@@ -54,6 +54,8 @@ def main() -> None:
         for name, importer_fn in IMPORTERS:
             result = run_importer(name, db, importer_fn, notion, db)
             print(result)
+            if result.errors:
+                print(result.error_report())
         print("=" * 40 + "\nKész.")
     finally:
         db.close()

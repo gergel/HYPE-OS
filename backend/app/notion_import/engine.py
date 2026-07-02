@@ -1,6 +1,12 @@
 """Generikus, idempotens import-motor: minden importer ezt használja a Notion page ->
 HYPE OS rekord létrehozásához/frissítéséhez, és a Notion relation mezők (page ID lista)
-a mi FK-jainkra való feloldásához a NotionImportMap táblán keresztül."""
+a mi FK-jainkra való feloldásához a NotionImportMap táblán keresztül.
+
+Öt éves, élesben használt Notion adat garantáltan tartalmaz olyan sorokat, amik
+megsértik a mi szigorúbb sémánk valamelyik megszorítását (pl. két employee ugyanazzal
+az e-mail-lel). Ezért minden egyes rekord upsertje saját SAVEPOINT-ban fut: ha egy sor
+hibás, csak az a sor esik ki (a result.errors-ba kerül a konkrét okkal), a többi attól
+még bekerül."""
 
 from __future__ import annotations
 
@@ -27,6 +33,12 @@ class ImportResult:
             summary += f", {len(self.errors)} hiba"
         return summary
 
+    def error_report(self) -> str:
+        if not self.errors:
+            return ""
+        lines = [f"  [{self.entity_type}] {msg}" for msg in self.errors]
+        return "\n".join(lines)
+
 
 def resolve_relation_ids(db: Session, entity_type: str, notion_page_ids: list[str]) -> list[int]:
     """Notion relation (page ID lista) -> a mi entitásaink integer ID-i. Azokat a
@@ -49,7 +61,10 @@ def resolve_relation_id(db: Session, entity_type: str, notion_page_ids: list[str
 
 def upsert(db: Session, model: type, entity_type: str, notion_page_id: str, fields: dict[str, Any]) -> tuple[Any, bool]:
     """Létrehoz vagy frissít egy rekordot a notion_page_id alapján - ez teszi idempotenssé
-    az importot (újrafuttatásnál nem duplikál). (rekord, is_new) párt ad vissza."""
+    az importot (újrafuttatásnál nem duplikál). (rekord, is_new) párt ad vissza.
+
+    Nincs benne hibakezelés - importeren belül a safe_upsert()-öt használd, hacsak nem
+    vagy biztos benne, hogy a hívó már véd egy savepoint-tal (lásd get_or_create_unknown_client)."""
     mapping = db.scalar(select(NotionImportMap).where(NotionImportMap.notion_page_id == notion_page_id))
 
     if mapping:
@@ -67,10 +82,37 @@ def upsert(db: Session, model: type, entity_type: str, notion_page_id: str, fiel
     return obj, True
 
 
+def safe_upsert(
+    db: Session,
+    result: ImportResult,
+    model: type,
+    entity_type: str,
+    notion_page_id: str,
+    fields: dict[str, Any],
+    label: str,
+) -> Any | None:
+    """upsert() SAVEPOINT-tal védve: ha ez az egy sor hibázik (pl. UNIQUE ütközés egy
+    duplikált e-mailen/sorozatszámon), csak ez a sor esik ki - a result.errors-ba kerül
+    a konkrét hibaüzenet és a `label` (hogy a Notion-ban vissza lehessen keresni), a
+    tranzakció a savepointig visszagörgetve folytatódik. None-t ad vissza hiba esetén,
+    az importer ilyenkor `continue`-zzon a ciklusban."""
+    try:
+        with db.begin_nested():
+            obj, created = upsert(db, model, entity_type, notion_page_id, fields)
+        if created:
+            result.created += 1
+        else:
+            result.updated += 1
+        return obj
+    except Exception as exc:  # noqa: BLE001 - soronkénti izoláció, szándékosan széles
+        result.errors.append(f"{label} (notion_page_id={notion_page_id}): {type(exc).__name__}: {exc}")
+        return None
+
+
 def run_importer(name: str, db: Session, fn, *args, **kwargs) -> ImportResult:
-    """Egy importer futtatása izolálva, saját tranzakcióval - ha az egyik tábla
-    feldolgozása hibára fut (pl. váratlan Notion mezőalak), rollback-elünk és a többi
-    importer attól még lefut a következő (tiszta) tranzakcióban."""
+    """Egy importer futtatása izolálva, saját tranzakcióval - ha maga az importer
+    (nem egy adott sor, hanem a séma feldolgozó kód) hibára fut, rollback-elünk és a
+    többi importer attól még lefut a következő (tiszta) tranzakcióban."""
     try:
         result = fn(*args, **kwargs)
         db.commit()
@@ -78,5 +120,5 @@ def run_importer(name: str, db: Session, fn, *args, **kwargs) -> ImportResult:
     except Exception as exc:  # noqa: BLE001 - szándékosan széles, hogy egy hibás importer ne állítsa meg a többit
         db.rollback()
         result = ImportResult(entity_type=name)
-        result.errors.append(f"{type(exc).__name__}: {exc}")
+        result.errors.append(f"importer szintű hiba: {type(exc).__name__}: {exc}")
         return result

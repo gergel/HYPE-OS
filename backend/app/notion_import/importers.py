@@ -16,7 +16,7 @@ from app.models.rate import Rate
 from app.models.task import Task
 from app.notion_import import database_ids as db_ids
 from app.notion_import.client import NotionClient, as_date, extract_properties
-from app.notion_import.engine import ImportResult, resolve_relation_id, upsert
+from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert, upsert
 
 UNKNOWN_CLIENT_KEY = "client:unknown-notion-import"
 
@@ -78,8 +78,9 @@ def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResu
 
         hype_client = company_key_to_client.get(company_key)
         if hype_client is None:
-            hype_client, created = upsert(
+            hype_client = safe_upsert(
                 db,
+                result,
                 Client,
                 "Client",
                 company_key,
@@ -90,18 +91,18 @@ def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResu
                     "nyilvantartasi_szam": _text(props.get("Nyilvántartásiszám")),
                     "kepviselo": _text(props.get("Képviselő")),
                 },
+                label=f"Client '{company_name}'",
             )
+            if hype_client is None:
+                continue
             company_key_to_client[company_key] = hype_client
-            if created:
-                result.created += 1
-            else:
-                result.updated += 1
 
         full_name = _text(props.get("Full Name"))
         if not full_name:
             continue
-        _, created = upsert(
+        safe_upsert(
             db,
+            result,
             Contact,
             "Contact",
             page["id"],
@@ -111,8 +112,8 @@ def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResu
                 "email": _text(props.get("Email")),
                 "phone": _text(props.get("Phone")),
             },
+            label=f"Contact '{full_name}'",
         )
-        # a kontakt létrehozás/frissítés nem számít bele a Client created/updated számba
 
     return result
 
@@ -137,8 +138,9 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
         if "bels" in joined:
             tipus = EmployeeType.BELSOS
 
-        _, created = upsert(
+        safe_upsert(
             db,
+            result,
             Employee,
             "Employee",
             page["id"],
@@ -152,9 +154,8 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
                 "role": SystemRole.OPERATOR,
                 "is_active": True,
             },
+            label=f"Employee '{full_name}'",
         )
-        result.created += 1 if created else 0
-        result.updated += 0 if created else 1
 
     # Type-overlay: a Vágók tábla '👥 Külsős és belsős' relation-je jelöli ki, ki vágó -
     # ez valódi relation (nem név-egyeztetés), tehát biztonságosan használható.
@@ -165,9 +166,12 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
         if employee_id is None:
             result.skipped += 1
             continue
-        employee = db.get(Employee, employee_id)
-        employee.tipus = EmployeeType.VAGO
-        db.flush()
+        try:
+            with db.begin_nested():
+                employee = db.get(Employee, employee_id)
+                employee.tipus = EmployeeType.VAGO
+        except Exception as exc:  # noqa: BLE001
+            result.errors.append(f"Vágó type-overlay (employee_id={employee_id}): {type(exc).__name__}: {exc}")
 
     return result
 
@@ -183,8 +187,9 @@ def import_rates(client: NotionClient, db: Session) -> ImportResult:
             result.skipped += 1
             continue
 
-        _, created = upsert(
+        safe_upsert(
             db,
+            result,
             Rate,
             "Rate",
             page["id"],
@@ -198,9 +203,8 @@ def import_rates(client: NotionClient, db: Session) -> ImportResult:
                 "elso_munkanap": as_date(props.get("Első munkanap")),
                 "utolso_munkanap": as_date(props.get("Utolsó munkanap")),
             },
+            label=f"Rate (employee_id={employee_id})",
         )
-        result.created += 1 if created else 0
-        result.updated += 0 if created else 1
 
     return result
 
@@ -223,8 +227,9 @@ def import_equipment(client: NotionClient, db: Session) -> ImportResult:
             continue
 
         osszes_mennyiseg = props.get("Összes mennyiség")
-        _, created = upsert(
+        safe_upsert(
             db,
+            result,
             Equipment,
             "Equipment",
             page["id"],
@@ -237,9 +242,8 @@ def import_equipment(client: NotionClient, db: Session) -> ImportResult:
                 "track_mode": _normalize_track_mode(props.get("Track mode")),
                 "osszes_mennyiseg": int(osszes_mennyiseg) if osszes_mennyiseg else None,
             },
+            label=f"Equipment '{nev}'",
         )
-        result.created += 1 if created else 0
-        result.updated += 0 if created else 1
 
     return result
 
@@ -258,8 +262,9 @@ def import_campaigns(client: NotionClient, db: Session) -> ImportResult:
         intervalluma = props.get("Intervalluma")
         intervalluma_text = intervalluma.get("start") if isinstance(intervalluma, dict) else None
 
-        _, created = upsert(
+        safe_upsert(
             db,
+            result,
             Campaign,
             "Campaign",
             page["id"],
@@ -270,14 +275,15 @@ def import_campaigns(client: NotionClient, db: Session) -> ImportResult:
                 "intervalluma": intervalluma_text,
                 "kesz": bool(props.get("Kész")),
             },
+            label=f"Campaign '{nev}'",
         )
-        result.created += 1 if created else 0
-        result.updated += 0 if created else 1
 
     return result
 
 
-def _import_task_database(client: NotionClient, db: Session, database_id: str, result: ImportResult, forced_allapot: str | None = None) -> None:
+def _import_task_database(
+    client: NotionClient, db: Session, database_id: str, result: ImportResult, forced_allapot: str | None = None
+) -> None:
     for page in client.query_database(database_id):
         props = extract_properties(page)
         feladat = _text(props.get("Feladat")) or _text(props.get("Name"))
@@ -285,8 +291,9 @@ def _import_task_database(client: NotionClient, db: Session, database_id: str, r
             result.skipped += 1
             continue
 
-        _, created = upsert(
+        safe_upsert(
             db,
+            result,
             Task,
             "Task",
             page["id"],
@@ -297,9 +304,8 @@ def _import_task_database(client: NotionClient, db: Session, database_id: str, r
                 "kategoria": _text(props.get("Kategória")),
                 "checked": bool(props.get("Checked", False)),
             },
+            label=f"Task '{feladat}'",
         )
-        result.created += 1 if created else 0
-        result.updated += 0 if created else 1
 
 
 def import_tasks(client: NotionClient, db: Session) -> ImportResult:
@@ -320,8 +326,9 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
         props = extract_properties(page)
         client_id = resolve_client_via_contact(db, props.get("Akivel szerződünk") or [])
         szerzodes_url = _first_url(props.get("Szerződés"))
-        _, created = upsert(
+        safe_upsert(
             db,
+            result,
             Contract,
             "Contract",
             page["id"],
@@ -337,16 +344,16 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
                 "keltezes": as_date(props.get("Keltezés")),
                 "alairva": bool(szerzodes_url),
             },
+            label="Contract (keretszerződés)",
         )
-        result.created += 1 if created else 0
-        result.updated += 0 if created else 1
 
     for page in client.query_database(db_ids.ALVALLALKOZO_KERETSZERZODES):
         props = extract_properties(page)
         employee_id = resolve_relation_id(db, "Employee", props.get("Vállalkozó") or [])
         szerzodes_url = _first_url(props.get("Szerződés aláírva"))
-        _, created = upsert(
+        safe_upsert(
             db,
+            result,
             Contract,
             "Contract",
             page["id"],
@@ -362,9 +369,8 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
                 "keltezes": as_date(props.get("Keltezés dátuma")),
                 "alairva": bool(szerzodes_url),
             },
+            label="Contract (alvállalkozói keretszerződés)",
         )
-        result.created += 1 if created else 0
-        result.updated += 0 if created else 1
 
     return result
 
@@ -386,8 +392,9 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
         client_id = resolve_client_via_contact(db, props.get("Megrendelői kontaktok") or []) or unknown_client.id
         contract_id = resolve_relation_id(db, "Contract", props.get("Keretszerződés") or [])
 
-        _, created = upsert(
+        safe_upsert(
             db,
+            result,
             ProjectCode,
             "ProjectCode",
             page["id"],
@@ -402,8 +409,7 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
                 "tig_statusza": _text(props.get("TIG státusza")),
                 "szamla_statusza": _text(props.get("Számla státusza")),
             },
+            label=f"ProjectCode '{projektkod}'",
         )
-        result.created += 1 if created else 0
-        result.updated += 0 if created else 1
 
     return result
