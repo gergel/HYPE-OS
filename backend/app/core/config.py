@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,6 +9,16 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://hype:hype@localhost:5432/hype_os"
     redis_url: str = "redis://localhost:6379/0"
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_psycopg_driver(cls, value: str) -> str:
+        """Railway (és a legtöbb PaaS) sima 'postgres://'/'postgresql://' URL-t ad -
+        ezt írjuk át a psycopg3 driverre, hogy ne kelljen kézzel bütykölni az env var-t."""
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg://" + value[len(prefix) :]
+        return value
 
     secret_key: str = "change-me-to-a-random-secret"
     access_token_expire_minutes: int = 1440
