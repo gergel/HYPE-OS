@@ -1,11 +1,33 @@
-import { PlaceholderPage } from "@/components/PlaceholderPage";
+import { Campaign, formatDate, getCampaigns } from "@/lib/api";
+import { Card } from "@/components/Card";
+import { DataTable } from "@/components/DataTable";
+import { StatusBadge } from "@/components/StatusBadge";
+import { TopBar } from "@/components/TopBar";
 
-export default function KampanyokPage() {
+export default async function KampanyokPage() {
+  const campaigns = await getCampaigns();
+
   return (
-    <PlaceholderPage
-      title="Kampányok"
-      description="Önálló marketing entitás, nem kötve a Project Code maghoz. A backend API (GET/POST /api/v1/campaigns) már működik, a lista/naptár UI a Fázis 1 munka része."
-      entities={["Campaign"]}
-    />
+    <div className="flex flex-1 flex-col">
+      <TopBar />
+      <div className="flex-1 p-6">
+        <Card title={`Kampányok (${campaigns.length})`}>
+          <DataTable<Campaign>
+            rows={campaigns}
+            emptyText="Még nincs felvett kampány - importáld a Notionból, vagy adj hozzá egyet a /api/v1/campaigns végponton."
+            columns={[
+              { header: "Név", render: (c) => c.nev },
+              { header: "Státusz", render: (c) => (c.kampany_statusza ? <StatusBadge label={c.kampany_statusza} tone="neutral" /> : "–") },
+              { header: "Határidő", render: (c) => formatDate(c.hatarido) },
+              {
+                header: "Kész",
+                align: "right",
+                render: (c) => <StatusBadge label={c.kesz ? "Kész" : "Folyamatban"} tone={c.kesz ? "success" : "warning"} />,
+              },
+            ]}
+          />
+        </Card>
+      </div>
+    </div>
   );
 }

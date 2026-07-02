@@ -1,11 +1,36 @@
-import { PlaceholderPage } from "@/components/PlaceholderPage";
+import { Card } from "@/components/Card";
+import { DataTable } from "@/components/DataTable";
+import { StatusBadge } from "@/components/StatusBadge";
+import { TopBar } from "@/components/TopBar";
+import { formatDate, formatHuf, getClients, getProjectCodes, ProjectCode } from "@/lib/api";
 
-export default function ProjectKodokPage() {
+export default async function ProjectKodokPage() {
+  const [projectCodes, clients] = await Promise.all([getProjectCodes(), getClients()]);
+  const clientNameById = new Map(clients.map((c) => [c.id, c.nev]));
+
   return (
-    <PlaceholderPage
-      title="Project Code-ok"
-      description="A pénzügyi mag: ügyfél, keret, önköltség-számítás. A backend API (GET/POST /api/v1/project-codes) már működik, a lista/részlet UI a Fázis 1 munka része."
-      entities={["ProjectCode", "Contract", "Expense", "Revenue"]}
-    />
+    <div className="flex flex-1 flex-col">
+      <TopBar />
+      <div className="flex-1 p-6">
+        <Card title={`Project Code-ok (${projectCodes.length})`}>
+          <DataTable<ProjectCode>
+            rows={projectCodes}
+            emptyText="Még nincs felvett Project Code - importáld a Notionból, vagy adj hozzá egyet a /api/v1/project-codes végponton."
+            columns={[
+              { header: "Projektkód", render: (pc) => pc.projektkod },
+              { header: "Ügyfél", render: (pc) => clientNameById.get(pc.client_id) ?? "–" },
+              { header: "Dátum", render: (pc) => formatDate(pc.datum) },
+              { header: "Összes költség", align: "right", render: (pc) => formatHuf(pc.osszes_koltseg) },
+              { header: "Becsült profit", align: "right", render: (pc) => formatHuf(pc.becsult_profit) },
+              {
+                header: "Státusz",
+                align: "right",
+                render: (pc) => (pc.esemeny_allapota ? <StatusBadge label={pc.esemeny_allapota} tone="neutral" /> : "–"),
+              },
+            ]}
+          />
+        </Card>
+      </div>
+    </div>
   );
 }

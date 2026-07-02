@@ -1,11 +1,34 @@
-import { PlaceholderPage } from "@/components/PlaceholderPage";
+import { formatDate, getTasks, Task } from "@/lib/api";
+import { Card } from "@/components/Card";
+import { DataTable } from "@/components/DataTable";
+import { StatusBadge } from "@/components/StatusBadge";
+import { TopBar } from "@/components/TopBar";
 
-export default function FeladatokPage() {
+export default async function FeladatokPage() {
+  const tasks = await getTasks();
+
   return (
-    <PlaceholderPage
-      title="Feladatok"
-      description="Egyesített TODO-lista (TEENDŐK + Ági to do list + HYPE TO-DO LIST). A backend API (GET/POST /api/v1/tasks) már működik, a lista UI a Fázis 1 munka része."
-      entities={["Task"]}
-    />
+    <div className="flex flex-1 flex-col">
+      <TopBar />
+      <div className="flex-1 p-6">
+        <Card title={`Feladatok (${tasks.length})`}>
+          <DataTable<Task>
+            rows={tasks}
+            emptyText="Még nincs felvett feladat - importáld a Notionból, vagy adj hozzá egyet a /api/v1/tasks végponton."
+            columns={[
+              { header: "Feladat", render: (t) => t.feladat },
+              { header: "Kategória", render: (t) => t.kategoria ?? "–" },
+              { header: "Határidő", render: (t) => formatDate(t.hatarido) },
+              { header: "Állapot", render: (t) => (t.allapot ? <StatusBadge label={t.allapot} tone="neutral" /> : "–") },
+              {
+                header: "Kész",
+                align: "right",
+                render: (t) => <StatusBadge label={t.checked ? "Kész" : "Nyitott"} tone={t.checked ? "success" : "warning"} />,
+              },
+            ]}
+          />
+        </Card>
+      </div>
+    </div>
   );
 }
