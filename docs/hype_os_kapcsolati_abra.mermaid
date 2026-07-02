@@ -1,0 +1,278 @@
+erDiagram
+    CLIENT ||--o{ CONTACT : "kapcsolattartok"
+    CLIENT ||--o{ PROJECT_CODE : "ugyfel"
+    CLIENT ||--o{ CONTRACT : "keretszerzodes"
+    PROJECT_CODE ||--o{ PROJECT : "1 kod : N forgatas"
+    PROJECT_CODE ||--o{ EXPENSE : "projekt kiadasok"
+    PROJECT_CODE ||--o{ REVENUE : "bevetelek"
+    PROJECT_CODE }o--|| CONTRACT : "szerzodes alapja"
+    PROJECT_CODE ||--o{ DELIVERABLE : "utomunkak"
+    PROJECT ||--o{ DELIVERABLE : "vagando anyag"
+    PROJECT ||--o{ CALLSHEET : "diszpo"
+    PROJECT ||--o{ ASSIGNMENT : "kivitt/visszahozott eszkoz"
+    PROJECT }o--o{ EMPLOYEE : "crew / stab"
+    ASSIGNMENT }o--|| EQUIPMENT : "melyik eszkoz"
+    EQUIPMENT ||--o{ ASSIGNMENT : "kivitel-visszahozas tortenet"
+    DELIVERABLE ||--o{ TIMESHEET : "vagasi ido"
+    DELIVERABLE ||--o{ FEEDBACK : "gombos visszajelzes"
+    DELIVERABLE }o--|| EMPLOYEE : "vago"
+    TIMESHEET }o--|| EMPLOYEE : "ki dolgozott"
+    TIMESHEET }o--|| RATE : "dijszamitas"
+    EMPLOYEE ||--o{ RATE : "berezesi szabaly"
+    EMPLOYEE ||--o{ EXPENSE : "belsos / kulsos elszamolas"
+    EMPLOYEE }o--o{ CONTRACT : "megbizasi szerzodes"
+    EMPLOYEE ||--o{ CALLSHEET : "operatori diszpo"
+    CAMPAIGN ||--o{ PROJECT : "kampanyhoz tartozo forgatas"
+    CAMPAIGN ||--o{ DELIVERABLE : "kampany utomunka"
+    CAMPAIGN }o--|| EMPLOYEE : "kampany felelose"
+    TASK }o--o{ EMPLOYEE : "felelos"
+    KP_FORGALOM }o--|| EXPENSE : "kapcsolodik, de onallo marad"
+    PROJECT ||--o{ MEDIA : "feltoltott video/kep"
+    PROJECT ||--o| PORTAL : "ugyfelportal"
+    PORTAL ||--o| PAYMENT : "opcionalis fizetes (Barion)"
+    PAYMENT }o--|| REVENUE : "sikeres fizetes = bevetel"
+    MEDIA }o--o| FOLDER : "mappaba rendezve"
+
+    CLIENT {
+        string nev
+        string adoszam
+        string szekhely
+        string nyilvantartasi_szam
+        string kepviselo
+    }
+
+    CONTACT {
+        string full_name
+        string first_name
+        string last_name
+        email email
+        string phone
+        relation client_id
+    }
+
+    CAMPAIGN {
+        string nev
+        status kampany_statusza
+        date hatarido
+        date intervalluma
+        relation felelos_employee_id
+        relation client_id
+        bool kesz
+    }
+
+    PROJECT_CODE {
+        string projektkod PK
+        relation client_id
+        date datum
+        select esemeny_allapota
+        formula osszes_koltseg
+        formula belsos_koltseg
+        formula alvallalkozok_koltsege
+        formula vagasi_koltseg
+        formula becsult_profit
+        formula profit_szazalek
+        select penznem
+        number arfolyam
+        relation contract_id
+        files szerzodes
+        status tig_statusza
+        status szamla_statusza
+    }
+
+    PROJECT {
+        string nev PK
+        relation project_code_id
+        date forgatas_datuma
+        string helyszin
+        relation campaign_id
+        relation crew_employee_ids
+        relation equipment_assignment_ids
+        status allapot
+    }
+
+    CONTRACT {
+        string tipus "kereto / alvallalkozoi"
+        relation client_or_employee_id
+        formula ceg_neve
+        formula szekhely
+        formula adoszam
+        select megbizas_targya
+        status szerzodes_allapota
+        files szerzodes_file
+        date keltezes
+        bool alairva
+    }
+
+    EMPLOYEE {
+        string full_name PK
+        select tipus "belsos / kulsos / vago / kreativ / stab"
+        email email
+        string telefon
+        select jogositvany
+        formula orabler
+        formula napidij
+        relation rate_id
+        relation contract_id
+        files munkaszerzodes
+        formula ertekeles
+        date elso_munkanap
+        date utolso_munkanap
+    }
+
+    RATE {
+        relation employee_id PK
+        number orabler
+        number napibler
+        number tulora
+        number plusz_nap
+        number havi_alap
+        date elso_munkanap
+        date utolso_munkanap
+    }
+
+    TIMESHEET {
+        relation employee_id
+        relation deliverable_id
+        date start_date
+        date end_date
+        formula idotartam_perc
+        formula koltseg "ora x rate"
+        status statusz
+        bool completed
+    }
+
+    DELIVERABLE {
+        string projekt_neve PK
+        relation project_code_id
+        relation project_id
+        relation vago_employee_id
+        relation campaign_id
+        status allapot
+        date hatarido
+        formula koltseg
+        url kesz_anyag
+        url nyersanyag
+        bool anyag_kikuldve
+        relation feedback_id
+    }
+
+    FEEDBACK {
+        relation deliverable_id "utomunka gombjabol"
+        relation project_id
+        relation forgatta_employee_id
+        number technikai_helyesseg
+        number kreativ_kepivilag
+        number nyersanyag_felhasznalhatosaga
+        formula atlag
+        status ertekeles_kuldese
+        string visszajelzes_szoveg
+    }
+
+    EQUIPMENT {
+        string nev PK
+        string serial_number
+        select kategoria
+        select allapot
+        select archive_statusz
+        select track_mode "asset (egyedi) / stock (darabszamos)"
+        number osszes_mennyiseg "csak stock eseten relevans"
+        formula qr_kod
+        relation projektek "tortenelmi hasznalat"
+    }
+
+    ASSIGNMENT {
+        relation equipment_id
+        relation project_id
+        string aki_kivitte
+        date kivitel_datuma
+        string aki_visszahozta
+        date visszahozatal_datuma
+    }
+
+    EXPENSE {
+        string megnevezes PK
+        relation project_code_id
+        relation employee_id
+        select tipus "belsos / kulsos / extra"
+        number netto
+        formula brutto
+        select penznem
+        select kifizetes_modja
+        date fizetes_hatarideje
+        bool kesz
+    }
+
+    REVENUE {
+        relation project_code_id
+        select bevetel_formaja
+        number netto
+        formula brutto
+        select penznem
+        date fizetes_hatarideje
+        date fizetes_datuma
+    }
+
+    TASK {
+        string feladat PK
+        status allapot
+        relation felelos_employee_id
+        date hatarido
+        select kategoria
+        bool checked
+    }
+
+    CALLSHEET {
+        relation project_id
+        relation employee_id
+        url diszpo_pdf
+        string reszvevok
+        number tulora
+        date datum
+    }
+
+    KP_FORGALOM {
+        select forgalom
+        number osszeg
+        formula forintban
+        select penznem
+        select legalis
+        relation expense_id
+        date kiadas_datuma
+    }
+
+    PORTAL {
+        string slug PK "url: /p/{slug}"
+        relation project_id
+        string password_hash "nullable"
+        string share_token
+        select status "draft/live/archived"
+        select brand "hype/contentbee"
+        date expires_at
+    }
+
+    MEDIA {
+        string title PK
+        relation project_id
+        relation folder_id
+        string storage_key "R2/S3 kulcs"
+        string thumbnail_url
+        number duration_seconds
+        string resolution_label
+        number size_bytes
+        select status "processing/ready/failed"
+    }
+
+    FOLDER {
+        string nev PK
+        relation project_id
+        number sort_order
+    }
+
+    PAYMENT {
+        string payment_request_id PK
+        relation project_id
+        number osszeg_huf
+        select mode "contact/paid"
+        select allapot
+        string barion_payment_id
+    }
