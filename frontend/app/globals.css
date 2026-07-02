@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+
+  --surface-1: #141414;
+  --surface-2: #1a1a1a;
+  --surface-3: #202020;
+  --border: rgba(255, 255, 255, 0.08);
+
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-accent: #93c5fd;
+  --bg-accent: rgba(147, 197, 253, 0.12);
+
+  --text-success: #86efac;
+  --bg-success: rgba(34, 197, 94, 0.14);
+  --text-warning: #fbbf24;
+  --bg-warning: rgba(217, 119, 6, 0.16);
+  --text-danger: #fca5a5;
+  --bg-danger: rgba(220, 38, 38, 0.16);
+
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-accent: var(--text-accent);
+  --color-bg-accent: var(--bg-accent);
+  --color-text-success: var(--text-success);
+  --color-bg-success: var(--bg-success);
+  --color-text-warning: var(--text-warning);
+  --color-bg-warning: var(--bg-warning);
+  --color-text-danger: var(--text-danger);
+  --color-bg-danger: var(--bg-danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+* {
+  border-color: var(--border);
+}
