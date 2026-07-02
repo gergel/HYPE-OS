@@ -1,0 +1,66 @@
+from fastapi import APIRouter
+
+from app.api.routes.ai_assistant import router as ai_assistant_router
+from app.api.routes.auth import router as auth_router
+from app.api.routes.automation import router as automation_router
+from app.api.routes.callsheets import router as callsheets_router
+from app.api.routes.campaigns import router as campaigns_router
+from app.api.routes.clients import contacts_router, router as clients_router
+from app.api.routes.contracts import router as contracts_router
+from app.api.routes.crew import rates_router, router as crew_router
+from app.api.routes.dashboard import router as dashboard_router
+from app.api.routes.equipment import assignments_router, router as equipment_router
+from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router
+from app.api.routes.portal import payments_router, router as portal_router
+from app.api.routes.postproduction import deliverables_router, feedback_router, timesheets_router
+from app.api.routes.project_codes import router as project_codes_router
+from app.api.routes.projects import router as projects_router
+from app.api.routes.storage import folders_router, media_router
+from app.api.routes.tasks import router as tasks_router
+from app.api.routes.timeline import router as timeline_router
+
+api_router = APIRouter()
+
+# 1. Auth
+api_router.include_router(auth_router)
+# 2. Dashboard
+api_router.include_router(dashboard_router)
+# 3. Ügyfelek
+api_router.include_router(clients_router)
+api_router.include_router(contacts_router)
+# 4-5. Project Codes / Projects
+api_router.include_router(project_codes_router)
+api_router.include_router(projects_router)
+# 6. Crew (Employee + Rate)
+api_router.include_router(crew_router)
+api_router.include_router(rates_router)
+# 7. Equipment
+api_router.include_router(equipment_router)
+api_router.include_router(assignments_router)
+# 8. Timeline
+api_router.include_router(timeline_router)
+# 9. Storage
+api_router.include_router(folders_router)
+api_router.include_router(media_router)
+# 10. Naptár / Diszpó
+api_router.include_router(callsheets_router)
+# 11. Utómunka
+api_router.include_router(deliverables_router)
+api_router.include_router(timesheets_router)
+api_router.include_router(feedback_router)
+# 12. Portál / Fizetés
+api_router.include_router(portal_router)
+api_router.include_router(payments_router)
+# 13. Pénzügyek
+api_router.include_router(expenses_router)
+api_router.include_router(revenues_router)
+api_router.include_router(kp_forgalom_router)
+api_router.include_router(contracts_router)
+# 14. Kampányok
+api_router.include_router(campaigns_router)
+# Feladatok
+api_router.include_router(tasks_router)
+# Automation
+api_router.include_router(automation_router)
+# AI Assistant
+api_router.include_router(ai_assistant_router)
