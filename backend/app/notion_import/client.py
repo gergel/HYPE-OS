@@ -130,4 +130,34 @@ def extract_property(prop: dict) -> Any:
         return value.get(rollup_type)
     if prop_type in ("created_time", "last_edited_time"):
         return value
+    if prop_type == "button":
+        return None
     return value
+
+
+def extract_properties(page: dict) -> dict[str, Any]:
+    """Egy Notion page összes property-jét kiolvassa egy sima {mezőnév: érték} dict-be."""
+    return {name: extract_property(prop) for name, prop in page.get("properties", {}).items()}
+
+
+def as_date(value: dict | str | None):
+    """A date property extract_property által visszaadott {'start':..,'end':..} alakját
+    (vagy a rich_text-ként tárolt szabad dátum-szöveget, ami a HYPE Notionban gyakori)
+    Python date-re alakítja, ha lehet."""
+    from datetime import date, datetime
+
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        raw = value.get("start")
+    else:
+        raw = value
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+    except (ValueError, AttributeError):
+        try:
+            return date.fromisoformat(raw[:10])
+        except (ValueError, TypeError):
+            return None
