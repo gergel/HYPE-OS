@@ -176,3 +176,19 @@ def as_date(value: dict | str | None):
             return date.fromisoformat(raw[:10])
         except (ValueError, TypeError):
             return None
+
+
+def as_datetime(value: dict | str | None):
+    """Mint as_date, de a teljes időbélyeget (óra/perc) is megtartja - a created_time/
+    last_edited_time property-k már eleve ISO-datetime string-ek."""
+    from datetime import datetime
+
+    if value is None:
+        return None
+    raw = value.get("start") if isinstance(value, dict) else value
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None

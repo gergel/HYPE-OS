@@ -20,7 +20,7 @@ from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.timesheet import Timesheet
 from app.notion_import import database_ids as db_ids
-from app.notion_import.client import NotionClient, as_date, extract_properties, remaining_properties
+from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties, remaining_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert, upsert
 from app.notion_import.importers import _text, get_or_create_unknown_client
 
@@ -48,15 +48,13 @@ def get_or_create_unknown_project_code(db: Session) -> ProjectCode:
     return project_code
 
 
-_PROJECT_CONSUMED = {"Name", "HYPE ADMIN projektkódok", "Kampányok", "Date", "Helyszín", "Location", "Állapot"}
-
-
 def import_projects(client: NotionClient, db: Session) -> ImportResult:
-    """Project <- 'Main Database'. Ez a legnagyobb/legzajosabb tábla (144 mező,
-    rengeteg button/formula) - csak az érdemi, adat-jellegű mezőket vesszük át
-    saját oszlopba, a többi (jórészt formula/button, sok redundáns) az `extra`
-    JSON-ba kerül. Crew-t (stáb) NEM tudunk hozzárendelni, mert az 'Operatőr'
-    mező Notion user-people típusú, nem relation az Employee-forrás táblára."""
+    """Project <- 'Main Database'. Ez a legnagyobb/legzajosabb tábla (~140 mező) - a
+    felhasználó döntése alapján (2026-07-02) minden mező saját oszlopot kap (lásd
+    app/models/project.py), nincs közös 'extra' JSON. Crew-t (stáb) NEM tudunk
+    hozzárendelni, mert az 'Operatőr' mező Notion user-people típusú, nem relation
+    az Employee-forrás táblára - a nyers people-értéket az `operator_notion` oszlop
+    őrzi."""
     result = ImportResult(entity_type="Project")
     unknown_project_code = get_or_create_unknown_project_code(db)
 
@@ -86,7 +84,134 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
                 "forgatas_datuma": as_date(props.get("Date")),
                 "helyszin": _text(props.get("Helyszín")) or _text(props.get("Location")),
                 "allapot": _text(props.get("Állapot")),
-                "extra": remaining_properties(props, _PROJECT_CONSUMED),
+                "teljesites_datuma": as_date(props.get("Teljesítés dátuma")),
+                "diszpo": _text(props.get("Diszpó")),
+                "diszpo_szovege": _text(props.get("Diszpó szövege")),
+                "diszpo_pdf_url": props.get("Diszpó pdf"),
+                "drive_diszpo_pdf_url": props.get("Drive diszpó pdf"),
+                "fo_diszpo_teszteles": props.get("Fő diszpó tesztelés"),
+                "fo_diszpo_elozetes_teszteles": props.get("Fő diszpó előzetes tesztelés"),
+                "fo_esemenyre_elozetes_kuldes_statusz": _text(props.get("fő eseményre előzetes küldés státusz")),
+                "fo_esemenyre_diszpo_kuldes_statusz": _text(props.get("fő eseményre diszpó küldés státusz")),
+                "elozetes_diszpo_kuldes": _text(props.get("Előzetes diszpó küldés")),
+                "diszpo_teszteles": props.get("Diszpó tesztelés"),
+                "elozetes_teszteles": props.get("Előzetes tesztelés"),
+                "diszpo_targya_notion": props.get("Diszpó tárgya"),
+                "aki_kikuldte_a_diszpot": props.get("Aki kiküldte a diszpót"),
+                "aki_az_elozetest_kuldte_ki": props.get("Aki az előzetest küldte ki"),
+                "diszpo_iras_kezdete": as_date(props.get("diszpo írás kezdete")),
+                "diszpo_iras_vege": as_date(props.get("diszpo írás vége")),
+                "diszpo_irasal_toltott_ido": props.get("diszpo írásal töltött idő"),
+                "diszpoirassal_toltott_percek": props.get("Diszpóírással töltött percek"),
+                "zapier_diszpo_targy": _text(props.get("Zapier diszpo tárgy")),
+                "gmail_thread_id": _text(props.get("Gmail Thread ID")),
+                "resztvevok_email": _text(props.get("Résztvevők email")),
+                "technika_ready": props.get("Technika ready"),
+                "vissza_hozott_technika": _text(props.get("Vissza hozott technika")),
+                "vissza_nem_kerult_eszkozok": _text(props.get("Vissza nem került eszközök")),
+                "berelt_technika_logisztika": _text(
+                    props.get("Bérelt, Bérelendő technika és annak a logisztikája")
+                ),
+                "kivitt_technika": _text(props.get("Kivitt technika")),
+                "technika_lista": _text(props.get("Technika lista:")),
+                "aki_kivitte_az_eszkozoket": _text(props.get("Aki kivitte az eszközöket")),
+                "aki_visszahozta_az_eszkozoket": _text(props.get("Aki visszahozta az eszközöket")),
+                "ki_apple_id": _text(props.get("Ki Apple ID")),
+                "vissza_apple_id": _text(props.get("Vissza Apple ID")),
+                "kivitt_eszkozok_notion_ids": props.get("Kivitt eszközök"),
+                "visszahozott_eszkozok_notion_ids": props.get("Visszahozott eszközök"),
+                "leltar_notion_ids": props.get("Leltár"),
+                "stock_igenyek_1_notion_ids": props.get("Stock igények 1"),
+                "archive_technika_projektek_notion_ids": props.get("Archive technika projektek"),
+                "szerzodes_allapot": _text(props.get("Szerződés állapot")),
+                "megbizott_neve": _text(props.get("Megbízott neve")),
+                "megbizott_szekhely": _text(props.get("Megbízott székhely")),
+                "megbizott_adoszam": _text(props.get("Megbízott adószám")),
+                "kepviselo": _text(props.get("Képviselő")),
+                "keltezes_datuma": as_date(props.get("Keltezés dátuma")),
+                "megbizas_targya": _text(props.get("Megbízás tárgya")),
+                "akiknek_mar_van_tig_szerzodes": props.get("Akiknek már van TIG szerződés"),
+                "akiknek_szerzodest_kell_keszitem": props.get("Akiknek szerződést kell készíteni"),
+                "mindenkinek_van_szerzodes": props.get("Mindenkinek van szerződés?"),
+                "tig_kuldes_idopont": props.get("TIG küldés időpont"),
+                "nyilvantartasi_szam": _text(props.get("Nyilvántartási szám:")),
+                "alvallakozo_keretszerzodes_notion_ids": props.get("Alvállakozó keretszerződés (külsős)"),
+                "szerzodes_keszites_notion_ids": props.get("Szerződés készítés"),
+                "akinek_mar_van_notion_ids": props.get("Akinek már van"),
+                "netto_osszeg": props.get("Nettó összeg"),
+                "start_timer": as_date(props.get("Start timer")),
+                "end_timer": as_date(props.get("End timer")),
+                "kezdo_datum_notion": props.get("Kezdő dátum"),
+                "zaro_datum_notion": props.get("Záró dátum"),
+                "forgatas_kezdete_notion": props.get("forgatás kezdete"),
+                "forgatas_vege_notion": props.get("forgatás vége"),
+                "forgatas_idopontja_notion": props.get("Forgatás időpontja"),
+                "tobb_napos": props.get("Több napos"),
+                "tobb_napos_szamitas": props.get("több napos számítás"),
+                "tobb_napos_test": props.get("több napos test"),
+                "hany_nap": props.get("Hány nap"),
+                "mai_notion": props.get("Mai?"),
+                "jovobeni": props.get("jövőbeni?"),
+                "mar_forog_e": props.get("már forog e"),
+                "foroge_jelenleg": props.get("foroge jelenleg"),
+                "foroge_jelenleg2": props.get("foroge jelenleg2"),
+                "darabolas_datuma": as_date(props.get("Darabolás dátuma")),
+                "calendar_name": _text(props.get("Calendar Name")),
+                "project_name_select": _text(props.get("Project Name")),
+                "esemeny": _text(props.get("Esemény")),
+                "fo_esemeny_targy_idopont": _text(props.get("fő esemény tárgy időpont")),
+                "fo_esemeny_targya": props.get("fő esemény tárgya"),
+                "organizer": _text(props.get("Organizer")),
+                "attendees_contacts_notion_ids": props.get("Attendees Contacts"),
+                "freebusy": _text(props.get("Freebusy")),
+                "visibility": _text(props.get("Visibility")),
+                "source": _text(props.get("Source")),
+                "sync_status": _text(props.get("Sync Status")),
+                "automation_name": _text(props.get("Automation Name")),
+                "external_id": _text(props.get("external_id")),
+                "operator_notion": props.get("Operatőr"),
+                "projektkod_szoveg": _text(props.get("Projektkód")),
+                "brief": _text(props.get("Brief")),
+                "brief_tipus": _text(props.get("Brief típus")),
+                "description": _text(props.get("Description")),
+                "kontaktok": _text(props.get("Kontaktok")),
+                "technikai_kerdes": _text(props.get("Technikai kérdés")),
+                "backend_statusz": _text(props.get("Backend státusz")),
+                "backend_uzenet": _text(props.get("Backend üzenet")),
+                "gyartassal_kapcsolatban": _text(props.get("Gyártással kapcsolatban")),
+                "gyartas_komment": _text(props.get("Gyártás komment")),
+                "kreativ_doksi_url": props.get("Kreatív doksi"),
+                "csatolni_valo": props.get("Csatolni való"),
+                "plusz_afa": _text(props.get("PLUSZ áfa")),
+                "emailek_notion": props.get("Emailek"),
+                "email_notion": props.get("Email"),
+                "nincs_email_notion": props.get("nincs email"),
+                "fotos_diszpo": props.get("Fotós diszpó"),
+                "kreativ_team_database_notion_ids": props.get("Kreatív team database"),
+                "visszajelzesek_a_vagoktol_notion_ids": props.get("Visszajelzések a vágóktól"),
+                "felvezetett_utomunka_notion_ids": props.get("Felvezetett utómunka"),
+                "torolt_anyagok_notion_ids": props.get("Törölt anyagok"),
+                "uj_notion": props.get("Új"),
+                "altalanos_notion": props.get("Általános"),
+                "van_e_utomunka": props.get("Van e utómunka"),
+                "duration_hours_notion": props.get("Duration hours(Σ)"),
+                "formula_generic": props.get("Formula"),
+                "formula_1": props.get("Formula 1"),
+                "formula_2": props.get("Formula 2"),
+                "sd_akksik": props.get("sd, akksik"),
+                "sd_akksik_vege": props.get("sd akksik vége"),
+                "created_at_notion": as_datetime(props.get("Created At")),
+                "updated_at_notion": as_datetime(props.get("Updated At")),
+                "fabian_peter_adott_nap": props.get("Fábián Péter"),
+                "barni_adott_nap": props.get("Barni adott nap"),
+                "salamon_zalan_adott_nap": props.get("Salamon Zalán adott nap"),
+                "iszlai_aron_adott_nap": props.get("Iszlai Áron adott nap"),
+                "varga_adam_adott_nap": props.get("Varga Ádám"),
+                "hamza_marko_adott_nap": props.get("Hamza Márkó adott nap"),
+                "vidor_gergely_adott_nap": props.get("Vidor Gergely"),
+                "nemes_attila_adott_nap": props.get("Nemes Attila"),
+                "bukfa_kristof_adott_nap": props.get("Bükfa Kristóf"),
+                "adott_nap_generic": props.get("adott nap"),
             },
             label=f"Project '{nev}'",
         )
