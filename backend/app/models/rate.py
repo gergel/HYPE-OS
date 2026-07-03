@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Numeric
+from sqlalchemy import Date, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -23,5 +23,8 @@ class Rate(TimestampMixin, Base):
 
     elso_munkanap: Mapped[date | None] = mapped_column(Date)
     utolso_munkanap: Mapped[date | None] = mapped_column(Date)
+
+    fotos_napi_ber: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Fotós napi bér")
+    nev: Mapped[str | None] = mapped_column(String(255), comment="Name")
 
     employee: Mapped["Employee"] = relationship(back_populates="rates")

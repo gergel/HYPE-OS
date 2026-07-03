@@ -4,6 +4,8 @@ from pydantic import BaseModel
 
 from app.models.employee import EmployeeType, SystemRole
 
+JsonScalar = dict | list | float | str | bool | None
+
 
 class EmployeeBase(BaseModel):
     full_name: str
@@ -33,7 +35,51 @@ class EmployeeRead(EmployeeBase):
     id: int
     role: SystemRole
     is_active: bool
-    extra: dict | None = None
+
+    # a 'Külsős és belsős' Notion tábla maradék mezői, egyenként
+    technikai_ismeret: str | None = None
+    vallalkozas_kepviselo: str | None = None
+    leltar_notion_ids: JsonScalar = None
+    hany_visszajelzese_van_notion: JsonScalar = None
+    first_name: str | None = None
+    last_name: str | None = None
+    munkanapok_notion: JsonScalar = None
+    linkedin_profile: str | None = None
+    twitter_profile: str | None = None
+    facebook_profile: str | None = None
+    photo_url: str | None = None
+    kulsos_tig_notion_ids: JsonScalar = None
+    belsos_tig_notion_ids: JsonScalar = None
+    orabler_notion: str | None = None
+    napidij_notion: str | None = None
+    extra_kiadas_megnevezes: str | None = None
+    extra_kiadas_osszeg: float | None = None
+    extra_kiadas_datuma: date | None = None
+    belsos_havi_tig: bool | None = None
+    source: str | None = None
+    events_involved_count_notion: JsonScalar = None
+    netto_osszeg: float | None = None
+    linked_events_notion_ids: JsonScalar = None
+    leltar_hiany_20240415_notion: JsonScalar = None
+    legutolso_napi_dij_megegyezes: str | None = None
+    milyen_suru_hivjuk: str | None = None
+    megbizas_targya: str | None = None
+    szallito_notion_ids: JsonScalar = None
+    keltezes_datuma: date | None = None
+    archive_technika_elhagyas_notion_ids: JsonScalar = None
+    nyilvantartasi_szam: str | None = None
+    vallakozas_szekhely: str | None = None
+    van_e_email_cime_notion: JsonScalar = None
+    vallakozas_neve: str | None = None
+    phone_2: str | None = None
+    megjegyzes: str | None = None
+    honnan_ismerjuk: str | None = None
+    birthday: date | None = None
+    kiadas_projektkodja_notion_ids: JsonScalar = None
+    formula_2_notion: JsonScalar = None
+    main_database_notion_ids: JsonScalar = None
+    vallalkozas_adoszama: str | None = None
+    plusz_afa: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -59,5 +105,7 @@ class RateUpdate(RateBase):
 class RateRead(RateBase):
     id: int
     employee_id: int
+    fotos_napi_ber: float | None = None
+    nev: str | None = None
 
     model_config = {"from_attributes": True}

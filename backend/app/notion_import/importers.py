@@ -59,18 +59,6 @@ def get_or_create_unknown_client(db: Session) -> Client:
     return client
 
 
-_CONTACT_CONSUMED = {
-    "Vállalkozás neve",
-    "Full Name",
-    "Adószám",
-    "Székhely",
-    "Nyilvántartásiszám",
-    "Képviselő",
-    "Email",
-    "Phone",
-}
-
-
 def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResult:
     """Client + Contact <- 'Megrendelői kontaktok'. A Notion tábla kontakt-szinten
     tárolja a cégadatokat is, ezért (Vállalkozás neve, Adószám) alapján csoportosítva
@@ -81,7 +69,7 @@ def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResu
     company_key_to_client: dict[str, Client] = {}
 
     for page in client.query_database(db_ids.MEGRENDELOI_KONTAKTOK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         company_name = _text(props.get("Vállalkozás neve")) or _text(props.get("Full Name"))
         if not company_name:
             result.skipped += 1
@@ -125,7 +113,10 @@ def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResu
                 "full_name": full_name,
                 "email": _text(props.get("Email")),
                 "phone": _text(props.get("Phone")),
-                "extra": remaining_properties(props, _CONTACT_CONSUMED),
+                "keresztnev_notion": _text(props.get("Keresztnév")),
+                "vezeteknev_notion": _text(props.get("Vezeték név")),
+                "torolt_anyagok_notion_ids": props.get("Törölt anyagok"),
+                "kreativ_team_database_notion_ids": props.get("Kreatív team database"),
             },
             label=f"Contact '{full_name}'",
         )
@@ -133,16 +124,6 @@ def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResu
     return result
 
 
-_EMPLOYEE_CONSUMED = {
-    "Full Name",
-    "E-MAIL CÍM",
-    "Email",
-    "TELEFONSZÁM",
-    "Phone",
-    "JOGOSÍTVÁNY",
-    "Munkaszerződés",
-    "Külsős vagy belsős",
-}
 
 
 def import_employees(client: NotionClient, db: Session) -> ImportResult:
@@ -153,7 +134,7 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Employee")
 
     for page in client.query_database(db_ids.KULSOS_ES_BELSOS):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         full_name = _text(props.get("Full Name"))
         if not full_name:
             result.skipped += 1
@@ -180,7 +161,52 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
                 "munkaszerzodes_url": _first_url(props.get("Munkaszerződés")),
                 "role": SystemRole.OPERATOR,
                 "is_active": True,
-                "extra": remaining_properties(props, _EMPLOYEE_CONSUMED),
+                "elso_munkanap": as_date(props.get("Első munkanap")),
+                "utolso_munkanap": as_date(props.get("Utolsó munkanap")),
+                "ertekeles": props.get("Értékelés"),
+                "technikai_ismeret": _text(props.get("TECHNIKAI ISMERET")),
+                "vallalkozas_kepviselo": _text(props.get("Vállalkozás képviselő")),
+                "leltar_notion_ids": props.get("🎥 Leltár"),
+                "hany_visszajelzese_van_notion": props.get("Hány visszajelzése van"),
+                "first_name": _text(props.get("First name")),
+                "last_name": _text(props.get("Last name")),
+                "munkanapok_notion": props.get("Munkanapok"),
+                "linkedin_profile": props.get("LinkedIn Profile"),
+                "twitter_profile": props.get("Twitter Profile"),
+                "facebook_profile": props.get("Facebook Profile"),
+                "photo_url": _first_url(props.get("Photo")),
+                "kulsos_tig_notion_ids": props.get("Külsős TIG"),
+                "belsos_tig_notion_ids": props.get("Belsős TIG"),
+                "orabler_notion": _text(props.get("Órabér")),
+                "napidij_notion": _text(props.get("Napidíj")),
+                "extra_kiadas_megnevezes": _text(props.get("Extra kiadás megnevezés")),
+                "extra_kiadas_osszeg": props.get("Extra kiadás összeg"),
+                "extra_kiadas_datuma": as_date(props.get("Extra kiadás dátuma")),
+                "belsos_havi_tig": props.get("Belsős Havi TIG"),
+                "source": _text(props.get("Source")),
+                "events_involved_count_notion": props.get("Events involved count (Σ)"),
+                "netto_osszeg": props.get("Nettó összeg"),
+                "linked_events_notion_ids": props.get("Linked Events"),
+                "leltar_hiany_20240415_notion": props.get("2024.04.15. leltár hiány"),
+                "legutolso_napi_dij_megegyezes": _text(props.get("LEGUTOLSÓ NAPI DÍJ MEGEGYEZÉS")),
+                "milyen_suru_hivjuk": _text(props.get("MILYEN SŰRŰN HÍVJUK")),
+                "megbizas_targya": _text(props.get("Megbízás tárgya")),
+                "szallito_notion_ids": props.get("Szállító"),
+                "keltezes_datuma": as_date(props.get("Keltezés dátuma")),
+                "archive_technika_elhagyas_notion_ids": props.get("Archive technika elhagyás"),
+                "nyilvantartasi_szam": _text(props.get("Nyilvántartási szám:")),
+                "vallakozas_szekhely": _text(props.get("Vállakozás székhely")),
+                "van_e_email_cime_notion": props.get("van e email címe"),
+                "vallakozas_neve": _text(props.get("Vállakozás neve")),
+                "phone_2": props.get("Phone 2"),
+                "megjegyzes": _text(props.get("MEGJEGYZÉS")),
+                "honnan_ismerjuk": _text(props.get("HONNAN ISMERJÜK")),
+                "birthday": as_date(props.get("Birthday")),
+                "kiadas_projektkodja_notion_ids": props.get("Kiadás projektkódja"),
+                "formula_2_notion": props.get("Formula 2"),
+                "main_database_notion_ids": props.get("📅 Main Database"),
+                "vallalkozas_adoszama": _text(props.get("Vállalkozás adószáma")),
+                "plusz_afa": _text(props.get("Plusz ÁFA")),
             },
             label=f"Employee '{full_name}'",
         )
@@ -188,7 +214,7 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
     # Type-overlay: a Vágók tábla '👥 Külsős és belsős' relation-je jelöli ki, ki vágó -
     # ez valódi relation (nem név-egyeztetés), tehát biztonságosan használható.
     for page in client.query_database(db_ids.VAGOK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         related_ids = props.get("👥 Külsős és belsős") or []
         employee_id = resolve_relation_id(db, "Employee", related_ids)
         if employee_id is None:
@@ -209,7 +235,7 @@ def import_rates(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Rate")
 
     for page in client.query_database(db_ids.ORABER_NAPIBER):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         employee_id = resolve_relation_id(db, "Employee", props.get("Személy") or [])
         if employee_id is None:
             result.skipped += 1
@@ -230,6 +256,8 @@ def import_rates(client: NotionClient, db: Session) -> ImportResult:
                 "havi_alap": props.get("Havi alap"),
                 "elso_munkanap": as_date(props.get("Első munkanap")),
                 "utolso_munkanap": as_date(props.get("Utolsó munkanap")),
+                "fotos_napi_ber": props.get("Fotós napi bér"),
+                "nev": _text(props.get("Name")),
             },
             label=f"Rate (employee_id={employee_id})",
         )
@@ -259,7 +287,7 @@ def import_equipment(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Equipment")
 
     for page in client.query_database(db_ids.LELTAR):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         nev = _text(props.get("Name"))
         if not nev:
             result.skipped += 1
@@ -296,7 +324,7 @@ def import_campaigns(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Campaign")
 
     for page in client.query_database(db_ids.KAMPANYOK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         nev = _text(props.get("Kampány neve"))
         if not nev:
             result.skipped += 1
@@ -343,7 +371,7 @@ def _import_task_database(
     client: NotionClient, db: Session, database_id: str, result: ImportResult, forced_allapot: str | None = None
 ) -> None:
     for page in client.query_database(database_id):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         feladat = _text(props.get("Feladat")) or _text(props.get("Name"))
         if not feladat:
             result.skipped += 1
@@ -405,7 +433,7 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Contract")
 
     for page in client.query_database(db_ids.KERETSZERZODES):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         client_id = resolve_client_via_contact(db, props.get("Akivel szerződünk") or [])
         szerzodes_url = _first_url(props.get("Szerződés"))
         safe_upsert(
@@ -431,7 +459,7 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
         )
 
     for page in client.query_database(db_ids.ALVALLALKOZO_KERETSZERZODES):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         employee_id = resolve_relation_id(db, "Employee", props.get("Vállalkozó") or [])
         szerzodes_url = _first_url(props.get("Szerződés aláírva"))
         safe_upsert(
@@ -473,7 +501,7 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
     unknown_client = get_or_create_unknown_client(db)
 
     for page in client.query_database(db_ids.HYPE_ADMIN_PROJEKTKODOK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         projektkod = _text(props.get("PROJEKTKÓD"))
         if not projektkod:
             result.skipped += 1

@@ -59,7 +59,7 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
     unknown_project_code = get_or_create_unknown_project_code(db)
 
     for page in client.query_database(db_ids.MAIN_DATABASE):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         nev = _text(props.get("Name"))
         if not nev:
             result.skipped += 1
@@ -239,7 +239,7 @@ def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Deliverable")
 
     for page in client.query_database(db_ids.UTOMUNKA):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         projekt_neve = _text(props.get("PROJEK NEVE"))
         if not projekt_neve:
             result.skipped += 1
@@ -281,7 +281,7 @@ def _import_timesheet_database(
 ) -> None:
     consumed = _timesheet_consumed(deliverable_relation_field)
     for page in client.query_database(database_id):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         employee_id = resolve_relation_id(db, "Employee", props.get("Vágó") or [])
         if employee_id is None:
             result.skipped += 1
@@ -345,7 +345,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Expense")
 
     for page in client.query_database(db_ids.KIADASOK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         megnevezes = _text(props.get("Kedvezményezett"))
         if not megnevezes:
             result.skipped += 1
@@ -383,7 +383,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
         )
 
     for page in client.query_database(db_ids.PROJEKT_KIADASOK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         megnevezes = _text(props.get("Kiadás megnevezése"))
         if not megnevezes:
             result.skipped += 1
@@ -410,7 +410,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
         )
 
     for page in client.query_database(db_ids.BELSOS_EXTRA_KIADASOK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         megnevezes = _text(props.get("Megnevezés")) or _text(props.get("Név"))
         if not megnevezes:
             result.skipped += 1
@@ -455,7 +455,7 @@ def import_revenues(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Revenue")
 
     for page in client.query_database(db_ids.BEVETELEK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         project_code_id = resolve_relation_id(db, "ProjectCode", props.get("HYPE ADMIN projektkódok") or [])
         if project_code_id is None:
             result.skipped += 1
@@ -492,7 +492,7 @@ def import_kp_forgalom(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="KpForgalom")
 
     for page in client.query_database(db_ids.KP_FORGALOM):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         expense_id = resolve_relation_id(db, "Expense", props.get("Projekt kiadások") or [])
 
         safe_upsert(
@@ -522,7 +522,7 @@ def import_feedback(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Feedback")
 
     for page in client.query_database(db_ids.VISSZAJELZESSEK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         deliverable_id = resolve_relation_id(db, "Deliverable", props.get("Utómunka_2") or [])
         if deliverable_id is None:
             result.skipped += 1

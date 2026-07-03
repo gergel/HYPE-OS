@@ -36,6 +36,13 @@ class Contact(TimestampMixin, Base):
     last_name: Mapped[str | None] = mapped_column(String(120))
     email: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(50))
-    extra: Mapped[dict | None] = mapped_column(JSON)
+
+    # a 'Megrendelői kontaktok' Notion tábla maradék mezői
+    keresztnev_notion: Mapped[str | None] = mapped_column(String(120), comment="Keresztnév (formula)")
+    vezeteknev_notion: Mapped[str | None] = mapped_column(String(120), comment="Vezeték név (formula)")
+    torolt_anyagok_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Törölt anyagok (relation)")
+    kreativ_team_database_notion_ids: Mapped[dict | None] = mapped_column(
+        JSON, comment="Kreatív team database (relation)"
+    )
 
     client: Mapped["Client"] = relationship(back_populates="contacts")

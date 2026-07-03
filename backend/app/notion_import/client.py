@@ -52,6 +52,41 @@ class NotionClient:
         resp.raise_for_status()
         return resp.json()
 
+    def _get(self, path: str, params: dict | None = None) -> dict:
+        for attempt in range(5):
+            resp = self._client.get(path, params=params or {})
+            if resp.status_code == 429:
+                wait = float(resp.headers.get("Retry-After", "1"))
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_full_property(self, page_id: str, property_id: str) -> list[dict]:
+        """A page-lekérdezés válaszában a rich_text/relation/people/title típusú
+        property-k tömbje Notion-oldalon csonkolható (dokumentált API-korlát: kb.
+        25 elem felett lapozni kell) - ez a végpont mindig a TELJES, lapozott
+        értéket adja vissza. Csak akkor hívjuk, ha a query-válaszban kapott tömb
+        gyanúsan a csonkolási határon van (lásd extract_properties)."""
+        results: list[dict] = []
+        cursor = None
+        while True:
+            params: dict[str, Any] = {"page_size": 100}
+            if cursor:
+                params["start_cursor"] = cursor
+            data = self._get(f"/pages/{page_id}/properties/{property_id}", params=params)
+            if data.get("object") == "list":
+                results.extend(data.get("results", []))
+                if not data.get("has_more"):
+                    break
+                cursor = data.get("next_cursor")
+            else:
+                # nem lapozott, egyetlen érték (pl. number/select/date/stb.) - nincs mit tenni
+                return [data]
+        return results
+
     def search_databases(self) -> list[dict]:
         """Az integrációval megosztott összes adatbázis (csak azok látszanak, amiket
         a Notionban kézzel megosztottak az integrációval - lásd a discovery script kimenetét)."""
@@ -104,7 +139,14 @@ def extract_property(prop: dict) -> Any:
     if prop_type == "date":
         if not value:
             return None
-        return {"start": value.get("start"), "end": value.get("end")}
+        start = value.get("start")
+        end = value.get("end")
+        # sima dátum-string-et adunk vissza (pontosan azt, amit Notionban látsz),
+        # nem egy {'start':..,'end':..} JSON objektumot - egy dátum tartomány esetén
+        # "kezdő – záró" alakban.
+        if end and end != start:
+            return f"{start} – {end}"
+        return start
     if prop_type == "checkbox":
         return bool(value)
     if prop_type == "people":
@@ -127,7 +169,9 @@ def extract_property(prop: dict) -> Any:
         rollup_type = value.get("type")
         if rollup_type == "array":
             return [extract_property(v) for v in value.get("array", [])]
-        return value.get(rollup_type)
+        # a date/number/string altípusokat is a fenti, típus szerinti ágakon
+        # keresztül normalizáljuk (pl. dátum -> sima string, nem beágyazott objektum)
+        return extract_property({"type": rollup_type, rollup_type: value.get(rollup_type)})
     if prop_type in ("created_time", "last_edited_time"):
         return value
     if prop_type == "button":
@@ -135,9 +179,35 @@ def extract_property(prop: dict) -> Any:
     return value
 
 
-def extract_properties(page: dict) -> dict[str, Any]:
-    """Egy Notion page összes property-jét kiolvassa egy sima {mezőnév: érték} dict-be."""
-    return {name: extract_property(prop) for name, prop in page.get("properties", {}).items()}
+_PAGINATED_TYPES = ("rich_text", "title", "relation", "people")
+_TRUNCATION_THRESHOLD = 25  # Notion API: array-tipusú property-k a query/retrieve válaszban
+# legfeljebb ennyi elemet adnak vissza egyben - efölött a property-item végponttal kell
+# lapozni a teljes értékért (ez okozta, hogy 1000+ karakteres rich_text mezők nálunk
+# üresen/null-ként jöttek át, ha sok formázási szegmensre voltak darabolva Notion-ban).
+
+
+def extract_properties(page: dict, client: "NotionClient | None" = None) -> dict[str, Any]:
+    """Egy Notion page összes property-jét kiolvassa egy sima {mezőnév: érték} dict-be.
+
+    Ha kapunk egy NotionClient-et, és egy array-tipusú property pont a Notion
+    csonkolási határán (25 elem) jön vissza, újra lekérjük a teljes, lapozott
+    értéket a /pages/{id}/properties/{property_id} végponttal - enélkül a hosszú,
+    sok formázási szegmensre bomló rich_text mezők (pl. hosszú megjegyzések)
+    csendben null-ként/hiányosan érkeznének."""
+    result = {}
+    for name, prop in page.get("properties", {}).items():
+        prop_type = prop.get("type")
+        raw_value = prop.get(prop_type)
+        if (
+            client is not None
+            and prop_type in _PAGINATED_TYPES
+            and isinstance(raw_value, list)
+            and len(raw_value) >= _TRUNCATION_THRESHOLD
+        ):
+            full_items = client.get_full_property(page["id"], prop["id"])
+            prop = {"type": prop_type, prop_type: [item.get(prop_type) for item in full_items]}
+        result[name] = extract_property(prop)
+    return result
 
 
 def remaining_properties(props: dict[str, Any], consumed: set[str]) -> dict[str, Any]:

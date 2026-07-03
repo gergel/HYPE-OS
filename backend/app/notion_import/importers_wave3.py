@@ -55,7 +55,7 @@ def import_stock_igenyek(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Assignment (Stock igények)")
 
     for page in client.query_database(db_ids.STOCK_IGENYEK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         equipment_id = resolve_relation_id(db, "Equipment", props.get("Item") or [])
         project_id = resolve_relation_id(db, "Project", props.get("Shoot") or [])
         if equipment_id is None or project_id is None:
@@ -99,7 +99,7 @@ def import_geri_elszamolas(client: NotionClient, db: Session) -> ImportResult:
     geri = get_or_create_geri_employee(db)
 
     for page in client.query_database(db_ids.GERI_ELSZAMOLAS):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         megnevezes = _text(props.get("Leírás")) or "Geri elszámolás"
 
         netto = props.get("Kiadás összege")
@@ -148,7 +148,7 @@ def import_torolt_anyagok(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="Media (Törölt anyagok)")
 
     for page in client.query_database(db_ids.TOROLT_ANYAGOK):
-        props = extract_properties(page)
+        props = extract_properties(page, client)
         title = _text(props.get("Name"))
         project_id = resolve_relation_id(db, "Project", props.get("Forgatás") or [])
         if not title or project_id is None:
