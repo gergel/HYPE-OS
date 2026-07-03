@@ -33,6 +33,7 @@ class EmployeeRead(EmployeeBase):
     id: int
     role: SystemRole
     is_active: bool
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}
 

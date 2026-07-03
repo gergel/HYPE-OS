@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -21,6 +21,7 @@ class Timesheet(TimestampMixin, Base):
     koltseg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     statusz: Mapped[str | None] = mapped_column(String(50))
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     employee: Mapped["Employee"] = relationship(back_populates="timesheets")
     deliverable: Mapped["Deliverable"] = relationship(back_populates="timesheets")

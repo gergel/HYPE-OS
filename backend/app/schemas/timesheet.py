@@ -26,5 +26,6 @@ class TimesheetUpdate(BaseModel):
 class TimesheetRead(TimesheetBase):
     id: int
     idotartam_perc: int | None = None
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}

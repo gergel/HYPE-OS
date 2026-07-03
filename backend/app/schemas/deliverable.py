@@ -30,5 +30,6 @@ class DeliverableUpdate(BaseModel):
 
 class DeliverableRead(DeliverableBase):
     id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}

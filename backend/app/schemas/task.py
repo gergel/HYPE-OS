@@ -9,6 +9,7 @@ class TaskBase(BaseModel):
     hatarido: date | None = None
     kategoria: str | None = None
     checked: bool = False
+    leiras: str | None = None
 
 
 class TaskCreate(TaskBase):
@@ -24,5 +25,6 @@ class TaskUpdate(BaseModel):
 
 class TaskRead(TaskBase):
     id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}

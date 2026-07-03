@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -25,6 +25,7 @@ class Expense(TimestampMixin, Base):
     kifizetes_modja: Mapped[str | None] = mapped_column(String(50))
     fizetes_hatarideje: Mapped[date | None] = mapped_column(Date)
     kesz: Mapped[bool] = mapped_column(Boolean, default=False)
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     project_code: Mapped["ProjectCode"] = relationship(back_populates="expenses")
     employee: Mapped["Employee"] = relationship(back_populates="expenses")
@@ -45,6 +46,7 @@ class Revenue(TimestampMixin, Base):
     penznem: Mapped[str] = mapped_column(String(10), default="HUF")
     fizetes_hatarideje: Mapped[date | None] = mapped_column(Date)
     fizetes_datuma: Mapped[date | None] = mapped_column(Date)
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     project_code: Mapped["ProjectCode"] = relationship(back_populates="revenues")
     payments: Mapped[list["Payment"]] = relationship(back_populates="revenue")
@@ -63,6 +65,7 @@ class KpForgalom(TimestampMixin, Base):
     penznem: Mapped[str] = mapped_column(String(10), default="HUF")
     legalis: Mapped[str | None] = mapped_column(String(50))
     kiadas_datuma: Mapped[date | None] = mapped_column(Date)
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     expense: Mapped["Expense"] = relationship(back_populates="kp_forgalmak")
 

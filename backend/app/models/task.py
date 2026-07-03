@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Boolean, Column, Date, ForeignKey, String, Table
+from sqlalchemy import JSON, Boolean, Column, Date, ForeignKey, String, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -25,5 +25,7 @@ class Task(TimestampMixin, Base):
     hatarido: Mapped[date | None] = mapped_column(Date)
     kategoria: Mapped[str | None] = mapped_column(String(100))
     checked: Mapped[bool] = mapped_column(Boolean, default=False)
+    leiras: Mapped[str | None] = mapped_column(String(2000))
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     felelosok: Mapped[list["Employee"]] = relationship(secondary=task_employees, back_populates="tasks")

@@ -27,5 +27,6 @@ class ProjectUpdate(BaseModel):
 
 class ProjectRead(ProjectBase):
     id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}

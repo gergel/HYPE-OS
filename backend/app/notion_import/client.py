@@ -140,6 +140,21 @@ def extract_properties(page: dict) -> dict[str, Any]:
     return {name: extract_property(prop) for name, prop in page.get("properties", {}).items()}
 
 
+def remaining_properties(props: dict[str, Any], consumed: set[str]) -> dict[str, Any]:
+    """Azokat a Notion mezőket adja vissza, amiket az importer NEM olvasott ki saját
+    oszlopba - ez kerül az entitás `extra` JSON mezőjébe, hogy a HYPE ADMIN projektkódok-
+    hoz hasonló, 60+ mezős táblák adata ne vesszen el, de a séma se dagadjon szét.
+    Üres/None értékeket kihagyja, hogy az extra JSON kompakt maradjon."""
+    result = {}
+    for key, value in props.items():
+        if key in consumed:
+            continue
+        if value is None or value == [] or value == "":
+            continue
+        result[key] = value
+    return result
+
+
 def as_date(value: dict | str | None):
     """A date property extract_property által visszaadott {'start':..,'end':..} alakját
     (vagy a rich_text-ként tárolt szabad dátum-szöveget, ami a HYPE Notionban gyakori)

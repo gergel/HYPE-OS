@@ -31,5 +31,6 @@ class ContractUpdate(BaseModel):
 class ContractRead(ContractBase):
     id: int
     szerzodes_file_url: str | None = None
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}

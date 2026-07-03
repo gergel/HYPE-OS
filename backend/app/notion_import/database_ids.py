@@ -34,5 +34,13 @@ BELSOS_EXTRA_KIADASOK = "240c9afd-d53b-808e-ba1b-e4230add850b"
 BEVETELEK = "218c9afd-d53b-80d9-b2f4-f583ce991885"
 KP_FORGALOM = "2bec9afd-d53b-80a5-bdff-e00fb187d4ca"
 VISSZAJELZESSEK = "c20b3377-db65-436e-92a7-76571fc58169"
+
+# Nem importáljuk (a felhasználó explicit döntése, 2026-07-02: "csak tesztek voltak,
+# nincs szükség rájuk") - a konstansok itt maradnak referenciaként, ha mégis kellenének:
 OPERATORI_DISZPO = "149c9afd-d53b-8096-bccf-d6f43093c4d7"
 ESZKOZKIVITEL = "240c9afd-d53b-80ee-bd9a-f9eb34e91dea"
+
+# Fázis 2, 3. kör (egyedi logikájú maradék táblák):
+STOCK_IGENYEK = "2edc9afd-d53b-8087-bf72-edd6027147ef"
+GERI_ELSZAMOLAS = "301c9afd-d53b-80f7-be78-f43bdc3f0486"
+TOROLT_ANYAGOK = "223c9afd-d53b-80bf-ac08-e99816340f48"

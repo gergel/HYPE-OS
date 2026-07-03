@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Column, Date, ForeignKey, String, Table
+from sqlalchemy import JSON, Column, Date, ForeignKey, String, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -28,6 +28,7 @@ class Project(TimestampMixin, Base):
     forgatas_datuma: Mapped[date | None] = mapped_column(Date)
     helyszin: Mapped[str | None] = mapped_column(String(255))
     allapot: Mapped[str | None] = mapped_column(String(50))
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     project_code: Mapped["ProjectCode"] = relationship(back_populates="projects")
     campaign: Mapped["Campaign"] = relationship(back_populates="projects")

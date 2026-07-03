@@ -29,6 +29,7 @@ class EquipmentUpdate(BaseModel):
 
 class EquipmentRead(EquipmentBase):
     id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}
 
@@ -54,5 +55,6 @@ class AssignmentUpdate(BaseModel):
 
 class AssignmentRead(AssignmentBase):
     id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}

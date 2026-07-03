@@ -25,5 +25,6 @@ class CampaignUpdate(BaseModel):
 
 class CampaignRead(CampaignBase):
     id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}

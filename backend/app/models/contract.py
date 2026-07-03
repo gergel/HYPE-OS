@@ -1,7 +1,7 @@
 from datetime import date
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, String
+from sqlalchemy import JSON, Boolean, Date, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -37,6 +37,7 @@ class Contract(TimestampMixin, Base):
     szerzodes_file_url: Mapped[str | None] = mapped_column(String(500))
     keltezes: Mapped[date | None] = mapped_column(Date)
     alairva: Mapped[bool] = mapped_column(Boolean, default=False)
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     client: Mapped["Client"] = relationship(back_populates="contracts")
     employee: Mapped["Employee"] = relationship(back_populates="contracts")

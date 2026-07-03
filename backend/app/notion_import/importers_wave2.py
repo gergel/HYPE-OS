@@ -3,15 +3,10 @@
 (importers.py) sikeres lefutása után van értelme futtatni, mert ezek Client/
 Employee/Campaign/ProjectCode relation-öket oldanak fel.
 
-Amit ez a kör NEM importál, és miért:
-- Callsheet <- 'Operatőri diszpó': a forrás táblában nincs relation mező a
-  Main Database-hez, csak egy szabad szöveges 'Projektkód' rich_text - ennek
-  string-alapú feloldása pont az a törékeny név/kód-egyeztetés lenne, amit a
-  HYPE OS ki akar iktatni (lásd hype_os_railway_integracio.md 2. fejezet).
-- Assignment <- 'Eszközkivitel': ugyanez a probléma - nincs relation a
-  Main Database-hez, csak egy 'Projektkód' title mező.
-Mindkettőt érdemesebb manuálisan vagy egy Notion-oldali relation mező
-pótlása után importálni, nem force-olt szöveg-egyeztetéssel.
+A felhasználó explicit döntése alapján (2026-07-02) az alábbi két táblát NEM
+importáljuk, mert csak tesztek voltak, nincs rájuk szükség:
+- Callsheet <- 'Operatőri diszpó'
+- Assignment <- 'Eszközkivitel'
 """
 
 from __future__ import annotations
@@ -25,7 +20,7 @@ from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.timesheet import Timesheet
 from app.notion_import import database_ids as db_ids
-from app.notion_import.client import NotionClient, as_date, extract_properties
+from app.notion_import.client import NotionClient, as_date, extract_properties, remaining_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert, upsert
 from app.notion_import.importers import _text, get_or_create_unknown_client
 
@@ -53,11 +48,15 @@ def get_or_create_unknown_project_code(db: Session) -> ProjectCode:
     return project_code
 
 
+_PROJECT_CONSUMED = {"Name", "HYPE ADMIN projektkódok", "Kampányok", "Date", "Helyszín", "Location", "Állapot"}
+
+
 def import_projects(client: NotionClient, db: Session) -> ImportResult:
     """Project <- 'Main Database'. Ez a legnagyobb/legzajosabb tábla (144 mező,
-    rengeteg button/formula) - csak az érdemi, adat-jellegű mezőket vesszük át.
-    Crew-t (stáb) NEM tudunk hozzárendelni, mert az 'Operatőr' mező Notion
-    user-people típusú, nem relation az Employee-forrás táblára."""
+    rengeteg button/formula) - csak az érdemi, adat-jellegű mezőket vesszük át
+    saját oszlopba, a többi (jórészt formula/button, sok redundáns) az `extra`
+    JSON-ba kerül. Crew-t (stáb) NEM tudunk hozzárendelni, mert az 'Operatőr'
+    mező Notion user-people típusú, nem relation az Employee-forrás táblára."""
     result = ImportResult(entity_type="Project")
     unknown_project_code = get_or_create_unknown_project_code(db)
 
@@ -87,11 +86,27 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
                 "forgatas_datuma": as_date(props.get("Date")),
                 "helyszin": _text(props.get("Helyszín")) or _text(props.get("Location")),
                 "allapot": _text(props.get("Állapot")),
+                "extra": remaining_properties(props, _PROJECT_CONSUMED),
             },
             label=f"Project '{nev}'",
         )
 
     return result
+
+
+_DELIVERABLE_CONSUMED = {
+    "PROJEK NEVE",
+    "HYPE ADMIN projektkódok",
+    "Forgatás",
+    "Vágók",
+    "Kampányok",
+    "Állapot",
+    "Határidő",
+    "Költség",
+    "Kész anyag",
+    "Nyersanyag",
+    "Anyag kiküldve",
+}
 
 
 def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
@@ -124,6 +139,7 @@ def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
                 "kesz_anyag_url": props.get("Kész anyag"),
                 "nyersanyag_url": props.get("Nyersanyag"),
                 "anyag_kikuldve": bool(props.get("Anyag kiküldve")),
+                "extra": remaining_properties(props, _DELIVERABLE_CONSUMED),
             },
             label=f"Deliverable '{projekt_neve}'",
         )
@@ -131,9 +147,14 @@ def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
     return result
 
 
+def _timesheet_consumed(deliverable_relation_field: str) -> set[str]:
+    return {"Vágó", deliverable_relation_field, "Start Date", "End Date", "Költség", "Státusz", "Completed"}
+
+
 def _import_timesheet_database(
     client: NotionClient, db: Session, database_id: str, result: ImportResult, deliverable_relation_field: str
 ) -> None:
+    consumed = _timesheet_consumed(deliverable_relation_field)
     for page in client.query_database(database_id):
         props = extract_properties(page)
         employee_id = resolve_relation_id(db, "Employee", props.get("Vágó") or [])
@@ -156,6 +177,7 @@ def _import_timesheet_database(
                 "koltseg": koltseg if isinstance(koltseg, (int, float)) else None,
                 "statusz": _text(props.get("Státusz")),
                 "completed": bool(props.get("Completed")),
+                "extra": remaining_properties(props, consumed),
             },
             label=f"Timesheet (employee_id={employee_id})",
         )
@@ -168,6 +190,29 @@ def import_timesheets(client: NotionClient, db: Session) -> ImportResult:
     _import_timesheet_database(client, db, db_ids.TIMESHEET_PUBLIC, result, "Utómunka_2")
     _import_timesheet_database(client, db, db_ids.TIMESHEET_PRIVATE, result, "Utómunka_1")
     return result
+
+
+_KIADASOK_CONSUMED = {
+    "Kedvezményezett",
+    "Külsős ",
+    "Belsős",
+    "Nettó",
+    "Bruttó",
+    "Pénznem",
+    "Kifizetés módja",
+    "Fizetési határidő",
+    "Kész",
+}
+_PROJEKT_KIADASOK_CONSUMED = {
+    "Kiadás megnevezése",
+    "Projekt",
+    "Személy",
+    "Kiadás összege",
+    "Bruttó összeg",
+    "Pénznem",
+    "Kiadás formája",
+}
+_BELSOS_EXTRA_KIADASOK_CONSUMED = {"Megnevezés", "Név", "Projektkód", "Személy", "Belsős", "Összeg", "Kiadás időpontja"}
 
 
 def import_expenses(client: NotionClient, db: Session) -> ImportResult:
@@ -207,6 +252,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
                 "kifizetes_modja": _text(props.get("Kifizetés módja")),
                 "fizetes_hatarideje": as_date(props.get("Fizetési határidő")),
                 "kesz": bool(props.get("Kész")),
+                "extra": remaining_properties(props, _KIADASOK_CONSUMED),
             },
             label=f"Expense '{megnevezes}'",
         )
@@ -233,6 +279,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
                 "netto": props.get("Kiadás összege"),
                 "brutto": brutto if isinstance(brutto, (int, float)) else None,
                 "penznem": _text(props.get("Pénznem")) or "HUF",
+                "extra": remaining_properties(props, _PROJEKT_KIADASOK_CONSUMED),
             },
             label=f"Expense '{megnevezes}'",
         )
@@ -257,11 +304,23 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
                 "tipus": "belsos",
                 "netto": props.get("Összeg"),
                 "fizetes_hatarideje": as_date(props.get("Kiadás időpontja")),
+                "extra": remaining_properties(props, _BELSOS_EXTRA_KIADASOK_CONSUMED),
             },
             label=f"Expense '{megnevezes}'",
         )
 
     return result
+
+
+_REVENUE_CONSUMED = {
+    "HYPE ADMIN projektkódok",
+    "Bevétel formája",
+    "Nettó",
+    "Bruttó",
+    "Pénznem",
+    "Fizetési határidő",
+    "Fizetés dátuma",
+}
 
 
 def import_revenues(client: NotionClient, db: Session) -> ImportResult:
@@ -292,11 +351,15 @@ def import_revenues(client: NotionClient, db: Session) -> ImportResult:
                 "penznem": _text(props.get("Pénznem")) or "HUF",
                 "fizetes_hatarideje": as_date(props.get("Fizetési határidő")),
                 "fizetes_datuma": as_date(props.get("Fizetés dátuma")),
+                "extra": remaining_properties(props, _REVENUE_CONSUMED),
             },
             label=f"Revenue (project_code_id={project_code_id})",
         )
 
     return result
+
+
+_KP_FORGALOM_CONSUMED = {"Projekt kiadások", "Forgalom", "Összeg", "Pénznem", "Legális", "Kiadás dátuma"}
 
 
 def import_kp_forgalom(client: NotionClient, db: Session) -> ImportResult:
@@ -320,6 +383,7 @@ def import_kp_forgalom(client: NotionClient, db: Session) -> ImportResult:
                 "penznem": _text(props.get("Pénznem")) or "HUF",
                 "legalis": _text(props.get("Legális")),
                 "kiadas_datuma": as_date(props.get("Kiadás dátuma")),
+                "extra": remaining_properties(props, _KP_FORGALOM_CONSUMED),
             },
             label="KpForgalom",
         )

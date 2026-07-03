@@ -15,7 +15,7 @@ from app.models.project_code import ProjectCode
 from app.models.rate import Rate
 from app.models.task import Task
 from app.notion_import import database_ids as db_ids
-from app.notion_import.client import NotionClient, as_date, extract_properties
+from app.notion_import.client import NotionClient, as_date, extract_properties, remaining_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert, upsert
 
 UNKNOWN_CLIENT_KEY = "client:unknown-notion-import"
@@ -59,10 +59,24 @@ def get_or_create_unknown_client(db: Session) -> Client:
     return client
 
 
+_CONTACT_CONSUMED = {
+    "Vállalkozás neve",
+    "Full Name",
+    "Adószám",
+    "Székhely",
+    "Nyilvántartásiszám",
+    "Képviselő",
+    "Email",
+    "Phone",
+}
+
+
 def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResult:
     """Client + Contact <- 'Megrendelői kontaktok'. A Notion tábla kontakt-szinten
     tárolja a cégadatokat is, ezért (Vállalkozás neve, Adószám) alapján csoportosítva
-    hozzuk létre a Client rekordokat, és minden Notion page egy Contact lesz."""
+    hozzuk létre a Client rekordokat, és minden Notion page egy Contact lesz. A fel nem
+    használt mezők (pl. reverse-relationök más táblákra) a Contact.extra-ba kerülnek -
+    a Client szintetikus, több kontakthoz tartozó kulcs, nincs saját "extra"-ja."""
     result = ImportResult(entity_type="Client+Contact")
     company_key_to_client: dict[str, Client] = {}
 
@@ -111,11 +125,24 @@ def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResu
                 "full_name": full_name,
                 "email": _text(props.get("Email")),
                 "phone": _text(props.get("Phone")),
+                "extra": remaining_properties(props, _CONTACT_CONSUMED),
             },
             label=f"Contact '{full_name}'",
         )
 
     return result
+
+
+_EMPLOYEE_CONSUMED = {
+    "Full Name",
+    "E-MAIL CÍM",
+    "Email",
+    "TELEFONSZÁM",
+    "Phone",
+    "JOGOSÍTVÁNY",
+    "Munkaszerződés",
+    "Külsős vagy belsős",
+}
 
 
 def import_employees(client: NotionClient, db: Session) -> ImportResult:
@@ -153,6 +180,7 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
                 "munkaszerzodes_url": _first_url(props.get("Munkaszerződés")),
                 "role": SystemRole.OPERATOR,
                 "is_active": True,
+                "extra": remaining_properties(props, _EMPLOYEE_CONSUMED),
             },
             label=f"Employee '{full_name}'",
         )
@@ -215,6 +243,17 @@ def _normalize_track_mode(raw: str | None) -> TrackMode:
     return TrackMode.ASSET
 
 
+_EQUIPMENT_CONSUMED = {
+    "Name",
+    "Serial number",
+    "Kategória",
+    "Állapota",
+    "Archive státusz",
+    "Track mode",
+    "Összes mennyiség",
+}
+
+
 def import_equipment(client: NotionClient, db: Session) -> ImportResult:
     """Equipment <- 'Leltár'."""
     result = ImportResult(entity_type="Equipment")
@@ -241,11 +280,15 @@ def import_equipment(client: NotionClient, db: Session) -> ImportResult:
                 "archive_statusz": _text(props.get("Archive státusz")),
                 "track_mode": _normalize_track_mode(props.get("Track mode")),
                 "osszes_mennyiseg": int(osszes_mennyiseg) if osszes_mennyiseg else None,
+                "extra": remaining_properties(props, _EQUIPMENT_CONSUMED),
             },
             label=f"Equipment '{nev}'",
         )
 
     return result
+
+
+_CAMPAIGN_CONSUMED = {"Kampány neve", "Kampány státusza", "Határidő", "Intervalluma", "Kész"}
 
 
 def import_campaigns(client: NotionClient, db: Session) -> ImportResult:
@@ -274,11 +317,26 @@ def import_campaigns(client: NotionClient, db: Session) -> ImportResult:
                 "hatarido": as_date(props.get("Határidő")),
                 "intervalluma": intervalluma_text,
                 "kesz": bool(props.get("Kész")),
+                "extra": remaining_properties(props, _CAMPAIGN_CONSUMED),
             },
             label=f"Campaign '{nev}'",
         )
 
     return result
+
+
+_TASK_CONSUMED = {
+    "Feladat",
+    "Name",
+    "Állapot",
+    "Status",
+    "Határidő",
+    "Date",
+    "Due date",
+    "Kategória",
+    "Checked",
+    "Leírás",
+}
 
 
 def _import_task_database(
@@ -303,6 +361,8 @@ def _import_task_database(
                 "hatarido": as_date(props.get("Határidő")) or as_date(props.get("Date")) or as_date(props.get("Due date")),
                 "kategoria": _text(props.get("Kategória")),
                 "checked": bool(props.get("Checked", False)),
+                "leiras": _text(props.get("Leírás")),
+                "extra": remaining_properties(props, _TASK_CONSUMED),
             },
             label=f"Task '{feladat}'",
         )
@@ -316,6 +376,28 @@ def import_tasks(client: NotionClient, db: Session) -> ImportResult:
     _import_task_database(client, db, db_ids.HYPE_TODO_LIST, result)
     _import_task_database(client, db, db_ids.ARCHIVE_FELADATOK, result, forced_allapot="archived")
     return result
+
+
+_KERETSZERZODES_CONSUMED = {
+    "Akivel szerződünk",
+    "Szerződés",
+    "Cég neve",
+    "Székhely",
+    "Adószám",
+    "Megbízás tárgya",
+    "Keretszerződés állapota",
+    "Keltezés",
+}
+_ALVALLALKOZOI_CONSUMED = {
+    "Vállalkozó",
+    "Szerződés aláírva",
+    "Vállalkozás neve",
+    "Vállalkozás székhelye",
+    "Vállalkozás adószáma",
+    "Megbízás tárgya",
+    "Állapot",
+    "Keltezés dátuma",
+}
 
 
 def import_contracts(client: NotionClient, db: Session) -> ImportResult:
@@ -343,6 +425,7 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
                 "szerzodes_file_url": szerzodes_url,
                 "keltezes": as_date(props.get("Keltezés")),
                 "alairva": bool(szerzodes_url),
+                "extra": remaining_properties(props, _KERETSZERZODES_CONSUMED),
             },
             label="Contract (keretszerződés)",
         )
@@ -368,6 +451,7 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
                 "szerzodes_file_url": szerzodes_url,
                 "keltezes": as_date(props.get("Keltezés dátuma")),
                 "alairva": bool(szerzodes_url),
+                "extra": remaining_properties(props, _ALVALLALKOZOI_CONSUMED),
             },
             label="Contract (alvállalkozói keretszerződés)",
         )
@@ -375,10 +459,30 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
     return result
 
 
+_PROJECT_CODE_CONSUMED = {
+    "PROJEKTKÓD",
+    "Megrendelői kontaktok",
+    "Dátum",
+    "Esemény állapota",
+    "Pénznem",
+    "Árfolyam",
+    "TIG státusza",
+    "Számla státusza",
+    "Keretszerződés",
+    "MEGJEGYZÉS",
+    "Teljesítés dátuma",
+    "Utalás dátuma",
+    "Számla",
+    "TIG aláírva",
+}
+
+
 def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
     """ProjectCode <- 'HYPE ADMIN projektkódok'. Ha a 'Megrendelői kontaktok' relation
     nem oldható fel (pl. üres kontakt-lap volt), az 'Ismeretlen ügyfél' placeholder
-    Client-hez kötjük, hogy a pénzügyi adat ne vesszen el."""
+    Client-hez kötjük, hogy a pénzügyi adat ne vesszen el. A tábla 60+ mezős - a
+    kevésbé fontos, nagyrészt Notion-formulából számolt mezők az `extra` JSON-ba
+    kerülnek (lásd remaining_properties), nem kapnak saját oszlopot."""
     result = ImportResult(entity_type="ProjectCode")
     unknown_client = get_or_create_unknown_client(db)
 
@@ -408,6 +512,12 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
                 "arfolyam": props.get("Árfolyam"),
                 "tig_statusza": _text(props.get("TIG státusza")),
                 "szamla_statusza": _text(props.get("Számla státusza")),
+                "megjegyzes": _text(props.get("MEGJEGYZÉS")),
+                "teljesites_datuma": as_date(props.get("Teljesítés dátuma")),
+                "utalas_datuma": as_date(props.get("Utalás dátuma")),
+                "szamla_url": _first_url(props.get("Számla")),
+                "tig_alairva_url": _first_url(props.get("TIG aláírva")),
+                "extra": remaining_properties(props, _PROJECT_CODE_CONSUMED),
             },
             label=f"ProjectCode '{projektkod}'",
         )

@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -26,6 +26,7 @@ class Deliverable(TimestampMixin, Base):
     kesz_anyag_url: Mapped[str | None] = mapped_column(String(500))
     nyersanyag_url: Mapped[str | None] = mapped_column(String(500))
     anyag_kikuldve: Mapped[bool] = mapped_column(Boolean, default=False)
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     project_code: Mapped["ProjectCode"] = relationship(back_populates="deliverables")
     project: Mapped["Project"] = relationship(back_populates="deliverables")

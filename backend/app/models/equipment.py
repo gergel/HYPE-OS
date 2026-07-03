@@ -1,7 +1,7 @@
 from datetime import date
 from enum import StrEnum
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, String
+from sqlalchemy import JSON, Date, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -32,6 +32,7 @@ class Equipment(TimestampMixin, Base):
         nullable=False,
     )
     osszes_mennyiseg: Mapped[int | None] = mapped_column(Integer, comment="csak stock track_mode esetén relevans")
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="equipment")
 
@@ -50,6 +51,7 @@ class Assignment(TimestampMixin, Base):
     kivitel_datuma: Mapped[date | None] = mapped_column(Date)
     aki_visszahozta: Mapped[str | None] = mapped_column(String(255))
     visszahozatal_datuma: Mapped[date | None] = mapped_column(Date)
+    extra: Mapped[dict | None] = mapped_column(JSON)
 
     equipment: Mapped["Equipment"] = relationship(back_populates="assignments")
     project: Mapped["Project"] = relationship(back_populates="assignments")

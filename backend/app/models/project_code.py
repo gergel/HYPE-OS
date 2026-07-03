@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Numeric, String
+from sqlalchemy import JSON, Date, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -25,6 +25,15 @@ class ProjectCode(TimestampMixin, Base):
     szerzodes_url: Mapped[str | None] = mapped_column(String(500))
     tig_statusza: Mapped[str | None] = mapped_column(String(50))
     szamla_statusza: Mapped[str | None] = mapped_column(String(50))
+
+    megjegyzes: Mapped[str | None] = mapped_column(Text)
+    teljesites_datuma: Mapped[date | None] = mapped_column(Date)
+    utalas_datuma: Mapped[date | None] = mapped_column(Date)
+    szamla_url: Mapped[str | None] = mapped_column(String(500))
+    tig_alairva_url: Mapped[str | None] = mapped_column(String(500))
+    extra: Mapped[dict | None] = mapped_column(
+        JSON, comment="a Notionban meglévő, de nálunk saját oszlopot nem kapott mezők nyers értéke"
+    )
 
     client: Mapped["Client"] = relationship(back_populates="project_codes")
     contract: Mapped["Contract"] = relationship(back_populates="project_codes")

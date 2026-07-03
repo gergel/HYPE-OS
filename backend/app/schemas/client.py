@@ -24,6 +24,7 @@ class ContactUpdate(BaseModel):
 class ContactRead(ContactBase):
     id: int
     client_id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}
 

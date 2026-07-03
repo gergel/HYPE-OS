@@ -28,6 +28,7 @@ class ExpenseUpdate(BaseModel):
 
 class ExpenseRead(ExpenseBase):
     id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}
 
@@ -52,6 +53,7 @@ class RevenueUpdate(BaseModel):
 
 class RevenueRead(RevenueBase):
     id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}
 
@@ -75,5 +77,6 @@ class KpForgalomUpdate(KpForgalomBase):
 
 class KpForgalomRead(KpForgalomBase):
     id: int
+    extra: dict | None = None
 
     model_config = {"from_attributes": True}
