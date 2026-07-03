@@ -14,6 +14,9 @@ class NotionImportMap(TimestampMixin, Base):
     __tablename__ = "notion_import_map"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    notion_page_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
+    # 36 karakter épp elég egy valódi Notion UUID-hoz, de a szintetikus kulcsaink
+    # (pl. "client:cegnev-vagy-email@pelda.hu" az Ügyfél cég-csoportosításnál) ennél
+    # hosszabbak is lehetnek - bőven méretezve, hogy ne csorduljon túl.
+    notion_page_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     entity_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     entity_id: Mapped[int] = mapped_column(nullable=False)
