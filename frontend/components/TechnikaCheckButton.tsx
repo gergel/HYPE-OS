@@ -27,6 +27,8 @@ export function TechnikaCheckButton({ projectId }: { projectId: number }) {
       const data: Result = await res.json();
       setResult(data);
       router.refresh();
+    } catch (err) {
+      alert(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
       setBusy(false);
     }

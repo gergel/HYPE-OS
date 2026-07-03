@@ -41,6 +41,8 @@ export function ActionButton({
       } else {
         router.refresh();
       }
+    } catch (err) {
+      alert(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
       setBusy(false);
     }

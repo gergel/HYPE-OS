@@ -46,6 +46,8 @@ export function QuickCreateForm({
       setValues({});
       setOpen(false);
       router.refresh();
+    } catch (err) {
+      setError(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
       setBusy(false);
     }

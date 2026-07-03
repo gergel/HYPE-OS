@@ -23,6 +23,18 @@ class ProjectCreate(ProjectBase):
     crew_employee_ids: list[int] = []
 
 
+class ProjectListItem(ProjectBase):
+    """A projekt lista nézet (GET /api/v1/projects) szűkített sémája - a Project
+    ~140 oszlopos teljes ProjectRead helyett, mert a lista oldal ténylegesen csak
+    ezt az 5-6 mezőt jeleníti meg (lásd frontend/app/projektek/page.tsx és
+    RelatedTable), a teljes séma soronkénti validálása/JSON-ba szerializálása
+    pedig érezhetően lassította a listaoldal betöltését sok projekt esetén."""
+
+    id: int
+
+    model_config = {"from_attributes": True}
+
+
 class ProjectUpdate(BaseModel):
     nev: str | None = None
     campaign_id: int | None = None

@@ -43,6 +43,8 @@ export function M2mLinker({
         return;
       }
       router.refresh();
+    } catch (err) {
+      alert(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
       setBusy(false);
     }

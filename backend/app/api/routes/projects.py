@@ -7,7 +7,7 @@ from app.core.security import Role, require_roles
 from app.models.employee import Employee
 from app.models.project import Project
 from app.schemas.deliverable import DeliverableRead
-from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate, SzerzodesKeszitesPayload
+from app.schemas.project import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate, SzerzodesKeszitesPayload
 from app.services.contract_actions import apply_szerzodes_keszites, send_szerzodes
 from app.services.dispo import send_diszpo, send_elozetes_diszpo
 from app.services.project_actions import create_feldarabolas, create_utomunka
@@ -18,6 +18,7 @@ router = build_crud_router(
     create_schema=ProjectCreate,
     update_schema=ProjectUpdate,
     read_schema=ProjectRead,
+    list_read_schema=ProjectListItem,
     prefix="/projects",
     tags=["projects"],
     m2m_fields={"crew_employee_ids": ("crew", Employee)},

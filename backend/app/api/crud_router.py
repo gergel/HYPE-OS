@@ -26,13 +26,20 @@ def build_crud_router(
     write_roles: tuple[Role, ...] = (Role.ADMIN, Role.OPERATOR),
     before_create: Callable[[dict, Session], dict] | None = None,
     m2m_fields: dict[str, tuple[str, type]] | None = None,
+    list_read_schema: type[BaseModel] | None = None,
 ) -> APIRouter:
     """m2m_fields: {payload_key: (relationship_attr_name, related_model)} a many-to-many mezőkhöz
     (pl. Project.crew_employee_ids -> ("crew", Employee)), amiket a sima **data konstruktor nem tud kezelni.
-    """
+
+    list_read_schema: ha meg van adva, a lista végpont (GET "") ezt a szűkebb sémát
+    használja read_schema helyett - nagyon széles táblákhoz (pl. Project ~140 oszlop),
+    ahol a listanézet ténylegesen csak pár mezőt jelenít meg, de a teljes séma
+    soronkénti validálása/JSON-ba szerializálása felesleges terhelés minden egyes
+    listaoldal-betöltésnél. Az egyedi rekord GET továbbra is a teljes read_schema-t adja."""
     router = APIRouter(prefix=prefix, tags=tags)
     write_dependency = require_roles(*write_roles) if write_roles else None
     m2m_fields = m2m_fields or {}
+    list_read_schema = list_read_schema or read_schema
 
     def _get_or_404(db: Session, obj_id: int) -> Any:
         obj = db.get(model, obj_id)
@@ -50,7 +57,7 @@ def build_crud_router(
 
     column_names = set(model.__table__.columns.keys())
 
-    @router.get("", response_model=list[read_schema])
+    @router.get("", response_model=list[list_read_schema])
     def list_items(request: Request, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
         """A skip/limit mellett bármelyik valódi oszlop szerint szűrhető query
         param-mal (pl. ?project_code_id=5) - ez adja a kapcsolódó rekordok
