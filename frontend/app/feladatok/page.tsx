@@ -15,6 +15,7 @@ export default async function FeladatokPage() {
           <DataTable<Task>
             rows={tasks}
             emptyText="Még nincs felvett feladat - importáld a Notionból, vagy adj hozzá egyet a /api/v1/tasks végponton."
+            getHref={(t) => `/feladatok/${t.id}`}
             columns={[
               { header: "Feladat", render: (t) => t.feladat },
               { header: "Kategória", render: (t) => t.kategoria ?? "–" },

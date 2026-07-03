@@ -23,6 +23,7 @@ export default async function CsapatPage() {
           <DataTable<Employee>
             rows={employees}
             emptyText="Még nincs felvett crew tag - importáld a Notionból, vagy adj hozzá egyet a /api/v1/crew végponton."
+            getHref={(e) => `/csapat/${e.id}`}
             columns={[
               { header: "Név", render: (e) => e.full_name },
               {

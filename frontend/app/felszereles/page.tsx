@@ -15,6 +15,7 @@ export default async function FelszerelesPage() {
           <DataTable<Equipment>
             rows={equipment}
             emptyText="Még nincs felvett eszköz - importáld a Notionból, vagy adj hozzá egyet a /api/v1/equipment végponton."
+            getHref={(e) => `/felszereles/${e.id}`}
             columns={[
               { header: "Név", render: (e) => e.nev },
               { header: "Kategória", render: (e) => e.kategoria ?? "–" },

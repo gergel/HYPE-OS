@@ -6,7 +6,7 @@ ne kelljen ugyanazt a boilerplate-et kézzel megismételni minden modulban.
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -48,9 +48,23 @@ def build_crud_router(
             related = db.scalars(select(related_model).where(related_model.id.in_(ids))).all() if ids else []
             setattr(obj, attr_name, related)
 
+    column_names = set(model.__table__.columns.keys())
+
     @router.get("", response_model=list[read_schema])
-    def list_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-        return db.scalars(select(model).offset(skip).limit(limit)).all()
+    def list_items(request: Request, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+        """A skip/limit mellett bármelyik valódi oszlop szerint szűrhető query
+        param-mal (pl. ?project_code_id=5) - ez adja a kapcsolódó rekordok
+        (pl. egy Project Code összes Projektje) frontend-oldali lekérdezését."""
+        stmt = select(model)
+        for key, raw_value in request.query_params.items():
+            if key in ("skip", "limit") or key not in column_names:
+                continue
+            try:
+                value: Any = int(raw_value)
+            except ValueError:
+                value = raw_value
+            stmt = stmt.where(getattr(model, key) == value)
+        return db.scalars(stmt.offset(skip).limit(limit)).all()
 
     @router.get("/{item_id}", response_model=read_schema)
     def get_item(item_id: int, db: Session = Depends(get_db)):

@@ -15,6 +15,7 @@ export default async function PenzugyekPage() {
           <DataTable<Expense>
             rows={expenses}
             emptyText="Még nincs felvett kiadás - importáld a Notionból, vagy adj hozzá egyet a /api/v1/expenses végponton."
+            getHref={(e) => `/penzugyek/kiadas/${e.id}`}
             columns={[
               { header: "Megnevezés", render: (e) => e.megnevezes },
               { header: "Típus", render: (e) => e.tipus ?? "–" },
@@ -33,6 +34,7 @@ export default async function PenzugyekPage() {
           <DataTable<Revenue>
             rows={revenues}
             emptyText="Még nincs felvett bevétel - importáld a Notionból, vagy adj hozzá egyet a /api/v1/revenues végponton."
+            getHref={(r) => `/penzugyek/bevetel/${r.id}`}
             columns={[
               { header: "Forma", render: (r) => r.bevetel_formaja ?? "–" },
               { header: "Nettó", align: "right", render: (r) => formatHuf(r.netto) },

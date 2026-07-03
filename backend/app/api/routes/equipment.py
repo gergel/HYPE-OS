@@ -36,8 +36,19 @@ def _overlaps(a_start, a_end, b_start, b_end) -> bool:
 
 
 @assignments_router.get("", response_model=list[AssignmentRead])
-def list_assignments(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.scalars(select(Assignment).offset(skip).limit(limit)).all()
+def list_assignments(
+    skip: int = 0,
+    limit: int = 100,
+    equipment_id: int | None = None,
+    project_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    stmt = select(Assignment)
+    if equipment_id is not None:
+        stmt = stmt.where(Assignment.equipment_id == equipment_id)
+    if project_id is not None:
+        stmt = stmt.where(Assignment.project_id == project_id)
+    return db.scalars(stmt.offset(skip).limit(limit)).all()
 
 
 @assignments_router.post(

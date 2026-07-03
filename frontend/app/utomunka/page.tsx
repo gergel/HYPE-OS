@@ -15,6 +15,7 @@ export default async function UtomunkaPage() {
           <DataTable<Deliverable>
             rows={deliverables}
             emptyText="Még nincs felvett vágandó anyag - importáld a Notionból, vagy adj hozzá egyet a /api/v1/deliverables végponton."
+            getHref={(d) => `/utomunka/${d.id}`}
             columns={[
               { header: "Anyag", render: (d) => d.projekt_neve },
               { header: "Állapot", render: (d) => (d.allapot ? <StatusBadge label={d.allapot} tone="neutral" /> : "–") },

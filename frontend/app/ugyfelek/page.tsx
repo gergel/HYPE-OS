@@ -14,6 +14,7 @@ export default async function UgyfelekPage() {
           <DataTable<Client>
             rows={clients}
             emptyText="Még nincs felvett ügyfél - importáld a Notionból, vagy adj hozzá egyet a /api/v1/clients végponton."
+            getHref={(c) => `/ugyfelek/${c.id}`}
             columns={[
               { header: "Név", render: (c) => c.nev },
               { header: "Adószám", render: (c) => c.adoszam ?? "–" },

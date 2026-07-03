@@ -16,6 +16,7 @@ export default async function ProjectKodokPage() {
           <DataTable<ProjectCode>
             rows={projectCodes}
             emptyText="Még nincs felvett Project Code - importáld a Notionból, vagy adj hozzá egyet a /api/v1/project-codes végponton."
+            getHref={(pc) => `/projektek/project-kodok/${pc.id}`}
             columns={[
               { header: "Projektkód", render: (pc) => pc.projektkod },
               { header: "Ügyfél", render: (pc) => clientNameById.get(pc.client_id) ?? "–" },

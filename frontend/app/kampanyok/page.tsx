@@ -15,6 +15,7 @@ export default async function KampanyokPage() {
           <DataTable<Campaign>
             rows={campaigns}
             emptyText="Még nincs felvett kampány - importáld a Notionból, vagy adj hozzá egyet a /api/v1/campaigns végponton."
+            getHref={(c) => `/kampanyok/${c.id}`}
             columns={[
               { header: "Név", render: (c) => c.nev },
               { header: "Státusz", render: (c) => (c.kampany_statusza ? <StatusBadge label={c.kampany_statusza} tone="neutral" /> : "–") },

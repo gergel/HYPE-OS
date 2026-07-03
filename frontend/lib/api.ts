@@ -40,6 +40,7 @@ export type Employee = {
   email: string | null;
   telefon: string | null;
   is_active: boolean;
+  role: string;
 };
 
 export type Equipment = {
@@ -95,6 +96,28 @@ export type Deliverable = {
   hatarido: string | null;
   anyag_kikuldve: boolean;
   vago_employee_id: number | null;
+};
+
+export type JsonRecord = Record<string, unknown> & { id: number };
+
+export type Contact = {
+  id: number;
+  client_id: number;
+  full_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+};
+
+export type Contract = {
+  id: number;
+  tipus: string;
+  client_id: number | null;
+  employee_id: number | null;
+  ceg_neve: string | null;
+  szerzodes_allapota: string | null;
+  alairva: boolean;
 };
 
 export async function apiGet<T>(path: string): Promise<T | null> {
@@ -153,6 +176,50 @@ export async function getRevenues(limit = 200): Promise<Revenue[]> {
 
 export async function getDeliverables(limit = 200): Promise<Deliverable[]> {
   return (await apiGet<Deliverable[]>(`/api/v1/deliverables?limit=${limit}`)) ?? [];
+}
+
+/** Az egyes entitás-modulok API alap-útvonalai, a részletnézetekhez és a
+ * kapcsolódó rekordok (foreign key szerinti szűrés) lekérdezéséhez. */
+export const ENTITY_PATHS = {
+  client: "/api/v1/clients",
+  contact: "/api/v1/contacts",
+  projectCode: "/api/v1/project-codes",
+  project: "/api/v1/projects",
+  employee: "/api/v1/crew",
+  rate: "/api/v1/rates",
+  equipment: "/api/v1/equipment",
+  campaign: "/api/v1/campaigns",
+  task: "/api/v1/tasks",
+  expense: "/api/v1/expenses",
+  revenue: "/api/v1/revenues",
+  deliverable: "/api/v1/deliverables",
+  timesheet: "/api/v1/timesheets",
+  feedback: "/api/v1/feedback",
+  contract: "/api/v1/contracts",
+} as const;
+
+/** Egy rekord összes mezőjének lekérése (a részletnézetekhez) - nem szűkítjük
+ * le típusra, mert a cél épp az, hogy minden Notionből átjött oszlopot lássunk. */
+export async function getRecord(basePath: string, id: number): Promise<JsonRecord | null> {
+  return apiGet<JsonRecord>(`${basePath}/${id}`);
+}
+
+/** Kapcsolódó rekordok lekérése egy foreign key oszlop szerint szűrve, pl.
+ * getRelated(ENTITY_PATHS.project, { project_code_id: 5 }) -> az adott
+ * Project Code összes Projektje. A backend generikus CRUD router bármelyik
+ * valódi oszlop szerinti query paramot elfogadja. */
+export async function getRelated(
+  basePath: string,
+  params: Record<string, number | string>,
+  limit = 200,
+): Promise<JsonRecord[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  for (const [key, value] of Object.entries(params)) query.set(key, String(value));
+  return (await apiGet<JsonRecord[]>(`${basePath}?${query.toString()}`)) ?? [];
+}
+
+export async function getContactsByClient(clientId: number): Promise<Contact[]> {
+  return (await getRelated(ENTITY_PATHS.contact, { client_id: clientId })) as unknown as Contact[];
 }
 
 export function formatHuf(value: number | null): string {

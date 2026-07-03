@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { RowLink } from "@/components/RowLink";
 
 export type Column<T> = {
   header: string;
@@ -10,10 +11,12 @@ export function DataTable<T extends { id: number }>({
   columns,
   rows,
   emptyText,
+  getHref,
 }: {
   columns: Column<T>[];
   rows: T[];
   emptyText: string;
+  getHref?: (row: T) => string;
 }) {
   if (rows.length === 0) {
     return <p className="text-[13px] text-text-muted">{emptyText}</p>;
@@ -37,18 +40,25 @@ export function DataTable<T extends { id: number }>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-b border-border last:border-0">
-              {columns.map((col) => (
-                <td
-                  key={col.header}
-                  className={`py-2 pr-4 ${col.align === "right" ? "text-right" : "text-left"}`}
-                >
-                  {col.render(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const cells = columns.map((col) => (
+              <td key={col.header} className={`py-2 pr-4 ${col.align === "right" ? "text-right" : "text-left"}`}>
+                {col.render(row)}
+              </td>
+            ));
+            if (getHref) {
+              return (
+                <RowLink key={row.id} href={getHref(row)}>
+                  {cells}
+                </RowLink>
+              );
+            }
+            return (
+              <tr key={row.id} className="border-b border-border last:border-0">
+                {cells}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
