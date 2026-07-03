@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Date, Enum, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -33,7 +33,37 @@ class Equipment(TimestampMixin, Base):
         nullable=False,
     )
     osszes_mennyiseg: Mapped[int | None] = mapped_column(Integer, comment="csak stock track_mode esetén relevans")
-    extra: Mapped[dict | None] = mapped_column(JSON)
+
+    # a 'Leltár' Notion tábla maradék mezői, egyenként (lásd scripts/dump_extra_keys.py)
+    leltar_20240415: Mapped[bool | None] = mapped_column(Boolean, comment="2024.04.15. Leltár")
+    leltar_20250104: Mapped[bool | None] = mapped_column(Boolean, comment="2025.01.04. Leltár")
+    hasznalhato: Mapped[str | None] = mapped_column(String(50), comment="Használható?")
+    leltar_20240526: Mapped[bool | None] = mapped_column(Boolean, comment="2024.05.26. Leltár")
+    rendszerbe_kerules_idopontja: Mapped[datetime | None] = mapped_column(DateTime)
+    letrehozta_notion: Mapped[dict | list | None] = mapped_column(JSON, comment="Created by")
+    leltar_20240620: Mapped[bool | None] = mapped_column(Boolean, comment="2024.06.20. Leltár")
+    hany_napot_dolgozott: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    status_notion: Mapped[str | None] = mapped_column(String(50), comment="status")
+    hany_forgatason_vett_reszt: Mapped[str | None] = mapped_column(String(50))
+    mai_notion: Mapped[bool | None] = mapped_column(Boolean, comment="mai")
+    leltar_20250519: Mapped[bool | None] = mapped_column(Boolean, comment="2025.05.19. - Leltár")
+    qr_kod: Mapped[str | None] = mapped_column(String(255), comment="QR kód")
+    created_at_notion: Mapped[datetime | None] = mapped_column(DateTime, comment="Created time")
+    leltar_tetelek_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Leltár tételek")
+    forgatasi_napok: Mapped[str | None] = mapped_column(Text, comment="Forgatási napok")
+    projektek_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Projektek")
+    qr: Mapped[str | None] = mapped_column(String(50))
+    eszkozkiviteli_ki_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="eszközkiviteli ki")
+    eszkozkiviteli_vissza_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="eszközkiviteli vissza")
+    megjegyzes: Mapped[str | None] = mapped_column(Text)
+    stock_qty: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    zoom_atfogas: Mapped[dict | list | None] = mapped_column(JSON, comment="Zoom átfogás")
+    stock_igenyek_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Stock igények")
+    jovobeni: Mapped[str | None] = mapped_column(Text, comment="JÖVŐBENI")
+    megeri_e_szerelni: Mapped[str | None] = mapped_column(String(50), comment="Megéri e szerelni")
+    szerviz_leiras: Mapped[str | None] = mapped_column(Text, comment="Szervíz leírás")
+    selejtezes_elhagyas_datuma: Mapped[date | None] = mapped_column(Date, comment="Selejtezés /elhagyás dátuma")
+    ahol_utoljara_volt: Mapped[str | None] = mapped_column(Text, comment="Ahol utoljára volt")
 
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="equipment")
     projects: Mapped[list["Project"]] = relationship(secondary=project_equipment, back_populates="equipment")

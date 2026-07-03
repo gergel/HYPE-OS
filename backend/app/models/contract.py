@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, Date, Enum, ForeignKey, String
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -37,7 +37,18 @@ class Contract(TimestampMixin, Base):
     szerzodes_file_url: Mapped[str | None] = mapped_column(String(500))
     keltezes: Mapped[date | None] = mapped_column(Date)
     alairva: Mapped[bool] = mapped_column(Boolean, default=False)
-    extra: Mapped[dict | None] = mapped_column(JSON)
+
+    # a 'Keretszerződés' / 'Alvállakozó keretszerződés' Notion táblák maradék mezői
+    letrehozta_notion: Mapped[dict | list | None] = mapped_column(JSON, comment="Created by")
+    vallalkozas_kepviseloje: Mapped[str | None] = mapped_column(String(255), comment="Vállalkozás képviselője")
+    created_at_notion: Mapped[datetime | None] = mapped_column(DateTime, comment="Created time")
+    keretszerzodes_kuld: Mapped[bool | None] = mapped_column(Boolean, comment="Keretszerződés küld")
+    email: Mapped[str | None] = mapped_column(String(255))
+    szemely_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Személy")
+    nev: Mapped[str | None] = mapped_column(String(255), comment="Name")
+    kulsos_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Külsős")
+    vallalkozas_nyilvantartasi_szam: Mapped[str | None] = mapped_column(String(100))
+    szerzodes_megjegyzes: Mapped[str | None] = mapped_column(Text)
 
     client: Mapped["Client"] = relationship(back_populates="contracts")
     employee: Mapped["Employee"] = relationship(back_populates="contracts")

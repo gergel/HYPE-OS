@@ -2,6 +2,8 @@ from datetime import date
 
 from pydantic import BaseModel
 
+JsonScalar = dict | list | float | str | bool | None
+
 
 class CampaignBase(BaseModel):
     nev: str
@@ -25,6 +27,15 @@ class CampaignUpdate(BaseModel):
 
 class CampaignRead(CampaignBase):
     id: int
-    extra: dict | None = None
+
+    # a 'Kampányok' Notion tábla maradék mezői
+    forgatas_utomunka: str | None = None
+    forgatas: bool | None = None
+    kreativ_team_database_notion_ids: JsonScalar = None
+    van_utomunka: bool | None = None
+    kampany_felelose_notion_ids: JsonScalar = None
+    leiras: str | None = None
+    utomunka_szoveg: str | None = None
+    forgatasok_notion_ids: JsonScalar = None
 
     model_config = {"from_attributes": True}

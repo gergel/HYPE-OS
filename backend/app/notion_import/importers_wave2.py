@@ -22,7 +22,7 @@ from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.timesheet import Timesheet
 from app.notion_import import database_ids as db_ids
-from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties, remaining_properties
+from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_relation_ids, safe_upsert, upsert
 from app.notion_import.importers import _text, get_or_create_unknown_client
 
@@ -235,21 +235,6 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
     return result
 
 
-_DELIVERABLE_CONSUMED = {
-    "PROJEK NEVE",
-    "HYPE ADMIN projektkódok",
-    "Forgatás",
-    "Vágók",
-    "Kampányok",
-    "Állapot",
-    "Határidő",
-    "Költség",
-    "Kész anyag",
-    "Nyersanyag",
-    "Anyag kiküldve",
-}
-
-
 def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
     """Deliverable <- 'Utómunka'."""
     result = ImportResult(entity_type="Deliverable")
@@ -280,7 +265,48 @@ def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
                 "kesz_anyag_url": props.get("Kész anyag"),
                 "nyersanyag_url": props.get("Nyersanyag"),
                 "anyag_kikuldve": bool(props.get("Anyag kiküldve")),
-                "extra": remaining_properties(props, _DELIVERABLE_CONSUMED),
+                "tobb_vinyo": props.get("Több vinyó"),
+                "timesheet_status": _text(props.get("Timesheet status")),
+                "stop_timer": props.get("Stop timer"),
+                "completed_notion": props.get("Completed"),
+                "time_minutes": props.get("Time (minutes)") if isinstance(props.get("Time (minutes)"), (int, float)) else None,
+                "jovairva": props.get("jóváírva"),
+                "total_time": _text(props.get("Total time")),
+                "anyag_zapierbe": props.get("Anyag zapierbe"),
+                "updated_at_notion": as_datetime(props.get("Last edited time")),
+                "vinyok": props.get("Vinyók"),
+                "projektkod_szoveg": _text(props.get("Projektkód")),
+                "completed_time": as_date(props.get("Completed time")),
+                "vagas_leiras": _text(props.get("Vágás leírás")),
+                "aki_felvezette_az_utomunkat_notion_ids": props.get("Aki felvezette az utómunkát"),
+                "jovairando_pont": props.get("jóváírandó pont") if isinstance(props.get("jóváírandó pont"), (int, float)) else None,
+                "timesheet_public_notion_ids": props.get("Timesheet Public"),
+                "timesheet_private_notion_ids": props.get("Timesheet Private"),
+                "forgatas_datuma_notion": _text(props.get("Forgatás dátuma")),
+                "esemeny_neve": _text(props.get("Esemény neve")),
+                "aki_ellenorzesbe_tette_notion_ids": props.get("Aki ellenőrzésbe tette 1"),
+                "megrendeloi_email_cimek": _text(props.get("Megrendelői email címek")),
+                "email_megnevezes": _text(props.get("Email megnevezés")),
+                "megrendeloi_kontaktok_notion_ids": props.get("Megrendelői kontaktok"),
+                "archivalas": _text(props.get("Archiválás")),
+                "label": _text(props.get("Label")),
+                "assigned_to_notion": props.get("Assigned To"),
+                "visszajelzessek_notion_ids": props.get("Visszajelzéssek"),
+                "files_vagashoz_urls": props.get("Files vágáshoz"),
+                "esedekes": _text(props.get("Esedékes")),
+                "email_forgatas_datum": _text(props.get("Email forgatás dátum")),
+                "xp": _text(props.get("XP")),
+                "pontozas": props.get("Pontozás") if isinstance(props.get("Pontozás"), (int, float)) else None,
+                "egyeb_megjegyzes": _text(props.get("Egyéb megjegyzés")),
+                "nyersanyag_felhasznalhatosaga": props.get("Nyersanyag felhasználhatósága")
+                if isinstance(props.get("Nyersanyag felhasználhatósága"), (int, float))
+                else None,
+                "technikai_helyesseg": props.get("Technikai helyesség")
+                if isinstance(props.get("Technikai helyesség"), (int, float))
+                else None,
+                "kreativ_es_kepi_vilag": props.get("Kreatív és képi világ")
+                if isinstance(props.get("Kreatív és képi világ"), (int, float))
+                else None,
             },
             label=f"Deliverable '{projekt_neve}'",
         )
@@ -288,14 +314,13 @@ def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
     return result
 
 
-def _timesheet_consumed(deliverable_relation_field: str) -> set[str]:
-    return {"Vágó", deliverable_relation_field, "Start Date", "End Date", "Költség", "Státusz", "Completed"}
+def _numeric_or_none(value: object) -> float | None:
+    return value if isinstance(value, (int, float)) else None
 
 
 def _import_timesheet_database(
     client: NotionClient, db: Session, database_id: str, result: ImportResult, deliverable_relation_field: str
 ) -> None:
-    consumed = _timesheet_consumed(deliverable_relation_field)
     for page in client.query_database(database_id):
         props = extract_properties(page, client)
         employee_id = resolve_relation_id(db, "Employee", props.get("Vágó") or [])
@@ -318,7 +343,23 @@ def _import_timesheet_database(
                 "koltseg": koltseg if isinstance(koltseg, (int, float)) else None,
                 "statusz": _text(props.get("Státusz")),
                 "completed": bool(props.get("Completed")),
-                "extra": remaining_properties(props, consumed),
+                "person_notion": props.get("Person"),
+                "fut": props.get("fut"),
+                "orabere": _numeric_or_none(props.get("Órabér")),
+                "timesheet_status": _text(props.get("Timesheet status")),
+                "nev": _text(props.get("Name")),
+                "time_xp": _text(props.get("Time XP")),
+                "time_szoveg": _text(props.get("Time")),
+                "time_minutes": _numeric_or_none(props.get("Time (minutes)")),
+                "xp_pontozas": _numeric_or_none(props.get("XP pontozás")),
+                "vagok_notion_ids": props.get("Vágók"),
+                "mai_percek": _numeric_or_none(props.get("Mai percek")),
+                "percek_2025_majus": _numeric_or_none(props.get("2025 május percek")),
+                "mai_xp": _numeric_or_none(props.get("Mai xp")),
+                "kezdes_ma": props.get("kezdés ma"),
+                "akkori_orabere": _numeric_or_none(props.get("Akkori órabér")),
+                "timesheet_public_notion_ids": props.get("Timesheet Public"),
+                "percek_lista": props.get("percek"),
             },
             label=f"Timesheet (employee_id={employee_id})",
         )
@@ -333,27 +374,41 @@ def import_timesheets(client: NotionClient, db: Session) -> ImportResult:
     return result
 
 
-_KIADASOK_CONSUMED = {
-    "Kedvezményezett",
-    "Külsős ",
-    "Belsős",
-    "Nettó",
-    "Bruttó",
-    "Pénznem",
-    "Kifizetés módja",
-    "Fizetési határidő",
-    "Kész",
-}
-_PROJEKT_KIADASOK_CONSUMED = {
-    "Kiadás megnevezése",
-    "Projekt",
-    "Személy",
-    "Kiadás összege",
-    "Bruttó összeg",
-    "Pénznem",
-    "Kiadás formája",
-}
-_BELSOS_EXTRA_KIADASOK_CONSUMED = {"Megnevezés", "Név", "Projektkód", "Személy", "Belsős", "Összeg", "Kiadás időpontja"}
+def _expense_notion_fields(props: dict) -> dict:
+    """A 'Kiadások' / 'Projekt kiadások' / 'Belsős extra kiadások' Notion táblák
+    maradék mezői - mindhárom forrás ugyanezen a dict-en megy át, a props.get()
+    egyszerűen None-t ad azokra a kulcsokra, amik az adott forrásban nem léteznek."""
+    return {
+        "letrehozta_notion": props.get("Created by"),
+        "afa_osszege": _numeric_or_none(props.get("ÁFÁ összege")),
+        "szamla": _text(props.get("Számla")),
+        "kiadas_megnevezese_projekt_kod": _text(props.get("Kiadás megnevezése/Project kód")),
+        "netto_forintban_notion": _numeric_or_none(props.get("Nettó forintban")),
+        "fizetes_datuma": as_date(props.get("Fizetés dátuma")),
+        "mikor_fizetett": _text(props.get("Mikor fizetett")),
+        "szamla_pdf_urls": props.get("Számla pdf"),
+        "plusz_afa": _text(props.get("+ÁFA")),
+        "hozzaadas_a_kiadasokhoz": props.get("Hozzá adás a kiadásokhoz"),
+        "forintban_notion": _numeric_or_none(props.get("Forintban")),
+        "kiadas_datuma": as_date(props.get("Kiadás dátuma")),
+        "projekt_kiadasok_notion_ids": props.get("Projekt kiadások"),
+        "kiadasok_notion_ids": props.get("Kiadások"),
+        "szamla_statusza": _text(props.get("Számla státusza")),
+        "fedezes": _text(props.get("Fedezés")),
+        "osszes_kiadas_notion": _numeric_or_none(props.get("Összes kiadás")),
+        "tulora_osszege": _numeric_or_none(props.get("Túlóra összege")),
+        "plusz_afa_mezo": _text(props.get("Plusz Áfa")),
+        "arfolyam": _numeric_or_none(props.get("Árfolyam")),
+        "datum_notion": props.get("Dátum"),
+        "projektkod_notion": props.get("Projektkód"),
+        "egyeb_kiadas": props.get("Egyéb kiadás"),
+        "tulora_orabere": _numeric_or_none(props.get("Túlóra órabér")),
+        "tulora_szama": _numeric_or_none(props.get("Túlóra száma")),
+        "egyeni_afa_osszege": _numeric_or_none(props.get("Egyéni áfa összege")),
+        "megjegyzes": _text(props.get("Megjegyzés")),
+        "plusz_napok_ara": _numeric_or_none(props.get("Plusz napok ára")),
+        "plusz_napok_szama": _numeric_or_none(props.get("Plusz napok száma")),
+    }
 
 
 def import_expenses(client: NotionClient, db: Session) -> ImportResult:
@@ -393,7 +448,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
                 "kifizetes_modja": _text(props.get("Kifizetés módja")),
                 "fizetes_hatarideje": as_date(props.get("Fizetési határidő")),
                 "kesz": bool(props.get("Kész")),
-                "extra": remaining_properties(props, _KIADASOK_CONSUMED),
+                **_expense_notion_fields(props),
             },
             label=f"Expense '{megnevezes}'",
         )
@@ -420,7 +475,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
                 "netto": props.get("Kiadás összege"),
                 "brutto": brutto if isinstance(brutto, (int, float)) else None,
                 "penznem": _text(props.get("Pénznem")) or "HUF",
-                "extra": remaining_properties(props, _PROJEKT_KIADASOK_CONSUMED),
+                **_expense_notion_fields(props),
             },
             label=f"Expense '{megnevezes}'",
         )
@@ -445,23 +500,12 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
                 "tipus": "belsos",
                 "netto": props.get("Összeg"),
                 "fizetes_hatarideje": as_date(props.get("Kiadás időpontja")),
-                "extra": remaining_properties(props, _BELSOS_EXTRA_KIADASOK_CONSUMED),
+                **_expense_notion_fields(props),
             },
             label=f"Expense '{megnevezes}'",
         )
 
     return result
-
-
-_REVENUE_CONSUMED = {
-    "HYPE ADMIN projektkódok",
-    "Bevétel formája",
-    "Nettó",
-    "Bruttó",
-    "Pénznem",
-    "Fizetési határidő",
-    "Fizetés dátuma",
-}
 
 
 def import_revenues(client: NotionClient, db: Session) -> ImportResult:
@@ -492,15 +536,17 @@ def import_revenues(client: NotionClient, db: Session) -> ImportResult:
                 "penznem": _text(props.get("Pénznem")) or "HUF",
                 "fizetes_hatarideje": as_date(props.get("Fizetési határidő")),
                 "fizetes_datuma": as_date(props.get("Fizetés dátuma")),
-                "extra": remaining_properties(props, _REVENUE_CONSUMED),
+                "nev": _text(props.get("Name")),
+                "forint_netto_notion": _numeric_or_none(props.get("Forint nettó")),
+                "plusz_afa": _text(props.get("+ÁFA")),
+                "mikor_fizetett": _text(props.get("Mikor fizetett")),
+                "megjegyzes": _text(props.get("Megjegyzés")),
+                "arfolyam": _numeric_or_none(props.get("Árfolyam")),
             },
             label=f"Revenue (project_code_id={project_code_id})",
         )
 
     return result
-
-
-_KP_FORGALOM_CONSUMED = {"Projekt kiadások", "Forgalom", "Összeg", "Pénznem", "Legális", "Kiadás dátuma"}
 
 
 def import_kp_forgalom(client: NotionClient, db: Session) -> ImportResult:
@@ -524,7 +570,9 @@ def import_kp_forgalom(client: NotionClient, db: Session) -> ImportResult:
                 "penznem": _text(props.get("Pénznem")) or "HUF",
                 "legalis": _text(props.get("Legális")),
                 "kiadas_datuma": as_date(props.get("Kiadás dátuma")),
-                "extra": remaining_properties(props, _KP_FORGALOM_CONSUMED),
+                "kiadas_sum_notion": _numeric_or_none(props.get("Kiadás sum")),
+                "forintban_notion": _numeric_or_none(props.get("Forintban")),
+                "megnevezes": _text(props.get("Megnevezés")),
             },
             label="KpForgalom",
         )

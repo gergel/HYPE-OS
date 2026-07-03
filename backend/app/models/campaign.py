@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import JSON, Boolean, Date, ForeignKey, String
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -18,7 +18,16 @@ class Campaign(TimestampMixin, Base):
     hatarido: Mapped[date | None] = mapped_column(Date)
     intervalluma: Mapped[str | None] = mapped_column(String(120))
     kesz: Mapped[bool] = mapped_column(Boolean, default=False)
-    extra: Mapped[dict | None] = mapped_column(JSON)
+
+    # a 'Kampányok' Notion tábla maradék mezői
+    forgatas_utomunka: Mapped[str | None] = mapped_column(String(50), comment="Forgatás/utómunka")
+    forgatas: Mapped[bool | None] = mapped_column(Boolean, comment="Forgatás?")
+    kreativ_team_database_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Kreatív team database")
+    van_utomunka: Mapped[bool | None] = mapped_column(Boolean, comment="Utómunka?")
+    kampany_felelose_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Kampány felelőse")
+    leiras: Mapped[str | None] = mapped_column(Text, comment="Leírás")
+    utomunka_szoveg: Mapped[str | None] = mapped_column(String(255), comment="Utómunka")
+    forgatasok_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Forgatások")
 
     felelos_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
     client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"))

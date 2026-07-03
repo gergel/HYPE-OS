@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Column, Date, ForeignKey, String, Table
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, ForeignKey, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -26,6 +26,18 @@ class Task(TimestampMixin, Base):
     kategoria: Mapped[str | None] = mapped_column(String(100))
     checked: Mapped[bool] = mapped_column(Boolean, default=False)
     leiras: Mapped[str | None] = mapped_column(String(2000))
-    extra: Mapped[dict | None] = mapped_column(JSON)
+
+    # a TEENDŐK/Ági to do list/HYPE TO-DO LIST/Archive feladatok táblák maradék mezői
+    aki_felvezette_notion: Mapped[dict | list | None] = mapped_column(JSON, comment="Aki felvezette")
+    letrehozas_idopontja: Mapped[datetime | None] = mapped_column(DateTime, comment="Létrehozás időpontja")
+    felelos_notion: Mapped[dict | list | None] = mapped_column(JSON, comment="Felelős")
+    ugyfel: Mapped[str | None] = mapped_column(String(255), comment="Ügyfél")
+    ellenorzes_felelos_notion: Mapped[dict | list | None] = mapped_column(JSON, comment="Ellenőrzés felelős")
+    aki_ellenorizte_keszbe_rakta_notion: Mapped[dict | list | None] = mapped_column(
+        JSON, comment="Aki ellenőrizte/készbe rakta"
+    )
+    kovetkezo_lepes: Mapped[str | None] = mapped_column(Text, comment="Következő lépés")
+    csatolni_valo_urls: Mapped[dict | list | None] = mapped_column(JSON, comment="Csatolni való")
+    files_media_urls: Mapped[dict | list | None] = mapped_column(JSON, comment="Files & media")
 
     felelosok: Mapped[list["Employee"]] = relationship(secondary=task_employees, back_populates="tasks")

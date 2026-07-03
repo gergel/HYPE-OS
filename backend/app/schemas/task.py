@@ -1,6 +1,8 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
+
+JsonScalar = dict | list | float | str | bool | None
 
 
 class TaskBase(BaseModel):
@@ -25,6 +27,16 @@ class TaskUpdate(BaseModel):
 
 class TaskRead(TaskBase):
     id: int
-    extra: dict | None = None
+
+    # a TEENDŐK/Ági to do list/HYPE TO-DO LIST/Archive feladatok táblák maradék mezői
+    aki_felvezette_notion: JsonScalar = None
+    letrehozas_idopontja: datetime | None = None
+    felelos_notion: JsonScalar = None
+    ugyfel: str | None = None
+    ellenorzes_felelos_notion: JsonScalar = None
+    aki_ellenorizte_keszbe_rakta_notion: JsonScalar = None
+    kovetkezo_lepes: str | None = None
+    csatolni_valo_urls: JsonScalar = None
+    files_media_urls: JsonScalar = None
 
     model_config = {"from_attributes": True}

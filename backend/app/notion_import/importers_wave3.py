@@ -82,16 +82,6 @@ def import_stock_igenyek(client: NotionClient, db: Session) -> ImportResult:
     return result
 
 
-_GERI_ELSZAMOLAS_CONSUMED = {
-    "Leírás",
-    "Kiadás összege",
-    "Egyéb kiadás összege",
-    "Kiadás dátuma",
-    "Kiadás tipusa",
-    "Projektek",
-}
-
-
 def import_geri_elszamolas(client: NotionClient, db: Session) -> ImportResult:
     """Expense <- 'Geri elszámolás', egy jelölt Geri placeholder Employee-hez kötve
     (lásd get_or_create_geri_employee - a tábla nem hordoz Person relation-t)."""
@@ -130,7 +120,6 @@ def import_geri_elszamolas(client: NotionClient, db: Session) -> ImportResult:
                 "tipus": _text(props.get("Kiadás tipusa")) or "geri",
                 "netto": netto if isinstance(netto, (int, float)) else None,
                 "fizetes_hatarideje": as_date(props.get("Kiadás dátuma")),
-                "extra": remaining_properties(props, _GERI_ELSZAMOLAS_CONSUMED),
             },
             label=f"Expense (Geri elszámolás) '{megnevezes}'",
         )

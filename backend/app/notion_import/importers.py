@@ -15,7 +15,7 @@ from app.models.project_code import ProjectCode
 from app.models.rate import Rate
 from app.models.task import Task
 from app.notion_import import database_ids as db_ids
-from app.notion_import.client import NotionClient, as_date, extract_properties, remaining_properties
+from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert, upsert
 
 UNKNOWN_CLIENT_KEY = "client:unknown-notion-import"
@@ -271,17 +271,6 @@ def _normalize_track_mode(raw: str | None) -> TrackMode:
     return TrackMode.ASSET
 
 
-_EQUIPMENT_CONSUMED = {
-    "Name",
-    "Serial number",
-    "Kategória",
-    "Állapota",
-    "Archive státusz",
-    "Track mode",
-    "Összes mennyiség",
-}
-
-
 def import_equipment(client: NotionClient, db: Session) -> ImportResult:
     """Equipment <- 'Leltár'."""
     result = ImportResult(entity_type="Equipment")
@@ -294,6 +283,8 @@ def import_equipment(client: NotionClient, db: Session) -> ImportResult:
             continue
 
         osszes_mennyiseg = props.get("Összes mennyiség")
+        hany_napot_dolgozott = props.get("Hány napot dolgozott")
+        stock_qty = props.get("Stock qty")
         safe_upsert(
             db,
             result,
@@ -308,15 +299,40 @@ def import_equipment(client: NotionClient, db: Session) -> ImportResult:
                 "archive_statusz": _text(props.get("Archive státusz")),
                 "track_mode": _normalize_track_mode(props.get("Track mode")),
                 "osszes_mennyiseg": int(osszes_mennyiseg) if osszes_mennyiseg else None,
-                "extra": remaining_properties(props, _EQUIPMENT_CONSUMED),
+                "leltar_20240415": props.get("2024.04.15. Leltár"),
+                "leltar_20250104": props.get("2025.01.04. Leltár"),
+                "hasznalhato": _text(props.get("Használható?")),
+                "leltar_20240526": props.get("2024.05.26. Leltár"),
+                "rendszerbe_kerules_idopontja": as_datetime(props.get("Rendszerbe kerülés időpontja")),
+                "letrehozta_notion": props.get("Created by"),
+                "leltar_20240620": props.get("2024.06.20. Leltár"),
+                "hany_napot_dolgozott": hany_napot_dolgozott if isinstance(hany_napot_dolgozott, (int, float)) else None,
+                "status_notion": _text(props.get("status")),
+                "hany_forgatason_vett_reszt": _text(props.get("Hány forgatáson vett részt")),
+                "mai_notion": props.get("mai"),
+                "leltar_20250519": props.get("2025.05.19. - Leltár"),
+                "qr_kod": _text(props.get("QR kód")),
+                "created_at_notion": as_datetime(props.get("Created time")),
+                "leltar_tetelek_notion_ids": props.get("Leltár tételek"),
+                "forgatasi_napok": _text(props.get("Forgatási napok")),
+                "projektek_notion_ids": props.get("Projektek"),
+                "qr": _text(props.get("QR")),
+                "eszkozkiviteli_ki_notion_ids": props.get("eszközkiviteli ki"),
+                "eszkozkiviteli_vissza_notion_ids": props.get("eszközkiviteli vissza"),
+                "megjegyzes": _text(props.get("Megjegyzés")),
+                "stock_qty": stock_qty if isinstance(stock_qty, (int, float)) else None,
+                "zoom_atfogas": props.get("Zoom átfogás"),
+                "stock_igenyek_notion_ids": props.get("Stock igények"),
+                "jovobeni": _text(props.get("JÖVŐBENI")),
+                "megeri_e_szerelni": _text(props.get("Megéri e szerelni")),
+                "szerviz_leiras": _text(props.get("Szervíz leírás")),
+                "selejtezes_elhagyas_datuma": as_date(props.get("Selejtezés /elhagyás dátuma")),
+                "ahol_utoljara_volt": _text(props.get("Ahol utoljára volt")),
             },
             label=f"Equipment '{nev}'",
         )
 
     return result
-
-
-_CAMPAIGN_CONSUMED = {"Kampány neve", "Kampány státusza", "Határidő", "Intervalluma", "Kész"}
 
 
 def import_campaigns(client: NotionClient, db: Session) -> ImportResult:
@@ -332,6 +348,7 @@ def import_campaigns(client: NotionClient, db: Session) -> ImportResult:
 
         intervalluma = props.get("Intervalluma")
         intervalluma_text = intervalluma.get("start") if isinstance(intervalluma, dict) else None
+        felelos_employee_id = resolve_relation_id(db, "Employee", props.get("Kampány felelőse") or [])
 
         safe_upsert(
             db,
@@ -345,26 +362,20 @@ def import_campaigns(client: NotionClient, db: Session) -> ImportResult:
                 "hatarido": as_date(props.get("Határidő")),
                 "intervalluma": intervalluma_text,
                 "kesz": bool(props.get("Kész")),
-                "extra": remaining_properties(props, _CAMPAIGN_CONSUMED),
+                "felelos_employee_id": felelos_employee_id,
+                "forgatas_utomunka": _text(props.get("Forgatás/utómunka")),
+                "forgatas": props.get("Forgatás?"),
+                "kreativ_team_database_notion_ids": props.get("Kreatív team database"),
+                "van_utomunka": props.get("Utómunka?"),
+                "kampany_felelose_notion_ids": props.get("Kampány felelőse"),
+                "leiras": _text(props.get("Leírás")),
+                "utomunka_szoveg": _text(props.get("Utómunka")),
+                "forgatasok_notion_ids": props.get("Forgatások"),
             },
             label=f"Campaign '{nev}'",
         )
 
     return result
-
-
-_TASK_CONSUMED = {
-    "Feladat",
-    "Name",
-    "Állapot",
-    "Status",
-    "Határidő",
-    "Date",
-    "Due date",
-    "Kategória",
-    "Checked",
-    "Leírás",
-}
 
 
 def _import_task_database(
@@ -390,7 +401,15 @@ def _import_task_database(
                 "kategoria": _text(props.get("Kategória")),
                 "checked": bool(props.get("Checked", False)),
                 "leiras": _text(props.get("Leírás")),
-                "extra": remaining_properties(props, _TASK_CONSUMED),
+                "aki_felvezette_notion": props.get("Aki felvezette"),
+                "letrehozas_idopontja": as_datetime(props.get("Létrehozás időpontja")),
+                "felelos_notion": props.get("Felelős"),
+                "ugyfel": _text(props.get("Ügyfél")),
+                "ellenorzes_felelos_notion": props.get("Ellenőrzés felelős"),
+                "aki_ellenorizte_keszbe_rakta_notion": props.get("Aki ellenőrizte/készbe rakta"),
+                "kovetkezo_lepes": _text(props.get("Következő lépés")),
+                "csatolni_valo_urls": props.get("Csatolni való"),
+                "files_media_urls": props.get("Files & media"),
             },
             label=f"Task '{feladat}'",
         )
@@ -404,28 +423,6 @@ def import_tasks(client: NotionClient, db: Session) -> ImportResult:
     _import_task_database(client, db, db_ids.HYPE_TODO_LIST, result)
     _import_task_database(client, db, db_ids.ARCHIVE_FELADATOK, result, forced_allapot="archived")
     return result
-
-
-_KERETSZERZODES_CONSUMED = {
-    "Akivel szerződünk",
-    "Szerződés",
-    "Cég neve",
-    "Székhely",
-    "Adószám",
-    "Megbízás tárgya",
-    "Keretszerződés állapota",
-    "Keltezés",
-}
-_ALVALLALKOZOI_CONSUMED = {
-    "Vállalkozó",
-    "Szerződés aláírva",
-    "Vállalkozás neve",
-    "Vállalkozás székhelye",
-    "Vállalkozás adószáma",
-    "Megbízás tárgya",
-    "Állapot",
-    "Keltezés dátuma",
-}
 
 
 def import_contracts(client: NotionClient, db: Session) -> ImportResult:
@@ -453,7 +450,16 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
                 "szerzodes_file_url": szerzodes_url,
                 "keltezes": as_date(props.get("Keltezés")),
                 "alairva": bool(szerzodes_url),
-                "extra": remaining_properties(props, _KERETSZERZODES_CONSUMED),
+                "letrehozta_notion": props.get("Created by"),
+                "vallalkozas_kepviseloje": _text(props.get("Vállalkozás képviselője")),
+                "created_at_notion": as_datetime(props.get("Created time")),
+                "keretszerzodes_kuld": props.get("Keretszerződés küld"),
+                "email": _text(props.get("Email")),
+                "szemely_notion_ids": props.get("Személy"),
+                "nev": _text(props.get("Name")),
+                "kulsos_notion_ids": props.get("Külsős "),
+                "vallalkozas_nyilvantartasi_szam": _text(props.get("Vállalkozás nyilvántartási szám")),
+                "szerzodes_megjegyzes": _text(props.get("Szerződés megjegyzés")),
             },
             label="Contract (keretszerződés)",
         )
@@ -479,7 +485,16 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
                 "szerzodes_file_url": szerzodes_url,
                 "keltezes": as_date(props.get("Keltezés dátuma")),
                 "alairva": bool(szerzodes_url),
-                "extra": remaining_properties(props, _ALVALLALKOZOI_CONSUMED),
+                "letrehozta_notion": props.get("Created by"),
+                "vallalkozas_kepviseloje": _text(props.get("Vállalkozás képviselője")),
+                "created_at_notion": as_datetime(props.get("Created time")),
+                "keretszerzodes_kuld": props.get("Keretszerződés küld"),
+                "email": _text(props.get("Email")),
+                "szemely_notion_ids": props.get("Személy"),
+                "nev": _text(props.get("Name")),
+                "kulsos_notion_ids": props.get("Külsős "),
+                "vallalkozas_nyilvantartasi_szam": _text(props.get("Vállalkozás nyilvántartási szám")),
+                "szerzodes_megjegyzes": _text(props.get("Szerződés megjegyzés")),
             },
             label="Contract (alvállalkozói keretszerződés)",
         )
