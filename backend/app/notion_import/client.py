@@ -37,32 +37,51 @@ class NotionClient:
                 "Notion-Version": NOTION_VERSION,
                 "Content-Type": "application/json",
             },
-            timeout=30.0,
+            # a property-item végpont (lapozott rich_text/relation mezők) néha lassan
+            # válaszol nagy táblákon - a korábbi 30s-os globális timeout ReadTimeout-ot
+            # dobott egy teljes importert (pl. Employee) elvitt élesben, ld. retry lent
+            timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0),
         )
 
-    def _post(self, path: str, json: dict | None = None) -> dict:
+    def _request_with_retry(self, method: str, path: str, **kwargs) -> dict:
+        """429 (rate limit) és átmeneti hálózati hibák (timeout, kapcsolat megszakadás)
+        esetén is újrapróbálkozik, exponenciális backoff-fal - egy éles importban egy
+        elszigetelt ReadTimeout ne vigye el az egész táblát (lásd run_importer)."""
+        wait = 1.0
+        last_exc: Exception | None = None
         for attempt in range(5):
-            resp = self._client.post(path, json=json or {})
-            if resp.status_code == 429:
-                wait = float(resp.headers.get("Retry-After", "1"))
+            try:
+                resp = self._client.request(method, path, **kwargs)
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                last_exc = exc
+                if attempt == 4:
+                    raise
                 time.sleep(wait)
+                wait *= 2
+                continue
+            if resp.status_code == 429:
+                retry_after = float(resp.headers.get("Retry-After", str(wait)))
+                time.sleep(retry_after)
+                wait *= 2
+                continue
+            if resp.status_code >= 500:
+                if attempt == 4:
+                    resp.raise_for_status()
+                time.sleep(wait)
+                wait *= 2
                 continue
             resp.raise_for_status()
             return resp.json()
+        if last_exc:
+            raise last_exc
         resp.raise_for_status()
         return resp.json()
 
+    def _post(self, path: str, json: dict | None = None) -> dict:
+        return self._request_with_retry("POST", path, json=json or {})
+
     def _get(self, path: str, params: dict | None = None) -> dict:
-        for attempt in range(5):
-            resp = self._client.get(path, params=params or {})
-            if resp.status_code == 429:
-                wait = float(resp.headers.get("Retry-After", "1"))
-                time.sleep(wait)
-                continue
-            resp.raise_for_status()
-            return resp.json()
-        resp.raise_for_status()
-        return resp.json()
+        return self._request_with_retry("GET", path, params=params or {})
 
     def get_full_property(self, page_id: str, property_id: str) -> list[dict]:
         """A page-lekérdezés válaszában a rich_text/relation/people/title típusú
