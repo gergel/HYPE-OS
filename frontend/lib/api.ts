@@ -196,6 +196,7 @@ export const ENTITY_PATHS = {
   timesheet: "/api/v1/timesheets",
   feedback: "/api/v1/feedback",
   contract: "/api/v1/contracts",
+  assignment: "/api/v1/assignments",
 } as const;
 
 /** Egy rekord összes mezőjének lekérése (a részletnézetekhez) - nem szűkítjük

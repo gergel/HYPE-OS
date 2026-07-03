@@ -6,7 +6,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
-from app.models.project import project_equipment
 
 
 class TrackMode(StrEnum):
@@ -66,13 +65,14 @@ class Equipment(TimestampMixin, Base):
     ahol_utoljara_volt: Mapped[str | None] = mapped_column(Text, comment="Ahol utoljára volt")
 
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="equipment")
-    projects: Mapped[list["Project"]] = relationship(secondary=project_equipment, back_populates="equipment")
 
     @property
     def project_ids(self) -> list[int]:
-        """Melyik projekteken volt kint ez az eszköz - a Project importere tölti fel
-        a 'Kivitt eszközök'/'Visszahozott eszközök' Notion relation-ök feloldásával."""
-        return [p.id for p in self.projects]
+        """Melyik projektekhez van ez az eszköz hozzárendelve - az Assignment
+        (foglalás) táblán keresztül; ez a Leltár+Stock igények egységes
+        hozzárendelési mechanizmusa (lásd Assignment.qty: 1 db "asset" eszköznél,
+        N db "stock" eszköznél)."""
+        return sorted({a.project_id for a in self.assignments})
 
 
 class Assignment(TimestampMixin, Base):

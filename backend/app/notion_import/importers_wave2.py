@@ -3,11 +3,16 @@
 (importers.py) sikeres lefutása után van értelme futtatni, mert ezek Client/
 Employee/Campaign/ProjectCode relation-öket oldanak fel.
 
-A felhasználó explicit döntése alapján (2026-07-02) az alábbi két táblát NEM
-importáljuk, mert csak tesztek voltak, nincs rájuk szükség:
+A felhasználó explicit döntése alapján (2026-07-02) az alábbi táblát NEM
+importáljuk, mert csak teszt volt, nincs rá szükség:
 - Callsheet <- 'Operatőri diszpó'
-- Assignment <- 'Eszközkivitel'
-"""
+
+Az Assignment (eszköz-foglalás egy projekthez) két forrásból töltődik: a
+'Leltár' relation-ből (itt, lásd _link_leltar_equipment - egyedi "asset"
+eszközök, qty=1) és a 'Stock igények' Notion adatbázisból (lásd
+importers_wave3.import_stock_igenyek - darabszámos "stock" eszközök) - a
+felhasználó kérése szerint ez a két korábban külön kezelt mechanizmus egyetlen
+Assignment-alapú foglalási modellben egyesül."""
 
 from __future__ import annotations
 
@@ -15,7 +20,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.deliverable import Deliverable
-from app.models.equipment import Equipment
+from app.models.employee import Employee
+from app.models.equipment import Assignment
 from app.models.feedback import Feedback
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.project import Project
@@ -27,6 +33,60 @@ from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_
 from app.notion_import.importers import _text, get_or_create_unknown_client
 
 UNKNOWN_PROJECT_CODE_KEY = "project_code:unknown-notion-import"
+
+
+def _split_date_range(value: str | None) -> tuple:
+    """A extract_property() már lelapított "kezdő – záró" alakú range-stringet
+    (vagy sima "kezdő" dátumot) bontja szét (kezdő, záró) date-ekre - a Technika
+    ready ütközés-ellenőrzéshez kell a projekt teljes forgatási naptartománya,
+    nem csak a kezdő nap."""
+    if not value:
+        return None, None
+    if isinstance(value, str) and " – " in value:
+        start_s, end_s = value.split(" – ", 1)
+        return as_date(start_s), as_date(end_s)
+    return as_date(value), None
+
+
+def _link_leltar_equipment(db: Session, project: Project, props: dict) -> None:
+    """A 'Leltár' relation (a Main oldalon kereséssel/kattintással hozzáadható
+    eszközök) feloldása Assignment sorokká - qty=1, mert ez a relation nem hordoz
+    darabszámot (a darabszámos eszközöket a 'Stock igények' táblából oldjuk fel,
+    lásd importers_wave3.import_stock_igenyek). Nem duplikál újrafuttatáskor."""
+    equipment_notion_ids = props.get("Leltár") or []
+    if not equipment_notion_ids:
+        return
+    equipment_ids = resolve_relation_ids(db, "Equipment", equipment_notion_ids)
+    if not equipment_ids:
+        return
+    already_linked = {
+        a.equipment_id
+        for a in db.scalars(select(Assignment).where(Assignment.project_id == project.id))
+    }
+    for equipment_id in equipment_ids:
+        if equipment_id in already_linked:
+            continue
+        db.add(Assignment(project_id=project.id, equipment_id=equipment_id, qty=1))
+    db.flush()
+
+
+def _link_attendees_crew(db: Session, project: Project, props: dict) -> None:
+    """Az 'Attendees Contacts' relation (kétirányú kapcsolat a 'Külsős és belsős'
+    (Employee) adatbázissal - itt lehet névvel embereket hozzáadni egy projekthez)
+    feloldása a project.crew m2m kapcsolattá."""
+    people_notion_ids = props.get("Attendees Contacts") or []
+    if not people_notion_ids:
+        return
+    employee_ids = resolve_relation_ids(db, "Employee", people_notion_ids)
+    if not employee_ids:
+        return
+    current_ids = {e.id for e in project.crew}
+    new_ids = [eid for eid in employee_ids if eid not in current_ids]
+    if not new_ids:
+        return
+    new_employees = db.scalars(select(Employee).where(Employee.id.in_(new_ids))).all()
+    project.crew = list(project.crew) + list(new_employees)
+    db.flush()
 
 
 def get_or_create_unknown_project_code(db: Session) -> ProjectCode:
@@ -72,6 +132,7 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
             or unknown_project_code.id
         )
         campaign_id = resolve_relation_id(db, "Campaign", props.get("Kampányok") or [])
+        forgatas_datuma, forgatas_datuma_vege = _split_date_range(props.get("Date"))
 
         project_obj = safe_upsert(
             db,
@@ -83,7 +144,8 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
                 "nev": nev,
                 "project_code_id": project_code_id,
                 "campaign_id": campaign_id,
-                "forgatas_datuma": as_date(props.get("Date")),
+                "forgatas_datuma": forgatas_datuma,
+                "forgatas_datuma_vege": forgatas_datuma_vege,
                 "helyszin": _text(props.get("Helyszín")) or _text(props.get("Location")),
                 "allapot": _text(props.get("Állapot")),
                 "teljesites_datuma": as_date(props.get("Teljesítés dátuma")),
@@ -219,18 +281,14 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
         )
 
         if project_obj is not None:
-            equipment_notion_ids = list(
-                {*(props.get("Kivitt eszközök") or []), *(props.get("Visszahozott eszközök") or [])}
-            )
             try:
-                equipment_ids = resolve_relation_ids(db, "Equipment", equipment_notion_ids)
-                if equipment_ids:
-                    project_obj.equipment = db.scalars(
-                        select(Equipment).where(Equipment.id.in_(equipment_ids))
-                    ).all()
-                    db.flush()
-            except Exception as exc:  # noqa: BLE001 - egy m2m-feloldási hiba ne vigye el a teljes sort
+                _link_leltar_equipment(db, project_obj, props)
+            except Exception as exc:  # noqa: BLE001 - egy foglalás-feloldási hiba ne vigye el a teljes sort
                 result.errors.append(f"Project '{nev}' eszköz-kapcsolat feloldás: {type(exc).__name__}: {exc}")
+            try:
+                _link_attendees_crew(db, project_obj, props)
+            except Exception as exc:  # noqa: BLE001 - egy stáb-feloldási hiba ne vigye el a teljes sort
+                result.errors.append(f"Project '{nev}' stáb-kapcsolat feloldás: {type(exc).__name__}: {exc}")
 
     return result
 

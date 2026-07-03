@@ -6,6 +6,7 @@ from app.api.crud_router import build_crud_router
 from app.core.database import get_db
 from app.core.security import Role, require_roles
 from app.models.equipment import Assignment, Equipment, TrackMode
+from app.models.project import Project
 from app.schemas.equipment import (
     AssignmentCreate,
     AssignmentRead,
@@ -26,13 +27,14 @@ router = build_crud_router(
 assignments_router = APIRouter(prefix="/assignments", tags=["equipment"])
 
 
-def _overlaps(a_start, a_end, b_start, b_end) -> bool:
-    """Két dátumtartomány átfedésben van-e - nyitott végű (None) tartomány = 'még kint van'."""
-    if a_end is not None and b_start is not None and a_end < b_start:
-        return False
-    if b_end is not None and a_start is not None and b_end < a_start:
-        return False
-    return True
+def _project_range(project: Project) -> tuple | None:
+    if not project.forgatas_datuma:
+        return None
+    return project.forgatas_datuma, (project.forgatas_datuma_vege or project.forgatas_datuma)
+
+
+def _ranges_overlap(a_start, a_end, b_start, b_end) -> bool:
+    return a_start <= b_end and b_start <= a_end
 
 
 @assignments_router.get("", response_model=list[AssignmentRead])
@@ -58,38 +60,85 @@ def list_assignments(
     dependencies=[Depends(require_roles(Role.ADMIN, Role.OPERATOR))],
 )
 def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
-    """Ütközés-detektálás a HYPE_Technika minta alapján: 'asset' eszköznél egy adott
-    időszakban csak egy aktív kiadás lehet; 'stock' eszköznél a lefoglalt darabszám
-    nem lépheti túl az összes mennyiséget.
-    """
+    """Eszköz (Leltár, egyedi vagy darabszámos) hozzárendelése egy projekthez -
+    ez a Leltár + Stock igények egységes hozzáadási mechanizmusa: 'asset' eszköznél
+    qty=1, 'stock' eszköznél a kért darabszám. Az esetleges ütközést (más projekt
+    ugyanarra az eszközre, átfedő napon, vagy a stock keret túllépése) NEM itt
+    blokkoljuk - a projekten a 'Technika ready' ellenőrzés (POST
+    /projects/{id}/technika-check) adja a hivatalos, nap-szintű riportot, ahogy az
+    eredeti Notion workflow-ban is: szabadon fel lehet venni mindent, a checkbox
+    futtatja le a validációt.
+
+    Ha nincs megadva kivitel_datuma/visszahozatal_datuma, a projekt forgatási
+    dátumaiból (forgatas_datuma / forgatas_datuma_vege) töltjük ki."""
     equipment = db.get(Equipment, payload.equipment_id)
     if equipment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipment nem található")
+    project = db.get(Project, payload.project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projekt nem található")
 
-    existing = db.scalars(select(Assignment).where(Assignment.equipment_id == payload.equipment_id)).all()
-    overlapping = [
-        a
-        for a in existing
-        if _overlaps(a.kivitel_datuma, a.visszahozatal_datuma, payload.kivitel_datuma, payload.visszahozatal_datuma)
-    ]
+    data = payload.model_dump()
+    if data.get("kivitel_datuma") is None:
+        data["kivitel_datuma"] = project.forgatas_datuma
+    if data.get("visszahozatal_datuma") is None:
+        data["visszahozatal_datuma"] = project.forgatas_datuma_vege or project.forgatas_datuma
 
-    if equipment.track_mode == TrackMode.ASSET:
-        if overlapping:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Ütközés: '{equipment.nev}' már ki van adva ebben az időszakban (assignment id={overlapping[0].id})",
-            )
-    else:
-        foglalt = sum(a.qty for a in overlapping)
-        keret = equipment.osszes_mennyiseg or 0
-        if foglalt + payload.qty > keret:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Ütközés: '{equipment.nev}' készlet túllépve ({foglalt + payload.qty}/{keret} db ebben az időszakban)",
-            )
-
-    obj = Assignment(**payload.model_dump())
+    obj = Assignment(**data)
     db.add(obj)
     db.commit()
     db.refresh(obj)
     return obj
+
+
+@assignments_router.delete(
+    "/{assignment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_roles(Role.ADMIN, Role.OPERATOR))],
+)
+def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    obj = db.get(Assignment, assignment_id)
+    if obj is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment nem található")
+    db.delete(obj)
+    db.commit()
+
+
+@router.get("/{equipment_id}/availability")
+def equipment_availability(equipment_id: int, project_id: int, db: Session = Depends(get_db)):
+    """Egy eszköz elérhetősége egy adott projekt forgatási napjaira - asset eszköznél
+    foglalt-e már (más projekthez), stock eszköznél hány db szabad a teljes
+    mennyiségből. A hozzáadás UI-ban ez mutatja élőben, mennyi elérhető, mielőtt
+    a felhasználó ténylegesen hozzáadná."""
+    equipment = db.get(Equipment, equipment_id)
+    if equipment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipment nem található")
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projekt nem található")
+
+    project_range = _project_range(project)
+    if project_range is None:
+        return {"track_mode": equipment.track_mode.value, "available": None, "detail": "Nincs forgatási dátum a projekten."}
+    start, end = project_range
+
+    other_assignments = db.scalars(
+        select(Assignment).where(Assignment.equipment_id == equipment_id, Assignment.project_id != project_id)
+    ).all()
+
+    if equipment.track_mode == TrackMode.ASSET:
+        for a in other_assignments:
+            other = db.get(Project, a.project_id)
+            other_range = _project_range(other) if other else None
+            if other_range and _ranges_overlap(start, end, *other_range):
+                return {"track_mode": "asset", "available": False, "detail": f"Foglalt: {other.nev}"}
+        return {"track_mode": "asset", "available": True, "detail": None}
+
+    keret = equipment.osszes_mennyiseg or 0
+    foglalt = 0
+    for a in other_assignments:
+        other = db.get(Project, a.project_id)
+        other_range = _project_range(other) if other else None
+        if other_range and _ranges_overlap(start, end, *other_range):
+            foglalt += a.qty
+    return {"track_mode": "stock", "available": max(keret - foglalt, 0), "keret": keret, "foglalt": foglalt}

@@ -1,10 +1,13 @@
 import { notFound } from "next/navigation";
+import { ActionButton } from "@/components/ActionButton";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { DetailGrid } from "@/components/DetailGrid";
+import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { M2mLinker } from "@/components/M2mLinker";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
+import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { TopBar } from "@/components/TopBar";
 import { ENTITY_PATHS, getEmployees, getEquipment, getRecord, getRelated } from "@/lib/api";
 import { toDetailFields } from "@/lib/detail";
@@ -15,19 +18,40 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const project = await getRecord(ENTITY_PATHS.project, projectId);
   if (!project) notFound();
 
-  const equipmentIds = Array.isArray(project.equipment_ids) ? (project.equipment_ids as number[]) : [];
   const crewIds = Array.isArray(project.crew_employee_ids) ? (project.crew_employee_ids as number[]) : [];
 
-  const [projectCode, campaign, deliverables, allEquipment, allEmployees] = await Promise.all([
+  const [projectCode, campaign, deliverables, allEquipment, allEmployees, bookings] = await Promise.all([
     project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
     project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
     getRelated(ENTITY_PATHS.deliverable, { project_id: projectId }),
     getEquipment(),
     getEmployees(),
+    getRelated(ENTITY_PATHS.assignment, { project_id: projectId }),
   ]);
 
-  const equipmentOptions = allEquipment.map((e) => ({ id: e.id, label: e.nev, href: `/felszereles/${e.id}` }));
+  const equipmentById = new Map(allEquipment.map((e) => [e.id, e]));
+  const equipmentOptions = allEquipment.map((e) => ({
+    id: e.id,
+    label: e.nev,
+    href: `/felszereles/${e.id}`,
+    trackMode: e.track_mode,
+  }));
   const crewOptions = allEmployees.map((e) => ({ id: e.id, label: e.full_name, href: `/csapat/${e.id}` }));
+
+  const bookingRows = bookings
+    .map((b) => {
+      const equipmentId = Number(b.equipment_id);
+      const equipment = equipmentById.get(equipmentId);
+      if (!equipment) return null;
+      return {
+        id: Number(b.id),
+        label: equipment.nev,
+        href: `/felszereles/${equipment.id}`,
+        qty: Number(b.qty ?? 1),
+        trackMode: equipment.track_mode,
+      };
+    })
+    .filter((b): b is NonNullable<typeof b> => b !== null);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -36,32 +60,34 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <BackLink href="/projektek" label="Projektek" />
 
         <Card title={String(project.nev ?? `Projekt #${project.id}`)}>
-          <div className="mb-4 flex flex-wrap gap-4 text-[13px] text-text-secondary">
-            {projectCode && (
-              <a href={`/projektek/project-kodok/${projectCode.id}`} className="text-text-accent hover:underline">
-                Project Code: {String(projectCode.projektkod)}
-              </a>
-            )}
-            {campaign && (
-              <a href={`/kampanyok/${campaign.id}`} className="text-text-accent hover:underline">
-                Kampány: {String(campaign.nev)}
-              </a>
-            )}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
+              {projectCode && (
+                <a href={`/projektek/project-kodok/${projectCode.id}`} className="text-text-accent hover:underline">
+                  Project Code: {String(projectCode.projektkod)}
+                </a>
+              )}
+              {campaign && (
+                <a href={`/kampanyok/${campaign.id}`} className="text-text-accent hover:underline">
+                  Kampány: {String(campaign.nev)}
+                </a>
+              )}
+            </div>
+            <ActionButton
+              path={`/api/v1/projects/${project.id}/feldarabolas`}
+              label="Feldarabolás"
+              confirmMessage="Új projekt jön létre ugyanahhoz a Project Code-hoz (feldarabolt forgatási nap). Folytatod?"
+              redirectTo={(result) => `/projektek/${result.id}`}
+            />
           </div>
-          <DetailGrid
-            fields={toDetailFields(project, ["project_code_id", "campaign_id", "equipment_ids", "crew_employee_ids"])}
-          />
+          <DetailGrid fields={toDetailFields(project, ["project_code_id", "campaign_id", "crew_employee_ids"])} />
         </Card>
 
-        <Card title={`Eszközök (${equipmentIds.length})`}>
-          <M2mLinker
-            patchPath={`${ENTITY_PATHS.project}/${project.id}`}
-            fieldName="equipment_ids"
-            currentIds={equipmentIds}
-            options={equipmentOptions}
-            emptyText="Nincs eszköz hozzárendelve ehhez a projekthez."
-            addLabel="Eszköz hozzáadása"
-          />
+        <Card title={`Eszközök (${bookingRows.length})`}>
+          <EquipmentBookingManager projectId={project.id} bookings={bookingRows} options={equipmentOptions} />
+          <div className="mt-4 border-t border-border pt-4">
+            <TechnikaCheckButton projectId={project.id} />
+          </div>
         </Card>
 
         <Card title={`Stáb (${crewIds.length})`}>
@@ -76,9 +102,19 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </Card>
 
         <Card title={`Utómunka (${deliverables.length})`}>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <ActionButton
+              path={`/api/v1/projects/${project.id}/create-utomunka`}
+              label="+ Utómunka létrehozása"
+              redirectTo={(result) => `/utomunka/${result.id}`}
+            />
+            <span className="text-[13px] text-text-secondary">
+              Automatikusan névvel és forgatáshoz kötve jön létre (Notion automatizmus alapján).
+            </span>
+          </div>
           <QuickCreateForm
             postPath={ENTITY_PATHS.deliverable}
-            addLabel="+ Új utómunka hozzáadása"
+            addLabel="+ Egyéni utómunka hozzáadása"
             presetFields={{ project_id: project.id, project_code_id: project.project_code_id }}
             fields={[
               { name: "projekt_neve", label: "Anyag neve", required: true },

@@ -38,8 +38,8 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
           />
         </Card>
 
-        <Card title={`Kivitelek (${assignments.length})`}>
-          <RelatedTable rows={assignments} emptyText="Nincs eszközkivitel rögzítve ehhez az eszközhöz." />
+        <Card title={`Foglalások (${assignments.length})`}>
+          <RelatedTable rows={assignments} emptyText="Nincs foglalás rögzítve ehhez az eszközhöz." deleteBasePath={ENTITY_PATHS.assignment} />
         </Card>
       </div>
     </div>

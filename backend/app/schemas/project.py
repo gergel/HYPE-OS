@@ -10,29 +10,29 @@ class ProjectBase(BaseModel):
     project_code_id: int
     campaign_id: int | None = None
     forgatas_datuma: date | None = None
+    forgatas_datuma_vege: date | None = None
     helyszin: str | None = None
     allapot: str | None = None
 
 
 class ProjectCreate(ProjectBase):
     crew_employee_ids: list[int] = []
-    equipment_ids: list[int] = []
 
 
 class ProjectUpdate(BaseModel):
     nev: str | None = None
     campaign_id: int | None = None
     forgatas_datuma: date | None = None
+    forgatas_datuma_vege: date | None = None
     helyszin: str | None = None
     allapot: str | None = None
     crew_employee_ids: list[int] | None = None
-    equipment_ids: list[int] | None = None
+    technika_ready: bool | None = None
 
 
 class ProjectRead(ProjectBase):
     id: int
     crew_employee_ids: list[int] = []
-    equipment_ids: list[int] = []
 
     # a 'Main Database' Notion tábla maradék ~140 mezője, egyenként (lásd
     # app/models/project.py) - nem egy közös 'extra' JSON-ban.
