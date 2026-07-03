@@ -459,30 +459,16 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
     return result
 
 
-_PROJECT_CODE_CONSUMED = {
-    "PROJEKTKÓD",
-    "Megrendelői kontaktok",
-    "Dátum",
-    "Esemény állapota",
-    "Pénznem",
-    "Árfolyam",
-    "TIG státusza",
-    "Számla státusza",
-    "Keretszerződés",
-    "MEGJEGYZÉS",
-    "Teljesítés dátuma",
-    "Utalás dátuma",
-    "Számla",
-    "TIG aláírva",
-}
-
-
 def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
     """ProjectCode <- 'HYPE ADMIN projektkódok'. Ha a 'Megrendelői kontaktok' relation
     nem oldható fel (pl. üres kontakt-lap volt), az 'Ismeretlen ügyfél' placeholder
-    Client-hez kötjük, hogy a pénzügyi adat ne vesszen el. A tábla 60+ mezős - a
-    kevésbé fontos, nagyrészt Notion-formulából számolt mezők az `extra` JSON-ba
-    kerülnek (lásd remaining_properties), nem kapnak saját oszlopot."""
+    Client-hez kötjük, hogy a pénzügyi adat ne vesszen el. A tábla 81 mezős - a
+    felhasználó döntése alapján (2026-07-02) minden mező saját oszlopot kap (lásd
+    app/models/project_code.py), nincs közös 'extra' JSON gyűjtőmező. Az 'Utómunka'/
+    'Bevételek'/'Forgatások'/'Projekt kiadások'/'Belsős extra kiadások' Notion
+    relationöket szándékosan nem vesszük át külön mezőként, mert ugyanazt az adatot
+    duplikálnák, amit a Deliverable/Revenue/Project/Expense.project_code_id már
+    helyesen, fordított irányból hordoz."""
     result = ImportResult(entity_type="ProjectCode")
     unknown_client = get_or_create_unknown_client(db)
 
@@ -517,7 +503,62 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
                 "utalas_datuma": as_date(props.get("Utalás dátuma")),
                 "szamla_url": _first_url(props.get("Számla")),
                 "tig_alairva_url": _first_url(props.get("TIG aláírva")),
-                "extra": remaining_properties(props, _PROJECT_CODE_CONSUMED),
+                "teljesites_datum_formazva": _text(props.get("Teljesítés dátum formáz")),
+                "netto_osszeg": props.get("Nettó összeg"),
+                "megrendelo_szekhelye": _text(props.get("Megrendelő  székhelye")),
+                "profit_szazalek_notion": props.get("Profit százalék"),
+                "geri_projekt": _text(props.get("Geri projekt")),
+                "szerzodes_targya": _text(props.get("Szerződés tárgya")),
+                "keltezes_datum_formazva": _text(props.get("Keltezés dátum formáz")),
+                "gyartasi_koltseg_notion": props.get("Gyártási költség"),
+                "szerzodes_specialis_eset": _text(props.get("Szerződés speciális eset")),
+                "fizetesi_hatarido": as_date(props.get("Fizetési határidő")),
+                "megrendelo_nyilvantartasi_szam": _text(props.get("Megrendelő nyilvántartásiszám")),
+                "szerzodes_kuldes": bool(props.get("Szerződés küldés")),
+                "osszes_koltseg_notion": props.get("Összes költség"),
+                "tig_teljesitesi_ido": _text(props.get("TIG teljesítési idő")),
+                "megrendelo_neve": _text(props.get("Megrendelő neve")),
+                "osszesen_netto_notion": props.get("Összesen nettó"),
+                "megrendelo_adoszama": _text(props.get("Megrendelő adószáma")),
+                "netto_notion": props.get("Nettó"),
+                "helyszin": _text(props.get("HELYSZÍN")),
+                "datum_megjegyzes": _text(props.get("DÁTUM megjegyzés")),
+                "szerzodes_plusz_afa": _text(props.get("Szerződés plus ÁFA")),
+                "tig_projektnev": _text(props.get("TIG projektnév")),
+                "specialis_eset": _text(props.get("Speciális eset")),
+                "szerzodes_helye": _text(props.get("Szerződés helye")),
+                "szerzodes_netto_osszeg": props.get("Szerződés nettó összeg"),
+                "megrendeloi_emailek": _text(props.get("megrendelői emailek")),
+                "brutto_notion": props.get("Bruttó"),
+                "kulsos_notion_ids": props.get("Külsős"),
+                "alvallalkozok_koltsege_notion": props.get("Alvállalkozók költsége"),
+                "darabolva": props.get("Darabolva"),
+                "vagasi_koltseg_notion": props.get("Vágási költség"),
+                "project_nev": _text(props.get("PROJECT NÉV")),
+                "szerzodes_statusza": _text(props.get("Szerződés státusza")),
+                "plusz_afa": _text(props.get("Plusz ÁFA")),
+                "megerte_e": props.get("Megérte-e"),
+                "megrendelo_kepviseloje": _text(props.get("Megrendelő képviselője")),
+                "szerzodes_projekt_nev": _text(props.get("Szerződés projekt név")),
+                "teljesites": _text(props.get("Teljesítés")),
+                "tig_kikuldve": bool(props.get("TIG kiküldve")),
+                "adminisztracios_tablaban": _text(props.get("ADMINISZTRÁCIÓS TÁBLÁBAN?")),
+                "tig_specialis": _text(props.get("TIG Speciális")),
+                "keltezes_datuma": as_date(props.get("Keltezés dátuma")),
+                "lejart_notion": props.get("Lejárt"),
+                "megbizas_targya": _text(props.get("Megbízás tárgya")),
+                "belsos_koltseg_akkor": props.get("Belsős költség akkor"),
+                "vallalasi_ar_notion": props.get("Vállalási ár"),
+                "tovabbi_dokumentumok": props.get("További dokumentumok"),
+                "utomunkak_notion": props.get("Utómunkák"),
+                "bevetel_formaja": _text(props.get("Bevétel formája")),
+                "darabolas_notion_ids": props.get("HYPE ADMIN PROJEKTKÓDOK DARABOLÁS"),
+                "megrendelo_email": _text(props.get("Megrendelő email")),
+                "forintban_notion": props.get("Forintban"),
+                "szerzodes_keltezes_datuma": as_date(props.get("Szerződés keltezés dátuma")),
+                "belsos_koltseg_notion": props.get("Belsős költség"),
+                "belso_plusz_koltseg_notion": props.get("Belső plusz költség"),
+                "tig_url": props.get("TIG url"),
             },
             label=f"ProjectCode '{projektkod}'",
         )
