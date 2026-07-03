@@ -6,18 +6,21 @@ import { authFetch } from "@/lib/authFetch";
 
 /** Egy Notion button-automatizmust portoló, egy kattintásos backend akció (pl.
  * Feldarabolás, Utómunka létrehozása) - POST a megadott útvonalra, majd vagy
- * frissíti az oldalt, vagy (ha a válasz egy új rekordot ad vissza) átirányít
- * annak részletnézetére. */
+ * frissíti az oldalt, vagy (ha redirectPrefix meg van adva és a válasz tartalmaz
+ * egy 'id' mezőt) átirányít az új rekord részletnézetére.
+ *
+ * A redirectPrefix szándékosan string, nem függvény: szerver komponensből
+ * nem lehet függvényt propként átadni egy "use client" komponensnek. */
 export function ActionButton({
   path,
   label,
   confirmMessage,
-  redirectTo,
+  redirectPrefix,
 }: {
   path: string;
   label: string;
   confirmMessage?: string;
-  redirectTo?: (result: Record<string, unknown>) => string;
+  redirectPrefix?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -33,8 +36,8 @@ export function ActionButton({
         return;
       }
       const data = await res.json().catch(() => null);
-      if (redirectTo && data) {
-        router.push(redirectTo(data));
+      if (redirectPrefix && data && typeof data.id !== "undefined") {
+        router.push(`${redirectPrefix}${data.id}`);
       } else {
         router.refresh();
       }

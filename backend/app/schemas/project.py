@@ -5,6 +5,10 @@ from pydantic import BaseModel
 JsonScalar = dict | list | float | str | bool | None
 
 
+class SzerzodesKeszitesPayload(BaseModel):
+    employee_id: int
+
+
 class ProjectBase(BaseModel):
     nev: str
     project_code_id: int
@@ -28,6 +32,7 @@ class ProjectUpdate(BaseModel):
     allapot: str | None = None
     crew_employee_ids: list[int] | None = None
     technika_ready: bool | None = None
+    alvallakozo_keretszerzodes_contract_id: int | None = None
 
 
 class ProjectRead(ProjectBase):
@@ -88,6 +93,9 @@ class ProjectRead(ProjectBase):
     alvallakozo_keretszerzodes_notion_ids: JsonScalar = None
     szerzodes_keszites_notion_ids: JsonScalar = None
     akinek_mar_van_notion_ids: JsonScalar = None
+    szerzodes_pdf_url: str | None = None
+    szerzodes_keszites_employee_id: int | None = None
+    alvallakozo_keretszerzodes_contract_id: int | None = None
     netto_osszeg: float | None = None
     start_timer: date | None = None
     end_timer: date | None = None

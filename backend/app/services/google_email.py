@@ -1,0 +1,164 @@
+"""Gmail küldés - a felhasználó által csatolt 'diszpo-kuldes' Railway program
+(app/email_gmail.py) email-küldő rétegének portolása. Három hitelesítési mód
+támogatott (Service Account domain-wide delegation, teljes OAuth token JSON,
+vagy OAuth "hármas" client_id/secret/refresh_token) - amelyik env var készlet
+ki van töltve, azt használjuk.
+
+Hitelesítő adatok (GMAIL_SENDER + GMAIL_SERVICE_ACCOUNT_JSON/GMAIL_OAUTH_*)
+nélkül minden hívás RuntimeError-t dob - ezt csak Railway-en, a valódi env
+varokkal lehet tesztelni, ebből a sandboxból nem."""
+
+from __future__ import annotations
+
+import base64
+import json
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email import encoders
+
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials as UserCredentials
+from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+from googleapiclient.discovery import build
+
+from app.core.config import settings
+
+GMAIL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.readonly",
+]
+
+
+def _gmail_service():
+    if settings.gmail_oauth_token_json:
+        data = json.loads(settings.gmail_oauth_token_json)
+        data.setdefault("token_uri", "https://oauth2.googleapis.com/token")
+        creds = UserCredentials.from_authorized_user_info(data, scopes=GMAIL_SCOPES)
+        if not creds.valid:
+            creds.refresh(Request())
+        return build("gmail", "v1", credentials=creds, cache_discovery=False)
+
+    if settings.gmail_service_account_json:
+        info = json.loads(settings.gmail_service_account_json)
+        sa = ServiceAccountCredentials.from_service_account_info(info, scopes=GMAIL_SCOPES)
+        if settings.gmail_impersonate_user:
+            sa = sa.with_subject(settings.gmail_impersonate_user)
+        return build("gmail", "v1", credentials=sa, cache_discovery=False)
+
+    if settings.gmail_oauth_client_id and settings.gmail_oauth_client_secret and settings.gmail_oauth_refresh_token:
+        creds = UserCredentials(
+            None,
+            refresh_token=settings.gmail_oauth_refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=settings.gmail_oauth_client_id,
+            client_secret=settings.gmail_oauth_client_secret,
+            scopes=GMAIL_SCOPES,
+        )
+        if not creds.valid:
+            creds.refresh(Request())
+        return build("gmail", "v1", credentials=creds, cache_discovery=False)
+
+    raise RuntimeError(
+        "Nincs Gmail hitelesítés beállítva (GMAIL_SERVICE_ACCOUNT_JSON / GMAIL_OAUTH_TOKEN_JSON / "
+        "GMAIL_OAUTH_CLIENT_ID+SECRET+REFRESH_TOKEN) - állítsd be a backend környezeti változóit."
+    )
+
+
+def _format_sender() -> str:
+    if not settings.gmail_sender:
+        raise RuntimeError("GMAIL_SENDER nincs beállítva.")
+    if settings.gmail_sender_name:
+        return f"{settings.gmail_sender_name} <{settings.gmail_sender}>"
+    return settings.gmail_sender
+
+
+def _extract_header(headers: list[dict], name: str) -> str | None:
+    for h in headers or []:
+        if h.get("name", "").lower() == name.lower():
+            return h.get("value")
+    return None
+
+
+def _build_mime(
+    *,
+    html: str,
+    subject: str,
+    sender: str,
+    to_list: list[str],
+    cc_list: list[str] | None = None,
+    pdf_bytes: bytes | None = None,
+    pdf_filename: str | None = None,
+    in_reply_to: str | None = None,
+) -> dict:
+    msg = MIMEMultipart()
+    msg.attach(MIMEText(html, "html", "utf-8"))
+
+    if pdf_bytes:
+        part = MIMEBase("application", "pdf")
+        part.set_payload(pdf_bytes)
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", f'attachment; filename="{pdf_filename or "diszpo.pdf"}"')
+        msg.attach(part)
+
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = ", ".join(to_list)
+    if cc_list:
+        msg["Cc"] = ", ".join(cc_list)
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+        msg["References"] = in_reply_to
+
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+    return {"raw": raw}
+
+
+def send_message(
+    to_list: list[str],
+    subject: str,
+    html_body: str,
+    *,
+    pdf_bytes: bytes | None = None,
+    pdf_filename: str | None = None,
+    thread_id: str | None = None,
+    in_reply_to: str | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    """Visszatér: (gmailThreadId, gmailMessageId, rfc822MessageId). CC mindig a
+    HYPE_CC env-ben megadott lista. thread_id + in_reply_to esetén ugyanabban a
+    Gmail szálban válaszol, nem új levelet indít."""
+    svc = _gmail_service()
+    sender = _format_sender()
+    body = _build_mime(
+        html=html_body,
+        subject=subject,
+        sender=sender,
+        to_list=to_list,
+        cc_list=settings.hype_cc_list,
+        pdf_bytes=pdf_bytes,
+        pdf_filename=pdf_filename,
+        in_reply_to=in_reply_to,
+    )
+    if thread_id:
+        body["threadId"] = thread_id
+
+    r = svc.users().messages().send(userId="me", body=body).execute()
+    thr = r.get("threadId")
+    mid = r.get("id")
+
+    rfc822 = None
+    if mid:
+        meta = svc.users().messages().get(
+            userId="me", id=mid, format="metadata", metadataHeaders=["Message-Id"]
+        ).execute()
+        headers = (meta.get("payload") or {}).get("headers") or []
+        rfc822 = _extract_header(headers, "Message-Id")
+
+    return thr, mid, rfc822
+
+
+def search_thread_by_subject(subject: str) -> str | None:
+    svc = _gmail_service()
+    res = svc.users().threads().list(userId="me", q=f'subject:"{subject}"', maxResults=1).execute()
+    threads = res.get("threads") or []
+    return threads[0].get("id") if threads else None

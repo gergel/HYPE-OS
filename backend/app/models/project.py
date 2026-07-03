@@ -122,10 +122,25 @@ class Project(TimestampMixin, Base):
     tig_kuldes_idopont: Mapped[dict | None] = mapped_column(JSON, comment="TIG küldés időpont")
     nyilvantartasi_szam: Mapped[str | None] = mapped_column(String(100), comment="Nyilvántartási szám:")
     alvallakozo_keretszerzodes_notion_ids: Mapped[dict | None] = mapped_column(
-        JSON, comment="Alvállakozó keretszerződés (külsős) (relation)"
+        JSON, comment="Alvállakozó keretszerződés (külsős) (relation) - nyers Notion import"
     )
-    szerzodes_keszites_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Szerződés készítés (relation)")
+    szerzodes_keszites_notion_ids: Mapped[dict | None] = mapped_column(
+        JSON, comment="Szerződés készítés (relation) - nyers Notion import"
+    )
     akinek_mar_van_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Akinek már van (relation)")
+    szerzodes_pdf_url: Mapped[str | None] = mapped_column(
+        String(500), comment="Szerződés készítése és küldése gomb - generált szerződés Google Docs linkje"
+    )
+    szerzodes_keszites_employee_id: Mapped[int | None] = mapped_column(
+        ForeignKey("employees.id"),
+        comment="'Szerződés készítés' relation (Külsős és belsős) - a kiválasztott ember adatai a "
+        "megbízott_* mezőkbe másolódnak (lásd app/services/contract_actions.py)",
+    )
+    alvallakozo_keretszerzodes_contract_id: Mapped[int | None] = mapped_column(
+        ForeignKey("contracts.id"),
+        comment="'Alvállakozó keretszerződés (külsős)' relation - egy meglévő keretszerződés "
+        "hozzálinkelése ehhez a projekthez",
+    )
 
     # --- pénzügy ---
     netto_osszeg: Mapped[float | None] = mapped_column(Numeric(14, 2), comment="Nettó összeg")

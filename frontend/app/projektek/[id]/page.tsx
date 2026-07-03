@@ -7,9 +7,10 @@ import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { M2mLinker } from "@/components/M2mLinker";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
+import { SingleRelationPicker } from "@/components/SingleRelationPicker";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getEmployees, getEquipment, getRecord, getRelated } from "@/lib/api";
+import { ENTITY_PATHS, getContracts, getEmployees, getEquipment, getRecord, getRelated } from "@/lib/api";
 import { toDetailFields } from "@/lib/detail";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,13 +21,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const crewIds = Array.isArray(project.crew_employee_ids) ? (project.crew_employee_ids as number[]) : [];
 
-  const [projectCode, campaign, deliverables, allEquipment, allEmployees, bookings] = await Promise.all([
+  const [projectCode, campaign, deliverables, allEquipment, allEmployees, bookings, allContracts] = await Promise.all([
     project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
     project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
     getRelated(ENTITY_PATHS.deliverable, { project_id: projectId }),
     getEquipment(),
     getEmployees(),
     getRelated(ENTITY_PATHS.assignment, { project_id: projectId }),
+    getContracts(),
   ]);
 
   const equipmentById = new Map(allEquipment.map((e) => [e.id, e]));
@@ -37,6 +39,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     trackMode: e.track_mode,
   }));
   const crewOptions = allEmployees.map((e) => ({ id: e.id, label: e.full_name, href: `/csapat/${e.id}` }));
+  const contractOptions = allContracts
+    .filter((c) => c.tipus === "alvallalkozoi")
+    .map((c) => ({ id: c.id, label: c.ceg_neve || `Szerződés #${c.id}` }));
 
   const bookingRows = bookings
     .map((b) => {
@@ -77,10 +82,74 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               path={`/api/v1/projects/${project.id}/feldarabolas`}
               label="Feldarabolás"
               confirmMessage="Új projekt jön létre ugyanahhoz a Project Code-hoz (feldarabolt forgatási nap). Folytatod?"
-              redirectTo={(result) => `/projektek/${result.id}`}
+              redirectPrefix="/projektek/"
             />
           </div>
-          <DetailGrid fields={toDetailFields(project, ["project_code_id", "campaign_id", "crew_employee_ids"])} />
+          <DetailGrid
+            fields={toDetailFields(project, [
+              "project_code_id",
+              "campaign_id",
+              "crew_employee_ids",
+              "szerzodes_keszites_employee_id",
+              "alvallakozo_keretszerzodes_contract_id",
+            ])}
+          />
+        </Card>
+
+        <Card title="Diszpó">
+          <div className="flex flex-wrap items-center gap-3">
+            <ActionButton
+              path={`/api/v1/projects/${project.id}/diszpo/elozetes`}
+              label="Előzetes diszpó"
+              confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+            />
+            <ActionButton
+              path={`/api/v1/projects/${project.id}/diszpo/kuldes`}
+              label="Diszpó küldése"
+              confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+            />
+            <span className="text-[13px] text-text-secondary">
+              Diszpó állapot: {String(project.diszpo ?? "–")} · Előzetes: {String(project.elozetes_diszpo_kuldes ?? "–")}
+            </span>
+          </div>
+        </Card>
+
+        <Card title="Szerződés">
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-[13px] font-medium text-text-primary">Szerződés készítés (megbízott kiválasztása)</p>
+              <SingleRelationPicker
+                path={`/api/v1/projects/${project.id}/szerzodes-keszites`}
+                bodyKey="employee_id"
+                currentId={project.szerzodes_keszites_employee_id as number | null}
+                currentLabel={project.megbizott_neve as string | null}
+                options={crewOptions}
+                actionLabel="Adatok átemelése"
+                emptyText="Nincs kiválasztva megbízott."
+                allowClear={false}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+              <ActionButton
+                path={`/api/v1/projects/${project.id}/szerzodes-keszites-es-kuldese`}
+                label="Szerződés készítése és küldése"
+                confirmMessage="Elküldi a megbízási szerződést a kiválasztott megbízott email címére. Folytatod?"
+              />
+              <span className="text-[13px] text-text-secondary">Állapot: {String(project.szerzodes_allapot ?? "–")}</span>
+            </div>
+            <div className="border-t border-border pt-4">
+              <p className="mb-2 text-[13px] font-medium text-text-primary">Alvállakozó keretszerződés (külsős)</p>
+              <SingleRelationPicker
+                path={`${ENTITY_PATHS.project}/${project.id}`}
+                method="PATCH"
+                bodyKey="alvallakozo_keretszerzodes_contract_id"
+                currentId={project.alvallakozo_keretszerzodes_contract_id as number | null}
+                options={contractOptions}
+                actionLabel="Hozzálinkelés"
+                emptyText="Nincs hozzálinkelt keretszerződés."
+              />
+            </div>
+          </div>
         </Card>
 
         <Card title={`Eszközök (${bookingRows.length})`}>
@@ -106,7 +175,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <ActionButton
               path={`/api/v1/projects/${project.id}/create-utomunka`}
               label="+ Utómunka létrehozása"
-              redirectTo={(result) => `/utomunka/${result.id}`}
+              redirectPrefix="/utomunka/"
             />
             <span className="text-[13px] text-text-secondary">
               Automatikusan névvel és forgatáshoz kötve jön létre (Notion automatizmus alapján).

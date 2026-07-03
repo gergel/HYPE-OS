@@ -178,6 +178,10 @@ export async function getDeliverables(limit = 5000): Promise<Deliverable[]> {
   return (await apiGet<Deliverable[]>(`/api/v1/deliverables?limit=${limit}`)) ?? [];
 }
 
+export async function getContracts(limit = 5000): Promise<Contract[]> {
+  return (await apiGet<Contract[]>(`/api/v1/contracts?limit=${limit}`)) ?? [];
+}
+
 /** Az egyes entitás-modulok API alap-útvonalai, a részletnézetekhez és a
  * kapcsolódó rekordok (foreign key szerinti szűrés) lekérdezéséhez. */
 export const ENTITY_PATHS = {
