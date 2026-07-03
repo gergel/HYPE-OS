@@ -33,27 +33,46 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         </Card>
 
         <Card title={`Díjak (${rates.length})`}>
-          <RelatedTable rows={rates} emptyText="Nincs felvett díj ehhez a crew taghoz." />
+          <RelatedTable rows={rates} emptyText="Nincs felvett díj ehhez a crew taghoz." deleteBasePath={ENTITY_PATHS.rate} />
         </Card>
 
         <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
-          <RelatedTable rows={timesheets} emptyText="Nincs munkaidő-elszámolás ehhez a crew taghoz." />
+          <RelatedTable
+            rows={timesheets}
+            emptyText="Nincs munkaidő-elszámolás ehhez a crew taghoz."
+            deleteBasePath={ENTITY_PATHS.timesheet}
+          />
         </Card>
 
         <Card title={`Kiadások (${expenses.length})`}>
-          <RelatedTable rows={expenses} emptyText="Nincs kiadás ehhez a crew taghoz." getHref={(e) => `/penzugyek/kiadas/${e.id}`} />
+          <RelatedTable
+            rows={expenses}
+            emptyText="Nincs kiadás ehhez a crew taghoz."
+            getHref={(e) => `/penzugyek/kiadas/${e.id}`}
+            deleteBasePath={ENTITY_PATHS.expense}
+          />
         </Card>
 
         <Card title={`Szerződések (${contracts.length})`}>
-          <RelatedTable rows={contracts} emptyText="Nincs szerződés ehhez a crew taghoz." />
+          <RelatedTable rows={contracts} emptyText="Nincs szerződés ehhez a crew taghoz." deleteBasePath={ENTITY_PATHS.contract} />
         </Card>
 
         <Card title={`Vágott anyagok (${deliverables.length})`}>
-          <RelatedTable rows={deliverables} emptyText="Nincs vágandó anyag ehhez a crew taghoz." getHref={(d) => `/utomunka/${d.id}`} />
+          <RelatedTable
+            rows={deliverables}
+            emptyText="Nincs vágandó anyag ehhez a crew taghoz."
+            getHref={(d) => `/utomunka/${d.id}`}
+            deleteBasePath={ENTITY_PATHS.deliverable}
+          />
         </Card>
 
         <Card title={`Felelős kampányok (${campaigns.length})`}>
-          <RelatedTable rows={campaigns} emptyText="Nincs kampány ehhez a crew taghoz." getHref={(c) => `/kampanyok/${c.id}`} />
+          <RelatedTable
+            rows={campaigns}
+            emptyText="Nincs kampány ehhez a crew taghoz."
+            getHref={(c) => `/kampanyok/${c.id}`}
+            deleteBasePath={ENTITY_PATHS.campaign}
+          />
         </Card>
       </div>
     </div>

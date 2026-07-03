@@ -138,43 +138,43 @@ export async function getDashboardSummary(): Promise<DashboardSummary | null> {
   return apiGet<DashboardSummary>("/api/v1/dashboard/summary");
 }
 
-export async function getProjectCodes(limit = 200): Promise<ProjectCode[]> {
+export async function getProjectCodes(limit = 5000): Promise<ProjectCode[]> {
   return (await apiGet<ProjectCode[]>(`/api/v1/project-codes?limit=${limit}`)) ?? [];
 }
 
-export async function getClients(limit = 200): Promise<Client[]> {
+export async function getClients(limit = 5000): Promise<Client[]> {
   return (await apiGet<Client[]>(`/api/v1/clients?limit=${limit}`)) ?? [];
 }
 
-export async function getProjects(limit = 200): Promise<Project[]> {
+export async function getProjects(limit = 5000): Promise<Project[]> {
   return (await apiGet<Project[]>(`/api/v1/projects?limit=${limit}`)) ?? [];
 }
 
-export async function getEmployees(limit = 200): Promise<Employee[]> {
+export async function getEmployees(limit = 5000): Promise<Employee[]> {
   return (await apiGet<Employee[]>(`/api/v1/crew?limit=${limit}`)) ?? [];
 }
 
-export async function getEquipment(limit = 200): Promise<Equipment[]> {
+export async function getEquipment(limit = 5000): Promise<Equipment[]> {
   return (await apiGet<Equipment[]>(`/api/v1/equipment?limit=${limit}`)) ?? [];
 }
 
-export async function getCampaigns(limit = 200): Promise<Campaign[]> {
+export async function getCampaigns(limit = 5000): Promise<Campaign[]> {
   return (await apiGet<Campaign[]>(`/api/v1/campaigns?limit=${limit}`)) ?? [];
 }
 
-export async function getTasks(limit = 200): Promise<Task[]> {
+export async function getTasks(limit = 5000): Promise<Task[]> {
   return (await apiGet<Task[]>(`/api/v1/tasks?limit=${limit}`)) ?? [];
 }
 
-export async function getExpenses(limit = 200): Promise<Expense[]> {
+export async function getExpenses(limit = 5000): Promise<Expense[]> {
   return (await apiGet<Expense[]>(`/api/v1/expenses?limit=${limit}`)) ?? [];
 }
 
-export async function getRevenues(limit = 200): Promise<Revenue[]> {
+export async function getRevenues(limit = 5000): Promise<Revenue[]> {
   return (await apiGet<Revenue[]>(`/api/v1/revenues?limit=${limit}`)) ?? [];
 }
 
-export async function getDeliverables(limit = 200): Promise<Deliverable[]> {
+export async function getDeliverables(limit = 5000): Promise<Deliverable[]> {
   return (await apiGet<Deliverable[]>(`/api/v1/deliverables?limit=${limit}`)) ?? [];
 }
 
@@ -211,7 +211,7 @@ export async function getRecord(basePath: string, id: number): Promise<JsonRecor
 export async function getRelated(
   basePath: string,
   params: Record<string, number | string>,
-  limit = 200,
+  limit = 5000,
 ): Promise<JsonRecord[]> {
   const query = new URLSearchParams({ limit: String(limit) });
   for (const [key, value] of Object.entries(params)) query.set(key, String(value));

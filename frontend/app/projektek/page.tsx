@@ -2,7 +2,7 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { formatDate, getProjectCodes, getProjects, Project } from "@/lib/api";
+import { ENTITY_PATHS, formatDate, getProjectCodes, getProjects, Project } from "@/lib/api";
 
 export default async function ProjektekPage() {
   const [projects, projectCodes] = await Promise.all([getProjects(), getProjectCodes()]);
@@ -17,12 +17,22 @@ export default async function ProjektekPage() {
             rows={projects}
             emptyText="Még nincs felvett projekt - importáld a Notionból, vagy adj hozzá egyet a /api/v1/projects végponton."
             getHref={(p) => `/projektek/${p.id}`}
+            deleteHref={(p) => `${ENTITY_PATHS.project}/${p.id}`}
+            filterable
             columns={[
-              { header: "Név", render: (p) => p.nev },
-              { header: "Projektkód", render: (p) => projectCodeById.get(p.project_code_id) ?? "–" },
-              { header: "Forgatás dátuma", render: (p) => formatDate(p.forgatas_datuma) },
-              { header: "Helyszín", render: (p) => p.helyszin ?? "–" },
-              { header: "Állapot", render: (p) => (p.allapot ? <StatusBadge label={p.allapot} tone="neutral" /> : "–") },
+              { header: "Név", render: (p) => p.nev, sortAccessor: (p) => p.nev },
+              {
+                header: "Projektkód",
+                render: (p) => projectCodeById.get(p.project_code_id) ?? "–",
+                sortAccessor: (p) => projectCodeById.get(p.project_code_id),
+              },
+              { header: "Forgatás dátuma", render: (p) => formatDate(p.forgatas_datuma), sortAccessor: (p) => p.forgatas_datuma },
+              { header: "Helyszín", render: (p) => p.helyszin ?? "–", sortAccessor: (p) => p.helyszin },
+              {
+                header: "Állapot",
+                render: (p) => (p.allapot ? <StatusBadge label={p.allapot} tone="neutral" /> : "–"),
+                sortAccessor: (p) => p.allapot,
+              },
             ]}
           />
         </Card>

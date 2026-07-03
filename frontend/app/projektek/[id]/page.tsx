@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { DetailGrid } from "@/components/DetailGrid";
+import { M2mLinker } from "@/components/M2mLinker";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getRecord, getRecordsByIds, getRelated } from "@/lib/api";
+import { ENTITY_PATHS, getEmployees, getEquipment, getRecord, getRelated } from "@/lib/api";
 import { toDetailFields } from "@/lib/detail";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,13 +18,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const equipmentIds = Array.isArray(project.equipment_ids) ? (project.equipment_ids as number[]) : [];
   const crewIds = Array.isArray(project.crew_employee_ids) ? (project.crew_employee_ids as number[]) : [];
 
-  const [projectCode, campaign, deliverables, equipment, crew] = await Promise.all([
+  const [projectCode, campaign, deliverables, allEquipment, allEmployees] = await Promise.all([
     project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
     project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
     getRelated(ENTITY_PATHS.deliverable, { project_id: projectId }),
-    getRecordsByIds(ENTITY_PATHS.equipment, equipmentIds),
-    getRecordsByIds(ENTITY_PATHS.employee, crewIds),
+    getEquipment(),
+    getEmployees(),
   ]);
+
+  const equipmentOptions = allEquipment.map((e) => ({ id: e.id, label: e.nev, href: `/felszereles/${e.id}` }));
+  const crewOptions = allEmployees.map((e) => ({ id: e.id, label: e.full_name, href: `/csapat/${e.id}` }));
 
   return (
     <div className="flex flex-1 flex-col">
@@ -48,20 +53,45 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           />
         </Card>
 
-        <Card title={`Eszközök (${equipment.length})`}>
-          <RelatedTable
-            rows={equipment}
+        <Card title={`Eszközök (${equipmentIds.length})`}>
+          <M2mLinker
+            patchPath={`${ENTITY_PATHS.project}/${project.id}`}
+            fieldName="equipment_ids"
+            currentIds={equipmentIds}
+            options={equipmentOptions}
             emptyText="Nincs eszköz hozzárendelve ehhez a projekthez."
-            getHref={(e) => `/felszereles/${e.id}`}
+            addLabel="Eszköz hozzáadása"
           />
         </Card>
 
-        <Card title={`Stáb (${crew.length})`}>
-          <RelatedTable rows={crew} emptyText="Nincs stábtag hozzárendelve ehhez a projekthez." getHref={(e) => `/csapat/${e.id}`} />
+        <Card title={`Stáb (${crewIds.length})`}>
+          <M2mLinker
+            patchPath={`${ENTITY_PATHS.project}/${project.id}`}
+            fieldName="crew_employee_ids"
+            currentIds={crewIds}
+            options={crewOptions}
+            emptyText="Nincs stábtag hozzárendelve ehhez a projekthez."
+            addLabel="Stábtag hozzáadása"
+          />
         </Card>
 
         <Card title={`Utómunka (${deliverables.length})`}>
-          <RelatedTable rows={deliverables} emptyText="Nincs vágandó anyag ehhez a projekthez." getHref={(d) => `/utomunka/${d.id}`} />
+          <QuickCreateForm
+            postPath={ENTITY_PATHS.deliverable}
+            addLabel="+ Új utómunka hozzáadása"
+            presetFields={{ project_id: project.id, project_code_id: project.project_code_id }}
+            fields={[
+              { name: "projekt_neve", label: "Anyag neve", required: true },
+              { name: "allapot", label: "Állapot" },
+              { name: "hatarido", label: "Határidő", type: "date" },
+            ]}
+          />
+          <RelatedTable
+            rows={deliverables}
+            emptyText="Nincs vágandó anyag ehhez a projekthez."
+            getHref={(d) => `/utomunka/${d.id}`}
+            deleteBasePath={ENTITY_PATHS.deliverable}
+          />
         </Card>
       </div>
     </div>

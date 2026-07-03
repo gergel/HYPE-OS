@@ -2,7 +2,7 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { Equipment, getEquipment } from "@/lib/api";
+import { ENTITY_PATHS, Equipment, getEquipment } from "@/lib/api";
 
 export default async function FelszerelesPage() {
   const equipment = await getEquipment();
@@ -16,15 +16,23 @@ export default async function FelszerelesPage() {
             rows={equipment}
             emptyText="Még nincs felvett eszköz - importáld a Notionból, vagy adj hozzá egyet a /api/v1/equipment végponton."
             getHref={(e) => `/felszereles/${e.id}`}
+            deleteHref={(e) => `${ENTITY_PATHS.equipment}/${e.id}`}
+            filterable
             columns={[
-              { header: "Név", render: (e) => e.nev },
-              { header: "Kategória", render: (e) => e.kategoria ?? "–" },
-              { header: "Állapot", render: (e) => e.allapot ?? "–" },
+              { header: "Név", render: (e) => e.nev, sortAccessor: (e) => e.nev },
+              { header: "Kategória", render: (e) => e.kategoria ?? "–", sortAccessor: (e) => e.kategoria },
+              { header: "Állapot", render: (e) => e.allapot ?? "–", sortAccessor: (e) => e.allapot },
               {
                 header: "Track mode",
                 render: (e) => <StatusBadge label={e.track_mode === "stock" ? "Készlet" : "Egyedi"} tone="neutral" />,
+                sortAccessor: (e) => e.track_mode,
               },
-              { header: "Mennyiség", align: "right", render: (e) => e.osszes_mennyiseg ?? "–" },
+              {
+                header: "Mennyiség",
+                align: "right",
+                render: (e) => e.osszes_mennyiseg ?? "–",
+                sortAccessor: (e) => e.osszes_mennyiseg,
+              },
             ]}
           />
         </Card>

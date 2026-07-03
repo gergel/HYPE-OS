@@ -43,11 +43,21 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         </Card>
 
         <Card title={`Projektek (${projects.length})`}>
-          <RelatedTable rows={projects} emptyText="Nincs projekt ehhez a kampányhoz." getHref={(p) => `/projektek/${p.id}`} />
+          <RelatedTable
+            rows={projects}
+            emptyText="Nincs projekt ehhez a kampányhoz."
+            getHref={(p) => `/projektek/${p.id}`}
+            deleteBasePath={ENTITY_PATHS.project}
+          />
         </Card>
 
         <Card title={`Utómunka (${deliverables.length})`}>
-          <RelatedTable rows={deliverables} emptyText="Nincs vágandó anyag ehhez a kampányhoz." getHref={(d) => `/utomunka/${d.id}`} />
+          <RelatedTable
+            rows={deliverables}
+            emptyText="Nincs vágandó anyag ehhez a kampányhoz."
+            getHref={(d) => `/utomunka/${d.id}`}
+            deleteBasePath={ENTITY_PATHS.deliverable}
+          />
         </Card>
       </div>
     </div>

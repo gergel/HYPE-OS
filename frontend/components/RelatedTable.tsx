@@ -32,20 +32,32 @@ export function RelatedTable({
   rows,
   emptyText,
   getHref,
+  deleteBasePath,
 }: {
   rows: JsonRecord[];
   emptyText: string;
   getHref?: (row: JsonRecord) => string;
+  /** Ha meg van adva, minden sor mellett törlés-gomb jelenik meg, ami a rekordot
+   * magát törli (pl. deleteBasePath="/api/v1/deliverables") - FK-tulajdonolt
+   * (egy-a-többhöz) kapcsolatokhoz, NEM many-to-many linkeléshez. */
+  deleteBasePath?: string;
 }) {
   return (
     <DataTable<JsonRecord>
       rows={rows}
       emptyText={emptyText}
       getHref={getHref}
+      filterable={rows.length > 8}
+      deleteHref={deleteBasePath ? (r) => `${deleteBasePath}/${r.id}` : undefined}
       columns={[
-        { header: "Megnevezés", render: (r) => pickField(r, LABEL_KEYS) ?? `#${r.id}` },
-        { header: "Állapot", render: (r) => pickField(r, STATUS_KEYS) ?? "–" },
-        { header: "Dátum", align: "right", render: (r) => formatDate(pickField(r, DATE_KEYS)) },
+        { header: "Megnevezés", render: (r) => pickField(r, LABEL_KEYS) ?? `#${r.id}`, sortAccessor: (r) => pickField(r, LABEL_KEYS) },
+        { header: "Állapot", render: (r) => pickField(r, STATUS_KEYS) ?? "–", sortAccessor: (r) => pickField(r, STATUS_KEYS) },
+        {
+          header: "Dátum",
+          align: "right",
+          render: (r) => formatDate(pickField(r, DATE_KEYS)),
+          sortAccessor: (r) => pickField(r, DATE_KEYS),
+        },
       ]}
     />
   );

@@ -41,19 +41,39 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
         </Card>
 
         <Card title={`Projektek (${projects.length})`}>
-          <RelatedTable rows={projects} emptyText="Nincs projekt ehhez a Project Code-hoz." getHref={(p) => `/projektek/${p.id}`} />
+          <RelatedTable
+            rows={projects}
+            emptyText="Nincs projekt ehhez a Project Code-hoz."
+            getHref={(p) => `/projektek/${p.id}`}
+            deleteBasePath={ENTITY_PATHS.project}
+          />
         </Card>
 
         <Card title={`Kiadások (${expenses.length})`}>
-          <RelatedTable rows={expenses} emptyText="Nincs kiadás ehhez a Project Code-hoz." getHref={(e) => `/penzugyek/kiadas/${e.id}`} />
+          <RelatedTable
+            rows={expenses}
+            emptyText="Nincs kiadás ehhez a Project Code-hoz."
+            getHref={(e) => `/penzugyek/kiadas/${e.id}`}
+            deleteBasePath={ENTITY_PATHS.expense}
+          />
         </Card>
 
         <Card title={`Bevételek (${revenues.length})`}>
-          <RelatedTable rows={revenues} emptyText="Nincs bevétel ehhez a Project Code-hoz." getHref={(r) => `/penzugyek/bevetel/${r.id}`} />
+          <RelatedTable
+            rows={revenues}
+            emptyText="Nincs bevétel ehhez a Project Code-hoz."
+            getHref={(r) => `/penzugyek/bevetel/${r.id}`}
+            deleteBasePath={ENTITY_PATHS.revenue}
+          />
         </Card>
 
         <Card title={`Utómunka (${deliverables.length})`}>
-          <RelatedTable rows={deliverables} emptyText="Nincs vágandó anyag ehhez a Project Code-hoz." getHref={(d) => `/utomunka/${d.id}`} />
+          <RelatedTable
+            rows={deliverables}
+            emptyText="Nincs vágandó anyag ehhez a Project Code-hoz."
+            getHref={(d) => `/utomunka/${d.id}`}
+            deleteBasePath={ENTITY_PATHS.deliverable}
+          />
         </Card>
       </div>
     </div>

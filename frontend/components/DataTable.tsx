@@ -1,66 +1,48 @@
 import type { ReactNode } from "react";
-import { RowLink } from "@/components/RowLink";
+import { InteractiveTableClient } from "@/components/InteractiveTableClient";
 
 export type Column<T> = {
   header: string;
   align?: "left" | "right";
   render: (row: T) => ReactNode;
+  /** Ha meg van adva, az oszlop fejléce kattintható lesz és rendezhető erre az
+   * értékre - stringet/számot ad vissza (nem JSX-et, mert azt nem lehet rendezni). */
+  sortAccessor?: (row: T) => string | number | null | undefined;
 };
 
+/** Szerver-oldali komponens: minden sort/cellát itt renderelünk le (col.render,
+ * col.sortAccessor, getHref, deleteHref függvényeit itt hívjuk meg), mert
+ * függvényeket nem lehet átküldeni a szerver/kliens határon. A már kész,
+ * szerializálható eredményt (ReactNode cellák, string/szám sortKey-ek, string
+ * href-ek) adjuk át az InteractiveTableClient-nek, ami a rendezést/szűrést/
+ * törlést kezeli kliens oldalon. */
 export function DataTable<T extends { id: number }>({
   columns,
   rows,
   emptyText,
   getHref,
+  filterable = false,
+  deleteHref,
 }: {
   columns: Column<T>[];
   rows: T[];
   emptyText: string;
   getHref?: (row: T) => string;
+  /** Szabadszavas keresőmező a táblázat felett. */
+  filterable?: boolean;
+  /** Ha meg van adva, minden sor végén egy törlés-gomb jelenik meg - a DELETE
+   * végpont teljes útvonalát adja vissza (pl. `/api/v1/deliverables/42`). */
+  deleteHref?: (row: T) => string;
 }) {
-  if (rows.length === 0) {
-    return <p className="text-[13px] text-text-muted">{emptyText}</p>;
-  }
+  const headerMeta = columns.map((col) => ({ header: col.header, align: col.align, sortable: !!col.sortAccessor }));
+  const renderedRows = rows.map((row) => ({
+    id: row.id,
+    href: getHref?.(row),
+    deletePath: deleteHref?.(row),
+    cells: columns.map((col) => col.render(row)),
+    sortKeys: columns.map((col) => col.sortAccessor?.(row) ?? null),
+    searchText: JSON.stringify(row).toLowerCase(),
+  }));
 
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-[13px]">
-        <thead>
-          <tr className="border-b border-border">
-            {columns.map((col) => (
-              <th
-                key={col.header}
-                className={`whitespace-nowrap py-1.5 font-medium text-text-secondary ${
-                  col.align === "right" ? "text-right" : "text-left"
-                }`}
-              >
-                {col.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const cells = columns.map((col) => (
-              <td key={col.header} className={`py-2 pr-4 ${col.align === "right" ? "text-right" : "text-left"}`}>
-                {col.render(row)}
-              </td>
-            ));
-            if (getHref) {
-              return (
-                <RowLink key={row.id} href={getHref(row)}>
-                  {cells}
-                </RowLink>
-              );
-            }
-            return (
-              <tr key={row.id} className="border-b border-border last:border-0">
-                {cells}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+  return <InteractiveTableClient headerMeta={headerMeta} rows={renderedRows} emptyText={emptyText} filterable={filterable} />;
 }

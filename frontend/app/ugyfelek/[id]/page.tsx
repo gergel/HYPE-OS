@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { DetailGrid } from "@/components/DetailGrid";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
 import { ENTITY_PATHS, getRecord, getRelated } from "@/lib/api";
@@ -31,7 +32,17 @@ export default async function UgyfelDetailPage({ params }: { params: Promise<{ i
         </Card>
 
         <Card title={`Kapcsolattartók (${contacts.length})`}>
-          <RelatedTable rows={contacts} emptyText="Nincs kapcsolattartó ehhez az ügyfélhez." />
+          <QuickCreateForm
+            postPath={ENTITY_PATHS.contact}
+            addLabel="+ Új kapcsolattartó hozzáadása"
+            presetFields={{ client_id: client.id }}
+            fields={[
+              { name: "full_name", label: "Név", required: true },
+              { name: "email", label: "Email" },
+              { name: "phone", label: "Telefon" },
+            ]}
+          />
+          <RelatedTable rows={contacts} emptyText="Nincs kapcsolattartó ehhez az ügyfélhez." deleteBasePath={ENTITY_PATHS.contact} />
         </Card>
 
         <Card title={`Project Code-ok (${projectCodes.length})`}>
@@ -39,15 +50,21 @@ export default async function UgyfelDetailPage({ params }: { params: Promise<{ i
             rows={projectCodes}
             emptyText="Nincs Project Code ehhez az ügyfélhez."
             getHref={(pc) => `/projektek/project-kodok/${pc.id}`}
+            deleteBasePath={ENTITY_PATHS.projectCode}
           />
         </Card>
 
         <Card title={`Szerződések (${contracts.length})`}>
-          <RelatedTable rows={contracts} emptyText="Nincs szerződés ehhez az ügyfélhez." />
+          <RelatedTable rows={contracts} emptyText="Nincs szerződés ehhez az ügyfélhez." deleteBasePath={ENTITY_PATHS.contract} />
         </Card>
 
         <Card title={`Kampányok (${campaigns.length})`}>
-          <RelatedTable rows={campaigns} emptyText="Nincs kampány ehhez az ügyfélhez." getHref={(c) => `/kampanyok/${c.id}`} />
+          <RelatedTable
+            rows={campaigns}
+            emptyText="Nincs kampány ehhez az ügyfélhez."
+            getHref={(c) => `/kampanyok/${c.id}`}
+            deleteBasePath={ENTITY_PATHS.campaign}
+          />
         </Card>
       </div>
     </div>

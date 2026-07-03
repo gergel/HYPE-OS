@@ -57,11 +57,15 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
         </Card>
 
         <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
-          <RelatedTable rows={timesheets} emptyText="Nincs munkaidő-elszámolás ehhez az anyaghoz." />
+          <RelatedTable
+            rows={timesheets}
+            emptyText="Nincs munkaidő-elszámolás ehhez az anyaghoz."
+            deleteBasePath={ENTITY_PATHS.timesheet}
+          />
         </Card>
 
         <Card title={`Visszajelzések (${feedbacks.length})`}>
-          <RelatedTable rows={feedbacks} emptyText="Nincs visszajelzés ehhez az anyaghoz." />
+          <RelatedTable rows={feedbacks} emptyText="Nincs visszajelzés ehhez az anyaghoz." deleteBasePath={ENTITY_PATHS.feedback} />
         </Card>
       </div>
     </div>
