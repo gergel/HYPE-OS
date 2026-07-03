@@ -30,6 +30,7 @@ class EquipmentUpdate(BaseModel):
 class EquipmentRead(EquipmentBase):
     id: int
     extra: dict | None = None
+    project_ids: list[int] = []
 
     model_config = {"from_attributes": True}
 

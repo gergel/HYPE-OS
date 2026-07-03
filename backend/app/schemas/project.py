@@ -16,6 +16,7 @@ class ProjectBase(BaseModel):
 
 class ProjectCreate(ProjectBase):
     crew_employee_ids: list[int] = []
+    equipment_ids: list[int] = []
 
 
 class ProjectUpdate(BaseModel):
@@ -25,10 +26,13 @@ class ProjectUpdate(BaseModel):
     helyszin: str | None = None
     allapot: str | None = None
     crew_employee_ids: list[int] | None = None
+    equipment_ids: list[int] | None = None
 
 
 class ProjectRead(ProjectBase):
     id: int
+    crew_employee_ids: list[int] = []
+    equipment_ids: list[int] = []
 
     # a 'Main Database' Notion tábla maradék ~140 mezője, egyenként (lásd
     # app/models/project.py) - nem egy közös 'extra' JSON-ban.

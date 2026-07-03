@@ -222,6 +222,14 @@ export async function getContactsByClient(clientId: number): Promise<Contact[]> 
   return (await getRelated(ENTITY_PATHS.contact, { client_id: clientId })) as unknown as Contact[];
 }
 
+/** Több rekord lekérése id lista alapján (many-to-many kapcsolatokhoz, pl. egy
+ * Projekthez rendelt Equipment-ek - ott nincs egyetlen foreign key oszlop, amivel
+ * getRelated szűrhetne, csak egy id-lista a rekordon). */
+export async function getRecordsByIds(basePath: string, ids: number[]): Promise<JsonRecord[]> {
+  const records = await Promise.all(ids.map((id) => getRecord(basePath, id)));
+  return records.filter((r): r is JsonRecord => r !== null);
+}
+
 export function formatHuf(value: number | null): string {
   if (value === null) return "–";
   if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(".0", "")}M Ft`;

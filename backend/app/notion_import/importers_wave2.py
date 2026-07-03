@@ -11,9 +11,11 @@ importáljuk, mert csak tesztek voltak, nincs rájuk szükség:
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.deliverable import Deliverable
+from app.models.equipment import Equipment
 from app.models.feedback import Feedback
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.project import Project
@@ -21,7 +23,7 @@ from app.models.project_code import ProjectCode
 from app.models.timesheet import Timesheet
 from app.notion_import import database_ids as db_ids
 from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties, remaining_properties
-from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert, upsert
+from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_relation_ids, safe_upsert, upsert
 from app.notion_import.importers import _text, get_or_create_unknown_client
 
 UNKNOWN_PROJECT_CODE_KEY = "project_code:unknown-notion-import"
@@ -71,7 +73,7 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
         )
         campaign_id = resolve_relation_id(db, "Campaign", props.get("Kampányok") or [])
 
-        safe_upsert(
+        project_obj = safe_upsert(
             db,
             result,
             Project,
@@ -215,6 +217,20 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
             },
             label=f"Project '{nev}'",
         )
+
+        if project_obj is not None:
+            equipment_notion_ids = list(
+                {*(props.get("Kivitt eszközök") or []), *(props.get("Visszahozott eszközök") or [])}
+            )
+            try:
+                equipment_ids = resolve_relation_ids(db, "Equipment", equipment_notion_ids)
+                if equipment_ids:
+                    project_obj.equipment = db.scalars(
+                        select(Equipment).where(Equipment.id.in_(equipment_ids))
+                    ).all()
+                    db.flush()
+            except Exception as exc:  # noqa: BLE001 - egy m2m-feloldási hiba ne vigye el a teljes sort
+                result.errors.append(f"Project '{nev}' eszköz-kapcsolat feloldás: {type(exc).__name__}: {exc}")
 
     return result
 

@@ -13,6 +13,13 @@ project_crew = Table(
     Column("employee_id", ForeignKey("employees.id"), primary_key=True),
 )
 
+project_equipment = Table(
+    "project_equipment",
+    Base.metadata,
+    Column("project_id", ForeignKey("projects.id"), primary_key=True),
+    Column("equipment_id", ForeignKey("equipment.id"), primary_key=True),
+)
+
 
 class Project(TimestampMixin, Base):
     """Konkrét forgatás egy Project Code-on belül.
@@ -220,6 +227,7 @@ class Project(TimestampMixin, Base):
     project_code: Mapped["ProjectCode"] = relationship(back_populates="projects")
     campaign: Mapped["Campaign"] = relationship(back_populates="projects")
     crew: Mapped[list["Employee"]] = relationship(secondary=project_crew, back_populates="projects")
+    equipment: Mapped[list["Equipment"]] = relationship(secondary=project_equipment, back_populates="projects")
 
     deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project")
     callsheets: Mapped[list["Callsheet"]] = relationship(back_populates="project")
@@ -227,3 +235,15 @@ class Project(TimestampMixin, Base):
     media_items: Mapped[list["Media"]] = relationship(back_populates="project")
     folders: Mapped[list["Folder"]] = relationship(back_populates="project")
     portal: Mapped["Portal"] = relationship(back_populates="project", uselist=False)
+
+    @property
+    def equipment_ids(self) -> list[int]:
+        """A 'Kivitt eszközök'/'Visszahozott eszközök' Notion relation-ökből import
+        közben feloldott Equipment-ek - így látszik a frontenden, hogy egy projekthez
+        melyik leltári tétel(ek) voltak kikötve, anélkül hogy a kihagyott 'Eszközkivitel'
+        checkout-log táblát importálnánk."""
+        return [e.id for e in self.equipment]
+
+    @property
+    def crew_employee_ids(self) -> list[int]:
+        return [e.id for e in self.crew]
