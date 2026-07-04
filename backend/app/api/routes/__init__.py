@@ -19,6 +19,7 @@ from app.api.routes.projects import router as projects_router
 from app.api.routes.storage import folders_router, media_router
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.timeline import router as timeline_router
+from app.api.routes.user_access import router as user_access_router
 
 api_router = APIRouter()
 
@@ -65,5 +66,6 @@ api_router.include_router(tasks_router)
 api_router.include_router(automation_router)
 # AI Assistant
 api_router.include_router(ai_assistant_router)
-# Beállítások: mező-láthatóság
+# Beállítások: mező-láthatóság + oldal-hozzáférés (egyénenként)
 api_router.include_router(field_visibility_router)
+api_router.include_router(user_access_router)

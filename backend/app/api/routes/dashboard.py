@@ -8,6 +8,8 @@ from sqlalchemy import extract, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.employee import Employee
 from app.models.finance import Revenue
 from app.models.project import Project
 from app.models.project_code import ProjectCode
@@ -23,7 +25,7 @@ class DashboardSummary(BaseModel):
 
 
 @router.get("/summary", response_model=DashboardSummary)
-def summary(db: Session = Depends(get_db)):
+def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     today = date.today()
 
     mai_forgatasok = (

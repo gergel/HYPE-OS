@@ -8,6 +8,13 @@ export type NavGroup = {
   items: NavItem[];
 };
 
+/** Az összes oldal lapos listája (címke + href), a Beállítások oldal
+ * oldal-hozzáférés szerkesztőjének kell, hogy egyénenként fel tudja sorolni
+ * a checkboxokat - lásd UserAccessManager. */
+export function flatNavItems(): NavItem[] {
+  return navGroups.flatMap((group) => group.items);
+}
+
 export const navGroups: NavGroup[] = [
   { label: null, items: [{ label: "Dashboard", href: "/dashboard" }] },
   {

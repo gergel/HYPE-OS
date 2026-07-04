@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { setToken } from "@/lib/authFetch";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -29,8 +30,9 @@ export default function LoginPage() {
         return;
       }
       const data = await res.json();
-      localStorage.setItem("hype_os_token", data.access_token);
+      setToken(data.access_token);
       router.push("/dashboard");
+      router.refresh();
     } catch {
       setError("Nem sikerült elérni a backend API-t.");
     } finally {

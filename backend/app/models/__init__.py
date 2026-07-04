@@ -20,6 +20,7 @@ from app.models.rate import Rate
 from app.models.task import Task, task_employees
 from app.models.timesheet import Timesheet
 from app.models.timeline import TimelineEvent
+from app.models.user_access import PageAccessConfig
 
 __all__ = [
     "Base",
@@ -57,4 +58,5 @@ __all__ = [
     "task_employees",
     "Timesheet",
     "TimelineEvent",
+    "PageAccessConfig",
 ]

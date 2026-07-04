@@ -13,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import Role, require_roles
+from app.core.security import Role, get_current_user, require_roles
+from app.models.employee import Employee
 
 # Soha nem PATCH-elhető mezők, még akkor sem, ha valódi oszlopok - a "minden
 # adat szerkeszthető" elv alól ez az egyetlen kivétel (biztonsági okból).
@@ -84,10 +85,13 @@ def build_crud_router(
     column_names = set(model.__table__.columns.keys())
 
     @router.get("", response_model=list[list_read_schema])
-    def list_items(request: Request, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    def list_items(
+        request: Request, skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
+    ):
         """A skip/limit mellett bármelyik valódi oszlop szerint szűrhető query
         param-mal (pl. ?project_code_id=5) - ez adja a kapcsolódó rekordok
-        (pl. egy Project Code összes Projektje) frontend-oldali lekérdezését."""
+        (pl. egy Project Code összes Projektje) frontend-oldali lekérdezését.
+        Bejelentkezés nélkül semmilyen adat nem érhető el (lásd get_current_user)."""
         stmt = select(model)
         for key, raw_value in request.query_params.items():
             if key in ("skip", "limit") or key not in column_names:
@@ -100,7 +104,7 @@ def build_crud_router(
         return db.scalars(stmt.offset(skip).limit(limit)).all()
 
     @router.get("/{item_id}", response_model=read_schema)
-    def get_item(item_id: int, db: Session = Depends(get_db)):
+    def get_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
         return _get_or_404(db, item_id)
 
     create_kwargs = {"dependencies": [Depends(write_dependency)]} if write_dependency else {}

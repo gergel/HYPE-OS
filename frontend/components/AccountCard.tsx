@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
+import { clearToken } from "@/lib/authFetch";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -32,8 +33,9 @@ export function AccountCard() {
   }, []);
 
   function handleLogout() {
-    localStorage.removeItem("hype_os_token");
+    clearToken();
     router.push("/login");
+    router.refresh();
   }
 
   return (

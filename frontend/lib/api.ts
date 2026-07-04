@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type DashboardSummary = {
@@ -120,9 +122,19 @@ export type Contract = {
   alairva: boolean;
 };
 
+/** A backend GET végpontok mostantól bejelentkezést igényelnek (lásd
+ * app/api/crud_router.py), ezért a szerver-oldali (SSR) lekérdezéseknek is
+ * kell egy érvényes Bearer token - ezt a login-kor beállított cookie-ból
+ * olvassuk (lásd lib/authFetch.ts setToken), mert a middleware/SSR nem éri
+ * el a böngésző localStorage-át, csak a cookie-kat. */
+async function authHeaders(): Promise<HeadersInit> {
+  const token = (await cookies()).get("hype_os_token")?.value;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function apiGet<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store", headers: await authHeaders() });
     if (!res.ok) {
       console.error(`API hiba: GET ${path} -> HTTP ${res.status}`);
       return null;
@@ -182,18 +194,14 @@ export async function getContracts(limit = 5000): Promise<Contract[]> {
   return (await apiGet<Contract[]>(`/api/v1/contracts?limit=${limit}`)) ?? [];
 }
 
-export type FieldVisibilityConfig = { entity_type: string; visible_fields: string[] | null };
+export type FieldVisibilityConfig = { employee_id: number; entity_type: string; visible_fields: string[] | null };
 
-/** A Beállítások oldalon konfigurált mező-láthatóság - melyik mezők jelenjenek
- * meg egy adott entitástípus (lásd ENTITY_PATHS kulcsok) részletnézetén.
+/** A bejelentkezett felhasználó saját mező-láthatósága egy entitástípushoz -
+ * egyénenként állítható be a Beállítások oldalon (csak admin szerkesztheti).
  * Nincs config sor -> nincs szűrés, minden mező látszik. */
-export async function getFieldVisibility(): Promise<FieldVisibilityConfig[]> {
-  return (await apiGet<FieldVisibilityConfig[]>("/api/v1/field-visibility")) ?? [];
-}
-
 export async function getVisibleFields(entityType: string): Promise<string[] | null> {
-  const all = await getFieldVisibility();
-  return all.find((c) => c.entity_type === entityType)?.visible_fields ?? null;
+  const res = await apiGet<{ visible_fields: string[] | null }>(`/api/v1/field-visibility/me/${entityType}`);
+  return res?.visible_fields ?? null;
 }
 
 /** {mezőnév: "boolean"|"date"|"datetime"|"number"|"text"} egy entitástípushoz -
@@ -201,7 +209,27 @@ export async function getVisibleFields(entityType: string): Promise<string[] | n
  * a EditableDetailGrid a helyes input-típussal jelenítsen meg, mert a nyers
  * null értékből ez önmagában nem derülne ki. */
 export async function getFieldTypes(entityType: string): Promise<Record<string, string>> {
-  return (await apiGet<Record<string, string>>(`/api/v1/field-visibility/${entityType}/schema`)) ?? {};
+  return (await apiGet<Record<string, string>>(`/api/v1/field-visibility/schema/${entityType}`)) ?? {};
+}
+
+/** Admin-nézet: egy adott munkatárs összes entitástípushoz beállított
+ * mező-láthatósága (Beállítások oldal, munkatárs-választó után). */
+export async function getFieldVisibilityForEmployee(employeeId: number): Promise<FieldVisibilityConfig[]> {
+  return (await apiGet<FieldVisibilityConfig[]>(`/api/v1/field-visibility/${employeeId}`)) ?? [];
+}
+
+export type PageAccessConfig = { employee_id: number; allowed_pages: string[] | null };
+
+/** A bejelentkezett felhasználó saját oldal-hozzáférése - null = minden oldalt
+ * lát. A middleware és a Sidebar is ez alapján szűr. */
+export async function getMyPageAccess(): Promise<string[] | null> {
+  const res = await apiGet<{ allowed_pages: string[] | null }>("/api/v1/user-access/me");
+  return res?.allowed_pages ?? null;
+}
+
+/** Admin-nézet: az összes munkatárs oldal-hozzáférése (Beállítások oldal). */
+export async function getAllPageAccess(): Promise<PageAccessConfig[]> {
+  return (await apiGet<PageAccessConfig[]>("/api/v1/user-access")) ?? [];
 }
 
 /** Az egyes entitás-modulok API alap-útvonalai, a részletnézetekhez és a

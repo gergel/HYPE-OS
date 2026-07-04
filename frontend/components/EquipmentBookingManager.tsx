@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { DeleteButton } from "@/components/DeleteButton";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
 type EquipmentOption = { id: number; label: string; href: string; trackMode: string };
 type BookingRow = { id: number; label: string; href: string; qty: number; trackMode: string };
 type Availability = {
@@ -51,7 +49,7 @@ export function EquipmentBookingManager({
     setLoadingAvailability(true);
     setAvailability(null);
     setAvailabilityError(null);
-    fetch(`${API_BASE_URL}/api/v1/equipment/${selected}/availability?project_id=${projectId}`)
+    authFetch(`/api/v1/equipment/${selected}/availability?project_id=${projectId}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

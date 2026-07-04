@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import Role, require_roles
+from app.core.security import Role, get_current_user, require_roles
+from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.project import Project
 from app.schemas.equipment import (
@@ -44,6 +45,7 @@ def list_assignments(
     equipment_id: int | None = None,
     project_id: int | None = None,
     db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
 ):
     stmt = select(Assignment)
     if equipment_id is not None:
@@ -105,7 +107,9 @@ def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{equipment_id}/availability")
-def equipment_availability(equipment_id: int, project_id: int, db: Session = Depends(get_db)):
+def equipment_availability(
+    equipment_id: int, project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
+):
     """Egy eszköz elérhetősége egy adott projekt forgatási napjaira - asset eszköznél
     foglalt-e már (más projekthez), stock eszköznél hány db szabad a teljes
     mennyiségből. A hozzáadás UI-ban ez mutatja élőben, mennyi elérhető, mielőtt

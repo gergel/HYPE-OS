@@ -4,8 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navGroups } from "@/lib/nav";
 
-export function Sidebar() {
+/** allowedPages: az egyénenként beállított oldal-hozzáférés (lásd Beállítások) -
+ * null = minden oldal látszik, egyébként csak azok, amiknek a href-jének első
+ * útvonal-szegmense (pl. "/projektek") szerepel a listában. A tényleges
+ * belépés-blokkolást a middleware végzi, ez csak a navigáció elrejtése. */
+export function Sidebar({ allowedPages }: { allowedPages: string[] | null }) {
   const pathname = usePathname();
+
+  function isAllowed(href: string): boolean {
+    if (!allowedPages) return true;
+    const topSegment = "/" + href.split("/").filter(Boolean)[0];
+    return topSegment === "/dashboard" || allowedPages.includes(topSegment);
+  }
+
+  const visibleGroups = navGroups
+    .map((group) => ({ ...group, items: group.items.filter((item) => isAllowed(item.href)) }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface-1 p-4 md:flex">
@@ -15,7 +29,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">
-        {navGroups.map((group, idx) => (
+        {visibleGroups.map((group, idx) => (
           <div key={idx}>
             {group.label && (
               <p className="mb-1.5 px-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">

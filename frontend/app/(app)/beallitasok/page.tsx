@@ -4,8 +4,17 @@ import { DataTable } from "@/components/DataTable";
 import { FieldVisibilityManager } from "@/components/FieldVisibilityManager";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { Employee, ENTITY_PATHS, getEmployees, getFieldVisibility, getSampleRecord } from "@/lib/api";
+import { UserAccessManager } from "@/components/UserAccessManager";
+import {
+  Employee,
+  ENTITY_PATHS,
+  getAllPageAccess,
+  getEmployees,
+  getFieldVisibilityForEmployee,
+  getSampleRecord,
+} from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
+import { flatNavItems } from "@/lib/nav";
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Admin",
@@ -31,12 +40,21 @@ const VISIBILITY_ENTITIES: { entityType: string; label: string; basePath: string
 ];
 
 export default async function BeallitasokPage() {
-  const [employees, visibilityConfigs, samples] = await Promise.all([
+  const [employees, pageAccessConfigs, samples] = await Promise.all([
     getEmployees(),
-    getFieldVisibility(),
+    getAllPageAccess(),
     Promise.all(VISIBILITY_ENTITIES.map((e) => getSampleRecord(e.basePath))),
   ]);
-  const visibleFieldsByEntity = new Map(visibilityConfigs.map((c) => [c.entity_type, c.visible_fields]));
+  const allowedPagesByEmployee = new Map(pageAccessConfigs.map((c) => [c.employee_id, c.allowed_pages]));
+  const pages = flatNavItems();
+
+  const availableFieldsByEntity = VISIBILITY_ENTITIES.map((entity, i) => {
+    const sample = samples[i];
+    if (!sample) return null;
+    return toEditableDetailFields(sample, entity.hide, null).map((f) => ({ key: f.key, label: f.label }));
+  });
+
+  const employeeFieldVisibility = await Promise.all(employees.map((e) => getFieldVisibilityForEmployee(e.id)));
 
   return (
     <div className="flex flex-1 flex-col">
@@ -62,23 +80,46 @@ export default async function BeallitasokPage() {
           />
         </Card>
 
-        <Card title="Mező-láthatóság">
+        <Card title="Felhasználó-kezelés">
           <p className="mb-3 text-[13px] text-text-secondary">
-            Melyik mezők jelenjenek meg az egyes részletnézeteken - mindenkire egyformán vonatkozik, csak admin szerkesztheti.
+            Egyénenként állítható be a jelszó, a látható oldalak és az egyes részletnézeteken látható mezők - csak admin szerkesztheti,
+            az érintett munkatárs saját maga nem módosíthatja.
           </p>
           <div className="space-y-2">
-            {VISIBILITY_ENTITIES.map((entity, i) => {
-              const sample = samples[i];
-              if (!sample) return null;
-              const availableFields = toEditableDetailFields(sample, entity.hide, null).map((f) => ({ key: f.key, label: f.label }));
+            {employees.map((employee, idx) => {
+              const visibleFieldsByEntity = new Map(employeeFieldVisibility[idx].map((c) => [c.entity_type, c.visible_fields]));
               return (
-                <FieldVisibilityManager
-                  key={entity.entityType}
-                  entityType={entity.entityType}
-                  entityLabel={entity.label}
-                  availableFields={availableFields}
-                  initialVisible={visibleFieldsByEntity.get(entity.entityType) ?? null}
-                />
+                <details key={employee.id} className="rounded-[var(--radius)] border border-border p-3">
+                  <summary className="cursor-pointer text-[13px] font-medium text-text-primary">
+                    {employee.full_name} <span className="text-text-muted">({ROLE_LABEL[employee.role] ?? employee.role})</span>
+                  </summary>
+                  <div className="mt-3 space-y-4">
+                    <UserAccessManager
+                      employeeId={employee.id}
+                      employeeLabel={employee.full_name}
+                      pages={pages}
+                      initialAllowedPages={allowedPagesByEmployee.get(employee.id) ?? null}
+                    />
+                    <div className="border-t border-border pt-4">
+                      <p className="mb-2 text-[13px] font-medium text-text-primary">Mező-láthatóság</p>
+                      <div className="space-y-2">
+                        {VISIBILITY_ENTITIES.map((entity, i) => {
+                          const availableFields = availableFieldsByEntity[i];
+                          if (!availableFields) return null;
+                          return (
+                            <FieldVisibilityManager
+                              key={entity.entityType}
+                              patchPath={`/api/v1/field-visibility/${employee.id}/${entity.entityType}`}
+                              entityLabel={entity.label}
+                              availableFields={availableFields}
+                              initialVisible={visibleFieldsByEntity.get(entity.entityType) ?? null}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </details>
               );
             })}
           </div>
