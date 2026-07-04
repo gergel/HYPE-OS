@@ -4,6 +4,7 @@ ne kelljen ugyanazt a boilerplate-et kézzel megismételni minden modulban.
 """
 
 from collections.abc import Callable
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -13,6 +14,24 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import Role, require_roles
+
+# Soha nem PATCH-elhető mezők, még akkor sem, ha valódi oszlopok - a "minden
+# adat szerkeszthető" elv alól ez az egyetlen kivétel (biztonsági okból).
+_PATCH_DENYLIST = {"id", "hashed_password"}
+
+
+def _coerce_value(column: Any, value: Any) -> Any:
+    """A böngészőből érkező nyers JSON értéket (string/number/bool/null) az
+    oszlop tényleges Python típusára alakítja, ahol ez nem triviális (Date/
+    DateTime oszlopok stringként érkeznek az inline-szerkesztő inputokból)."""
+    if value is None or not isinstance(value, str):
+        return value
+    py_type = getattr(column.type, "python_type", None)
+    if py_type is date:
+        return date.fromisoformat(value[:10])
+    if py_type is datetime:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return value
 
 
 def build_crud_router(
@@ -30,6 +49,13 @@ def build_crud_router(
 ) -> APIRouter:
     """m2m_fields: {payload_key: (relationship_attr_name, related_model)} a many-to-many mezőkhöz
     (pl. Project.crew_employee_ids -> ("crew", Employee)), amiket a sima **data konstruktor nem tud kezelni.
+
+    update_schema: jelenleg nem használja a PATCH végpont ("minden mező helyben
+    szerkeszthető" - lásd update_item) - az a nyers JSON body-t fogadja és
+    bármelyik valódi oszlopot elfogadja, hogy ne kelljen entitásonként kézzel
+    karban tartani egy 50-140 mezős Update sémát. A paraméter a hívási helyeken
+    (routes/*.py) marad, hogy ne kelljen mindet átírni, és mert dokumentálja,
+    milyen mezőkre gondolt eredetileg az adott entitás Update DTO-ja.
 
     list_read_schema: ha meg van adva, a lista végpont (GET "") ezt a szűkebb sémát
     használja read_schema helyett - nagyon széles táblákhoz (pl. Project ~140 oszlop),
@@ -96,17 +122,34 @@ def build_crud_router(
         return obj
 
     @router.patch("/{item_id}", response_model=read_schema, **create_kwargs)
-    def update_item(item_id: int, payload: update_schema, db: Session = Depends(get_db)):
+    async def update_item(item_id: int, request: Request, db: Session = Depends(get_db)):
+        """A payload egy nyers JSON objektum (nem egy fix update_schema) - bármelyik
+        valódi oszlop PATCH-elhető vele (a hashed_password/id kivételével), hogy a
+        részletnézeten bármelyik mező helyben szerkeszthető legyen (lásd
+        EditableDetailGrid a frontenden), anélkül hogy minden entitáshoz kézzel
+        karban kellene tartani egy külön Update sémát a ~50-140 mezőhöz."""
         obj = _get_or_404(db, item_id)
-        data = payload.model_dump(exclude_unset=True)
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A kérés törzsének JSON objektumnak kell lennie")
+
         for payload_key in list(m2m_fields):
             if payload_key in data:
                 ids = data.pop(payload_key)
                 attr_name, related_model = m2m_fields[payload_key]
                 related = db.scalars(select(related_model).where(related_model.id.in_(ids))).all() if ids else []
                 setattr(obj, attr_name, related)
+
+        columns = model.__table__.columns
         for field, value in data.items():
-            setattr(obj, field, value)
+            if field in _PATCH_DENYLIST or field not in column_names:
+                continue
+            try:
+                setattr(obj, field, _coerce_value(columns[field], value))
+            except (ValueError, TypeError) as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=f"Érvénytelen érték a '{field}' mezőhöz: {exc}"
+                ) from exc
         db.commit()
         db.refresh(obj)
         return obj

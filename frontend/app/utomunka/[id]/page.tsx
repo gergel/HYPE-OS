@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailGrid } from "@/components/DetailGrid";
+import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getRecord, getRelated } from "@/lib/api";
-import { toDetailFields } from "@/lib/detail";
+import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import { toEditableDetailFields } from "@/lib/detail";
 
 export default async function DeliverableDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,13 +13,15 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
   const deliverable = await getRecord(ENTITY_PATHS.deliverable, deliverableId);
   if (!deliverable) notFound();
 
-  const [projectCode, project, vago, campaign, timesheets, feedbacks] = await Promise.all([
+  const [projectCode, project, vago, campaign, timesheets, feedbacks, visibleFields, fieldTypes] = await Promise.all([
     deliverable.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(deliverable.project_code_id)) : null,
     deliverable.project_id ? getRecord(ENTITY_PATHS.project, Number(deliverable.project_id)) : null,
     deliverable.vago_employee_id ? getRecord(ENTITY_PATHS.employee, Number(deliverable.vago_employee_id)) : null,
     deliverable.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(deliverable.campaign_id)) : null,
     getRelated(ENTITY_PATHS.timesheet, { deliverable_id: deliverableId }),
     getRelated(ENTITY_PATHS.feedback, { deliverable_id: deliverableId }),
+    getVisibleFields("deliverable"),
+    getFieldTypes("deliverable"),
   ]);
 
   return (
@@ -51,8 +53,14 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               </a>
             )}
           </div>
-          <DetailGrid
-            fields={toDetailFields(deliverable, ["project_code_id", "project_id", "vago_employee_id", "campaign_id"])}
+          <EditableDetailGrid
+            patchPath={`${ENTITY_PATHS.deliverable}/${deliverable.id}`}
+            fields={toEditableDetailFields(
+              deliverable,
+              ["project_code_id", "project_id", "vago_employee_id", "campaign_id"],
+              visibleFields,
+              fieldTypes,
+            )}
           />
         </Card>
 

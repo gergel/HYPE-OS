@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailGrid } from "@/components/DetailGrid";
+import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getRecord, getRelated } from "@/lib/api";
-import { toDetailFields } from "@/lib/detail";
+import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import { toEditableDetailFields } from "@/lib/detail";
 
 export default async function ProjectCodeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,13 +13,15 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   const projectCode = await getRecord(ENTITY_PATHS.projectCode, projectCodeId);
   if (!projectCode) notFound();
 
-  const [client, contract, projects, expenses, revenues, deliverables] = await Promise.all([
+  const [client, contract, projects, expenses, revenues, deliverables, visibleFields, fieldTypes] = await Promise.all([
     projectCode.client_id ? getRecord(ENTITY_PATHS.client, Number(projectCode.client_id)) : null,
     projectCode.contract_id ? getRecord(ENTITY_PATHS.contract, Number(projectCode.contract_id)) : null,
     getRelated(ENTITY_PATHS.project, { project_code_id: projectCodeId }),
     getRelated(ENTITY_PATHS.expense, { project_code_id: projectCodeId }),
     getRelated(ENTITY_PATHS.revenue, { project_code_id: projectCodeId }),
     getRelated(ENTITY_PATHS.deliverable, { project_code_id: projectCodeId }),
+    getVisibleFields("projectCode"),
+    getFieldTypes("projectCode"),
   ]);
 
   return (
@@ -37,7 +39,10 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             )}
             {contract && <span>Szerződés: #{contract.id}</span>}
           </div>
-          <DetailGrid fields={toDetailFields(projectCode, ["client_id", "contract_id"])} />
+          <EditableDetailGrid
+            patchPath={`${ENTITY_PATHS.projectCode}/${projectCode.id}`}
+            fields={toEditableDetailFields(projectCode, ["client_id", "contract_id"], visibleFields, fieldTypes)}
+          />
         </Card>
 
         <Card title={`Projektek (${projects.length})`}>

@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailGrid } from "@/components/DetailGrid";
+import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getRecord, getRelated } from "@/lib/api";
-import { toDetailFields } from "@/lib/detail";
+import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import { toEditableDetailFields } from "@/lib/detail";
 
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,13 +13,15 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
   const employee = await getRecord(ENTITY_PATHS.employee, employeeId);
   if (!employee) notFound();
 
-  const [rates, timesheets, expenses, contracts, deliverables, campaigns] = await Promise.all([
+  const [rates, timesheets, expenses, contracts, deliverables, campaigns, visibleFields, fieldTypes] = await Promise.all([
     getRelated(ENTITY_PATHS.rate, { employee_id: employeeId }),
     getRelated(ENTITY_PATHS.timesheet, { employee_id: employeeId }),
     getRelated(ENTITY_PATHS.expense, { employee_id: employeeId }),
     getRelated(ENTITY_PATHS.contract, { employee_id: employeeId }),
     getRelated(ENTITY_PATHS.deliverable, { vago_employee_id: employeeId }),
     getRelated(ENTITY_PATHS.campaign, { felelos_employee_id: employeeId }),
+    getVisibleFields("employee"),
+    getFieldTypes("employee"),
   ]);
 
   return (
@@ -29,7 +31,10 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         <BackLink href="/csapat" label="Csapat" />
 
         <Card title={String(employee.full_name ?? `Crew tag #${employee.id}`)}>
-          <DetailGrid fields={toDetailFields(employee, ["hashed_password"])} />
+          <EditableDetailGrid
+            patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
+            fields={toEditableDetailFields(employee, ["hashed_password"], visibleFields, fieldTypes)}
+          />
         </Card>
 
         <Card title={`Díjak (${rates.length})`}>

@@ -10,7 +10,7 @@ const LONG_TEXT_LENGTH = 120;
 
 export type DetailField = { label: string; value: ReactNode; wide?: boolean };
 
-function humanizeKey(key: string): string {
+export function humanizeKey(key: string): string {
   return key
     .replace(/_id$/, "")
     .replace(/_/g, " ")
@@ -67,17 +67,68 @@ function formatValue(key: string, value: unknown): { node: ReactNode; wide: bool
   return { node: String(value), wide: false };
 }
 
+export type EditableInputType = "text" | "number" | "date" | "boolean" | "textarea";
+
+export type EditableDetailField = DetailField & {
+  key: string;
+  editable: boolean;
+  inputType: EditableInputType;
+  rawValue: string | number | boolean | null;
+};
+
+const DATE_KEY_PATTERN = /datum|date|hatarido|keltezes/i;
+
+/** Ha az érték null, a nyers JSON-ból önmagában nem derül ki, hogy a mező
+ * valójában boolean/dátum-e (pl. egy még be nem pipált checkbox) - ezért a
+ * backend field-típus hintjét (lásd getFieldTypes) használjuk, ha elérhető,
+ * és csak ennek hiányában esünk vissza a mezőnév-mintázatra. */
+function classifyInput(
+  key: string,
+  value: unknown,
+  fieldTypeHint?: string,
+): { editable: boolean; inputType: EditableInputType } {
+  if (value === null || value === undefined) {
+    if (fieldTypeHint === "boolean") return { editable: true, inputType: "boolean" };
+    if (fieldTypeHint === "date" || fieldTypeHint === "datetime") return { editable: true, inputType: "date" };
+    if (fieldTypeHint === "number") return { editable: true, inputType: "number" };
+    return { editable: true, inputType: DATE_KEY_PATTERN.test(key) ? "date" : "text" };
+  }
+  if (typeof value === "boolean") return { editable: true, inputType: "boolean" };
+  if (typeof value === "number") return { editable: true, inputType: "number" };
+  if (typeof value === "string") {
+    if (DATE_VALUE_PATTERN.test(value)) return { editable: true, inputType: "date" };
+    if (isLongText(value)) return { editable: true, inputType: "textarea" };
+    return { editable: true, inputType: "text" };
+  }
+  // objektum/tömb mezők (relation snapshotok, formula-eredmények) egyelőre
+  // nem inline-szerkeszthetők - kockázatos lenne kézzel írt JSON-ra hagyatkozni,
+  // a valódi kapcsolatokat (crew, eszközök, stb.) amúgy is dedikált UI kezeli
+  return { editable: false, inputType: "text" };
+}
+
 /** Egy nyers rekord (bármelyik entitás, tetszőleges Notionből átjött mezőkkel)
- * DetailGrid-kompatibilis label/value listává alakítása - nem kell entitásonként
- * kézzel felsorolni a mezőket, mert a cél az, hogy minden mezőt lássunk. Hosszú
- * vagy többsoros szövegek (diszpó szövege, brief, technika lista, stb.) teljes
- * szélességben, a sortörések megtartásával jelennek meg. */
-export function toDetailFields(record: Record<string, unknown>, hide: string[] = []): DetailField[] {
+ * EditableDetailGrid-kompatibilis mezőlistává alakítása - minden mezőhöz
+ * megtartja a nyers értéket és egy inputType-hintet, hogy helyben
+ * szerkeszthetővé tegye. onlyShow (ha meg van adva és nem üres) a Beállítások
+ * oldalon konfigurált mező-láthatóság szűrője. */
+export function toEditableDetailFields(
+  record: Record<string, unknown>,
+  hide: string[] = [],
+  onlyShow?: string[] | null,
+  fieldTypes?: Record<string, string> | null,
+): EditableDetailField[] {
   const hideSet = new Set([...HIDDEN_KEYS, ...hide]);
+  const onlyShowSet = onlyShow && onlyShow.length > 0 ? new Set(onlyShow) : null;
   return Object.entries(record)
     .filter(([key]) => !hideSet.has(key))
+    .filter(([key]) => !onlyShowSet || onlyShowSet.has(key))
     .map(([key, value]) => {
       const { node, wide } = formatValue(key, value);
-      return { label: humanizeKey(key), value: node, wide };
+      const { editable, inputType } = classifyInput(key, value, fieldTypes?.[key]);
+      const rawValue =
+        typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null
+          ? value
+          : null;
+      return { key, label: humanizeKey(key), value: node, wide, editable, inputType, rawValue };
     });
 }

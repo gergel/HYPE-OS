@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailGrid } from "@/components/DetailGrid";
+import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getRecord, getRelated } from "@/lib/api";
-import { toDetailFields } from "@/lib/detail";
+import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import { toEditableDetailFields } from "@/lib/detail";
 
 export default async function UgyfelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,11 +14,13 @@ export default async function UgyfelDetailPage({ params }: { params: Promise<{ i
   const client = await getRecord(ENTITY_PATHS.client, clientId);
   if (!client) notFound();
 
-  const [contacts, projectCodes, contracts, campaigns] = await Promise.all([
+  const [contacts, projectCodes, contracts, campaigns, visibleFields, fieldTypes] = await Promise.all([
     getRelated(ENTITY_PATHS.contact, { client_id: clientId }),
     getRelated(ENTITY_PATHS.projectCode, { client_id: clientId }),
     getRelated(ENTITY_PATHS.contract, { client_id: clientId }),
     getRelated(ENTITY_PATHS.campaign, { client_id: clientId }),
+    getVisibleFields("client"),
+    getFieldTypes("client"),
   ]);
 
   return (
@@ -28,7 +30,10 @@ export default async function UgyfelDetailPage({ params }: { params: Promise<{ i
         <BackLink href="/ugyfelek" label="Ügyfelek" />
 
         <Card title={String(client.nev ?? `Ügyfél #${client.id}`)}>
-          <DetailGrid fields={toDetailFields(client)} />
+          <EditableDetailGrid
+            patchPath={`${ENTITY_PATHS.client}/${client.id}`}
+            fields={toEditableDetailFields(client, [], visibleFields, fieldTypes)}
+          />
         </Card>
 
         <Card title={`Kapcsolattartók (${contacts.length})`}>

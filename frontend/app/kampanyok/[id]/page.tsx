@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailGrid } from "@/components/DetailGrid";
+import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getRecord, getRelated } from "@/lib/api";
-import { toDetailFields } from "@/lib/detail";
+import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import { toEditableDetailFields } from "@/lib/detail";
 
 export default async function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,11 +13,13 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const campaign = await getRecord(ENTITY_PATHS.campaign, campaignId);
   if (!campaign) notFound();
 
-  const [felelos, client, projects, deliverables] = await Promise.all([
+  const [felelos, client, projects, deliverables, visibleFields, fieldTypes] = await Promise.all([
     campaign.felelos_employee_id ? getRecord(ENTITY_PATHS.employee, Number(campaign.felelos_employee_id)) : null,
     campaign.client_id ? getRecord(ENTITY_PATHS.client, Number(campaign.client_id)) : null,
     getRelated(ENTITY_PATHS.project, { campaign_id: campaignId }),
     getRelated(ENTITY_PATHS.deliverable, { campaign_id: campaignId }),
+    getVisibleFields("campaign"),
+    getFieldTypes("campaign"),
   ]);
 
   return (
@@ -39,7 +41,10 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
               </a>
             )}
           </div>
-          <DetailGrid fields={toDetailFields(campaign, ["felelos_employee_id", "client_id"])} />
+          <EditableDetailGrid
+            patchPath={`${ENTITY_PATHS.campaign}/${campaign.id}`}
+            fields={toEditableDetailFields(campaign, ["felelos_employee_id", "client_id"], visibleFields, fieldTypes)}
+          />
         </Card>
 
         <Card title={`Projektek (${projects.length})`}>

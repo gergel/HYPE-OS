@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailGrid } from "@/components/DetailGrid";
+import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getRecord } from "@/lib/api";
-import { toDetailFields } from "@/lib/detail";
+import { ENTITY_PATHS, getFieldTypes, getRecord, getVisibleFields } from "@/lib/api";
+import { toEditableDetailFields } from "@/lib/detail";
 
 export default async function RevenueDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,7 +12,11 @@ export default async function RevenueDetailPage({ params }: { params: Promise<{ 
   const revenue = await getRecord(ENTITY_PATHS.revenue, revenueId);
   if (!revenue) notFound();
 
-  const projectCode = revenue.project_code_id ? await getRecord(ENTITY_PATHS.projectCode, Number(revenue.project_code_id)) : null;
+  const [projectCode, visibleFields, fieldTypes] = await Promise.all([
+    revenue.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(revenue.project_code_id)) : null,
+    getVisibleFields("revenue"),
+    getFieldTypes("revenue"),
+  ]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -28,7 +32,10 @@ export default async function RevenueDetailPage({ params }: { params: Promise<{ 
               </a>
             )}
           </div>
-          <DetailGrid fields={toDetailFields(revenue, ["project_code_id"])} />
+          <EditableDetailGrid
+            patchPath={`${ENTITY_PATHS.revenue}/${revenue.id}`}
+            fields={toEditableDetailFields(revenue, ["project_code_id"], visibleFields, fieldTypes)}
+          />
         </Card>
       </div>
     </div>

@@ -10,6 +10,7 @@ from app.api.routes.contracts import router as contracts_router
 from app.api.routes.crew import rates_router, router as crew_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
+from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router
 from app.api.routes.portal import payments_router, router as portal_router
 from app.api.routes.postproduction import deliverables_router, feedback_router, timesheets_router
@@ -64,3 +65,5 @@ api_router.include_router(tasks_router)
 api_router.include_router(automation_router)
 # AI Assistant
 api_router.include_router(ai_assistant_router)
+# Beállítások: mező-láthatóság
+api_router.include_router(field_visibility_router)

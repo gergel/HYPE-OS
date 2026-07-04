@@ -182,6 +182,28 @@ export async function getContracts(limit = 5000): Promise<Contract[]> {
   return (await apiGet<Contract[]>(`/api/v1/contracts?limit=${limit}`)) ?? [];
 }
 
+export type FieldVisibilityConfig = { entity_type: string; visible_fields: string[] | null };
+
+/** A Beállítások oldalon konfigurált mező-láthatóság - melyik mezők jelenjenek
+ * meg egy adott entitástípus (lásd ENTITY_PATHS kulcsok) részletnézetén.
+ * Nincs config sor -> nincs szűrés, minden mező látszik. */
+export async function getFieldVisibility(): Promise<FieldVisibilityConfig[]> {
+  return (await apiGet<FieldVisibilityConfig[]>("/api/v1/field-visibility")) ?? [];
+}
+
+export async function getVisibleFields(entityType: string): Promise<string[] | null> {
+  const all = await getFieldVisibility();
+  return all.find((c) => c.entity_type === entityType)?.visible_fields ?? null;
+}
+
+/** {mezőnév: "boolean"|"date"|"datetime"|"number"|"text"} egy entitástípushoz -
+ * kell, hogy egy éppen null értékű mezőt (pl. egy még be nem pipált checkbox)
+ * a EditableDetailGrid a helyes input-típussal jelenítsen meg, mert a nyers
+ * null értékből ez önmagában nem derülne ki. */
+export async function getFieldTypes(entityType: string): Promise<Record<string, string>> {
+  return (await apiGet<Record<string, string>>(`/api/v1/field-visibility/${entityType}/schema`)) ?? {};
+}
+
 /** Az egyes entitás-modulok API alap-útvonalai, a részletnézetekhez és a
  * kapcsolódó rekordok (foreign key szerinti szűrés) lekérdezéséhez. */
 export const ENTITY_PATHS = {
@@ -207,6 +229,18 @@ export const ENTITY_PATHS = {
  * le típusra, mert a cél épp az, hogy minden Notionből átjött oszlopot lássunk. */
 export async function getRecord(basePath: string, id: number): Promise<JsonRecord | null> {
   return apiGet<JsonRecord>(`${basePath}/${id}`);
+}
+
+/** Egy tetszőleges (bármelyik) rekord lekérése egy entitástípusból - a
+ * Beállítások oldal mező-láthatóság szerkesztőjének kell, hogy fel tudja
+ * sorolni, milyen mezői vannak az adott entitásnak (a rekord kulcsaiból). */
+export async function getSampleRecord(basePath: string): Promise<JsonRecord | null> {
+  const rows = await apiGet<JsonRecord[]>(`${basePath}?limit=1`);
+  if (!rows || rows.length === 0) return null;
+  // A lista végpont egyes entitásoknál (pl. Project) szándékosan szűkebb sémát ad
+  // vissza teljesítmény miatt (lásd list_read_schema) - az egyedi GET viszont
+  // mindig a teljes sémát, ezért azt kérjük le, hogy minden mező felsorolható legyen.
+  return getRecord(basePath, rows[0].id);
 }
 
 /** Kapcsolódó rekordok lekérése egy foreign key oszlop szerint szűrve, pl.

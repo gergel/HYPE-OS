@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailGrid } from "@/components/DetailGrid";
+import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { M2mLinker } from "@/components/M2mLinker";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
@@ -10,8 +10,8 @@ import { RelatedTable } from "@/components/RelatedTable";
 import { SingleRelationPicker } from "@/components/SingleRelationPicker";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getContracts, getEmployees, getEquipment, getRecord, getRelated } from "@/lib/api";
-import { toDetailFields } from "@/lib/detail";
+import { ENTITY_PATHS, getContracts, getEmployees, getEquipment, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import { toEditableDetailFields } from "@/lib/detail";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,15 +21,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const crewIds = Array.isArray(project.crew_employee_ids) ? (project.crew_employee_ids as number[]) : [];
 
-  const [projectCode, campaign, deliverables, allEquipment, allEmployees, bookings, allContracts] = await Promise.all([
-    project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
-    project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
-    getRelated(ENTITY_PATHS.deliverable, { project_id: projectId }),
-    getEquipment(),
-    getEmployees(),
-    getRelated(ENTITY_PATHS.assignment, { project_id: projectId }),
-    getContracts(),
-  ]);
+  const [projectCode, campaign, deliverables, allEquipment, allEmployees, bookings, allContracts, visibleFields, fieldTypes] =
+    await Promise.all([
+      project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
+      project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
+      getRelated(ENTITY_PATHS.deliverable, { project_id: projectId }),
+      getEquipment(),
+      getEmployees(),
+      getRelated(ENTITY_PATHS.assignment, { project_id: projectId }),
+      getContracts(),
+      getVisibleFields("project"),
+      getFieldTypes("project"),
+    ]);
 
   const equipmentById = new Map(allEquipment.map((e) => [e.id, e]));
   const equipmentOptions = allEquipment.map((e) => ({
@@ -85,14 +88,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               redirectPrefix="/projektek/"
             />
           </div>
-          <DetailGrid
-            fields={toDetailFields(project, [
-              "project_code_id",
-              "campaign_id",
-              "crew_employee_ids",
-              "szerzodes_keszites_employee_id",
-              "alvallakozo_keretszerzodes_contract_id",
-            ])}
+          <EditableDetailGrid
+            patchPath={`${ENTITY_PATHS.project}/${project.id}`}
+            fields={toEditableDetailFields(
+              project,
+              ["project_code_id", "campaign_id", "crew_employee_ids", "szerzodes_keszites_employee_id", "alvallakozo_keretszerzodes_contract_id"],
+              visibleFields,
+              fieldTypes,
+            )}
           />
         </Card>
 

@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailGrid } from "@/components/DetailGrid";
+import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getRecord, getRecordsByIds, getRelated } from "@/lib/api";
-import { toDetailFields } from "@/lib/detail";
+import { ENTITY_PATHS, getFieldTypes, getRecord, getRecordsByIds, getRelated, getVisibleFields } from "@/lib/api";
+import { toEditableDetailFields } from "@/lib/detail";
 
 export default async function EquipmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,9 +15,11 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
 
   const projectIds = Array.isArray(equipment.project_ids) ? (equipment.project_ids as number[]) : [];
 
-  const [assignments, projects] = await Promise.all([
+  const [assignments, projects, visibleFields, fieldTypes] = await Promise.all([
     getRelated("/api/v1/assignments", { equipment_id: equipmentId }),
     getRecordsByIds(ENTITY_PATHS.project, projectIds),
+    getVisibleFields("equipment"),
+    getFieldTypes("equipment"),
   ]);
 
   return (
@@ -27,7 +29,10 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
         <BackLink href="/felszereles" label="Felszerelés" />
 
         <Card title={String(equipment.nev ?? `Eszköz #${equipment.id}`)}>
-          <DetailGrid fields={toDetailFields(equipment, ["project_ids"])} />
+          <EditableDetailGrid
+            patchPath={`${ENTITY_PATHS.equipment}/${equipment.id}`}
+            fields={toEditableDetailFields(equipment, ["project_ids"], visibleFields, fieldTypes)}
+          />
         </Card>
 
         <Card title={`Projektek (${projects.length})`}>
