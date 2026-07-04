@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { FieldVisibilityManager } from "@/components/FieldVisibilityManager";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { UserAccessManager } from "@/components/UserAccessManager";
 
-type EmployeeOption = { id: number; full_name: string; email: string | null; role: string };
+type EmployeeOption = { id: number; full_name: string; email: string | null; role: string; has_password: boolean };
 type PageOption = { href: string; label: string };
 type FieldOption = { key: string; label: string };
 type VisibilityEntity = { entityType: string; label: string; availableFields: FieldOption[] };
@@ -55,8 +56,11 @@ export function EmployeeAccessManager({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    // Üres keresésnél csak azokat mutatjuk, akiknek jelenleg van hozzáférése
+    // (van jelszavuk) - gyors áttekintés, ki aktív. Amint gépelsz, az összes
+    // munkatárs között keresünk, hogy újnak is meg tudd adni a hozzáférést.
     const matches = !q
-      ? employees
+      ? employees.filter((e) => e.has_password)
       : employees.filter((e) => e.full_name.toLowerCase().includes(q) || (e.email ?? "").toLowerCase().includes(q));
     return matches.slice(0, 20);
   }, [employees, query]);
@@ -67,6 +71,18 @@ export function EmployeeAccessManager({
     <div>
       {!selected && (
         <>
+          <QuickCreateForm
+            postPath="/api/v1/crew"
+            addLabel="+ Teljesen új munkatárs hozzáadása"
+            submitLabel="Létrehozás"
+            presetFields={{ tipus: "belsos", role: "operator" }}
+            fields={[
+              { name: "full_name", label: "Név", required: true },
+              { name: "email", label: "Email (felhasználónév)" },
+              { name: "password", label: "Jelszó (min. 6 karakter)", type: "password", required: true },
+            ]}
+          />
+
           <input
             type="text"
             value={query}
@@ -75,7 +91,11 @@ export function EmployeeAccessManager({
             className="mb-2 w-full max-w-sm rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
           />
           <div className="max-h-80 overflow-y-auto rounded-[var(--radius)] border border-border">
-            {filtered.length === 0 && <p className="p-3 text-[13px] text-text-muted">Nincs találat.</p>}
+            {filtered.length === 0 && (
+              <p className="p-3 text-[13px] text-text-muted">
+                {query.trim() ? "Nincs találat." : "Jelenleg senkinek nincs hozzáférése - keress rá valakire, vagy adj hozzá egy új munkatársat."}
+              </p>
+            )}
             {filtered.map((e) => (
               <button
                 key={e.id}
@@ -90,9 +110,14 @@ export function EmployeeAccessManager({
               </button>
             ))}
           </div>
-          {employees.length > filtered.length && (
+          {!query.trim() && (
             <p className="mt-1.5 text-[12px] text-text-muted">
-              {filtered.length} / {employees.length} találat megjelenítve - pontosítsd a keresést a további találatokhoz.
+              Csak azok látszanak, akiknek jelenleg van hozzáférése - kereséssel bárkit megtalálsz.
+            </p>
+          )}
+          {query.trim() && employees.length > filtered.length && (
+            <p className="mt-1.5 text-[12px] text-text-muted">
+              {filtered.length} találat megjelenítve - pontosítsd a keresést a további találatokhoz.
             </p>
           )}
         </>

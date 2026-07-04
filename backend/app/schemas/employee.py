@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, computed_field
 
 from app.models.employee import EmployeeType, SystemRole
 
@@ -35,6 +35,11 @@ class EmployeeRead(EmployeeBase):
     id: int
     role: SystemRole
     is_active: bool
+    # a nyers jelszó-hash sosem kerül ki a válaszban (exclude=True) - csak azt
+    # a bool jelzőt adjuk vissza, hogy van-e egyáltalán beállítva (lásd
+    # Beállítások oldal munkatárs-keresője: alapból csak azokat listázza, akiknek
+    # már van hozzáférése).
+    hashed_password: str | None = Field(default=None, exclude=True)
 
     # a 'Külsős és belsős' Notion tábla maradék mezői, egyenként
     technikai_ismeret: str | None = None
@@ -82,6 +87,11 @@ class EmployeeRead(EmployeeBase):
     plusz_afa: str | None = None
 
     model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def has_password(self) -> bool:
+        return bool(self.hashed_password)
 
 
 class RateBase(BaseModel):

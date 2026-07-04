@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 
-type FieldSpec = { name: string; label: string; type?: "text" | "date" | "number"; required?: boolean };
+type FieldSpec = { name: string; label: string; type?: "text" | "date" | "number" | "password"; required?: boolean };
 
 /** Kis inline form egy új, kapcsolódó rekord létrehozásához (pl. egy projekthez új
  * utómunka), a szükséges foreign key-ket előre kitöltve (`presetFields`) küldi -

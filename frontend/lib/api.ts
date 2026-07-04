@@ -63,6 +63,7 @@ export type Employee = {
   telefon: string | null;
   is_active: boolean;
   role: string;
+  has_password: boolean;
 };
 
 export type Equipment = {
