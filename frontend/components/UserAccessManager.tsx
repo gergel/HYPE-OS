@@ -13,14 +13,18 @@ export function UserAccessManager({
   employeeId,
   employeeLabel,
   pages,
+  initialEmail,
   initialAllowedPages,
 }: {
   employeeId: number;
   employeeLabel: string;
   pages: PageOption[];
+  initialEmail: string | null;
   initialAllowedPages: string[] | null;
 }) {
   const router = useRouter();
+  const [email, setEmail] = useState(initialEmail ?? "");
+  const [emailBusy, setEmailBusy] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
 
@@ -37,6 +41,23 @@ export function UserAccessManager({
       else next.add(href);
       return next;
     });
+  }
+
+  async function saveEmail() {
+    setEmailBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/crew/${employeeId}`, { method: "PATCH", body: JSON.stringify({ email: email.trim() || null }) });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setEmailBusy(false);
+    }
   }
 
   async function setPasswordSubmit() {
@@ -82,6 +103,27 @@ export function UserAccessManager({
   return (
     <div className="space-y-4">
       <div>
+        <p className="mb-2 text-[13px] font-medium text-text-primary">Felhasználónév (email)</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="pl. nev@hype.hu"
+            className="rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+          />
+          <button
+            type="button"
+            disabled={emailBusy || email.trim() === (initialEmail ?? "")}
+            onClick={saveEmail}
+            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+          >
+            Mentés
+          </button>
+        </div>
+      </div>
+
+      <div className="border-t border-border pt-4">
         <p className="mb-2 text-[13px] font-medium text-text-primary">Jelszó beállítása</p>
         <div className="flex items-center gap-2">
           <input

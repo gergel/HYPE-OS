@@ -1,10 +1,9 @@
 import { AccountCard } from "@/components/AccountCard";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
-import { FieldVisibilityManager } from "@/components/FieldVisibilityManager";
+import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { UserAccessManager } from "@/components/UserAccessManager";
 import {
   Employee,
   ENTITY_PATHS,
@@ -46,22 +45,17 @@ export default async function BeallitasokPage() {
     getAllFieldVisibility(),
     Promise.all(VISIBILITY_ENTITIES.map((e) => getSampleRecord(e.basePath))),
   ]);
-  const allowedPagesByEmployee = new Map(pageAccessConfigs.map((c) => [c.employee_id, c.allowed_pages]));
   const pages = flatNavItems();
 
-  const availableFieldsByEntity = VISIBILITY_ENTITIES.map((entity, i) => {
+  const visibilityEntities = VISIBILITY_ENTITIES.map((entity, i) => {
     const sample = samples[i];
     if (!sample) return null;
-    return toEditableDetailFields(sample, entity.hide, null).map((f) => ({ key: f.key, label: f.label }));
-  });
-
-  const fieldVisibilityByEmployee = new Map<number, Map<string, string[] | null>>();
-  for (const config of fieldVisibilityConfigs) {
-    if (!fieldVisibilityByEmployee.has(config.employee_id)) {
-      fieldVisibilityByEmployee.set(config.employee_id, new Map());
-    }
-    fieldVisibilityByEmployee.get(config.employee_id)!.set(config.entity_type, config.visible_fields);
-  }
+    return {
+      entityType: entity.entityType,
+      label: entity.label,
+      availableFields: toEditableDetailFields(sample, entity.hide, null).map((f) => ({ key: f.key, label: f.label })),
+    };
+  }).filter((e): e is { entityType: string; label: string; availableFields: { key: string; label: string }[] } => e !== null);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -89,47 +83,17 @@ export default async function BeallitasokPage() {
 
         <Card title="Felhasználó-kezelés">
           <p className="mb-3 text-[13px] text-text-secondary">
-            Egyénenként állítható be a jelszó, a látható oldalak és az egyes részletnézeteken látható mezők - csak admin szerkesztheti,
-            az érintett munkatárs saját maga nem módosíthatja.
+            Válaszd ki (kereséssel) a munkatársat, akinek be szeretnéd állítani a felhasználónevét (email), jelszavát, illetve hogy
+            pontosan mely oldalakat és azokon belül mely mezőket lássa - csak admin szerkesztheti, az érintett munkatárs saját maga
+            nem módosíthatja.
           </p>
-          <div className="space-y-2">
-            {employees.map((employee) => {
-              const visibleFieldsByEntity = fieldVisibilityByEmployee.get(employee.id) ?? new Map();
-              return (
-                <details key={employee.id} className="rounded-[var(--radius)] border border-border p-3">
-                  <summary className="cursor-pointer text-[13px] font-medium text-text-primary">
-                    {employee.full_name} <span className="text-text-muted">({ROLE_LABEL[employee.role] ?? employee.role})</span>
-                  </summary>
-                  <div className="mt-3 space-y-4">
-                    <UserAccessManager
-                      employeeId={employee.id}
-                      employeeLabel={employee.full_name}
-                      pages={pages}
-                      initialAllowedPages={allowedPagesByEmployee.get(employee.id) ?? null}
-                    />
-                    <div className="border-t border-border pt-4">
-                      <p className="mb-2 text-[13px] font-medium text-text-primary">Mező-láthatóság</p>
-                      <div className="space-y-2">
-                        {VISIBILITY_ENTITIES.map((entity, i) => {
-                          const availableFields = availableFieldsByEntity[i];
-                          if (!availableFields) return null;
-                          return (
-                            <FieldVisibilityManager
-                              key={entity.entityType}
-                              patchPath={`/api/v1/field-visibility/${employee.id}/${entity.entityType}`}
-                              entityLabel={entity.label}
-                              availableFields={availableFields}
-                              initialVisible={visibleFieldsByEntity.get(entity.entityType) ?? null}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </details>
-              );
-            })}
-          </div>
+          <EmployeeAccessManager
+            employees={employees}
+            pages={pages}
+            visibilityEntities={visibilityEntities}
+            pageAccessConfigs={pageAccessConfigs}
+            fieldVisibilityConfigs={fieldVisibilityConfigs}
+          />
         </Card>
 
         <Card title="Rendszer">
