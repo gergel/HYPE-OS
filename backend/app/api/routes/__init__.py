@@ -13,7 +13,7 @@ from app.api.routes.equipment import assignments_router, router as equipment_rou
 from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router
 from app.api.routes.portal import payments_router, router as portal_router
-from app.api.routes.postproduction import deliverables_router, feedback_router, timesheets_router
+from app.api.routes.postproduction import deliverable_actions_router, deliverables_router, feedback_router, timesheets_router
 from app.api.routes.project_codes import router as project_codes_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.storage import folders_router, media_router
@@ -47,6 +47,7 @@ api_router.include_router(media_router)
 # 10. Naptár / Diszpó
 api_router.include_router(callsheets_router)
 # 11. Utómunka
+api_router.include_router(deliverable_actions_router)
 api_router.include_router(deliverables_router)
 api_router.include_router(timesheets_router)
 api_router.include_router(feedback_router)

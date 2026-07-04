@@ -356,3 +356,52 @@ export function formatDate(value: string | null): string {
   if (!value) return "–";
   return value.slice(0, 10);
 }
+
+/** Az Utómunka (Deliverable) oldal kapcsolatai - lásd services/deliverable_actions.py. */
+export type AssignableEmployee = { id: number; full_name: string };
+
+export async function getAssignableEmployees(): Promise<AssignableEmployee[]> {
+  return (await apiGet<AssignableEmployee[]>("/api/v1/deliverables/assignable-employees")) ?? [];
+}
+
+export async function getVinyoOptions(): Promise<string[]> {
+  const res = await apiGet<{ options: string[] }>("/api/v1/deliverables/vinyo-options");
+  return res?.options ?? [];
+}
+
+export type DeliverableContact = { id: number; full_name: string; email: string | null };
+
+export async function getDeliverableContacts(deliverableId: number): Promise<DeliverableContact[]> {
+  return (await apiGet<DeliverableContact[]>(`/api/v1/deliverables/${deliverableId}/contacts`)) ?? [];
+}
+
+export type TimerEmployeeSummary = {
+  employee_id: number;
+  full_name: string;
+  total_minutes: number;
+  total_cost: number | null;
+};
+
+export type TimerState = {
+  my_running_since: string | null;
+  by_employee: TimerEmployeeSummary[];
+  total_minutes: number;
+  total_cost: number | null;
+};
+
+export async function getTimerState(deliverableId: number): Promise<TimerState | null> {
+  return apiGet<TimerState>(`/api/v1/deliverables/${deliverableId}/timer/state`);
+}
+
+export type DeliverableComment = {
+  id: number;
+  deliverable_id: number;
+  employee_id: number;
+  employee_name: string;
+  body: string;
+  created_at: string;
+};
+
+export async function getDeliverableComments(deliverableId: number): Promise<DeliverableComment[]> {
+  return (await apiGet<DeliverableComment[]>(`/api/v1/deliverables/${deliverableId}/comments`)) ?? [];
+}

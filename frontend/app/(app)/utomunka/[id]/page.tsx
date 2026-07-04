@@ -1,11 +1,49 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
+import { AssignedToPicker } from "@/components/deliverable/AssignedToPicker";
+import { CommentsSection } from "@/components/deliverable/CommentsSection";
+import { ContactsManager } from "@/components/deliverable/ContactsManager";
+import { FeedbackSendButton } from "@/components/deliverable/FeedbackSendButton";
+import { TimerControls } from "@/components/deliverable/TimerControls";
+import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import {
+  ENTITY_PATHS,
+  getAssignableEmployees,
+  getContactsByClient,
+  getDeliverableComments,
+  getDeliverableContacts,
+  getFieldTypes,
+  getRecord,
+  getRelated,
+  getTimerState,
+  getVinyoOptions,
+  getVisibleFields,
+} from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
+
+const HIDDEN_FIELDS = [
+  "project_code_id",
+  "project_id",
+  "vago_employee_id",
+  "campaign_id",
+  "aki_felvezette_employee_id",
+  "assigned_to_employee_id",
+  "vinyok",
+  "megrendeloi_kontaktok_notion_ids",
+  "megrendeloi_email_cimek",
+  "aki_felvezette_az_utomunkat_notion_ids",
+  "aki_ellenorzesbe_tette_notion_ids",
+  "assigned_to_notion",
+  "visszajelzessek_notion_ids",
+  "timesheet_public_notion_ids",
+  "timesheet_private_notion_ids",
+  "total_time",
+  "stop_timer",
+];
 
 export default async function DeliverableDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,16 +51,40 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
   const deliverable = await getRecord(ENTITY_PATHS.deliverable, deliverableId);
   if (!deliverable) notFound();
 
-  const [projectCode, project, vago, campaign, timesheets, feedbacks, visibleFields, fieldTypes] = await Promise.all([
+  const [
+    projectCode,
+    project,
+    vago,
+    campaign,
+    felvezeto,
+    timesheets,
+    feedbacks,
+    visibleFields,
+    fieldTypes,
+    assignableEmployees,
+    vinyoOptions,
+    contacts,
+    timerState,
+    comments,
+  ] = await Promise.all([
     deliverable.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(deliverable.project_code_id)) : null,
     deliverable.project_id ? getRecord(ENTITY_PATHS.project, Number(deliverable.project_id)) : null,
     deliverable.vago_employee_id ? getRecord(ENTITY_PATHS.employee, Number(deliverable.vago_employee_id)) : null,
     deliverable.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(deliverable.campaign_id)) : null,
+    deliverable.aki_felvezette_employee_id ? getRecord(ENTITY_PATHS.employee, Number(deliverable.aki_felvezette_employee_id)) : null,
     getRelated(ENTITY_PATHS.timesheet, { deliverable_id: deliverableId }),
     getRelated(ENTITY_PATHS.feedback, { deliverable_id: deliverableId }),
     getVisibleFields("deliverable"),
     getFieldTypes("deliverable"),
+    getAssignableEmployees(),
+    getVinyoOptions(),
+    getDeliverableContacts(deliverableId),
+    getTimerState(deliverableId),
+    getDeliverableComments(deliverableId),
   ]);
+
+  const clientId = projectCode ? Number(projectCode.client_id) : null;
+  const contactOptions = clientId ? await getContactsByClient(clientId) : [];
 
   return (
     <div className="flex flex-1 flex-col">
@@ -52,16 +114,49 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
                 Kampány: {String(campaign.nev)}
               </a>
             )}
+            {felvezeto && (
+              <a href={`/csapat/${felvezeto.id}`} className="text-text-accent hover:underline">
+                Felvezette: {String(felvezeto.full_name)}
+              </a>
+            )}
           </div>
           <EditableDetailGrid
             patchPath={`${ENTITY_PATHS.deliverable}/${deliverable.id}`}
-            fields={toEditableDetailFields(
-              deliverable,
-              ["project_code_id", "project_id", "vago_employee_id", "campaign_id"],
-              visibleFields,
-              fieldTypes,
-            )}
+            fields={toEditableDetailFields(deliverable, HIDDEN_FIELDS, visibleFields, fieldTypes)}
           />
+        </Card>
+
+        <Card title="Kiosztás">
+          <p className="mb-2 text-[13px] text-text-secondary">
+            Kire van kiosztva ez a vágás - csak azok közül választhatsz, akiknek van bejelentkezési joga az Utómunka oldalhoz.
+          </p>
+          <AssignedToPicker
+            deliverableId={deliverableId}
+            employees={assignableEmployees}
+            currentId={deliverable.assigned_to_employee_id ? Number(deliverable.assigned_to_employee_id) : null}
+          />
+        </Card>
+
+        <Card title="Vinyók">
+          <VinyokEditor
+            deliverableId={deliverableId}
+            knownOptions={vinyoOptions}
+            currentValues={Array.isArray(deliverable.vinyok) ? (deliverable.vinyok as string[]) : []}
+          />
+        </Card>
+
+        <Card title="Időmérés">
+          <TimerControls deliverableId={deliverableId} initialState={timerState} />
+        </Card>
+
+        <Card title="Megrendelői kontaktok">
+          <p className="mb-2 text-[13px] text-text-secondary">Kinek kell kiküldeni a kész anyagot.</p>
+          <ContactsManager deliverableId={deliverableId} current={contacts} options={contactOptions} />
+          {deliverable.megrendeloi_email_cimek != null && (
+            <p className="mt-3 text-[12px] text-text-muted">
+              Email címek: <span className="text-text-secondary">{String(deliverable.megrendeloi_email_cimek)}</span>
+            </p>
+          )}
         </Card>
 
         <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
@@ -73,7 +168,14 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
         </Card>
 
         <Card title={`Visszajelzések (${feedbacks.length})`}>
+          <div className="mb-3">
+            <FeedbackSendButton deliverableId={deliverableId} />
+          </div>
           <RelatedTable rows={feedbacks} emptyText="Nincs visszajelzés ehhez az anyaghoz." deleteBasePath={ENTITY_PATHS.feedback} />
+        </Card>
+
+        <Card title="Hozzászólások">
+          <CommentsSection deliverableId={deliverableId} initialComments={comments} mentionableEmployees={assignableEmployees} />
         </Card>
       </div>
     </div>

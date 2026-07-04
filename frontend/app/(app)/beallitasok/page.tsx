@@ -26,7 +26,30 @@ const VISIBILITY_ENTITIES: { entityType: string; label: string; basePath: string
   { entityType: "task", label: "Feladatok", basePath: ENTITY_PATHS.task, hide: [] },
   { entityType: "expense", label: "Kiadások", basePath: ENTITY_PATHS.expense, hide: ["project_code_id", "employee_id"] },
   { entityType: "revenue", label: "Bevételek", basePath: ENTITY_PATHS.revenue, hide: ["project_code_id"] },
-  { entityType: "deliverable", label: "Utómunka", basePath: ENTITY_PATHS.deliverable, hide: ["project_code_id", "project_id", "vago_employee_id", "campaign_id"] },
+  {
+    entityType: "deliverable",
+    label: "Utómunka",
+    basePath: ENTITY_PATHS.deliverable,
+    hide: [
+      "project_code_id",
+      "project_id",
+      "vago_employee_id",
+      "campaign_id",
+      "aki_felvezette_employee_id",
+      "assigned_to_employee_id",
+      "vinyok",
+      "megrendeloi_kontaktok_notion_ids",
+      "megrendeloi_email_cimek",
+      "aki_felvezette_az_utomunkat_notion_ids",
+      "aki_ellenorzesbe_tette_notion_ids",
+      "assigned_to_notion",
+      "visszajelzessek_notion_ids",
+      "timesheet_public_notion_ids",
+      "timesheet_private_notion_ids",
+      "total_time",
+      "stop_timer",
+    ],
+  },
 ];
 
 export default async function BeallitasokPage() {

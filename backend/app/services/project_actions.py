@@ -55,6 +55,7 @@ def create_utomunka(db: Session, project: Project, current_user: Employee) -> De
         campaign_id=project.campaign_id,
         allapot="Beérkező",
         projektkod_szoveg=project.projektkod_szoveg,
+        aki_felvezette_employee_id=current_user.id,
         aki_felvezette_az_utomunkat_notion_ids=[current_user.full_name],
     )
     db.add(deliverable)

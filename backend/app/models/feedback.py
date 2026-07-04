@@ -14,6 +14,10 @@ class Feedback(TimestampMixin, Base):
     deliverable_id: Mapped[int] = mapped_column(ForeignKey("deliverables.id"), nullable=False)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
     forgatta_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
+    # Ki küldte a visszajelzést (a "Visszajelzés küldése" gombot megnyomó
+    # felhasználó) - nem ugyanaz, mint forgatta_employee_id (aki a projektet
+    # forgatta) - lásd services/deliverable_actions.send_visszajelzes.
+    visszajelzo_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
 
     technikai_helyesseg: Mapped[float | None] = mapped_column(Numeric(3, 1))
     kreativ_kepivilag: Mapped[float | None] = mapped_column(Numeric(3, 1))
@@ -22,7 +26,8 @@ class Feedback(TimestampMixin, Base):
     visszajelzes_szoveg: Mapped[str | None] = mapped_column(Text)
 
     deliverable: Mapped["Deliverable"] = relationship(back_populates="feedbacks")
-    forgatta: Mapped["Employee"] = relationship(back_populates="feedbacks")
+    forgatta: Mapped["Employee"] = relationship(back_populates="feedbacks", foreign_keys=[forgatta_employee_id])
+    visszajelzo: Mapped["Employee"] = relationship(foreign_keys=[visszajelzo_employee_id])
 
     @property
     def atlag(self) -> float | None:

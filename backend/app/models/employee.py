@@ -112,8 +112,12 @@ class Employee(TimestampMixin, Base):
     expenses: Mapped[list["Expense"]] = relationship(back_populates="employee")
     contracts: Mapped[list["Contract"]] = relationship(back_populates="employee")
     callsheets: Mapped[list["Callsheet"]] = relationship(back_populates="employee")
-    deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="vago")
-    feedbacks: Mapped[list["Feedback"]] = relationship(back_populates="forgatta")
+    deliverables: Mapped[list["Deliverable"]] = relationship(
+        back_populates="vago", foreign_keys="Deliverable.vago_employee_id"
+    )
+    feedbacks: Mapped[list["Feedback"]] = relationship(
+        back_populates="forgatta", foreign_keys="Feedback.forgatta_employee_id"
+    )
     campaigns: Mapped[list["Campaign"]] = relationship(back_populates="felelos")
     tasks: Mapped[list["Task"]] = relationship(
         secondary="task_employees", back_populates="felelosok"
