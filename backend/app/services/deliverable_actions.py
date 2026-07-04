@@ -24,6 +24,7 @@ from app.schemas.deliverable_actions import (
     TimerState,
     VinyoOptions,
 )
+from app.services import notifications
 
 UTOMUNKA_PAGE = "/utomunka"
 
@@ -207,6 +208,36 @@ def add_comment(db: Session, deliverable_id: int, current_user: Employee, body: 
     db.add(comment)
     db.commit()
     db.refresh(comment)
+
+    deliverable = db.get(Deliverable, deliverable_id)
+    title = deliverable.projekt_neve or f"Anyag #{deliverable.id}"
+    already_notified: set[int] = set()
+
+    for employee_id in notifications.extract_mentioned_employee_ids(body, db):
+        notifications.create_notification(
+            db,
+            employee_id=employee_id,
+            kind="mention",
+            message=f"{current_user.full_name} megemlített egy hozzászólásban: {title}",
+            link=f"{UTOMUNKA_PAGE}/{deliverable.id}",
+            actor_id=current_user.id,
+        )
+        already_notified.add(employee_id)
+
+    for employee_id in filter(None, [deliverable.assigned_to_employee_id, deliverable.aki_felvezette_employee_id]):
+        if employee_id in already_notified:
+            continue
+        notifications.create_notification(
+            db,
+            employee_id=employee_id,
+            kind="comment",
+            message=f"{current_user.full_name} kommentelt: {title}",
+            link=f"{UTOMUNKA_PAGE}/{deliverable.id}",
+            actor_id=current_user.id,
+        )
+        already_notified.add(employee_id)
+
+    db.commit()
     return CommentRead(
         id=comment.id,
         deliverable_id=comment.deliverable_id,

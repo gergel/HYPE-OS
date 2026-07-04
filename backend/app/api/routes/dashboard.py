@@ -15,7 +15,7 @@ from app.models.employee import Employee
 from app.models.finance import Revenue
 from app.models.project import Project
 from app.models.project_code import ProjectCode
-from app.models.task import Task
+from app.models.task import Task, task_employees
 from app.schemas.dashboard_config import DashboardConfigUpdate, MyDashboardConfig
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -36,6 +36,18 @@ class RevenueMonth(BaseModel):
 class DashboardAlerts(BaseModel):
     lejart_utomunka: int
     lejart_feladat: int
+
+
+class MyTaskItem(BaseModel):
+    id: int
+    title: str
+    hatarido: date | None
+    link: str
+
+
+class MyTasksSummary(BaseModel):
+    deliverables: list[MyTaskItem]
+    tasks: list[MyTaskItem]
 
 
 class DashboardSummary(BaseModel):
@@ -141,6 +153,31 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
         upcoming_events=upcoming_events,
         revenue_trend=revenue_trend,
         alerts=DashboardAlerts(lejart_utomunka=lejart_utomunka, lejart_feladat=lejart_feladat),
+    )
+
+
+@router.get("/my-tasks", response_model=MyTasksSummary)
+def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    """A "Teendőim" dashboard-widget adatai - a bejelentkezett felhasználóra
+    kiosztott, még nyitott Utómunkák és Feladatok, hogy egy helyen lássa, mivel
+    kell foglalkoznia."""
+    deliverables = db.scalars(
+        select(Deliverable)
+        .where(Deliverable.assigned_to_employee_id == current_user.id, Deliverable.anyag_kikuldve.is_(False))
+        .order_by(Deliverable.hatarido.asc().nulls_last())
+    ).all()
+    tasks = db.scalars(
+        select(Task)
+        .join(task_employees, task_employees.c.task_id == Task.id)
+        .where(task_employees.c.employee_id == current_user.id, Task.checked.is_(False))
+        .order_by(Task.hatarido.asc().nulls_last())
+    ).all()
+    return MyTasksSummary(
+        deliverables=[
+            MyTaskItem(id=d.id, title=d.projekt_neve or f"Anyag #{d.id}", hatarido=d.hatarido, link=f"/utomunka/{d.id}")
+            for d in deliverables
+        ],
+        tasks=[MyTaskItem(id=t.id, title=t.feladat, hatarido=t.hatarido, link="/feladatok") for t in tasks],
     )
 
 

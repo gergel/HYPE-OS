@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DashboardAlerts, RevenueMonth, UpcomingEvent, formatHuf } from "@/lib/api";
+import { DashboardAlerts, MyTasksSummary, RevenueMonth, UpcomingEvent, formatHuf } from "@/lib/api";
 
 const MONTH_SHORT = ["jan", "feb", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
 
@@ -29,6 +29,53 @@ export function AlertsCard({ alerts }: { alerts: DashboardAlerts }) {
           <span className="font-medium">{i.count}</span> {i.label}
         </Link>
       ))}
+    </div>
+  );
+}
+
+export function MyTasksCard({ myTasks }: { myTasks: MyTasksSummary }) {
+  const { deliverables, tasks } = myTasks;
+  if (deliverables.length === 0 && tasks.length === 0) {
+    return <p className="text-[13px] text-text-muted">Nincs nyitott teendőd.</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {deliverables.length > 0 && (
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">Rád kiosztott utómunka</p>
+          <ul className="space-y-1">
+            {deliverables.map((d) => (
+              <li key={`deliverable-${d.id}`}>
+                <Link
+                  href={d.link}
+                  className="flex items-center justify-between gap-3 rounded-[var(--radius)] px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-3"
+                >
+                  <span className="truncate text-text-primary">{d.title}</span>
+                  {d.hatarido && <span className="shrink-0 text-text-secondary">{formatShortDate(d.hatarido)}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {tasks.length > 0 && (
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">Rád osztott feladat</p>
+          <ul className="space-y-1">
+            {tasks.map((t) => (
+              <li key={`task-${t.id}`}>
+                <Link
+                  href={t.link}
+                  className="flex items-center justify-between gap-3 rounded-[var(--radius)] px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-3"
+                >
+                  <span className="truncate text-text-primary">{t.title}</span>
+                  {t.hatarido && <span className="shrink-0 text-text-secondary">{formatShortDate(t.hatarido)}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

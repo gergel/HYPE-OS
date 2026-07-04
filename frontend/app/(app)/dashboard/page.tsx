@@ -10,9 +10,11 @@ import {
 } from "@/components/dashboard/DashboardWidgets";
 import { StatCard } from "@/components/StatCard";
 import { TopBar } from "@/components/TopBar";
-import { getDashboardSummary, getMyDashboardConfig, getProjectCodes } from "@/lib/api";
+import { getDashboardSummary, getMyDashboardConfig, getMyTasksSummary, getProjectCodes } from "@/lib/api";
+import { MyTasksCard } from "@/components/dashboard/DashboardWidgets";
 
 const WIDGETS: WidgetOption[] = [
+  { key: "teendoim", label: "Teendőim" },
   { key: "mai_feladatok", label: "Mai feladatok" },
   { key: "figyelmeztetesek", label: "Figyelmeztetések" },
   { key: "ai_javaslat", label: "AI javaslat" },
@@ -34,10 +36,11 @@ function normalizedStatusLabel(allapot: string | null): string {
 }
 
 export default async function DashboardPage() {
-  const [summary, projectCodes, visibleWidgets] = await Promise.all([
+  const [summary, projectCodes, visibleWidgets, myTasks] = await Promise.all([
     getDashboardSummary(),
     getProjectCodes(),
     getMyDashboardConfig(),
+    getMyTasksSummary(),
   ]);
 
   const isVisible = (key: string) => !visibleWidgets || visibleWidgets.includes(key);
@@ -67,6 +70,11 @@ export default async function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {isVisible("teendoim") && (
+            <Card title="Teendőim">
+              {myTasks ? <MyTasksCard myTasks={myTasks} /> : <p className="text-[13px] text-text-muted">–</p>}
+            </Card>
+          )}
           {isVisible("mai_feladatok") && (
             <Card title="Mai feladatok">
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">

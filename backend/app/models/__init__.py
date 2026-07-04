@@ -14,6 +14,7 @@ from app.models.feedback import Feedback
 from app.models.field_visibility import FieldVisibilityConfig
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.media import Folder, Media
+from app.models.notification import Notification
 from app.models.notion_import import NotionImportMap
 from app.models.portal import Brand, PaymentMode, Payment, Portal, PortalStatus
 from app.models.project import Project, project_crew
@@ -49,6 +50,7 @@ __all__ = [
     "Revenue",
     "Folder",
     "Media",
+    "Notification",
     "NotionImportMap",
     "Brand",
     "PaymentMode",

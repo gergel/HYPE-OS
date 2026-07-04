@@ -48,6 +48,7 @@ def build_crud_router(
     before_create: Callable[[dict, Session], dict] | None = None,
     m2m_fields: dict[str, tuple[str, type]] | None = None,
     list_read_schema: type[BaseModel] | None = None,
+    after_update: Callable[[Any, dict, dict[str, dict[str, set[int]]], Session, Employee], None] | None = None,
 ) -> APIRouter:
     """m2m_fields: {payload_key: (relationship_attr_name, related_model)} a many-to-many mezőkhöz
     (pl. Project.crew_employee_ids -> ("crew", Employee)), amiket a sima **data konstruktor nem tud kezelni.
@@ -63,7 +64,13 @@ def build_crud_router(
     használja read_schema helyett - nagyon széles táblákhoz (pl. Project ~140 oszlop),
     ahol a listanézet ténylegesen csak pár mezőt jelenít meg, de a teljes séma
     soronkénti validálása/JSON-ba szerializálása felesleges terhelés minden egyes
-    listaoldal-betöltésnél. Az egyedi rekord GET továbbra is a teljes read_schema-t adja."""
+    listaoldal-betöltésnél. Az egyedi rekord GET továbbra is a teljes read_schema-t adja.
+
+    after_update: PATCH után hívódik (obj, data, m2m_changes, db, current_user) paraméterekkel,
+    miután a rekord már commitolva/refresh-elve van - side effect-ekhez (pl. értesítés
+    küldése kiosztás-váltáskor, lásd routes/postproduction.py, routes/tasks.py). `data` a
+    ténylegesen PATCH-elt scalar mezőket tartalmazza (a payload kulcsaival), `m2m_changes`
+    pedig {payload_key: {"added": {id, ...}, "removed": {id, ...}}} minden érintett m2m mezőhöz."""
     router = APIRouter(prefix=prefix, tags=tags)
     write_dependency = require_roles(*write_roles) if write_roles else None
     m2m_fields = m2m_fields or {}
@@ -126,8 +133,15 @@ def build_crud_router(
         db.refresh(obj)
         return obj
 
-    @router.patch("/{item_id}", response_model=read_schema, **create_kwargs)
-    async def update_item(item_id: int, request: Request, db: Session = Depends(get_db)):
+    update_user_dependency = write_dependency or get_current_user
+
+    @router.patch("/{item_id}", response_model=read_schema)
+    async def update_item(
+        item_id: int,
+        request: Request,
+        db: Session = Depends(get_db),
+        current_user: Employee = Depends(update_user_dependency),
+    ):
         """A payload egy nyers JSON objektum (nem egy fix update_schema) - bármelyik
         valódi oszlop PATCH-elhető vele (a hashed_password/id kivételével), hogy a
         részletnézeten bármelyik mező helyben szerkeszthető legyen (lásd
@@ -138,12 +152,15 @@ def build_crud_router(
         if not isinstance(data, dict):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A kérés törzsének JSON objektumnak kell lennie")
 
+        m2m_changes: dict[str, dict[str, set[int]]] = {}
         for payload_key in list(m2m_fields):
             if payload_key in data:
-                ids = data.pop(payload_key)
+                ids = set(data.pop(payload_key) or [])
                 attr_name, related_model = m2m_fields[payload_key]
+                previous_ids = {r.id for r in getattr(obj, attr_name)}
                 related = db.scalars(select(related_model).where(related_model.id.in_(ids))).all() if ids else []
                 setattr(obj, attr_name, related)
+                m2m_changes[attr_name] = {"added": ids - previous_ids, "removed": previous_ids - ids}
 
         columns = model.__table__.columns
         for field, value in data.items():
@@ -163,6 +180,8 @@ def build_crud_router(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Az érték már foglalt (egyedinek kell lennie)."
             ) from exc
         db.refresh(obj)
+        if after_update:
+            after_update(obj, data, m2m_changes, db, current_user)
         return obj
 
     @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT, **create_kwargs)

@@ -405,3 +405,32 @@ export type DeliverableComment = {
 export async function getDeliverableComments(deliverableId: number): Promise<DeliverableComment[]> {
   return (await apiGet<DeliverableComment[]>(`/api/v1/deliverables/${deliverableId}/comments`)) ?? [];
 }
+
+export type NotificationItem = {
+  id: number;
+  kind: string;
+  message: string;
+  link: string;
+  is_read: boolean;
+  created_at: string;
+};
+
+export async function getNotifications(): Promise<NotificationItem[]> {
+  return (await apiGet<NotificationItem[]>("/api/v1/notifications")) ?? [];
+}
+
+export type MyTaskItem = {
+  id: number;
+  title: string;
+  hatarido: string | null;
+  link: string;
+};
+
+export type MyTasksSummary = {
+  deliverables: MyTaskItem[];
+  tasks: MyTaskItem[];
+};
+
+export async function getMyTasksSummary(): Promise<MyTasksSummary | null> {
+  return apiGet<MyTasksSummary>("/api/v1/dashboard/my-tasks");
+}

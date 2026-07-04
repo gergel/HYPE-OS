@@ -22,7 +22,30 @@ from app.schemas.deliverable_actions import (
 )
 from app.schemas.feedback import FeedbackCreate, FeedbackRead, FeedbackUpdate
 from app.schemas.timesheet import TimesheetCreate, TimesheetRead, TimesheetUpdate
-from app.services import deliverable_actions
+from app.services import deliverable_actions, notifications
+
+
+def _after_deliverable_update(
+    obj: Deliverable, data: dict, m2m_changes: dict, db: Session, current_user: Employee
+) -> None:
+    """Ha a PATCH kiosztotta (Assigned To) az anyagot valakinek, azt a
+    munkatársat értesíti - lásd AssignedToPicker.tsx."""
+    if "assigned_to_employee_id" not in data:
+        return
+    new_id = data["assigned_to_employee_id"]
+    if not new_id:
+        return
+    title = obj.projekt_neve or f"Anyag #{obj.id}"
+    notifications.create_notification(
+        db,
+        employee_id=new_id,
+        kind="assignment",
+        message=f"{current_user.full_name} kiosztotta neked: {title}",
+        link=f"/utomunka/{obj.id}",
+        actor_id=current_user.id,
+    )
+    db.commit()
+
 
 deliverables_router = build_crud_router(
     model=Deliverable,
@@ -31,6 +54,7 @@ deliverables_router = build_crud_router(
     read_schema=DeliverableRead,
     prefix="/deliverables",
     tags=["postproduction"],
+    after_update=_after_deliverable_update,
 )
 
 timesheets_router = build_crud_router(

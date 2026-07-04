@@ -12,6 +12,7 @@ from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
 from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router
+from app.api.routes.notifications import router as notifications_router
 from app.api.routes.portal import payments_router, router as portal_router
 from app.api.routes.postproduction import deliverable_actions_router, deliverables_router, feedback_router, timesheets_router
 from app.api.routes.project_codes import router as project_codes_router
@@ -70,3 +71,5 @@ api_router.include_router(ai_assistant_router)
 # Beállítások: mező-láthatóság + oldal-hozzáférés (egyénenként)
 api_router.include_router(field_visibility_router)
 api_router.include_router(user_access_router)
+# Értesítések
+api_router.include_router(notifications_router)
