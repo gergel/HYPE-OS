@@ -30,10 +30,19 @@ class Settings(BaseSettings):
     r2_bucket_name: str = "hype-os-storage"
     r2_public_url: str = ""
 
-    cors_origins: str = "http://localhost:3000"
+    # Alapértelmezetten minden origin engedélyezett - az API kizárólag Bearer
+    # token-nel (Authorization header, nem cookie-val) hitelesít, ezért nincs
+    # CSRF-kockázat a wildcard origin engedélyezésénél. Ez azért fontos, mert a
+    # korábbi szigorúbb alapérték (csak http://localhost:3000) éles Railway
+    # deploy-on néma hálózati hibát okozott minden írási műveletnél (a böngésző
+    # blokkolta a frontend<->backend hívást, mert a frontend domain-je nem volt
+    # rajta a listán) - ha mégis szűkíteni akarod, add meg vesszővel elválasztva.
+    cors_origins: str = "*"
 
     @property
     def cors_origin_list(self) -> list[str]:
+        if self.cors_origins.strip() == "*":
+            return ["*"]
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     # ───────── Diszpó/szerződés küldés (Gmail + Google Docs/Drive) ─────────

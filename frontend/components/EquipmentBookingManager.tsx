@@ -37,24 +37,30 @@ export function EquipmentBookingManager({
   const [busy, setBusy] = useState(false);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
   const selectedOption = options.find((o) => String(o.id) === selected);
 
   useEffect(() => {
     if (!selected) {
       setAvailability(null);
+      setAvailabilityError(null);
       return;
     }
     let cancelled = false;
     setLoadingAvailability(true);
     setAvailability(null);
+    setAvailabilityError(null);
     fetch(`${API_BASE_URL}/api/v1/equipment/${selected}/availability?project_id=${projectId}`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (!cancelled) setAvailability(data);
       })
-      .catch(() => {
-        if (!cancelled) setAvailability(null);
+      .catch((err) => {
+        if (!cancelled) setAvailabilityError(`Nem sikerült lekérdezni az elérhetőséget (hálózati hiba): ${err}`);
       })
       .finally(() => {
         if (!cancelled) setLoadingAvailability(false);
@@ -166,13 +172,14 @@ export function EquipmentBookingManager({
         </button>
       </div>
       {selected && (
-        <p className="mt-1.5 text-[12px] text-text-muted">
+        <p className={`mt-1.5 text-[12px] ${availabilityError ? "text-text-danger" : "text-text-muted"}`}>
           {loadingAvailability && "Elérhetőség ellenőrzése…"}
-          {!loadingAvailability && availability?.track_mode === "stock" &&
+          {!loadingAvailability && availabilityError}
+          {!loadingAvailability && !availabilityError && availability?.track_mode === "stock" &&
             `Elérhető: ${availability.available} db (${availability.keret} db keretből, ${availability.foglalt} db foglalt máshol erre az időszakra)`}
-          {!loadingAvailability && availability?.track_mode === "asset" &&
+          {!loadingAvailability && !availabilityError && availability?.track_mode === "asset" &&
             (availability.available ? "Szabad erre az időszakra." : `Foglalt máshol: ${availability.detail}`)}
-          {!loadingAvailability && availability && availability.available === null && availability.detail}
+          {!loadingAvailability && !availabilityError && availability && availability.available === null && availability.detail}
         </p>
       )}
     </div>
