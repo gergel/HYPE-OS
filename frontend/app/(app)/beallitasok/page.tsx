@@ -1,6 +1,7 @@
 import { AccountCard } from "@/components/AccountCard";
 import { Card } from "@/components/Card";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
+import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
@@ -66,6 +67,14 @@ export default async function BeallitasokPage() {
             pageAccessConfigs={pageAccessConfigs}
             fieldVisibilityConfigs={fieldVisibilityConfigs}
           />
+        </Card>
+
+        <Card title="Veszélyzóna">
+          <p className="mb-3 text-[13px] text-text-secondary">
+            Egy kattintással törölheted mindenki más hozzáférését (a sajátod kivételével) - a munkatárs-rekordok megmaradnak, csak
+            a jelszavuk törlődik és a hozzáférésük áll vissza alapértelmezettre. Utána egyénenként újra beállíthatod, akinek kell.
+          </p>
+          <RevokeAllOthersButton />
         </Card>
 
         <Card title="Rendszer">

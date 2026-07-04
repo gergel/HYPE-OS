@@ -41,6 +41,21 @@ def set_access(employee_id: int, payload: PageAccessUpdate, db: Session = Depend
     return config
 
 
+@router.delete("/others")
+def revoke_access_for_others(current_user: Employee = Depends(require_roles(Role.ADMIN)), db: Session = Depends(get_db)):
+    """Admin egy kattintással visszavonja MINDENKI MÁS bejelentkezési hozzáférését
+    a sajátja kivételével - a munkatárs-rekordjuk megmarad (nem törlődnek, csak a
+    jelszavuk), és az oldal-/mező-hozzáférésük alapértelmezettre áll vissza.
+    Admin bármikor újra beállíthatja egyénenként (lásd Beállítások oldal)."""
+    other_ids = list(db.scalars(select(Employee.id).where(Employee.id != current_user.id)))
+    if other_ids:
+        db.query(Employee).filter(Employee.id.in_(other_ids)).update({"hashed_password": None}, synchronize_session=False)
+        db.query(PageAccessConfig).filter(PageAccessConfig.employee_id.in_(other_ids)).delete(synchronize_session=False)
+        db.query(FieldVisibilityConfig).filter(FieldVisibilityConfig.employee_id.in_(other_ids)).delete(synchronize_session=False)
+    db.commit()
+    return {"revoked_count": len(other_ids)}
+
+
 @router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_roles(Role.ADMIN))])
 def revoke_access(employee_id: int, db: Session = Depends(get_db)):
     """Admin visszavonja egy munkatárs hozzáférését (Beállítások oldal, "Hozzáférés
