@@ -212,10 +212,12 @@ export async function getFieldTypes(entityType: string): Promise<Record<string, 
   return (await apiGet<Record<string, string>>(`/api/v1/field-visibility/schema/${entityType}`)) ?? {};
 }
 
-/** Admin-nézet: egy adott munkatárs összes entitástípushoz beállított
- * mező-láthatósága (Beállítások oldal, munkatárs-választó után). */
-export async function getFieldVisibilityForEmployee(employeeId: number): Promise<FieldVisibilityConfig[]> {
-  return (await apiGet<FieldVisibilityConfig[]>(`/api/v1/field-visibility/${employeeId}`)) ?? [];
+/** Admin-nézet: MINDEN munkatárs összes mező-láthatósági beállítása egyetlen
+ * lekérdezéssel (Beállítások oldal) - fontos, hogy egy hívás legyen munkatársanként
+ * N hívás helyett, mert utóbbi (sok munkatárs esetén, párhuzamosan hívva) kimeríti
+ * a backend DB connection pool-ját (QueuePool timeout, 500-as hibák). */
+export async function getAllFieldVisibility(): Promise<FieldVisibilityConfig[]> {
+  return (await apiGet<FieldVisibilityConfig[]>("/api/v1/field-visibility")) ?? [];
 }
 
 export type PageAccessConfig = { employee_id: number; allowed_pages: string[] | null };

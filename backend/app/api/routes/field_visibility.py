@@ -33,6 +33,15 @@ def get_my_field_visibility(entity_type: str, current_user: Employee = Depends(g
     return MyFieldVisibility(visible_fields=config.visible_fields if config else None)
 
 
+@router.get("", response_model=list[FieldVisibilityRead], dependencies=[Depends(require_roles(Role.ADMIN))])
+def list_all_field_visibility(db: Session = Depends(get_db)):
+    """Az összes munkatárs összes entitástípushoz beállított mező-láthatósága,
+    egyetlen lekérdezéssel (Beállítások oldal) - fontos, hogy EGY hívás legyen
+    munkatársanként N hívás helyett, mert utóbbi (sok munkatárs esetén,
+    párhuzamosan hívva) kimeríti a DB connection pool-t (QueuePool timeout)."""
+    return db.scalars(select(FieldVisibilityConfig)).all()
+
+
 @router.get("/{employee_id}", response_model=list[FieldVisibilityRead], dependencies=[Depends(require_roles(Role.ADMIN))])
 def list_field_visibility(employee_id: int, db: Session = Depends(get_db)):
     """Egy adott munkatárs összes entitástípushoz beállított mező-láthatósága

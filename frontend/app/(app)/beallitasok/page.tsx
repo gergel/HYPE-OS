@@ -8,9 +8,9 @@ import { UserAccessManager } from "@/components/UserAccessManager";
 import {
   Employee,
   ENTITY_PATHS,
+  getAllFieldVisibility,
   getAllPageAccess,
   getEmployees,
-  getFieldVisibilityForEmployee,
   getSampleRecord,
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
@@ -40,9 +40,10 @@ const VISIBILITY_ENTITIES: { entityType: string; label: string; basePath: string
 ];
 
 export default async function BeallitasokPage() {
-  const [employees, pageAccessConfigs, samples] = await Promise.all([
+  const [employees, pageAccessConfigs, fieldVisibilityConfigs, samples] = await Promise.all([
     getEmployees(),
     getAllPageAccess(),
+    getAllFieldVisibility(),
     Promise.all(VISIBILITY_ENTITIES.map((e) => getSampleRecord(e.basePath))),
   ]);
   const allowedPagesByEmployee = new Map(pageAccessConfigs.map((c) => [c.employee_id, c.allowed_pages]));
@@ -54,7 +55,13 @@ export default async function BeallitasokPage() {
     return toEditableDetailFields(sample, entity.hide, null).map((f) => ({ key: f.key, label: f.label }));
   });
 
-  const employeeFieldVisibility = await Promise.all(employees.map((e) => getFieldVisibilityForEmployee(e.id)));
+  const fieldVisibilityByEmployee = new Map<number, Map<string, string[] | null>>();
+  for (const config of fieldVisibilityConfigs) {
+    if (!fieldVisibilityByEmployee.has(config.employee_id)) {
+      fieldVisibilityByEmployee.set(config.employee_id, new Map());
+    }
+    fieldVisibilityByEmployee.get(config.employee_id)!.set(config.entity_type, config.visible_fields);
+  }
 
   return (
     <div className="flex flex-1 flex-col">
@@ -86,8 +93,8 @@ export default async function BeallitasokPage() {
             az érintett munkatárs saját maga nem módosíthatja.
           </p>
           <div className="space-y-2">
-            {employees.map((employee, idx) => {
-              const visibleFieldsByEntity = new Map(employeeFieldVisibility[idx].map((c) => [c.entity_type, c.visible_fields]));
+            {employees.map((employee) => {
+              const visibleFieldsByEntity = fieldVisibilityByEmployee.get(employee.id) ?? new Map();
               return (
                 <details key={employee.id} className="rounded-[var(--radius)] border border-border p-3">
                   <summary className="cursor-pointer text-[13px] font-medium text-text-primary">
