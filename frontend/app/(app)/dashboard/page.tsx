@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/Card";
 import { DashboardCustomizePanel, WidgetOption } from "@/components/DashboardCustomizePanel";
 import {
@@ -53,7 +54,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-6">
+      <div className="flex-1 space-y-8 p-6 lg:p-8">
         {apiUnavailable && (
           <div className="rounded-[var(--radius)] border border-border bg-surface-1 px-4 py-3 text-[13px] text-text-secondary">
             A backend API ({process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}) jelenleg nem elérhető -
@@ -65,16 +66,17 @@ export default async function DashboardPage() {
           <DashboardCustomizePanel widgets={WIDGETS} initialVisible={visibleWidgets} />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {isVisible("mai_feladatok") && (
             <Card title="Mai feladatok">
-              <div className="grid grid-cols-3 gap-2">
-                <StatCard label="Forgatás" value={summary?.mai_forgatasok ?? "–"} />
-                <StatCard label="Aktív Project Code" value={summary?.aktiv_project_codeok ?? "–"} />
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                <StatCard label="Forgatás" value={summary?.mai_forgatasok ?? "–"} href="/projektek" />
+                <StatCard label="Aktív Project Code" value={summary?.aktiv_project_codeok ?? "–"} href="/projektek/project-kodok" />
                 <StatCard
                   label="Equipment ütközés"
                   value={summary?.equipment_utkozesek ?? "–"}
                   tone={summary && summary.equipment_utkozesek > 0 ? "danger" : "default"}
+                  href="/felszereles"
                 />
               </div>
             </Card>
@@ -91,21 +93,25 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {isVisible("kozelgo_esemenyek") && (
             <Card title="Közelgő események">
               {summary ? <UpcomingEventsCard events={summary.upcoming_events} /> : <p className="text-[13px] text-text-muted">–</p>}
             </Card>
           )}
           {isVisible("projektek_statusza") && (
-            <Card title="Projektek státusza">
-              <ProjectStatusDonut statusCounts={statusCounts} />
-            </Card>
+            <Link href="/projektek/project-kodok" className="block">
+              <Card title="Projektek státusza" className="h-full transition-colors hover:border-text-accent/40">
+                <ProjectStatusDonut statusCounts={statusCounts} />
+              </Card>
+            </Link>
           )}
           {isVisible("bevetel") && (
-            <Card title="Bevétel (havi)">
-              {summary ? <RevenueTrendChart trend={summary.revenue_trend} /> : <p className="text-[13px] text-text-muted">–</p>}
-            </Card>
+            <Link href="/penzugyek" className="block">
+              <Card title="Bevétel (havi)" className="h-full transition-colors hover:border-text-accent/40">
+                {summary ? <RevenueTrendChart trend={summary.revenue_trend} /> : <p className="text-[13px] text-text-muted">–</p>}
+              </Card>
+            </Link>
           )}
         </div>
       </div>
