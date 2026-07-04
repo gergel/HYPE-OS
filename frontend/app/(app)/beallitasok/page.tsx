@@ -1,11 +1,8 @@
 import { AccountCard } from "@/components/AccountCard";
 import { Card } from "@/components/Card";
-import { DataTable } from "@/components/DataTable";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
-import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
 import {
-  Employee,
   ENTITY_PATHS,
   getAllFieldVisibility,
   getAllPageAccess,
@@ -14,13 +11,6 @@ import {
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
 import { flatNavItems } from "@/lib/nav";
-
-const ROLE_LABEL: Record<string, string> = {
-  admin: "Admin",
-  operator: "Operatőr",
-  editor: "Vágó",
-  client: "Ügyfél",
-};
 
 /** A részletnézeteken szereplő entitások, ugyanazokkal a hide-listákkal, mint
  * a saját oldaluk (lásd app/*.tsx), hogy a mező-láthatóság beállítás
@@ -62,24 +52,6 @@ export default async function BeallitasokPage() {
       <TopBar />
       <div className="flex-1 space-y-6 p-6">
         <AccountCard />
-
-        <Card title={`Csapattagok és szerepkörök (${employees.length})`}>
-          <DataTable<Employee>
-            rows={employees}
-            emptyText="Még nincs felvett crew tag."
-            getHref={(e) => `/csapat/${e.id}`}
-            columns={[
-              { header: "Név", render: (e) => e.full_name },
-              { header: "Email", render: (e) => e.email ?? "–" },
-              { header: "Szerepkör", render: (e) => <StatusBadge label={ROLE_LABEL[e.role] ?? e.role} tone="neutral" /> },
-              {
-                header: "Aktív",
-                align: "right",
-                render: (e) => <StatusBadge label={e.is_active ? "Aktív" : "Inaktív"} tone={e.is_active ? "success" : "neutral"} />,
-              },
-            ]}
-          />
-        </Card>
 
         <Card title="Felhasználó-kezelés">
           <p className="mb-3 text-[13px] text-text-secondary">

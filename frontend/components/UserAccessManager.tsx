@@ -33,6 +33,7 @@ export function UserAccessManager({
     new Set(initialAllowedPages && initialAllowedPages.length > 0 ? initialAllowedPages : pages.map((p) => p.href)),
   );
   const [accessBusy, setAccessBusy] = useState(false);
+  const [revokeBusy, setRevokeBusy] = useState(false);
 
   function togglePage(href: string) {
     setSelectedPages((prev) => {
@@ -97,6 +98,26 @@ export function UserAccessManager({
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
     } finally {
       setAccessBusy(false);
+    }
+  }
+
+  async function revokeAccess() {
+    if (!confirm(`Biztosan törlöd ${employeeLabel} hozzáférését? A jelszava törlődik (nem tud többé bejelentkezni), az oldal- és mező-hozzáférése alapértelmezettre áll vissza.`)) {
+      return;
+    }
+    setRevokeBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/user-access/${employeeId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen törlés (hálózati hiba): ${err}`);
+    } finally {
+      setRevokeBusy(false);
     }
   }
 
@@ -182,6 +203,17 @@ export function UserAccessManager({
           className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
         >
           Mentés
+        </button>
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <button
+          type="button"
+          disabled={revokeBusy}
+          onClick={revokeAccess}
+          className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-danger hover:bg-surface-3 disabled:opacity-50"
+        >
+          Hozzáférés törlése
         </button>
       </div>
     </div>
