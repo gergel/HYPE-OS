@@ -224,12 +224,15 @@ export async function getVisibleFields(entityType: string): Promise<string[] | n
   return res?.visible_fields ?? null;
 }
 
-/** {mezőnév: "boolean"|"date"|"datetime"|"number"|"text"} egy entitástípushoz -
- * kell, hogy egy éppen null értékű mezőt (pl. egy még be nem pipált checkbox)
- * a EditableDetailGrid a helyes input-típussal jelenítsen meg, mert a nyers
- * null értékből ez önmagában nem derülne ki. */
-export async function getFieldTypes(entityType: string): Promise<Record<string, string>> {
-  return (await apiGet<Record<string, string>>(`/api/v1/field-visibility/schema/${entityType}`)) ?? {};
+export type FieldTypeInfo = { type: string; options?: string[] };
+
+/** {mezőnév: {type: "boolean"|"date"|"datetime"|"number"|"select"|"text", options?: [...]}}
+ * egy entitástípushoz - kell, hogy egy éppen null értékű mezőt (pl. egy még be
+ * nem pipált checkbox) a EditableDetailGrid a helyes input-típussal
+ * jelenítsen meg, illetve hogy mely mezők jelenjenek meg legördülő (select)
+ * listaként a lehetséges értékekkel. */
+export async function getFieldTypes(entityType: string): Promise<Record<string, FieldTypeInfo>> {
+  return (await apiGet<Record<string, FieldTypeInfo>>(`/api/v1/field-visibility/schema/${entityType}`)) ?? {};
 }
 
 /** Admin-nézet: MINDEN munkatárs összes mező-láthatósági beállítása egyetlen

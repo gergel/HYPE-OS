@@ -13,11 +13,12 @@ router = APIRouter(prefix="/field-visibility", tags=["field-visibility"])
 
 
 @router.get("/schema/{entity_type}", dependencies=[Depends(get_current_user)])
-def get_entity_field_types(entity_type: str):
-    """{mezőnév: "boolean"|"date"|"datetime"|"number"|"text"} - a frontend ebből
-    tudja, hogy egy éppen null értékű mezőt checkbox-ként vagy dátum-inputként
-    kell-e megjelenítenie (a nyers null értékből ez nem derülne ki)."""
-    return get_field_types(entity_type)
+def get_entity_field_types(entity_type: str, db: Session = Depends(get_db)):
+    """{mezőnév: {"type": "boolean"|"date"|"datetime"|"number"|"select"|"text", "options"?: [...]}} -
+    a frontend ebből tudja, hogy egy éppen null értékű mezőt checkbox-ként vagy
+    dátum-inputként kell-e megjelenítenie, illetve mely mezők jelenjenek meg
+    legördülő (select) listaként a lehetséges értékekkel (lásd EditableDetailGrid)."""
+    return get_field_types(entity_type, db)
 
 
 @router.get("/me/{entity_type}", response_model=MyFieldVisibility)

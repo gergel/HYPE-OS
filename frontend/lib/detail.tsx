@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { formatDate, formatHuf } from "@/lib/api";
+import { FieldTypeInfo, formatDate, formatHuf } from "@/lib/api";
 
 const HIDDEN_KEYS = new Set(["id", "created_at", "updated_at"]);
 
@@ -67,30 +67,35 @@ function formatValue(key: string, value: unknown): { node: ReactNode; wide: bool
   return { node: String(value), wide: false };
 }
 
-export type EditableInputType = "text" | "number" | "date" | "boolean" | "textarea";
+export type EditableInputType = "text" | "number" | "date" | "boolean" | "textarea" | "select";
 
 export type EditableDetailField = DetailField & {
   key: string;
   editable: boolean;
   inputType: EditableInputType;
   rawValue: string | number | boolean | null;
+  options?: string[];
 };
 
 const DATE_KEY_PATTERN = /datum|date|hatarido|keltezes/i;
 
 /** Ha az érték null, a nyers JSON-ból önmagában nem derül ki, hogy a mező
- * valójában boolean/dátum-e (pl. egy még be nem pipált checkbox) - ezért a
- * backend field-típus hintjét (lásd getFieldTypes) használjuk, ha elérhető,
- * és csak ennek hiányában esünk vissza a mezőnév-mintázatra. */
+ * valójában boolean/dátum/select-e (pl. egy még be nem pipált checkbox vagy
+ * egy még be nem állított állapot) - ezért a backend field-típus hintjét
+ * (lásd getFieldTypes) használjuk, ha elérhető, és csak ennek hiányában esünk
+ * vissza a mezőnév-mintázatra. */
 function classifyInput(
   key: string,
   value: unknown,
-  fieldTypeHint?: string,
-): { editable: boolean; inputType: EditableInputType } {
+  fieldTypeHint?: FieldTypeInfo,
+): { editable: boolean; inputType: EditableInputType; options?: string[] } {
+  if (fieldTypeHint?.type === "select" && fieldTypeHint.options) {
+    return { editable: true, inputType: "select", options: fieldTypeHint.options };
+  }
   if (value === null || value === undefined) {
-    if (fieldTypeHint === "boolean") return { editable: true, inputType: "boolean" };
-    if (fieldTypeHint === "date" || fieldTypeHint === "datetime") return { editable: true, inputType: "date" };
-    if (fieldTypeHint === "number") return { editable: true, inputType: "number" };
+    if (fieldTypeHint?.type === "boolean") return { editable: true, inputType: "boolean" };
+    if (fieldTypeHint?.type === "date" || fieldTypeHint?.type === "datetime") return { editable: true, inputType: "date" };
+    if (fieldTypeHint?.type === "number") return { editable: true, inputType: "number" };
     return { editable: true, inputType: DATE_KEY_PATTERN.test(key) ? "date" : "text" };
   }
   if (typeof value === "boolean") return { editable: true, inputType: "boolean" };
@@ -115,7 +120,7 @@ export function toEditableDetailFields(
   record: Record<string, unknown>,
   hide: string[] = [],
   onlyShow?: string[] | null,
-  fieldTypes?: Record<string, string> | null,
+  fieldTypes?: Record<string, FieldTypeInfo> | null,
 ): EditableDetailField[] {
   const hideSet = new Set([...HIDDEN_KEYS, ...hide]);
   const onlyShowSet = onlyShow && onlyShow.length > 0 ? new Set(onlyShow) : null;
@@ -124,11 +129,11 @@ export function toEditableDetailFields(
     .filter(([key]) => !onlyShowSet || onlyShowSet.has(key))
     .map(([key, value]) => {
       const { node, wide } = formatValue(key, value);
-      const { editable, inputType } = classifyInput(key, value, fieldTypes?.[key]);
+      const { editable, inputType, options } = classifyInput(key, value, fieldTypes?.[key]);
       const rawValue =
         typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null
           ? value
           : null;
-      return { key, label: humanizeKey(key), value: node, wide, editable, inputType, rawValue };
+      return { key, label: humanizeKey(key), value: node, wide, editable, inputType, rawValue, options };
     });
 }
