@@ -5,6 +5,7 @@ from app.models.callsheet import Callsheet
 from app.models.campaign import Campaign
 from app.models.client import Client, Contact
 from app.models.contract import Contract, ContractType
+from app.models.dashboard_config import DashboardConfig
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee, EmployeeType, SystemRole
 from app.models.equipment import Assignment, Equipment, TrackMode
@@ -30,6 +31,7 @@ __all__ = [
     "Contact",
     "Contract",
     "ContractType",
+    "DashboardConfig",
     "Deliverable",
     "Employee",
     "EmployeeType",

@@ -1,27 +1,54 @@
 import { Card } from "@/components/Card";
+import { DashboardCustomizePanel, WidgetOption } from "@/components/DashboardCustomizePanel";
+import {
+  AiSuggestionCard,
+  AlertsCard,
+  ProjectStatusDonut,
+  RevenueTrendChart,
+  UpcomingEventsCard,
+} from "@/components/dashboard/DashboardWidgets";
 import { StatCard } from "@/components/StatCard";
-import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { formatHuf, getClients, getDashboardSummary, getProjectCodes } from "@/lib/api";
+import { getDashboardSummary, getMyDashboardConfig, getProjectCodes } from "@/lib/api";
 
-function statusTone(allapot: string | null): "success" | "warning" | "danger" | "neutral" {
-  if (!allapot) return "neutral";
-  const normalized = allapot.toLowerCase();
-  if (["folyamatban", "aktiv", "kesz"].some((s) => normalized.includes(s))) return "success";
-  if (["tervezes", "elozetes"].some((s) => normalized.includes(s))) return "warning";
-  if (["blokkolva", "lezarva"].some((s) => normalized.includes(s))) return "danger";
-  return "neutral";
+const WIDGETS: WidgetOption[] = [
+  { key: "mai_feladatok", label: "Mai feladatok" },
+  { key: "figyelmeztetesek", label: "Figyelmeztetések" },
+  { key: "ai_javaslat", label: "AI javaslat" },
+  { key: "kozelgo_esemenyek", label: "Közelgő események" },
+  { key: "projektek_statusza", label: "Projektek státusza" },
+  { key: "bevetel", label: "Bevétel (havi)" },
+];
+
+const STATUS_LABEL: Record<string, string> = {
+  folyamatban: "Folyamatban",
+  tervezes: "Tervezés",
+  kesz: "Kész",
+  lezarva: "Lezárva",
+};
+
+function normalizedStatusLabel(allapot: string | null): string {
+  if (!allapot) return "Nincs státusz";
+  return STATUS_LABEL[allapot.toLowerCase()] ?? allapot;
 }
 
 export default async function DashboardPage() {
-  const [summary, projectCodes, clients] = await Promise.all([
+  const [summary, projectCodes, visibleWidgets] = await Promise.all([
     getDashboardSummary(),
-    getProjectCodes(5),
-    getClients(),
+    getProjectCodes(),
+    getMyDashboardConfig(),
   ]);
 
-  const clientNameById = new Map(clients.map((c) => [c.id, c.nev]));
+  const isVisible = (key: string) => !visibleWidgets || visibleWidgets.includes(key);
   const apiUnavailable = summary === null;
+
+  const statusCounts = Array.from(
+    projectCodes.reduce((map, pc) => {
+      const label = normalizedStatusLabel(pc.esemeny_allapota);
+      map.set(label, (map.get(label) ?? 0) + 1);
+      return map;
+    }, new Map<string, number>()),
+  ).map(([label, value]) => ({ label, value }));
 
   return (
     <div className="flex flex-1 flex-col">
@@ -34,60 +61,53 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard label="Mai forgatás" value={summary?.mai_forgatasok ?? "–"} />
-          <StatCard label="Aktív Project Code" value={summary?.aktiv_project_codeok ?? "–"} />
-          <StatCard
-            label="Equipment ütközés"
-            value={summary?.equipment_utkozesek ?? "–"}
-            tone={summary && summary.equipment_utkozesek > 0 ? "danger" : "default"}
-          />
-          <StatCard label="Havi bevétel" value={summary ? formatHuf(summary.havi_bevetel) : "–"} />
+        <div className="flex justify-end">
+          <DashboardCustomizePanel widgets={WIDGETS} initialVisible={visibleWidgets} />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.3fr_1fr]">
-          <Card title="Mai diszpó / forgatások">
-            <p className="text-[13px] text-text-muted">
-              A Naptár / Diszpó modul (Callsheet entitás) még nincs kitöltve adattal - a projektváz kész, a
-              lekérdezés a modul UI-jának Fázis 1 munkája.
-            </p>
-          </Card>
-          <Card title="Utómunka állapot">
-            <p className="text-[13px] text-text-muted">
-              A Deliverable-ök összegzése (kész / folyamatban / lejárt határidő) a Fázis 1 Utómunka modul UI
-              munkájának része.
-            </p>
-          </Card>
-        </div>
-
-        <Card title="Aktív Project Code-ok">
-          {projectCodes.length === 0 ? (
-            <p className="text-[13px] text-text-muted">Még nincs felvett Project Code.</p>
-          ) : (
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="py-1.5 text-left font-medium text-text-secondary">Projektkód</th>
-                  <th className="py-1.5 text-left font-medium text-text-secondary">Ügyfél</th>
-                  <th className="py-1.5 text-right font-medium text-text-secondary">Becsült profit</th>
-                  <th className="py-1.5 text-right font-medium text-text-secondary">Státusz</th>
-                </tr>
-              </thead>
-              <tbody>
-                {projectCodes.map((pc) => (
-                  <tr key={pc.id} className="border-b border-border last:border-0">
-                    <td className="py-2">{pc.projektkod}</td>
-                    <td className="py-2 text-text-secondary">{clientNameById.get(pc.client_id) ?? "–"}</td>
-                    <td className="py-2 text-right">{formatHuf(pc.becsult_profit)}</td>
-                    <td className="py-2 text-right">
-                      <StatusBadge label={pc.esemeny_allapota ?? "Nincs státusz"} tone={statusTone(pc.esemeny_allapota)} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          {isVisible("mai_feladatok") && (
+            <Card title="Mai feladatok">
+              <div className="grid grid-cols-3 gap-2">
+                <StatCard label="Forgatás" value={summary?.mai_forgatasok ?? "–"} />
+                <StatCard label="Aktív Project Code" value={summary?.aktiv_project_codeok ?? "–"} />
+                <StatCard
+                  label="Equipment ütközés"
+                  value={summary?.equipment_utkozesek ?? "–"}
+                  tone={summary && summary.equipment_utkozesek > 0 ? "danger" : "default"}
+                />
+              </div>
+            </Card>
           )}
-        </Card>
+          {isVisible("figyelmeztetesek") && (
+            <Card title="Figyelmeztetések">
+              {summary ? <AlertsCard alerts={summary.alerts} /> : <p className="text-[13px] text-text-muted">–</p>}
+            </Card>
+          )}
+          {isVisible("ai_javaslat") && (
+            <Card title="AI javaslat">
+              <AiSuggestionCard />
+            </Card>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          {isVisible("kozelgo_esemenyek") && (
+            <Card title="Közelgő események">
+              {summary ? <UpcomingEventsCard events={summary.upcoming_events} /> : <p className="text-[13px] text-text-muted">–</p>}
+            </Card>
+          )}
+          {isVisible("projektek_statusza") && (
+            <Card title="Projektek státusza">
+              <ProjectStatusDonut statusCounts={statusCounts} />
+            </Card>
+          )}
+          {isVisible("bevetel") && (
+            <Card title="Bevétel (havi)">
+              {summary ? <RevenueTrendChart trend={summary.revenue_trend} /> : <p className="text-[13px] text-text-muted">–</p>}
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );

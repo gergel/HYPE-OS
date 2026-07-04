@@ -2,11 +2,31 @@ import { cookies } from "next/headers";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export type UpcomingEvent = {
+  id: number;
+  nev: string;
+  forgatas_datuma: string | null;
+  helyszin: string | null;
+};
+
+export type RevenueMonth = {
+  month: string;
+  total: number;
+};
+
+export type DashboardAlerts = {
+  lejart_utomunka: number;
+  lejart_feladat: number;
+};
+
 export type DashboardSummary = {
   mai_forgatasok: number;
   aktiv_project_codeok: number;
   equipment_utkozesek: number;
   havi_bevetel: number;
+  upcoming_events: UpcomingEvent[];
+  revenue_trend: RevenueMonth[];
+  alerts: DashboardAlerts;
 };
 
 export type Client = {
@@ -232,6 +252,28 @@ export async function getMyPageAccess(): Promise<string[] | null> {
 /** Admin-nézet: az összes munkatárs oldal-hozzáférése (Beállítások oldal). */
 export async function getAllPageAccess(): Promise<PageAccessConfig[]> {
   return (await apiGet<PageAccessConfig[]>("/api/v1/user-access")) ?? [];
+}
+
+export type CurrentUser = {
+  id: number;
+  full_name: string;
+  email: string | null;
+  role: string;
+  is_active: boolean;
+};
+
+/** A bejelentkezett felhasználó saját adatai (TopBar üdvözlés/avatar,
+ * kijelentkezés) - a tokenből derül ki (lásd auth/me, get_current_user). */
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  return apiGet<CurrentUser>("/api/v1/auth/me");
+}
+
+/** A bejelentkezett felhasználó saját Dashboard widget-beállítása - null =
+ * minden widget látszik. Tisztán megjelenítési preferencia, bárki
+ * szabadon szerkesztheti a sajátját (lásd Dashboard oldal, testreszabás gomb). */
+export async function getMyDashboardConfig(): Promise<string[] | null> {
+  const res = await apiGet<{ visible_widgets: string[] | null }>("/api/v1/dashboard/config/me");
+  return res?.visible_widgets ?? null;
 }
 
 /** Az egyes entitás-modulok API alap-útvonalai, a részletnézetekhez és a
