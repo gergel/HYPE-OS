@@ -31,6 +31,7 @@ router = build_crud_router(
     read_schema=TaskRead,
     prefix="/tasks",
     tags=["tasks"],
+    page="/feladatok",
     m2m_fields={"felelos_employee_ids": ("felelosok", Employee)},
     after_update=_after_task_update,
 )

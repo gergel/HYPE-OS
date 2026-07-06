@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import Role, get_current_user, require_roles
+from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.project import Project
@@ -23,6 +23,7 @@ router = build_crud_router(
     read_schema=EquipmentRead,
     prefix="/equipment",
     tags=["equipment"],
+    page="/felszereles",
 )
 
 assignments_router = APIRouter(prefix="/assignments", tags=["equipment"])
@@ -59,7 +60,7 @@ def list_assignments(
     "",
     response_model=AssignmentRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_roles(Role.ADMIN, Role.OPERATOR))],
+    dependencies=[Depends(require_page_action("/felszereles", "create"))],
 )
 def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
     """Eszköz (Leltár, egyedi vagy darabszámos) hozzárendelése egy projekthez -
@@ -96,7 +97,7 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
 @assignments_router.delete(
     "/{assignment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_roles(Role.ADMIN, Role.OPERATOR))],
+    dependencies=[Depends(require_page_action("/felszereles", "delete"))],
 )
 def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
     obj = db.get(Assignment, assignment_id)

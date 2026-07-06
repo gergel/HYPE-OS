@@ -19,6 +19,7 @@ router = build_crud_router(
     read_schema=PortalRead,
     prefix="/portal",
     tags=["portal"],
+    page="/media-portal",
     before_create=_hash_portal_password,
 )
 
@@ -29,4 +30,5 @@ payments_router = build_crud_router(
     read_schema=PaymentRead,
     prefix="/payments",
     tags=["portal"],
+    page="/media-portal",
 )

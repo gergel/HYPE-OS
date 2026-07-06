@@ -54,6 +54,7 @@ deliverables_router = build_crud_router(
     read_schema=DeliverableRead,
     prefix="/deliverables",
     tags=["postproduction"],
+    page="/utomunka",
     after_update=_after_deliverable_update,
 )
 
@@ -64,6 +65,7 @@ timesheets_router = build_crud_router(
     read_schema=TimesheetRead,
     prefix="/timesheets",
     tags=["postproduction"],
+    page="/utomunka",
 )
 
 feedback_router = build_crud_router(
@@ -73,6 +75,7 @@ feedback_router = build_crud_router(
     read_schema=FeedbackRead,
     prefix="/feedback",
     tags=["postproduction"],
+    page="/utomunka",
 )
 
 # Külön router a Deliverable egyedi (nem CRUD) akcióihoz - FONTOS: ezt kell

@@ -11,7 +11,7 @@ import {
   getSampleRecord,
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
-import { flatNavItems } from "@/lib/nav";
+import { pagePermissionGroups } from "@/lib/nav";
 
 /** A részletnézeteken szereplő entitások, ugyanazokkal a hide-listákkal, mint
  * a saját oldaluk (lásd app/*.tsx), hogy a mező-láthatóság beállítás
@@ -59,7 +59,7 @@ export default async function BeallitasokPage() {
     getAllFieldVisibility(),
     Promise.all(VISIBILITY_ENTITIES.map((e) => getSampleRecord(e.basePath))),
   ]);
-  const pages = flatNavItems();
+  const pages = pagePermissionGroups();
 
   const visibilityEntities = VISIBILITY_ENTITIES.map((entity, i) => {
     const sample = samples[i];

@@ -4,11 +4,13 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.employee import Employee, SystemRole as Role
+from app.models.user_access import PageAccessConfig
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -59,6 +61,40 @@ def require_roles(*roles: Role):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Nincs jogosultságod ehhez a művelethez",
             )
+        return current_user
+
+    return dependency
+
+
+def check_page_action(db: Session, employee: Employee, page: str, action: str) -> None:
+    """A durvább admin/operator szerepkör-ellenőrzés (lásd require_roles) UTÁN
+    hívva a finomabb, oldal+művelet-szintű írási jogosultságot ellenőrzi - ha
+    az alkalmazottnak van PageAccessConfig sora ÉS abban page_permissions be
+    van állítva, csak azokon az oldalakon/műveleteken enged, amiket admin
+    kifejezetten megadott neki (lásd Beállítások oldal). Ha nincs sora, vagy a
+    page_permissions None, korlátozás nélkül enged (ugyanaz az alapértelmezett
+    viselkedés, mint az oldal-láthatóságnál)."""
+    config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
+    if config is None or config.page_permissions is None:
+        return
+    allowed = config.page_permissions.get(page)
+    if allowed is None or action not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Nincs jogosultságod ehhez a művelethez ezen az oldalon.",
+        )
+
+
+def require_page_action(page: str, action: str, *write_roles: Role):
+    """Standalone (nem build_crud_router-en keresztül regisztrált) végpontokhoz
+    - pl. equipment.py Assignment create/delete - ugyanazt az oldal+művelet-
+    szintű ellenőrzést adja, mint amit a build_crud_router minden generikus
+    create/update/delete végpontja automatikusan megkap."""
+    write_roles = write_roles or (Role.ADMIN, Role.OPERATOR)
+    role_dependency = require_roles(*write_roles)
+
+    def dependency(current_user: Employee = Depends(role_dependency), db: Session = Depends(get_db)) -> Employee:
+        check_page_action(db, current_user, page, action)
         return current_user
 
     return dependency

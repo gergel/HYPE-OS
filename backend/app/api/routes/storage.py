@@ -11,6 +11,7 @@ folders_router = build_crud_router(
     read_schema=FolderRead,
     prefix="/folders",
     tags=["storage"],
+    page="/media-portal",
 )
 
 media_router = build_crud_router(
@@ -20,4 +21,5 @@ media_router = build_crud_router(
     read_schema=MediaRead,
     prefix="/media",
     tags=["storage"],
+    page="/media-portal",
 )

@@ -9,4 +9,5 @@ router = build_crud_router(
     read_schema=CampaignRead,
     prefix="/campaigns",
     tags=["campaigns"],
+    page="/kampanyok",
 )

@@ -23,6 +23,7 @@ router = build_crud_router(
     read_schema=EmployeeRead,
     prefix="/crew",
     tags=["crew"],
+    page="/csapat",
     before_create=_hash_employee_password,
 )
 
@@ -56,4 +57,5 @@ rates_router = build_crud_router(
     read_schema=RateRead,
     prefix="/rates",
     tags=["crew"],
+    page="/csapat",
 )

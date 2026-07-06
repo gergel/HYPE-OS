@@ -32,14 +32,14 @@ UTOMUNKA_PAGE = "/utomunka"
 def list_assignable_employees(db: Session) -> list[AssignableEmployee]:
     """Kik választhatók az "Assigned To" mezőbe - csak azok, akiknek van
     jelszavuk (be tudnak lépni) ÉS akiknek nincs korlátozva a hozzáférése az
-    /utomunka oldaltól (nincs PageAccessConfig soruk, vagy allowed_pages=null,
-    vagy tartalmazza az /utomunka-t)."""
-    configs = {c.employee_id: c.allowed_pages for c in db.scalars(select(PageAccessConfig))}
+    /utomunka oldaltól (nincs PageAccessConfig soruk, vagy page_permissions=null,
+    vagy szerepel benne az /utomunka kulcs)."""
+    configs = {c.employee_id: c.page_permissions for c in db.scalars(select(PageAccessConfig))}
     employees = db.scalars(select(Employee).where(Employee.hashed_password.is_not(None), Employee.is_active.is_(True)))
     result = []
     for e in employees:
-        allowed_pages = configs.get(e.id)
-        if e.id not in configs or allowed_pages is None or UTOMUNKA_PAGE in allowed_pages:
+        page_permissions = configs.get(e.id)
+        if e.id not in configs or page_permissions is None or UTOMUNKA_PAGE in page_permissions:
             result.append(AssignableEmployee(id=e.id, full_name=e.full_name))
     return sorted(result, key=lambda e: e.full_name)
 

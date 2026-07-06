@@ -9,4 +9,5 @@ router = build_crud_router(
     read_schema=ProjectCodeRead,
     prefix="/project-codes",
     tags=["project-codes"],
+    page="/projektek",
 )

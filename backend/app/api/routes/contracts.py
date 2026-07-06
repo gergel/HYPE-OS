@@ -9,4 +9,5 @@ router = build_crud_router(
     read_schema=ContractRead,
     prefix="/contracts",
     tags=["contracts"],
+    page="/penzugyek",
 )

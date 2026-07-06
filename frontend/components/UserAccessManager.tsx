@@ -4,23 +4,35 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 
-type PageOption = { href: string; label: string };
+type PageOption = { page: string; label: string };
+
+const EXTRA_ACTIONS: { key: string; label: string }[] = [
+  { key: "edit", label: "Szerkesztés" },
+  { key: "create", label: "Létrehozás" },
+  { key: "delete", label: "Törlés" },
+];
+const FULL_ACCESS = ["view", "edit", "create", "delete"];
 
 /** Egy munkatárs jelszavának beállítása + oldal-hozzáférésének szerkesztése -
  * egyénenként állítható, csak admin mentheti. A munkatárs saját maga nem
- * módosíthatja (a backend /user-access/{id} PUT admin-only, lásd require_roles). */
+ * módosíthatja (a backend /user-access/{id} PUT admin-only, lásd require_roles).
+ *
+ * Egy bejelölt oldalon belül a megtekintés mindig jár (ez adja a láthatóságot,
+ * lásd middleware.ts) - az edit/create/delete külön-külön kapcsolható, hogy
+ * valaki csak megtekinthesse, vagy szerkeszthesse/létrehozhassa/törölhesse is
+ * (lásd core/security.check_page_action a backend-oldali kikényszerítéshez). */
 export function UserAccessManager({
   employeeId,
   employeeLabel,
   pages,
   initialEmail,
-  initialAllowedPages,
+  initialPagePermissions,
 }: {
   employeeId: number;
   employeeLabel: string;
   pages: PageOption[];
   initialEmail: string | null;
-  initialAllowedPages: string[] | null;
+  initialPagePermissions: Record<string, string[]> | null;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState(initialEmail ?? "");
@@ -28,18 +40,34 @@ export function UserAccessManager({
   const [password, setPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
 
-  const [showAllPages, setShowAllPages] = useState(!initialAllowedPages || initialAllowedPages.length === 0);
-  const [selectedPages, setSelectedPages] = useState<Set<string>>(
-    new Set(initialAllowedPages && initialAllowedPages.length > 0 ? initialAllowedPages : pages.map((p) => p.href)),
+  const hasRestriction = !!initialPagePermissions && Object.keys(initialPagePermissions).length > 0;
+  const [showAllPages, setShowAllPages] = useState(!hasRestriction);
+  const [permissions, setPermissions] = useState<Map<string, Set<string>>>(
+    new Map(
+      hasRestriction
+        ? Object.entries(initialPagePermissions!).map(([page, actions]) => [page, new Set(actions)])
+        : pages.map((p) => [p.page, new Set(FULL_ACCESS)]),
+    ),
   );
   const [accessBusy, setAccessBusy] = useState(false);
   const [revokeBusy, setRevokeBusy] = useState(false);
 
-  function togglePage(href: string) {
-    setSelectedPages((prev) => {
-      const next = new Set(prev);
-      if (next.has(href)) next.delete(href);
-      else next.add(href);
+  function togglePage(page: string) {
+    setPermissions((prev) => {
+      const next = new Map(prev);
+      if (next.has(page)) next.delete(page);
+      else next.set(page, new Set(FULL_ACCESS));
+      return next;
+    });
+  }
+
+  function toggleAction(page: string, action: string) {
+    setPermissions((prev) => {
+      const next = new Map(prev);
+      const actions = new Set(next.get(page));
+      if (actions.has(action)) actions.delete(action);
+      else actions.add(action);
+      next.set(page, actions);
       return next;
     });
   }
@@ -86,7 +114,11 @@ export function UserAccessManager({
   async function saveAccess() {
     setAccessBusy(true);
     try {
-      const body = { allowed_pages: showAllPages ? null : Array.from(selectedPages) };
+      const body = {
+        page_permissions: showAllPages
+          ? null
+          : Object.fromEntries(Array.from(permissions.entries()).map(([page, actions]) => [page, Array.from(actions)])),
+      };
       const res = await authFetch(`/api/v1/user-access/${employeeId}`, { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -174,25 +206,47 @@ export function UserAccessManager({
         {!showAllPages && (
           <>
             <div className="mb-2 flex gap-2">
-              <button type="button" onClick={() => setSelectedPages(new Set())} className="text-[12px] text-text-accent hover:underline">
+              <button
+                type="button"
+                onClick={() => setPermissions(new Map())}
+                className="text-[12px] text-text-accent hover:underline"
+              >
                 Összes kikapcsolása
               </button>
               <span className="text-text-muted">·</span>
               <button
                 type="button"
-                onClick={() => setSelectedPages(new Set(pages.map((p) => p.href)))}
+                onClick={() => setPermissions(new Map(pages.map((p) => [p.page, new Set(FULL_ACCESS)])))}
                 className="text-[12px] text-text-accent hover:underline"
               >
-                Összes bekapcsolása
+                Összes bekapcsolása (teljes joggal)
               </button>
             </div>
-            <div className="mb-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-              {pages.map((p) => (
-                <label key={p.href} className="flex items-center gap-1.5 text-[12px] text-text-secondary">
-                  <input type="checkbox" checked={selectedPages.has(p.href)} onChange={() => togglePage(p.href)} />
-                  {p.label}
-                </label>
-              ))}
+            <p className="mb-2 text-[12px] text-text-muted">
+              A bejelölt oldalt megtekintheti - az alábbi jelölőnégyzetekkel adhatsz hozzá szerkesztési/létrehozási/törlési jogot is.
+            </p>
+            <div className="mb-3 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+              {pages.map((p) => {
+                const actions = permissions.get(p.page);
+                return (
+                  <div key={p.page}>
+                    <label className="flex items-center gap-1.5 text-[12px] font-medium text-text-secondary">
+                      <input type="checkbox" checked={!!actions} onChange={() => togglePage(p.page)} />
+                      {p.label}
+                    </label>
+                    {actions && (
+                      <div className="ml-5 mt-0.5 flex flex-wrap gap-x-2.5 text-[11px] text-text-muted">
+                        {EXTRA_ACTIONS.map((a) => (
+                          <label key={a.key} className="flex items-center gap-1">
+                            <input type="checkbox" checked={actions.has(a.key)} onChange={() => toggleAction(p.page, a.key)} />
+                            {a.label}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}

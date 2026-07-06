@@ -19,6 +19,7 @@ expenses_router = build_crud_router(
     read_schema=ExpenseRead,
     prefix="/expenses",
     tags=["finance"],
+    page="/penzugyek",
 )
 
 revenues_router = build_crud_router(
@@ -28,6 +29,7 @@ revenues_router = build_crud_router(
     read_schema=RevenueRead,
     prefix="/revenues",
     tags=["finance"],
+    page="/penzugyek",
 )
 
 kp_forgalom_router = build_crud_router(
@@ -37,4 +39,5 @@ kp_forgalom_router = build_crud_router(
     read_schema=KpForgalomRead,
     prefix="/kp-forgalom",
     tags=["finance"],
+    page="/penzugyek",
 )

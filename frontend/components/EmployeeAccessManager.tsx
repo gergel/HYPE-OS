@@ -6,10 +6,10 @@ import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { UserAccessManager } from "@/components/UserAccessManager";
 
 type EmployeeOption = { id: number; full_name: string; email: string | null; role: string; has_password: boolean };
-type PageOption = { href: string; label: string };
+type PageOption = { page: string; label: string };
 type FieldOption = { key: string; label: string };
 type VisibilityEntity = { entityType: string; label: string; availableFields: FieldOption[] };
-type PageAccessConfig = { employee_id: number; allowed_pages: string[] | null };
+type PageAccessConfig = { employee_id: number; page_permissions: Record<string, string[]> | null };
 type FieldVisibilityConfig = { employee_id: number; entity_type: string; visible_fields: string[] | null };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -40,8 +40,8 @@ export function EmployeeAccessManager({
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const allowedPagesByEmployee = useMemo(
-    () => new Map(pageAccessConfigs.map((c) => [c.employee_id, c.allowed_pages])),
+  const pagePermissionsByEmployee = useMemo(
+    () => new Map(pageAccessConfigs.map((c) => [c.employee_id, c.page_permissions])),
     [pageAccessConfigs],
   );
 
@@ -143,7 +143,7 @@ export function EmployeeAccessManager({
             employeeLabel={selected.full_name}
             initialEmail={selected.email}
             pages={pages}
-            initialAllowedPages={allowedPagesByEmployee.get(selected.id) ?? null}
+            initialPagePermissions={pagePermissionsByEmployee.get(selected.id) ?? null}
           />
 
           <div className="border-t border-border pt-4">

@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import Role, get_current_user, require_roles
+from app.core.security import Role, check_page_action, get_current_user, require_roles
 from app.models.employee import Employee
 
 # Soha nem PATCH-elhető mezők, még akkor sem, ha valódi oszlopok - a "minden
@@ -44,13 +44,20 @@ def build_crud_router(
     read_schema: type[BaseModel],
     prefix: str,
     tags: list[str],
+    page: str,
     write_roles: tuple[Role, ...] = (Role.ADMIN, Role.OPERATOR),
     before_create: Callable[[dict, Session], dict] | None = None,
     m2m_fields: dict[str, tuple[str, type]] | None = None,
     list_read_schema: type[BaseModel] | None = None,
     after_update: Callable[[Any, dict, dict[str, dict[str, set[int]]], Session, Employee], None] | None = None,
 ) -> APIRouter:
-    """m2m_fields: {payload_key: (relationship_attr_name, related_model)} a many-to-many mezőkhöz
+    """page: a frontend/lib/nav.ts oldal-href-je (pl. "/projektek"), amihez ez az
+    entitás tartozik - a Beállítások oldalon egyénenként beállított
+    page_permissions (lásd core/security.check_page_action) ez alapján dönti
+    el, ki hozhat létre/szerkeszthet/törölhet ezen az entitáson (a durvább
+    admin/operator szerepkör-ellenőrzés MELLETT, nem helyette).
+
+    m2m_fields: {payload_key: (relationship_attr_name, related_model)} a many-to-many mezőkhöz
     (pl. Project.crew_employee_ids -> ("crew", Employee)), amiket a sima **data konstruktor nem tud kezelni.
 
     update_schema: jelenleg nem használja a PATCH végpont ("minden mező helyben
@@ -72,9 +79,20 @@ def build_crud_router(
     ténylegesen PATCH-elt scalar mezőket tartalmazza (a payload kulcsaival), `m2m_changes`
     pedig {payload_key: {"added": {id, ...}, "removed": {id, ...}}} minden érintett m2m mezőhöz."""
     router = APIRouter(prefix=prefix, tags=tags)
-    write_dependency = require_roles(*write_roles) if write_roles else None
+    role_dependency = require_roles(*write_roles) if write_roles else get_current_user
     m2m_fields = m2m_fields or {}
     list_read_schema = list_read_schema or read_schema
+
+    def _action_dependency(action: str):
+        def dependency(current_user: Employee = Depends(role_dependency), db: Session = Depends(get_db)) -> Employee:
+            check_page_action(db, current_user, page, action)
+            return current_user
+
+        return dependency
+
+    create_dependency = _action_dependency("create")
+    edit_dependency = _action_dependency("edit")
+    delete_dependency = _action_dependency("delete")
 
     def _get_or_404(db: Session, obj_id: int) -> Any:
         obj = db.get(model, obj_id)
@@ -115,10 +133,8 @@ def build_crud_router(
     def get_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
         return _get_or_404(db, item_id)
 
-    create_kwargs = {"dependencies": [Depends(write_dependency)]} if write_dependency else {}
-
-    @router.post("", response_model=read_schema, status_code=status.HTTP_201_CREATED, **create_kwargs)
-    def create_item(payload: create_schema, db: Session = Depends(get_db)):
+    @router.post("", response_model=read_schema, status_code=status.HTTP_201_CREATED)
+    def create_item(payload: create_schema, db: Session = Depends(get_db), _user: Employee = Depends(create_dependency)):
         data = payload.model_dump()
         m2m_data = {k: data.pop(k) for k in list(m2m_fields) if k in data}
         if before_create:
@@ -133,14 +149,12 @@ def build_crud_router(
         db.refresh(obj)
         return obj
 
-    update_user_dependency = write_dependency or get_current_user
-
     @router.patch("/{item_id}", response_model=read_schema)
     async def update_item(
         item_id: int,
         request: Request,
         db: Session = Depends(get_db),
-        current_user: Employee = Depends(update_user_dependency),
+        current_user: Employee = Depends(edit_dependency),
     ):
         """A payload egy nyers JSON objektum (nem egy fix update_schema) - bármelyik
         valódi oszlop PATCH-elhető vele (a hashed_password/id kivételével), hogy a
@@ -184,8 +198,8 @@ def build_crud_router(
             after_update(obj, data, m2m_changes, db, current_user)
         return obj
 
-    @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT, **create_kwargs)
-    def delete_item(item_id: int, db: Session = Depends(get_db)):
+    @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def delete_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(delete_dependency)):
         obj = _get_or_404(db, item_id)
         db.delete(obj)
         db.commit()

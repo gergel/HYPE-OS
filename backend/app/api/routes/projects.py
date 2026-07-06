@@ -21,6 +21,7 @@ router = build_crud_router(
     list_read_schema=ProjectListItem,
     prefix="/projects",
     tags=["projects"],
+    page="/projektek",
     m2m_fields={"crew_employee_ids": ("crew", Employee)},
 )
 

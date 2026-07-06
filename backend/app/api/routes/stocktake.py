@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee
 from app.schemas.stocktake import (
     StocktakeItemRead,
@@ -24,7 +24,7 @@ def _get_session_or_404(session_id: int, db: Session):
 
 
 @router.post("/sessions", response_model=StocktakeSessionRead, status_code=status.HTTP_201_CREATED)
-def create_session(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+def create_session(db: Session = Depends(get_db), current_user: Employee = Depends(require_page_action("/felszereles", "create"))):
     session = stocktake.start_session(db, current_user)
     return stocktake.get_session(db, session.id)
 
@@ -51,7 +51,7 @@ def update_item(
     item_id: int,
     payload: StocktakeItemUpdate,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(get_current_user),
+    _user: Employee = Depends(require_page_action("/felszereles", "edit")),
 ):
     item = stocktake.get_item(db, session_id, item_id)
     if item is None:
@@ -63,7 +63,9 @@ def update_item(
 
 
 @router.post("/sessions/{session_id}/complete", response_model=StocktakeSessionRead)
-def complete_session(session_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+def complete_session(
+    session_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action("/felszereles", "edit"))
+):
     session = _get_session_or_404(session_id, db)
     stocktake.complete_session(db, session)
     return stocktake.get_session(db, session_id)

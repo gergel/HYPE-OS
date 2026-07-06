@@ -244,7 +244,7 @@ export async function getAllFieldVisibility(): Promise<FieldVisibilityConfig[]> 
   return (await apiGet<FieldVisibilityConfig[]>("/api/v1/field-visibility")) ?? [];
 }
 
-export type PageAccessConfig = { employee_id: number; allowed_pages: string[] | null };
+export type PageAccessConfig = { employee_id: number; page_permissions: Record<string, string[]> | null };
 
 /** A bejelentkezett felhasználó saját oldal-hozzáférése - null = minden oldalt
  * lát. A middleware és a Sidebar is ez alapján szűr. */

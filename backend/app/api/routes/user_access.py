@@ -17,7 +17,9 @@ def get_my_access(current_user: Employee = Depends(get_current_user), db: Sessio
     """A bejelentkezett felhasználó saját oldal-hozzáférése - ezt bárki lekérdezheti
     saját magára (a middleware és a Sidebar ez alapján szűr), de nem módosíthatja."""
     config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == current_user.id))
-    return MyAccess(allowed_pages=config.allowed_pages if config else None)
+    permissions = config.page_permissions if config else None
+    allowed_pages = list(permissions.keys()) if permissions is not None else None
+    return MyAccess(allowed_pages=allowed_pages, page_permissions=permissions)
 
 
 @router.get("", response_model=list[PageAccessRead], dependencies=[Depends(require_roles(Role.ADMIN))])
@@ -32,10 +34,10 @@ def set_access(employee_id: int, payload: PageAccessUpdate, db: Session = Depend
     módosíthatja, maga az érintett felhasználó nem (lásd GET /me, csak olvasás)."""
     config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee_id))
     if config is None:
-        config = PageAccessConfig(employee_id=employee_id, allowed_pages=payload.allowed_pages)
+        config = PageAccessConfig(employee_id=employee_id, page_permissions=payload.page_permissions)
         db.add(config)
     else:
-        config.allowed_pages = payload.allowed_pages
+        config.page_permissions = payload.page_permissions
     db.commit()
     db.refresh(config)
     return config
