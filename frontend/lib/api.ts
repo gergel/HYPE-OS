@@ -135,6 +135,9 @@ export type Deliverable = {
   hatarido: string | null;
   anyag_kikuldve: boolean;
   vago_employee_id: number | null;
+  assigned_to_employee_id: number | null;
+  project_id: number | null;
+  vinyok: string[] | null;
 };
 
 export type JsonRecord = Record<string, unknown> & { id: number };
