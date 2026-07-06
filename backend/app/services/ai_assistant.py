@@ -15,6 +15,7 @@ megpróbálhatná közvetlenül hívni)."""
 from __future__ import annotations
 
 import json
+from datetime import date, datetime
 from typing import Any
 
 import anthropic
@@ -81,6 +82,47 @@ def _jsonable(value: Any) -> Any:
         return str(value)
 
 
+_TRUE_STRINGS = {"true", "igen", "1", "yes"}
+_FALSE_STRINGS = {"false", "nem", "0", "no"}
+
+
+def _coerce_filter_value(py_type: type | None, value: Any) -> Any:
+    """A modell tool-hívásának filters mezőjében az érték szinte mindig
+    string (a JSON-séma nem ír elő per-mező típust) - dátum/szám/bool
+    oszlopoknál viszont egy nyers string == összehasonlítás a Python str
+    típusa alapján rossz SQL-típussal (pl. VARCHAR) kötné be a paramétert
+    (SQLAlchemy a bind literál típusából indul ki, NEM az oszlopéból), ami
+    Postgres-en "operator does not exist: date = character varying"-szerű
+    hibát ad - ezért itt az oszlop tényleges Python típusára alakítjuk,
+    mielőtt összehasonlítanánk. None visszatérés = nem sikerült értelmezni,
+    ilyenkor a hívó inkább figyelmen kívül hagyja ezt a szűrőt."""
+    if not isinstance(value, str):
+        return value
+    if py_type is date:
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    if py_type is datetime:
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    if py_type is bool:
+        lowered = value.strip().lower()
+        if lowered in _TRUE_STRINGS:
+            return True
+        if lowered in _FALSE_STRINGS:
+            return False
+        return None
+    if py_type in (int, float):
+        try:
+            return py_type(value)
+        except ValueError:
+            return None
+    return value
+
+
 def _describe_entity(db: Session, employee: Employee, entity_type: str) -> dict:
     if entity_type not in _allowed_entity_types(db, employee):
         return {"error": f"Nincs jogosultságod ehhez az entitástípushoz: {entity_type}"}
@@ -107,10 +149,32 @@ def _query_entity(db: Session, employee: Employee, entity_type: str, filters: di
         if key not in columns or key not in visible:
             continue
         column = columns[key]
-        query = query.where(column.ilike(f"%{value}%") if isinstance(value, str) else column == value)
+        # ILIKE csak valódi szöveges oszlopokon értelmezhető (Postgres nem tud
+        # "date ~~* varchar"-t) - más típusoknál (dátum, szám, bool, enum stb.)
+        # egyenlőséget használunk, a szöveges JSON-értéket pedig előbb az
+        # oszlop tényleges Python típusára alakítjuk (lásd _coerce_filter_value).
+        py_type = getattr(column.type, "python_type", None)
+        if py_type is str and isinstance(value, str):
+            query = query.where(column.ilike(f"%{value}%"))
+            continue
+        coerced = _coerce_filter_value(py_type, value)
+        if coerced is None:
+            # Nem sikerült értelmezni (pl. hibás dátumformátum) - inkább
+            # figyelmen kívül hagyjuk ezt a szűrőt, mint hogy 500-at dobjunk.
+            continue
+        query = query.where(column == coerced)
 
     query = query.limit(max(1, min(limit or 20, MAX_ROWS)))
-    rows = db.scalars(query).all()
+    try:
+        rows = db.scalars(query).all()
+    except Exception as exc:
+        # Egy rosszul formázott szűrő (pl. típus-eltérés) ne dobjon 500-at a
+        # végpontból - a modell kapjon vissza egy hibaüzenetet, amiből tud
+        # próbálkozni másképp. A rollback azért kell, mert egy sikertelen
+        # SQL statement után a session tranzakciója "aborted" állapotba kerül,
+        # ami a tool-loop KÖVETKEZŐ körének lekérdezéseit is elrontaná.
+        db.rollback()
+        return {"error": f"Sikertelen lekérdezés: {exc}"}
     result = [{field: _jsonable(getattr(row, field)) for field in all_fields if field in visible} for row in rows]
     return {"rows": result, "count": len(result)}
 
