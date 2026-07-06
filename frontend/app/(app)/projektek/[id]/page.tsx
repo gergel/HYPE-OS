@@ -10,7 +10,17 @@ import { RelatedTable } from "@/components/RelatedTable";
 import { SingleRelationPicker } from "@/components/SingleRelationPicker";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getContracts, getEmployees, getEquipment, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import {
+  ENTITY_PATHS,
+  formatHuf,
+  getContracts,
+  getEmployees,
+  getEquipment,
+  getFieldTypes,
+  getRecord,
+  getRelated,
+  getVisibleFields,
+} from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -45,6 +55,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const contractOptions = allContracts
     .filter((c) => c.tipus === "alvallalkozoi")
     .map((c) => ({ id: c.id, label: c.ceg_neve || `Szerződés #${c.id}` }));
+
+  const deliverableTimesheets = await Promise.all(
+    deliverables.map((d) => getRelated(ENTITY_PATHS.timesheet, { deliverable_id: Number(d.id) })),
+  );
+  const vagasiKoltsegOsszesen = deliverableTimesheets
+    .flat()
+    .reduce((sum, t) => sum + (typeof t.koltseg === "number" ? t.koltseg : 0), 0);
 
   const bookingRows = bookings
     .map((b) => {
@@ -174,6 +191,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </Card>
 
         <Card title={`Utómunka (${deliverables.length})`}>
+          {deliverables.length > 0 && (
+            <p className="mb-3 text-[13px] text-text-secondary">
+              Vágási költség összesen: <span className="font-medium text-text-primary">{formatHuf(vagasiKoltsegOsszesen)}</span>
+            </p>
+          )}
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <ActionButton
               path={`/api/v1/projects/${project.id}/create-utomunka`}

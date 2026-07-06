@@ -64,6 +64,22 @@ export type Employee = {
   is_active: boolean;
   role: string;
   has_password: boolean;
+  elso_munkanap: string | null;
+  utolso_munkanap: string | null;
+};
+
+export type Rate = {
+  id: number;
+  employee_id: number;
+  orabler: number | null;
+  napibler: number | null;
+  tulora: number | null;
+  plusz_nap: number | null;
+  havi_alap: number | null;
+  elso_munkanap: string | null;
+  utolso_munkanap: string | null;
+  fotos_napi_ber: number | null;
+  nev: string | null;
 };
 
 export type Equipment = {
@@ -213,6 +229,10 @@ export async function getDeliverables(limit = 5000): Promise<Deliverable[]> {
 
 export async function getContracts(limit = 5000): Promise<Contract[]> {
   return (await apiGet<Contract[]>(`/api/v1/contracts?limit=${limit}`)) ?? [];
+}
+
+export async function getRates(limit = 5000): Promise<Rate[]> {
+  return (await apiGet<Rate[]>(`/api/v1/rates?limit=${limit}`)) ?? [];
 }
 
 export type FieldVisibilityConfig = { employee_id: number; entity_type: string; visible_fields: string[] | null };

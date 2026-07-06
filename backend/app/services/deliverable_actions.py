@@ -44,17 +44,40 @@ def list_assignable_employees(db: Session) -> list[AssignableEmployee]:
     return sorted(result, key=lambda e: e.full_name)
 
 
+VINYO_OPTIONS = [
+    "HYPE_Kiemelt projektek",
+    "HYPE_01", "HYPE_02", "HYPE_03", "HYPE_04", "HYPE_05", "HYPE_06", "HYPE_07", "HYPE_08",
+    "HYPE_09", "HYPE_10", "HYPE_11", "HYPE_13", "HYPE_14", "HYPE_15", "HYPE_16", "HYPE_17",
+    "HYPE_18", "HYPE_19", "HYPE_21", "HYPE_22",
+    "MyBook_26_01", "MyBook_26_02", "MyBook_26_03", "MyBook_26_04", "MyBook_26_05",
+    "MyBook_25_01", "MyBook_25_02", "MyBook_25_03", "MyBook_25_04", "MyBook_25_05",
+    "MyBook_25_06", "MyBook_25_07", "MyBook_25_08", "MyBook_11", "MyBook_12", "MyBook_16",
+    "Pajta_01", "Pajta_02", "Pajta_03", "Pajta_04",
+    "Sárga_01", "Sárga_02",
+    "Archive_24_01", "Archive_24_02", "MyBook_25_09", "Archive_24_04", "MTE_01", "BBGP_01",
+    "Archive_24_10",
+    "Archive_23_01", "Archive_23_02", "Archive_23_03", "Archive_23_04", "Archive_23_05", "Archive_23_06",
+    "Archive_21_101", "Archive_21_102", "Archive_21_103", "Archive_21_104", "Archive_21_105", "Archive_21_106",
+    "HYPE_F_01", "HYPE_F_02", "MyBook_F_01", "MyBook_F_02",
+    "MEGSEMMISÜLT",
+]
+
+
 def get_vinyo_options(db: Session) -> VinyoOptions:
-    """Az eddig valaha használt vinyó-értékek egyesített, duplikátum-mentes
-    listája (lásd Deliverable.vinyok JSON lista) - a frontend ebből épít
-    választható (checkbox-listás) legördülőt, új érték szabadon hozzáadható."""
-    seen: dict[str, None] = {}
+    """A Notionben kézzel konfigurált, rögzített sorrendű vinyó-lista (lásd a
+    felhasználó által küldött screenshotok) - ez adja a frontend multi-select
+    választható opcióit. A ténylegesen valaha használt, de a fenti listából
+    hiányzó értékeket (pl. régi, azóta törölt Notion opciók) a végére fűzzük,
+    hogy semmilyen historikus adat ne tűnjön el a választhatók közül."""
+    declared = list(VINYO_OPTIONS)
+    declared_set = set(declared)
+    extras: dict[str, None] = {}
     for (raw,) in db.execute(select(Deliverable.vinyok).where(Deliverable.vinyok.is_not(None))):
         if isinstance(raw, list):
             for v in raw:
-                if isinstance(v, str) and v not in seen:
-                    seen[v] = None
-    return VinyoOptions(options=sorted(seen.keys()))
+                if isinstance(v, str) and v not in declared_set and v not in extras:
+                    extras[v] = None
+    return VinyoOptions(options=declared + sorted(extras.keys()))
 
 
 def _recompute_email_list(deliverable: Deliverable) -> None:
