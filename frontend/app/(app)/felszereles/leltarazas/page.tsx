@@ -28,7 +28,7 @@ export default async function LeltarazasListPage() {
             {sessions.map((s) => (
               <a
                 key={s.id}
-                href={`/felszereles/leltarazas/${s.id}`}
+                href={`/felszereles/leltarazas/${s.id}${s.completed_at ? "/eredmeny" : ""}`}
                 className="flex items-center justify-between gap-3 py-2.5 text-[13px] hover:bg-surface-3"
               >
                 <div>

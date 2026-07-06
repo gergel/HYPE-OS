@@ -9,7 +9,7 @@ export function CompleteStocktakeButton({ sessionId }: { sessionId: number }) {
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
-    if (!confirm("Lezárod a leltározást? Utána is szerkeszthetők maradnak a tételek.")) return;
+    if (!confirm("Lezárod a leltározást? Utána a tételek már nem lesznek szerkeszthetők.")) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/v1/stocktake/sessions/${sessionId}/complete`, { method: "POST" });
@@ -18,7 +18,7 @@ export function CompleteStocktakeButton({ sessionId }: { sessionId: number }) {
         alert(`Sikertelen lezárás: ${detail?.detail ?? res.status}`);
         return;
       }
-      router.refresh();
+      router.push(`/felszereles/leltarazas/${sessionId}/eredmeny`);
     } catch (err) {
       alert(`Sikertelen lezárás (hálózati hiba): ${err}`);
     } finally {

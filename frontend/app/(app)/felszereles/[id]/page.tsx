@@ -32,7 +32,11 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
           <EditableDetailGrid
             patchPath={`${ENTITY_PATHS.equipment}/${equipment.id}`}
             fields={toEditableDetailFields(
-              { ...equipment, forgatasok_szama: projectIds.length },
+              // A ténylegesen betöltött projektek számát mutatjuk, nem a nyers
+              // project_ids hosszát - így a szám sosem térhet el attól, amit a
+              // "Projektek" szekció alant ténylegesen felsorol (pl. ha egy
+              // hivatkozott projekt rekord lekérése valamiért nem sikerülne).
+              { ...equipment, forgatasok_szama: projects.length },
               ["project_ids"],
               visibleFields,
               fieldTypes,

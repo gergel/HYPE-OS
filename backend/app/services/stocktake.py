@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.equipment import Equipment, TrackMode
+from app.models.equipment import Equipment
 from app.models.employee import Employee
 from app.models.stocktake import StocktakeItem, StocktakeSession
 from app.schemas.stocktake import (
@@ -33,7 +33,11 @@ def start_session(db: Session, current_user: Employee) -> StocktakeSession:
             StocktakeItem(
                 session_id=session.id,
                 equipment_id=equipment.id,
-                expected_qty=equipment.osszes_mennyiseg if equipment.track_mode == TrackMode.STOCK else None,
+                # A track_mode Notion-import-eredetű, sok esetben pontatlan
+                # besorolás - az elvárt mennyiséget attól függetlenül vesszük
+                # át, hogy az Equipment.osszes_mennyiseg ténylegesen ki van-e
+                # töltve, nem csak "stock" track_mode-nál.
+                expected_qty=equipment.osszes_mennyiseg,
                 counted_qty=None,
                 status=equipment.allapot,
             )
@@ -66,6 +70,8 @@ def get_item(db: Session, session_id: int, item_id: int) -> StocktakeItem | None
 def update_item(db: Session, item: StocktakeItem, payload: StocktakeItemUpdate) -> StocktakeItem:
     """Az itemen kívül a mögötte lévő Equipment rekordot is frissíti (élő
     állapot/mennyiség), hogy a leltár valós adatot hagyjon maga után."""
+    if item.session.completed_at is not None:
+        raise ValueError("Ez a leltározás már le van zárva, nem módosítható.")
     if payload.status is not None:
         item.status = payload.status
         item.equipment.allapot = payload.status

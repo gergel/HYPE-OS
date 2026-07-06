@@ -1,31 +1,16 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { CompleteStocktakeButton } from "@/components/stocktake/CompleteStocktakeButton";
-import { StocktakeItemRow } from "@/components/stocktake/StocktakeItemRow";
 import { TopBar } from "@/components/TopBar";
-import { formatDate, getFieldTypes, getStocktakeSession, getStocktakeSummary } from "@/lib/api";
+import { formatDate, getStocktakeSession, getStocktakeSummary } from "@/lib/api";
 
-export default async function LeltarazasDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LeltarazasEredmenyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const sessionId = Number(id);
-  const [session, summary, fieldTypes] = await Promise.all([
-    getStocktakeSession(sessionId),
-    getStocktakeSummary(sessionId),
-    getFieldTypes("equipment"),
-  ]);
-  if (!session) notFound();
-  // Lezárt leltározás már nem szerkeszthető - az eredményoldal a végleges nézet.
-  if (session.completed_at) redirect(`/felszereles/leltarazas/${sessionId}/eredmeny`);
+  const [session, summary] = await Promise.all([getStocktakeSession(sessionId), getStocktakeSummary(sessionId)]);
+  if (!session || !summary) notFound();
 
-  const allapotOptions = fieldTypes.allapot?.options ?? [];
-
-  const groups = new Map<string, typeof session.items>();
-  for (const item of session.items) {
-    const key = item.kategoria ?? "Egyéb";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(item);
-  }
+  const hasProblems = summary.problemas_statuszok.length > 0 || summary.hianyzo_keszletek.length > 0;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -33,27 +18,15 @@ export default async function LeltarazasDetailPage({ params }: { params: Promise
       <div className="flex-1 space-y-6 p-6">
         <BackLink href="/felszereles/leltarazas" label="Leltározások" />
 
-        <Card title={`Leltározás #${session.id}`}>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-[13px] text-text-secondary">
-            <p>
-              Indította: <span className="text-text-primary">{session.started_by_name}</span> · {formatDate(session.created_at)}
-            </p>
-            <CompleteStocktakeButton sessionId={session.id} />
-          </div>
+        <Card title={`Leltározás #${session.id} eredménye`}>
+          <p className="text-[13px] text-text-secondary">
+            Indította: <span className="text-text-primary">{session.started_by_name}</span> · {formatDate(session.created_at)}
+            {session.completed_at && <span className="text-text-success"> · Lezárva: {formatDate(session.completed_at)}</span>}
+          </p>
         </Card>
 
-        {Array.from(groups.entries()).map(([kategoria, items]) => (
-          <Card key={kategoria} title={`${kategoria} (${items.length})`}>
-            <div className="divide-y divide-border">
-              {items.map((item) => (
-                <StocktakeItemRow key={item.id} sessionId={session.id} item={item} allapotOptions={allapotOptions} />
-              ))}
-            </div>
-          </Card>
-        ))}
-
-        <Card title="Összesítés">
-          {summary && (summary.problemas_statuszok.length > 0 || summary.hianyzo_keszletek.length > 0) ? (
+        <Card title="Amit érdemes intézni">
+          {hasProblems ? (
             <div className="space-y-4">
               {summary.problemas_statuszok.length > 0 && (
                 <div>
@@ -95,7 +68,7 @@ export default async function LeltarazasDetailPage({ params }: { params: Promise
               )}
             </div>
           ) : (
-            <p className="text-[13px] text-text-muted">Egyelőre nincs eltérés vagy hiány rögzítve.</p>
+            <p className="text-[13px] text-text-muted">Minden eszköz "Jó" állapotú és minden készlet megvan - nincs teendő.</p>
           )}
         </Card>
       </div>

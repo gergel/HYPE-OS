@@ -6,11 +6,14 @@ import { authFetch } from "@/lib/authFetch";
 import { selectColor } from "@/lib/selectColor";
 import type { StocktakeItem } from "@/lib/api";
 
-/** Egy eszköz sora a leltározás oldalon - "asset" eszközöknél az állapotát
- * (színes select, ugyanazokból az opciókból mint a részletnézeten), "stock"
- * eszközöknél a ténylegesen megszámolt darabszámát lehet beállítani. Minden
- * változtatás azonnal ment (lásd services/stocktake.py update_item - a
- * mögöttes Equipment rekordot is frissíti). */
+/** Egy eszköz sora a leltározás oldalon - az állapotát (színes select) a
+ * "stock" track_mode-ú eszközök KIVÉTELÉVEL mindenki kaphat (a track_mode
+ * Notion-import-eredetű besorolás, sokszor pontatlan, ezért a darabszám-mező
+ * megjelenítését nem erre, hanem arra alapozzuk, hogy van-e ténylegesen elvárt
+ * mennyiség beállítva - lásd services/stocktake.py start_session). Minden
+ * változtatás azonnal ment - a szerkesztő oldal lezárt leltározásnál átirányít
+ * az eredményoldalra, ide (élő szerkesztésre) így csak nyitott leltározásnál
+ * lehet eljutni. */
 export function StocktakeItemRow({
   sessionId,
   item,
@@ -48,37 +51,40 @@ export function StocktakeItemRow({
       <a href={`/felszereles/${item.equipment_id}`} className="min-w-0 flex-1 truncate text-[13px] text-text-primary hover:underline">
         {item.equipment_nev}
       </a>
-      {item.track_mode === "stock" ? (
-        <div className="flex items-center gap-2 text-[13px] text-text-secondary">
-          <span className="text-text-muted">Elvárt: {item.expected_qty ?? "–"}</span>
-          <input
-            type="number"
+      <div className="flex items-center gap-3">
+        {item.expected_qty !== null && (
+          <div className="flex items-center gap-2 text-[13px] text-text-secondary">
+            <span className="text-text-muted">Elvárt: {item.expected_qty}</span>
+            <input
+              type="number"
+              disabled={busy}
+              defaultValue={item.counted_qty ?? ""}
+              placeholder="Megszámolt"
+              onBlur={(e) => {
+                const value = e.target.value === "" ? null : Number(e.target.value);
+                if (value !== item.counted_qty) save({ counted_qty: value });
+              }}
+              className="w-24 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
+            />
+          </div>
+        )}
+        {item.track_mode !== "stock" && (
+          <select
             disabled={busy}
-            defaultValue={item.counted_qty ?? ""}
-            placeholder="Megszámolt"
-            onBlur={(e) => {
-              const value = e.target.value === "" ? null : Number(e.target.value);
-              if (value !== item.counted_qty) save({ counted_qty: value });
-            }}
-            className="w-24 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
-          />
-        </div>
-      ) : (
-        <select
-          disabled={busy}
-          value={item.status ?? ""}
-          onChange={(e) => save({ status: e.target.value || null })}
-          className="rounded-[var(--radius)] border border-border px-2 py-1 text-[13px] focus:outline-none"
-          style={item.status ? { background: selectColor(item.status).bg, color: selectColor(item.status).text } : undefined}
-        >
-          <option value="">Nincs beállítva</option>
-          {allapotOptions.map((opt) => (
-            <option key={opt} value={opt} style={{ background: selectColor(opt).bg, color: selectColor(opt).text }}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      )}
+            value={item.status ?? ""}
+            onChange={(e) => save({ status: e.target.value || null })}
+            className="rounded-[var(--radius)] border border-border px-2 py-1 text-[13px] focus:outline-none"
+            style={item.status ? { background: selectColor(item.status).bg, color: selectColor(item.status).text } : undefined}
+          >
+            <option value="">Nincs beállítva</option>
+            {allapotOptions.map((opt) => (
+              <option key={opt} value={opt} style={{ background: selectColor(opt).bg, color: selectColor(opt).text }}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
     </div>
   );
 }

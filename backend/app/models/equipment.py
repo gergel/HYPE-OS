@@ -22,7 +22,12 @@ class Equipment(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     nev: Mapped[str] = mapped_column(String(255), nullable=False)
-    serial_number: Mapped[str | None] = mapped_column(String(120), unique=True)
+    # Nem unique: a Notion forrás nem garantálja az egyediséget (pl. több
+    # tételnél is ugyanaz a "-"/"N/A" placeholder szerepel sorozatszámként) -
+    # egy unique constraint ezeknél elutasítaná (silently skipped safe_upsert
+    # hiba) minden, az elsőt követő importált sort, ami épp az egyik oka lehet
+    # annak, hogy Notionben létező eszközök nem kerülnek be nálunk.
+    serial_number: Mapped[str | None] = mapped_column(String(120))
     kategoria: Mapped[str | None] = mapped_column(String(100))
     allapot: Mapped[str | None] = mapped_column(String(50))
     archive_statusz: Mapped[str | None] = mapped_column(String(50))

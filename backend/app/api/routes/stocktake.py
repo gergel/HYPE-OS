@@ -56,7 +56,10 @@ def update_item(
     item = stocktake.get_item(db, session_id, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Leltár-tétel nem található")
-    return stocktake.update_item(db, item, payload)
+    try:
+        return stocktake.update_item(db, item, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/sessions/{session_id}/complete", response_model=StocktakeSessionRead)
