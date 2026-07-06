@@ -1,12 +1,14 @@
 import { AccountCard } from "@/components/AccountCard";
 import { Card } from "@/components/Card";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
+import { NotionImportPanel } from "@/components/NotionImportPanel";
 import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   getAllFieldVisibility,
   getAllPageAccess,
+  getCurrentUser,
   getEmployees,
   getSampleRecord,
 } from "@/lib/api";
@@ -53,11 +55,12 @@ const VISIBILITY_ENTITIES: { entityType: string; label: string; basePath: string
 ];
 
 export default async function BeallitasokPage() {
-  const [employees, pageAccessConfigs, fieldVisibilityConfigs, samples] = await Promise.all([
+  const [employees, pageAccessConfigs, fieldVisibilityConfigs, samples, currentUser] = await Promise.all([
     getEmployees(),
     getAllPageAccess(),
     getAllFieldVisibility(),
     Promise.all(VISIBILITY_ENTITIES.map((e) => getSampleRecord(e.basePath))),
+    getCurrentUser(),
   ]);
   const pages = pagePermissionGroups();
 
@@ -91,6 +94,17 @@ export default async function BeallitasokPage() {
             fieldVisibilityConfigs={fieldVisibilityConfigs}
           />
         </Card>
+
+        {currentUser?.role === "admin" && (
+          <Card title="Notion import">
+            <p className="mb-3 text-[13px] text-text-secondary">
+              A teljes (mind a 3 kör) idempotens Notion import elindítása innen, a böngészőből - nincs szükség `railway ssh`-ra, a
+              háttérben a Railway-en futó backend service saját processzében fut le, ezért egy megszakadt kapcsolat nem szakítja
+              félbe.
+            </p>
+            <NotionImportPanel />
+          </Card>
+        )}
 
         <Card title="Veszélyzóna">
           <p className="mb-3 text-[13px] text-text-secondary">

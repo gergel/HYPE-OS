@@ -4,10 +4,12 @@ Csak azt tudja, amire a Fázis 2 importhoz szükség van: adatbázisok listázá
 (amiket megosztottak az integrációval), egy adatbázis összes oldalának lapozott
 lekérése, és a Notion property-értékek generikus, típus szerinti kiolvasása.
 
-A HYPE OS futása közben ezt SOHA nem hívja senki élőben - lásd
-docs/hype_os_build_roadmap.md Fázis 2: a rendszer Notion-független, ez a kliens
-kizárólag a scripts/notion_discover.py és scripts/notion_import.py egyszeri
-futtatásaihoz kell.
+A HYPE OS rendszer maga Notion-független - ezt a klienst kizárólag a
+scripts/notion_discover.py és scripts/notion_import.py egyszeri futtatásai
+használják, ÉS az admin-only /api/v1/admin/notion-import végpont (lásd
+app/api/routes/admin_import.py), ami ugyanezt a futtatja egy háttérszálon, a
+Railway-en éppen futó backend service processzében - hogy egy megszakadt
+`railway ssh` kapcsolat ne szakítsa félbe a (több órás) importot.
 """
 
 from __future__ import annotations
