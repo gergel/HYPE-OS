@@ -78,6 +78,12 @@ class Project(TimestampMixin, Base):
     )
     zapier_diszpo_targy: Mapped[str | None] = mapped_column(String(500), comment="Zapier diszpo tárgy")
     gmail_thread_id: Mapped[str | None] = mapped_column(String(255), comment="Gmail Thread ID")
+    gmail_last_message_id: Mapped[str | None] = mapped_column(
+        String(255),
+        comment="Az utoljára ebben a diszpó-szálban küldött email RFC822 Message-ID-je (nem Gmail thread ID!) "
+        "- ez kell a következő email 'In-Reply-To'/'References' fejlécéhez, hogy az valóban válaszként "
+        "(ne külön levélként) fűződjön a szálhoz a címzettek levelezőjében is, nem csak a küldő Gmail-fiókjában.",
+    )
     resztvevok_email: Mapped[str | None] = mapped_column(Text, comment="Résztvevők email")
 
     # --- technika / eszközök (szöveges/relation mezők - a valódi Equipment/Assignment

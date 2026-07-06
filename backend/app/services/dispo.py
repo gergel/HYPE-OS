@@ -10,7 +10,16 @@ egyenesen elvégzi a neki megfelelő lépést.
 Az egyetlen state-alapú viselkedés, amit megtartunk: ha a projektnek már van
 gmail_thread_id-je (mert korábban már küldtünk rajta emailt), a további
 küldések ugyanabba a Gmail szálba válaszolnak ahelyett, hogy új levelet
-indítanának - ez felel meg az eredeti FULL_REPLY módnak."""
+indítanának - ez felel meg az eredeti FULL_REPLY módnak.
+
+FONTOS a válaszként (nem külön levélként) küldéshez: a Gmail API-nak küldött
+`threadId` csak a KÜLDŐ saját Gmail-fiókjában garantálja a szálba fűzést - a
+CÍMZETTEK levelezőjében (és más Gmail-fiókokban is) a tényleges RFC822
+`In-Reply-To`/`References` fejléc dönt, aminek egy VALÓDI Message-ID-t kell
+tartalmaznia (pl. `<abc123@mail.gmail.com>`), NEM a Gmail thread ID-t (ami
+egy teljesen más formátumú, rövid hex azonosító). Ezért a `gmail_thread_id`
+MELLETT a `gmail_last_message_id`-t (az előző email valódi Message-ID-je,
+lásd Project modell) is eltároljuk, és EZT adjuk át `in_reply_to`-ként."""
 
 from __future__ import annotations
 
@@ -41,6 +50,51 @@ Projektkód: {projektkod}<br/>
 Forgatás dátuma: {idopont}<br/>
 Helyszín: {helyszin}</p>
 <p>Köszönettel</p>
+"""
+
+# A felhasználó által megadott, rögzített HYPE aláírás - minden diszpó emailhez
+# (előzetes és teljes is) hozzáfűzzük. Külön konstansként, NEM a fenti .format()-olt
+# sablonok részeként, hogy a benne szereplő HTML sose ütközzön a .format() placeholder
+# szintaxisával (nincs benne {kulcs}, de így akkor sem lenne gond, ha később kapna).
+_SIGNATURE_HTML = """\
+<table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
+  <tr>
+    <td style="vertical-align: middle; width: 150px;">
+      <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
+    </td>
+    <td style="padding-left: 20px; vertical-align: middle;">
+      <p style="margin: 0; font-size: 12px; font-weight: bold;">
+        HYPE PRODUCTIONS - GYÁRTÁS
+      </p>
+      <p style="margin: 0; color: #888; font-size: 12px;">
+        Hype Productions Kft.
+      </p>
+    </td>
+    <td style="padding-left: 40px; vertical-align: top; color: #888; font-size: 12px;">
+      <p style="margin: 0;">Rahman Martin – cégvezető</p>
+      <p style="margin: 0;">
+        <a href="mailto:martin.rahman@hypestab.hu" style="color: #888; text-decoration: underline;">martin.rahman@hypestab.hu</a><br>
+        +36 30 898 7600
+
+      <br>
+      <p style="margin: 0;">Barna Blanka – Back office manager</p>
+      <p style="margin: 0;">
+        <a href="mailto:blanka.barna@hypestab.hu" style="color: #888; text-decoration: underline;">blanka.barna@hypestab.hu</a><br>
+        +36 30 758 8751
+ <br>
+      <p style="margin: 0;">Zseni Boglárka – Gyártásvezető</p>
+      <p style="margin: 0;">
+        <a href="mailto:boglarka.zseni@hypestab.hu" style="color: #888; text-decoration: underline;">boglarka.zseni@hypestab.hu</a><br>
+        +36 30 241 9643
+ <br>
+      <p style="margin: 0;">Vidor Gergely – Operatív vezető</p>
+      <p style="margin: 0;">
+        <a href="mailto:gergely.vidor@hypestab.hu" style="color: #888; text-decoration: underline;">gergely.vidor@hypestab.hu</a><br>
+        +36 20 560 9623
+      </p>
+    </td>
+  </tr>
+</table>
 """
 
 
@@ -74,17 +128,18 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
     if not to_list:
         raise ValueError("Nincs kitöltve 'Résztvevők email' - nincs kinek küldeni az előzetes diszpót.")
 
-    html = _PRE_DISPO_HTML.format(helyszin=project.helyszin or "", diszpo_szoveg=project.diszpo_szovege or "")
+    html = _PRE_DISPO_HTML.format(helyszin=project.helyszin or "", diszpo_szoveg=project.diszpo_szovege or "") + _SIGNATURE_HTML
     thread_id, _msg_id, rfc822 = send_message(
         to_list,
         _subject(project),
         html,
         thread_id=project.gmail_thread_id,
-        in_reply_to=project.gmail_thread_id,
+        in_reply_to=project.gmail_last_message_id,
     )
 
     project.elozetes_diszpo_kuldes = "Küldésre állítva"
     project.gmail_thread_id = thread_id or project.gmail_thread_id
+    project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     project.aki_az_elozetest_kuldte_ki = [current_user.full_name]
     db.commit()
     db.refresh(project)
@@ -92,10 +147,11 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
 
 
 def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
-    """'Diszpó küldése' gomb - teljes diszpó email a technika listával, brief-fel
-    stb., és (ha GDOC_DISPO_TEMPLATE_ID be van állítva) egy Google Docs sablonból
-    generált, csatolt PDF-fel. Ha a projektnek már van gmail_thread_id-je
-    (előzetes diszpó már ment), ugyanabba a szálba válaszol."""
+    """'Diszpó küldése' gomb - teljes diszpó email a technika listával, stábbal,
+    brief-fel stb., és (ha GDOC_DISPO_TEMPLATE_ID be van állítva) egy Google Docs
+    sablonból generált, csatolt PDF-fel. Ha a projektnek már van
+    gmail_thread_id-je (előzetes diszpó már ment), ugyanabba a szálba válaszol -
+    valódi email-válaszként (lásd gmail_last_message_id), nem külön levélként."""
     to_list = _recipients(project)
     if not to_list:
         raise ValueError("Nincs kitöltve 'Résztvevők email' - nincs kinek küldeni a diszpót.")
@@ -103,6 +159,7 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     doc_link = None
     pdf_bytes = None
     if settings.gdoc_dispo_template_id:
+        stab = ", ".join(e.full_name for e in project.crew) if project.crew else ""
         fields = {
             "Projekt": project.nev or "",
             "Projektkód": project.projektkod_szoveg or "",
@@ -110,6 +167,7 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
             "Helyszín": project.helyszin or "",
             "Esemény": project.esemeny or "",
             "Diszpó_szövege": project.diszpo_szovege or "",
+            "Stáb": stab,
             "Technika": project.technika_lista or "",
             "Bérelt_technika": project.berelt_technika_logisztika or "",
             "Brief": project.brief or "",
@@ -130,7 +188,7 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
         projektkod=project.projektkod_szoveg or "",
         idopont=_format_hu_date_range(project),
         helyszin=project.helyszin or "",
-    )
+    ) + _SIGNATURE_HTML
     thread_id, _msg_id, rfc822 = send_message(
         to_list,
         _subject(project),
@@ -138,12 +196,13 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
         pdf_bytes=pdf_bytes,
         pdf_filename="diszpo.pdf",
         thread_id=project.gmail_thread_id,
-        in_reply_to=project.gmail_thread_id,
+        in_reply_to=project.gmail_last_message_id,
     )
 
     project.diszpo = "Kiküldve"
     project.drive_diszpo_pdf_url = doc_link or project.drive_diszpo_pdf_url
     project.gmail_thread_id = thread_id or project.gmail_thread_id
+    project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     project.aki_kikuldte_a_diszpot = [current_user.full_name]
     db.commit()
     db.refresh(project)

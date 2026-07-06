@@ -74,6 +74,7 @@ class ProjectRead(ProjectBase):
     diszpoirassal_toltott_percek: float | None = None
     zapier_diszpo_targy: str | None = None
     gmail_thread_id: str | None = None
+    gmail_last_message_id: str | None = None
     resztvevok_email: str | None = None
     technika_ready: bool | None = None
     vissza_hozott_technika: str | None = None
