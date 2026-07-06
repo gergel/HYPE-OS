@@ -87,6 +87,24 @@ def _get_portal_or_404(db: Session, portal_id: int) -> Portal:
     return portal
 
 
+def _enqueue_processing(video_id: int, source_key: str) -> None:
+    """A videó feltöltése (R2 + DB sor) ekkorra már sikeresen megtörtént -
+    ha a Celery task queue-ba tétele elhasal (pl. mert a REDIS_URL nincs
+    beállítva, vagy a worker service nem fut), ne egy nyers, kontextus
+    nélküli 500-at kapjon a kliens, hanem egyértelmű, javítható hibaüzenetet."""
+    try:
+        process_video_task.delay(video_id, source_key)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "A videó feltöltve, de a feldolgozás nem indult el, mert a háttér-feldolgozó "
+                "szolgáltatás (Redis/Celery worker) nincs beállítva vagy nem érhető el. "
+                "Ellenőrizd a REDIS_URL környezeti változót és hogy a Celery worker service fut-e."
+            ),
+        ) from exc
+
+
 # ---------------- Portálok (projektenként) ----------------
 
 
@@ -329,7 +347,7 @@ def multipart_complete(
     video.status = "processing"
     db.commit()
     db.refresh(video)
-    process_video_task.delay(video.id, payload.key)
+    _enqueue_processing(video.id, payload.key)
     return PortalVideoOut.model_validate(video)
 
 
@@ -377,7 +395,7 @@ async def upload_video(
     db.commit()
     db.refresh(video)
 
-    process_video_task.delay(video.id, source_key)
+    _enqueue_processing(video.id, source_key)
     return PortalVideoOut.model_validate(video)
 
 
@@ -428,7 +446,7 @@ async def replace_video(
     os.unlink(tmp_path)
     video.source_key = source_key
     db.commit()
-    process_video_task.delay(video.id, source_key)
+    _enqueue_processing(video.id, source_key)
     return PortalVideoOut.model_validate(video)
 
 
