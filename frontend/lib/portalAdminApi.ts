@@ -30,6 +30,23 @@ export async function createPortal(projectId: number, password?: string): Promis
   });
 }
 
+export async function createManualPortal(
+  title: string,
+  clientName?: string,
+  projectDate?: string,
+  password?: string,
+): Promise<PortalSummary> {
+  return req<PortalSummary>("/api/v1/portal-admin", {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      client_name: clientName || undefined,
+      project_date: projectDate || undefined,
+      password: password || undefined,
+    }),
+  });
+}
+
 export async function deletePortal(id: number): Promise<void> {
   return req(`/api/v1/portal-admin/${id}`, { method: "DELETE" });
 }

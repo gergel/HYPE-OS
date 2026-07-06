@@ -6,6 +6,7 @@ import { Plus, ExternalLink, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/media-portal/ui/button";
 import {
   createPortal,
+  createManualPortal,
   deletePortal,
   getPendingDeletion,
   listPortals,
@@ -16,9 +17,12 @@ import type { PortalSummary, Project } from "@/lib/api";
 
 /** A Média Portál admin dashboardja - a Hype-repo-main (különálló
  * client-portál projekt) admin/page.tsx Dashboard komponensének 1:1
- * vizuális portja, egyetlen lényegi eltéréssel: "Új projekt" itt egy MEGLÉVŐ
- * HYPE OS Project kiválasztását jelenti (nem szabadon kitöltött cím/
- * ügyfélnevet), mert a Portal 1:1 egy valódi Projekthez van kötve. */
+ * vizuális portja. "Új Portál" alapból egy MEGLÉVŐ HYPE OS Project
+ * kiválasztását jelenti (mert a Portal alapesetben 1:1 egy valódi
+ * Projekthez van kötve), de a "Kézzel" fül lehetővé teszi Projekt
+ * nélküli, szabadon kitöltött cím/ügyfélnév/dátum megadását is - ilyenkor
+ * a Portal project_id nélkül jön létre, és a title_override/
+ * client_name_override/project_date_override mezői adják az adatot. */
 export function MediaPortalDashboard({
   initialPortals,
   availableProjects,
@@ -29,7 +33,11 @@ export function MediaPortalDashboard({
   const [projects, setProjects] = useState(initialPortals);
   const [pending, setPending] = useState<PendingDeletionPortal[]>([]);
   const [creating, setCreating] = useState(false);
+  const [createMode, setCreateMode] = useState<"project" | "manual">("project");
   const [selectedProjectId, setSelectedProjectId] = useState<number | "">("");
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualClientName, setManualClientName] = useState("");
+  const [manualDate, setManualDate] = useState("");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "name">("date_desc");
   const [confirmDelete, setConfirmDelete] = useState<{ id: number; title: string } | null>(null);
@@ -51,9 +59,19 @@ export function MediaPortalDashboard({
   }, []);
 
   async function doCreate() {
-    if (!selectedProjectId) return;
-    const created = await createPortal(selectedProjectId);
+    const created =
+      createMode === "project"
+        ? selectedProjectId
+          ? await createPortal(selectedProjectId)
+          : null
+        : manualTitle.trim()
+          ? await createManualPortal(manualTitle.trim(), manualClientName.trim(), manualDate.trim())
+          : null;
+    if (!created) return;
     setSelectedProjectId("");
+    setManualTitle("");
+    setManualClientName("");
+    setManualDate("");
     setCreating(false);
     refresh();
     window.location.href = `/media-portal/${created.id}`;
@@ -103,7 +121,7 @@ export function MediaPortalDashboard({
     });
 
   return (
-    <main className="hype-portal mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16">
+    <main className="hype-portal dark mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="font-mono text-xs uppercase tracking-eyebrow text-mist">HYPE Productions</p>
@@ -153,22 +171,69 @@ export function MediaPortalDashboard({
       )}
 
       {creating && (
-        <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-ink-line bg-ink-card p-4">
-          <select
-            value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value ? Number(e.target.value) : "")}
-            className="w-full min-w-0 flex-1 rounded-full border border-ink-line bg-ink px-4 py-2.5 text-bone outline-none focus:border-ember/60 sm:w-auto"
-          >
-            <option value="">Válassz projektet…</option>
-            {availableProjects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nev}
-              </option>
-            ))}
-          </select>
-          <Button variant="primary" onClick={doCreate} disabled={!selectedProjectId} className="w-full sm:w-auto">
-            Létrehozás
-          </Button>
+        <div className="mt-6 rounded-2xl border border-ink-line bg-ink-card p-4">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCreateMode("project")}
+              className={`rounded-full px-4 py-1.5 text-sm transition ${
+                createMode === "project" ? "bg-ember text-ink" : "border border-ink-line text-mist hover:text-bone"
+              }`}
+            >
+              Meglévő projekt
+            </button>
+            <button
+              onClick={() => setCreateMode("manual")}
+              className={`rounded-full px-4 py-1.5 text-sm transition ${
+                createMode === "manual" ? "bg-ember text-ink" : "border border-ink-line text-mist hover:text-bone"
+              }`}
+            >
+              Kézzel
+            </button>
+          </div>
+
+          {createMode === "project" ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value ? Number(e.target.value) : "")}
+                className="w-full min-w-0 flex-1 rounded-full border border-ink-line bg-ink px-4 py-2.5 text-bone outline-none focus:border-ember/60 sm:w-auto"
+              >
+                <option value="">Válassz projektet…</option>
+                {availableProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nev}
+                  </option>
+                ))}
+              </select>
+              <Button variant="primary" onClick={doCreate} disabled={!selectedProjectId} className="w-full sm:w-auto">
+                Létrehozás
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <input
+                placeholder="Portál címe (kötelező)…"
+                value={manualTitle}
+                onChange={(e) => setManualTitle(e.target.value)}
+                className="w-full min-w-0 flex-1 rounded-full border border-ink-line bg-ink px-4 py-2.5 text-bone outline-none focus:border-ember/60 sm:w-auto"
+              />
+              <input
+                placeholder="Ügyfél neve…"
+                value={manualClientName}
+                onChange={(e) => setManualClientName(e.target.value)}
+                className="w-full min-w-0 flex-1 rounded-full border border-ink-line bg-ink px-4 py-2.5 text-bone outline-none focus:border-ember/60 sm:w-auto"
+              />
+              <input
+                placeholder="Dátum (pl. 2026.06.17)…"
+                value={manualDate}
+                onChange={(e) => setManualDate(e.target.value)}
+                className="w-full min-w-0 flex-1 rounded-full border border-ink-line bg-ink px-4 py-2.5 text-bone outline-none focus:border-ember/60 sm:w-auto"
+              />
+              <Button variant="primary" onClick={doCreate} disabled={!manualTitle.trim()} className="w-full sm:w-auto">
+                Létrehozás
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

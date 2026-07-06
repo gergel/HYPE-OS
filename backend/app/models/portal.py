@@ -37,7 +37,7 @@ class Portal(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), unique=True, nullable=False)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), unique=True, nullable=True)
 
     title_override: Mapped[str | None] = mapped_column(String(255))
     client_name_override: Mapped[str | None] = mapped_column(String(255))
@@ -65,7 +65,7 @@ class Portal(TimestampMixin, Base):
     expires_at: Mapped[date | None] = mapped_column(Date)
     notion_page_id: Mapped[str | None] = mapped_column(String(255), index=True)
 
-    project: Mapped["Project"] = relationship(back_populates="portal")
+    project: Mapped["Project | None"] = relationship(back_populates="portal")
     payments: Mapped[list["Payment"]] = relationship(back_populates="portal")
     folders: Mapped[list["PortalFolder"]] = relationship(
         back_populates="portal", cascade="all, delete-orphan", order_by="PortalFolder.sort_order"

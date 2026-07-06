@@ -496,7 +496,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
   const selectedCount = selectedVideos.size + selectedImages.size;
 
   return (
-    <main className="hype-portal mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="hype-portal dark mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <Link href="/media-portal" className="font-mono text-xs uppercase tracking-eyebrow text-mist">
         ← Összes Portál
       </Link>
@@ -1053,7 +1053,7 @@ function PromptDialog({
 }) {
   const [value, setValue] = useState(initialValue);
   return (
-    <div className="hype-portal fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
+    <div className="hype-portal dark fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
       <div className="w-full max-w-sm rounded-2xl border border-ink-line bg-ink-card p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-display text-lg text-bone">{title}</h3>
         <input
@@ -1081,7 +1081,7 @@ function PromptDialog({
 
 function ConfirmDialog({ message, onCancel, onConfirm }: { message: string; onCancel: () => void; onConfirm: () => void }) {
   return (
-    <div className="hype-portal fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
+    <div className="hype-portal dark fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
       <div className="w-full max-w-sm rounded-2xl border border-ink-line bg-ink-card p-6" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm leading-relaxed text-bone">{message}</p>
         <div className="mt-5 flex justify-end gap-3">

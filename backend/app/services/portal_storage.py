@@ -23,14 +23,21 @@ class R2NotConfiguredError(Exception):
 
 
 def is_configured() -> bool:
-    return bool(settings.r2_account_id and settings.r2_access_key_id and settings.r2_secret_access_key)
+    return bool(
+        settings.r2_account_id
+        and settings.r2_access_key_id
+        and settings.r2_secret_access_key
+        and settings.r2_bucket_name
+        and settings.r2_public_url
+    )
 
 
 def _client():
     if not is_configured():
         raise R2NotConfiguredError(
-            "Az R2 tárhely nincs beállítva (hiányzó R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / "
-            "R2_SECRET_ACCESS_KEY környezeti változó) - videó/kép feltöltés emiatt nem működik."
+            "Az R2 tárhely nincs (teljesen) beállítva (hiányzó R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / "
+            "R2_SECRET_ACCESS_KEY / R2_BUCKET_NAME / R2_PUBLIC_URL környezeti változó) - videó/kép "
+            "feltöltés emiatt nem működik."
         )
     return _session.client(
         "s3",

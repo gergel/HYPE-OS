@@ -97,9 +97,16 @@ def list_portals(db: Session = Depends(get_db), _user: Employee = Depends(get_cu
 
 
 class PortalAdminCreate(BaseModel):
-    project_id: int
+    project_id: int | None = None
     slug: str | None = None
     password: str | None = None
+    # Csak akkor kötelező (és csak akkor van jelentése), ha nincs project_id -
+    # egy Projekthez kötött Portálnál ezek a Project saját mezőire esnek
+    # vissza (lásd services/portal_resolve.py), egy "kézzel" létrehozott,
+    # Projekt nélküli Portálnál viszont ezek adják az egyetlen adatforrást.
+    title: str | None = None
+    client_name: str | None = None
+    project_date: str | None = None
 
 
 @router.post("", response_model=PortalSummary, status_code=201)
@@ -108,22 +115,37 @@ def create_portal(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
-    project = db.get(Project, payload.project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Projekt nem található")
-    if project.portal is not None:
-        raise HTTPException(status_code=400, detail="Ennek a projektnek már van Portálja")
+    if payload.project_id is not None:
+        project = db.get(Project, payload.project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Projekt nem található")
+        if project.portal is not None:
+            raise HTTPException(status_code=400, detail="Ennek a projektnek már van Portálja")
+        slug_base = payload.slug or slugify(project.nev)
+        project_id = project.id
+        title_override = client_name_override = project_date_override = None
+    else:
+        if not (payload.title or "").strip():
+            raise HTTPException(status_code=400, detail="A Portál címe kötelező, ha nincs projekt kiválasztva")
+        slug_base = payload.slug or slugify(payload.title or "")
+        project_id = None
+        title_override = payload.title
+        client_name_override = payload.client_name
+        project_date_override = payload.project_date
 
-    slug = payload.slug or slugify(project.nev)
+    slug = slug_base
     if db.query(Portal).filter(Portal.slug == slug).first():
-        slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+        slug = f"{slug_base}-{uuid.uuid4().hex[:6]}"
 
     portal = Portal(
-        project_id=project.id,
+        project_id=project_id,
         slug=slug,
         status="live",  # az eredeti Hype-repo-main is közvetlenül "live"-ként hozza létre, nincs külön "vázlat" lépés
         password_hash=hash_password(payload.password) if payload.password else None,
         expires_at=date.today() + timedelta(days=30),
+        title_override=title_override,
+        client_name_override=client_name_override,
+        project_date_override=project_date_override,
     )
     db.add(portal)
     db.commit()

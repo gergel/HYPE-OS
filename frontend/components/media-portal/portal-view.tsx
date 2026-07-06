@@ -16,7 +16,6 @@ import { Button } from "@/components/media-portal/ui/button";
 import { VideoCard } from "@/components/media-portal/video-card";
 import { VideoPlayer } from "@/components/media-portal/video-player";
 import { downloadVideo, downloadImage, downloadImagesAll } from "@/lib/portalUtils";
-import { ThemeToggle } from "@/components/media-portal/theme-toggle";
 
 const CONTENTBEE_ACCENT = "rgb(243, 199, 68)";
 
@@ -24,12 +23,10 @@ export function PortalView({
   project,
   expiredContactEmail,
   expiredPaymentMode,
-  theme,
 }: {
   project: PublicPortal;
   expiredContactEmail?: string;
   expiredPaymentMode?: string;
-  theme?: { dark: boolean; setTheme: (d: boolean) => void; mounted: boolean };
 }) {
   const [active, setActive] = useState<VideoT | null>(null);
   const [lightbox, setLightbox] = useState<{ images: ImageType[]; index: number } | null>(null);
@@ -70,11 +67,6 @@ export function PortalView({
 
   return (
     <main className="relative">
-      {theme?.mounted && !active && !lightbox && (
-        <div className="fixed right-4 top-4 z-[90]">
-          <ThemeToggle dark={theme.dark} onChange={theme.setTheme} />
-        </div>
-      )}
       {/* ---------- Hero ---------- */}
       <section className="relative flex min-h-[88vh] items-end overflow-hidden">
         <div className="absolute inset-0">
