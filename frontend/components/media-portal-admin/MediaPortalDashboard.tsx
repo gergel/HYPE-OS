@@ -59,22 +59,26 @@ export function MediaPortalDashboard({
   }, []);
 
   async function doCreate() {
-    const created =
-      createMode === "project"
-        ? selectedProjectId
-          ? await createPortal(selectedProjectId)
-          : null
-        : manualTitle.trim()
-          ? await createManualPortal(manualTitle.trim(), manualClientName.trim(), manualDate.trim())
-          : null;
-    if (!created) return;
-    setSelectedProjectId("");
-    setManualTitle("");
-    setManualClientName("");
-    setManualDate("");
-    setCreating(false);
-    refresh();
-    window.location.href = `/media-portal/${created.id}`;
+    try {
+      const created =
+        createMode === "project"
+          ? selectedProjectId
+            ? await createPortal(selectedProjectId)
+            : null
+          : manualTitle.trim()
+            ? await createManualPortal(manualTitle.trim(), manualClientName.trim(), manualDate.trim())
+            : null;
+      if (!created) return;
+      setSelectedProjectId("");
+      setManualTitle("");
+      setManualClientName("");
+      setManualDate("");
+      setCreating(false);
+      refresh();
+      window.location.href = `/media-portal/${created.id}`;
+    } catch (err) {
+      alert(`Portál létrehozása sikertelen: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   function onDelete(e: React.MouseEvent, id: number, title: string) {
@@ -85,10 +89,14 @@ export function MediaPortalDashboard({
 
   async function doDelete() {
     if (!confirmDelete) return;
-    await deletePortal(confirmDelete.id);
-    setConfirmDelete(null);
-    refresh();
-    refreshPending();
+    try {
+      await deletePortal(confirmDelete.id);
+      setConfirmDelete(null);
+      refresh();
+      refreshPending();
+    } catch (err) {
+      alert(`Portál törlése sikertelen: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   async function doPurge() {
@@ -98,6 +106,8 @@ export function MediaPortalDashboard({
       await purgePortalFiles(confirmPurge.id);
       setConfirmPurge(null);
       refreshPending();
+    } catch (err) {
+      alert(`Fájlok törlése sikertelen: ${err instanceof Error ? err.message : err}`);
     } finally {
       setPurging(false);
     }

@@ -326,9 +326,13 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
   }
 
   async function onDeleteCover() {
-    await deleteCover(initial.id);
-    setForm((f) => ({ ...f, cover_image_url: "" }));
-    refresh();
+    try {
+      await deleteCover(initial.id);
+      setForm((f) => ({ ...f, cover_image_url: "" }));
+      refresh();
+    } catch (err) {
+      alert(`Borítókép törlése sikertelen: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   async function onReplace(e: React.ChangeEvent<HTMLInputElement>) {
@@ -364,8 +368,12 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     setConfirmDialog({
       message: "Biztosan törlöd ezt a Portált az összes videójával és képével együtt? Ez nem vonható vissza.",
       onConfirm: async () => {
-        await deletePortal(initial.id);
-        router.push("/media-portal");
+        try {
+          await deletePortal(initial.id);
+          router.push("/media-portal");
+        } catch (err) {
+          alert(`Portál törlése sikertelen: ${err instanceof Error ? err.message : err}`);
+        }
       },
     });
   }
@@ -412,9 +420,13 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     setConfirmDialog({
       message: "Törlöd ezt a mappát a benne lévő összes videóval és képpel együtt? Ez nem vonható vissza.",
       onConfirm: async () => {
-        await deleteFolder(folderId);
-        if (currentFolder === folderId) setCurrentFolder(null);
-        refresh();
+        try {
+          await deleteFolder(folderId);
+          if (currentFolder === folderId) setCurrentFolder(null);
+          refresh();
+        } catch (err) {
+          alert(`Mappa törlése sikertelen: ${err instanceof Error ? err.message : err}`);
+        }
       },
     });
   }
@@ -423,8 +435,12 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     setConfirmDialog({
       message: "Törlöd ezt a videót? Ez nem vonható vissza.",
       onConfirm: async () => {
-        await deleteVideo(videoId);
-        refresh();
+        try {
+          await deleteVideo(videoId);
+          refresh();
+        } catch (err) {
+          alert(`Videó törlése sikertelen: ${err instanceof Error ? err.message : err}`);
+        }
       },
     });
   }
@@ -433,8 +449,12 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     setConfirmDialog({
       message: "Törlöd ezt a képet? Ez nem vonható vissza.",
       onConfirm: async () => {
-        await deleteImage(imageId);
-        refresh();
+        try {
+          await deleteImage(imageId);
+          refresh();
+        } catch (err) {
+          alert(`Kép törlése sikertelen: ${err instanceof Error ? err.message : err}`);
+        }
       },
     });
   }
@@ -480,10 +500,29 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     setConfirmDialog({
       message: `Törlöd a kijelölt ${total} elemet? Ez nem vonható vissza.`,
       onConfirm: async () => {
-        for (const vid of vIds) await deleteVideo(vid).catch(() => {});
-        for (const iid of iIds) await deleteImage(iid).catch(() => {});
+        let failCount = 0;
+        let lastError: string | null = null;
+        for (const vid of vIds) {
+          try {
+            await deleteVideo(vid);
+          } catch (err) {
+            failCount++;
+            lastError = err instanceof Error ? err.message : String(err);
+          }
+        }
+        for (const iid of iIds) {
+          try {
+            await deleteImage(iid);
+          } catch (err) {
+            failCount++;
+            lastError = err instanceof Error ? err.message : String(err);
+          }
+        }
         clearSelection();
         refresh();
+        if (failCount > 0) {
+          alert(`${failCount} elem törlése sikertelen volt: ${lastError}`);
+        }
       },
     });
   }
