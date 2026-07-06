@@ -68,5 +68,13 @@ class Settings(BaseSettings):
     def hype_cc_list(self) -> list[str]:
         return [addr.strip() for addr in self.hype_cc.replace(";", ",").split(",") if addr.strip()]
 
+    # ───────── AI Assistant (Anthropic Claude, tool-calling) ─────────
+    # anthropic_api_key hiányában az /ai-assistant/ask végpont egyértelmű
+    # hibaüzenetet ad vissza, de az app egyébként elindul. Sonnet 5-öt
+    # használunk alapértelmezettként (nem Opus-t) - ez egy belső, viszonylag
+    # kis léptékű céges eszköz, ahol a Sonnet ár/érték aránya jobban megéri.
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-5"
+
 
 settings = Settings()

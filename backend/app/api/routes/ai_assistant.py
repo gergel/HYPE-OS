@@ -1,11 +1,16 @@
-"""AI Assistant modul (Fázis 5, hype_os_build_roadmap.md) - RAG réteg a végleges Postgres
-felett, tool-calling-gal. Csak a Fázis 0-4 után van értelme (lásd termékspecifikáció 6.
-fejezet), amikor már megbízható, strukturált adat van a rendszerben - itt egyelőre csak a
-végleges API-alak van lefektetve.
-"""
+"""AI Assistant - Anthropic Claude tool-calling a végleges Postgres felett (lásd
+app/services/ai_assistant.py). A tényleges adathozzáférés a bejelentkezett
+felhasználó saját page_permissions/field_visibility jogosultsága szerint
+szűrve történik - lásd a service modul docstringjét a részletekért."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.employee import Employee
+from app.services import ai_assistant
 
 router = APIRouter(prefix="/ai-assistant", tags=["ai-assistant"])
 
@@ -19,8 +24,9 @@ class AskResponse(BaseModel):
 
 
 @router.post("/ask", response_model=AskResponse)
-def ask(payload: AskRequest) -> AskResponse:
-    return AskResponse(
-        answer="Az AI Assistant modul Fázis 5-ben épül (lásd hype_os_build_roadmap.md) - "
-        "egyelőre nincs bekötve RAG/tool-calling réteg."
-    )
+def ask(
+    payload: AskRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AskResponse:
+    return AskResponse(answer=ai_assistant.ask(db, current_user, payload.question))
