@@ -16,7 +16,22 @@ KEY_PREFIX = "media-portal/"
 _session = boto3.session.Session()
 
 
+class R2NotConfiguredError(Exception):
+    """R2 hitelesítő adatok (settings.r2_*) hiányoznak - lásd a route-oldali
+    kezelést (portal_admin.py), ami ezt egyértelmű 503 hibaüzenetté alakítja
+    a nyers boto3/hálózati kivétel helyett."""
+
+
+def is_configured() -> bool:
+    return bool(settings.r2_account_id and settings.r2_access_key_id and settings.r2_secret_access_key)
+
+
 def _client():
+    if not is_configured():
+        raise R2NotConfiguredError(
+            "Az R2 tárhely nincs beállítva (hiányzó R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / "
+            "R2_SECRET_ACCESS_KEY környezeti változó) - videó/kép feltöltés emiatt nem működik."
+        )
     return _session.client(
         "s3",
         endpoint_url=f"https://{settings.r2_account_id}.r2.cloudflarestorage.com",

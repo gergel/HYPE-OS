@@ -121,6 +121,7 @@ def create_portal(
     portal = Portal(
         project_id=project.id,
         slug=slug,
+        status="live",  # az eredeti Hype-repo-main is közvetlenül "live"-ként hozza létre, nincs külön "vázlat" lépés
         password_hash=hash_password(payload.password) if payload.password else None,
         expires_at=date.today() + timedelta(days=30),
     )
@@ -230,6 +231,98 @@ def regenerate_share(
 
 
 # ---------------- Videók ----------------
+
+
+class MultipartInitIn(BaseModel):
+    filename: str
+    content_type: str = "video/mp4"
+    title: str | None = None
+
+
+class MultipartPartIn(BaseModel):
+    upload_id: str
+    key: str
+    part_number: int
+
+
+class MultipartCompleteIn(BaseModel):
+    upload_id: str
+    key: str
+    video_id: int
+    parts: list[dict]
+
+
+class MultipartAbortIn(BaseModel):
+    upload_id: str
+    key: str
+    video_id: int
+
+
+@router.post("/{portal_id}/videos/multipart/init")
+def multipart_init(
+    portal_id: int,
+    payload: MultipartInitIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """Nagy videók feltöltéséhez - a kliens (admin UI) ezt hívja először,
+    majd a kapott upload_id-vel darabolva, közvetlenül R2-be tölt fel
+    (lásd sign-part), és a végén complete-tel zárja le. Ez ad valós
+    feltöltési haladásjelzést, szemben az egyszerű /videos POST-tal."""
+    portal = _get_portal_or_404(db, portal_id)
+    max_order = max([v.sort_order for v in portal.videos], default=-1)
+    video = PortalVideo(
+        portal_id=portal_id,
+        title=payload.title or os.path.splitext(payload.filename)[0],
+        status="uploading",
+        sort_order=max_order + 1,
+    )
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+
+    key = f"videos/{video.id}/upload.mp4"
+    upload_id = storage.create_multipart(key, payload.content_type)
+    video.source_key = key
+    db.commit()
+
+    return {"video_id": video.id, "upload_id": upload_id, "key": key}
+
+
+@router.post("/videos/multipart/sign-part")
+def multipart_sign_part(payload: MultipartPartIn, _user: Employee = Depends(require_page_action(PAGE, "create"))):
+    return {"url": storage.presigned_part(payload.key, payload.upload_id, payload.part_number)}
+
+
+@router.post("/videos/multipart/complete", response_model=PortalVideoOut)
+def multipart_complete(
+    payload: MultipartCompleteIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    video = db.get(PortalVideo, payload.video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Videó nem található")
+    storage.complete_multipart(payload.key, payload.upload_id, payload.parts)
+    video.status = "processing"
+    db.commit()
+    db.refresh(video)
+    process_video_task.delay(video.id, payload.key)
+    return PortalVideoOut.model_validate(video)
+
+
+@router.post("/videos/multipart/abort")
+def multipart_abort(
+    payload: MultipartAbortIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    storage.abort_multipart(payload.key, payload.upload_id)
+    video = db.get(PortalVideo, payload.video_id)
+    if video:
+        db.delete(video)
+        db.commit()
+    return {"ok": True}
 
 
 @router.post("/{portal_id}/videos", response_model=PortalVideoOut)
