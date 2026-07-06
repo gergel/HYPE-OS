@@ -49,6 +49,35 @@ ENTITY_MODELS: dict[str, type] = {
 SELECT_LIKE_MAX_DISTINCT = 20
 SELECT_LIKE_MAX_VALUE_LENGTH = 60
 
+# Explicit módon deklarált select-opciólisták olyan szöveges mezőkhöz, ahol a
+# tényleges DB-adat (még) nem fedi le a Notion select-mező teljes, elvárt
+# értékkészletét (pl. üres sandbox, vagy egy státusz, amit még sosem
+# választottak) - ezek MINDIG felülírják a lenti heurisztikát/valódi
+# enum-detektálást, mert a felhasználó explicit megadta a pontos listát.
+SELECT_FIELD_OVERRIDES: dict[str, dict[str, list[str]]] = {
+    "equipment": {
+        "allapot": ["Jó", "Szerelendő", "Selejt", "Elhagyva", "Szervíz", "Szerelve"],
+        "hasznalhato": ["Használható", "Nem használható"],
+        "kategoria": [
+            "Iroda (adatároló)",
+            "Irodai",
+            "Optika",
+            "Egyéb",
+            "Kártya",
+            "Akkumulátor",
+            "Mozgatók",
+            "Hang",
+            "Statív",
+            "Világítás",
+            "Lámpa állvány",
+            "Kamera",
+            "220V",
+            "Drón",
+            "Táska",
+        ],
+    },
+}
+
 # Azonosító-jellegű/szabad szöveges mezők - ezeket sosem tekintjük select-nek,
 # még akkor sem, ha a jelenlegi adatban véletlenül kevés/ismétlődő értékük van.
 NOT_SELECT_NAME_PATTERN_FRAGMENTS = (
@@ -110,7 +139,11 @@ def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, Fi
     if model is None:
         return {}
     result: dict[str, FieldTypeInfo] = {}
+    overrides = SELECT_FIELD_OVERRIDES.get(entity_type, {})
     for name, column in model.__table__.columns.items():
+        if name in overrides:
+            result[name] = {"type": "select", "options": overrides[name]}
+            continue
         if isinstance(column.type, SAEnum):
             result[name] = {"type": "select", "options": list(column.type.enums)}
             continue

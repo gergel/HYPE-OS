@@ -434,3 +434,61 @@ export type MyTasksSummary = {
 export async function getMyTasksSummary(): Promise<MyTasksSummary | null> {
   return apiGet<MyTasksSummary>("/api/v1/dashboard/my-tasks");
 }
+
+export type StocktakeItem = {
+  id: number;
+  equipment_id: number;
+  equipment_nev: string;
+  kategoria: string | null;
+  track_mode: string;
+  expected_qty: number | null;
+  counted_qty: number | null;
+  status: string | null;
+};
+
+export type StocktakeSession = {
+  id: number;
+  started_by_employee_id: number;
+  started_by_name: string;
+  created_at: string;
+  completed_at: string | null;
+  items: StocktakeItem[];
+};
+
+export type StocktakeSessionListItem = {
+  id: number;
+  started_by_name: string;
+  created_at: string;
+  completed_at: string | null;
+  item_count: number;
+};
+
+export type StocktakeStatusGroup = {
+  status: string;
+  items: { equipment_id: number; nev: string }[];
+};
+
+export type StocktakeMissingStock = {
+  equipment_id: number;
+  nev: string;
+  expected_qty: number;
+  counted_qty: number;
+  hiany: number;
+};
+
+export type StocktakeSummary = {
+  problemas_statuszok: StocktakeStatusGroup[];
+  hianyzo_keszletek: StocktakeMissingStock[];
+};
+
+export async function getStocktakeSessions(): Promise<StocktakeSessionListItem[]> {
+  return (await apiGet<StocktakeSessionListItem[]>("/api/v1/stocktake/sessions")) ?? [];
+}
+
+export async function getStocktakeSession(sessionId: number): Promise<StocktakeSession | null> {
+  return apiGet<StocktakeSession>(`/api/v1/stocktake/sessions/${sessionId}`);
+}
+
+export async function getStocktakeSummary(sessionId: number): Promise<StocktakeSummary | null> {
+  return apiGet<StocktakeSummary>(`/api/v1/stocktake/sessions/${sessionId}/summary`);
+}

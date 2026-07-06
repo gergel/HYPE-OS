@@ -31,7 +31,12 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
         <Card title={String(equipment.nev ?? `Eszköz #${equipment.id}`)}>
           <EditableDetailGrid
             patchPath={`${ENTITY_PATHS.equipment}/${equipment.id}`}
-            fields={toEditableDetailFields(equipment, ["project_ids"], visibleFields, fieldTypes)}
+            fields={toEditableDetailFields(
+              { ...equipment, forgatasok_szama: projectIds.length },
+              ["project_ids"],
+              visibleFields,
+              fieldTypes,
+            )}
           />
         </Card>
 

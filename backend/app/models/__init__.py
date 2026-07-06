@@ -20,6 +20,7 @@ from app.models.portal import Brand, PaymentMode, Payment, Portal, PortalStatus
 from app.models.project import Project, project_crew
 from app.models.project_code import ProjectCode
 from app.models.rate import Rate
+from app.models.stocktake import StocktakeItem, StocktakeSession
 from app.models.task import Task, task_employees
 from app.models.timesheet import Timesheet
 from app.models.timeline import TimelineEvent
@@ -61,6 +62,8 @@ __all__ = [
     "project_crew",
     "ProjectCode",
     "Rate",
+    "StocktakeItem",
+    "StocktakeSession",
     "Task",
     "task_employees",
     "Timesheet",

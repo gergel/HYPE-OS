@@ -12,6 +12,14 @@ export default async function FelszerelesPage() {
       <TopBar />
       <div className="flex-1 p-6">
         <Card title={`Felszerelés (${equipment.length})`}>
+          <div className="mb-3 flex justify-end">
+            <a
+              href="/felszereles/leltarazas"
+              className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+            >
+              Leltározás
+            </a>
+          </div>
           <DataTable<Equipment>
             rows={equipment}
             emptyText="Még nincs felvett eszköz - importáld a Notionból, vagy adj hozzá egyet a /api/v1/equipment végponton."

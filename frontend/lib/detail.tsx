@@ -3,6 +3,12 @@ import { FieldTypeInfo, formatDate, formatHuf } from "@/lib/api";
 
 const HIDDEN_KEYS = new Set(["id", "created_at", "updated_at"]);
 
+/** Szintetikus, csak megjelenítésre szánt (kliens-oldalon számolt) mezők,
+ * amiket a hívó oldal illeszt a rekordba (pl. equipment.project_ids.length) -
+ * ezek sosem PATCH-elhetők, még akkor sem, ha az értékük szám/string (amit a
+ * classifyInput önmagában szerkeszthetőnek nézne). */
+const FORCE_READONLY_KEYS = new Set(["forgatasok_szama"]);
+
 const MONEY_KEY_PATTERN = /(netto|brutto|osszeg|koltseg|profit|bevetel|arfolyam|dij|ber)/i;
 const DATE_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}/;
 const URL_PATTERN = /^https?:\/\/\S+$/i;
@@ -129,7 +135,9 @@ export function toEditableDetailFields(
     .filter(([key]) => !onlyShowSet || onlyShowSet.has(key))
     .map(([key, value]) => {
       const { node, wide } = formatValue(key, value);
-      const { editable, inputType, options } = classifyInput(key, value, fieldTypes?.[key]);
+      const classified = classifyInput(key, value, fieldTypes?.[key]);
+      const { inputType, options } = classified;
+      const editable = FORCE_READONLY_KEYS.has(key) ? false : classified.editable;
       const rawValue =
         typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null
           ? value

@@ -17,6 +17,7 @@ from app.api.routes.portal import payments_router, router as portal_router
 from app.api.routes.postproduction import deliverable_actions_router, deliverables_router, feedback_router, timesheets_router
 from app.api.routes.project_codes import router as project_codes_router
 from app.api.routes.projects import router as projects_router
+from app.api.routes.stocktake import router as stocktake_router
 from app.api.routes.storage import folders_router, media_router
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.timeline import router as timeline_router
@@ -40,6 +41,7 @@ api_router.include_router(rates_router)
 # 7. Equipment
 api_router.include_router(equipment_router)
 api_router.include_router(assignments_router)
+api_router.include_router(stocktake_router)
 # 8. Timeline
 api_router.include_router(timeline_router)
 # 9. Storage

@@ -34,7 +34,10 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Felszerelés",
-    items: [{ label: "Eszközök", href: "/felszereles" }],
+    items: [
+      { label: "Eszközök", href: "/felszereles" },
+      { label: "Leltározás", href: "/felszereles/leltarazas" },
+    ],
   },
   {
     label: "Naptár / Diszpó",
