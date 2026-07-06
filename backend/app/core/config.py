@@ -76,5 +76,25 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
 
+    # ───────── Média Portál (ügyfél videó/kép átadó felület, /p/{slug}) ─────────
+    # A Hype-repo-main (különálló client-portál projekt) 1:1 portolt funkciója -
+    # mind opcionális, hiányukban az adott képesség (fizetés/Notion sync) csak
+    # egyértelmű hibát ad, a portál videó/kép átadás alapfunkciója attól még megy.
+    frontend_base_url: str = ""
+    api_base_url: str = ""
+
+    barion_pos_key: str = ""
+    barion_env: str = "test"  # test | prod
+    barion_payee: str = ""
+
+    @property
+    def barion_api_base(self) -> str:
+        return "https://api.test.barion.com" if self.barion_env == "test" else "https://api.barion.com"
+
+    # Külön Notion adatbázis a portál-projektekhez (NEM ugyanaz, mint a fő
+    # HYPE OS Notion importja) - opcionális "Notion szinkron" admin gombhoz.
+    portal_notion_api_key: str = ""
+    portal_notion_database_id: str = ""
+
 
 settings = Settings()

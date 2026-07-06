@@ -16,3 +16,6 @@ google-api-python-client>=2.147.0
 google-auth>=2.35.0
 google-auth-oauthlib>=1.2.1
 anthropic>=0.40.0
+celery[redis]>=5.4.0
+pillow>=11.0.0
+python-slugify>=8.0.4

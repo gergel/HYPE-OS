@@ -515,3 +515,72 @@ export async function getStocktakeSession(sessionId: number): Promise<StocktakeS
 export async function getStocktakeSummary(sessionId: number): Promise<StocktakeSummary | null> {
   return apiGet<StocktakeSummary>(`/api/v1/stocktake/sessions/${sessionId}/summary`);
 }
+
+/** Média Portál (ügyfél videó/kép átadó felület, /p/{slug}) admin adatai -
+ * lásd backend/app/api/routes/portal_admin.py. Egy Portal mindig egy meglévő
+ * HYPE OS Project-hez van kötve (1:1) - a cím/ügyfélnév a Project mezőire esik
+ * vissza, hacsak nincs felülírva (title_override/client_name_override). */
+export type PortalSummary = {
+  id: number;
+  slug: string;
+  project_id: number;
+  title: string;
+  client_name: string;
+  cover_image_url: string;
+  status: string;
+  brand: string;
+  project_date: string;
+  expires_at: string | null;
+  payment_mode: string;
+  has_password: boolean;
+};
+
+export type PortalVideoItem = {
+  id: number;
+  title: string;
+  folder_id: number | null;
+  mp4_url: string;
+  hls_url: string;
+  thumbnail_url: string;
+  duration_seconds: number;
+  width: number;
+  height: number;
+  resolution_label: string;
+  aspect_ratio_label: string;
+  size_bytes: number;
+  status: string;
+  sort_order: number;
+};
+
+export type PortalImageItem = {
+  id: number;
+  title: string;
+  folder_id: number | null;
+  url: string;
+  thumbnail_url: string;
+};
+
+export type PortalFolderItem = {
+  id: number;
+  name: string;
+  sort_order: number;
+};
+
+export type PortalDetailData = PortalSummary & {
+  description: string;
+  share_token: string | null;
+  title_override: string | null;
+  client_name_override: string | null;
+  project_date_override: string | null;
+  videos: PortalVideoItem[];
+  folders: PortalFolderItem[];
+  images: PortalImageItem[];
+};
+
+export async function getPortals(): Promise<PortalSummary[]> {
+  return (await apiGet<PortalSummary[]>("/api/v1/portal-admin")) ?? [];
+}
+
+export async function getPortalDetail(portalId: number): Promise<PortalDetailData | null> {
+  return apiGet<PortalDetailData>(`/api/v1/portal-admin/${portalId}`);
+}

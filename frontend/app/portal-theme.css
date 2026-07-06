@@ -1,0 +1,100 @@
+/* Média Portál (ügyfél-nézet, /p/[slug]) saját, prémium dizájn-rendszere - a
+   Hype-repo-main (különálló client-portál projekt) globals.css/tailwind.config.js
+   1:1 portolt design tokenjei. Minden szín/animáció-token EGYEDI névvel (ink,
+   bone, mist, ember, tracking-eyebrow, rounded-xl2, animate-drift/fade-up),
+   ezért globálisan biztonságos hozzáadni őket a Tailwind @theme-hez anélkül,
+   hogy a HYPE OS admin felület saját design tokenjeivel (background/surface-1/
+   text-primary stb.) ütköznének.
+
+   FONTOS: a @theme blokk itt csak REGISZTRÁLJA a "ink"/"bone" stb. Tailwind
+   utility-ket (bg-ink, text-bone...) egy ideiglenes alapértékkel - a TÉNYLEGES
+   színt a .hype-portal/.hype-portal.dark osztály írja felül UGYANAZON
+   --color-* egyéni tulajdonság újra-deklarálásával (lásd lent). Egy két-lépcsős
+   "--color-ink: var(--c-ink)" indirekció NEM működne itt: a CSS egyéni
+   tulajdonságok öröklődése a DEKLARÁLÁS helyén (itt: :root) kiszámított
+   (lefagyasztott) értéket örökíti tovább, nem évaluálja újra minden leszármazott
+   elemnél - ezért ha a fallback :root szinten "transparent"-re oldódna fel,
+   az MINDEN leszármazottnál (pl. .hype-portal) transparent maradna, akkor is,
+   ha az ő saját --c-ink változóját közben átdefiniáltuk. */
+
+@theme {
+  --color-ink: #f3f0e9;
+  --color-ink-soft: #e9e5dc;
+  --color-ink-card: #fbf9f5;
+  --color-ink-line: #d9d4c8;
+  --color-bone: #1c1b18;
+  --color-mist: #6b6862;
+  --color-ember: #e8623a;
+
+  --font-display: var(--font-portal-display), Georgia, serif;
+
+  --tracking-eyebrow: 0.32em;
+  --radius-xl2: 1.75rem;
+
+  --animate-drift: drift 24s ease-in-out infinite alternate;
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes drift {
+  0% {
+    transform: scale(1.08) translate3d(0, 0, 0);
+  }
+  100% {
+    transform: scale(1.15) translate3d(-1.5%, -1.5%, 0);
+  }
+}
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* A .hype-portal wrapperen KÍVÜL a fenti @theme alapértékek (világos portál
+   színek) élnek - ez ártalmatlan, mert "bg-ink"/"text-bone" stb. sehol nem
+   használt osztálynevek a HYPE OS admin felületén. A .hype-portal.dark pedig
+   közvetlenül UGYANAZOKAT a --color-* tokeneket írja felül sötét értékekre. */
+.hype-portal.dark {
+  color-scheme: dark;
+  --color-ink: #070707;
+  --color-ink-soft: #0d0d0f;
+  --color-ink-card: #121214;
+  --color-ink-line: #222226;
+  --color-bone: #f4f1ea;
+  --color-mist: #a8a8a6;
+}
+
+.hype-portal {
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hype-portal ::selection {
+  background: #e8623a;
+  color: #f4f1ea;
+}
+
+.hype-portal.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hype-portal *,
+  .hype-portal *::before,
+  .hype-portal *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_COOKIE = "hype_os_token";
-const PUBLIC_PATHS = ["/login"];
+// "/p" a Média Portál ÜGYFÉL-oldali nézete (/p/{slug}) - szándékosan publikus,
+// mert a valódi ügyfelek, akiknek a linket küldjük, nem HYPE OS alkalmazottak
+// (saját, portál-hatókörű jelszó/share-token védi, lásd
+// backend/app/api/routes/portal_public.py).
+const PUBLIC_PATHS = ["/login", "/p"];
 
-/** Bejelentkezés nélkül semmilyen oldal nem érhető el (kivéve /login) - és ha
- * a bejelentkezett felhasználóhoz egyénenkénti oldal-korlátozás van beállítva
- * (lásd /api/v1/user-access/me), a nem engedélyezett oldalakat is blokkolja. */
+/** Bejelentkezés nélkül semmilyen oldal nem érhető el (kivéve a fenti
+ * PUBLIC_PATHS) - és ha a bejelentkezett felhasználóhoz egyénenkénti
+ * oldal-korlátozás van beállítva (lásd /api/v1/user-access/me), a nem
+ * engedélyezett oldalakat is blokkolja. */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 

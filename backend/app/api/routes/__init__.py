@@ -15,6 +15,8 @@ from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.portal import payments_router, router as portal_router
+from app.api.routes.portal_admin import router as portal_admin_router
+from app.api.routes.portal_public import downloads_router as portal_downloads_router, router as portal_public_router
 from app.api.routes.postproduction import deliverable_actions_router, deliverables_router, feedback_router, timesheets_router
 from app.api.routes.project_codes import router as project_codes_router
 from app.api.routes.projects import router as projects_router
@@ -58,6 +60,9 @@ api_router.include_router(feedback_router)
 # 12. Portál / Fizetés
 api_router.include_router(portal_router)
 api_router.include_router(payments_router)
+api_router.include_router(portal_admin_router)
+api_router.include_router(portal_public_router)
+api_router.include_router(portal_downloads_router)
 # 13. Pénzügyek
 api_router.include_router(expenses_router)
 api_router.include_router(revenues_router)

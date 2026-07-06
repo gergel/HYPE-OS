@@ -26,6 +26,11 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
   const token = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  // FormData-nál a böngészőnek KELL magának beállítania a Content-Type-ot (a
+  // multipart boundary miatt) - ha itt application/json-t kényszerítenénk rá,
+  // a fájlfeltöltés végpontok nem tudnák szétszedni a body-t.
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
 }

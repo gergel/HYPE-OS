@@ -35,6 +35,20 @@ services:
     volumes:
       - ./backend:/app
 
+  media-worker:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://hype:hype@postgres:5432/hype_os
+      REDIS_URL: redis://redis:6379/0
+    command: celery -A app.workers.portal_tasks worker --loglevel=info --concurrency=2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
   frontend:
     build: ./frontend
     environment:

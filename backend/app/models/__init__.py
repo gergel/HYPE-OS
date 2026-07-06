@@ -16,7 +16,16 @@ from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.media import Folder, Media
 from app.models.notification import Notification
 from app.models.notion_import import NotionImportMap
-from app.models.portal import Brand, PaymentMode, Payment, Portal, PortalStatus
+from app.models.portal import (
+    Brand,
+    PaymentMode,
+    Payment,
+    Portal,
+    PortalFolder,
+    PortalImage,
+    PortalStatus,
+    PortalVideo,
+)
 from app.models.project import Project, project_crew
 from app.models.project_code import ProjectCode
 from app.models.rate import Rate
@@ -57,7 +66,10 @@ __all__ = [
     "PaymentMode",
     "Payment",
     "Portal",
+    "PortalFolder",
+    "PortalImage",
     "PortalStatus",
+    "PortalVideo",
     "Project",
     "project_crew",
     "ProjectCode",
