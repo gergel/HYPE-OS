@@ -4,11 +4,17 @@ importja a HYPE OS Postgres-ébe, három körben.
 Használat (Railway-en, `railway ssh` után, ahol a NOTION_API_KEY env var be van
 állítva a backend service Variables fülén):
 
-    python scripts/notion_import.py
+    python scripts/notion_import.py                  # teljes import (mind a 3 kör)
+    python scripts/notion_import.py --only Equipment  # csak egyetlen entitás (lásd a
+                                                       # lenti listákban a pontos nevet)
 
 Bármikor újrafuttatható - a NotionImportMap tábla (notion_page_id -> a mi entitásunk)
 miatt nem duplikál, csak frissíti a már importált rekordokat. A körök egymásra épülnek
-(relation-feloldás), ezért mindig ugyanabban a sorrendben futnak, egy futtatáson belül.
+(relation-feloldás), ezért teljes importnál mindig ugyanabban a sorrendben futnak, egy
+futtatáson belül. A --only kapcsoló ETTŐL FÜGGETLENÜL, önmagában futtat egyetlen
+importert - az Equipment ('Leltár') ehhez biztonságos, mert nem függ semmilyen más
+entitás előzetes importjától (a Projektekkel/Stock igényekkel való összekötés külön,
+a Project- és Stock igények-importerekben történik, nem itt).
 
 A legtöbb entitás egy `extra` JSON mezőt is kap: ez tartalmazza azokat a Notion
 mezőket, amik nem kaptak saját oszlopot (jórészt Notion formula/rollup - ugyanazt a
@@ -70,6 +76,9 @@ WAVE_3 = [
 ]
 
 
+ALL_IMPORTERS = WAVE_1 + WAVE_2 + WAVE_3
+
+
 def run_wave(title: str, wave: list, notion: NotionClient, db) -> None:
     print(f"\n{title}\n" + "=" * 40)
     for name, importer_fn in wave:
@@ -79,13 +88,46 @@ def run_wave(title: str, wave: list, notion: NotionClient, db) -> None:
             print(result.error_report())
 
 
+def find_importer(name: str):
+    """Ismeretlen névnél None-t ad vissza - a hívó a NotionClient() (és ezzel a
+    NOTION_API_KEY-igény) ELŐTT ellenőrzi, hogy egy elgépelt --only név ne csak
+    Notion-hitelesítéssel derüljön ki."""
+    return next((fn for importer_name, fn in ALL_IMPORTERS if importer_name.lower() == name.lower()), None)
+
+
+def run_only(name: str, importer_fn, notion: NotionClient, db) -> None:
+    print(f"\nHYPE OS - Notion import, csak: {name}\n" + "=" * 40)
+    result = run_importer(name, db, importer_fn, notion, db)
+    print(result)
+    if result.errors:
+        print(result.error_report())
+
+
 def main() -> None:
+    only = None
+    if len(sys.argv) > 1:
+        if sys.argv[1] != "--only" or len(sys.argv) < 3:
+            print("Használat: python scripts/notion_import.py [--only <importer neve>]")
+            sys.exit(1)
+        only = sys.argv[2]
+
+    only_fn = None
+    if only:
+        only_fn = find_importer(only)
+        if only_fn is None:
+            available = ", ".join(importer_name for importer_name, _ in ALL_IMPORTERS)
+            print(f"Ismeretlen importer: '{only}'.\nVálaszthatók: {available}")
+            sys.exit(1)
+
     notion = NotionClient()
     db = SessionLocal()
     try:
-        run_wave("HYPE OS - Notion import, 1. kör", WAVE_1, notion, db)
-        run_wave("HYPE OS - Notion import, 2. kör", WAVE_2, notion, db)
-        run_wave("HYPE OS - Notion import, 3. kör", WAVE_3, notion, db)
+        if only:
+            run_only(only, only_fn, notion, db)
+        else:
+            run_wave("HYPE OS - Notion import, 1. kör", WAVE_1, notion, db)
+            run_wave("HYPE OS - Notion import, 2. kör", WAVE_2, notion, db)
+            run_wave("HYPE OS - Notion import, 3. kör", WAVE_3, notion, db)
         print("\n" + "=" * 40 + "\nKész.")
     finally:
         db.close()
