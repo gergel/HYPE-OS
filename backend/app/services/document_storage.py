@@ -53,6 +53,11 @@ def upload_bytes(data: bytes, key: str, content_type: str) -> str:
     return public_url(key)
 
 
+def delete_object(key: str) -> None:
+    client = _client()
+    client.delete_object(Bucket=settings.r2_bucket_name, Key=_key(key))
+
+
 def public_url(key: str) -> str:
     base = settings.r2_public_url.rstrip("/")
     return f"{base}/{_key(key)}"

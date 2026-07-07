@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -85,7 +85,6 @@ class EmployeeRead(EmployeeBase):
     main_database_notion_ids: JsonScalar = None
     vallalkozas_adoszama: str | None = None
     plusz_afa: bool | None = None
-    munkaszerzodes_url: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -93,6 +92,17 @@ class EmployeeRead(EmployeeBase):
     @property
     def has_password(self) -> bool:
         return bool(self.hashed_password)
+
+
+class EmployeeDocumentRead(BaseModel):
+    id: int
+    employee_id: int
+    filename: str
+    url: str
+    content_type: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class RateBase(BaseModel):

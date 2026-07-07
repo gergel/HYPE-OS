@@ -44,7 +44,6 @@ class Employee(TimestampMixin, Base):
     telefon: Mapped[str | None] = mapped_column(String(50))
     jogositvany: Mapped[str | None] = mapped_column(String(255))
 
-    munkaszerzodes_url: Mapped[str | None] = mapped_column(String(500))
     ertekeles: Mapped[float | None] = mapped_column()
     elso_munkanap: Mapped[date | None] = mapped_column(Date)
     utolso_munkanap: Mapped[date | None] = mapped_column(Date)
@@ -108,6 +107,7 @@ class Employee(TimestampMixin, Base):
     plusz_afa: Mapped[bool | None] = mapped_column(Boolean, comment="Plusz ÁFA")
 
     rates: Mapped[list["Rate"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    documents: Mapped[list["EmployeeDocument"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
     timesheets: Mapped[list["Timesheet"]] = relationship(back_populates="employee")
     expenses: Mapped[list["Expense"]] = relationship(back_populates="employee")
     contracts: Mapped[list["Contract"]] = relationship(back_populates="employee")

@@ -5,7 +5,7 @@ import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { MunkaszerzodesUpload } from "@/components/MunkaszerzodesUpload";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import { ENTITY_PATHS, getEmployeeDocuments, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
 
 /** Ezek az adatok másolódnak át előtöltésként az alvállalkozói eseti
@@ -21,7 +21,6 @@ const VALLALKOZAS_FIELD_KEYS = [
   "megbizas_targya",
   "plusz_afa",
   "email",
-  "munkaszerzodes_url",
 ];
 
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,22 +29,22 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
   const employee = await getRecord(ENTITY_PATHS.employee, employeeId);
   if (!employee) notFound();
 
-  const [rates, timesheets, expenses, contracts, deliverables, campaigns, visibleFields, fieldTypes] = await Promise.all([
-    getRelated(ENTITY_PATHS.rate, { employee_id: employeeId }),
-    getRelated(ENTITY_PATHS.timesheet, { employee_id: employeeId }),
-    getRelated(ENTITY_PATHS.expense, { employee_id: employeeId }),
-    getRelated(ENTITY_PATHS.contract, { employee_id: employeeId }),
-    getRelated(ENTITY_PATHS.deliverable, { vago_employee_id: employeeId }),
-    getRelated(ENTITY_PATHS.campaign, { felelos_employee_id: employeeId }),
-    getVisibleFields("employee"),
-    getFieldTypes("employee"),
-  ]);
+  const [rates, timesheets, expenses, contracts, deliverables, campaigns, documents, visibleFields, fieldTypes] =
+    await Promise.all([
+      getRelated(ENTITY_PATHS.rate, { employee_id: employeeId }),
+      getRelated(ENTITY_PATHS.timesheet, { employee_id: employeeId }),
+      getRelated(ENTITY_PATHS.expense, { employee_id: employeeId }),
+      getRelated(ENTITY_PATHS.contract, { employee_id: employeeId }),
+      getRelated(ENTITY_PATHS.deliverable, { vago_employee_id: employeeId }),
+      getRelated(ENTITY_PATHS.campaign, { felelos_employee_id: employeeId }),
+      getEmployeeDocuments(employeeId),
+      getVisibleFields("employee"),
+      getFieldTypes("employee"),
+    ]);
 
   const vallalkozasFieldKeys = visibleFields
     ? VALLALKOZAS_FIELD_KEYS.filter((k) => visibleFields.includes(k))
     : VALLALKOZAS_FIELD_KEYS;
-  const vallalkozasGridKeys = vallalkozasFieldKeys.filter((k) => k !== "munkaszerzodes_url");
-  const showMunkaszerzodesUpload = vallalkozasFieldKeys.includes("munkaszerzodes_url");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -67,18 +66,14 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
 
         {vallalkozasFieldKeys.length > 0 && (
           <Card title="Vállalkozás adatok">
-            {vallalkozasGridKeys.length > 0 && (
-              <EditableDetailGrid
-                patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
-                fields={toEditableDetailFields(employee, [], vallalkozasGridKeys, fieldTypes)}
-              />
-            )}
-            {showMunkaszerzodesUpload && (
-              <div className={vallalkozasGridKeys.length > 0 ? "mt-4 border-t border-border pt-4" : ""}>
-                <p className="mb-2 text-[11px] text-text-muted">Munkaszerződés</p>
-                <MunkaszerzodesUpload employeeId={employee.id} currentUrl={(employee.munkaszerzodes_url as string | null) ?? null} />
-              </div>
-            )}
+            <EditableDetailGrid
+              patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
+              fields={toEditableDetailFields(employee, [], vallalkozasFieldKeys, fieldTypes)}
+            />
+            <div className={vallalkozasFieldKeys.length > 0 ? "mt-4 border-t border-border pt-4" : ""}>
+              <p className="mb-2 text-[11px] text-text-muted">Munkaszerződés</p>
+              <MunkaszerzodesUpload employeeId={employee.id} documents={documents} />
+            </div>
           </Card>
         )}
 

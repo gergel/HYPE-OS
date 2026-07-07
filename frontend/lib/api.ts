@@ -73,7 +73,15 @@ export type Employee = {
   nyilvantartasi_szam: string | null;
   megbizas_targya: string | null;
   plusz_afa: boolean | null;
-  munkaszerzodes_url: string | null;
+};
+
+export type EmployeeDocument = {
+  id: number;
+  employee_id: number;
+  filename: string;
+  url: string;
+  content_type: string | null;
+  created_at: string;
 };
 
 export type Rate = {
@@ -222,6 +230,10 @@ export async function getProjects(limit = 5000): Promise<Project[]> {
 
 export async function getEmployees(limit = 5000): Promise<Employee[]> {
   return (await apiGet<Employee[]>(`/api/v1/crew?limit=${limit}`)) ?? [];
+}
+
+export async function getEmployeeDocuments(employeeId: number): Promise<EmployeeDocument[]> {
+  return (await apiGet<EmployeeDocument[]>(`/api/v1/crew/${employeeId}/munkaszerzodesek`)) ?? [];
 }
 
 export async function getEquipment(limit = 5000): Promise<Equipment[]> {

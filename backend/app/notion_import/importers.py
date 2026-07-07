@@ -158,7 +158,6 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
                 "email": _text(props.get("E-MAIL CÍM")) or _text(props.get("Email")),
                 "telefon": _text(props.get("TELEFONSZÁM")) or _text(props.get("Phone")),
                 "jogositvany": _text(props.get("JOGOSÍTVÁNY")),
-                "munkaszerzodes_url": _first_url(props.get("Munkaszerződés")),
                 "role": SystemRole.OPERATOR,
                 "is_active": True,
                 "elso_munkanap": as_date(props.get("Első munkanap")),
