@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from app.models.contract import ContractType
 
@@ -22,7 +22,7 @@ class ContractBase(BaseModel):
     netto_osszeg: float | None = None
     teljesites_kezdete: date | None = None
     teljesites_vege: date | None = None
-    plusz_afa: str | None = None
+    plusz_afa: bool | None = None
 
 
 class ContractCreate(ContractBase):
@@ -36,7 +36,7 @@ class ContractUpdate(BaseModel):
     netto_osszeg: float | None = None
     teljesites_kezdete: date | None = None
     teljesites_vege: date | None = None
-    plusz_afa: str | None = None
+    plusz_afa: bool | None = None
 
 
 class ContractRead(ContractBase):
@@ -56,3 +56,12 @@ class ContractRead(ContractBase):
     szerzodes_megjegyzes: str | None = None
 
     model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def brutto_osszeg(self) -> float | None:
+        """ÁFA-val növelt összeg - ha a megbízottnak plusz ÁFA-t kell
+        felszámolni, a nettó összeg 1,27-szerese, egyébként megegyezik vele."""
+        if self.netto_osszeg is None:
+            return None
+        return round(self.netto_osszeg * 1.27, 2) if self.plusz_afa else self.netto_osszeg

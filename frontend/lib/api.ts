@@ -72,7 +72,8 @@ export type Employee = {
   vallalkozas_kepviselo: string | null;
   nyilvantartasi_szam: string | null;
   megbizas_targya: string | null;
-  plusz_afa: string | null;
+  plusz_afa: boolean | null;
+  munkaszerzodes_url: string | null;
 };
 
 export type Rate = {
@@ -175,7 +176,8 @@ export type Contract = {
   netto_osszeg: number | null;
   teljesites_kezdete: string | null;
   teljesites_vege: string | null;
-  plusz_afa: string | null;
+  plusz_afa: boolean | null;
+  brutto_osszeg: number | null;
 };
 
 /** A backend GET végpontok mostantól bejelentkezést igényelnek (lásd
@@ -269,7 +271,7 @@ export type SubcontractorContractDraft = {
   teljesites_kezdete: string | null;
   teljesites_vege: string | null;
   keltezes: string | null;
-  plusz_afa: string | null;
+  plusz_afa: boolean | null;
 };
 
 export type PendingSubcontractorEmployee = {
@@ -282,7 +284,7 @@ export type PendingSubcontractorEmployee = {
   kepviselo: string | null;
   nyilvantartasi_szam: string | null;
   megbizas_targya: string | null;
-  plusz_afa: string | null;
+  plusz_afa: boolean | null;
   draft: SubcontractorContractDraft | null;
 };
 

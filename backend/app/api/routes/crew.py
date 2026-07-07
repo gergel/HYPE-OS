@@ -1,13 +1,16 @@
-from fastapi import Depends, HTTPException, status
+import os
+
+from fastapi import Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import Role, hash_password, require_roles
+from app.core.security import Role, hash_password, require_page_action, require_roles
 from app.models.employee import Employee
 from app.models.rate import Rate
 from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate, RateCreate, RateRead, RateUpdate
+from app.services import document_storage
 
 
 def _hash_employee_password(data: dict, db: Session) -> dict:
@@ -49,6 +52,30 @@ def set_employee_password(employee_id: int, payload: SetPasswordPayload, db: Ses
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A jelszónak legalább 6 karakter hosszúnak kell lennie")
     employee.hashed_password = hash_password(payload.password)
     db.commit()
+
+
+@router.post("/{employee_id}/munkaszerzodes")
+async def upload_munkaszerzodes(
+    employee_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action("/csapat", "edit")),
+):
+    """A munkatárs munkaszerződésének (PDF/Word/kép) feltöltése - egy adott
+    munkatárshoz mindig ugyanazt az R2 kulcsot írjuk felül (nincs kiterjedés-
+    független fájlnév-ütközés/árva fájl felhalmozódás új feltöltésenként)."""
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Munkatárs nem található")
+    ext = os.path.splitext(file.filename or "munkaszerzodes.pdf")[1] or ".pdf"
+    key = f"munkaszerzodes/{employee_id}{ext}"
+    content_type = file.content_type or "application/octet-stream"
+    data = await file.read()
+    url = document_storage.upload_bytes(data, key, content_type)
+    employee.munkaszerzodes_url = url
+    db.commit()
+    return {"munkaszerzodes_url": url}
+
 
 rates_router = build_crud_router(
     model=Rate,

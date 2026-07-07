@@ -16,7 +16,7 @@ type FormState = {
   teljesites_kezdete: string;
   teljesites_vege: string;
   keltezes: string;
-  plusz_afa: string;
+  plusz_afa: boolean;
 };
 
 function formFromEmployee(employee: PendingSubcontractorEmployee): FormState {
@@ -32,8 +32,17 @@ function formFromEmployee(employee: PendingSubcontractorEmployee): FormState {
     teljesites_kezdete: draft?.teljesites_kezdete ?? "",
     teljesites_vege: draft?.teljesites_vege ?? "",
     keltezes: draft?.keltezes ?? "",
-    plusz_afa: draft?.plusz_afa ?? employee.plusz_afa ?? "",
+    plusz_afa: draft?.plusz_afa ?? employee.plusz_afa ?? false,
   };
+}
+
+/** Bruttó = nettó * 1,27, ha a megbízottnak plusz ÁFA-t kell felszámolni,
+ * egyébként megegyezik a nettóval. */
+function computeBrutto(nettoOsszeg: string, pluszAfa: boolean): number | null {
+  if (!nettoOsszeg.trim()) return null;
+  const netto = Number(nettoOsszeg);
+  if (Number.isNaN(netto)) return null;
+  return pluszAfa ? Math.round(netto * 1.27 * 100) / 100 : netto;
 }
 
 /** A projekten résztvevő, még nem kezelt (sem belsős, sem keretszerződéses)
@@ -55,6 +64,7 @@ export function SubcontractorContractManager({
   const [busy, setBusy] = useState<"save" | "send" | "skip" | null>(null);
 
   const selectedEmployee = pending.find((p) => p.id === openId) ?? null;
+  const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
 
   function openForm() {
     if (!selectedId) return;
@@ -69,7 +79,7 @@ export function SubcontractorContractManager({
     setForm(null);
   }
 
-  function update<K extends keyof FormState>(key: K, value: string) {
+  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
@@ -87,7 +97,7 @@ export function SubcontractorContractManager({
       teljesites_kezdete: form.teljesites_kezdete || null,
       teljesites_vege: form.teljesites_vege || null,
       keltezes: form.keltezes || null,
-      plusz_afa: form.plusz_afa || null,
+      plusz_afa: form.plusz_afa,
     };
   }
 
@@ -290,12 +300,20 @@ export function SubcontractorContractManager({
                 />
               </Field>
               <Field label="PLUSZ áfa">
-                <input
-                  value={form.plusz_afa}
-                  onChange={(e) => update("plusz_afa", e.target.value)}
-                  disabled={busyState}
-                  className={inputClass}
-                />
+                <label className="flex items-center gap-2 py-1.5 text-[13px] text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={form.plusz_afa}
+                    onChange={(e) => update("plusz_afa", e.target.checked)}
+                    disabled={busyState}
+                  />
+                  {form.plusz_afa ? "Igen" : "Nem"}
+                </label>
+              </Field>
+              <Field label="Bruttó összeg (Ft)">
+                <p className="py-1.5 text-[13px] text-text-secondary">
+                  {bruttoOsszeg != null ? `${bruttoOsszeg.toLocaleString("hu-HU")} Ft` : "–"}
+                </p>
               </Field>
               <Field label="Keltezés dátuma">
                 <input

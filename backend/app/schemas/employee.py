@@ -84,7 +84,7 @@ class EmployeeRead(EmployeeBase):
     formula_2_notion: JsonScalar = None
     main_database_notion_ids: JsonScalar = None
     vallalkozas_adoszama: str | None = None
-    plusz_afa: str | None = None
+    plusz_afa: bool | None = None
     munkaszerzodes_url: str | None = None
 
     model_config = {"from_attributes": True}

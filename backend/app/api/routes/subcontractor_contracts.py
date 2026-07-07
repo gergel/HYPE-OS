@@ -149,7 +149,7 @@ class DraftInfo(BaseModel):
     teljesites_kezdete: date | None
     teljesites_vege: date | None
     keltezes: date | None
-    plusz_afa: str | None
+    plusz_afa: bool | None
 
 
 class PendingEmployeeInfo(BaseModel):
@@ -162,7 +162,7 @@ class PendingEmployeeInfo(BaseModel):
     kepviselo: str | None
     nyilvantartasi_szam: str | None
     megbizas_targya: str | None
-    plusz_afa: str | None
+    plusz_afa: bool | None
     draft: DraftInfo | None
 
 
@@ -299,7 +299,7 @@ class ContractDraftIn(BaseModel):
     teljesites_kezdete: date | None = None
     teljesites_vege: date | None = None
     keltezes: date | None = None
-    plusz_afa: str | None = None
+    plusz_afa: bool | None = None
 
 
 _DRAFT_FIELDS = (
@@ -375,6 +375,8 @@ def generate_and_send(
     else:
         teljesites_str = ""
 
+    brutto_osszeg = round(draft.netto_osszeg * 1.27, 2) if draft.plusz_afa else draft.netto_osszeg
+
     doc_link = None
     pdf_bytes = None
     base_name = f"{project.forgatas_datuma or ''}_{project.nev or ''}_{employee.full_name}_szerződés"
@@ -388,7 +390,8 @@ def generate_and_send(
                 "tido": teljesites_str,
                 "netto": f"{draft.netto_osszeg:,.0f}".replace(",", " "),
                 "kelt": keltezes.strftime("%Y.%m.%d."),
-                "afa": draft.plusz_afa or "",
+                "afa": "Igen" if draft.plusz_afa else "Nem",
+                "brutto": f"{brutto_osszeg:,.0f}".replace(",", " "),
                 "nettoki": szam_betukkel(draft.netto_osszeg),
                 "nyilvszam": draft.vallalkozas_nyilvantartasi_szam or "",
                 "kepvis": draft.vallalkozas_kepviseloje or "",

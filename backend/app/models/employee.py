@@ -105,7 +105,7 @@ class Employee(TimestampMixin, Base):
     formula_2_notion: Mapped[dict | None] = mapped_column(JSON, comment="Formula 2")
     main_database_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="📅 Main Database (relation)")
     vallalkozas_adoszama: Mapped[str | None] = mapped_column(String(50), comment="Vállalkozás adószáma")
-    plusz_afa: Mapped[str | None] = mapped_column(String(100), comment="Plusz ÁFA")
+    plusz_afa: Mapped[bool | None] = mapped_column(Boolean, comment="Plusz ÁFA")
 
     rates: Mapped[list["Rate"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
     timesheets: Mapped[list["Timesheet"]] = relationship(back_populates="employee")

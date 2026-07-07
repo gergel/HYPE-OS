@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
+import { MunkaszerzodesUpload } from "@/components/MunkaszerzodesUpload";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
 import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
@@ -43,6 +44,8 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
   const vallalkozasFieldKeys = visibleFields
     ? VALLALKOZAS_FIELD_KEYS.filter((k) => visibleFields.includes(k))
     : VALLALKOZAS_FIELD_KEYS;
+  const vallalkozasGridKeys = vallalkozasFieldKeys.filter((k) => k !== "munkaszerzodes_url");
+  const showMunkaszerzodesUpload = vallalkozasFieldKeys.includes("munkaszerzodes_url");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -64,10 +67,18 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
 
         {vallalkozasFieldKeys.length > 0 && (
           <Card title="Vállalkozás adatok">
-            <EditableDetailGrid
-              patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
-              fields={toEditableDetailFields(employee, [], vallalkozasFieldKeys, fieldTypes)}
-            />
+            {vallalkozasGridKeys.length > 0 && (
+              <EditableDetailGrid
+                patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
+                fields={toEditableDetailFields(employee, [], vallalkozasGridKeys, fieldTypes)}
+              />
+            )}
+            {showMunkaszerzodesUpload && (
+              <div className={vallalkozasGridKeys.length > 0 ? "mt-4 border-t border-border pt-4" : ""}>
+                <p className="mb-2 text-[11px] text-text-muted">Munkaszerződés</p>
+                <MunkaszerzodesUpload employeeId={employee.id} currentUrl={(employee.munkaszerzodes_url as string | null) ?? null} />
+              </div>
+            )}
           </Card>
         )}
 

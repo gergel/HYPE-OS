@@ -48,7 +48,7 @@ class Contract(TimestampMixin, Base):
     netto_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Nettó összeg")
     teljesites_kezdete: Mapped[date | None] = mapped_column(Date, comment="Teljesítés kezdete")
     teljesites_vege: Mapped[date | None] = mapped_column(Date, comment="Teljesítés vége")
-    plusz_afa: Mapped[str | None] = mapped_column(String(50), comment="Plusz ÁFA")
+    plusz_afa: Mapped[bool | None] = mapped_column(Boolean, comment="Plusz ÁFA")
 
     # a 'Keretszerződés' / 'Alvállakozó keretszerződés' Notion táblák maradék mezői
     letrehozta_notion: Mapped[dict | list | None] = mapped_column(JSON, comment="Created by")
