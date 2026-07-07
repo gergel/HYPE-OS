@@ -257,6 +257,21 @@ export type PendingSubcontractorProject = {
   pending_count: number;
 };
 
+export type SubcontractorContractDraft = {
+  szerzodes_allapota: string | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  vallalkozas_kepviseloje: string | null;
+  vallalkozas_nyilvantartasi_szam: string | null;
+  megbizas_targya: string | null;
+  netto_osszeg: number | null;
+  teljesites_kezdete: string | null;
+  teljesites_vege: string | null;
+  keltezes: string | null;
+  plusz_afa: string | null;
+};
+
 export type PendingSubcontractorEmployee = {
   id: number;
   full_name: string;
@@ -268,6 +283,7 @@ export type PendingSubcontractorEmployee = {
   nyilvantartasi_szam: string | null;
   megbizas_targya: string | null;
   plusz_afa: string | null;
+  draft: SubcontractorContractDraft | null;
 };
 
 export type PendingSubcontractorProjectDetail = {

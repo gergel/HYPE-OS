@@ -7,16 +7,16 @@ import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { M2mLinker } from "@/components/M2mLinker";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
-import { SingleRelationPicker } from "@/components/SingleRelationPicker";
+import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   formatHuf,
-  getContracts,
   getEmployees,
   getEquipment,
   getFieldTypes,
+  getPendingSubcontractorsForProject,
   getRecord,
   getRelated,
   getVisibleFields,
@@ -31,7 +31,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const crewIds = Array.isArray(project.crew_employee_ids) ? (project.crew_employee_ids as number[]) : [];
 
-  const [projectCode, campaign, deliverables, allEquipment, allEmployees, bookings, allContracts, visibleFields, fieldTypes] =
+  const [projectCode, campaign, deliverables, allEquipment, allEmployees, bookings, pendingContracts, visibleFields, fieldTypes] =
     await Promise.all([
       project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
       project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
@@ -39,7 +39,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       getEquipment(),
       getEmployees(),
       getRelated(ENTITY_PATHS.assignment, { project_id: projectId }),
-      getContracts(),
+      getPendingSubcontractorsForProject(projectId),
       getVisibleFields("project"),
       getFieldTypes("project"),
     ]);
@@ -52,9 +52,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     trackMode: e.track_mode,
   }));
   const crewOptions = allEmployees.map((e) => ({ id: e.id, label: e.full_name, href: `/csapat/${e.id}` }));
-  const contractOptions = allContracts
-    .filter((c) => c.tipus === "alvallalkozoi")
-    .map((c) => ({ id: c.id, label: c.ceg_neve || `Szerződés #${c.id}` }));
 
   const deliverableTimesheets = await Promise.all(
     deliverables.map((d) => getRelated(ENTITY_PATHS.timesheet, { deliverable_id: Number(d.id) })),
@@ -134,42 +131,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </div>
         </Card>
 
-        <Card title="Szerződés">
-          <div className="space-y-4">
-            <div>
-              <p className="mb-2 text-[13px] font-medium text-text-primary">Szerződés készítés (megbízott kiválasztása)</p>
-              <SingleRelationPicker
-                path={`/api/v1/projects/${project.id}/szerzodes-keszites`}
-                bodyKey="employee_id"
-                currentId={project.szerzodes_keszites_employee_id as number | null}
-                currentLabel={project.megbizott_neve as string | null}
-                options={crewOptions}
-                actionLabel="Adatok átemelése"
-                emptyText="Nincs kiválasztva megbízott."
-                allowClear={false}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
-              <ActionButton
-                path={`/api/v1/projects/${project.id}/szerzodes-keszites-es-kuldese`}
-                label="Szerződés készítése és küldése"
-                confirmMessage="Elküldi a megbízási szerződést a kiválasztott megbízott email címére. Folytatod?"
-              />
-              <span className="text-[13px] text-text-secondary">Állapot: {String(project.szerzodes_allapot ?? "–")}</span>
-            </div>
-            <div className="border-t border-border pt-4">
-              <p className="mb-2 text-[13px] font-medium text-text-primary">Alvállakozó keretszerződés (külsős)</p>
-              <SingleRelationPicker
-                path={`${ENTITY_PATHS.project}/${project.id}`}
-                method="PATCH"
-                bodyKey="alvallakozo_keretszerzodes_contract_id"
-                currentId={project.alvallakozo_keretszerzodes_contract_id as number | null}
-                options={contractOptions}
-                actionLabel="Hozzálinkelés"
-                emptyText="Nincs hozzálinkelt keretszerződés."
-              />
-            </div>
-          </div>
+        <Card title="Szerződés készítés">
+          <SubcontractorContractManager projectId={project.id} pending={pendingContracts?.pending ?? []} />
         </Card>
 
         <Card title={`Eszközök (${bookingRows.length})`}>

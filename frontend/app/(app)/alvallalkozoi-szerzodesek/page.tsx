@@ -21,7 +21,7 @@ export default async function AlvallalkozoiSzerzodesekPage() {
           <DataTable<(typeof projects)[number]>
             rows={projects}
             emptyText="Nincs függő alvállalkozói szerződés - minden diszpózott projekten mindenki belsős, keretszerződéses, vagy már el van intézve."
-            getHref={(p) => `/alvallalkozoi-szerzodesek/${p.project_id}`}
+            getHref={(p) => `/projektek/${p.project_id}`}
             columns={[
               { header: "Projekt", render: (p) => p.project_nev ?? `#${p.project_id}`, sortAccessor: (p) => p.project_nev },
               {
