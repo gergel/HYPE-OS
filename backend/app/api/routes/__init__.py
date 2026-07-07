@@ -22,6 +22,7 @@ from app.api.routes.project_codes import router as project_codes_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.stocktake import router as stocktake_router
 from app.api.routes.storage import folders_router, media_router
+from app.api.routes.subcontractor_contracts import router as subcontractor_contracts_router
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.timeline import router as timeline_router
 from app.api.routes.user_access import router as user_access_router
@@ -68,6 +69,7 @@ api_router.include_router(expenses_router)
 api_router.include_router(revenues_router)
 api_router.include_router(kp_forgalom_router)
 api_router.include_router(contracts_router)
+api_router.include_router(subcontractor_contracts_router)
 # 14. Kampányok
 api_router.include_router(campaigns_router)
 # Feladatok

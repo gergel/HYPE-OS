@@ -50,6 +50,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Crew", href: "/csapat" },
       { label: "Vágók", href: "/csapat/vagok" },
+      { label: "Belsősök", href: "/csapat/belsosok" },
     ],
   },
   {
@@ -73,11 +74,15 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Pénzügyek",
-    items: [{ label: "Pénzügyek", href: "/penzugyek" }],
+    items: [
+      { label: "Pénzügyek", href: "/penzugyek" },
+      { label: "Keretszerződések", href: "/penzugyek/keretszerzodesek" },
+    ],
   },
   {
     label: null,
     items: [
+      { label: "Alvállalkozók szerződése", href: "/alvallalkozoi-szerzodesek" },
       { label: "Kampányok", href: "/kampanyok" },
       { label: "Feladatok", href: "/feladatok" },
       { label: "AI Assistant", href: "/ai-assistant" },

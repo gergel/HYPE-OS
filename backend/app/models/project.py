@@ -250,6 +250,7 @@ class Project(TimestampMixin, Base):
     media_items: Mapped[list["Media"]] = relationship(back_populates="project")
     folders: Mapped[list["Folder"]] = relationship(back_populates="project")
     portal: Mapped["Portal"] = relationship(back_populates="project", uselist=False)
+    contracts: Mapped[list["Contract"]] = relationship(back_populates="project", foreign_keys="Contract.project_id")
 
     @property
     def crew_employee_ids(self) -> list[int]:

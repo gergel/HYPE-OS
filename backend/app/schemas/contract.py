@@ -11,6 +11,7 @@ class ContractBase(BaseModel):
     tipus: ContractType
     client_id: int | None = None
     employee_id: int | None = None
+    project_id: int | None = None
     ceg_neve: str | None = None
     szekhely: str | None = None
     adoszam: str | None = None
@@ -18,6 +19,10 @@ class ContractBase(BaseModel):
     szerzodes_allapota: str | None = None
     keltezes: date | None = None
     alairva: bool = False
+    netto_osszeg: float | None = None
+    teljesites_kezdete: date | None = None
+    teljesites_vege: date | None = None
+    plusz_afa: str | None = None
 
 
 class ContractCreate(ContractBase):
@@ -28,6 +33,10 @@ class ContractUpdate(BaseModel):
     szerzodes_allapota: str | None = None
     alairva: bool | None = None
     szerzodes_file_url: str | None = None
+    netto_osszeg: float | None = None
+    teljesites_kezdete: date | None = None
+    teljesites_vege: date | None = None
+    plusz_afa: str | None = None
 
 
 class ContractRead(ContractBase):

@@ -66,6 +66,13 @@ export type Employee = {
   has_password: boolean;
   elso_munkanap: string | null;
   utolso_munkanap: string | null;
+  vallakozas_neve: string | null;
+  vallakozas_szekhely: string | null;
+  vallalkozas_adoszama: string | null;
+  vallalkozas_kepviselo: string | null;
+  nyilvantartasi_szam: string | null;
+  megbizas_targya: string | null;
+  plusz_afa: string | null;
 };
 
 export type Rate = {
@@ -157,9 +164,18 @@ export type Contract = {
   tipus: string;
   client_id: number | null;
   employee_id: number | null;
+  project_id: number | null;
   ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  megbizas_targya: string | null;
   szerzodes_allapota: string | null;
+  keltezes: string | null;
   alairva: boolean;
+  netto_osszeg: number | null;
+  teljesites_kezdete: string | null;
+  teljesites_vege: string | null;
+  plusz_afa: string | null;
 };
 
 /** A backend GET végpontok mostantól bejelentkezést igényelnek (lásd
@@ -232,6 +248,44 @@ export async function getDeliverables(limit = 5000): Promise<Deliverable[]> {
 
 export async function getContracts(limit = 5000): Promise<Contract[]> {
   return (await apiGet<Contract[]>(`/api/v1/contracts?limit=${limit}`)) ?? [];
+}
+
+export type PendingSubcontractorProject = {
+  project_id: number;
+  project_nev: string | null;
+  forgatas_datuma: string | null;
+  pending_count: number;
+};
+
+export type PendingSubcontractorEmployee = {
+  id: number;
+  full_name: string;
+  email: string | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  kepviselo: string | null;
+  nyilvantartasi_szam: string | null;
+  megbizas_targya: string | null;
+  plusz_afa: string | null;
+};
+
+export type PendingSubcontractorProjectDetail = {
+  project_id: number;
+  project_nev: string | null;
+  forgatas_datuma: string | null;
+  forgatas_datuma_vege: string | null;
+  pending: PendingSubcontractorEmployee[];
+};
+
+export async function getPendingSubcontractorProjects(): Promise<PendingSubcontractorProject[]> {
+  return (await apiGet<PendingSubcontractorProject[]>("/api/v1/alvallalkozoi-szerzodesek")) ?? [];
+}
+
+export async function getPendingSubcontractorsForProject(
+  projectId: number,
+): Promise<PendingSubcontractorProjectDetail | null> {
+  return apiGet<PendingSubcontractorProjectDetail>(`/api/v1/alvallalkozoi-szerzodesek/${projectId}`);
 }
 
 export async function getRates(limit = 5000): Promise<Rate[]> {
