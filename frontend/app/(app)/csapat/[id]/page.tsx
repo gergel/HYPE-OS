@@ -23,11 +23,25 @@ const VALLALKOZAS_FIELD_KEYS = [
   "email",
 ];
 
-export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const BACK_TARGETS: Record<string, { href: string; label: string }> = {
+  vagok: { href: "/csapat/vagok", label: "Vágók" },
+  belsosok: { href: "/csapat/belsosok", label: "Belsősök" },
+};
+
+export default async function EmployeeDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+}) {
   const { id } = await params;
+  const { from } = await searchParams;
   const employeeId = Number(id);
   const employee = await getRecord(ENTITY_PATHS.employee, employeeId);
   if (!employee) notFound();
+
+  const backTarget = (from && BACK_TARGETS[from]) || { href: "/csapat", label: "Külsős" };
 
   const [rates, timesheets, expenses, contracts, deliverables, campaigns, documents, visibleFields, fieldTypes] =
     await Promise.all([
@@ -50,7 +64,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 space-y-6 p-6">
-        <BackLink href="/csapat" label="Csapat" />
+        <BackLink href={backTarget.href} label={backTarget.label} />
 
         <Card title={String(employee.full_name ?? `Crew tag #${employee.id}`)}>
           <EditableDetailGrid

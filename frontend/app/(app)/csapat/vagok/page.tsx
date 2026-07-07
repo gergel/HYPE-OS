@@ -37,7 +37,7 @@ export default async function VagokPage() {
           <DataTable<VagoRow>
             rows={rows}
             emptyText="Még nincs vágóként felvett munkatárs - add hozzá fent."
-            getHref={(e) => `/csapat/${e.id}`}
+            getHref={(e) => `/csapat/${e.id}?from=vagok`}
             columns={[
               { header: "Név", render: (e) => e.full_name, sortAccessor: (e) => e.full_name },
               { header: "Email", render: (e) => e.email ?? "–", sortAccessor: (e) => e.email },

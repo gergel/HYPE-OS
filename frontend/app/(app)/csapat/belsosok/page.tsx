@@ -35,7 +35,7 @@ export default async function BelsosokPage() {
           <DataTable<(typeof rows)[number]>
             rows={rows}
             emptyText="Még nincs belsősként megjelölt munkatárs - válassz valakit fent a crew listából."
-            getHref={(e) => `/csapat/${e.id}`}
+            getHref={(e) => `/csapat/${e.id}?from=belsosok`}
             columns={[
               { header: "Név", render: (e) => e.full_name, sortAccessor: (e) => e.full_name },
               { header: "Email", render: (e) => e.email ?? "–", sortAccessor: (e) => e.email },
