@@ -23,8 +23,9 @@ from app.services import document_storage
 
 
 def _hash_employee_password(data: dict, db: Session) -> dict:
-    password = data.pop("password")
-    data["hashed_password"] = hash_password(password)
+    password = data.pop("password", None)
+    if password:
+        data["hashed_password"] = hash_password(password)
     return data
 
 

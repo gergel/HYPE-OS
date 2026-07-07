@@ -1,38 +1,41 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
 import { Employee, ENTITY_PATHS, getEmployees } from "@/lib/api";
 
-const TIPUS_LABEL: Record<string, string> = {
-  belsos: "Belsős",
-  kulsos: "Külsős",
-  vago: "Vágó",
-  kreativ: "Kreatív",
-  stab: "Stáb",
-};
-
+/** Külsős: a közös crew-adatbázisból (lásd Vágók/Belsősök oldal) azok, akik
+ * sem nem belsősök, sem nem vágók/kreatívok/stáb - vagyis a diszpó-küldés
+ * után eseti (nem keretszerződéses) megbízási szerződést igénylő emberek. Ha
+ * valakit belsősre/vágóra sorolunk át (tipus mező), automatikusan eltűnik
+ * innen és megjelenik a másik nézetben - ugyanaz a tábla, csak szűrve. */
 export default async function CsapatPage() {
   const employees = await getEmployees();
+  const rows = employees.filter((e) => e.tipus === "kulsos");
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 p-6">
-        <Card title={`Csapat (${employees.length})`}>
+        <Card title={`Külsős (${rows.length})`}>
+          <QuickCreateForm
+            postPath={ENTITY_PATHS.employee}
+            addLabel="+ Új külsős hozzáadása"
+            presetFields={{ tipus: "kulsos" }}
+            fields={[
+              { name: "full_name", label: "Név", required: true },
+              { name: "email", label: "Email" },
+            ]}
+          />
           <DataTable<Employee>
-            rows={employees}
-            emptyText="Még nincs felvett crew tag - importáld a Notionból, vagy adj hozzá egyet a /api/v1/crew végponton."
+            rows={rows}
+            emptyText="Még nincs felvett külsős munkatárs."
             getHref={(e) => `/csapat/${e.id}`}
             deleteHref={(e) => `${ENTITY_PATHS.employee}/${e.id}`}
             filterable
             columns={[
               { header: "Név", render: (e) => e.full_name, sortAccessor: (e) => e.full_name },
-              {
-                header: "Típus",
-                render: (e) => <StatusBadge label={TIPUS_LABEL[e.tipus] ?? e.tipus} tone="neutral" />,
-                sortAccessor: (e) => e.tipus,
-              },
               { header: "Email", render: (e) => e.email ?? "–", sortAccessor: (e) => e.email },
               { header: "Telefon", render: (e) => e.telefon ?? "–", sortAccessor: (e) => e.telefon },
               {

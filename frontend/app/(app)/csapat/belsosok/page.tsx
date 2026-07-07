@@ -1,10 +1,11 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { TopBar } from "@/components/TopBar";
 import { BelsosAddWidget } from "@/components/BelsosAddWidget";
 import { EmployeeActiveToggle } from "@/components/VagoInlineFields";
-import { getEmployees } from "@/lib/api";
+import { ENTITY_PATHS, getEmployees } from "@/lib/api";
 
 /** Belsősök: a crew-adatbázisból (külsős + belsős) azok, akiket az admin
  * belsősként jelölt meg (Employee.tipus == "belsos") - bármikor bővíthető a
@@ -22,6 +23,15 @@ export default async function BelsosokPage() {
       <div className="flex-1 p-6">
         <Card title={`Belsősök (${rows.length})`}>
           <BelsosAddWidget candidates={candidates} />
+          <QuickCreateForm
+            postPath={ENTITY_PATHS.employee}
+            addLabel="+ Új belsős hozzáadása"
+            presetFields={{ tipus: "belsos" }}
+            fields={[
+              { name: "full_name", label: "Név", required: true },
+              { name: "email", label: "Email" },
+            ]}
+          />
           <DataTable<(typeof rows)[number]>
             rows={rows}
             emptyText="Még nincs belsősként megjelölt munkatárs - válassz valakit fent a crew listából."

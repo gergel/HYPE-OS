@@ -48,7 +48,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "Csapat",
     items: [
-      { label: "Crew", href: "/csapat" },
+      { label: "Külsős", href: "/csapat" },
       { label: "Vágók", href: "/csapat/vagok" },
       { label: "Belsősök", href: "/csapat/belsosok" },
     ],

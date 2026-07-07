@@ -19,7 +19,10 @@ class EmployeeBase(BaseModel):
 
 class EmployeeCreate(EmployeeBase):
     role: SystemRole = SystemRole.OPERATOR
-    password: str
+    # opcionális - ha nincs megadva, hashed_password=None marad (ugyanúgy,
+    # mint a Notionből importált munkatársaknál), az admin később a
+    # Beállítások oldalon állíthat be jelszót neki, ha bejelentkezést igényel.
+    password: str | None = None
 
 
 class EmployeeUpdate(BaseModel):

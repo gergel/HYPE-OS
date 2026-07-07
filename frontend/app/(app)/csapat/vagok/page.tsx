@@ -1,9 +1,10 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { TopBar } from "@/components/TopBar";
 import { EmployeeActiveToggle, EmployeeStartDateEditor, RateHourlyEditor } from "@/components/VagoInlineFields";
-import { Employee, formatDate, getEmployees, getRates, Rate } from "@/lib/api";
+import { Employee, ENTITY_PATHS, formatDate, getEmployees, getRates, Rate } from "@/lib/api";
 
 type VagoRow = Employee & { rate: Rate | null };
 
@@ -24,9 +25,18 @@ export default async function VagokPage() {
       <TopBar />
       <div className="flex-1 p-6">
         <Card title={`Vágók (${rows.length})`}>
+          <QuickCreateForm
+            postPath={ENTITY_PATHS.employee}
+            addLabel="+ Új vágó hozzáadása"
+            presetFields={{ tipus: "vago" }}
+            fields={[
+              { name: "full_name", label: "Név", required: true },
+              { name: "email", label: "Email" },
+            ]}
+          />
           <DataTable<VagoRow>
             rows={rows}
-            emptyText="Még nincs vágóként felvett munkatárs - a Csapat oldalon add hozzá, típusnak 'Vágó'-t választva."
+            emptyText="Még nincs vágóként felvett munkatárs - add hozzá fent."
             getHref={(e) => `/csapat/${e.id}`}
             columns={[
               { header: "Név", render: (e) => e.full_name, sortAccessor: (e) => e.full_name },
