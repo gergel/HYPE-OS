@@ -7,6 +7,22 @@ import { TopBar } from "@/components/TopBar";
 import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
 
+/** Ezek az adatok másolódnak át előtöltésként az alvállalkozói eseti
+ * szerződés generálásakor (lásd backend/app/api/routes/subcontractor_contracts.py
+ * _get_or_create_draft) - ezért egy külön, jól látható szekcióban gyűjtjük
+ * össze őket a crew tag oldalán, hogy egyszer kelljen csak kitölteni. */
+const VALLALKOZAS_FIELD_KEYS = [
+  "vallakozas_neve",
+  "vallalkozas_kepviselo",
+  "vallakozas_szekhely",
+  "vallalkozas_adoszama",
+  "nyilvantartasi_szam",
+  "megbizas_targya",
+  "plusz_afa",
+  "email",
+  "munkaszerzodes_url",
+];
+
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const employeeId = Number(id);
@@ -24,6 +40,10 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
     getFieldTypes("employee"),
   ]);
 
+  const vallalkozasFieldKeys = visibleFields
+    ? VALLALKOZAS_FIELD_KEYS.filter((k) => visibleFields.includes(k))
+    : VALLALKOZAS_FIELD_KEYS;
+
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
@@ -33,9 +53,23 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         <Card title={String(employee.full_name ?? `Crew tag #${employee.id}`)}>
           <EditableDetailGrid
             patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
-            fields={toEditableDetailFields(employee, ["hashed_password"], visibleFields, fieldTypes)}
+            fields={toEditableDetailFields(
+              employee,
+              ["hashed_password", ...VALLALKOZAS_FIELD_KEYS],
+              visibleFields,
+              fieldTypes,
+            )}
           />
         </Card>
+
+        {vallalkozasFieldKeys.length > 0 && (
+          <Card title="Vállalkozás adatok">
+            <EditableDetailGrid
+              patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
+              fields={toEditableDetailFields(employee, [], vallalkozasFieldKeys, fieldTypes)}
+            />
+          </Card>
+        )}
 
         <Card title={`Díjak (${rates.length})`}>
           <RelatedTable rows={rates} emptyText="Nincs felvett díj ehhez a crew taghoz." deleteBasePath={ENTITY_PATHS.rate} />
