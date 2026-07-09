@@ -5,8 +5,10 @@ const TOKEN_COOKIE = "hype_os_token";
 // "/p" a Média Portál ÜGYFÉL-oldali nézete (/p/{slug}) - szándékosan publikus,
 // mert a valódi ügyfelek, akiknek a linket küldjük, nem HYPE OS alkalmazottak
 // (saját, portál-hatókörű jelszó/share-token védi, lásd
-// backend/app/api/routes/portal_public.py).
-const PUBLIC_PATHS = ["/login", "/p"];
+// backend/app/api/routes/portal_public.py). "/kerdoiv" az utókövető kérdőív -
+// a diszpó-résztvevő crew tagok emailben kapják a linket, ők sem feltétlenül
+// HYPE OS felhasználók (lásd backend/app/api/routes/public_utokovetes.py).
+const PUBLIC_PATHS = ["/login", "/p", "/kerdoiv"];
 
 /** Bejelentkezés nélkül semmilyen oldal nem érhető el (kivéve a fenti
  * PUBLIC_PATHS) - és ha a bejelentkezett felhasználóhoz egyénenkénti

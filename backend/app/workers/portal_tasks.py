@@ -76,3 +76,11 @@ def build_hls_task(video_id: int, source_key: str) -> None:
         pass
     finally:
         db.close()
+
+
+# A modul aljára szándékosan (nem a fájl tetejére, körkörös import miatt) - a
+# dispo_tasks.py a fent definiált celery_app-ra regisztrálja a saját taskját,
+# ezért be kell töltődnie, mielőtt a worker ("-A app.workers.portal_tasks
+# worker") elindulna, különben a "dispo.send_utokovetes_email" task ismeretlen
+# maradna a worker számára.
+from app.workers import dispo_tasks  # noqa: E402,F401

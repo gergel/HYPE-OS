@@ -23,6 +23,10 @@ lásd Project modell) is eltároljuk, és EZT adjuk át `in_reply_to`-ként."""
 
 from __future__ import annotations
 
+import logging
+import secrets
+from datetime import datetime, time, timedelta
+
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -30,6 +34,8 @@ from app.models.employee import Employee
 from app.models.project import Project
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import send_message
+
+logger = logging.getLogger("hype_os")
 
 _PRE_DISPO_HTML = """\
 <p>Sziasztok,</p>
@@ -146,6 +152,29 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
     return {"status": "OK", "message": "Előzetes diszpó elküldve.", "thread_id": project.gmail_thread_id}
 
 
+def _schedule_utokovetes_email(project: Project) -> None:
+    """A diszpó kiküldése után beütemezi az utókövető kérdőív-emailt a
+    forgatás vége utáni napra, 12 órára (egy napos forgatásnál a forgatási
+    nap utáni nap 12:00, több naposnál az utolsó forgatási nap utáni nap
+    12:00 - mindkettő ugyanaz a képlet: utolsó nap + 1 nap, 12:00). Az eta-t
+    naiv (nem UTC-re konvertált) időpontként adjuk át - egy nagyjából 12 órás
+    utókövető emailnél ez az egyszerűsítés (max. 1-2 órás csúszás időzóna
+    miatt) nem számít. Ha az ütemezés (pl. Redis nem elérhető) elhasal, ez
+    NEM hiúsítja meg magát a diszpó-küldést - csak naplózzuk."""
+    last_day = project.forgatas_datuma_vege or project.forgatas_datuma
+    if not last_day:
+        return
+    if not project.utokoveto_token:
+        project.utokoveto_token = secrets.token_urlsafe(16)
+    eta = datetime.combine(last_day, time(0)) + timedelta(days=1, hours=12)
+    try:
+        from app.workers.dispo_tasks import send_utokovetes_email_task
+
+        send_utokovetes_email_task.apply_async(args=[project.id], eta=eta)
+    except Exception:
+        logger.exception("Nem sikerült beütemezni az utókövető emailt project_id=%s", project.id)
+
+
 def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     """'Diszpó küldése' gomb - teljes diszpó email a technika listával, stábbal,
     brief-fel stb., és (ha GDOC_DISPO_TEMPLATE_ID be van állítva) egy Google Docs
@@ -204,6 +233,7 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     project.gmail_thread_id = thread_id or project.gmail_thread_id
     project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     project.aki_kikuldte_a_diszpot = [current_user.full_name]
+    _schedule_utokovetes_email(project)
     db.commit()
     db.refresh(project)
     return {"status": "OK", "message": "Diszpó elküldve.", "thread_id": project.gmail_thread_id, "doc_link": doc_link}

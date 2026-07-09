@@ -85,6 +85,11 @@ class Project(TimestampMixin, Base):
         "(ne külön levélként) fűződjön a szálhoz a címzettek levelezőjében is, nem csak a küldő Gmail-fiókjában.",
     )
     resztvevok_email: Mapped[str | None] = mapped_column(Text, comment="Résztvevők email")
+    # A publikus utókövető kérdőív linkjéhez (lásd services/dispo.py,
+    # api/routes/public_utokovetes.py) - a diszpó kiküldésekor generáljuk, hogy
+    # a bejelentkezést nem igénylő űrlap ne a nyers (kitalálható) project_id-t
+    # használja az URL-ben.
+    utokoveto_token: Mapped[str | None] = mapped_column(String(64), unique=True)
 
     # --- technika / eszközök (szöveges/relation mezők - a valódi Equipment/Assignment
     #     kapcsolat az Assignment táblán keresztül él, ezek itt a Notion-oldali nyers adat) ---
@@ -251,6 +256,7 @@ class Project(TimestampMixin, Base):
     folders: Mapped[list["Folder"]] = relationship(back_populates="project")
     portal: Mapped["Portal"] = relationship(back_populates="project", uselist=False)
     contracts: Mapped[list["Contract"]] = relationship(back_populates="project", foreign_keys="Contract.project_id")
+    post_shoot_feedbacks: Mapped[list["PostShootFeedback"]] = relationship(back_populates="project")
 
     @property
     def crew_employee_ids(self) -> list[int]:

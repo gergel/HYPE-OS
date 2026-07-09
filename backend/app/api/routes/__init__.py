@@ -20,6 +20,7 @@ from app.api.routes.portal_public import downloads_router as portal_downloads_ro
 from app.api.routes.postproduction import deliverable_actions_router, deliverables_router, feedback_router, timesheets_router
 from app.api.routes.project_codes import router as project_codes_router
 from app.api.routes.projects import router as projects_router
+from app.api.routes.public_utokovetes import router as public_utokovetes_router
 from app.api.routes.stocktake import router as stocktake_router
 from app.api.routes.storage import folders_router, media_router
 from app.api.routes.subcontractor_contracts import router as subcontractor_contracts_router
@@ -53,6 +54,7 @@ api_router.include_router(folders_router)
 api_router.include_router(media_router)
 # 10. Naptár / Diszpó
 api_router.include_router(callsheets_router)
+api_router.include_router(public_utokovetes_router)
 # 11. Utómunka
 api_router.include_router(deliverable_actions_router)
 api_router.include_router(deliverables_router)
