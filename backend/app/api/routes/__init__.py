@@ -28,6 +28,7 @@ from app.api.routes.subcontractor_contracts import router as subcontractor_contr
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.timeline import router as timeline_router
 from app.api.routes.user_access import router as user_access_router
+from app.api.routes.utokovetes_admin import router as utokovetes_admin_router
 
 api_router = APIRouter()
 
@@ -74,6 +75,7 @@ api_router.include_router(kp_forgalom_router)
 api_router.include_router(contracts_router)
 api_router.include_router(subcontractor_contracts_router)
 api_router.include_router(performance_certificates_router)
+api_router.include_router(utokovetes_admin_router)
 # 14. Kampányok
 api_router.include_router(campaigns_router)
 # Feladatok

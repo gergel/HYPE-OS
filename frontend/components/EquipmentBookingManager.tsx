@@ -32,6 +32,8 @@ export function EquipmentBookingManager({
   const router = useRouter();
   const [selected, setSelected] = useState("");
   const [qty, setQty] = useState("1");
+  const [kivitelDatuma, setKivitelDatuma] = useState("");
+  const [visszahozatalDatuma, setVisszahozatalDatuma] = useState("");
   const [busy, setBusy] = useState(false);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
@@ -49,7 +51,10 @@ export function EquipmentBookingManager({
     setLoadingAvailability(true);
     setAvailability(null);
     setAvailabilityError(null);
-    authFetch(`/api/v1/equipment/${selected}/availability?project_id=${projectId}`)
+    const params = new URLSearchParams({ project_id: String(projectId) });
+    if (kivitelDatuma) params.set("start_date", kivitelDatuma);
+    if (visszahozatalDatuma || kivitelDatuma) params.set("end_date", visszahozatalDatuma || kivitelDatuma);
+    authFetch(`/api/v1/equipment/${selected}/availability?${params.toString()}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -66,7 +71,7 @@ export function EquipmentBookingManager({
     return () => {
       cancelled = true;
     };
-  }, [selected, projectId]);
+  }, [selected, projectId, kivitelDatuma, visszahozatalDatuma]);
 
   const maxQty =
     availability && availability.track_mode === "stock" && typeof availability.available === "number"
@@ -84,7 +89,13 @@ export function EquipmentBookingManager({
     try {
       const res = await authFetch("/api/v1/assignments", {
         method: "POST",
-        body: JSON.stringify({ equipment_id: Number(selected), project_id: projectId, qty: requestedQty }),
+        body: JSON.stringify({
+          equipment_id: Number(selected),
+          project_id: projectId,
+          qty: requestedQty,
+          kivitel_datuma: kivitelDatuma || null,
+          visszahozatal_datuma: visszahozatalDatuma || kivitelDatuma || null,
+        }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -160,6 +171,24 @@ export function EquipmentBookingManager({
             className="w-20 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
           />
         )}
+        <div className="flex items-center gap-1">
+          <label className="text-[11px] text-text-muted">Mikortól</label>
+          <input
+            type="date"
+            value={kivitelDatuma}
+            onChange={(e) => setKivitelDatuma(e.target.value)}
+            className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <label className="text-[11px] text-text-muted">Meddig</label>
+          <input
+            type="date"
+            value={visszahozatalDatuma}
+            onChange={(e) => setVisszahozatalDatuma(e.target.value)}
+            className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+          />
+        </div>
         <button
           type="button"
           disabled={!selected || busy || maxQty === 0}
@@ -169,6 +198,9 @@ export function EquipmentBookingManager({
           Hozzáadás
         </button>
       </div>
+      <p className="mt-1 text-[11px] text-text-muted">
+        A "Mikortól" / "Meddig" mező üresen hagyva a projekt teljes forgatási időszakára foglal.
+      </p>
       {selected && (
         <p className={`mt-1.5 text-[12px] ${availabilityError ? "text-text-danger" : "text-text-muted"}`}>
           {loadingAvailability && "Elérhetőség ellenőrzése…"}

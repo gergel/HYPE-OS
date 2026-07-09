@@ -114,8 +114,24 @@ def _format_hu_date_range(project: Project) -> str:
 
 
 def _recipients(project: Project) -> list[str]:
+    """A diszpó (és az utókövető email) címzettjei - a 'Résztvevők email'
+    Notion-mezőben kézzel felsoroltak MELLÉ automatikusan hozzávesszük a
+    projekt stábjaként (project.crew) felvett emberek email címét is, hogy ne
+    kelljen minden hozzáadott stábtagot manuálisan is beírni a szöveges
+    mezőbe. Kis- és nagybetű szerint dedupolva, a megjelenési sorrend
+    megtartásával."""
     raw = (project.resztvevok_email or "").replace(";", ",")
-    return [e.strip() for e in raw.split(",") if e.strip()]
+    manual = [e.strip() for e in raw.split(",") if e.strip()]
+    crew_emails = [e.email.strip() for e in project.crew if e.email and e.email.strip()]
+
+    seen: set[str] = set()
+    result: list[str] = []
+    for email in manual + crew_emails:
+        key = email.lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(email)
+    return result
 
 
 def _subject(project: Project) -> str:

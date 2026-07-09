@@ -192,8 +192,11 @@ def check_technika(db: Session, project: Project) -> dict:
                 if alternatives:
                     msg += f". Alternatívák: {', '.join(alt.nev for alt in alternatives)}"
                 messages.append(msg)
-        else:
-            keret = equipment.osszes_mennyiseg or 0
+        elif equipment.osszes_mennyiseg is not None:
+            # Ha nincs megadva "Összes mennyiség", nem ismert a keret - ilyenkor
+            # nem jelezzük túllépésnek (0-nak véve mindig hibát adna, holott
+            # csak a Notion-import forrásadata hiányzik, nem a valós készlet).
+            keret = equipment.osszes_mennyiseg
             same_item_assignments = db.scalars(select(Assignment).where(Assignment.equipment_id == equipment.id)).all()
             overbooked_day: date | None = None
             overbooked_total = 0

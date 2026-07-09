@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -109,12 +111,20 @@ def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{equipment_id}/availability")
 def equipment_availability(
-    equipment_id: int, project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
+    equipment_id: int,
+    project_id: int,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
 ):
     """Egy eszköz elérhetősége egy adott projekt forgatási napjaira - asset eszköznél
     foglalt-e már (más projekthez), stock eszköznél hány db szabad a teljes
     mennyiségből. A hozzáadás UI-ban ez mutatja élőben, mennyi elérhető, mielőtt
-    a felhasználó ténylegesen hozzáadná."""
+    a felhasználó ténylegesen hozzáadná. Ha a felhasználó a hozzáadáskor a projekt
+    teljes forgatási időszakától eltérő (szűkebb) kiviteli/visszahozatali dátumot
+    ad meg, azt start_date/end_date-ként átadva ARRA az időszakra kérdezhető le az
+    elérhetőség (nem a teljes projekt-időszakra)."""
     equipment = db.get(Equipment, equipment_id)
     if equipment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipment nem található")
@@ -122,7 +132,10 @@ def equipment_availability(
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projekt nem található")
 
-    project_range = _project_range(project)
+    if start_date is not None:
+        project_range = (start_date, end_date or start_date)
+    else:
+        project_range = _project_range(project)
     if project_range is None:
         return {"track_mode": equipment.track_mode.value, "available": None, "detail": "Nincs forgatási dátum a projekten."}
     start, end = project_range
@@ -139,11 +152,24 @@ def equipment_availability(
                 return {"track_mode": "asset", "available": False, "detail": f"Foglalt: {other.nev}"}
         return {"track_mode": "asset", "available": True, "detail": None}
 
-    keret = equipment.osszes_mennyiseg or 0
     foglalt = 0
     for a in other_assignments:
         other = db.get(Project, a.project_id)
         other_range = _project_range(other) if other else None
         if other_range and _ranges_overlap(start, end, *other_range):
             foglalt += a.qty
+
+    if equipment.osszes_mennyiseg is None:
+        # Nincs megadva "Összes mennyiség" (gyakori a Notion-importált
+        # tételeknél) - ez NEM azt jelenti, hogy 0 db van belőle, csak azt,
+        # hogy nem ismert a keret. Ilyenkor nem korlátozzuk a hozzáadást.
+        return {
+            "track_mode": "stock",
+            "available": None,
+            "keret": None,
+            "foglalt": foglalt,
+            "detail": "Nincs megadva összes mennyiség ennél az eszköznél - a hozzáadás nem korlátozott.",
+        }
+
+    keret = equipment.osszes_mennyiseg
     return {"track_mode": "stock", "available": max(keret - foglalt, 0), "keret": keret, "foglalt": foglalt}

@@ -368,6 +368,50 @@ export async function getPendingTigForProject(projectId: number): Promise<Pendin
   return apiGet<PendingTigProjectDetail>(`/api/v1/teljesitesi-igazolasok/${projectId}`);
 }
 
+export type UtokovetesOverview = {
+  project_id: number;
+  project_nev: string | null;
+  projektkod: string | null;
+  forgatas_datuma: string | null;
+  forgatas_datuma_vege: string | null;
+  szerzodes_osszes: number;
+  szerzodes_fuggo: number;
+  tig_ready: boolean;
+  tig_osszes: number;
+  tig_fuggo: number;
+  visszajelzes_darab: number;
+};
+
+export type PostShootFeedback = {
+  id: number;
+  project_id: number;
+  erdemleges_tortent: string | null;
+  technika_info: string | null;
+  egyeb: string | null;
+  werk_fotok: { url: string; filename: string }[] | null;
+  created_at: string;
+};
+
+export type UtokovetesDetail = {
+  project_id: number;
+  project_nev: string | null;
+  projektkod: string | null;
+  forgatas_datuma: string | null;
+  forgatas_datuma_vege: string | null;
+  szerzodesek: { id: number; full_name: string; email: string | null; draft: SubcontractorContractDraft | null }[];
+  tig_ready: boolean;
+  teljesitesi_igazolasok: { id: number; full_name: string; email: string | null; draft: TigDraft | null }[];
+  visszajelzesek: PostShootFeedback[];
+};
+
+export async function getUtokovetesOverview(): Promise<UtokovetesOverview[]> {
+  return (await apiGet<UtokovetesOverview[]>("/api/v1/utokovetes")) ?? [];
+}
+
+export async function getUtokovetesDetail(projectId: number): Promise<UtokovetesDetail | null> {
+  return apiGet<UtokovetesDetail>(`/api/v1/utokovetes/${projectId}`);
+}
+
 export async function getRates(limit = 5000): Promise<Rate[]> {
   return (await apiGet<Rate[]>(`/api/v1/rates?limit=${limit}`)) ?? [];
 }
