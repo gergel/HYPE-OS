@@ -83,6 +83,7 @@ export const navGroups: NavGroup[] = [
     label: null,
     items: [
       { label: "Alvállalkozók szerződése", href: "/alvallalkozoi-szerzodesek" },
+      { label: "Teljesítési igazolások", href: "/teljesitesi-igazolasok" },
       { label: "Kampányok", href: "/kampanyok" },
       { label: "Feladatok", href: "/feladatok" },
       { label: "AI Assistant", href: "/ai-assistant" },

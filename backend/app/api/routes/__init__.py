@@ -14,6 +14,7 @@ from app.api.routes.equipment import assignments_router, router as equipment_rou
 from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router
 from app.api.routes.notifications import router as notifications_router
+from app.api.routes.performance_certificates import router as performance_certificates_router
 from app.api.routes.portal import payments_router, router as portal_router
 from app.api.routes.portal_admin import router as portal_admin_router
 from app.api.routes.portal_public import downloads_router as portal_downloads_router, router as portal_public_router
@@ -72,6 +73,7 @@ api_router.include_router(revenues_router)
 api_router.include_router(kp_forgalom_router)
 api_router.include_router(contracts_router)
 api_router.include_router(subcontractor_contracts_router)
+api_router.include_router(performance_certificates_router)
 # 14. Kampányok
 api_router.include_router(campaigns_router)
 # Feladatok

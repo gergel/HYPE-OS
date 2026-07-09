@@ -17,6 +17,7 @@ from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.media import Folder, Media
 from app.models.notification import Notification
 from app.models.notion_import import NotionImportMap
+from app.models.performance_certificate import PerformanceCertificate
 from app.models.post_shoot_feedback import PostShootFeedback
 from app.models.portal import (
     Brand,
@@ -65,6 +66,7 @@ __all__ = [
     "Media",
     "Notification",
     "NotionImportMap",
+    "PerformanceCertificate",
     "PostShootFeedback",
     "Brand",
     "PaymentMode",

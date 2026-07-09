@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     gdoc_dispo_template_id: str = ""
     gdoc_contract_template_id: str = ""
     gdoc_alvallalkozoi_szerzodes_template_id: str = ""
+    gdoc_tig_template_id: str = ""
     gdoc_output_folder_id: str = ""
     google_docs_oauth_token_json: str = ""
     drive_folder_id: str = ""

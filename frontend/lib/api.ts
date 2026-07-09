@@ -318,6 +318,56 @@ export async function getPendingSubcontractorsForProject(
   return apiGet<PendingSubcontractorProjectDetail>(`/api/v1/alvallalkozoi-szerzodesek/${projectId}`);
 }
 
+export type PendingTigProject = {
+  project_id: number;
+  project_nev: string | null;
+  forgatas_datuma: string | null;
+  pending_count: number;
+};
+
+export type TigDraft = {
+  allapot: string | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  megbizas_targya: string | null;
+  netto_osszeg: number | null;
+  teljesites_kezdete: string | null;
+  teljesites_vege: string | null;
+  keltezes: string | null;
+  plusz_afa: boolean | null;
+};
+
+export type PendingTigEmployee = {
+  id: number;
+  full_name: string;
+  email: string | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  megbizas_targya: string | null;
+  plusz_afa: boolean | null;
+  draft: TigDraft | null;
+};
+
+export type PendingTigProjectDetail = {
+  project_id: number;
+  project_nev: string | null;
+  projektkod: string | null;
+  forgatas_datuma: string | null;
+  forgatas_datuma_vege: string | null;
+  pending: PendingTigEmployee[];
+  tig_ready: boolean;
+};
+
+export async function getPendingTigProjects(): Promise<PendingTigProject[]> {
+  return (await apiGet<PendingTigProject[]>("/api/v1/teljesitesi-igazolasok")) ?? [];
+}
+
+export async function getPendingTigForProject(projectId: number): Promise<PendingTigProjectDetail | null> {
+  return apiGet<PendingTigProjectDetail>(`/api/v1/teljesitesi-igazolasok/${projectId}`);
+}
+
 export async function getRates(limit = 5000): Promise<Rate[]> {
   return (await apiGet<Rate[]>(`/api/v1/rates?limit=${limit}`)) ?? [];
 }

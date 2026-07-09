@@ -5,6 +5,7 @@ import { Card } from "@/components/Card";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { M2mLinker } from "@/components/M2mLinker";
+import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
@@ -17,6 +18,7 @@ import {
   getEquipment,
   getFieldTypes,
   getPendingSubcontractorsForProject,
+  getPendingTigForProject,
   getRecord,
   getRelated,
   getVisibleFields,
@@ -31,18 +33,29 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const crewIds = Array.isArray(project.crew_employee_ids) ? (project.crew_employee_ids as number[]) : [];
 
-  const [projectCode, campaign, deliverables, allEquipment, allEmployees, bookings, pendingContracts, visibleFields, fieldTypes] =
-    await Promise.all([
-      project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
-      project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
-      getRelated(ENTITY_PATHS.deliverable, { project_id: projectId }),
-      getEquipment(),
-      getEmployees(),
-      getRelated(ENTITY_PATHS.assignment, { project_id: projectId }),
-      getPendingSubcontractorsForProject(projectId),
-      getVisibleFields("project"),
-      getFieldTypes("project"),
-    ]);
+  const [
+    projectCode,
+    campaign,
+    deliverables,
+    allEquipment,
+    allEmployees,
+    bookings,
+    pendingContracts,
+    pendingTig,
+    visibleFields,
+    fieldTypes,
+  ] = await Promise.all([
+    project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
+    project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
+    getRelated(ENTITY_PATHS.deliverable, { project_id: projectId }),
+    getEquipment(),
+    getEmployees(),
+    getRelated(ENTITY_PATHS.assignment, { project_id: projectId }),
+    getPendingSubcontractorsForProject(projectId),
+    getPendingTigForProject(projectId),
+    getVisibleFields("project"),
+    getFieldTypes("project"),
+  ]);
 
   const equipmentById = new Map(allEquipment.map((e) => [e.id, e]));
   const equipmentOptions = allEquipment.map((e) => ({
@@ -133,6 +146,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
         <Card title="Szerződés készítés">
           <SubcontractorContractManager projectId={project.id} pending={pendingContracts?.pending ?? []} />
+        </Card>
+
+        <Card title="Teljesítési igazolás">
+          {pendingTig?.tig_ready ? (
+            <PerformanceCertificateManager projectId={project.id} pending={pendingTig.pending} />
+          ) : (
+            <p className="text-[13px] text-text-secondary">
+              Teljesítési igazolás csak azután készíthető, hogy ezen a projekten mindenkinek megvan a szerződés
+              státusza (kiküldve vagy kihagyva) - lásd a fenti "Szerződés készítés" kártyát.
+            </p>
+          )}
         </Card>
 
         <Card title={`Eszközök (${bookingRows.length})`}>
