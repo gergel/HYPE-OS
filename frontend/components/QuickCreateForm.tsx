@@ -30,8 +30,18 @@ export function QuickCreateForm({
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setError(null);
+    // Ne csak a böngésző natív "required" tooltipjére hagyatkozzunk - az
+    // könnyen észrevétlen marad (pl. ha a mező máshova görgetve van), és
+    // ilyenkor a kattintás úgy nézett ki, mintha semmi nem történt volna
+    // (nem ment ki kérés a szerver felé). Explicit, jól látható hibaüzenetet
+    // adunk ilyenkor is.
+    const missing = fields.filter((f) => f.required && !values[f.name]?.trim());
+    if (missing.length > 0) {
+      setError(`Kötelező mező hiányzik: ${missing.map((f) => f.label).join(", ")}`);
+      return;
+    }
+    setBusy(true);
     try {
       const body: Record<string, unknown> = { ...presetFields };
       for (const f of fields) {
@@ -64,6 +74,7 @@ export function QuickCreateForm({
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       className="mb-3 flex flex-wrap items-end gap-3 rounded-[var(--radius)] border border-border bg-surface-3 p-3"
     >
       {fields.map((f) => (

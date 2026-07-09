@@ -145,7 +145,13 @@ def build_crud_router(
             related = db.scalars(select(related_model).where(related_model.id.in_(ids))).all() if ids else []
             setattr(obj, attr_name, related)
         db.add(obj)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Az érték már foglalt (egyedinek kell lennie)."
+            ) from exc
         db.refresh(obj)
         return obj
 
