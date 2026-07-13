@@ -416,6 +416,31 @@ export async function getRates(limit = 5000): Promise<Rate[]> {
   return (await apiGet<Rate[]>(`/api/v1/rates?limit=${limit}`)) ?? [];
 }
 
+export type MonthlyFinance = { month: string; bevetel: number; kiadas: number };
+
+export type OutstandingProject = {
+  project_code_id: number;
+  projektkod: string;
+  ugyfel_nev: string | null;
+  kintlevo_osszeg: number;
+  legkorabbi_hatarido: string | null;
+  lejart: boolean;
+};
+
+export type FinanceSummary = {
+  ytd_bevetel: number;
+  ytd_kiadas: number;
+  ytd_profit: number;
+  osszes_kintlevoseg: number;
+  kintlevo_projektek_szama: number;
+  havi_trend: MonthlyFinance[];
+  kintlevo_projektek: OutstandingProject[];
+};
+
+export async function getFinanceSummary(): Promise<FinanceSummary | null> {
+  return apiGet<FinanceSummary>("/api/v1/finance/summary");
+}
+
 export type FieldVisibilityConfig = { employee_id: number; entity_type: string; visible_fields: string[] | null };
 
 /** A bejelentkezett felhasználó saját mező-láthatósága egy entitástípushoz -

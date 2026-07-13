@@ -69,6 +69,15 @@ export function Sidebar({ allowedPages }: { allowedPages: string[] | null }) {
     .map((group) => ({ ...group, items: group.items.filter((item) => isAllowed(item.href)) }))
     .filter((group) => group.items.length > 0);
 
+  // Csak a LEGSPECIFIKUSABB (leghosszabb) egyező href legyen aktív - enélkül
+  // pl. "/penzugyek/keretszerzodesek"-en a "Pénzügyek" (href "/penzugyek")
+  // ÉS a "Keretszerződések" is aktívnak látszana egyszerre, mert mindkettő
+  // előtagja az útvonalnak.
+  const allHrefs = navGroups.flatMap((group) => group.items.map((item) => item.href));
+  const activeHref = allHrefs
+    .filter((href) => pathname === href || pathname.startsWith(href + "/"))
+    .sort((a, b) => b.length - a.length)[0];
+
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface-1 p-4 md:flex">
       <div className="mb-6 flex items-center gap-2.5 px-2">
@@ -103,7 +112,7 @@ export function Sidebar({ allowedPages }: { allowedPages: string[] | null }) {
             )}
             <div className="flex flex-col gap-0.5">
               {group.items.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                const active = item.href === activeHref;
                 const Icon = item.icon ? ICONS[item.icon] : undefined;
                 return (
                   <Link

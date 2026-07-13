@@ -12,7 +12,7 @@ from app.api.routes.crew import rates_router, router as crew_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
 from app.api.routes.field_visibility import router as field_visibility_router
-from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router
+from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router, summary_router as finance_summary_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.performance_certificates import router as performance_certificates_router
 from app.api.routes.portal import payments_router, router as portal_router
@@ -72,6 +72,7 @@ api_router.include_router(portal_downloads_router)
 api_router.include_router(expenses_router)
 api_router.include_router(revenues_router)
 api_router.include_router(kp_forgalom_router)
+api_router.include_router(finance_summary_router)
 api_router.include_router(contracts_router)
 api_router.include_router(subcontractor_contracts_router)
 api_router.include_router(performance_certificates_router)
