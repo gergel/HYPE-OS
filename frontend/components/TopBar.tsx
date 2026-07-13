@@ -55,7 +55,7 @@ export async function TopBar() {
         <p className="mt-0.5 text-[13px] text-text-secondary">{today}</p>
       </div>
       <div className="flex items-center gap-3">
-        <label className="hidden items-center gap-2 rounded-[var(--radius)] border border-border bg-surface-1 px-3 py-1.5 text-text-muted md:flex">
+        <label className="hidden items-center gap-2 rounded-full border border-border bg-surface-1 px-3.5 py-2 text-text-muted transition-colors focus-within:border-text-accent/40 md:flex">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <circle cx="11" cy="11" r="7" />
             <path d="m21 21-4.3-4.3" />

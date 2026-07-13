@@ -2,29 +2,52 @@
 @import "./portal-theme.css";
 
 :root {
-  --background: #0a0a0a;
+  /* Sötét, de nem sík fekete alap - enyhe kék-lila alátónus adja a "modern,
+     de mégis színes" hatást, amit a referencia dizájn is használ. */
+  --background: #08080d;
   --foreground: #ededed;
 
-  --surface-1: #141414;
-  --surface-2: #1a1a1a;
-  --surface-3: #202020;
+  --surface-1: #121218;
+  --surface-2: #16161e;
+  --surface-3: #1e1e29;
   --border: rgba(255, 255, 255, 0.08);
 
-  --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --text-accent: #93c5fd;
-  --bg-accent: rgba(147, 197, 253, 0.12);
+  --text-primary: #f4f4f6;
+  --text-secondary: #a4a4b8;
+  --text-muted: #75758c;
 
-  --text-success: #86efac;
-  --bg-success: rgba(34, 197, 94, 0.14);
+  /* Elsődleges márka-akcentus: lila/ibolya (a referencia logó/aktív
+     nav-elem/haladás-gyűrű színe), a korábbi kék helyett. */
+  --text-accent: #a996ff;
+  --bg-accent: rgba(139, 108, 255, 0.16);
+  --accent-solid: #7c5cff;
+  --accent-solid-hover: #8f6fff;
+  --accent-gradient: linear-gradient(135deg, #8b6cff 0%, #6d5cff 50%, #5b4ce0 100%);
+
+  --text-success: #6ee7a8;
+  --bg-success: rgba(34, 197, 94, 0.16);
   --text-warning: #fbbf24;
-  --bg-warning: rgba(217, 119, 6, 0.16);
-  --text-danger: #fca5a5;
-  --bg-danger: rgba(220, 38, 38, 0.16);
+  --bg-warning: rgba(217, 119, 6, 0.18);
+  --text-danger: #fb7185;
+  --bg-danger: rgba(220, 38, 38, 0.18);
 
-  --radius: 8px;
-  --radius-lg: 12px;
+  /* Kategória-színek a dashboard kártyák/ikonok színezéséhez - kék, türkiz,
+     narancs, pink, sárga - a lila mellett ezek adják a "színes, de nem
+     rikító" hatást a sötét felületen. */
+  --text-blue: #7dc4fb;
+  --bg-blue: rgba(56, 149, 248, 0.16);
+  --text-teal: #5eead4;
+  --bg-teal: rgba(20, 184, 166, 0.16);
+  --text-orange: #fdad6a;
+  --bg-orange: rgba(251, 146, 60, 0.16);
+  --text-pink: #f5a3c7;
+  --bg-pink: rgba(236, 72, 153, 0.16);
+  --text-yellow: #fde68a;
+  --bg-yellow: rgba(234, 179, 8, 0.16);
+
+  --radius: 9px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
 }
 
 @theme inline {
@@ -45,12 +68,26 @@
   --color-bg-warning: var(--bg-warning);
   --color-text-danger: var(--text-danger);
   --color-bg-danger: var(--bg-danger);
+  --color-text-blue: var(--text-blue);
+  --color-bg-blue: var(--bg-blue);
+  --color-text-teal: var(--text-teal);
+  --color-bg-teal: var(--bg-teal);
+  --color-text-orange: var(--text-orange);
+  --color-bg-orange: var(--bg-orange);
+  --color-text-pink: var(--text-pink);
+  --color-bg-pink: var(--bg-pink);
+  --color-text-yellow: var(--text-yellow);
+  --color-bg-yellow: var(--bg-yellow);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(124, 92, 255, 0.10), transparent),
+    radial-gradient(ellipse 700px 500px at 100% 0%, rgba(56, 149, 248, 0.06), transparent),
+    var(--background);
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }

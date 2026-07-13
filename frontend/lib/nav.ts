@@ -1,6 +1,9 @@
 export type NavItem = {
   label: string;
   href: string;
+  /** lucide-react ikonnév (lásd Sidebar.tsx ICONS map) - soronként egy ikon,
+   * a referencia dizájn mintájára. */
+  icon?: string;
 };
 
 export type NavGroup = {
@@ -33,62 +36,62 @@ export function pagePermissionGroups(): PagePermissionGroup[] {
 }
 
 export const navGroups: NavGroup[] = [
-  { label: null, items: [{ label: "Dashboard", href: "/dashboard" }] },
+  { label: null, items: [{ label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" }] },
   {
     label: "Projektek",
     items: [
-      { label: "Project Code-ok", href: "/projektek/project-kodok" },
-      { label: "Projektek", href: "/projektek" },
+      { label: "Project Code-ok", href: "/projektek/project-kodok", icon: "Hash" },
+      { label: "Projektek", href: "/projektek", icon: "FolderKanban" },
     ],
   },
   {
     label: "Ügyfelek",
-    items: [{ label: "Ügyfelek", href: "/ugyfelek" }],
+    items: [{ label: "Ügyfelek", href: "/ugyfelek", icon: "Users" }],
   },
   {
     label: "Csapat",
     items: [
-      { label: "Külsős", href: "/csapat" },
-      { label: "Vágók", href: "/csapat/vagok" },
-      { label: "Belsősök", href: "/csapat/belsosok" },
+      { label: "Külsős", href: "/csapat", icon: "UserRound" },
+      { label: "Vágók", href: "/csapat/vagok", icon: "Scissors" },
+      { label: "Belsősök", href: "/csapat/belsosok", icon: "UserCheck" },
     ],
   },
   {
     label: "Felszerelés",
     items: [
-      { label: "Eszközök", href: "/felszereles" },
-      { label: "Leltározás", href: "/felszereles/leltarazas" },
+      { label: "Eszközök", href: "/felszereles", icon: "Package" },
+      { label: "Leltározás", href: "/felszereles/leltarazas", icon: "ClipboardList" },
     ],
   },
   {
     label: "Naptár / Diszpó",
-    items: [{ label: "Diszpó", href: "/naptar" }],
+    items: [{ label: "Diszpó", href: "/naptar", icon: "Send" }],
   },
   {
     label: "Utómunka",
-    items: [{ label: "Deliverable-ök", href: "/utomunka" }],
+    items: [{ label: "Deliverable-ök", href: "/utomunka", icon: "Clapperboard" }],
   },
   {
     label: "Média & Portál",
-    items: [{ label: "Portál", href: "/media-portal" }],
+    items: [{ label: "Portál", href: "/media-portal", icon: "Globe" }],
   },
   {
     label: "Pénzügyek",
     items: [
-      { label: "Pénzügyek", href: "/penzugyek" },
-      { label: "Keretszerződések", href: "/penzugyek/keretszerzodesek" },
+      { label: "Pénzügyek", href: "/penzugyek", icon: "Wallet" },
+      { label: "Keretszerződések", href: "/penzugyek/keretszerzodesek", icon: "FileSignature" },
     ],
   },
   {
     label: null,
     items: [
-      { label: "Alvállalkozók szerződése", href: "/alvallalkozoi-szerzodesek" },
-      { label: "Teljesítési igazolások", href: "/teljesitesi-igazolasok" },
-      { label: "Utókövetés", href: "/utokovetes" },
-      { label: "Kampányok", href: "/kampanyok" },
-      { label: "Feladatok", href: "/feladatok" },
-      { label: "AI Assistant", href: "/ai-assistant" },
-      { label: "Beállítások", href: "/beallitasok" },
+      { label: "Alvállalkozók szerződése", href: "/alvallalkozoi-szerzodesek", icon: "FileCheck2" },
+      { label: "Teljesítési igazolások", href: "/teljesitesi-igazolasok", icon: "BadgeCheck" },
+      { label: "Utókövetés", href: "/utokovetes", icon: "History" },
+      { label: "Kampányok", href: "/kampanyok", icon: "Megaphone" },
+      { label: "Feladatok", href: "/feladatok", icon: "CheckSquare" },
+      { label: "AI Assistant", href: "/ai-assistant", icon: "Sparkles" },
+      { label: "Beállítások", href: "/beallitasok", icon: "Settings" },
     ],
   },
 ];

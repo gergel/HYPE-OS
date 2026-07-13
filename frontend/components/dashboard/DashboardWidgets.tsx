@@ -120,7 +120,9 @@ export function UpcomingEventsCard({ events }: { events: UpcomingEvent[] }) {
   );
 }
 
-const DONUT_COLORS = ["#93c5fd", "#86efac", "#fbbf24", "#fca5a5", "#a1a1aa"];
+// Kategorikus szín-sorrend a design rendszerből (lila elsődleges, majd kék,
+// türkiz, narancs, pink) - lásd app/globals.css szín tokenjei.
+const DONUT_COLORS = ["#8b6cff", "#3895f8", "#2dd4bf", "#fb923c", "#ec4899"];
 
 export function ProjectStatusDonut({ statusCounts }: { statusCounts: { label: string; value: number }[] }) {
   const total = statusCounts.reduce((sum, s) => sum + s.value, 0);
@@ -134,17 +136,20 @@ export function ProjectStatusDonut({ statusCounts }: { statusCounts: { label: st
   const gradient = total > 0 ? `conic-gradient(${stops.join(", ")})` : "conic-gradient(var(--surface-3) 0deg 360deg)";
 
   return (
-    <div className="flex flex-wrap items-center gap-5">
-      <div className="relative h-28 w-28 shrink-0 rounded-full" style={{ background: gradient }}>
-        <div className="absolute inset-2 flex flex-col items-center justify-center rounded-full bg-surface-2">
-          <p className="text-xl font-semibold text-text-primary">{total}</p>
+    <div className="flex flex-wrap items-center gap-6">
+      <div
+        className="relative h-32 w-32 shrink-0 rounded-full p-[3px]"
+        style={{ background: gradient, boxShadow: total > 0 ? "0 0 24px -8px rgba(139,108,255,0.45)" : undefined }}
+      >
+        <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-surface-2">
+          <p className="text-2xl font-bold text-text-primary">{total}</p>
           <p className="text-[11px] text-text-muted">összes projekt</p>
         </div>
       </div>
       <ul className="space-y-2">
         {statusCounts.map((s, i) => (
           <li key={s.label} className="flex items-center gap-2 text-[12px] text-text-secondary">
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
             <span className="truncate">{s.label}</span> <span className="text-text-muted">({s.value})</span>
           </li>
         ))}
@@ -164,7 +169,10 @@ export function RevenueTrendChart({ trend }: { trend: RevenueMonth[] }) {
           return (
             <div key={t.month} className="flex flex-1 flex-col items-center gap-2">
               <div className="flex h-24 w-full items-end justify-center">
-                <div className="w-full max-w-6 rounded-t-[4px] bg-text-accent" style={{ height: `${heightPct}%` }} />
+                <div
+                  className="w-full max-w-6 rounded-t-[5px]"
+                  style={{ height: `${heightPct}%`, background: "var(--accent-gradient)" }}
+                />
               </div>
               <p className="text-[10px] text-text-muted">{MONTH_SHORT[month]}</p>
             </div>

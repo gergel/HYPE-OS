@@ -1,3 +1,4 @@
+import { AlertTriangle, Clapperboard, Hash } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/Card";
 import { DashboardCustomizePanel, WidgetOption } from "@/components/DashboardCustomizePanel";
@@ -78,13 +79,20 @@ export default async function DashboardPage() {
           {isVisible("mai_feladatok") && (
             <Card title="Mai feladatok">
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                <StatCard label="Forgatás" value={summary?.mai_forgatasok ?? "–"} href="/projektek" />
-                <StatCard label="Aktív Project Code" value={summary?.aktiv_project_codeok ?? "–"} href="/projektek/project-kodok" />
+                <StatCard label="Forgatás" value={summary?.mai_forgatasok ?? "–"} href="/projektek" icon={Clapperboard} tone="blue" />
+                <StatCard
+                  label="Aktív Project Code"
+                  value={summary?.aktiv_project_codeok ?? "–"}
+                  href="/projektek/project-kodok"
+                  icon={Hash}
+                  tone="accent"
+                />
                 <StatCard
                   label="Equipment ütközés"
                   value={summary?.equipment_utkozesek ?? "–"}
-                  tone={summary && summary.equipment_utkozesek > 0 ? "danger" : "default"}
+                  tone={summary && summary.equipment_utkozesek > 0 ? "danger" : "teal"}
                   href="/felszereles"
+                  icon={AlertTriangle}
                 />
               </div>
             </Card>
