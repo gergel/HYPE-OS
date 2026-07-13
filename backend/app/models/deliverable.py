@@ -102,3 +102,11 @@ class Deliverable(TimestampMixin, Base):
     timesheets: Mapped[list["Timesheet"]] = relationship(back_populates="deliverable")
     feedbacks: Mapped[list["Feedback"]] = relationship(back_populates="deliverable")
     comments: Mapped[list["DeliverableComment"]] = relationship(back_populates="deliverable", order_by="DeliverableComment.created_at")
+    portal: Mapped["Portal | None"] = relationship(back_populates="deliverable", uselist=False)
+
+    @property
+    def portal_id(self) -> int | None:
+        """A DeliverableRead séma erre hivatkozik, hogy a frontend eldönthesse:
+        van-e már Média Portál ehhez a vágandó anyaghoz (lásd
+        routes/portal_admin.py create_portal_from_deliverable)."""
+        return self.portal.id if self.portal else None

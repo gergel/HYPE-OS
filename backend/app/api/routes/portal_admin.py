@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user, hash_password, require_page_action
+from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.portal import Portal, PortalFolder, PortalImage, PortalVideo
 from app.models.project import Project
@@ -54,6 +55,7 @@ def _summary(p: Portal) -> PortalSummary:
         id=p.id,
         slug=p.slug,
         project_id=p.project_id,
+        deliverable_id=p.deliverable_id,
         title=resolve_title(p),
         client_name=resolve_client_name(p),
         cover_image_url=p.cover_image_url or "",
@@ -168,6 +170,64 @@ def create_portal(
     db.add(portal)
     db.commit()
     db.refresh(portal)
+    return _summary(portal)
+
+
+class PortalFromDeliverableCreate(BaseModel):
+    password: str | None = None
+
+
+@router.post("/from-deliverable/{deliverable_id}", response_model=PortalSummary, status_code=201)
+def create_portal_from_deliverable(
+    deliverable_id: int,
+    payload: PortalFromDeliverableCreate,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """Az Utómunka oldalon lévő "Portál létrehozása" gomb - egy Portált hoz
+    létre KÖZVETLENÜL egy Deliverable-hez kötve (nem a mögöttes Projekthez,
+    lásd Portal.deliverable_id kommentje), és a Portál publikus linkjét
+    automatikusan beírja a Deliverable "Kész anyag URL" mezőjébe, hogy a
+    vágónak ne kelljen külön másolnia/beillesztenie."""
+    deliverable = db.get(Deliverable, deliverable_id)
+    if not deliverable:
+        raise HTTPException(status_code=404, detail="Utómunka nem található")
+    if deliverable.portal is not None:
+        raise HTTPException(status_code=400, detail="Ehhez az utómunkához már tartozik Portál")
+
+    title = deliverable.projekt_neve or f"Utómunka #{deliverable.id}"
+    client_name = ""
+    if deliverable.project_code and deliverable.project_code.client:
+        client_name = deliverable.project_code.client.nev
+    elif deliverable.project and deliverable.project.project_code and deliverable.project.project_code.client:
+        client_name = deliverable.project.project_code.client.nev
+    project_date = deliverable.hatarido.strftime("%Y.%m.%d") if deliverable.hatarido else ""
+
+    slug_base = slugify(title)
+    slug = slug_base
+    if db.query(Portal).filter(Portal.slug == slug).first():
+        slug = f"{slug_base}-{uuid.uuid4().hex[:6]}"
+
+    portal = Portal(
+        deliverable_id=deliverable.id,
+        slug=slug,
+        status="live",
+        password_hash=hash_password(payload.password) if payload.password else None,
+        expires_at=date.today() + timedelta(days=30),
+        title_override=title,
+        client_name_override=client_name,
+        project_date_override=project_date,
+    )
+    db.add(portal)
+    db.commit()
+    db.refresh(portal)
+
+    from app.core.config import settings
+
+    front = settings.frontend_base_url.rstrip("/")
+    deliverable.kesz_anyag_url = f"{front}/p/{portal.slug}"
+    db.commit()
+
     return _summary(portal)
 
 

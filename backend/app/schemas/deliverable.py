@@ -35,6 +35,10 @@ class DeliverableUpdate(BaseModel):
 
 class DeliverableRead(DeliverableBase):
     id: int
+    # Ha van hozzá tartozó Média Portál (lásd routes/portal_admin.py
+    # create_portal_from_deliverable), a frontend ez alapján dönti el, hogy
+    # "Portál létrehozása" gombot vagy a meglévő Portálra mutató linket mutassa.
+    portal_id: int | None = None
 
     # az 'Utómunka' Notion tábla maradék mezői, egyenként (lásd scripts/dump_extra_keys.py)
     tobb_vinyo: bool | None = None

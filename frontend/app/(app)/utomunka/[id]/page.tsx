@@ -4,6 +4,7 @@ import { Card } from "@/components/Card";
 import { AssignedToPicker } from "@/components/deliverable/AssignedToPicker";
 import { CommentsSection } from "@/components/deliverable/CommentsSection";
 import { ContactsManager } from "@/components/deliverable/ContactsManager";
+import { CreatePortalButton } from "@/components/deliverable/CreatePortalButton";
 import { FeedbackSendButton } from "@/components/deliverable/FeedbackSendButton";
 import { TimerControls } from "@/components/deliverable/TimerControls";
 import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
@@ -43,6 +44,7 @@ const HIDDEN_FIELDS = [
   "timesheet_private_notion_ids",
   "total_time",
   "stop_timer",
+  "portal_id",
 ];
 
 export default async function DeliverableDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -134,6 +136,14 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
             deliverableId={deliverableId}
             employees={assignableEmployees}
             currentId={deliverable.assigned_to_employee_id ? Number(deliverable.assigned_to_employee_id) : null}
+          />
+        </Card>
+
+        <Card title="Média Portál">
+          <CreatePortalButton
+            deliverableId={deliverableId}
+            existingPortalId={deliverable.portal_id ? Number(deliverable.portal_id) : null}
+            keszAnyagUrl={deliverable.kesz_anyag_url ? String(deliverable.kesz_anyag_url) : null}
           />
         </Card>
 

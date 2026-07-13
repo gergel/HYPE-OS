@@ -38,6 +38,12 @@ class Portal(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), unique=True, nullable=True)
+    # Az Utómunkából ("Portál létrehozása" gomb egy Deliverable-ön) létrehozott
+    # Portálok a mögöttes Projekttől függetlenül, közvetlenül egy konkrét
+    # Deliverable-hoz vannak kötve - enélkül egy Projekt több Deliverable-je
+    # (pl. több vágási verzió) nem kaphatna külön-külön Portált, mert a
+    # project_id fenti unique kényszere csak egyet engedne projektenként.
+    deliverable_id: Mapped[int | None] = mapped_column(ForeignKey("deliverables.id"), unique=True, nullable=True)
 
     title_override: Mapped[str | None] = mapped_column(String(255))
     client_name_override: Mapped[str | None] = mapped_column(String(255))
@@ -66,6 +72,7 @@ class Portal(TimestampMixin, Base):
     notion_page_id: Mapped[str | None] = mapped_column(String(255), index=True)
 
     project: Mapped["Project | None"] = relationship(back_populates="portal")
+    deliverable: Mapped["Deliverable | None"] = relationship(back_populates="portal")
     payments: Mapped[list["Payment"]] = relationship(back_populates="portal")
     folders: Mapped[list["PortalFolder"]] = relationship(
         back_populates="portal", cascade="all, delete-orphan", order_by="PortalFolder.sort_order"

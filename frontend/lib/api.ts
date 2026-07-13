@@ -727,6 +727,7 @@ export type PortalSummary = {
   id: number;
   slug: string;
   project_id: number | null;
+  deliverable_id: number | null;
   title: string;
   client_name: string;
   cover_image_url: string;

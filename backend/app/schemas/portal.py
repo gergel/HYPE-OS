@@ -146,6 +146,7 @@ class PortalSummary(BaseModel):
     id: int
     slug: str
     project_id: int | None = None
+    deliverable_id: int | None = None
     title: str
     client_name: str
     cover_image_url: str

@@ -47,6 +47,13 @@ export async function createManualPortal(
   });
 }
 
+export async function createPortalFromDeliverable(deliverableId: number, password?: string): Promise<PortalSummary> {
+  return req<PortalSummary>(`/api/v1/portal-admin/from-deliverable/${deliverableId}`, {
+    method: "POST",
+    body: JSON.stringify({ password: password || undefined }),
+  });
+}
+
 export async function deletePortal(id: number): Promise<void> {
   return req(`/api/v1/portal-admin/${id}`, { method: "DELETE" });
 }
