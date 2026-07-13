@@ -224,8 +224,8 @@ export async function getClients(limit = 5000): Promise<Client[]> {
   return (await apiGet<Client[]>(`/api/v1/clients?limit=${limit}`)) ?? [];
 }
 
-export async function getProjects(limit = 5000): Promise<Project[]> {
-  return (await apiGet<Project[]>(`/api/v1/projects?limit=${limit}`)) ?? [];
+export async function getProjects(limit = 5000, skip = 0): Promise<Project[]> {
+  return (await apiGet<Project[]>(`/api/v1/projects?limit=${limit}&skip=${skip}`)) ?? [];
 }
 
 export async function getEmployees(limit = 5000): Promise<Employee[]> {
@@ -256,8 +256,8 @@ export async function getRevenues(limit = 5000): Promise<Revenue[]> {
   return (await apiGet<Revenue[]>(`/api/v1/revenues?limit=${limit}`)) ?? [];
 }
 
-export async function getDeliverables(limit = 5000): Promise<Deliverable[]> {
-  return (await apiGet<Deliverable[]>(`/api/v1/deliverables?limit=${limit}`)) ?? [];
+export async function getDeliverables(limit = 5000, skip = 0): Promise<Deliverable[]> {
+  return (await apiGet<Deliverable[]>(`/api/v1/deliverables?limit=${limit}&skip=${skip}`)) ?? [];
 }
 
 export async function getContracts(limit = 5000): Promise<Contract[]> {

@@ -211,6 +211,7 @@ def create_portal_from_deliverable(
     portal = Portal(
         deliverable_id=deliverable.id,
         slug=slug,
+        share_token=uuid.uuid4().hex,
         status="live",
         password_hash=hash_password(payload.password) if payload.password else None,
         expires_at=date.today() + timedelta(days=30),
@@ -224,8 +225,13 @@ def create_portal_from_deliverable(
 
     from app.core.config import settings
 
+    # A megosztó linket (share_token-nel) írjuk a "Kész anyag URL" mezőbe -
+    # ugyanaz a link, amit a Portál admin felületén a "Megosztó link" gomb
+    # generál (lásd regenerate_share lent) -, nem a puszta /p/{slug} URL-t,
+    # hogy jelszóval védett Portál esetén is közvetlenül működjön a link,
+    # amit a megrendelő kap.
     front = settings.frontend_base_url.rstrip("/")
-    deliverable.kesz_anyag_url = f"{front}/p/{portal.slug}"
+    deliverable.kesz_anyag_url = f"{front}/p/{portal.slug}?share={portal.share_token}"
     db.commit()
 
     return _summary(portal)

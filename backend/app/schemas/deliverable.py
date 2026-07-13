@@ -25,6 +25,25 @@ class DeliverableCreate(DeliverableBase):
     pass
 
 
+class DeliverableListItem(BaseModel):
+    """A lista nézet (GET /api/v1/deliverables) szűkített sémája - a Deliverable
+    ~60 oszlopos teljes DeliverableRead helyett, mert az Utómunka oldal
+    (Kanban tábla + admin lista) és a kapcsolódó RelatedTable-ök (pl. egy
+    Projekt vagy Crew tag deliverable-jei) ténylegesen csak ezt a néhány
+    mezőt jelenítik meg (lásd frontend/app/utomunka/page.tsx és
+    RelatedTable.tsx) - ugyanaz a minta, mint a Project ProjectListItem-je."""
+
+    id: int
+    projekt_neve: str
+    allapot: str | None = None
+    hatarido: date | None = None
+    assigned_to_employee_id: int | None = None
+    vinyok: JsonScalar = None
+    anyag_kikuldve: bool = False
+
+    model_config = {"from_attributes": True}
+
+
 class DeliverableUpdate(BaseModel):
     allapot: str | None = None
     vago_employee_id: int | None = None

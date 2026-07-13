@@ -127,6 +127,13 @@ def build_crud_router(
             except ValueError:
                 value = raw_value
             stmt = stmt.where(getattr(model, key) == value)
+        # A legutóbb módosított/létrehozott rekordok jöjjenek elöl - enélkül a
+        # lapozás (skip/limit) tetszőleges, DB-függő sorrendben adná vissza a
+        # sorokat, és a frontend "elsőként a friss, régieket később a
+        # háttérben" betöltési mintája (lásd pl. app/(app)/utomunka/page.tsx)
+        # nem érné el a célját, mert az "első lap" nem a friss rekordokat adná.
+        order_column = getattr(model, "updated_at", None)
+        stmt = stmt.order_by(order_column.desc() if order_column is not None else model.id.desc())
         return db.scalars(stmt.offset(skip).limit(limit)).all()
 
     @router.get("/{item_id}", response_model=read_schema)

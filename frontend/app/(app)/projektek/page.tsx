@@ -1,41 +1,25 @@
-import { Card } from "@/components/Card";
-import { DataTable } from "@/components/DataTable";
-import { StatusBadge } from "@/components/StatusBadge";
+import { ProjektekContent } from "@/components/ProjektekContent";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, formatDate, getProjectCodes, getProjects, Project } from "@/lib/api";
+import { getProjectCodes, getProjects } from "@/lib/api";
+
+// Csak ennyi legutóbb módosított/létrehozott projektet töltünk be azonnal
+// (a backend list_items alapértelmezetten updated_at szerint csökkenő
+// sorrendben ad vissza, lásd api/crud_router.py) - a régebbi, rég lezárt
+// projektek a háttérben töltődnek be (lásd ProjektekContent).
+const INITIAL_BATCH = 200;
 
 export default async function ProjektekPage() {
-  const [projects, projectCodes] = await Promise.all([getProjects(), getProjectCodes()]);
-  const projectCodeById = new Map(projectCodes.map((pc) => [pc.id, pc.projektkod]));
+  const [projects, projectCodes] = await Promise.all([getProjects(INITIAL_BATCH), getProjectCodes()]);
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 p-6">
-        <Card title={`Projektek (${projects.length})`}>
-          <DataTable<Project>
-            rows={projects}
-            emptyText="Még nincs felvett projekt - importáld a Notionból, vagy adj hozzá egyet a /api/v1/projects végponton."
-            getHref={(p) => `/projektek/${p.id}`}
-            deleteHref={(p) => `${ENTITY_PATHS.project}/${p.id}`}
-            filterable
-            columns={[
-              { header: "Név", render: (p) => p.nev, sortAccessor: (p) => p.nev },
-              {
-                header: "Projektkód",
-                render: (p) => projectCodeById.get(p.project_code_id) ?? "–",
-                sortAccessor: (p) => projectCodeById.get(p.project_code_id),
-              },
-              { header: "Forgatás dátuma", render: (p) => formatDate(p.forgatas_datuma), sortAccessor: (p) => p.forgatas_datuma },
-              { header: "Helyszín", render: (p) => p.helyszin ?? "–", sortAccessor: (p) => p.helyszin },
-              {
-                header: "Állapot",
-                render: (p) => (p.allapot ? <StatusBadge label={p.allapot} tone="neutral" /> : "–"),
-                sortAccessor: (p) => p.allapot,
-              },
-            ]}
-          />
-        </Card>
+        <ProjektekContent
+          initialProjects={projects}
+          hasMore={projects.length === INITIAL_BATCH}
+          projectCodes={projectCodes}
+        />
       </div>
     </div>
   );

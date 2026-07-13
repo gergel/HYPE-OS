@@ -10,7 +10,7 @@ from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.feedback import Feedback
 from app.models.timesheet import Timesheet
-from app.schemas.deliverable import DeliverableCreate, DeliverableRead, DeliverableUpdate
+from app.schemas.deliverable import DeliverableCreate, DeliverableListItem, DeliverableRead, DeliverableUpdate
 from app.schemas.deliverable_actions import (
     AssignableEmployee,
     CommentCreate,
@@ -52,6 +52,7 @@ deliverables_router = build_crud_router(
     create_schema=DeliverableCreate,
     update_schema=DeliverableUpdate,
     read_schema=DeliverableRead,
+    list_read_schema=DeliverableListItem,
     prefix="/deliverables",
     tags=["postproduction"],
     page="/utomunka",
