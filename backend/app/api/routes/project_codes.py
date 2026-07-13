@@ -9,5 +9,9 @@ router = build_crud_router(
     read_schema=ProjectCodeRead,
     prefix="/project-codes",
     tags=["project-codes"],
-    page="/projektek",
+    # Külön jogosultsági hatókör, NEM ugyanaz, mint a Projekteké (lásd
+    # projects.py page="/projektek") - a felhasználó explicit kérése, hogy
+    # a Project Code-okhoz csak külön, kifejezett jogosultsággal lehessen
+    # hozzáférni, ne automatikusan a Projektek jogosultsággal együtt.
+    page="/projektek/project-kodok",
 )

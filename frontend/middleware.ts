@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolvePermissionPage } from "@/lib/nav";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_COOKIE = "hype_os_token";
@@ -30,7 +31,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  const topSegment = "/" + (pathname.split("/").filter(Boolean)[0] ?? "");
+  // NEM a puszta URL első szegmensét nézzük (pl. "/projektek"), hanem a
+  // nav.ts-ben definiált, TÉNYLEGES backend jogosultsági kulcsot - enélkül pl.
+  // "/projektek/project-kodok" tévesen a "Projektek" jogosultsággal is
+  // beengedhető lenne, holott a két oldal külön jogosultság (lásd
+  // resolvePermissionPage kommentje).
+  const topSegment = resolvePermissionPage(pathname);
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/user-access/me`, {

@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 
-export type WidgetOption = { key: string; label: string };
+export type WidgetOption = { key: string; label: string; requiredPages?: string[] };
 
 /** Mindenki (nem csak admin) testreszabhatja a saját Dashboardján megjelenő
  * widgeteket - tisztán megjelenítési preferencia, önkiszolgáló (lásd

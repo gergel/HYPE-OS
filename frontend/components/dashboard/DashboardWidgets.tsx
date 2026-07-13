@@ -8,11 +8,12 @@ function formatShortDate(iso: string): string {
   return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}.`;
 }
 
-export function AlertsCard({ alerts }: { alerts: DashboardAlerts }) {
+export function AlertsCard({ alerts, allowedPages }: { alerts: DashboardAlerts; allowedPages: string[] | null }) {
+  const hasPage = (page: string) => allowedPages === null || allowedPages.includes(page);
   const items = [
     { label: "lejárt utómunka határidő", count: alerts.lejart_utomunka, href: "/utomunka" },
     { label: "lejárt feladat határidő", count: alerts.lejart_feladat, href: "/feladatok" },
-  ].filter((i) => i.count > 0);
+  ].filter((i) => i.count > 0 && hasPage(i.href));
 
   if (items.length === 0) {
     return <p className="text-[13px] text-text-muted">Nincs aktív figyelmeztetés.</p>;

@@ -11,18 +11,22 @@ import {
 } from "@/components/dashboard/DashboardWidgets";
 import { StatCard } from "@/components/StatCard";
 import { TopBar } from "@/components/TopBar";
-import { getDashboardSummary, getMyDashboardConfig, getMyTasksSummary, getProjectCodes } from "@/lib/api";
+import { getDashboardSummary, getMyDashboardConfig, getMyPageAccess, getMyTasksSummary, getProjectCodes } from "@/lib/api";
 import { MyTasksCard } from "@/components/dashboard/DashboardWidgets";
 
 const WIDGETS: WidgetOption[] = [
   { key: "teendoim", label: "Teendőim" },
   { key: "mai_feladatok", label: "Mai feladatok" },
   { key: "figyelmeztetesek", label: "Figyelmeztetések" },
-  { key: "ai_javaslat", label: "AI javaslat" },
-  { key: "kozelgo_esemenyek", label: "Közelgő események" },
-  { key: "projektek_statusza", label: "Projektek státusza" },
-  { key: "bevetel", label: "Bevétel (havi)" },
+  { key: "ai_javaslat", label: "AI javaslat", requiredPages: ["/ai-assistant"] },
+  { key: "kozelgo_esemenyek", label: "Közelgő események", requiredPages: ["/projektek"] },
+  { key: "projektek_statusza", label: "Projektek státusza", requiredPages: ["/projektek/project-kodok"] },
+  { key: "bevetel", label: "Bevétel (havi)", requiredPages: ["/penzugyek"] },
 ];
+
+function hasPage(allowedPages: string[] | null, page: string): boolean {
+  return allowedPages === null || allowedPages.includes(page);
+}
 
 const STATUS_LABEL: Record<string, string> = {
   folyamatban: "Folyamatban",
@@ -37,14 +41,33 @@ function normalizedStatusLabel(allapot: string | null): string {
 }
 
 export default async function DashboardPage() {
-  const [summary, projectCodes, visibleWidgets, myTasks] = await Promise.all([
+  const [summary, projectCodes, visibleWidgets, myTasks, allowedPages] = await Promise.all([
     getDashboardSummary(),
     getProjectCodes(),
     getMyDashboardConfig(),
     getMyTasksSummary(),
+    getMyPageAccess(),
   ]);
 
-  const isVisible = (key: string) => !visibleWidgets || visibleWidgets.includes(key);
+  // A "Mai feladatok" és "Figyelmeztetések" widget több különböző oldalra
+  // mutató al-kártyát/sort tartalmaz (Forgatás->/projektek, Aktív Project
+  // Code->/projektek/project-kodok, Equipment ütközés->/felszereles, stb.) -
+  // ezért nem egyetlen requiredPages listával, hanem "legalább egy elérhető
+  // al-elem" logikával döntjük el, hogy egyáltalán felkínálható-e a widget.
+  const canSeeProjektek = hasPage(allowedPages, "/projektek");
+  const canSeeProjectCodes = hasPage(allowedPages, "/projektek/project-kodok");
+  const canSeeFelszereles = hasPage(allowedPages, "/felszereles");
+  const canSeeUtomunka = hasPage(allowedPages, "/utomunka");
+  const canSeeFeladatok = hasPage(allowedPages, "/feladatok");
+
+  const permittedWidgets = WIDGETS.filter((w) => {
+    if (w.key === "mai_feladatok") return canSeeProjektek || canSeeProjectCodes || canSeeFelszereles;
+    if (w.key === "figyelmeztetesek") return canSeeUtomunka || canSeeFeladatok;
+    return !w.requiredPages || w.requiredPages.every((p) => hasPage(allowedPages, p));
+  });
+  const permittedKeys = new Set(permittedWidgets.map((w) => w.key));
+
+  const isVisible = (key: string) => permittedKeys.has(key) && (!visibleWidgets || visibleWidgets.includes(key));
   const apiUnavailable = summary === null;
 
   const statusCounts = Array.from(
@@ -67,7 +90,7 @@ export default async function DashboardPage() {
         )}
 
         <div className="flex justify-end">
-          <DashboardCustomizePanel widgets={WIDGETS} initialVisible={visibleWidgets} />
+          <DashboardCustomizePanel widgets={permittedWidgets} initialVisible={visibleWidgets} />
         </div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -79,27 +102,33 @@ export default async function DashboardPage() {
           {isVisible("mai_feladatok") && (
             <Card title="Mai feladatok">
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                <StatCard label="Forgatás" value={summary?.mai_forgatasok ?? "–"} href="/projektek" icon={Clapperboard} tone="blue" />
-                <StatCard
-                  label="Aktív Project Code"
-                  value={summary?.aktiv_project_codeok ?? "–"}
-                  href="/projektek/project-kodok"
-                  icon={Hash}
-                  tone="accent"
-                />
-                <StatCard
-                  label="Equipment ütközés"
-                  value={summary?.equipment_utkozesek ?? "–"}
-                  tone={summary && summary.equipment_utkozesek > 0 ? "danger" : "teal"}
-                  href="/felszereles"
-                  icon={AlertTriangle}
-                />
+                {canSeeProjektek && (
+                  <StatCard label="Forgatás" value={summary?.mai_forgatasok ?? "–"} href="/projektek" icon={Clapperboard} tone="blue" />
+                )}
+                {canSeeProjectCodes && (
+                  <StatCard
+                    label="Aktív Project Code"
+                    value={summary?.aktiv_project_codeok ?? "–"}
+                    href="/projektek/project-kodok"
+                    icon={Hash}
+                    tone="accent"
+                  />
+                )}
+                {canSeeFelszereles && (
+                  <StatCard
+                    label="Equipment ütközés"
+                    value={summary?.equipment_utkozesek ?? "–"}
+                    tone={summary && summary.equipment_utkozesek > 0 ? "danger" : "teal"}
+                    href="/felszereles"
+                    icon={AlertTriangle}
+                  />
+                )}
               </div>
             </Card>
           )}
           {isVisible("figyelmeztetesek") && (
             <Card title="Figyelmeztetések">
-              {summary ? <AlertsCard alerts={summary.alerts} /> : <p className="text-[13px] text-text-muted">–</p>}
+              {summary ? <AlertsCard alerts={summary.alerts} allowedPages={allowedPages} /> : <p className="text-[13px] text-text-muted">–</p>}
             </Card>
           )}
           {isVisible("ai_javaslat") && (

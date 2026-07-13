@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navGroups } from "@/lib/nav";
+import { NavItem, navGroups } from "@/lib/nav";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -53,20 +53,22 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 /** allowedPages: az egyénenként beállított oldal-hozzáférés (lásd Beállítások) -
- * null = minden oldal látszik, egyébként csak azok, amiknek a href-jének első
- * útvonal-szegmense (pl. "/projektek") szerepel a listában. A tényleges
- * belépés-blokkolást a middleware végzi, ez csak a navigáció elrejtése. */
+ * null = minden oldal látszik, egyébként csak azok, amiknek a permissionPage-e
+ * (vagy ha az nincs megadva, a href-je) szerepel a listában - lásd
+ * NavItem.permissionPage kommentje arról, miért nem elég a puszta URL első
+ * szegmense. A tényleges belépés-blokkolást a middleware végzi, ez csak a
+ * navigáció elrejtése. */
 export function Sidebar({ allowedPages }: { allowedPages: string[] | null }) {
   const pathname = usePathname();
 
-  function isAllowed(href: string): boolean {
+  function isAllowed(item: NavItem): boolean {
     if (!allowedPages) return true;
-    const topSegment = "/" + href.split("/").filter(Boolean)[0];
-    return topSegment === "/dashboard" || allowedPages.includes(topSegment);
+    const page = item.permissionPage ?? item.href;
+    return page === "/dashboard" || allowedPages.includes(page);
   }
 
   const visibleGroups = navGroups
-    .map((group) => ({ ...group, items: group.items.filter((item) => isAllowed(item.href)) }))
+    .map((group) => ({ ...group, items: group.items.filter((item) => isAllowed(item)) }))
     .filter((group) => group.items.length > 0);
 
   // Csak a LEGSPECIFIKUSABB (leghosszabb) egyező href legyen aktív - enélkül
