@@ -3,16 +3,16 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  GripVertical,
-  Upload,
-  Trash2,
-  Replace,
-  Link2,
-  Save,
-  FolderPlus,
-  Folder as FolderIcon,
   ArrowLeft,
+  Folder as FolderIcon,
+  FolderPlus,
+  GripVertical,
+  Link2,
   Pencil,
+  Replace,
+  Save,
+  Trash2,
+  Upload,
 } from "lucide-react";
 import {
   createFolder,
@@ -33,18 +33,22 @@ import {
   reorderVideos,
   deletePortal,
 } from "@/lib/portalAdminApi";
-import { Button } from "@/components/media-portal/ui/button";
+import { Card } from "@/components/Card";
 import { formatDuration, formatBytes } from "@/lib/portalUtils";
 import type { PortalDetailData, PortalFolderItem, PortalImageItem, PortalVideoItem } from "@/lib/api";
 
-/** A Média Portál admin projekt-részletnézete - a Hype-repo-main (különálló
- * client-portál projekt) admin/[id]/page.tsx komponensének 1:1 vizuális és
- * funkcionális portja. A "title"/"client_name"/"project_date" mezők itt a
- * Portal saját title_override/client_name_override/project_date_override
- * mezőit szerkesztik (nem a mögöttes HYPE OS Project rekordot magát, amit
- * más modulok - diszpó, deliverable-ök stb. - is használnak), de a
- * felhasználó felé pontosan úgy néznek ki, mintha közvetlenül szerkesztené
- * a projekt címét/ügyfelét/dátumát. */
+const inputClass =
+  "mt-1.5 w-full rounded-[var(--radius)] border border-border bg-surface-3 px-3.5 py-2.5 text-[13px] text-text-primary outline-none focus:border-text-accent/40";
+const labelClass = "text-[11px] font-medium uppercase tracking-wide text-text-muted";
+
+/** A Média Portál admin projekt-részletnézete - a megosztott (lila akcentusú,
+ * sötét) design rendszerre igazítva, a korábbi különálló "ink/bone/mist/
+ * ember" vizuális nyelv helyett. A "title"/"client_name"/"project_date"
+ * mezők itt a Portal saját title_override/client_name_override/
+ * project_date_override mezőit szerkesztik (nem a mögöttes HYPE OS Project
+ * rekordot magát, amit más modulok - diszpó, deliverable-ök stb. - is
+ * használnak), de a felhasználó felé pontosan úgy néznek ki, mintha
+ * közvetlenül szerkesztené a projekt címét/ügyfelét/dátumát. */
 export default function MediaPortalDetail({ initial }: { initial: PortalDetailData }) {
   const router = useRouter();
   const [data, setData] = useState<PortalDetailData>(initial);
@@ -535,16 +539,16 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
   const selectedCount = selectedVideos.size + selectedImages.size;
 
   return (
-    <main className="hype-portal dark mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href="/media-portal" className="font-mono text-xs uppercase tracking-eyebrow text-mist">
-        ← Összes Portál
+    <div className="flex-1 space-y-4 p-6 lg:p-8">
+      <Link href="/media-portal" className="inline-flex items-center gap-1.5 text-[13px] text-text-muted hover:text-text-primary">
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Összes Portál
       </Link>
 
-      <div className="mt-4 grid gap-8 lg:grid-cols-[1.1fr_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         {/* Beállítások */}
-        <section className="rounded-2xl border border-ink-line bg-ink-card p-4 sm:p-6">
-          <h2 className="font-display text-xl text-bone">Portál adatai</h2>
-          <div className="mt-5 space-y-3">
+        <Card title="Portál adatai">
+          <div className="space-y-3">
             <Field label="Projekt címe" value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} />
             <Field
               label="Ügyfél neve"
@@ -560,15 +564,15 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
 
             <div>
               <div className="flex items-center justify-between">
-                <label className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">Borítókép</label>
+                <label className={labelClass}>Borítókép</label>
                 <div className="flex items-center gap-3">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-ember px-3 py-1.5 text-xs font-medium text-white transition hover:bg-ember/90">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[12px] font-medium text-text-accent hover:opacity-90">
                     <Upload className="h-3.5 w-3.5" />
                     Feltöltés
                     <input type="file" accept="image/*" className="hidden" onChange={onCoverUpload} />
                   </label>
                   {form.cover_image_url && (
-                    <button type="button" onClick={onDeleteCover} className="text-xs text-mist hover:text-ember hover:underline">
+                    <button type="button" onClick={onDeleteCover} className="text-[12px] text-text-muted hover:text-text-danger hover:underline">
                       Eltávolítás
                     </button>
                   )}
@@ -576,28 +580,30 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
               </div>
               {form.cover_image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={form.cover_image_url} alt="Borító" className="mt-2 h-32 w-full rounded-2xl border border-ink-line object-cover" />
+                <img src={form.cover_image_url} alt="Borító" className="mt-2 h-32 w-full rounded-[var(--radius)] border border-border object-cover" />
               )}
             </div>
 
             <div>
-              <label className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">Leírás</label>
+              <label className={labelClass}>Leírás</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 rows={3}
-                className="mt-1.5 w-full rounded-2xl border border-ink-line bg-ink px-4 py-3 text-bone outline-none focus:border-ember/60"
+                className={inputClass}
               />
             </div>
 
             <div>
-              <label className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">Márka</label>
+              <label className={labelClass}>Márka</label>
               <div className="mt-1.5 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setForm((f) => ({ ...f, brand: "hype" }))}
-                  className={`flex-1 rounded-full border px-4 py-2 text-sm transition ${
-                    form.brand === "hype" ? "border-ember bg-ember/10 text-bone" : "border-ink-line text-mist hover:text-bone"
+                  className={`flex-1 rounded-[var(--radius)] border px-4 py-2 text-[13px] transition-colors ${
+                    form.brand === "hype"
+                      ? "border-text-accent/50 bg-bg-accent text-text-primary"
+                      : "border-border text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   HYPE
@@ -605,8 +611,10 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                 <button
                   type="button"
                   onClick={() => setForm((f) => ({ ...f, brand: "contentbee" }))}
-                  className={`flex-1 rounded-full border px-4 py-2 text-sm transition ${
-                    form.brand === "contentbee" ? "border-ember bg-ember/10 text-bone" : "border-ink-line text-mist hover:text-bone"
+                  className={`flex-1 rounded-[var(--radius)] border px-4 py-2 text-[13px] transition-colors ${
+                    form.brand === "contentbee"
+                      ? "border-text-accent/50 bg-bg-accent text-text-primary"
+                      : "border-border text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   ContentBee
@@ -614,15 +622,15 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
               </div>
             </div>
             <div>
-              <label className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">Elérhető eddig</label>
+              <label className={labelClass}>Elérhető eddig</label>
               <input
                 type="date"
                 value={form.expires_at}
                 onChange={(e) => onChangeExpiry(e.target.value)}
-                className="mt-1.5 w-full rounded-full border border-ink-line bg-ink px-4 py-2.5 text-bone outline-none focus:border-ember/60"
+                className={inputClass}
               />
               {form.expires_at && (
-                <p className="mt-1.5 text-xs text-mist">
+                <p className="mt-1.5 text-[12px] text-text-muted">
                   {(() => {
                     const d = daysLeft();
                     if (d === null) return null;
@@ -634,13 +642,15 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
               )}
             </div>
             <div>
-              <label className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">Lejáratkor</label>
+              <label className={labelClass}>Lejáratkor</label>
               <div className="mt-1.5 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setForm((f) => ({ ...f, payment_mode: "contact" }))}
-                  className={`flex-1 rounded-full border px-4 py-2 text-sm transition ${
-                    form.payment_mode === "contact" ? "border-ember bg-ember/10 text-bone" : "border-ink-line text-mist hover:text-bone"
+                  className={`flex-1 rounded-[var(--radius)] border px-4 py-2 text-[13px] transition-colors ${
+                    form.payment_mode === "contact"
+                      ? "border-text-accent/50 bg-bg-accent text-text-primary"
+                      : "border-border text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   Kapcsolatfelvétel
@@ -648,14 +658,16 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                 <button
                   type="button"
                   onClick={() => setForm((f) => ({ ...f, payment_mode: "paid" }))}
-                  className={`flex-1 rounded-full border px-4 py-2 text-sm transition ${
-                    form.payment_mode === "paid" ? "border-ember bg-ember/10 text-bone" : "border-ink-line text-mist hover:text-bone"
+                  className={`flex-1 rounded-[var(--radius)] border px-4 py-2 text-[13px] transition-colors ${
+                    form.payment_mode === "paid"
+                      ? "border-text-accent/50 bg-bg-accent text-text-primary"
+                      : "border-border text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   Fizetős hosszabbítás
                 </button>
               </div>
-              <p className="mt-1.5 text-xs text-mist">
+              <p className="mt-1.5 text-[12px] text-text-muted">
                 {form.payment_mode === "paid"
                   ? "Az ügyfelek fizetéssel meghosszabbíthatják a hozzáférést lejárat után."
                   : "Az ügyfelek kapcsolatfelvételi üzenetet látnak lejárat után."}
@@ -663,11 +675,11 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
             </div>
             <div>
               <div className="flex items-center justify-between">
-                <label className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">
+                <label className={labelClass}>
                   Jelszó {data.has_password ? "(beállítva)" : "(nincs)"}
                 </label>
                 {data.has_password && (
-                  <button type="button" onClick={clearPassword} className="text-xs text-ember hover:underline">
+                  <button type="button" onClick={clearPassword} className="text-[12px] text-text-accent hover:underline">
                     Jelszó törlése
                   </button>
                 )}
@@ -677,65 +689,81 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                 value={form.password}
                 placeholder={data.has_password ? "Új jelszó (üresen hagyva megmarad)" : "Jelszó beállítása"}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                className="mt-1.5 w-full rounded-full border border-ink-line bg-ink px-4 py-2.5 text-bone outline-none focus:border-ember/60"
+                className={inputClass}
               />
             </div>
           </div>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button variant="primary" onClick={save}>
+            <button
+              type="button"
+              onClick={save}
+              className="flex items-center gap-1.5 rounded-[var(--radius)] px-4 py-2 text-[13px] font-medium text-white"
+              style={{ background: "var(--accent-gradient)" }}
+            >
               <Save className="h-4 w-4" />
               {saved ? "Mentve" : "Mentés"}
-            </Button>
-            <Button variant="ghost" asChild>
-              <a href={portalUrl} target="_blank" rel="noreferrer">
-                Portál megtekintése
-              </a>
-            </Button>
-            <Button variant="ghost" onClick={makeShare}>
+            </button>
+            <a
+              href={portalUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-[var(--radius)] border border-border px-4 py-2 text-[13px] text-text-secondary hover:bg-surface-3"
+            >
+              Portál megtekintése
+            </a>
+            <button
+              type="button"
+              onClick={makeShare}
+              className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-4 py-2 text-[13px] text-text-secondary hover:bg-surface-3"
+            >
               <Link2 className="h-4 w-4" />
               Megosztó link
-            </Button>
+            </button>
             <button
               onClick={onDeletePortal}
-              className="ml-auto flex items-center gap-2 rounded-full border border-ember/40 px-4 py-2 text-sm text-ember transition hover:bg-ember/10"
+              className="ml-auto flex items-center gap-2 rounded-[var(--radius)] border border-text-danger/40 px-4 py-2 text-[13px] text-text-danger transition-colors hover:bg-bg-danger"
             >
               <Trash2 className="h-4 w-4" />
               Portál törlése
             </button>
           </div>
           {shareUrl && (
-            <p className="mt-3 break-all rounded-xl border border-ink-line bg-ink px-3 py-2 font-mono text-xs text-mist">
+            <p className="mt-3 break-all rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[12px] text-text-muted">
               Másolva: {shareUrl}
             </p>
           )}
-        </section>
+        </Card>
 
         {/* Fájlok / Mappák (Drive-szerű) */}
-        <section className="rounded-2xl border border-ink-line bg-ink-card p-4 sm:p-6">
+        <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               {currentFolder && (
                 <button
                   onClick={() => setCurrentFolder(null)}
                   title="Vissza"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-mist transition hover:bg-white/[0.05] hover:text-bone"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
               )}
-              <h2 className="truncate font-display text-xl text-bone">{openFolder ? openFolder.name : "Tartalom"}</h2>
+              <h2 className="truncate text-[15px] font-medium text-text-primary">{openFolder ? openFolder.name : "Tartalom"}</h2>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={onCreateFolder}>
+              <button
+                type="button"
+                onClick={onCreateFolder}
+                className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-3 py-1.5 text-[12px] text-text-secondary hover:bg-surface-3"
+              >
                 <FolderPlus className="h-4 w-4" />
                 Új mappa
-              </Button>
+              </button>
             </div>
             <input ref={replaceRef} type="file" accept="video/*" hidden onChange={onReplace} />
           </div>
 
-          <p className="mt-2 text-xs text-mist">
+          <p className="mt-2 text-[12px] text-text-muted">
             {currentFolder
               ? "A feltöltött videók és képek ebbe a mappába kerülnek."
               : "Nyiss meg egy mappát, vagy tölts fel ide videókat és képeket mappa nélkül."}
@@ -748,28 +776,28 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
             }}
             onDragLeave={() => setDragOver(false)}
             onDrop={onDropFiles}
-            className={`mt-3 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition ${
-              dragOver ? "border-ember bg-ember/10" : "border-ink-line bg-ink hover:border-ember/50"
+            className={`mt-3 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-lg)] border-2 border-dashed px-4 py-8 text-center transition-colors ${
+              dragOver ? "border-text-accent/60 bg-bg-accent" : "border-border bg-surface-3 hover:border-text-accent/40"
             }`}
           >
-            <Upload className="h-6 w-6 text-mist" />
-            <span className="text-sm text-bone">Húzd ide a fájlokat vagy egy egész mappát</span>
-            <span className="text-[11px] text-mist">
+            <Upload className="h-6 w-6 text-text-muted" />
+            <span className="text-[13px] text-text-primary">Húzd ide a fájlokat vagy egy egész mappát</span>
+            <span className="text-[11px] text-text-muted">
               Mappa húzásakor automatikusan létrejön a mappa a benne lévő fájlokkal. Vagy kattints a tallózáshoz.
             </span>
             <input type="file" accept="video/*,image/*" multiple className="hidden" onChange={onUpload} />
           </label>
 
           {selectedCount > 0 && (
-            <div className="mt-4 flex items-center justify-between rounded-xl border border-ember/40 bg-ember/10 px-3 py-2.5">
-              <span className="text-sm text-bone">{selectedCount} kijelölve</span>
+            <div className="mt-4 flex items-center justify-between rounded-[var(--radius)] border border-text-accent/40 bg-bg-accent px-3 py-2.5">
+              <span className="text-[13px] text-text-primary">{selectedCount} kijelölve</span>
               <div className="flex items-center gap-3">
-                <button onClick={clearSelection} className="text-xs text-mist transition hover:text-bone">
+                <button onClick={clearSelection} className="text-[12px] text-text-muted transition-colors hover:text-text-primary">
                   Mégse
                 </button>
                 <button
                   onClick={onDeleteSelected}
-                  className="flex items-center gap-2 rounded-full border border-ember/50 px-3 py-1.5 text-xs text-ember transition hover:bg-ember/20"
+                  className="flex items-center gap-2 rounded-[var(--radius)] border border-text-danger/50 px-3 py-1.5 text-[12px] text-text-danger transition-colors hover:bg-bg-danger"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Kijelöltek törlése
@@ -779,12 +807,12 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
           )}
 
           {batch && (
-            <div className="mt-4 rounded-xl border border-ember/40 bg-ember/10 px-3 py-3">
+            <div className="mt-4 rounded-[var(--radius)] border border-text-accent/40 bg-bg-accent px-3 py-3">
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-sm text-bone">
+                <span className="text-[13px] text-text-primary">
                   Feltöltés: {batch.done} / {batch.total} kép
                 </span>
-                <span className="font-mono text-[11px] text-mist">
+                <span className="text-[11px] text-text-muted">
                   {(() => {
                     if (batch.done === 0) return "Becslés…";
                     const elapsed = (Date.now() - batch.startedAt) / 1000;
@@ -795,15 +823,15 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                   })()}
                 </span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-line">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
                 <div
-                  className="h-full rounded-full bg-ember transition-all duration-300"
-                  style={{ width: `${Math.round((batch.done / batch.total) * 100)}%` }}
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round((batch.done / batch.total) * 100)}%`, background: "var(--accent-gradient)" }}
                 />
               </div>
               <button
                 onClick={cancelUploadNow}
-                className="mt-2.5 w-full rounded-full border border-ember/50 py-1.5 text-xs text-ember transition hover:bg-ember/20"
+                className="mt-2.5 w-full rounded-[var(--radius)] border border-text-danger/40 py-1.5 text-[12px] text-text-danger transition-colors hover:bg-bg-danger"
               >
                 Feltöltés leállítása
               </button>
@@ -811,12 +839,12 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
           )}
 
           {videoBatch && (
-            <div className="mt-4 rounded-xl border border-ember/40 bg-ember/10 px-3 py-2.5">
+            <div className="mt-4 rounded-[var(--radius)] border border-text-accent/40 bg-bg-accent px-3 py-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-bone">
+                <span className="text-[13px] text-text-primary">
                   Videó feltöltése: {Math.min(videoBatch.done + 1, videoBatch.total)} / {videoBatch.total}
                 </span>
-                <span className="font-mono text-[11px] text-mist">
+                <span className="text-[11px] text-text-muted">
                   {(() => {
                     if (videoBatch.done === 0) return "Becslés…";
                     const elapsed = (Date.now() - videoBatch.startedAt) / 1000;
@@ -833,13 +861,16 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
           {uploads.length > 0 && (
             <div className="mt-4 space-y-2">
               {uploads.map((u) => (
-                <div key={u.name} className="rounded-xl border border-ink-line bg-ink px-3 py-2.5">
+                <div key={u.name} className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5">
                   <div className="mb-1.5 flex items-center justify-between">
-                    <span className="truncate text-sm text-bone">{u.name}</span>
-                    <span className="font-mono text-[11px] text-mist">{u.percent < 100 ? `${u.percent}%` : "Feldolgozás…"}</span>
+                    <span className="truncate text-[13px] text-text-primary">{u.name}</span>
+                    <span className="text-[11px] text-text-muted">{u.percent < 100 ? `${u.percent}%` : "Feldolgozás…"}</span>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-line">
-                    <div className="h-full rounded-full bg-ember transition-all duration-200" style={{ width: `${u.percent}%` }} />
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="h-full rounded-full transition-all duration-200"
+                      style={{ width: `${u.percent}%`, background: "var(--accent-gradient)" }}
+                    />
                   </div>
                 </div>
               ))}
@@ -852,16 +883,16 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                 const vCount = videos.filter((v) => v.folder_id === f.id).length;
                 const iCount = images.filter((i) => i.folder_id === f.id).length;
                 return (
-                  <li key={f.id} className="flex items-center gap-3 rounded-xl border border-ink-line bg-ink px-3 py-2.5">
+                  <li key={f.id} className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5">
                     <button onClick={() => setCurrentFolder(f.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                      <FolderIcon className="h-5 w-5 shrink-0 text-ember" />
-                      <span className="truncate text-sm text-bone">{f.name}</span>
-                      <span className="ml-auto shrink-0 font-mono text-[11px] text-mist">{vCount + iCount} elem</span>
+                      <FolderIcon className="h-5 w-5 shrink-0 text-text-accent" />
+                      <span className="truncate text-[13px] text-text-primary">{f.name}</span>
+                      <span className="ml-auto shrink-0 text-[11px] text-text-muted">{vCount + iCount} elem</span>
                     </button>
-                    <button title="Átnevezés" onClick={() => onRenameFolder(f.id)} className="text-mist transition hover:text-bone">
+                    <button title="Átnevezés" onClick={() => onRenameFolder(f.id)} className="text-text-muted transition-colors hover:text-text-primary">
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button title="Mappa törlése" onClick={() => onDeleteFolder(f.id)} className="text-mist transition hover:text-ember">
+                    <button title="Mappa törlése" onClick={() => onDeleteFolder(f.id)} className="text-text-muted transition-colors hover:text-text-danger">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </li>
@@ -880,8 +911,8 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                   onDragStart={() => (dragId.current = v.id)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => onDrop(v.id)}
-                  className={`flex items-center gap-2 rounded-xl border bg-ink px-2.5 py-2.5 sm:gap-3 sm:px-3 ${
-                    isSelected ? "border-ember/60" : "border-ink-line"
+                  className={`flex items-center gap-2 rounded-[var(--radius)] border bg-surface-3 px-2.5 py-2.5 sm:gap-3 sm:px-3 ${
+                    isSelected ? "border-text-accent/60" : "border-border"
                   }`}
                 >
                   <input
@@ -889,18 +920,18 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                     checked={isSelected}
                     onChange={() => toggleVideo(v.id)}
                     onClick={(e) => e.stopPropagation()}
-                    className="h-4 w-4 shrink-0 cursor-pointer accent-ember"
+                    className="h-4 w-4 shrink-0 cursor-pointer accent-[var(--accent-solid)]"
                   />
-                  <GripVertical className="hidden h-4 w-4 shrink-0 cursor-grab text-mist sm:block" />
-                  <div className="h-9 w-12 shrink-0 overflow-hidden rounded bg-ink-soft sm:w-16">
+                  <GripVertical className="hidden h-4 w-4 shrink-0 cursor-grab text-text-muted sm:block" />
+                  <div className="h-9 w-12 shrink-0 overflow-hidden rounded-[var(--radius)] bg-surface-2 sm:w-16">
                     {v.thumbnail_url && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={v.thumbnail_url} alt="" className="h-full w-full object-cover" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-bone">{v.title}</p>
-                    <p className="font-mono text-[11px] text-mist">
+                    <p className="truncate text-[13px] text-text-primary">{v.title}</p>
+                    <p className="text-[11px] text-text-muted">
                       {v.status === "ready"
                         ? `${v.resolution_label} · ${formatDuration(v.duration_seconds)} · ${formatBytes(v.size_bytes)}`
                         : v.status === "processing"
@@ -909,11 +940,11 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                     </p>
                   </div>
                   {currentFolder && (
-                    <button title="Kivétel a mappából" onClick={() => onRemoveFromFolder(v.id)} className="text-mist transition hover:text-bone">
+                    <button title="Kivétel a mappából" onClick={() => onRemoveFromFolder(v.id)} className="text-text-muted transition-colors hover:text-text-primary">
                       <ArrowLeft className="h-4 w-4" />
                     </button>
                   )}
-                  <button title="Átnevezés" onClick={() => onRenameVideo(v.id)} className="text-mist transition hover:text-bone">
+                  <button title="Átnevezés" onClick={() => onRenameVideo(v.id)} className="text-text-muted transition-colors hover:text-text-primary">
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
@@ -922,18 +953,18 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                       replaceId.current = v.id;
                       replaceRef.current?.click();
                     }}
-                    className="text-mist transition hover:text-bone"
+                    className="text-text-muted transition-colors hover:text-text-primary"
                   >
                     <Replace className="h-4 w-4" />
                   </button>
-                  <button title="Törlés" onClick={() => onDeleteVideo(v.id)} className="text-mist transition hover:text-ember">
+                  <button title="Törlés" onClick={() => onDeleteVideo(v.id)} className="text-text-muted transition-colors hover:text-text-danger">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </li>
               );
             })}
             {visibleVideos.length === 0 && (
-              <li className="py-8 text-center text-sm text-mist">
+              <li className="py-8 text-center text-[13px] text-text-muted">
                 {currentFolder ? "Nincs videó ebben a mappában." : "Nincs mappán kívüli videó."}
               </li>
             )}
@@ -941,7 +972,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
 
           {visibleImages.length > 0 && (
             <div className="mt-6">
-              <h3 className="mb-3 font-mono text-[11px] uppercase tracking-eyebrow text-mist">Képek ({visibleImages.length})</h3>
+              <h3 className="mb-3 text-[11px] font-medium uppercase tracking-wide text-text-muted">Képek ({visibleImages.length})</h3>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {visibleImages.map((img) => (
                   <LazyImageCell
@@ -957,7 +988,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
               </div>
             </div>
           )}
-        </section>
+        </Card>
       </div>
 
       {prompt && (
@@ -984,7 +1015,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
           }}
         />
       )}
-    </main>
+    </div>
   );
 }
 
@@ -1017,8 +1048,8 @@ function LazyImageCell({
   return (
     <div
       ref={ref}
-      className={`group relative aspect-square overflow-hidden rounded-lg border bg-ink-soft ${
-        selected ? "border-ember/60 ring-2 ring-ember/40" : "border-ink-line"
+      className={`group relative aspect-square overflow-hidden rounded-[var(--radius)] border bg-surface-2 ${
+        selected ? "border-text-accent/60 ring-2 ring-text-accent/40" : "border-border"
       }`}
     >
       {visible && (
@@ -1026,14 +1057,14 @@ function LazyImageCell({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={img.thumbnail_url || img.url} alt={img.title ?? ""} loading="lazy" decoding="async" className="h-full w-full object-cover" />
           <label className="absolute left-2 top-2 z-20 flex h-6 w-6 cursor-pointer items-center justify-center rounded bg-black/60" onClick={(e) => e.stopPropagation()}>
-            <input type="checkbox" checked={selected} onChange={onToggle} className="h-4 w-4 cursor-pointer accent-ember" />
+            <input type="checkbox" checked={selected} onChange={onToggle} className="h-4 w-4 cursor-pointer accent-[var(--accent-solid)]" />
           </label>
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 transition group-hover:opacity-100">
             {inFolder && (
               <button
                 title="Kivétel a mappából"
                 onClick={onRemoveFromFolder}
-                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-bone transition hover:text-white"
+                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition hover:text-white/80"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
@@ -1041,7 +1072,7 @@ function LazyImageCell({
             <button
               title="Törlés"
               onClick={onDelete}
-              className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-bone transition hover:text-ember"
+              className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition hover:text-text-danger"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -1067,13 +1098,13 @@ function Field({
 }) {
   return (
     <div>
-      <label className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">{label}</label>
+      <label className={labelClass}>{label}</label>
       <input
         type={type}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded-full border border-ink-line bg-ink px-4 py-2.5 text-bone outline-none focus:border-ember/60"
+        className={inputClass}
       />
     </div>
   );
@@ -1092,9 +1123,9 @@ function PromptDialog({
 }) {
   const [value, setValue] = useState(initialValue);
   return (
-    <div className="hype-portal dark fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
-      <div className="w-full max-w-sm rounded-2xl border border-ink-line bg-ink-card p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="font-display text-lg text-bone">{title}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
+      <div className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-[15px] font-medium text-text-primary">{title}</h3>
         <input
           autoFocus
           value={value}
@@ -1103,15 +1134,24 @@ function PromptDialog({
             if (e.key === "Enter") onConfirm(value);
             if (e.key === "Escape") onCancel();
           }}
-          className="mt-4 w-full rounded-full border border-ink-line bg-ink px-4 py-2.5 text-bone outline-none focus:border-ember/60"
+          className={inputClass}
         />
         <div className="mt-5 flex justify-end gap-3">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-[var(--radius)] border border-border px-4 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+          >
             Mégse
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => onConfirm(value)}>
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(value)}
+            className="rounded-[var(--radius)] px-4 py-1.5 text-[13px] font-medium text-white"
+            style={{ background: "var(--accent-gradient)" }}
+          >
             OK
-          </Button>
+          </button>
         </div>
       </div>
     </div>
@@ -1120,14 +1160,21 @@ function PromptDialog({
 
 function ConfirmDialog({ message, onCancel, onConfirm }: { message: string; onCancel: () => void; onConfirm: () => void }) {
   return (
-    <div className="hype-portal dark fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
-      <div className="w-full max-w-sm rounded-2xl border border-ink-line bg-ink-card p-6" onClick={(e) => e.stopPropagation()}>
-        <p className="text-sm leading-relaxed text-bone">{message}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
+      <div className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6" onClick={(e) => e.stopPropagation()}>
+        <p className="text-[13px] leading-relaxed text-text-primary">{message}</p>
         <div className="mt-5 flex justify-end gap-3">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-[var(--radius)] border border-border px-4 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+          >
             Mégse
-          </Button>
-          <button onClick={onConfirm} className="flex items-center gap-2 rounded-full border border-ember/40 px-4 py-2 text-sm text-ember transition hover:bg-ember/10">
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex items-center gap-2 rounded-[var(--radius)] border border-text-danger/40 px-4 py-2 text-[13px] text-text-danger transition-colors hover:bg-bg-danger"
+          >
             Törlés
           </button>
         </div>
