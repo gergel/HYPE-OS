@@ -3,13 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Globe } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import { createPortalFromDeliverable } from "@/lib/portalAdminApi";
 
 /** Az Utómunka részletnézetén megjelenő "Portál létrehozása" gomb - egy Média
  * Portált hoz létre közvetlenül ehhez a Deliverable-hez kötve (nem a
  * mögöttes Projekthez, mert egy Projektnek több Deliverable-je is lehet), és
- * a Portál publikus linkjét automatikusan beírja a "Kész anyag URL" mezőbe
- * (lásd backend/app/api/routes/portal_admin.py create_portal_from_deliverable).
+ * a Portál TELJES, kiküldhető publikus linkjét (megosztó token-nel, mint a
+ * Portál admin "Megosztó link" gombja) automatikusan beírja a "Kész anyag
+ * URL" mezőbe. Az abszolút URL-t szándékosan itt, a böngészőben rakjuk
+ * össze (window.location.origin-ból), nem a backend teszi ezt - a backend
+ * nem tudhatja megbízhatóan a publikus domain-t minden környezetben, és
+ * enélkül csak a relatív "/p/{slug}..." útvonal kerülne a mezőbe, amit nem
+ * lehet közvetlenül kiküldeni a megrendelőnek.
  * A Portál Admin listában (/media-portal) is megjelenik, mert ugyanabba a
  * `portals` táblába kerül, mint a projekt-alapú vagy kézi Portálok. */
 export function CreatePortalButton({
@@ -54,7 +60,17 @@ export function CreatePortalButton({
     setBusy(true);
     setError(null);
     try {
-      await createPortalFromDeliverable(deliverableId);
+      const portal = await createPortalFromDeliverable(deliverableId);
+      const fullUrl = `${window.location.origin}/p/${portal.slug}${portal.share_token ? `?share=${portal.share_token}` : ""}`;
+      const res = await authFetch(`/api/v1/deliverables/${deliverableId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ kesz_anyag_url: fullUrl }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        setError(`A portál létrejött, de a "Kész anyag URL" mentése sikertelen: ${detail?.detail ?? res.status}`);
+        return;
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

@@ -156,11 +156,15 @@ class PortalSummary(BaseModel):
     expires_at: date | None = None
     payment_mode: PaymentMode
     has_password: bool = False
+    # Csak akkor van értéke, ha valaha generáltak megosztó linket ehhez a
+    # Portálhoz (lásd portal_admin.py regenerate_share) - a frontend ebből
+    # rakja össze a teljes, jelszó nélkül is működő linket (window.location.origin
+    # + /p/{slug}?share={token}), pl. a Deliverable "Kész anyag URL" mezőjéhez.
+    share_token: str | None = None
 
 
 class PortalDetail(PortalSummary):
     description: str
-    share_token: str | None = None
     # A nyers felülírás-mezők (nem a resolve_*-tal számolt title/client_name/
     # project_date) - kellenek az admin felületnek, hogy meg tudja mutatni,
     # mi van ténylegesen felülírva, és üresen (None) tudja előtölteni a

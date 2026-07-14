@@ -65,6 +65,7 @@ def _summary(p: Portal) -> PortalSummary:
         expires_at=p.expires_at,
         payment_mode=p.payment_mode,
         has_password=bool(p.password_hash),
+        share_token=p.share_token,
     )
 
 
@@ -72,7 +73,6 @@ def _detail(p: Portal) -> PortalDetail:
     return PortalDetail(
         **_summary(p).model_dump(),
         description=p.description or "",
-        share_token=p.share_token,
         title_override=p.title_override,
         client_name_override=p.client_name_override,
         project_date_override=p.project_date_override,
@@ -223,17 +223,12 @@ def create_portal_from_deliverable(
     db.commit()
     db.refresh(portal)
 
-    from app.core.config import settings
-
-    # A megosztó linket (share_token-nel) írjuk a "Kész anyag URL" mezőbe -
-    # ugyanaz a link, amit a Portál admin felületén a "Megosztó link" gomb
-    # generál (lásd regenerate_share lent) -, nem a puszta /p/{slug} URL-t,
-    # hogy jelszóval védett Portál esetén is közvetlenül működjön a link,
-    # amit a megrendelő kap.
-    front = settings.frontend_base_url.rstrip("/")
-    deliverable.kesz_anyag_url = f"{front}/p/{portal.slug}?share={portal.share_token}"
-    db.commit()
-
+    # A "Kész anyag URL" mező kitöltését a FRONTEND végzi (lásd
+    # CreatePortalButton.tsx), a böngésző window.location.origin-jéből
+    # összerakva a teljes, abszolút linket - itt a backend nem tudja
+    # megbízhatóan összerakni (a settings.frontend_base_url gyakran nincs
+    # beállítva minden környezetben, és akkor csak a relatív "/p/{slug}..."
+    # útvonal kerülne a mezőbe, ami önmagában nem küldhető ki a megrendelőnek).
     return _summary(portal)
 
 

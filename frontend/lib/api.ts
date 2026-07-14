@@ -737,6 +737,7 @@ export type PortalSummary = {
   expires_at: string | null;
   payment_mode: string;
   has_password: boolean;
+  share_token: string | null;
 };
 
 export type PortalVideoItem = {
