@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { DeliverableBoard, type BoardCard, type BoardColumn } from "@/components/deliverable/DeliverableBoard";
@@ -149,7 +150,14 @@ export function UtomunkaContent({
               { header: "Anyag", render: (d) => d.projekt_neve, sortAccessor: (d) => d.projekt_neve },
               {
                 header: "Állapot",
-                render: (d) => (d.allapot ? <StatusBadge label={d.allapot} tone="neutral" /> : "–"),
+                render: (d) => (
+                  <EditableStatusBadge
+                    patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`}
+                    field="allapot"
+                    value={d.allapot}
+                    options={statusOptions}
+                  />
+                ),
                 sortAccessor: (d) => d.allapot,
               },
               { header: "Határidő", render: (d) => formatDate(d.hatarido), sortAccessor: (d) => d.hatarido },

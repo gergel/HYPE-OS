@@ -1,6 +1,6 @@
 import { ProjektekContent } from "@/components/ProjektekContent";
 import { TopBar } from "@/components/TopBar";
-import { getProjectCodes, getProjects } from "@/lib/api";
+import { getFieldTypes, getProjectCodes, getProjects } from "@/lib/api";
 
 // Csak ennyi legutóbb módosított/létrehozott projektet töltünk be azonnal
 // (a backend list_items alapértelmezetten updated_at szerint csökkenő
@@ -9,7 +9,11 @@ import { getProjectCodes, getProjects } from "@/lib/api";
 const INITIAL_BATCH = 200;
 
 export default async function ProjektekPage() {
-  const [projects, projectCodes] = await Promise.all([getProjects(INITIAL_BATCH), getProjectCodes()]);
+  const [projects, projectCodes, fieldTypes] = await Promise.all([
+    getProjects(INITIAL_BATCH),
+    getProjectCodes(),
+    getFieldTypes("project"),
+  ]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -19,6 +23,7 @@ export default async function ProjektekPage() {
           initialProjects={projects}
           hasMore={projects.length === INITIAL_BATCH}
           projectCodes={projectCodes}
+          statusOptions={fieldTypes.allapot?.options ?? []}
         />
       </div>
     </div>

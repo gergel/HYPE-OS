@@ -1,11 +1,13 @@
-import { ENTITY_PATHS, formatDate, getTasks, Task } from "@/lib/api";
+import { ENTITY_PATHS, formatDate, getFieldTypes, getTasks, Task } from "@/lib/api";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
 
 export default async function FeladatokPage() {
-  const tasks = await getTasks();
+  const [tasks, fieldTypes] = await Promise.all([getTasks(), getFieldTypes("task")]);
+  const statusOptions = fieldTypes.allapot?.options ?? [];
 
   return (
     <div className="flex flex-1 flex-col">
@@ -24,7 +26,14 @@ export default async function FeladatokPage() {
               { header: "Határidő", render: (t) => formatDate(t.hatarido), sortAccessor: (t) => t.hatarido },
               {
                 header: "Állapot",
-                render: (t) => (t.allapot ? <StatusBadge label={t.allapot} tone="neutral" /> : "–"),
+                render: (t) => (
+                  <EditableStatusBadge
+                    patchPath={`${ENTITY_PATHS.task}/${t.id}`}
+                    field="allapot"
+                    value={t.allapot}
+                    options={statusOptions}
+                  />
+                ),
                 sortAccessor: (t) => t.allapot,
               },
               {

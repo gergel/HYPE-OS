@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
-import { StatusBadge } from "@/components/StatusBadge";
+import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import type { Project, ProjectCode } from "@/lib/api";
 
@@ -27,10 +27,12 @@ export function ProjektekContent({
   initialProjects,
   hasMore,
   projectCodes,
+  statusOptions,
 }: {
   initialProjects: Project[];
   hasMore: boolean;
   projectCodes: ProjectCode[];
+  statusOptions: string[];
 }) {
   const [projects, setProjects] = useState(initialProjects);
 
@@ -64,7 +66,14 @@ export function ProjektekContent({
           { header: "Helyszín", render: (p) => p.helyszin ?? "–", sortAccessor: (p) => p.helyszin },
           {
             header: "Állapot",
-            render: (p) => (p.allapot ? <StatusBadge label={p.allapot} tone="neutral" /> : "–"),
+            render: (p) => (
+              <EditableStatusBadge
+                patchPath={`${PROJECT_BASE_PATH}/${p.id}`}
+                field="allapot"
+                value={p.allapot}
+                options={statusOptions}
+              />
+            ),
             sortAccessor: (p) => p.allapot,
           },
         ]}

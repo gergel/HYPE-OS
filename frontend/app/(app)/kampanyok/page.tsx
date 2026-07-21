@@ -1,11 +1,13 @@
-import { Campaign, ENTITY_PATHS, formatDate, getCampaigns } from "@/lib/api";
+import { Campaign, ENTITY_PATHS, formatDate, getCampaigns, getFieldTypes } from "@/lib/api";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
 
 export default async function KampanyokPage() {
-  const campaigns = await getCampaigns();
+  const [campaigns, fieldTypes] = await Promise.all([getCampaigns(), getFieldTypes("campaign")]);
+  const statusOptions = fieldTypes.kampany_statusza?.options ?? [];
 
   return (
     <div className="flex flex-1 flex-col">
@@ -22,7 +24,14 @@ export default async function KampanyokPage() {
               { header: "Név", render: (c) => c.nev, sortAccessor: (c) => c.nev },
               {
                 header: "Státusz",
-                render: (c) => (c.kampany_statusza ? <StatusBadge label={c.kampany_statusza} tone="neutral" /> : "–"),
+                render: (c) => (
+                  <EditableStatusBadge
+                    patchPath={`${ENTITY_PATHS.campaign}/${c.id}`}
+                    field="kampany_statusza"
+                    value={c.kampany_statusza}
+                    options={statusOptions}
+                  />
+                ),
                 sortAccessor: (c) => c.kampany_statusza,
               },
               { header: "Határidő", render: (c) => formatDate(c.hatarido), sortAccessor: (c) => c.hatarido },

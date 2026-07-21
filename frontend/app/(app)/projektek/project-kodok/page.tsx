@@ -1,12 +1,17 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
-import { StatusBadge } from "@/components/StatusBadge";
+import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, formatDate, formatHuf, getClients, getProjectCodes, ProjectCode } from "@/lib/api";
+import { ENTITY_PATHS, formatDate, formatHuf, getClients, getFieldTypes, getProjectCodes, ProjectCode } from "@/lib/api";
 
 export default async function ProjectKodokPage() {
-  const [projectCodes, clients] = await Promise.all([getProjectCodes(), getClients()]);
+  const [projectCodes, clients, fieldTypes] = await Promise.all([
+    getProjectCodes(),
+    getClients(),
+    getFieldTypes("projectCode"),
+  ]);
   const clientNameById = new Map(clients.map((c) => [c.id, c.nev]));
+  const statusOptions = fieldTypes.esemeny_allapota?.options ?? [];
 
   return (
     <div className="flex flex-1 flex-col">
@@ -42,7 +47,14 @@ export default async function ProjectKodokPage() {
               {
                 header: "Státusz",
                 align: "right",
-                render: (pc) => (pc.esemeny_allapota ? <StatusBadge label={pc.esemeny_allapota} tone="neutral" /> : "–"),
+                render: (pc) => (
+                  <EditableStatusBadge
+                    patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`}
+                    field="esemeny_allapota"
+                    value={pc.esemeny_allapota}
+                    options={statusOptions}
+                  />
+                ),
                 sortAccessor: (pc) => pc.esemeny_allapota,
               },
             ]}
