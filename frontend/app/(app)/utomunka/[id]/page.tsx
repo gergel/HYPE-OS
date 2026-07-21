@@ -8,7 +8,7 @@ import { CreatePortalButton } from "@/components/deliverable/CreatePortalButton"
 import { FeedbackSendButton } from "@/components/deliverable/FeedbackSendButton";
 import { TimerControls } from "@/components/deliverable/TimerControls";
 import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
-import { EditableDetailGrid } from "@/components/EditableDetailGrid";
+import { DetailTabs } from "@/components/DetailTabs";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -17,14 +17,16 @@ import {
   getContactsByClient,
   getDeliverableComments,
   getDeliverableContacts,
+  getDetailTabs,
   getFieldTypes,
+  getMyPagePermissions,
   getRecord,
   getRelated,
   getTimerState,
   getVinyoOptions,
   getVisibleFields,
 } from "@/lib/api";
-import { toEditableDetailFields } from "@/lib/detail";
+import { buildFieldTabs } from "@/lib/detailTabs";
 
 const HIDDEN_FIELDS = [
   "project_code_id",
@@ -47,6 +49,8 @@ const HIDDEN_FIELDS = [
   "portal_id",
 ];
 
+const PAGE = "/utomunka";
+
 export default async function DeliverableDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const deliverableId = Number(id);
@@ -68,6 +72,8 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     contacts,
     timerState,
     comments,
+    dbTabs,
+    pagePermissions,
   ] = await Promise.all([
     deliverable.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(deliverable.project_code_id)) : null,
     deliverable.project_id ? getRecord(ENTITY_PATHS.project, Number(deliverable.project_id)) : null,
@@ -83,50 +89,59 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     getDeliverableContacts(deliverableId),
     getTimerState(deliverableId),
     getDeliverableComments(deliverableId),
+    getDetailTabs("deliverable"),
+    getMyPagePermissions(),
   ]);
 
   const clientId = projectCode ? Number(projectCode.client_id) : null;
   const contactOptions = clientId ? await getContactsByClient(clientId) : [];
+
+  const tabs = buildFieldTabs({
+    page: PAGE,
+    patchPath: `${ENTITY_PATHS.deliverable}/${deliverable.id}`,
+    record: deliverable,
+    dbTabs,
+    visibleFields,
+    fieldTypes,
+    pagePermissions,
+    alwaysHidden: HIDDEN_FIELDS,
+  });
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 space-y-6 p-6">
         <BackLink href="/utomunka" label="Utómunka" />
+        <h1 className="text-lg font-medium text-text-primary">{String(deliverable.projekt_neve ?? `Anyag #${deliverable.id}`)}</h1>
+        <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
+          {projectCode && (
+            <a href={`/projektek/project-kodok/${projectCode.id}`} className="text-text-accent hover:underline">
+              Project Code: {String(projectCode.projektkod)}
+            </a>
+          )}
+          {project && (
+            <a href={`/projektek/${project.id}`} className="text-text-accent hover:underline">
+              Projekt: {String(project.nev)}
+            </a>
+          )}
+          {vago && (
+            <a href={`/csapat/${vago.id}`} className="text-text-accent hover:underline">
+              Vágó: {String(vago.full_name)}
+            </a>
+          )}
+          {campaign && (
+            <a href={`/kampanyok/${campaign.id}`} className="text-text-accent hover:underline">
+              Kampány: {String(campaign.nev)}
+            </a>
+          )}
+          {felvezeto && (
+            <a href={`/csapat/${felvezeto.id}`} className="text-text-accent hover:underline">
+              Felvezette: {String(felvezeto.full_name)}
+            </a>
+          )}
+        </div>
 
-        <Card title={String(deliverable.projekt_neve ?? `Anyag #${deliverable.id}`)}>
-          <div className="mb-4 flex flex-wrap gap-4 text-[13px] text-text-secondary">
-            {projectCode && (
-              <a href={`/projektek/project-kodok/${projectCode.id}`} className="text-text-accent hover:underline">
-                Project Code: {String(projectCode.projektkod)}
-              </a>
-            )}
-            {project && (
-              <a href={`/projektek/${project.id}`} className="text-text-accent hover:underline">
-                Projekt: {String(project.nev)}
-              </a>
-            )}
-            {vago && (
-              <a href={`/csapat/${vago.id}`} className="text-text-accent hover:underline">
-                Vágó: {String(vago.full_name)}
-              </a>
-            )}
-            {campaign && (
-              <a href={`/kampanyok/${campaign.id}`} className="text-text-accent hover:underline">
-                Kampány: {String(campaign.nev)}
-              </a>
-            )}
-            {felvezeto && (
-              <a href={`/csapat/${felvezeto.id}`} className="text-text-accent hover:underline">
-                Felvezette: {String(felvezeto.full_name)}
-              </a>
-            )}
-          </div>
-          <EditableDetailGrid
-            patchPath={`${ENTITY_PATHS.deliverable}/${deliverable.id}`}
-            fields={toEditableDetailFields(deliverable, HIDDEN_FIELDS, visibleFields, fieldTypes)}
-          />
-        </Card>
+        <DetailTabs tabs={tabs} />
 
         <Card title="Kiosztás">
           <p className="mb-2 text-[13px] text-text-secondary">

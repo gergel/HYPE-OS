@@ -479,6 +479,39 @@ export async function getMyPageAccess(): Promise<string[] | null> {
   return res?.allowed_pages ?? null;
 }
 
+/** A bejelentkezett felhasználó teljes {oldal_vagy_"oldal:fül": [művelet, ...]}
+ * térképe - null = nincs korlátozás (mindent lát/szerkeszthet). A fül-szintű
+ * nézési/szerkesztési jogosultság ugyanezt a dictet használja, "{page}:{tab_key}"
+ * összetett kulcsokkal (lásd backend core/security.check_page_action,
+ * models/detail_tab.py osztály-komment) - erre épül a részletnézetek
+ * fül-szűrése (lásd DetailTabs, EditableDetailGrid readOnly módja). */
+export async function getMyPagePermissions(): Promise<Record<string, string[]> | null> {
+  const res = await apiGet<{ page_permissions: Record<string, string[]> | null }>("/api/v1/user-access/me");
+  return res?.page_permissions ?? null;
+}
+
+export type DetailTab = {
+  tab_key: string;
+  label: string;
+  icon: string | null;
+  field_keys: string[];
+};
+
+/** Egy entitástípus admin által beállított fül-elrendezése (lásd
+ * backend/app/services/detail_tabs.py) - a részletnézetek ez alapján
+ * renderelik a füleket. Bejelentkezett felhasználó bárki lekérdezheti. */
+export async function getDetailTabs(entityType: string): Promise<DetailTab[]> {
+  return (await apiGet<DetailTab[]>(`/api/v1/detail-tabs/${entityType}`)) ?? [];
+}
+
+export type DetailTabConfigByEntity = { entity_type: string; tabs: DetailTab[] };
+
+/** Admin-nézet: MINDEN entitástípus fül-elrendezése egyszerre (Beállítások
+ * oldal admin fül-szerkesztője tölti be egyben). */
+export async function getAllDetailTabs(): Promise<DetailTabConfigByEntity[]> {
+  return (await apiGet<DetailTabConfigByEntity[]>("/api/v1/detail-tabs")) ?? [];
+}
+
 /** Admin-nézet: az összes munkatárs oldal-hozzáférése (Beállítások oldal). */
 export async function getAllPageAccess(): Promise<PageAccessConfig[]> {
   return (await apiGet<PageAccessConfig[]>("/api/v1/user-access")) ?? [];

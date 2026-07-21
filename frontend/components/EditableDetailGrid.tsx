@@ -137,10 +137,22 @@ function EditableCell({ patchPath, field }: { patchPath: string; field: Editable
  * egyben, átláthatóan legyenek olvashatók (lásd referenciakép). Minden mező
  * kattintásra helyben szerkeszthetővé válik, és a megadott patchPath-ra
  * PATCH-eli a módosított mezőt. */
-export function EditableDetailGrid({ patchPath, fields }: { patchPath: string; fields: EditableDetailField[] }) {
+export function EditableDetailGrid({
+  patchPath,
+  fields,
+  readOnly = false,
+}: {
+  patchPath: string;
+  fields: EditableDetailField[];
+  /** Ha igaz, minden mező csak olvashatóként jelenik meg (nincs PATCH-küldés) -
+   * a fül-szintű szerkesztési jogosultság hiányában (lásd lib/detailTabs.tsx),
+   * hogy a felhasználó lássa az adatot, de ne módosíthassa. */
+  readOnly?: boolean;
+}) {
+  const effectiveFields = readOnly ? fields.map((f) => ({ ...f, editable: false })) : fields;
   return (
     <dl className="divide-y divide-border">
-      {fields.map((f) => (
+      {effectiveFields.map((f) => (
         <div key={f.key} className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-start sm:gap-4">
           <dt className="shrink-0 text-[13px] text-text-muted sm:w-52">{f.label}</dt>
           <div className="min-w-0 flex-1">

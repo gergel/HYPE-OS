@@ -8,6 +8,7 @@ from app.models.contract import Contract, ContractType
 from app.models.dashboard_config import DashboardConfig
 from app.models.deliverable import Deliverable, deliverable_contacts
 from app.models.deliverable_comment import DeliverableComment
+from app.models.detail_tab import DetailTabConfig
 from app.models.employee import Employee, EmployeeType, SystemRole
 from app.models.employee_document import EmployeeDocument
 from app.models.equipment import Assignment, Equipment, TrackMode
@@ -50,6 +51,7 @@ __all__ = [
     "Deliverable",
     "deliverable_contacts",
     "DeliverableComment",
+    "DetailTabConfig",
     "Employee",
     "EmployeeType",
     "SystemRole",

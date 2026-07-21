@@ -1,11 +1,13 @@
 import { AccountCard } from "@/components/AccountCard";
 import { Card } from "@/components/Card";
+import { DetailTabEditor } from "@/components/DetailTabEditor";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
 import { NotionImportPanel } from "@/components/NotionImportPanel";
 import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
+  getAllDetailTabs,
   getAllFieldVisibility,
   getAllPageAccess,
   getCurrentUser,
@@ -14,6 +16,22 @@ import {
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
 import { pagePermissionGroups } from "@/lib/nav";
+
+/** A 8 entitás, aminek van generikus, fület-alapú részletnézete (lásd
+ * app/*[id]/page.tsx, lib/detailTabs.tsx) - ehhez a 8-hoz kapcsolódik admin
+ * fül-szerkesztő ÉS a Felhasználó-kezelésben megjelenő fülenkénti
+ * Látja/Szerkesztheti jogosultság-választó. A page érték mindig a backend
+ * build_crud_router page= paraméterével kell, hogy egyezzen. */
+const ENTITY_PAGE_MAP: Record<string, string> = {
+  project: "/projektek",
+  client: "/ugyfelek",
+  projectCode: "/projektek/project-kodok",
+  employee: "/csapat",
+  equipment: "/felszereles",
+  campaign: "/kampanyok",
+  task: "/feladatok",
+  deliverable: "/utomunka",
+};
 
 /** A részletnézeteken szereplő entitások, ugyanazokkal a hide-listákkal, mint
  * a saját oldaluk (lásd app/*.tsx), hogy a mező-láthatóság beállítás
@@ -55,12 +73,13 @@ const VISIBILITY_ENTITIES: { entityType: string; label: string; basePath: string
 ];
 
 export default async function BeallitasokPage() {
-  const [employees, pageAccessConfigs, fieldVisibilityConfigs, samples, currentUser] = await Promise.all([
+  const [employees, pageAccessConfigs, fieldVisibilityConfigs, samples, currentUser, allDetailTabs] = await Promise.all([
     getEmployees(),
     getAllPageAccess(),
     getAllFieldVisibility(),
     Promise.all(VISIBILITY_ENTITIES.map((e) => getSampleRecord(e.basePath))),
     getCurrentUser(),
+    getAllDetailTabs(),
   ]);
   const pages = pagePermissionGroups();
 
@@ -73,6 +92,15 @@ export default async function BeallitasokPage() {
       availableFields: toEditableDetailFields(sample, entity.hide, null).map((f) => ({ key: f.key, label: f.label })),
     };
   }).filter((e): e is { entityType: string; label: string; availableFields: { key: string; label: string }[] } => e !== null);
+
+  const detailTabEntities = visibilityEntities.filter((e) => e.entityType in ENTITY_PAGE_MAP);
+  const detailTabsByEntity = Object.fromEntries(allDetailTabs.map((c) => [c.entity_type, c.tabs]));
+  const pageTabsMap = Object.fromEntries(
+    Object.entries(ENTITY_PAGE_MAP).map(([entityType, page]) => [
+      page,
+      (detailTabsByEntity[entityType] ?? []).filter((t: { tab_key: string }) => t.tab_key !== "_other"),
+    ]),
+  );
 
   return (
     <div className="flex flex-1 flex-col">
@@ -92,7 +120,16 @@ export default async function BeallitasokPage() {
             visibilityEntities={visibilityEntities}
             pageAccessConfigs={pageAccessConfigs}
             fieldVisibilityConfigs={fieldVisibilityConfigs}
+            pageTabsMap={pageTabsMap}
           />
+        </Card>
+
+        <Card title="Részletnézet fülek">
+          <p className="mb-3 text-[13px] text-text-secondary">
+            Az entitások részletnézetén megjelenő fülek elrendezése - mely mezők melyik fülbe kerüljenek, milyen sorrendben és
+            néven/ikonnal. Amit egyik fül sem tartalmaz, az automatikusan az &quot;Egyéb&quot; fülre kerül a részletnézeten - nem vész el.
+          </p>
+          <DetailTabEditor entities={detailTabEntities} initialConfigsByEntity={detailTabsByEntity} />
         </Card>
 
         {currentUser?.role === "admin" && (

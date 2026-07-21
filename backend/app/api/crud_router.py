@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import Role, check_page_action, get_current_user, require_roles
 from app.models.employee import Employee
+from app.services.detail_tabs import OTHER_TAB_KEY, get_field_tab_map
 
 # Soha nem PATCH-elhető mezők, még akkor sem, ha valódi oszlopok - a "minden
 # adat szerkeszthető" elv alól ez az egyetlen kivétel (biztonsági okból).
@@ -50,6 +51,7 @@ def build_crud_router(
     m2m_fields: dict[str, tuple[str, type]] | None = None,
     list_read_schema: type[BaseModel] | None = None,
     after_update: Callable[[Any, dict, dict[str, dict[str, set[int]]], Session, Employee], None] | None = None,
+    entity_type: str | None = None,
 ) -> APIRouter:
     """page: a frontend/lib/nav.ts oldal-href-je (pl. "/projektek"), amihez ez az
     entitás tartozik - a Beállítások oldalon egyénenként beállított
@@ -77,7 +79,15 @@ def build_crud_router(
     miután a rekord már commitolva/refresh-elve van - side effect-ekhez (pl. értesítés
     küldése kiosztás-váltáskor, lásd routes/postproduction.py, routes/tasks.py). `data` a
     ténylegesen PATCH-elt scalar mezőket tartalmazza (a payload kulcsaival), `m2m_changes`
-    pedig {payload_key: {"added": {id, ...}, "removed": {id, ...}}} minden érintett m2m mezőhöz."""
+    pedig {payload_key: {"added": {id, ...}, "removed": {id, ...}}} minden érintett m2m mezőhöz.
+
+    entity_type: ha meg van adva, PATCH-nél a payloadban érintett mezőket a
+    services/detail_tabs.get_field_tab_map alapján fülekre bontja, és minden
+    érintett fülhöz külön ellenőrzi a "{page}:{tab_key}" összetett kulccsal az
+    "edit" jogot (lásd core/security.check_page_action) - így egy admin
+    korlátozhatja, hogy egy felhasználó csak bizonyos fülök mezőit
+    szerkeszthesse (a durvább, oldal-szintű edit_dependency ellenőrzés MELLETT).
+    Ha nincs megadva, a viselkedés változatlan (csak az oldal-szintű ellenőrzés fut)."""
     router = APIRouter(prefix=prefix, tags=tags)
     role_dependency = require_roles(*write_roles) if write_roles else get_current_user
     m2m_fields = m2m_fields or {}
@@ -188,6 +198,16 @@ def build_crud_router(
                 related = db.scalars(select(related_model).where(related_model.id.in_(ids))).all() if ids else []
                 setattr(obj, attr_name, related)
                 m2m_changes[attr_name] = {"added": ids - previous_ids, "removed": previous_ids - ids}
+
+        if entity_type:
+            field_tab_map = get_field_tab_map(db, entity_type)
+            touched_tabs = {
+                field_tab_map.get(field, OTHER_TAB_KEY)
+                for field in data.keys()
+                if field not in _PATCH_DENYLIST and field in column_names
+            }
+            for tab_key in touched_tabs:
+                check_page_action(db, current_user, f"{page}:{tab_key}", "edit")
 
         columns = model.__table__.columns
         for field, value in data.items():

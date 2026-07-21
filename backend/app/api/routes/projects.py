@@ -23,6 +23,7 @@ router = build_crud_router(
     tags=["projects"],
     page="/projektek",
     m2m_fields={"crew_employee_ids": ("crew", Employee)},
+    entity_type="project",
 )
 
 

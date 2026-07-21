@@ -10,6 +10,7 @@ from app.api.routes.clients import contacts_router, router as clients_router
 from app.api.routes.contracts import router as contracts_router
 from app.api.routes.crew import rates_router, router as crew_router
 from app.api.routes.dashboard import router as dashboard_router
+from app.api.routes.detail_tabs import router as detail_tabs_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
 from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router, summary_router as finance_summary_router
@@ -85,9 +86,10 @@ api_router.include_router(tasks_router)
 api_router.include_router(automation_router)
 # AI Assistant
 api_router.include_router(ai_assistant_router)
-# Beállítások: mező-láthatóság + oldal-hozzáférés (egyénenként)
+# Beállítások: mező-láthatóság + oldal-hozzáférés (egyénenként) + admin fül-elrendezés
 api_router.include_router(field_visibility_router)
 api_router.include_router(user_access_router)
+api_router.include_router(detail_tabs_router)
 # Értesítések
 api_router.include_router(notifications_router)
 # Admin: Notion import a böngészőből (railway ssh nélkül)

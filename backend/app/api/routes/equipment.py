@@ -26,6 +26,7 @@ router = build_crud_router(
     prefix="/equipment",
     tags=["equipment"],
     page="/felszereles",
+    entity_type="equipment",
 )
 
 assignments_router = APIRouter(prefix="/assignments", tags=["equipment"])

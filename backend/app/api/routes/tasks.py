@@ -34,4 +34,5 @@ router = build_crud_router(
     page="/feladatok",
     m2m_fields={"felelos_employee_ids": ("felelosok", Employee)},
     after_update=_after_task_update,
+    entity_type="task",
 )

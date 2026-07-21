@@ -10,4 +10,5 @@ router = build_crud_router(
     prefix="/campaigns",
     tags=["campaigns"],
     page="/kampanyok",
+    entity_type="campaign",
 )

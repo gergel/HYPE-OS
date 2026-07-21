@@ -10,6 +10,7 @@ router = build_crud_router(
     prefix="/clients",
     tags=["clients"],
     page="/ugyfelek",
+    entity_type="client",
 )
 
 contacts_router = build_crud_router(

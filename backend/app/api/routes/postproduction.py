@@ -57,6 +57,7 @@ deliverables_router = build_crud_router(
     tags=["postproduction"],
     page="/utomunka",
     after_update=_after_deliverable_update,
+    entity_type="deliverable",
 )
 
 timesheets_router = build_crud_router(

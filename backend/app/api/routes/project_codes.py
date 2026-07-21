@@ -14,4 +14,5 @@ router = build_crud_router(
     # a Project Code-okhoz csak külön, kifejezett jogosultsággal lehessen
     # hozzáférni, ne automatikusan a Projektek jogosultsággal együtt.
     page="/projektek/project-kodok",
+    entity_type="projectCode",
 )

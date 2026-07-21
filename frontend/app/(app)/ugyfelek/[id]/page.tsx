@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { EditableDetailGrid } from "@/components/EditableDetailGrid";
+import { DetailTabs } from "@/components/DetailTabs";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
-import { toEditableDetailFields } from "@/lib/detail";
+import { ENTITY_PATHS, getDetailTabs, getFieldTypes, getMyPagePermissions, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import { buildFieldTabs } from "@/lib/detailTabs";
+
+const PAGE = "/ugyfelek";
 
 export default async function UgyfelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,27 +16,35 @@ export default async function UgyfelDetailPage({ params }: { params: Promise<{ i
   const client = await getRecord(ENTITY_PATHS.client, clientId);
   if (!client) notFound();
 
-  const [contacts, projectCodes, contracts, campaigns, visibleFields, fieldTypes] = await Promise.all([
+  const [contacts, projectCodes, contracts, campaigns, visibleFields, fieldTypes, dbTabs, pagePermissions] = await Promise.all([
     getRelated(ENTITY_PATHS.contact, { client_id: clientId }),
     getRelated(ENTITY_PATHS.projectCode, { client_id: clientId }),
     getRelated(ENTITY_PATHS.contract, { client_id: clientId }),
     getRelated(ENTITY_PATHS.campaign, { client_id: clientId }),
     getVisibleFields("client"),
     getFieldTypes("client"),
+    getDetailTabs("client"),
+    getMyPagePermissions(),
   ]);
+
+  const tabs = buildFieldTabs({
+    page: PAGE,
+    patchPath: `${ENTITY_PATHS.client}/${client.id}`,
+    record: client,
+    dbTabs,
+    visibleFields,
+    fieldTypes,
+    pagePermissions,
+  });
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 space-y-6 p-6">
         <BackLink href="/ugyfelek" label="Ügyfelek" />
+        <h1 className="text-lg font-medium text-text-primary">{String(client.nev ?? `Ügyfél #${client.id}`)}</h1>
 
-        <Card title={String(client.nev ?? `Ügyfél #${client.id}`)}>
-          <EditableDetailGrid
-            patchPath={`${ENTITY_PATHS.client}/${client.id}`}
-            fields={toEditableDetailFields(client, [], visibleFields, fieldTypes)}
-          />
-        </Card>
+        <DetailTabs tabs={tabs} />
 
         <Card title={`Kapcsolattartók (${contacts.length})`}>
           <QuickCreateForm

@@ -38,6 +38,7 @@ router = build_crud_router(
     tags=["crew"],
     page="/csapat",
     before_create=_hash_employee_password,
+    entity_type="employee",
 )
 
 

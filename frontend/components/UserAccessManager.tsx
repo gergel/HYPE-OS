@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 
 type PageOption = { page: string; label: string };
+type DbTab = { tab_key: string; label: string };
 
 const EXTRA_ACTIONS: { key: string; label: string }[] = [
   { key: "edit", label: "Szerkesztés" },
@@ -27,12 +28,20 @@ export function UserAccessManager({
   pages,
   initialEmail,
   initialPagePermissions,
+  pageTabsMap = {},
 }: {
   employeeId: number;
   employeeLabel: string;
   pages: PageOption[];
   initialEmail: string | null;
   initialPagePermissions: Record<string, string[]> | null;
+  /** {oldal_href: fülek} azokhoz az oldalakhoz, amiknek van admin által
+   * konfigurált fül-elrendezése (lásd DetailTabEditor) - ha egy oldal itt
+   * szerepel, a bejelölése alatt fülönként külön Látja/Szerkesztheti
+   * checkbox jelenik meg, ami a "{page}:{tab_key}" összetett kulcsot írja a
+   * page_permissions dict-be (lásd backend core/security.check_page_action,
+   * api/crud_router.py update_item). */
+  pageTabsMap?: Record<string, DbTab[]>;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState(initialEmail ?? "");
@@ -68,6 +77,26 @@ export function UserAccessManager({
       if (actions.has(action)) actions.delete(action);
       else actions.add(action);
       next.set(page, actions);
+      return next;
+    });
+  }
+
+  function toggleTabView(compositeKey: string) {
+    setPermissions((prev) => {
+      const next = new Map(prev);
+      if (next.has(compositeKey)) next.delete(compositeKey);
+      else next.set(compositeKey, new Set(["view"]));
+      return next;
+    });
+  }
+
+  function toggleTabEdit(compositeKey: string) {
+    setPermissions((prev) => {
+      const next = new Map(prev);
+      const actions = new Set(next.get(compositeKey) ?? ["view"]);
+      if (actions.has("edit")) actions.delete("edit");
+      else actions.add("edit");
+      next.set(compositeKey, actions);
       return next;
     });
   }
@@ -228,6 +257,7 @@ export function UserAccessManager({
             <div className="mb-3 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
               {pages.map((p) => {
                 const actions = permissions.get(p.page);
+                const tabs = pageTabsMap[p.page];
                 return (
                   <div key={p.page}>
                     <label className="flex items-center gap-1.5 text-[12px] font-medium text-text-secondary">
@@ -242,6 +272,31 @@ export function UserAccessManager({
                             {a.label}
                           </label>
                         ))}
+                      </div>
+                    )}
+                    {actions && tabs && tabs.length > 0 && (
+                      <div className="ml-5 mt-1.5 space-y-1 border-l border-border pl-2">
+                        <p className="text-[10px] text-text-muted">
+                          Fülenként (ha egy fül itt nincs bejelölve, nem látja - alapból egyik sincs bejelölve):
+                        </p>
+                        {tabs.map((tab) => {
+                          const compositeKey = `${p.page}:${tab.tab_key}`;
+                          const tabActions = permissions.get(compositeKey);
+                          return (
+                            <div key={tab.tab_key} className="flex items-center gap-2 text-[11px] text-text-muted">
+                              <label className="flex items-center gap-1">
+                                <input type="checkbox" checked={!!tabActions} onChange={() => toggleTabView(compositeKey)} />
+                                {tab.label}
+                              </label>
+                              {tabActions && (
+                                <label className="flex items-center gap-1">
+                                  <input type="checkbox" checked={tabActions.has("edit")} onChange={() => toggleTabEdit(compositeKey)} />
+                                  szerk.
+                                </label>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

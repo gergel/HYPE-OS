@@ -1,12 +1,23 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
+import { DetailTabs } from "@/components/DetailTabs";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { MunkaszerzodesUpload } from "@/components/MunkaszerzodesUpload";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getEmployeeDocuments, getFieldTypes, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import {
+  ENTITY_PATHS,
+  getDetailTabs,
+  getEmployeeDocuments,
+  getFieldTypes,
+  getMyPagePermissions,
+  getRecord,
+  getRelated,
+  getVisibleFields,
+} from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
+import { buildFieldTabs } from "@/lib/detailTabs";
 
 /** Ezek az adatok másolódnak át előtöltésként az alvállalkozói eseti
  * szerződés generálásakor (lásd backend/app/api/routes/subcontractor_contracts.py
@@ -28,6 +39,8 @@ const BACK_TARGETS: Record<string, { href: string; label: string }> = {
   belsosok: { href: "/csapat/belsosok", label: "Belsősök" },
 };
 
+const PAGE = "/csapat";
+
 export default async function EmployeeDetailPage({
   params,
   searchParams,
@@ -43,7 +56,7 @@ export default async function EmployeeDetailPage({
 
   const backTarget = (from && BACK_TARGETS[from]) || { href: "/csapat", label: "Külsős" };
 
-  const [rates, timesheets, expenses, contracts, deliverables, campaigns, documents, visibleFields, fieldTypes] =
+  const [rates, timesheets, expenses, contracts, deliverables, campaigns, documents, visibleFields, fieldTypes, dbTabs, pagePermissions] =
     await Promise.all([
       getRelated(ENTITY_PATHS.rate, { employee_id: employeeId }),
       getRelated(ENTITY_PATHS.timesheet, { employee_id: employeeId }),
@@ -54,29 +67,33 @@ export default async function EmployeeDetailPage({
       getEmployeeDocuments(employeeId),
       getVisibleFields("employee"),
       getFieldTypes("employee"),
+      getDetailTabs("employee"),
+      getMyPagePermissions(),
     ]);
 
   const vallalkozasFieldKeys = visibleFields
     ? VALLALKOZAS_FIELD_KEYS.filter((k) => visibleFields.includes(k))
     : VALLALKOZAS_FIELD_KEYS;
 
+  const tabs = buildFieldTabs({
+    page: PAGE,
+    patchPath: `${ENTITY_PATHS.employee}/${employee.id}`,
+    record: employee,
+    dbTabs,
+    visibleFields,
+    fieldTypes,
+    pagePermissions,
+    alwaysHidden: ["hashed_password", ...VALLALKOZAS_FIELD_KEYS],
+  });
+
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 space-y-6 p-6">
         <BackLink href={backTarget.href} label={backTarget.label} />
+        <h1 className="text-lg font-medium text-text-primary">{String(employee.full_name ?? `Crew tag #${employee.id}`)}</h1>
 
-        <Card title={String(employee.full_name ?? `Crew tag #${employee.id}`)}>
-          <EditableDetailGrid
-            patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
-            fields={toEditableDetailFields(
-              employee,
-              ["hashed_password", ...VALLALKOZAS_FIELD_KEYS],
-              visibleFields,
-              fieldTypes,
-            )}
-          />
-        </Card>
+        <DetailTabs tabs={tabs} />
 
         {vallalkozasFieldKeys.length > 0 && (
           <Card title="Vállalkozás adatok">

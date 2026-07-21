@@ -11,6 +11,7 @@ type FieldOption = { key: string; label: string };
 type VisibilityEntity = { entityType: string; label: string; availableFields: FieldOption[] };
 type PageAccessConfig = { employee_id: number; page_permissions: Record<string, string[]> | null };
 type FieldVisibilityConfig = { employee_id: number; entity_type: string; visible_fields: string[] | null };
+type DbTab = { tab_key: string; label: string };
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Admin",
@@ -30,12 +31,14 @@ export function EmployeeAccessManager({
   visibilityEntities,
   pageAccessConfigs,
   fieldVisibilityConfigs,
+  pageTabsMap = {},
 }: {
   employees: EmployeeOption[];
   pages: PageOption[];
   visibilityEntities: VisibilityEntity[];
   pageAccessConfigs: PageAccessConfig[];
   fieldVisibilityConfigs: FieldVisibilityConfig[];
+  pageTabsMap?: Record<string, DbTab[]>;
 }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -144,6 +147,7 @@ export function EmployeeAccessManager({
             initialEmail={selected.email}
             pages={pages}
             initialPagePermissions={pagePermissionsByEmployee.get(selected.id) ?? null}
+            pageTabsMap={pageTabsMap}
           />
 
           <div className="border-t border-border pt-4">
