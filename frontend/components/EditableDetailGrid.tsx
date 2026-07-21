@@ -9,12 +9,22 @@ import type { EditableDetailField } from "@/lib/detail";
 /** Egyetlen mező helyben szerkeszthető cellája - kattintásra input/textarea/
  * select jelenik meg (checkbox/select esetén azonnal ment), Enter/elkattintás
  * menti, Escape visszavonja. Csak azt a mezőt PATCH-eli, amit ténylegesen
- * módosítottak. */
-function EditableCell({ patchPath, field }: { patchPath: string; field: EditableDetailField }) {
+ * módosítottak.
+ *
+ * boxed: ha igaz, a mező NYUGALMI állapotban is látható szegéllyel/dobozzal
+ * jelenik meg (form-mező kinézet, lásd referenciakép: minden mező úgy néz
+ * ki, mint egy input, nem csak kattintáskor) - a szerkesztés-logika
+ * (kattintás -> input, Enter/elkattintás -> mentés) változatlan, csak a
+ * nyugalmi állapot vizuálja tér el a Notion-stílusú "sima szöveg" nézettől. */
+function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; field: EditableDetailField; boxed?: boolean }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string>(field.rawValue === null ? "" : String(field.rawValue));
   const [busy, setBusy] = useState(false);
+
+  const restBoxClass = boxed
+    ? "rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 min-h-[34px]"
+    : "";
 
   async function save(value: unknown) {
     setBusy(true);
@@ -35,12 +45,14 @@ function EditableCell({ patchPath, field }: { patchPath: string; field: Editable
   }
 
   if (!field.editable) {
-    return <dd className="text-[13px] leading-relaxed text-text-primary break-words">{field.value ?? "Üres"}</dd>;
+    return (
+      <dd className={`text-[13px] leading-relaxed text-text-primary break-words ${restBoxClass}`}>{field.value ?? "Üres"}</dd>
+    );
   }
 
   if (field.inputType === "boolean") {
     return (
-      <dd>
+      <dd className={boxed ? `flex items-center ${restBoxClass}` : undefined}>
         <input
           type="checkbox"
           checked={Boolean(field.rawValue)}
@@ -56,7 +68,7 @@ function EditableCell({ patchPath, field }: { patchPath: string; field: Editable
     const current = field.rawValue === null || field.rawValue === "" ? null : String(field.rawValue);
     if (!editing) {
       return (
-        <dd role="button" tabIndex={0} onClick={() => setEditing(true)} className="cursor-pointer">
+        <dd role="button" tabIndex={0} onClick={() => setEditing(true)} className={`cursor-pointer ${restBoxClass}`}>
           {current ? (
             <span
               className="inline-flex items-center gap-1.5 rounded-[var(--radius)] px-2 py-0.5 text-[13px]"
@@ -66,7 +78,7 @@ function EditableCell({ patchPath, field }: { patchPath: string; field: Editable
               {current}
             </span>
           ) : (
-            <span className="rounded text-[13px] text-text-muted italic hover:bg-surface-3">Üres</span>
+            <span className="rounded text-[13px] text-text-muted italic">Üres</span>
           )}
         </dd>
       );
@@ -79,7 +91,7 @@ function EditableCell({ patchPath, field }: { patchPath: string; field: Editable
           value={current ?? ""}
           onChange={(e) => save(e.target.value || null)}
           onBlur={() => setEditing(false)}
-          className="w-full max-w-xs rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
+          className="w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
         >
           <option value="">Üres</option>
           {field.options?.map((opt) => (
@@ -98,7 +110,7 @@ function EditableCell({ patchPath, field }: { patchPath: string; field: Editable
         role="button"
         tabIndex={0}
         onClick={() => setEditing(true)}
-        className="cursor-text rounded text-[13px] leading-relaxed text-text-primary break-words hover:bg-surface-3"
+        className={`cursor-text text-[13px] leading-relaxed text-text-primary break-words ${boxed ? restBoxClass : "rounded hover:bg-surface-3"}`}
       >
         {field.value ?? <span className="text-text-muted italic">Üres</span>}
       </dd>
@@ -141,6 +153,7 @@ export function EditableDetailGrid({
   patchPath,
   fields,
   readOnly = false,
+  layout = "row",
 }: {
   patchPath: string;
   fields: EditableDetailField[];
@@ -148,8 +161,27 @@ export function EditableDetailGrid({
    * a fül-szintű szerkesztési jogosultság hiányában (lásd lib/detailTabs.tsx),
    * hogy a felhasználó lássa az adatot, de ne módosíthassa. */
   readOnly?: boolean;
+  /** "row" (alapértelmezett): Notion-stílusú, címke balra/érték jobbra sor.
+   * "boxed": címke fent, alatta mindig látható szegélyű doboz (form-mező
+   * kinézet, lásd referenciakép) - a részletnézet szekció-kártyáiban
+   * használt elrendezés (lásd lib/detailTabs.tsx). */
+  layout?: "row" | "boxed";
 }) {
   const effectiveFields = readOnly ? fields.map((f) => ({ ...f, editable: false })) : fields;
+
+  if (layout === "boxed") {
+    return (
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {effectiveFields.map((f) => (
+          <div key={f.key} className={`flex flex-col gap-1 ${f.wide ? "sm:col-span-2" : ""}`}>
+            <dt className="text-[11px] text-text-muted">{f.label}</dt>
+            <EditableCell patchPath={patchPath} field={f} boxed />
+          </div>
+        ))}
+      </dl>
+    );
+  }
+
   return (
     <dl className="divide-y divide-border">
       {effectiveFields.map((f) => (

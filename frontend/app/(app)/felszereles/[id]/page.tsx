@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailTabs } from "@/components/DetailTabs";
+import { DetailSections } from "@/components/DetailSections";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
 import { ENTITY_PATHS, getDetailTabs, getFieldTypes, getMyPagePermissions, getRecord, getRecordsByIds, getRelated, getVisibleFields } from "@/lib/api";
@@ -48,7 +48,7 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
         <BackLink href="/felszereles" label="Felszerelés" />
         <h1 className="text-lg font-medium text-text-primary">{String(equipment.nev ?? `Eszköz #${equipment.id}`)}</h1>
 
-        <DetailTabs tabs={tabs} />
+        <DetailSections sections={tabs} />
 
         <Card title={`Projektek (${projects.length})`}>
           <RelatedTable

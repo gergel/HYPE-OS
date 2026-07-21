@@ -85,6 +85,33 @@ def check_page_action(db: Session, employee: Employee, page: str, action: str) -
         )
 
 
+def check_tab_action(db: Session, employee: Employee, page: str, tab_key: str, action: str) -> None:
+    """A részletnézet-fülek (lásd models/detail_tab.py) szintjén finomítja a
+    check_page_action-t: a "{page}:{tab_key}" összetett kulcs csak akkor
+    SZŰKÍTI a jogosultságot, ha admin kifejezetten beállította azt a
+    munkatársnak (lásd Beállítások oldal, UserAccessManager fülenkénti
+    Látja/Szerkesztheti checkboxai) - ha nincs ilyen összetett kulcs a
+    page_permissions dict-ben, az adott fül a MEGLÉVŐ, oldal-szintű jogot
+    örökli (nem esik vissza tiltásra). Enélkül minden olyan munkatárs, akinek
+    admin BÁRMELYIK oldalhoz korlátozást állított be (page_permissions nem
+    None), az ÖSSZES részletnézet-fülön elveszítené a hozzáférést minden
+    olyan fülhöz, amihez admin még nem konfigurált explicit fül-szintű
+    engedélyt - beleértve a bespoke widgeteket (pl. eszközfoglalás, szerződés
+    készítés) is, amik nem is mező-szerkesztést jelentenek, hanem önálló
+    akció-gombok egy adott fülön belül."""
+    config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
+    if config is None or config.page_permissions is None:
+        return
+    allowed = config.page_permissions.get(f"{page}:{tab_key}")
+    if allowed is None:
+        allowed = config.page_permissions.get(page)
+    if allowed is None or action not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Nincs jogosultságod ehhez a művelethez ezen a fülön.",
+        )
+
+
 def require_page_action(page: str, action: str, *write_roles: Role):
     """Standalone (nem build_crud_router-en keresztül regisztrált) végpontokhoz
     - pl. equipment.py Assignment create/delete - ugyanazt az oldal+művelet-

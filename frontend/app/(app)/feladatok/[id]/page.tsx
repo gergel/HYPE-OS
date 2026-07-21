@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
-import { DetailTabs } from "@/components/DetailTabs";
+import { DetailSections } from "@/components/DetailSections";
 import { TopBar } from "@/components/TopBar";
 import { ENTITY_PATHS, getDetailTabs, getFieldTypes, getMyPagePermissions, getRecord, getVisibleFields } from "@/lib/api";
 import { buildFieldTabs } from "@/lib/detailTabs";
@@ -36,7 +36,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
         <BackLink href="/feladatok" label="Feladatok" />
         <h1 className="text-lg font-medium text-text-primary">{String(task.feladat ?? `Feladat #${task.id}`)}</h1>
 
-        <DetailTabs tabs={tabs} />
+        <DetailSections sections={tabs} />
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailTabs } from "@/components/DetailTabs";
+import { DetailSections } from "@/components/DetailSections";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
@@ -44,7 +44,7 @@ export default async function UgyfelDetailPage({ params }: { params: Promise<{ i
         <BackLink href="/ugyfelek" label="Ügyfelek" />
         <h1 className="text-lg font-medium text-text-primary">{String(client.nev ?? `Ügyfél #${client.id}`)}</h1>
 
-        <DetailTabs tabs={tabs} />
+        <DetailSections sections={tabs} />
 
         <Card title={`Kapcsolattartók (${contacts.length})`}>
           <QuickCreateForm

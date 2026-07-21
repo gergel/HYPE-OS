@@ -4,7 +4,7 @@ import { ActionButton } from "@/components/ActionButton";
 import { Card } from "@/components/Card";
 import { DeleteButton } from "@/components/DeleteButton";
 import { DetailHeader } from "@/components/DetailHeader";
-import { DetailTabs } from "@/components/DetailTabs";
+import { DetailSections } from "@/components/DetailSections";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { M2mLinker } from "@/components/M2mLinker";
@@ -173,7 +173,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       {
         key: "csapat",
         label: "Csapat & Utómunka",
-        badge: crewIds.length + deliverables.length,
         content: (
           <>
             <Card title={`Stáb (${crewIds.length})`} icon={Users}>
@@ -273,7 +272,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           }
         />
 
-        <DetailTabs tabs={tabs} />
+        <DetailSections sections={tabs} />
       </div>
     </div>
   );

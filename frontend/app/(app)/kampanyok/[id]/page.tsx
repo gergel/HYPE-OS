@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailTabs } from "@/components/DetailTabs";
+import { DetailSections } from "@/components/DetailSections";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
 import { ENTITY_PATHS, getDetailTabs, getFieldTypes, getMyPagePermissions, getRecord, getRelated, getVisibleFields } from "@/lib/api";
@@ -56,7 +56,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           )}
         </div>
 
-        <DetailTabs tabs={tabs} />
+        <DetailSections sections={tabs} />
 
         <Card title={`Projektek (${projects.length})`}>
           <RelatedTable

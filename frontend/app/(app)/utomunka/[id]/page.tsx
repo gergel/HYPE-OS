@@ -8,7 +8,7 @@ import { CreatePortalButton } from "@/components/deliverable/CreatePortalButton"
 import { FeedbackSendButton } from "@/components/deliverable/FeedbackSendButton";
 import { TimerControls } from "@/components/deliverable/TimerControls";
 import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
-import { DetailTabs } from "@/components/DetailTabs";
+import { DetailSections } from "@/components/DetailSections";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -141,7 +141,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
           )}
         </div>
 
-        <DetailTabs tabs={tabs} />
+        <DetailSections sections={tabs} />
 
         <Card title="Kiosztás">
           <p className="mb-2 text-[13px] text-text-secondary">

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailTabs } from "@/components/DetailTabs";
+import { DetailSections } from "@/components/DetailSections";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { MunkaszerzodesUpload } from "@/components/MunkaszerzodesUpload";
 import { RelatedTable } from "@/components/RelatedTable";
@@ -93,7 +93,7 @@ export default async function EmployeeDetailPage({
         <BackLink href={backTarget.href} label={backTarget.label} />
         <h1 className="text-lg font-medium text-text-primary">{String(employee.full_name ?? `Crew tag #${employee.id}`)}</h1>
 
-        <DetailTabs tabs={tabs} />
+        <DetailSections sections={tabs} />
 
         {vallalkozasFieldKeys.length > 0 && (
           <Card title="Vállalkozás adatok">

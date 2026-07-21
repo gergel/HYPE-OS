@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import Role, check_page_action, get_current_user, require_roles
+from app.core.security import Role, check_page_action, check_tab_action, get_current_user, require_roles
 from app.models.employee import Employee
 from app.services.detail_tabs import OTHER_TAB_KEY, get_field_tab_map
 
@@ -84,7 +84,7 @@ def build_crud_router(
     entity_type: ha meg van adva, PATCH-nél a payloadban érintett mezőket a
     services/detail_tabs.get_field_tab_map alapján fülekre bontja, és minden
     érintett fülhöz külön ellenőrzi a "{page}:{tab_key}" összetett kulccsal az
-    "edit" jogot (lásd core/security.check_page_action) - így egy admin
+    "edit" jogot (lásd core/security.check_tab_action) - így egy admin
     korlátozhatja, hogy egy felhasználó csak bizonyos fülök mezőit
     szerkeszthesse (a durvább, oldal-szintű edit_dependency ellenőrzés MELLETT).
     Ha nincs megadva, a viselkedés változatlan (csak az oldal-szintű ellenőrzés fut)."""
@@ -207,7 +207,7 @@ def build_crud_router(
                 if field not in _PATCH_DENYLIST and field in column_names
             }
             for tab_key in touched_tabs:
-                check_page_action(db, current_user, f"{page}:{tab_key}", "edit")
+                check_tab_action(db, current_user, page, tab_key, "edit")
 
         columns = model.__table__.columns
         for field, value in data.items():

@@ -277,7 +277,9 @@ export function UserAccessManager({
                     {actions && tabs && tabs.length > 0 && (
                       <div className="ml-5 mt-1.5 space-y-1 border-l border-border pl-2">
                         <p className="text-[10px] text-text-muted">
-                          Fülenként (ha egy fül itt nincs bejelölve, nem látja - alapból egyik sincs bejelölve):
+                          Fülenkénti felülbírálás (opcionális) - amit itt NEM jelölsz be, az a fenti oldal-szintű jogot örökli, tehát
+                          alapból minden fület lát/szerkeszthet, amihez az oldalon jogot adtál. Csak akkor jelölj be egy fület, ha
+                          AZT külön, a többitől eltérően szeretnéd korlátozni:
                         </p>
                         {tabs.map((tab) => {
                           const compositeKey = `${p.page}:${tab.tab_key}`;
