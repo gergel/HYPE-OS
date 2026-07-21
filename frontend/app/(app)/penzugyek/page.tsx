@@ -1,14 +1,38 @@
 import { AlertCircle, TrendingDown, TrendingUp, Wallet } from "lucide-react";
-import { ENTITY_PATHS, Expense, formatHuf, getExpenses, getFinanceSummary, getRevenues, Revenue } from "@/lib/api";
+import {
+  ENTITY_PATHS,
+  Expense,
+  formatHuf,
+  getCurrentUser,
+  getExpenses,
+  getFinanceSummary,
+  getMyPagePermissions,
+  getProjectCodes,
+  getRevenues,
+  Revenue,
+} from "@/lib/api";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { FinanceMonthlyChart, OutstandingProjectsTable } from "@/components/finance/FinanceSummaryWidgets";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
+import { canDoAction } from "@/lib/permissions";
+
+const PAGE = "/penzugyek";
 
 export default async function PenzugyekPage() {
-  const [expenses, revenues, summary] = await Promise.all([getExpenses(), getRevenues(), getFinanceSummary()]);
+  const [expenses, revenues, summary, projectCodes, currentUser, pagePermissions] = await Promise.all([
+    getExpenses(),
+    getRevenues(),
+    getFinanceSummary(),
+    getProjectCodes(),
+    getCurrentUser(),
+    getMyPagePermissions(),
+  ]);
+  const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
+  const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -45,11 +69,21 @@ export default async function PenzugyekPage() {
         )}
 
         <Card title={`Kiadások (${expenses.length})`}>
+          {canCreate && (
+            <QuickCreateForm
+              postPath={ENTITY_PATHS.expense}
+              addLabel="+ Új kiadás hozzáadása"
+              fields={[
+                { name: "megnevezes", label: "Megnevezés", required: true },
+                { name: "netto", label: "Nettó", type: "number" },
+              ]}
+            />
+          )}
           <DataTable<Expense>
             rows={expenses}
-            emptyText="Még nincs felvett kiadás - importáld a Notionból, vagy adj hozzá egyet a /api/v1/expenses végponton."
+            emptyText="Még nincs felvett kiadás - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(e) => `/penzugyek/kiadas/${e.id}`}
-            deleteHref={(e) => `${ENTITY_PATHS.expense}/${e.id}`}
+            deleteHref={canDelete ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}
             filterable
             columns={[
               { header: "Megnevezés", render: (e) => e.megnevezes, sortAccessor: (e) => e.megnevezes },
@@ -67,11 +101,27 @@ export default async function PenzugyekPage() {
         </Card>
 
         <Card title={`Bevételek (${revenues.length})`}>
+          {canCreate && (
+            <QuickCreateForm
+              postPath={ENTITY_PATHS.revenue}
+              addLabel="+ Új bevétel hozzáadása"
+              fields={[
+                {
+                  name: "project_code_id",
+                  label: "Project Code",
+                  type: "select",
+                  required: true,
+                  options: projectCodes.map((pc) => ({ value: pc.id, label: pc.projektkod })),
+                },
+                { name: "netto", label: "Nettó", type: "number" },
+              ]}
+            />
+          )}
           <DataTable<Revenue>
             rows={revenues}
-            emptyText="Még nincs felvett bevétel - importáld a Notionból, vagy adj hozzá egyet a /api/v1/revenues végponton."
+            emptyText="Még nincs felvett bevétel - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(r) => `/penzugyek/bevetel/${r.id}`}
-            deleteHref={(r) => `${ENTITY_PATHS.revenue}/${r.id}`}
+            deleteHref={canDelete ? (r) => `${ENTITY_PATHS.revenue}/${r.id}` : undefined}
             filterable
             columns={[
               { header: "Forma", render: (r) => r.bevetel_formaja ?? "–", sortAccessor: (r) => r.bevetel_formaja },

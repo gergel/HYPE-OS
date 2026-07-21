@@ -1,24 +1,45 @@
-import { ENTITY_PATHS, formatDate, getFieldTypes, getTasks, Task } from "@/lib/api";
+import { ENTITY_PATHS, formatDate, getCurrentUser, getFieldTypes, getMyPagePermissions, getTasks, Task } from "@/lib/api";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
+import { canDoAction } from "@/lib/permissions";
+
+const PAGE = "/feladatok";
 
 export default async function FeladatokPage() {
-  const [tasks, fieldTypes] = await Promise.all([getTasks(), getFieldTypes("task")]);
+  const [tasks, fieldTypes, currentUser, pagePermissions] = await Promise.all([
+    getTasks(),
+    getFieldTypes("task"),
+    getCurrentUser(),
+    getMyPagePermissions(),
+  ]);
   const statusOptions = fieldTypes.allapot?.options ?? [];
+  const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
+  const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 p-6">
         <Card title={`Feladatok (${tasks.length})`}>
+          {canCreate && (
+            <QuickCreateForm
+              postPath={ENTITY_PATHS.task}
+              addLabel="+ Új feladat hozzáadása"
+              fields={[
+                { name: "feladat", label: "Feladat", required: true },
+                { name: "hatarido", label: "Határidő", type: "date" },
+              ]}
+            />
+          )}
           <DataTable<Task>
             rows={tasks}
-            emptyText="Még nincs felvett feladat - importáld a Notionból, vagy adj hozzá egyet a /api/v1/tasks végponton."
+            emptyText="Még nincs felvett feladat - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(t) => `/feladatok/${t.id}`}
-            deleteHref={(t) => `${ENTITY_PATHS.task}/${t.id}`}
+            deleteHref={canDelete ? (t) => `${ENTITY_PATHS.task}/${t.id}` : undefined}
             filterable
             columns={[
               { header: "Feladat", render: (t) => t.feladat, sortAccessor: (t) => t.feladat },

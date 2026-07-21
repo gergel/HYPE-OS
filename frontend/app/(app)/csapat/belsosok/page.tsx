@@ -5,7 +5,10 @@ import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { TopBar } from "@/components/TopBar";
 import { BelsosAddWidget } from "@/components/BelsosAddWidget";
 import { EmployeeActiveToggle } from "@/components/VagoInlineFields";
-import { ENTITY_PATHS, getEmployees } from "@/lib/api";
+import { ENTITY_PATHS, getCurrentUser, getEmployees, getMyPagePermissions } from "@/lib/api";
+import { canDoAction } from "@/lib/permissions";
+
+const PAGE = "/csapat";
 
 /** Belsősök: a crew-adatbázisból (külsős + belsős) azok, akiket az admin
  * belsősként jelölt meg (Employee.tipus == "belsos") - bármikor bővíthető a
@@ -13,29 +16,34 @@ import { ENTITY_PATHS, getEmployees } from "@/lib/api";
  * használja, csak itt van egy "hozzáadás" widget is, mert idesorolás admin
  * döntés, nem egy fix Notion-import-béli kategória. */
 export default async function BelsosokPage() {
-  const employees = await getEmployees();
+  const [employees, currentUser, pagePermissions] = await Promise.all([getEmployees(), getCurrentUser(), getMyPagePermissions()]);
   const rows = employees.filter((e) => e.tipus === "belsos");
   const candidates = employees.filter((e) => e.tipus !== "belsos");
+  const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
+  const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 p-6">
         <Card title={`Belsősök (${rows.length})`}>
-          <BelsosAddWidget candidates={candidates} />
-          <QuickCreateForm
-            postPath={ENTITY_PATHS.employee}
-            addLabel="+ Új belsős hozzáadása"
-            presetFields={{ tipus: "belsos" }}
-            fields={[
-              { name: "full_name", label: "Név", required: true },
-              { name: "email", label: "Email" },
-            ]}
-          />
+          {canCreate && <BelsosAddWidget candidates={candidates} />}
+          {canCreate && (
+            <QuickCreateForm
+              postPath={ENTITY_PATHS.employee}
+              addLabel="+ Új belsős hozzáadása"
+              presetFields={{ tipus: "belsos" }}
+              fields={[
+                { name: "full_name", label: "Név", required: true },
+                { name: "email", label: "Email" },
+              ]}
+            />
+          )}
           <DataTable<(typeof rows)[number]>
             rows={rows}
             emptyText="Még nincs belsősként megjelölt munkatárs - válassz valakit fent a crew listából."
             getHref={(e) => `/csapat/${e.id}?from=belsosok`}
+            deleteHref={canDelete ? (e) => `${ENTITY_PATHS.employee}/${e.id}` : undefined}
             columns={[
               { header: "Név", render: (e) => e.full_name, sortAccessor: (e) => e.full_name },
               { header: "Email", render: (e) => e.email ?? "–", sortAccessor: (e) => e.email },

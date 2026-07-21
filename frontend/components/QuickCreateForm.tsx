@@ -4,7 +4,15 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 
-type FieldSpec = { name: string; label: string; type?: "text" | "date" | "number" | "password"; required?: boolean };
+type FieldSpec = {
+  name: string;
+  label: string;
+  type?: "text" | "date" | "number" | "password" | "select";
+  required?: boolean;
+  /** "select" típusnál a legördülő opciói - pl. egy foreign key mezőhöz
+   * (ügyfél/project code kiválasztása név szerint, ID begépelés helyett). */
+  options?: { value: number | string; label: string }[];
+};
 
 /** Kis inline form egy új, kapcsolódó rekord létrehozásához (pl. egy projekthez új
  * utómunka), a szükséges foreign key-ket előre kitöltve (`presetFields`) küldi -
@@ -45,7 +53,9 @@ export function QuickCreateForm({
     try {
       const body: Record<string, unknown> = { ...presetFields };
       for (const f of fields) {
-        if (values[f.name]) body[f.name] = f.type === "number" ? Number(values[f.name]) : values[f.name];
+        if (!values[f.name]) continue;
+        const isNumericSelect = f.type === "select" && typeof f.options?.[0]?.value === "number";
+        body[f.name] = f.type === "number" || isNumericSelect ? Number(values[f.name]) : values[f.name];
       }
       const res = await authFetch(postPath, { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) {
@@ -83,13 +93,29 @@ export function QuickCreateForm({
             {f.label}
             {f.required && " *"}
           </label>
-          <input
-            type={f.type ?? "text"}
-            required={f.required}
-            value={values[f.name] ?? ""}
-            onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-            className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
-          />
+          {f.type === "select" ? (
+            <select
+              required={f.required}
+              value={values[f.name] ?? ""}
+              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+              className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
+            >
+              <option value="">Válassz…</option>
+              {f.options?.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type={f.type ?? "text"}
+              required={f.required}
+              value={values[f.name] ?? ""}
+              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+              className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
+            />
+          )}
         </div>
       ))}
       <button

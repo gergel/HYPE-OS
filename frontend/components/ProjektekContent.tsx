@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { authFetch } from "@/lib/authFetch";
 import type { Project, ProjectCode } from "@/lib/api";
 
@@ -28,11 +29,15 @@ export function ProjektekContent({
   hasMore,
   projectCodes,
   statusOptions,
+  canCreate,
+  canDelete,
 }: {
   initialProjects: Project[];
   hasMore: boolean;
   projectCodes: ProjectCode[];
   statusOptions: string[];
+  canCreate: boolean;
+  canDelete: boolean;
 }) {
   const [projects, setProjects] = useState(initialProjects);
 
@@ -49,11 +54,23 @@ export function ProjektekContent({
 
   return (
     <Card title={`Projektek (${projects.length})`}>
+      {canCreate && (
+        <QuickCreateForm
+          postPath={PROJECT_BASE_PATH}
+          addLabel="+ Új projekt hozzáadása"
+          fields={[
+            { name: "nev", label: "Név", required: true },
+            { name: "project_code_id", label: "Project Code", type: "select", required: true, options: projectCodes.map((pc) => ({ value: pc.id, label: pc.projektkod })) },
+            { name: "forgatas_datuma", label: "Forgatás dátuma", type: "date" },
+            { name: "helyszin", label: "Helyszín" },
+          ]}
+        />
+      )}
       <DataTable<Project>
         rows={projects}
-        emptyText="Még nincs felvett projekt - importáld a Notionból, vagy adj hozzá egyet a /api/v1/projects végponton."
+        emptyText="Még nincs felvett projekt - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
         getHref={(p) => `/projektek/${p.id}`}
-        deleteHref={(p) => `${PROJECT_BASE_PATH}/${p.id}`}
+        deleteHref={canDelete ? (p) => `${PROJECT_BASE_PATH}/${p.id}` : undefined}
         filterable
         columns={[
           { header: "Név", render: (p) => p.nev, sortAccessor: (p) => p.nev },

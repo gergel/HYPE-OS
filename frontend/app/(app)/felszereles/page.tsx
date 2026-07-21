@@ -1,13 +1,24 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, Equipment, getEquipment, getFieldTypes } from "@/lib/api";
+import { ENTITY_PATHS, Equipment, getCurrentUser, getEquipment, getFieldTypes, getMyPagePermissions } from "@/lib/api";
+import { canDoAction } from "@/lib/permissions";
+
+const PAGE = "/felszereles";
 
 export default async function FelszerelesPage() {
-  const [equipment, fieldTypes] = await Promise.all([getEquipment(), getFieldTypes("equipment")]);
+  const [equipment, fieldTypes, currentUser, pagePermissions] = await Promise.all([
+    getEquipment(),
+    getFieldTypes("equipment"),
+    getCurrentUser(),
+    getMyPagePermissions(),
+  ]);
   const statusOptions = fieldTypes.allapot?.options ?? [];
+  const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
+  const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -22,11 +33,21 @@ export default async function FelszerelesPage() {
               Leltározás
             </a>
           </div>
+          {canCreate && (
+            <QuickCreateForm
+              postPath={ENTITY_PATHS.equipment}
+              addLabel="+ Új eszköz hozzáadása"
+              fields={[
+                { name: "nev", label: "Név", required: true },
+                { name: "kategoria", label: "Kategória" },
+              ]}
+            />
+          )}
           <DataTable<Equipment>
             rows={equipment}
-            emptyText="Még nincs felvett eszköz - importáld a Notionból, vagy adj hozzá egyet a /api/v1/equipment végponton."
+            emptyText="Még nincs felvett eszköz - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(e) => `/felszereles/${e.id}`}
-            deleteHref={(e) => `${ENTITY_PATHS.equipment}/${e.id}`}
+            deleteHref={canDelete ? (e) => `${ENTITY_PATHS.equipment}/${e.id}` : undefined}
             filterable
             columns={[
               { header: "Név", render: (e) => e.nev, sortAccessor: (e) => e.nev },

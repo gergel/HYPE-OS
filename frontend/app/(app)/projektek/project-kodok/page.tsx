@@ -1,28 +1,57 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, formatDate, formatHuf, getClients, getFieldTypes, getProjectCodes, ProjectCode } from "@/lib/api";
+import {
+  ENTITY_PATHS,
+  formatDate,
+  formatHuf,
+  getClients,
+  getCurrentUser,
+  getFieldTypes,
+  getMyPagePermissions,
+  getProjectCodes,
+  ProjectCode,
+} from "@/lib/api";
+import { canDoAction } from "@/lib/permissions";
+
+const PAGE = "/projektek/project-kodok";
 
 export default async function ProjectKodokPage() {
-  const [projectCodes, clients, fieldTypes] = await Promise.all([
+  const [projectCodes, clients, fieldTypes, currentUser, pagePermissions] = await Promise.all([
     getProjectCodes(),
     getClients(),
     getFieldTypes("projectCode"),
+    getCurrentUser(),
+    getMyPagePermissions(),
   ]);
   const clientNameById = new Map(clients.map((c) => [c.id, c.nev]));
   const statusOptions = fieldTypes.esemeny_allapota?.options ?? [];
+  const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
+  const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 p-6">
         <Card title={`Project Code-ok (${projectCodes.length})`}>
+          {canCreate && (
+            <QuickCreateForm
+              postPath={ENTITY_PATHS.projectCode}
+              addLabel="+ Új Project Code hozzáadása"
+              fields={[
+                { name: "projektkod", label: "Projektkód", required: true },
+                { name: "client_id", label: "Ügyfél", type: "select", required: true, options: clients.map((c) => ({ value: c.id, label: c.nev })) },
+                { name: "datum", label: "Dátum", type: "date" },
+              ]}
+            />
+          )}
           <DataTable<ProjectCode>
             rows={projectCodes}
-            emptyText="Még nincs felvett Project Code - importáld a Notionból, vagy adj hozzá egyet a /api/v1/project-codes végponton."
+            emptyText="Még nincs felvett Project Code - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(pc) => `/projektek/project-kodok/${pc.id}`}
-            deleteHref={(pc) => `${ENTITY_PATHS.projectCode}/${pc.id}`}
+            deleteHref={canDelete ? (pc) => `${ENTITY_PATHS.projectCode}/${pc.id}` : undefined}
             filterable
             columns={[
               { header: "Projektkód", render: (pc) => pc.projektkod, sortAccessor: (pc) => pc.projektkod },

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { DeliverableBoard, type BoardCard, type BoardColumn } from "@/components/deliverable/DeliverableBoard";
@@ -40,6 +41,8 @@ export function UtomunkaContent({
   employees,
   statusOptions,
   vinyoOptions,
+  canCreate,
+  canDelete,
 }: {
   initialDeliverables: Deliverable[];
   deliverablesHasMore: boolean;
@@ -48,6 +51,8 @@ export function UtomunkaContent({
   employees: Employee[];
   statusOptions: string[];
   vinyoOptions: string[];
+  canCreate: boolean;
+  canDelete: boolean;
 }) {
   const [deliverables, setDeliverables] = useState(initialDeliverables);
   const [projects, setProjects] = useState(initialProjects);
@@ -140,11 +145,21 @@ export function UtomunkaContent({
       }
       list={
         <Card title={`Utómunka (${deliverables.length})`}>
+          {canCreate && (
+            <QuickCreateForm
+              postPath={DELIVERABLE_BASE_PATH}
+              addLabel="+ Új anyag hozzáadása"
+              fields={[
+                { name: "projekt_neve", label: "Anyag neve", required: true },
+                { name: "hatarido", label: "Határidő", type: "date" },
+              ]}
+            />
+          )}
           <DataTable<Deliverable>
             rows={deliverables}
-            emptyText="Még nincs felvett vágandó anyag - importáld a Notionból, vagy adj hozzá egyet a /api/v1/deliverables végponton."
+            emptyText="Még nincs felvett vágandó anyag - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(d) => `/utomunka/${d.id}`}
-            deleteHref={(d) => `${DELIVERABLE_BASE_PATH}/${d.id}`}
+            deleteHref={canDelete ? (d) => `${DELIVERABLE_BASE_PATH}/${d.id}` : undefined}
             filterable
             columns={[
               { header: "Anyag", render: (d) => d.projekt_neve, sortAccessor: (d) => d.projekt_neve },
