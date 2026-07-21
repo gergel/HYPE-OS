@@ -7,36 +7,26 @@ import type { DetailTab as DbDetailTab, FieldTypeInfo, JsonRecord } from "@/lib/
 import { toEditableDetailFields } from "@/lib/detail";
 
 /** Ugyanaz a szintetikus kulcs, mint a backend OTHER_TAB_KEY-je (lásd
- * backend/app/services/detail_tabs.py) - a szekció-szintű jogosultság-
- * ellenőrzés mindkét oldalon ugyanazt az "{page}:_other" összetett kulcsot
- * használja. */
+ * backend/app/services/detail_tabs.py). */
 const OTHER_TAB_KEY = "_other";
 const ALWAYS_EXCLUDE_META = new Set(["id", "created_at", "updated_at"]);
 
-/** A "{page}:{tabKey}" összetett kulcs csak akkor SZŰKÍTI a jogosultságot, ha
- * admin kifejezetten beállította azt (lásd Beállítások oldal,
- * UserAccessManager fülenkénti Látja/Szerkesztheti checkboxai) - ha nincs
- * ilyen összetett kulcs, a szekció a meglévő, oldal-szintű jogot örökli (nem
- * esik vissza tiltásra). Enélkül bármelyik munkatárs, akinek admin BÁRMELYIK
- * oldalhoz korlátozást állított be (pagePermissions !== null), az összes
- * részletnézet-szekción elveszítené a hozzáférést minden olyan szekcióhoz,
- * amihez admin még nem konfigurált explicit engedélyt - beleértve a bespoke
- * widgeteket (pl. eszközfoglalás, szerződés készítés) is, amik nem is mező-
- * szerkesztést jelentenek, hanem önálló akció-gombok egy adott szekción
- * belül. Ugyanez a logika a backend oldalon core/security.check_tab_action. */
-function resolveTabPermissions(pagePermissions: Record<string, string[]> | null, page: string, tabKey: string): string[] | null {
-  if (pagePermissions === null) return null;
-  return pagePermissions[`${page}:${tabKey}`] ?? pagePermissions[page] ?? [];
-}
-
-function canView(pagePermissions: Record<string, string[]> | null, page: string, tabKey: string): boolean {
-  const perms = resolveTabPermissions(pagePermissions, page, tabKey);
-  return perms === null || perms.includes("view");
-}
-
+/** A szekciók MINDIG látszanak (nincs szekció-szintű elrejtés) - csak a
+ * SZERKESZTÉS korlátozható admin által a "{page}:{tab_key}" összetett
+ * kulccsal (lásd Beállítások oldal, UserAccessManager fülenkénti
+ * Szerkesztheti checkboxa). Korábban a szekció LÁTHATÓSÁGA is ehhez a
+ * kulcshoz volt kötve, de ez azt jelentette, hogy bármelyik munkatárs,
+ * akinek admin BÁRMELYIK oldalhoz korlátozást állított be
+ * (pagePermissions !== null), elveszítette volna a hozzáférést minden olyan
+ * szekcióhoz, amihez admin még nem konfigurált explicit engedélyt -
+ * beleértve a bespoke widgeteket (pl. eszközfoglalás, szerződés készítés)
+ * is, amik nem is mező-szerkesztést jelentenek, hanem önálló akció-gombok.
+ * Ez a felhasználó számára "eltűnt mezőkként" jelentkezett - ezért a
+ * láthatóság mostantól sosem korlátozott, csak a szerkeszthetőség. */
 function canEdit(pagePermissions: Record<string, string[]> | null, page: string, tabKey: string): boolean {
-  const perms = resolveTabPermissions(pagePermissions, page, tabKey);
-  return perms === null || perms.includes("edit");
+  if (pagePermissions === null) return true;
+  const perms = pagePermissions[`${page}:${tabKey}`] ?? pagePermissions[page];
+  return !!perms?.includes("edit");
 }
 
 function intersectVisible(fields: string[], visibleFields: string[] | null): string[] {
@@ -57,12 +47,11 @@ function intersectVisible(fields: string[], visibleFields: string[] | null): str
  * mert admin még nem sorolta be sehova.
  *
  * A szekció-szintű jogosultság ("{page}:{tab_key}", lásd
- * core/security.check_tab_action) KÉTFÉLE módon hat: "view" hiánya esetén a
- * kártya EGYÁLTALÁN nem jelenik meg (nem csak olvashatatlan - a felhasználó
- * nem is tudja, hogy létezik), "edit" hiánya esetén megjelenik, de minden
- * mezője csak olvasható (readOnly EditableDetailGrid). pagePermissions=null
- * (a felhasználó nincs korlátozva oldal-szinten) -> minden szekció látszik és
- * szerkeszthető, változatlan viselkedés.
+ * core/security.check_tab_action) csak a szerkeszthetőséget korlátozza: ha
+ * admin nem adott "edit" jogot egy adott szekcióhoz, az megjelenik, de minden
+ * mezője csak olvasható (readOnly EditableDetailGrid) - a kártya maga sosem
+ * tűnik el. pagePermissions=null (a felhasználó nincs korlátozva
+ * oldal-szinten) -> minden szekció szerkeszthető, változatlan viselkedés.
  *
  * extraTabs: bespoke, nem mező-alapú szekciók (pl. Projekt "Csapat &
  * Utómunka" kártyája M2mLinker/RelatedTable widgetekkel) - ezek a DB-driven
@@ -108,7 +97,6 @@ export function buildFieldTabs({
   const sections: DetailSection[] = [];
 
   for (const t of dbTabs) {
-    if (!canView(pagePermissions, page, t.tab_key)) continue;
     const fields = intersectVisible(
       t.field_keys.filter((f) => !hiddenSet.has(f)),
       visibleFields,
@@ -137,12 +125,9 @@ export function buildFieldTabs({
     });
   }
 
-  for (const extra of extraTabs) {
-    if (!canView(pagePermissions, page, extra.key)) continue;
-    sections.push(extra);
-  }
+  sections.push(...extraTabs);
 
-  if (otherFields.length > 0 && canView(pagePermissions, page, OTHER_TAB_KEY)) {
+  if (otherFields.length > 0) {
     const fields = intersectVisible(otherFields, visibleFields);
     if (fields.length > 0) {
       sections.push({

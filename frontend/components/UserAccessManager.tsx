@@ -81,22 +81,16 @@ export function UserAccessManager({
     });
   }
 
-  function toggleTabView(compositeKey: string) {
+  /** A fülek MINDIG láthatók (lásd lib/detailTabs.tsx) - itt csak a
+   * szerkeszthetőség korlátozható. A checkbox bejelölése hozza létre a
+   * "{page}:{tab_key}" összetett kulcsot ["edit"] értékkel (a fül ETTŐL
+   * KEZDVE csak olvasható lesz, amíg admin vissza nem kapcsolja) - kijelölés
+   * hiánya = a fül öröklődik az oldal-szintű szerkesztési jogból. */
+  function toggleTabEditRestriction(compositeKey: string) {
     setPermissions((prev) => {
       const next = new Map(prev);
       if (next.has(compositeKey)) next.delete(compositeKey);
-      else next.set(compositeKey, new Set(["view"]));
-      return next;
-    });
-  }
-
-  function toggleTabEdit(compositeKey: string) {
-    setPermissions((prev) => {
-      const next = new Map(prev);
-      const actions = new Set(next.get(compositeKey) ?? ["view"]);
-      if (actions.has("edit")) actions.delete("edit");
-      else actions.add("edit");
-      next.set(compositeKey, actions);
+      else next.set(compositeKey, new Set());
       return next;
     });
   }
@@ -277,26 +271,17 @@ export function UserAccessManager({
                     {actions && tabs && tabs.length > 0 && (
                       <div className="ml-5 mt-1.5 space-y-1 border-l border-border pl-2">
                         <p className="text-[10px] text-text-muted">
-                          Fülenkénti felülbírálás (opcionális) - amit itt NEM jelölsz be, az a fenti oldal-szintű jogot örökli, tehát
-                          alapból minden fület lát/szerkeszthet, amihez az oldalon jogot adtál. Csak akkor jelölj be egy fület, ha
-                          AZT külön, a többitől eltérően szeretnéd korlátozni:
+                          Fülenkénti felülbírálás (opcionális) - a fülek MINDIG láthatók, itt csak azt jelölheted be, mely fül legyen
+                          KIVÉTELESEN csak olvasható a fenti oldal-szintű szerkesztési jog ellenére:
                         </p>
                         {tabs.map((tab) => {
                           const compositeKey = `${p.page}:${tab.tab_key}`;
-                          const tabActions = permissions.get(compositeKey);
+                          const restricted = permissions.has(compositeKey);
                           return (
-                            <div key={tab.tab_key} className="flex items-center gap-2 text-[11px] text-text-muted">
-                              <label className="flex items-center gap-1">
-                                <input type="checkbox" checked={!!tabActions} onChange={() => toggleTabView(compositeKey)} />
-                                {tab.label}
-                              </label>
-                              {tabActions && (
-                                <label className="flex items-center gap-1">
-                                  <input type="checkbox" checked={tabActions.has("edit")} onChange={() => toggleTabEdit(compositeKey)} />
-                                  szerk.
-                                </label>
-                              )}
-                            </div>
+                            <label key={tab.tab_key} className="flex items-center gap-1 text-[11px] text-text-muted">
+                              <input type="checkbox" checked={restricted} onChange={() => toggleTabEditRestriction(compositeKey)} />
+                              {tab.label} (csak olvasható)
+                            </label>
                           );
                         })}
                       </div>

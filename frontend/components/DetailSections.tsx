@@ -16,8 +16,13 @@ export type DetailSection = { key: string; label: string; badge?: number; conten
  * JS-es masonry könyvtár nélkül (lásd referenciakép: a kártyák nem egyenlő
  * magasságú sorokban, hanem a legrövidebb oszlopba folyva rendeződnek). */
 export function DetailSections({ sections }: { sections: DetailSection[] }) {
+  // 2 oszlopnál nem megyünk tovább: 3+ oszlopnál a CSS multi-column
+  // kiegyenlítő algoritmusa (Chrome) nagyon egyenlőtlenül tölti fel az
+  // oszlopokat, ha a kártyák magassága nagyon eltérő (pl. egy 16 mezős
+  // szekció egy 4 mezős mellett) - ez nagy, üres területeket hagy néhány
+  // oszlopban. 2 oszlopnál ez a torzulás sokkal kevésbé feltűnő.
   return (
-    <div className="columns-1 gap-5 lg:columns-2 xl:columns-3 [&>*]:mb-5 [&>*]:break-inside-avoid">
+    <div className="columns-1 gap-5 lg:columns-2 [&>*]:mb-5 [&>*]:break-inside-avoid">
       {sections.map((s) => (
         <div key={s.key}>{s.content}</div>
       ))}

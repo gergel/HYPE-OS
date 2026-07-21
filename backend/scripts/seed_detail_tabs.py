@@ -9,12 +9,11 @@ fülre esik (lásd services/detail_tabs.OTHER_TAB_KEY) - tipikusan a Notion
 formula/rollup/relation-snapshot "maradék mezők", amikhez nincs értelme
 kézzel elnevezett fület nyitni.
 
-Mindig FELÜLÍRJA a meglévő konfigurációt (delete + insert, lásd
-services.detail_tabs.replace_tabs) - ez a szkript az admin UI (DetailTabEditor)
-"gyári alapállapotát" adja, nem egy egyszeri, csak üres táblánál futó seed.
-Ha admin már testre szabott egy entitást a Beállítások oldalon, ennek a
-szkriptnek az újrafuttatása azt felülírná - csak fejlesztői/bootstrap
-környezetben futtatandó, nem éles adatbázison admin-testreszabás után.
+Idempotens: entitástípusonként csak akkor ír, ha MÉG NINCS egyetlen sora sem
+(hogy egy már admin által testre szabott elrendezést újrafuttatáskor ne írjon
+felül) - emiatt biztonságos MINDEN induláskor lefuttatni (lásd Dockerfile CMD,
+ugyanúgy, mint az `alembic upgrade head`): az első induláskor feltölti az
+(akkor még üres) táblát a kezdő elrendezéssel, utána már nem nyúl hozzá.
 
 Használat:  python scripts/seed_detail_tabs.py
 """
@@ -24,7 +23,10 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from sqlalchemy import select  # noqa: E402
+
 from app.core.database import SessionLocal  # noqa: E402
+from app.models.detail_tab import DetailTabConfig  # noqa: E402
 from app.services import detail_tabs as detail_tabs_service  # noqa: E402
 from app.services.entity_registry import ENTITY_MODELS  # noqa: E402
 
@@ -327,6 +329,11 @@ ENTITY_TABS: dict[str, list[_Tab]] = {
 
 def seed(db) -> None:
     for entity_type, model in ENTITY_MODELS.items():
+        existing = db.scalar(select(DetailTabConfig.id).where(DetailTabConfig.entity_type == entity_type))
+        if existing is not None:
+            print(f"  {entity_type}: már van fül-konfigurációja, kihagyva")
+            continue
+
         curated = ENTITY_TABS.get(entity_type)
         if curated is not None:
             tabs = curated
@@ -335,7 +342,7 @@ def seed(db) -> None:
             tabs = [_Tab("adatok", "Adatok", "Info", all_fields)]
 
         detail_tabs_service.replace_tabs(db, entity_type, tabs)
-        print(f"  {entity_type}: {len(tabs)} fül beállítva")
+        print(f"  {entity_type}: {len(tabs)} fül létrehozva")
 
 
 if __name__ == "__main__":

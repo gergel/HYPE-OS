@@ -17,4 +17,4 @@ EXPOSE 8000
 # kapcsolatot - ha ezt figyelmen kívül hagynánk és mindig 8000-re kötnénk, a platform
 # proxyja 502-t adna, mert nem azon a porton figyelünk, amit ő elvár. Lokálisan/
 # docker-compose-ban nincs PORT env var, ott az 8000-es alapértelmezés marad érvényben.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "alembic upgrade head && python scripts/seed_detail_tabs.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
