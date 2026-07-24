@@ -125,51 +125,69 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     fieldTypes,
     pagePermissions,
     alwaysHidden: ALWAYS_HIDDEN,
-    badges: { technika: bookingRows.length },
-    prependContent: {
-      diszpo: (
-        <Card title="Diszpó küldése" icon={Send}>
-          <div className="flex flex-wrap items-center gap-3">
-            <ActionButton
-              path={`/api/v1/projects/${project.id}/diszpo/elozetes`}
-              label="Előzetes diszpó"
-              confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
-            />
-            <ActionButton
-              path={`/api/v1/projects/${project.id}/diszpo/kuldes`}
-              label="Diszpó küldése"
-              confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
-            />
-          </div>
-        </Card>
-      ),
-      technika: (
-        <Card title={`Eszközök (${bookingRows.length})`} icon={Wrench}>
-          <EquipmentBookingManager projectId={project.id} bookings={bookingRows} options={equipmentOptions} />
-          <div className="mt-4 border-t border-border pt-4">
-            <TechnikaCheckButton projectId={project.id} />
-          </div>
-        </Card>
-      ),
-      penzugy: (
-        <>
-          <Card title="Szerződés készítés" icon={Wallet}>
-            <SubcontractorContractManager projectId={project.id} pending={pendingContracts?.pending ?? []} />
-          </Card>
-          <Card title="Teljesítési igazolás" icon={FileText}>
-            {pendingTig?.tig_ready ? (
-              <PerformanceCertificateManager projectId={project.id} pending={pendingTig.pending} />
-            ) : (
-              <p className="text-[13px] text-text-secondary">
-                Teljesítési igazolás csak azután készíthető, hogy ezen a projekten mindenkinek megvan a szerződés
-                státusza (kiküldve vagy kihagyva) - lásd a fenti "Szerződés készítés" kártyát.
-              </p>
-            )}
-          </Card>
-        </>
-      ),
-    },
+    // A lenti bespoke widgetek (diszpó küldés, eszközfoglalás, szerződés/TIG)
+    // szándékosan extraTabs-ként, NEM prependContent-ként szerepelnek: a
+    // prependContent egy admin által a Beállítások oldalon szabadon
+    // átnevezhető/törölhető DB-driven fülhöz (tab_key) tapadt volna - ha
+    // admin törölte vagy átszervezte pl. a "technika" fület, a hozzá kötött
+    // eszközfoglaló widget is némán eltűnt, miközben a felhasználó ezt
+    // hiányzó funkciónak látta ("nincs opcióm technika hozzáadásához"). Az
+    // extraTabs szekciók mindig megjelennek, függetlenül az admin
+    // fül-szerkesztésétől.
     extraTabs: [
+      {
+        key: "diszpo-kuldes",
+        label: "Diszpó küldése",
+        content: (
+          <Card title="Diszpó küldése" icon={Send}>
+            <div className="flex flex-wrap items-center gap-3">
+              <ActionButton
+                path={`/api/v1/projects/${project.id}/diszpo/elozetes`}
+                label="Előzetes diszpó"
+                confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+              />
+              <ActionButton
+                path={`/api/v1/projects/${project.id}/diszpo/kuldes`}
+                label="Diszpó küldése"
+                confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+              />
+            </div>
+          </Card>
+        ),
+      },
+      {
+        key: "eszkozok",
+        label: `Eszközök (${bookingRows.length})`,
+        content: (
+          <Card title={`Eszközök (${bookingRows.length})`} icon={Wrench}>
+            <EquipmentBookingManager projectId={project.id} bookings={bookingRows} options={equipmentOptions} />
+            <div className="mt-4 border-t border-border pt-4">
+              <TechnikaCheckButton projectId={project.id} />
+            </div>
+          </Card>
+        ),
+      },
+      {
+        key: "szerzodes-tig",
+        label: "Szerződés & TIG",
+        content: (
+          <>
+            <Card title="Szerződés készítés" icon={Wallet}>
+              <SubcontractorContractManager projectId={project.id} pending={pendingContracts?.pending ?? []} />
+            </Card>
+            <Card title="Teljesítési igazolás" icon={FileText}>
+              {pendingTig?.tig_ready ? (
+                <PerformanceCertificateManager projectId={project.id} pending={pendingTig.pending} />
+              ) : (
+                <p className="text-[13px] text-text-secondary">
+                  Teljesítési igazolás csak azután készíthető, hogy ezen a projekten mindenkinek megvan a szerződés
+                  státusza (kiküldve vagy kihagyva) - lásd a fenti &quot;Szerződés készítés&quot; kártyát.
+                </p>
+              )}
+            </Card>
+          </>
+        ),
+      },
       {
         key: "csapat",
         label: "Csapat & Utómunka",
