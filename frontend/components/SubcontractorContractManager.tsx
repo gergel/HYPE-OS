@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 import type { PendingSubcontractorEmployee } from "@/lib/api";
 
 type FormState = {
@@ -58,6 +59,7 @@ export function SubcontractorContractManager({
   pending: PendingSubcontractorEmployee[];
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [selectedId, setSelectedId] = useState<number | "">("");
   const [openId, setOpenId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
@@ -129,7 +131,7 @@ export function SubcontractorContractManager({
       alert("Add meg a nettó összeget.");
       return;
     }
-    if (!confirm(`Elküldi a megbízási szerződést ${selectedEmployee.full_name} email címére?`)) return;
+    if (!(await confirm(`Elküldi a megbízási szerződést ${selectedEmployee.full_name} email címére?`))) return;
     setBusy("send");
     try {
       const res = await authFetch(
@@ -153,7 +155,7 @@ export function SubcontractorContractManager({
 
   async function handleSkip() {
     if (!selectedEmployee) return;
-    if (!confirm(`Biztosan kihagyod ${selectedEmployee.full_name}-t? A projekt szerződés nélkül zárul vele.`)) return;
+    if (!(await confirm(`Biztosan kihagyod ${selectedEmployee.full_name}-t? A projekt szerződés nélkül zárul vele.`))) return;
     setBusy("skip");
     try {
       const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.id}/skip`, {

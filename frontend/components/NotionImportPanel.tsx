@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type ImportStatus = {
   running: boolean;
@@ -21,6 +22,7 @@ const POLL_MS = 2000;
  * ezért ez a komponens csak akkor jelenik meg, ha a bejelentkezett
  * felhasználó admin (lásd Beállítások oldal). */
 export function NotionImportPanel() {
+  const confirm = useConfirm();
   const [status, setStatus] = useState<ImportStatus | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export function NotionImportPanel() {
   }, [status?.running]);
 
   async function start() {
-    if (!confirm("Elindítja a teljes Notion importot (mind a 3 kör) - ez akár órákig is eltarthat a Notion API rate limitje miatt. Folytatod?")) {
+    if (!(await confirm("Elindítja a teljes Notion importot (mind a 3 kör) - ez akár órákig is eltarthat a Notion API rate limitje miatt. Folytatod?"))) {
       return;
     }
     setStarting(true);

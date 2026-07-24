@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 /** Egy rekord törlésére szolgáló gomb - a `path` a teljes DELETE végpont
  * (pl. /api/v1/deliverables/42). Bejelentkezés (admin/operátor szerepkör)
@@ -24,10 +25,11 @@ export function DeleteButton({
   className?: string;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
-    if (!confirm("Biztosan törlöd ezt a rekordot?")) return;
+    if (!(await confirm("Biztosan törlöd ezt a rekordot?"))) return;
     setBusy(true);
     try {
       const res = await authFetch(path, { method: "DELETE" });

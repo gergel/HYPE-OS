@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 import type { PendingTigEmployee } from "@/lib/api";
 
 type FormState = {
@@ -55,6 +56,7 @@ export function PerformanceCertificateManager({
   pending: PendingTigEmployee[];
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [selectedId, setSelectedId] = useState<number | "">("");
   const [openId, setOpenId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
@@ -124,7 +126,7 @@ export function PerformanceCertificateManager({
       alert("Add meg a nettó összeget.");
       return;
     }
-    if (!confirm(`Elküldi a teljesítési igazolást ${selectedEmployee.full_name} email címére?`)) return;
+    if (!(await confirm(`Elküldi a teljesítési igazolást ${selectedEmployee.full_name} email címére?`))) return;
     setBusy("send");
     try {
       const res = await authFetch(
@@ -148,7 +150,7 @@ export function PerformanceCertificateManager({
 
   async function handleSkip() {
     if (!selectedEmployee) return;
-    if (!confirm(`Biztosan kihagyod ${selectedEmployee.full_name}-t? A projekt teljesítési igazolás nélkül zárul vele.`)) return;
+    if (!(await confirm(`Biztosan kihagyod ${selectedEmployee.full_name}-t? A projekt teljesítési igazolás nélkül zárul vele.`))) return;
     setBusy("skip");
     try {
       const res = await authFetch(`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.id}/skip`, {

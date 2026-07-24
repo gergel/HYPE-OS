@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 /** "Visszajelzés küldése" gomb - a felhasználó által küldött Notion
  * automatizmus portolása (lásd services/deliverable_actions.send_visszajelzes):
@@ -10,10 +11,11 @@ import { authFetch } from "@/lib/authFetch";
  * azokat az anyagon a következő körhöz. */
 export function FeedbackSendButton({ deliverableId }: { deliverableId: number }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
-    if (!confirm("Biztos küldesz visszajelzést?")) return;
+    if (!(await confirm("Biztos küldesz visszajelzést?"))) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/v1/deliverables/${deliverableId}/kuldes-visszajelzes`, { method: "POST" });

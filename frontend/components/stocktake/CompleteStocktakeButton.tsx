@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 export function CompleteStocktakeButton({ sessionId }: { sessionId: number }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
-    if (!confirm("Lezárod a leltározást? Utána a tételek már nem lesznek szerkeszthetők.")) return;
+    if (!(await confirm("Lezárod a leltározást? Utána a tételek már nem lesznek szerkeszthetők."))) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/v1/stocktake/sessions/${sessionId}/complete`, { method: "POST" });

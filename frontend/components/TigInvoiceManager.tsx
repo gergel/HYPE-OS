@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type Cert = {
   id: number;
@@ -34,6 +35,7 @@ export function TigInvoiceManager({
   readyStatus: string;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [busyId, setBusyId] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -60,7 +62,7 @@ export function TigInvoiceManager({
   }
 
   async function markPaid(employeeId: number) {
-    if (!confirm("Kifizetettként jelölöd a számlát? Ez létrehoz (vagy frissít) egy Kiadás sort a Pénzügyben.")) return;
+    if (!(await confirm("Kifizetettként jelölöd a számlát? Ez létrehoz (vagy frissít) egy Kiadás sort a Pénzügyben."))) return;
     setBusyId(employeeId);
     try {
       const res = await authFetch(`${basePath}/${projectId}/${employeeId}/szamla-kifizetve`, { method: "POST" });

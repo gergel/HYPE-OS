@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 import type { EmployeeDocument } from "@/lib/api";
 
 /** A munkatárshoz feltöltött dokumentumok (pl. munkaszerződés) listája -
@@ -10,6 +11,7 @@ import type { EmployeeDocument } from "@/lib/api";
  * külön törlés-gombbal (lásd backend crew.py munkaszerzodesek végpontjai). */
 export function MunkaszerzodesUpload({ employeeId, documents }: { employeeId: number; documents: EmployeeDocument[] }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -37,7 +39,7 @@ export function MunkaszerzodesUpload({ employeeId, documents }: { employeeId: nu
   }
 
   async function handleDelete(doc: EmployeeDocument) {
-    if (!confirm(`Törlöd a(z) "${doc.filename}" fájlt?`)) return;
+    if (!(await confirm(`Törlöd a(z) "${doc.filename}" fájlt?`))) return;
     setDeletingId(doc.id);
     try {
       const res = await authFetch(`/api/v1/crew/${employeeId}/munkaszerzodesek/${doc.id}`, { method: "DELETE" });

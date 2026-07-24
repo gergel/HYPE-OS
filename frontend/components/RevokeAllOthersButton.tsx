@@ -3,21 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 /** Admin egy kattintással visszavonja MINDENKI MÁS bejelentkezési hozzáférését
  * a sajátja kivételével - a munkatárs-rekordok megmaradnak (csak a jelszavuk
  * törlődik), admin bármikor újra beállíthatja őket egyénenként a keresőben. */
 export function RevokeAllOthersButton() {
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
     if (
-      !confirm(
+      !(await confirm(
         "Biztosan törlöd MINDENKI MÁS hozzáférését (a sajátod kivételével)? " +
           "A munkatársak megmaradnak, csak a jelszavuk törlődik (nem tudnak többé bejelentkezni), " +
           "és az oldal-/mező-hozzáférésük alapértelmezettre áll vissza. Bármikor újra beállíthatod őket egyénenként.",
-      )
+      ))
     ) {
       return;
     }

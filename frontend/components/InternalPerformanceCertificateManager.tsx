@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 import type { PendingBelsosTigEmployee } from "@/lib/api";
 
 type FormState = {
@@ -44,6 +45,7 @@ export function InternalPerformanceCertificateManager({
   pending: PendingBelsosTigEmployee[];
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [selectedId, setSelectedId] = useState<number | "">("");
   const [openId, setOpenId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
@@ -131,7 +133,7 @@ export function InternalPerformanceCertificateManager({
 
   async function handleSkip() {
     if (!selectedEmployee) return;
-    if (!confirm(`Biztosan kihagyod ${selectedEmployee.full_name}-t?`)) return;
+    if (!(await confirm(`Biztosan kihagyod ${selectedEmployee.full_name}-t?`))) return;
     setBusy("skip");
     try {
       const res = await authFetch(`/api/v1/belsos-tig/${projectId}/${selectedEmployee.id}/skip`, {

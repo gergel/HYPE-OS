@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 /** Egy Notion button-automatizmust portoló, egy kattintásos backend akció (pl.
  * Feldarabolás, Utómunka létrehozása) - POST a megadott útvonalra, majd vagy
@@ -23,10 +24,11 @@ export function ActionButton({
   redirectPrefix?: string;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
-    if (confirmMessage && !confirm(confirmMessage)) return;
+    if (confirmMessage && !(await confirm(confirmMessage))) return;
     setBusy(true);
     try {
       const res = await authFetch(path, { method: "POST" });

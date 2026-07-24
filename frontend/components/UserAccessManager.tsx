@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type PageOption = { page: string; label: string };
 type DbTab = { tab_key: string; label: string };
@@ -44,6 +45,7 @@ export function UserAccessManager({
   pageTabsMap?: Record<string, DbTab[]>;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [email, setEmail] = useState(initialEmail ?? "");
   const [emailBusy, setEmailBusy] = useState(false);
   const [password, setPassword] = useState("");
@@ -157,7 +159,7 @@ export function UserAccessManager({
   }
 
   async function revokeAccess() {
-    if (!confirm(`Biztosan törlöd ${employeeLabel} hozzáférését? A jelszava törlődik (nem tud többé bejelentkezni), az oldal- és mező-hozzáférése alapértelmezettre áll vissza.`)) {
+    if (!(await confirm(`Biztosan törlöd ${employeeLabel} hozzáférését? A jelszava törlődik (nem tud többé bejelentkezni), az oldal- és mező-hozzáférése alapértelmezettre áll vissza.`))) {
       return;
     }
     setRevokeBusy(true);
