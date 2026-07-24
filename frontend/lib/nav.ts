@@ -123,6 +123,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Alvállalkozók szerződése", href: "/alvallalkozoi-szerzodesek", icon: "FileCheck2" },
       { label: "Teljesítési igazolások", href: "/teljesitesi-igazolasok", icon: "BadgeCheck" },
+      { label: "Belsős TIG", href: "/belsos-tig", icon: "BadgeCheck" },
       { label: "Utókövetés", href: "/utokovetes", icon: "History" },
       { label: "Kampányok", href: "/kampanyok", icon: "Megaphone" },
       { label: "Feladatok", href: "/feladatok", icon: "CheckSquare" },

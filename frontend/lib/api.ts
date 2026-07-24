@@ -404,44 +404,13 @@ export async function getAllTigForProject(projectId: number): Promise<Performanc
   return (await apiGet<PerformanceCertificate[]>(`/api/v1/teljesitesi-igazolasok/${projectId}/all`)) ?? [];
 }
 
-export type PendingBelsosTigProject = {
-  project_id: number;
-  project_nev: string | null;
-  forgatas_datuma: string | null;
-  pending_count: number;
-};
-
-export type BelsosTigDraft = {
-  allapot: string | null;
-  netto_osszeg: number | null;
-  plusz_afa: boolean | null;
-  teljesites_kezdete: string | null;
-  teljesites_vege: string | null;
-  megjegyzes: string | null;
-};
-
-export type PendingBelsosTigEmployee = {
-  id: number;
-  full_name: string;
-  draft: BelsosTigDraft | null;
-};
-
-export type PendingBelsosTigProjectDetail = {
-  project_id: number;
-  project_nev: string | null;
-  forgatas_datuma: string | null;
-  pending: PendingBelsosTigEmployee[];
-};
-
-export async function getPendingBelsosTigForProject(projectId: number): Promise<PendingBelsosTigProjectDetail | null> {
-  return apiGet<PendingBelsosTigProjectDetail>(`/api/v1/belsos-tig/${projectId}`);
-}
-
 export type InternalPerformanceCertificate = {
   id: number;
-  project_id: number;
   employee_id: number;
+  ev: number;
+  honap: number;
   allapot: string | null;
+  megjegyzes: string | null;
   netto_osszeg: number | null;
   plusz_afa: boolean | null;
   brutto_osszeg: number | null;
@@ -450,8 +419,19 @@ export type InternalPerformanceCertificate = {
   expense_id: number | null;
 };
 
-export async function getAllBelsosTigForProject(projectId: number): Promise<InternalPerformanceCertificate[]> {
-  return (await apiGet<InternalPerformanceCertificate[]>(`/api/v1/belsos-tig/${projectId}/all`)) ?? [];
+export type BelsosTigMonthEmployee = {
+  id: number;
+  full_name: string;
+  email: string | null;
+  record: InternalPerformanceCertificate | null;
+};
+
+export async function getBelsosTigMonth(ev?: number, honap?: number): Promise<BelsosTigMonthEmployee[]> {
+  const params = new URLSearchParams();
+  if (ev) params.set("ev", String(ev));
+  if (honap) params.set("honap", String(honap));
+  const qs = params.toString();
+  return (await apiGet<BelsosTigMonthEmployee[]>(`/api/v1/belsos-tig${qs ? `?${qs}` : ""}`)) ?? [];
 }
 
 export type UtokovetesOverview = {

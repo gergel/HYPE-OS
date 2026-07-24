@@ -1,17 +1,14 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { InternalPerformanceCertificateManager } from "@/components/InternalPerformanceCertificateManager";
 import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { TopBar } from "@/components/TopBar";
 import {
   formatDate,
-  getAllBelsosTigForProject,
   getAllTigForProject,
   getEmployees,
-  getPendingBelsosTigForProject,
   getPendingSubcontractorsForProject,
   getPendingTigForProject,
   getUtokovetesDetail,
@@ -20,20 +17,18 @@ import {
 /** Az Utókövetés részletnézete NEM csak egy állapot-áttekintés, hanem itt is
  * el lehet készíteni a szerződéseket és a TIG-eket - ugyanazok a
  * (SubcontractorContractManager/PerformanceCertificateManager/
- * InternalPerformanceCertificateManager/TigInvoiceManager) komponensek,
- * amik a Projekt oldal "Szerződés & TIG" szekciójában is szerepelnek -, hogy
- * ne kelljen admin a Projekt oldalra átnavigálnia csak azért, hogy egy
- * hátralévő tételt lezárjon. */
+ * TigInvoiceManager) komponensek, amik a Projekt oldal "Szerződés & TIG"
+ * szekciójában is szerepelnek -, hogy ne kelljen admin a Projekt oldalra
+ * átnavigálnia csak azért, hogy egy hátralévő tételt lezárjon. A Belsős TIG
+ * itt nem jelenik meg - az havi, nem projektenkénti, lásd /belsos-tig. */
 export default async function UtokovetesDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectId = Number(id);
-  const [detail, pendingContracts, pendingTig, allTig, pendingBelsosTig, allBelsosTig, allEmployees] = await Promise.all([
+  const [detail, pendingContracts, pendingTig, allTig, allEmployees] = await Promise.all([
     getUtokovetesDetail(projectId),
     getPendingSubcontractorsForProject(projectId),
     getPendingTigForProject(projectId),
     getAllTigForProject(projectId),
-    getPendingBelsosTigForProject(projectId),
-    getAllBelsosTigForProject(projectId),
     getEmployees(),
   ]);
   if (!detail) notFound();
@@ -80,17 +75,6 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
             certificates={allTig}
             employeeNameById={employeeNameById}
             readyStatus="Kiküldve"
-          />
-        </Card>
-
-        <Card title="Belsős TIG">
-          <InternalPerformanceCertificateManager projectId={projectId} pending={pendingBelsosTig?.pending ?? []} />
-          <TigInvoiceManager
-            projectId={projectId}
-            basePath="/api/v1/belsos-tig"
-            certificates={allBelsosTig}
-            employeeNameById={employeeNameById}
-            readyStatus="Kész"
           />
         </Card>
 

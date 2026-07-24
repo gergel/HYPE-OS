@@ -7,7 +7,6 @@ import { DetailHeader } from "@/components/DetailHeader";
 import { DetailSections } from "@/components/DetailSections";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
-import { InternalPerformanceCertificateManager } from "@/components/InternalPerformanceCertificateManager";
 import { M2mLinker } from "@/components/M2mLinker";
 import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
@@ -19,14 +18,12 @@ import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   formatHuf,
-  getAllBelsosTigForProject,
   getAllTigForProject,
   getDetailTabs,
   getEmployees,
   getEquipment,
   getFieldTypes,
   getMyPagePermissions,
-  getPendingBelsosTigForProject,
   getPendingSubcontractorsForProject,
   getPendingTigForProject,
   getRecord,
@@ -70,8 +67,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     pendingContracts,
     pendingTig,
     allTig,
-    pendingBelsosTig,
-    allBelsosTig,
     visibleFields,
     fieldTypes,
     dbTabs,
@@ -86,8 +81,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     getPendingSubcontractorsForProject(projectId),
     getPendingTigForProject(projectId),
     getAllTigForProject(projectId),
-    getPendingBelsosTigForProject(projectId),
-    getAllBelsosTigForProject(projectId),
     getVisibleFields("project"),
     getFieldTypes("project"),
     getDetailTabs("project"),
@@ -210,16 +203,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 certificates={allTig}
                 employeeNameById={employeeNameById}
                 readyStatus="Kiküldve"
-              />
-            </Card>
-            <Card title="Belsős TIG" icon={FileText}>
-              <InternalPerformanceCertificateManager projectId={project.id} pending={pendingBelsosTig?.pending ?? []} />
-              <TigInvoiceManager
-                projectId={project.id}
-                basePath="/api/v1/belsos-tig"
-                certificates={allBelsosTig}
-                employeeNameById={employeeNameById}
-                readyStatus="Kész"
               />
             </Card>
           </>

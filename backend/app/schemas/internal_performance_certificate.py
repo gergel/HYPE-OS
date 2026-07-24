@@ -1,18 +1,17 @@
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, computed_field
 
 
 class InternalPerformanceCertificateRead(BaseModel):
     id: int
-    project_id: int
     employee_id: int
+    ev: int
+    honap: int
     allapot: str | None = None
     megjegyzes: str | None = None
     netto_osszeg: float | None = None
     plusz_afa: bool | None = None
-    teljesites_kezdete: date | None = None
-    teljesites_vege: date | None = None
     szamla_url: str | None = None
     szamla_kifizetve: bool = False
     expense_id: int | None = None
