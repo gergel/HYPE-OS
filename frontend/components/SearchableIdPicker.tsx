@@ -3,7 +3,32 @@
 import { useEffect, useRef, useState } from "react";
 import { selectColor } from "@/lib/selectColor";
 
-export type IdOption = { id: number; label: string; sublabel?: string | null };
+export type IdOption = { id: number; label: string; sublabel?: string | null; group?: string | null };
+
+const UNGROUPED = "__ungrouped__";
+
+/** Csoport szerint rendezett, de az egyes csoportokon belül az eredeti
+ * sorrendet megtartó lista - a csoport-fejlécek (pl. eszköz-kategóriák)
+ * ugyanabban a sorrendben jelennek meg, ahogy a csoport első tagja
+ * szerepelt az `options` listában. Csoport nélküli elemek (group=null/
+ * undefined) egyetlen, fejléc nélküli "egyéb" blokkba kerülnek a végén. */
+function groupOptions(options: IdOption[]): { group: string | null; items: IdOption[] }[] {
+  const order: string[] = [];
+  const byGroup = new Map<string, IdOption[]>();
+  for (const opt of options) {
+    const key = opt.group?.trim() || UNGROUPED;
+    if (!byGroup.has(key)) {
+      byGroup.set(key, []);
+      order.push(key);
+    }
+    byGroup.get(key)!.push(opt);
+  }
+  const result: { group: string | null; items: IdOption[] }[] = order
+    .filter((key) => key !== UNGROUPED)
+    .map((key) => ({ group: key, items: byGroup.get(key)! }));
+  if (byGroup.has(UNGROUPED)) result.push({ group: null, items: byGroup.get(UNGROUPED)! });
+  return result;
+}
 
 /** Ugyanaz a kattintásra-azonnal-nyíló, kereshető felugró UI, mint a
  * SelectDropdown-nál (lásd components/SelectDropdown.tsx), csak nem egy
@@ -51,6 +76,7 @@ export function SearchableIdPicker({
   const filtered = query.trim()
     ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
     : options;
+  const groupedFiltered = groupOptions(filtered);
   const color = current ? selectColor(current.label) : { bg: "var(--surface-3)", text: "var(--text-muted)" };
 
   function select(next: number | null) {
@@ -94,23 +120,32 @@ export function SearchableIdPicker({
               style={{ color: color.text }}
             />
           </div>
-          <div className="max-h-64 space-y-1 overflow-y-auto">
-            {filtered.map((opt) => {
-              const c = selectColor(opt.label);
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => select(opt.id)}
-                  className="flex w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-left text-[13px] hover:opacity-80"
-                  style={{ background: c.bg, color: c.text }}
-                >
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: c.text }} />
-                  <span className="truncate">{opt.label}</span>
-                  {opt.sublabel && <span className="ml-auto shrink-0 text-[11px] opacity-70">{opt.sublabel}</span>}
-                </button>
-              );
-            })}
+          <div className="max-h-64 space-y-2 overflow-y-auto">
+            {groupedFiltered.map(({ group, items }) => (
+              <div key={group ?? UNGROUPED}>
+                {group && (
+                  <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">{group}</p>
+                )}
+                <div className="space-y-1">
+                  {items.map((opt) => {
+                    const c = selectColor(opt.label);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => select(opt.id)}
+                        className="flex w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-left text-[13px] hover:opacity-80"
+                        style={{ background: c.bg, color: c.text }}
+                      >
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: c.text }} />
+                        <span className="truncate">{opt.label}</span>
+                        {opt.sublabel && <span className="ml-auto shrink-0 text-[11px] opacity-70">{opt.sublabel}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
             {filtered.length === 0 && <p className="p-2 text-[12px] text-text-muted">Nincs találat.</p>}
           </div>
         </div>

@@ -89,6 +89,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     label: e.nev,
     href: `/felszereles/${e.id}`,
     trackMode: e.track_mode,
+    kategoria: e.kategoria,
   }));
   const crewOptions = allEmployees.map((e) => ({ id: e.id, label: e.full_name, href: `/csapat/${e.id}` }));
 

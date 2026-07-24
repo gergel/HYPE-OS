@@ -6,7 +6,7 @@ import { authFetch } from "@/lib/authFetch";
 import { DeleteButton } from "@/components/DeleteButton";
 import { SearchableIdPicker } from "@/components/SearchableIdPicker";
 
-type EquipmentOption = { id: number; label: string; href: string; trackMode: string };
+type EquipmentOption = { id: number; label: string; href: string; trackMode: string; kategoria: string | null };
 type BookingRow = { id: number; label: string; href: string; qty: number; trackMode: string };
 type Availability = {
   track_mode: string;
@@ -148,7 +148,12 @@ export function EquipmentBookingManager({
       <div className="flex flex-wrap items-center gap-2">
         <SearchableIdPicker
           value={selected ? Number(selected) : null}
-          options={options.map((o) => ({ id: o.id, label: o.label, sublabel: o.trackMode === "stock" ? "készlet" : null }))}
+          options={options.map((o) => ({
+            id: o.id,
+            label: o.label,
+            sublabel: o.trackMode === "stock" ? "készlet" : null,
+            group: o.kategoria,
+          }))}
           onChange={(next) => {
             setSelected(next === null ? "" : String(next));
             setQty("1");
