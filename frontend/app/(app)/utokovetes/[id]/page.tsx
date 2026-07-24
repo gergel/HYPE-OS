@@ -1,33 +1,44 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { StatusBadge } from "@/components/StatusBadge";
+import { InternalPerformanceCertificateManager } from "@/components/InternalPerformanceCertificateManager";
+import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
+import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
+import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { TopBar } from "@/components/TopBar";
-import { formatDate, getUtokovetesDetail } from "@/lib/api";
+import {
+  formatDate,
+  getAllBelsosTigForProject,
+  getAllTigForProject,
+  getEmployees,
+  getPendingBelsosTigForProject,
+  getPendingSubcontractorsForProject,
+  getPendingTigForProject,
+  getUtokovetesDetail,
+} from "@/lib/api";
 
-function personRow(person: { id: number; full_name: string; email: string | null }, allapot: string | null | undefined) {
-  const tone = allapot === "Kiküldve" ? "success" : allapot === "Kihagyva" ? "neutral" : "warning";
-  const label = allapot ?? "Nincs elkezdve";
-  return (
-    <tr key={person.id} className="border-b border-border last:border-0">
-      <td className="py-2 pr-4">
-        <a href={`/csapat/${person.id}`} className="text-text-accent hover:underline">
-          {person.full_name}
-        </a>
-      </td>
-      <td className="py-2 pr-4 text-text-secondary">{person.email ?? "–"}</td>
-      <td className="py-2 text-right">
-        <StatusBadge label={label} tone={tone} />
-      </td>
-    </tr>
-  );
-}
-
+/** Az Utókövetés részletnézete NEM csak egy állapot-áttekintés, hanem itt is
+ * el lehet készíteni a szerződéseket és a TIG-eket - ugyanazok a
+ * (SubcontractorContractManager/PerformanceCertificateManager/
+ * InternalPerformanceCertificateManager/TigInvoiceManager) komponensek,
+ * amik a Projekt oldal "Szerződés & TIG" szekciójában is szerepelnek -, hogy
+ * ne kelljen admin a Projekt oldalra átnavigálnia csak azért, hogy egy
+ * hátralévő tételt lezárjon. */
 export default async function UtokovetesDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectId = Number(id);
-  const detail = await getUtokovetesDetail(projectId);
+  const [detail, pendingContracts, pendingTig, allTig, pendingBelsosTig, allBelsosTig, allEmployees] = await Promise.all([
+    getUtokovetesDetail(projectId),
+    getPendingSubcontractorsForProject(projectId),
+    getPendingTigForProject(projectId),
+    getAllTigForProject(projectId),
+    getPendingBelsosTigForProject(projectId),
+    getAllBelsosTigForProject(projectId),
+    getEmployees(),
+  ]);
   if (!detail) notFound();
+
+  const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
 
   return (
     <div className="flex flex-1 flex-col">
@@ -50,42 +61,37 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
           </div>
         </Card>
 
-        <Card title={`Szerződések (${detail.szerzodesek.length})`}>
-          {detail.szerzodesek.length === 0 ? (
-            <p className="text-[13px] text-text-secondary">Nincs olyan résztvevő, akinek eseti szerződést kellene készíteni.</p>
-          ) : (
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="py-1.5 text-left font-medium text-text-secondary">Név</th>
-                  <th className="py-1.5 text-left font-medium text-text-secondary">Email</th>
-                  <th className="py-1.5 text-right font-medium text-text-secondary">Állapot</th>
-                </tr>
-              </thead>
-              <tbody>{detail.szerzodesek.map((s) => personRow(s, s.draft?.szerzodes_allapota))}</tbody>
-            </table>
-          )}
+        <Card title="Szerződés készítés">
+          <SubcontractorContractManager projectId={projectId} pending={pendingContracts?.pending ?? []} />
         </Card>
 
-        <Card title={`Teljesítési igazolások (${detail.teljesitesi_igazolasok.length})`}>
-          {!detail.tig_ready ? (
-            <p className="text-[13px] text-text-secondary">
-              Teljesítési igazolás csak azután készíthető, hogy mindenkinek megvan a szerződés státusza (kiküldve vagy kihagyva).
-            </p>
-          ) : detail.teljesitesi_igazolasok.length === 0 ? (
-            <p className="text-[13px] text-text-secondary">Nincs olyan résztvevő, akinek teljesítési igazolást kellene készíteni.</p>
+        <Card title="Teljesítési igazolás (Külsős TIG)">
+          {pendingTig?.tig_ready ? (
+            <PerformanceCertificateManager projectId={projectId} pending={pendingTig.pending} />
           ) : (
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="py-1.5 text-left font-medium text-text-secondary">Név</th>
-                  <th className="py-1.5 text-left font-medium text-text-secondary">Email</th>
-                  <th className="py-1.5 text-right font-medium text-text-secondary">Állapot</th>
-                </tr>
-              </thead>
-              <tbody>{detail.teljesitesi_igazolasok.map((t) => personRow(t, t.draft?.allapot))}</tbody>
-            </table>
+            <p className="text-[13px] text-text-secondary">
+              Teljesítési igazolás csak azután készíthető, hogy mindenkinek megvan a szerződés státusza (kiküldve vagy
+              kihagyva) - lásd a fenti &quot;Szerződés készítés&quot; kártyát.
+            </p>
           )}
+          <TigInvoiceManager
+            projectId={projectId}
+            basePath="/api/v1/teljesitesi-igazolasok"
+            certificates={allTig}
+            employeeNameById={employeeNameById}
+            readyStatus="Kiküldve"
+          />
+        </Card>
+
+        <Card title="Belsős TIG">
+          <InternalPerformanceCertificateManager projectId={projectId} pending={pendingBelsosTig?.pending ?? []} />
+          <TigInvoiceManager
+            projectId={projectId}
+            basePath="/api/v1/belsos-tig"
+            certificates={allBelsosTig}
+            employeeNameById={employeeNameById}
+            readyStatus="Kész"
+          />
         </Card>
 
         <Card title={`Visszajelzések (${detail.visszajelzesek.length})`}>
