@@ -105,6 +105,108 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     fieldTypes,
     pagePermissions,
     alwaysHidden: HIDDEN_FIELDS,
+    extraTabs: [
+      {
+        key: "kiosztas",
+        label: "Kiosztás",
+        content: (
+          <Card title="Kiosztás">
+            <p className="mb-2 text-[13px] text-text-secondary">
+              Kire van kiosztva ez a vágás - csak azok közül választhatsz, akiknek van bejelentkezési joga az Utómunka oldalhoz.
+            </p>
+            <AssignedToPicker
+              deliverableId={deliverableId}
+              employees={assignableEmployees}
+              currentId={deliverable.assigned_to_employee_id ? Number(deliverable.assigned_to_employee_id) : null}
+            />
+          </Card>
+        ),
+      },
+      {
+        key: "kontaktok",
+        label: "Megrendelői kontaktok",
+        content: (
+          <Card title="Megrendelői kontaktok">
+            <p className="mb-2 text-[13px] text-text-secondary">Kinek kell kiküldeni a kész anyagot.</p>
+            <ContactsManager deliverableId={deliverableId} current={contacts} options={contactOptions} />
+            {deliverable.megrendeloi_email_cimek != null && (
+              <p className="mt-3 text-[12px] text-text-muted">
+                Email címek: <span className="text-text-secondary">{String(deliverable.megrendeloi_email_cimek)}</span>
+              </p>
+            )}
+          </Card>
+        ),
+      },
+      {
+        key: "media-portal",
+        label: "Média Portál",
+        content: (
+          <Card title="Média Portál">
+            <CreatePortalButton
+              deliverableId={deliverableId}
+              existingPortalId={deliverable.portal_id ? Number(deliverable.portal_id) : null}
+              keszAnyagUrl={deliverable.kesz_anyag_url ? String(deliverable.kesz_anyag_url) : null}
+            />
+          </Card>
+        ),
+      },
+      {
+        key: "vinyok",
+        label: "Vinyók",
+        content: (
+          <Card title="Vinyók">
+            <VinyokEditor
+              deliverableId={deliverableId}
+              knownOptions={vinyoOptions}
+              currentValues={Array.isArray(deliverable.vinyok) ? (deliverable.vinyok as string[]) : []}
+            />
+          </Card>
+        ),
+      },
+      {
+        key: "idomeres",
+        label: "Időmérés",
+        content: (
+          <Card title="Időmérés">
+            <TimerControls deliverableId={deliverableId} initialState={timerState} />
+          </Card>
+        ),
+      },
+      {
+        key: "munkaido",
+        label: "Munkaidő-elszámolások",
+        content: (
+          <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
+            <RelatedTable
+              rows={timesheets}
+              emptyText="Nincs munkaidő-elszámolás ehhez az anyaghoz."
+              deleteBasePath={ENTITY_PATHS.timesheet}
+            />
+          </Card>
+        ),
+      },
+      {
+        key: "visszajelzesek",
+        label: "Visszajelzések",
+        content: (
+          <Card title={`Visszajelzések (${feedbacks.length})`}>
+            <div className="mb-3">
+              <FeedbackSendButton deliverableId={deliverableId} />
+            </div>
+            <RelatedTable rows={feedbacks} emptyText="Nincs visszajelzés ehhez az anyaghoz." deleteBasePath={ENTITY_PATHS.feedback} />
+          </Card>
+        ),
+      },
+      {
+        key: "hozzaszolasok",
+        label: "Hozzászólások",
+        content: (
+          <Card title="Hozzászólások">
+            <CommentsSection deliverableId={deliverableId} initialComments={comments} mentionableEmployees={assignableEmployees} />
+          </Card>
+        ),
+      },
+    ],
   });
 
   return (
@@ -142,66 +244,6 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
         </div>
 
         <DetailSections sections={tabs} />
-
-        <Card title="Kiosztás">
-          <p className="mb-2 text-[13px] text-text-secondary">
-            Kire van kiosztva ez a vágás - csak azok közül választhatsz, akiknek van bejelentkezési joga az Utómunka oldalhoz.
-          </p>
-          <AssignedToPicker
-            deliverableId={deliverableId}
-            employees={assignableEmployees}
-            currentId={deliverable.assigned_to_employee_id ? Number(deliverable.assigned_to_employee_id) : null}
-          />
-        </Card>
-
-        <Card title="Média Portál">
-          <CreatePortalButton
-            deliverableId={deliverableId}
-            existingPortalId={deliverable.portal_id ? Number(deliverable.portal_id) : null}
-            keszAnyagUrl={deliverable.kesz_anyag_url ? String(deliverable.kesz_anyag_url) : null}
-          />
-        </Card>
-
-        <Card title="Vinyók">
-          <VinyokEditor
-            deliverableId={deliverableId}
-            knownOptions={vinyoOptions}
-            currentValues={Array.isArray(deliverable.vinyok) ? (deliverable.vinyok as string[]) : []}
-          />
-        </Card>
-
-        <Card title="Időmérés">
-          <TimerControls deliverableId={deliverableId} initialState={timerState} />
-        </Card>
-
-        <Card title="Megrendelői kontaktok">
-          <p className="mb-2 text-[13px] text-text-secondary">Kinek kell kiküldeni a kész anyagot.</p>
-          <ContactsManager deliverableId={deliverableId} current={contacts} options={contactOptions} />
-          {deliverable.megrendeloi_email_cimek != null && (
-            <p className="mt-3 text-[12px] text-text-muted">
-              Email címek: <span className="text-text-secondary">{String(deliverable.megrendeloi_email_cimek)}</span>
-            </p>
-          )}
-        </Card>
-
-        <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
-          <RelatedTable
-            rows={timesheets}
-            emptyText="Nincs munkaidő-elszámolás ehhez az anyaghoz."
-            deleteBasePath={ENTITY_PATHS.timesheet}
-          />
-        </Card>
-
-        <Card title={`Visszajelzések (${feedbacks.length})`}>
-          <div className="mb-3">
-            <FeedbackSendButton deliverableId={deliverableId} />
-          </div>
-          <RelatedTable rows={feedbacks} emptyText="Nincs visszajelzés ehhez az anyaghoz." deleteBasePath={ENTITY_PATHS.feedback} />
-        </Card>
-
-        <Card title="Hozzászólások">
-          <CommentsSection deliverableId={deliverableId} initialComments={comments} mentionableEmployees={assignableEmployees} />
-        </Card>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
@@ -43,6 +44,7 @@ export function UtomunkaContent({
   vinyoOptions,
   canCreate,
   canDelete,
+  canEdit,
 }: {
   initialDeliverables: Deliverable[];
   deliverablesHasMore: boolean;
@@ -53,6 +55,7 @@ export function UtomunkaContent({
   vinyoOptions: string[];
   canCreate: boolean;
   canDelete: boolean;
+  canEdit: boolean;
 }) {
   const [deliverables, setDeliverables] = useState(initialDeliverables);
   const [projects, setProjects] = useState(initialProjects);
@@ -162,7 +165,16 @@ export function UtomunkaContent({
             deleteHref={canDelete ? (d) => `${DELIVERABLE_BASE_PATH}/${d.id}` : undefined}
             filterable
             columns={[
-              { header: "Anyag", render: (d) => d.projekt_neve, sortAccessor: (d) => d.projekt_neve },
+              {
+                header: "Anyag",
+                render: (d) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`} field="projekt_neve" value={d.projekt_neve} />
+                  ) : (
+                    d.projekt_neve
+                  ),
+                sortAccessor: (d) => d.projekt_neve,
+              },
               {
                 header: "Állapot",
                 render: (d) => (
@@ -175,7 +187,16 @@ export function UtomunkaContent({
                 ),
                 sortAccessor: (d) => d.allapot,
               },
-              { header: "Határidő", render: (d) => formatDate(d.hatarido), sortAccessor: (d) => d.hatarido },
+              {
+                header: "Határidő",
+                render: (d) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`} field="hatarido" value={d.hatarido} type="date" />
+                  ) : (
+                    formatDate(d.hatarido)
+                  ),
+                sortAccessor: (d) => d.hatarido,
+              },
               {
                 header: "Kiküldve",
                 align: "right",

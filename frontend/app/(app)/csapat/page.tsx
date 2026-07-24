@@ -1,5 +1,6 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
@@ -18,6 +19,7 @@ export default async function CsapatPage() {
   const rows = employees.filter((e) => e.tipus === "kulsos");
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -42,9 +44,36 @@ export default async function CsapatPage() {
             deleteHref={canDelete ? (e) => `${ENTITY_PATHS.employee}/${e.id}` : undefined}
             filterable
             columns={[
-              { header: "Név", render: (e) => e.full_name, sortAccessor: (e) => e.full_name },
-              { header: "Email", render: (e) => e.email ?? "–", sortAccessor: (e) => e.email },
-              { header: "Telefon", render: (e) => e.telefon ?? "–", sortAccessor: (e) => e.telefon },
+              {
+                header: "Név",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.employee}/${e.id}`} field="full_name" value={e.full_name} />
+                  ) : (
+                    e.full_name
+                  ),
+                sortAccessor: (e) => e.full_name,
+              },
+              {
+                header: "Email",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.employee}/${e.id}`} field="email" value={e.email} />
+                  ) : (
+                    e.email ?? "–"
+                  ),
+                sortAccessor: (e) => e.email,
+              },
+              {
+                header: "Telefon",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.employee}/${e.id}`} field="telefon" value={e.telefon} />
+                  ) : (
+                    e.telefon ?? "–"
+                  ),
+                sortAccessor: (e) => e.telefon,
+              },
               {
                 header: "Aktív",
                 render: (e) => <StatusBadge label={e.is_active ? "Aktív" : "Inaktív"} tone={e.is_active ? "success" : "neutral"} />,

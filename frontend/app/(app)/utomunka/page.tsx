@@ -43,6 +43,7 @@ export default async function UtomunkaPage() {
           vinyoOptions={vinyoOptions}
           canCreate={canDoAction(currentUser?.role, pagePermissions, PAGE, "create")}
           canDelete={canDoAction(currentUser?.role, pagePermissions, PAGE, "delete")}
+          canEdit={canDoAction(currentUser?.role, pagePermissions, PAGE, "edit")}
         />
       </div>
     </div>

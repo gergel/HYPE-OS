@@ -1,6 +1,7 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -30,6 +31,7 @@ export default async function ProjectKodokPage() {
   const statusOptions = fieldTypes.esemeny_allapota?.options ?? [];
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -54,13 +56,31 @@ export default async function ProjectKodokPage() {
             deleteHref={canDelete ? (pc) => `${ENTITY_PATHS.projectCode}/${pc.id}` : undefined}
             filterable
             columns={[
-              { header: "Projektkód", render: (pc) => pc.projektkod, sortAccessor: (pc) => pc.projektkod },
+              {
+                header: "Projektkód",
+                render: (pc) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="projektkod" value={pc.projektkod} />
+                  ) : (
+                    pc.projektkod
+                  ),
+                sortAccessor: (pc) => pc.projektkod,
+              },
               {
                 header: "Ügyfél",
                 render: (pc) => clientNameById.get(pc.client_id) ?? "–",
                 sortAccessor: (pc) => clientNameById.get(pc.client_id),
               },
-              { header: "Dátum", render: (pc) => formatDate(pc.datum), sortAccessor: (pc) => pc.datum },
+              {
+                header: "Dátum",
+                render: (pc) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="datum" value={pc.datum} type="date" />
+                  ) : (
+                    formatDate(pc.datum)
+                  ),
+                sortAccessor: (pc) => pc.datum,
+              },
               {
                 header: "Összes költség",
                 align: "right",

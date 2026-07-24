@@ -2,6 +2,7 @@ import { Campaign, ENTITY_PATHS, formatDate, getCampaigns, getCurrentUser, getFi
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
@@ -19,6 +20,7 @@ export default async function KampanyokPage() {
   const statusOptions = fieldTypes.kampany_statusza?.options ?? [];
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -42,7 +44,12 @@ export default async function KampanyokPage() {
             deleteHref={canDelete ? (c) => `${ENTITY_PATHS.campaign}/${c.id}` : undefined}
             filterable
             columns={[
-              { header: "Név", render: (c) => c.nev, sortAccessor: (c) => c.nev },
+              {
+                header: "Név",
+                render: (c) =>
+                  canEdit ? <EditableTableCell patchPath={`${ENTITY_PATHS.campaign}/${c.id}`} field="nev" value={c.nev} /> : c.nev,
+                sortAccessor: (c) => c.nev,
+              },
               {
                 header: "Státusz",
                 render: (c) => (
@@ -55,7 +62,16 @@ export default async function KampanyokPage() {
                 ),
                 sortAccessor: (c) => c.kampany_statusza,
               },
-              { header: "Határidő", render: (c) => formatDate(c.hatarido), sortAccessor: (c) => c.hatarido },
+              {
+                header: "Határidő",
+                render: (c) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.campaign}/${c.id}`} field="hatarido" value={c.hatarido} type="date" />
+                  ) : (
+                    formatDate(c.hatarido)
+                  ),
+                sortAccessor: (c) => c.hatarido,
+              },
               {
                 header: "Kész",
                 align: "right",

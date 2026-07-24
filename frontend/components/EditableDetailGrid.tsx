@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { SelectDropdown } from "@/components/SelectDropdown";
 import { authFetch } from "@/lib/authFetch";
-import { selectColor } from "@/lib/selectColor";
 import type { EditableDetailField } from "@/lib/detail";
 
 /** Egyetlen mező helyben szerkeszthető cellája - kattintásra input/textarea/
@@ -66,40 +66,16 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
 
   if (field.inputType === "select") {
     const current = field.rawValue === null || field.rawValue === "" ? null : String(field.rawValue);
-    if (!editing) {
-      return (
-        <dd role="button" tabIndex={0} onClick={() => setEditing(true)} className={`cursor-pointer ${restBoxClass}`}>
-          {current ? (
-            <span
-              className="inline-flex items-center gap-1.5 rounded-[var(--radius)] px-2 py-0.5 text-[13px]"
-              style={{ background: selectColor(current).bg, color: selectColor(current).text }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: selectColor(current).text }} />
-              {current}
-            </span>
-          ) : (
-            <span className="rounded text-[13px] text-text-muted italic">Üres</span>
-          )}
-        </dd>
-      );
-    }
     return (
       <dd>
-        <select
-          autoFocus
+        <SelectDropdown
+          value={current}
+          options={field.options ?? []}
+          onChange={(next) => save(next)}
           disabled={busy}
-          value={current ?? ""}
-          onChange={(e) => save(e.target.value || null)}
-          onBlur={() => setEditing(false)}
-          className="w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
-        >
-          <option value="">Üres</option>
-          {field.options?.map((opt) => (
-            <option key={opt} value={opt} style={{ background: selectColor(opt).bg, color: selectColor(opt).text }}>
-              {opt}
-            </option>
-          ))}
-        </select>
+          placeholder="Üres"
+          className={boxed ? "w-full" : undefined}
+        />
       </dd>
     );
   }

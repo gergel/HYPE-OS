@@ -1,5 +1,6 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { TopBar } from "@/components/TopBar";
@@ -29,6 +30,7 @@ export default async function VagokPage() {
     .map((e) => ({ ...e, rate: ratesByEmployee.get(e.id) ?? null }));
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -52,8 +54,26 @@ export default async function VagokPage() {
             getHref={(e) => `/csapat/${e.id}?from=vagok`}
             deleteHref={canDelete ? (e) => `${ENTITY_PATHS.employee}/${e.id}` : undefined}
             columns={[
-              { header: "Név", render: (e) => e.full_name, sortAccessor: (e) => e.full_name },
-              { header: "Email", render: (e) => e.email ?? "–", sortAccessor: (e) => e.email },
+              {
+                header: "Név",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.employee}/${e.id}`} field="full_name" value={e.full_name} />
+                  ) : (
+                    e.full_name
+                  ),
+                sortAccessor: (e) => e.full_name,
+              },
+              {
+                header: "Email",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.employee}/${e.id}`} field="email" value={e.email} />
+                  ) : (
+                    e.email ?? "–"
+                  ),
+                sortAccessor: (e) => e.email,
+              },
               {
                 header: "Első munkanap",
                 render: (e) => (

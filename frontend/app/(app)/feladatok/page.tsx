@@ -2,6 +2,7 @@ import { ENTITY_PATHS, formatDate, getCurrentUser, getFieldTypes, getMyPagePermi
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
@@ -19,6 +20,7 @@ export default async function FeladatokPage() {
   const statusOptions = fieldTypes.allapot?.options ?? [];
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -42,9 +44,32 @@ export default async function FeladatokPage() {
             deleteHref={canDelete ? (t) => `${ENTITY_PATHS.task}/${t.id}` : undefined}
             filterable
             columns={[
-              { header: "Feladat", render: (t) => t.feladat, sortAccessor: (t) => t.feladat },
-              { header: "Kategória", render: (t) => t.kategoria ?? "–", sortAccessor: (t) => t.kategoria },
-              { header: "Határidő", render: (t) => formatDate(t.hatarido), sortAccessor: (t) => t.hatarido },
+              {
+                header: "Feladat",
+                render: (t) =>
+                  canEdit ? <EditableTableCell patchPath={`${ENTITY_PATHS.task}/${t.id}`} field="feladat" value={t.feladat} /> : t.feladat,
+                sortAccessor: (t) => t.feladat,
+              },
+              {
+                header: "Kategória",
+                render: (t) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.task}/${t.id}`} field="kategoria" value={t.kategoria} />
+                  ) : (
+                    t.kategoria ?? "–"
+                  ),
+                sortAccessor: (t) => t.kategoria,
+              },
+              {
+                header: "Határidő",
+                render: (t) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.task}/${t.id}`} field="hatarido" value={t.hatarido} type="date" />
+                  ) : (
+                    formatDate(t.hatarido)
+                  ),
+                sortAccessor: (t) => t.hatarido,
+              },
               {
                 header: "Állapot",
                 render: (t) => (

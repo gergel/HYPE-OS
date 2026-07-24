@@ -1,6 +1,7 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
@@ -19,6 +20,7 @@ export default async function FelszerelesPage() {
   const statusOptions = fieldTypes.allapot?.options ?? [];
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -50,7 +52,12 @@ export default async function FelszerelesPage() {
             deleteHref={canDelete ? (e) => `${ENTITY_PATHS.equipment}/${e.id}` : undefined}
             filterable
             columns={[
-              { header: "Név", render: (e) => e.nev, sortAccessor: (e) => e.nev },
+              {
+                header: "Név",
+                render: (e) =>
+                  canEdit ? <EditableTableCell patchPath={`${ENTITY_PATHS.equipment}/${e.id}`} field="nev" value={e.nev} /> : e.nev,
+                sortAccessor: (e) => e.nev,
+              },
               { header: "Kategória", render: (e) => e.kategoria ?? "–", sortAccessor: (e) => e.kategoria },
               {
                 header: "Állapot",
@@ -72,7 +79,17 @@ export default async function FelszerelesPage() {
               {
                 header: "Mennyiség",
                 align: "right",
-                render: (e) => e.osszes_mennyiseg ?? "–",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.equipment}/${e.id}`}
+                      field="osszes_mennyiseg"
+                      value={e.osszes_mennyiseg}
+                      type="number"
+                    />
+                  ) : (
+                    e.osszes_mennyiseg ?? "–"
+                  ),
                 sortAccessor: (e) => e.osszes_mennyiseg,
               },
             ]}

@@ -1,5 +1,6 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { TopBar } from "@/components/TopBar";
 import { Client, ENTITY_PATHS, getClients, getCurrentUser, getMyPagePermissions } from "@/lib/api";
@@ -11,6 +12,7 @@ export default async function UgyfelekPage() {
   const [clients, currentUser, pagePermissions] = await Promise.all([getClients(), getCurrentUser(), getMyPagePermissions()]);
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -35,9 +37,36 @@ export default async function UgyfelekPage() {
             deleteHref={canDelete ? (c) => `${ENTITY_PATHS.client}/${c.id}` : undefined}
             filterable
             columns={[
-              { header: "Név", render: (c) => c.nev, sortAccessor: (c) => c.nev },
-              { header: "Adószám", render: (c) => c.adoszam ?? "–", sortAccessor: (c) => c.adoszam },
-              { header: "Székhely", render: (c) => c.szekhely ?? "–", sortAccessor: (c) => c.szekhely },
+              {
+                header: "Név",
+                render: (c) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.client}/${c.id}`} field="nev" value={c.nev} />
+                  ) : (
+                    c.nev
+                  ),
+                sortAccessor: (c) => c.nev,
+              },
+              {
+                header: "Adószám",
+                render: (c) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.client}/${c.id}`} field="adoszam" value={c.adoszam} />
+                  ) : (
+                    c.adoszam ?? "–"
+                  ),
+                sortAccessor: (c) => c.adoszam,
+              },
+              {
+                header: "Székhely",
+                render: (c) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.client}/${c.id}`} field="szekhely" value={c.szekhely} />
+                  ) : (
+                    c.szekhely ?? "–"
+                  ),
+                sortAccessor: (c) => c.szekhely,
+              },
             ]}
           />
         </Card>

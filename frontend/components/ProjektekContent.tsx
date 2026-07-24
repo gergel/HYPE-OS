@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { authFetch } from "@/lib/authFetch";
 import type { Project, ProjectCode } from "@/lib/api";
@@ -31,6 +32,7 @@ export function ProjektekContent({
   statusOptions,
   canCreate,
   canDelete,
+  canEdit,
 }: {
   initialProjects: Project[];
   hasMore: boolean;
@@ -38,6 +40,7 @@ export function ProjektekContent({
   statusOptions: string[];
   canCreate: boolean;
   canDelete: boolean;
+  canEdit: boolean;
 }) {
   const [projects, setProjects] = useState(initialProjects);
 
@@ -73,14 +76,37 @@ export function ProjektekContent({
         deleteHref={canDelete ? (p) => `${PROJECT_BASE_PATH}/${p.id}` : undefined}
         filterable
         columns={[
-          { header: "Név", render: (p) => p.nev, sortAccessor: (p) => p.nev },
+          {
+            header: "Név",
+            render: (p) =>
+              canEdit ? <EditableTableCell patchPath={`${PROJECT_BASE_PATH}/${p.id}`} field="nev" value={p.nev} /> : p.nev,
+            sortAccessor: (p) => p.nev,
+          },
           {
             header: "Projektkód",
             render: (p) => projectCodeById.get(p.project_code_id) ?? "–",
             sortAccessor: (p) => projectCodeById.get(p.project_code_id),
           },
-          { header: "Forgatás dátuma", render: (p) => formatDate(p.forgatas_datuma), sortAccessor: (p) => p.forgatas_datuma },
-          { header: "Helyszín", render: (p) => p.helyszin ?? "–", sortAccessor: (p) => p.helyszin },
+          {
+            header: "Forgatás dátuma",
+            render: (p) =>
+              canEdit ? (
+                <EditableTableCell patchPath={`${PROJECT_BASE_PATH}/${p.id}`} field="forgatas_datuma" value={p.forgatas_datuma} type="date" />
+              ) : (
+                formatDate(p.forgatas_datuma)
+              ),
+            sortAccessor: (p) => p.forgatas_datuma,
+          },
+          {
+            header: "Helyszín",
+            render: (p) =>
+              canEdit ? (
+                <EditableTableCell patchPath={`${PROJECT_BASE_PATH}/${p.id}`} field="helyszin" value={p.helyszin} />
+              ) : (
+                p.helyszin ?? "–"
+              ),
+            sortAccessor: (p) => p.helyszin,
+          },
           {
             header: "Állapot",
             render: (p) => (
