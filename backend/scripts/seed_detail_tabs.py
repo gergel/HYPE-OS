@@ -107,6 +107,13 @@ ENTITY_TABS: dict[str, list[_Tab]] = {
                 "vissza_apple_id",
                 "darabolas_datuma",
                 "technikai_kerdes",
+                # Szintetikus mezőkulcs (nem valódi oszlop) az eszközfoglaló
+                # widgethez - lásd frontend/lib/detailTabs.tsx
+                # EQUIPMENT_WIDGET_FIELD_KEY, a két helyen szó szerint
+                # egyeznie kell. Csak új (üres detail_tab_configs táblájú)
+                # környezeten hat - meglévő beállításokat a seed() nem ír
+                # felül, ott admin a Beállítások oldalon rendeli hozzá.
+                "__eszkozok_widget",
             ],
         ),
         _Tab(

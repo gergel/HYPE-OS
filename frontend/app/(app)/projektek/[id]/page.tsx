@@ -28,7 +28,7 @@ import {
   getRelated,
   getVisibleFields,
 } from "@/lib/api";
-import { buildFieldTabs } from "@/lib/detailTabs";
+import { buildFieldTabs, EQUIPMENT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
 
 // A projekt mezői eredetileg a Notion "Main Database" ~140 oszlopát tükrözik
 // (lásd backend/app/models/project.py osztály-kommentje) - ahelyett hogy
@@ -125,15 +125,33 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     fieldTypes,
     pagePermissions,
     alwaysHidden: ALWAYS_HIDDEN,
-    // A lenti bespoke widgetek (diszpó küldés, eszközfoglalás, szerződés/TIG)
-    // szándékosan extraTabs-ként, NEM prependContent-ként szerepelnek: a
-    // prependContent egy admin által a Beállítások oldalon szabadon
-    // átnevezhető/törölhető DB-driven fülhöz (tab_key) tapadt volna - ha
-    // admin törölte vagy átszervezte pl. a "technika" fület, a hozzá kötött
-    // eszközfoglaló widget is némán eltűnt, miközben a felhasználó ezt
-    // hiányzó funkciónak látta ("nincs opcióm technika hozzáadásához"). Az
-    // extraTabs szekciók mindig megjelennek, függetlenül az admin
-    // fül-szerkesztésétől.
+    // A lenti bespoke widgetek (diszpó küldés, szerződés/TIG) szándékosan
+    // extraTabs-ként, NEM prependContent-ként szerepelnek: a prependContent
+    // egy admin által a Beállítások oldalon szabadon átnevezhető/törölhető
+    // DB-driven fülhöz (tab_key) tapadt volna - ha admin törölte vagy
+    // átszervezte pl. a "technika" fület, a hozzá kötött widget is némán
+    // eltűnt, miközben a felhasználó ezt hiányzó funkciónak látta ("nincs
+    // opcióm technika hozzáadásához"). Az extraTabs szekciók mindig
+    // megjelennek, függetlenül az admin fül-szerkesztésétől.
+    //
+    // Az Eszközök widget viszont a `widgets` mechanizmuson keresztül kerül
+    // be (lásd lib/detailTabs.tsx) - ez is garantáltan sosem tűnik el, de
+    // emellett admin a Beállítások > Részletnézet fülek szerkesztőjében
+    // szabadon áthelyezheti bármelyik fülre (a EQUIPMENT_WIDGET_FIELD_KEY
+    // szintetikus mezőkulcsként viselkedik), és munkatársanként el is
+    // rejthető a mező-láthatóság beállítással - pont ezt kérte a
+    // felhasználó ("hogy kinél látszódjon és melyik csoportosításba
+    // legyen").
+    widgets: {
+      [EQUIPMENT_WIDGET_FIELD_KEY]: (
+        <Card title={`Eszközök (${bookingRows.length})`} icon={Wrench}>
+          <EquipmentBookingManager projectId={project.id} bookings={bookingRows} options={equipmentOptions} />
+          <div className="mt-4 border-t border-border pt-4">
+            <TechnikaCheckButton projectId={project.id} />
+          </div>
+        </Card>
+      ),
+    },
     extraTabs: [
       {
         key: "diszpo-kuldes",
@@ -151,18 +169,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 label="Diszpó küldése"
                 confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
               />
-            </div>
-          </Card>
-        ),
-      },
-      {
-        key: "eszkozok",
-        label: `Eszközök (${bookingRows.length})`,
-        content: (
-          <Card title={`Eszközök (${bookingRows.length})`} icon={Wrench}>
-            <EquipmentBookingManager projectId={project.id} bookings={bookingRows} options={equipmentOptions} />
-            <div className="mt-4 border-t border-border pt-4">
-              <TechnikaCheckButton projectId={project.id} />
             </div>
           </Card>
         ),

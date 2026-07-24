@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { DeleteButton } from "@/components/DeleteButton";
+import { SearchableIdPicker } from "@/components/SearchableIdPicker";
 
 type EquipmentOption = { id: number; label: string; href: string; trackMode: string };
 type BookingRow = { id: number; label: string; href: string; qty: number; trackMode: string };
@@ -145,22 +146,16 @@ export function EquipmentBookingManager({
         </table>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={selected}
-          onChange={(e) => {
-            setSelected(e.target.value);
+        <SearchableIdPicker
+          value={selected ? Number(selected) : null}
+          options={options.map((o) => ({ id: o.id, label: o.label, sublabel: o.trackMode === "stock" ? "készlet" : null }))}
+          onChange={(next) => {
+            setSelected(next === null ? "" : String(next));
             setQty("1");
           }}
-          className="rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
-        >
-          <option value="">Válassz eszközt...</option>
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-              {o.trackMode === "stock" ? " (készlet)" : ""}
-            </option>
-          ))}
-        </select>
+          placeholder="Válassz eszközt…"
+          className="min-w-[14rem]"
+        />
         {selectedOption?.trackMode === "stock" && (
           <input
             type="number"

@@ -15,6 +15,7 @@ import {
   getSampleRecord,
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
+import { EQUIPMENT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
 import { pagePermissionGroups } from "@/lib/nav";
 
 /** A 8 entitás, aminek van generikus, fület-alapú részletnézete (lásd
@@ -86,10 +87,20 @@ export default async function BeallitasokPage() {
   const visibilityEntities = VISIBILITY_ENTITIES.map((entity, i) => {
     const sample = samples[i];
     if (!sample) return null;
+    const availableFields = toEditableDetailFields(sample, entity.hide, null).map((f) => ({ key: f.key, label: f.label }));
+    // A Projekt oldal eszközfoglaló widgetje nem valódi DB-mező, de a
+    // felhasználó ugyanúgy tudja akarja fülre helyezni/munkatársanként
+    // elrejteni, mint bármelyik mezőt - ezért szintetikus kulcsként
+    // felvesszük ide, hogy megjelenjen a lenti mező-láthatóság checkbox-listán
+    // ÉS a Részletnézet fülek szerkesztőjében is (lásd lib/detailTabs.tsx
+    // buildFieldTabs widgets paramétere).
+    if (entity.entityType === "project") {
+      availableFields.push({ key: EQUIPMENT_WIDGET_FIELD_KEY, label: "Eszközök (widget)" });
+    }
     return {
       entityType: entity.entityType,
       label: entity.label,
-      availableFields: toEditableDetailFields(sample, entity.hide, null).map((f) => ({ key: f.key, label: f.label })),
+      availableFields,
     };
   }).filter((e): e is { entityType: string; label: string; availableFields: { key: string; label: string }[] } => e !== null);
 

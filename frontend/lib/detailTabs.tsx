@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { Card } from "@/components/Card";
 import type { DetailSection } from "@/components/DetailSections";
@@ -10,6 +11,14 @@ import { toEditableDetailFields } from "@/lib/detail";
  * backend/app/services/detail_tabs.py). */
 const OTHER_TAB_KEY = "_other";
 const ALWAYS_EXCLUDE_META = new Set(["id", "created_at", "updated_at"]);
+
+/** Szintetikus "mezőkulcs" a Projekt oldal eszközfoglaló widgetjéhez - ezt a
+ * kulcsot veszi fel a Beállítások oldal a Projekt entitás availableFields
+ * listájába (lásd beallitasok/page.tsx VISIBILITY_ENTITIES), hogy a widget
+ * ugyanúgy áthelyezhető legyen fülek között és ugyanúgy elrejthető
+ * munkatársanként, mint egy valódi DB-mező (lásd buildFieldTabs widgets
+ * paramétere). */
+export const EQUIPMENT_WIDGET_FIELD_KEY = "__eszkozok_widget";
 
 /** A szekciók MINDIG látszanak (nincs szekció-szintű elrejtés) - csak a
  * SZERKESZTÉS korlátozható admin által a "{page}:{tab_key}" összetett
@@ -69,6 +78,7 @@ export function buildFieldTabs({
   extraTabs = [],
   prependContent = {},
   badges = {},
+  widgets = {},
 }: {
   page: string;
   patchPath: string;
@@ -89,19 +99,36 @@ export function buildFieldTabs({
    * "technika" szekció foglalásainak száma) - csak megjelenítés, nem
    * befolyásolja a szekció létét/sorrendjét. */
   badges?: Record<string, number>;
+  /** Bespoke widget(ek), amik szintetikus "mezőkulcs"-ként viselkednek (a
+   * kulcsot a hívó oldal veszi fel a Beállítások VISIBILITY_ENTITIES
+   * availableFields listájába, lásd beallitasok/page.tsx) - admin a
+   * Részletnézet fülek szerkesztőjében ugyanúgy áthelyezheti egyik fülről a
+   * másikra, mint egy valódi DB-mezőt, és ugyanúgy elrejthető
+   * munkatársanként a mező-láthatóság beállítással. Eltérően a fenti
+   * prependContent-től (ami egy FIX, admin által törölhető/átnevezhető
+   * tab_key-hez tapad, és eltűnik, ha az a fül megszűnik), ez sosem tűnik
+   * el: ha admin nem rendeli egyik fülhöz sem, a szintetikus "Egyéb" fülre
+   * esik, pont úgy, mint egy hozzá nem rendelt mező. */
+  widgets?: Record<string, React.ReactNode>;
 }): DetailSection[] {
   const hiddenSet = new Set([...ALWAYS_EXCLUDE_META, ...alwaysHidden]);
+  const widgetKeys = Object.keys(widgets);
   const assignedFieldSet = new Set(dbTabs.flatMap((t) => t.field_keys));
   const otherFields = Object.keys(record).filter((k) => !assignedFieldSet.has(k) && !hiddenSet.has(k));
+  const otherWidgetKeys = widgetKeys.filter((k) => !assignedFieldSet.has(k));
 
   const sections: DetailSection[] = [];
 
   for (const t of dbTabs) {
     const fields = intersectVisible(
-      t.field_keys.filter((f) => !hiddenSet.has(f)),
+      t.field_keys.filter((f) => !hiddenSet.has(f) && !widgetKeys.includes(f)),
       visibleFields,
     );
-    if (fields.length === 0 && !prependContent[t.tab_key]) continue;
+    const tabWidgetKeys = intersectVisible(
+      t.field_keys.filter((f) => widgetKeys.includes(f)),
+      visibleFields,
+    );
+    if (fields.length === 0 && tabWidgetKeys.length === 0 && !prependContent[t.tab_key]) continue;
     const Icon = t.icon ? ICON_MAP[t.icon] : undefined;
     const title = badges[t.tab_key] ? `${t.label} (${badges[t.tab_key]})` : t.label;
     sections.push({
@@ -110,6 +137,9 @@ export function buildFieldTabs({
       content: (
         <>
           {prependContent[t.tab_key]}
+          {tabWidgetKeys.map((k) => (
+            <Fragment key={k}>{widgets[k]}</Fragment>
+          ))}
           {fields.length > 0 && (
             <Card title={title} icon={Icon}>
               <EditableDetailGrid
@@ -127,24 +157,30 @@ export function buildFieldTabs({
 
   sections.push(...extraTabs);
 
-  if (otherFields.length > 0) {
-    const fields = intersectVisible(otherFields, visibleFields);
-    if (fields.length > 0) {
-      sections.push({
-        key: OTHER_TAB_KEY,
-        label: "Egyéb",
-        content: (
-          <Card title="Egyéb" icon={MoreHorizontal}>
-            <EditableDetailGrid
-              patchPath={patchPath}
-              fields={toEditableDetailFields(record, [], fields, fieldTypes)}
-              readOnly={!canEdit(pagePermissions, page, OTHER_TAB_KEY)}
-              layout="boxed"
-            />
-          </Card>
-        ),
-      });
-    }
+  const visibleOtherFields = intersectVisible(otherFields, visibleFields);
+  const visibleOtherWidgetKeys = intersectVisible(otherWidgetKeys, visibleFields);
+  if (visibleOtherFields.length > 0 || visibleOtherWidgetKeys.length > 0) {
+    sections.push({
+      key: OTHER_TAB_KEY,
+      label: "Egyéb",
+      content: (
+        <>
+          {visibleOtherWidgetKeys.map((k) => (
+            <Fragment key={k}>{widgets[k]}</Fragment>
+          ))}
+          {visibleOtherFields.length > 0 && (
+            <Card title="Egyéb" icon={MoreHorizontal}>
+              <EditableDetailGrid
+                patchPath={patchPath}
+                fields={toEditableDetailFields(record, [], visibleOtherFields, fieldTypes)}
+                readOnly={!canEdit(pagePermissions, page, OTHER_TAB_KEY)}
+                layout="boxed"
+              />
+            </Card>
+          )}
+        </>
+      ),
+    });
   }
 
   return sections;
