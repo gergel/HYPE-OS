@@ -61,10 +61,14 @@ class Settings(BaseSettings):
     gdoc_dispo_template_id: str = ""
     gdoc_contract_template_id: str = ""
     gdoc_alvallalkozoi_szerzodes_template_id: str = ""
-    gdoc_tig_template_id: str = ""
+    gdoc_kulsos_tig_template_id: str = ""
     gdoc_output_folder_id: str = ""
     google_docs_oauth_token_json: str = ""
     drive_folder_id: str = ""
+    # A Külsős TIG saját, kész-fájl célmappája - ha be van állítva, ez élvez
+    # elsőbbséget a generikus gdoc_output_folder_id/drive_folder_id felett
+    # (lásd api/routes/performance_certificates.py generate_and_send).
+    drive_kulsos_tig: str = ""
 
     @property
     def hype_cc_list(self) -> list[str]:

@@ -374,7 +374,7 @@ def generate_and_send(
     pdf_bytes = None
     base_name = f"{projektdatum}_{draft.ceg_neve or employee.full_name}_{project.projektkod_szoveg or ''}_TIG"
     try:
-        if settings.gdoc_tig_template_id:
+        if settings.gdoc_kulsos_tig_template_id:
             fields = {
                 "nev": draft.ceg_neve or employee.full_name,
                 "hely": draft.szekhely or "",
@@ -388,10 +388,10 @@ def generate_and_send(
                 "nettoki": szam_betukkel(draft.netto_osszeg),
             }
             pdf_bytes, new_doc_id = gdoc_fill_and_export_pdf(
-                template_file_id=settings.gdoc_tig_template_id,
+                template_file_id=settings.gdoc_kulsos_tig_template_id,
                 base_name=base_name,
                 fields=fields,
-                output_folder_id=settings.gdoc_output_folder_id or settings.drive_folder_id or None,
+                output_folder_id=settings.drive_kulsos_tig or settings.gdoc_output_folder_id or settings.drive_folder_id or None,
             )
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
 
