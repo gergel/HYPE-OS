@@ -384,7 +384,7 @@ def generate_and_send(
                 "projkod": project.projektkod_szoveg or "",
                 "netto": f"{draft.netto_osszeg:,.0f}".replace(",", " "),
                 "kelt": keltezes.strftime("%Y.%m.%d."),
-                "afa": "Igen" if draft.plusz_afa else "Nem",
+                "afa": "+ ÁFA" if draft.plusz_afa else "",
                 "nettoki": szam_betukkel(draft.netto_osszeg),
             }
             pdf_bytes, new_doc_id = gdoc_fill_and_export_pdf(

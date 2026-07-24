@@ -390,7 +390,7 @@ def generate_and_send(
                 "tido": teljesites_str,
                 "netto": f"{draft.netto_osszeg:,.0f}".replace(",", " "),
                 "kelt": keltezes.strftime("%Y.%m.%d."),
-                "afa": "Igen" if draft.plusz_afa else "Nem",
+                "afa": "+ ÁFA" if draft.plusz_afa else "",
                 "brutto": f"{brutto_osszeg:,.0f}".replace(",", " "),
                 "nettoki": szam_betukkel(draft.netto_osszeg),
                 "nyilvszam": draft.vallalkozas_nyilvantartasi_szam or "",
