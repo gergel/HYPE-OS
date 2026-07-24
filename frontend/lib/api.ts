@@ -404,6 +404,14 @@ export async function getAllTigForProject(projectId: number): Promise<Performanc
   return (await apiGet<PerformanceCertificate[]>(`/api/v1/teljesitesi-igazolasok/${projectId}/all`)) ?? [];
 }
 
+export type InternalPerformanceCertificateInvoice = {
+  id: number;
+  filename: string;
+  url: string;
+  content_type: string | null;
+  created_at: string;
+};
+
 export type InternalPerformanceCertificate = {
   id: number;
   employee_id: number;
@@ -414,7 +422,7 @@ export type InternalPerformanceCertificate = {
   netto_osszeg: number | null;
   plusz_afa: boolean | null;
   brutto_osszeg: number | null;
-  szamla_url: string | null;
+  invoices: InternalPerformanceCertificateInvoice[];
   szamla_kifizetve: boolean;
   expense_id: number | null;
 };

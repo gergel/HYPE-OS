@@ -3,6 +3,16 @@ from datetime import datetime
 from pydantic import BaseModel, computed_field
 
 
+class InternalPerformanceCertificateInvoiceRead(BaseModel):
+    id: int
+    filename: str
+    url: str
+    content_type: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class InternalPerformanceCertificateRead(BaseModel):
     id: int
     employee_id: int
@@ -12,7 +22,7 @@ class InternalPerformanceCertificateRead(BaseModel):
     megjegyzes: str | None = None
     netto_osszeg: float | None = None
     plusz_afa: bool | None = None
-    szamla_url: str | None = None
+    invoices: list[InternalPerformanceCertificateInvoiceRead] = []
     szamla_kifizetve: bool = False
     expense_id: int | None = None
     created_at: datetime

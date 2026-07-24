@@ -15,7 +15,10 @@ from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.feedback import Feedback
 from app.models.field_visibility import FieldVisibilityConfig
 from app.models.finance import Expense, KpForgalom, Revenue
-from app.models.internal_performance_certificate import InternalPerformanceCertificate
+from app.models.internal_performance_certificate import (
+    InternalPerformanceCertificate,
+    InternalPerformanceCertificateInvoice,
+)
 from app.models.media import Folder, Media
 from app.models.notification import Notification
 from app.models.notion_import import NotionImportMap
@@ -66,6 +69,7 @@ __all__ = [
     "KpForgalom",
     "Revenue",
     "InternalPerformanceCertificate",
+    "InternalPerformanceCertificateInvoice",
     "Folder",
     "Media",
     "Notification",

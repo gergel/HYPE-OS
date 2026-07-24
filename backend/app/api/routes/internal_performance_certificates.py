@@ -20,7 +20,10 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee, EmployeeType
 from app.models.finance import Expense
-from app.models.internal_performance_certificate import InternalPerformanceCertificate
+from app.models.internal_performance_certificate import (
+    InternalPerformanceCertificate,
+    InternalPerformanceCertificateInvoice,
+)
 from app.schemas.internal_performance_certificate import InternalPerformanceCertificateRead
 from app.services import document_storage
 
@@ -209,15 +212,43 @@ async def upload_szamla(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
+    """Egy Belsős TIG-hez tetszőleges számú számla tölthető fel - minden
+    hívás egy ÚJ számla-sort hoz létre (nem írja felül az előzőt), lásd
+    InternalPerformanceCertificateInvoice modell-kommentje."""
     record = _get_finalized_or_404(db, employee_id, ev, honap)
     filename = file.filename or "szamla"
     content_type = file.content_type or "application/octet-stream"
+    invoice = InternalPerformanceCertificateInvoice(
+        certificate_id=record.id, filename=filename, content_type=content_type, storage_key="", url=""
+    )
+    db.add(invoice)
+    db.flush()
     ext = os.path.splitext(filename)[1]
-    key = f"belsos-tig-szamla/{employee_id}/{ev}-{honap:02d}{ext}"
+    key = f"belsos-tig-szamla/{employee_id}/{ev}-{honap:02d}-{invoice.id}{ext}"
     data = await file.read()
     url = document_storage.upload_bytes(data, key, content_type)
-    record.szamla_url = url
-    record.szamla_storage_key = key
+    invoice.storage_key = key
+    invoice.url = url
+    db.commit()
+    db.refresh(record)
+    return InternalPerformanceCertificateRead.model_validate(record)
+
+
+@router.delete("/{employee_id}/{ev}/{honap}/szamla/{invoice_id}", response_model=InternalPerformanceCertificateRead)
+def delete_szamla(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    record = _get_finalized_or_404(db, employee_id, ev, honap)
+    invoice = db.get(InternalPerformanceCertificateInvoice, invoice_id)
+    if invoice is None or invoice.certificate_id != record.id:
+        raise HTTPException(status_code=404, detail="A számla nem található.")
+    document_storage.delete_object(invoice.storage_key)
+    db.delete(invoice)
     db.commit()
     db.refresh(record)
     return InternalPerformanceCertificateRead.model_validate(record)
@@ -232,7 +263,7 @@ def mark_szamla_kifizetve(
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
     record = _get_finalized_or_404(db, employee_id, ev, honap)
-    if not record.szamla_url:
+    if not record.invoices:
         raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
 
     brutto = round(record.netto_osszeg * 1.27, 2) if (record.plusz_afa and record.netto_osszeg) else record.netto_osszeg

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -55,7 +56,6 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
   const [openId, setOpenId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openEmployee = employees.find((e) => e.id === openId) ?? null;
   const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
@@ -150,7 +150,7 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
     }
   }
 
-  async function uploadSzamla(employee: BelsosTigMonthEmployee, file: File) {
+  async function uploadSzamla(employee: BelsosTigMonthEmployee, input: HTMLInputElement, file: File) {
     setBusyId(employee.id);
     try {
       const fd = new FormData();
@@ -166,7 +166,25 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
       alert(`Sikertelen feltöltés (hálózati hiba): ${err}`);
     } finally {
       setBusyId(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      input.value = "";
+    }
+  }
+
+  async function deleteSzamla(employee: BelsosTigMonthEmployee, invoiceId: number, filename: string) {
+    if (!(await confirm(`Biztosan törlöd ezt a számlát: "${filename}"?`))) return;
+    setBusyId(employee.id);
+    try {
+      const res = await authFetch(`/api/v1/belsos-tig/${employee.id}/${ev}/${honap}/szamla/${invoiceId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen törlés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -193,11 +211,11 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-border">
-            <th className="py-1.5 text-left font-medium text-text-secondary">Munkatárs</th>
-            <th className="py-1.5 text-left font-medium text-text-secondary">Állapot</th>
-            <th className="py-1.5 text-right font-medium text-text-secondary">Bruttó</th>
-            <th className="py-1.5 text-left font-medium text-text-secondary">Számla</th>
-            <th className="py-1.5 text-right font-medium text-text-secondary"></th>
+            <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Munkatárs</th>
+            <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Állapot</th>
+            <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Bruttó</th>
+            <th className="min-w-[240px] py-1.5 pr-6 text-left font-medium text-text-secondary">Számlák</th>
+            <th className="py-1.5 text-right font-medium text-text-secondary">Kifizetés</th>
           </tr>
         </thead>
         <tbody>
@@ -207,34 +225,57 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
             const isTerminal = allapot === "Kész" || allapot === "Kihagyva";
             const isKesz = allapot === "Kész";
             const busy = busyId === employee.id;
+            const invoices = record?.invoices ?? [];
             return (
-              <tr key={employee.id} className="border-b border-border last:border-0">
-                <td className="py-2 pr-4">{employee.full_name}</td>
-                <td className="py-2 pr-4">{statusBadge(employee)}</td>
-                <td className="py-2 text-right">
+              <tr key={employee.id} className="border-b border-border last:border-0 align-top">
+                <td className="py-3 pr-6">{employee.full_name}</td>
+                <td className="py-3 pr-6">{statusBadge(employee)}</td>
+                <td className="py-3 pr-6 text-right whitespace-nowrap">
                   {record?.brutto_osszeg != null ? `${record.brutto_osszeg.toLocaleString("hu-HU")} Ft` : "–"}
                 </td>
-                <td className="py-2 pr-4">
+                <td className="py-3 pr-6">
                   {!isKesz ? (
-                    "–"
-                  ) : record?.szamla_url ? (
-                    <a href={record.szamla_url} target="_blank" rel="noopener noreferrer" className="text-text-accent hover:underline">
-                      Megnyitás
-                    </a>
+                    <span className="text-text-muted">–</span>
                   ) : (
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      disabled={busy}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadSzamla(employee, file);
-                      }}
-                      className="max-w-[160px] text-[12px]"
-                    />
+                    <div className="flex flex-col gap-1.5">
+                      {invoices.map((inv) => (
+                        <div key={inv.id} className="flex items-center gap-2">
+                          <a
+                            href={inv.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="max-w-[180px] truncate text-text-accent hover:underline"
+                            title={inv.filename}
+                          >
+                            {inv.filename}
+                          </a>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => deleteSzamla(employee, inv.id, inv.filename)}
+                            className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+                            title="Számla törlése"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      <label className="w-fit cursor-pointer text-[12px] text-text-accent hover:underline">
+                        + Számla feltöltése
+                        <input
+                          type="file"
+                          disabled={busy}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) uploadSzamla(employee, e.target, file);
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   )}
                 </td>
-                <td className="py-2 text-right">
+                <td className="py-3 text-right">
                   {!isTerminal ? (
                     <button
                       type="button"
@@ -246,7 +287,7 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
                     </button>
                   ) : isKesz && record?.szamla_kifizetve ? (
                     <StatusBadge label="Kifizetve" tone="success" />
-                  ) : isKesz && record?.szamla_url ? (
+                  ) : isKesz && invoices.length > 0 ? (
                     <button
                       type="button"
                       disabled={busy}
