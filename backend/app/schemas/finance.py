@@ -73,6 +73,7 @@ class RevenueBase(BaseModel):
     penznem: str = "HUF"
     fizetes_hatarideje: date | None = None
     fizetes_datuma: date | None = None
+    szamla_kiallitva_datuma: date | None = None
 
 
 class RevenueCreate(RevenueBase):
@@ -81,6 +82,7 @@ class RevenueCreate(RevenueBase):
 
 class RevenueUpdate(BaseModel):
     fizetes_datuma: date | None = None
+    szamla_kiallitva_datuma: date | None = None
 
 
 class RevenueRead(RevenueBase):

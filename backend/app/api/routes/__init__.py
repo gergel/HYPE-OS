@@ -6,6 +6,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.automation import router as automation_router
 from app.api.routes.callsheets import router as callsheets_router
 from app.api.routes.campaigns import router as campaigns_router
+from app.api.routes.client_contracts import router as client_contracts_router
 from app.api.routes.clients import contacts_router, router as clients_router
 from app.api.routes.contracts import router as contracts_router
 from app.api.routes.crew import rates_router, router as crew_router
@@ -14,6 +15,7 @@ from app.api.routes.detail_tabs import router as detail_tabs_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
 from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router, summary_router as finance_summary_router
+from app.api.routes.internal_performance_certificates import router as internal_performance_certificates_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.performance_certificates import router as performance_certificates_router
 from app.api.routes.portal import payments_router, router as portal_router
@@ -76,7 +78,9 @@ api_router.include_router(kp_forgalom_router)
 api_router.include_router(finance_summary_router)
 api_router.include_router(contracts_router)
 api_router.include_router(subcontractor_contracts_router)
+api_router.include_router(client_contracts_router)
 api_router.include_router(performance_certificates_router)
+api_router.include_router(internal_performance_certificates_router)
 api_router.include_router(utokovetes_admin_router)
 # 14. Kampányok
 api_router.include_router(campaigns_router)

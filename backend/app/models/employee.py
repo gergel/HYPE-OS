@@ -112,6 +112,7 @@ class Employee(TimestampMixin, Base):
     expenses: Mapped[list["Expense"]] = relationship(back_populates="employee")
     contracts: Mapped[list["Contract"]] = relationship(back_populates="employee")
     performance_certificates: Mapped[list["PerformanceCertificate"]] = relationship(back_populates="employee")
+    internal_performance_certificates: Mapped[list["InternalPerformanceCertificate"]] = relationship(back_populates="employee")
     callsheets: Mapped[list["Callsheet"]] = relationship(back_populates="employee")
     deliverables: Mapped[list["Deliverable"]] = relationship(
         back_populates="vago", foreign_keys="Deliverable.vago_employee_id"

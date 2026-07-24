@@ -133,6 +133,8 @@ export type Expense = {
   brutto: number | null;
   penznem: string;
   kesz: boolean;
+  kifizetes_modja: string | null;
+  hozzaadas_a_kiadasokhoz: boolean | null;
 };
 
 export type Revenue = {
@@ -142,6 +144,8 @@ export type Revenue = {
   netto: number | null;
   brutto: number | null;
   penznem: string;
+  fizetes_datuma: string | null;
+  szamla_kiallitva_datuma: string | null;
 };
 
 export type Deliverable = {
@@ -186,7 +190,20 @@ export type Contract = {
   teljesites_vege: string | null;
   plusz_afa: boolean | null;
   brutto_osszeg: number | null;
+  szerzodes_file_url: string | null;
 };
+
+export type PendingClientContract = {
+  project_code_id: number;
+  projektkod: string;
+  client_id: number;
+  client_nev: string | null;
+  existing_keretszerzodes_id: number | null;
+};
+
+export async function getPendingClientContracts(): Promise<PendingClientContract[]> {
+  return (await apiGet<PendingClientContract[]>("/api/v1/megrendeloi-szerzodesek")) ?? [];
+}
 
 /** A backend GET végpontok mostantól bejelentkezést igényelnek (lásd
  * app/api/crud_router.py), ezért a szerver-oldali (SSR) lekérdezéseknek is
@@ -368,6 +385,75 @@ export async function getPendingTigForProject(projectId: number): Promise<Pendin
   return apiGet<PendingTigProjectDetail>(`/api/v1/teljesitesi-igazolasok/${projectId}`);
 }
 
+export type PerformanceCertificate = {
+  id: number;
+  project_id: number;
+  employee_id: number;
+  allapot: string | null;
+  file_url: string | null;
+  ceg_neve: string | null;
+  netto_osszeg: number | null;
+  plusz_afa: boolean | null;
+  brutto_osszeg: number | null;
+  szamla_url: string | null;
+  szamla_kifizetve: boolean;
+  expense_id: number | null;
+};
+
+export async function getAllTigForProject(projectId: number): Promise<PerformanceCertificate[]> {
+  return (await apiGet<PerformanceCertificate[]>(`/api/v1/teljesitesi-igazolasok/${projectId}/all`)) ?? [];
+}
+
+export type PendingBelsosTigProject = {
+  project_id: number;
+  project_nev: string | null;
+  forgatas_datuma: string | null;
+  pending_count: number;
+};
+
+export type BelsosTigDraft = {
+  allapot: string | null;
+  netto_osszeg: number | null;
+  plusz_afa: boolean | null;
+  teljesites_kezdete: string | null;
+  teljesites_vege: string | null;
+  megjegyzes: string | null;
+};
+
+export type PendingBelsosTigEmployee = {
+  id: number;
+  full_name: string;
+  draft: BelsosTigDraft | null;
+};
+
+export type PendingBelsosTigProjectDetail = {
+  project_id: number;
+  project_nev: string | null;
+  forgatas_datuma: string | null;
+  pending: PendingBelsosTigEmployee[];
+};
+
+export async function getPendingBelsosTigForProject(projectId: number): Promise<PendingBelsosTigProjectDetail | null> {
+  return apiGet<PendingBelsosTigProjectDetail>(`/api/v1/belsos-tig/${projectId}`);
+}
+
+export type InternalPerformanceCertificate = {
+  id: number;
+  project_id: number;
+  employee_id: number;
+  allapot: string | null;
+  netto_osszeg: number | null;
+  plusz_afa: boolean | null;
+  brutto_osszeg: number | null;
+  szamla_url: string | null;
+  szamla_kifizetve: boolean;
+  expense_id: number | null;
+};
+
+export async function getAllBelsosTigForProject(projectId: number): Promise<InternalPerformanceCertificate[]> {
+  return (await apiGet<InternalPerformanceCertificate[]>(`/api/v1/belsos-tig/${projectId}/all`)) ?? [];
+}
+
 export type UtokovetesOverview = {
   project_id: number;
   project_nev: string | null;
@@ -427,6 +513,8 @@ export type OutstandingProject = {
   lejart: boolean;
 };
 
+export type PaymentMethodBreakdown = { kifizetes_modja: string | null; osszeg: number };
+
 export type FinanceSummary = {
   ytd_bevetel: number;
   ytd_kiadas: number;
@@ -435,6 +523,7 @@ export type FinanceSummary = {
   kintlevo_projektek_szama: number;
   havi_trend: MonthlyFinance[];
   kintlevo_projektek: OutstandingProject[];
+  ytd_kiadas_fizetesi_mod_szerint: PaymentMethodBreakdown[];
 };
 
 export async function getFinanceSummary(): Promise<FinanceSummary | null> {

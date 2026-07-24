@@ -122,8 +122,17 @@ class ProjectCode(TimestampMixin, Base):
 
     @property
     def osszes_koltseg(self) -> float:
-        """Számított: belsos + alvallalkozok + vagasi koltseg. Lásd FinanceService."""
-        return sum(e.brutto or 0 for e in self.expenses)
+        """Számított: az összes projektkiadás (alvállalkozói/belsős TIG-ekből
+        keletkezett Expense-ek is ide tartoznak, hiszen azok is Expense-ként
+        jönnek létre - lásd performance_certificates.py /szamla-kifizetve) +
+        az utómunka/vágási költség (Deliverable.koltseg). Ez a projekt VALÓS
+        teljes költsége - szándékosan nem szűri a Pénzügy-gate
+        (hozzaadas_a_kiadasokhoz), mert az csak a globális Pénzügy nézet
+        összesítőit korlátozza (lásd api/routes/finance.py), nem azt, hogy mi
+        számít az adott projekt költségének."""
+        expense_total = sum(e.brutto or 0 for e in self.expenses)
+        utomunka_total = sum(d.koltseg or 0 for d in self.deliverables)
+        return expense_total + utomunka_total
 
     @property
     def becsult_profit(self) -> float:

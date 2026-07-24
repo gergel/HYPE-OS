@@ -39,5 +39,15 @@ class PerformanceCertificate(TimestampMixin, Base):
     keltezes: Mapped[date | None] = mapped_column(Date, comment="Keltezési idő")
     email: Mapped[str | None] = mapped_column(String(255))
 
+    # Számla feltöltése + kifizetése - a TIG kiküldése után jövő lépés
+    # (lásd api/routes/performance_certificates.py /szamla és
+    # /szamla-kifizetve végpontjai): a kifizetés automatikusan létrehoz egy
+    # Expense sort a megfelelő ProjectCode-hoz kötve, hogy a Pénzügy ->
+    # Kiadások összesítőben megjelenjen.
+    szamla_url: Mapped[str | None] = mapped_column(String(500), comment="Feltöltött számla fájl URL-je")
+    szamla_storage_key: Mapped[str | None] = mapped_column(String(500))
+    szamla_kifizetve: Mapped[bool] = mapped_column(Boolean, default=False)
+    expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
+
     project: Mapped["Project"] = relationship(back_populates="performance_certificates")
     employee: Mapped["Employee"] = relationship(back_populates="performance_certificates")

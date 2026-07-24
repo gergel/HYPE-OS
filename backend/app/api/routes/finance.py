@@ -71,6 +71,11 @@ class OutstandingProject(BaseModel):
     lejart: bool
 
 
+class PaymentMethodBreakdown(BaseModel):
+    kifizetes_modja: str | None
+    osszeg: float
+
+
 class FinanceSummary(BaseModel):
     ytd_bevetel: float
     ytd_kiadas: float
@@ -79,6 +84,21 @@ class FinanceSummary(BaseModel):
     kintlevo_projektek_szama: int
     havi_trend: list[MonthlyFinance]
     kintlevo_projektek: list[OutstandingProject]
+    ytd_kiadas_fizetesi_mod_szerint: list[PaymentMethodBreakdown]
+
+
+# Egy kiadás csak akkor számít bele a Pénzügy összesítőkbe (YTD kiadás, havi
+# trend, fizetési mód szerinti bontás), ha a "Hozzá adás a kiadásokhoz"
+# checkbox nincs kifejezetten kikapcsolva - a régi Notion-import forrásai
+# (sima "Kiadások" / "Belsős extra kiadások" táblák) nem is ismerték ezt a
+# mezőt, ott NULL-ként importálódott, ezért a NULL-t "számítson bele"-ként
+# kezeljük (nem "nincs bepipálva"-ként), hogy a checkbox bevezetése ne
+# tüntessen el némán történeti kiadásokat az összesítőkből - csak a
+# kifejezetten (a "Projekt kiadások" felvitelnél) kipipálatlanul hagyott
+# sorok esnek ki. A projektkód-szintű Expense.brutto összeg (ProjectCode.
+# osszes_koltseg) ettől függetlenül MINDIG az adott projekt teljes,
+# valós költségét mutatja - ez a gate csak a globális Pénzügy nézetet szűri.
+_EXPENSE_COUNTS_TOWARD_TOTALS = Expense.hozzaadas_a_kiadasokhoz.is_not(False)
 
 
 def _last_n_months(today: date, n: int) -> list[tuple[int, int]]:
@@ -115,7 +135,9 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     ytd_kiadas = (
         db.scalar(
             select(func.coalesce(func.sum(Expense.brutto), 0)).where(
-                Expense.fizetes_datuma.is_not(None), Expense.fizetes_datuma >= year_start
+                Expense.fizetes_datuma.is_not(None),
+                Expense.fizetes_datuma >= year_start,
+                _EXPENSE_COUNTS_TOWARD_TOTALS,
             )
         )
         or 0
@@ -144,10 +166,20 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
             extract("month", Expense.fizetes_datuma).label("m"),
             func.coalesce(func.sum(Expense.brutto), 0).label("total"),
         )
-        .where(Expense.fizetes_datuma.is_not(None), Expense.fizetes_datuma >= min_date)
+        .where(Expense.fizetes_datuma.is_not(None), Expense.fizetes_datuma >= min_date, _EXPENSE_COUNTS_TOWARD_TOTALS)
         .group_by("y", "m")
     ).all():
         expense_by_month[(int(row.y), int(row.m))] = float(row.total)
+
+    ytd_kiadas_fizetesi_mod_szerint = [
+        PaymentMethodBreakdown(kifizetes_modja=row.kifizetes_modja, osszeg=float(row.total))
+        for row in db.execute(
+            select(Expense.kifizetes_modja, func.coalesce(func.sum(Expense.brutto), 0).label("total"))
+            .where(Expense.fizetes_datuma.is_not(None), Expense.fizetes_datuma >= year_start, _EXPENSE_COUNTS_TOWARD_TOTALS)
+            .group_by(Expense.kifizetes_modja)
+            .order_by(func.sum(Expense.brutto).desc())
+        ).all()
+    ]
 
     havi_trend = [
         MonthlyFinance(
@@ -195,4 +227,5 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         kintlevo_projektek_szama=len(kintlevo_projektek),
         havi_trend=havi_trend,
         kintlevo_projektek=kintlevo_projektek[:15],
+        ytd_kiadas_fizetesi_mod_szerint=ytd_kiadas_fizetesi_mod_szerint,
     )

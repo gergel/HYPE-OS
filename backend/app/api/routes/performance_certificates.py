@@ -13,9 +13,10 @@ mezőkészletével/sablon-placeholdereivel."""
 
 from __future__ import annotations
 
+import os
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
@@ -24,9 +25,11 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee, EmployeeType
+from app.models.finance import Expense
 from app.models.performance_certificate import PerformanceCertificate
 from app.models.project import Project
 from app.schemas.performance_certificate import PerformanceCertificateRead
+from app.services import document_storage
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import send_message
 from app.services.hu_number_words import szam_betukkel
@@ -230,6 +233,17 @@ def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _use
     )
 
 
+@router.get("/{project_id}/all", response_model=list[PerformanceCertificateRead])
+def list_all_for_project(project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """Az adott projekt ÖSSZES TIG-bejegyzése (bármilyen állapotban) - a
+    kiküldött (Kiküldve) tételekhez itt jelenik meg a számla-feltöltés és
+    kifizetettként jelölés vezérlő a frontenden (lásd
+    PerformanceCertificateManager), a still-pending (Készítés alatt) tételek
+    a get_pending_for_project végpontból jönnek."""
+    rows = db.query(PerformanceCertificate).filter(PerformanceCertificate.project_id == project_id).all()
+    return [PerformanceCertificateRead.model_validate(r) for r in rows]
+
+
 def _validate_pending_employee(db: Session, project: Project, employee_id: int) -> Employee:
     if not _is_szerzodes_phase_done(db, project):
         raise HTTPException(
@@ -411,3 +425,92 @@ def skip_tig(
     db.commit()
     db.refresh(draft)
     return PerformanceCertificateRead.model_validate(draft)
+
+
+def _get_sent_certificate_or_404(db: Session, project_id: int, employee_id: int) -> PerformanceCertificate:
+    """A TIG-hez tartozó számla feltöltése/kifizetése csak azután lehetséges,
+    hogy magát a TIG-et már kiküldtük (lásd generate_and_send) - eddig a
+    pontig nincs mihez számlát kötni."""
+    cert = (
+        db.query(PerformanceCertificate)
+        .filter(PerformanceCertificate.project_id == project_id, PerformanceCertificate.employee_id == employee_id)
+        .first()
+    )
+    if cert is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és emberhez nem tartozik TIG-bejegyzés.")
+    if cert.allapot != "Kiküldve":
+        raise HTTPException(status_code=400, detail="Számla csak kiküldött TIG-hez tölthető fel.")
+    return cert
+
+
+@router.post("/{project_id}/{employee_id}/szamla", response_model=PerformanceCertificateRead)
+async def upload_szamla(
+    project_id: int,
+    employee_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A kiküldött TIG-hez tartozó (külső számlázási rendszerben kiállított)
+    számla feltöltése - ez még nem jelenti a kifizetést, csak a dokumentum
+    rögzítését (lásd /szamla-kifizetve a tényleges Pénzügy-be kerüléshez)."""
+    cert = _get_sent_certificate_or_404(db, project_id, employee_id)
+    filename = file.filename or "szamla"
+    content_type = file.content_type or "application/octet-stream"
+    ext = os.path.splitext(filename)[1]
+    key = f"tig-szamla/{project_id}/{employee_id}{ext}"
+    data = await file.read()
+    url = document_storage.upload_bytes(data, key, content_type)
+    cert.szamla_url = url
+    cert.szamla_storage_key = key
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
+@router.post("/{project_id}/{employee_id}/szamla-kifizetve", response_model=PerformanceCertificateRead)
+def mark_szamla_kifizetve(
+    project_id: int,
+    employee_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A feltöltött számla kifizetettként jelölése - ez hozza létre (vagy
+    frissíti, ha már létezik) a Pénzügy -> Kiadások-ban megjelenő Expense
+    sort, a projekt project_code_id-jához és az alvállalkozóhoz kötve, hogy a
+    költség a helyes projekthez kapcsolódjon (lásd spec 2.1)."""
+    cert = _get_sent_certificate_or_404(db, project_id, employee_id)
+    if not cert.szamla_url:
+        raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
+    project = _get_project_or_404(db, project_id)
+
+    brutto = round(cert.netto_osszeg * 1.27, 2) if (cert.plusz_afa and cert.netto_osszeg) else cert.netto_osszeg
+
+    if cert.expense_id is not None:
+        expense = db.get(Expense, cert.expense_id)
+    else:
+        expense = None
+
+    if expense is None:
+        expense = Expense(
+            megnevezes=f"TIG - {cert.ceg_neve or ''} - {project.projektkod_szoveg or project.nev or ''}".strip(" -"),
+            project_code_id=project.project_code_id,
+            employee_id=cert.employee_id,
+            tipus="kulsos",
+            netto=cert.netto_osszeg,
+            brutto=brutto,
+            hozzaadas_a_kiadasokhoz=True,
+        )
+        db.add(expense)
+        db.flush()
+        cert.expense_id = expense.id
+    else:
+        expense.netto = cert.netto_osszeg
+        expense.brutto = brutto
+
+    expense.kesz = True
+    expense.fizetes_datuma = date.today()
+    cert.szamla_kifizetve = True
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)

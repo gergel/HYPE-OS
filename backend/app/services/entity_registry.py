@@ -55,6 +55,9 @@ SELECT_LIKE_MAX_VALUE_LENGTH = 60
 # választottak) - ezek MINDIG felülírják a lenti heurisztikát/valódi
 # enum-detektálást, mert a felhasználó explicit megadta a pontos listát.
 SELECT_FIELD_OVERRIDES: dict[str, dict[str, list[str]]] = {
+    "expense": {
+        "kifizetes_modja": ["Készpénz", "Átutalás", "Bankkártya"],
+    },
     "equipment": {
         "allapot": ["Jó", "Szerelendő", "Selejt", "Elhagyva", "Szervíz", "Szerelve"],
         "hasznalhato": ["Használható", "Nem használható"],

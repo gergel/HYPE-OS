@@ -258,6 +258,7 @@ class Project(TimestampMixin, Base):
     contracts: Mapped[list["Contract"]] = relationship(back_populates="project", foreign_keys="Contract.project_id")
     post_shoot_feedbacks: Mapped[list["PostShootFeedback"]] = relationship(back_populates="project")
     performance_certificates: Mapped[list["PerformanceCertificate"]] = relationship(back_populates="project")
+    internal_performance_certificates: Mapped[list["InternalPerformanceCertificate"]] = relationship(back_populates="project")
 
     @property
     def crew_employee_ids(self) -> list[int]:

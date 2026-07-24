@@ -1,11 +1,27 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
+import { ClientContractManager } from "@/components/ClientContractManager";
 import { DetailSections } from "@/components/DetailSections";
+import { EditableBooleanCell } from "@/components/EditableBooleanCell";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { RelatedTable } from "@/components/RelatedTable";
+import { StatCard } from "@/components/StatCard";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getDetailTabs, getFieldTypes, getMyPagePermissions, getRecord, getRelated, getVisibleFields } from "@/lib/api";
+import {
+  Contract,
+  ENTITY_PATHS,
+  formatHuf,
+  getDetailTabs,
+  getFieldTypes,
+  getMyPagePermissions,
+  getPendingClientContracts,
+  getRecord,
+  getRelated,
+  getVisibleFields,
+} from "@/lib/api";
 import { buildFieldTabs } from "@/lib/detailTabs";
+import { FileText, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const PAGE = "/projektek/project-kodok";
 
@@ -15,7 +31,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   const projectCode = await getRecord(ENTITY_PATHS.projectCode, projectCodeId);
   if (!projectCode) notFound();
 
-  const [client, contract, projects, expenses, revenues, deliverables, visibleFields, fieldTypes, dbTabs, pagePermissions] =
+  const [client, contract, projects, expenses, revenues, deliverables, pendingClientContracts, visibleFields, fieldTypes, dbTabs, pagePermissions] =
     await Promise.all([
       projectCode.client_id ? getRecord(ENTITY_PATHS.client, Number(projectCode.client_id)) : null,
       projectCode.contract_id ? getRecord(ENTITY_PATHS.contract, Number(projectCode.contract_id)) : null,
@@ -23,11 +39,14 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
       getRelated(ENTITY_PATHS.expense, { project_code_id: projectCodeId }),
       getRelated(ENTITY_PATHS.revenue, { project_code_id: projectCodeId }),
       getRelated(ENTITY_PATHS.deliverable, { project_code_id: projectCodeId }),
+      getPendingClientContracts(),
       getVisibleFields("projectCode"),
       getFieldTypes("projectCode"),
       getDetailTabs("projectCode"),
       getMyPagePermissions(),
     ]);
+
+  const pendingEntry = pendingClientContracts.find((p) => p.project_code_id === projectCodeId) ?? null;
 
   const tabs = buildFieldTabs({
     page: PAGE,
@@ -55,6 +74,67 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             </a>
           )}
           {contract && <span>Szerződés: #{contract.id}</span>}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard
+            label="Összes költség (kiadások + utómunka)"
+            value={formatHuf(typeof projectCode.osszes_koltseg === "number" ? projectCode.osszes_koltseg : 0)}
+            icon={TrendingDown}
+            tone="orange"
+          />
+          <StatCard
+            label="Bevétel"
+            value={formatHuf(revenues.reduce((sum, r) => sum + (typeof r.brutto === "number" ? r.brutto : 0), 0))}
+            icon={TrendingUp}
+            tone="teal"
+          />
+          <StatCard
+            label="Becsült profit"
+            value={formatHuf(typeof projectCode.becsult_profit === "number" ? projectCode.becsult_profit : 0)}
+            icon={Wallet}
+            tone={typeof projectCode.becsult_profit === "number" && projectCode.becsult_profit >= 0 ? "accent" : "danger"}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <Card title="Megrendelői szerződés" icon={FileText}>
+            <ClientContractManager
+              projectCodeId={projectCodeId}
+              existingContract={contract as unknown as Contract | null}
+              existingKeretszerzodesId={pendingEntry?.existing_keretszerzodes_id ?? null}
+            />
+          </Card>
+          <Card title="Megrendelői TIG" icon={FileText}>
+            <div className="space-y-3 text-[13px]">
+              <label className="flex items-center gap-2 text-text-primary">
+                <EditableBooleanCell
+                  patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
+                  field="tig_kikuldve"
+                  value={typeof projectCode.tig_kikuldve === "boolean" ? projectCode.tig_kikuldve : false}
+                />
+                Projekt teljesítése igazolva (TIG kiküldve)
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-text-secondary">Státusz:</span>
+                <EditableTableCell
+                  patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
+                  field="tig_statusza"
+                  value={typeof projectCode.tig_statusza === "string" ? projectCode.tig_statusza : null}
+                  placeholder="Nincs megadva"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-text-secondary">TIG link:</span>
+                <EditableTableCell
+                  patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
+                  field="tig_url"
+                  value={typeof projectCode.tig_url === "string" ? projectCode.tig_url : null}
+                  placeholder="Nincs link"
+                />
+              </div>
+            </div>
+          </Card>
         </div>
 
         <DetailSections sections={tabs} />

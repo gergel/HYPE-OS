@@ -7,21 +7,26 @@ import { DetailHeader } from "@/components/DetailHeader";
 import { DetailSections } from "@/components/DetailSections";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
+import { InternalPerformanceCertificateManager } from "@/components/InternalPerformanceCertificateManager";
 import { M2mLinker } from "@/components/M2mLinker";
 import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
+import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   formatHuf,
+  getAllBelsosTigForProject,
+  getAllTigForProject,
   getDetailTabs,
   getEmployees,
   getEquipment,
   getFieldTypes,
   getMyPagePermissions,
+  getPendingBelsosTigForProject,
   getPendingSubcontractorsForProject,
   getPendingTigForProject,
   getRecord,
@@ -64,6 +69,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     bookings,
     pendingContracts,
     pendingTig,
+    allTig,
+    pendingBelsosTig,
+    allBelsosTig,
     visibleFields,
     fieldTypes,
     dbTabs,
@@ -77,11 +85,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     getRelated(ENTITY_PATHS.assignment, { project_id: projectId }),
     getPendingSubcontractorsForProject(projectId),
     getPendingTigForProject(projectId),
+    getAllTigForProject(projectId),
+    getPendingBelsosTigForProject(projectId),
+    getAllBelsosTigForProject(projectId),
     getVisibleFields("project"),
     getFieldTypes("project"),
     getDetailTabs("project"),
     getMyPagePermissions(),
   ]);
+
+  const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
 
   const equipmentById = new Map(allEquipment.map((e) => [e.id, e]));
   const equipmentOptions = allEquipment.map((e) => ({
@@ -182,7 +195,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <Card title="Szerződés készítés" icon={Wallet}>
               <SubcontractorContractManager projectId={project.id} pending={pendingContracts?.pending ?? []} />
             </Card>
-            <Card title="Teljesítési igazolás" icon={FileText}>
+            <Card title="Teljesítési igazolás (Külsős TIG)" icon={FileText}>
               {pendingTig?.tig_ready ? (
                 <PerformanceCertificateManager projectId={project.id} pending={pendingTig.pending} />
               ) : (
@@ -191,6 +204,23 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   státusza (kiküldve vagy kihagyva) - lásd a fenti &quot;Szerződés készítés&quot; kártyát.
                 </p>
               )}
+              <TigInvoiceManager
+                projectId={project.id}
+                basePath="/api/v1/teljesitesi-igazolasok"
+                certificates={allTig}
+                employeeNameById={employeeNameById}
+                readyStatus="Kiküldve"
+              />
+            </Card>
+            <Card title="Belsős TIG" icon={FileText}>
+              <InternalPerformanceCertificateManager projectId={project.id} pending={pendingBelsosTig?.pending ?? []} />
+              <TigInvoiceManager
+                projectId={project.id}
+                basePath="/api/v1/belsos-tig"
+                certificates={allBelsosTig}
+                employeeNameById={employeeNameById}
+                readyStatus="Kész"
+              />
             </Card>
           </>
         ),

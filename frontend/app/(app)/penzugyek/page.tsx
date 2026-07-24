@@ -5,6 +5,7 @@ import {
   formatHuf,
   getCurrentUser,
   getExpenses,
+  getFieldTypes,
   getFinanceSummary,
   getMyPagePermissions,
   getProjectCodes,
@@ -13,9 +14,12 @@ import {
 } from "@/lib/api";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { EditableBooleanCell } from "@/components/EditableBooleanCell";
+import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { FinanceMonthlyChart, OutstandingProjectsTable } from "@/components/finance/FinanceSummaryWidgets";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
+import { RevenueInvoiceStatus } from "@/components/RevenueInvoiceStatus";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
@@ -24,17 +28,19 @@ import { canDoAction } from "@/lib/permissions";
 const PAGE = "/penzugyek";
 
 export default async function PenzugyekPage() {
-  const [expenses, revenues, summary, projectCodes, currentUser, pagePermissions] = await Promise.all([
+  const [expenses, revenues, summary, projectCodes, expenseFieldTypes, currentUser, pagePermissions] = await Promise.all([
     getExpenses(),
     getRevenues(),
     getFinanceSummary(),
     getProjectCodes(),
+    getFieldTypes("expense"),
     getCurrentUser(),
     getMyPagePermissions(),
   ]);
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
+  const fizetesiModOptions = expenseFieldTypes.kifizetes_modja?.options ?? ["Készpénz", "Átutalás", "Bankkártya"];
 
   return (
     <div className="flex flex-1 flex-col">
@@ -67,6 +73,19 @@ export default async function PenzugyekPage() {
                 <OutstandingProjectsTable projects={summary.kintlevo_projektek} />
               </Card>
             </div>
+
+            {summary.ytd_kiadas_fizetesi_mod_szerint.length > 0 && (
+              <Card title="Kiadás fizetési mód szerint (idén)">
+                <ul className="divide-y divide-border">
+                  {summary.ytd_kiadas_fizetesi_mod_szerint.map((row) => (
+                    <li key={row.kifizetes_modja ?? "ismeretlen"} className="flex items-center justify-between py-2 text-[13px]">
+                      <span className="text-text-secondary">{row.kifizetes_modja ?? "Nincs megadva"}</span>
+                      <span className="font-medium text-text-primary">{formatHuf(row.osszeg)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
           </>
         )}
 
@@ -112,10 +131,41 @@ export default async function PenzugyekPage() {
               },
               { header: "Bruttó", align: "right", render: (e) => formatHuf(e.brutto), sortAccessor: (e) => e.brutto },
               {
+                header: "Fizetési mód",
+                render: (e) => (
+                  <EditableStatusBadge
+                    patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
+                    field="kifizetes_modja"
+                    value={e.kifizetes_modja}
+                    options={fizetesiModOptions}
+                    placeholder="Nincs megadva"
+                  />
+                ),
+                sortAccessor: (e) => e.kifizetes_modja,
+              },
+              {
                 header: "Kész",
                 align: "right",
                 render: (e) => <StatusBadge label={e.kesz ? "Kifizetve" : "Nyitott"} tone={e.kesz ? "success" : "warning"} />,
                 sortAccessor: (e) => (e.kesz ? 1 : 0),
+              },
+              {
+                header: "Beleszámít",
+                align: "right",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableBooleanCell
+                      patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
+                      field="hozzaadas_a_kiadasokhoz"
+                      value={e.hozzaadas_a_kiadasokhoz}
+                    />
+                  ) : (
+                    <StatusBadge
+                      label={e.hozzaadas_a_kiadasokhoz === false ? "Nem" : "Igen"}
+                      tone={e.hozzaadas_a_kiadasokhoz === false ? "neutral" : "success"}
+                    />
+                  ),
+                sortAccessor: (e) => (e.hozzaadas_a_kiadasokhoz === false ? 0 : 1),
               },
             ]}
           />
@@ -168,6 +218,18 @@ export default async function PenzugyekPage() {
               },
               { header: "Bruttó", align: "right", render: (r) => formatHuf(r.brutto), sortAccessor: (r) => r.brutto },
               { header: "Pénznem", align: "right", render: (r) => r.penznem, sortAccessor: (r) => r.penznem },
+              {
+                header: "Számla",
+                align: "right",
+                render: (r) => (
+                  <RevenueInvoiceStatus
+                    patchPath={`${ENTITY_PATHS.revenue}/${r.id}`}
+                    szamlaKiallitva={r.szamla_kiallitva_datuma}
+                    fizetve={r.fizetes_datuma}
+                  />
+                ),
+                sortAccessor: (r) => (r.fizetes_datuma ? 2 : r.szamla_kiallitva_datuma ? 1 : 0),
+              },
             ]}
           />
         </Card>

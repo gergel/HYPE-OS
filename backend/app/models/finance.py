@@ -76,6 +76,15 @@ class Revenue(TimestampMixin, Base):
     penznem: Mapped[str] = mapped_column(String(10), default="HUF")
     fizetes_hatarideje: Mapped[date | None] = mapped_column(Date)
     fizetes_datuma: Mapped[date | None] = mapped_column(Date)
+    # A megrendelői számla köztes állapota - a számla NEM ebben a rendszerben
+    # készül (külső számlázási rendszerben állítják ki), itt csak azt
+    # rögzítjük, mikor lett kiállítva/kiküldve a megrendelőnek. Amíg ez None,
+    # a bevétel "nincs kiállítva" állapotú; utána "számla kiállítva, még nem
+    # fizetve"; a fizetes_datuma kitöltése zárja "kifizetve"-re (lásd spec
+    # 3.3/5.3 - a régi rendszerben a fizetés-dátum önmagában bináris volt,
+    # nem különböztette meg a "még ki sem lett állítva" és "kiállítva, de még
+    # nem fizetve" eseteket).
+    szamla_kiallitva_datuma: Mapped[date | None] = mapped_column(Date, comment="Számla kiállítva dátuma")
 
     # a bevétel-táblák maradék mezői
     nev: Mapped[str | None] = mapped_column(String(255), comment="Name")
