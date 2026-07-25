@@ -13,6 +13,13 @@ const MONTH_LABELS = [
 ];
 
 const BAR_LANE_HEIGHT = 20;
+// A napi cella tetején lévő "p-1" padding (4px) + a dátumszám sor magassága
+// (lásd lejjebb a dátumszám elem explicit height/lineHeight stílusa) - erre
+// van szükség, hogy a több napos sáv pontosan a dátumszám ALÁ kerüljön (ne
+// föléje), ugyanoda, ahol az egynapos események pillái is kezdődnek.
+const CELL_PADDING = 4;
+const DATE_ROW_HEIGHT = 18;
+const BARS_TOP_OFFSET = CELL_PADDING + DATE_ROW_HEIGHT;
 
 function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -196,27 +203,7 @@ export function ForgatasokCalendar({ projects }: { projects: CalendarProject[] }
           const placedBars = placeBarsForWeek(multiDayBars, weekStart, weekEnd);
           const laneCount = placedBars.reduce((max, b) => Math.max(max, b.lane + 1), 0);
           return (
-            <div key={wi} className="border-t border-border">
-              {laneCount > 0 && (
-                <div className="relative bg-surface-2 px-px" style={{ height: laneCount * BAR_LANE_HEIGHT }}>
-                  {placedBars.map((b) => (
-                    <a
-                      key={b.project.id}
-                      href={`/projektek/${b.project.id}`}
-                      className="absolute flex items-center truncate rounded bg-bg-accent px-1.5 text-text-accent hover:opacity-90"
-                      style={{
-                        left: `${(b.startCol / 7) * 100}%`,
-                        width: `${((b.endCol - b.startCol + 1) / 7) * 100}%`,
-                        top: b.lane * BAR_LANE_HEIGHT,
-                        height: BAR_LANE_HEIGHT - 2,
-                      }}
-                      title={b.project.nev}
-                    >
-                      {b.project.nev}
-                    </a>
-                  ))}
-                </div>
-              )}
+            <div key={wi} className="relative border-t border-border">
               <div className="grid grid-cols-7 gap-px bg-border">
                 {week.map((day, di) => {
                   const key = toDateKey(day);
@@ -229,7 +216,10 @@ export function ForgatasokCalendar({ projects }: { projects: CalendarProject[] }
                         key === todayKey ? "ring-1 ring-inset ring-[var(--color-text-accent)]" : ""
                       }`}
                     >
-                      <p className="mb-1 text-text-muted">{day.getDate()}</p>
+                      <p className="text-text-muted" style={{ height: DATE_ROW_HEIGHT, lineHeight: `${DATE_ROW_HEIGHT}px` }}>
+                        {day.getDate()}
+                      </p>
+                      {laneCount > 0 && <div style={{ height: laneCount * BAR_LANE_HEIGHT }} />}
                       <div className="flex flex-col gap-0.5">
                         {dayProjects.map((p) => (
                           <div key={p.id} className="flex items-center gap-1 rounded bg-surface-3 px-1 py-0.5">
@@ -248,6 +238,29 @@ export function ForgatasokCalendar({ projects }: { projects: CalendarProject[] }
                   );
                 })}
               </div>
+              {laneCount > 0 && (
+                <div
+                  className="pointer-events-none absolute right-0 left-0 px-px"
+                  style={{ top: BARS_TOP_OFFSET, height: laneCount * BAR_LANE_HEIGHT }}
+                >
+                  {placedBars.map((b) => (
+                    <a
+                      key={b.project.id}
+                      href={`/projektek/${b.project.id}`}
+                      className="pointer-events-auto absolute flex items-center truncate rounded bg-surface-3 px-1.5 text-text-secondary hover:text-text-accent"
+                      style={{
+                        left: `${(b.startCol / 7) * 100}%`,
+                        width: `${((b.endCol - b.startCol + 1) / 7) * 100}%`,
+                        top: b.lane * BAR_LANE_HEIGHT,
+                        height: BAR_LANE_HEIGHT - 2,
+                      }}
+                      title={b.project.nev}
+                    >
+                      {b.project.nev}
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
