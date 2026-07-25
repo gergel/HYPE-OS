@@ -55,7 +55,7 @@ export function ActionButton({
       type="button"
       onClick={handleClick}
       disabled={busy}
-      className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+      className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-colors hover:border-text-accent/50 hover:bg-bg-accent hover:text-text-accent disabled:opacity-50"
     >
       {busy ? "Folyamatban…" : label}
     </button>

@@ -1,16 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ActionButton } from "@/components/ActionButton";
 import { Card } from "@/components/Card";
-import { DataTable } from "@/components/DataTable";
 import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar";
 import { ProjectDetailModal } from "@/components/ProjectDetailModal";
+import { RowLink } from "@/components/RowLink";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Project, ProjectCode } from "@/lib/api";
 
 function formatDate(value: string | null): string {
   return value ? value.slice(0, 10) : "–";
+}
+
+/** YYYY-MM-DD, helyi időzóna szerint (nem UTC - a Date#toISOString() a
+ * szerver/böngésző UTC-eltolása miatt éjfél körül átcsúsztatná a "ma"
+ * dátumát). */
+function localISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatGroupDateLabel(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("hu-HU", { month: "long", day: "numeric", weekday: "long" });
 }
 
 /** A Naptár/Diszpó oldal tényleges tartalma - a Project rekordokon
@@ -51,13 +66,49 @@ export function NaptarDiszpoContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduled, query, projectCodes]);
 
-  const elozetesKuldve = filtered.filter((p) => p.elozetes_diszpo_kuldes).length;
-  const teljesKuldve = filtered.filter((p) => p.diszpo).length;
+  // Csak a tegnapi és a jövőbeni forgatásokat mutatjuk (a régebbieket nem -
+  // azokhoz úgysincs már értelme diszpót küldeni), a "Forgatás dátuma" (kezdő
+  // dátum) szerint csoportosítva: Tegnapi/Mai/Holnapi fix csoportok, utána a
+  // további jövőbeni dátumok időrendben, mindegyik saját csoportként.
+  const { upcoming, groups } = useMemo(() => {
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    const todayStr = localISODate(now);
+    const yesterdayStr = localISODate(yesterday);
+    const tomorrowStr = localISODate(tomorrow);
+
+    const upcoming = filtered.filter((p) => (p.forgatas_datuma ?? "").slice(0, 10) >= yesterdayStr);
+
+    const buckets = new Map<string, Project[]>();
+    for (const p of upcoming) {
+      const d = (p.forgatas_datuma ?? "").slice(0, 10);
+      const key = d === yesterdayStr ? "Tegnapi" : d === todayStr ? "Mai" : d === tomorrowStr ? "Holnapi" : d;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key)!.push(p);
+    }
+    const fixedOrder = ["Tegnapi", "Mai", "Holnapi"];
+    const restKeys = [...buckets.keys()].filter((k) => !fixedOrder.includes(k)).sort();
+    const groups = [...fixedOrder, ...restKeys]
+      .filter((k) => buckets.has(k))
+      .map((key) => ({
+        key,
+        label: fixedOrder.includes(key) ? key : formatGroupDateLabel(key),
+        projects: buckets.get(key)!.sort((a, b) => (a.forgatas_datuma ?? "").localeCompare(b.forgatas_datuma ?? "")),
+      }));
+
+    return { upcoming, groups };
+  }, [filtered]);
+
+  const elozetesKuldve = upcoming.filter((p) => p.elozetes_diszpo_kuldes).length;
+  const teljesKuldve = upcoming.filter((p) => p.diszpo).length;
 
   return (
-    <Card title={`Naptár / Diszpó (${filtered.length} forgatás)`}>
+    <Card title={`Naptár / Diszpó (${upcoming.length} forgatás)`}>
       <p className="mb-3 text-[13px] text-text-secondary">
-        {elozetesKuldve} előzetes diszpó elküldve · {teljesKuldve} teljes diszpó kiküldve · {filtered.length - teljesKuldve} még hátra van
+        {elozetesKuldve} előzetes diszpó elküldve · {teljesKuldve} teljes diszpó kiküldve · {upcoming.length - teljesKuldve} még hátra van
       </p>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -91,72 +142,83 @@ export function NaptarDiszpoContent({
       </div>
 
       {view === "table" ? (
-        <DataTable<Project>
-          rows={filtered}
-          emptyText={query ? "Nincs találat a szűrésre." : "Nincs dátummal rendelkező forgatás."}
-          onRowClick={(id) => setModalProjectId(id)}
-          columns={[
-            {
-              header: "Név",
-              render: (p) => p.nev,
-              sortAccessor: (p) => p.nev,
-            },
-            {
-              header: "Projektkód",
-              render: (p) => projectCodeById.get(p.project_code_id) ?? "–",
-              sortAccessor: (p) => projectCodeById.get(p.project_code_id),
-            },
-            {
-              header: "Forgatás dátuma",
-              render: (p) =>
-                p.forgatas_datuma_vege && p.forgatas_datuma_vege !== p.forgatas_datuma
-                  ? `${formatDate(p.forgatas_datuma)} – ${formatDate(p.forgatas_datuma_vege)}`
-                  : formatDate(p.forgatas_datuma),
-              sortAccessor: (p) => p.forgatas_datuma,
-            },
-            {
-              header: "Helyszín",
-              render: (p) => p.helyszin ?? "–",
-              sortAccessor: (p) => p.helyszin,
-            },
-            {
-              header: "Előzetes diszpó",
-              render: (p) => (
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  {p.elozetes_diszpo_kuldes ? (
-                    <StatusBadge label={p.elozetes_diszpo_kuldes} tone="teal" />
-                  ) : (
-                    <StatusBadge label="Nincs elküldve" tone="neutral" />
-                  )}
-                  {canSend && (
-                    <ActionButton
-                      path={`/api/v1/projects/${p.id}/diszpo/elozetes`}
-                      label="Küldés"
-                      confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
-                    />
-                  )}
-                </div>
-              ),
-            },
-            {
-              header: "Diszpó",
-              render: (p) => (
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  {p.diszpo ? <StatusBadge label={p.diszpo} tone="success" /> : <StatusBadge label="Nincs kiküldve" tone="neutral" />}
-                  {canSend && (
-                    <ActionButton
-                      path={`/api/v1/projects/${p.id}/diszpo/kuldes`}
-                      label="Küldés"
-                      confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
-                    />
-                  )}
-                </div>
-              ),
-            },
-          ]}
-        />
+        groups.length === 0 ? (
+          <p className="text-[13px] text-text-muted">
+            {query ? "Nincs találat a szűrésre." : "Nincs tegnapi vagy jövőbeni forgatás."}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[13px]">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="whitespace-nowrap py-1.5 text-left font-medium text-text-secondary">Név</th>
+                  <th className="whitespace-nowrap py-1.5 text-left font-medium text-text-secondary">Projektkód</th>
+                  <th className="whitespace-nowrap py-1.5 text-left font-medium text-text-secondary">Forgatás dátuma</th>
+                  <th className="whitespace-nowrap py-1.5 text-left font-medium text-text-secondary">Helyszín</th>
+                  <th className="whitespace-nowrap py-1.5 text-left font-medium text-text-secondary">Előzetes diszpó</th>
+                  <th className="whitespace-nowrap py-1.5 text-left font-medium text-text-secondary">Diszpó</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map((group) => (
+                  <Fragment key={group.key}>
+                    <tr>
+                      <td colSpan={6} className="bg-surface-3/60 px-2 py-1.5 text-[12px] font-medium capitalize text-text-secondary">
+                        {group.label} <span className="font-normal text-text-muted">({group.projects.length})</span>
+                      </td>
+                    </tr>
+                    {group.projects.map((p) => (
+                      <RowLink key={p.id} onClick={() => setModalProjectId(p.id)}>
+                        <td className="py-2 pr-4">{p.nev}</td>
+                        <td className="py-2 pr-4">{projectCodeById.get(p.project_code_id) ?? "–"}</td>
+                        <td className="py-2 pr-4">
+                          {p.forgatas_datuma_vege && p.forgatas_datuma_vege !== p.forgatas_datuma
+                            ? `${formatDate(p.forgatas_datuma)} – ${formatDate(p.forgatas_datuma_vege)}`
+                            : formatDate(p.forgatas_datuma)}
+                        </td>
+                        <td className="py-2 pr-4">{p.helyszin ?? "–"}</td>
+                        <td className="py-2 pr-4">
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            {p.elozetes_diszpo_kuldes ? (
+                              <StatusBadge label={p.elozetes_diszpo_kuldes} tone="teal" />
+                            ) : (
+                              <StatusBadge label="Nincs elküldve" tone="neutral" />
+                            )}
+                            {canSend && (
+                              <ActionButton
+                                path={`/api/v1/projects/${p.id}/diszpo/elozetes`}
+                                label="Küldés"
+                                confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+                              />
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 pr-4">
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            {p.diszpo ? (
+                              <StatusBadge label={p.diszpo} tone="success" />
+                            ) : (
+                              <StatusBadge label="Nincs kiküldve" tone="neutral" />
+                            )}
+                            {canSend && (
+                              <ActionButton
+                                path={`/api/v1/projects/${p.id}/diszpo/kuldes`}
+                                label="Küldés"
+                                confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+                              />
+                            )}
+                          </div>
+                        </td>
+                      </RowLink>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       ) : (
-        <ForgatasokCalendar projects={filtered} onProjectClick={(id) => setModalProjectId(id)} />
+        <ForgatasokCalendar projects={upcoming} onProjectClick={(id) => setModalProjectId(id)} />
       )}
 
       <ProjectDetailModal projectId={modalProjectId} projectCodes={projectCodes} onClose={() => setModalProjectId(null)} />
