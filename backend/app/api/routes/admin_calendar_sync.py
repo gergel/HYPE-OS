@@ -11,7 +11,12 @@ from app.core.database import get_db
 from app.core.security import Role, require_roles
 from app.models.calendar_sync import CalendarSyncState
 from app.models.employee import Employee
-from app.services.google_calendar import CalendarNotConfiguredError, CalendarNotFoundError, sync_hype_calendar
+from app.services.google_calendar import (
+    CalendarAuthError,
+    CalendarNotConfiguredError,
+    CalendarNotFoundError,
+    sync_hype_calendar,
+)
 
 router = APIRouter(prefix="/admin/calendar-sync", tags=["admin"])
 
@@ -20,7 +25,7 @@ router = APIRouter(prefix="/admin/calendar-sync", tags=["admin"])
 def trigger_sync(db: Session = Depends(get_db), _user: Employee = Depends(require_roles(Role.ADMIN))) -> dict:
     try:
         return sync_hype_calendar(db)
-    except (CalendarNotConfiguredError, CalendarNotFoundError) as exc:
+    except (CalendarNotConfiguredError, CalendarNotFoundError, CalendarAuthError) as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
 

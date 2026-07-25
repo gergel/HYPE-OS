@@ -71,26 +71,60 @@ class CalendarNotFoundError(RuntimeError):
     """A hitelesített fiók nem lát a megadott nevű naptárat."""
 
 
+class CalendarAuthError(RuntimeError):
+    """A hitelesítő adatok be vannak állítva, de a Google elutasította őket
+    (hibás JSON, lejárt/visszavont kulcs, hiányzó domain-wide delegation
+    jóváhagyás stb.) - külön hibaosztály, hogy admin a Beállítások oldalon a
+    tényleges Google hibaüzenetet lássa egy semmitmondó "szerverhiba" helyett
+    (lásd main.py catch_unhandled_exceptions - enélkül minden itt eldobott
+    kivétel egy generikus 500-zá silányulna, és a valódi ok csak a Railway
+    logban látszana)."""
+
+
 def _calendar_service():
-    if settings.google_calendar_oauth_token_json:
-        data = json.loads(settings.google_calendar_oauth_token_json)
-        data.setdefault("token_uri", "https://oauth2.googleapis.com/token")
-        creds = UserCredentials.from_authorized_user_info(data, scopes=CALENDAR_SCOPES)
-        if not creds.valid:
-            creds.refresh(Request())
-        return build("calendar", "v3", credentials=creds, cache_discovery=False)
+    try:
+        if settings.google_calendar_oauth_token_json:
+            data = json.loads(settings.google_calendar_oauth_token_json)
+            data.setdefault("token_uri", "https://oauth2.googleapis.com/token")
+            creds = UserCredentials.from_authorized_user_info(data, scopes=CALENDAR_SCOPES)
+            if not creds.valid:
+                creds.refresh(Request())
+            return build("calendar", "v3", credentials=creds, cache_discovery=False)
 
-    if settings.google_calendar_service_account_json:
-        info = json.loads(settings.google_calendar_service_account_json)
-        sa = ServiceAccountCredentials.from_service_account_info(info, scopes=CALENDAR_SCOPES)
-        if settings.google_calendar_impersonate_user:
-            sa = sa.with_subject(settings.google_calendar_impersonate_user)
-        return build("calendar", "v3", credentials=sa, cache_discovery=False)
+        if settings.google_calendar_service_account_json:
+            info = json.loads(settings.google_calendar_service_account_json)
+            sa = ServiceAccountCredentials.from_service_account_info(info, scopes=CALENDAR_SCOPES)
+            if settings.google_calendar_impersonate_user:
+                sa = sa.with_subject(settings.google_calendar_impersonate_user)
+            # A service account hitelesítés csak a build() hívásnál még nem
+            # derül ki, hogy tényleg működik-e - egy próba API hívással
+            # (calendarList) explicit módon kikényszerítjük a tokenlekérést
+            # itt, hogy a hiba (pl. hibás private_key formázás, visszavont
+            # kulcs, hiányzó domain-wide delegation jóváhagyás) egyértelmű
+            # üzenettel bukjon el, ne egy később, véletlenszerű helyen.
+            service = build("calendar", "v3", credentials=sa, cache_discovery=False)
+            service.calendarList().list(maxResults=1).execute()
+            return service
 
-    raise CalendarNotConfiguredError(
-        "Nincs Google Naptár hitelesítés beállítva (GOOGLE_CALENDAR_OAUTH_TOKEN_JSON vagy "
-        "GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON) - állítsd be a backend környezeti változóit."
-    )
+        raise CalendarNotConfiguredError(
+            "Nincs Google Naptár hitelesítés beállítva (GOOGLE_CALENDAR_OAUTH_TOKEN_JSON vagy "
+            "GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON) - állítsd be a backend környezeti változóit."
+        )
+    except CalendarNotConfiguredError:
+        raise
+    except json.JSONDecodeError as exc:
+        raise CalendarAuthError(
+            f"A megadott Google hitelesítő adat nem érvényes JSON ({exc}) - ellenőrizd, hogy a teljes "
+            "service account/OAuth token JSON-t hiba nélkül másoltad-e be a környezeti változóba."
+        ) from exc
+    except HttpError as exc:
+        raise CalendarAuthError(
+            f"A Google elutasította a hitelesítést (HTTP {exc.resp.status}): {exc.reason or exc}. Ellenőrizd, hogy "
+            "a service account fiókkal (a JSON-ban lévő client_email) meg van-e osztva a naptár, vagy ha domain-wide "
+            "delegationt használsz, jóvá van-e hagyva a Google Workspace admin konzolban a megfelelő scope-ra."
+        ) from exc
+    except Exception as exc:  # noqa: BLE001 - lásd CalendarAuthError docstring: mindig kell egy érthető üzenet
+        raise CalendarAuthError(f"Hiba a Google Naptár hitelesítés során: {type(exc).__name__}: {exc}") from exc
 
 
 def _resolve_calendar_id(service) -> str:
@@ -100,16 +134,21 @@ def _resolve_calendar_id(service) -> str:
     target = settings.google_calendar_name.strip()
     page_token = None
     names_seen: list[str] = []
-    while True:
-        resp = service.calendarList().list(pageToken=page_token).execute()
-        for item in resp.get("items", []):
-            summary = (item.get("summary") or "").strip()
-            names_seen.append(summary)
-            if summary == target:
-                return item["id"]
-        page_token = resp.get("nextPageToken")
-        if not page_token:
-            break
+    try:
+        while True:
+            resp = service.calendarList().list(pageToken=page_token).execute()
+            for item in resp.get("items", []):
+                summary = (item.get("summary") or "").strip()
+                names_seen.append(summary)
+                if summary == target:
+                    return item["id"]
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+    except HttpError as exc:
+        raise CalendarAuthError(
+            f"Hiba a naptárak listázása közben (HTTP {exc.resp.status}): {exc.reason or exc}."
+        ) from exc
 
     raise CalendarNotFoundError(
         f"Nem található '{target}' nevű naptár a hitelesített Google fiók naptárai között "
