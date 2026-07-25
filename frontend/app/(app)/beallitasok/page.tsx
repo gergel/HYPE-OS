@@ -2,6 +2,7 @@ import { AccountCard } from "@/components/AccountCard";
 import { CalendarSyncPanel } from "@/components/CalendarSyncPanel";
 import { Card } from "@/components/Card";
 import { DetailTabEditor } from "@/components/DetailTabEditor";
+import { DispoResponsiblesManager } from "@/components/DispoResponsiblesManager";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
 import { NotionImportPanel } from "@/components/NotionImportPanel";
 import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
@@ -9,6 +10,7 @@ import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   getAllDetailTabs,
+  getDispoResponsibles,
   getAllFieldVisibility,
   getAllPageAccess,
   getCurrentUser,
@@ -75,14 +77,16 @@ const VISIBILITY_ENTITIES: { entityType: string; label: string; basePath: string
 ];
 
 export default async function BeallitasokPage() {
-  const [employees, pageAccessConfigs, fieldVisibilityConfigs, samples, currentUser, allDetailTabs] = await Promise.all([
+  const [employees, pageAccessConfigs, fieldVisibilityConfigs, samples, currentUser, allDetailTabs, dispoResponsibles] =
+    await Promise.all([
     getEmployees(),
     getAllPageAccess(),
     getAllFieldVisibility(),
     Promise.all(VISIBILITY_ENTITIES.map((e) => getSampleRecord(e.basePath))),
     getCurrentUser(),
     getAllDetailTabs(),
-  ]);
+      getDispoResponsibles(),
+    ]);
   const pages = pagePermissionGroups();
 
   const visibilityEntities = VISIBILITY_ENTITIES.map((entity, i) => {
@@ -152,6 +156,17 @@ export default async function BeallitasokPage() {
               félbe.
             </p>
             <NotionImportPanel />
+          </Card>
+        )}
+
+        {currentUser?.role === "admin" && (
+          <Card title="Diszpó felelősök">
+            <p className="mb-3 text-[13px] text-text-secondary">
+              Akik itt szerepelnek, azoknak a &quot;Teendőim&quot; widget minden nap felhozza a MÁSNAPI forgatások
+              diszpóit. A két oldal külön névsor, és külön feltétellel kerül le a teendő - egy ember mindkét oldalon
+              szerepelhet.
+            </p>
+            <DispoResponsiblesManager initial={dispoResponsibles} employees={employees} />
           </Card>
         )}
 

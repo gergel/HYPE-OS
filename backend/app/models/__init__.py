@@ -11,6 +11,7 @@ from app.models.deliverable import Deliverable, deliverable_contacts
 from app.models.deliverable_comment import DeliverableComment
 from app.models.detail_section_order import DetailSectionOrder
 from app.models.detail_tab import DetailTabConfig
+from app.models.dispo_responsible import DispoResponsible, DispoSide
 from app.models.employee import Employee, EmployeeType, SystemRole
 from app.models.employee_document import EmployeeDocument
 from app.models.equipment import Assignment, Equipment, TrackMode
@@ -61,6 +62,8 @@ __all__ = [
     "DeliverableComment",
     "DetailSectionOrder",
     "DetailTabConfig",
+    "DispoResponsible",
+    "DispoSide",
     "Employee",
     "EmployeeType",
     "SystemRole",

@@ -1,6 +1,6 @@
 """Dashboard modul - a mockup összegző kártyáinak valós lekérdezései."""
 
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.dashboard_config import DashboardConfig
 from app.models.deliverable import Deliverable
+from app.models.dispo_responsible import DispoResponsible, DispoSide
 from app.models.employee import Employee
 from app.models.finance import Revenue
 from app.models.project import Project
@@ -48,6 +49,10 @@ class MyTaskItem(BaseModel):
 class MyTasksSummary(BaseModel):
     deliverables: list[MyTaskItem]
     tasks: list[MyTaskItem]
+    # A másnapi forgatások diszpói, ha a felhasználó diszpó-felelős (lásd
+    # models/dispo_responsible.py). Külön lista, mert nem egy Feladat/Utómunka
+    # rekordból jön, hanem a forgatás diszpó-állapotából származtatjuk.
+    diszpok: list[MyTaskItem] = []
 
 
 class DashboardSummary(BaseModel):
@@ -178,7 +183,58 @@ def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get
             for d in deliverables
         ],
         tasks=[MyTaskItem(id=t.id, title=t.feladat, hatarido=t.hatarido, link="/feladatok") for t in tasks],
+        diszpok=_tomorrow_dispo_tasks(db, current_user),
     )
+
+
+def _tomorrow_dispo_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
+    """A MÁSNAPI forgatások diszpói teendőként, ha a felhasználó diszpó-felelős.
+
+    A két oldal külön tétel, mert külön feltétellel kerül le a listáról:
+
+    - gyártás: az előzetes diszpó kiküldésével kész. Ha viszont a TELJES diszpó
+      már kiment (akár előzetes nélkül), akkor sincs több teendő - a felhasználó
+      kifejezett kérése, hogy ilyenkor a gyártástól is tűnjön el.
+    - technika: KIZÁRÓLAG a teljes diszpó kiküldésével kész; az előzetes
+      önmagában nem számít, mert a technika lista abban még nem megy ki.
+
+    Aki mindkét oldalon felelős, két tételt lát ugyanarra a forgatásra, amíg
+    mindkettő nyitva van - szándékosan, mert két külön elvégzendő dologról van
+    szó."""
+    sides = set(
+        db.scalars(select(DispoResponsible.oldal).where(DispoResponsible.employee_id == user.id)).all()
+    )
+    if not sides:
+        return []
+
+    tomorrow = date.today() + timedelta(days=1)
+    projects = db.scalars(
+        select(Project).where(Project.forgatas_datuma == tomorrow).order_by(Project.nev)
+    ).all()
+
+    items: list[MyTaskItem] = []
+    for p in projects:
+        teljes_kiment = bool(p.diszpo)
+        elozetes_kiment = bool(p.elozetes_diszpo_kuldes)
+        if DispoSide.GYARTAS in sides and not elozetes_kiment and not teljes_kiment:
+            items.append(
+                MyTaskItem(
+                    id=p.id,
+                    title=f"Előzetes diszpó (gyártás): {p.nev}",
+                    hatarido=p.forgatas_datuma,
+                    link=f"/projektek/{p.id}",
+                )
+            )
+        if DispoSide.TECHNIKA in sides and not teljes_kiment:
+            items.append(
+                MyTaskItem(
+                    id=p.id,
+                    title=f"Teljes diszpó (technika): {p.nev}",
+                    hatarido=p.forgatas_datuma,
+                    link=f"/projektek/{p.id}",
+                )
+            )
+    return items
 
 
 @router.get("/config/me", response_model=MyDashboardConfig)

@@ -35,12 +35,32 @@ export function AlertsCard({ alerts, allowedPages }: { alerts: DashboardAlerts; 
 }
 
 export function MyTasksCard({ myTasks }: { myTasks: MyTasksSummary }) {
-  const { deliverables, tasks } = myTasks;
-  if (deliverables.length === 0 && tasks.length === 0) {
+  const { deliverables, tasks, diszpok } = myTasks;
+  if (deliverables.length === 0 && tasks.length === 0 && diszpok.length === 0) {
     return <p className="text-[13px] text-text-muted">Nincs nyitott teendőd.</p>;
   }
   return (
     <div className="space-y-3">
+      {/* Elöl a diszpók: ezek MÁSNAPI határidejűek, tehát a legsürgősebbek -
+          lásd backend api/routes/dashboard.py _tomorrow_dispo_tasks. */}
+      {diszpok.length > 0 && (
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">Holnapi diszpó</p>
+          <ul className="space-y-1">
+            {diszpok.map((d, i) => (
+              <li key={`diszpo-${d.id}-${i}`}>
+                <Link
+                  href={d.link}
+                  className="flex items-center justify-between gap-3 rounded-[var(--radius)] px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-3"
+                >
+                  <span className="truncate text-text-primary">{d.title}</span>
+                  {d.hatarido && <span className="shrink-0 text-text-secondary">{formatShortDate(d.hatarido)}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {deliverables.length > 0 && (
         <div>
           <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">Rád kiosztott utómunka</p>

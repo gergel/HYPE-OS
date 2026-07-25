@@ -779,7 +779,19 @@ export type MyTaskItem = {
 export type MyTasksSummary = {
   deliverables: MyTaskItem[];
   tasks: MyTaskItem[];
+  /** A másnapi forgatások diszpói, ha a felhasználó diszpó-felelős (lásd
+   * backend models/dispo_responsible.py). */
+  diszpok: MyTaskItem[];
 };
+
+/** Ki felel a diszpó kiküldéséért, oldalanként (gyártás / technika) - a
+ * Beállítások oldalon szerkeszthető, és ez alapján kapják meg a felelősök a
+ * másnapi diszpókat teendőként. */
+export type DispoResponsibles = { gyartas: number[]; technika: number[] };
+
+export async function getDispoResponsibles(): Promise<DispoResponsibles> {
+  return (await apiGet<DispoResponsibles>("/api/v1/dispo-responsibles")) ?? { gyartas: [], technika: [] };
+}
 
 export async function getMyTasksSummary(): Promise<MyTasksSummary | null> {
   return apiGet<MyTasksSummary>("/api/v1/dashboard/my-tasks");
