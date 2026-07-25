@@ -23,6 +23,7 @@ export function DataTable<T extends { id: number }>({
   getHref,
   filterable = false,
   deleteHref,
+  onRowClick,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -33,6 +34,9 @@ export function DataTable<T extends { id: number }>({
   /** Ha meg van adva, minden sor végén egy törlés-gomb jelenik meg - a DELETE
    * végpont teljes útvonalát adja vissza (pl. `/api/v1/deliverables/42`). */
   deleteHref?: (row: T) => string;
+  /** Ha meg van adva, sorra kattintáskor ez fut le a sor id-jével a getHref
+   * szerinti navigáció HELYETT (pl. felugró ablakban való megnyitáshoz). */
+  onRowClick?: (id: number) => void;
 }) {
   const headerMeta = columns.map((col) => ({ header: col.header, align: col.align, sortable: !!col.sortAccessor }));
   const renderedRows = rows.map((row) => ({
@@ -44,5 +48,13 @@ export function DataTable<T extends { id: number }>({
     searchText: JSON.stringify(row).toLowerCase(),
   }));
 
-  return <InteractiveTableClient headerMeta={headerMeta} rows={renderedRows} emptyText={emptyText} filterable={filterable} />;
+  return (
+    <InteractiveTableClient
+      headerMeta={headerMeta}
+      rows={renderedRows}
+      emptyText={emptyText}
+      filterable={filterable}
+      onRowClick={onRowClick}
+    />
+  );
 }

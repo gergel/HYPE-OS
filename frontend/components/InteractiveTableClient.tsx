@@ -24,11 +24,15 @@ export function InteractiveTableClient({
   rows,
   emptyText,
   filterable,
+  onRowClick,
 }: {
   headerMeta: HeaderMeta[];
   rows: RenderedRow[];
   emptyText: string;
   filterable: boolean;
+  /** Ha meg van adva, sorra kattintáskor ez fut le (a sor id-jével) a
+   * href-alapú navigáció HELYETT - lásd RowLink.tsx. */
+  onRowClick?: (id: number) => void;
 }) {
   const [query, setQuery] = useState("");
   const [sortIndex, setSortIndex] = useState<number | null>(null);
@@ -114,9 +118,9 @@ export function InteractiveTableClient({
                     </td>,
                   );
                 }
-                if (row.href) {
+                if (row.href || onRowClick) {
                   return (
-                    <RowLink key={row.id} href={row.href}>
+                    <RowLink key={row.id} href={row.href} onClick={onRowClick ? () => onRowClick(row.id) : undefined}>
                       {cells}
                     </RowLink>
                   );

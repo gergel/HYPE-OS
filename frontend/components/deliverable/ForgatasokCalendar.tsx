@@ -144,7 +144,17 @@ function AddUtomunkaButton({ projectId }: { projectId: number }) {
  * időtartamukon átívelő sávként jelennek meg minden érintett hét tetején -
  * NEM ismétlődnek külön-külön minden napi cellában -, az egynapos forgatások
  * pedig változatlanul a saját napjuk cellájában, kis "pill"-ként. */
-export function ForgatasokCalendar({ projects }: { projects: CalendarProject[] }) {
+export function ForgatasokCalendar({
+  projects,
+  onProjectClick,
+}: {
+  projects: CalendarProject[];
+  /** Ha meg van adva, egy projektre kattintás ezt hívja meg (a projekt id-
+   * jével) a `/projektek/{id}`-re navigálás HELYETT - pl. felugró ablakban
+   * való megnyitáshoz (lásd ProjektekContent.tsx). Az Utómunka oldal nem ad
+   * meg ilyet, ott változatlanul a teljes oldalra navigál kattintás. */
+  onProjectClick?: (id: number) => void;
+}) {
   const [monthCursor, setMonthCursor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -225,6 +235,14 @@ export function ForgatasokCalendar({ projects }: { projects: CalendarProject[] }
                           <div key={p.id} className="flex items-center gap-1 rounded bg-surface-3 px-1 py-0.5">
                             <a
                               href={`/projektek/${p.id}`}
+                              onClick={
+                                onProjectClick
+                                  ? (e) => {
+                                      e.preventDefault();
+                                      onProjectClick(p.id);
+                                    }
+                                  : undefined
+                              }
                               className="min-w-0 flex-1 truncate text-text-secondary hover:text-text-accent hover:underline"
                               title={p.nev}
                             >
@@ -247,6 +265,14 @@ export function ForgatasokCalendar({ projects }: { projects: CalendarProject[] }
                     <a
                       key={b.project.id}
                       href={`/projektek/${b.project.id}`}
+                      onClick={
+                        onProjectClick
+                          ? (e) => {
+                              e.preventDefault();
+                              onProjectClick(b.project.id);
+                            }
+                          : undefined
+                      }
                       className="pointer-events-auto absolute flex items-center truncate rounded bg-surface-3 px-1.5 text-text-secondary hover:text-text-accent"
                       style={{
                         left: `${(b.startCol / 7) * 100}%`,
