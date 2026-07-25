@@ -79,6 +79,7 @@ export function buildFieldTabs({
   prependContent = {},
   badges = {},
   widgets = {},
+  sectionOrder = [],
 }: {
   page: string;
   patchPath: string;
@@ -110,6 +111,12 @@ export function buildFieldTabs({
    * el: ha admin nem rendeli egyik fülhöz sem, a szintetikus "Egyéb" fülre
    * esik, pont úgy, mint egy hozzá nem rendelt mező. */
   widgets?: Record<string, React.ReactNode>;
+  /** A felhasználó által húzással beállított kártya-sorrend (lásd
+   * DetailSections + backend detail_section_orders) - itt, szerver oldalon
+   * alkalmazzuk, hogy már az ELSŐ renderelés a mentett sorrendben történjen,
+   * ne ugorjanak át a kártyák betöltés után. Ami nincs benne a mentett
+   * listában, az a végére kerül, a természetes sorrendjében. */
+  sectionOrder?: string[];
 }): DetailSection[] {
   const hiddenSet = new Set([...ALWAYS_EXCLUDE_META, ...alwaysHidden]);
   const widgetKeys = Object.keys(widgets);
@@ -181,6 +188,19 @@ export function buildFieldTabs({
         </>
       ),
     });
+  }
+
+  if (sectionOrder.length > 0) {
+    const rank = (key: string) => {
+      const i = sectionOrder.indexOf(key);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    // Stabil rendezés: az azonos rangúak (mind a -1-esek) megtartják az
+    // eredeti egymáshoz képesti sorrendjüket.
+    return sections
+      .map((s, i) => ({ s, i }))
+      .sort((a, b) => rank(a.s.key) - rank(b.s.key) || a.i - b.i)
+      .map(({ s }) => s);
   }
 
   return sections;

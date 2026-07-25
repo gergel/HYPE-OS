@@ -25,6 +25,7 @@ import {
   ENTITY_PATHS,
   formatHuf,
   getAllTigForProject,
+  getCurrentUser,
   getDetailTabs,
   getEmployees,
   getEquipment,
@@ -34,6 +35,7 @@ import {
   getPendingTigForProject,
   getRecord,
   getRelated,
+  getSectionOrder,
   getVisibleFields,
 } from "@/lib/api";
 import { buildFieldTabs, EQUIPMENT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
@@ -86,6 +88,8 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     fieldTypes,
     dbTabs,
     pagePermissions,
+    sectionOrder,
+    currentUser,
   ] = await Promise.all([
     project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
     project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
@@ -100,6 +104,8 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     getFieldTypes("project"),
     getDetailTabs("project"),
     getMyPagePermissions(),
+    getSectionOrder("project"),
+    getCurrentUser(),
   ]);
 
   const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
@@ -146,6 +152,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     visibleFields,
     fieldTypes,
     pagePermissions,
+    sectionOrder,
     alwaysHidden: ALWAYS_HIDDEN,
     // A lenti bespoke widgetek (diszpó küldés, szerződés/TIG) szándékosan
     // extraTabs-ként, NEM prependContent-ként szerepelnek: a prependContent
@@ -325,7 +332,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
           }
         />
 
-        <DetailSections sections={tabs} />
+        <DetailSections sections={tabs} entityType="project" canReorder={currentUser?.role === "admin"} />
       </div>
     </div>
   );

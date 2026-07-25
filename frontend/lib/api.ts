@@ -587,6 +587,14 @@ export async function getDetailTabs(entityType: string): Promise<DetailTab[]> {
   return (await apiGet<DetailTab[]>(`/api/v1/detail-tabs/${entityType}`)) ?? [];
 }
 
+/** A részletnézet szekció-kártyáinak ("widgetek") mentett sorrendje - a
+ * felhasználó húzással állítja be, és onnantól az adott entitástípus MINDEN
+ * rekordjánál ez érvényes (lásd components/DetailSections.tsx). */
+export async function getSectionOrder(entityType: string): Promise<string[]> {
+  const res = await apiGet<{ section_keys: string[] }>(`/api/v1/detail-tabs/${entityType}/section-order`);
+  return res?.section_keys ?? [];
+}
+
 export type DetailTabConfigByEntity = { entity_type: string; tabs: DetailTab[] };
 
 /** Admin-nézet: MINDEN entitástípus fül-elrendezése egyszerre (Beállítások

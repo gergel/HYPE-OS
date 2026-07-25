@@ -1,15 +1,21 @@
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import Role, get_current_user, require_roles
+from app.models.detail_section_order import DetailSectionOrder
 from app.models.detail_tab import DetailTabConfig
 from app.models.employee import Employee
 from app.schemas.detail_tab import DetailTabConfigRead, DetailTabConfigWrite, DetailTabRead
 from app.services import detail_tabs as detail_tabs_service
 
 router = APIRouter(prefix="/detail-tabs", tags=["detail-tabs"])
+
+
+class SectionOrderPayload(BaseModel):
+    section_keys: list[str]
 
 
 @router.get("", response_model=list[DetailTabConfigRead])
@@ -46,3 +52,33 @@ def set_tab_config(
     """Admin felülírja egy entitástípus teljes fül-listáját (Beállítások
     oldal) - a korábbi fülek törlődnek, az újak lépnek a helyükre."""
     return detail_tabs_service.replace_tabs(db, entity_type, payload.tabs)
+
+
+@router.get("/{entity_type}/section-order", response_model=SectionOrderPayload)
+def get_section_order(
+    entity_type: str, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
+) -> SectionOrderPayload:
+    """A részletnézet szekció-kártyáinak sorrendje - bármely bejelentkezett
+    felhasználó lekérdezheti, mert minden részletnézet ez alapján rendeződik."""
+    row = db.scalars(select(DetailSectionOrder).where(DetailSectionOrder.entity_type == entity_type)).first()
+    return SectionOrderPayload(section_keys=row.section_keys if row else [])
+
+
+@router.put("/{entity_type}/section-order", response_model=SectionOrderPayload)
+def set_section_order(
+    entity_type: str,
+    payload: SectionOrderPayload,
+    db: Session = Depends(get_db),
+    _admin: Employee = Depends(require_roles(Role.ADMIN)),
+) -> SectionOrderPayload:
+    """Az új sorrend mentése (húzással átrendezés után) - entitástípusonként
+    EGY közös sorrend, tehát az adott típus minden rekordjánál ez érvényesül,
+    pontosan úgy, ahogy az admin beállította."""
+    row = db.scalars(select(DetailSectionOrder).where(DetailSectionOrder.entity_type == entity_type)).first()
+    if row is None:
+        row = DetailSectionOrder(entity_type=entity_type, section_keys=payload.section_keys)
+        db.add(row)
+    else:
+        row.section_keys = payload.section_keys
+    db.commit()
+    return SectionOrderPayload(section_keys=row.section_keys)
