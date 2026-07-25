@@ -459,6 +459,14 @@ export type UtokovetesOverview = {
   tig_ready: boolean;
   tig_osszes: number;
   tig_fuggo: number;
+  /** Kifizetés: a nem belsős stábtagok (külsős + keretszerződéses) közül
+   * hánynak kell fizetni, és hány van még hátra (lásd backend
+   * utokovetes_admin.py _kifizetes_state). */
+  kifizetes_osszes: number;
+  kifizetes_fuggo: number;
+  /** Csak akkor igaz, ha a szerződések, a TIG-ek ÉS a kifizetések is mind
+   * rendben vannak - ekkor a projekt teljesen le van zárva. */
+  kesz: boolean;
   visszajelzes_darab: number;
 };
 
@@ -480,7 +488,17 @@ export type UtokovetesDetail = {
   forgatas_datuma_vege: string | null;
   szerzodesek: { id: number; full_name: string; email: string | null; draft: SubcontractorContractDraft | null }[];
   tig_ready: boolean;
-  teljesitesi_igazolasok: { id: number; full_name: string; email: string | null; draft: TigDraft | null }[];
+  teljesitesi_igazolasok: {
+    id: number;
+    full_name: string;
+    email: string | null;
+    draft: TigDraft | null;
+    szamla_kifizetve: boolean;
+    van_szamla: boolean;
+  }[];
+  kifizetes_osszes: number;
+  kifizetes_fuggo: number;
+  kesz: boolean;
   visszajelzesek: PostShootFeedback[];
 };
 

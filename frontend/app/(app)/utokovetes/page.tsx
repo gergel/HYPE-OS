@@ -17,6 +17,12 @@ function tigBadge(ready: boolean, osszes: number, fuggo: number) {
   return <StatusBadge label={`${fuggo} függő`} tone="warning" />;
 }
 
+function kifizetesBadge(osszes: number, fuggo: number) {
+  if (osszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
+  if (fuggo === 0) return <StatusBadge label={`${osszes}/${osszes} kifizetve`} tone="success" />;
+  return <StatusBadge label={`${fuggo} kifizetetlen`} tone="warning" />;
+}
+
 function visszajelzesBadge(darab: number) {
   if (darab === 0) return <StatusBadge label="Nincs válasz" tone="neutral" />;
   return <StatusBadge label={`${darab} válasz`} tone="success" />;
@@ -59,9 +65,25 @@ export default async function UtokovetesPage() {
                 sortAccessor: (r) => r.tig_fuggo,
               },
               {
+                header: "Kifizetés",
+                render: (r) => kifizetesBadge(r.kifizetes_osszes, r.kifizetes_fuggo),
+                sortAccessor: (r) => r.kifizetes_fuggo,
+              },
+              {
                 header: "Visszajelzés",
                 render: (r) => visszajelzesBadge(r.visszajelzes_darab),
                 sortAccessor: (r) => r.visszajelzes_darab,
+              },
+              {
+                header: "Kész",
+                render: (r) =>
+                  r.kesz ? (
+                    <StatusBadge label="Kész" tone="success" />
+                  ) : (
+                    <StatusBadge label="Folyamatban" tone="neutral" />
+                  ),
+                // A kész projektek kerüljenek a lista végére rendezéskor.
+                sortAccessor: (r) => (r.kesz ? 1 : 0),
               },
             ]}
           />

@@ -71,6 +71,32 @@ def _tig_state(db: Session, project: Project, szerzodes_done: bool) -> tuple[boo
     return True, total, len(pending)
 
 
+def _kifizetes_state(db: Session, project: Project) -> tuple[int, int]:
+    """(összes, függő) - ki van-e fizetve mindenki, akinek fizetni kell.
+
+    A populáció ugyanaz, mint a TIG-nél: minden NEM belsős stábtag, tehát a
+    külsősök ÉS a keretszerződésesek is (a belsősök havi bérezésűek, nekik
+    projektenként nincs kifizetés - a felhasználó kifejezett kérése).
+
+    Akinek a TIG-je "Kihagyva", annak nincs mit kifizetni, ezért ki is marad a
+    nevezőből - különben egy szándékosan kihagyott ember örökre "függőben"
+    tartaná a projektet."""
+    candidates = _tig_candidates(project)
+    if not candidates:
+        return 0, 0
+    tig_lookup = _load_tig_lookup(db, {e.id for e in candidates})
+    total = 0
+    pending = 0
+    for e in candidates:
+        tig = tig_lookup.get((project.id, e.id))
+        if tig is not None and tig.allapot == "Kihagyva":
+            continue
+        total += 1
+        if tig is None or not tig.szamla_kifizetve:
+            pending += 1
+    return total, pending
+
+
 class ProjectOverviewSummary(BaseModel):
     project_id: int
     project_nev: str | None
@@ -82,6 +108,11 @@ class ProjectOverviewSummary(BaseModel):
     tig_ready: bool
     tig_osszes: int
     tig_fuggo: int
+    kifizetes_osszes: int
+    kifizetes_fuggo: int
+    # Akkor és csak akkor teljesen kész a projekt, ha az adminisztráció mindhárom
+    # fázisa lezárult ÉS mindenki meg is kapta a pénzét (lásd _kifizetes_state).
+    kesz: bool
     visszajelzes_darab: int
 
 
@@ -101,6 +132,7 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
     for p in projects:
         szerzodes_osszes, szerzodes_fuggo = _szerzodes_candidates(db, p)
         tig_ready, tig_osszes, tig_fuggo = _tig_state(db, p, szerzodes_fuggo == 0)
+        kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(db, p)
         result.append(
             ProjectOverviewSummary(
                 project_id=p.id,
@@ -113,6 +145,9 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
                 tig_ready=tig_ready,
                 tig_osszes=tig_osszes,
                 tig_fuggo=tig_fuggo,
+                kifizetes_osszes=kifizetes_osszes,
+                kifizetes_fuggo=kifizetes_fuggo,
+                kesz=szerzodes_fuggo == 0 and tig_fuggo == 0 and kifizetes_fuggo == 0,
                 visszajelzes_darab=len(p.post_shoot_feedbacks),
             )
         )
@@ -131,6 +166,10 @@ class TigStatusInfo(BaseModel):
     full_name: str
     email: str | None
     draft: TigDraftInfo | None
+    # A TIG kiküldése utáni lépés: fel van-e töltve a számla és ki van-e fizetve
+    # (lásd models/performance_certificate.py) - enélkül a projekt nincs kész.
+    szamla_kifizetve: bool = False
+    van_szamla: bool = False
 
 
 class ProjectOverviewDetail(BaseModel):
@@ -142,6 +181,9 @@ class ProjectOverviewDetail(BaseModel):
     szerzodesek: list[ContractStatusInfo]
     tig_ready: bool
     teljesitesi_igazolasok: list[TigStatusInfo]
+    kifizetes_osszes: int
+    kifizetes_fuggo: int
+    kesz: bool
     visszajelzesek: list[PostShootFeedbackRead]
 
 
@@ -164,10 +206,20 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
         candidates = _tig_candidates(project)
         tig_ready = bool(candidates)
         tig_lookup = _load_tig_lookup(db, {e.id for e in candidates})
-        teljesitesi_igazolasok = [
-            TigStatusInfo(id=e.id, full_name=e.full_name, email=e.email, draft=_tig_draft_info(tig_lookup.get((project.id, e.id))))
-            for e in candidates
-        ]
+        for e in candidates:
+            tig = tig_lookup.get((project.id, e.id))
+            teljesitesi_igazolasok.append(
+                TigStatusInfo(
+                    id=e.id,
+                    full_name=e.full_name,
+                    email=e.email,
+                    draft=_tig_draft_info(tig),
+                    szamla_kifizetve=bool(tig and tig.szamla_kifizetve),
+                    van_szamla=bool(tig and tig.szamla_url),
+                )
+            )
+    kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(db, project)
+    tig_fuggo = len(_tig_pending_employees(project, _load_tig_lookup(db, {e.id for e in _tig_candidates(project)}))) if szerzodes_done else 1
 
     feedbacks = (
         db.query(PostShootFeedback)
@@ -185,5 +237,8 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
         szerzodesek=szerzodesek,
         tig_ready=tig_ready,
         teljesitesi_igazolasok=teljesitesi_igazolasok,
+        kifizetes_osszes=kifizetes_osszes,
+        kifizetes_fuggo=kifizetes_fuggo,
+        kesz=szerzodes_done and tig_fuggo == 0 and kifizetes_fuggo == 0,
         visszajelzesek=[PostShootFeedbackRead.model_validate(f) for f in feedbacks],
     )

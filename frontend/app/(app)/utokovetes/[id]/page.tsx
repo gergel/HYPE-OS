@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
+import { StatusBadge } from "@/components/StatusBadge";
 import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
@@ -42,6 +43,23 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
         <BackLink href="/utokovetes" label="Utókövetés" />
 
         <Card title={detail.project_nev ?? `Projekt #${detail.project_id}`}>
+          {/* A projekt csak akkor teljesen kész, ha az alvállalkozók ki is
+              vannak fizetve - nem elég a szerződés + TIG (lásd backend
+              utokovetes_admin.py _kifizetes_state). */}
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            {detail.kesz ? (
+              <StatusBadge label="Teljesen kész" tone="success" />
+            ) : (
+              <StatusBadge label="Folyamatban" tone="warning" />
+            )}
+            <span className="text-[13px] text-text-secondary">
+              {detail.kifizetes_osszes === 0
+                ? "Nincs kifizetendő alvállalkozó ezen a projekten."
+                : detail.kifizetes_fuggo === 0
+                  ? `Mind a(z) ${detail.kifizetes_osszes} alvállalkozó ki van fizetve.`
+                  : `${detail.kifizetes_fuggo} / ${detail.kifizetes_osszes} alvállalkozó még nincs kifizetve.`}
+            </span>
+          </div>
           <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
             {detail.projektkod && <span>Projektkód: {detail.projektkod}</span>}
             <span>
@@ -69,6 +87,28 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
               kihagyva) - lásd a fenti &quot;Szerződés készítés&quot; kártyát.
             </p>
           )}
+          {detail.teljesitesi_igazolasok.length > 0 && (
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                Kifizetés (külsős + keretszerződéses; belsős nem számít)
+              </p>
+              <ul className="space-y-1">
+                {detail.teljesitesi_igazolasok.map((t) => (
+                  <li key={t.id} className="flex items-center justify-between gap-3 text-[13px]">
+                    <span className="truncate text-text-primary">{t.full_name}</span>
+                    {t.szamla_kifizetve ? (
+                      <StatusBadge label="Kifizetve" tone="success" />
+                    ) : t.van_szamla ? (
+                      <StatusBadge label="Számla feltöltve, nincs kifizetve" tone="warning" />
+                    ) : (
+                      <StatusBadge label="Nincs számla" tone="neutral" />
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <TigInvoiceManager
             projectId={projectId}
             basePath="/api/v1/teljesitesi-igazolasok"
