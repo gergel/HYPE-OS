@@ -20,6 +20,7 @@ export default async function TeljesitesiIgazolasokPage() {
       <div className="flex-1 p-6">
         <Card title={`Teljesítési igazolások (${projects.length} projekt)`}>
           <DataTable<(typeof projects)[number]>
+            filterable
             rows={projects}
             emptyText="Nincs függő teljesítési igazolás - minden diszpózott projekten, ahol lezárult a szerződés fázis, mindenki el van intézve."
             getHref={(p) => `/projektek/${p.project_id}`}

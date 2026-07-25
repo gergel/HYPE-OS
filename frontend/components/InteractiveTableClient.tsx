@@ -4,8 +4,10 @@ import { useMemo, useState, type ReactNode } from "react";
 import { RowLink } from "@/components/RowLink";
 import { DeleteButton } from "@/components/DeleteButton";
 import { RecordDetailModal } from "@/components/RecordDetailModal";
+import { TableFilterBuilder } from "@/components/TableFilterBuilder";
+import { matchesAllRules, type ColumnKind, type FilterRule } from "@/lib/tableFilters";
 
-export type HeaderMeta = { header: string; align?: "left" | "right"; sortable: boolean };
+export type HeaderMeta = { header: string; align?: "left" | "right"; sortable: boolean; kind: ColumnKind };
 export type RenderedRow = {
   id: number;
   href?: string;
@@ -13,6 +15,8 @@ export type RenderedRow = {
   cells: ReactNode[];
   sortKeys: (string | number | null | undefined)[];
   searchText: string;
+  /** Oszloponkénti szöveges érték a mezőnkénti szűréshez (lásd DataTable). */
+  filterValues: string[];
 };
 
 type SortDir = "asc" | "desc";
@@ -25,6 +29,7 @@ export function InteractiveTableClient({
   rows,
   emptyText,
   filterable,
+  columnFilters = true,
   onRowClick,
   openInModal = false,
 }: {
@@ -32,6 +37,8 @@ export function InteractiveTableClient({
   rows: RenderedRow[];
   emptyText: string;
   filterable: boolean;
+  /** Mezőnkénti szűrő-építő (lásd TableFilterBuilder). */
+  columnFilters?: boolean;
   /** Ha meg van adva, sorra kattintáskor ez fut le (a sor id-jével) a
    * href-alapú navigáció HELYETT - lásd RowLink.tsx. */
   onRowClick?: (id: number) => void;
@@ -41,15 +48,20 @@ export function InteractiveTableClient({
   openInModal?: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [rules, setRules] = useState<FilterRule[]>([]);
   const [modalHref, setModalHref] = useState<string | null>(null);
   const [sortIndex, setSortIndex] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
+  // A szabadszavas kereső és a mezőnkénti szabályok EGYÜTT szűkítenek (a
+  // felhasználó kérése: a szűrő-rendszer mellett a keresés is maradjon meg).
   const filtered = useMemo(() => {
-    if (!query.trim()) return rows;
     const needle = query.trim().toLowerCase();
-    return rows.filter((row) => row.searchText.includes(needle));
-  }, [rows, query]);
+    if (!needle && rules.length === 0) return rows;
+    return rows.filter(
+      (row) => (!needle || row.searchText.includes(needle)) && matchesAllRules(row.filterValues, rules),
+    );
+  }, [rows, query, rules]);
 
   const sorted = useMemo(() => {
     if (sortIndex === null) return filtered;
@@ -80,17 +92,30 @@ export function InteractiveTableClient({
 
   return (
     <div>
-      {filterable && (
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Szűrés..."
-          className="mb-2 w-full max-w-xs rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none"
-        />
+      {(filterable || columnFilters) && (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          {filterable && (
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Keresés..."
+              className="w-full max-w-xs rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none"
+            />
+          )}
+          {columnFilters && (
+            <TableFilterBuilder
+              columns={headerMeta.map((col) => ({ header: col.header, kind: col.kind }))}
+              rules={rules}
+              onChange={setRules}
+            />
+          )}
+        </div>
       )}
       {sorted.length === 0 ? (
-        <p className="text-[13px] text-text-muted">{query ? "Nincs találat a szűrésre." : emptyText}</p>
+        <p className="text-[13px] text-text-muted">
+          {query || rules.length > 0 ? "Nincs találat a szűrésre." : emptyText}
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[13px]">

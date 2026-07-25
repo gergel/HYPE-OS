@@ -49,6 +49,7 @@ export default async function VagokPage() {
             />
           )}
           <DataTable<VagoRow>
+            filterable
             rows={rows}
             emptyText="Még nincs vágóként felvett munkatárs - add hozzá fent."
             getHref={(e) => `/csapat/${e.id}?from=vagok`}

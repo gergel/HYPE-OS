@@ -29,6 +29,7 @@ export default async function KeretszerzodesekPage() {
         <Card title={`Keretszerződések (${rows.length})`}>
           <KeretszerzodesAddWidget candidates={candidates} />
           <DataTable<KeretszerzodesRow>
+            filterable
             rows={rows}
             emptyText="Még nincs felvett keretszerződés."
             getHref={(c) => `/csapat/${c.employee_id}`}

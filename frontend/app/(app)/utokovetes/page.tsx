@@ -43,6 +43,7 @@ export default async function UtokovetesPage() {
       <div className="flex-1 p-6">
         <Card title={`Utókövetés (${rows.length} diszpózott projekt)`}>
           <DataTable<(typeof rows)[number] & { id: number }>
+            filterable
             rows={rows.map((r) => ({ ...r, id: r.project_id }))}
             emptyText="Nincs még diszpózott projekt."
             getHref={(r) => `/utokovetes/${r.project_id}`}

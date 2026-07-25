@@ -54,6 +54,10 @@ export function RelatedTable({
       getHref={getHref}
       openInModal
       filterable={rows.length > 8}
+      // Kapcsolódó rekordok táblái általában rövidek - néhány sornál a
+      // szűrő-építő csak zaj lenne, ezért ugyanannál a küszöbnél jelenik meg,
+      // mint a keresőmező.
+      columnFilters={rows.length > 8}
       deleteHref={deleteBasePath ? (r) => `${deleteBasePath}/${r.id}` : undefined}
       columns={[
         { header: "Megnevezés", render: (r) => pickField(r, LABEL_KEYS) ?? `#${r.id}`, sortAccessor: (r) => pickField(r, LABEL_KEYS) },

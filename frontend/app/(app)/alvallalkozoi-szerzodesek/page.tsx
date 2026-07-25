@@ -19,6 +19,7 @@ export default async function AlvallalkozoiSzerzodesekPage() {
       <div className="flex-1 p-6">
         <Card title={`Alvállalkozók szerződése (${projects.length} projekt)`}>
           <DataTable<(typeof projects)[number]>
+            filterable
             rows={projects}
             emptyText="Nincs függő alvállalkozói szerződés - minden diszpózott projekten mindenki belsős, keretszerződéses, vagy már el van intézve."
             getHref={(p) => `/projektek/${p.project_id}`}
