@@ -89,6 +89,24 @@ class Settings(BaseSettings):
     google_calendar_id: str = ""
     google_calendar_name: str = "HYPE CALENDAR"
 
+    # A "csak jelentkezz be egyszer" folyamathoz (lásd services/google_oauth.py):
+    # ezekkel a HYPE OS a saját nevében kéri el a naptár olvasási jogot, a kapott
+    # refresh tokent pedig ADATBÁZISBAN tárolja - így adminnak soha nem kell
+    # kézzel token/service account JSON-t másolgatnia környezeti változóba.
+    # Ha nincs külön naptár-kliens megadva, a már meglévő Gmail OAuth kliensre
+    # esünk vissza (ugyanabban a Google Cloud projektben lévő OAuth client
+    # több scope-ra is használható), hogy ne kelljen új klienst regisztrálni.
+    google_calendar_oauth_client_id: str = ""
+    google_calendar_oauth_client_secret: str = ""
+
+    @property
+    def calendar_oauth_client_id(self) -> str:
+        return self.google_calendar_oauth_client_id or self.gmail_oauth_client_id
+
+    @property
+    def calendar_oauth_client_secret(self) -> str:
+        return self.google_calendar_oauth_client_secret or self.gmail_oauth_client_secret
+
     # ───────── AI Assistant (Anthropic Claude, tool-calling) ─────────
     # anthropic_api_key hiányában az /ai-assistant/ask végpont egyértelmű
     # hibaüzenetet ad vissza, de az app egyébként elindul. Sonnet 5-öt

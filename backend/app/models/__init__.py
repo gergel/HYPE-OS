@@ -16,6 +16,7 @@ from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.feedback import Feedback
 from app.models.field_visibility import FieldVisibilityConfig
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.google_oauth_token import GoogleOAuthToken
 from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
@@ -67,6 +68,7 @@ __all__ = [
     "TrackMode",
     "Feedback",
     "FieldVisibilityConfig",
+    "GoogleOAuthToken",
     "Expense",
     "KpForgalom",
     "Revenue",

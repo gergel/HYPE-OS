@@ -28,9 +28,14 @@ egy adott eseményhez - utána a sima ID-alapú keresés veszi át, tehát egy
 esetleges téves egyeztetés hatóköre korlátozott (csak akkor fordulhat elő,
 ha két különböző projektnek pontosan ugyanaz a neve ÉS kezdő dátuma).
 
-Hitelesítő adatok (GOOGLE_CALENDAR_OAUTH_TOKEN_JSON vagy
-GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON) nélkül minden hívás CalendarNotConfiguredError-t
-dob - ezt csak valódi env varokkal lehet tesztelni, ebből a sandboxból nem."""
+HITELESÍTÉS: az ajánlott (és adminnak legegyszerűbb) út a Beállítások oldalon
+egyszer elvégzett "Csatlakozás Google fiókkal" - az így kapott refresh token
+adatbázisban tárolódik és magától megújul, lásd services/google_oauth.py.
+Emellett visszafelé kompatibilisen továbbra is működik a két kézzel beállított
+környezeti változó (GOOGLE_CALENDAR_OAUTH_TOKEN_JSON vagy
+GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON). Ha egyik sincs, minden hívás
+CalendarNotConfiguredError-t dob. Valódi Google hívást csak élesben lehet
+tesztelni, ebből a sandboxból nem."""
 
 from __future__ import annotations
 
@@ -49,6 +54,7 @@ from app.models.calendar_sync import CalendarSyncState
 from app.models.client import Client
 from app.models.project import Project
 from app.models.project_code import ProjectCode
+from app.services.google_oauth import OAuthError, load_credentials as load_db_credentials
 
 CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
@@ -81,12 +87,29 @@ class CalendarAuthError(RuntimeError):
     logban látszana)."""
 
 
-def _calendar_service():
+def _calendar_service(db: Session | None = None):
     try:
+        # 1. Elsődleges (és ajánlott) forrás: a Beállítások oldalon egyszer
+        # elvégzett "Csatlakozás Google fiókkal" után adatbázisban tárolt
+        # hitelesítés - ez újul meg magától, adminnak nincs vele dolga.
+        if db is not None:
+            creds = load_db_credentials(db)
+            if creds is not None:
+                return build("calendar", "v3", credentials=creds, cache_discovery=False)
+
+        # 2. Visszafelé kompatibilis, kézzel beállított környezeti változók.
+        # A scope-ot NEM kényszerítjük rá a tárolt tokenre: ha az más
+        # jogosultság-készlettel lett kiállítva, a google-auth a frissítéskor
+        # elküldené ezt a listát, és a Google `invalid_scope`-pal utasítaná el.
         if settings.google_calendar_oauth_token_json:
             data = json.loads(settings.google_calendar_oauth_token_json)
-            data.setdefault("token_uri", "https://oauth2.googleapis.com/token")
-            creds = UserCredentials.from_authorized_user_info(data, scopes=CALENDAR_SCOPES)
+            creds = UserCredentials(
+                token=data.get("token"),
+                refresh_token=data.get("refresh_token"),
+                token_uri=data.get("token_uri") or "https://oauth2.googleapis.com/token",
+                client_id=data.get("client_id"),
+                client_secret=data.get("client_secret"),
+            )
             if not creds.valid:
                 creds.refresh(Request())
             return build("calendar", "v3", credentials=creds, cache_discovery=False)
@@ -107,10 +130,12 @@ def _calendar_service():
             return service
 
         raise CalendarNotConfiguredError(
-            "Nincs Google Naptár hitelesítés beállítva (GOOGLE_CALENDAR_OAUTH_TOKEN_JSON vagy "
-            "GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON) - állítsd be a backend környezeti változóit."
+            "Nincs összekötve Google fiók a naptár szinkronhoz - nyisd meg a Beállítások oldalt, és "
+            "kattints a 'Csatlakozás Google fiókkal' gombra."
         )
-    except CalendarNotConfiguredError:
+    except (CalendarNotConfiguredError, OAuthError):
+        # Az OAuthError már tartalmazza a valódi, admin számára értelmezhető
+        # üzenetet (lásd services/google_oauth.py), nem csomagoljuk újra.
         raise
     except json.JSONDecodeError as exc:
         raise CalendarAuthError(
@@ -264,7 +289,7 @@ def sync_hype_calendar(db: Session) -> dict:
     """Fő belépési pont - lásd modul-fejléc. Minden esemény-feldolgozás saját
     SAVEPOINT-ban fut (mint a Notion importnál), hogy egy hibás esemény ne
     dobja el a köteg többi, addig sikeresen feldolgozott elemét."""
-    service = _calendar_service()
+    service = _calendar_service(db)
     calendar_id = _resolve_calendar_id(service)
 
     state = db.query(CalendarSyncState).filter(CalendarSyncState.calendar_id == calendar_id).first()
