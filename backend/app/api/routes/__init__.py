@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.routes.admin_calendar_sync import router as admin_calendar_sync_router
 from app.api.routes.admin_import import router as admin_import_router
 from app.api.routes.ai_assistant import router as ai_assistant_router
 from app.api.routes.auth import router as auth_router
@@ -98,3 +99,5 @@ api_router.include_router(detail_tabs_router)
 api_router.include_router(notifications_router)
 # Admin: Notion import a böngészőből (railway ssh nélkül)
 api_router.include_router(admin_import_router)
+# Admin: HYPE CALENDAR naptár-szinkron kézi indítása/állapota
+api_router.include_router(admin_calendar_sync_router)

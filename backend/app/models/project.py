@@ -47,6 +47,13 @@ class Project(TimestampMixin, Base):
     )
     helyszin: Mapped[str | None] = mapped_column(String(255))
     allapot: Mapped[str | None] = mapped_column(String(50))
+    google_calendar_event_id: Mapped[str | None] = mapped_column(
+        String(255),
+        unique=True,
+        index=True,
+        comment="A HYPE CALENDAR naptárból szinkronizált esemény Google Calendar event ID-je - "
+        "csak a naptárból automatikusan létrehozott projekteknek van (lásd services/google_calendar.py).",
+    )
     teljesites_datuma: Mapped[date | None] = mapped_column(Date, comment="Teljesítés dátuma")
 
     # --- diszpó ---

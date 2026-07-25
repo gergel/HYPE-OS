@@ -1,4 +1,5 @@
 import { AccountCard } from "@/components/AccountCard";
+import { CalendarSyncPanel } from "@/components/CalendarSyncPanel";
 import { Card } from "@/components/Card";
 import { DetailTabEditor } from "@/components/DetailTabEditor";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
@@ -151,6 +152,18 @@ export default async function BeallitasokPage() {
               félbe.
             </p>
             <NotionImportPanel />
+          </Card>
+        )}
+
+        {currentUser?.role === "admin" && (
+          <Card title="Naptár szinkron">
+            <p className="mb-3 text-[13px] text-text-secondary">
+              A HYPE CALENDAR nevű Google Naptárban létrehozott/módosított/törölt eseményeket percenként automatikusan
+              tükrözi ide, Projektként (a naptárban törölt esemény a Projektet is törli, a szerkesztés felülírja a
+              dátumot/helyszínt/nevet). Az újonnan érkező projektek egy közös &quot;Naptárból importált (rendezetlen)&quot;
+              Project Code alá kerülnek, amíg admin át nem sorolja őket.
+            </p>
+            <CalendarSyncPanel />
           </Card>
         )}
 

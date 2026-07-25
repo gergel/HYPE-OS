@@ -74,6 +74,21 @@ class Settings(BaseSettings):
     def hype_cc_list(self) -> list[str]:
         return [addr.strip() for addr in self.hype_cc.replace(";", ",").split(",") if addr.strip()]
 
+    # ───────── Naptár szinkron (Google Calendar -> Project, percenkénti) ─────────
+    # KÜLÖN Google fiók, mint a fenti Gmail/Docs - a felhasználó megerősítette,
+    # hogy a HYPE CALENDAR más fióknál van, ezért saját hitelesítő adatok kellenek
+    # (ugyanaz a kettős minta, mint fent: OAuth token JSON VAGY service account
+    # JSON + opcionális impersonation - lásd services/google_calendar.py). Ha egyik
+    # sincs beállítva, a percenkénti sync feladat csendben kihagyja a futást.
+    google_calendar_oauth_token_json: str = ""
+    google_calendar_service_account_json: str = ""
+    google_calendar_impersonate_user: str = ""
+    # Ha üres, a szinkron a naptárak listájából NÉV szerint (google_calendar_name)
+    # keresi meg a naptárat - ha ismert a naptár ID-je (pl. xxx@group.calendar.google.com),
+    # ezzel megspórolható a névkeresés és egyértelműsíthető azonos nevű naptárak esetén.
+    google_calendar_id: str = ""
+    google_calendar_name: str = "HYPE CALENDAR"
+
     # ───────── AI Assistant (Anthropic Claude, tool-calling) ─────────
     # anthropic_api_key hiányában az /ai-assistant/ask végpont egyértelmű
     # hibaüzenetet ad vissza, de az app egyébként elindul. Sonnet 5-öt

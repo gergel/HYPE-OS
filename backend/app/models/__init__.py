@@ -2,6 +2,7 @@
 
 from app.core.database import Base
 from app.models.callsheet import Callsheet
+from app.models.calendar_sync import CalendarSyncState
 from app.models.campaign import Campaign
 from app.models.client import Client, Contact
 from app.models.contract import Contract, ContractType
@@ -46,6 +47,7 @@ from app.models.user_access import PageAccessConfig
 __all__ = [
     "Base",
     "Callsheet",
+    "CalendarSyncState",
     "Campaign",
     "Client",
     "Contact",

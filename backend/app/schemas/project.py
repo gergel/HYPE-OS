@@ -50,6 +50,7 @@ class ProjectUpdate(BaseModel):
 class ProjectRead(ProjectBase):
     id: int
     crew_employee_ids: list[int] = []
+    google_calendar_event_id: str | None = None
 
     # a 'Main Database' Notion tábla maradék ~140 mezője, egyenként (lásd
     # app/models/project.py) - nem egy közös 'extra' JSON-ban.
