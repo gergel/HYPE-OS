@@ -19,6 +19,7 @@ export function BackLink({ href, label }: { href: string; label: string }) {
 
   return (
     <a
+      data-app-chrome
       href={href}
       onClick={(e) => {
         e.preventDefault();

@@ -27,7 +27,12 @@ function pickField(row: JsonRecord, keys: string[]): string | null {
 /** Kapcsolódó rekordok (pl. egy Project Code összes Projektje) generikus,
  * entitástípustól független listázása - a részletnézetek sok különböző
  * kapcsolt táblát mutatnak be, ehelyett ismételnénk ugyanazt a 3 oszlopot
- * entitásonként kézzel felsorolva. */
+ * entitásonként kézzel felsorolva.
+ *
+ * A sorok FELUGRÓ ABLAKBAN nyílnak meg (lásd RecordDetailModal), nem teljes
+ * oldalként: egy kapcsolódó rekordba belenézni (pl. egy Külsősnél a hozzá
+ * tartozó szerződésbe) ne járjon azzal, hogy elveszítjük az éppen nézett
+ * rekordot és vissza kell navigálni. */
 export function RelatedTable({
   rows,
   emptyText,
@@ -47,6 +52,7 @@ export function RelatedTable({
       rows={rows}
       emptyText={emptyText}
       getHref={getHref}
+      openInModal
       filterable={rows.length > 8}
       deleteHref={deleteBasePath ? (r) => `${deleteBasePath}/${r.id}` : undefined}
       columns={[

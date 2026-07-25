@@ -24,6 +24,7 @@ export function DataTable<T extends { id: number }>({
   filterable = false,
   deleteHref,
   onRowClick,
+  openInModal = false,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -37,6 +38,10 @@ export function DataTable<T extends { id: number }>({
   /** Ha meg van adva, sorra kattintáskor ez fut le a sor id-jével a getHref
    * szerinti navigáció HELYETT (pl. felugró ablakban való megnyitáshoz). */
   onRowClick?: (id: number) => void;
+  /** A getHref szerinti cél felugró ablakban nyíljon meg, ne teljes oldalként
+   * (lásd RecordDetailModal) - a kapcsolódó rekordok tábláinál ez az
+   * alapértelmezés, lásd RelatedTable. */
+  openInModal?: boolean;
 }) {
   const headerMeta = columns.map((col) => ({ header: col.header, align: col.align, sortable: !!col.sortAccessor }));
   const renderedRows = rows.map((row) => ({
@@ -55,6 +60,7 @@ export function DataTable<T extends { id: number }>({
       emptyText={emptyText}
       filterable={filterable}
       onRowClick={onRowClick}
+      openInModal={openInModal}
     />
   );
 }

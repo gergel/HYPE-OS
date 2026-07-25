@@ -95,3 +95,12 @@ body {
 * {
   border-color: var(--border);
 }
+
+/* Felugró ablakba (iframe-be) ágyazott részletnézetek: az alkalmazás-keret
+   (felső sáv, vissza-link) elrejtése - lásd app/embed/layout.tsx. A beágyazott
+   útvonalak ugyanazt a page komponenst használják, mint a rendes oldalak,
+   azok pedig maguk renderelik a fejlécüket; itt viszont az ablak saját
+   fejléce már tartalmazza a bezárást és a "teljes oldalon megnyitást". */
+.embed-root [data-app-chrome] {
+  display: none;
+}

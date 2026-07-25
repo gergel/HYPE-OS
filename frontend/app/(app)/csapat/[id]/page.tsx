@@ -130,7 +130,12 @@ export default async function EmployeeDetailPage({
         </Card>
 
         <Card title={`Szerződések (${contracts.length})`}>
-          <RelatedTable rows={contracts} emptyText="Nincs szerződés ehhez a crew taghoz." deleteBasePath={ENTITY_PATHS.contract} />
+          <RelatedTable
+            rows={contracts}
+            emptyText="Nincs szerződés ehhez a crew taghoz."
+            getHref={(c) => `/szerzodesek/${c.id}`}
+            deleteBasePath={ENTITY_PATHS.contract}
+          />
         </Card>
 
         <Card title={`Vágott anyagok (${deliverables.length})`}>

@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { RowLink } from "@/components/RowLink";
 import { DeleteButton } from "@/components/DeleteButton";
+import { RecordDetailModal } from "@/components/RecordDetailModal";
 
 export type HeaderMeta = { header: string; align?: "left" | "right"; sortable: boolean };
 export type RenderedRow = {
@@ -25,6 +26,7 @@ export function InteractiveTableClient({
   emptyText,
   filterable,
   onRowClick,
+  openInModal = false,
 }: {
   headerMeta: HeaderMeta[];
   rows: RenderedRow[];
@@ -33,8 +35,13 @@ export function InteractiveTableClient({
   /** Ha meg van adva, sorra kattintáskor ez fut le (a sor id-jével) a
    * href-alapú navigáció HELYETT - lásd RowLink.tsx. */
   onRowClick?: (id: number) => void;
+  /** A sor href-je felugró ablakban nyíljon meg, ne teljes oldalként (lásd
+   * RecordDetailModal) - a kapcsolódó rekordok tábláinál ez az alapértelmezés,
+   * hogy ne kelljen elnavigálni a nézett rekordról. */
+  openInModal?: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [modalHref, setModalHref] = useState<string | null>(null);
   const [sortIndex, setSortIndex] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
@@ -119,8 +126,13 @@ export function InteractiveTableClient({
                   );
                 }
                 if (row.href || onRowClick) {
+                  const onClick = onRowClick
+                    ? () => onRowClick(row.id)
+                    : openInModal && row.href
+                      ? () => setModalHref(row.href!)
+                      : undefined;
                   return (
-                    <RowLink key={row.id} href={row.href} onClick={onRowClick ? () => onRowClick(row.id) : undefined}>
+                    <RowLink key={row.id} href={row.href} onClick={onClick}>
                       {cells}
                     </RowLink>
                   );
@@ -135,6 +147,7 @@ export function InteractiveTableClient({
           </table>
         </div>
       )}
+      <RecordDetailModal href={modalHref} onClose={() => setModalHref(null)} />
     </div>
   );
 }

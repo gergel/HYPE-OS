@@ -70,7 +70,12 @@ export default async function UgyfelDetailPage({ params }: { params: Promise<{ i
         </Card>
 
         <Card title={`Szerződések (${contracts.length})`}>
-          <RelatedTable rows={contracts} emptyText="Nincs szerződés ehhez az ügyfélhez." deleteBasePath={ENTITY_PATHS.contract} />
+          <RelatedTable
+            rows={contracts}
+            emptyText="Nincs szerződés ehhez az ügyfélhez."
+            getHref={(c) => `/szerzodesek/${c.id}`}
+            deleteBasePath={ENTITY_PATHS.contract}
+          />
         </Card>
 
         <Card title={`Kampányok (${campaigns.length})`}>

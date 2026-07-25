@@ -46,7 +46,7 @@ export async function TopBar() {
   const initials = user ? initialsFromName(user.full_name) : "?";
 
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
+    <div data-app-chrome className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
       <div>
         <p className="text-lg font-medium text-text-primary">
           {greeting}

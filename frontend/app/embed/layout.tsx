@@ -13,7 +13,14 @@ export default function EmbedLayout({ children }: Readonly<{ children: React.Rea
   return (
     <ToastProvider>
       <ConfirmProvider>
-        <div className="flex min-h-screen flex-col">{children}</div>
+        {/* Az "embed-root" osztály rejti el az alkalmazás-keretet (felső sáv,
+            vissza-link) a beágyazott nézetben - lásd globals.css. Azért CSS-sel
+            és nem feltételes rendereléssel, mert az /embed útvonalak
+            SZÁNDÉKOSAN ugyanazt a page komponenst exportálják újra, mint a
+            rendes oldalak (így nem tudnak elcsúszni egymástól), és azok maguk
+            renderelik a saját fejlécüket. Az osztály már a szerver-oldali
+            HTML-ben ott van, tehát nincs felvillanás. */}
+        <div className="embed-root flex min-h-screen flex-col">{children}</div>
       </ConfirmProvider>
     </ToastProvider>
   );
