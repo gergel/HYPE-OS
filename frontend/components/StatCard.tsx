@@ -38,9 +38,14 @@ export function StatCard({
       <p className={`text-2xl font-semibold ${cls.text}`}>{value}</p>
     </>
   );
-  const className = `block rounded-[var(--radius-lg)] border border-border p-4 transition-colors ${
+  // A kattintható kártya hover-jelzését box-shadow adja, nem border-color: a
+  // globals.css-ben lévő réteg nélküli `* { border-color: var(--border) }`
+  // szabály a CSS kaszkádban mindig legyőzi a Tailwind @layer utilities-be
+  // sorolt hover:border-* osztályokat, így a korábbi hover:border-text-accent/40
+  // egyáltalán nem érvényesült - a kártyán semmilyen hover-visszajelzés nem volt.
+  const className = `block rounded-[var(--radius-lg)] border border-border p-4 transition ${
     Icon ? "bg-surface-2" : tone === "danger" ? "bg-bg-danger" : "bg-surface-1"
-  } ${href ? "hover:border-text-accent/40" : ""}`;
+  } ${href ? "hover:shadow-[0_0_0_1px_var(--accent-solid)]" : ""}`;
 
   if (href) {
     return (
