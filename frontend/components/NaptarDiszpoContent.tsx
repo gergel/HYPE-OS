@@ -267,7 +267,7 @@ export function NaptarDiszpoContent({
         <ForgatasokCalendar projects={upcoming} onProjectClick={(id) => setModalProjectId(id)} />
       )}
 
-      <ProjectDetailModal projectId={modalProjectId} projectCodes={projectCodes} onClose={() => setModalProjectId(null)} />
+      <ProjectDetailModal projectId={modalProjectId} onClose={() => setModalProjectId(null)} />
     </Card>
   );
 }

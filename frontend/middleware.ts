@@ -36,7 +36,13 @@ export async function middleware(request: NextRequest) {
   // "/projektek/project-kodok" tévesen a "Projektek" jogosultsággal is
   // beengedhető lenne, holott a két oldal külön jogosultság (lásd
   // resolvePermissionPage kommentje).
-  const topSegment = resolvePermissionPage(pathname);
+  // Az /embed/* útvonalak ugyanannak a nézetnek a felugró ablakba szánt,
+  // keret nélküli változatai (lásd app/embed/layout.tsx), ezért ugyanaz a
+  // jogosultság vonatkozik rájuk - az előtagot le kell vágni, különben a
+  // resolvePermissionPage egy nem létező "/embed" oldalt keresne, és a
+  // korlátozott hozzáférésű felhasználókat tévesen kizárnánk.
+  const permissionPath = pathname.startsWith("/embed/") ? pathname.slice("/embed".length) : pathname;
+  const topSegment = resolvePermissionPage(permissionPath);
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/user-access/me`, {

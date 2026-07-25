@@ -178,7 +178,7 @@ export function ProjektekContent({
         <ForgatasokCalendar projects={filteredProjects} onProjectClick={(id) => setModalProjectId(id)} />
       )}
 
-      <ProjectDetailModal projectId={modalProjectId} projectCodes={projectCodes} onClose={() => setModalProjectId(null)} />
+      <ProjectDetailModal projectId={modalProjectId} onClose={() => setModalProjectId(null)} />
     </Card>
   );
 }

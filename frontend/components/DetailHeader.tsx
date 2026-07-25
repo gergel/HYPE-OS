@@ -15,8 +15,10 @@ export function DetailHeader({
   subtitle,
   actions,
 }: {
-  backHref: string;
-  backLabel: string;
+  /** Elhagyható: felugró ablakba ágyazott részletnézetnél nincs hova
+   * "visszalépni" (lásd ProjectDetailContent embedded módja). */
+  backHref?: string;
+  backLabel?: string;
   title: string;
   statusBadge?: ReactNode;
   subtitle?: ReactNode;
@@ -24,7 +26,7 @@ export function DetailHeader({
 }) {
   return (
     <div className="border-b border-border pb-4">
-      <BackLink href={backHref} label={backLabel} />
+      {backHref && <BackLink href={backHref} label={backLabel ?? "Vissza"} />}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
