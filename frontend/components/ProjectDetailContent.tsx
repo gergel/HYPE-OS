@@ -12,6 +12,7 @@ import { DeleteButton } from "@/components/DeleteButton";
 import { DetailHeader } from "@/components/DetailHeader";
 import { DetailSections } from "@/components/DetailSections";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { M2mLinker } from "@/components/M2mLinker";
 import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
@@ -152,6 +153,12 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
 
   const patchPath = `${ENTITY_PATHS.project}/${project.id}`;
 
+  // A két diszpó-állapot csak visszajelzésként jelenik meg a küldés-gombok
+  // mellett (lásd a "diszpo-kuldes" fület lentebb) - a rekord JsonRecord, ezért
+  // itt szűkítjük szöveggé.
+  const elozetesAllapot = typeof project.elozetes_diszpo_kuldes === "string" ? project.elozetes_diszpo_kuldes : null;
+  const diszpoAllapot = typeof project.diszpo === "string" ? project.diszpo : null;
+
   const tabs = buildFieldTabs({
     page: PAGE,
     patchPath,
@@ -193,19 +200,29 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
       {
         key: "diszpo-kuldes",
         label: "Diszpó küldése",
+        // A gomb mellett látszik, hogy az adott diszpó már kiment-e. Ez
+        // szándékosan NEM szerkeszthető (StatusBadge, nem EditableStatusBadge):
+        // az állapotot kizárólag a tényleges kiküldés állíthatja, itt csak
+        // visszajelzés.
         content: (
           <Card title="Diszpó küldése" icon={Send}>
-            <div className="flex flex-wrap items-center gap-3">
-              <ActionButton
-                path={`/api/v1/projects/${project.id}/diszpo/elozetes`}
-                label="Előzetes diszpó"
-                confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
-              />
-              <ActionButton
-                path={`/api/v1/projects/${project.id}/diszpo/kuldes`}
-                label="Diszpó küldése"
-                confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
-              />
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <ActionButton
+                  path={`/api/v1/projects/${project.id}/diszpo/elozetes`}
+                  label="Előzetes diszpó"
+                  confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+                />
+                {elozetesAllapot && <StatusBadge label={elozetesAllapot} tone="success" />}
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <ActionButton
+                  path={`/api/v1/projects/${project.id}/diszpo/kuldes`}
+                  label="Diszpó küldése"
+                  confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+                />
+                {diszpoAllapot && <StatusBadge label={diszpoAllapot} tone="success" />}
+              </div>
             </div>
           </Card>
         ),

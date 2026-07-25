@@ -203,7 +203,10 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
         sender_name=settings.dispo_sender_name,
     )
 
-    project.elozetes_diszpo_kuldes = "Küldésre állítva"
+    # A levél ekkor már ténylegesen kiment (a send_message fentebb hibát dobna,
+    # ha nem), ezért "Kiküldve" - ugyanaz a szöveg, mint a teljes diszpónál, hogy
+    # a két állapot egységes legyen a Naptár/Projekt nézetekben.
+    project.elozetes_diszpo_kuldes = "Kiküldve"
     project.gmail_thread_id = thread_id or project.gmail_thread_id
     project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     project.aki_az_elozetest_kuldte_ki = [current_user.full_name]
