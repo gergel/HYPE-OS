@@ -118,7 +118,15 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     trackMode: e.track_mode,
     kategoria: e.kategoria,
   }));
-  const crewOptions = allEmployees.map((e) => ({ id: e.id, label: e.full_name, href: `/csapat/${e.id}` }));
+  // A típus csoportosít, az e-mail pedig segít megkülönböztetni az azonos nevű
+  // embereket a stábtag-kereső listájában (lásd M2mLinker + SearchableIdPicker).
+  const crewOptions = allEmployees.map((e) => ({
+    id: e.id,
+    label: e.full_name,
+    href: `/csapat/${e.id}`,
+    sublabel: e.email,
+    group: e.tipus,
+  }));
 
   const deliverableTimesheets = await Promise.all(
     deliverables.map((d) => getRelated(ENTITY_PATHS.timesheet, { deliverable_id: Number(d.id) })),

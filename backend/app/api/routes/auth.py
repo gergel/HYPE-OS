@@ -13,8 +13,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.scalars(select(Employee).where(Employee.email == form_data.username)).first()
-    if user is None or not user.hashed_password or not verify_password(form_data.password, user.hashed_password):
+    # Egy e-mail címhez TÖBB munkatárs is tartozhat (az email szándékosan nem
+    # egyedi, lásd models/employee.py), ezért nem az első találatot vesszük -
+    # az ugyanis simán lehetne egy jelszó nélküli stáblap-rekord, és a valódi
+    # felhasználó nem tudna belépni. Végigpróbáljuk az azonos című fiókokat, és
+    # az lép be, amelyiknek a jelszava egyezik; így két, ugyanazt a címet
+    # használó ember is a SAJÁT fiókjába jelentkezik be.
+    candidates = db.scalars(
+        select(Employee).where(Employee.email == form_data.username).order_by(Employee.id)
+    ).all()
+    user = next(
+        (c for c in candidates if c.hashed_password and verify_password(form_data.password, c.hashed_password)),
+        None,
+    )
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Hibás email vagy jelszó",

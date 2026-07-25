@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { SearchableIdPicker } from "@/components/SearchableIdPicker";
 
-type Option = { id: number; label: string; href?: string };
+type Option = { id: number; label: string; href?: string; sublabel?: string | null; group?: string | null };
 
 /** Many-to-many kapcsolat (pl. Project.equipment_ids) szerkesztése: már
  * hozzárendelt elemek "chip" listája (✕ gombbal leválasztható), plusz egy
@@ -77,18 +78,17 @@ export function M2mLinker({
       </div>
       {available.length > 0 && (
         <div className="flex items-center gap-2">
-          <select
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            className="rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
-          >
-            <option value="">Válassz...</option>
-            {available.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          {/* Ugyanaz a gépeléssel kereshető választó, mint a technikánál (lásd
+              EquipmentBookingManager) - sok stábtagnál egy sima legördülőben
+              végiggörgetni használhatatlan volt. */}
+          <SearchableIdPicker
+            value={selected ? Number(selected) : null}
+            options={available.map((o) => ({ id: o.id, label: o.label, sublabel: o.sublabel, group: o.group }))}
+            onChange={(next) => setSelected(next === null ? "" : String(next))}
+            placeholder="Keresés név szerint…"
+            disabled={busy}
+            className="min-w-[240px]"
+          />
           <button
             type="button"
             disabled={!selected || busy}

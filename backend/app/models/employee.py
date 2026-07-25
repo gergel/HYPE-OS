@@ -40,7 +40,13 @@ class Employee(TimestampMixin, Base):
         nullable=False,
     )
 
-    email: Mapped[str | None] = mapped_column(String(255), unique=True)
+    # SZÁNDÉKOSAN nem egyedi: a valóságban több embernek is lehet ugyanaz a
+    # címe (közös cég-postafiók, vagy egy stábtag a főnöke címét adja meg),
+    # és a korábbi unique megkötés miatt ilyenkor egyszerűen nem lehetett
+    # felvenni a második embert. Az index megmarad, mert a bejelentkezés e
+    # szerint keres (lásd api/routes/auth.py - ott a jelszó dönti el, melyik
+    # azonos című fiókról van szó).
+    email: Mapped[str | None] = mapped_column(String(255), index=True)
     telefon: Mapped[str | None] = mapped_column(String(50))
     jogositvany: Mapped[str | None] = mapped_column(String(255))
 
