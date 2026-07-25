@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     # végpontok egyértelmű hibát adnak vissza, de az app egyébként elindul.
     gmail_sender: str = ""
     gmail_sender_name: str = ""
+    # A diszpó-levelek (előzetes, teljes, utókövető kérdőív) feladóneve - ez
+    # látszik a címzett postaládájában a cím helyett. Külön a generikus
+    # GMAIL_SENDER_NAME-től, mert a szerződés/TIG levelek nem a gyártástól
+    # mennek. A küldő CÍM mindig GMAIL_SENDER marad.
+    dispo_sender_name: str = "HYPE GYÁRTÁS"
     gmail_oauth_token_json: str = ""
     gmail_oauth_client_id: str = ""
     gmail_oauth_client_secret: str = ""

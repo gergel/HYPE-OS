@@ -15,6 +15,7 @@ import json
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr
 from email import encoders
 
 from google.auth.transport.requests import Request
@@ -65,11 +66,22 @@ def _gmail_service():
     )
 
 
-def _format_sender() -> str:
+def _format_sender(sender_name: str | None = None) -> str:
+    """A From fejléc értéke: "Megjelenő Név <cim@domain>".
+
+    formataddr-ral építjük, mert a megjelenő név ékezetes lehet (pl. "HYPE
+    GYÁRTÁS"), és egy sima f-string esetén a Python az EGÉSZ fejlécet - a
+    címet is beleértve - egyetlen =?utf-8?b?...?= blokká kódolja, amiből a
+    levelezők már nem tudják kiolvasni a feladó címét. A formataddr csak a
+    nevet kódolja, a <cim> érintetlen marad.
+
+    A sender_name felülírja a globális GMAIL_SENDER_NAME-et (a diszpó pl. a
+    saját nevén megy ki, lásd services/dispo.py)."""
     if not settings.gmail_sender:
         raise RuntimeError("GMAIL_SENDER nincs beállítva.")
-    if settings.gmail_sender_name:
-        return f"{settings.gmail_sender_name} <{settings.gmail_sender}>"
+    name = sender_name or settings.gmail_sender_name
+    if name:
+        return formataddr((name, settings.gmail_sender), charset="utf-8")
     return settings.gmail_sender
 
 
@@ -123,12 +135,16 @@ def send_message(
     pdf_filename: str | None = None,
     thread_id: str | None = None,
     in_reply_to: str | None = None,
+    sender_name: str | None = None,
 ) -> tuple[str | None, str | None, str | None]:
     """Visszatér: (gmailThreadId, gmailMessageId, rfc822MessageId). CC mindig a
     HYPE_CC env-ben megadott lista. thread_id + in_reply_to esetén ugyanabban a
-    Gmail szálban válaszol, nem új levelet indít."""
+    Gmail szálban válaszol, nem új levelet indít.
+
+    sender_name: a címzett által látott feladónév erre a levélre (alapból a
+    GMAIL_SENDER_NAME) - a küldő cím ettől függetlenül mindig GMAIL_SENDER."""
     svc = _gmail_service()
-    sender = _format_sender()
+    sender = _format_sender(sender_name)
     body = _build_mime(
         html=html_body,
         subject=subject,

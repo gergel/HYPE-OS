@@ -134,13 +134,56 @@ def _recipients(project: Project) -> list[str]:
     return result
 
 
+def _subject_date(project: Project) -> str:
+    """A tárgyban szereplő dátum, ÉVSZÁM NÉLKÜL:
+
+    - egy nap:                 "07.06."
+    - több nap egy hónapban:   "07.08.-10."   (a hónapot nem ismételjük)
+    - hónaphatáron át:         "07.30.-08.02."
+    """
+    start = project.forgatas_datuma
+    if not start:
+        return ""
+    end = project.forgatas_datuma_vege
+    if not end or end == start:
+        return start.strftime("%m.%d.")
+    if end.month == start.month:
+        return f"{start.strftime('%m.%d.')}-{end.strftime('%d.')}"
+    return f"{start.strftime('%m.%d.')}-{end.strftime('%m.%d.')}"
+
+
 def _subject(project: Project) -> str:
+    """A diszpó-levél tárgya: "<dátum>_diszpo_<projektkód>", pl.
+    "07.06._diszpo_HYPE26-0001" vagy "07.08.-10._diszpo_HYPE26-0002".
+
+    Mindig ebből a két adatból áll össze - a Notion 'Diszpó tárgya' képletét
+    szándékosan NEM használjuk, mert a felhasználó egységes formátumot kért.
+    A Notion-képlet (majd a projekt neve) csak akkor jön elő, ha se dátum, se
+    projektkód nincs, hogy tárgy nélküli levél semmiképp ne menjen ki.
+
+    Ugyanez a szöveg lesz a csatolt PDF neve is (lásd _pdf_filename)."""
+    datum = _subject_date(project)
+    projektkod = (project.projektkod_szoveg or "").strip()
+    if datum or projektkod:
+        return f"{datum}_diszpo_{projektkod}"
+
     formula = project.diszpo_targya_notion
     if isinstance(formula, str) and formula.strip():
         return formula.strip()
     if isinstance(formula, list) and formula and isinstance(formula[0], str) and formula[0].strip():
         return formula[0].strip()
     return f"Diszpó – {project.nev}" if project.nev else "Diszpó"
+
+
+def _pdf_filename(project: Project) -> str:
+    """A csatolt PDF neve = a levél tárgya (felhasználói kérés). A fájlnévbe
+    nem való karaktereket cseréljük, mert a tárgy tartalmazhat ilyet (pl. a
+    fallback ágon "Diszpó – Név"), és a név idézőjelek közt megy ki a
+    Content-Disposition fejlécben."""
+    name = _subject(project)
+    for bad in ('/', '\\', '"', "\r", "\n", "\t"):
+        name = name.replace(bad, "-")
+    return f"{name.strip() or 'diszpo'}.pdf"
 
 
 def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
@@ -157,6 +200,7 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
         html,
         thread_id=project.gmail_thread_id,
         in_reply_to=project.gmail_last_message_id,
+        sender_name=settings.dispo_sender_name,
     )
 
     project.elozetes_diszpo_kuldes = "Küldésre állítva"
@@ -239,9 +283,10 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
         _subject(project),
         html,
         pdf_bytes=pdf_bytes,
-        pdf_filename="diszpo.pdf",
+        pdf_filename=_pdf_filename(project),
         thread_id=project.gmail_thread_id,
         in_reply_to=project.gmail_last_message_id,
+        sender_name=settings.dispo_sender_name,
     )
 
     project.diszpo = "Kiküldve"

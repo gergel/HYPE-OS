@@ -49,6 +49,9 @@ def send_utokovetes_email_task(project_id: int) -> None:
             html,
             thread_id=project.gmail_thread_id,
             in_reply_to=project.gmail_last_message_id,
+            # ugyanabban a szálban válaszol, mint a diszpó - a feladónév is
+            # ugyanaz kell legyen, különben a szál közepén nevet vált
+            sender_name=settings.dispo_sender_name,
         )
         project.gmail_thread_id = thread_id or project.gmail_thread_id
         project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
