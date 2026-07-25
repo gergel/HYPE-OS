@@ -6,7 +6,15 @@ import { StatusBadge } from "@/components/StatusBadge";
 
 type SyncStatusCalendar = { calendar_id: string; has_sync_token: boolean; last_synced_at: string | null };
 type SyncStatus = { calendars: SyncStatusCalendar[] };
-type SyncStats = { created: number; updated: number; deleted: number; skipped: number; full_resync: boolean; total_events: number };
+type SyncStats = {
+  created: number;
+  linked_existing: number;
+  updated: number;
+  deleted: number;
+  skipped: number;
+  full_resync: boolean;
+  total_events: number;
+};
 
 /** A HYPE CALENDAR -> Projekt naptár-szinkron kézi indítása/állapota - a
  * tényleges szinkron percenként automatikusan lefut (Celery Beat, lásd
@@ -65,7 +73,8 @@ export function CalendarSyncPanel() {
       {error && <p className="mb-3 text-[12px] text-text-danger">{error}</p>}
       {lastStats && (
         <p className="mb-3 text-[12px] text-text-secondary">
-          {lastStats.created} új · {lastStats.updated} frissítve · {lastStats.deleted} törölve · {lastStats.skipped} kihagyva
+          {lastStats.created} új · {lastStats.linked_existing} összepárosítva (Notionból már megvolt) · {lastStats.updated} frissítve ·{" "}
+          {lastStats.deleted} törölve · {lastStats.skipped} kihagyva
           {lastStats.full_resync ? " (teljes újraszinkron)" : ""}
         </p>
       )}

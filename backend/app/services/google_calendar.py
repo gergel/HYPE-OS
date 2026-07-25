@@ -15,6 +15,19 @@ sor TÖRLÉSÉT váltja ki, egy szerkesztett esemény pedig felülírja a meglé
 Project releváns mezőit - ez szándékos, a felhasználó explicit kérése alapján
 a naptár az "igazság forrása" ezekre a mezőkre nézve.
 
+FONTOS: a korábban Notionból (a régi 2Sync -> Notion -> HYPE OS importon
+keresztül) már behozott projekteket NEM szabad újra létrehozni, amikor
+ugyanaz a naptáresemény először összefut ezzel a szinkronnal. A Notion-
+importált projekteknek nincs megbízható, a Google Calendar event ID-jével
+egyező mezőjük (a `Project.external_id` NEM ez - a felhasználó megerősítette,
+hogy más eredetű/gyakran üres), ezért egy egyszeri, "legjobb próbálkozás"
+egyeztetést végzünk NÉV + KEZDŐ DÁTUM alapján (lásd _find_unlinked_match) -
+ha talál egyezést egy még nem naptárhoz-kötött projekt között, ahhoz köti a
+naptáresemény ID-jét (nem hoz létre újat). Ez csak az ELSŐ alkalommal fut le
+egy adott eseményhez - utána a sima ID-alapú keresés veszi át, tehát egy
+esetleges téves egyeztetés hatóköre korlátozott (csak akkor fordulhat elő,
+ha két különböző projektnek pontosan ugyanaz a neve ÉS kezdő dátuma).
+
 Hitelesítő adatok (GOOGLE_CALENDAR_OAUTH_TOKEN_JSON vagy
 GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON) nélkül minden hívás CalendarNotConfiguredError-t
 dob - ezt csak valódi env varokkal lehet tesztelni, ebből a sandboxból nem."""
@@ -188,6 +201,26 @@ def _get_or_create_placeholder_project_code(db: Session) -> ProjectCode:
     return code
 
 
+def _find_unlinked_match(db: Session, nev: str, forgatas_datuma: date | None) -> Project | None:
+    """Lásd modul-fejléc "FONTOS" bekezdése - egyszeri, név+dátum alapú
+    egyeztetés a már Notionból behozott (és emiatt még google_calendar_event_id
+    nélküli) projektek közül, hogy ne duplikáljunk. Csak azok a projektek
+    jöhetnek szóba, amikhez MÉG nincs naptáresemény kötve."""
+    if forgatas_datuma is None:
+        return None
+    normalized = nev.strip().casefold()
+    candidates = (
+        db.query(Project)
+        .filter(Project.google_calendar_event_id.is_(None))
+        .filter(Project.forgatas_datuma == forgatas_datuma)
+        .all()
+    )
+    for candidate in candidates:
+        if (candidate.nev or "").strip().casefold() == normalized:
+            return candidate
+    return None
+
+
 def sync_hype_calendar(db: Session) -> dict:
     """Fő belépési pont - lásd modul-fejléc. Minden esemény-feldolgozás saját
     SAVEPOINT-ban fut (mint a Notion importnál), hogy egy hibás esemény ne
@@ -203,7 +236,15 @@ def sync_hype_calendar(db: Session) -> dict:
 
     events, next_sync_token, did_full_resync = _fetch_events(service, calendar_id, state.sync_token)
 
-    stats = {"created": 0, "updated": 0, "deleted": 0, "skipped": 0, "full_resync": did_full_resync, "total_events": len(events)}
+    stats = {
+        "created": 0,
+        "linked_existing": 0,
+        "updated": 0,
+        "deleted": 0,
+        "skipped": 0,
+        "full_resync": did_full_resync,
+        "total_events": len(events),
+    }
     placeholder_code_id: int | None = None
 
     for event in events:
@@ -229,11 +270,16 @@ def sync_hype_calendar(db: Session) -> dict:
                 leiras = event.get("description") or None
 
                 if project is None:
-                    if placeholder_code_id is None:
-                        placeholder_code_id = _get_or_create_placeholder_project_code(db).id
-                    project = Project(google_calendar_event_id=event_id, project_code_id=placeholder_code_id, nev=nev)
-                    db.add(project)
-                    stats["created"] += 1
+                    project = _find_unlinked_match(db, nev, forgatas_datuma)
+                    if project is not None:
+                        project.google_calendar_event_id = event_id
+                        stats["linked_existing"] += 1
+                    else:
+                        if placeholder_code_id is None:
+                            placeholder_code_id = _get_or_create_placeholder_project_code(db).id
+                        project = Project(google_calendar_event_id=event_id, project_code_id=placeholder_code_id, nev=nev)
+                        db.add(project)
+                        stats["created"] += 1
                 else:
                     stats["updated"] += 1
 
