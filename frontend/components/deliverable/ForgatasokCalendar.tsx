@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 
-type CalendarProject = { id: number; nev: string; forgatas_datuma: string | null };
+type CalendarProject = { id: number; nev: string; forgatas_datuma: string | null; forgatas_datuma_vege: string | null };
 
 const WEEKDAY_LABELS = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
 const MONTH_LABELS = [
@@ -12,8 +12,23 @@ const MONTH_LABELS = [
   "július", "augusztus", "szeptember", "október", "november", "december",
 ];
 
+const BAR_LANE_HEIGHT = 20;
+
 function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function parseDateOnly(value: string): Date {
+  const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function diffDays(a: Date, b: Date): number {
+  return Math.round((a.getTime() - b.getTime()) / 86_400_000);
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
 }
 
 /** Naptár-rácsot épít a hónaphoz - a hónap első hetének hétfőjétől az utolsó
@@ -42,6 +57,37 @@ function buildWeeks(monthCursor: Date): Date[][] {
     weeks.push(week);
   }
   return weeks;
+}
+
+type MultiDayBar = { project: CalendarProject; start: Date; end: Date };
+type PlacedBar = MultiDayBar & { startCol: number; endCol: number; lane: number };
+
+/** Egy héten belül a több napos forgatásokhoz "sáv" (lane) indexet rendel,
+ * hogy az egymást átfedő sávok ne csússzanak egymásra - mohó algoritmus: a
+ * legkorábban kezdődő sáv kapja az első szabad sort, amelyben az előző sáv
+ * már véget ért. Ugyanaz a minta, mint a szokásos "több napos esemény"
+ * naptár-nézeteknél (pl. Google/Notion naptár). */
+function placeBarsForWeek(bars: MultiDayBar[], weekStart: Date, weekEnd: Date): PlacedBar[] {
+  const inWeek = bars
+    .filter((b) => b.start <= weekEnd && b.end >= weekStart)
+    .map((b) => ({
+      ...b,
+      startCol: clamp(diffDays(b.start, weekStart), 0, 6),
+      endCol: clamp(diffDays(b.end, weekStart), 0, 6),
+    }))
+    .sort((a, b) => a.startCol - b.startCol || b.endCol - b.startCol - (a.endCol - a.startCol));
+
+  const laneEnds: number[] = [];
+  return inWeek.map((b) => {
+    let lane = laneEnds.findIndex((endCol) => endCol < b.startCol);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(b.endCol);
+    } else {
+      laneEnds[lane] = b.endCol;
+    }
+    return { ...b, lane };
+  });
 }
 
 /** Egy adott forgatáshoz (Project) új utómunkát hoz létre - ugyanaz a backend
@@ -83,19 +129,31 @@ function AddUtomunkaButton({ projectId }: { projectId: number }) {
   );
 }
 
-/** Havi nézetű naptár a forgatásokról (Project.forgatas_datuma) - innen
- * nyithatók meg az adott napi forgatások, és innen adható hozzájuk új
- * utómunka is, hogy a vágóknak ne kelljen a Projektek listát böngészniük. */
+/** Havi nézetű naptár a forgatásokról (Project.forgatas_datuma /
+ * forgatas_datuma_vege) - innen nyithatók meg az adott napi forgatások, és
+ * innen adható hozzájuk új utómunka is, hogy a vágóknak ne kelljen a
+ * Projektek listát böngészniük. A több napos forgatások (ahol van
+ * forgatas_datuma_vege, és az később van, mint a kezdés) egy, a teljes
+ * időtartamukon átívelő sávként jelennek meg minden érintett hét tetején -
+ * NEM ismétlődnek külön-külön minden napi cellában -, az egynapos forgatások
+ * pedig változatlanul a saját napjuk cellájában, kis "pill"-ként. */
 export function ForgatasokCalendar({ projects }: { projects: CalendarProject[] }) {
   const [monthCursor, setMonthCursor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
+  const multiDayBars: MultiDayBar[] = [];
   const byDay = new Map<string, CalendarProject[]>();
   for (const p of projects) {
     if (!p.forgatas_datuma) continue;
-    const key = p.forgatas_datuma.slice(0, 10);
+    const start = parseDateOnly(p.forgatas_datuma);
+    const end = p.forgatas_datuma_vege ? parseDateOnly(p.forgatas_datuma_vege) : start;
+    if (end.getTime() > start.getTime()) {
+      multiDayBars.push({ project: p, start, end });
+      continue;
+    }
+    const key = toDateKey(start);
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key)!.push(p);
   }
@@ -124,43 +182,75 @@ export function ForgatasokCalendar({ projects }: { projects: CalendarProject[] }
           ›
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-[var(--radius)] border border-border bg-border text-[12px]">
-        {WEEKDAY_LABELS.map((w) => (
-          <div key={w} className="bg-surface-3 px-1.5 py-1 text-center text-text-muted">
-            {w}
-          </div>
-        ))}
-        {weeks.flatMap((week, wi) =>
-          week.map((day, di) => {
-            const key = toDateKey(day);
-            const inMonth = day.getMonth() === monthCursor.getMonth();
-            const dayProjects = byDay.get(key) ?? [];
-            return (
-              <div
-                key={`${wi}-${di}`}
-                className={`min-h-[5rem] bg-surface-2 p-1 ${inMonth ? "" : "opacity-40"} ${
-                  key === todayKey ? "ring-1 ring-inset ring-[var(--color-text-accent)]" : ""
-                }`}
-              >
-                <p className="mb-1 text-text-muted">{day.getDate()}</p>
-                <div className="flex flex-col gap-0.5">
-                  {dayProjects.map((p) => (
-                    <div key={p.id} className="flex items-center gap-1 rounded bg-surface-3 px-1 py-0.5">
-                      <a
-                        href={`/projektek/${p.id}`}
-                        className="min-w-0 flex-1 truncate text-text-secondary hover:text-text-accent hover:underline"
-                        title={p.nev}
-                      >
-                        {p.nev}
-                      </a>
-                      <AddUtomunkaButton projectId={p.id} />
-                    </div>
+      <div className="overflow-hidden rounded-[var(--radius)] border border-border text-[12px]">
+        <div className="grid grid-cols-7 gap-px bg-border">
+          {WEEKDAY_LABELS.map((w) => (
+            <div key={w} className="bg-surface-3 px-1.5 py-1 text-center text-text-muted">
+              {w}
+            </div>
+          ))}
+        </div>
+        {weeks.map((week, wi) => {
+          const weekStart = week[0];
+          const weekEnd = week[6];
+          const placedBars = placeBarsForWeek(multiDayBars, weekStart, weekEnd);
+          const laneCount = placedBars.reduce((max, b) => Math.max(max, b.lane + 1), 0);
+          return (
+            <div key={wi} className="border-t border-border">
+              {laneCount > 0 && (
+                <div className="relative bg-surface-2 px-px" style={{ height: laneCount * BAR_LANE_HEIGHT }}>
+                  {placedBars.map((b) => (
+                    <a
+                      key={b.project.id}
+                      href={`/projektek/${b.project.id}`}
+                      className="absolute flex items-center truncate rounded bg-bg-accent px-1.5 text-text-accent hover:opacity-90"
+                      style={{
+                        left: `${(b.startCol / 7) * 100}%`,
+                        width: `${((b.endCol - b.startCol + 1) / 7) * 100}%`,
+                        top: b.lane * BAR_LANE_HEIGHT,
+                        height: BAR_LANE_HEIGHT - 2,
+                      }}
+                      title={b.project.nev}
+                    >
+                      {b.project.nev}
+                    </a>
                   ))}
                 </div>
+              )}
+              <div className="grid grid-cols-7 gap-px bg-border">
+                {week.map((day, di) => {
+                  const key = toDateKey(day);
+                  const inMonth = day.getMonth() === monthCursor.getMonth();
+                  const dayProjects = byDay.get(key) ?? [];
+                  return (
+                    <div
+                      key={di}
+                      className={`min-h-[5rem] bg-surface-2 p-1 ${inMonth ? "" : "opacity-40"} ${
+                        key === todayKey ? "ring-1 ring-inset ring-[var(--color-text-accent)]" : ""
+                      }`}
+                    >
+                      <p className="mb-1 text-text-muted">{day.getDate()}</p>
+                      <div className="flex flex-col gap-0.5">
+                        {dayProjects.map((p) => (
+                          <div key={p.id} className="flex items-center gap-1 rounded bg-surface-3 px-1 py-0.5">
+                            <a
+                              href={`/projektek/${p.id}`}
+                              className="min-w-0 flex-1 truncate text-text-secondary hover:text-text-accent hover:underline"
+                              title={p.nev}
+                            >
+                              {p.nev}
+                            </a>
+                            <AddUtomunkaButton projectId={p.id} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          }),
-        )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

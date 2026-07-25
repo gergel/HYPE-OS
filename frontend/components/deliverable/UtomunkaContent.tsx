@@ -26,7 +26,7 @@ function formatDate(value: string | null): string {
   return value ? value.slice(0, 10) : "–";
 }
 
-type CalendarProject = { id: number; nev: string; forgatas_datuma: string | null };
+type CalendarProject = { id: number; nev: string; forgatas_datuma: string | null; forgatas_datuma_vege: string | null };
 
 /** Az Utómunka oldal tényleges tartalma (tábla + naptár + admin lista) - a
  * kezdeti szerver-oldali renderelés csak a legutóbb módosított anyagok/

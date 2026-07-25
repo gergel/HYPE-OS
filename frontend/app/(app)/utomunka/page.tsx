@@ -27,7 +27,12 @@ export default async function UtomunkaPage() {
   ]);
 
   const statusOptions = fieldTypes.allapot?.options ?? [];
-  const calendarProjects = projects.map((p) => ({ id: p.id, nev: p.nev, forgatas_datuma: p.forgatas_datuma }));
+  const calendarProjects = projects.map((p) => ({
+    id: p.id,
+    nev: p.nev,
+    forgatas_datuma: p.forgatas_datuma,
+    forgatas_datuma_vege: p.forgatas_datuma_vege,
+  }));
 
   return (
     <div className="flex flex-1 flex-col">

@@ -51,6 +51,7 @@ export type Project = {
   nev: string;
   project_code_id: number;
   forgatas_datuma: string | null;
+  forgatas_datuma_vege: string | null;
   helyszin: string | null;
   allapot: string | null;
 };
