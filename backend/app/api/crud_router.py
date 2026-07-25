@@ -51,6 +51,7 @@ def build_crud_router(
     m2m_fields: dict[str, tuple[str, type]] | None = None,
     list_read_schema: type[BaseModel] | None = None,
     after_update: Callable[[Any, dict, dict[str, dict[str, set[int]]], Session, Employee], None] | None = None,
+    before_delete: Callable[[Any, Session], None] | None = None,
     entity_type: str | None = None,
 ) -> APIRouter:
     """page: a frontend/lib/nav.ts oldal-href-je (pl. "/projektek"), amihez ez az
@@ -80,6 +81,10 @@ def build_crud_router(
     küldése kiosztás-váltáskor, lásd routes/postproduction.py, routes/tasks.py). `data` a
     ténylegesen PATCH-elt scalar mezőket tartalmazza (a payload kulcsaival), `m2m_changes`
     pedig {payload_key: {"added": {id, ...}, "removed": {id, ...}}} minden érintett m2m mezőhöz.
+
+    before_delete: DELETE előtt hívódik (obj, db) paraméterekkel - HTTPException-t
+    dobhat, ha a rekord nem törölhető (pl. a projekthez tartozó Média Portál
+    tartalmát nem szabad mellékhatásként elveszíteni, lásd routes/projects.py).
 
     entity_type: ha meg van adva, PATCH-nél a payloadban érintett mezőket a
     services/detail_tabs.get_field_tab_map alapján fülekre bontja, és minden
@@ -234,7 +239,23 @@ def build_crud_router(
     @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(delete_dependency)):
         obj = _get_or_404(db, item_id)
+        if before_delete:
+            before_delete(obj, db)
         db.delete(obj)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            # Maradt olyan kapcsolódó rekord, ami hivatkozik erre a sorra (vagy
+            # egy nem-nullázható idegen kulcsot próbáltunk nullázni). Enélkül a
+            # felhasználó csak egy "Váratlan szerverhiba történt." üzenetet
+            # látott, amiből semmi nem derült ki.
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"A rekord nem törölhető, mert még hivatkoznak rá más rekordok. "
+                    f"Előbb töröld vagy oldd le azokat. ({model.__name__} #{item_id})"
+                ),
+            ) from exc
 
     return router

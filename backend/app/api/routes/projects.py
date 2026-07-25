@@ -13,6 +13,32 @@ from app.services.dispo import send_diszpo, send_elozetes_diszpo
 from app.services.project_actions import create_feldarabolas, create_utomunka
 from app.services.technika import check_technika
 
+def _block_delete_if_portal_content(project: Project, _db: Session) -> None:
+    """A projekt saját rekordjai (eszközfoglalás, diszpó-adatlap, szerződések,
+    TIG-ek, utómunkák) a projekttel együtt törlődnek (lásd models/project.py
+    cascade-jei), a Média Portál tartalma viszont NEM: az ügyfélnek kiadott,
+    akár már kifizetett anyag, amit nem szabad egy projekt-törlés
+    mellékhatásaként elveszíteni. Ilyenkor inkább érthető hibaüzenettel
+    elutasítjuk a törlést, hogy a felhasználó tudatosan dönthessen."""
+    blockers = []
+    if project.portal is not None:
+        blockers.append("Média Portál")
+    if project.media_items:
+        blockers.append(f"{len(project.media_items)} médiafájl")
+    if project.folders:
+        blockers.append(f"{len(project.folders)} mappa")
+    if blockers:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A projekt nem törölhető, mert tartozik hozzá "
+                + ", ".join(blockers)
+                + ". Ezeket a Média Portál oldalon kell előbb törölni - "
+                "szándékosan nem töröljük őket a projekttel együtt."
+            ),
+        )
+
+
 router = build_crud_router(
     model=Project,
     create_schema=ProjectCreate,
@@ -23,6 +49,7 @@ router = build_crud_router(
     tags=["projects"],
     page="/projektek",
     m2m_fields={"crew_employee_ids": ("crew", Employee)},
+    before_delete=_block_delete_if_portal_content,
     entity_type="project",
 )
 

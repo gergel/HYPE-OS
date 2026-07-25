@@ -99,9 +99,15 @@ class Deliverable(TimestampMixin, Base):
     campaign: Mapped["Campaign"] = relationship(back_populates="deliverables")
     megrendeloi_kontaktok: Mapped[list["Contact"]] = relationship(secondary=deliverable_contacts)
 
-    timesheets: Mapped[list["Timesheet"]] = relationship(back_populates="deliverable")
-    feedbacks: Mapped[list["Feedback"]] = relationship(back_populates="deliverable")
-    comments: Mapped[list["DeliverableComment"]] = relationship(back_populates="deliverable", order_by="DeliverableComment.created_at")
+    # Az anyaghoz tartozó munkaidő/visszajelzés/hozzászólás önmagában
+    # értelmezhetetlen, ezért az anyaggal együtt törlődik - enélkül egy
+    # (projekttel együtt) törölt anyag idegen kulcs hibával akasztotta meg a
+    # törlést, lásd Project.deliverables kommentje.
+    timesheets: Mapped[list["Timesheet"]] = relationship(back_populates="deliverable", cascade="all, delete-orphan")
+    feedbacks: Mapped[list["Feedback"]] = relationship(back_populates="deliverable", cascade="all, delete-orphan")
+    comments: Mapped[list["DeliverableComment"]] = relationship(
+        back_populates="deliverable", order_by="DeliverableComment.created_at", cascade="all, delete-orphan"
+    )
     portal: Mapped["Portal | None"] = relationship(back_populates="deliverable", uselist=False)
 
     @property

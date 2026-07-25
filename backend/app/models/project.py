@@ -256,15 +256,35 @@ class Project(TimestampMixin, Base):
     campaign: Mapped["Campaign"] = relationship(back_populates="projects")
     crew: Mapped[list["Employee"]] = relationship(secondary=project_crew, back_populates="projects")
 
-    deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project")
-    callsheets: Mapped[list["Callsheet"]] = relationship(back_populates="project")
-    assignments: Mapped[list["Assignment"]] = relationship(back_populates="project")
+    # A projekt "saját" rekordjai: a projekt törlésekor velük együtt törlődnek.
+    # Cascade nélkül a SQLAlchemy alapból NULL-ra állítaná a gyerek project_id-
+    # jét, ami itt kétféleképp is rossz: a NOT NULL oszlopoknál (assignments,
+    # callsheets, post_shoot_feedbacks, performance_certificates) adatbázis-
+    # hibával elszállt a törlés, a nullable-öknél pedig némán árván maradt a
+    # sor - egy eseti szerződésből például project_id nélkül keretszerződés
+    # lett volna (lásd subcontractor_contracts.py _load_contract_lookup).
+    deliverables: Mapped[list["Deliverable"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    callsheets: Mapped[list["Callsheet"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    assignments: Mapped[list["Assignment"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    contracts: Mapped[list["Contract"]] = relationship(
+        back_populates="project", foreign_keys="Contract.project_id", cascade="all, delete-orphan"
+    )
+    post_shoot_feedbacks: Mapped[list["PostShootFeedback"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    performance_certificates: Mapped[list["PerformanceCertificate"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+
+    # A Média Portál tartalma SZÁNDÉKOSAN nem törlődik a projekttel: ügyfélnek
+    # kiadott (akár már kifizetett) anyag, amit nem szabad egy projekt-törlés
+    # mellékhatásaként elveszíteni. Ha van ilyen, a törlés érthető hibaüzenettel
+    # elutasításra kerül (lásd api/routes/projects.py delete-ellenőrzése).
     media_items: Mapped[list["Media"]] = relationship(back_populates="project")
     folders: Mapped[list["Folder"]] = relationship(back_populates="project")
     portal: Mapped["Portal"] = relationship(back_populates="project", uselist=False)
-    contracts: Mapped[list["Contract"]] = relationship(back_populates="project", foreign_keys="Contract.project_id")
-    post_shoot_feedbacks: Mapped[list["PostShootFeedback"]] = relationship(back_populates="project")
-    performance_certificates: Mapped[list["PerformanceCertificate"]] = relationship(back_populates="project")
 
     @property
     def crew_employee_ids(self) -> list[int]:
