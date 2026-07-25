@@ -50,12 +50,16 @@ export function ActionButton({
     }
   }
 
+  // A hover-körvonalat box-shadow-val (nem border-color-ral) rajzoljuk: a
+  // globals.css-ben van egy réteg nélküli `* { border-color: var(--border) }`
+  // szabály, ami a CSS kaszkádban mindig legyőzi a Tailwind @layer utilities-be
+  // sorolt hover:border-* osztályokat, így azok nem érvényesülnének.
   return (
     <button
       type="button"
       onClick={handleClick}
       disabled={busy}
-      className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-colors hover:border-text-accent/50 hover:bg-bg-accent hover:text-text-accent disabled:opacity-50"
+      className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-colors hover:bg-bg-accent hover:text-text-accent hover:shadow-[0_0_0_1px_var(--accent-solid)] disabled:opacity-50"
     >
       {busy ? "Folyamatban…" : label}
     </button>
