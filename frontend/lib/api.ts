@@ -54,6 +54,11 @@ export type Project = {
   forgatas_datuma_vege: string | null;
   helyszin: string | null;
   allapot: string | null;
+  /** Csak a legutóbb ténylegesen beállított értéket tükrözi ("Kiküldve" /
+   * "Küldésre állítva") - lásd backend/app/services/dispo.py. */
+  diszpo: string | null;
+  elozetes_diszpo_kuldes: string | null;
+  resztvevok_email: string | null;
 };
 
 export type Employee = {

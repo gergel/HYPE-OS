@@ -28,9 +28,19 @@ class ProjectListItem(ProjectBase):
     ~140 oszlopos teljes ProjectRead helyett, mert a lista oldal ténylegesen csak
     ezt az 5-6 mezőt jeleníti meg (lásd frontend/app/projektek/page.tsx és
     RelatedTable), a teljes séma soronkénti validálása/JSON-ba szerializálása
-    pedig érezhetően lassította a listaoldal betöltését sok projekt esetén."""
+    pedig érezhetően lassította a listaoldal betöltését sok projekt esetén.
+
+    A diszpó-mezők (diszpo/elozetes_diszpo_kuldes/resztvevok_email) azért
+    kerültek ide is, mert a Naptár/Diszpó oldal (lásd frontend
+    NaptarDiszpoContent.tsx) a lista végpontból építi fel az áttekintő
+    táblázatot/naptárat, és ott soronként meg kell jelenni, kinek van már
+    kiküldve az előzetes/teljes diszpója, anélkül hogy projektenként külön
+    lekérné a teljes ~140 mezős rekordot."""
 
     id: int
+    diszpo: str | None = None
+    elozetes_diszpo_kuldes: str | None = None
+    resztvevok_email: str | None = None
 
     model_config = {"from_attributes": True}
 
