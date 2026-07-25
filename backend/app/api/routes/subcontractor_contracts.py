@@ -375,7 +375,9 @@ def generate_and_send(
     else:
         teljesites_str = ""
 
-    brutto_osszeg = round(draft.netto_osszeg * 1.27, 2) if draft.plusz_afa else draft.netto_osszeg
+    # float(): a Numeric oszlop az adatbázisból Decimal-ként jön vissza (csak a
+    # most beírt érték float), a Decimal * float pedig TypeError.
+    brutto_osszeg = round(float(draft.netto_osszeg) * 1.27, 2) if draft.plusz_afa else draft.netto_osszeg
 
     doc_link = None
     pdf_bytes = None

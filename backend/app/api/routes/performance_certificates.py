@@ -26,7 +26,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee, EmployeeType
 from app.models.finance import Expense
-from app.models.performance_certificate import PerformanceCertificate
+from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateInvoice
 from app.models.project import Project
 from app.schemas.performance_certificate import PerformanceCertificateRead
 from app.services import document_storage
@@ -453,16 +453,48 @@ async def upload_szamla(
 ):
     """A kiküldött TIG-hez tartozó (külső számlázási rendszerben kiállított)
     számla feltöltése - ez még nem jelenti a kifizetést, csak a dokumentum
-    rögzítését (lásd /szamla-kifizetve a tényleges Pénzügy-be kerüléshez)."""
+    rögzítését (lásd /szamla-kifizetve a tényleges Pénzügy-be kerüléshez).
+
+    Egy TIG-hez tetszőleges számú számla tölthető fel: minden hívás egy ÚJ
+    számla-sort hoz létre (nem írja felül az előzőt) - a storage-kulcs ezért
+    tartalmazza a számla id-jét is, különben a második feltöltés felülírná az
+    első fájlját (lásd PerformanceCertificateInvoice modell-kommentje)."""
     cert = _get_sent_certificate_or_404(db, project_id, employee_id)
     filename = file.filename or "szamla"
     content_type = file.content_type or "application/octet-stream"
+    invoice = PerformanceCertificateInvoice(
+        certificate_id=cert.id, filename=filename, content_type=content_type, storage_key="", url=""
+    )
+    db.add(invoice)
+    db.flush()
     ext = os.path.splitext(filename)[1]
-    key = f"tig-szamla/{project_id}/{employee_id}{ext}"
+    key = f"tig-szamla/{project_id}/{employee_id}-{invoice.id}{ext}"
     data = await file.read()
     url = document_storage.upload_bytes(data, key, content_type)
-    cert.szamla_url = url
-    cert.szamla_storage_key = key
+    invoice.storage_key = key
+    invoice.url = url
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
+@router.delete("/{project_id}/{employee_id}/szamla/{invoice_id}", response_model=PerformanceCertificateRead)
+def delete_szamla(
+    project_id: int,
+    employee_id: int,
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Egy tévesen feltöltött számla törlése - a fájl a tárolóból is törlődik.
+    A kifizetettség (szamla_kifizetve) és a hozzá tartozó Expense sor NEM
+    változik: az már pénzügyi tény, nem a feltöltött dokumentum függvénye."""
+    cert = _get_sent_certificate_or_404(db, project_id, employee_id)
+    invoice = db.get(PerformanceCertificateInvoice, invoice_id)
+    if invoice is None or invoice.certificate_id != cert.id:
+        raise HTTPException(status_code=404, detail="A számla nem található.")
+    document_storage.delete_object(invoice.storage_key)
+    db.delete(invoice)
     db.commit()
     db.refresh(cert)
     return PerformanceCertificateRead.model_validate(cert)
@@ -480,11 +512,14 @@ def mark_szamla_kifizetve(
     sort, a projekt project_code_id-jához és az alvállalkozóhoz kötve, hogy a
     költség a helyes projekthez kapcsolódjon (lásd spec 2.1)."""
     cert = _get_sent_certificate_or_404(db, project_id, employee_id)
-    if not cert.szamla_url:
+    if not cert.invoices:
         raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
     project = _get_project_or_404(db, project_id)
 
-    brutto = round(cert.netto_osszeg * 1.27, 2) if (cert.plusz_afa and cert.netto_osszeg) else cert.netto_osszeg
+    # float(): a Numeric oszlop az adatbázisból Decimal-ként jön vissza, és a
+    # Decimal * float TypeError-t dob (csak akkor működne, ha ugyanabban a
+    # kérésben mi magunk írtunk bele float-ot).
+    brutto = round(float(cert.netto_osszeg) * 1.27, 2) if (cert.plusz_afa and cert.netto_osszeg) else cert.netto_osszeg
 
     if cert.expense_id is not None:
         expense = db.get(Expense, cert.expense_id)

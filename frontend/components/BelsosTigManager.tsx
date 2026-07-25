@@ -150,16 +150,20 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
     }
   }
 
-  async function uploadSzamla(employee: BelsosTigMonthEmployee, input: HTMLInputElement, file: File) {
+  /** Egyszerre több kiválasztott fájl is feltölthető - egymás után megy fel,
+   * mert minden hívás egy külön számla-sort hoz létre a backenden. */
+  async function uploadSzamla(employee: BelsosTigMonthEmployee, input: HTMLInputElement, files: File[]) {
     setBusyId(employee.id);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await authFetch(`/api/v1/belsos-tig/${employee.id}/${ev}/${honap}/szamla`, { method: "POST", body: fd });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        alert(`Sikertelen feltöltés: ${detail?.detail ?? res.status}`);
-        return;
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await authFetch(`/api/v1/belsos-tig/${employee.id}/${ev}/${honap}/szamla`, { method: "POST", body: fd });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => null);
+          alert(`Sikertelen feltöltés (${file.name}): ${detail?.detail ?? res.status}`);
+          break;
+        }
       }
       router.refresh();
     } catch (err) {
@@ -261,13 +265,14 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
                         </div>
                       ))}
                       <label className="w-fit cursor-pointer text-[12px] text-text-accent hover:underline">
-                        + Számla feltöltése
+                        {busy ? "Feltöltés…" : "+ Számla feltöltése"}
                         <input
                           type="file"
+                          multiple
                           disabled={busy}
                           onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) uploadSzamla(employee, e.target, file);
+                            const files = Array.from(e.target.files ?? []);
+                            if (files.length > 0) uploadSzamla(employee, e.target, files);
                           }}
                           className="hidden"
                         />

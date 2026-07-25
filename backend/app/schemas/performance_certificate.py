@@ -3,6 +3,16 @@ from datetime import date, datetime
 from pydantic import BaseModel, computed_field
 
 
+class PerformanceCertificateInvoiceRead(BaseModel):
+    id: int
+    filename: str
+    url: str
+    content_type: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class PerformanceCertificateRead(BaseModel):
     id: int
     project_id: int
@@ -19,7 +29,7 @@ class PerformanceCertificateRead(BaseModel):
     teljesites_vege: date | None = None
     keltezes: date | None = None
     email: str | None = None
-    szamla_url: str | None = None
+    invoices: list[PerformanceCertificateInvoiceRead] = []
     szamla_kifizetve: bool = False
     expense_id: int | None = None
     created_at: datetime

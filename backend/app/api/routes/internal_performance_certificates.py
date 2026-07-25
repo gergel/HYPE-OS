@@ -266,7 +266,13 @@ def mark_szamla_kifizetve(
     if not record.invoices:
         raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
 
-    brutto = round(record.netto_osszeg * 1.27, 2) if (record.plusz_afa and record.netto_osszeg) else record.netto_osszeg
+    # float(): a Numeric oszlop az adatbázisból Decimal-ként jön vissza, és a
+    # Decimal * float TypeError-t dob (lásd performance_certificates.py).
+    brutto = (
+        round(float(record.netto_osszeg) * 1.27, 2)
+        if (record.plusz_afa and record.netto_osszeg)
+        else record.netto_osszeg
+    )
 
     expense = db.get(Expense, record.expense_id) if record.expense_id is not None else None
     if expense is None:

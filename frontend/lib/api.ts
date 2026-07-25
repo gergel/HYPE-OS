@@ -391,6 +391,14 @@ export async function getPendingTigForProject(projectId: number): Promise<Pendin
   return apiGet<PendingTigProjectDetail>(`/api/v1/teljesitesi-igazolasok/${projectId}`);
 }
 
+export type PerformanceCertificateInvoice = {
+  id: number;
+  filename: string;
+  url: string;
+  content_type: string | null;
+  created_at: string;
+};
+
 export type PerformanceCertificate = {
   id: number;
   project_id: number;
@@ -401,7 +409,8 @@ export type PerformanceCertificate = {
   netto_osszeg: number | null;
   plusz_afa: boolean | null;
   brutto_osszeg: number | null;
-  szamla_url: string | null;
+  /** Egy TIG-hez több számla is tartozhat, egyenként törölhetően. */
+  invoices: PerformanceCertificateInvoice[];
   szamla_kifizetve: boolean;
   expense_id: number | null;
 };

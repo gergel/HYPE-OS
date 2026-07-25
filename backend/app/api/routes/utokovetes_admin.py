@@ -215,7 +215,7 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
                     email=e.email,
                     draft=_tig_draft_info(tig),
                     szamla_kifizetve=bool(tig and tig.szamla_kifizetve),
-                    van_szamla=bool(tig and tig.szamla_url),
+                    van_szamla=bool(tig and tig.invoices),
                 )
             )
     kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(db, project)

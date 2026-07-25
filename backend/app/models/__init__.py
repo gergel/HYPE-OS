@@ -26,7 +26,7 @@ from app.models.internal_performance_certificate import (
 from app.models.media import Folder, Media
 from app.models.notification import Notification
 from app.models.notion_import import NotionImportMap
-from app.models.performance_certificate import PerformanceCertificate
+from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateInvoice
 from app.models.post_shoot_feedback import PostShootFeedback
 from app.models.portal import (
     Brand,
@@ -84,6 +84,7 @@ __all__ = [
     "Notification",
     "NotionImportMap",
     "PerformanceCertificate",
+    "PerformanceCertificateInvoice",
     "PostShootFeedback",
     "Brand",
     "PaymentMode",
