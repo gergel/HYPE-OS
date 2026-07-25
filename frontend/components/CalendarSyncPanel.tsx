@@ -163,9 +163,17 @@ export function CalendarSyncPanel() {
             integrációhoz már van kliensed, azt is használhatod).
           </p>
         )}
-        {conn?.redirect_uri && (
+        {conn?.redirect_uri ? (
           <p className="mt-2 break-all text-[11px] text-text-muted">
-            Engedélyezett átirányítási cím (ezt kell beírni a Google Cloud Console-ban): {conn.redirect_uri}
+            Engedélyezett átirányítási cím – ezt másold be a Google Cloud Console &quot;Authorized redirect URIs&quot;
+            mezőjébe, pontosan így:{" "}
+            <code className="rounded bg-surface-2 px-1 py-0.5 text-text-secondary">{conn.redirect_uri}</code>
+          </p>
+        ) : (
+          <p className="mt-2 text-[11px] text-text-warning">
+            Nincs beállítva az API_BASE_URL környezeti változó a backenden, ezért nem tudjuk kiírni a Google Cloud
+            Console-ba beírandó átirányítási címet. Állítsd be a backend nyilvános címére (ugyanaz, amit a frontend
+            NEXT_PUBLIC_API_URL-ként használ, pl. https://hype-os-backend.up.railway.app).
           </p>
         )}
       </div>
