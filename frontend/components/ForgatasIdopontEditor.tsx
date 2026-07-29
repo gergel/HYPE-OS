@@ -2,48 +2,38 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarClock } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { Card } from "@/components/Card";
-import { CalendarClock } from "lucide-react";
+import { DateRangePicker, type DateRangeValue } from "@/components/DateRangePicker";
 
-type Draft = {
-  forgatas_datuma: string;
-  forgatas_kezdes_ido: string;
-  forgatas_datuma_vege: string;
-  forgatas_veg_ido: string;
-};
-
-const inputClass =
-  "rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none disabled:opacity-50";
-
-/** A forgatás ideje EGY helyen: kezdő dátum + óra, záró dátum + óra.
+/** A forgatás ideje EGY mezőként: kezdő dátum, opcionális záró dátum, és
+ * opcionális időpont - a felhasználó által kért Notion-szerű választóval
+ * (lásd DateRangePicker).
  *
- * Ez ugyanaz a négy mező, ami a projekten külön-külön is létezik
- * (forgatas_datuma / forgatas_kezdes_ido / forgatas_datuma_vege /
- * forgatas_veg_ido), de itt együtt szerkeszthető, mert egy dolgot írnak le:
- * mikortól meddig tart a forgatás. Ez az adat hajtja a Diszpó naptár nézetet
- * és a diszpó tárgyát is, és a HYPE CALENDAR szinkron is ezt tölti
- * (lásd backend services/google_calendar.py).
- *
- * A záró dátum ELHAGYHATÓ: üresen a forgatás egy napos. Az időpontok is
- * elhagyhatók - üresen a nap egészére szól, ahogy eddig is. */
+ * A négy DB-oszlop (forgatas_datuma / forgatas_kezdes_ido /
+ * forgatas_datuma_vege / forgatas_veg_ido) mögötte marad, de a felületen nem
+ * külön mezőkként jelenik meg, mert egy dolgot írnak le: mikortól meddig tart
+ * a forgatás. Ez az adat hajtja a Diszpó naptár nézetet és a diszpó tárgyát is,
+ * és a HYPE CALENDAR szinkron is ezt tölti (lásd backend
+ * services/google_calendar.py). */
 export function ForgatasIdopontEditor({
   patchPath,
   initial,
   readOnly = false,
 }: {
   patchPath: string;
-  initial: Draft;
+  initial: DateRangeValue;
   readOnly?: boolean;
 }) {
   const router = useRouter();
-  const [draft, setDraft] = useState<Draft>(initial);
+  const [value, setValue] = useState<DateRangeValue>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  async function save(next: Draft) {
-    setDraft(next);
+  async function save(next: DateRangeValue) {
+    setValue(next);
     setBusy(true);
     setError(null);
     setSaved(false);
@@ -51,10 +41,10 @@ export function ForgatasIdopontEditor({
       const res = await authFetch(patchPath, {
         method: "PATCH",
         body: JSON.stringify({
-          forgatas_datuma: next.forgatas_datuma || null,
-          forgatas_kezdes_ido: next.forgatas_kezdes_ido || null,
-          forgatas_datuma_vege: next.forgatas_datuma_vege || null,
-          forgatas_veg_ido: next.forgatas_veg_ido || null,
+          forgatas_datuma: next.start || null,
+          forgatas_kezdes_ido: next.startTime || null,
+          forgatas_datuma_vege: next.end || null,
+          forgatas_veg_ido: next.endTime || null,
         }),
       });
       if (!res.ok) {
@@ -71,56 +61,11 @@ export function ForgatasIdopontEditor({
     }
   }
 
-  function update<K extends keyof Draft>(key: K, value: string) {
-    save({ ...draft, [key]: value });
-  }
-
-  const tobbNapos = !!draft.forgatas_datuma_vege && draft.forgatas_datuma_vege !== draft.forgatas_datuma;
-
   return (
-    <Card title="Forgatás időpontja" icon={CalendarClock}>
-      <div className="space-y-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 text-[12px] text-text-muted">Kezdés</span>
-          <input
-            type="date"
-            value={draft.forgatas_datuma}
-            disabled={readOnly || busy}
-            onChange={(e) => update("forgatas_datuma", e.target.value)}
-            className={inputClass}
-          />
-          <input
-            type="time"
-            value={draft.forgatas_kezdes_ido}
-            disabled={readOnly || busy}
-            onChange={(e) => update("forgatas_kezdes_ido", e.target.value)}
-            className={inputClass}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 text-[12px] text-text-muted">Vége</span>
-          <input
-            type="date"
-            value={draft.forgatas_datuma_vege}
-            disabled={readOnly || busy}
-            onChange={(e) => update("forgatas_datuma_vege", e.target.value)}
-            className={inputClass}
-          />
-          <input
-            type="time"
-            value={draft.forgatas_veg_ido}
-            disabled={readOnly || busy}
-            onChange={(e) => update("forgatas_veg_ido", e.target.value)}
-            className={inputClass}
-          />
-        </div>
-        <p className="text-[12px] text-text-muted">
-          {tobbNapos ? "Több napos forgatás." : "A záró dátumot üresen hagyva egy napos a forgatás."} Az időpont
-          elhagyható - a naptárból szinkronizált eseményeknél magától kitöltődik.
-        </p>
-        {error && <p className="text-[12px] text-text-danger">{error}</p>}
-        {saved && !error && <p className="text-[12px] text-text-success">Mentve.</p>}
-      </div>
+    <Card title="Forgatás dátuma" icon={CalendarClock}>
+      <DateRangePicker value={value} onChange={save} readOnly={readOnly || busy} />
+      {error && <p className="mt-2 text-[12px] text-text-danger">{error}</p>}
+      {saved && !error && <p className="mt-2 text-[12px] text-text-success">Mentve.</p>}
     </Card>
   );
 }

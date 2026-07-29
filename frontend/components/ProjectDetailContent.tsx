@@ -200,10 +200,10 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
         <ForgatasIdopontEditor
           patchPath={patchPath}
           initial={{
-            forgatas_datuma: asText(project.forgatas_datuma),
-            forgatas_kezdes_ido: asText(project.forgatas_kezdes_ido).slice(0, 5),
-            forgatas_datuma_vege: asText(project.forgatas_datuma_vege),
-            forgatas_veg_ido: asText(project.forgatas_veg_ido).slice(0, 5),
+            start: asText(project.forgatas_datuma),
+            startTime: asText(project.forgatas_kezdes_ido).slice(0, 5),
+            end: asText(project.forgatas_datuma_vege),
+            endTime: asText(project.forgatas_veg_ido).slice(0, 5),
           }}
           readOnly={pagePermissions !== null && !(pagePermissions[PAGE] ?? []).includes("edit")}
         />
