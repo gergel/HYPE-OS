@@ -134,6 +134,32 @@ def _recipients(project: Project) -> list[str]:
     return result
 
 
+def _crew_without_email(project: Project) -> list[str]:
+    """A projekt stábjából azok neve, akiknek nincs email címük - ábécé
+    sorrendben, duplikátumok nélkül."""
+    names = {e.full_name for e in project.crew if not (e.email or "").strip()}
+    return sorted(names)
+
+
+def _require_crew_emails(project: Project) -> None:
+    """A diszpó (előzetes és teljes egyaránt) nem küldhető ki, amíg a projekt
+    stábjában van olyan ember, akinek nincs email címe.
+
+    Enélkül a hiányzó címűek NÉMÁN kimaradtak a címzettek közül (lásd
+    _recipients: a None/üres emaileket egyszerűen kiszűri), tehát a diszpó
+    kiment ugyan, de pont az érintett stábtag nem kapta meg - a felhasználó
+    kifejezett kérése, hogy ilyenkor inkább álljon meg a küldés, és mondjuk
+    meg, kinek hiányzik a címe."""
+    missing = _crew_without_email(project)
+    if not missing:
+        return
+    raise ValueError(
+        "Nem küldhető ki a diszpó, mert a következő stábtagoknak nincs email címe:\n"
+        + "\n".join(f"• {name}" for name in missing)
+        + "\n\nAdd meg az email címüket (Csapat oldal), vagy vedd le őket a projekt stábjáról."
+    )
+
+
 def _subject_date(project: Project) -> str:
     """A tárgyban szereplő dátum, ÉVSZÁM NÉLKÜL:
 
@@ -189,6 +215,7 @@ def _pdf_filename(project: Project) -> str:
 def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     """'Előzetes diszpó' gomb - rövid, technika-lista nélküli tájékoztató email
     (helyszín + diszpó szövege), nem generál PDF-et."""
+    _require_crew_emails(project)
     to_list = _recipients(project)
     if not to_list:
         raise ValueError("Nincs kitöltve 'Résztvevők email' - nincs kinek küldeni az előzetes diszpót.")
@@ -244,6 +271,7 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     sablonból generált, csatolt PDF-fel. Ha a projektnek már van
     gmail_thread_id-je (előzetes diszpó már ment), ugyanabba a szálba válaszol -
     valódi email-válaszként (lásd gmail_last_message_id), nem külön levélként."""
+    _require_crew_emails(project)
     to_list = _recipients(project)
     if not to_list:
         raise ValueError("Nincs kitöltve 'Résztvevők email' - nincs kinek küldeni a diszpót.")

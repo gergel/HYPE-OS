@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
-import { useConfirm } from "@/components/ConfirmProvider";
+import { useAlertDialog, useConfirm } from "@/components/ConfirmProvider";
 
 /** Egy Notion button-automatizmust portoló, egy kattintásos backend akció (pl.
  * Feldarabolás, Utómunka létrehozása) - POST a megadott útvonalra, majd vagy
@@ -25,6 +25,10 @@ export function ActionButton({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
+  // A hibát felugró ablakban mutatjuk (nem magától eltűnő értesítés-sávban):
+  // ezek blokkoló hibák, amik akár több soros listát is tartalmaznak (pl. kinek
+  // hiányzik az email címe a diszpó küldése előtt), és el kell olvasni őket.
+  const alertDialog = useAlertDialog();
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
@@ -34,7 +38,7 @@ export function ActionButton({
       const res = await authFetch(path, { method: "POST" });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
-        alert(`Sikertelen: ${detail?.detail ?? res.status}`);
+        await alertDialog(String(detail?.detail ?? `Sikertelen művelet (HTTP ${res.status}).`));
         return;
       }
       const data = await res.json().catch(() => null);
@@ -44,7 +48,7 @@ export function ActionButton({
         router.refresh();
       }
     } catch (err) {
-      alert(`Sikertelen (hálózati hiba): ${err}`);
+      await alertDialog(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
       setBusy(false);
     }
