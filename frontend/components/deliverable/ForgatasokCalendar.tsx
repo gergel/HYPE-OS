@@ -4,7 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 
-type CalendarProject = { id: number; nev: string; forgatas_datuma: string | null; forgatas_datuma_vege: string | null };
+type CalendarProject = {
+  id: number;
+  nev: string;
+  forgatas_datuma: string | null;
+  forgatas_datuma_vege: string | null;
+  /** "08:30:00" alakban, ha meg van adva - a naptárból is átjön. */
+  forgatas_kezdes_ido?: string | null;
+};
+
+/** A kezdés órája a naptár-bejegyzés elé ("08:30 Projekt neve") - csak ha a
+ * felhasználó (vagy a naptár-szinkron) meg is adta. */
+function startTimeLabel(p: CalendarProject): string {
+  return p.forgatas_kezdes_ido ? p.forgatas_kezdes_ido.slice(0, 5) : "";
+}
 
 const WEEKDAY_LABELS = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
 const MONTH_LABELS = [
@@ -244,8 +257,9 @@ export function ForgatasokCalendar({
                                   : undefined
                               }
                               className="min-w-0 flex-1 truncate text-text-secondary hover:text-text-accent hover:underline"
-                              title={p.nev}
+                              title={startTimeLabel(p) ? `${startTimeLabel(p)} – ${p.nev}` : p.nev}
                             >
+                              {startTimeLabel(p) && <span className="mr-1 text-text-muted">{startTimeLabel(p)}</span>}
                               {p.nev}
                             </a>
                             <AddUtomunkaButton projectId={p.id} />

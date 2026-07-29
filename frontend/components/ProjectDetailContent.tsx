@@ -14,6 +14,7 @@ import { DetailSections } from "@/components/DetailSections";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
+import { ForgatasIdopontEditor } from "@/components/ForgatasIdopontEditor";
 import { M2mLinker } from "@/components/M2mLinker";
 import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
@@ -39,7 +40,7 @@ import {
   getSectionOrder,
   getVisibleFields,
 } from "@/lib/api";
-import { buildFieldTabs, EQUIPMENT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
+import { buildFieldTabs, EQUIPMENT_WIDGET_FIELD_KEY, FORGATAS_IDOPONT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
 
 // A projekt mezői eredetileg a Notion "Main Database" ~140 oszlopát tükrözik
 // (lásd backend/app/models/project.py osztály-kommentje) - ahelyett hogy
@@ -60,6 +61,13 @@ import { buildFieldTabs, EQUIPMENT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
  * implementálni. `embedded` módban csak az alkalmazás-keret (TopBar, vissza-link)
  * marad el, a tartalom és minden művelet azonos. */
 const ALWAYS_HIDDEN = [
+  // A forgatás dátuma/időpontja NEM külön mezőkként, hanem egy összevont
+  // widgetben szerkeszthető (lásd ForgatasIdopontEditor) - egy dolgot írnak le,
+  // és így nem lehet a kezdést a végétől külön elrontani.
+  "forgatas_datuma",
+  "forgatas_datuma_vege",
+  "forgatas_kezdes_ido",
+  "forgatas_veg_ido",
   "project_code_id",
   "campaign_id",
   "crew_employee_ids",
@@ -156,6 +164,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
   // A két diszpó-állapot csak visszajelzésként jelenik meg a küldés-gombok
   // mellett (lásd a "diszpo-kuldes" fület lentebb) - a rekord JsonRecord, ezért
   // itt szűkítjük szöveggé.
+  const asText = (value: unknown) => (typeof value === "string" ? value : "");
   const elozetesAllapot = typeof project.elozetes_diszpo_kuldes === "string" ? project.elozetes_diszpo_kuldes : null;
   const diszpoAllapot = typeof project.diszpo === "string" ? project.diszpo : null;
 
@@ -187,6 +196,18 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     // felhasználó ("hogy kinél látszódjon és melyik csoportosításba
     // legyen").
     widgets: {
+      [FORGATAS_IDOPONT_WIDGET_FIELD_KEY]: (
+        <ForgatasIdopontEditor
+          patchPath={patchPath}
+          initial={{
+            forgatas_datuma: asText(project.forgatas_datuma),
+            forgatas_kezdes_ido: asText(project.forgatas_kezdes_ido).slice(0, 5),
+            forgatas_datuma_vege: asText(project.forgatas_datuma_vege),
+            forgatas_veg_ido: asText(project.forgatas_veg_ido).slice(0, 5),
+          }}
+          readOnly={pagePermissions !== null && !(pagePermissions[PAGE] ?? []).includes("edit")}
+        />
+      ),
       [EQUIPMENT_WIDGET_FIELD_KEY]: (
         <Card title={`Eszközök (${bookingRows.length})`} icon={Wrench}>
           <EquipmentBookingManager projectId={project.id} bookings={bookingRows} options={equipmentOptions} />

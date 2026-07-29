@@ -18,7 +18,7 @@ import {
   getSampleRecord,
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
-import { EQUIPMENT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
+import { EQUIPMENT_WIDGET_FIELD_KEY, FORGATAS_IDOPONT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
 import { pagePermissionGroups } from "@/lib/nav";
 
 /** A 8 entitás, aminek van generikus, fület-alapú részletnézete (lásd
@@ -101,6 +101,7 @@ export default async function BeallitasokPage() {
     // buildFieldTabs widgets paramétere).
     if (entity.entityType === "project") {
       availableFields.push({ key: EQUIPMENT_WIDGET_FIELD_KEY, label: "Eszközök (widget)" });
+      availableFields.push({ key: FORGATAS_IDOPONT_WIDGET_FIELD_KEY, label: "Forgatás időpontja (widget)" });
     }
     return {
       entityType: entity.entityType,

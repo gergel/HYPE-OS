@@ -20,6 +20,11 @@ const ALWAYS_EXCLUDE_META = new Set(["id", "created_at", "updated_at"]);
  * paramétere). */
 export const EQUIPMENT_WIDGET_FIELD_KEY = "__eszkozok_widget";
 
+/** A forgatás időpontja (kezdő/záró dátum + óra) egyben szerkeszthető widget -
+ * ugyanaz a mechanizmus, mint az eszköz-widgetnél: admin szabadon áthelyezheti
+ * fülek közt, és munkatársanként elrejthető. Lásd ForgatasIdopontEditor. */
+export const FORGATAS_IDOPONT_WIDGET_FIELD_KEY = "__forgatas_idopont_widget";
+
 /** A szekciók MINDIG látszanak (nincs szekció-szintű elrejtés) - csak a
  * SZERKESZTÉS korlátozható admin által a "{page}:{tab_key}" összetett
  * kulccsal (lásd Beállítások oldal, UserAccessManager fülenkénti

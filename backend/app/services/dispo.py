@@ -200,21 +200,19 @@ def _format_ido(project: Project) -> str:
 
 
 def _subject_date(project: Project) -> str:
-    """A tárgyban szereplő dátum, ÉVSZÁM NÉLKÜL:
+    """A tárgyban szereplő dátum, ÉVSZÁM NÉLKÜL - a felhasználó által megadott
+    pontos alak (időpont ide NEM kerül, csak a dátum):
 
-    - egy nap:                 "07.06."
-    - több nap egy hónapban:   "07.08.-10."   (a hónapot nem ismételjük)
-    - hónaphatáron át:         "07.30.-08.02."
+    - egy nap:      "07.30"          (pont nélkül a végén)
+    - több nap:     "07.28-07.31."   (mindkét hónap kiírva, ponttal a végén)
     """
     start = project.forgatas_datuma
     if not start:
         return ""
     end = project.forgatas_datuma_vege
     if not end or end == start:
-        return start.strftime("%m.%d.")
-    if end.month == start.month:
-        return f"{start.strftime('%m.%d.')}-{end.strftime('%d.')}"
-    return f"{start.strftime('%m.%d.')}-{end.strftime('%m.%d.')}"
+        return start.strftime("%m.%d")
+    return f"{start.strftime('%m.%d')}-{end.strftime('%m.%d')}."
 
 
 def _subject(project: Project) -> str:
