@@ -9,6 +9,7 @@ import { EditableTableCell } from "@/components/EditableTableCell";
 import { ProjectDetailModal } from "@/components/ProjectDetailModal";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { authFetch } from "@/lib/authFetch";
+import { useLiveTopic } from "@/lib/live";
 import type { Project, ProjectCode } from "@/lib/api";
 
 // Nem importáljuk az ENTITY_PATHS-t a lib/api.ts-ből (bár csak egy sima
@@ -63,6 +64,16 @@ export function ProjektekContent({
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A lista a komponens saját állapotában él (a szerver csak az első szeletet
+  // adja), ezért a háttérfrissítésnél itt kell újratölteni - pl. amikor a
+  // naptár-szinkron új forgatást hoz be.
+  useLiveTopic("projects", () => {
+    authFetch(`/api/v1/projects?limit=5000`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((fresh: Project[] | null) => fresh && setProjects(fresh))
+      .catch(() => {});
+  });
 
   const projectCodeById = new Map(projectCodes.map((pc) => [pc.id, pc.projektkod]));
 

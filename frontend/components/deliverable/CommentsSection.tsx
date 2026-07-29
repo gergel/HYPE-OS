@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { useLiveTopic } from "@/lib/live";
 import type { DeliverableComment } from "@/lib/api";
 
 const MENTION_PATTERN = /@[^\s@]*$/;
@@ -48,6 +49,17 @@ export function CommentsSection({
   const [busy, setBusy] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Ha valaki MÁS ír ide, az oldal újratöltése nélkül is megjelenjen: a
+  // háttérfigyelő szól, ha ennek az anyagnak a hozzászólásai változtak, és
+  // csak akkor kérjük le újra a listát. A félig megírt saját szöveg (body)
+  // érintetlen marad, mert az külön állapot.
+  useLiveTopic(`comments:${deliverableId}`, () => {
+    authFetch(`/api/v1/deliverables/${deliverableId}/comments`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((fresh: DeliverableComment[] | null) => fresh && setComments(fresh))
+      .catch(() => {});
+  });
 
   const mentionMatches = useMemo(() => {
     if (mentionQuery === null) return [];

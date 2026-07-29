@@ -27,6 +27,7 @@ from app.api.routes.postproduction import deliverable_actions_router, deliverabl
 from app.api.routes.project_codes import router as project_codes_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.public_utokovetes import router as public_utokovetes_router
+from app.api.routes.realtime import router as realtime_router
 from app.api.routes.search import router as search_router
 from app.api.routes.stocktake import router as stocktake_router
 from app.api.routes.storage import folders_router, media_router
@@ -105,4 +106,5 @@ api_router.include_router(admin_import_router)
 api_router.include_router(admin_calendar_sync_router)
 api_router.include_router(dispo_responsibles_router)
 # Globális kereső (TopBar "Keresés bármiben…")
+api_router.include_router(realtime_router)
 api_router.include_router(search_router)

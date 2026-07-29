@@ -13,6 +13,7 @@ import {
   purgePortalFiles,
   PendingDeletionPortal,
 } from "@/lib/portalAdminApi";
+import { useLiveTopic } from "@/lib/live";
 import type { PortalSummary, Project } from "@/lib/api";
 
 const inputClass =
@@ -48,6 +49,11 @@ export function MediaPortalDashboard({
   const [confirmDelete, setConfirmDelete] = useState<{ id: number; title: string } | null>(null);
   const [confirmPurge, setConfirmPurge] = useState<{ id: number; title: string } | null>(null);
   const [purging, setPurging] = useState(false);
+
+  // Ha valaki más hoz létre/töröl portált, itt is látszódjon újratöltés nélkül.
+  useLiveTopic("portals", () => {
+    void refresh();
+  });
 
   async function refresh() {
     setProjects(await listPortals());

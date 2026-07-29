@@ -8,6 +8,7 @@ import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
+import { useLiveTopic } from "@/lib/live";
 import { DeliverableBoard, type BoardCard, type BoardColumn } from "@/components/deliverable/DeliverableBoard";
 import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar";
 import { UtomunkaViewTabs } from "@/components/deliverable/UtomunkaViewTabs";
@@ -78,6 +79,22 @@ export function UtomunkaContent({
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Mindkét lista a komponens saját állapotában él (a szerver csak az első
+  // szeletet adja), ezért a háttérfrissítésnél itt kell újratölteni.
+  useLiveTopic("deliverables", () => {
+    authFetch(`/api/v1/deliverables?limit=5000`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((fresh: Deliverable[] | null) => fresh && setDeliverables(fresh))
+      .catch(() => {});
+  });
+
+  useLiveTopic("projects", () => {
+    authFetch(`/api/v1/projects?limit=5000`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((fresh: CalendarProject[] | null) => fresh && setProjects(fresh))
+      .catch(() => {});
+  });
 
   const employeeName = useMemo(() => new Map(employees.map((e) => [e.id, e.full_name])), [employees]);
 
