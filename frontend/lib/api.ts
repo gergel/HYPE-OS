@@ -52,6 +52,10 @@ export type Project = {
   project_code_id: number;
   forgatas_datuma: string | null;
   forgatas_datuma_vege: string | null;
+  /** A forgatás napon belüli időpontja ("08:30:00"), ha meg van adva - a
+   * naptárból is átjön (lásd backend services/google_calendar.py). */
+  forgatas_kezdes_ido: string | null;
+  forgatas_veg_ido: string | null;
   helyszin: string | null;
   allapot: string | null;
   /** Kiküldés után "Kiküldve", egyébként üres - ugyanez az előzetesnél is

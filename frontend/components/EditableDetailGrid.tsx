@@ -19,7 +19,16 @@ import type { EditableDetailField } from "@/lib/detail";
 function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; field: EditableDetailField; boxed?: boolean }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<string>(field.rawValue === null ? "" : String(field.rawValue));
+  // Az <input type="time"> csak "HH:MM"-et fogad el (a backend "08:00:00"-t
+  // ad vissza a Time oszlopból), ezért a másodperceket levágjuk - enélkül a
+  // böngésző üresnek mutatná a mezőt, mintha nem lenne beállítva időpont.
+  const initialDraft =
+    field.rawValue === null
+      ? ""
+      : field.inputType === "time"
+        ? String(field.rawValue).slice(0, 5)
+        : String(field.rawValue);
+  const [draft, setDraft] = useState<string>(initialDraft);
   const [busy, setBusy] = useState(false);
 
   const restBoxClass = boxed
@@ -114,7 +123,18 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
       {field.inputType === "textarea" ? (
         <textarea rows={4} {...commonProps} />
       ) : (
-        <input type={field.inputType === "date" ? "date" : field.inputType === "number" ? "number" : "text"} {...commonProps} />
+        <input
+          type={
+            field.inputType === "date"
+              ? "date"
+              : field.inputType === "time"
+                ? "time"
+                : field.inputType === "number"
+                  ? "number"
+                  : "text"
+          }
+          {...commonProps}
+        />
       )}
     </dd>
   );

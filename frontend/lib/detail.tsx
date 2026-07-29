@@ -79,6 +79,9 @@ function formatValue(key: string, value: unknown): { node: ReactNode; wide: bool
   if (typeof value === "number") {
     return { node: MONEY_KEY_PATTERN.test(key) ? formatHuf(value) : String(value), wide: false };
   }
+  // A Time oszlopok "08:30:00" alakban jönnek - a másodperc itt zaj, a
+  // felhasználó órát:percet vár (lásd Project.forgatas_kezdes_ido).
+  if (typeof value === "string" && TIME_VALUE_PATTERN.test(value)) return { node: value.slice(0, 5), wide: false };
   if (typeof value === "string" && DATE_VALUE_PATTERN.test(value)) return { node: formatDate(value), wide: false };
   if (typeof value === "string" && isUrl(value)) return { node: <LinkValue href={value} />, wide: false };
   if (typeof value === "string" && isLongText(value)) {
@@ -89,7 +92,7 @@ function formatValue(key: string, value: unknown): { node: ReactNode; wide: bool
   return { node: String(value), wide: false };
 }
 
-export type EditableInputType = "text" | "number" | "date" | "boolean" | "textarea" | "select";
+export type EditableInputType = "text" | "number" | "date" | "time" | "boolean" | "textarea" | "select";
 
 export type EditableDetailField = DetailField & {
   key: string;
@@ -100,6 +103,7 @@ export type EditableDetailField = DetailField & {
 };
 
 const DATE_KEY_PATTERN = /datum|date|hatarido|keltezes/i;
+const TIME_VALUE_PATTERN = /^\d{2}:\d{2}(:\d{2})?$/;
 
 /** Ha az érték null, a nyers JSON-ból önmagában nem derül ki, hogy a mező
  * valójában boolean/dátum/select-e (pl. egy még be nem pipált checkbox vagy
@@ -117,12 +121,16 @@ function classifyInput(
   if (value === null || value === undefined) {
     if (fieldTypeHint?.type === "boolean") return { editable: true, inputType: "boolean" };
     if (fieldTypeHint?.type === "date" || fieldTypeHint?.type === "datetime") return { editable: true, inputType: "date" };
+    if (fieldTypeHint?.type === "time") return { editable: true, inputType: "time" };
     if (fieldTypeHint?.type === "number") return { editable: true, inputType: "number" };
     return { editable: true, inputType: DATE_KEY_PATTERN.test(key) ? "date" : "text" };
   }
   if (typeof value === "boolean") return { editable: true, inputType: "boolean" };
   if (typeof value === "number") return { editable: true, inputType: "number" };
   if (typeof value === "string") {
+    // A "time" mezőket (pl. forgatás kezdete/vége) csak a backend típus-hintje
+    // alapján ismerjük fel - a "08:00:00" érték önmagában sima szöveg lenne.
+    if (fieldTypeHint?.type === "time") return { editable: true, inputType: "time" };
     if (DATE_VALUE_PATTERN.test(value)) return { editable: true, inputType: "date" };
     if (isLongText(value)) return { editable: true, inputType: "textarea" };
     return { editable: true, inputType: "text" };

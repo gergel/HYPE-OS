@@ -1,6 +1,6 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 
-from sqlalchemy import JSON, Boolean, Column, Date, DateTime, ForeignKey, Numeric, String, Table, Text
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, ForeignKey, Numeric, String, Table, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -45,6 +45,14 @@ class Project(TimestampMixin, Base):
     forgatas_datuma_vege: Mapped[date | None] = mapped_column(
         Date, comment="A Notion 'Date' property end-je - több napos forgatás záró napja, ha van"
     )
+    # A forgatás napon belüli időpontja (hánytól hányig). Külön oszlopban, nem
+    # a dátumba olvasztva, mert a forgatás dátuma önmagában is értelmes és
+    # használt adat (naptár nézet, diszpó tárgya, TIG teljesítési idő), az
+    # időpont pedig gyakran csak később derül ki. A HYPE CALENDAR-ból
+    # szinkronizálva is töltjük, ha az esemény nem egész napos
+    # (lásd services/google_calendar.py _parse_event_dates).
+    forgatas_kezdes_ido: Mapped[time | None] = mapped_column(Time, comment="Forgatás kezdete (óra:perc)")
+    forgatas_veg_ido: Mapped[time | None] = mapped_column(Time, comment="Forgatás vége (óra:perc)")
     helyszin: Mapped[str | None] = mapped_column(String(255))
     allapot: Mapped[str | None] = mapped_column(String(50))
     google_calendar_event_id: Mapped[str | None] = mapped_column(

@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from pydantic import BaseModel
 
@@ -15,6 +15,10 @@ class ProjectBase(BaseModel):
     campaign_id: int | None = None
     forgatas_datuma: date | None = None
     forgatas_datuma_vege: date | None = None
+    # A forgatás napon belüli időpontja (hánytól hányig) - a naptárból is
+    # átjön, lásd services/google_calendar.py.
+    forgatas_kezdes_ido: time | None = None
+    forgatas_veg_ido: time | None = None
     helyszin: str | None = None
     allapot: str | None = None
 
@@ -50,6 +54,8 @@ class ProjectUpdate(BaseModel):
     campaign_id: int | None = None
     forgatas_datuma: date | None = None
     forgatas_datuma_vege: date | None = None
+    forgatas_kezdes_ido: time | None = None
+    forgatas_veg_ido: time | None = None
     helyszin: str | None = None
     allapot: str | None = None
     crew_employee_ids: list[int] | None = None

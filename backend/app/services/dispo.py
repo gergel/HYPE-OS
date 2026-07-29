@@ -33,6 +33,7 @@ from app.core.config import settings
 from app.models.employee import Employee
 from app.models.project import Project
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
+from app.services.google_calendar import PLACEHOLDER_PROJEKTKOD
 from app.services.google_email import send_message
 
 logger = logging.getLogger("hype_os")
@@ -105,12 +106,17 @@ _SIGNATURE_HTML = """\
 
 
 def _format_hu_date_range(project: Project) -> str:
+    """A forgatás ideje a levélben/PDF-ben: dátum(ok), és ha meg van adva, a
+    napon belüli időpont is ("2026.07.06., 08:00 – 17:00")."""
     if not project.forgatas_datuma:
         return ""
     start = project.forgatas_datuma.strftime("%Y.%m.%d")
     if project.forgatas_datuma_vege and project.forgatas_datuma_vege != project.forgatas_datuma:
-        return f"{start} – {project.forgatas_datuma_vege.strftime('%Y.%m.%d')}"
-    return start
+        datum = f"{start} – {project.forgatas_datuma_vege.strftime('%Y.%m.%d')}"
+    else:
+        datum = start
+    ido = _format_ido(project)
+    return f"{datum}, {ido}" if ido else datum
 
 
 def _recipients(project: Project) -> list[str]:
@@ -158,6 +164,39 @@ def _require_crew_emails(project: Project) -> None:
         + "\n".join(f"• {name}" for name in missing)
         + "\n\nAdd meg az email címüket (Csapat oldal), vagy vedd le őket a projekt stábjáról."
     )
+
+
+def _require_projektkod(project: Project) -> None:
+    """Projektkód nélkül nem megy ki diszpó.
+
+    A projektkód a levél tárgyának és a csatolt PDF nevének a fele (lásd
+    _subject), és ez alapján azonosítja a stáb a forgatást a levelezésben -
+    enélkül "07.06._diszpo_" alakú, azonosíthatatlan tárgy menne ki. A
+    naptárból érkező projektek gyűjtő ("NAPTAR-IMPORT") kódját sem fogadjuk
+    el: az csak egy technikai kezdőérték, amíg admin be nem sorolja a
+    projektet (lásd services/google_calendar.py)."""
+    kod = (project.projektkod_szoveg or "").strip()
+    if kod and kod != PLACEHOLDER_PROJEKTKOD:
+        return
+    raise ValueError(
+        "Nem küldhető ki a diszpó, mert a projektnek nincs projektkódja.\n\n"
+        "A projektkód a levél tárgyába és a csatolt PDF nevébe is bekerül, ezért enélkül "
+        "azonosíthatatlan lenne a forgatás. Add meg a projektkódot a projekt adatlapján."
+    )
+
+
+def _format_ido(project: Project) -> str:
+    """A forgatás napon belüli időpontja ("08:00 – 17:00"), ha meg van adva -
+    egyébként üres. Csak kezdés is elég ("08:00-tól")."""
+    kezdes = project.forgatas_kezdes_ido
+    veg = project.forgatas_veg_ido
+    if kezdes and veg:
+        return f"{kezdes.strftime('%H:%M')} – {veg.strftime('%H:%M')}"
+    if kezdes:
+        return f"{kezdes.strftime('%H:%M')}-tól"
+    if veg:
+        return f"{veg.strftime('%H:%M')}-ig"
+    return ""
 
 
 def _subject_date(project: Project) -> str:
@@ -215,6 +254,7 @@ def _pdf_filename(project: Project) -> str:
 def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     """'Előzetes diszpó' gomb - rövid, technika-lista nélküli tájékoztató email
     (helyszín + diszpó szövege), nem generál PDF-et."""
+    _require_projektkod(project)
     _require_crew_emails(project)
     to_list = _recipients(project)
     if not to_list:
@@ -271,6 +311,7 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     sablonból generált, csatolt PDF-fel. Ha a projektnek már van
     gmail_thread_id-je (előzetes diszpó már ment), ugyanabba a szálba válaszol -
     valódi email-válaszként (lásd gmail_last_message_id), nem külön levélként."""
+    _require_projektkod(project)
     _require_crew_emails(project)
     to_list = _recipients(project)
     if not to_list:

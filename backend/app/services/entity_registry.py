@@ -15,7 +15,7 @@ Két módon ismerjük fel a Notion "select" mezőket:
    kizárjuk, mert ezeknél a véletlen adatismétlődés (pl. több "No Email Ember"
    nevű Notion-import placeholder) hamis select-találatot adna."""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import TypedDict
 
@@ -134,7 +134,7 @@ def _select_options(name: str, db: Session, column) -> list[str] | None:
 
 
 def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, FieldTypeInfo]:
-    """{mezőnév: {"type": "boolean"|"date"|"datetime"|"number"|"select"|"text", "options"?: [...]}}
+    """{mezőnév: {"type": "boolean"|"date"|"datetime"|"time"|"number"|"select"|"text", "options"?: [...]}}
     egy entitástípushoz. Az "options" csak "select" típusnál van jelen. db
     hiányában a szöveges mezők mindig sima "text"-ként jönnek vissza (nincs
     select-detektálás adat nélkül)."""
@@ -157,6 +157,10 @@ def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, Fi
             result[name] = {"type": "date"}
         elif py_type is datetime:
             result[name] = {"type": "datetime"}
+        elif py_type is time:
+            # Napon belüli időpont (pl. forgatás kezdete/vége) - a frontend
+            # ebből tudja, hogy <input type="time"> kell, ne szabad szöveg.
+            result[name] = {"type": "time"}
         elif py_type in (int, float, Decimal):
             result[name] = {"type": "number"}
         elif py_type is str and db is not None:

@@ -40,7 +40,7 @@ tesztelni, ebből a sandboxból nem."""
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials as UserCredentials
@@ -183,7 +183,13 @@ def _resolve_calendar_id(service) -> str:
     )
 
 
-def _parse_event_dates(event: dict) -> tuple[date | None, date | None]:
+def _parse_event_dates(event: dict) -> tuple[date | None, date | None, time | None, time | None]:
+    """(kezdő dátum, záró dátum, kezdő időpont, záró időpont).
+
+    Egész napos eseménynél a két időpont None - ilyenkor a naptárban sincs
+    óra:perc, és nem szabad kitalálni egyet. Időpontos eseménynél mindkettőt
+    átvesszük, hogy a projekten is látszódjon, hánytól hányig tart a forgatás
+    (lásd Project.forgatas_kezdes_ido/forgatas_veg_ido)."""
     start = event.get("start") or {}
     end = event.get("end") or {}
 
@@ -196,16 +202,21 @@ def _parse_event_dates(event: dict) -> tuple[date | None, date | None]:
         # forgatas_datuma_vege szemantikánkkal egyezzen (lásd Project modell
         # kommentje és ForgatasokCalendar.tsx).
         end_date = end_date - timedelta(days=1)
-        return start_date, (end_date if end_date > start_date else None)
+        return start_date, (end_date if end_date > start_date else None), None, None
 
     if "dateTime" in start:
         start_dt = datetime.fromisoformat(start["dateTime"])
         end_dt = datetime.fromisoformat(end["dateTime"]) if "dateTime" in end else start_dt
         start_date = start_dt.date()
         end_date = end_dt.date()
-        return start_date, (end_date if end_date > start_date else None)
+        return (
+            start_date,
+            (end_date if end_date > start_date else None),
+            start_dt.time().replace(second=0, microsecond=0),
+            end_dt.time().replace(second=0, microsecond=0),
+        )
 
-    return None, None
+    return None, None, None, None
 
 
 def _fetch_events(service, calendar_id: str, sync_token: str | None) -> tuple[list[dict], str | None, bool]:
@@ -329,7 +340,7 @@ def sync_hype_calendar(db: Session) -> dict:
                     continue
 
                 nev = event.get("summary") or "(névtelen esemény)"
-                forgatas_datuma, forgatas_datuma_vege = _parse_event_dates(event)
+                forgatas_datuma, forgatas_datuma_vege, kezdes_ido, veg_ido = _parse_event_dates(event)
                 helyszin = event.get("location") or None
                 leiras = event.get("description") or None
 
@@ -350,6 +361,8 @@ def sync_hype_calendar(db: Session) -> dict:
                 project.nev = nev
                 project.forgatas_datuma = forgatas_datuma
                 project.forgatas_datuma_vege = forgatas_datuma_vege
+                project.forgatas_kezdes_ido = kezdes_ido
+                project.forgatas_veg_ido = veg_ido
                 project.helyszin = helyszin
                 project.description = leiras
         except Exception:  # noqa: BLE001
