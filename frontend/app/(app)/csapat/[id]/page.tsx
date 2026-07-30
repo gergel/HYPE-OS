@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
+import { BelsosTigEmployeeList } from "@/components/BelsosTigEmployeeList";
 import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
@@ -8,6 +9,7 @@ import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
+  getBelsosTigForEmployee,
   getDetailTabs,
   getEmployeeDocuments,
   getFieldTypes,
@@ -56,8 +58,20 @@ export default async function EmployeeDetailPage({
 
   const backTarget = (from && BACK_TARGETS[from]) || { href: "/csapat", label: "Külsős" };
 
-  const [rates, timesheets, expenses, contracts, deliverables, campaigns, documents, visibleFields, fieldTypes, dbTabs, pagePermissions] =
-    await Promise.all([
+  const [
+    rates,
+    timesheets,
+    expenses,
+    contracts,
+    deliverables,
+    campaigns,
+    documents,
+    belsosTigek,
+    visibleFields,
+    fieldTypes,
+    dbTabs,
+    pagePermissions,
+  ] = await Promise.all([
       getRelated(ENTITY_PATHS.rate, { employee_id: employeeId }),
       getRelated(ENTITY_PATHS.timesheet, { employee_id: employeeId }),
       getRelated(ENTITY_PATHS.expense, { employee_id: employeeId }),
@@ -65,6 +79,7 @@ export default async function EmployeeDetailPage({
       getRelated(ENTITY_PATHS.deliverable, { vago_employee_id: employeeId }),
       getRelated(ENTITY_PATHS.campaign, { felelos_employee_id: employeeId }),
       getEmployeeDocuments(employeeId),
+      getBelsosTigForEmployee(employeeId),
       getVisibleFields("employee"),
       getFieldTypes("employee"),
       getDetailTabs("employee"),
@@ -105,6 +120,12 @@ export default async function EmployeeDetailPage({
               <p className="mb-2 text-[11px] text-text-muted">Munkaszerződés</p>
               <MunkaszerzodesUpload employeeId={employee.id} documents={documents} />
             </div>
+          </Card>
+        )}
+
+        {belsosTigek.length > 0 && (
+          <Card title={`Belsős TIG-ek (${belsosTigek.length})`}>
+            <BelsosTigEmployeeList records={belsosTigek} />
           </Card>
         )}
 

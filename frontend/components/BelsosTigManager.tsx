@@ -6,20 +6,36 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
+import { huEvHonap, tigHonapTeljesitesbol } from "@/lib/huDate";
 import type { BelsosTigMonthEmployee } from "@/lib/api";
 
 type FormState = {
   netto_osszeg: string;
   plusz_afa: boolean;
   megjegyzes: string;
+  megbizas_targya: string;
+  teljesites_datuma: string;
+  keltezes: string;
 };
 
-function formFromRecord(employee: BelsosTigMonthEmployee): FormState {
+/** A hónapot követő hónap első napja - ez az alapértelmezett teljesítési
+ * dátum, mert a teljesítés MINDIG a lefedett hónap utáni hónapban történik
+ * (ebből számolja vissza a rendszer, melyik hónapé a TIG). */
+function alapTeljesitesDatum(ev: number, honap: number): string {
+  const kovEv = honap === 12 ? ev + 1 : ev;
+  const kovHonap = honap === 12 ? 1 : honap + 1;
+  return `${kovEv}-${String(kovHonap).padStart(2, "0")}-01`;
+}
+
+function formFromRecord(employee: BelsosTigMonthEmployee, ev: number, honap: number): FormState {
   const record = employee.record;
   return {
     netto_osszeg: record?.netto_osszeg != null ? String(record.netto_osszeg) : "",
     plusz_afa: record?.plusz_afa ?? false,
     megjegyzes: record?.megjegyzes ?? "",
+    megbizas_targya: record?.megbizas_targya ?? "",
+    teljesites_datuma: record?.teljesites_datuma ?? alapTeljesitesDatum(ev, honap),
+    keltezes: record?.keltezes ?? "",
   };
 }
 
@@ -32,6 +48,9 @@ function computeBrutto(nettoOsszeg: string, pluszAfa: boolean): number | null {
 
 function statusBadge(employee: BelsosTigMonthEmployee) {
   const allapot = employee.record?.allapot;
+  if (allapot === "Kiküldve") return <StatusBadge label="Kiküldve" tone="success" />;
+  // A "Kész" a korábbi, email-küldés nélküli életciklusból maradt állapot -
+  // a régi bejegyzések így vannak eltárolva (lásd backend TERMINAL_STATUSES).
   if (allapot === "Kész") return <StatusBadge label="Kész" tone="success" />;
   if (allapot === "Kihagyva") return <StatusBadge label="Kihagyva" tone="neutral" />;
   if (allapot === "Készítés alatt") return <StatusBadge label="Készítés alatt" tone="warning" />;
@@ -59,9 +78,14 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
 
   const openEmployee = employees.find((e) => e.id === openId) ?? null;
   const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
+  // A teljesítés dátuma dönti el, melyik hónapé a TIG (mindig az azt megelőző
+  // hónap) - ha az admin olyat ír be, ami másik hónapra mutat, ezt előre
+  // jelezzük, mert a bejegyzés át fog kerülni oda.
+  const celHonap = form?.teljesites_datuma ? tigHonapTeljesitesbol(form.teljesites_datuma) : null;
+  const celHonapEltero = !!celHonap && (celHonap.ev !== ev || celHonap.honap !== honap);
 
   function openForm(employee: BelsosTigMonthEmployee) {
-    setForm(formFromRecord(employee));
+    setForm(formFromRecord(employee, ev, honap));
     setOpenId(employee.id);
   }
 
@@ -80,6 +104,9 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
       netto_osszeg: form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null,
       plusz_afa: form.plusz_afa,
       megjegyzes: form.megjegyzes || null,
+      megbizas_targya: form.megbizas_targya || null,
+      teljesites_datuma: form.teljesites_datuma || null,
+      keltezes: form.keltezes || null,
     };
   }
 
@@ -105,15 +132,19 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
     }
   }
 
-  async function handleKesz() {
+  async function handleKuldes() {
     if (!openEmployee || !form) return;
     if (!form.netto_osszeg.trim() || Number.isNaN(Number(form.netto_osszeg)) || Number(form.netto_osszeg) <= 0) {
       alert("Add meg a nettó összeget.");
       return;
     }
+    if (!openEmployee.email) {
+      alert(`${openEmployee.full_name} nem kapott email címet, így nem lehet kiküldeni a TIG-et.`);
+      return;
+    }
     setBusyId(openEmployee.id);
     try {
-      const res = await authFetch(`/api/v1/belsos-tig/${openEmployee.id}/${ev}/${honap}/kesz`, {
+      const res = await authFetch(`/api/v1/belsos-tig/${openEmployee.id}/${ev}/${honap}/generalas-es-kuldes`, {
         method: "POST",
         body: JSON.stringify(buildPayload()),
       });
@@ -218,6 +249,7 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
             <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Munkatárs</th>
             <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Állapot</th>
             <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Bruttó</th>
+            <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">TIG</th>
             <th className="min-w-[240px] py-1.5 pr-6 text-left font-medium text-text-secondary">Számlák</th>
             <th className="py-1.5 text-right font-medium text-text-secondary">Kifizetés</th>
           </tr>
@@ -226,8 +258,10 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
           {employees.map((employee) => {
             const record = employee.record;
             const allapot = record?.allapot;
-            const isTerminal = allapot === "Kész" || allapot === "Kihagyva";
-            const isKesz = allapot === "Kész";
+            // A "Kész" a korábbi, küldés nélküli életciklusból maradt - a régi
+            // bejegyzések ugyanúgy lezártnak számítanak, mint a "Kiküldve".
+            const isKesz = allapot === "Kész" || allapot === "Kiküldve";
+            const isTerminal = isKesz || allapot === "Kihagyva";
             const busy = busyId === employee.id;
             const invoices = record?.invoices ?? [];
             return (
@@ -236,6 +270,20 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
                 <td className="py-3 pr-6">{statusBadge(employee)}</td>
                 <td className="py-3 pr-6 text-right whitespace-nowrap">
                   {record?.brutto_osszeg != null ? `${record.brutto_osszeg.toLocaleString("hu-HU")} Ft` : "–"}
+                </td>
+                <td className="py-3 pr-6">
+                  {record?.file_url ? (
+                    <a
+                      href={record.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-text-accent hover:underline"
+                    >
+                      Dokumentum
+                    </a>
+                  ) : (
+                    <span className="text-text-muted">–</span>
+                  )}
                 </td>
                 <td className="py-3 pr-6">
                   {!isKesz ? (
@@ -316,10 +364,48 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="mb-1 text-[15px] font-medium text-text-primary">
-              Belsős TIG – {openEmployee.full_name} ({ev}.{String(honap).padStart(2, "0")})
+              Belsős TIG – {openEmployee.full_name} ({huEvHonap(ev, honap)})
             </h3>
             <p className="mb-4 text-[12px] text-text-muted">Állapot: {openEmployee.record?.allapot ?? "Nincs elkezdve"}</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1 sm:col-span-2">
+                <label className="text-[11px] text-text-muted">Megbízás tárgya</label>
+                <input
+                  value={form.megbizas_targya}
+                  onChange={(e) => update("megbizas_targya", e.target.value)}
+                  disabled={!!busyId}
+                  placeholder="A munkatárs adatlapjáról jön, de itt átírható"
+                  className={inputClass}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-text-muted">Teljesítés dátuma</label>
+                <input
+                  type="date"
+                  value={form.teljesites_datuma}
+                  onChange={(e) => update("teljesites_datuma", e.target.value)}
+                  disabled={!!busyId}
+                  className={inputClass}
+                />
+                <p className={`text-[11px] ${celHonapEltero ? "text-text-warning" : "text-text-muted"}`}>
+                  {celHonap
+                    ? celHonapEltero
+                      ? `Ez a ${huEvHonap(celHonap.ev, celHonap.honap)} havi TIG lesz – átkerül abba a hónapba.`
+                      : `Ez a ${huEvHonap(celHonap.ev, celHonap.honap)} havi TIG.`
+                    : "A teljesítést megelőző hónap TIG-je."}
+                </p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-text-muted">Keltezés</label>
+                <input
+                  type="date"
+                  value={form.keltezes}
+                  onChange={(e) => update("keltezes", e.target.value)}
+                  disabled={!!busyId}
+                  className={inputClass}
+                />
+                <p className="text-[11px] text-text-muted">Üresen hagyva a kiküldés napja kerül rá.</p>
+              </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Nettó összeg (Ft) *</label>
                 <input
@@ -385,11 +471,12 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
               </button>
               <button
                 type="button"
-                onClick={handleKesz}
+                onClick={handleKuldes}
                 disabled={!!busyId}
+                title={openEmployee.email ?? "Nincs email cím"}
                 className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
               >
-                {busyId === openEmployee.id ? "Mentés…" : "Kész (jöhet a számla)"}
+                {busyId === openEmployee.id ? "Generálás és küldés…" : "Generálás és kiküldés"}
               </button>
             </div>
           </div>

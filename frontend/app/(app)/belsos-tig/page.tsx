@@ -4,21 +4,7 @@ import { BelsosTigManager } from "@/components/BelsosTigManager";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { getBelsosTigMonth } from "@/lib/api";
-
-const HONAP_NEVEK = [
-  "Január",
-  "Február",
-  "Március",
-  "Április",
-  "Május",
-  "Június",
-  "Július",
-  "Augusztus",
-  "Szeptember",
-  "Október",
-  "November",
-  "December",
-];
+import { huEvHonap } from "@/lib/huDate";
 
 function shiftMonth(ev: number, honap: number, delta: number): { ev: number; honap: number } {
   const zeroBased = honap - 1 + delta;
@@ -47,16 +33,20 @@ export default async function BelsosTigPage({
   const prev = shiftMonth(ev, honap, -1);
   const next = shiftMonth(ev, honap, 1);
 
-  const keszCount = employees.filter((e) => e.record?.allapot === "Kész").length;
+  // A "Kész" a korábbi, email-küldés nélküli életciklusból maradt állapot -
+  // a régi bejegyzések így vannak eltárolva (lásd backend TERMINAL_STATUSES).
+  const kikuldveCount = employees.filter(
+    (e) => e.record?.allapot === "Kiküldve" || e.record?.allapot === "Kész",
+  ).length;
   const kihagyvaCount = employees.filter((e) => e.record?.allapot === "Kihagyva").length;
-  const teendoCount = employees.length - keszCount - kihagyvaCount;
+  const teendoCount = employees.length - kikuldveCount - kihagyvaCount;
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 p-6">
         <Card
-          title={`Belsős TIG – ${HONAP_NEVEK[honap - 1]} ${ev}`}
+          title={`Belsős TIG – ${huEvHonap(ev, honap)}`}
           actions={
             <div className="flex items-center gap-1">
               <Link
@@ -75,7 +65,8 @@ export default async function BelsosTigPage({
           }
         >
           <p className="mb-4 text-[13px] text-text-secondary">
-            {employees.length} belsős munkatárs · {keszCount} kész · {kihagyvaCount} kihagyva · {teendoCount} még teendő
+            {employees.length} belsős munkatárs · {kikuldveCount} kiküldve · {kihagyvaCount} kihagyva · {teendoCount} még
+            teendő
           </p>
           {employees.length === 0 ? (
             <p className="text-[13px] text-text-secondary">Nincs belsős munkatárs.</p>

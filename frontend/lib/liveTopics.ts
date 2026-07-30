@@ -21,7 +21,7 @@ const BY_PREFIX: Record<string, string[]> = {
   // hozzászólás is frissítené ezt az oldalt.
   "/utomunka": ["deliverables", "timesheets"],
   "/feladatok": ["tasks"],
-  "/csapat": ["employees", "rates"],
+  "/csapat": ["employees", "rates", "internalPerformanceCertificates"],
   "/felszereles": ["equipment", "assignments"],
   "/felszereles/leltarazas": ["stocktakes", "equipment"],
   "/ugyfelek": ["clients", "contacts"],

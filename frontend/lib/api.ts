@@ -441,6 +441,13 @@ export type InternalPerformanceCertificate = {
   netto_osszeg: number | null;
   plusz_afa: boolean | null;
   brutto_osszeg: number | null;
+  megbizas_targya: string | null;
+  teljesites_datuma: string | null;
+  keltezes: string | null;
+  /** A kiküldött TIG dokumentum Drive linkje. */
+  file_url: string | null;
+  /** A hónap betűvel ("május") - a Belsős TIG sehol nem írja ki számmal. */
+  honap_nev: string;
   invoices: InternalPerformanceCertificateInvoice[];
   szamla_kifizetve: boolean;
   expense_id: number | null;
@@ -459,6 +466,12 @@ export async function getBelsosTigMonth(ev?: number, honap?: number): Promise<Be
   if (honap) params.set("honap", String(honap));
   const qs = params.toString();
   return (await apiGet<BelsosTigMonthEmployee[]>(`/api/v1/belsos-tig${qs ? `?${qs}` : ""}`)) ?? [];
+}
+
+/** Egy munkatárs összes belsős TIG-je, a legfrissebb hónappal elöl - a
+ * személy adatlapján a "Belsős TIG-ek" szekciót tölti. */
+export async function getBelsosTigForEmployee(employeeId: number): Promise<InternalPerformanceCertificate[]> {
+  return (await apiGet<InternalPerformanceCertificate[]>(`/api/v1/belsos-tig/employee/${employeeId}`)) ?? [];
 }
 
 export type UtokovetesOverview = {

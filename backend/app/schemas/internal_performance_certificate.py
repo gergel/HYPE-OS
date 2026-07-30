@@ -1,6 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, computed_field
+
+from app.services.hu_datum import honap_neve
 
 
 class InternalPerformanceCertificateInvoiceRead(BaseModel):
@@ -22,6 +24,10 @@ class InternalPerformanceCertificateRead(BaseModel):
     megjegyzes: str | None = None
     netto_osszeg: float | None = None
     plusz_afa: bool | None = None
+    megbizas_targya: str | None = None
+    teljesites_datuma: date | None = None
+    keltezes: date | None = None
+    file_url: str | None = None
     invoices: list[InternalPerformanceCertificateInvoiceRead] = []
     szamla_kifizetve: bool = False
     expense_id: int | None = None
@@ -35,3 +41,9 @@ class InternalPerformanceCertificateRead(BaseModel):
         if self.netto_osszeg is None:
             return None
         return round(self.netto_osszeg * 1.27, 2) if self.plusz_afa else self.netto_osszeg
+
+    @computed_field
+    @property
+    def honap_nev(self) -> str:
+        """A hónap BETŰVEL - a Belsős TIG sehol nem írja ki számmal."""
+        return honap_neve(self.honap)
