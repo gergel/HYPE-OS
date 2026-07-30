@@ -104,6 +104,27 @@ def list_contacts(deliverable: Deliverable) -> list[ContactOption]:
     return [ContactOption(id=c.id, full_name=c.full_name, email=c.email) for c in deliverable.megrendeloi_kontaktok]
 
 
+def aktualis_orabere(db: Session, employee_id: int) -> float | None:
+    """A munkatárs MOSTANI órabére (Rate.orabler) - csak a mérés indításakor
+    (illetve utólagos javításkor, ha akkor még nem volt rögzítve) kérdezzük le.
+    Utána a Timesheet.akkori_orabere befagy: ha valaki később többet keres, az
+    a RÉGI költségeket nem írhatja át.
+
+    Ha több Rate sora is van (mert az emelést új sorként vették fel, nem a
+    régit írták át), a LEGUTÓBBI (legnagyobb id) számít - az a mostani
+    órabére."""
+    rate = db.scalar(
+        select(Rate).where(Rate.employee_id == employee_id, Rate.orabler.is_not(None)).order_by(Rate.id.desc())
+    )
+    return float(rate.orabler) if rate is not None else None
+
+
+def szamolt_koltseg(percek: float, orabere: float | None) -> float | None:
+    if orabere is None:
+        return None
+    return round((percek / 60) * float(orabere), 2)
+
+
 def start_timer(db: Session, deliverable: Deliverable, current_user: Employee) -> None:
     """"Start" gomb - új, nyitott (end_date=None) Timesheet sort hoz létre a
     bejelentkezett felhasználóhoz - egyszerre csak egy fusson, különben a
@@ -118,13 +139,12 @@ def start_timer(db: Session, deliverable: Deliverable, current_user: Employee) -
     if open_row is not None:
         raise ValueError("Már fut egy időmérés ehhez az anyaghoz - előbb állítsd le.")
 
-    rate = db.scalar(select(Rate).where(Rate.employee_id == current_user.id))
     db.add(
         Timesheet(
             employee_id=current_user.id,
             deliverable_id=deliverable.id,
             start_date=datetime.now(timezone.utc),
-            akkori_orabere=rate.orabler if rate else None,
+            akkori_orabere=aktualis_orabere(db, current_user.id),
         )
     )
     db.commit()
@@ -152,8 +172,12 @@ def stop_timer(db: Session, deliverable: Deliverable, current_user: Employee, em
     open_row.end_date = datetime.now(timezone.utc)
     minutes = open_row.idotartam_perc or 0
     open_row.time_minutes = minutes
-    if open_row.akkori_orabere:
-        open_row.koltseg = round((minutes / 60) * float(open_row.akkori_orabere), 2)
+    # Ha az indításkor még nem volt órabér rögzítve (pl. akkor még nem volt Rate
+    # sora), most pótoljuk - innentől ez a sor órabére, egy későbbi emelés már
+    # nem írja át.
+    if open_row.akkori_orabere is None:
+        open_row.akkori_orabere = aktualis_orabere(db, open_row.employee_id)
+    open_row.koltseg = szamolt_koltseg(minutes, open_row.akkori_orabere)
     db.commit()
 
 
@@ -172,12 +196,15 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
     rows = db.scalars(select(Timesheet).where(Timesheet.deliverable_id == deliverable.id)).all()
 
     my_running_since = None
-    futo: list[tuple[int, datetime]] = []
+    futo: list[tuple[int, datetime, float | None]] = []
     by_employee_minutes: dict[int, float] = {}
     by_employee_cost: dict[int, float] = {}
     for row in rows:
         if row.end_date is None and row.start_date is not None:
-            futo.append((row.employee_id, row.start_date))
+            # Az órabért is visszaadjuk, hogy a felület a MÉG FUTÓ mérés
+            # költségét is tudja másodpercenként számolni (lásd TimerControls).
+            orabere = float(row.akkori_orabere) if row.akkori_orabere is not None else aktualis_orabere(db, row.employee_id)
+            futo.append((row.employee_id, row.start_date, orabere))
             if row.employee_id == current_user.id:
                 my_running_since = row.start_date
         if row.end_date is not None and row.start_date is not None:
@@ -186,7 +213,7 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
             if row.koltseg is not None:
                 by_employee_cost[row.employee_id] = by_employee_cost.get(row.employee_id, 0) + float(row.koltseg)
 
-    employee_ids = list({*by_employee_minutes.keys(), *(eid for eid, _ in futo)})
+    employee_ids = list({*by_employee_minutes.keys(), *(eid for eid, _, _ in futo)})
     names = {e.id: e.full_name for e in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))} if employee_ids else {}
 
     by_employee = [
@@ -202,13 +229,20 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
     total_cost = sum(by_employee_cost.values()) if by_employee_cost else None
 
     # A költséget nem csak elrejtjük a felületen: aki nem láthatja, annak a
-    # válaszban sincs benne.
-    if not _may_see_costs(db, current_user):
+    # válaszban sincs benne. Ez az órabérre is áll - abból ki lehetne számolni.
+    lathat_koltseget = _may_see_costs(db, current_user)
+    if not lathat_koltseget:
         by_employee = [s.model_copy(update={"total_cost": None}) for s in by_employee]
         total_cost = None
 
     running = [
-        TimerRunningEntry(employee_id=eid, full_name=names.get(eid, "Ismeretlen"), since=since) for eid, since in futo
+        TimerRunningEntry(
+            employee_id=eid,
+            full_name=names.get(eid, "Ismeretlen"),
+            since=since,
+            orabere=orabere if lathat_koltseget else None,
+        )
+        for eid, since, orabere in futo
     ]
 
     return TimerState(

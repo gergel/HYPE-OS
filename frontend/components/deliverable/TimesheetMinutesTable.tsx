@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { authFetch } from "@/lib/authFetch";
+import { formatFt, formatPercek } from "@/lib/ido";
 import type { JsonRecord } from "@/lib/api";
 
 function formatDateTime(value: unknown): string {
@@ -15,10 +16,7 @@ function formatDateTime(value: unknown): string {
 }
 
 function formatPerc(minutes: number | null): string {
-  if (minutes === null) return "–";
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  return h > 0 ? `${h} ó ${m} p` : `${m} p`;
+  return minutes === null ? "–" : formatPercek(minutes);
 }
 
 /** Egy sor percének helyben szerkesztése. Kattintásra beviteli mezővé válik,
@@ -180,7 +178,7 @@ export function TimesheetMinutesTable({
               </td>
               {showCost && (
                 <td className="py-2 pr-4 text-right whitespace-nowrap text-text-secondary">
-                  {typeof r.koltseg === "number" ? `${r.koltseg.toLocaleString("hu-HU")} Ft` : "–"}
+                  {typeof r.koltseg === "number" ? formatFt(r.koltseg) : "–"}
                 </td>
               )}
               <td className="py-2 text-right">

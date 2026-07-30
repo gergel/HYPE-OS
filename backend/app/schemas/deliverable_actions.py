@@ -49,6 +49,11 @@ class TimerRunningEntry(BaseModel):
     employee_id: int
     full_name: str
     since: datetime
+    #: A mérés indításakor RÖGZÍTETT órabér (Timesheet.akkori_orabere) - ebből
+    #: számolja a felület másodpercenként a még futó mérés költségét is, hogy ne
+    #: csak leállítás után derüljön ki, mennyibe kerül. Ha a felhasználó nem
+    #: láthatja a forintokat, üresen megy vissza.
+    orabere: float | None = None
 
 
 class TimerState(BaseModel):

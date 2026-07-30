@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 
 from fastapi import Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
@@ -23,6 +24,7 @@ from app.schemas.employee import (
     RateUpdate,
 )
 from app.services import deliverable_actions, document_storage
+from app.services.hu_datum import ev_honap_szoveg
 
 
 def _hash_employee_password(data: dict, db: Session) -> dict:
@@ -69,7 +71,7 @@ def set_employee_password(employee_id: int, payload: SetPasswordPayload, db: Ses
 
 
 class UtomunkaProjektIdo(BaseModel):
-    """Egy vágó összesített utómunka-ideje EGY projekten."""
+    """Egy vágó összesített utómunka-ideje EGY projekten, EGY hónapon belül."""
 
     project_id: int | None
     project_nev: str | None
@@ -79,15 +81,32 @@ class UtomunkaProjektIdo(BaseModel):
     total_cost: float | None = None
 
 
-@router.get("/{employee_id}/utomunka-ido", response_model=list[UtomunkaProjektIdo])
+class UtomunkaHonapIdo(BaseModel):
+    """Egy HÓNAP összesítése: mennyit vágott a munkatárs, mennyibe került, és
+    ezen belül projektenként hogyan oszlik meg."""
+
+    ev: int
+    honap: int
+    honap_szoveg: str
+    total_minutes: float
+    total_cost: float | None = None
+    projektek: list[UtomunkaProjektIdo] = []
+
+
+@router.get("/{employee_id}/utomunka-ido", response_model=list[UtomunkaHonapIdo])
 def get_utomunka_ido(
     employee_id: int,
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
-    """Melyik projekten mennyit dolgozott ez a vágó utómunkával, összesítve -
-    a személy adatlapján jelenik meg. A projekt nélküli anyagok egy közös,
+    """Mennyit vágott ez a munkatárs HÓNAPOKRA bontva, hónapon belül pedig
+    projektenként - a személy adatlapján jelenik meg (lásd
+    components/UtomunkaIdoHavonta.tsx). A projekt nélküli anyagok egy közös,
     "Projekt nélkül" sorba kerülnek (project_id=None).
+
+    A hónapot a munka KEZDÉSE (start_date) dönti el. A még futó mérés is
+    beleszámít, a mostani állásával - így a felületen látott összeg ugyanaz,
+    mint az anyag oldalán ketyegő időmérőé.
 
     A forintos oszlop csak annak megy vissza, akinek a Pénzügy oldalhoz van
     hozzáférése (ugyanaz a szabály, mint az Utómunka oldalon - lásd
@@ -99,35 +118,63 @@ def get_utomunka_ido(
         db.query(Timesheet, Deliverable, Project)
         .join(Deliverable, Timesheet.deliverable_id == Deliverable.id)
         .outerjoin(Project, Deliverable.project_id == Project.id)
-        .filter(Timesheet.employee_id == employee_id, Timesheet.end_date.isnot(None))
+        .filter(Timesheet.employee_id == employee_id, Timesheet.start_date.isnot(None))
         .all()
     )
 
     lathat_koltseget = deliverable_actions._may_see_costs(db, current_user)
-    osszesites: dict[int | None, UtomunkaProjektIdo] = {}
-    anyagok: dict[int | None, set[int]] = {}
+    most = datetime.now(timezone.utc)
+    honapok: dict[tuple[int, int], UtomunkaHonapIdo] = {}
+    projektek: dict[tuple[int, int], dict[int | None, UtomunkaProjektIdo]] = {}
+    anyagok: dict[tuple[int, int, int | None], set[int]] = {}
+
     for timesheet, deliverable, project in rows:
-        kulcs = project.id if project is not None else None
-        if kulcs not in osszesites:
-            osszesites[kulcs] = UtomunkaProjektIdo(
-                project_id=kulcs,
+        if timesheet.end_date is None:
+            # Még fut: a mostani állásával számoljuk, hogy ne hiányozzon a
+            # havi összesítésből, amíg valaki le nem állítja.
+            percek = max(0.0, (most - timesheet.start_date).total_seconds() / 60)
+            koltseg = deliverable_actions.szamolt_koltseg(percek, timesheet.akkori_orabere)
+        else:
+            percek = float(timesheet.time_minutes if timesheet.time_minutes is not None else (timesheet.idotartam_perc or 0))
+            koltseg = float(timesheet.koltseg) if timesheet.koltseg is not None else None
+
+        honap_kulcs = (timesheet.start_date.year, timesheet.start_date.month)
+        projekt_kulcs = project.id if project is not None else None
+        if honap_kulcs not in honapok:
+            honapok[honap_kulcs] = UtomunkaHonapIdo(
+                ev=honap_kulcs[0],
+                honap=honap_kulcs[1],
+                honap_szoveg=ev_honap_szoveg(*honap_kulcs),
+                total_minutes=0,
+                total_cost=0 if lathat_koltseget else None,
+            )
+            projektek[honap_kulcs] = {}
+        if projekt_kulcs not in projektek[honap_kulcs]:
+            projektek[honap_kulcs][projekt_kulcs] = UtomunkaProjektIdo(
+                project_id=projekt_kulcs,
                 project_nev=project.nev if project is not None else None,
                 projektkod=project.projektkod_szoveg if project is not None else None,
                 anyagok_szama=0,
                 total_minutes=0,
                 total_cost=0 if lathat_koltseget else None,
             )
-            anyagok[kulcs] = set()
-        sor = osszesites[kulcs]
-        percek = timesheet.time_minutes if timesheet.time_minutes is not None else (timesheet.idotartam_perc or 0)
-        sor.total_minutes += float(percek)
-        if lathat_koltseget and timesheet.koltseg is not None:
-            sor.total_cost = (sor.total_cost or 0) + float(timesheet.koltseg)
-        anyagok[kulcs].add(deliverable.id)
+            anyagok[(*honap_kulcs, projekt_kulcs)] = set()
 
-    for kulcs, sor in osszesites.items():
-        sor.anyagok_szama = len(anyagok[kulcs])
-    return sorted(osszesites.values(), key=lambda s: s.total_minutes, reverse=True)
+        honapok[honap_kulcs].total_minutes += percek
+        projektek[honap_kulcs][projekt_kulcs].total_minutes += percek
+        if lathat_koltseget and koltseg is not None:
+            honapok[honap_kulcs].total_cost = (honapok[honap_kulcs].total_cost or 0) + koltseg
+            sor = projektek[honap_kulcs][projekt_kulcs]
+            sor.total_cost = (sor.total_cost or 0) + koltseg
+        anyagok[(*honap_kulcs, projekt_kulcs)].add(deliverable.id)
+
+    for honap_kulcs, honap in honapok.items():
+        for projekt_kulcs, sor in projektek[honap_kulcs].items():
+            sor.anyagok_szama = len(anyagok[(*honap_kulcs, projekt_kulcs)])
+        honap.projektek = sorted(projektek[honap_kulcs].values(), key=lambda s: s.total_minutes, reverse=True)
+
+    # Legfrissebb hónap elöl - azt nézi meg az ember legelőször.
+    return sorted(honapok.values(), key=lambda h: (h.ev, h.honap), reverse=True)
 
 
 @router.get("/{employee_id}/munkaszerzodesek", response_model=list[EmployeeDocumentRead])

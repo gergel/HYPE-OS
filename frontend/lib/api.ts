@@ -791,6 +791,9 @@ export type TimerRunningEntry = {
   employee_id: number;
   full_name: string;
   since: string;
+  /** A mérés indításakor rögzített órabér - ebből számolja a felület a még
+   * futó mérés költségét is. Üres, ha a felhasználó nem láthat forintokat. */
+  orabere: number | null;
 };
 
 export type TimerState = {
@@ -810,9 +813,18 @@ export type UtomunkaProjektIdo = {
   total_cost: number | null;
 };
 
-/** Melyik projekten mennyit dolgozott ez a vágó utómunkával, összesítve. */
-export async function getUtomunkaIdo(employeeId: number): Promise<UtomunkaProjektIdo[]> {
-  return (await apiGet<UtomunkaProjektIdo[]>(`/api/v1/crew/${employeeId}/utomunka-ido`)) ?? [];
+export type UtomunkaHonapIdo = {
+  ev: number;
+  honap: number;
+  honap_szoveg: string;
+  total_minutes: number;
+  total_cost: number | null;
+  projektek: UtomunkaProjektIdo[];
+};
+
+/** Mennyit vágott ez a munkatárs hónapokra bontva, hónapon belül projektenként. */
+export async function getUtomunkaIdo(employeeId: number): Promise<UtomunkaHonapIdo[]> {
+  return (await apiGet<UtomunkaHonapIdo[]>(`/api/v1/crew/${employeeId}/utomunka-ido`)) ?? [];
 }
 
 export async function getTimerState(deliverableId: number): Promise<TimerState | null> {

@@ -4,26 +4,17 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { authFetch } from "@/lib/authFetch";
+import { elteltPercek, formatEltelt, formatFt, formatPercek, futoKoltseg } from "@/lib/ido";
 import type { TimerState } from "@/lib/api";
-
-function formatMinutes(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  return h > 0 ? `${h} óra ${m} perc` : `${m} perc`;
-}
-
-function formatElapsedSince(startIso: string, now: Date): string {
-  const start = new Date(startIso);
-  const totalSeconds = Math.max(0, Math.floor((now.getTime() - start.getTime()) / 1000));
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
-}
 
 /** Start/Stop időmérés egy Utómunka anyagon - egyénenként külön követi, ki
  * mennyit dolgozott (lásd services/deliverable_actions.py timer_*), hogy az
- * óradíjjal felszorozva ki lehessen számolni a vágás tényleges költségét. */
+ * óradíjjal felszorozva ki lehessen számolni a vágás tényleges költségét.
+ *
+ * A még FUTÓ mérés ideje ÉS költsége is másodpercenként frissül: az óradíj a
+ * mérés indításakor rögzített órabér (TimerRunningEntry.orabere), ugyanaz,
+ * amivel a backend a leállításkor számol - így a Stop pillanatában nem ugrik
+ * meg az összeg. */
 export function TimerControls({
   deliverableId,
   initialState,
@@ -45,9 +36,10 @@ export function TimerControls({
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const running = Boolean(initialState?.my_running_since);
+  const futok = initialState?.running ?? [];
   // Az óra akkor is ketyegjen, ha nem én mérek, hanem valaki más - különben a
   // "kinél fut" lista ideje befagyna a betöltés pillanatában.
-  const barkiMer = running || (initialState?.running.length ?? 0) > 0;
+  const barkiMer = running || futok.length > 0;
 
   useEffect(() => {
     if (!barkiMer) return;
@@ -58,8 +50,34 @@ export function TimerControls({
   /** A saját sorunkat a fenti Start/Stop gomb kezeli - ott ne jelenjen meg
    * még egy "Leállítás". */
   function isMine(employeeId: number): boolean {
-    return running && initialState?.running.some((r) => r.employee_id === employeeId && r.since === initialState.my_running_since) === true;
+    return running && futok.some((r) => r.employee_id === employeeId && r.since === initialState?.my_running_since);
   }
+
+  // A lezárt sorokból számolt összesítéshez hozzáadjuk a MOST futó méréseket
+  // is, hogy a lista és az "Összesen" sor együtt nőjön az órával - különben
+  // csak leállítás után derülne ki, hol tart az anyag ideje és költsége.
+  const futoPercPerFo = new Map<number, number>();
+  const futoKoltsegPerFo = new Map<number, number>();
+  for (const r of futok) {
+    futoPercPerFo.set(r.employee_id, (futoPercPerFo.get(r.employee_id) ?? 0) + elteltPercek(r.since, now));
+    futoKoltsegPerFo.set(r.employee_id, (futoKoltsegPerFo.get(r.employee_id) ?? 0) + futoKoltseg(r.since, r.orabere, now));
+  }
+  const mertFok = [...new Set([...(initialState?.by_employee ?? []).map((e) => e.employee_id), ...futoPercPerFo.keys()])];
+  const osszesites = mertFok.map((employeeId) => {
+    const lezart = initialState?.by_employee.find((e) => e.employee_id === employeeId);
+    const futoSor = futok.find((r) => r.employee_id === employeeId);
+    const vanKoltseg = lezart?.total_cost != null || futoSor?.orabere != null;
+    return {
+      employee_id: employeeId,
+      full_name: lezart?.full_name ?? futoSor?.full_name ?? "Ismeretlen",
+      total_minutes: (lezart?.total_minutes ?? 0) + (futoPercPerFo.get(employeeId) ?? 0),
+      total_cost: vanKoltseg ? (lezart?.total_cost ?? 0) + (futoKoltsegPerFo.get(employeeId) ?? 0) : null,
+      fut: futoSor != null,
+    };
+  });
+  const osszPerc = osszesites.reduce((sum, e) => sum + e.total_minutes, 0);
+  const vanBarmiKoltseg = osszesites.some((e) => e.total_cost != null);
+  const osszKoltseg = vanBarmiKoltseg ? osszesites.reduce((sum, e) => sum + (e.total_cost ?? 0), 0) : null;
 
   async function stopFor(employeeId: number, nev: string) {
     if (!(await confirm(`Leállítod ${nev} futó időmérését?`))) return;
@@ -115,21 +133,22 @@ export function TimerControls({
             eltér, ezért suppressHydrationWarning van rajta. */}
         {running && initialState?.my_running_since && (
           <span suppressHydrationWarning className="text-[13px] tabular-nums text-text-secondary">
-            {formatElapsedSince(initialState.my_running_since, now)}
+            {formatEltelt(initialState.my_running_since, now)}
           </span>
         )}
       </div>
 
       {/* Az ÉPP FUTÓ mérések névvel - enélkül csak egy csupasz óra ketyegett,
           amiből nem derült ki, kihez tartozik (és a másokét nem is mutatta). */}
-      {initialState && initialState.running.length > 0 && (
-        <div className="space-y-1">
-          {initialState.running.map((r) => (
+      {futok.length > 0 && (
+        <div className="mb-3 space-y-1">
+          {futok.map((r) => (
             <div key={r.employee_id} className="flex items-center justify-between gap-2 text-[12px]">
               <span className="text-text-primary">{r.full_name}</span>
               <span className="flex items-center gap-2">
                 <span suppressHydrationWarning className="tabular-nums text-text-warning">
-                  {formatElapsedSince(r.since, now)} · fut
+                  {formatEltelt(r.since, now)}
+                  {showCost && r.orabere != null && ` · ${formatFt(futoKoltseg(r.since, r.orabere, now))}`} · fut
                 </span>
                 {isAdmin && !isMine(r.employee_id) && (
                   <button
@@ -147,23 +166,34 @@ export function TimerControls({
         </div>
       )}
 
-      {initialState && initialState.by_employee.length > 0 && (
+      {osszesites.length > 0 && (
         <div className="space-y-1">
-          {initialState.by_employee.map((e) => (
+          {osszesites.map((e) => (
             <div key={e.employee_id} className="flex items-center justify-between text-[12px] text-text-secondary">
               <span>{e.full_name}</span>
-              <span>
-                {formatMinutes(e.total_minutes)}
-                {showCost && e.total_cost != null && <span className="text-text-muted"> · {Math.round(e.total_cost)} Ft</span>}
+              {/* A suppressHydrationWarning nem öröklődik a gyerekekre, ezért a
+                  forintos részen külön is ott van - a futó mérés összege a
+                  szerveren és a böngészőben definíció szerint eltér. */}
+              <span suppressHydrationWarning>
+                {formatPercek(e.total_minutes)}
+                {showCost && e.total_cost != null && (
+                  <span suppressHydrationWarning className="text-text-muted">
+                    {" "}
+                    · {formatFt(e.total_cost)}
+                  </span>
+                )}
               </span>
             </div>
           ))}
           <div className="mt-1.5 flex items-center justify-between border-t border-border pt-1.5 text-[12px] font-medium text-text-primary">
             <span>Összesen</span>
-            <span>
-              {formatMinutes(initialState.total_minutes)}
-              {showCost && initialState.total_cost != null && (
-                <span className="text-text-muted"> · {Math.round(initialState.total_cost)} Ft</span>
+            <span suppressHydrationWarning>
+              {formatPercek(osszPerc)}
+              {showCost && osszKoltseg != null && (
+                <span suppressHydrationWarning className="text-text-muted">
+                  {" "}
+                  · {formatFt(osszKoltseg)}
+                </span>
               )}
             </span>
           </div>

@@ -2,11 +2,12 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { BelsosTigEmployeeList } from "@/components/BelsosTigEmployeeList";
 import { Card } from "@/components/Card";
+import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { DetailSections } from "@/components/DetailSections";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { MunkaszerzodesUpload } from "@/components/MunkaszerzodesUpload";
 import { RelatedTable } from "@/components/RelatedTable";
-import { UtomunkaIdoOsszesito } from "@/components/UtomunkaIdoOsszesito";
+import { UtomunkaIdoHavonta } from "@/components/UtomunkaIdoHavonta";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
@@ -112,15 +113,16 @@ export default async function EmployeeDetailPage({
         <BackLink href={backTarget.href} label={backTarget.label} />
         <h1 className="text-lg font-medium text-text-primary">{String(employee.full_name ?? `Crew tag #${employee.id}`)}</h1>
 
-        {/* Közvetlenül a név alatt: melyik projekten mennyit dolgozott
-            utómunkával - ez a vágó oldalának legfontosabb összesítése. */}
-        {utomunkaIdo.length > 0 && (
-          <Card title="Utómunkával töltött idő projektenként">
-            <UtomunkaIdoOsszesito rows={utomunkaIdo} />
-          </Card>
-        )}
-
         <DetailSections sections={tabs} />
+
+        {/* Az alapadatok ALATT, összecsukva: mennyit vágott hónapról hónapra,
+            hónapon belül projektenként (lásd UtomunkaIdoHavonta). Felül az
+            adatlap maradjon, ez a hosszú lista ne tolja le. */}
+        {utomunkaIdo.length > 0 && (
+          <CollapsibleCard title="Utómunkával töltött idő havonta">
+            <UtomunkaIdoHavonta honapok={utomunkaIdo} />
+          </CollapsibleCard>
+        )}
 
         {vallalkozasFieldKeys.length > 0 && (
           <Card title="Vállalkozás adatok">

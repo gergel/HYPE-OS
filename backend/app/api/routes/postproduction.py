@@ -199,8 +199,12 @@ def set_timesheet_minutes(
     if row is None or row.deliverable_id != deliverable_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nincs ilyen munkaidő-elszámolás ezen az anyagon.")
     row.time_minutes = payload.minutes
-    if row.akkori_orabere:
-        row.koltseg = round((payload.minutes / 60) * float(row.akkori_orabere), 2)
+    # Az órabér a sor SAJÁT, befagyasztott órabére (akkori_orabere) - egy
+    # későbbi béremelés a régi költséget nem írhatja át. Ha még nincs rögzítve,
+    # most vesszük fel a mostanit.
+    if row.akkori_orabere is None:
+        row.akkori_orabere = deliverable_actions.aktualis_orabere(db, row.employee_id)
+    row.koltseg = deliverable_actions.szamolt_koltseg(payload.minutes, row.akkori_orabere)
     db.commit()
     db.refresh(row)
     return row

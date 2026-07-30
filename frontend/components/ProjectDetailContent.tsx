@@ -23,9 +23,9 @@ import { SubcontractorContractManager } from "@/components/SubcontractorContract
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { TopBar } from "@/components/TopBar";
+import { VagasiKoltsegOsszesen, type FutoMeres } from "@/components/deliverable/VagasiKoltsegOsszesen";
 import {
   ENTITY_PATHS,
-  formatHuf,
   getAllTigForProject,
   getCurrentUser,
   getDetailTabs,
@@ -140,9 +140,18 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
   const deliverableTimesheets = await Promise.all(
     deliverables.map((d) => getRelated(ENTITY_PATHS.timesheet, { deliverable_id: Number(d.id) })),
   );
-  const vagasiKoltsegOsszesen = deliverableTimesheets
-    .flat()
-    .reduce((sum, t) => sum + (typeof t.koltseg === "number" ? t.koltseg : 0), 0);
+  // A lezárt sorok összege a szerverről jön, a MÉG FUTÓ méréseket a
+  // VagasiKoltsegOsszesen komponens adja hozzá másodpercenként (lásd ott).
+  const osszesTimesheet = deliverableTimesheets.flat();
+  const futoMeresek: FutoMeres[] = osszesTimesheet
+    .filter((t) => !t.end_date && typeof t.start_date === "string")
+    .map((t) => ({ since: String(t.start_date), orabere: typeof t.akkori_orabere === "number" ? t.akkori_orabere : null }));
+  const lezartSorok = osszesTimesheet.filter((t) => !!t.end_date || !t.start_date);
+  const lezartPercek = lezartSorok.reduce((sum, t) => sum + (typeof t.time_minutes === "number" ? t.time_minutes : 0), 0);
+  const lezartKoltseg = lezartSorok.reduce((sum, t) => sum + (typeof t.koltseg === "number" ? t.koltseg : 0), 0);
+  // A forint összeg itt is a Pénzügy-hozzáféréshez kötött (ugyanaz a szabály,
+  // mint az Utómunka oldalon - lásd deliverable_actions._may_see_costs).
+  const lathatKoltseget = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
 
   const bookingRows = bookings
     .map((b) => {
@@ -298,9 +307,12 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
             </Card>
             <Card title={`Utómunka (${deliverables.length})`} icon={Clapperboard}>
               {deliverables.length > 0 && (
-                <p className="mb-3 text-[13px] text-text-secondary">
-                  Vágási költség összesen: <span className="font-medium text-text-primary">{formatHuf(vagasiKoltsegOsszesen)}</span>
-                </p>
+                <VagasiKoltsegOsszesen
+                  lezartPercek={lezartPercek}
+                  lezartKoltseg={lezartKoltseg}
+                  futok={futoMeresek}
+                  showCost={lathatKoltseget}
+                />
               )}
               <div className="mb-3 flex flex-wrap items-center gap-3">
                 <ActionButton
