@@ -7,9 +7,12 @@ from sqlalchemy.orm import Session
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
 from app.core.security import Role, get_current_user, hash_password, require_page_action, require_roles
+from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.employee_document import EmployeeDocument
+from app.models.project import Project
 from app.models.rate import Rate
+from app.models.timesheet import Timesheet
 from app.schemas.employee import (
     EmployeeCreate,
     EmployeeDocumentRead,
@@ -19,7 +22,7 @@ from app.schemas.employee import (
     RateRead,
     RateUpdate,
 )
-from app.services import document_storage
+from app.services import deliverable_actions, document_storage
 
 
 def _hash_employee_password(data: dict, db: Session) -> dict:
@@ -63,6 +66,68 @@ def set_employee_password(employee_id: int, payload: SetPasswordPayload, db: Ses
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A jelszónak legalább 6 karakter hosszúnak kell lennie")
     employee.hashed_password = hash_password(payload.password)
     db.commit()
+
+
+class UtomunkaProjektIdo(BaseModel):
+    """Egy vágó összesített utómunka-ideje EGY projekten."""
+
+    project_id: int | None
+    project_nev: str | None
+    projektkod: str | None
+    anyagok_szama: int
+    total_minutes: float
+    total_cost: float | None = None
+
+
+@router.get("/{employee_id}/utomunka-ido", response_model=list[UtomunkaProjektIdo])
+def get_utomunka_ido(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Melyik projekten mennyit dolgozott ez a vágó utómunkával, összesítve -
+    a személy adatlapján jelenik meg. A projekt nélküli anyagok egy közös,
+    "Projekt nélkül" sorba kerülnek (project_id=None).
+
+    A forintos oszlop csak annak megy vissza, akinek a Pénzügy oldalhoz van
+    hozzáférése (ugyanaz a szabály, mint az Utómunka oldalon - lásd
+    services/deliverable_actions._may_see_costs)."""
+    if db.get(Employee, employee_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Munkatárs nem található")
+
+    rows = (
+        db.query(Timesheet, Deliverable, Project)
+        .join(Deliverable, Timesheet.deliverable_id == Deliverable.id)
+        .outerjoin(Project, Deliverable.project_id == Project.id)
+        .filter(Timesheet.employee_id == employee_id, Timesheet.end_date.isnot(None))
+        .all()
+    )
+
+    lathat_koltseget = deliverable_actions._may_see_costs(db, current_user)
+    osszesites: dict[int | None, UtomunkaProjektIdo] = {}
+    anyagok: dict[int | None, set[int]] = {}
+    for timesheet, deliverable, project in rows:
+        kulcs = project.id if project is not None else None
+        if kulcs not in osszesites:
+            osszesites[kulcs] = UtomunkaProjektIdo(
+                project_id=kulcs,
+                project_nev=project.nev if project is not None else None,
+                projektkod=project.projektkod_szoveg if project is not None else None,
+                anyagok_szama=0,
+                total_minutes=0,
+                total_cost=0 if lathat_koltseget else None,
+            )
+            anyagok[kulcs] = set()
+        sor = osszesites[kulcs]
+        percek = timesheet.time_minutes if timesheet.time_minutes is not None else (timesheet.idotartam_perc or 0)
+        sor.total_minutes += float(percek)
+        if lathat_koltseget and timesheet.koltseg is not None:
+            sor.total_cost = (sor.total_cost or 0) + float(timesheet.koltseg)
+        anyagok[kulcs].add(deliverable.id)
+
+    for kulcs, sor in osszesites.items():
+        sor.anyagok_szama = len(anyagok[kulcs])
+    return sorted(osszesites.values(), key=lambda s: s.total_minutes, reverse=True)
 
 
 @router.get("/{employee_id}/munkaszerzodesek", response_model=list[EmployeeDocumentRead])

@@ -785,12 +785,35 @@ export type TimerEmployeeSummary = {
   total_cost: number | null;
 };
 
+/** Épp futó időmérés - névvel, hogy a felületen ne csak egy csupasz óra
+ * ketyegjen, hanem az is látszódjon, kinél fut. */
+export type TimerRunningEntry = {
+  employee_id: number;
+  full_name: string;
+  since: string;
+};
+
 export type TimerState = {
   my_running_since: string | null;
+  running: TimerRunningEntry[];
   by_employee: TimerEmployeeSummary[];
   total_minutes: number;
   total_cost: number | null;
 };
+
+export type UtomunkaProjektIdo = {
+  project_id: number | null;
+  project_nev: string | null;
+  projektkod: string | null;
+  anyagok_szama: number;
+  total_minutes: number;
+  total_cost: number | null;
+};
+
+/** Melyik projekten mennyit dolgozott ez a vágó utómunkával, összesítve. */
+export async function getUtomunkaIdo(employeeId: number): Promise<UtomunkaProjektIdo[]> {
+  return (await apiGet<UtomunkaProjektIdo[]>(`/api/v1/crew/${employeeId}/utomunka-ido`)) ?? [];
+}
 
 export async function getTimerState(deliverableId: number): Promise<TimerState | null> {
   return apiGet<TimerState>(`/api/v1/deliverables/${deliverableId}/timer/state`);

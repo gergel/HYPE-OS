@@ -23,6 +23,7 @@ from app.schemas.deliverable_actions import (
     CommentRead,
     ContactOption,
     TimerEmployeeSummary,
+    TimerRunningEntry,
     TimerState,
     VinyoOptions,
 )
@@ -165,18 +166,21 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
     rows = db.scalars(select(Timesheet).where(Timesheet.deliverable_id == deliverable.id)).all()
 
     my_running_since = None
+    futo: list[tuple[int, datetime]] = []
     by_employee_minutes: dict[int, float] = {}
     by_employee_cost: dict[int, float] = {}
     for row in rows:
-        if row.employee_id == current_user.id and row.end_date is None and row.start_date is not None:
-            my_running_since = row.start_date
+        if row.end_date is None and row.start_date is not None:
+            futo.append((row.employee_id, row.start_date))
+            if row.employee_id == current_user.id:
+                my_running_since = row.start_date
         if row.end_date is not None and row.start_date is not None:
             minutes = row.time_minutes if row.time_minutes is not None else row.idotartam_perc or 0
             by_employee_minutes[row.employee_id] = by_employee_minutes.get(row.employee_id, 0) + float(minutes)
             if row.koltseg is not None:
                 by_employee_cost[row.employee_id] = by_employee_cost.get(row.employee_id, 0) + float(row.koltseg)
 
-    employee_ids = list(by_employee_minutes.keys())
+    employee_ids = list({*by_employee_minutes.keys(), *(eid for eid, _ in futo)})
     names = {e.id: e.full_name for e in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))} if employee_ids else {}
 
     by_employee = [
@@ -197,7 +201,17 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
         by_employee = [s.model_copy(update={"total_cost": None}) for s in by_employee]
         total_cost = None
 
-    return TimerState(my_running_since=my_running_since, by_employee=by_employee, total_minutes=total_minutes, total_cost=total_cost)
+    running = [
+        TimerRunningEntry(employee_id=eid, full_name=names.get(eid, "Ismeretlen"), since=since) for eid, since in futo
+    ]
+
+    return TimerState(
+        my_running_since=my_running_since,
+        running=running,
+        by_employee=by_employee,
+        total_minutes=total_minutes,
+        total_cost=total_cost,
+    )
 
 
 def send_visszajelzes(db: Session, deliverable: Deliverable, current_user: Employee) -> Feedback:

@@ -6,6 +6,7 @@ import { DetailSections } from "@/components/DetailSections";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { MunkaszerzodesUpload } from "@/components/MunkaszerzodesUpload";
 import { RelatedTable } from "@/components/RelatedTable";
+import { UtomunkaIdoOsszesito } from "@/components/UtomunkaIdoOsszesito";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
@@ -16,6 +17,7 @@ import {
   getMyPagePermissions,
   getRecord,
   getRelated,
+  getUtomunkaIdo,
   getVisibleFields,
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
@@ -67,6 +69,7 @@ export default async function EmployeeDetailPage({
     campaigns,
     documents,
     belsosTigek,
+    utomunkaIdo,
     visibleFields,
     fieldTypes,
     dbTabs,
@@ -80,6 +83,7 @@ export default async function EmployeeDetailPage({
       getRelated(ENTITY_PATHS.campaign, { felelos_employee_id: employeeId }),
       getEmployeeDocuments(employeeId),
       getBelsosTigForEmployee(employeeId),
+      getUtomunkaIdo(employeeId),
       getVisibleFields("employee"),
       getFieldTypes("employee"),
       getDetailTabs("employee"),
@@ -107,6 +111,14 @@ export default async function EmployeeDetailPage({
       <div className="flex-1 space-y-6 p-6">
         <BackLink href={backTarget.href} label={backTarget.label} />
         <h1 className="text-lg font-medium text-text-primary">{String(employee.full_name ?? `Crew tag #${employee.id}`)}</h1>
+
+        {/* Közvetlenül a név alatt: melyik projekten mennyit dolgozott
+            utómunkával - ez a vágó oldalának legfontosabb összesítése. */}
+        {utomunkaIdo.length > 0 && (
+          <Card title="Utómunkával töltött idő projektenként">
+            <UtomunkaIdoOsszesito rows={utomunkaIdo} />
+          </Card>
+        )}
 
         <DetailSections sections={tabs} />
 

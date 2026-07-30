@@ -39,12 +39,15 @@ export function TimerControls({
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const running = Boolean(initialState?.my_running_since);
+  // Az óra akkor is ketyegjen, ha nem én mérek, hanem valaki más - különben a
+  // "kinél fut" lista ideje befagyna a betöltés pillanatában.
+  const barkiMer = running || (initialState?.running.length ?? 0) > 0;
 
   useEffect(() => {
-    if (!running) return;
+    if (!barkiMer) return;
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
-  }, [running]);
+  }, [barkiMer]);
 
   async function handleClick() {
     setBusy(true);
@@ -77,12 +80,30 @@ export function TimerControls({
         >
           {running ? "Stop" : "Start"}
         </button>
+        {/* Az eltelt idő a szerveren és a böngészőben más másodpercnél jár (a
+            kettő között eltelik némi idő) - ez a szöveg definíció szerint
+            eltér, ezért suppressHydrationWarning van rajta. */}
         {running && initialState?.my_running_since && (
-          <span className="text-[13px] tabular-nums text-text-secondary">
+          <span suppressHydrationWarning className="text-[13px] tabular-nums text-text-secondary">
             {formatElapsedSince(initialState.my_running_since, now)}
           </span>
         )}
       </div>
+
+      {/* Az ÉPP FUTÓ mérések névvel - enélkül csak egy csupasz óra ketyegett,
+          amiből nem derült ki, kihez tartozik (és a másokét nem is mutatta). */}
+      {initialState && initialState.running.length > 0 && (
+        <div className="space-y-1">
+          {initialState.running.map((r) => (
+            <div key={r.employee_id} className="flex items-center justify-between text-[12px]">
+              <span className="text-text-primary">{r.full_name}</span>
+              <span suppressHydrationWarning className="tabular-nums text-text-warning">
+                {formatElapsedSince(r.since, now)} · fut
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {initialState && initialState.by_employee.length > 0 && (
         <div className="space-y-1">

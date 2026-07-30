@@ -42,8 +42,18 @@ class TimerEmployeeSummary(BaseModel):
     total_cost: float | None = None
 
 
+class TimerRunningEntry(BaseModel):
+    """Épp FUTÓ időmérés - névvel, hogy a felületen ne csak egy csupasz óra
+    ketyegjen, hanem az is látszódjon, kinél fut."""
+
+    employee_id: int
+    full_name: str
+    since: datetime
+
+
 class TimerState(BaseModel):
     my_running_since: datetime | None
+    running: list[TimerRunningEntry] = []
     by_employee: list[TimerEmployeeSummary]
     total_minutes: float
     total_cost: float | None = None
