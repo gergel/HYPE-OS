@@ -27,13 +27,17 @@ function alapTeljesitesDatum(ev: number, honap: number): string {
   return `${kovEv}-${String(kovHonap).padStart(2, "0")}-01`;
 }
 
+/** A megbízás tárgya és az áfa-jelölés a munkatárs adatlapjáról jön - de csak
+ * amíg a hónap bejegyzésének nincs saját (esetleg átírt) értéke. Az első
+ * megnyitáskor még egyáltalán nincs bejegyzés, ezért kell a személy adata is
+ * (lásd backend MonthEmployeeInfo). */
 function formFromRecord(employee: BelsosTigMonthEmployee, ev: number, honap: number): FormState {
   const record = employee.record;
   return {
     netto_osszeg: record?.netto_osszeg != null ? String(record.netto_osszeg) : "",
-    plusz_afa: record?.plusz_afa ?? false,
+    plusz_afa: record?.plusz_afa ?? employee.plusz_afa ?? false,
     megjegyzes: record?.megjegyzes ?? "",
-    megbizas_targya: record?.megbizas_targya ?? "",
+    megbizas_targya: record?.megbizas_targya ?? employee.megbizas_targya ?? "",
     teljesites_datuma: record?.teljesites_datuma ?? alapTeljesitesDatum(ev, honap),
     keltezes: record?.keltezes ?? "",
   };
@@ -374,7 +378,7 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
                   value={form.megbizas_targya}
                   onChange={(e) => update("megbizas_targya", e.target.value)}
                   disabled={!!busyId}
-                  placeholder="A munkatárs adatlapjáról jön, de itt átírható"
+                  placeholder="A munkatárs adatlapján sincs megadva"
                   className={inputClass}
                 />
               </div>

@@ -131,6 +131,11 @@ class MonthEmployeeInfo(BaseModel):
     id: int
     full_name: str
     email: str | None
+    # A munkatárs adatlapjáról jövő előtöltés: a TIG űrlap ezekkel indul, ha
+    # még nincs bejegyzés arra a hónapra (olyankor `record` üres, tehát nem
+    # lenne miből kitölteni).
+    megbizas_targya: str | None
+    plusz_afa: bool | None
     record: InternalPerformanceCertificateRead | None
 
 
@@ -166,6 +171,8 @@ def list_month(
             id=e.id,
             full_name=e.full_name,
             email=e.email,
+            megbizas_targya=e.megbizas_targya,
+            plusz_afa=e.plusz_afa,
             record=InternalPerformanceCertificateRead.model_validate(lookup[e.id]) if e.id in lookup else None,
         )
         for e in employees

@@ -457,6 +457,10 @@ export type BelsosTigMonthEmployee = {
   id: number;
   full_name: string;
   email: string | null;
+  /** A munkatárs adatlapjáról - ezzel indul a TIG űrlap, amíg nincs saját
+   * (esetleg felülírt) értéke a hónap bejegyzésének. */
+  megbizas_targya: string | null;
+  plusz_afa: boolean | null;
   record: InternalPerformanceCertificate | null;
 };
 
