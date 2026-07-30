@@ -19,7 +19,7 @@ from io import BytesIO
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials as UserCredentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 from app.core.config import settings
 
@@ -45,15 +45,21 @@ def _load_user_creds_from_json(token_json: str) -> UserCredentials:
 
 
 def _google_service(api: str, version: str):
-    if settings.google_docs_oauth_token_json:
-        creds = _load_user_creds_from_json(settings.google_docs_oauth_token_json)
-        return build(api, version, credentials=creds, cache_discovery=False)
-    if settings.gmail_oauth_token_json:
-        creds = _load_user_creds_from_json(settings.gmail_oauth_token_json)
-        return build(api, version, credentials=creds, cache_discovery=False)
+    # A TIGTOKEN_JSON a különálló belsős-TIG program (csatolt belsos-TIG-main)
+    # token-neve - azért fogadjuk el, hogy a HYPE OS ugyanazzal a Railway
+    # beállítással működjön, amivel az a program eddig futott.
+    for token_json in (
+        settings.google_docs_oauth_token_json,
+        settings.tigtoken_json,
+        settings.gmail_oauth_token_json,
+    ):
+        if token_json:
+            creds = _load_user_creds_from_json(token_json)
+            return build(api, version, credentials=creds, cache_discovery=False)
     raise RuntimeError(
         "Nincs Google OAuth token beállítva a Docs/Drive sablon-generáláshoz. Állítsd be a "
-        f"GOOGLE_DOCS_OAUTH_TOKEN_JSON környezeti változót az alábbi scope-okkal: {', '.join(DOCS_SCOPES)}"
+        f"GOOGLE_DOCS_OAUTH_TOKEN_JSON (vagy TIGTOKEN_JSON) környezeti változót az alábbi "
+        f"scope-okkal: {', '.join(DOCS_SCOPES)}"
     )
 
 
@@ -93,6 +99,61 @@ def _export_pdf_bytes(doc_id: str) -> bytes:
     while not done:
         _status, done = downloader.next_chunk()
     return fh.getvalue()
+
+
+def _upload_pdf(filename: str, pdf_bytes: bytes, folder_id: str | None) -> str | None:
+    """A kész PDF-et FÁJLKÉNT tölti fel a Drive-ra, és a webViewLink-jével tér
+    vissza. Az eredeti program lemezre írt (/tmp), majd onnan töltött fel -
+    Railway-en a fájlrendszer efemer, ezért itt memóriából megy."""
+    drive = _google_service("drive", "v3")
+    body: dict = {"name": filename}
+    if folder_id:
+        body["parents"] = [folder_id]
+    media = MediaIoBaseUpload(BytesIO(pdf_bytes), mimetype="application/pdf", resumable=False)
+    uploaded = drive.files().create(body=body, media_body=media, fields="id, webViewLink").execute()
+    return uploaded.get("webViewLink")
+
+
+def _delete_file(file_id: str) -> None:
+    drive = _google_service("drive", "v3")
+    drive.files().delete(fileId=file_id).execute()
+
+
+def gdoc_fill_export_and_store_pdf(
+    *,
+    template_file_id: str,
+    base_name: str,
+    fields: dict[str, str],
+    output_folder_id: str | None = None,
+) -> tuple[bytes, str | None]:
+    """Ugyanaz, mint a gdoc_fill_and_export_pdf, de a VÉGEREDMÉNY a Drive-ra
+    feltöltött PDF, és az ideiglenes Google Docs példány törlődik - a csatolt
+    belsős-TIG program (belsos-TIG-main/gdocs.py) menete:
+
+    sablon másolása -> placeholderek cseréje -> PDF export -> a PDF feltöltése
+    a célmappába -> az ideiglenes Doc törlése.
+
+    Visszatér: (pdf_bytes, a feltöltött PDF webViewLink-je). Így a rendszerben
+    tárolt link egy KÉSZ PDF-re mutat, nem egy szerkeszthető dokumentumra -
+    ez kerül vissza a munkatárshoz a TIG-listájába.
+
+    A másolat szándékosan NEM a célmappába jön létre (mint az eredetiben sem):
+    úgyis törlődik, a mappába a kész PDF kerül."""
+    doc_name = (base_name or "Dokumentum").strip() or "Dokumentum"
+    doc_id = _copy_template(template_file_id, doc_name, None)
+    try:
+        _replace_placeholders(doc_id, fields)
+        pdf_bytes = _export_pdf_bytes(doc_id)
+        link = _upload_pdf(f"{doc_name}.pdf", pdf_bytes, output_folder_id)
+    finally:
+        # Az ideiglenes példány akkor se maradjon a Drive-on, ha közben hiba
+        # történt - a törlés hibáját elnyeljük, mert a lényeg (a PDF) már
+        # megvan, és egy takarítási hiba ne bukja meg a kiküldést.
+        try:
+            _delete_file(doc_id)
+        except Exception:  # noqa: BLE001
+            pass
+    return pdf_bytes, link
 
 
 def gdoc_fill_and_export_pdf(

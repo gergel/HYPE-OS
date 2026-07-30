@@ -32,8 +32,11 @@ GMAIL_SCOPES = [
 
 
 def _gmail_service():
-    if settings.gmail_oauth_token_json:
-        data = json.loads(settings.gmail_oauth_token_json)
+    # A TIGTOKEN_JSON a különálló belsős-TIG program token-neve - azért
+    # fogadjuk el, hogy a HYPE OS ugyanazzal a Railway beállítással működjön.
+    token_json = settings.gmail_oauth_token_json or settings.tigtoken_json
+    if token_json:
+        data = json.loads(token_json)
         data.setdefault("token_uri", "https://oauth2.googleapis.com/token")
         creds = UserCredentials.from_authorized_user_info(data, scopes=GMAIL_SCOPES)
         if not creds.valid:

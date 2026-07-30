@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import type { PerformanceCertificate } from "@/lib/api";
 
 /** A "Kiküldve"/"Kész" állapotú TIG-ekhez (akár Külsős, akár Belsős) tartozó
@@ -24,12 +25,16 @@ export function TigInvoiceManager({
   certificates,
   employeeNameById,
   readyStatus,
+  canEdit = true,
 }: {
   projectId: number;
   basePath: string;
   certificates: PerformanceCertificate[];
   employeeNameById: Map<number, string>;
   readyStatus: string;
+  /** Az állapot legördülője csak szerkesztési joggal aktív - enélkül sima
+   * címkeként jelenik meg (lásd TigAllapotSelect). */
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -107,6 +112,7 @@ export function TigInvoiceManager({
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Megbízott</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">TIG állapota</th>
               <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Bruttó</th>
               <th className="min-w-[240px] py-1.5 pr-6 text-left font-medium text-text-secondary">Számlák</th>
               <th className="py-1.5 text-right font-medium text-text-secondary">Státusz</th>
@@ -119,6 +125,15 @@ export function TigInvoiceManager({
               return (
                 <tr key={c.id} className="border-b border-border align-top last:border-0">
                   <td className="py-3 pr-6">{employeeNameById.get(c.employee_id) ?? `#${c.employee_id}`}</td>
+                  <td className="py-3 pr-6">
+                    {/* Kézzel is javítható: egy tévesen kiküldöttre állított TIG
+                        visszavehető "Készítés alatt"-ra, és újra elkészíthető. */}
+                    <TigAllapotSelect
+                      postPath={`${basePath}/${projectId}/${c.employee_id}/allapot`}
+                      value={c.allapot}
+                      canEdit={canEdit}
+                    />
+                  </td>
                   <td className="whitespace-nowrap py-3 pr-6 text-right">
                     {c.brutto_osszeg != null ? `${c.brutto_osszeg.toLocaleString("hu-HU")} Ft` : "–"}
                   </td>

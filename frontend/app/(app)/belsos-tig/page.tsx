@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BelsosTigManager } from "@/components/BelsosTigManager";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
-import { getBelsosTigMonth } from "@/lib/api";
+import { getBelsosTigMonth, getMyPagePermissions } from "@/lib/api";
 import { huEvHonap } from "@/lib/huDate";
 
 function shiftMonth(ev: number, honap: number, delta: number): { ev: number; honap: number } {
@@ -29,7 +29,9 @@ export default async function BelsosTigPage({
   const ev = params.ev ? Number(params.ev) : today.getFullYear();
   const honap = params.honap ? Number(params.honap) : today.getMonth() + 1;
 
-  const employees = await getBelsosTigMonth(ev, honap);
+  const [employees, pagePermissions] = await Promise.all([getBelsosTigMonth(ev, honap), getMyPagePermissions()]);
+  // Aki az oldalon szerkeszthet, az az állapotot is kézzel át tudja állítani.
+  const canEdit = pagePermissions === null || !!pagePermissions["/belsos-tig"]?.includes("edit");
   const prev = shiftMonth(ev, honap, -1);
   const next = shiftMonth(ev, honap, 1);
 
@@ -71,7 +73,7 @@ export default async function BelsosTigPage({
           {employees.length === 0 ? (
             <p className="text-[13px] text-text-secondary">Nincs belsős munkatárs.</p>
           ) : (
-            <BelsosTigManager ev={ev} honap={honap} employees={employees} />
+            <BelsosTigManager ev={ev} honap={honap} employees={employees} canEdit={canEdit} />
           )}
         </Card>
       </div>

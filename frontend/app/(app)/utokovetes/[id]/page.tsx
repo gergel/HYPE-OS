@@ -11,6 +11,7 @@ import {
   getAllTigForProject,
   getEmployees,
   getPendingSubcontractorsForProject,
+  getMyPagePermissions,
   getPendingTigForProject,
   getUtokovetesDetail,
 } from "@/lib/api";
@@ -25,14 +26,18 @@ import {
 export default async function UtokovetesDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectId = Number(id);
-  const [detail, pendingContracts, pendingTig, allTig, allEmployees] = await Promise.all([
+  const [detail, pendingContracts, pendingTig, allTig, allEmployees, pagePermissions] = await Promise.all([
     getUtokovetesDetail(projectId),
     getPendingSubcontractorsForProject(projectId),
     getPendingTigForProject(projectId),
     getAllTigForProject(projectId),
     getEmployees(),
+    getMyPagePermissions(),
   ]);
   if (!detail) notFound();
+
+  // Aki az oldalon szerkeszthet, az a TIG állapotát is kézzel át tudja állítani.
+  const canEdit = pagePermissions === null || !!pagePermissions["/utokovetes"]?.includes("edit");
 
   const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
 
@@ -115,6 +120,7 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
             certificates={allTig}
             employeeNameById={employeeNameById}
             readyStatus="Kiküldve"
+            canEdit={canEdit}
           />
         </Card>
 

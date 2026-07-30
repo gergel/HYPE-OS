@@ -32,7 +32,7 @@ from app.models.internal_performance_certificate import (
 )
 from app.schemas.internal_performance_certificate import InternalPerformanceCertificateRead
 from app.services import document_storage
-from app.services.gdoc_template import gdoc_fill_and_export_pdf
+from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
 from app.services.hu_datum import elozo_honap, ev_honap_szoveg, kovetkezo_honap_elseje
 from app.services.hu_number_words import szam_betukkel
@@ -277,14 +277,15 @@ def generate_and_send(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
-    """Legenerálja a TIG dokumentumot a Google Docs sablonból, elmenti a
-    Drive-ra, és PDF-ként kiküldi a munkatársnak emailben - ugyanaz a lépés,
-    mint a Külsős TIG-nél (lásd performance_certificates.py generate_and_send),
-    csak a belsős sablonnal és a hónap-alapú adatokkal.
+    """A csatolt belsős-TIG program (belsos-TIG-main) menete, egy az egyben:
+    a Google Docs sablon másolása, a {{placeholder}}-ek cseréje, PDF export, a
+    PDF feltöltése a Drive célmappába, az ideiglenes Doc törlése, végül az
+    email a munkatársnak - a PDF csatolmánnyal. A Drive-ra feltöltött PDF
+    linkje kerül a rekordba (file_url), tehát a rendszerben tárolt hivatkozás
+    a KÉSZ igazolásra mutat, nem egy szerkeszthető dokumentumra.
 
-    Sablon nélkül (nincs beállítva gdoc_belsos_tig_template_id) az email
-    csatolmány nélkül megy ki - így a küldés akkor sem áll meg, ha a
-    dokumentum-generálás nincs bekonfigurálva."""
+    Sablon nélkül nem küldünk: egy PDF nélküli TIG-email nem ér semmit, ezért
+    inkább beszédes hibát adunk a hiányzó beállítás nevével."""
     employee = _validate_belsos_employee(db, employee_id)
     record = _get_or_create(db, employee, ev, honap)
     if record.allapot in TERMINAL_STATUSES:
@@ -296,39 +297,47 @@ def generate_and_send(
         raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
     if not employee.email:
         raise HTTPException(status_code=400, detail=f"{employee.full_name} nem kapott email címet, így nem lehet kiküldeni a TIG-et.")
+    if not settings.belsos_tig_template_id:
+        db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Nincs beállítva a Belsős TIG dokumentum-sablon, így a PDF nem generálható. "
+                "Állítsd be a GDOC_BELSOS_TIG_TEMPLATE_ID (vagy GOOGLE_DRIVE_TEMPLATE_ID) "
+                "környezeti változót a backendhez."
+            ),
+        )
 
     keltezes = record.keltezes or date.today()
     record.keltezes = keltezes
     honap_szoveg = ev_honap_szoveg(record.ev, record.honap)
+    # Fájlnév és tárgy az eredeti program formátumában ("2026. május_Név_TIG").
+    base_name = f"{honap_szoveg}_{employee.full_name}_TIG"
 
-    doc_link = None
-    pdf_bytes = None
-    # A hónap a fájlnévben is betűvel: "2026_majus" helyett a teljes,
-    # ékezetes alak megy, ahogy a dokumentumban is szerepel.
-    base_name = f"{honap_szoveg}_{employee.full_name}_belsos_TIG"
+    fields = {
+        "nev": employee.full_name,
+        "hely": employee.vallakozas_szekhely or "",
+        "adoszam": employee.vallalkozas_adoszama or "",
+        "targy": record.megbizas_targya or "",
+        # Az eredeti sablonban a {{tido}} a HÓNAP szövege (nem a teljesítés
+        # napja) - a teljesítés dátuma csak a hónap kiszámolására szolgál.
+        "tido": honap_szoveg,
+        "honap": honap_szoveg,
+        # Ezres elválasztó ponttal, ahogy az eredeti program írja: "120.000".
+        "netto": f"{record.netto_osszeg:,.0f}".replace(",", "."),
+        "kelt": keltezes.strftime("%Y.%m.%d."),
+        "afa": "+ ÁFA" if record.plusz_afa else "",
+        "nettoki": szam_betukkel(record.netto_osszeg),
+    }
+
     try:
-        if settings.gdoc_belsos_tig_template_id:
-            fields = {
-                "nev": employee.full_name,
-                "hely": employee.vallakozas_szekhely or "",
-                "adoszam": employee.vallalkozas_adoszama or "",
-                "targy": record.megbizas_targya or "",
-                "honap": honap_szoveg,
-                "tido": record.teljesites_datuma.strftime("%Y.%m.%d.") if record.teljesites_datuma else "",
-                "netto": f"{record.netto_osszeg:,.0f}".replace(",", " "),
-                "kelt": keltezes.strftime("%Y.%m.%d."),
-                "afa": "+ ÁFA" if record.plusz_afa else "",
-                "nettoki": szam_betukkel(record.netto_osszeg),
-            }
-            pdf_bytes, new_doc_id = gdoc_fill_and_export_pdf(
-                template_file_id=settings.gdoc_belsos_tig_template_id,
-                base_name=base_name,
-                fields=fields,
-                output_folder_id=settings.drive_belsos_tig or settings.gdoc_output_folder_id or settings.drive_folder_id or None,
-            )
-            doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
-
-        subject = f"{employee.full_name} - {honap_szoveg} havi teljesítési igazolás"
+        pdf_bytes, pdf_link = gdoc_fill_export_and_store_pdf(
+            template_file_id=settings.belsos_tig_template_id,
+            base_name=base_name,
+            fields=fields,
+            output_folder_id=settings.belsos_tig_folder_id or None,
+        )
+        subject = f"{employee.full_name}_{honap_szoveg} - hónap_TIG"
         html = _BELSOS_TIG_EMAIL_HTML.format(nev=employee.full_name, honap=honap_szoveg)
         send_message([employee.email], subject, html, pdf_bytes=pdf_bytes, pdf_filename=f"{base_name}.pdf")
     except RuntimeError as exc:
@@ -338,7 +347,7 @@ def generate_and_send(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     record.allapot = "Kiküldve"
-    record.file_url = doc_link
+    record.file_url = pdf_link
     db.commit()
     db.refresh(record)
     return InternalPerformanceCertificateRead.model_validate(record)
@@ -357,6 +366,36 @@ def skip(
     if record.allapot in TERMINAL_STATUSES:
         raise HTTPException(status_code=400, detail="Ehhez a hónaphoz már véglegesített Belsős TIG tartozik.")
     record.allapot = "Kihagyva"
+    db.commit()
+    db.refresh(record)
+    return InternalPerformanceCertificateRead.model_validate(record)
+
+
+class AllapotIn(BaseModel):
+    allapot: str
+
+
+ALLOWED_STATUSES = ["Készítés alatt", "Kiküldve", "Kihagyva"]
+
+
+@router.post("/{employee_id}/{ev}/{honap}/allapot", response_model=InternalPerformanceCertificateRead)
+def set_allapot(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    payload: AllapotIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A TIG állapotának KÉZI átállítása. Aki az oldalon szerkeszthet, itt is
+    javíthat: pl. visszavehet egy tévesen kiküldöttre állított TIG-et, vagy
+    kiküldöttnek jelölhet egyet, amit a rendszeren kívül küldtek el. A
+    generálás/küldés folyamat változatlan - ez csak az állapot javítása."""
+    if payload.allapot not in ALLOWED_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen állapot. Választható: {', '.join(ALLOWED_STATUSES)}")
+    employee = _validate_belsos_employee(db, employee_id)
+    record = _get_or_create(db, employee, ev, honap)
+    record.allapot = payload.allapot
     db.commit()
     db.refresh(record)
     return InternalPerformanceCertificateRead.model_validate(record)

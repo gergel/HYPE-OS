@@ -57,7 +57,12 @@ export default async function UgyfelDetailPage({ params }: { params: Promise<{ i
               { name: "phone", label: "Telefon" },
             ]}
           />
-          <RelatedTable rows={contacts} emptyText="Nincs kapcsolattartó ehhez az ügyfélhez." deleteBasePath={ENTITY_PATHS.contact} />
+          <RelatedTable
+            rows={contacts}
+            emptyText="Nincs kapcsolattartó ehhez az ügyfélhez."
+            entityKey="contact"
+            deleteBasePath={ENTITY_PATHS.contact}
+          />
         </Card>
 
         <Card title={`Project Code-ok (${projectCodes.length})`}>

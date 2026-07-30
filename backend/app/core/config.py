@@ -78,6 +78,27 @@ class Settings(BaseSettings):
     # Ugyanez a Belsős TIG-hez (lásd api/routes/internal_performance_certificates.py).
     drive_belsos_tig: str = ""
 
+    # A különálló belsős-TIG program (belsos-TIG-main) env-nevei. Azért
+    # fogadjuk el őket, hogy a HYPE OS ugyanazzal a Railway beállítással
+    # működjön, amivel az a program eddig futott - ne kelljen ugyanazt a
+    # sablont/mappát/tokent új néven még egyszer felvenni.
+    google_drive_template_id: str = ""
+    notion_file_folder_id: str = ""
+    tigtoken_json: str = ""
+
+    @property
+    def belsos_tig_template_id(self) -> str:
+        return self.gdoc_belsos_tig_template_id or self.google_drive_template_id
+
+    @property
+    def belsos_tig_folder_id(self) -> str:
+        return (
+            self.drive_belsos_tig
+            or self.notion_file_folder_id
+            or self.gdoc_output_folder_id
+            or self.drive_folder_id
+        )
+
     @property
     def hype_cc_list(self) -> list[str]:
         return [addr.strip() for addr in self.hype_cc.replace(";", ",").split(",") if addr.strip()]

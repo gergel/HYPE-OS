@@ -24,14 +24,18 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.campaign import Campaign
-from app.models.client import Client
+from app.models.client import Client, Contact
+from app.models.contract import Contract
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
-from app.models.equipment import Equipment
+from app.models.equipment import Assignment, Equipment
+from app.models.feedback import Feedback
 from app.models.finance import Expense, Revenue
 from app.models.project import Project
 from app.models.project_code import ProjectCode
+from app.models.rate import Rate
 from app.models.task import Task
+from app.models.timesheet import Timesheet
 
 ENTITY_MODELS: dict[str, type] = {
     "project": Project,
@@ -44,6 +48,15 @@ ENTITY_MODELS: dict[str, type] = {
     "expense": Expense,
     "revenue": Revenue,
     "deliverable": Deliverable,
+    # Ezeknek nincs saját részletnézet-oldaluk, a generikus /rekord/... adatlap
+    # nyitja meg őket (lásd frontend lib/recordEntities.ts) - a mezőtípusok
+    # (dátum/szám/select) ide is ugyanúgy kellenek a szerkesztéshez.
+    "contact": Contact,
+    "contract": Contract,
+    "rate": Rate,
+    "timesheet": Timesheet,
+    "feedback": Feedback,
+    "assignment": Assignment,
 }
 
 SELECT_LIKE_MAX_DISTINCT = 20

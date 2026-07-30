@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
+import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { huEvHonap, tigHonapTeljesitesbol } from "@/lib/huDate";
 import type { BelsosTigMonthEmployee } from "@/lib/api";
 
@@ -50,17 +51,6 @@ function computeBrutto(nettoOsszeg: string, pluszAfa: boolean): number | null {
   return pluszAfa ? Math.round(netto * 1.27 * 100) / 100 : netto;
 }
 
-function statusBadge(employee: BelsosTigMonthEmployee) {
-  const allapot = employee.record?.allapot;
-  if (allapot === "Kiküldve") return <StatusBadge label="Kiküldve" tone="success" />;
-  // A "Kész" a korábbi, email-küldés nélküli életciklusból maradt állapot -
-  // a régi bejegyzések így vannak eltárolva (lásd backend TERMINAL_STATUSES).
-  if (allapot === "Kész") return <StatusBadge label="Kész" tone="success" />;
-  if (allapot === "Kihagyva") return <StatusBadge label="Kihagyva" tone="neutral" />;
-  if (allapot === "Készítés alatt") return <StatusBadge label="Készítés alatt" tone="warning" />;
-  return <StatusBadge label="Nincs elkezdve" tone="neutral" />;
-}
-
 const inputClass =
   "w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none";
 
@@ -73,7 +63,19 @@ const inputClass =
  * feltöltése és kifizetettként jelölése, ami létrehozza a Pénzügy ->
  * Kiadások-ban megjelenő Expense sort (lásd backend
  * internal_performance_certificates.py /szamla és /szamla-kifizetve). */
-export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: number; employees: BelsosTigMonthEmployee[] }) {
+export function BelsosTigManager({
+  ev,
+  honap,
+  employees,
+  canEdit = true,
+}: {
+  ev: number;
+  honap: number;
+  employees: BelsosTigMonthEmployee[];
+  /** Az állapot kézi átállítása szerkesztési jogot igényel - enélkül sima
+   * címkeként jelenik meg (lásd TigAllapotSelect). */
+  canEdit?: boolean;
+}) {
   const router = useRouter();
   const confirm = useConfirm();
   const [openId, setOpenId] = useState<number | null>(null);
@@ -271,7 +273,15 @@ export function BelsosTigManager({ ev, honap, employees }: { ev: number; honap: 
             return (
               <tr key={employee.id} className="border-b border-border last:border-0 align-top">
                 <td className="py-3 pr-6">{employee.full_name}</td>
-                <td className="py-3 pr-6">{statusBadge(employee)}</td>
+                <td className="py-3 pr-6">
+                  {/* Kézzel is javítható: egy tévesen kiküldöttre állított TIG
+                      visszavehető "Készítés alatt"-ra, és újra elkészíthető. */}
+                  <TigAllapotSelect
+                    postPath={`/api/v1/belsos-tig/${employee.id}/${ev}/${honap}/allapot`}
+                    value={record?.allapot ?? null}
+                    canEdit={canEdit}
+                  />
+                </td>
                 <td className="py-3 pr-6 text-right whitespace-nowrap">
                   {record?.brutto_osszeg != null ? `${record.brutto_osszeg.toLocaleString("hu-HU")} Ft` : "–"}
                 </td>

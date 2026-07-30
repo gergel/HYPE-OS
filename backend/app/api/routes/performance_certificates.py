@@ -427,6 +427,40 @@ def skip_tig(
     return PerformanceCertificateRead.model_validate(draft)
 
 
+class AllapotIn(BaseModel):
+    allapot: str
+
+
+ALLOWED_STATUSES = ["Készítés alatt", "Kiküldve", "Kihagyva"]
+
+
+@router.post("/{project_id}/{employee_id}/allapot", response_model=PerformanceCertificateRead)
+def set_allapot(
+    project_id: int,
+    employee_id: int,
+    payload: AllapotIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A TIG állapotának KÉZI átállítása. Aki az oldalon szerkeszthet, itt is
+    javíthat: pl. visszavehet egy tévesen kiküldöttre állított TIG-et, vagy
+    kiküldöttnek jelölhet egyet, amit a rendszeren kívül küldtek el. A
+    generálás/küldés folyamat változatlan - ez csak az állapot javítása."""
+    if payload.allapot not in ALLOWED_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen állapot. Választható: {', '.join(ALLOWED_STATUSES)}")
+    cert = (
+        db.query(PerformanceCertificate)
+        .filter(PerformanceCertificate.project_id == project_id, PerformanceCertificate.employee_id == employee_id)
+        .first()
+    )
+    if cert is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és emberhez nincs TIG bejegyzés.")
+    cert.allapot = payload.allapot
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
 def _get_sent_certificate_or_404(db: Session, project_id: int, employee_id: int) -> PerformanceCertificate:
     """A TIG-hez tartozó számla feltöltése/kifizetése csak azután lehetséges,
     hogy magát a TIG-et már kiküldtük (lásd generate_and_send) - eddig a

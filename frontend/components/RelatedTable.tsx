@@ -1,5 +1,6 @@
 import { DataTable } from "@/components/DataTable";
 import { formatDate, type JsonRecord } from "@/lib/api";
+import { recordHref, type RecordEntityKey } from "@/lib/recordEntities";
 
 const LABEL_KEYS = [
   "projektkod",
@@ -37,21 +38,29 @@ export function RelatedTable({
   rows,
   emptyText,
   getHref,
+  entityKey,
   deleteBasePath,
 }: {
   rows: JsonRecord[];
   emptyText: string;
   getHref?: (row: JsonRecord) => string;
+  /** Azoknak az entitásoknak, amiknek nincs saját részletnézet-oldaluk (díj,
+   * munkaidő-elszámolás, visszajelzés, eszközfoglalás, kapcsolattartó) - így
+   * a soruk a generikus /rekord/... adatlapon nyílik meg, és minden mezőjük
+   * szerkeszthető. Enélkül ezek a sorok kattinthatatlanok voltak, tehát a
+   * bennük lévő adatot sehol nem lehetett javítani. */
+  entityKey?: RecordEntityKey;
   /** Ha meg van adva, minden sor mellett törlés-gomb jelenik meg, ami a rekordot
    * magát törli (pl. deleteBasePath="/api/v1/deliverables") - FK-tulajdonolt
    * (egy-a-többhöz) kapcsolatokhoz, NEM many-to-many linkeléshez. */
   deleteBasePath?: string;
 }) {
+  const href = getHref ?? (entityKey ? (row: JsonRecord) => recordHref(entityKey, String(row.id)) : undefined);
   return (
     <DataTable<JsonRecord>
       rows={rows}
       emptyText={emptyText}
-      getHref={getHref}
+      getHref={href}
       openInModal
       filterable={rows.length > 8}
       // Kapcsolódó rekordok táblái általában rövidek - néhány sornál a

@@ -180,6 +180,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
             <RelatedTable
               rows={timesheets}
               emptyText="Nincs munkaidő-elszámolás ehhez az anyaghoz."
+              entityKey="timesheet"
               deleteBasePath={ENTITY_PATHS.timesheet}
             />
           </Card>
@@ -193,7 +194,12 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
             <div className="mb-3">
               <FeedbackSendButton deliverableId={deliverableId} />
             </div>
-            <RelatedTable rows={feedbacks} emptyText="Nincs visszajelzés ehhez az anyaghoz." deleteBasePath={ENTITY_PATHS.feedback} />
+            <RelatedTable
+              rows={feedbacks}
+              emptyText="Nincs visszajelzés ehhez az anyaghoz."
+              entityKey="feedback"
+              deleteBasePath={ENTITY_PATHS.feedback}
+            />
           </Card>
         ),
       },

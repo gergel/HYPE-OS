@@ -130,13 +130,19 @@ export default async function EmployeeDetailPage({
         )}
 
         <Card title={`Díjak (${rates.length})`}>
-          <RelatedTable rows={rates} emptyText="Nincs felvett díj ehhez a crew taghoz." deleteBasePath={ENTITY_PATHS.rate} />
+          <RelatedTable
+            rows={rates}
+            emptyText="Nincs felvett díj ehhez a crew taghoz."
+            entityKey="rate"
+            deleteBasePath={ENTITY_PATHS.rate}
+          />
         </Card>
 
         <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
           <RelatedTable
             rows={timesheets}
             emptyText="Nincs munkaidő-elszámolás ehhez a crew taghoz."
+            entityKey="timesheet"
             deleteBasePath={ENTITY_PATHS.timesheet}
           />
         </Card>

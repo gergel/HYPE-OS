@@ -271,6 +271,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 certificates={allTig}
                 employeeNameById={employeeNameById}
                 readyStatus="Kiküldve"
+                canEdit={pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit")}
               />
             </Card>
           </>
