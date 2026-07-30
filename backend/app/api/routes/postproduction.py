@@ -1,11 +1,12 @@
 """Utómunka modul: Deliverable (vágandó anyag) + Timesheet (ledolgozott idő) + Feedback (gombos visszajelzés)."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_page_action
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.feedback import Feedback
@@ -152,6 +153,37 @@ def get_timer_state(deliverable_id: int, db: Session = Depends(get_db), current_
 def send_visszajelzes(deliverable_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     """"Visszajelzés küldése" gomb - lásd services/deliverable_actions.send_visszajelzes."""
     return deliverable_actions.send_visszajelzes(db, _get_deliverable_or_404(deliverable_id, db), current_user)
+
+
+class PercekIn(BaseModel):
+    """Percek egy már rögzített munkaidő-sorra - lásd set_timesheet_minutes."""
+
+    minutes: float
+
+
+@deliverable_actions_router.post("/{deliverable_id}/timesheets/{timesheet_id}/percek", response_model=TimesheetRead)
+def set_timesheet_minutes(
+    deliverable_id: int,
+    timesheet_id: int,
+    payload: PercekIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action("/utomunka", "edit")),
+):
+    """Egy munkaidő-sor percének UTÓLAGOS javítása - ha valaki elfelejtette
+    leállítani az időmérőt (pl. egész éjjel futott), ez az egyetlen módja, hogy
+    a valós munkaidő kerüljön be. A költséget is újraszámoljuk az akkori
+    órabérrel, különben a Pénzügyben a hibás összeg maradna."""
+    if payload.minutes < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A perc nem lehet negatív.")
+    row = db.get(Timesheet, timesheet_id)
+    if row is None or row.deliverable_id != deliverable_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nincs ilyen munkaidő-elszámolás ezen az anyagon.")
+    row.time_minutes = payload.minutes
+    if row.akkori_orabere:
+        row.koltseg = round((payload.minutes / 60) * float(row.akkori_orabere), 2)
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 @deliverable_actions_router.get("/{deliverable_id}/comments", response_model=list[CommentRead])

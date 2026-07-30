@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AnchoredPanel } from "@/components/AnchoredPanel";
 import { selectColor } from "@/lib/selectColor";
 
 export type IdOption = { id: number; label: string; sublabel?: string | null; group?: string | null };
@@ -56,17 +57,10 @@ export function SearchableIdPicker({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -98,7 +92,7 @@ export function SearchableIdPicker({
         <span className="truncate">{current?.label ?? placeholder}</span>
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-2 shadow-xl">
+        <AnchoredPanel anchorRef={containerRef} onClose={close} width={288}>
           <div
             className="mb-2 flex items-center gap-1.5 rounded-full py-1 pl-2.5 pr-2 text-[13px]"
             style={{ background: color.bg, color: color.text }}
@@ -109,10 +103,7 @@ export function SearchableIdPicker({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setOpen(false);
-                  setQuery("");
-                }
+                if (e.key === "Escape") close();
                 if (e.key === "Enter" && filtered.length === 1) select(filtered[0].id);
               }}
               placeholder={current?.label ?? placeholder}
@@ -120,7 +111,7 @@ export function SearchableIdPicker({
               style={{ color: color.text }}
             />
           </div>
-          <div className="max-h-64 space-y-2 overflow-y-auto">
+          <div className="space-y-2">
             {groupedFiltered.map(({ group, items }) => (
               <div key={group ?? UNGROUPED}>
                 {group && (
@@ -148,7 +139,7 @@ export function SearchableIdPicker({
             ))}
             {filtered.length === 0 && <p className="p-2 text-[12px] text-text-muted">Nincs találat.</p>}
           </div>
-        </div>
+        </AnchoredPanel>
       )}
     </div>
   );

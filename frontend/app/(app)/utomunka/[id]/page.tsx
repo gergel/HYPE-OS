@@ -10,6 +10,7 @@ import { TimerControls } from "@/components/deliverable/TimerControls";
 import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
 import { DetailSections } from "@/components/DetailSections";
 import { RelatedTable } from "@/components/RelatedTable";
+import { TimesheetMinutesTable } from "@/components/deliverable/TimesheetMinutesTable";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
@@ -17,6 +18,7 @@ import {
   getContactsByClient,
   getDeliverableComments,
   getDeliverableContacts,
+  getEmployees,
   getDetailTabs,
   getFieldTypes,
   getMyPagePermissions,
@@ -74,6 +76,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     comments,
     dbTabs,
     pagePermissions,
+    allEmployees,
   ] = await Promise.all([
     deliverable.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(deliverable.project_code_id)) : null,
     deliverable.project_id ? getRecord(ENTITY_PATHS.project, Number(deliverable.project_id)) : null,
@@ -91,10 +94,15 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     getDeliverableComments(deliverableId),
     getDetailTabs("deliverable"),
     getMyPagePermissions(),
+    getEmployees(),
   ]);
 
   const clientId = projectCode ? Number(projectCode.client_id) : null;
   const contactOptions = clientId ? await getContactsByClient(clientId) : [];
+
+  const employeeNameById = Object.fromEntries(allEmployees.map((e) => [e.id, e.full_name]));
+  // Aki az Utómunka oldalon szerkeszthet, az javíthatja a rögzített perceket is.
+  const canEditPage = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
 
   const tabs = buildFieldTabs({
     page: PAGE,
@@ -177,11 +185,14 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
         label: "Munkaidő-elszámolások",
         content: (
           <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
-            <RelatedTable
+            {/* A perc helyben javítható - ha valaki elfelejti leállítani az
+                időmérőt, enélkül egy egész éjszakányi idő maradna a soron (és
+                az abból számolt költség a Pénzügyben). */}
+            <TimesheetMinutesTable
+              deliverableId={deliverableId}
               rows={timesheets}
-              emptyText="Nincs munkaidő-elszámolás ehhez az anyaghoz."
-              entityKey="timesheet"
-              deleteBasePath={ENTITY_PATHS.timesheet}
+              employeeNameById={employeeNameById}
+              canEdit={canEditPage}
             />
           </Card>
         ),

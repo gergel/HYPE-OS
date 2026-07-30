@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import { AnchoredPanel } from "@/components/AnchoredPanel";
 import { selectColor } from "@/lib/selectColor";
 
 /** Notion-stílusú select mező: kattintásra AZONNAL megnyílik egy lebegő
@@ -31,17 +32,12 @@ export function SelectDropdown({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  // A panelen kívülre kattintás kezelését az AnchoredPanel végzi (a panel a
+  // portál miatt már nincs a containerRef-en belül).
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -70,7 +66,7 @@ export function SelectDropdown({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-2 shadow-xl">
+        <AnchoredPanel anchorRef={containerRef} onClose={close} width={256}>
           <div
             className="mb-2 flex items-center gap-1.5 rounded-full py-1 pl-2.5 pr-2 text-[13px]"
             style={{ background: color.bg, color: color.text }}
@@ -81,10 +77,7 @@ export function SelectDropdown({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setOpen(false);
-                  setQuery("");
-                }
+                if (e.key === "Escape") close();
                 if (e.key === "Enter" && filtered.length === 1) select(filtered[0]);
               }}
               placeholder={value ?? placeholder}
@@ -102,7 +95,7 @@ export function SelectDropdown({
               </button>
             )}
           </div>
-          <div className="max-h-64 space-y-1 overflow-y-auto">
+          <div className="space-y-1">
             {filtered.map((opt) => {
               const c = selectColor(opt);
               return (
@@ -120,7 +113,7 @@ export function SelectDropdown({
             })}
             {filtered.length === 0 && <p className="p-2 text-[12px] text-text-muted">Nincs találat.</p>}
           </div>
-        </div>
+        </AnchoredPanel>
       )}
     </div>
   );
