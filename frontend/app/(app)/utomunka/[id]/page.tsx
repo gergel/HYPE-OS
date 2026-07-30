@@ -18,6 +18,7 @@ import {
   getContactsByClient,
   getDeliverableComments,
   getDeliverableContacts,
+  getCurrentUser,
   getEmployees,
   getDetailTabs,
   getFieldTypes,
@@ -77,6 +78,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     dbTabs,
     pagePermissions,
     allEmployees,
+    currentUser,
   ] = await Promise.all([
     deliverable.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(deliverable.project_code_id)) : null,
     deliverable.project_id ? getRecord(ENTITY_PATHS.project, Number(deliverable.project_id)) : null,
@@ -95,6 +97,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     getDetailTabs("deliverable"),
     getMyPagePermissions(),
     getEmployees(),
+    getCurrentUser(),
   ]);
 
   const clientId = projectCode ? Number(projectCode.client_id) : null;
@@ -178,7 +181,12 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
         label: "Időmérés",
         content: (
           <Card title="Időmérés">
-            <TimerControls deliverableId={deliverableId} initialState={timerState} showCost={canSeeCost} />
+            <TimerControls
+              deliverableId={deliverableId}
+              initialState={timerState}
+              showCost={canSeeCost}
+              isAdmin={currentUser?.role === "admin"}
+            />
           </Card>
         ),
       },

@@ -4,13 +4,20 @@ import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { TopBar } from "@/components/TopBar";
-import { EmployeeActiveToggle, EmployeeStartDateEditor, RateHourlyEditor } from "@/components/VagoInlineFields";
+import { EmployeeActiveToggle, EmployeeStartDateEditor, EmployeeTipusSelect, RateHourlyEditor } from "@/components/VagoInlineFields";
 import { Employee, ENTITY_PATHS, formatDate, getCurrentUser, getEmployees, getMyPagePermissions, getRates, Rate } from "@/lib/api";
 import { canDoAction } from "@/lib/permissions";
 
 type VagoRow = Employee & { rate: Rate | null };
 
 const PAGE = "/csapat";
+
+/** Ki számít vágónak: a SZEREPKÖR (role) dönti el, nem az üzleti típus. A
+ * tipus mező csak azt mondja meg, hogy az illető külsős vagy belsős - a kettő
+ * két külön kérdés, egy vágó ugyanúgy lehet külsős, mint belsős. (Korábban a
+ * tipus="vago" jelölte ki ezt a listát, ami épp a külsős/belsős információt
+ * írta felül.) */
+const VAGO_ROLE = "vago";
 
 /** Vágók (editorok) listája: ki dolgozik nálunk vágóként, mikor kezdett,
  * dolgozik-e még, és mennyi az óradíja - ez utóbbi adja a projektenkénti
@@ -26,7 +33,7 @@ export default async function VagokPage() {
   ]);
   const ratesByEmployee = new Map(rates.map((r) => [r.employee_id, r]));
   const rows: VagoRow[] = employees
-    .filter((e) => e.tipus === "vago")
+    .filter((e) => e.role === VAGO_ROLE)
     .map((e) => ({ ...e, rate: ratesByEmployee.get(e.id) ?? null }));
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
@@ -41,10 +48,20 @@ export default async function VagokPage() {
             <QuickCreateForm
               postPath={ENTITY_PATHS.employee}
               addLabel="+ Új vágó hozzáadása"
-              presetFields={{ tipus: "vago" }}
+              presetFields={{ role: VAGO_ROLE }}
               fields={[
                 { name: "full_name", label: "Név", required: true },
                 { name: "email", label: "Email" },
+                {
+                  name: "tipus",
+                  label: "Külsős / Belsős",
+                  type: "select",
+                  required: true,
+                  options: [
+                    { value: "kulsos", label: "Külsős" },
+                    { value: "belsos", label: "Belsős" },
+                  ],
+                },
               ]}
             />
           )}
@@ -74,6 +91,15 @@ export default async function VagokPage() {
                     e.email ?? "–"
                   ),
                 sortAccessor: (e) => e.email,
+              },
+              {
+                header: "Külsős / Belsős",
+                render: (e) => (
+                  <StopClickPropagation>
+                    <EmployeeTipusSelect employeeId={e.id} initialValue={e.tipus} />
+                  </StopClickPropagation>
+                ),
+                sortAccessor: (e) => e.tipus,
               },
               {
                 header: "Első munkanap",

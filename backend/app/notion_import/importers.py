@@ -210,8 +210,12 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
             label=f"Employee '{full_name}'",
         )
 
-    # Type-overlay: a Vágók tábla '👥 Külsős és belsős' relation-je jelöli ki, ki vágó -
-    # ez valódi relation (nem név-egyeztetés), tehát biztonságosan használható.
+    # Szerepkör-overlay: a Vágók tábla '👥 Külsős és belsős' relation-je jelöli
+    # ki, ki vágó - ez valódi relation (nem név-egyeztetés), tehát biztonságosan
+    # használható. A ROLE-t állítjuk, NEM a tipus-t: a tipus azt mondja meg,
+    # hogy valaki külsős vagy belsős (ezt épp a forrás-tábla neve is jelzi),
+    # és korábban ezt írta felül az overlay - vagyis pont azt az információt
+    # törölte, amiért a relation létezik.
     for page in client.query_database(db_ids.VAGOK):
         props = extract_properties(page, client)
         related_ids = props.get("👥 Külsős és belsős") or []
@@ -222,7 +226,10 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
         try:
             with db.begin_nested():
                 employee = db.get(Employee, employee_id)
-                employee.tipus = EmployeeType.VAGO
+                # Admint/operátort nem fokozunk le: náluk a vágó-szerep
+                # kevesebb jogot jelentene, mint amijük van.
+                if employee.role not in (SystemRole.ADMIN, SystemRole.OPERATOR):
+                    employee.role = SystemRole.VAGO
         except Exception as exc:  # noqa: BLE001
             result.errors.append(f"Vágó type-overlay (employee_id={employee_id}): {type(exc).__name__}: {exc}")
 

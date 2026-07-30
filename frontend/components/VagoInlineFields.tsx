@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { SelectDropdown } from "@/components/SelectDropdown";
 import { authFetch } from "@/lib/authFetch";
 
 const EMPLOYEE_PATH = "/api/v1/crew";
@@ -44,6 +45,55 @@ export function EmployeeActiveToggle({ employeeId, initialActive }: { employeeId
       disabled={busy}
       onChange={(e) => save(e.target.checked)}
       className="h-4 w-4 accent-[var(--color-text-accent)]"
+    />
+  );
+}
+
+/** A tipus mező emberi nevei: az adatbázisban "kulsos"/"belsos" szerepel, a
+ * felületen viszont ezt olvassa a felhasználó. */
+const TIPUS_LABELS: Record<string, string> = { kulsos: "Külsős", belsos: "Belsős" };
+const TIPUS_VALUES: Record<string, string> = { Külsős: "kulsos", Belsős: "belsos" };
+
+/** Külsős/belsős jelölés helyben szerkesztése. A vágó-lista SZEREPKÖR (role)
+ * alapján áll össze, a tipus pedig már csak ezt az egy kérdést dönti el -
+ * ezért kell itt is látszania és állíthatónak lennie. */
+export function EmployeeTipusSelect({ employeeId, initialValue }: { employeeId: number; initialValue: string | null }) {
+  const router = useRouter();
+  const [value, setValue] = useState(initialValue);
+  const [busy, setBusy] = useState(false);
+
+  async function save(label: string | null) {
+    const next = label ? (TIPUS_VALUES[label] ?? null) : null;
+    const elozo = value;
+    setValue(next);
+    setBusy(true);
+    try {
+      const res = await authFetch(`${EMPLOYEE_PATH}/${employeeId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ tipus: next }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        setValue(elozo);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+      setValue(elozo);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SelectDropdown
+      value={value ? (TIPUS_LABELS[value] ?? value) : null}
+      options={["Külsős", "Belsős"]}
+      onChange={save}
+      placeholder="Nincs megadva"
+      disabled={busy}
     />
   );
 }

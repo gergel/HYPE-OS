@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ConfirmProvider";
 import { authFetch } from "@/lib/authFetch";
 import type { TimerState } from "@/lib/api";
 
@@ -27,15 +28,20 @@ export function TimerControls({
   deliverableId,
   initialState,
   showCost = true,
+  isAdmin = false,
 }: {
   deliverableId: number;
   initialState: TimerState | null;
+  /** Admin más futó mérését is leállíthatja - egy elfelejtett mérőt egyébként
+   * csak az tudna lezárni, aki elindította (lásd stop_timer_for_employee). */
+  isAdmin?: boolean;
   /** A forint összegek csak annak látszanak, akinek a Pénzügy oldalhoz van
    * hozzáférése - a backend amúgy is üresen adja vissza nekik (lásd
    * services/deliverable_actions._may_see_costs). */
   showCost?: boolean;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const running = Boolean(initialState?.my_running_since);
@@ -48,6 +54,30 @@ export function TimerControls({
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
   }, [barkiMer]);
+
+  /** A saját sorunkat a fenti Start/Stop gomb kezeli - ott ne jelenjen meg
+   * még egy "Leállítás". */
+  function isMine(employeeId: number): boolean {
+    return running && initialState?.running.some((r) => r.employee_id === employeeId && r.since === initialState.my_running_since) === true;
+  }
+
+  async function stopFor(employeeId: number, nev: string) {
+    if (!(await confirm(`Leállítod ${nev} futó időmérését?`))) return;
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/deliverables/${deliverableId}/timer/stop/${employeeId}`, { method: "POST" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleClick() {
     setBusy(true);
@@ -95,10 +125,22 @@ export function TimerControls({
       {initialState && initialState.running.length > 0 && (
         <div className="space-y-1">
           {initialState.running.map((r) => (
-            <div key={r.employee_id} className="flex items-center justify-between text-[12px]">
+            <div key={r.employee_id} className="flex items-center justify-between gap-2 text-[12px]">
               <span className="text-text-primary">{r.full_name}</span>
-              <span suppressHydrationWarning className="tabular-nums text-text-warning">
-                {formatElapsedSince(r.since, now)} · fut
+              <span className="flex items-center gap-2">
+                <span suppressHydrationWarning className="tabular-nums text-text-warning">
+                  {formatElapsedSince(r.since, now)} · fut
+                </span>
+                {isAdmin && !isMine(r.employee_id) && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => stopFor(r.employee_id, r.full_name)}
+                    className="rounded-[var(--radius)] border border-border px-1.5 py-0.5 text-[11px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                  >
+                    Leállítás
+                  </button>
+                )}
               </span>
             </div>
           ))}

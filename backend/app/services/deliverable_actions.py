@@ -130,13 +130,19 @@ def start_timer(db: Session, deliverable: Deliverable, current_user: Employee) -
     db.commit()
 
 
-def stop_timer(db: Session, deliverable: Deliverable, current_user: Employee) -> None:
+def stop_timer(db: Session, deliverable: Deliverable, current_user: Employee, employee_id: int | None = None) -> None:
     """"Stop" gomb - lezárja a nyitott Timesheet sort, kiszámolja a ledolgozott
-    percet és (ha van óradíj) a költséget."""
+    percet és (ha van óradíj) a költséget.
+
+    `employee_id`: MÁS ember mérésének leállítása (admin joga, lásd a hívó
+    végpontot) - erre azért van szükség, mert egy elfelejtett, éjszakán át
+    futó mérőt csak az tud lezárni, aki elindította, ő viszont épp nincs
+    gépnél."""
+    cel_id = employee_id if employee_id is not None else current_user.id
     open_row = db.scalar(
         select(Timesheet).where(
             Timesheet.deliverable_id == deliverable.id,
-            Timesheet.employee_id == current_user.id,
+            Timesheet.employee_id == cel_id,
             Timesheet.end_date.is_(None),
         )
     )

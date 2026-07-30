@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import get_current_user, require_page_action
+from app.core.security import Role, get_current_user, require_page_action, require_roles
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.feedback import Feedback
@@ -140,6 +140,26 @@ def start_timer(deliverable_id: int, db: Session = Depends(get_db), current_user
 def stop_timer(deliverable_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     try:
         deliverable_actions.stop_timer(db, _get_deliverable_or_404(deliverable_id, db), current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@deliverable_actions_router.post(
+    "/{deliverable_id}/timer/stop/{employee_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_roles(Role.ADMIN))],
+)
+def stop_timer_for_employee(
+    deliverable_id: int,
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """MÁS ember futó időmérésének leállítása - csak adminnak. Egy elfelejtett
+    mérőt egyébként csak az tudna lezárni, aki elindította; ha ő nincs gépnél,
+    egész éjjel futna (és a belőle számolt költség is hibás lenne)."""
+    try:
+        deliverable_actions.stop_timer(db, _get_deliverable_or_404(deliverable_id, db), current_user, employee_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
