@@ -258,7 +258,11 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
             </Card>
             <Card title="Teljesítési igazolás (Külsős TIG)" icon={FileText}>
               {pendingTig?.tig_ready ? (
-                <PerformanceCertificateManager projectId={project.id} pending={pendingTig.pending} />
+                <PerformanceCertificateManager
+                  projectId={project.id}
+                  pending={pendingTig.pending}
+                  teljesitesAlap={pendingTig.teljesites_szoveg_alap}
+                />
               ) : (
                 <p className="text-[13px] text-text-secondary">
                   Teljesítési igazolás csak azután készíthető, hogy ezen a projekten mindenkinek megvan a szerződés

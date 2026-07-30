@@ -12,13 +12,15 @@ type FormState = {
   adoszam: string;
   megbizas_targya: string;
   netto_osszeg: string;
-  teljesites_kezdete: string;
-  teljesites_vege: string;
+  teljesites_szoveg: string;
   keltezes: string;
   plusz_afa: boolean;
 };
 
-function formFromEmployee(employee: PendingTigEmployee): FormState {
+/** `teljesitesAlap`: a projekt forgatási dátumából képzett alapértelmezett
+ * szöveg - az űrlap ezzel indul, amíg nincs mentett bejegyzés (az akkor még
+ * nem is létezik, tehát nem lenne miből előtölteni). */
+function formFromEmployee(employee: PendingTigEmployee, teljesitesAlap: string): FormState {
   const draft = employee.draft;
   return {
     ceg_neve: draft?.ceg_neve ?? employee.ceg_neve ?? "",
@@ -26,8 +28,7 @@ function formFromEmployee(employee: PendingTigEmployee): FormState {
     adoszam: draft?.adoszam ?? employee.adoszam ?? "",
     megbizas_targya: draft?.megbizas_targya ?? employee.megbizas_targya ?? "",
     netto_osszeg: draft?.netto_osszeg != null ? String(draft.netto_osszeg) : "",
-    teljesites_kezdete: draft?.teljesites_kezdete ?? "",
-    teljesites_vege: draft?.teljesites_vege ?? "",
+    teljesites_szoveg: draft?.teljesites_szoveg ?? teljesitesAlap,
     keltezes: draft?.keltezes ?? "",
     plusz_afa: draft?.plusz_afa ?? employee.plusz_afa ?? false,
   };
@@ -51,9 +52,13 @@ function computeBrutto(nettoOsszeg: string, pluszAfa: boolean): number | null {
 export function PerformanceCertificateManager({
   projectId,
   pending,
+  teljesitesAlap = "",
 }: {
   projectId: number;
   pending: PendingTigEmployee[];
+  /** A teljesítés idejének alapértelmezett szövege (a projekt forgatási
+   * dátumából) - lásd backend PendingProjectDetail.teljesites_szoveg_alap. */
+  teljesitesAlap?: string;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -69,7 +74,7 @@ export function PerformanceCertificateManager({
     if (!selectedId) return;
     const employee = pending.find((p) => p.id === selectedId);
     if (!employee) return;
-    setForm(formFromEmployee(employee));
+    setForm(formFromEmployee(employee, teljesitesAlap));
     setOpenId(employee.id);
   }
 
@@ -91,8 +96,7 @@ export function PerformanceCertificateManager({
       adoszam: form.adoszam || null,
       megbizas_targya: form.megbizas_targya || null,
       netto_osszeg: netto,
-      teljesites_kezdete: form.teljesites_kezdete || null,
-      teljesites_vege: form.teljesites_vege || null,
+      teljesites_szoveg: form.teljesites_szoveg || null,
       keltezes: form.keltezes || null,
       plusz_afa: form.plusz_afa,
     };
@@ -253,21 +257,14 @@ export function PerformanceCertificateManager({
                   className={inputClass}
                 />
               </Field>
-              <Field label="Teljesítés kezdete">
+              {/* Szabad szöveg, nem dátum: a papírra nem mindig egy naptári
+                  intervallum kerül ("2026. július", felsorolás, stb.). */}
+              <Field label="Teljesítés ideje">
                 <input
-                  type="date"
-                  value={form.teljesites_kezdete}
-                  onChange={(e) => update("teljesites_kezdete", e.target.value)}
+                  value={form.teljesites_szoveg}
+                  onChange={(e) => update("teljesites_szoveg", e.target.value)}
                   disabled={busyState}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Teljesítés vége">
-                <input
-                  type="date"
-                  value={form.teljesites_vege}
-                  onChange={(e) => update("teljesites_vege", e.target.value)}
-                  disabled={busyState}
+                  placeholder="Pl. 2026.07.06. - 2026.07.08. vagy 2026. július"
                   className={inputClass}
                 />
               </Field>

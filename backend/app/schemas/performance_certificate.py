@@ -25,6 +25,7 @@ class PerformanceCertificateRead(BaseModel):
     megbizas_targya: str | None = None
     netto_osszeg: float | None = None
     plusz_afa: bool | None = None
+    teljesites_szoveg: str | None = None
     teljesites_kezdete: date | None = None
     teljesites_vege: date | None = None
     keltezes: date | None = None

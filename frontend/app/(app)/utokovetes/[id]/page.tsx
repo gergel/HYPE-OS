@@ -85,7 +85,11 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
 
         <Card title="Teljesítési igazolás (Külsős TIG)">
           {pendingTig?.tig_ready ? (
-            <PerformanceCertificateManager projectId={projectId} pending={pendingTig.pending} />
+            <PerformanceCertificateManager
+              projectId={projectId}
+              pending={pendingTig.pending}
+              teljesitesAlap={pendingTig.teljesites_szoveg_alap}
+            />
           ) : (
             <p className="text-[13px] text-text-secondary">
               Teljesítési igazolás csak azután készíthető, hogy mindenkinek megvan a szerződés státusza (kiküldve vagy

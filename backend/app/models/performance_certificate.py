@@ -34,6 +34,12 @@ class PerformanceCertificate(TimestampMixin, Base):
     megbizas_targya: Mapped[str | None] = mapped_column(String(255))
     netto_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Nettó TIG")
     plusz_afa: Mapped[bool | None] = mapped_column(Boolean)
+    # A teljesítés ideje SZABAD SZÖVEG, nem dátum: a valóságban nem mindig egy
+    # (tól-ig) naptári intervallum kerül a papírra - lehet "2026. július", egy
+    # felsorolás, vagy bármilyen megfogalmazás. Ez megy a dokumentum {{tido}}
+    # helyére. A régi, dátum-alapú mezők megmaradnak a korábbi bejegyzések
+    # miatt (és mert a migráció ezekből töltötte fel a szöveget).
+    teljesites_szoveg: Mapped[str | None] = mapped_column(String(255), comment="Teljesítés ideje - szabad szöveg")
     teljesites_kezdete: Mapped[date | None] = mapped_column(Date)
     teljesites_vege: Mapped[date | None] = mapped_column(Date)
     keltezes: Mapped[date | None] = mapped_column(Date, comment="Keltezési idő")

@@ -155,6 +155,7 @@ class DraftInfo(BaseModel):
     adoszam: str | None
     megbizas_targya: str | None
     netto_osszeg: float | None
+    teljesites_szoveg: str | None
     teljesites_kezdete: date | None
     teljesites_vege: date | None
     keltezes: date | None
@@ -179,6 +180,9 @@ class PendingProjectDetail(BaseModel):
     projektkod: str | None
     forgatas_datuma: date | None
     forgatas_datuma_vege: date | None
+    # A teljesítés idejének alapértelmezett SZÖVEGE (a forgatás dátumából) -
+    # az űrlap ezzel indul, amíg nincs mentett bejegyzés, amiből előtöltene.
+    teljesites_szoveg_alap: str
     pending: list[PendingEmployeeInfo]
     tig_ready: bool
 
@@ -193,6 +197,7 @@ def _draft_info(c: PerformanceCertificate | None) -> DraftInfo | None:
         adoszam=c.adoszam,
         megbizas_targya=c.megbizas_targya,
         netto_osszeg=c.netto_osszeg,
+        teljesites_szoveg=c.teljesites_szoveg,
         teljesites_kezdete=c.teljesites_kezdete,
         teljesites_vege=c.teljesites_vege,
         keltezes=c.keltezes,
@@ -215,6 +220,7 @@ def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _use
         projektkod=project.projektkod_szoveg,
         forgatas_datuma=project.forgatas_datuma,
         forgatas_datuma_vege=project.forgatas_datuma_vege,
+        teljesites_szoveg_alap=_projekt_teljesites_szoveg(project),
         tig_ready=tig_ready,
         pending=[
             PendingEmployeeInfo(
@@ -259,6 +265,29 @@ def _validate_pending_employee(db: Session, project: Project, employee_id: int) 
     return employee
 
 
+def _teljesites_datumokbol(cert: PerformanceCertificate) -> str:
+    """A korábbi, tól-ig dátumos megadás szöveggé formázva - csak a régi
+    bejegyzésekhez tartalék (lásd teljesites_szoveg)."""
+    if cert.teljesites_vege and cert.teljesites_vege != cert.teljesites_kezdete:
+        kezdet = cert.teljesites_kezdete.strftime("%Y.%m.%d.") if cert.teljesites_kezdete else ""
+        return f"{kezdet} - {cert.teljesites_vege.strftime('%Y.%m.%d.')}"
+    if cert.teljesites_kezdete:
+        return cert.teljesites_kezdete.strftime("%Y.%m.%d.")
+    return ""
+
+
+def _projekt_teljesites_szoveg(project: Project) -> str:
+    """Előtöltés a projekt forgatási dátumából - a teljesítés jellemzően a
+    forgatás ideje, de a mező szabad szöveg, tehát bármire átírható."""
+    start = project.forgatas_datuma
+    if not start:
+        return ""
+    end = project.forgatas_datuma_vege
+    if end and end != start:
+        return f"{start.strftime('%Y.%m.%d.')} - {end.strftime('%Y.%m.%d.')}"
+    return start.strftime("%Y.%m.%d.")
+
+
 def _get_or_create_draft(db: Session, project: Project, employee: Employee) -> PerformanceCertificate:
     existing = (
         db.query(PerformanceCertificate)
@@ -281,6 +310,7 @@ def _get_or_create_draft(db: Session, project: Project, employee: Employee) -> P
         adoszam=employee.vallalkozas_adoszama,
         megbizas_targya=employee.megbizas_targya,
         plusz_afa=employee.plusz_afa,
+        teljesites_szoveg=_projekt_teljesites_szoveg(project),
         email=employee.email,
     )
     db.add(draft)
@@ -294,6 +324,7 @@ class TigDraftIn(BaseModel):
     adoszam: str | None = None
     megbizas_targya: str | None = None
     netto_osszeg: float | None = None
+    teljesites_szoveg: str | None = None
     teljesites_kezdete: date | None = None
     teljesites_vege: date | None = None
     keltezes: date | None = None
@@ -306,6 +337,7 @@ _DRAFT_FIELDS = (
     "adoszam",
     "megbizas_targya",
     "netto_osszeg",
+    "teljesites_szoveg",
     "teljesites_kezdete",
     "teljesites_vege",
     "keltezes",
@@ -358,15 +390,9 @@ def generate_and_send(
     keltezes = draft.keltezes or date.today()
     draft.keltezes = keltezes
 
-    if draft.teljesites_vege and draft.teljesites_vege != draft.teljesites_kezdete:
-        teljesites_str = (
-            f"{draft.teljesites_kezdete.strftime('%Y.%m.%d.') if draft.teljesites_kezdete else ''} - "
-            f"{draft.teljesites_vege.strftime('%Y.%m.%d.')}"
-        )
-    elif draft.teljesites_kezdete:
-        teljesites_str = draft.teljesites_kezdete.strftime("%Y.%m.%d.")
-    else:
-        teljesites_str = ""
+    # A teljesítés ideje szabad szöveg - a régi, dátum-alapú bejegyzésekhez
+    # (amiknél ez még üres) a korábbi formázás a tartalék.
+    teljesites_str = (draft.teljesites_szoveg or "").strip() or _teljesites_datumokbol(draft)
 
     projektdatum = project.forgatas_datuma.strftime("%Y.%m.%d.") if project.forgatas_datuma else ""
 

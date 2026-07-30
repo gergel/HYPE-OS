@@ -359,6 +359,8 @@ export type TigDraft = {
   adoszam: string | null;
   megbizas_targya: string | null;
   netto_osszeg: number | null;
+  /** A teljesítés ideje SZABAD SZÖVEG (nem dátum) - ez megy a dokumentumba. */
+  teljesites_szoveg: string | null;
   teljesites_kezdete: string | null;
   teljesites_vege: string | null;
   keltezes: string | null;
@@ -383,6 +385,9 @@ export type PendingTigProjectDetail = {
   projektkod: string | null;
   forgatas_datuma: string | null;
   forgatas_datuma_vege: string | null;
+  /** A teljesítés idejének alapértelmezett szövege (a forgatás dátumából) -
+   * az űrlap ezzel indul, amíg nincs mentett bejegyzés. */
+  teljesites_szoveg_alap: string;
   pending: PendingTigEmployee[];
   tig_ready: boolean;
 };
