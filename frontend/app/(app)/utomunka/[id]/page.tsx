@@ -103,6 +103,8 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
   const employeeNameById = Object.fromEntries(allEmployees.map((e) => [e.id, e.full_name]));
   // Aki az Utómunka oldalon szerkeszthet, az javíthatja a rögzített perceket is.
   const canEditPage = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
+  // Forint összeg csak annak, akinek a Pénzügy oldalhoz van hozzáférése.
+  const canSeeCost = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
 
   const tabs = buildFieldTabs({
     page: PAGE,
@@ -176,7 +178,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
         label: "Időmérés",
         content: (
           <Card title="Időmérés">
-            <TimerControls deliverableId={deliverableId} initialState={timerState} />
+            <TimerControls deliverableId={deliverableId} initialState={timerState} showCost={canSeeCost} />
           </Card>
         ),
       },
@@ -193,6 +195,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               rows={timesheets}
               employeeNameById={employeeNameById}
               canEdit={canEditPage}
+              showCost={canSeeCost}
             />
           </Card>
         ),

@@ -23,7 +23,18 @@ function formatElapsedSince(startIso: string, now: Date): string {
 /** Start/Stop időmérés egy Utómunka anyagon - egyénenként külön követi, ki
  * mennyit dolgozott (lásd services/deliverable_actions.py timer_*), hogy az
  * óradíjjal felszorozva ki lehessen számolni a vágás tényleges költségét. */
-export function TimerControls({ deliverableId, initialState }: { deliverableId: number; initialState: TimerState | null }) {
+export function TimerControls({
+  deliverableId,
+  initialState,
+  showCost = true,
+}: {
+  deliverableId: number;
+  initialState: TimerState | null;
+  /** A forint összegek csak annak látszanak, akinek a Pénzügy oldalhoz van
+   * hozzáférése - a backend amúgy is üresen adja vissza nekik (lásd
+   * services/deliverable_actions._may_see_costs). */
+  showCost?: boolean;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
@@ -80,7 +91,7 @@ export function TimerControls({ deliverableId, initialState }: { deliverableId: 
               <span>{e.full_name}</span>
               <span>
                 {formatMinutes(e.total_minutes)}
-                {e.total_cost != null && <span className="text-text-muted"> · {Math.round(e.total_cost)} Ft</span>}
+                {showCost && e.total_cost != null && <span className="text-text-muted"> · {Math.round(e.total_cost)} Ft</span>}
               </span>
             </div>
           ))}
@@ -88,7 +99,9 @@ export function TimerControls({ deliverableId, initialState }: { deliverableId: 
             <span>Összesen</span>
             <span>
               {formatMinutes(initialState.total_minutes)}
-              {initialState.total_cost != null && <span className="text-text-muted"> · {Math.round(initialState.total_cost)} Ft</span>}
+              {showCost && initialState.total_cost != null && (
+                <span className="text-text-muted"> · {Math.round(initialState.total_cost)} Ft</span>
+              )}
             </span>
           </div>
         </div>

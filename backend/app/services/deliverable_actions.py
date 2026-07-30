@@ -5,9 +5,11 @@ küldött Notion automatizmus screenshot alapján) és a chat-szerű kommentek."
 
 from datetime import datetime, timezone
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.security import check_page_action
 from app.models.client import Contact
 from app.models.deliverable import Deliverable
 from app.models.deliverable_comment import DeliverableComment
@@ -148,6 +150,17 @@ def stop_timer(db: Session, deliverable: Deliverable, current_user: Employee) ->
     db.commit()
 
 
+def _may_see_costs(db: Session, employee: Employee) -> bool:
+    """A munkaidőhöz tartozó FORINT összegeket csak az látja, akinek a Pénzügy
+    oldalhoz van hozzáférése - a vágóknak jellemzően nincs, nekik az idő
+    releváns, a bekerülési költség nem."""
+    try:
+        check_page_action(db, employee, "/penzugyek", "view")
+    except HTTPException:
+        return False
+    return True
+
+
 def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employee) -> TimerState:
     rows = db.scalars(select(Timesheet).where(Timesheet.deliverable_id == deliverable.id)).all()
 
@@ -177,6 +190,12 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
     ]
     total_minutes = sum(by_employee_minutes.values())
     total_cost = sum(by_employee_cost.values()) if by_employee_cost else None
+
+    # A költséget nem csak elrejtjük a felületen: aki nem láthatja, annak a
+    # válaszban sincs benne.
+    if not _may_see_costs(db, current_user):
+        by_employee = [s.model_copy(update={"total_cost": None}) for s in by_employee]
+        total_cost = None
 
     return TimerState(my_running_since=my_running_since, by_employee=by_employee, total_minutes=total_minutes, total_cost=total_cost)
 

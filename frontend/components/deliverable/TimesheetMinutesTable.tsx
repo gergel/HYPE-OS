@@ -110,11 +110,15 @@ export function TimesheetMinutesTable({
   rows,
   employeeNameById,
   canEdit,
+  showCost,
 }: {
   deliverableId: number;
   rows: JsonRecord[];
   employeeNameById: Record<number, string>;
   canEdit: boolean;
+  /** A költség oszlop csak annak látszik, akinek a Pénzügy oldalhoz van
+   * hozzáférése - a vágóknak jellemzően nincs, nekik az idő releváns. */
+  showCost: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -150,7 +154,7 @@ export function TimesheetMinutesTable({
           <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Kezdés</th>
           <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Vége</th>
           <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Idő</th>
-          <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Költség</th>
+          {showCost && <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Költség</th>}
           <th className="py-1.5" />
         </tr>
       </thead>
@@ -174,9 +178,11 @@ export function TimesheetMinutesTable({
                   canEdit={canEdit}
                 />
               </td>
-              <td className="py-2 pr-4 text-right whitespace-nowrap text-text-secondary">
-                {typeof r.koltseg === "number" ? `${r.koltseg.toLocaleString("hu-HU")} Ft` : "–"}
-              </td>
+              {showCost && (
+                <td className="py-2 pr-4 text-right whitespace-nowrap text-text-secondary">
+                  {typeof r.koltseg === "number" ? `${r.koltseg.toLocaleString("hu-HU")} Ft` : "–"}
+                </td>
+              )}
               <td className="py-2 text-right">
                 {canEdit && (
                   <button
@@ -198,7 +204,7 @@ export function TimesheetMinutesTable({
             Összesen
           </td>
           <td className="py-2 pr-4 text-right font-medium whitespace-nowrap text-text-primary">{formatPerc(osszesen)}</td>
-          <td colSpan={2} />
+          <td colSpan={showCost ? 2 : 1} />
         </tr>
       </tbody>
     </table>
