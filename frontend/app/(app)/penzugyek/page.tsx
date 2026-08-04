@@ -144,7 +144,10 @@ export default async function PenzugyekPage() {
                 sortAccessor: (e) => e.kifizetes_modja,
               },
               {
-                header: "Kész",
+                // A cella tartalma egy ÁLLAPOT ("Kifizetve"/"Nyitott"), ezért a
+                // fejléc is "Állapot" - a korábbi "Kész" cím alapján a szűrőben
+                // nem lehetett kitalálni, mire kell szűrni.
+                header: "Állapot",
                 align: "right",
                 render: (e) => <StatusBadge label={e.kesz ? "Kifizetve" : "Nyitott"} tone={e.kesz ? "success" : "warning"} />,
                 sortAccessor: (e) => (e.kesz ? 1 : 0),

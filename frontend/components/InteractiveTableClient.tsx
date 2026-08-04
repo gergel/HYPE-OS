@@ -7,7 +7,15 @@ import { RecordDetailModal } from "@/components/RecordDetailModal";
 import { TableFilterBuilder } from "@/components/TableFilterBuilder";
 import { matchesAllRules, type ColumnKind, type FilterRule } from "@/lib/tableFilters";
 
-export type HeaderMeta = { header: string; align?: "left" | "right"; sortable: boolean; kind: ColumnKind };
+export type HeaderMeta = {
+  header: string;
+  align?: "left" | "right";
+  sortable: boolean;
+  kind: ColumnKind;
+  /** Az oszlopban előforduló értékek - ezekből lehet a szűrőben legördülő
+   * listából választani (lásd DataTable filterOptions). */
+  options?: string[];
+};
 export type RenderedRow = {
   id: number;
   href?: string;
@@ -105,7 +113,7 @@ export function InteractiveTableClient({
           )}
           {columnFilters && (
             <TableFilterBuilder
-              columns={headerMeta.map((col) => ({ header: col.header, kind: col.kind }))}
+              columns={headerMeta.map((col) => ({ header: col.header, kind: col.kind, options: col.options }))}
               rules={rules}
               onChange={setRules}
             />

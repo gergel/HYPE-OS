@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
+import { SelectDropdown } from "@/components/SelectDropdown";
 import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { huEvHonap, tigHonapTeljesitesbol } from "@/lib/huDate";
 import type { BelsosTigMonthEmployee } from "@/lib/api";
@@ -54,6 +55,16 @@ function computeBrutto(nettoOsszeg: string, pluszAfa: boolean): number | null {
 const inputClass =
   "w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none";
 
+/** Az állapot-szűrő "nincs szűrés" értéke. */
+const MIND = "Összes állapot";
+
+/** Akinek még nincs bejegyzése arra a hónapra, annak nincs is állapota - a
+ * szűrőben mégis ez a legfontosabb csoport ("kivel van még teendő"), ezért
+ * saját, nevesített értéket kap. */
+const NINCS_ELKEZDVE = "Nincs elkezdve";
+
+const ALLAPOT_SZURO_OPCIOK = [MIND, NINCS_ELKEZDVE, "Készítés alatt", "Kiküldve", "Kész", "Kihagyva"];
+
 /** Belsős TIG - havi admin oldal (lásd app/(app)/belsos-tig/page.tsx), ami az
  * adott hónap (alapértelmezetten a folyó hónap) összes belsős munkatársát
  * felsorolja, egy sorban mindegyiket. Ellentétben a Külsős TIG-gel, ez NEM
@@ -81,6 +92,7 @@ export function BelsosTigManager({
   const [openId, setOpenId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [allapotSzuro, setAllapotSzuro] = useState(MIND);
 
   const openEmployee = employees.find((e) => e.id === openId) ?? null;
   const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
@@ -247,8 +259,33 @@ export function BelsosTigManager({
     }
   }
 
+  // Állapotra szűrés legördülő listából - a hónap végén jellemzően az a
+  // kérdés, kivel van még teendő, nem az egész névsor.
+  const szurtEmployees =
+    allapotSzuro === MIND
+      ? employees
+      : employees.filter((e) => (e.record?.allapot ?? NINCS_ELKEZDVE) === allapotSzuro);
+
   return (
     <div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <SelectDropdown
+          value={allapotSzuro}
+          options={ALLAPOT_SZURO_OPCIOK}
+          onChange={(value) => setAllapotSzuro(value ?? MIND)}
+          placeholder={MIND}
+        />
+        <span className="text-[12px] text-text-muted">
+          {szurtEmployees.length === employees.length
+            ? `${employees.length} munkatárs`
+            : `${szurtEmployees.length} / ${employees.length} munkatárs`}
+        </span>
+      </div>
+
+      {szurtEmployees.length === 0 && (
+        <p className="mb-3 text-[13px] text-text-muted">Nincs ilyen állapotú munkatárs ebben a hónapban.</p>
+      )}
+
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-border">
@@ -261,7 +298,7 @@ export function BelsosTigManager({
           </tr>
         </thead>
         <tbody>
-          {employees.map((employee) => {
+          {szurtEmployees.map((employee) => {
             const record = employee.record;
             const allapot = record?.allapot;
             // A "Kész" a korábbi, küldés nélküli életciklusból maradt - a régi

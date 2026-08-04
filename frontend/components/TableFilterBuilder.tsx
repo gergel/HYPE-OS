@@ -12,7 +12,18 @@ import {
   type FilterRule,
 } from "@/lib/tableFilters";
 
-export type FilterColumn = { header: string; kind: ColumnKind };
+export type FilterColumn = {
+  header: string;
+  kind: ColumnKind;
+  /** Az oszlopban ténylegesen előforduló értékek - egyenlő/nem egyenlő
+   * művelethez ezekből lehet legördülő listából választani. */
+  options?: string[];
+};
+
+/** Ezeknél a műveleteknél PONTOS érték kell, tehát van értelme listából
+ * választani. A "tartalmazza"/"ezzel kezdődik" jellegűeknél épp az a lényeg,
+ * hogy töredéket lehessen beírni - ott marad a szabad szöveg. */
+const LISTAS_MUVELETEK: FilterOperator[] = ["is", "isNot"];
 
 const selectClass =
   "rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary focus:outline-none";
@@ -129,6 +140,7 @@ export function TableFilterBuilder({
           <div className="space-y-2">
             {rules.map((rule, index) => {
               const kind = columns[rule.columnIndex]?.kind ?? "text";
+              const options = columns[rule.columnIndex]?.options;
               return (
                 <div key={rule.id} className="flex flex-wrap items-center gap-2">
                   <span className="w-10 text-[12px] text-text-muted">{index === 0 ? "Ahol" : "és"}</span>
@@ -161,15 +173,30 @@ export function TableFilterBuilder({
                       </option>
                     ))}
                   </select>
-                  {needsValue(rule.operator) ? (
+                  {!needsValue(rule.operator) ? (
+                    <span className="flex-1" />
+                  ) : options && LISTAS_MUVELETEK.includes(rule.operator) ? (
+                    // Az oszlopban előforduló értékek listája - állapot-jellegű
+                    // mezőknél így nem kell kitalálni, pontosan mit kell beírni.
+                    <select
+                      value={rule.value}
+                      onChange={(e) => updateRule(rule.id, { value: e.target.value })}
+                      className={`${selectClass} min-w-0 flex-1`}
+                    >
+                      <option value="">Válassz értéket…</option>
+                      {options.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
                     <input
                       value={rule.value}
                       onChange={(e) => updateRule(rule.id, { value: e.target.value })}
                       placeholder="Érték"
                       className="min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none"
                     />
-                  ) : (
-                    <span className="flex-1" />
                   )}
                   <button
                     type="button"

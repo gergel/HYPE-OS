@@ -47,6 +47,28 @@ function columnKind(values: string[]): ColumnKind {
   return filled.every((v) => NUMBER_LIKE.test(v)) ? "number" : "text";
 }
 
+/** Legfeljebb ennyi különböző értéknél kínálunk legördülő listát a szűrőben.
+ * Efölött (pl. egy név-oszlopnál) a lista használhatatlan lenne, ott marad a
+ * szabad szöveges beírás. */
+const MAX_SZURO_OPCIO = 40;
+
+/** Egy oszlop választható értékei a szűrőhöz: az oszlopban ténylegesen
+ * előforduló, különböző értékek. Így az állapot-jellegű mezőknél nem kell
+ * kitalálni, pontosan mit kell beírni - ki lehet választani a listából. */
+function filterOptions(values: string[]): string[] | undefined {
+  const kulonbozo = new Set<string>();
+  for (const raw of values) {
+    const value = raw.trim();
+    if (!value || value === "–" || value === "-") continue;
+    // A hosszú, szabad szövegek (leírás, megjegyzés) nem select-jellegűek.
+    if (value.length > 60 || value.includes("\n")) return undefined;
+    kulonbozo.add(value);
+    if (kulonbozo.size > MAX_SZURO_OPCIO) return undefined;
+  }
+  if (kulonbozo.size === 0) return undefined;
+  return [...kulonbozo].sort((a, b) => a.localeCompare(b, "hu"));
+}
+
 export type Column<T> = {
   header: string;
   align?: "left" | "right";
@@ -96,21 +118,34 @@ export function DataTable<T extends { id: number }>({
   openInModal?: boolean;
 }) {
   const renderedCells = rows.map((row) => columns.map((col) => col.render(row)));
-  // A szűrés alapértéke a cella látható szövege; ahol van sortAccessor, az
-  // pontosabb (nyers érték, formázás nélkül), ezért az élvez elsőbbséget.
+  // A szűrés ARRA fut, AMI A CELLÁBAN LÁTSZIK - ez a szűrő egész működésének
+  // alapelve (lásd lib/tableFilters fejléc-kommentje).
+  //
+  // Korábban a sortAccessor értéke élvezett elsőbbséget, "mert az a nyers
+  // érték". Ez viszont pont az állapot-oszlopokat rontotta el: ott a
+  // sortAccessor csak RENDEZÉSI kulcs (pl. `kesz ? 1 : 0`), aminek semmi köze
+  // a kiírt szöveghez - a felhasználó "Kifizetve"-t látott, de az "1"-re
+  // kellett volna szűrnie, amit sehonnan nem tudhatott. Ezért a látható szöveg
+  // az elsődleges, és a sortAccessor csak akkor jön, ha a cella szövege üres
+  // (pl. tisztán ikonnal jelölt érték).
   const filterValuesByRow = rows.map((row, rowIndex) =>
     columns.map((col, colIndex) => {
+      const text = nodeToText(renderedCells[rowIndex][colIndex]).trim();
+      if (text) return text;
       const sortValue = col.sortAccessor?.(row);
-      if (sortValue !== null && sortValue !== undefined && sortValue !== "") return String(sortValue);
-      return nodeToText(renderedCells[rowIndex][colIndex]);
+      return sortValue === null || sortValue === undefined ? "" : String(sortValue);
     }),
   );
-  const headerMeta = columns.map((col, colIndex) => ({
-    header: col.header,
-    align: col.align,
-    sortable: !!col.sortAccessor,
-    kind: columnKind(filterValuesByRow.map((values) => values[colIndex])),
-  }));
+  const headerMeta = columns.map((col, colIndex) => {
+    const ertekek = filterValuesByRow.map((values) => values[colIndex]);
+    return {
+      header: col.header,
+      align: col.align,
+      sortable: !!col.sortAccessor,
+      kind: columnKind(ertekek),
+      options: filterOptions(ertekek),
+    };
+  });
   const renderedRows = rows.map((row, rowIndex) => ({
     id: row.id,
     href: getHref?.(row),

@@ -76,7 +76,10 @@ export default async function UtokovetesPage() {
                 sortAccessor: (r) => r.visszajelzes_darab,
               },
               {
-                header: "Kész",
+                // Állapot-oszlop ("Kész"/"Folyamatban") - a fejléc korábban
+                // "Kész" volt, amiből a szűrőben nem derült ki, mire lehet
+                // szűrni.
+                header: "Állapot",
                 render: (r) =>
                   r.kesz ? (
                     <StatusBadge label="Kész" tone="success" />
