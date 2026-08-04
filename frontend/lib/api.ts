@@ -63,6 +63,12 @@ export type Project = {
   diszpo: string | null;
   elozetes_diszpo_kuldes: string | null;
   resztvevok_email: string | null;
+  /** Meeting / helyszínbejárás, nem forgatás - nincs mit diszponálni. A
+   * naptár-szinkron a lila esemény-szín alapján állítja be (lásd backend
+   * services/google_calendar.py), de kézzel is átállítható. */
+  nem_diszponalando: boolean;
+  /** A naptáresemény színe magyar néven, ha kapott egyet ("Lila", "Zöld"…). */
+  naptar_szin: string | null;
 };
 
 export type Employee = {

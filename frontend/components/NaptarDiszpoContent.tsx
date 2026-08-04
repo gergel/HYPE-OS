@@ -126,21 +126,28 @@ export function NaptarDiszpoContent({
           title,
           dateLabel: parseISODate(iso).toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" }),
           projects: items,
-          pending: items.filter((p) => !p.diszpo).length,
+          pending: items.filter((p) => !p.diszpo && !p.nem_diszponalando).length,
+          meetings: items.filter((p) => p.nem_diszponalando).length,
         };
       });
 
     return { upcoming, groups };
   }, [filtered]);
 
-  const elozetesKuldve = upcoming.filter((p) => p.elozetes_diszpo_kuldes).length;
-  const teljesKuldve = upcoming.filter((p) => p.diszpo).length;
+  // A meetingek/helyszínbejárások (a naptárban lila események) benne maradnak a
+  // listában - a naptár úgy teljes, ahogy van -, de EGYIK diszpó-számlálóba sem
+  // számítanak bele: nincs rajtuk elvégzendő teendő.
+  const diszponalando = upcoming.filter((p) => !p.nem_diszponalando);
+  const meetingek = upcoming.length - diszponalando.length;
+  const elozetesKuldve = diszponalando.filter((p) => p.elozetes_diszpo_kuldes).length;
+  const teljesKuldve = diszponalando.filter((p) => p.diszpo).length;
 
   return (
-    <Card title={`Naptár / Diszpó (${upcoming.length} forgatás)`}>
+    <Card title={`Naptár / Diszpó (${diszponalando.length} forgatás)`}>
       <p className="mb-3 text-[13px] text-text-secondary">
         {elozetesKuldve} előzetes diszpó elküldve · {teljesKuldve} teljes diszpó kiküldve ·{" "}
-        {upcoming.length - teljesKuldve} még hátra van
+        {diszponalando.length - teljesKuldve} még hátra van
+        {meetingek > 0 && ` · ${meetingek} meeting (nem diszponálandó)`}
       </p>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -188,7 +195,8 @@ export function NaptarDiszpoContent({
                     <span className={`text-[15px] font-semibold ${tone.title}`}>{group.title}</span>
                     <span className="text-[12px] text-text-secondary">{group.dateLabel}</span>
                     <span className="ml-auto text-[12px] text-text-muted">
-                      {group.projects.length} forgatás
+                      {group.projects.length - group.meetings} forgatás
+                      {group.meetings > 0 && ` · ${group.meetings} meeting`}
                       {group.pending > 0 && ` · ${group.pending} diszpó hátra`}
                     </span>
                   </div>
@@ -211,6 +219,14 @@ export function NaptarDiszpoContent({
                           </p>
                         </div>
 
+                        {p.nem_diszponalando ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusBadge label="Meeting – nem diszponálandó" tone="neutral" />
+                            {p.naptar_szin && (
+                              <span className="text-[12px] text-text-muted">naptár szín: {p.naptar_szin}</span>
+                            )}
+                          </div>
+                        ) : (
                         <div
                           className="flex flex-wrap items-end gap-x-6 gap-y-3"
                           onClick={(e) => e.stopPropagation()}
@@ -255,6 +271,7 @@ export function NaptarDiszpoContent({
                             </div>
                           </div>
                         </div>
+                        )}
                       </div>
                     ))}
                   </div>

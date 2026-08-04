@@ -62,6 +62,17 @@ class Project(TimestampMixin, Base):
         comment="A HYPE CALENDAR naptárból szinkronizált esemény Google Calendar event ID-je - "
         "csak a naptárból automatikusan létrehozott projekteknek van (lásd services/google_calendar.py).",
     )
+    # A naptáresemény színe magyar néven ("Lila", "Zöld"…), ha a naptárban
+    # kaptott egyet. Azért tároljuk, mert a "lila = meeting" szabály ezen
+    # múlik - enélkül nem lenne látható, MIÉRT lett egy esemény
+    # nem-diszponálandó (lásd services/google_calendar.py MEETING_SZINEK).
+    naptar_szin: Mapped[str | None] = mapped_column(String(30), comment="Naptár szín")
+    # Nem forgatás, hanem meeting / helyszínbejárás - nincs mit diszponálni.
+    # A naptár-szinkron a szín alapján állítja be, de kézzel is átállítható:
+    # a naptárban elfelejtett szín nem zárhat ki egy valódi forgatást örökre.
+    nem_diszponalando: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false", comment="Nem diszponálandó (meeting)"
+    )
     teljesites_datuma: Mapped[date | None] = mapped_column(Date, comment="Teljesítés dátuma")
 
     # --- diszpó ---

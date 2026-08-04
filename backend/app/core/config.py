@@ -121,6 +121,10 @@ class Settings(BaseSettings):
     # ezzel megspórolható a névkeresés és egyértelműsíthető azonos nevű naptárak esetén.
     google_calendar_id: str = ""
     google_calendar_name: str = "HYPE CALENDAR"
+    # Melyik naptár-esemény szín jelent meetinget/helyszínbejárást (nem
+    # diszponálandó) - Google colorId-k vesszővel elválasztva. Alapból csak a
+    # "3" (lila / Grape). Lásd services/google_calendar.py NAPTAR_SZINEK.
+    naptar_meeting_szinek: str = "3"
 
     # A "csak jelentkezz be egyszer" folyamathoz (lásd services/google_oauth.py):
     # ezekkel a HYPE OS a saját nevében kéri el a naptár olvasási jogot, a kapott

@@ -45,6 +45,10 @@ class ProjectListItem(ProjectBase):
     diszpo: str | None = None
     elozetes_diszpo_kuldes: str | None = None
     resztvevok_email: str | None = None
+    # A Naptár/Diszpó oldalnak tudnia kell, melyik esemény meeting/helyszín-
+    # bejárás - azokat nem kell (és nem is lehet) diszponálni.
+    nem_diszponalando: bool = False
+    naptar_szin: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -61,12 +65,17 @@ class ProjectUpdate(BaseModel):
     crew_employee_ids: list[int] | None = None
     technika_ready: bool | None = None
     alvallakozo_keretszerzodes_contract_id: int | None = None
+    # Kézzel is átállítható: ha valaki elfelejtette lilára tenni a naptárban a
+    # meetinget (vagy épp fordítva), ne kelljen a naptárhoz nyúlni miatta.
+    nem_diszponalando: bool | None = None
 
 
 class ProjectRead(ProjectBase):
     id: int
     crew_employee_ids: list[int] = []
     google_calendar_event_id: str | None = None
+    naptar_szin: str | None = None
+    nem_diszponalando: bool = False
     #: Ha ez a projekt egy több napos forgatásból leválasztott nap, itt az
     #: eredeti projekt id-je áll (lásd project_actions.create_feldarabolas).
     feldarabolas_szulo_id: int | None = None

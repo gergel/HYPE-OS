@@ -68,6 +68,44 @@ FULL_SYNC_LOOKAHEAD_DAYS = 548  # kb. 18 hónap
 PLACEHOLDER_PROJEKTKOD = "NAPTAR-IMPORT"
 PLACEHOLDER_CLIENT_NEV = "Naptárból importált (rendezetlen)"
 
+# A Google Calendar esemény-színek (colorId) magyar nevei. A Google csak
+# számot ad vissza; szín NÉLKÜLI eseménynél nincs colorId (olyankor az esemény
+# a naptár alapszínét viseli, ami nem az esemény sajátja - azt nem is
+# értelmezzük).
+NAPTAR_SZINEK: dict[str, str] = {
+    "1": "Levendula",
+    "2": "Zsálya",
+    "3": "Lila",  # Google: "Grape" / "Szőlő"
+    "4": "Flamingó",
+    "5": "Banán",
+    "6": "Mandarin",
+    "7": "Páva",
+    "8": "Grafit",
+    "9": "Áfonya",
+    "10": "Bazsalikom",
+    "11": "Paradicsom",
+}
+
+# A LILA esemény meeting / helyszínbejárás - nincs mit diszponálni rajta
+# (a felhasználó szabálya). Csak a "Grape" (3) az igazi lila; a Levendula (1)
+# szándékosan NEM szerepel itt, mert az egy külön, világosabb szín, és egy
+# tévesen kizárt esemény azt jelentené, hogy egy valódi forgatásra nem megy ki
+# diszpó. Ha mégis kell (vagy más szín is meetinget jelöl), a
+# NAPTAR_MEETING_SZINEK környezeti változóval bővíthető, kódmódosítás nélkül:
+# vesszővel elválasztott Google colorId-k, pl. "1,3".
+def _meeting_szinek() -> set[str]:
+    nyers = (settings.naptar_meeting_szinek or "3").strip()
+    return {darab.strip() for darab in nyers.split(",") if darab.strip()}
+
+
+def _szin_adatok(event: dict) -> tuple[str | None, bool]:
+    """(szín magyar neve, meeting-e). Szín nélküli eseménynél (None, False)."""
+    color_id = event.get("colorId")
+    if not color_id:
+        return None, False
+    color_id = str(color_id)
+    return NAPTAR_SZINEK.get(color_id, f"#{color_id}"), color_id in _meeting_szinek()
+
 
 class CalendarNotConfiguredError(RuntimeError):
     """Nincs beállítva Google Naptár hitelesítés."""
@@ -317,6 +355,9 @@ def sync_hype_calendar(db: Session) -> dict:
         "updated": 0,
         "deleted": 0,
         "skipped": 0,
+        # Hány esemény bizonyult meetingnek/helyszínbejárásnak a színe alapján
+        # - a Beállítások oldalon látszik, hogy a szabály tényleg fog-e valamit.
+        "meeting": 0,
         "full_resync": did_full_resync,
         "total_events": len(events),
     }
@@ -343,6 +384,7 @@ def sync_hype_calendar(db: Session) -> dict:
                 forgatas_datuma, forgatas_datuma_vege, kezdes_ido, veg_ido = _parse_event_dates(event)
                 helyszin = event.get("location") or None
                 leiras = event.get("description") or None
+                szin, meeting = _szin_adatok(event)
 
                 if project is None:
                     project = _find_unlinked_match(db, nev, forgatas_datuma)
@@ -365,6 +407,15 @@ def sync_hype_calendar(db: Session) -> dict:
                 project.forgatas_veg_ido = veg_ido
                 project.helyszin = helyszin
                 project.description = leiras
+                project.naptar_szin = szin
+                # A lila esemény meeting/helyszínbejárás - nincs mit diszponálni.
+                # Csak akkor állítjuk vissza False-ra, ha az esemény KAPOTT
+                # színt a naptárban: egy szín nélküli eseménynél nem tudunk
+                # semmit, és nem írhatjuk felül a kézzel beállított jelölést.
+                if szin is not None:
+                    project.nem_diszponalando = meeting
+                if meeting:
+                    stats["meeting"] += 1
         except Exception:  # noqa: BLE001
             stats["skipped"] += 1
             continue

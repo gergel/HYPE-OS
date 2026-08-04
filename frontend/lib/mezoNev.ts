@@ -19,6 +19,8 @@ const LABEL_OVERRIDES: Record<string, string> = {
   munkaszerzodes_url: "Munkaszerződés",
   email: "Email cím",
   vagas_leallitva: "Vágás leállítva",
+  naptar_szin: "Naptár szín",
+  nem_diszponalando: "Nem diszponálandó (meeting)",
 };
 
 export function humanizeKey(key: string): string {

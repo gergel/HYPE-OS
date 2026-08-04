@@ -315,7 +315,12 @@ def _tomorrow_dispo_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
 
     tomorrow = date.today() + timedelta(days=1)
     projects = db.scalars(
-        select(Project).where(Project.forgatas_datuma == tomorrow).order_by(Project.nev)
+        select(Project)
+        .where(Project.forgatas_datuma == tomorrow)
+        # A meetingek/helyszínbejárások (a naptárban lila események) nem
+        # diszponálandók - lásd services/google_calendar.py.
+        .where(Project.nem_diszponalando.is_(False))
+        .order_by(Project.nev)
     ).all()
 
     # Ha egy több napos forgatásból leválasztottuk a holnapi napot, akkor azt a
