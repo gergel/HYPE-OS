@@ -606,6 +606,28 @@ export async function getAllFieldVisibility(): Promise<FieldVisibilityConfig[]> 
   return (await apiGet<FieldVisibilityConfig[]>("/api/v1/field-visibility")) ?? [];
 }
 
+/** Egy mező az entitáson - lehet valódi (Notionből áthozott) DB-oszlop vagy
+ * admin által létrehozott saját mező (lásd backend entity_fields.py). */
+export type EntityField = {
+  name: string;
+  label: string;
+  type: string;
+  options: string[] | null;
+  /** Saját mező - csak ezek törölhetők véglegesen. */
+  custom: boolean;
+  /** Eltávolítva a rendszerből (visszahozható). */
+  removed: boolean;
+  /** Az eltávolításkor az adatait is kiürítettük. */
+  data_wiped: boolean;
+  removable: boolean;
+  reason: string | null;
+};
+
+export async function getEntityFields(entityType: string): Promise<EntityField[]> {
+  const data = await apiGet<{ entity_type: string; fields: EntityField[] }>(`/api/v1/entity-fields/${entityType}`);
+  return data?.fields ?? [];
+}
+
 export type PageAccessConfig = { employee_id: number; page_permissions: Record<string, string[]> | null };
 
 /** A bejelentkezett felhasználó saját oldal-hozzáférése - null = minden oldalt

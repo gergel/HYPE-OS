@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import Role, check_page_action, check_tab_action, get_current_user, require_roles
 from app.models.employee import Employee
+from app.services import entity_fields
 from app.services.detail_tabs import OTHER_TAB_KEY, get_field_tab_map
 
 # Soha nem PATCH-elhető mezők, még akkor sem, ha valódi oszlopok - a "minden
@@ -125,7 +126,26 @@ def build_crud_router(
 
     column_names = set(model.__table__.columns.keys())
 
-    @router.get("", response_model=list[list_read_schema])
+    def _kimenet(obj: Any, schema: type[BaseModel], db: Session, *, sajat_mezokkel: bool) -> dict:
+        """A válasz JSON-ja, az entitáshoz beállított mezőkkel: az eltávolított
+        mezők KIMARADNAK, a saját (admin által létrehozott) mezők pedig
+        bekerülnek - így a frontendnek nem kell tudnia róluk, mindenhol úgy
+        viselkednek, mint bármelyik valódi oszlop (lásd services/entity_fields.py).
+        Ha ehhez az entitáshoz nincs se eltávolított, se saját mező, a séma
+        kimenete változatlanul megy tovább."""
+        adat = schema.model_validate(obj).model_dump(mode="json")
+        if entity_type is None:
+            return adat
+        for field in entity_fields.hidden_fields(db, entity_type):
+            adat.pop(field, None)
+        if sajat_mezokkel:
+            adat.update(entity_fields.values_for_record(db, entity_type, obj.id))
+        return adat
+
+    # response_model helyett kézzel szerializálunk (lásd _kimenet): a FastAPI
+    # response_model visszavágná a saját mezőket és visszatenné az
+    # eltávolítottakat, mert a séma mezőlistája fix.
+    @router.get("", response_model=None)
     def list_items(
         request: Request, skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
     ):
@@ -149,13 +169,16 @@ def build_crud_router(
         # nem érné el a célját, mert az "első lap" nem a friss rekordokat adná.
         order_column = getattr(model, "updated_at", None)
         stmt = stmt.order_by(order_column.desc() if order_column is not None else model.id.desc())
-        return db.scalars(stmt.offset(skip).limit(limit)).all()
+        sorok = db.scalars(stmt.offset(skip).limit(limit)).all()
+        # A listákba a saját mezők értékei nem kerülnek bele (rekordonként
+        # külön lekérdezés lenne) - a részletnézeten viszont ott vannak.
+        return [_kimenet(o, list_read_schema, db, sajat_mezokkel=False) for o in sorok]
 
-    @router.get("/{item_id}", response_model=read_schema)
+    @router.get("/{item_id}", response_model=None)
     def get_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
-        return _get_or_404(db, item_id)
+        return _kimenet(_get_or_404(db, item_id), read_schema, db, sajat_mezokkel=True)
 
-    @router.post("", response_model=read_schema, status_code=status.HTTP_201_CREATED)
+    @router.post("", response_model=None, status_code=status.HTTP_201_CREATED)
     def create_item(payload: create_schema, db: Session = Depends(get_db), _user: Employee = Depends(create_dependency)):
         data = payload.model_dump()
         m2m_data = {k: data.pop(k) for k in list(m2m_fields) if k in data}
@@ -175,9 +198,9 @@ def build_crud_router(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Az érték már foglalt (egyedinek kell lennie)."
             ) from exc
         db.refresh(obj)
-        return obj
+        return _kimenet(obj, read_schema, db, sajat_mezokkel=True)
 
-    @router.patch("/{item_id}", response_model=read_schema)
+    @router.patch("/{item_id}", response_model=None)
     async def update_item(
         item_id: int,
         request: Request,
@@ -214,9 +237,21 @@ def build_crud_router(
             for tab_key in touched_tabs:
                 check_tab_action(db, current_user, page, tab_key, "edit")
 
+        # A SAJÁT (admin által létrehozott) mezők értékei nem oszlopok, hanem
+        # külön táblában vannak - ezeket innen emeljük ki, hogy a felületnek ne
+        # kelljen külön végpontot hívnia: a részletnézet ugyanúgy PATCH-eli
+        # őket, mint bármelyik valódi mezőt (lásd services/entity_fields.py).
+        eltavolitott = entity_fields.hidden_fields(db, entity_type) if entity_type else set()
+        sajat_ertekek = (
+            {k: v for k, v in data.items() if k in entity_fields.custom_keys(db, entity_type)} if entity_type else {}
+        )
+
         columns = model.__table__.columns
         for field, value in data.items():
-            if field in _PATCH_DENYLIST or field not in column_names:
+            # Az eltávolított mező nem része a rendszernek: az értéke akkor sem
+            # írható felül, ha valaki (pl. egy régi, még nyitva lévő fül)
+            # elküldi.
+            if field in _PATCH_DENYLIST or field in eltavolitott or field not in column_names:
                 continue
             try:
                 setattr(obj, field, _coerce_value(columns[field], value))
@@ -224,6 +259,8 @@ def build_crud_router(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail=f"Érvénytelen érték a '{field}' mezőhöz: {exc}"
                 ) from exc
+        if sajat_ertekek and entity_type:
+            entity_fields.set_values(db, entity_type, obj.id, sajat_ertekek)
         try:
             db.commit()
         except IntegrityError as exc:
@@ -234,13 +271,17 @@ def build_crud_router(
         db.refresh(obj)
         if after_update:
             after_update(obj, data, m2m_changes, db, current_user)
-        return obj
+        return _kimenet(obj, read_schema, db, sajat_mezokkel=True)
 
     @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(delete_dependency)):
         obj = _get_or_404(db, item_id)
         if before_delete:
             before_delete(obj, db)
+        if entity_type:
+            # A saját mezők értékeit nem idegen kulcs köti a rekordhoz (a tábla
+            # generikus), ezért kézzel kell vinni őket a rekorddal együtt.
+            entity_fields.delete_values_for_record(db, entity_type, obj.id)
         db.delete(obj)
         try:
             db.commit()

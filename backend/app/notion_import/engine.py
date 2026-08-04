@@ -59,6 +59,26 @@ def resolve_relation_id(db: Session, entity_type: str, notion_page_ids: list[str
     return ids[0] if ids else None
 
 
+def _eltavolitott_mezok_nelkul(db: Session, model: type, fields: dict[str, Any]) -> dict[str, Any]:
+    """Kihagyja azokat a mezőket, amiket admin eltávolított a rendszerből (lásd
+    services/entity_fields.py). Enélkül egy újabb Notion-import visszatöltené
+    pont azt az adatot, amit a felhasználó szándékosan kitörölt - az importált
+    mezőkészletből ugyanis sok itt már nem kell."""
+    from app.services.entity_fields import hidden_fields
+    from app.services.entity_registry import ENTITY_MODELS
+
+    # A modellből visszakeressük az entitás kulcsát: az importerek saját,
+    # nagybetűs neveket használnak ("Employee"), a mezőkezelés viszont az API
+    # kulcsait ("employee") - a modell a közös, biztos kapocs.
+    entity_key = next((key for key, m in ENTITY_MODELS.items() if m is model), None)
+    if entity_key is None:
+        return fields
+    eltavolitott = hidden_fields(db, entity_key)
+    if not eltavolitott:
+        return fields
+    return {k: v for k, v in fields.items() if k not in eltavolitott}
+
+
 def upsert(db: Session, model: type, entity_type: str, notion_page_id: str, fields: dict[str, Any]) -> tuple[Any, bool]:
     """Létrehoz vagy frissít egy rekordot a notion_page_id alapján - ez teszi idempotenssé
     az importot (újrafuttatásnál nem duplikál). (rekord, is_new) párt ad vissza.
@@ -66,6 +86,7 @@ def upsert(db: Session, model: type, entity_type: str, notion_page_id: str, fiel
     Nincs benne hibakezelés - importeren belül a safe_upsert()-öt használd, hacsak nem
     vagy biztos benne, hogy a hívó már véd egy savepoint-tal (lásd get_or_create_unknown_client)."""
     mapping = db.scalar(select(NotionImportMap).where(NotionImportMap.notion_page_id == notion_page_id))
+    fields = _eltavolitott_mezok_nelkul(db, model, fields)
 
     if mapping:
         obj = db.get(model, mapping.entity_id)

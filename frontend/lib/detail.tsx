@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { FieldTypeInfo, formatDate, formatHuf } from "@/lib/api";
+import { humanizeKey } from "@/lib/mezoNev";
 
 const HIDDEN_KEYS = new Set(["id", "created_at", "updated_at"]);
 
@@ -16,28 +17,11 @@ const LONG_TEXT_LENGTH = 120;
 
 export type DetailField = { label: string; value: ReactNode; wide?: boolean };
 
-/** Néhány Notion-ből importált mezőnév ékezet nélküli/kódolt (pl.
- * "vallakozas_neve"), ezért a humanizeKey generikus szó-szétbontása nem adna
- * helyes magyar címkét - ezekhez explicit felülírás kell. */
-const LABEL_OVERRIDES: Record<string, string> = {
-  vallakozas_neve: "Vállalkozás neve",
-  vallalkozas_kepviselo: "Vállalkozás képviselője",
-  vallakozas_szekhely: "Vállalkozás székhelye",
-  vallalkozas_adoszama: "Vállalkozás adószáma",
-  nyilvantartasi_szam: "Nyilvántartási szám",
-  megbizas_targya: "Megbízás tárgya",
-  plusz_afa: "Plusz ÁFA",
-  munkaszerzodes_url: "Munkaszerződés",
-  email: "Email cím",
-};
-
-export function humanizeKey(key: string): string {
-  if (LABEL_OVERRIDES[key]) return LABEL_OVERRIDES[key];
-  return key
-    .replace(/_id$/, "")
-    .replace(/_/g, " ")
-    .replace(/^./, (c) => c.toUpperCase());
-}
+/** A mezőnév-humanizálás külön, függőség nélküli modulban van (lásd
+ * lib/mezoNev.ts), hogy kliens-komponensek is használhassák - ez a modul a
+ * lib/api.ts-en át a szerver-only "next/headers"-t is behúzza. Innen
+ * továbbexportáljuk, hogy a meglévő importok változatlanok maradjanak. */
+export { humanizeKey } from "@/lib/mezoNev";
 
 function isLongText(value: string): boolean {
   return value.includes("\n") || value.length > LONG_TEXT_LENGTH;

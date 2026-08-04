@@ -146,6 +146,21 @@ def _select_options(name: str, db: Session, column) -> list[str] | None:
     return values
 
 
+def _sajat_mezok_tipusai(entity_type: str, db: Session) -> dict[str, FieldTypeInfo]:
+    """Az admin által létrehozott saját mezők típusai - körkörös import
+    elkerülésére itt, függvényen belül importálva (az entity_fields modul
+    ebből a modulból veszi az ENTITY_MODELS-t)."""
+    from app.services.entity_fields import custom_defs
+
+    result: dict[str, FieldTypeInfo] = {}
+    for mezo in custom_defs(db, entity_type):
+        if mezo.field_type == "select":
+            result[mezo.field_key] = {"type": "select", "options": list(mezo.options or [])}
+        else:
+            result[mezo.field_key] = {"type": mezo.field_type}
+    return result
+
+
 def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, FieldTypeInfo]:
     """{mezőnév: {"type": "boolean"|"date"|"datetime"|"time"|"number"|"select"|"text", "options"?: [...]}}
     egy entitástípushoz. Az "options" csak "select" típusnál van jelen. db
@@ -156,7 +171,16 @@ def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, Fi
         return {}
     result: dict[str, FieldTypeInfo] = {}
     overrides = SELECT_FIELD_OVERRIDES.get(entity_type, {})
+    # Az eltávolított mezők nem részei a rendszernek: a mezőtípusok között sem
+    # szerepelnek (lásd services/entity_fields.py).
+    eltavolitott: set[str] = set()
+    if db is not None:
+        from app.services.entity_fields import hidden_fields
+
+        eltavolitott = hidden_fields(db, entity_type)
     for name, column in model.__table__.columns.items():
+        if name in eltavolitott:
+            continue
         if name in overrides:
             result[name] = {"type": "select", "options": overrides[name]}
             continue
@@ -181,4 +205,6 @@ def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, Fi
             result[name] = {"type": "select", "options": options} if options else {"type": "text"}
         else:
             result[name] = {"type": "text"}
+    if db is not None:
+        result.update(_sajat_mezok_tipusai(entity_type, db))
     return result

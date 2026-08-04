@@ -4,6 +4,7 @@ import { Card } from "@/components/Card";
 import { DetailTabEditor } from "@/components/DetailTabEditor";
 import { DispoResponsiblesManager } from "@/components/DispoResponsiblesManager";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
+import { EntityFieldManager } from "@/components/EntityFieldManager";
 import { NotionImportPanel } from "@/components/NotionImportPanel";
 import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
 import { TopBar } from "@/components/TopBar";
@@ -148,6 +149,18 @@ export default async function BeallitasokPage() {
           </p>
           <DetailTabEditor entities={detailTabEntities} initialConfigsByEntity={detailTabsByEntity} />
         </Card>
+
+        {currentUser?.role === "admin" && (
+          <Card title="Mezők kezelése">
+            <p className="mb-3 text-[13px] text-text-secondary">
+              A Notionből áthozott mezők közül sok itt már nem kell - ezeket eltávolíthatod, és újakat is létrehozhatsz. Az
+              eltávolított mező az EGÉSZ rendszerből eltűnik (adatlap, listák, szerkesztés); az &quot;Eltávolítás&quot; a benne
+              tárolt adatot meghagyja, a kuka gomb véglegesen törli is. Bármikor visszahozható - ha az adatát is töröltük,
+              üresen tér vissza. Ha csak EGY munkatárstól akarsz elrejteni egy mezőt, arra a lenti mező-láthatóság való.
+            </p>
+            <EntityFieldManager entities={visibilityEntities.map((e) => ({ entityType: e.entityType, label: e.label }))} />
+          </Card>
+        )}
 
         {currentUser?.role === "admin" && (
           <Card title="Notion import">
