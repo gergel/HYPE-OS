@@ -61,6 +61,7 @@ def build_crud_router(
     after_update: Callable[[Any, dict, dict[str, dict[str, set[int]]], Session, Employee], None] | None = None,
     before_delete: Callable[[Any, Session], None] | None = None,
     entity_type: str | None = None,
+    list_options: tuple[Any, ...] = (),
 ) -> APIRouter:
     """page: a frontend/lib/nav.ts oldal-href-je (pl. "/projektek"), amihez ez az
     entitás tartozik - a Beállítások oldalon egyénenként beállított
@@ -133,17 +134,30 @@ def build_crud_router(
 
     column_names = set(model.__table__.columns.keys())
 
-    def _kimenet(obj: Any, schema: type[BaseModel], db: Session, *, sajat_mezokkel: bool) -> dict:
+    def _kimenet(
+        obj: Any,
+        schema: type[BaseModel],
+        db: Session,
+        *,
+        sajat_mezokkel: bool,
+        eltavolitott: set[str] | None = None,
+    ) -> dict:
         """A válasz JSON-ja, az entitáshoz beállított mezőkkel: az eltávolított
         mezők KIMARADNAK, a saját (admin által létrehozott) mezők pedig
         bekerülnek - így a frontendnek nem kell tudnia róluk, mindenhol úgy
         viselkednek, mint bármelyik valódi oszlop (lásd services/entity_fields.py).
         Ha ehhez az entitáshoz nincs se eltávolított, se saját mező, a séma
-        kimenete változatlanul megy tovább."""
+        kimenete változatlanul megy tovább.
+
+        `eltavolitott`: az eltávolított mezők halmaza. LISTÁNÁL a hívó adja át,
+        egyszer lekérdezve - enélkül soronként futna egy lekérdezés, ami több
+        száz soros listánál önmagában több száz felesleges kört jelentene."""
         adat = schema.model_validate(obj).model_dump(mode="json")
         if entity_type is None:
             return adat
-        for field in entity_fields.hidden_fields(db, entity_type):
+        if eltavolitott is None:
+            eltavolitott = entity_fields.hidden_fields(db, entity_type)
+        for field in eltavolitott:
             adat.pop(field, None)
         if sajat_mezokkel:
             adat.update(entity_fields.values_for_record(db, entity_type, obj.id))
@@ -161,6 +175,11 @@ def build_crud_router(
         (pl. egy Project Code összes Projektje) frontend-oldali lekérdezését.
         Bejelentkezés nélkül semmilyen adat nem érhető el (lásd get_current_user)."""
         stmt = select(model)
+        # Eager load a lista-lekérdezéshez: ha a read séma számított mezői
+        # kapcsolatokat járnak be (pl. ProjectCode.osszes_koltseg), azok
+        # enélkül SORONKÉNT indítanának külön lekérdezést.
+        if list_options:
+            stmt = stmt.options(*list_options)
         for key, raw_value in request.query_params.items():
             if key in ("skip", "limit") or key not in column_names:
                 continue
@@ -177,9 +196,13 @@ def build_crud_router(
         order_column = getattr(model, "updated_at", None)
         stmt = stmt.order_by(order_column.desc() if order_column is not None else model.id.desc())
         sorok = db.scalars(stmt.offset(skip).limit(limit)).all()
+        # Az eltávolított mezőket EGYSZER kérdezzük le az egész listára.
+        eltavolitott = entity_fields.hidden_fields(db, entity_type) if entity_type else set()
         # A listákba a saját mezők értékei nem kerülnek bele (rekordonként
         # külön lekérdezés lenne) - a részletnézeten viszont ott vannak.
-        return [_kimenet(o, list_read_schema, db, sajat_mezokkel=False) for o in sorok]
+        return [
+            _kimenet(o, list_read_schema, db, sajat_mezokkel=False, eltavolitott=eltavolitott) for o in sorok
+        ]
 
     @router.get("/{item_id}", response_model=None)
     def get_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
