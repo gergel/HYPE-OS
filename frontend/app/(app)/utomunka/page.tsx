@@ -37,7 +37,7 @@ export default async function UtomunkaPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-8">
         <UtomunkaContent
           initialDeliverables={deliverables}
           deliverablesHasMore={deliverables.length === INITIAL_BATCH}

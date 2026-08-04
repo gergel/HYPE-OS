@@ -121,18 +121,18 @@ export function DetailSections({
   return (
     <div ref={containerRef}>
       {reorderable && (
-        <p className="mb-2 text-[12px] text-text-muted">
+        <p className="mb-4 text-[12px] text-text-muted">
           A kártyák a jobb felső sarkukban lévő fogantyúval átrendezhetők - a sorrend minden rekordnál érvényes lesz.
           {saving && <span className="ml-2 text-text-accent">Mentés…</span>}
         </p>
       )}
-      <div className="columns-1 gap-5 lg:columns-2 [&>*]:mb-5 [&>*]:break-inside-avoid">
+      <div className="columns-1 gap-6 lg:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
         {ordered.map((s) => (
           <div
             key={s.key}
             data-section-key={s.key}
             className={`relative ${dragKey === s.key ? "opacity-40" : ""} ${
-              overKey === s.key ? "rounded-[var(--radius-lg)] shadow-[0_0_0_2px_var(--accent-solid)]" : ""
+              overKey === s.key ? "rounded-[var(--radius-lg)] shadow-[0_0_0_1px_var(--border-strong)]" : ""
             }`}
           >
             {reorderable && (

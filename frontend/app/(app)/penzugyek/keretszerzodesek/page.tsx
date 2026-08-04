@@ -26,7 +26,7 @@ export default async function KeretszerzodesekPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-8">
         <Card title={`Keretszerződések (${rows.length})`}>
           <KeretszerzodesAddWidget candidates={candidates} />
           <DataTable<KeretszerzodesRow>

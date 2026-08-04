@@ -27,7 +27,7 @@ export default async function BelsosokPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-8">
         <Card title={`Belsősök (${rows.length})`}>
           {canCreate && <BelsosAddWidget candidates={candidates} />}
           {canCreate && (

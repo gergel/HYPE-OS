@@ -81,38 +81,35 @@ export function Sidebar({ allowedPages }: { allowedPages: string[] | null }) {
     .sort((a, b) => b.length - a.length)[0];
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface-1 p-4 md:flex">
-      <div className="mb-6 flex items-center gap-2.5 px-2">
-        <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] text-white"
-          style={{ background: "var(--accent-gradient)" }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <aside className="hidden w-[248px] shrink-0 flex-col border-r border-border bg-surface-1 px-3 py-6 md:flex">
+      <div className="mb-8 flex items-center gap-3 px-3">
+        {/* A logó-jel egy matt titánlapka: nem világít, nem színez - csak
+            jelöli, hol a rendszer eleje. */}
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] border border-border-strong bg-surface-4 text-text-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
             <path
               d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"
-              stroke="white"
-              strokeWidth="1.6"
+              stroke="currentColor"
+              strokeWidth="1.5"
               strokeLinejoin="round"
-              fill="rgba(255,255,255,0.14)"
+              fill="rgba(255,255,255,0.05)"
             />
-            <path d="M3 7l9 5 9-5M12 12v10" stroke="white" strokeWidth="1.6" strokeLinejoin="round" />
+            <path d="M3 7l9 5 9-5M12 12v10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
           </svg>
         </div>
-        <div>
-          <p className="text-sm font-semibold tracking-tight text-text-primary">HYPE OS</p>
-          <p className="text-[11px] text-text-muted">HYPE Brain</p>
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold tracking-[-0.01em] text-text-primary">HYPE OS</p>
+          <p className="mt-0.5 text-[11px] text-text-muted">HYPE Brain</p>
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">
+      <nav className="flex flex-1 flex-col gap-6 overflow-y-auto pb-4">
         {visibleGroups.map((group, idx) => (
           <div key={idx}>
             {group.label && (
-              <p className="mb-1.5 px-2.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">
-                {group.label}
-              </p>
+              <p className="t-nav-group mb-2 px-3">{group.label}</p>
             )}
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-px">
               {group.items.map((item) => {
                 const active = item.href === activeHref;
                 const Icon = item.icon ? ICONS[item.icon] : undefined;
@@ -120,18 +117,26 @@ export function Sidebar({ allowedPages }: { allowedPages: string[] | null }) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-2.5 rounded-[var(--radius)] px-2.5 py-1.5 text-[13px] transition-colors ${
+                    className={`relative flex items-center gap-2.5 rounded-[var(--radius)] px-3 py-[7px] text-[13px] transition-colors duration-200 ${
                       active
-                        ? "text-white shadow-[0_4px_14px_-4px_rgba(124,92,255,0.55)]"
+                        ? "bg-surface-3 font-medium text-text-primary"
                         : "text-text-secondary hover:bg-surface-2 hover:text-text-primary"
                     }`}
-                    style={active ? { background: "var(--accent-gradient)" } : undefined}
                   >
+                    {/* Az aktív elem jelölése egy rövid függőleges vonal a bal
+                        szélen - halkabb, mint egy kitöltött gomb, de görgetés
+                        közben azonnal megtalálható. */}
+                    {active && (
+                      <span
+                        aria-hidden
+                        className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-text-accent"
+                      />
+                    )}
                     {Icon && (
                       <Icon
                         size={15}
-                        strokeWidth={2}
-                        className={active ? "text-white" : "text-text-muted"}
+                        strokeWidth={1.75}
+                        className={active ? "text-text-secondary" : "text-text-muted"}
                         aria-hidden
                       />
                     )}

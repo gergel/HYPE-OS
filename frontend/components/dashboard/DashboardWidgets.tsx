@@ -157,7 +157,10 @@ export function UpcomingEventsCard({ events }: { events: UpcomingEvent[] }) {
 
 // Kategorikus szín-sorrend a design rendszerből (lila elsődleges, majd kék,
 // türkiz, narancs, pink) - lásd app/globals.css szín tokenjei.
-const DONUT_COLORS = ["#8b6cff", "#3895f8", "#2dd4bf", "#fb923c", "#ec4899"];
+/* A fánkdiagram szegmensei a tompított kategória-tónusokból (lásd
+   globals.css). Nyers hex azért, mert SVG stroke-ként megy tovább - a
+   sorrend és az értékek szándékosan egyeznek a --text-* tokenekkel. */
+const DONUT_COLORS = ["#7d8fa6", "#6d9490", "#b0906f", "#a88b95", "#b3a173"];
 
 export function ProjectStatusDonut({ statusCounts }: { statusCounts: { label: string; value: number }[] }) {
   const total = statusCounts.reduce((sum, s) => sum + s.value, 0);

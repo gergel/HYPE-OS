@@ -101,14 +101,14 @@ export function InteractiveTableClient({
   return (
     <div>
       {(filterable || columnFilters) && (
-        <div className="mb-2 flex flex-wrap items-center gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           {filterable && (
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Keresés..."
-              className="w-full max-w-xs rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none"
+              className="field w-full max-w-[260px]"
             />
           )}
           {columnFilters && (
@@ -121,24 +121,27 @@ export function InteractiveTableClient({
         </div>
       )}
       {sorted.length === 0 ? (
-        <p className="text-[13px] text-text-muted">
+        <p className="py-8 text-center text-[13px] text-text-muted">
           {query || rules.length > 0 ? "Nincs találat a szűrésre." : emptyText}
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+        /* A táblázat saját, korlátozott magasságú görgető-kerete: így a
+           fejléc megtapadhat, és hosszú listánál is látszik, melyik oszlopot
+           nézzük - enélkül a fejléc kigörgött a képernyő tetején. */
+        <div className="-mx-1 max-h-[70vh] overflow-auto px-1">
+          <table className="os-table w-full border-collapse text-[13px]">
             <thead>
-              <tr className="border-b border-border">
+              <tr>
                 {headerMeta.map((col, index) => (
                   <th
                     key={col.header}
                     onClick={() => toggleSort(index)}
-                    className={`whitespace-nowrap py-1.5 font-medium text-text-secondary ${
-                      col.align === "right" ? "text-right" : "text-left"
-                    } ${col.sortable ? "cursor-pointer select-none hover:text-text-primary" : ""}`}
+                    className={`whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${
+                      col.sortable ? "cursor-pointer select-none hover:text-text-secondary" : ""
+                    } ${sortIndex === index ? "text-text-secondary" : ""}`}
                   >
                     {col.header}
-                    {col.sortable && sortIndex === index ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                    {col.sortable && sortIndex === index ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
                 ))}
                 {hasDelete && <th className="w-8" />}
@@ -147,13 +150,13 @@ export function InteractiveTableClient({
             <tbody>
               {sorted.map((row) => {
                 const cells = row.cells.map((cell, i) => (
-                  <td key={i} className={`py-2 pr-4 ${headerMeta[i]?.align === "right" ? "text-right" : "text-left"}`}>
+                  <td key={i} className={headerMeta[i]?.align === "right" ? "text-right" : "text-left"}>
                     {cell}
                   </td>
                 ));
                 if (hasDelete) {
                   cells.push(
-                    <td key="__delete" className="py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td key="__delete" className="pr-0 text-right" onClick={(e) => e.stopPropagation()}>
                       {row.deletePath && <DeleteButton path={row.deletePath} />}
                     </td>,
                   );
@@ -171,7 +174,7 @@ export function InteractiveTableClient({
                   );
                 }
                 return (
-                  <tr key={row.id} className="border-b border-border last:border-0">
+                  <tr key={row.id}>
                     {cells}
                   </tr>
                 );

@@ -105,19 +105,19 @@ export function TableFilterBuilder({
           setPickerOpen((v) => !v);
           setSearch("");
         }}
-        className="rounded-[var(--radius)] border border-border px-2.5 py-1.5 text-[12px] text-text-secondary transition-colors hover:bg-surface-3 hover:text-text-primary"
+        className="btn btn-ghost !px-2.5 !py-1.5 !text-[12px]"
       >
         + Szűrő
       </button>
 
       {pickerOpen && (
-        <div className="absolute left-0 top-full z-40 mt-1 w-[260px] rounded-[var(--radius)] border border-border bg-surface-2 p-2 shadow-lg">
+        <div className="fade-in absolute left-0 top-full z-40 mt-2 w-[280px] rounded-[var(--radius-lg)] border border-border-strong bg-surface-2 p-2 shadow-[0_16px_40px_-24px_rgba(0,0,0,0.9)]">
           <input
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Mező keresése…"
-            className="mb-2 w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none"
+            className="field mb-2 w-full"
           />
           <div className="max-h-[280px] overflow-y-auto">
             {matching.length === 0 && <p className="px-1 py-1.5 text-[12px] text-text-muted">Nincs ilyen mező.</p>}
@@ -136,7 +136,7 @@ export function TableFilterBuilder({
       )}
 
       {panelOpen && rules.length > 0 && (
-        <div className="absolute left-0 top-full z-40 mt-1 w-[520px] max-w-[92vw] rounded-[var(--radius)] border border-border bg-surface-2 p-3 shadow-lg">
+        <div className="fade-in absolute left-0 top-full z-40 mt-2 w-[520px] max-w-[92vw] rounded-[var(--radius-lg)] border border-border-strong bg-surface-2 p-4 shadow-[0_16px_40px_-24px_rgba(0,0,0,0.9)]">
           <div className="space-y-2">
             {rules.map((rule, index) => {
               const kind = columns[rule.columnIndex]?.kind ?? "text";
@@ -195,7 +195,7 @@ export function TableFilterBuilder({
                       value={rule.value}
                       onChange={(e) => updateRule(rule.id, { value: e.target.value })}
                       placeholder="Érték"
-                      className="min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none"
+                      className="field min-w-0 flex-1 !py-1 !text-[12px]"
                     />
                   )}
                   <button

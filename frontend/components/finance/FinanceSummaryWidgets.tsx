@@ -3,7 +3,7 @@ import { formatDate, formatHuf, FinanceSummary } from "@/lib/api";
 
 const MONTH_SHORT = ["jan", "feb", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
 
-const EXPENSE_COLOR = "#fb923c";
+const EXPENSE_COLOR = "var(--text-orange)";
 
 /** Havi bevétel/kiadás trend - két sorozat UGYANAZON a (forint) tengelyen,
  * nem két külön skálán, ezért csoportosított oszlopdiagram, nem kettős
@@ -15,7 +15,7 @@ export function FinanceMonthlyChart({ trend }: { trend: FinanceSummary["havi_tre
     <div>
       <div className="mb-4 flex items-center gap-4 text-[12px] text-text-secondary">
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--accent-solid)" }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--text-blue)" }} />
           Bevétel
         </span>
         <span className="flex items-center gap-1.5">
@@ -34,7 +34,7 @@ export function FinanceMonthlyChart({ trend }: { trend: FinanceSummary["havi_tre
                 <div
                   title={`Bevétel (${MONTH_SHORT[month]}): ${formatHuf(t.bevetel)}`}
                   className="w-full max-w-3.5 rounded-t-[4px]"
-                  style={{ height: `${bevPct}%`, background: "var(--accent-gradient)" }}
+                  style={{ height: `${bevPct}%`, background: "var(--text-blue)" }}
                 />
                 <div
                   title={`Kiadás (${MONTH_SHORT[month]}): ${formatHuf(t.kiadas)}`}

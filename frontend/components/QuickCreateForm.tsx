@@ -85,11 +85,11 @@ export function QuickCreateForm({
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="mb-3 flex flex-wrap items-end gap-3 rounded-[var(--radius)] border border-border bg-surface-3 p-3"
+      className="fade-in mb-4 flex flex-wrap items-end gap-4 rounded-[var(--radius-lg)] border border-border bg-surface-3 p-4"
     >
       {fields.map((f) => (
         <div key={f.name} className="flex flex-col gap-1">
-          <label className="text-[11px] text-text-muted">
+          <label className="t-label">
             {f.label}
             {f.required && " *"}
           </label>
@@ -98,7 +98,7 @@ export function QuickCreateForm({
               required={f.required}
               value={values[f.name] ?? ""}
               onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-              className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
+              className="field"
             >
               <option value="">Válassz…</option>
               {f.options?.map((opt) => (
@@ -113,7 +113,7 @@ export function QuickCreateForm({
               required={f.required}
               value={values[f.name] ?? ""}
               onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-              className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
+              className="field"
             />
           )}
         </div>
@@ -121,7 +121,7 @@ export function QuickCreateForm({
       <button
         type="submit"
         disabled={busy}
-        className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-2 disabled:opacity-50"
+        className="btn btn-primary"
       >
         {busy ? "Mentés…" : submitLabel}
       </button>

@@ -250,9 +250,11 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-6">
-        <BackLink href="/utomunka" label="Utómunka" />
-        <h1 className="text-lg font-medium text-text-primary">{String(deliverable.projekt_neve ?? `Anyag #${deliverable.id}`)}</h1>
+      <div className="flex-1 space-y-8 p-8">
+        <div className="space-y-2">
+          <BackLink href="/utomunka" label="Utómunka" />
+          <h1 className="t-page">{String(deliverable.projekt_neve ?? `Anyag #${deliverable.id}`)}</h1>
+        </div>
         <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
           {projectCode && (
             <a href={`/projektek/project-kodok/${projectCode.id}`} className="text-text-accent hover:underline">

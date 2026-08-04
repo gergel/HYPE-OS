@@ -61,33 +61,33 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
+    <div className="flex flex-1 items-center justify-center p-8">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6"
+        className="fade-in w-full max-w-[380px] rounded-[var(--radius-xl)] border border-border bg-surface-2 p-8"
       >
-        <p className="mb-1 text-lg font-medium text-text-primary">HYPE OS</p>
-        <p className="mb-5 text-[13px] text-text-secondary">Jelentkezz be a folytatáshoz</p>
+        <p className="mb-1.5 text-[19px] font-semibold tracking-[-0.02em] text-text-primary">HYPE OS</p>
+        <p className="mb-7 text-[13px] text-text-muted">Jelentkezz be a folytatáshoz</p>
 
-        <label className="mb-3 block">
-          <span className="mb-1 block text-[13px] text-text-secondary">Email</span>
+        <label className="mb-4 block">
+          <span className="mb-1.5 block text-[13px] text-text-secondary">Email</span>
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-[var(--radius)] border border-border bg-surface-1 px-3 py-2 text-[13px] text-text-primary outline-none focus:border-text-accent"
+            className="field w-full"
           />
         </label>
 
-        <label className="mb-4 block">
-          <span className="mb-1 block text-[13px] text-text-secondary">Jelszó</span>
+        <label className="mb-6 block">
+          <span className="mb-1.5 block text-[13px] text-text-secondary">Jelszó</span>
           <input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-[var(--radius)] border border-border bg-surface-1 px-3 py-2 text-[13px] text-text-primary outline-none focus:border-text-accent"
+            className="field w-full"
           />
         </label>
 
@@ -96,7 +96,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-[var(--radius)] bg-bg-accent px-3 py-2 text-[13px] font-medium text-text-accent disabled:opacity-50"
+          className="btn btn-primary w-full !py-2.5"
         >
           {loading ? "Belépés..." : "Belépés"}
         </button>

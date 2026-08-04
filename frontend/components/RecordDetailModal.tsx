@@ -57,14 +57,14 @@ export function RecordDetailModal({ href, onClose }: { href: string | null; onCl
           <div className="flex items-center gap-2">
             <a
               href={href}
-              className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[12px] text-text-secondary transition-colors hover:bg-bg-accent hover:text-text-accent hover:shadow-[0_0_0_1px_var(--accent-solid)]"
+              className="btn btn-ghost !text-[12px]"
             >
               Megnyitás új oldalon →
             </a>
             <button
               type="button"
               onClick={close}
-              className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[12px] text-text-secondary transition-colors hover:bg-bg-accent hover:text-text-accent hover:shadow-[0_0_0_1px_var(--accent-solid)]"
+              className="btn btn-ghost !text-[12px]"
             >
               Bezárás
             </button>

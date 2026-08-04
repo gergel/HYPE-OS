@@ -21,7 +21,7 @@ export default async function RevenueDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-6">
+      <div className="flex-1 space-y-8 p-8">
         <BackLink href="/penzugyek" label="Pénzügyek" />
 
         <Card title={String(revenue.bevetel_formaja ?? `Bevétel #${revenue.id}`)}>

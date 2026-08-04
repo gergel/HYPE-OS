@@ -123,7 +123,7 @@ export default async function BeallitasokPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-6">
+      <div className="flex-1 space-y-8 p-8">
         <AccountCard />
 
         <Card title="Felhasználó-kezelés">

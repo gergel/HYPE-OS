@@ -21,7 +21,7 @@ export function RowLink({
   return (
     <tr
       onClick={() => (onClick ? onClick() : href && router.push(href))}
-      className={`cursor-pointer border-b border-border last:border-0 hover:bg-surface-3 ${className}`}
+      className={`cursor-pointer hover:bg-surface-3 ${className}`}
     >
       {children}
     </tr>

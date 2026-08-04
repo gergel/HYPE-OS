@@ -22,7 +22,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-6">
+      <div className="flex-1 space-y-8 p-8">
         <BackLink href="/penzugyek" label="Pénzügyek" />
 
         <Card title={String(expense.megnevezes ?? `Kiadás #${expense.id}`)}>

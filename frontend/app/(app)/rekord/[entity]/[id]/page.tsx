@@ -47,11 +47,13 @@ export default async function GenericRecordPage({
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-6">
-        <BackLink href={config.page} label="Vissza" />
-        <h1 className="text-lg font-medium text-text-primary">
+      <div className="flex-1 space-y-8 p-8">
+        <div className="space-y-2">
+          <BackLink href={config.page} label="Vissza" />
+          <h1 className="t-page">
           {config.label} #{String(record.id)}
-        </h1>
+          </h1>
+        </div>
         <DetailSections sections={sections} />
       </div>
     </div>

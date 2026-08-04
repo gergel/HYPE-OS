@@ -62,9 +62,11 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-6">
-        <BackLink href="/penzugyek/keretszerzodesek" label="Keretszerződések" />
-        <h1 className="text-lg font-medium text-text-primary">{title}</h1>
+      <div className="flex-1 space-y-8 p-8">
+        <div className="space-y-2">
+          <BackLink href="/penzugyek/keretszerzodesek" label="Keretszerződések" />
+          <h1 className="t-page">{title}</h1>
+        </div>
         <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
           {employee && (
             <a href={`/csapat/${employee.id}`} className="text-text-accent hover:underline">

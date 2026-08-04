@@ -12,6 +12,14 @@ const toneClasses: Record<Tone, string> = {
   pink: "bg-bg-pink text-text-pink",
 };
 
+/** Állapotjelző. A szín az ADAT hordozója - ezért a badge maga visszafogott:
+ * halvány háttér, keret nélkül, a jelentést a szövegszín adja. */
 export function StatusBadge({ label, tone = "neutral" }: { label: string; tone?: Tone }) {
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${toneClasses[tone]}`}>{label}</span>;
+  return (
+    <span
+      className={`inline-flex items-center rounded-md px-2 py-[3px] text-[12px] font-medium tracking-[-0.005em] ${toneClasses[tone]}`}
+    >
+      {label}
+    </span>
+  );
 }

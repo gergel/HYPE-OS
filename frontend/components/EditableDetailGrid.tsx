@@ -32,7 +32,7 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
   const [busy, setBusy] = useState(false);
 
   const restBoxClass = boxed
-    ? "rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 min-h-[34px]"
+    ? "rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 min-h-[38px] transition-colors duration-200 hover:border-border-strong"
     : "";
 
   async function save(value: unknown) {
@@ -95,7 +95,7 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
         role="button"
         tabIndex={0}
         onClick={() => setEditing(true)}
-        className={`cursor-text text-[13px] leading-relaxed text-text-primary break-words ${boxed ? restBoxClass : "rounded hover:bg-surface-3"}`}
+        className={`cursor-text text-[13px] leading-relaxed text-text-primary break-words ${boxed ? restBoxClass : "-mx-1.5 rounded px-1.5 transition-colors duration-200 hover:bg-surface-3"}`}
       >
         {field.value ?? <span className="text-text-muted italic">Üres</span>}
       </dd>
@@ -114,8 +114,7 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
         save(field.inputType === "number" ? Number(draft) || null : draft || null);
       }
     },
-    className:
-      "w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none",
+    className: "field w-full",
   };
 
   return (
@@ -167,10 +166,10 @@ export function EditableDetailGrid({
 
   if (layout === "boxed") {
     return (
-      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <dl className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
         {effectiveFields.map((f) => (
-          <div key={f.key} className={`flex flex-col gap-1 ${f.wide ? "sm:col-span-2" : ""}`}>
-            <dt className="text-[11px] text-text-muted">{f.label}</dt>
+          <div key={f.key} className={`flex flex-col gap-1.5 ${f.wide ? "sm:col-span-2" : ""}`}>
+            <dt className="t-label">{f.label}</dt>
             <EditableCell patchPath={patchPath} field={f} boxed />
           </div>
         ))}
@@ -181,7 +180,7 @@ export function EditableDetailGrid({
   return (
     <dl className="divide-y divide-border">
       {effectiveFields.map((f) => (
-        <div key={f.key} className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-start sm:gap-4">
+        <div key={f.key} className="flex flex-col gap-1.5 py-3 sm:flex-row sm:items-start sm:gap-6">
           <dt className="shrink-0 text-[13px] text-text-muted sm:w-52">{f.label}</dt>
           <div className="min-w-0 flex-1">
             <EditableCell patchPath={patchPath} field={f} />

@@ -30,7 +30,7 @@ export function BackLink({ href, label }: { href: string; label: string }) {
           router.push(href);
         }
       }}
-      className="mb-3 inline-block cursor-pointer text-[13px] text-text-secondary hover:text-text-primary"
+      className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] text-text-muted transition-colors duration-200 hover:text-text-primary"
     >
       ← {label}
     </a>

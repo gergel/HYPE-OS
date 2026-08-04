@@ -25,7 +25,7 @@ export default async function FelszerelesPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-8">
         <Card title={`Felszerelés (${equipment.length})`}>
           <div className="mb-3 flex justify-end">
             <a

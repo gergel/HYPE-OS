@@ -17,7 +17,7 @@ export default async function UgyfelekPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-8">
         <Card title={`Ügyfelek (${clients.length})`}>
           {canCreate && (
             <QuickCreateForm

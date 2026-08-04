@@ -28,10 +28,10 @@ export function CollapsibleCard({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className={`flex w-full items-center gap-1.5 text-left text-sm font-medium text-text-primary ${open ? "mb-3" : ""}`}
+        className={`t-card flex w-full items-center gap-2 text-left transition-colors duration-200 ${open ? "mb-4" : ""}`}
       >
         {open ? <ChevronDown size={14} className="text-text-muted" /> : <ChevronRight size={14} className="text-text-muted" />}
-        {Icon && <Icon size={15} strokeWidth={2} className="text-text-accent" aria-hidden />}
+        {Icon && <Icon size={14} strokeWidth={1.75} className="shrink-0 text-text-muted" aria-hidden />}
         {title}
       </button>
       {open && children}

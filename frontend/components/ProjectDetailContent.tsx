@@ -377,7 +377,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
   return (
     <div className="flex flex-1 flex-col">
       {!embedded && <TopBar />}
-      <div className="flex-1 space-y-6 p-6">
+      <div className="flex-1 space-y-8 p-8">
         <DetailHeader
           backHref={embedded ? undefined : "/projektek"}
           backLabel={embedded ? undefined : "Projektek"}
@@ -416,7 +416,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 path={patchPath}
                 redirectTo="/projektek"
                 label="Törlés"
-                className="rounded-[var(--radius)] border border-text-danger/40 px-3 py-1.5 text-[13px] text-text-danger transition-colors hover:bg-bg-danger disabled:opacity-50"
+                className="btn btn-danger"
               />
             </>
           }

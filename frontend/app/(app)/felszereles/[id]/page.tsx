@@ -44,9 +44,11 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-6">
-        <BackLink href="/felszereles" label="Felszerelés" />
-        <h1 className="text-lg font-medium text-text-primary">{String(equipment.nev ?? `Eszköz #${equipment.id}`)}</h1>
+      <div className="flex-1 space-y-8 p-8">
+        <div className="space-y-2">
+          <BackLink href="/felszereles" label="Felszerelés" />
+          <h1 className="t-page">{String(equipment.nev ?? `Eszköz #${equipment.id}`)}</h1>
+        </div>
 
         <DetailSections sections={tabs} />
 

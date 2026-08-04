@@ -88,8 +88,7 @@ export function CreatePortalButton({
         type="button"
         onClick={onCreate}
         disabled={busy}
-        className="flex items-center gap-1.5 rounded-[var(--radius)] px-4 py-2 text-[13px] font-medium text-white disabled:opacity-50"
-        style={{ background: "var(--accent-gradient)" }}
+        className="btn btn-primary"
       >
         <Globe className="h-4 w-4" />
         {busy ? "Létrehozás…" : "Portál létrehozása"}

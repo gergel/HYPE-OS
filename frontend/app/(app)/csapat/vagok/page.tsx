@@ -42,7 +42,7 @@ export default async function VagokPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-8">
         <Card title={`Vágók (${rows.length})`}>
           {canCreate && (
             <QuickCreateForm

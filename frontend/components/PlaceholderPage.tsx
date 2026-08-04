@@ -13,7 +13,7 @@ export function PlaceholderPage({
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-8">
         <Card title={title}>
           <p className="mb-3 text-[13px] text-text-secondary">{description}</p>
           <div className="flex flex-wrap gap-2">

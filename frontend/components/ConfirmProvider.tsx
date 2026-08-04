@@ -53,7 +53,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           <div
             role="alertdialog"
             aria-modal="true"
-            className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-2 p-5 shadow-xl"
+            className="w-full max-w-sm fade-in rounded-[var(--radius-lg)] border border-border-strong bg-surface-2 p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.95)] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="mb-5 whitespace-pre-line text-[13px] text-text-primary">{pending.message}</p>
@@ -72,7 +72,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 type="button"
                 autoFocus={pending.kind === "alert"}
                 onClick={() => respond(true)}
-                className="rounded-[var(--radius)] border border-text-danger/40 bg-bg-danger px-3 py-1.5 text-[13px] text-text-danger hover:opacity-90"
+                className="btn btn-danger"
               >
                 Rendben
               </button>

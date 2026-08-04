@@ -71,11 +71,13 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-6">
-        <BackLink href="/projektek/project-kodok" label="Project Code-ok" />
-        <h1 className="text-lg font-medium text-text-primary">
+      <div className="flex-1 space-y-8 p-8">
+        <div className="space-y-2">
+          <BackLink href="/projektek/project-kodok" label="Project Code-ok" />
+          <h1 className="t-page">
           {String(projectCode.projektkod ?? `Project Code #${projectCode.id}`)}
-        </h1>
+          </h1>
+        </div>
         <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
           {client && (
             <a href={`/ugyfelek/${client.id}`} className="text-text-accent hover:underline">

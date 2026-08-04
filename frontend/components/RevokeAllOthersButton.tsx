@@ -46,7 +46,7 @@ export function RevokeAllOthersButton() {
       type="button"
       disabled={busy}
       onClick={handleClick}
-      className="rounded-[var(--radius)] border border-text-danger/40 px-3 py-1.5 text-[13px] text-text-danger hover:bg-bg-danger disabled:opacity-50"
+      className="btn btn-danger"
     >
       Minden más felhasználó hozzáférésének törlése
     </button>

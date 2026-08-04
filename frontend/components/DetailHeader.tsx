@@ -25,15 +25,15 @@ export function DetailHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="border-b border-border pb-4">
+    <div className="border-b border-border pb-6">
       {backHref && <BackLink href={backHref} label={backLabel ?? "Vissza"} />}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="truncate text-2xl font-semibold text-text-primary">{title}</h1>
+            <h1 className="t-page truncate">{title}</h1>
             {statusBadge}
           </div>
-          {subtitle && <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[13px] text-text-secondary">{subtitle}</div>}
+          {subtitle && <div className="mt-2.5 flex flex-wrap items-center gap-3 text-[13px] text-text-secondary">{subtitle}</div>}
         </div>
         {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>

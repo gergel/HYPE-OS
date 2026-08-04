@@ -30,22 +30,21 @@ export function StatCard({
   const content = (
     <>
       {Icon && (
-        <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-[var(--radius)] ${cls.bg}`}>
-          <Icon size={17} strokeWidth={2} className={cls.icon} aria-hidden />
+        <div
+          className={`mb-4 flex h-8 w-8 items-center justify-center rounded-[var(--radius)] border border-border ${cls.bg}`}
+        >
+          <Icon size={15} strokeWidth={1.75} className={cls.icon} aria-hidden />
         </div>
       )}
-      <p className="mb-1 text-[13px] text-text-secondary">{label}</p>
-      <p className={`text-2xl font-semibold ${cls.text}`}>{value}</p>
+      <p className="mb-2 text-[12.5px] leading-snug text-text-secondary">{label}</p>
+      {/* A szám a kártya tárgya - tabuláris számjegyekkel, hogy egymás alatt
+          a számok oszlopba rendeződjenek, ne ugráljanak. */}
+      <p className={`text-[26px] font-semibold leading-none tracking-[-0.03em] tabular-nums ${cls.text}`}>{value}</p>
     </>
   );
-  // A kattintható kártya hover-jelzését box-shadow adja, nem border-color: a
-  // globals.css-ben lévő réteg nélküli `* { border-color: var(--border) }`
-  // szabály a CSS kaszkádban mindig legyőzi a Tailwind @layer utilities-be
-  // sorolt hover:border-* osztályokat, így a korábbi hover:border-text-accent/40
-  // egyáltalán nem érvényesült - a kártyán semmilyen hover-visszajelzés nem volt.
-  const className = `block rounded-[var(--radius-lg)] border border-border p-4 transition ${
-    Icon ? "bg-surface-2" : tone === "danger" ? "bg-bg-danger" : "bg-surface-1"
-  } ${href ? "hover:shadow-[0_0_0_1px_var(--accent-solid)]" : ""}`;
+  const className = `block rounded-[var(--radius-lg)] border border-border p-5 transition-colors duration-200 ${
+    tone === "danger" && !Icon ? "bg-bg-danger" : "bg-surface-2"
+  } ${href ? "hover:border-border-strong hover:bg-surface-3" : ""}`;
 
   if (href) {
     return (

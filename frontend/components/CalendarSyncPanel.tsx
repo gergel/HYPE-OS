@@ -148,7 +148,7 @@ export function CalendarSyncPanel() {
               type="button"
               onClick={connect}
               disabled={connecting || !conn?.client_configured}
-              className="ml-auto rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent transition-colors hover:shadow-[0_0_0_1px_var(--accent-solid)] disabled:opacity-50"
+              className="btn btn-primary ml-auto"
             >
               {connecting ? "Átirányítás…" : "Csatlakozás Google fiókkal"}
             </button>
@@ -183,7 +183,7 @@ export function CalendarSyncPanel() {
           type="button"
           onClick={triggerSync}
           disabled={busy || !conn?.connected}
-          className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-colors hover:bg-bg-accent hover:text-text-accent hover:shadow-[0_0_0_1px_var(--accent-solid)] disabled:opacity-50"
+          className="btn btn-ghost"
         >
           {busy ? "Szinkronizálás…" : "Szinkronizálás most"}
         </button>

@@ -36,7 +36,7 @@ export default async function ProjectKodokPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-8">
         <Card title={`Project Code-ok (${projectCodes.length})`}>
           {canCreate && (
             <QuickCreateForm

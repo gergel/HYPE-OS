@@ -16,7 +16,7 @@ export default async function AlvallalkozoiSzerzodesekPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-8">
         <Card title={`Alvállalkozók szerződése (${projects.length} projekt)`}>
           <DataTable<(typeof projects)[number]>
             filterable

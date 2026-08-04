@@ -6,17 +6,20 @@
  * Külön fájl (nem lib/detail.tsx), mert ezt kliens-komponens (EditableDetailGrid)
  * is importálja futásidőben - a lib/detail.tsx a lib/api.ts-en (next/headers,
  * csak Server Component-ekben elérhető) keresztül szerver-only kódot húzna be. */
+/* Tompított, egymáshoz hangolt tónusok: a címkéknek elég megkülönböztethetőnek
+ * lenniük, nem kell kiabálniuk. Mind a globals.css kategória-tokenjeire épül,
+ * hogy a paletta egy helyen legyen hangolható. */
 const SELECT_COLOR_PALETTE: { bg: string; text: string }[] = [
-  { bg: "var(--bg-accent)", text: "var(--text-accent)" },
+  { bg: "var(--bg-blue)", text: "var(--text-blue)" },
   { bg: "var(--bg-success)", text: "var(--text-success)" },
   { bg: "var(--bg-warning)", text: "var(--text-warning)" },
   { bg: "var(--bg-danger)", text: "var(--text-danger)" },
-  { bg: "rgba(168, 85, 247, 0.14)", text: "#d8b4fe" },
-  { bg: "rgba(236, 72, 153, 0.14)", text: "#f9a8d4" },
-  { bg: "rgba(20, 184, 166, 0.14)", text: "#5eead4" },
-  { bg: "rgba(234, 179, 8, 0.14)", text: "#fde047" },
-  { bg: "rgba(99, 102, 241, 0.14)", text: "#a5b4fc" },
-  { bg: "rgba(163, 163, 163, 0.14)", text: "#d4d4d8" },
+  { bg: "var(--bg-teal)", text: "var(--text-teal)" },
+  { bg: "var(--bg-pink)", text: "var(--text-pink)" },
+  { bg: "var(--bg-orange)", text: "var(--text-orange)" },
+  { bg: "var(--bg-yellow)", text: "var(--text-yellow)" },
+  { bg: "var(--bg-accent)", text: "var(--text-accent)" },
+  { bg: "var(--surface-4)", text: "var(--text-secondary)" },
 ];
 
 export function selectColor(value: string): { bg: string; text: string } {

@@ -181,7 +181,7 @@ function EntityTabEditor({ entityType, label: entityLabel, availableFields, init
             <button type="button" onClick={() => moveTab(index, 1)} disabled={index === tabs.length - 1} className="rounded border border-border px-1.5 py-0.5 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-30">
               ↓
             </button>
-            <button type="button" onClick={() => removeTab(index)} className="rounded border border-text-danger/40 px-1.5 py-0.5 text-[12px] text-text-danger hover:bg-bg-danger">
+            <button type="button" onClick={() => removeTab(index)} className="btn btn-danger !px-2 !py-1 !text-[12px]">
               Törlés
             </button>
           </div>

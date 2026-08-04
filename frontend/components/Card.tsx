@@ -1,9 +1,12 @@
 import type { LucideIcon } from "lucide-react";
 
 /** A kártya kerete - a CollapsibleCard is ezt használja, hogy az összecsukható
- * kártyák pontosan ugyanúgy nézzenek ki, mint a többi. */
+ * kártyák pontosan ugyanúgy nézzenek ki, mint a többi. Nincs erős árnyék: a réteget a felület kontrasztja és egy
+ * hajszálvékony keret adja - ettől hat "megmunkált fém lapnak", nem lebegő
+ * dobozanak. A belső fény-vonal (inset) csak annyi, hogy a felső él
+ * elkülönüljön a háttértől. */
 export const CARD_CLASS =
-  "rounded-[var(--radius-lg)] border border-border bg-surface-2 p-5 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset,0_8px_24px_-16px_rgba(0,0,0,0.6)]";
+  "rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
 
 export function Card({
   title,
@@ -13,9 +16,9 @@ export function Card({
   className = "",
 }: {
   title?: string;
-  /** Opcionális kis ikon a cím elé (lásd referenciakép: minden kártya-cím
-   * mellett egy témajelző ikon áll) - accent színnel, hogy vizuálisan is
-   * elkülönítse a kártya témáját (Diszpó/Technika/stb.). */
+  /** Opcionális kis ikon a cím elé - halkan, a cím alárendelt jelzéseként.
+   * Nem színez: a kártya témáját a CÍM mondja meg, az ikon csak segít
+   * gyorsan megtalálni a kártyát görgetés közben. */
   icon?: LucideIcon;
   /** Opcionális jobbra igazított tartalom a cím mellett (pl. hónapváltó
    * nyilak) - csak akkor jelenik meg, ha van title is. */
@@ -26,9 +29,9 @@ export function Card({
   return (
     <div className={`${CARD_CLASS} ${className}`}>
       {title && (
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
-            {Icon && <Icon size={15} strokeWidth={2} className="text-text-accent" aria-hidden />}
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="t-card flex items-center gap-2">
+            {Icon && <Icon size={14} strokeWidth={1.75} className="shrink-0 text-text-muted" aria-hidden />}
             {title}
           </p>
           {actions}

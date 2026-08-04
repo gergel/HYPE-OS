@@ -132,11 +132,11 @@ function Toggle({ on, onClick, disabled }: { on: boolean; onClick: () => void; d
       disabled={disabled}
       onClick={onClick}
       className={`relative h-[18px] w-8 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-        on ? "bg-[var(--accent-solid)]" : "bg-surface-3"
+        on ? "bg-text-secondary" : "bg-surface-4"
       }`}
     >
       <span
-        className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white transition-all ${on ? "left-4" : "left-[2px]"}`}
+        className={`absolute top-[2px] h-[14px] w-[14px] rounded-full transition-all duration-200 ${on ? "left-4 bg-background" : "left-[2px] bg-text-muted"}`}
       />
     </button>
   );
@@ -248,7 +248,7 @@ export function DateRangePicker({
         <div className="absolute left-0 z-50 mt-1 w-[320px] rounded-[var(--radius)] border border-border bg-surface-2 p-3 shadow-lg">
           <div className="space-y-1.5">
             <div
-              className={`${fieldClass} ${!focusEnd ? "border-[var(--accent-solid)] bg-bg-accent" : "border-border bg-surface-3"}`}
+              className={`${fieldClass} ${!focusEnd ? "border-border-strong bg-surface-4" : "border-border bg-surface-3"}`}
             >
               <button type="button" onClick={() => setFocusEnd(false)} className="flex-1 text-left">
                 {formatDate(value.start, format) || "Dátum"}
@@ -263,7 +263,7 @@ export function DateRangePicker({
             </div>
             {hasEnd && (
               <div
-                className={`${fieldClass} ${focusEnd ? "border-[var(--accent-solid)] bg-bg-accent" : "border-border bg-surface-3"}`}
+                className={`${fieldClass} ${focusEnd ? "border-border-strong bg-surface-4" : "border-border bg-surface-3"}`}
               >
                 <button type="button" onClick={() => setFocusEnd(true)} className="flex-1 text-left">
                   {formatDate(value.end, format) || "Záró dátum"}
@@ -330,7 +330,7 @@ export function DateRangePicker({
                   onClick={() => pickDay(day)}
                   className={`h-8 rounded-[var(--radius)] text-[13px] transition-colors ${
                     isStart || isEnd
-                      ? "bg-[var(--accent-solid)] font-medium text-white"
+                      ? "border border-border-strong bg-surface-4 font-medium text-text-primary"
                       : inRange
                         ? "bg-bg-accent text-text-accent"
                         : isToday

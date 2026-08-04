@@ -47,15 +47,21 @@ export async function TopBar() {
   const initials = user ? initialsFromName(user.full_name) : "?";
 
   return (
-    <div data-app-chrome className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
-      <div>
-        <p className="text-lg font-medium text-text-primary">
+    /* A fejléc a vázhoz tartozik, nem a tartalomhoz: ugyanaz a sötétebb
+       felület, mint az oldalsávé, és megtapad görgetéskor - így a kereső és a
+       kijelentkezés mindig kéznél van. */
+    <div
+      data-app-chrome
+      className="sticky top-0 z-20 flex items-center justify-between gap-6 border-b border-border bg-surface-1/85 px-8 py-5 backdrop-blur-xl"
+    >
+      <div className="min-w-0">
+        <p className="text-[15px] font-medium tracking-[-0.01em] text-text-primary">
           {greeting}
-          {name ? `, ${name}` : ""}! <span aria-hidden>👋</span>
+          {name ? `, ${name}` : ""}
         </p>
-        <p className="mt-0.5 text-[13px] text-text-secondary">{today}</p>
+        <p className="mt-1 text-[12.5px] text-text-muted">{today}</p>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <GlobalSearch />
         <NotificationBell initial={notifications} />
         <UserMenu name={name || "Ismeretlen"} email={user?.email ?? null} initials={initials} />
