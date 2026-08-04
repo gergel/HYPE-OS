@@ -75,7 +75,7 @@ PLACEHOLDER_CLIENT_NEV = "Naptárból importált (rendezetlen)"
 NAPTAR_SZINEK: dict[str, str] = {
     "1": "Levendula",
     "2": "Zsálya",
-    "3": "Lila",  # Google: "Grape" / "Szőlő"
+    "3": "Szőlő",  # a Google palettáján ez a lila árnyalat
     "4": "Flamingó",
     "5": "Banán",
     "6": "Mandarin",
@@ -86,13 +86,13 @@ NAPTAR_SZINEK: dict[str, str] = {
     "11": "Paradicsom",
 }
 
-# A LILA esemény meeting / helyszínbejárás - nincs mit diszponálni rajta
-# (a felhasználó szabálya). Csak a "Grape" (3) az igazi lila; a Levendula (1)
-# szándékosan NEM szerepel itt, mert az egy külön, világosabb szín, és egy
-# tévesen kizárt esemény azt jelentené, hogy egy valódi forgatásra nem megy ki
-# diszpó. Ha mégis kell (vagy más szín is meetinget jelöl), a
-# NAPTAR_MEETING_SZINEK környezeti változóval bővíthető, kódmódosítás nélkül:
-# vesszővel elválasztott Google colorId-k, pl. "1,3".
+# A SZŐLŐ színű esemény meeting / helyszínbejárás - nincs mit diszponálni
+# rajta (a felhasználó szabálya). A Google palettáján a Szőlő (3) az egyetlen
+# igazi lila; a Levendula (1) szándékosan NEM szerepel itt, mert az egy külön,
+# világosabb szín, és egy tévesen kizárt esemény azt jelentené, hogy egy valódi
+# forgatásra nem megy ki diszpó. Ha mégis kell (vagy más szín is meetinget
+# jelöl), a NAPTAR_MEETING_SZINEK környezeti változóval bővíthető,
+# kódmódosítás nélkül: vesszővel elválasztott Google colorId-k, pl. "1,3".
 def _meeting_szinek() -> set[str]:
     nyers = (settings.naptar_meeting_szinek or "3").strip()
     return {darab.strip() for darab in nyers.split(",") if darab.strip()}

@@ -20,9 +20,13 @@ from sqlalchemy.orm import Session
 from app.models.document_attachment import DocumentAttachment
 from app.services import document_storage
 
-# A fájl szerepe. Az "egyeb" a gyűjtő: ami nem szerződés/TIG/számla, az is
-# felkerülhet, csak a pénzügyi gyűjtésekbe (havi számla-ZIP) nem számít bele.
-KATEGORIAK = ("szerzodes", "tig", "szamla", "egyeb")
+# A fájl szerepe. A "diszpo" külön kategória, mert ezek a fájlok NEM csak
+# tárolódnak: a diszpó kiküldésekor a levél mellékleteként ki is mennek a
+# stábnak (lásd services/dispo.py). Ezért nem lehet közös az "egyeb"-bel -
+# különben minden, a projekthez feltöltött fájl kiszaladna a stábnak.
+# Az "egyeb" a gyűjtő: ami nem szerződés/TIG/számla/diszpó-melléklet, csak a
+# pénzügyi gyűjtésekbe (havi számla-ZIP) nem számít bele.
+KATEGORIAK = ("szerzodes", "tig", "szamla", "diszpo", "egyeb")
 
 # Melyik entitáshoz melyik oldal jogosultsága kell a fel-/letöltéshez. Ami
 # nincs a listán, ahhoz nem lehet fájlt csatolni - így egy elgépelt vagy
@@ -65,6 +69,10 @@ def list_for(db: Session, entity_type: str, entity_id: int) -> list[DocumentAtta
             .order_by(DocumentAttachment.id)
         ).all()
     )
+
+
+def list_by_kategoria(db: Session, entity_type: str, entity_id: int, kategoria: str) -> list[DocumentAttachment]:
+    return [a for a in list_for(db, entity_type, entity_id) if a.kategoria == kategoria]
 
 
 def by_notion_source(db: Session, notion_forras: str) -> DocumentAttachment | None:

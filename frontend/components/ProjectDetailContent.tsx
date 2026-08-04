@@ -1,6 +1,7 @@
 import {
   Clapperboard,
   FileText,
+  Paperclip,
   Send,
   Users,
   Wallet,
@@ -11,6 +12,7 @@ import { Card } from "@/components/Card";
 import { DeleteButton } from "@/components/DeleteButton";
 import { DetailHeader } from "@/components/DetailHeader";
 import { DetailSections } from "@/components/DetailSections";
+import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
@@ -27,6 +29,7 @@ import { VagasiKoltsegOsszesen, type FutoMeres } from "@/components/deliverable/
 import {
   ENTITY_PATHS,
   getAllTigForProject,
+  getAttachments,
   getCurrentUser,
   getDetailTabs,
   getEmployees,
@@ -99,6 +102,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     pagePermissions,
     sectionOrder,
     currentUser,
+    attachments,
   ] = await Promise.all([
     project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
     project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
@@ -115,6 +119,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     getMyPagePermissions(),
     getSectionOrder("project"),
     getCurrentUser(),
+    getAttachments("project", projectId),
   ]);
 
   const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
@@ -152,6 +157,10 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
   // A forint összeg itt is a Pénzügy-hozzáféréshez kötött (ugyanaz a szabály,
   // mint az Utómunka oldalon - lásd deliverable_actions._may_see_costs).
   const lathatKoltseget = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
+  // A diszpó-mellékleteket az szerkesztheti, aki a Projekteket is - ugyanaz a
+  // jog, amit a backend is ellenőriz (services/attachments.py ENTITAS_OLDALAK).
+  const szerkeszthet = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
+  const torolhet = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
 
   const bookingRows = bookings
     .map((b) => {
@@ -235,26 +244,44 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
         // az állapotot kizárólag a tényleges kiküldés állíthatja, itt csak
         // visszajelzés.
         content: (
-          <Card title="Diszpó küldése" icon={Send}>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <ActionButton
-                  path={`/api/v1/projects/${project.id}/diszpo/elozetes`}
-                  label="Előzetes diszpó"
-                  confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
-                />
-                {elozetesAllapot && <StatusBadge label={elozetesAllapot} tone="success" />}
+          <>
+            <Card title="Diszpó küldése" icon={Send}>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <ActionButton
+                    path={`/api/v1/projects/${project.id}/diszpo/elozetes`}
+                    label="Előzetes diszpó"
+                    confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+                  />
+                  {elozetesAllapot && <StatusBadge label={elozetesAllapot} tone="success" />}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <ActionButton
+                    path={`/api/v1/projects/${project.id}/diszpo/kuldes`}
+                    label="Diszpó küldése"
+                    confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+                  />
+                  {diszpoAllapot && <StatusBadge label={diszpoAllapot} tone="success" />}
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <ActionButton
-                  path={`/api/v1/projects/${project.id}/diszpo/kuldes`}
-                  label="Diszpó küldése"
-                  confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
-                />
-                {diszpoAllapot && <StatusBadge label={diszpoAllapot} tone="success" />}
-              </div>
-            </div>
-          </Card>
+            </Card>
+
+            {/* Ezek a fájlok a TELJES diszpó levél mellékleteként mennek ki a
+                stábnak (az előzetes diszpó egy rövid tájékoztató, ahhoz nem).
+                A tárolás az R2-n van, a levélbe küldéskor mindig a legfrissebb
+                változat kerül - lásd backend services/dispo.py. */}
+            <Card title="Csatolni való (a diszpó levélhez)" icon={Paperclip}>
+              <DokumentumFeltoltes
+                entityType="project"
+                entityId={projectId}
+                attachments={attachments.filter((a) => a.kategoria === "diszpo")}
+                kategoria="diszpo"
+                canEdit={szerkeszthet}
+                canDelete={torolhet}
+                emptyText="Nincs csatolni való fájl - a diszpó a szokásos PDF-fel megy ki."
+              />
+            </Card>
+          </>
         ),
       },
       {

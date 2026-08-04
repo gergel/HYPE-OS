@@ -11,6 +11,7 @@ const KATEGORIA_NEVEK: Record<string, string> = {
   szerzodes: "Szerződés",
   tig: "TIG",
   szamla: "Számla",
+  diszpo: "Diszpóhoz",
   egyeb: "Egyéb",
 };
 
@@ -46,30 +47,38 @@ export function DokumentumFeltoltes({
   const router = useRouter();
   const confirm = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  /** Egyszerre több fájl is kiválasztható. EGYENKÉNT, sorban töltjük fel:
+   * így egy hibás fájl (pl. túl nagy) csak magát bukja, a többi felmegy - és
+   * a felhasználó látja, melyiknél akadt el. */
   async function feltolt(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    const hibak: string[] = [];
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await authFetch(
-        `/api/v1/csatolmanyok/${entityType}/${entityId}?kategoria=${encodeURIComponent(kategoria)}`,
-        { method: "POST", body: fd },
-      );
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        alert(`Sikertelen feltöltés: ${detail?.detail ?? res.status}`);
-        return;
+      for (const file of files) {
+        setUploading(file.name);
+        try {
+          const fd = new FormData();
+          fd.append("file", file);
+          const res = await authFetch(
+            `/api/v1/csatolmanyok/${entityType}/${entityId}?kategoria=${encodeURIComponent(kategoria)}`,
+            { method: "POST", body: fd },
+          );
+          if (!res.ok) {
+            const detail = await res.json().catch(() => null);
+            hibak.push(`${file.name}: ${detail?.detail ?? res.status}`);
+          }
+        } catch (err) {
+          hibak.push(`${file.name}: ${err}`);
+        }
       }
+      if (hibak.length > 0) alert(`Sikertelen feltöltés:\n${hibak.join("\n")}`);
       router.refresh();
-    } catch (err) {
-      alert(`Sikertelen feltöltés (hálózati hiba): ${err}`);
     } finally {
-      setUploading(false);
+      setUploading(null);
       if (inputRef.current) inputRef.current.value = "";
     }
   }
@@ -132,8 +141,8 @@ export function DokumentumFeltoltes({
       )}
       {canEdit && (
         <label className="inline-block cursor-pointer rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3">
-          {uploading ? "Feltöltés…" : "+ Fájl feltöltése"}
-          <input ref={inputRef} type="file" className="hidden" disabled={uploading} onChange={feltolt} />
+          {uploading ? `Feltöltés… (${uploading})` : "+ Fájlok feltöltése"}
+          <input ref={inputRef} type="file" multiple className="hidden" disabled={!!uploading} onChange={feltolt} />
         </label>
       )}
     </div>

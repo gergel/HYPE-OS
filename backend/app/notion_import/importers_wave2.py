@@ -293,6 +293,8 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
                 result.errors.append(f"Project '{nev}' stáb-kapcsolat feloldás: {type(exc).__name__}: {exc}")
             ujak = files.atemel_mindent(db, props, entity_type="project", entity_id=project_obj.id, result=result)
             project_obj.diszpo_pdf_url = files.elso(ujak, "Diszpó pdf") or project_obj.diszpo_pdf_url
+            if "Csatolni való" in ujak:
+                project_obj.csatolni_valo = ujak["Csatolni való"]
 
     return result
 

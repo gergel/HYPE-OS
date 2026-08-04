@@ -107,7 +107,7 @@ export type DocumentAttachment = {
   id: number;
   entity_type: string;
   entity_id: number;
-  kategoria: "szerzodes" | "tig" | "szamla" | "egyeb";
+  kategoria: "szerzodes" | "tig" | "szamla" | "diszpo" | "egyeb";
   filename: string;
   url: string;
   content_type: string | null;

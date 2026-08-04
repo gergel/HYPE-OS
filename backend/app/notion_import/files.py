@@ -195,6 +195,11 @@ def kategoria_mezonevbol(prop_nev: str) -> str:
     tábláiban a fájl-mezők neve következetesen megmondja, mi van bennük - és
     így nem kell táblánként kézzel felsorolni mind a több tucat mezőt."""
     nev = prop_nev.lower()
+    # A "Csatolni való" a diszpó-levél melléklete - ugyanaz, amit a felületen
+    # is a Diszpó küldése alatt lehet feltölteni (lásd services/dispo.py), így
+    # a Notionból áthozott régi mellékletek is a helyükre kerülnek.
+    if "csatolni" in nev:
+        return "diszpo"
     if "szerződés" in nev or "szerzodes" in nev or "keretszerz" in nev:
         return "szerzodes"
     if "tig" in nev or "teljesítési" in nev:

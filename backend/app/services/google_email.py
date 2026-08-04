@@ -104,6 +104,7 @@ def _build_mime(
     cc_list: list[str] | None = None,
     pdf_bytes: bytes | None = None,
     pdf_filename: str | None = None,
+    csatolmanyok: list[tuple[str, str, bytes]] | None = None,
     in_reply_to: str | None = None,
 ) -> dict:
     msg = MIMEMultipart()
@@ -114,6 +115,18 @@ def _build_mime(
         part.set_payload(pdf_bytes)
         encoders.encode_base64(part)
         part.add_header("Content-Disposition", f'attachment; filename="{pdf_filename or "diszpo.pdf"}"')
+        msg.attach(part)
+
+    # További, a felhasználó által feltöltött csatolmányok (fájlnév, MIME típus,
+    # tartalom) - pl. a diszpóhoz csatolni való dokumentumok.
+    for fajlnev, content_type, adat in csatolmanyok or []:
+        fotipus, _, altipus = (content_type or "application/octet-stream").partition("/")
+        part = MIMEBase(fotipus or "application", altipus or "octet-stream")
+        part.set_payload(adat)
+        encoders.encode_base64(part)
+        # A fájlnév ékezetes/szóközös is lehet - a Header-kódolást az
+        # email csomagra bízzuk, hogy a levelezőben a valódi név látszódjon.
+        part.add_header("Content-Disposition", "attachment", filename=fajlnev)
         msg.attach(part)
 
     msg["Subject"] = subject
@@ -136,6 +149,7 @@ def send_message(
     *,
     pdf_bytes: bytes | None = None,
     pdf_filename: str | None = None,
+    csatolmanyok: list[tuple[str, str, bytes]] | None = None,
     thread_id: str | None = None,
     in_reply_to: str | None = None,
     sender_name: str | None = None,
@@ -156,6 +170,7 @@ def send_message(
         cc_list=settings.hype_cc_list,
         pdf_bytes=pdf_bytes,
         pdf_filename=pdf_filename,
+        csatolmanyok=csatolmanyok,
         in_reply_to=in_reply_to,
     )
     if thread_id:

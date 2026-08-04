@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.employee import Employee
 from app.models.project import Project
+from app.services import attachments, document_storage
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_calendar import PLACEHOLDER_PROJEKTKOD
 from app.services.google_email import send_message
@@ -249,6 +250,48 @@ def _pdf_filename(project: Project) -> str:
     return f"{name.strip() or 'diszpo'}.pdf"
 
 
+# A Gmail üzenetméret-korlátja 25 MB, de az base64 kódolás ~33%-kal növeli a
+# méretet, és a levél többi része (HTML, diszpó PDF) is elfér benne - ezért a
+# nyers csatolmányokra ennél alacsonyabb határt szabunk. Enélkül a Gmail egy
+# nehezen értelmezhető hibával utasítaná vissza a küldést, a felhasználó pedig
+# nem tudná, mit rontott el.
+MAX_CSATOLMANY_BAJT = 15 * 1024 * 1024
+
+
+def _diszpo_csatolmanyok(db: Session, project: Project) -> list[tuple[str, str, bytes]]:
+    """A projekthez "csatolni való"-ként feltöltött fájlok a diszpó-levélhez,
+    (fájlnév, MIME típus, tartalom) hármasokként. A fájlok az R2-en vannak
+    (lásd services/attachments.py), innen töltjük le őket küldéskor - így a
+    levélbe mindig az AKTUÁLIS változat kerül.
+
+    Ha egy fájl nem tölthető le, inkább hibát dobunk, mint hogy a diszpó
+    csendben, a melléklet nélkül menjen ki: a stáb nem tudná, hogy hiányzik
+    valami."""
+    rekordok = attachments.list_by_kategoria(db, "project", project.id, "diszpo")
+    if not rekordok:
+        return []
+
+    osszes = sum(r.meret_bajt or 0 for r in rekordok)
+    if osszes > MAX_CSATOLMANY_BAJT:
+        raise ValueError(
+            f"A csatolni való fájlok együtt túl nagyok ({osszes / 1024 / 1024:.1f} MB) - "
+            f"a levélhez legfeljebb {MAX_CSATOLMANY_BAJT // 1024 // 1024} MB csatolható. "
+            "Törölj néhányat, vagy oszd meg linkként a nagyobbakat."
+        )
+
+    csatolmanyok: list[tuple[str, str, bytes]] = []
+    for rekord in rekordok:
+        try:
+            adat = document_storage.download_bytes(rekord.storage_key)
+        except Exception as exc:  # noqa: BLE001 - a konkrét okot a felhasználónak mutatjuk
+            raise ValueError(
+                f"A csatolni való fájl nem tölthető le a tárhelyről: {rekord.filename} ({exc}). "
+                "A diszpó nem ment ki - próbáld újra, vagy töltsd fel újra a fájlt."
+            ) from exc
+        csatolmanyok.append((rekord.filename, rekord.content_type or "application/octet-stream", adat))
+    return csatolmanyok
+
+
 def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     """'Előzetes diszpó' gomb - rövid, technika-lista nélküli tájékoztató email
     (helyszín + diszpó szövege), nem generál PDF-et."""
@@ -354,6 +397,7 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
         html,
         pdf_bytes=pdf_bytes,
         pdf_filename=_pdf_filename(project),
+        csatolmanyok=_diszpo_csatolmanyok(db, project),
         thread_id=project.gmail_thread_id,
         in_reply_to=project.gmail_last_message_id,
         sender_name=settings.dispo_sender_name,

@@ -123,7 +123,8 @@ class Settings(BaseSettings):
     google_calendar_name: str = "HYPE CALENDAR"
     # Melyik naptár-esemény szín jelent meetinget/helyszínbejárást (nem
     # diszponálandó) - Google colorId-k vesszővel elválasztva. Alapból csak a
-    # "3" (lila / Grape). Lásd services/google_calendar.py NAPTAR_SZINEK.
+    # "3" (Szőlő - a Google palettájának lila árnyalata). Lásd
+    # services/google_calendar.py NAPTAR_SZINEK.
     naptar_meeting_szinek: str = "3"
 
     # A "csak jelentkezz be egyszer" folyamathoz (lásd services/google_oauth.py):
