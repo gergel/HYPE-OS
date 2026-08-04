@@ -1,21 +1,107 @@
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
-sqlalchemy>=2.0.35
-alembic>=1.13.3
-psycopg[binary]>=3.2.3
-pydantic>=2.9.2
-pydantic-settings>=2.5.2
-python-jose[cryptography]>=3.3.0
+# A verziók RÖGZÍTVE vannak (==), nem ">="-vel nyitva.
+#
+# Miért: a Railway minden deploynál nulláról építi az image-et, és egy nyitott
+# követelmény minden alkalommal frissen oldódik fel a PyPI-ról. Így egy hibás
+# vagy inkompatibilis ÚJ kiadás bármikor eltörheti a buildet úgy, hogy a mi
+# kódunkban egy sor sem változott ("tegnap még ment"). Rögzített verziókkal a
+# build reprodukálható: ugyanaz a commit ugyanazt az image-et adja.
+#
+# Az alábbi verziók egy tényleges, végigfuttatott Docker-buildből származnak
+# (python:3.11-slim), ahol az image fel is épült és a konténer el is indult
+# (alembic migrációk + uvicorn).
+#
+# Frissítés: írd át a kívánt csomag verzióját (vagy oldd fel ideiglenesen
+# ">="-re), futtasd le a buildet, majd az `pip freeze` kimenetéből vezesd át
+# ide az új verziókat - beleértve az alul lévő, közvetett függőségeket is.
+
+# --- Közvetlen függőségek (amiket az alkalmazás kódja használ) ---
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+sqlalchemy==2.0.51
+alembic==1.18.5
+psycopg[binary]==3.3.4
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-jose[cryptography]==3.5.0
 passlib==1.7.4
 bcrypt==4.0.1
-python-multipart>=0.0.12
-redis>=5.1.1
-boto3>=1.35.36
-httpx>=0.27.2
-google-api-python-client>=2.147.0
-google-auth>=2.35.0
-google-auth-oauthlib>=1.2.1
-anthropic>=0.40.0
-celery[redis]>=5.4.0
-pillow>=11.0.0
-python-slugify>=8.0.4
+python-multipart==0.0.32
+redis==6.4.0
+boto3==1.43.63
+httpx==0.28.1
+google-api-python-client==2.198.0
+google-auth==2.56.2
+google-auth-oauthlib==1.4.0
+anthropic==0.120.2
+celery[redis]==5.6.3
+pillow==12.3.0
+python-slugify==8.0.4
+
+# --- Közvetett függőségek (a fentiek húzzák be) ---
+# Ezeket is rögzítjük, mert a build szempontjából ugyanúgy kockázatot jelentenek:
+# a legtöbb "váratlan" build-hibát nem a közvetlen csomag új kiadása okozza,
+# hanem valamelyik alatta lévőé.
+amqp==5.3.1
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.14.2
+billiard==4.2.4
+botocore==1.43.63
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.4.9
+click==8.4.2
+click-didyoumean==0.3.1
+click-plugins==1.1.1.2
+click-repl==0.3.0
+cryptography==50.0.0
+distro==1.9.0
+docstring-parser==0.18.0
+ecdsa==0.19.2
+google-api-core==2.33.0
+google-auth-httplib2==0.4.0
+googleapis-common-protos==1.75.0
+greenlet==3.5.4
+h11==0.16.0
+httpcore==1.0.9
+httplib2==0.32.0
+httptools==0.8.0
+idna==3.18
+jiter==0.16.0
+jmespath==1.1.0
+kombu==5.6.2
+mako==1.3.12
+markupsafe==3.0.3
+oauthlib==3.3.1
+packaging==26.2
+prompt-toolkit==3.0.53
+proto-plus==1.28.2
+protobuf==7.35.1
+psycopg-binary==3.3.4
+pyasn1==0.6.4
+pyasn1-modules==0.4.2
+pycparser==3.0
+pydantic-core==2.46.4
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.2
+pyyaml==6.0.3
+requests==2.34.2
+requests-oauthlib==2.0.0
+rsa==4.9.1
+s3transfer==0.19.2
+six==1.17.0
+sniffio==1.3.1
+starlette==1.3.1
+text-unidecode==1.3
+typing-extensions==4.16.0
+typing-inspection==0.4.2
+tzdata==2026.3
+tzlocal==5.4.4
+uritemplate==4.2.0
+urllib3==2.7.0
+uvloop==0.22.1
+vine==5.1.0
+watchfiles==1.2.0
+wcwidth==0.8.2
+websockets==17.0.1
