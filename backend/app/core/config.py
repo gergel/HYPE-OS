@@ -21,7 +21,11 @@ class Settings(BaseSettings):
         return value
 
     secret_key: str = "change-me-to-a-random-secret"
-    access_token_expire_minutes: int = 1440
+    # 30 nap: a napi/heti munkához nem életszerű, hogy 24 óránként újra be
+    # kelljen jelentkezni. A munkamenet emellett GÖRDÜLŐ is: minden oldal-
+    # betöltésnél megújul, ha már a felénél jár (lásd frontend middleware.ts
+    # + POST /auth/refresh), tehát aki használja a rendszert, sosem fut ki.
+    access_token_expire_minutes: int = 60 * 24 * 30
     algorithm: str = "HS256"
 
     r2_account_id: str = ""

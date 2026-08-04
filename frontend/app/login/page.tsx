@@ -1,13 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { setToken } from "@/lib/authFetch";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/** Csak saját, alkalmazáson belüli útvonalra irányítunk vissza - a "next"
+ * paraméter az URL-ből jön, tehát külső címet is bele lehetne írni. */
+function biztonsagosCel(next: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) return "/dashboard";
+  return next;
+}
+
 export default function LoginPage() {
-  const router = useRouter();
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -31,8 +46,13 @@ export default function LoginPage() {
       }
       const data = await res.json();
       setToken(data.access_token);
-      router.push("/dashboard");
-      router.refresh();
+      // TELJES oldalbetöltéssel megyünk tovább (nem router.push), mert a
+      // kliens-oldali route cache-ben ott maradhat a kiléptetés előtti,
+      // "loginra átirányított" változata a céloldalnak - egy sima kliens-
+      // oldali navigáció azt játszaná vissza, és úgy tűnne, mintha megint
+      // bejelentkezést kérne. Ha volt hova tartott, oda visszük vissza.
+      window.location.replace(biztonsagosCel(searchParams.get("next")));
+      return;
     } catch {
       setError("Nem sikerült elérni a backend API-t.");
     } finally {

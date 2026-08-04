@@ -6,7 +6,7 @@
  * Project-jéhez van kötve. */
 "use client";
 
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, getToken } from "@/lib/authFetch";
 import type { PortalDetailData, PortalFolderItem, PortalImageItem, PortalSummary, PortalVideoItem } from "@/lib/api";
 
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -185,11 +185,12 @@ export async function syncNotion(): Promise<{ synced?: number; created?: number;
 
 // ---- Multipart videó feltöltés (közvetlenül R2-be, valós haladásjelzéssel) ----
 
-const TOKEN_KEY = "hype_os_token";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 function authHeaders(): Record<string, string> {
-  const token = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+  // Ugyanabból a cookie-ból, mint minden más kliens-oldali hívás - a gördülő
+  // munkamenet megújíthatja a tokent, a localStorage-ban pedig a régi maradna.
+  const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

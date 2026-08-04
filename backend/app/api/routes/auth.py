@@ -38,6 +38,20 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return Token(access_token=token)
 
 
+@router.post("/refresh", response_model=Token)
+def refresh(current_user: Employee = Depends(get_current_user)):
+    """GÖRDÜLŐ munkamenet: érvényes tokenért cserébe ad egy frisset, újraindított
+    lejárattal. A frontend middleware hívja meg, amikor a token már a
+    lejárati idejének felénél jár - így aki használja a rendszert, sosem esik
+    ki, viszont aki hónapokig nem lép be, annak lejár a hozzáférése.
+
+    Az inaktívvá tett munkatárs itt akad fenn: a tokene nem újul meg, tehát a
+    lejáratkor kiesik akkor is, ha épp nyitva volt neki az oldal."""
+    if not current_user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A felhasználó inaktív")
+    return Token(access_token=create_access_token(subject=str(current_user.id), role=current_user.role.value))
+
+
 @router.get("/me", response_model=UserOut)
 def me(current_user: Employee = Depends(get_current_user)):
     return current_user
