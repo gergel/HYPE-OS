@@ -469,6 +469,37 @@ export type BelsosTigMonthEmployee = {
   record: InternalPerformanceCertificate | null;
 };
 
+/** Egy ember konkrét hiányossága egy hónapban - ebből derül ki, kinek mit
+ * kell még elkészítenie. */
+export type BelsosTigTeendo = {
+  employee_id: number;
+  full_name: string;
+  allapot: string | null;
+  hianyzik: string;
+};
+
+/** Egy hónap "mappája" a Belsős TIG havi áttekintésén. */
+export type BelsosTigHonap = {
+  ev: number;
+  honap: number;
+  honap_szoveg: string;
+  /** A hónap TIG-jeinek teljesítési (és így leadási) határideje. */
+  hatarido: string;
+  keses: boolean;
+  /** nincs_elkezdve | folyamatban | tig_kesz | lezarva */
+  allapot: string;
+  osszes: number;
+  kesz: number;
+  kihagyva: number;
+  hianyzo: number;
+  brutto_osszesen: number | null;
+  teendok: BelsosTigTeendo[];
+};
+
+export async function getBelsosTigAttekintes(honapok = 12): Promise<BelsosTigHonap[]> {
+  return (await apiGet<BelsosTigHonap[]>(`/api/v1/belsos-tig/attekintes?honapok=${honapok}`)) ?? [];
+}
+
 export async function getBelsosTigMonth(ev?: number, honap?: number): Promise<BelsosTigMonthEmployee[]> {
   const params = new URLSearchParams();
   if (ev) params.set("ev", String(ev));

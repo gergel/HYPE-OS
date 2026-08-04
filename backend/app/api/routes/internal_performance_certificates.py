@@ -179,6 +179,171 @@ def list_month(
     ]
 
 
+class HaviTeendo(BaseModel):
+    """Egy konkrét ember konkrét hiányossága egy hónapban - ebből derül ki,
+    KINEK MIT kell még elkészítenie."""
+
+    employee_id: int
+    full_name: str
+    allapot: str | None
+    #: Emberi mondat, hogy mi hiányzik (pl. "Nincs elkezdve", "Számla hiányzik").
+    hianyzik: str
+
+
+class HaviOsszesito(BaseModel):
+    """Egy hónap "mappája": kész van-e, és ha nem, mi hiányzik belőle."""
+
+    ev: int
+    honap: int
+    honap_szoveg: str
+    #: A hónap TIG-jeit a KÖVETKEZŐ hónap első napján kell teljesíteni - ez a
+    #: határidő (ugyanaz a dátum, amit a TIG teljesítési dátuma alapból kap).
+    hatarido: date
+    #: Lejárt-e a határidő úgy, hogy még maradt teendő.
+    keses: bool
+    #: nincs_elkezdve | folyamatban | tig_kesz | lezarva
+    allapot: str
+    osszes: int
+    kesz: int
+    kihagyva: int
+    hianyzo: int
+    brutto_osszesen: float | None
+    teendok: list[HaviTeendo]
+
+
+def _honap_teendoje(record: InternalPerformanceCertificate | None) -> str | None:
+    """Mi hiányzik még ehhez az emberhez ebben a hónapban? None = kész."""
+    if record is None:
+        return "Nincs elkezdve"
+    if record.allapot == "Kihagyva":
+        return None
+    if record.allapot not in FINALIZED_STATUSES:
+        if record.netto_osszeg is None:
+            return "Készítés alatt – összeg nincs megadva"
+        return "Készítés alatt – még nincs kiküldve"
+    if not record.invoices:
+        return "Számla hiányzik"
+    if not record.szamla_kifizetve:
+        return "Kifizetés hiányzik"
+    return None
+
+
+@router.get("/attekintes", response_model=list[HaviOsszesito])
+def havi_attekintes(
+    honapok: int = 12,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """HAVI ÁTTEKINTÉS ("mappázás"): hónaponként külön, hogy melyik hónap van
+    kész, és ahol nincs, ott pontosan kinek mi hiányzik - anélkül, hogy a
+    hónapok összefolynának.
+
+    A hónap akkor "lezárva", ha minden belsős munkatársnak vagy kiküldött
+    TIG-je van feltöltött ÉS kifizetett számlával, vagy ki lett hagyva. A
+    köztes állapot a "tig_kesz": a TIG-ek elkészültek, de a számla/kifizetés
+    még hátravan.
+
+    Azok a hónapok jelennek meg, amikre már van bejegyzés, plusz az utolsó
+    `honapok` hónap - hogy a még el sem kezdett hónapok is látszódjanak,
+    ne csak azok, amikhez valaki már hozzányúlt."""
+    today = date.today()
+    employees = _belsos_employees(db)
+
+    records = db.query(InternalPerformanceCertificate).all()
+    honap_szerint: dict[tuple[int, int], list[InternalPerformanceCertificate]] = {}
+    for r in records:
+        honap_szerint.setdefault((r.ev, r.honap), []).append(r)
+
+    # Az utolsó N hónap (a folyó hónappal együtt) + minden olyan hónap, amiben
+    # már van bejegyzés.
+    honap_kulcsok: set[tuple[int, int]] = set(honap_szerint.keys())
+    ev, honap = today.year, today.month
+    for _ in range(max(honapok, 1)):
+        honap_kulcsok.add((ev, honap))
+        ev, honap = elozo_honap(date(ev, honap, 1))
+
+    # A legelső bejegyzésnél RÉGEBBI hónapokat elhagyjuk: azok a rendszer
+    # használatba vétele előttiek, örökre "hiányosnak" látszanának, és csak
+    # elfednék az igazi teendőket. (Ha még egyetlen bejegyzés sincs, marad az
+    # utolsó N hónap - egy friss rendszeren pont azokkal kell kezdeni.)
+    if honap_szerint:
+        legkorabbi = min(honap_szerint)
+        honap_kulcsok = {k for k in honap_kulcsok if k >= legkorabbi}
+
+    eredmeny: list[HaviOsszesito] = []
+    for kulcs in sorted(honap_kulcsok, reverse=True):
+        ev, honap = kulcs
+        sorok = {r.employee_id: r for r in honap_szerint.get(kulcs, [])}
+        # A jelenlegi belsősök MELLETT azok is beleszámítanak, akiknek erre a
+        # hónapra van bejegyzésük, de azóta már nem belsősök - különben a
+        # munkájuk (és az összegük) eltűnne a hónap összesítéséből.
+        emberek = list(employees)
+        ismert = {e.id for e in emberek}
+        for employee_id in sorok:
+            if employee_id not in ismert:
+                korabbi = db.get(Employee, employee_id)
+                if korabbi is not None:
+                    emberek.append(korabbi)
+
+        teendok: list[HaviTeendo] = []
+        kesz = kihagyva = 0
+        brutto = 0.0
+        van_brutto = False
+        for e in emberek:
+            record = sorok.get(e.id)
+            if record is not None:
+                # A bruttó a séma számított mezője (nettó + ÁFA, ha kell) -
+                # szándékosan onnan vesszük, hogy a képlet egy helyen legyen.
+                osszeg = InternalPerformanceCertificateRead.model_validate(record).brutto_osszeg
+                if osszeg is not None:
+                    brutto += float(osszeg)
+                    van_brutto = True
+            hianyzik = _honap_teendoje(record)
+            if hianyzik is None:
+                if record is not None and record.allapot == "Kihagyva":
+                    kihagyva += 1
+                else:
+                    kesz += 1
+                continue
+            teendok.append(
+                HaviTeendo(
+                    employee_id=e.id,
+                    full_name=e.full_name,
+                    allapot=record.allapot if record is not None else None,
+                    hianyzik=hianyzik,
+                )
+            )
+
+        hatarido = kovetkezo_honap_elseje(ev, honap)
+        van_bejegyzes = bool(sorok)
+        if not teendok:
+            allapot = "lezarva"
+        elif not van_bejegyzes:
+            allapot = "nincs_elkezdve"
+        elif all(t.hianyzik in ("Számla hiányzik", "Kifizetés hiányzik") for t in teendok):
+            allapot = "tig_kesz"
+        else:
+            allapot = "folyamatban"
+
+        eredmeny.append(
+            HaviOsszesito(
+                ev=ev,
+                honap=honap,
+                honap_szoveg=ev_honap_szoveg(ev, honap),
+                hatarido=hatarido,
+                keses=bool(teendok) and today > hatarido,
+                allapot=allapot,
+                osszes=len(emberek),
+                kesz=kesz,
+                kihagyva=kihagyva,
+                hianyzo=len(teendok),
+                brutto_osszesen=brutto if van_brutto else None,
+                teendok=sorted(teendok, key=lambda t: t.full_name),
+            )
+        )
+    return eredmeny
+
+
 @router.get("/employee/{employee_id}", response_model=list[InternalPerformanceCertificateRead])
 def list_for_employee(
     employee_id: int,

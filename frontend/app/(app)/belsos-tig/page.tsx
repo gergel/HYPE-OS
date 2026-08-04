@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { BelsosTigHaviAttekintes } from "@/components/BelsosTigHaviAttekintes";
 import { BelsosTigManager } from "@/components/BelsosTigManager";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
-import { getBelsosTigMonth, getMyPagePermissions } from "@/lib/api";
+import { getBelsosTigAttekintes, getBelsosTigMonth, getMyPagePermissions } from "@/lib/api";
 import { huEvHonap } from "@/lib/huDate";
 
 function shiftMonth(ev: number, honap: number, delta: number): { ev: number; honap: number } {
@@ -29,7 +30,11 @@ export default async function BelsosTigPage({
   const ev = params.ev ? Number(params.ev) : today.getFullYear();
   const honap = params.honap ? Number(params.honap) : today.getMonth() + 1;
 
-  const [employees, pagePermissions] = await Promise.all([getBelsosTigMonth(ev, honap), getMyPagePermissions()]);
+  const [employees, attekintes, pagePermissions] = await Promise.all([
+    getBelsosTigMonth(ev, honap),
+    getBelsosTigAttekintes(12),
+    getMyPagePermissions(),
+  ]);
   // Aki az oldalon szerkeszthet, az az állapotot is kézzel át tudja állítani.
   const canEdit = pagePermissions === null || !!pagePermissions["/belsos-tig"]?.includes("edit");
   const prev = shiftMonth(ev, honap, -1);
@@ -46,7 +51,14 @@ export default async function BelsosTigPage({
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-6">
+      <div className="flex-1 space-y-6 p-6">
+        {/* Havi "mappázás": hónaponként külön dobozban, hogy ne folyjanak
+            egybe - melyik hónap van kész, és ahol nincs, ott kinek mi
+            hiányzik, meddig (lásd BelsosTigHaviAttekintes). */}
+        <Card title="Havi áttekintés">
+          <BelsosTigHaviAttekintes honapok={attekintes} />
+        </Card>
+
         <Card
           title={`Belsős TIG – ${huEvHonap(ev, honap)}`}
           actions={
