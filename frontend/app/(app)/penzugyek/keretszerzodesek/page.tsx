@@ -2,6 +2,7 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { TopBar } from "@/components/TopBar";
 import { KeretszerzodesAddWidget } from "@/components/KeretszerzodesAddWidget";
+import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { ENTITY_PATHS, formatDate, getContracts, getEmployees, type Contract } from "@/lib/api";
 
 type KeretszerzodesRow = Contract & { employee_name: string };
@@ -48,6 +49,20 @@ export default async function KeretszerzodesekPage() {
                 align: "right",
                 render: (c) => formatDate(c.keltezes),
                 sortAccessor: (c) => c.keltezes,
+              },
+              {
+                // A szerződés saját adatlapja: itt tölthető fel és nézhető meg
+                // az aláírt PDF (a sor kattintása a munkatárshoz visz, ezért
+                // ez a link megállítja a sor-navigációt).
+                header: "Dokumentumok",
+                align: "right",
+                render: (c) => (
+                  <StopClickPropagation>
+                    <a href={`/szerzodesek/${c.id}`} className="text-text-accent hover:underline">
+                      Fájlok
+                    </a>
+                  </StopClickPropagation>
+                ),
               },
             ]}
           />

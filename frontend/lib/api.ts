@@ -94,6 +94,21 @@ export type EmployeeDocument = {
   created_at: string;
 };
 
+/** Egy rekordhoz csatolt fájl (szerződés / TIG / számla / egyéb). A tartalom
+ * mindig az R2 tárhelyen van, itt csak a hivatkozás (lásd backend
+ * services/attachments.py). */
+export type DocumentAttachment = {
+  id: number;
+  entity_type: string;
+  entity_id: number;
+  kategoria: "szerzodes" | "tig" | "szamla" | "egyeb";
+  filename: string;
+  url: string;
+  content_type: string | null;
+  meret_bajt: number | null;
+  created_at: string;
+};
+
 export type Rate = {
   id: number;
   employee_id: number;
@@ -265,6 +280,10 @@ export async function getEmployees(limit = 5000): Promise<Employee[]> {
 
 export async function getEmployeeDocuments(employeeId: number): Promise<EmployeeDocument[]> {
   return (await apiGet<EmployeeDocument[]>(`/api/v1/crew/${employeeId}/munkaszerzodesek`)) ?? [];
+}
+
+export async function getAttachments(entityType: string, entityId: number): Promise<DocumentAttachment[]> {
+  return (await apiGet<DocumentAttachment[]>(`/api/v1/csatolmanyok/${entityType}/${entityId}`)) ?? [];
 }
 
 export async function getEquipment(limit = 5000): Promise<Equipment[]> {

@@ -1,9 +1,14 @@
 import { notFound } from "next/navigation";
+import { FileText } from "lucide-react";
 import { BackLink } from "@/components/BackLink";
+import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
+import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
+  getAttachments,
+  getCurrentUser,
   getDetailTabs,
   getFieldTypes,
   getMyPagePermissions,
@@ -12,6 +17,7 @@ import {
   getVisibleFields,
 } from "@/lib/api";
 import { buildFieldTabs } from "@/lib/detailTabs";
+import { canDoAction } from "@/lib/permissions";
 
 // A szerződéseknek eddig NEM volt részletnézetük: a kapcsolódó listákban (pl.
 // egy Külsős "Szerződések" kártyáján) csak sorok voltak, kattintható cél
@@ -26,7 +32,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   const contract = await getRecord(ENTITY_PATHS.contract, contractId);
   if (!contract) notFound();
 
-  const [employee, client, project, visibleFields, fieldTypes, dbTabs, pagePermissions, sectionOrder] = await Promise.all([
+  const [employee, client, project, visibleFields, fieldTypes, dbTabs, pagePermissions, sectionOrder, currentUser, attachments] = await Promise.all([
     contract.employee_id ? getRecord(ENTITY_PATHS.employee, Number(contract.employee_id)) : null,
     contract.client_id ? getRecord(ENTITY_PATHS.client, Number(contract.client_id)) : null,
     contract.project_id ? getRecord(ENTITY_PATHS.project, Number(contract.project_id)) : null,
@@ -35,6 +41,8 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     getDetailTabs("contract"),
     getMyPagePermissions(),
     getSectionOrder("contract"),
+    getCurrentUser(),
+    getAttachments("contract", contractId),
   ]);
 
   const tabs = buildFieldTabs({
@@ -74,6 +82,18 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
             </a>
           )}
         </div>
+
+        <Card title="Szerződés dokumentumai" icon={FileText}>
+          <DokumentumFeltoltes
+            entityType="contract"
+            entityId={contractId}
+            attachments={attachments}
+            kategoria="szerzodes"
+            canEdit={canDoAction(currentUser?.role, pagePermissions, PAGE, "edit")}
+            canDelete={canDoAction(currentUser?.role, pagePermissions, PAGE, "delete")}
+            emptyText="Nincs feltöltött szerződés-fájl."
+          />
+        </Card>
 
         <DetailSections sections={tabs} entityType="contract" />
       </div>

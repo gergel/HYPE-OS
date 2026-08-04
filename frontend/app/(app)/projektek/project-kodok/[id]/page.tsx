@@ -3,6 +3,7 @@ import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { ClientContractManager } from "@/components/ClientContractManager";
 import { DetailSections } from "@/components/DetailSections";
+import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { EditableBooleanCell } from "@/components/EditableBooleanCell";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { RelatedTable } from "@/components/RelatedTable";
@@ -12,6 +13,8 @@ import {
   Contract,
   ENTITY_PATHS,
   formatHuf,
+  getAttachments,
+  getCurrentUser,
   getDetailTabs,
   getFieldTypes,
   getMyPagePermissions,
@@ -21,6 +24,7 @@ import {
   getVisibleFields,
 } from "@/lib/api";
 import { buildFieldTabs } from "@/lib/detailTabs";
+import { canDoAction } from "@/lib/permissions";
 import { FileText, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const PAGE = "/projektek/project-kodok";
@@ -31,7 +35,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   const projectCode = await getRecord(ENTITY_PATHS.projectCode, projectCodeId);
   if (!projectCode) notFound();
 
-  const [client, contract, projects, expenses, revenues, deliverables, pendingClientContracts, visibleFields, fieldTypes, dbTabs, pagePermissions] =
+  const [client, contract, projects, expenses, revenues, deliverables, pendingClientContracts, visibleFields, fieldTypes, dbTabs, pagePermissions, currentUser, attachments] =
     await Promise.all([
       projectCode.client_id ? getRecord(ENTITY_PATHS.client, Number(projectCode.client_id)) : null,
       projectCode.contract_id ? getRecord(ENTITY_PATHS.contract, Number(projectCode.contract_id)) : null,
@@ -44,7 +48,12 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
       getFieldTypes("projectCode"),
       getDetailTabs("projectCode"),
       getMyPagePermissions(),
+      getCurrentUser(),
+      getAttachments("projectCode", projectCodeId),
     ]);
+
+  const canEditFiles = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
+  const canDeleteFiles = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
 
   const pendingEntry = pendingClientContracts.find((p) => p.project_code_id === projectCodeId) ?? null;
 
@@ -133,7 +142,40 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
                   placeholder="Nincs link"
                 />
               </div>
+              <DokumentumFeltoltes
+                entityType="projectCode"
+                entityId={projectCodeId}
+                attachments={attachments.filter((a) => a.kategoria === "tig")}
+                kategoria="tig"
+                canEdit={canEditFiles}
+                canDelete={canDeleteFiles}
+                emptyText="Nincs feltöltött (aláírt) TIG."
+              />
             </div>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <Card title="Megrendelői számlák" icon={FileText}>
+            <DokumentumFeltoltes
+              entityType="projectCode"
+              entityId={projectCodeId}
+              attachments={attachments.filter((a) => a.kategoria === "szamla")}
+              kategoria="szamla"
+              canEdit={canEditFiles}
+              canDelete={canDeleteFiles}
+              emptyText="Nincs feltöltött számla."
+            />
+          </Card>
+          <Card title="További dokumentumok" icon={FileText}>
+            <DokumentumFeltoltes
+              entityType="projectCode"
+              entityId={projectCodeId}
+              attachments={attachments.filter((a) => a.kategoria === "egyeb" || a.kategoria === "szerzodes")}
+              kategoria="egyeb"
+              canEdit={canEditFiles}
+              canDelete={canDeleteFiles}
+            />
           </Card>
         </div>
 

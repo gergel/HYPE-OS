@@ -88,6 +88,11 @@ export function NotionImportPanel() {
         </button>
         {status?.running && <span className="text-[12px] text-text-muted">Elindítva: {status.started_at}</span>}
       </div>
+      <p className="mb-3 text-[12px] text-text-muted">
+        Az import a Notionba FELTÖLTÖTT fájlokat (szerződések, TIG-ek, számlák) is áthozza, és a saját
+        tárhelyünkre (R2) menti - a Notion linkjei ugyanis egy óra után lejárnak. A külső hivatkozások
+        (pl. Google Docs) érintetlenül maradnak.
+      </p>
       {startError && <p className="mb-3 text-[12px] text-text-danger">{startError}</p>}
       {status && !status.running && status.finished_at && (
         <p className="mb-2 text-[12px] text-text-muted">

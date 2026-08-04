@@ -27,7 +27,7 @@ from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.timesheet import Timesheet
-from app.notion_import import database_ids as db_ids
+from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_relation_ids, safe_upsert, upsert
 from app.notion_import.importers import _text, get_or_create_unknown_client
@@ -289,6 +289,8 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
                 _link_attendees_crew(db, project_obj, props)
             except Exception as exc:  # noqa: BLE001 - egy stáb-feloldási hiba ne vigye el a teljes sort
                 result.errors.append(f"Project '{nev}' stáb-kapcsolat feloldás: {type(exc).__name__}: {exc}")
+            ujak = files.atemel_mindent(db, props, entity_type="project", entity_id=project_obj.id, result=result)
+            project_obj.diszpo_pdf_url = files.elso(ujak, "Diszpó pdf") or project_obj.diszpo_pdf_url
 
     return result
 
@@ -305,7 +307,7 @@ def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
             continue
 
         koltseg = props.get("Költség")
-        safe_upsert(
+        utomunka = safe_upsert(
             db,
             result,
             Deliverable,
@@ -368,6 +370,10 @@ def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
             },
             label=f"Deliverable '{projekt_neve}'",
         )
+        if utomunka is not None:
+            ujak = files.atemel_mindent(db, props, entity_type="deliverable", entity_id=utomunka.id, result=result)
+            if "Files vágáshoz" in ujak:
+                utomunka.files_vagashoz_urls = ujak["Files vágáshoz"]
 
     return result
 
@@ -469,6 +475,17 @@ def _expense_notion_fields(props: dict) -> dict:
     }
 
 
+def _kiadas_szamlai(db: Session, props: dict, kiadas, result: ImportResult) -> None:
+    """A kiadáshoz Notionban feltöltött BEJÖVŐ számlák (a "Számla pdf" mező)
+    átemelése az R2-re. Ezek a fájlok kerülnek bele a havi számla-csomagba is
+    (lásd routes/finance.py szamlak_zip)."""
+    if kiadas is None:
+        return
+    ujak = files.atemel_mindent(db, props, entity_type="expense", entity_id=kiadas.id, result=result)
+    if "Számla pdf" in ujak:
+        kiadas.szamla_pdf_urls = ujak["Számla pdf"]
+
+
 def import_expenses(client: NotionClient, db: Session) -> ImportResult:
     """Expense <- 'Kiadások' + 'Projekt kiadások' + 'Belsős extra kiadások'."""
     result = ImportResult(entity_type="Expense")
@@ -490,7 +507,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
                 tipus = "belsos"
 
         brutto = props.get("Bruttó")
-        safe_upsert(
+        kiadas = safe_upsert(
             db,
             result,
             Expense,
@@ -510,6 +527,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
             },
             label=f"Expense '{megnevezes}'",
         )
+        _kiadas_szamlai(db, props, kiadas, result)
 
     for page in client.query_database(db_ids.PROJEKT_KIADASOK):
         props = extract_properties(page, client)
@@ -519,7 +537,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
             continue
 
         brutto = props.get("Bruttó összeg")
-        safe_upsert(
+        kiadas = safe_upsert(
             db,
             result,
             Expense,
@@ -537,6 +555,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
             },
             label=f"Expense '{megnevezes}'",
         )
+        _kiadas_szamlai(db, props, kiadas, result)
 
     for page in client.query_database(db_ids.BELSOS_EXTRA_KIADASOK):
         props = extract_properties(page, client)
@@ -545,7 +564,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
             result.skipped += 1
             continue
 
-        safe_upsert(
+        kiadas = safe_upsert(
             db,
             result,
             Expense,
@@ -562,6 +581,7 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
             },
             label=f"Expense '{megnevezes}'",
         )
+        _kiadas_szamlai(db, props, kiadas, result)
 
     return result
 
@@ -580,7 +600,7 @@ def import_revenues(client: NotionClient, db: Session) -> ImportResult:
             continue
 
         brutto = props.get("Bruttó")
-        safe_upsert(
+        bevetel = safe_upsert(
             db,
             result,
             Revenue,
@@ -603,6 +623,10 @@ def import_revenues(client: NotionClient, db: Session) -> ImportResult:
             },
             label=f"Revenue (project_code_id={project_code_id})",
         )
+        if bevetel is not None:
+            # A megrendelőnek kiállított (KIMENŐ) számla a bevétel sorához
+            # tartozik - a havi számla-csomag innen szedi össze őket.
+            files.atemel_mindent(db, props, entity_type="revenue", entity_id=bevetel.id, result=result)
 
     return result
 

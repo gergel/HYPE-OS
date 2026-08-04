@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
+from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.internal_performance_certificate import InternalPerformanceCertificateInvoice
@@ -308,6 +309,47 @@ def _honap_szuro(datum: date | None, ev: int, honap: int) -> bool:
     return datum is not None and datum.year == ev and datum.month == honap
 
 
+def _csatolt_szamlak(db: Session, ev: int, honap: int) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[str]]:
+    """A rekordokhoz csatolt (feltöltött vagy Notionból átemelt) SZÁMLA
+    kategóriájú fájlok a hónapra bontva: (bejövő, kimenő, leírássorok).
+
+    A hónapot nem a feltöltés ideje adja, hanem a számla mögötti pénzügyi
+    dátum - a Notion importból származó fájlok mind egyszerre kerültek fel, a
+    hozzájuk tartozó kiadás/bevétel viszont tudja, mikori. Ha nincs ilyen
+    dátum, marad a feltöltés napja."""
+    bejovo: list[tuple[str, str]] = []
+    kimeno: list[tuple[str, str]] = []
+    leiras: list[str] = []
+
+    csatolmanyok = db.scalars(
+        select(DocumentAttachment).where(DocumentAttachment.kategoria == "szamla")
+    ).all()
+    kiadasok = {k.id: k for k in db.scalars(select(Expense)).all()} if csatolmanyok else {}
+    bevetelek = {b.id: b for b in db.scalars(select(Revenue)).all()} if csatolmanyok else {}
+
+    for csatolmany in csatolmanyok:
+        feltoltve = csatolmany.created_at.date() if csatolmany.created_at else None
+        datum, forras = feltoltve, f"{csatolmany.entity_type} #{csatolmany.entity_id}"
+        if csatolmany.entity_type == "expense":
+            kiadas = kiadasok.get(csatolmany.entity_id)
+            if kiadas is not None:
+                datum = kiadas.fizetes_datuma or kiadas.kiadas_datuma or kiadas.fizetes_hatarideje or feltoltve
+                forras = f"Kiadás #{kiadas.id} – {kiadas.megnevezes}"
+        elif csatolmany.entity_type == "revenue":
+            bevetel = bevetelek.get(csatolmany.entity_id)
+            if bevetel is not None:
+                datum = bevetel.szamla_kiallitva_datuma or bevetel.fizetes_datuma or feltoltve
+                forras = f"Bevétel #{bevetel.id}"
+        if not _honap_szuro(datum, ev, honap):
+            continue
+        mappa = "kimeno" if csatolmany.entity_type == "revenue" else "bejovo"
+        nev = f"{csatolmany.entity_type}_{csatolmany.entity_id}_{csatolmany.id}_{csatolmany.filename}"
+        (kimeno if mappa == "kimeno" else bejovo).append((nev, csatolmany.storage_key))
+        leiras.append(f"{mappa}/{nev}\t{forras}\tdátum: {datum}")
+
+    return bejovo, kimeno, leiras
+
+
 @summary_router.get("/szamlak-zip")
 def szamlak_zip(
     ev: int,
@@ -368,6 +410,12 @@ def szamlak_zip(
         nev = f"bevetel_{revenue.id}_{revenue.szamla_filename or 'szamla.pdf'}"
         kimeno.append((nev, revenue.szamla_storage_key))
         leiras.append(f"kimeno/{nev}\tBevétel #{revenue.id}\tkiállítva: {datum}")
+
+    # A rekordokhoz csatolt számlák (kézzel feltöltve vagy Notionból átemelve).
+    csatolt_bejovo, csatolt_kimeno, csatolt_leiras = _csatolt_szamlak(db, ev, honap)
+    bejovo += csatolt_bejovo
+    kimeno += csatolt_kimeno
+    leiras += csatolt_leiras
 
     if not bejovo and not kimeno:
         raise HTTPException(status_code=404, detail=f"Nincs feltöltött számla erre a hónapra: {ev}. {honap}.")

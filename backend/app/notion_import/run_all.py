@@ -53,7 +53,7 @@ def run_wave(title: str, wave: list, notion: NotionClient, db: Session, log: Cal
     for name, importer_fn in wave:
         result = run_importer(name, db, importer_fn, notion, db)
         log(str(result))
-        if result.errors:
+        if result.errors or result.file_errors:
             log(result.error_report())
 
 
@@ -81,7 +81,7 @@ def run_only_import(name: str, importer_fn, db: Session, log: Callable[[str], No
         log(f"\nHYPE OS - Notion import, csak: {name}\n" + "=" * 40)
         result = run_importer(name, db, importer_fn, notion, db)
         log(str(result))
-        if result.errors:
+        if result.errors or result.file_errors:
             log(result.error_report())
         log("\n" + "=" * 40 + "\nKész.")
     finally:

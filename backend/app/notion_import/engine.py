@@ -26,17 +26,25 @@ class ImportResult:
     updated: int = 0
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
+    # A Notionból átemelt fájlok száma és a kimaradt fájlok okai. Külön a
+    # sor-hibáktól: egy le nem tölthető csatolmány nem hibás rekord, a sor
+    # attól még rendben bekerült - csak a fájlja nem jött vele.
+    files_copied: int = 0
+    file_errors: list[str] = field(default_factory=list)
 
     def __str__(self) -> str:
         summary = f"{self.entity_type}: {self.created} új, {self.updated} frissítve, {self.skipped} kihagyva"
+        if self.files_copied:
+            summary += f", {self.files_copied} fájl átemelve"
         if self.errors:
             summary += f", {len(self.errors)} hiba"
+        if self.file_errors:
+            summary += f", {len(self.file_errors)} fájl kimaradt"
         return summary
 
     def error_report(self) -> str:
-        if not self.errors:
-            return ""
         lines = [f"  [{self.entity_type}] {msg}" for msg in self.errors]
+        lines += [f"  [{self.entity_type}] {msg}" for msg in self.file_errors]
         return "\n".join(lines)
 
 

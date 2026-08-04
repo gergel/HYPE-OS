@@ -14,15 +14,15 @@ from app.models.campaign import Campaign
 from app.models.project_code import ProjectCode
 from app.models.rate import Rate
 from app.models.task import Task
-from app.notion_import import database_ids as db_ids
+from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert, upsert
 
 UNKNOWN_CLIENT_KEY = "client:unknown-notion-import"
 
 
-def _first_url(files: list | None) -> str | None:
-    return files[0] if files else None
+def _first_url(ertekek: list | None) -> str | None:
+    return ertekek[0] if ertekek else None
 
 
 def _text(value) -> str | None:
@@ -146,7 +146,7 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
         if "bels" in joined:
             tipus = EmployeeType.BELSOS
 
-        safe_upsert(
+        munkatars = safe_upsert(
             db,
             result,
             Employee,
@@ -209,6 +209,9 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
             },
             label=f"Employee '{full_name}'",
         )
+        if munkatars is not None:
+            ujak = files.atemel_mindent(db, props, entity_type="employee", entity_id=munkatars.id, result=result)
+            munkatars.photo_url = files.elso(ujak, "Photo") or munkatars.photo_url
 
     # Szerepkör-overlay: a Vágók tábla '👥 Külsős és belsős' relation-je jelöli
     # ki, ki vágó - ez valódi relation (nem név-egyeztetés), tehát biztonságosan
@@ -394,7 +397,7 @@ def _import_task_database(
             result.skipped += 1
             continue
 
-        safe_upsert(
+        feladat_rekord = safe_upsert(
             db,
             result,
             Task,
@@ -419,6 +422,12 @@ def _import_task_database(
             },
             label=f"Task '{feladat}'",
         )
+        if feladat_rekord is not None:
+            ujak = files.atemel_mindent(db, props, entity_type="task", entity_id=feladat_rekord.id, result=result)
+            if "Csatolni való" in ujak:
+                feladat_rekord.csatolni_valo_urls = ujak["Csatolni való"]
+            if "Files & media" in ujak:
+                feladat_rekord.files_media_urls = ujak["Files & media"]
 
 
 def import_tasks(client: NotionClient, db: Session) -> ImportResult:
@@ -439,7 +448,7 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
         props = extract_properties(page, client)
         client_id = resolve_client_via_contact(db, props.get("Akivel szerződünk") or [])
         szerzodes_url = _first_url(props.get("Szerződés"))
-        safe_upsert(
+        szerzodes = safe_upsert(
             db,
             result,
             Contract,
@@ -469,12 +478,15 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
             },
             label="Contract (keretszerződés)",
         )
+        if szerzodes is not None:
+            ujak = files.atemel_mindent(db, props, entity_type="contract", entity_id=szerzodes.id, result=result)
+            szerzodes.szerzodes_file_url = files.elso(ujak, "Szerződés") or szerzodes.szerzodes_file_url
 
     for page in client.query_database(db_ids.ALVALLALKOZO_KERETSZERZODES):
         props = extract_properties(page, client)
         employee_id = resolve_relation_id(db, "Employee", props.get("Vállalkozó") or [])
         szerzodes_url = _first_url(props.get("Szerződés aláírva"))
-        safe_upsert(
+        szerzodes = safe_upsert(
             db,
             result,
             Contract,
@@ -504,6 +516,9 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
             },
             label="Contract (alvállalkozói keretszerződés)",
         )
+        if szerzodes is not None:
+            ujak = files.atemel_mindent(db, props, entity_type="contract", entity_id=szerzodes.id, result=result)
+            szerzodes.szerzodes_file_url = files.elso(ujak, "Szerződés aláírva") or szerzodes.szerzodes_file_url
 
     return result
 
@@ -531,7 +546,7 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
         client_id = resolve_client_via_contact(db, props.get("Megrendelői kontaktok") or []) or unknown_client.id
         contract_id = resolve_relation_id(db, "Contract", props.get("Keretszerződés") or [])
 
-        safe_upsert(
+        projektkod_rekord = safe_upsert(
             db,
             result,
             ProjectCode,
@@ -611,5 +626,18 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
             },
             label=f"ProjectCode '{projektkod}'",
         )
+        if projektkod_rekord is not None:
+            ujak = files.atemel_mindent(
+                db, props, entity_type="projectCode", entity_id=projektkod_rekord.id, result=result
+            )
+            # A megrendelői számla és az aláírt TIG a projektkód két legfontosabb
+            # dokumentuma - ezek külön oszlopban is látszanak a felületen, ezért
+            # a mostantól állandó, saját linkre írjuk át őket.
+            projektkod_rekord.szamla_url = files.elso(ujak, "Számla") or projektkod_rekord.szamla_url
+            projektkod_rekord.tig_alairva_url = (
+                files.elso(ujak, "TIG aláírva") or projektkod_rekord.tig_alairva_url
+            )
+            if "További dokumentumok" in ujak:
+                projektkod_rekord.tovabbi_dokumentumok = ujak["További dokumentumok"]
 
     return result

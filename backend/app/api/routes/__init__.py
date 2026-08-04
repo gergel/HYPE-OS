@@ -4,6 +4,7 @@ from app.api.routes.admin_calendar_sync import router as admin_calendar_sync_rou
 from app.api.routes.dispo_responsibles import router as dispo_responsibles_router
 from app.api.routes.admin_import import router as admin_import_router
 from app.api.routes.ai_assistant import router as ai_assistant_router
+from app.api.routes.attachments import router as attachments_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.automation import router as automation_router
 from app.api.routes.callsheets import router as callsheets_router
@@ -100,6 +101,8 @@ api_router.include_router(entity_fields_router)
 api_router.include_router(field_visibility_router)
 api_router.include_router(user_access_router)
 api_router.include_router(detail_tabs_router)
+# Fájl-csatolmányok (szerződés/TIG/számla) bármelyik rekordhoz - R2 tárhelyen
+api_router.include_router(attachments_router)
 # Értesítések
 api_router.include_router(notifications_router)
 # Admin: Notion import a böngészőből (railway ssh nélkül)
