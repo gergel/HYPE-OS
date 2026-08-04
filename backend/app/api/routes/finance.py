@@ -1,16 +1,24 @@
+import io
+import zipfile
 from datetime import date
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import extract, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.internal_performance_certificate import InternalPerformanceCertificateInvoice
+from app.models.performance_certificate import PerformanceCertificateInvoice
 from app.models.project_code import ProjectCode
+from app.services import document_storage
+from app.services.portal_storage import R2NotConfiguredError
 from app.schemas.finance import (
     ExpenseCreate,
     ExpenseRead,
@@ -54,6 +62,8 @@ kp_forgalom_router = build_crud_router(
 )
 
 summary_router = APIRouter(prefix="/finance", tags=["finance"])
+
+PENZUGY_PAGE = "/penzugyek"
 
 
 class MonthlyFinance(BaseModel):
@@ -228,4 +238,170 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         havi_trend=havi_trend,
         kintlevo_projektek=kintlevo_projektek[:15],
         ytd_kiadas_fizetesi_mod_szerint=ytd_kiadas_fizetesi_mod_szerint,
+    )
+
+
+# --- Kimenő számla fájl + havi számla-csomag -------------------------------
+
+
+@summary_router.post("/revenues/{revenue_id}/szamla", response_model=RevenueRead)
+async def upload_kimeno_szamla(
+    revenue_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "edit")),
+):
+    """A KIMENŐ (megrendelői) számla PDF-jének feltöltése egy bevétel-sorhoz.
+    Maga a számla külső számlázó rendszerben készül - ide azért kerül fel, hogy
+    a havi könyvelési csomagban (lásd szamlak_zip) a kimenő számlák is benne
+    legyenek, ne csak a bejövők. Bevételenként egy fájl: az újabb feltöltés
+    lecseréli a korábbit."""
+    revenue = db.get(Revenue, revenue_id)
+    if revenue is None:
+        raise HTTPException(status_code=404, detail="Bevétel nem található")
+
+    data = await file.read()
+    kulcs = f"kimeno-szamla/{revenue_id}/{uuid4().hex}_{file.filename}"
+    try:
+        url = document_storage.upload_bytes(data, kulcs, file.content_type or "application/octet-stream")
+    except R2NotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    # A korábbi fájl helyét felszabadítjuk - egy bevételhez egy számla tartozik.
+    if revenue.szamla_storage_key:
+        try:
+            document_storage.delete_object(revenue.szamla_storage_key)
+        except Exception:  # noqa: BLE001 - a törlés hibája ne bukjon a feltöltésen
+            pass
+
+    revenue.szamla_filename = file.filename
+    revenue.szamla_storage_key = kulcs
+    revenue.szamla_file_url = url
+    db.commit()
+    db.refresh(revenue)
+    return revenue
+
+
+@summary_router.delete("/revenues/{revenue_id}/szamla", response_model=RevenueRead)
+def delete_kimeno_szamla(
+    revenue_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    revenue = db.get(Revenue, revenue_id)
+    if revenue is None:
+        raise HTTPException(status_code=404, detail="Bevétel nem található")
+    if revenue.szamla_storage_key:
+        try:
+            document_storage.delete_object(revenue.szamla_storage_key)
+        except Exception:  # noqa: BLE001
+            pass
+    revenue.szamla_filename = None
+    revenue.szamla_storage_key = None
+    revenue.szamla_file_url = None
+    db.commit()
+    db.refresh(revenue)
+    return revenue
+
+
+def _honap_szuro(datum: date | None, ev: int, honap: int) -> bool:
+    return datum is not None and datum.year == ev and datum.month == honap
+
+
+@summary_router.get("/szamlak-zip")
+def szamlak_zip(
+    ev: int,
+    honap: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """Egy hónap ÖSSZES számlája egyetlen ZIP-ben - a könyvelésnek szánt
+    csomag, hogy ne kelljen egyenként végigkattintani a TIG-eket és a
+    bevételeket.
+
+    A ZIP két mappára oszlik:
+
+      bejovo/  - a külsős és belsős TIG-ekhez feltöltött (alvállalkozói)
+                 számlák, a FELTÖLTÉS hónapja szerint: ekkor érkezett be a
+                 számla a rendszerbe,
+      kimeno/  - a bevételekhez feltöltött megrendelői számlák, a SZÁMLA
+                 KIÁLLÍTÁSÁNAK hónapja szerint (ha nincs kiállítási dátum, a
+                 feltöltés hónapja szerint).
+
+    A csomag mellé kerül egy tartalom.txt is, amiben soronként látszik, melyik
+    fájl honnan jött - hogy a könyvelő utólag is vissza tudja fejteni."""
+    bejovo: list[tuple[str, str]] = []  # (fájlnév a ZIP-ben, storage kulcs)
+    leiras: list[str] = []
+
+    kulsos = (
+        db.query(PerformanceCertificateInvoice)
+        .options(selectinload(PerformanceCertificateInvoice.certificate))
+        .all()
+    )
+    for szamla in kulsos:
+        if not _honap_szuro(szamla.created_at.date() if szamla.created_at else None, ev, honap):
+            continue
+        cert = szamla.certificate
+        nev = f"kulsos_tig_{cert.employee_id if cert else 'ismeretlen'}_{szamla.id}_{szamla.filename}"
+        bejovo.append((nev, szamla.storage_key))
+        leiras.append(f"bejovo/{nev}\tKülsős TIG #{szamla.certificate_id}\tfeltöltve: {szamla.created_at:%Y-%m-%d}")
+
+    belsos = (
+        db.query(InternalPerformanceCertificateInvoice)
+        .options(selectinload(InternalPerformanceCertificateInvoice.certificate))
+        .all()
+    )
+    for szamla in belsos:
+        if not _honap_szuro(szamla.created_at.date() if szamla.created_at else None, ev, honap):
+            continue
+        cert = szamla.certificate
+        honap_jel = f"{cert.ev}-{cert.honap:02d}" if cert else "ismeretlen"
+        nev = f"belsos_tig_{honap_jel}_{szamla.id}_{szamla.filename}"
+        bejovo.append((nev, szamla.storage_key))
+        leiras.append(f"bejovo/{nev}\tBelsős TIG ({honap_jel})\tfeltöltve: {szamla.created_at:%Y-%m-%d}")
+
+    kimeno: list[tuple[str, str]] = []
+    for revenue in db.scalars(select(Revenue).where(Revenue.szamla_storage_key.is_not(None))):
+        datum = revenue.szamla_kiallitva_datuma or (revenue.created_at.date() if revenue.created_at else None)
+        if not _honap_szuro(datum, ev, honap):
+            continue
+        nev = f"bevetel_{revenue.id}_{revenue.szamla_filename or 'szamla.pdf'}"
+        kimeno.append((nev, revenue.szamla_storage_key))
+        leiras.append(f"kimeno/{nev}\tBevétel #{revenue.id}\tkiállítva: {datum}")
+
+    if not bejovo and not kimeno:
+        raise HTTPException(status_code=404, detail=f"Nincs feltöltött számla erre a hónapra: {ev}. {honap}.")
+
+    buffer = io.BytesIO()
+    hibas: list[str] = []
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for mappa, tetelek in (("bejovo", bejovo), ("kimeno", kimeno)):
+            for nev, kulcs in tetelek:
+                try:
+                    zf.writestr(f"{mappa}/{nev}", document_storage.download_bytes(kulcs))
+                except R2NotConfiguredError as exc:
+                    raise HTTPException(status_code=503, detail=str(exc)) from exc
+                except Exception as exc:  # noqa: BLE001
+                    # Egyetlen hiányzó fájl ne buktassa az egész csomagot - a
+                    # tartalom.txt-ben viszont látszania kell, mi maradt ki.
+                    hibas.append(f"{mappa}/{nev}\tNEM SIKERÜLT LETÖLTENI: {exc}")
+        tartalom = [
+            f"HYPE OS - {ev}. {honap:02d}. havi számlák",
+            "",
+            "A 'bejovo' mappa a TIG-ekhez feltöltött (alvállalkozói) számlákat tartalmazza,",
+            "a feltöltés hónapja szerint. A 'kimeno' mappa a bevételekhez feltöltött",
+            "megrendelői számlákat, a számla kiállításának hónapja szerint.",
+            "",
+            *leiras,
+        ]
+        if hibas:
+            tartalom += ["", "HIÁNYZÓ FÁJLOK:", *hibas]
+        zf.writestr("tartalom.txt", "\n".join(tartalom))
+
+    buffer.seek(0)
+    fajlnev = f"szamlak_{ev}_{honap:02d}.zip"
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fajlnev}"'},
     )

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PapirozasFolders } from "@/components/dashboard/PapirozasFolders";
 import { DashboardAlerts, MyTasksSummary, RevenueMonth, UpcomingEvent, formatHuf } from "@/lib/api";
 
 const MONTH_SHORT = ["jan", "feb", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
@@ -69,19 +70,9 @@ export function MyTasksCard({ myTasks }: { myTasks: MyTasksSummary }) {
           <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">
             Papírozás ({papirozas.length})
           </p>
-          <ul className="space-y-1">
-            {papirozas.map((p, i) => (
-              <li key={`papir-${p.id}-${i}`}>
-                <Link
-                  href={p.link}
-                  className="flex items-center justify-between gap-3 rounded-[var(--radius)] px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-3"
-                >
-                  <span className="truncate text-text-primary">{p.title}</span>
-                  {p.hatarido && <span className="shrink-0 text-text-secondary">{formatShortDate(p.hatarido)}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {/* Mappákba rendezve: több száz nyitott papírnál egyetlen lista
+              használhatatlan lenne a dashboardon (lásd PapirozasFolders). */}
+          <PapirozasFolders items={papirozas} />
         </div>
       )}
       {deliverables.length > 0 && (

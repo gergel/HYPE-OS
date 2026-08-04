@@ -88,6 +88,11 @@ class RevenueUpdate(BaseModel):
 class RevenueRead(RevenueBase):
     id: int
 
+    # A feltöltött KIMENŐ (megrendelői) számla - a havi számla-csomagba is
+    # ebből kerül be a kimenő oldal (lásd routes/finance.py szamlak_zip).
+    szamla_filename: str | None = None
+    szamla_file_url: str | None = None
+
     nev: str | None = None
     forint_netto_notion: float | None = None
     plusz_afa: str | None = None

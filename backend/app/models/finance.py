@@ -86,6 +86,14 @@ class Revenue(TimestampMixin, Base):
     # nem fizetve" eseteket).
     szamla_kiallitva_datuma: Mapped[date | None] = mapped_column(Date, comment="Számla kiállítva dátuma")
 
+    # A KIMENŐ (megrendelői) számla feltöltött fájlja. Maga a számla külső
+    # számlázó rendszerben készül, de a PDF-jét ide is fel lehet tölteni, hogy
+    # a havi könyvelési csomagban (lásd routes/finance.py szamlak_zip) a
+    # kimenő számlák is benne legyenek, ne csak a bejövők.
+    szamla_filename: Mapped[str | None] = mapped_column(String(255), comment="A feltöltött kimenő számla fájlneve")
+    szamla_storage_key: Mapped[str | None] = mapped_column(String(500))
+    szamla_file_url: Mapped[str | None] = mapped_column(String(500))
+
     # a bevétel-táblák maradék mezői
     nev: Mapped[str | None] = mapped_column(String(255), comment="Name")
     forint_netto_notion: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Forint nettó")

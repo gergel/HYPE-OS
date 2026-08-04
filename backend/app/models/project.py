@@ -189,6 +189,14 @@ class Project(TimestampMixin, Base):
     foroge_jelenleg: Mapped[dict | None] = mapped_column(JSON, comment="foroge jelenleg")
     foroge_jelenleg2: Mapped[dict | None] = mapped_column(JSON, comment="foroge jelenleg2")
     darabolas_datuma: Mapped[date | None] = mapped_column(Date, comment="Darabolás dátuma")
+    #: Ha ez a projekt egy TÖBB NAPOS forgatásból leválasztott nap (lásd
+    #: services/project_actions.create_feldarabolas), akkor itt az eredeti,
+    #: "egész" projekt id-je áll. Ebből tudja a rendszer, hogy diszponálni a
+    #: LEVÁLASZTOTT napot kell, nem az egészet (lásd dashboard
+    #: _tomorrow_dispo_tasks).
+    feldarabolas_szulo_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id"), comment="Melyik projektből lett leválasztva ez a nap"
+    )
 
     # --- esemény / naptár metaadat ---
     calendar_name: Mapped[str | None] = mapped_column(String(255), comment="Calendar Name")
@@ -259,6 +267,14 @@ class Project(TimestampMixin, Base):
     nemes_attila_adott_nap: Mapped[dict | None] = mapped_column(JSON, comment="Nemes Attila")
     bukfa_kristof_adott_nap: Mapped[dict | None] = mapped_column(JSON, comment="Bükfa Kristóf")
     adott_nap_generic: Mapped[dict | None] = mapped_column(JSON, comment="adott nap")
+
+    #: A több napos forgatásból leválasztott napok (lásd feldarabolas_szulo_id).
+    feldarabolt_napok: Mapped[list["Project"]] = relationship(
+        back_populates="feldarabolas_szulo", foreign_keys=[feldarabolas_szulo_id]
+    )
+    feldarabolas_szulo: Mapped["Project"] = relationship(
+        back_populates="feldarabolt_napok", remote_side="Project.id", foreign_keys=[feldarabolas_szulo_id]
+    )
 
     project_code: Mapped["ProjectCode"] = relationship(back_populates="projects")
     campaign: Mapped["Campaign"] = relationship(back_populates="projects")

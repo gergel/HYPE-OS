@@ -156,6 +156,10 @@ export type Revenue = {
   penznem: string;
   fizetes_datuma: string | null;
   szamla_kiallitva_datuma: string | null;
+  /** A feltöltött KIMENŐ (megrendelői) számla - ebből áll össze a havi
+   * számla-csomag kimenő oldala (lásd SzamlaCsomagLetoltes). */
+  szamla_filename: string | null;
+  szamla_file_url: string | null;
 };
 
 export type Deliverable = {
@@ -915,6 +919,9 @@ export type MyTaskItem = {
   title: string;
   hatarido: string | null;
   link: string;
+  /** Melyik "mappába" tartozik a teendő (pl. "Belsős TIG") - a papírozás
+   * listáját ez alapján csoportosítja a dashboard (lásd PapirozasFolders). */
+  csoport?: string | null;
 };
 
 export type MyTasksSummary = {

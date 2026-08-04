@@ -67,6 +67,9 @@ class ProjectRead(ProjectBase):
     id: int
     crew_employee_ids: list[int] = []
     google_calendar_event_id: str | None = None
+    #: Ha ez a projekt egy több napos forgatásból leválasztott nap, itt az
+    #: eredeti projekt id-je áll (lásd project_actions.create_feldarabolas).
+    feldarabolas_szulo_id: int | None = None
 
     # a 'Main Database' Notion tábla maradék ~140 mezője, egyenként (lásd
     # app/models/project.py) - nem egy közös 'extra' JSON-ban.

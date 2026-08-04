@@ -44,6 +44,10 @@ class MyTaskItem(BaseModel):
     title: str
     hatarido: date | None
     link: str
+    #: Melyik "mappába" tartozik a teendő (pl. "Belsős TIG") - a papírozás
+    #: listája így nem 400 sorként ömlik a dashboardra, hanem csoportosítva
+    #: jelenik meg (lásd frontend MyTasksCard).
+    csoport: str | None = None
 
 
 class MyTasksSummary(BaseModel):
@@ -227,9 +231,10 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
         items.append(
             MyTaskItem(
                 id=honap.ev * 100 + honap.honap,
-                title=f"Belsős TIG – {honap.honap_szoveg}: {honap.hianyzo} hiányzik",
+                title=f"{honap.honap_szoveg}: {honap.hianyzo} hiányzik",
                 hatarido=honap.hatarido,
                 link=f"/belsos-tig?ev={honap.ev}&honap={honap.honap}",
+                csoport="Belsős TIG",
             )
         )
 
@@ -241,18 +246,20 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
             items.append(
                 MyTaskItem(
                     id=sor.project_id,
-                    title=f"Alvállalkozói szerződés – {nev}: {sor.szerzodes_fuggo} hiányzik",
+                    title=f"{nev}: {sor.szerzodes_fuggo} hiányzik",
                     hatarido=sor.forgatas_datuma,
                     link=f"/utokovetes/{sor.project_id}",
+                    csoport="Alvállalkozói szerződés",
                 )
             )
         if sor.tig_ready and sor.tig_fuggo > 0:
             items.append(
                 MyTaskItem(
                     id=sor.project_id,
-                    title=f"Külsős TIG – {nev}: {sor.tig_fuggo} hiányzik",
+                    title=f"{nev}: {sor.tig_fuggo} hiányzik",
                     hatarido=sor.forgatas_datuma,
                     link=f"/utokovetes/{sor.project_id}",
+                    csoport="Külsős TIG",
                 )
             )
 
@@ -262,9 +269,10 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
             items.append(
                 MyTaskItem(
                     id=pc.id,
-                    title=f"Megrendelői szerződés – {pc.projektkod}",
+                    title=pc.projektkod,
                     hatarido=pc.datum,
                     link=f"/projektek/project-kodok/{pc.id}",
+                    csoport="Megrendelői szerződés",
                 )
             )
         # TIG csak akkor, ha a munka már el is indult (volt kiküldött diszpójú
@@ -273,9 +281,10 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
             items.append(
                 MyTaskItem(
                     id=pc.id,
-                    title=f"Megrendelői TIG – {pc.projektkod}",
+                    title=pc.projektkod,
                     hatarido=pc.datum,
                     link=f"/projektek/project-kodok/{pc.id}",
+                    csoport="Megrendelői TIG",
                 )
             )
 
@@ -309,8 +318,18 @@ def _tomorrow_dispo_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
         select(Project).where(Project.forgatas_datuma == tomorrow).order_by(Project.nev)
     ).all()
 
+    # Ha egy több napos forgatásból leválasztottuk a holnapi napot, akkor azt a
+    # NAPOT kell diszponálni, nem az egészet - az eredeti projekt ilyenkor nem
+    # jön fel teendőként (lásd services/project_actions.create_feldarabolas).
+    # A darabolás vissza is vágja az eredeti záró napját, tehát ez jellemzően
+    # már nem is fordulhat elő - a régebbi, darabolás előtti adatoknál viszont
+    # igen, ezért itt is kiszűrjük.
+    szulo_idk = {p.feldarabolas_szulo_id for p in projects if p.feldarabolas_szulo_id is not None}
+
     items: list[MyTaskItem] = []
     for p in projects:
+        if p.id in szulo_idk:
+            continue
         teljes_kiment = bool(p.diszpo)
         elozetes_kiment = bool(p.elozetes_diszpo_kuldes)
         if DispoSide.GYARTAS in sides and not elozetes_kiment and not teljes_kiment:

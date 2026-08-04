@@ -61,3 +61,11 @@ def delete_object(key: str) -> None:
 def public_url(key: str) -> str:
     base = settings.r2_public_url.rstrip("/")
     return f"{base}/{_key(key)}"
+
+
+def download_bytes(key: str) -> bytes:
+    """Egy feltöltött fájl tartalma - a havi számla-ZIP-hez kell (lásd
+    routes/finance.py szamlak_zip), ami a tárhelyről szedi össze a fájlokat és
+    egyetlen letöltésbe csomagolja őket."""
+    client = _client()
+    return client.get_object(Bucket=settings.r2_bucket_name, Key=_key(key))["Body"].read()

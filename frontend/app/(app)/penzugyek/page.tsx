@@ -18,6 +18,8 @@ import { EditableBooleanCell } from "@/components/EditableBooleanCell";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { FinanceMonthlyChart, OutstandingProjectsTable } from "@/components/finance/FinanceSummaryWidgets";
+import { SzamlaCsomagLetoltes } from "@/components/finance/SzamlaCsomagLetoltes";
+import { KimenoSzamlaCella } from "@/components/finance/KimenoSzamlaCella";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RevenueInvoiceStatus } from "@/components/RevenueInvoiceStatus";
 import { StatCard } from "@/components/StatCard";
@@ -88,6 +90,12 @@ export default async function PenzugyekPage() {
             )}
           </>
         )}
+
+        {/* Havi számla-csomag a könyvelésnek - egy hónap összes bejövő és
+            kimenő számlája egyetlen ZIP-ben. */}
+        <Card title="Havi számlák letöltése">
+          <SzamlaCsomagLetoltes />
+        </Card>
 
         <Card title={`Kiadások (${expenses.length})`}>
           {canCreate && (
@@ -232,6 +240,23 @@ export default async function PenzugyekPage() {
                   />
                 ),
                 sortAccessor: (r) => (r.fizetes_datuma ? 2 : r.szamla_kiallitva_datuma ? 1 : 0),
+              },
+              {
+                // A kimenő számla PDF-je: maga a számla külső rendszerben
+                // készül, ide azért kerül fel, hogy a havi csomagban is benne
+                // legyen (lásd SzamlaCsomagLetoltes).
+                header: "Számla fájl",
+                align: "right",
+                render: (r) => (
+                  <KimenoSzamlaCella
+                    revenueId={r.id}
+                    filename={typeof r.szamla_filename === "string" ? r.szamla_filename : null}
+                    url={typeof r.szamla_file_url === "string" ? r.szamla_file_url : null}
+                    canEdit={canEdit}
+                    canDelete={canDelete}
+                  />
+                ),
+                sortAccessor: (r) => (r.szamla_filename ? 1 : 0),
               },
             ]}
           />
