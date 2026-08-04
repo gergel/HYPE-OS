@@ -8,6 +8,7 @@ import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
+import { formatIdopont } from "@/lib/ido";
 import { useLiveTopic } from "@/lib/live";
 import { DeliverableBoard, type BoardCard, type BoardColumn } from "@/components/deliverable/DeliverableBoard";
 import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar";
@@ -213,6 +214,11 @@ export function UtomunkaContent({
                     formatDate(d.hatarido)
                   ),
                 sortAccessor: (d) => d.hatarido,
+              },
+              {
+                header: "Vágás leállítva",
+                render: (d) => formatIdopont(d.vagas_leallitva),
+                sortAccessor: (d) => d.vagas_leallitva,
               },
               {
                 header: "Kiküldve",

@@ -64,6 +64,16 @@ class Deliverable(TimestampMixin, Base):
     jovairando_pont: Mapped[float | None] = mapped_column(Numeric(8, 2), comment="jóváírandó pont")
     timesheet_public_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Timesheet Public")
     timesheet_private_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Timesheet Private")
+    # Mikor állították le UTOLJÁRA a vágás időmérőjét ezen az utómunkán. A
+    # Notion importban a 'Timesheet Public' tábla 'End Date' mezőjéből jön
+    # (lásd notion_import/importers_wave2._import_timesheet_database), a
+    # rendszeren belül pedig a timer leállítása írja (routes/postproduction.py).
+    # Azért külön oszlop, és nem a munkaidő-sorokból számoljuk: a listákon és a
+    # kapcsolódó táblákban is látszania kell, ott viszont soronként egy külön
+    # lekérdezés lenne belőle.
+    vagas_leallitva: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), comment="Vágás leállítva (Timesheet End Date)"
+    )
     forgatas_datuma_notion: Mapped[str | None] = mapped_column(String(100), comment="Forgatás dátuma")
     esemeny_neve: Mapped[str | None] = mapped_column(String(255), comment="Esemény neve")
     aki_ellenorzesbe_tette_notion_ids: Mapped[dict | list | None] = mapped_column(

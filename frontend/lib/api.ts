@@ -187,6 +187,10 @@ export type Deliverable = {
   assigned_to_employee_id: number | null;
   project_id: number | null;
   vinyok: string[] | null;
+  /** Mikor állították le UTOLJÁRA a vágás időmérőjét. Notion importnál a
+   * 'Timesheet Public' End Date mezőjéből jön, a rendszeren belül a timer
+   * leállítása írja. */
+  vagas_leallitva: string | null;
 };
 
 export type JsonRecord = Record<string, unknown> & { id: number };

@@ -48,3 +48,14 @@ export function futoKoltseg(startIso: string, orabere: number | null, now: Date)
 export function formatFt(value: number): string {
   return `${Math.round(value).toLocaleString("hu-HU")} Ft`;
 }
+
+/** ISO időbélyeg -> "2026. 08. 04. 14:32". Ott kell, ahol nem az eltelt idő,
+ * hanem a KONKRÉT időpont a lényeg (pl. mikor állították le a vágást) - a
+ * puszta dátum ebből épp a napon belüli időt dobná el. */
+export function formatIdopont(value: string | null | undefined): string {
+  if (!value) return "–";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "–";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}. ${p(d.getMonth() + 1)}. ${p(d.getDate())}. ${p(d.getHours())}:${p(d.getMinutes())}`;
+}

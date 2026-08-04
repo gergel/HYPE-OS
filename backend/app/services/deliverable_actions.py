@@ -178,6 +178,11 @@ def stop_timer(db: Session, deliverable: Deliverable, current_user: Employee, em
     if open_row.akkori_orabere is None:
         open_row.akkori_orabere = aktualis_orabere(db, open_row.employee_id)
     open_row.koltseg = szamolt_koltseg(minutes, open_row.akkori_orabere)
+    # Az utómunkán is nyilvántartjuk, mikor állították le UTOLJÁRA a mérőt -
+    # ugyanaz az adat, amit a Notion importban a 'Timesheet Public' End Date
+    # mezője hoz (lásd notion_import/importers_wave2.py). Így a listákon és a
+    # kapcsolódó táblákban is látszik, soronkénti külön lekérdezés nélkül.
+    deliverable.vagas_leallitva = open_row.end_date
     db.commit()
 
 

@@ -30,6 +30,7 @@ import {
   getVisibleFields,
 } from "@/lib/api";
 import { buildFieldTabs } from "@/lib/detailTabs";
+import { formatIdopont } from "@/lib/ido";
 
 const HIDDEN_FIELDS = [
   "project_code_id",
@@ -187,6 +188,15 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               showCost={canSeeCost}
               isAdmin={currentUser?.role === "admin"}
             />
+            {/* Mikor állították le utoljára a mérőt. A Notionból importált
+                anyagoknál ez a 'Timesheet Public' End Date mezője - ott van az
+                egyetlen nyoma annak, mikor fejezték be a vágást. */}
+            <p className="mt-3 border-t border-border pt-3 text-[13px] text-text-secondary">
+              Vágás leállítva:{" "}
+              <span className="text-text-primary">
+                {formatIdopont(typeof deliverable.vagas_leallitva === "string" ? deliverable.vagas_leallitva : null)}
+              </span>
+            </p>
           </Card>
         ),
       },

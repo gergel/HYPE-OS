@@ -16,6 +16,8 @@ Assignment-alapú foglalási modellben egyesül."""
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -382,9 +384,45 @@ def _numeric_or_none(value: object) -> float | None:
     return value if isinstance(value, (int, float)) else None
 
 
+def _idopont(value) -> datetime | None:
+    """Notion dátum/időpont -> időzóna-tudatos datetime.
+
+    A Notion csak akkor ad időzónát, ha az érték tartalmaz időt is; a puszta
+    dátumból (pl. "2025-05-01") naiv datetime lenne. A cél-oszlopok viszont
+    timezone-aware-ek, és naiv + aware datetime-ot összehasonlítani hiba -
+    ezért az időzóna nélkülieket UTC-nek vesszük."""
+    ertek = as_datetime(value)
+    if ertek is None:
+        return None
+    return ertek if ertek.tzinfo is not None else ertek.replace(tzinfo=timezone.utc)
+
+
+def _veg_datum(props: dict) -> datetime | None:
+    """A mérés leállításának időpontja. A Notion tábláiban ugyanez a mező több
+    írásmóddal is előfordul ("End Date" / "End date"), ezért mindet megnézzük -
+    egy elgépelés miatt ne veszítsük el az adatot.
+
+    Időpontként (és NEM puszta dátumként): a lényeg épp az, hogy MIKOR (hány
+    órakor) állították le - a dátumra csonkolás pont ezt dobná el."""
+    for kulcs in ("End Date", "End date", "end date", "Vége"):
+        ertek = _idopont(props.get(kulcs))
+        if ertek is not None:
+            return ertek
+    return None
+
+
 def _import_timesheet_database(
-    client: NotionClient, db: Session, database_id: str, result: ImportResult, deliverable_relation_field: str
+    client: NotionClient,
+    db: Session,
+    database_id: str,
+    result: ImportResult,
+    deliverable_relation_field: str,
+    *,
+    leallitasok: dict[int, datetime] | None = None,
 ) -> None:
+    """`leallitasok`: ha kap egy szótárat, utómunkánként gyűjti a LEGKÉSŐBBI
+    leállítási időpontot (End Date). Csak a 'Timesheet Public' táblánál adjuk
+    át - a felhasználó kérése szerint az utómunka leállítási ideje onnan jön."""
     for page in client.query_database(database_id):
         props = extract_properties(page, client)
         employee_id = resolve_relation_id(db, "Employee", props.get("Vágó") or [])
@@ -392,6 +430,8 @@ def _import_timesheet_database(
             result.skipped += 1
             continue
 
+        deliverable_id = resolve_relation_id(db, "Deliverable", props.get(deliverable_relation_field) or [])
+        vege = _veg_datum(props)
         koltseg = props.get("Költség")
         safe_upsert(
             db,
@@ -401,9 +441,9 @@ def _import_timesheet_database(
             page["id"],
             {
                 "employee_id": employee_id,
-                "deliverable_id": resolve_relation_id(db, "Deliverable", props.get(deliverable_relation_field) or []),
-                "start_date": as_date(props.get("Start Date")),
-                "end_date": as_date(props.get("End Date")),
+                "deliverable_id": deliverable_id,
+                "start_date": _idopont(props.get("Start Date")) or _idopont(props.get("Start date")),
+                "end_date": vege,
                 "koltseg": koltseg if isinstance(koltseg, (int, float)) else None,
                 "statusz": _text(props.get("Státusz")),
                 "completed": bool(props.get("Completed")),
@@ -428,13 +468,36 @@ def _import_timesheet_database(
             label=f"Timesheet (employee_id={employee_id})",
         )
 
+        if leallitasok is not None and deliverable_id is not None and vege is not None:
+            # A LEGKÉSŐBBI leállítás számít: egy utómunkán több mérés is futhatott
+            # (több vágó, vagy ugyanaz többször), a kérdés pedig az, mikor
+            # állították le utoljára. A tábla sorrendje nem garantált, ezért
+            # hasonlítunk, nem egyszerűen felülírunk.
+            meglevo = leallitasok.get(deliverable_id)
+            if meglevo is None or meglevo < vege:
+                leallitasok[deliverable_id] = vege
+
 
 def import_timesheets(client: NotionClient, db: Session) -> ImportResult:
     """Timesheet <- 'Timesheet Public' + 'Timesheet Private' (a mi sémánkban nincs
-    külön visibility mező, a kettő egy egységes Timesheet listába kerül)."""
+    külön visibility mező, a kettő egy egységes Timesheet listába kerül).
+
+    A 'Timesheet Public' sorai emellett az utómunkára is felírják, mikor
+    állították le a vágás mérőjét (Deliverable.vagas_leallitva) - ez az adat az
+    Utómunka táblában nincs benne, csak itt, az 'End Date' mezőben."""
     result = ImportResult(entity_type="Timesheet")
-    _import_timesheet_database(client, db, db_ids.TIMESHEET_PUBLIC, result, "Utómunka_2")
+    leallitasok: dict[int, datetime] = {}
+    _import_timesheet_database(client, db, db_ids.TIMESHEET_PUBLIC, result, "Utómunka_2", leallitasok=leallitasok)
     _import_timesheet_database(client, db, db_ids.TIMESHEET_PRIVATE, result, "Utómunka_1")
+
+    # A Timesheet Public a mérvadó forrás: amit ott találtunk, az felülírja a
+    # korábbi értéket (akár egy migrációs becslést, akár egy előző futásét) -
+    # nem "csak ha későbbi", különben egy téves régi érték örökre beragadna.
+    for deliverable_id, vege in leallitasok.items():
+        utomunka = db.get(Deliverable, deliverable_id)
+        if utomunka is not None:
+            utomunka.vagas_leallitva = vege
+    db.flush()
     return result
 
 

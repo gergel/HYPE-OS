@@ -40,6 +40,7 @@ class DeliverableListItem(BaseModel):
     assigned_to_employee_id: int | None = None
     vinyok: JsonScalar = None
     anyag_kikuldve: bool = False
+    vagas_leallitva: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -77,6 +78,7 @@ class DeliverableRead(DeliverableBase):
     jovairando_pont: float | None = None
     timesheet_public_notion_ids: JsonScalar = None
     timesheet_private_notion_ids: JsonScalar = None
+    vagas_leallitva: datetime | None = None
     forgatas_datuma_notion: str | None = None
     esemeny_neve: str | None = None
     aki_ellenorzesbe_tette_notion_ids: JsonScalar = None

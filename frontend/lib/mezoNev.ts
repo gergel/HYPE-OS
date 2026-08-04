@@ -18,6 +18,7 @@ const LABEL_OVERRIDES: Record<string, string> = {
   plusz_afa: "Plusz ÁFA",
   munkaszerzodes_url: "Munkaszerződés",
   email: "Email cím",
+  vagas_leallitva: "Vágás leállítva",
 };
 
 export function humanizeKey(key: string): string {
