@@ -25,6 +25,11 @@ class SystemRole(StrEnum):
     OPERATOR = "operator"
     VAGO = "vago"
     UGYFEL = "ugyfel"
+    #: Aki a projektek teljes "papírozásáért" felel: belsős TIG, külsős TIG és
+    #: alvállalkozói szerződés (utánkövetés), valamint a megrendelő felé menő
+    #: szerződés és TIG. Nekik a dashboard "Teendőim" widgete külön felhozza
+    #: ezeket a hiányzó papírokat (lásd routes/dashboard.py _papirozas_tasks).
+    ADMINISZTRACIO = "adminisztracio"
 
 
 class Employee(TimestampMixin, Base):

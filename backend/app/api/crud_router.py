@@ -14,7 +14,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import Role, check_page_action, check_tab_action, get_current_user, require_roles
+from app.core.security import (
+    DEFAULT_WRITE_ROLES,
+    Role,
+    check_page_action,
+    check_tab_action,
+    get_current_user,
+    require_roles,
+)
 from app.models.employee import Employee
 from app.services import entity_fields
 from app.services.detail_tabs import OTHER_TAB_KEY, get_field_tab_map
@@ -47,7 +54,7 @@ def build_crud_router(
     prefix: str,
     tags: list[str],
     page: str,
-    write_roles: tuple[Role, ...] = (Role.ADMIN, Role.OPERATOR),
+    write_roles: tuple[Role, ...] = DEFAULT_WRITE_ROLES,
     before_create: Callable[[dict, Session], dict] | None = None,
     m2m_fields: dict[str, tuple[str, type]] | None = None,
     list_read_schema: type[BaseModel] | None = None,

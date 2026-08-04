@@ -10,7 +10,10 @@
  * durvább szerepkör-ellenőrzést a page_permissions (ha be van állítva)
  * tovább szűkítheti, de sosem bővítheti. Ezért mindkét feltételnek teljesülnie
  * kell. */
-const WRITE_ROLES = new Set(["admin", "operator"]);
+/** Ugyanaz, mint a backend DEFAULT_WRITE_ROLES (lásd core/security.py) - az
+ * Adminisztráció szerepkör azért írhat, mert épp az a dolga, hogy a papírokat
+ * (TIG-ek, szerződések) elkészítse. */
+const WRITE_ROLES = new Set(["admin", "operator", "adminisztracio"]);
 
 export function canDoAction(
   role: string | undefined | null,

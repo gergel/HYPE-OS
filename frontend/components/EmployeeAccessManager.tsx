@@ -1,9 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FieldVisibilityManager } from "@/components/FieldVisibilityManager";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
+import { SelectDropdown } from "@/components/SelectDropdown";
 import { UserAccessManager } from "@/components/UserAccessManager";
+import { authFetch } from "@/lib/authFetch";
 
 type EmployeeOption = { id: number; full_name: string; email: string | null; role: string; has_password: boolean };
 type PageOption = { page: string; label: string };
@@ -13,11 +16,24 @@ type PageAccessConfig = { employee_id: number; page_permissions: Record<string, 
 type FieldVisibilityConfig = { employee_id: number; entity_type: string; visible_fields: string[] | null };
 type DbTab = { tab_key: string; label: string };
 
+/** A szerepkörök emberi nevei. A kulcsok a backend SystemRole értékei
+ * (lásd models/employee.py) - korábban itt "editor"/"client" szerepelt, ami
+ * sosem létezett, ezért a Vágó/Ügyfél szerepkörnél a nyers kód látszott. */
 const ROLE_LABEL: Record<string, string> = {
   admin: "Admin",
   operator: "Operatőr",
-  editor: "Vágó",
-  client: "Ügyfél",
+  vago: "Vágó",
+  ugyfel: "Ügyfél",
+  adminisztracio: "Adminisztráció",
+};
+
+const ROLE_ORDER = ["admin", "adminisztracio", "operator", "vago", "ugyfel"];
+
+/** A szerepkör magyarázata - hogy ne kelljen kitalálni, mit ad az
+ * Adminisztráció szerepkör. */
+const ROLE_LEIRAS: Record<string, string> = {
+  adminisztracio:
+    "A projektek papírozásáért felel - a Teendőim widget felhozza neki a hiányzó belsős/külsős TIG-eket, az alvállalkozói és a megrendelői szerződéseket.",
 };
 
 /** Kereshető munkatárs-választó a Beállítások oldalon - sok (akár több száz,
@@ -42,6 +58,28 @@ export function EmployeeAccessManager({
 }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [szerepkorBusy, setSzerepkorBusy] = useState(false);
+  const router = useRouter();
+
+  async function mentSzerepkor(employeeId: number, role: string) {
+    setSzerepkorBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/crew/${employeeId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setSzerepkorBusy(false);
+    }
+  }
 
   const pagePermissionsByEmployee = useMemo(
     () => new Map(pageAccessConfigs.map((c) => [c.employee_id, c.page_permissions])),
@@ -129,9 +167,7 @@ export function EmployeeAccessManager({
       {selected && (
         <div className="space-y-4 rounded-[var(--radius)] border border-border p-3">
           <div className="flex items-center justify-between">
-            <p className="text-[13px] font-medium text-text-primary">
-              {selected.full_name} <span className="text-text-muted">({ROLE_LABEL[selected.role] ?? selected.role})</span>
-            </p>
+            <p className="text-[13px] font-medium text-text-primary">{selected.full_name}</p>
             <button
               type="button"
               onClick={() => setSelectedId(null)}
@@ -139,6 +175,26 @@ export function EmployeeAccessManager({
             >
               Másik munkatárs
             </button>
+          </div>
+
+          {/* Szerepkör: eddig csak KIÍRVA volt, átállítani nem lehetett -
+              pedig pl. az Adminisztráció szerepkört valakihez hozzá kell tudni
+              rendelni. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] text-text-secondary">Szerepkör:</span>
+            <SelectDropdown
+              value={ROLE_LABEL[selected.role] ?? selected.role}
+              options={ROLE_ORDER.map((r) => ROLE_LABEL[r])}
+              onChange={(label) => {
+                const role = ROLE_ORDER.find((r) => ROLE_LABEL[r] === label);
+                if (role) void mentSzerepkor(selected.id, role);
+              }}
+              placeholder="Szerepkör"
+              disabled={szerepkorBusy}
+            />
+            {ROLE_LEIRAS[selected.role] && (
+              <span className="text-[12px] text-text-muted">{ROLE_LEIRAS[selected.role]}</span>
+            )}
           </div>
 
           <UserAccessManager

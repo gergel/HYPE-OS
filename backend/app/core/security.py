@@ -54,6 +54,13 @@ def get_current_user(
     return user
 
 
+#: Kik írhatnak alapértelmezetten (a page_permissions ezt tovább szűkítheti,
+#: de sosem bővítheti). Az Adminisztráció szerepkör azért van itt, mert épp az
+#: a dolga, hogy a papírokat (TIG-ek, szerződések) elkészítse - olvasási joggal
+#: a szerepkör értelmetlen lenne.
+DEFAULT_WRITE_ROLES: tuple[Role, ...] = (Role.ADMIN, Role.OPERATOR, Role.ADMINISZTRACIO)
+
+
 def require_roles(*roles: Role):
     def dependency(current_user: Employee = Depends(get_current_user)) -> Employee:
         if current_user.role not in roles:
@@ -117,7 +124,7 @@ def require_page_action(page: str, action: str, *write_roles: Role):
     - pl. equipment.py Assignment create/delete - ugyanazt az oldal+művelet-
     szintű ellenőrzést adja, mint amit a build_crud_router minden generikus
     create/update/delete végpontja automatikusan megkap."""
-    write_roles = write_roles or (Role.ADMIN, Role.OPERATOR)
+    write_roles = write_roles or DEFAULT_WRITE_ROLES
     role_dependency = require_roles(*write_roles)
 
     def dependency(current_user: Employee = Depends(role_dependency), db: Session = Depends(get_db)) -> Employee:

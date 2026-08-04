@@ -12,7 +12,7 @@ from app.core.security import get_current_user
 from app.models.dashboard_config import DashboardConfig
 from app.models.deliverable import Deliverable
 from app.models.dispo_responsible import DispoResponsible, DispoSide
-from app.models.employee import Employee
+from app.models.employee import Employee, SystemRole
 from app.models.finance import Revenue
 from app.models.project import Project
 from app.models.project_code import ProjectCode
@@ -53,6 +53,10 @@ class MyTasksSummary(BaseModel):
     # models/dispo_responsible.py). Külön lista, mert nem egy Feladat/Utómunka
     # rekordból jön, hanem a forgatás diszpó-állapotából származtatjuk.
     diszpok: list[MyTaskItem] = []
+    # A projektek "papírozása" (belsős TIG, külsős TIG + alvállalkozói
+    # szerződés, megrendelői szerződés + TIG) - csak az Adminisztráció
+    # szerepkörűeknek, lásd _papirozas_tasks.
+    papirozas: list[MyTaskItem] = []
 
 
 class DashboardSummary(BaseModel):
@@ -184,7 +188,100 @@ def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get
         ],
         tasks=[MyTaskItem(id=t.id, title=t.feladat, hatarido=t.hatarido, link="/feladatok") for t in tasks],
         diszpok=_tomorrow_dispo_tasks(db, current_user),
+        papirozas=_papirozas_tasks(db, current_user),
     )
+
+
+def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
+    """A projektek teljes "papírozása" teendőként - CSAK az Adminisztráció
+    szerepkörűeknek (lásd models/employee.SystemRole.ADMINISZTRACIO).
+
+    Három terület, ugyanaz, amit a saját oldalaik mutatnak - itt csak
+    összegyűjtve, hogy egy helyen látszódjon, mi maradt hátra:
+
+      1. Belsős TIG - havonta, mindenkinek (lásd belsos-tig/attekintes),
+      2. Külsős TIG + alvállalkozói szerződés a diszpózott projektekhez
+         (lásd Utókövetés),
+      3. a megrendelő felé menő szerződés és TIG projektkódonként.
+
+    Szándékosan a MÁR ESEDÉKES tételek jönnek: a belsős TIG-nél csak az a
+    hónap, aminek a határideje elérkezett (a jövő havi TIG-et még nem lehet
+    elkészíteni), a megrendelői TIG-nél pedig csak az a projektkód, amin már
+    volt kiküldött diszpójú forgatás - amíg a munka el sem kezdődött, nincs
+    mit igazolni."""
+    if user.role != SystemRole.ADMINISZTRACIO:
+        return []
+
+    # A körkörös import elkerülésére a hívás helyén importálunk: ezek a modulok
+    # a saját területük logikáját tartják karban, itt csak felhasználjuk őket.
+    from app.api.routes.internal_performance_certificates import havi_attekintes
+    from app.api.routes.utokovetes_admin import list_utokovetes_overview
+
+    today = date.today()
+    items: list[MyTaskItem] = []
+
+    # 1. Belsős TIG - hónaponként egy tétel, a hiányzók számával.
+    for honap in havi_attekintes(honapok=6, db=db, _user=user):
+        if honap.allapot == "lezarva" or honap.hatarido > today:
+            continue
+        items.append(
+            MyTaskItem(
+                id=honap.ev * 100 + honap.honap,
+                title=f"Belsős TIG – {honap.honap_szoveg}: {honap.hianyzo} hiányzik",
+                hatarido=honap.hatarido,
+                link=f"/belsos-tig?ev={honap.ev}&honap={honap.honap}",
+            )
+        )
+
+    # 2. Külsős TIG + alvállalkozói szerződés (Utókövetés) - projektenként
+    #    külön tétel a kettőre, mert két külön elvégzendő dolog.
+    for sor in list_utokovetes_overview(db=db, _user=user):
+        nev = sor.project_nev or f"Projekt #{sor.project_id}"
+        if sor.szerzodes_fuggo > 0:
+            items.append(
+                MyTaskItem(
+                    id=sor.project_id,
+                    title=f"Alvállalkozói szerződés – {nev}: {sor.szerzodes_fuggo} hiányzik",
+                    hatarido=sor.forgatas_datuma,
+                    link=f"/utokovetes/{sor.project_id}",
+                )
+            )
+        if sor.tig_ready and sor.tig_fuggo > 0:
+            items.append(
+                MyTaskItem(
+                    id=sor.project_id,
+                    title=f"Külsős TIG – {nev}: {sor.tig_fuggo} hiányzik",
+                    hatarido=sor.forgatas_datuma,
+                    link=f"/utokovetes/{sor.project_id}",
+                )
+            )
+
+    # 3. Megrendelői szerződés és TIG - projektkódonként.
+    for pc in db.scalars(select(ProjectCode).order_by(ProjectCode.projektkod)):
+        if pc.contract_id is None:
+            items.append(
+                MyTaskItem(
+                    id=pc.id,
+                    title=f"Megrendelői szerződés – {pc.projektkod}",
+                    hatarido=pc.datum,
+                    link=f"/projektek/project-kodok/{pc.id}",
+                )
+            )
+        # TIG csak akkor, ha a munka már el is indult (volt kiküldött diszpójú
+        # forgatás) - enélkül minden jövőbeli projektkód örökre teendő lenne.
+        elif not pc.tig_kikuldve and any(p.diszpo == "Kiküldve" for p in pc.projects):
+            items.append(
+                MyTaskItem(
+                    id=pc.id,
+                    title=f"Megrendelői TIG – {pc.projektkod}",
+                    hatarido=pc.datum,
+                    link=f"/projektek/project-kodok/{pc.id}",
+                )
+            )
+
+    # A legrégebbi határidő elöl (a dátum nélküliek a végén) - ami régebb óta
+    # húzódik, azzal kell előbb foglalkozni.
+    return sorted(items, key=lambda i: (i.hatarido is None, i.hatarido or today))
 
 
 def _tomorrow_dispo_tasks(db: Session, user: Employee) -> list[MyTaskItem]:

@@ -35,8 +35,8 @@ export function AlertsCard({ alerts, allowedPages }: { alerts: DashboardAlerts; 
 }
 
 export function MyTasksCard({ myTasks }: { myTasks: MyTasksSummary }) {
-  const { deliverables, tasks, diszpok } = myTasks;
-  if (deliverables.length === 0 && tasks.length === 0 && diszpok.length === 0) {
+  const { deliverables, tasks, diszpok, papirozas = [] } = myTasks;
+  if (deliverables.length === 0 && tasks.length === 0 && diszpok.length === 0 && papirozas.length === 0) {
     return <p className="text-[13px] text-text-muted">Nincs nyitott teendőd.</p>;
   }
   return (
@@ -55,6 +55,29 @@ export function MyTasksCard({ myTasks }: { myTasks: MyTasksSummary }) {
                 >
                   <span className="truncate text-text-primary">{d.title}</span>
                   {d.hatarido && <span className="shrink-0 text-text-secondary">{formatShortDate(d.hatarido)}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* Papírozás: csak az Adminisztráció szerepkörűeknek jön vissza a
+          backendtől (belsős/külsős TIG, alvállalkozói és megrendelői
+          szerződés) - lásd routes/dashboard.py _papirozas_tasks. */}
+      {papirozas.length > 0 && (
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+            Papírozás ({papirozas.length})
+          </p>
+          <ul className="space-y-1">
+            {papirozas.map((p, i) => (
+              <li key={`papir-${p.id}-${i}`}>
+                <Link
+                  href={p.link}
+                  className="flex items-center justify-between gap-3 rounded-[var(--radius)] px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-3"
+                >
+                  <span className="truncate text-text-primary">{p.title}</span>
+                  {p.hatarido && <span className="shrink-0 text-text-secondary">{formatShortDate(p.hatarido)}</span>}
                 </Link>
               </li>
             ))}

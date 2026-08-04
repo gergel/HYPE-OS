@@ -923,6 +923,10 @@ export type MyTasksSummary = {
   /** A másnapi forgatások diszpói, ha a felhasználó diszpó-felelős (lásd
    * backend models/dispo_responsible.py). */
   diszpok: MyTaskItem[];
+  /** A projektek papírozása (belsős/külsős TIG, alvállalkozói és megrendelői
+   * szerződés) - csak az Adminisztráció szerepkörűeknek jön vissza (lásd
+   * backend routes/dashboard.py _papirozas_tasks). */
+  papirozas: MyTaskItem[];
 };
 
 /** Ki felel a diszpó kiküldéséért, oldalanként (gyártás / technika) - a
