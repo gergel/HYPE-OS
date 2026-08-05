@@ -49,16 +49,30 @@ def upgrade() -> None:
 
     # 1. Biztos párosítás: a privát sor relationje pont egy importált public
     #    sorra mutat -> ugyanaz a mérés.
+    #
+    # A JSON mező nem garantáltan tömb: éles adatban skalár (egyetlen string)
+    # is előfordul, amin a jsonb_array_elements_text hibára fut ("cannot
+    # extract elements from a scalar"). Ezért típus szerint normalizáljuk:
+    # tömb marad tömb, skalárból egyelemű tömb lesz, minden más üres.
     op.execute(
         """
         CREATE TEMP TABLE torlendo_timesheet AS
-        SELECT DISTINCT t.id
-        FROM timesheets t
-        JOIN LATERAL jsonb_array_elements_text(to_jsonb(t.timesheet_public_notion_ids)) AS par(page_id) ON TRUE
+        WITH parok AS (
+            SELECT t.id,
+                   CASE jsonb_typeof(to_jsonb(t.timesheet_public_notion_ids))
+                       WHEN 'array' THEN to_jsonb(t.timesheet_public_notion_ids)
+                       WHEN 'string' THEN jsonb_build_array(to_jsonb(t.timesheet_public_notion_ids))
+                       ELSE '[]'::jsonb
+                   END AS page_idk
+            FROM timesheets t
+            WHERE t.notion_forras = 'private'
+        )
+        SELECT DISTINCT parok.id
+        FROM parok
+        JOIN LATERAL jsonb_array_elements_text(parok.page_idk) AS par(page_id) ON TRUE
         JOIN notion_import_map m
           ON m.entity_type = 'Timesheet' AND m.notion_page_id = par.page_id
         JOIN timesheets p ON p.id = m.entity_id AND p.notion_forras = 'public'
-        WHERE t.notion_forras = 'private'
         """
     )
 

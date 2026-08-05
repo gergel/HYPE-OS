@@ -469,7 +469,13 @@ def _mar_megvan_publicbol(
 
     Ha egy KORÁBBI import már behozta a duplikátumot, itt töröljük is - így egy
     újrafuttatás magától rendbe teszi a megkettőzött időket."""
-    parja = props.get("Timesheet Public") or []
+    # A relation értéke rendes esetben lista, de éles adatban egyetlen string
+    # is előfordul - egy sztringen végigiterálva karakterenként hasonlítanánk.
+    parja = props.get("Timesheet Public")
+    if isinstance(parja, str):
+        parja = [parja]
+    elif not isinstance(parja, list):
+        parja = []
     duplikatum = any(pid in public_page_idk for pid in parja if isinstance(pid, str))
     if not duplikatum and kulcs[0] is not None and kulcs[2] is not None:
         duplikatum = kulcs in public_kulcsok
