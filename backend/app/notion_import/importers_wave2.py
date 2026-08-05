@@ -16,7 +16,7 @@ Assignment-alapú foglalási modellben egyesül."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -413,6 +413,34 @@ def _veg_datum(props: dict) -> datetime | None:
     return None
 
 
+def _lezart_idopontok(props: dict) -> tuple[datetime | None, datetime | None]:
+    """Egy importált mérés kezdete és VÉGE - a vég mindig ki van töltve.
+
+    A Notionból áthozott mérés sosem lehet "épp fut": a futó mérés azt
+    jelenti, hogy valaki MOST dolgozik rajta, és a felület ennek megfelelően
+    ketyegteti tovább az időt és a költséget (lásd deliverable_actions.
+    get_timer_state - futó az, aminek nincs end_date-je). Egy évekkel ezelőtti
+    sorból így napokban mért, több százezer forintos "futó" mérés lett.
+
+    Ezért ha az End Date hiányzik (a Notionban is nyitva maradt a mérő), a
+    lezárás időpontját a mért időből számoljuk: kezdés + Time (minutes). Ha az
+    sincs, a kezdés pillanatával zárjuk - nulla perc az őszinte válasz, mert
+    nem tudjuk, meddig tartott, és semmiképp nem szabad tovább ketyegnie."""
+    start = _idopont(props.get("Start Date")) or _idopont(props.get("Start date"))
+    vege = _veg_datum(props)
+    if vege is not None:
+        # Kezdés nélküli, de lezárt sor: a kezdést a mért időből számoljuk
+        # vissza, hogy az időtartam ne legyen értelmezhetetlen.
+        if start is None:
+            percek = _numeric_or_none(props.get("Time (minutes)"))
+            start = (vege - timedelta(minutes=float(percek))) if percek else vege
+        return start, vege
+    if start is None:
+        return None, None
+    percek = _numeric_or_none(props.get("Time (minutes)"))
+    return start, (start + timedelta(minutes=float(percek))) if percek else start
+
+
 def _import_timesheet_database(
     client: NotionClient,
     db: Session,
@@ -433,6 +461,10 @@ def _import_timesheet_database(
             continue
 
         deliverable_id = resolve_relation_id(db, "Deliverable", props.get(deliverable_relation_field) or [])
+        # A mérés MINDIG lezárva jön be (lásd _lezart_idopontok). Az utómunka
+        # leállítási idejéhez viszont csak a VALÓDI End Date számít - egy
+        # számolt lezárás nem "leállítás", azt nem írjuk az utómunkára.
+        start, lezaras = _lezart_idopontok(props)
         vege = _veg_datum(props)
         koltseg = props.get("Költség")
         safe_upsert(
@@ -444,8 +476,8 @@ def _import_timesheet_database(
             {
                 "employee_id": employee_id,
                 "deliverable_id": deliverable_id,
-                "start_date": _idopont(props.get("Start Date")) or _idopont(props.get("Start date")),
-                "end_date": vege,
+                "start_date": start,
+                "end_date": lezaras,
                 "koltseg": koltseg if isinstance(koltseg, (int, float)) else None,
                 "statusz": _text(props.get("Státusz")),
                 "completed": bool(props.get("Completed")),

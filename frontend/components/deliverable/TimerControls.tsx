@@ -142,8 +142,12 @@ export function TimerControls({
           amiből nem derült ki, kihez tartozik (és a másokét nem is mutatta). */}
       {futok.length > 0 && (
         <div className="mb-3 space-y-1">
+          {/* A kulcsban a kezdés is benne van: ugyanahhoz az emberhez
+              elvileg egy futó mérés tartozik (a Start ezt kikényszeríti), de
+              egy hibás adatból származó második sor így sem borítja fel a
+              listát. */}
           {futok.map((r) => (
-            <div key={r.employee_id} className="flex items-center justify-between gap-2 text-[12px]">
+            <div key={`${r.employee_id}-${r.since}`} className="flex items-center justify-between gap-2 text-[12px]">
               <span className="text-text-primary">{r.full_name}</span>
               <span className="flex items-center gap-2">
                 <span suppressHydrationWarning className="tabular-nums text-text-warning">
