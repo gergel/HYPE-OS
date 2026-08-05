@@ -933,11 +933,34 @@ export type HaviTetel = {
   tipus: "alapber" | "extra";
   megnevezes: string;
   osszeg: number;
-  project_id: number | null;
-  project_nev: string | null;
+  project_code_id: number | null;
+  projektkod: string | null;
   datum: string | null;
   megjegyzes: string | null;
 };
+
+/** Egy munkatárs EGY hónapja teljes egészében - ezt nyitja meg a hónap saját
+ * oldala (/belsos-tig/[employeeId]/[ev]/[honap]). */
+export type HonapReszletek = {
+  employee_id: number;
+  full_name: string;
+  ev: number;
+  honap: number;
+  honap_nev: string;
+  record: InternalPerformanceCertificate | null;
+  tetelek: HaviTetel[];
+  alapber: number;
+  extra: number;
+  osszesen: number;
+};
+
+export async function getHonapReszletek(
+  employeeId: number,
+  ev: number,
+  honap: number,
+): Promise<HonapReszletek | null> {
+  return apiGet<HonapReszletek>(`/api/v1/belsos-tig/${employeeId}/${ev}/${honap}/reszletek`);
+}
 
 export type HaviKoltseg = {
   ev: number;

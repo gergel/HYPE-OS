@@ -9,6 +9,7 @@ import { MunkaszerzodesUpload } from "@/components/MunkaszerzodesUpload";
 import { RelatedTable } from "@/components/RelatedTable";
 import { UtomunkaIdoHavonta } from "@/components/UtomunkaIdoHavonta";
 import { HaviKoltsegek } from "@/components/crew/HaviKoltsegek";
+import { EgyebKiadasok } from "@/components/crew/EgyebKiadasok";
 import { VagottAnyagokLista } from "@/components/crew/VagottAnyagokLista";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -20,7 +21,7 @@ import {
   getEmployeeKoltsegek,
   getFieldTypes,
   getMyPagePermissions,
-  getProjects,
+  getProjectCodes,
   getRecord,
   getRelated,
   getUtomunkaIdo,
@@ -76,7 +77,7 @@ export default async function EmployeeDetailPage({
     documents,
     attachments,
     koltsegek,
-    projects,
+    projektkodok,
     utomunkaIdo,
     visibleFields,
     fieldTypes,
@@ -91,7 +92,7 @@ export default async function EmployeeDetailPage({
     getEmployeeDocuments(employeeId),
     getAttachments("employee", employeeId),
     getEmployeeKoltsegek(employeeId),
-    getProjects(),
+    getProjectCodes(),
     getUtomunkaIdo(employeeId),
     getVisibleFields("employee"),
     getFieldTypes("employee"),
@@ -106,7 +107,10 @@ export default async function EmployeeDetailPage({
 
   const szerkeszthet = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
   const torolhet = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
-  const projektOpciok = projects.map((p) => ({ id: p.id, nev: p.nev }));
+  const projektkodOpciok = projektkodok.map((p) => ({ id: p.id, projektkod: p.projektkod }));
+  // Az "Egyéb kiadások" tábla a kiadás projektkód-azonosítójából a KÓDOT írja
+  // ki, nem a nyers id-t - ehhez kell a feloldás.
+  const projektkodNevek = Object.fromEntries(projektkodok.map((p) => [p.id, p.projektkod]));
 
   /* MINDEN blokk szekcióként megy be, nem a lap aljára fixen kirakva - így az
      admin által beállított sorrend (fogd és vidd) ugyanúgy vonatkozik rájuk,
@@ -194,19 +198,14 @@ export default async function EmployeeDetailPage({
             <HaviKoltsegek
               employeeId={employee.id}
               evek={koltsegek}
-              projektek={projektOpciok}
+              projektkodok={projektkodOpciok}
               szerkeszthet={szerkeszthet}
               torolhet={torolhet}
             />
             {expenses.length > 0 && (
               <div className="mt-6 border-t border-border pt-5">
-                <p className="t-label mb-3">Egyéb kiadás-tételek ({expenses.length})</p>
-                <RelatedTable
-                  rows={expenses}
-                  emptyText="Nincs egyéb kiadás."
-                  getHref={(e) => `/penzugyek/kiadas/${e.id}`}
-                  deleteBasePath={ENTITY_PATHS.expense}
-                />
+                <p className="t-label mb-3">Egyéb kiadások ({expenses.length})</p>
+                <EgyebKiadasok kiadasok={expenses} projektkodNevek={projektkodNevek} />
               </div>
             )}
           </Card>

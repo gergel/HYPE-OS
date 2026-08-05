@@ -479,7 +479,7 @@ export function BelsosTigManager({
                         <li key={t.id} className="flex items-baseline justify-between gap-3 text-[12.5px]">
                           <span className="min-w-0 truncate text-text-secondary">
                             {t.megnevezes}
-                            {t.project_nev ? ` · ${t.project_nev}` : ""}
+                            {t.projektkod ? ` · ${t.projektkod}` : ""}
                           </span>
                           <span className="shrink-0 text-text-primary tabular-nums">{formatHuf(t.osszeg)}</span>
                         </li>

@@ -1,15 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { SearchableIdPicker } from "@/components/SearchableIdPicker";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { formatHuf } from "@/lib/penz";
 import type { EvesKoltseg, HaviKoltseg, HaviTetel } from "@/lib/api";
 
-type ProjektOpcio = { id: number; nev: string };
+/** A választható projektkódok - a kereshető listát ebből építjük
+ * (SearchableIdPicker), mert több száz projektkódnál egy sima legördülő
+ * használhatatlan lenne. */
+export type ProjektkodOpcio = { id: number; projektkod: string };
 
 const HONAP_NEVEK = [
   "január", "február", "március", "április", "május", "június",
@@ -30,7 +35,7 @@ function TetelSzerkeszto({
   ev,
   honap,
   tetelek,
-  projektek,
+  projektkodok,
   szerkeszthet,
   torolhet,
   zarolt,
@@ -40,7 +45,7 @@ function TetelSzerkeszto({
   ev: number;
   honap: number;
   tetelek: HaviTetel[];
-  projektek: ProjektOpcio[];
+  projektkodok: ProjektkodOpcio[];
   szerkeszthet: boolean;
   torolhet: boolean;
   zarolt: boolean;
@@ -56,7 +61,8 @@ function TetelSzerkeszto({
   const [tipus, setTipus] = useState<"alapber" | "extra">("extra");
   const [megnevezes, setMegnevezes] = useState("");
   const [osszeg, setOsszeg] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [projectCodeId, setProjectCodeId] = useState<number | null>(null);
+  const [datum, setDatum] = useState("");
 
   const vanAlapber = tetelek.some((t) => t.tipus === "alapber");
 
@@ -71,7 +77,8 @@ function TetelSzerkeszto({
           tipus,
           megnevezes: megnevezes.trim(),
           osszeg: Number(osszeg) || 0,
-          project_id: projectId ? Number(projectId) : null,
+          project_code_id: projectCodeId,
+          datum: datum || null,
         }),
       });
       if (!res.ok) {
@@ -81,7 +88,8 @@ function TetelSzerkeszto({
       }
       setMegnevezes("");
       setOsszeg("");
-      setProjectId("");
+      setProjectCodeId(null);
+      setDatum("");
       setNyitva(false);
       router.refresh();
     } finally {
@@ -118,7 +126,11 @@ function TetelSzerkeszto({
                     <StatusBadge label="Alapbér" tone="neutral" />
                   </span>
                 )}
-                {t.project_nev && <span className="mt-0.5 block text-[12px] text-text-muted">{t.project_nev}</span>}
+                {(t.projektkod || t.datum) && (
+                  <span className="mt-0.5 block text-[12px] text-text-muted">
+                    {[t.projektkod, t.datum].filter(Boolean).join(" · ")}
+                  </span>
+                )}
               </span>
               <span className="shrink-0 text-[13px] text-text-primary tabular-nums">{formatHuf(t.osszeg)}</span>
               {torolhet && !zarolt && (
@@ -178,16 +190,22 @@ function TetelSzerkeszto({
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="t-label">Projekt</span>
-              <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="field w-[190px]">
-                <option value="">Nincs projekthez kötve</option>
-                {projektek.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nev}
-                  </option>
-                ))}
-              </select>
+              <span className="t-label">Pontos dátum</span>
+              <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} className="field w-[160px]" />
             </label>
+            <div className="flex flex-col gap-1.5">
+              <span className="t-label">Projektkód</span>
+              {/* Kereshető lista: a projektkódok száma évek alatt több százra
+                  nő, egy sima legördülőben nem lehetne megtalálni egyet. */}
+              <SearchableIdPicker
+                value={projectCodeId}
+                options={projektkodok.map((p) => ({ id: p.id, label: p.projektkod }))}
+                onChange={setProjectCodeId}
+                placeholder="Nincs projektkódhoz kötve"
+                disabled={busy}
+                className="w-[210px]"
+              />
+            </div>
             <button type="button" onClick={hozzaad} disabled={busy} className="btn btn-primary">
               {busy ? "Mentés…" : "Hozzáadás"}
             </button>
@@ -208,13 +226,13 @@ function TetelSzerkeszto({
 function HonapSor({
   employeeId,
   honap,
-  projektek,
+  projektkodok,
   szerkeszthet,
   torolhet,
 }: {
   employeeId: number;
   honap: HaviKoltseg;
-  projektek: ProjektOpcio[];
+  projektkodok: ProjektkodOpcio[];
   szerkeszthet: boolean;
   torolhet: boolean;
 }) {
@@ -238,6 +256,17 @@ function HonapSor({
         <span className="shrink-0 text-[13.5px] text-text-primary tabular-nums">
           {honap.netto_osszeg === null ? "–" : formatHuf(honap.netto_osszeg)}
         </span>
+        {/* A hónap saját, megnyitható oldala: ott van egyben az alapbér, az
+            extrák és a szumma - megosztható linkkel. A sor kinyitása helyben
+            szerkeszt, ez a link "megnyitja" a hónapot. */}
+        <Link
+          href={`/belsos-tig/${employeeId}/${honap.ev}/${honap.honap}`}
+          onClick={(e) => e.stopPropagation()}
+          title="Hónap megnyitása külön oldalon"
+          className="shrink-0 rounded-[var(--radius)] p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+        >
+          <ExternalLink size={13} />
+        </Link>
       </button>
 
       {nyitva && (
@@ -255,7 +284,7 @@ function HonapSor({
             ev={honap.ev}
             honap={honap.honap}
             tetelek={honap.tetelek}
-            projektek={projektek}
+            projektkodok={projektkodok}
             szerkeszthet={szerkeszthet}
             torolhet={torolhet}
             zarolt={zarolt}
@@ -274,13 +303,13 @@ function HonapSor({
 export function HaviKoltsegek({
   employeeId,
   evek,
-  projektek,
+  projektkodok,
   szerkeszthet,
   torolhet,
 }: {
   employeeId: number;
   evek: EvesKoltseg[];
-  projektek: ProjektOpcio[];
+  projektkodok: ProjektkodOpcio[];
   szerkeszthet: boolean;
   torolhet: boolean;
 }) {
@@ -317,7 +346,7 @@ export function HaviKoltsegek({
               key={`${h.ev}-${h.honap}`}
               employeeId={employeeId}
               honap={h}
-              projektek={projektek}
+              projektkodok={projektkodok}
               szerkeszthet={szerkeszthet}
               torolhet={torolhet}
             />
@@ -342,6 +371,10 @@ export function HaviKoltsegek({
                   )),
                 )}
               </select>
+              <span className="mt-1 text-[12px] text-text-muted">
+                A tételhez megadható pontos dátum is - az elszámolás hónapját attól függetlenül mindig ez a
+                választás dönti el.
+              </span>
             </label>
             <TetelSzerkeszto
               key={ujHonap}
@@ -349,7 +382,7 @@ export function HaviKoltsegek({
               ev={ujEv}
               honap={ujHonapSzam}
               tetelek={[]}
-              projektek={projektek}
+              projektkodok={projektkodok}
               szerkeszthet={szerkeszthet}
               torolhet={torolhet}
               zarolt={false}

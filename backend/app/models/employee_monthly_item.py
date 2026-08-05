@@ -38,13 +38,15 @@ class EmployeeMonthlyItem(TimestampMixin, Base):
     megnevezes: Mapped[str] = mapped_column(String(255), nullable=False)
     osszeg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
 
-    # Melyik projekthez kapcsolódik az extra (túlóra, kiszállás) - a havi
-    # összesítőben így látszik, melyik munka mennyibe került.
-    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
+    # Melyik PROJEKTKÓDHOZ kapcsolódik az extra (túlóra, kiszállás). Nem a
+    # projekthez: egy projektkód alatt több forgatás is futhat, a költséget
+    # viszont a projektkód szintjén tartjuk nyilván (ott áll össze a bevétel
+    # és a kiadás is, lásd models/finance.py Expense.project_code_id).
+    project_code_id: Mapped[int | None] = mapped_column(ForeignKey("project_codes.id"))
     datum: Mapped[date | None] = mapped_column(Date, comment="A tétel napja a hónapon belül (opcionális)")
     megjegyzes: Mapped[str | None] = mapped_column(String(500))
 
     employee: Mapped["Employee"] = relationship(back_populates="monthly_items")
-    project: Mapped["Project | None"] = relationship()
+    project_code: Mapped["ProjectCode | None"] = relationship()
 
     __table_args__ = (Index("ix_employee_monthly_items_employee_honap", "employee_id", "ev", "honap"),)

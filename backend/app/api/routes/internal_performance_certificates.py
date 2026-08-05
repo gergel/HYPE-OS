@@ -707,7 +707,28 @@ class HaviTetelIn(BaseModel):
     tipus: str = "extra"
     megnevezes: str
     osszeg: float = 0
-    project_id: int | None = None
+    project_code_id: int | None = None
+    #: A tétel pontos napja (pl. mikor volt a túlóra, mikor vonták le).
+    #: SZÁNDÉKOSAN nem befolyásolja, melyik hónaphoz tartozik a tétel: azt
+    #: kizárólag az URL-ben megadott (ev, honap) dönti el. Így egy hónap végi
+    #: elszámolásba be lehet tenni egy más napra eső tételt is anélkül, hogy
+    #: átugrana egy másik hónapba.
+    datum: date | None = None
+    megjegyzes: str | None = None
+
+
+class HaviTetelPatch(BaseModel):
+    """Részleges módosítás: CSAK a ténylegesen elküldött mezőket írjuk át.
+
+    Külön séma a felvitelitől, mert ott minden mező kötelező. Ha itt is a
+    felviteli sémát használnánk, egy "csak az összeget írom át" kérés némán
+    törölné a tétel projektkódját és dátumát - a hiányzó mező ugyanis
+    None-ként érkezne."""
+
+    tipus: str | None = None
+    megnevezes: str | None = None
+    osszeg: float | None = None
+    project_code_id: int | None = None
     datum: date | None = None
     megjegyzes: str | None = None
 
@@ -720,8 +741,8 @@ class HaviTetelRead(BaseModel):
     tipus: str
     megnevezes: str
     osszeg: float
-    project_id: int | None = None
-    project_nev: str | None = None
+    project_code_id: int | None = None
+    projektkod: str | None = None
     datum: date | None = None
     megjegyzes: str | None = None
 
@@ -730,7 +751,7 @@ class HaviTetelRead(BaseModel):
 
 def _tetel_kimenet(tetel: EmployeeMonthlyItem) -> HaviTetelRead:
     adat = HaviTetelRead.model_validate(tetel)
-    adat.project_nev = tetel.project.nev if tetel.project else None
+    adat.projektkod = tetel.project_code.projektkod if tetel.project_code else None
     return adat
 
 
@@ -819,7 +840,7 @@ def create_havi_tetel(
         tipus=payload.tipus,
         megnevezes=payload.megnevezes.strip() or ("Alapbér" if payload.tipus == "alapber" else "Extra"),
         osszeg=payload.osszeg,
-        project_id=payload.project_id,
+        project_code_id=payload.project_code_id,
         datum=payload.datum,
         megjegyzes=payload.megjegyzes,
     )
@@ -834,7 +855,7 @@ def create_havi_tetel(
 @router.patch("/tetelek/{tetel_id}", response_model=HaviTetelRead)
 def update_havi_tetel(
     tetel_id: int,
-    payload: HaviTetelIn,
+    payload: HaviTetelPatch,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
@@ -842,11 +863,13 @@ def update_havi_tetel(
     if tetel is None:
         raise HTTPException(status_code=404, detail="A tétel nem található")
     _tiltsd_ha_lezart(db, tetel.employee_id, tetel.ev, tetel.honap)
-    tetel.megnevezes = payload.megnevezes.strip() or tetel.megnevezes
-    tetel.osszeg = payload.osszeg
-    tetel.project_id = payload.project_id
-    tetel.datum = payload.datum
-    tetel.megjegyzes = payload.megjegyzes
+    # Csak a ténylegesen elküldött mezők - lásd HaviTetelPatch.
+    for mezo, ertek in payload.model_dump(exclude_unset=True).items():
+        if mezo == "megnevezes":
+            ertek = (ertek or "").strip() or tetel.megnevezes
+        # Az (ev, honap) SZÁNDÉKOSAN nincs a módosítható mezők közt: egy tétel
+        # hovatartozását mindig a hónap-választás dönti el, nem a dátuma.
+        setattr(tetel, mezo, ertek)
     db.flush()
     _ujraszamol_tig_osszeget(db, tetel.employee, tetel.ev, tetel.honap)
     db.commit()
@@ -890,6 +913,60 @@ class EvesKoltseg(BaseModel):
     ev: int
     osszesen: float
     honapok: list[HaviKoltseg]
+
+
+class HonapReszletek(BaseModel):
+    """Egy munkatárs EGY hónapja teljes egészében - ezt nyitja meg a saját
+    oldala (lásd frontend app/(app)/belsos-tig/[employeeId]/[ev]/[honap])."""
+
+    employee_id: int
+    full_name: str
+    ev: int
+    honap: int
+    honap_nev: str
+    record: InternalPerformanceCertificateRead | None = None
+    tetelek: list[HaviTetelRead] = []
+    alapber: float = 0
+    extra: float = 0
+    osszesen: float = 0
+
+
+@router.get("/{employee_id}/{ev}/{honap}/reszletek", response_model=HonapReszletek)
+def honap_reszletek(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Egy hónap teljes képe: az alapbér, a hozzáadott extrák, a szumma, és a
+    hónap TIG-je (állapot, dokumentum, számlák).
+
+    Az `osszesen` a TÉTELEK összege - ez az, ami a TIG-re kerül. Ha egy régi
+    hónapnál nincsenek tételek (a tételes nyilvántartás előttről), a TIG-en
+    rögzített nettó összeget adjuk vissza, hogy a nézet akkor se legyen üres."""
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Munkatárs nem található")
+
+    record = _find(db, employee_id, ev, honap)
+    tetelek = _honap_tetelei(db, employee_id, ev, honap)
+    alapber = float(sum(float(t.osszeg or 0) for t in tetelek if t.tipus == "alapber"))
+    extra = float(sum(float(t.osszeg or 0) for t in tetelek if t.tipus != "alapber"))
+    olvasott = InternalPerformanceCertificateRead.model_validate(record) if record is not None else None
+
+    return HonapReszletek(
+        employee_id=employee_id,
+        full_name=employee.full_name,
+        ev=ev,
+        honap=honap,
+        honap_nev=honap_neve(honap),
+        record=olvasott,
+        tetelek=[_tetel_kimenet(t) for t in tetelek],
+        alapber=alapber,
+        extra=extra,
+        osszesen=alapber + extra if tetelek else float(olvasott.netto_osszeg or 0) if olvasott else 0,
+    )
 
 
 @router.get("/employee/{employee_id}/koltsegek", response_model=list[EvesKoltseg])
