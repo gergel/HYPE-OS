@@ -49,6 +49,11 @@ class InternalPerformanceCertificate(TimestampMixin, Base):
     )
     keltezes: Mapped[date | None] = mapped_column(Date, comment="A dokumentum keltezése")
     file_url: Mapped[str | None] = mapped_column(String(500), comment="A kiküldött TIG dokumentum Drive linkje")
+    # Csak akkor van kitöltve, ha a TIG dokumentumot MI tároljuk (kézzel
+    # feltöltött vagy Notionból áthozott fájl az R2-n) - a rendszer által
+    # generált, Drive-on maradó PDF-nél üres, mert azt nem a mi tárhelyünkről
+    # törölnénk.
+    file_storage_key: Mapped[str | None] = mapped_column(String(500))
 
     # A számla két dátuma. Külön a teljesítés/keltezés párostól: azok a TIG
     # DOKUMENTUMÁRÓL szólnak, ez a kettő a pénz útjáról - meddig kell fizetni,

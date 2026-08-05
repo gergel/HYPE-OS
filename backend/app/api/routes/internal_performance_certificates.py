@@ -599,12 +599,26 @@ def set_allapot(
     return InternalPerformanceCertificateRead.model_validate(record)
 
 
+def _honap_rekordja(db: Session, employee_id: int, ev: int, honap: int) -> InternalPerformanceCertificate:
+    """A hónap TIG-je, ha kell, létrehozva.
+
+    Szándékosan NEM követeli meg, hogy a TIG már ki legyen küldve: a papírok
+    (számla, aláírt TIG) sokszor visszamenőleg kerülnek elő - régi hónapokhoz,
+    amikhez a TIG nem itt készült (pl. Notionból hozott évek). Ha ilyenkor a
+    feltöltés elutasítaná a fájlt, a dokumentumnak nem lenne hova kerülnie."""
+    employee = _validate_belsos_employee(db, employee_id)
+    return _get_or_create(db, employee, ev, honap)
+
+
 def _get_finalized_or_404(db: Session, employee_id: int, ev: int, honap: int) -> InternalPerformanceCertificate:
     record = _find(db, employee_id, ev, honap)
     if record is None:
         raise HTTPException(status_code=404, detail="Ehhez a hónaphoz nem tartozik Belsős TIG bejegyzés.")
     if record.allapot not in FINALIZED_STATUSES:
-        raise HTTPException(status_code=400, detail="Számla csak kiküldött Belsős TIG-hez tölthető fel.")
+        raise HTTPException(
+            status_code=400,
+            detail="Kifizetettnek csak kiküldött (véglegesített) Belsős TIG jelölhető.",
+        )
     return record
 
 
@@ -620,7 +634,7 @@ async def upload_szamla(
     """Egy Belsős TIG-hez tetszőleges számú számla tölthető fel - minden
     hívás egy ÚJ számla-sort hoz létre (nem írja felül az előzőt), lásd
     InternalPerformanceCertificateInvoice modell-kommentje."""
-    record = _get_finalized_or_404(db, employee_id, ev, honap)
+    record = _honap_rekordja(db, employee_id, ev, honap)
     filename = file.filename or "szamla"
     content_type = file.content_type or "application/octet-stream"
     invoice = InternalPerformanceCertificateInvoice(
@@ -646,15 +660,86 @@ def delete_szamla(
     honap: int,
     invoice_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
 ):
-    record = _get_finalized_or_404(db, employee_id, ev, honap)
+    record = _find(db, employee_id, ev, honap)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Ehhez a hónaphoz nem tartozik Belsős TIG bejegyzés.")
     invoice = db.get(InternalPerformanceCertificateInvoice, invoice_id)
     if invoice is None or invoice.certificate_id != record.id:
         raise HTTPException(status_code=404, detail="A számla nem található.")
-    document_storage.delete_object(invoice.storage_key)
+    # Tárhely-kulcs nélküli (régi, importált) sor is törölhető legyen: enélkül
+    # a Törlés gomb pont azoknál a soroknál nem működne, amiknél a fájl amúgy
+    # sincs a mi tárhelyünkön.
+    if invoice.storage_key:
+        document_storage.delete_object(invoice.storage_key)
     db.delete(invoice)
     db.commit()
+    db.refresh(record)
+    return InternalPerformanceCertificateRead.model_validate(record)
+
+
+@router.post("/{employee_id}/{ev}/{honap}/tig-fajl", response_model=InternalPerformanceCertificateRead)
+async def upload_tig_fajl(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Az aláírt TIG dokumentum feltöltése egy hónaphoz.
+
+    A rendszerben készülő TIG-et a generálás teszi be (az a Drive-on marad),
+    de a régi hónapok igazolása papíron/Drive-on van, és aláírás után is
+    vissza kell tölteni valahova - ez az a hely. A fájl az R2-re kerül, és a
+    hónap `file_url`-je erre mutat.
+
+    Egy hónapnak EGY TIG dokumentuma van (ellentétben a számlákkal, amikből
+    több is lehet): egy újabb feltöltés lecseréli az előzőt, és ha az a mi
+    tárhelyünkön volt, azt az objektumot el is dobjuk."""
+    record = _honap_rekordja(db, employee_id, ev, honap)
+    filename = file.filename or "tig"
+    content_type = file.content_type or "application/octet-stream"
+    data = await file.read()
+
+    regi_kulcs = record.file_storage_key
+    kulcs = f"belsos-tig-dokumentum/{employee_id}/{ev}-{honap:02d}-{record.id}{os.path.splitext(filename)[1]}"
+    record.file_url = document_storage.upload_bytes(data, kulcs, content_type)
+    record.file_storage_key = kulcs
+    db.commit()
+    # A cserélt fájl törlése CSAK a mentés után, és csak ha tényleg másik
+    # objektum volt - így egy elhasalt feltöltésnél nem marad se régi, se új.
+    if regi_kulcs and regi_kulcs != kulcs:
+        document_storage.delete_object(regi_kulcs)
+    db.refresh(record)
+    return InternalPerformanceCertificateRead.model_validate(record)
+
+
+@router.delete("/{employee_id}/{ev}/{honap}/tig-fajl", response_model=InternalPerformanceCertificateRead)
+def delete_tig_fajl(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    """A hónaphoz tartozó TIG dokumentum hivatkozásának törlése.
+
+    Ha a fájl a mi tárhelyünkön van, az objektumot is töröljük. A generált,
+    Drive-on lévő PDF-nél csak a hivatkozás tűnik el: a Drive-ról nem a mi
+    dolgunk törölni, és a dokumentum ott a helyén marad."""
+    record = _find(db, employee_id, ev, honap)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Ehhez a hónaphoz nem tartozik Belsős TIG bejegyzés.")
+    if not record.file_url:
+        raise HTTPException(status_code=404, detail="Ehhez a hónaphoz nincs TIG dokumentum.")
+    kulcs = record.file_storage_key
+    record.file_url = None
+    record.file_storage_key = None
+    db.commit()
+    if kulcs:
+        document_storage.delete_object(kulcs)
     db.refresh(record)
     return InternalPerformanceCertificateRead.model_validate(record)
 

@@ -36,6 +36,7 @@ egy név mégis más, egy jelölt hozzáírása elég, nem kell újraírni az im
 from __future__ import annotations
 
 import os
+import re
 from datetime import date
 from typing import Any
 
@@ -55,12 +56,15 @@ from app.notion_import import files
 from app.notion_import.client import NotionClient, as_date, database_title, extract_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert
 from app.services import document_storage
-from app.services.hu_datum import elozo_honap, ev_honap_szoveg
+from app.services.hu_datum import HONAP_NEVEK, elozo_honap, ev_honap_szoveg
 from app.services.portal_storage import R2NotConfiguredError
 
-# A Notion-tábla neve. Kisbetűsítve, ékezet nélkül hasonlítunk, hogy a
-# "Belsős TIG-ek" / "Belsos TIG" írásmód is találjon.
-BELSOS_TIG_TABLA_NEVEK = ("belsos tig", "belsos tigek", "belsos havi tig", "belsos tig-ek")
+# A Notion-tábla neve. A HYPE workspace-ben ez a tábla egyszerűen "Belsős"
+# (a belsősök havi TIG-jei és számlái vannak benne, nem munkatárs-törzsadat -
+# a crew-directory a "Külsős és belsős"). Kisbetűsítve, ékezet nélkül
+# hasonlítunk, PONTOS egyezéssel: így a "kulsos es belsos" nem téveszthető
+# össze vele.
+BELSOS_TIG_TABLA_NEVEK = ("belsos", "belsos tig", "belsos tigek", "belsos havi tig", "belsos tig-ek")
 
 # Mezőnév-jelöltek. Az ELSŐ nem üres érték nyer (lásd _mezo).
 NEV_SZEMELY = ("Belsős", "Belsos", "Személy", "Munkatárs", "Külsős és belsős", "👥 Külsős és belsős", "Név")
@@ -94,6 +98,9 @@ def _ekezet_nelkul(szoveg: str) -> str:
     return "".join(
         c for c in unicodedata.normalize("NFKD", szoveg.lower()) if not unicodedata.combining(c)
     ).strip()
+
+
+HONAP_NEVEK_EKEZET_NELKUL = tuple(_ekezet_nelkul(nev) for nev in HONAP_NEVEK)
 
 
 def _text(value: Any) -> str | None:
@@ -134,6 +141,24 @@ def _mezo(props: dict, nevek: tuple[str, ...]) -> Any:
     return None
 
 
+def _relaciobol(db: Session, props: dict, nevek: tuple[str, ...], entity_type: str) -> int | None:
+    """Relation mezőből feloldott azonosító: előbb a névre ismert mezők, aztán
+    BÁRMELY relation, ami a keresett entitásra oldható fel. Az öt éve élő
+    táblákban a mezőnevek nem egységesek, a relation célja viszont az."""
+    for nev in nevek:
+        ertek = props.get(nev)
+        if isinstance(ertek, list) and ertek:
+            talalat = resolve_relation_id(db, entity_type, ertek)
+            if talalat is not None:
+                return talalat
+    for ertek in props.values():
+        if isinstance(ertek, list) and ertek and all(isinstance(v, str) for v in ertek):
+            talalat = resolve_relation_id(db, entity_type, ertek)
+            if talalat is not None:
+                return talalat
+    return None
+
+
 def _fajl_urlek(ertek: Any) -> list[str]:
     if ertek is None:
         return []
@@ -171,41 +196,120 @@ def _page_cim(page: dict, props: dict) -> str | None:
     return None
 
 
-def _employee_id(db: Session, props: dict, page_cim: str | None) -> int | None:
-    """A TIG munkatársa. Elsődlegesen relation-ből (ez biztos kapcsolat), és
-    csak ha az nincs, akkor a sor CÍMÉBŐL név szerint - utóbbi csak akkor, ha
-    pontosan egy munkatársra illik, hogy egy névrokon miatt ne kerüljön valaki
-    más TIG-je egy másik emberhez."""
-    for nev in NEV_SZEMELY:
-        ertek = props.get(nev)
-        if isinstance(ertek, list) and ertek:
-            talalat = resolve_relation_id(db, "Employee", ertek)
-            if talalat is not None:
-                return talalat
-    if not page_cim:
-        return None
-    # A cím gyakran "Kovács Béla - 2026. május" alakú: az első kötőjelig vesszük.
-    nev_resz = page_cim.split(" - ")[0].split(" – ")[0].strip()
-    if len(nev_resz) < 4:
-        return None
-    talalatok = db.scalars(select(Employee).where(Employee.full_name.ilike(nev_resz))).all()
-    return talalatok[0].id if len(talalatok) == 1 else None
+def visszafele_index(db: Session) -> dict[str, int]:
+    """Notion TIG-oldal ID -> a mi munkatárs-azonosítónk, a MUNKATÁRS felől.
+
+    A "Külsős és belsős" tábla "Belsős TIG" relation-je az importkor
+    bekerült a munkatárs `belsos_tig_notion_ids` mezőjébe. Ez a legmegbízhatóbb
+    kapcsolat: akkor is megvan, ha a TIG-sorban magában nincs (vagy más néven
+    van) a visszamutató relation - és pont ez okozta, hogy sok embernél nem
+    jött át semmi."""
+    index: dict[str, int] = {}
+    for employee_id, ids in db.execute(
+        select(Employee.id, Employee.belsos_tig_notion_ids).where(
+            Employee.belsos_tig_notion_ids.is_not(None)
+        )
+    ):
+        if isinstance(ids, list):
+            for page_id in ids:
+                if isinstance(page_id, str) and page_id:
+                    index.setdefault(page_id, employee_id)
+    return index
 
 
-def _honap(props: dict, teljesites: date | None, keltezes: date | None) -> tuple[int, int] | None:
+def _nev_szerint(db: Session, nyers: str | None) -> int | None:
+    """Munkatárs a NEVE alapján. Csak akkor ad találatot, ha pontosan egy
+    emberre illik - egy névrokon miatt nem kerülhet valaki más TIG-je máshoz.
+
+    A cím gyakran "Kovács Béla - 2026. május" vagy "Kovács Béla 2026.05"
+    alakú, ezért a dátumszerű farkot levágjuk."""
+    if not nyers:
+        return None
+    nev = re.split(r"\s+[-–—]\s+|\s*\d{4}[.\s]", nyers)[0].strip(" -–—.")
+    if len(nev) < 4:
+        return None
+    talalatok = db.scalars(select(Employee).where(Employee.full_name.ilike(nev))).all()
+    if len(talalatok) == 1:
+        return talalatok[0].id
+    # Ékezet/kötőjel eltérésre is adunk egy esélyt (a Notionban gyakori az
+    # ékezet nélküli írásmód) - továbbra is csak egyértelmű találatnál.
+    kulcs = _ekezet_nelkul(nev)
+    egyezok = [e for e in db.scalars(select(Employee)).all() if _ekezet_nelkul(e.full_name) == kulcs]
+    return egyezok[0].id if len(egyezok) == 1 else None
+
+
+def _employee_id(db: Session, page_id: str, props: dict, page_cim: str | None, index: dict[str, int]) -> int | None:
+    """A TIG munkatársa, négy forrásból - a legmegbízhatóbbtól haladva:
+
+    1. a munkatárs felőli relation (visszafele_index),
+    2. a TIG-sor névre ismert személy-relation mezői,
+    3. BÁRMELY relation mezője, ami munkatársra oldható fel (öt éve élő
+       táblában a mező neve bármi lehet: "Kinek", "Belsős munkatárs"…),
+    4. végül a sor címe név szerint."""
+    talalat = index.get(page_id)
+    if talalat is not None:
+        return talalat
+
+    talalat = _relaciobol(db, props, NEV_SZEMELY, "Employee")
+    if talalat is not None:
+        return talalat
+
+    # A személy neve szövegmezőben is állhat, nem csak a címben.
+    for jelolt in (page_cim, *(_text(props.get(nev)) for nev in NEV_SZEMELY)):
+        talalat = _nev_szerint(db, jelolt)
+        if talalat is not None:
+            return talalat
+    return None
+
+
+def _honap_cimbol(cim: str | None) -> tuple[int, int] | None:
+    """"Kovács Béla - 2026. május" / "2026.05" -> (2026, 5).
+
+    A címben a hónap ADOTT (nem következtetni kell rá), ezért jó mentőöv
+    azoknál a soroknál, ahol se hónap-mező, se teljesítési dátum nincs."""
+    if not cim:
+        return None
+    szoveg = _ekezet_nelkul(cim)
+    ev_talalat = re.search(r"(20\d{2})", szoveg)
+    if not ev_talalat:
+        return None
+    ev = int(ev_talalat.group(1))
+    maradek = szoveg[ev_talalat.end() :]
+    for i, nev in enumerate(HONAP_NEVEK_EKEZET_NELKUL, start=1):
+        if nev in maradek:
+            return ev, i
+    szam_talalat = re.search(r"[.\s/-]\s*(0?[1-9]|1[0-2])(?![0-9])", maradek)
+    if szam_talalat:
+        return ev, int(szam_talalat.group(1))
+    return None
+
+
+def _honap(props: dict, cim: str | None, teljesites: date | None, keltezes: date | None) -> tuple[int, int] | None:
     """Melyik hónap TIG-je ez.
 
     A rendszer szabálya: a hónapot a TELJESÍTÉS dátuma adja, és mindig az azt
     MEGELŐZŐ hónapot jelenti (2026.06.20-i teljesítés = a 2026. MÁJUSI TIG) -
-    lásd services/hu_datum.elozo_honap. Ha van explicit hónap-mező, az erősebb:
-    az a szándékot mondja ki, nem következtetni kell rá."""
+    lásd services/hu_datum.elozo_honap. Ami ennél erősebb, az a KIMONDOTT
+    hónap: az explicit hónap-mező, illetve a sor címében szereplő hónap.
+
+    A végén két gyengébb mentőöv jön (fizetési határidő, utalás napja): ezek
+    is a hónapot KÖVETŐ hónapra esnek, tehát ugyanaz a visszaszámolás
+    érvényes rájuk. Inkább egy jó eséllyel helyes hónap, mint egy kihagyott
+    sor - a hónap a felületen bármikor javítható."""
     explicit = as_date(_mezo(props, NEV_HONAP))
     if explicit is not None:
         return explicit.year, explicit.month
+    cimbol = _honap_cimbol(cim)
+    if cimbol is not None:
+        return cimbol
     if teljesites is not None:
         return elozo_honap(teljesites)
     if keltezes is not None:
         return elozo_honap(keltezes)
+    for nev in (NEV_FIZ_HATARIDO, NEV_UTALAS):
+        tartalek = as_date(_mezo(props, nev))
+        if tartalek is not None:
+            return elozo_honap(tartalek)
     return None
 
 
@@ -318,10 +422,11 @@ def _import_tigek(client: NotionClient, db: Session, result: ImportResult) -> No
         )
         return
 
+    index = visszafele_index(db)
     for page in client.query_database(database_id):
         props = extract_properties(page, client)
         cim = _page_cim(page, props)
-        employee_id = _employee_id(db, props, cim)
+        employee_id = _employee_id(db, page["id"], props, cim, index)
         if employee_id is None:
             result.skipped += 1
             result.errors.append(f"Belsős TIG '{cim or page['id']}': nem azonosítható a munkatárs, kihagyva")
@@ -329,7 +434,7 @@ def _import_tigek(client: NotionClient, db: Session, result: ImportResult) -> No
 
         teljesites = as_date(_mezo(props, NEV_TELJESITES))
         keltezes = as_date(_mezo(props, NEV_KELTEZES))
-        honap_par = _honap(props, teljesites, keltezes)
+        honap_par = _honap(props, cim, teljesites, keltezes)
         if honap_par is None:
             result.skipped += 1
             result.errors.append(
@@ -426,13 +531,7 @@ def _import_extrak(client: NotionClient, db: Session, result: ImportResult) -> N
             result.skipped += 1
             continue
 
-        employee_id = None
-        for nev in NEV_EXTRA_SZEMELY:
-            ertek = props.get(nev)
-            if isinstance(ertek, list) and ertek:
-                employee_id = resolve_relation_id(db, "Employee", ertek)
-                if employee_id is not None:
-                    break
+        employee_id = _relaciobol(db, props, NEV_EXTRA_SZEMELY, "Employee")
         if employee_id is None:
             result.skipped += 1
             continue
@@ -449,13 +548,7 @@ def _import_extrak(client: NotionClient, db: Session, result: ImportResult) -> N
         # az előjelet a típus adja (lásd models/employee_monthly_item.py).
         tipus = "levonando" if osszeg < 0 else "extra"
 
-        project_code_id = None
-        for nev in NEV_EXTRA_PROJEKTKOD:
-            ertek = props.get(nev)
-            if isinstance(ertek, list) and ertek:
-                project_code_id = resolve_relation_id(db, "ProjectCode", ertek)
-                if project_code_id is not None:
-                    break
+        project_code_id = _relaciobol(db, props, NEV_EXTRA_PROJEKTKOD, "ProjectCode")
 
         mezok = {
             "employee_id": employee_id,

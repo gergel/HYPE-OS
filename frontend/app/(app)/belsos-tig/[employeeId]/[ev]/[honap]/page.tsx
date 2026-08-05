@@ -6,8 +6,12 @@ import { Card } from "@/components/Card";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { formatDate, getHonapReszletek } from "@/lib/api";
+import { HonapDokumentumok } from "@/components/crew/HonapDokumentumok";
+import { formatDate, getCurrentUser, getHonapReszletek, getMyPagePermissions } from "@/lib/api";
+import { canDoAction } from "@/lib/permissions";
 import { formatHuf } from "@/lib/penz";
+
+const PAGE = "/belsos-tig";
 
 const ZAROLT = ["Kész", "Kiküldve", "Kihagyva"];
 
@@ -25,8 +29,15 @@ export default async function BelsosTigHonapPage({
   params: Promise<{ employeeId: string; ev: string; honap: string }>;
 }) {
   const { employeeId, ev, honap } = await params;
-  const adat = await getHonapReszletek(Number(employeeId), Number(ev), Number(honap));
+  const [adat, pagePermissions, currentUser] = await Promise.all([
+    getHonapReszletek(Number(employeeId), Number(ev), Number(honap)),
+    getMyPagePermissions(),
+    getCurrentUser(),
+  ]);
   if (!adat) notFound();
+
+  const szerkeszthet = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
+  const torolhet = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
 
   const record = adat.record;
   const zarolt = ZAROLT.includes(record?.allapot ?? "");
@@ -170,40 +181,30 @@ export default async function BelsosTigHonapPage({
           )}
         </Card>
 
-        {record && (record.invoices.length > 0 || record.megjegyzes || datumok.length > 0) && (
-          <Card title="A TIG-hez tartozó adatok" icon={FileText}>
-            {record.megjegyzes && <p className="mb-4 text-[13px] text-text-secondary">{record.megjegyzes}</p>}
-            {datumok.length > 0 && (
-              <dl className="mb-5 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-                {datumok.map(([cimke, ertek]) => (
-                  <div key={cimke}>
-                    <dt className="t-label mb-1">{cimke}</dt>
-                    <dd className="text-[13px] text-text-primary">{formatDate(ertek)}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            {record.invoices.length > 0 && (
-              <>
-                <p className="t-label mb-2">Feltöltött számlák</p>
-                <ul className="space-y-1.5">
-                  {record.invoices.map((szamla) => (
-                    <li key={szamla.id} className="text-[13px]">
-                      <a
-                        href={szamla.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-text-accent hover:underline"
-                      >
-                        {szamla.filename}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </Card>
-        )}
+        <Card title="A TIG-hez tartozó adatok" icon={FileText}>
+          {record?.megjegyzes && <p className="mb-4 text-[13px] text-text-secondary">{record.megjegyzes}</p>}
+          {datumok.length > 0 && (
+            <dl className="mb-6 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+              {datumok.map(([cimke, ertek]) => (
+                <div key={cimke}>
+                  <dt className="t-label mb-1">{cimke}</dt>
+                  <dd className="text-[13px] text-text-primary">{formatDate(ertek)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {/* A hónap papírjai: az aláírt TIG és a számlák - itt tölthetők fel
+              és törölhetők, mert a hiányuk is itt derül ki. */}
+          <HonapDokumentumok
+            employeeId={adat.employee_id}
+            ev={adat.ev}
+            honap={adat.honap}
+            tigUrl={record?.file_url ?? null}
+            szamlak={record?.invoices ?? []}
+            szerkeszthet={szerkeszthet}
+            torolhet={torolhet}
+          />
+        </Card>
       </div>
     </div>
   );
