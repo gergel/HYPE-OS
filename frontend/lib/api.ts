@@ -893,6 +893,10 @@ export type TimerState = {
   by_employee: TimerEmployeeSummary[];
   total_minutes: number;
   total_cost: number | null;
+  /** Munkaidő-sor azonosítója -> a sor költsége. A rögzített összeg gyakran
+   * hiányzik (importált mérések), ilyenkor a szerver az időből és az
+   * órabérből számolja - lásd deliverable_actions.sor_koltsege. */
+  sor_koltsegek: Record<number, number>;
 };
 
 export type UtomunkaProjektIdo = {
@@ -1010,6 +1014,23 @@ export async function getUtomunkaIdo(employeeId: number): Promise<UtomunkaHonapI
 
 export async function getTimerState(deliverableId: number): Promise<TimerState | null> {
   return apiGet<TimerState>(`/api/v1/deliverables/${deliverableId}/timer/state`);
+}
+
+/** Egy projekt teljes utómunka-ideje és -költsége, VÁGÓNKÉNT bontva - a
+ * szerver számolja, hogy a projekten és az anyagon ugyanaz az összeg álljon
+ * (lásd backend routes/projects.py utomunka_osszesites). */
+export type ProjektUtomunkaOsszesites = {
+  total_minutes: number;
+  total_cost: number | null;
+  by_employee: TimerEmployeeSummary[];
+  /** Az ÉPP FUTÓ mérések - ezeket a felület számolja tovább másodpercenként. */
+  futok: { since: string; orabere: number | null }[];
+};
+
+export async function getProjektUtomunkaOsszesites(
+  projectId: number,
+): Promise<ProjektUtomunkaOsszesites | null> {
+  return apiGet<ProjektUtomunkaOsszesites>(`/api/v1/projects/${projectId}/utomunka-osszesites`);
 }
 
 export type DeliverableComment = {

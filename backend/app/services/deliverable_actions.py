@@ -197,6 +197,40 @@ def _may_see_costs(db: Session, employee: Employee) -> bool:
     return True
 
 
+def sor_orabere(db: Session, row: Timesheet, gyorsito: dict[int, float | None]) -> float | None:
+    """Melyik órabérrel számol ez a sor: elsődlegesen a méréshez RÖGZÍTETT
+    órabér (az az akkori, befagyasztott ár), annak híján a munkatárs mai
+    órabére. A gyorsító azért kell, hogy egy anyag több tucat sorára ne
+    kérdezzük le ugyanazt az órabért újra és újra."""
+    if row.akkori_orabere is not None:
+        return float(row.akkori_orabere)
+    if row.employee_id not in gyorsito:
+        gyorsito[row.employee_id] = aktualis_orabere(db, row.employee_id)
+    return gyorsito[row.employee_id]
+
+
+def sor_percei(row: Timesheet) -> float:
+    """A soron eltöltött idő. A rögzített perc az elsődleges (a Notionból
+    hozott mérésnél sokszor CSAK ez van meg), különben a két időpont
+    különbsége."""
+    if row.time_minutes is not None:
+        return float(row.time_minutes)
+    return float(row.idotartam_perc or 0)
+
+
+def sor_koltsege(db: Session, row: Timesheet, gyorsito: dict[int, float | None]) -> float | None:
+    """Egy munkaidő-sor költsége.
+
+    Ha van rögzített összeg (a mérés leállításakor számolt, vagy a Notionból
+    hozott), az a mérvadó. Ha nincs - és az importált soroknál jellemzően
+    nincs -, akkor az IDŐBŐL és az órabérből számoljuk, mert enélkül a
+    felületen csak egy gondolatjel állna, és a vágás költsége sehol nem
+    jönne ki."""
+    if row.koltseg is not None:
+        return float(row.koltseg)
+    return szamolt_koltseg(sor_percei(row), sor_orabere(db, row, gyorsito))
+
+
 def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employee) -> TimerState:
     rows = db.scalars(select(Timesheet).where(Timesheet.deliverable_id == deliverable.id)).all()
 
@@ -204,19 +238,25 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
     futo: list[tuple[int, datetime, float | None]] = []
     by_employee_minutes: dict[int, float] = {}
     by_employee_cost: dict[int, float] = {}
+    sor_koltsegek: dict[int, float] = {}
+    orabere_gyorsito: dict[int, float | None] = {}
     for row in rows:
         if row.end_date is None and row.start_date is not None:
             # Az órabért is visszaadjuk, hogy a felület a MÉG FUTÓ mérés
             # költségét is tudja másodpercenként számolni (lásd TimerControls).
-            orabere = float(row.akkori_orabere) if row.akkori_orabere is not None else aktualis_orabere(db, row.employee_id)
-            futo.append((row.employee_id, row.start_date, orabere))
+            futo.append((row.employee_id, row.start_date, sor_orabere(db, row, orabere_gyorsito)))
             if row.employee_id == current_user.id:
                 my_running_since = row.start_date
-        if row.end_date is not None and row.start_date is not None:
-            minutes = row.time_minutes if row.time_minutes is not None else row.idotartam_perc or 0
-            by_employee_minutes[row.employee_id] = by_employee_minutes.get(row.employee_id, 0) + float(minutes)
-            if row.koltseg is not None:
-                by_employee_cost[row.employee_id] = by_employee_cost.get(row.employee_id, 0) + float(row.koltseg)
+            continue
+        # Minden, ami NEM fut, beleszámít a bontásba - az is, aminek nincs
+        # kezdő/záró időpontja, csak rögzített perce. (A Notionból hozott
+        # méréseknél előfordul, hogy csak a mért idő van meg; enélkül az
+        # anyagon lett volna összes idő, de nem látszott volna, KI dolgozta.)
+        by_employee_minutes[row.employee_id] = by_employee_minutes.get(row.employee_id, 0) + sor_percei(row)
+        koltseg = sor_koltsege(db, row, orabere_gyorsito)
+        if koltseg is not None:
+            by_employee_cost[row.employee_id] = by_employee_cost.get(row.employee_id, 0) + koltseg
+            sor_koltsegek[row.id] = koltseg
 
     employee_ids = list({*by_employee_minutes.keys(), *(eid for eid, _, _ in futo)})
     names = {e.id: e.full_name for e in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))} if employee_ids else {}
@@ -239,6 +279,7 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
     if not lathat_koltseget:
         by_employee = [s.model_copy(update={"total_cost": None}) for s in by_employee]
         total_cost = None
+        sor_koltsegek = {}
 
     running = [
         TimerRunningEntry(
@@ -256,6 +297,7 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
         by_employee=by_employee,
         total_minutes=total_minutes,
         total_cost=total_cost,
+        sor_koltsegek=sor_koltsegek,
     )
 
 

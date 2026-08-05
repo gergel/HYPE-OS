@@ -38,12 +38,14 @@ import {
   getMyPagePermissions,
   getPendingSubcontractorsForProject,
   getPendingTigForProject,
+  getProjektUtomunkaOsszesites,
   getRecord,
   getRelated,
   getSectionOrder,
   getVisibleFields,
 } from "@/lib/api";
 import { buildFieldTabs, EQUIPMENT_WIDGET_FIELD_KEY, FORGATAS_IDOPONT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
+import { formatFt, formatPercek } from "@/lib/ido";
 
 // A projekt mezői eredetileg a Notion "Main Database" ~140 oszlopát tükrözik
 // (lásd backend/app/models/project.py osztály-kommentje) - ahelyett hogy
@@ -142,18 +144,19 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     group: e.tipus,
   }));
 
-  const deliverableTimesheets = await Promise.all(
-    deliverables.map((d) => getRelated(ENTITY_PATHS.timesheet, { deliverable_id: Number(d.id) })),
-  );
-  // A lezárt sorok összege a szerverről jön, a MÉG FUTÓ méréseket a
-  // VagasiKoltsegOsszesen komponens adja hozzá másodpercenként (lásd ott).
-  const osszesTimesheet = deliverableTimesheets.flat();
-  const futoMeresek: FutoMeres[] = osszesTimesheet
-    .filter((t) => !t.end_date && typeof t.start_date === "string")
-    .map((t) => ({ since: String(t.start_date), orabere: typeof t.akkori_orabere === "number" ? t.akkori_orabere : null }));
-  const lezartSorok = osszesTimesheet.filter((t) => !!t.end_date || !t.start_date);
-  const lezartPercek = lezartSorok.reduce((sum, t) => sum + (typeof t.time_minutes === "number" ? t.time_minutes : 0), 0);
-  const lezartKoltseg = lezartSorok.reduce((sum, t) => sum + (typeof t.koltseg === "number" ? t.koltseg : 0), 0);
+  // Az utómunka-idő és -költség összesítése a SZERVERRŐL jön (egy hívás,
+  // anyagonkénti lekérdezések nélkül): a soron rögzített összeg gyakran
+  // hiányzik, olyankor az időből és az órabérből számol - ugyanazzal a
+  // szabállyal, mint az anyag oldala, hogy a két helyen ne álljon más szám.
+  // A MÉG FUTÓ méréseket a VagasiKoltsegOsszesen adja hozzá másodpercenként.
+  const utomunkaOsszesites = await getProjektUtomunkaOsszesites(Number(project.id));
+  const futoMeresek: FutoMeres[] = (utomunkaOsszesites?.futok ?? []).map((f) => ({
+    since: f.since,
+    orabere: f.orabere,
+  }));
+  const lezartPercek = utomunkaOsszesites?.total_minutes ?? 0;
+  const lezartKoltseg = utomunkaOsszesites?.total_cost ?? 0;
+  const vagokBontasa = utomunkaOsszesites?.by_employee ?? [];
   // A forint összeg itt is a Pénzügy-hozzáféréshez kötött (ugyanaz a szabály,
   // mint az Utómunka oldalon - lásd deliverable_actions._may_see_costs).
   const lathatKoltseget = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
@@ -334,12 +337,33 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
             </Card>
             <Card title={`Utómunka (${deliverables.length})`} icon={Clapperboard}>
               {deliverables.length > 0 && (
-                <VagasiKoltsegOsszesen
-                  lezartPercek={lezartPercek}
-                  lezartKoltseg={lezartKoltseg}
-                  futok={futoMeresek}
-                  showCost={lathatKoltseget}
-                />
+                <>
+                  <VagasiKoltsegOsszesen
+                    lezartPercek={lezartPercek}
+                    lezartKoltseg={lezartKoltseg}
+                    futok={futoMeresek}
+                    showCost={lathatKoltseget}
+                  />
+                  {/* KI mennyit dolgozott a projekt anyagain - enélkül csak
+                      egy összesített idő állt itt, és nem derült ki, kié. */}
+                  {vagokBontasa.length > 0 && (
+                    <div className="mb-4 space-y-1 border-b border-border pb-3">
+                      {vagokBontasa.map((v) => (
+                        <div key={v.employee_id} className="flex items-center justify-between text-[12.5px]">
+                          <a href={`/csapat/${v.employee_id}`} className="text-text-secondary hover:underline">
+                            {v.full_name}
+                          </a>
+                          <span className="tabular-nums text-text-secondary">
+                            {formatPercek(v.total_minutes)}
+                            {lathatKoltseget && v.total_cost != null && (
+                              <span className="text-text-muted"> · {formatFt(v.total_cost)}</span>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
               <div className="mb-3 flex flex-wrap items-center gap-3">
                 <ActionButton

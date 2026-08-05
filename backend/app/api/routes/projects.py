@@ -1,13 +1,20 @@
+from datetime import datetime
+
 from fastapi import Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import Role, require_roles
+from app.core.security import Role, get_current_user, require_roles
+from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.project import Project
+from app.models.timesheet import Timesheet
 from app.schemas.deliverable import DeliverableRead
+from app.schemas.deliverable_actions import TimerEmployeeSummary
 from app.schemas.project import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate, SzerzodesKeszitesPayload
+from app.services import deliverable_actions
 from app.services.contract_actions import apply_szerzodes_keszites, send_szerzodes
 from app.services.dispo import send_diszpo, send_elozetes_diszpo
 from app.services.project_actions import create_feldarabolas, create_utomunka
@@ -142,3 +149,82 @@ def run_szerzodes_keszites(project_id: int, payload: SzerzodesKeszitesPayload, d
 def run_szerzodes_kuldes(project_id: int, db: Session = Depends(get_db)):
     """'szerződés készítése és küldése' gomb (lásd app/services/contract_actions.py)."""
     return _run_dispatch_action(send_szerzodes, db, _get_project_or_404(project_id, db))
+
+
+class UtomunkaFuto(BaseModel):
+    """Egy ÉPP FUTÓ mérés a projekt anyagain - a felület ebből számolja
+    másodpercenként tovább az időt és a költséget."""
+
+    since: datetime
+    orabere: float | None = None
+
+
+class ProjektUtomunkaOsszesites(BaseModel):
+    """A projekt összes utómunka-ideje és -költsége, KI-re bontva.
+
+    Azért a szerver adja (és nem a felület adja össze a nyers sorokból), mert
+    a költség sokszor nincs rögzítve a soron (a Notionból hozott méréseknél
+    jellemzően nincs) - ilyenkor az időből és az órabérből SZÁMOLJUK, ugyanazzal
+    a szabállyal, mint az anyag oldalán (lásd deliverable_actions.sor_koltsege).
+    Enélkül a projekten és az anyagon más összeg állna."""
+
+    total_minutes: float = 0
+    total_cost: float | None = None
+    by_employee: list[TimerEmployeeSummary] = []
+    futok: list[UtomunkaFuto] = []
+
+
+@router.get("/{project_id}/utomunka-osszesites", response_model=ProjektUtomunkaOsszesites, tags=["projects"])
+def utomunka_osszesites(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    rows = (
+        db.query(Timesheet)
+        .join(Deliverable, Timesheet.deliverable_id == Deliverable.id)
+        .filter(Deliverable.project_id == project_id)
+        .all()
+    )
+    lathat_koltseget = deliverable_actions._may_see_costs(db, current_user)
+
+    percek: dict[int, float] = {}
+    koltsegek: dict[int, float] = {}
+    futok: list[UtomunkaFuto] = []
+    gyorsito: dict[int, float | None] = {}
+    for row in rows:
+        if row.end_date is None and row.start_date is not None:
+            futok.append(
+                UtomunkaFuto(
+                    since=row.start_date,
+                    orabere=deliverable_actions.sor_orabere(db, row, gyorsito) if lathat_koltseget else None,
+                )
+            )
+            continue
+        percek[row.employee_id] = percek.get(row.employee_id, 0) + deliverable_actions.sor_percei(row)
+        koltseg = deliverable_actions.sor_koltsege(db, row, gyorsito)
+        if koltseg is not None:
+            koltsegek[row.employee_id] = koltsegek.get(row.employee_id, 0) + koltseg
+
+    nevek = (
+        {e.id: e.full_name for e in db.query(Employee).filter(Employee.id.in_(percek.keys())).all()} if percek else {}
+    )
+    by_employee = sorted(
+        (
+            TimerEmployeeSummary(
+                employee_id=eid,
+                full_name=nevek.get(eid, "Ismeretlen"),
+                total_minutes=perc,
+                total_cost=koltsegek.get(eid) if lathat_koltseget else None,
+            )
+            for eid, perc in percek.items()
+        ),
+        key=lambda s: s.total_minutes,
+        reverse=True,
+    )
+    return ProjektUtomunkaOsszesites(
+        total_minutes=sum(percek.values()),
+        total_cost=(sum(koltsegek.values()) if koltsegek else None) if lathat_koltseget else None,
+        by_employee=by_employee,
+        futok=futok,
+    )

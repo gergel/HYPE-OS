@@ -62,3 +62,9 @@ class TimerState(BaseModel):
     by_employee: list[TimerEmployeeSummary]
     total_minutes: float
     total_cost: float | None = None
+    #: Munkaidő-sor azonosítója -> a sor költsége. Azért innen jön (és nem a
+    #: sor `koltseg` oszlopából), mert a rögzített összeg gyakran hiányzik, és
+    #: ilyenkor az időből + órabérből SZÁMOLJUK - a listának és az
+    #: összesítésnek pedig ugyanazt kell mutatnia. Üres, ha a felhasználó nem
+    #: láthatja a forintokat.
+    sor_koltsegek: dict[int, float] = {}

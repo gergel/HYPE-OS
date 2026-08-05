@@ -107,12 +107,17 @@ export function TimesheetMinutesTable({
   deliverableId,
   rows,
   employeeNameById,
+  koltsegById = {},
   canEdit,
   showCost,
 }: {
   deliverableId: number;
   rows: JsonRecord[];
   employeeNameById: Record<number, string>;
+  /** Soronkénti költség a szervertől. Ahol a soron nincs rögzített összeg
+   * (importált méréseknél jellemző), ott az időből és az órabérből számolt
+   * érték jön - így a lista és az összesítés ugyanazt mutatja. */
+  koltsegById?: Record<number, number>;
   canEdit: boolean;
   /** A költség oszlop csak annak látszik, akinek a Pénzügy oldalhoz van
    * hozzáférése - a vágóknak jellemzően nincs, nekik az idő releváns. */
@@ -142,7 +147,17 @@ export function TimesheetMinutesTable({
     }
   }
 
+  /** Egy sor költsége: a szervertől kapott (rögzített vagy időből számolt)
+   * érték, végső soron a sor saját összege. */
+  function sorKoltsege(r: JsonRecord): number | null {
+    const szamolt = koltsegById[Number(r.id)];
+    if (typeof szamolt === "number") return szamolt;
+    return typeof r.koltseg === "number" ? r.koltseg : null;
+  }
+
   const osszesen = rows.reduce((sum, r) => sum + (typeof r.time_minutes === "number" ? r.time_minutes : 0), 0);
+  const osszKoltseg = rows.reduce((sum, r) => sum + (sorKoltsege(r) ?? 0), 0);
+  const vanKoltseg = rows.some((r) => sorKoltsege(r) !== null);
 
   return (
     <table className="w-full border-collapse text-[13px]">
@@ -160,7 +175,11 @@ export function TimesheetMinutesTable({
         {rows.map((r) => {
           const id = Number(r.id);
           const ki = employeeNameById[Number(r.employee_id)] ?? `#${r.employee_id}`;
-          const fut = !r.end_date;
+          // Futó az, amit ELINDÍTOTTAK és még nem állítottak le. Ha kezdés
+          // sincs (a Notionból hozott méréseknél előfordul, hogy csak a mért
+          // perc van meg), az nem futó mérés - a szerver sem annak számolja
+          // (lásd deliverable_actions.get_timer_state).
+          const fut = !r.end_date && !!r.start_date;
           return (
             <tr key={id} className="border-b border-border last:border-0">
               <td className="py-2 pr-4">{ki}</td>
@@ -178,7 +197,7 @@ export function TimesheetMinutesTable({
               </td>
               {showCost && (
                 <td className="py-2 pr-4 text-right whitespace-nowrap text-text-secondary">
-                  {typeof r.koltseg === "number" ? formatFt(r.koltseg) : "–"}
+                  {sorKoltsege(r) !== null ? formatFt(sorKoltsege(r) as number) : "–"}
                 </td>
               )}
               <td className="py-2 text-right">
@@ -202,7 +221,12 @@ export function TimesheetMinutesTable({
             Összesen
           </td>
           <td className="py-2 pr-4 text-right font-medium whitespace-nowrap text-text-primary">{formatPerc(osszesen)}</td>
-          <td colSpan={showCost ? 2 : 1} />
+          {showCost && (
+            <td className="py-2 pr-4 text-right font-medium whitespace-nowrap text-text-primary">
+              {vanKoltseg ? formatFt(osszKoltseg) : "–"}
+            </td>
+          )}
+          <td />
         </tr>
       </tbody>
     </table>

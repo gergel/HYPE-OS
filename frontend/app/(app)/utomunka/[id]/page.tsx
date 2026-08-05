@@ -212,6 +212,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               deliverableId={deliverableId}
               rows={timesheets}
               employeeNameById={employeeNameById}
+              koltsegById={timerState?.sor_koltsegek ?? {}}
               canEdit={canEditPage}
               showCost={canSeeCost}
             />

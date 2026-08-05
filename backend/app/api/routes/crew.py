@@ -184,6 +184,7 @@ def get_utomunka_ido(
 
     lathat_koltseget = deliverable_actions._may_see_costs(db, current_user)
     most = datetime.now(timezone.utc)
+    orabere_gyorsito: dict[int, float | None] = {}
     honapok: dict[tuple[int, int], UtomunkaHonapIdo] = {}
     projektek: dict[tuple[int, int], dict[int | None, UtomunkaProjektIdo]] = {}
     anyagok: dict[tuple[int, int, int | None], set[int]] = {}
@@ -193,10 +194,15 @@ def get_utomunka_ido(
             # Még fut: a mostani állásával számoljuk, hogy ne hiányozzon a
             # havi összesítésből, amíg valaki le nem állítja.
             percek = max(0.0, (most - timesheet.start_date).total_seconds() / 60)
-            koltseg = deliverable_actions.szamolt_koltseg(percek, timesheet.akkori_orabere)
+            koltseg = deliverable_actions.szamolt_koltseg(
+                percek, deliverable_actions.sor_orabere(db, timesheet, orabere_gyorsito)
+            )
         else:
-            percek = float(timesheet.time_minutes if timesheet.time_minutes is not None else (timesheet.idotartam_perc or 0))
-            koltseg = float(timesheet.koltseg) if timesheet.koltseg is not None else None
+            percek = deliverable_actions.sor_percei(timesheet)
+            # Rögzített összeg híján az időből és az órabérből számoljuk -
+            # ugyanúgy, mint az anyag oldalán (lásd sor_koltsege), különben az
+            # importált méréseknél üres maradna a forintos oszlop.
+            koltseg = deliverable_actions.sor_koltsege(db, timesheet, orabere_gyorsito)
 
         honap_kulcs = (timesheet.start_date.year, timesheet.start_date.month)
         projekt_kulcs = project.id if project is not None else None
