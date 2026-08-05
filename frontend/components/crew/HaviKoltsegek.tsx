@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ExternalLink, Pencil, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -10,6 +10,22 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { formatHuf } from "@/lib/penz";
 import type { EvesKoltseg, HaviKoltseg, HaviTetel } from "@/lib/api";
+
+type TetelTipus = "alapber" | "extra" | "levonando";
+
+/** A tétel-típusok. A "levonando" összegét POZITÍVAN visszük fel, az előjelet
+ * a típus adja - így a felületen nem kell mínusszal bajlódni, és nem fordulhat
+ * elő, hogy egy elfelejtett mínusz miatt egy levonás hozzáadódik. */
+const TIPUS_NEVEK: Record<string, string> = {
+  alapber: "Alapbér",
+  extra: "Extra",
+  levonando: "Levonandó",
+};
+
+/** Az összeg megjelenítése előjelesen: a levonandó mínusszal. */
+function elojelesOsszeg(tipus: string, osszeg: number): string {
+  return tipus === "levonando" ? `− ${formatHuf(osszeg)}` : formatHuf(osszeg);
+}
 
 /** A választható projektkódok - a kereshető listát ebből építjük
  * (SearchableIdPicker), mert több száz projektkódnál egy sima legördülő
@@ -20,6 +36,172 @@ const HONAP_NEVEK = [
   "január", "február", "március", "április", "május", "június",
   "július", "augusztus", "szeptember", "október", "november", "december",
 ];
+
+
+/** Egy tétel sora. Kattintásra HELYBEN szerkeszthető (megnevezés, összeg,
+ * dátum, projektkód, típus) - nem külön űrlapon, mert egy elgépelt összeg
+ * javítása a leggyakoribb művelet, és nem érdemes hozzá oldalt váltani. */
+function TetelSor({
+  tetel,
+  projektkodok,
+  szerkeszthet,
+  torolhet,
+  onTorol,
+}: {
+  tetel: HaviTetel;
+  projektkodok: ProjektkodOpcio[];
+  szerkeszthet: boolean;
+  torolhet: boolean;
+  onTorol: () => void;
+}) {
+  const router = useRouter();
+  const [szerkeszt, setSzerkeszt] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [tipus, setTipus] = useState<TetelTipus>(tetel.tipus);
+  const [megnevezes, setMegnevezes] = useState(tetel.megnevezes);
+  const [osszeg, setOsszeg] = useState(String(tetel.osszeg));
+  const [datum, setDatum] = useState(tetel.datum ?? "");
+  const [projectCodeId, setProjectCodeId] = useState<number | null>(tetel.project_code_id);
+
+  function megsem() {
+    setTipus(tetel.tipus);
+    setMegnevezes(tetel.megnevezes);
+    setOsszeg(String(tetel.osszeg));
+    setDatum(tetel.datum ?? "");
+    setProjectCodeId(tetel.project_code_id);
+    setSzerkeszt(false);
+  }
+
+  async function ment() {
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/belsos-tig/tetelek/${tetel.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipus,
+          megnevezes: megnevezes.trim() || tetel.megnevezes,
+          osszeg: Number(osszeg) || 0,
+          project_code_id: projectCodeId,
+          datum: datum || null,
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      setSzerkeszt(false);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (szerkeszt) {
+    return (
+      <li className="fade-in py-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="t-label">Típus</span>
+            <select value={tipus} onChange={(e) => setTipus(e.target.value as TetelTipus)} className="field">
+              <option value="extra">Extra (hozzáadódik)</option>
+              <option value="levonando">Levonandó (levonódik)</option>
+              <option value="alapber">Alapbér</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="t-label">Megnevezés</span>
+            <input
+              type="text"
+              value={megnevezes}
+              onChange={(e) => setMegnevezes(e.target.value)}
+              className="field w-[180px]"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="t-label">Összeg</span>
+            <input
+              type="number"
+              value={osszeg}
+              onChange={(e) => setOsszeg(e.target.value)}
+              className="field w-[130px]"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="t-label">Pontos dátum</span>
+            <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} className="field w-[160px]" />
+          </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="t-label">Projektkód</span>
+            <SearchableIdPicker
+              value={projectCodeId}
+              options={projektkodok.map((p) => ({ id: p.id, label: p.projektkod }))}
+              onChange={setProjectCodeId}
+              placeholder="Nincs projektkódhoz kötve"
+              disabled={busy}
+              className="w-[210px]"
+            />
+          </div>
+          <button type="button" onClick={ment} disabled={busy} className="btn btn-primary">
+            <Check size={13} /> {busy ? "Mentés…" : "Mentés"}
+          </button>
+          <button type="button" onClick={megsem} disabled={busy} className="btn btn-ghost">
+            <X size={13} /> Mégse
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
+      <span className="min-w-0 flex-1">
+        <span className="text-[13px] text-text-primary">{tetel.megnevezes}</span>
+        {tetel.tipus !== "extra" && (
+          <span className="ml-2 align-middle">
+            <StatusBadge
+              label={TIPUS_NEVEK[tetel.tipus] ?? tetel.tipus}
+              tone={tetel.tipus === "levonando" ? "danger" : "neutral"}
+            />
+          </span>
+        )}
+        {(tetel.projektkod || tetel.datum) && (
+          <span className="mt-0.5 block text-[12px] text-text-muted">
+            {[tetel.projektkod, tetel.datum].filter(Boolean).join(" · ")}
+          </span>
+        )}
+      </span>
+      <span
+        className={`shrink-0 text-[13px] tabular-nums ${
+          tetel.tipus === "levonando" ? "text-text-danger" : "text-text-primary"
+        }`}
+      >
+        {elojelesOsszeg(tetel.tipus, tetel.osszeg)}
+      </span>
+      {szerkeszthet && (
+        <button
+          type="button"
+          onClick={() => setSzerkeszt(true)}
+          title="Tétel szerkesztése"
+          className="rounded-[var(--radius)] p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+        >
+          <Pencil size={13} />
+        </button>
+      )}
+      {torolhet && (
+        <button
+          type="button"
+          onClick={onTorol}
+          title="Tétel törlése"
+          className="rounded-[var(--radius)] p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-danger"
+        >
+          <Trash2 size={13} />
+        </button>
+      )}
+    </li>
+  );
+}
 
 /** Egy hónap tételei: az alapbér és a hozzáadódó extrák.
  *
@@ -58,7 +240,7 @@ function TetelSzerkeszto({
   const confirm = useConfirm();
   const [nyitva, setNyitva] = useState(alapbolNyitva);
   const [busy, setBusy] = useState(false);
-  const [tipus, setTipus] = useState<"alapber" | "extra">("extra");
+  const [tipus, setTipus] = useState<TetelTipus>("extra");
   const [megnevezes, setMegnevezes] = useState("");
   const [osszeg, setOsszeg] = useState("");
   const [projectCodeId, setProjectCodeId] = useState<number | null>(null);
@@ -118,33 +300,14 @@ function TetelSzerkeszto({
       {tetelek.length > 0 && (
         <ul className="divide-y divide-border">
           {tetelek.map((t) => (
-            <li key={t.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
-              <span className="min-w-0 flex-1">
-                <span className="text-[13px] text-text-primary">{t.megnevezes}</span>
-                {t.tipus === "alapber" && (
-                  <span className="ml-2 align-middle">
-                    <StatusBadge label="Alapbér" tone="neutral" />
-                  </span>
-                )}
-                {(t.projektkod || t.datum) && (
-                  <span className="mt-0.5 block text-[12px] text-text-muted">
-                    {[t.projektkod, t.datum].filter(Boolean).join(" · ")}
-                  </span>
-                )}
-              </span>
-              <span className="shrink-0 text-[13px] text-text-primary tabular-nums">{formatHuf(t.osszeg)}</span>
-              {torolhet && !zarolt && (
-                <button
-                  type="button"
-                  onClick={() => torol(t)}
-                  disabled={busy}
-                  title="Tétel törlése"
-                  className="rounded-[var(--radius)] p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
-                >
-                  <Trash2 size={13} />
-                </button>
-              )}
-            </li>
+            <TetelSor
+              key={t.id}
+              tetel={t}
+              projektkodok={projektkodok}
+              szerkeszthet={szerkeszthet && !zarolt}
+              torolhet={torolhet && !zarolt}
+              onTorol={() => torol(t)}
+            />
           ))}
         </ul>
       )}
@@ -159,12 +322,9 @@ function TetelSzerkeszto({
           <div className="fade-in flex flex-wrap items-end gap-3 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
             <label className="flex flex-col gap-1.5">
               <span className="t-label">Típus</span>
-              <select
-                value={tipus}
-                onChange={(e) => setTipus(e.target.value as "alapber" | "extra")}
-                className="field"
-              >
-                <option value="extra">Extra</option>
+              <select value={tipus} onChange={(e) => setTipus(e.target.value as TetelTipus)} className="field">
+                <option value="extra">Extra (hozzáadódik)</option>
+                <option value="levonando">Levonandó (levonódik)</option>
                 <option value="alapber" disabled={vanAlapber}>
                   Alapbér{vanAlapber ? " (már van)" : ""}
                 </option>
@@ -273,10 +433,15 @@ function HonapSor({
         <div className="fade-in pb-4 pl-7">
           {/* Az alapbér és az extrák külön összege - ebből látszik, mennyi
               volt a fix rész, és mennyi jött hozzá a hónap közben. */}
-          {(honap.alapber > 0 || honap.extra > 0) && (
+          {(honap.alapber > 0 || honap.extra > 0 || honap.levonas > 0) && (
             <p className="mb-3 text-[12px] text-text-muted">
               Alapbér: <span className="text-text-secondary">{formatHuf(honap.alapber)}</span> · Extrák:{" "}
               <span className="text-text-secondary">{formatHuf(honap.extra)}</span>
+              {honap.levonas > 0 && (
+                <>
+                  {" · "}Levonások: <span className="text-text-danger">− {formatHuf(honap.levonas)}</span>
+                </>
+              )}
             </p>
           )}
           <TetelSzerkeszto

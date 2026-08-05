@@ -25,7 +25,12 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee, EmployeeType
-from app.models.employee_monthly_item import TETEL_TIPUSOK, EmployeeMonthlyItem
+from app.models.employee_monthly_item import (
+    TETEL_TIPUSOK,
+    TIPUS_SORREND,
+    EmployeeMonthlyItem,
+    elojeles_osszeg,
+)
 from app.models.finance import Expense
 from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
@@ -179,9 +184,9 @@ def list_month(
             EmployeeMonthlyItem.honap == honap,
             EmployeeMonthlyItem.employee_id.in_([e.id for e in employees]),
         )
-        .order_by((EmployeeMonthlyItem.tipus != "alapber"), EmployeeMonthlyItem.id)
         .all()
     )
+    tetelek = sorted(tetelek, key=lambda t: (TIPUS_SORREND.get(t.tipus, 9), t.id))
     tetel_lookup: dict[int, list[HaviTetelRead]] = {}
     for tetel in tetelek:
         tetel_lookup.setdefault(tetel.employee_id, []).append(_tetel_kimenet(tetel))
@@ -756,18 +761,18 @@ def _tetel_kimenet(tetel: EmployeeMonthlyItem) -> HaviTetelRead:
 
 
 def _honap_tetelei(db: Session, employee_id: int, ev: int, honap: int) -> list[EmployeeMonthlyItem]:
-    return (
+    sorok = (
         db.query(EmployeeMonthlyItem)
         .filter(
             EmployeeMonthlyItem.employee_id == employee_id,
             EmployeeMonthlyItem.ev == ev,
             EmployeeMonthlyItem.honap == honap,
         )
-        # Az alapbér mindig elöl, utána az extrák felvitel szerint - így a
-        # lista úgy olvasható, ahogy az összeg összeáll.
-        .order_by((EmployeeMonthlyItem.tipus != "alapber"), EmployeeMonthlyItem.id)
         .all()
     )
+    # Alapbér -> extrák -> levonandók, típuson belül felvitel szerint: így a
+    # lista úgy olvasható, ahogy az összeg összeáll (lásd TIPUS_SORREND).
+    return sorted(sorok, key=lambda t: (TIPUS_SORREND.get(t.tipus, 9), t.id))
 
 
 def _tiltsd_ha_lezart(db: Session, employee_id: int, ev: int, honap: int) -> None:
@@ -801,7 +806,7 @@ def _ujraszamol_tig_osszeget(db: Session, employee: Employee, ev: int, honap: in
     if not tetelek:
         return
     record = _get_or_create(db, employee, ev, honap)
-    record.netto_osszeg = float(sum(float(t.osszeg or 0) for t in tetelek))
+    record.netto_osszeg = float(sum(elojeles_osszeg(t.tipus, t.osszeg) for t in tetelek))
 
 
 @router.get("/{employee_id}/{ev}/{honap}/tetelek", response_model=list[HaviTetelRead])
@@ -863,8 +868,22 @@ def update_havi_tetel(
     if tetel is None:
         raise HTTPException(status_code=404, detail="A tétel nem található")
     _tiltsd_ha_lezart(db, tetel.employee_id, tetel.ev, tetel.honap)
+
+    valtozok = payload.model_dump(exclude_unset=True)
+    uj_tipus = valtozok.get("tipus")
+    if uj_tipus is not None:
+        if uj_tipus not in TETEL_TIPUSOK:
+            raise HTTPException(status_code=400, detail=f"Ismeretlen tétel-típus: {uj_tipus}")
+        # Alapbérből hónaponként csak egy lehet - ugyanaz a szabály, mint
+        # felvitelnél; enélkül átminősítéssel meg lehetne kerülni.
+        if uj_tipus == "alapber" and any(
+            t.tipus == "alapber" and t.id != tetel.id
+            for t in _honap_tetelei(db, tetel.employee_id, tetel.ev, tetel.honap)
+        ):
+            raise HTTPException(status_code=409, detail="Ehhez a hónaphoz már van alapbér felvéve.")
+
     # Csak a ténylegesen elküldött mezők - lásd HaviTetelPatch.
-    for mezo, ertek in payload.model_dump(exclude_unset=True).items():
+    for mezo, ertek in valtozok.items():
         if mezo == "megnevezes":
             ertek = (ertek or "").strip() or tetel.megnevezes
         # Az (ev, honap) SZÁNDÉKOSAN nincs a módosítható mezők közt: egy tétel
@@ -906,6 +925,8 @@ class HaviKoltseg(BaseModel):
     brutto_osszeg: float | None = None
     alapber: float = 0
     extra: float = 0
+    #: A levonandó tételek összege POZITÍVAN - a nettó összegből már le van vonva.
+    levonas: float = 0
     tetelek: list[HaviTetelRead] = []
 
 
@@ -928,6 +949,8 @@ class HonapReszletek(BaseModel):
     tetelek: list[HaviTetelRead] = []
     alapber: float = 0
     extra: float = 0
+    #: A levonandó tételek összege POZITÍVAN; az `osszesen`-ből már levontuk.
+    levonas: float = 0
     osszesen: float = 0
 
 
@@ -952,7 +975,8 @@ def honap_reszletek(
     record = _find(db, employee_id, ev, honap)
     tetelek = _honap_tetelei(db, employee_id, ev, honap)
     alapber = float(sum(float(t.osszeg or 0) for t in tetelek if t.tipus == "alapber"))
-    extra = float(sum(float(t.osszeg or 0) for t in tetelek if t.tipus != "alapber"))
+    extra = float(sum(float(t.osszeg or 0) for t in tetelek if t.tipus == "extra"))
+    levonas = float(sum(float(t.osszeg or 0) for t in tetelek if t.tipus == "levonando"))
     olvasott = InternalPerformanceCertificateRead.model_validate(record) if record is not None else None
 
     return HonapReszletek(
@@ -965,7 +989,14 @@ def honap_reszletek(
         tetelek=[_tetel_kimenet(t) for t in tetelek],
         alapber=alapber,
         extra=extra,
-        osszesen=alapber + extra if tetelek else float(olvasott.netto_osszeg or 0) if olvasott else 0,
+        levonas=levonas,
+        osszesen=(
+            alapber + extra - levonas
+            if tetelek
+            else float(olvasott.netto_osszeg or 0)
+            if olvasott
+            else 0
+        ),
     )
 
 
@@ -1012,12 +1043,14 @@ def employee_koltsegek(
         adat.tetelek.append(_tetel_kimenet(tetel))
         if tetel.tipus == "alapber":
             adat.alapber += float(tetel.osszeg or 0)
+        elif tetel.tipus == "levonando":
+            adat.levonas += float(tetel.osszeg or 0)
         else:
             adat.extra += float(tetel.osszeg or 0)
 
     evek: dict[int, list[HaviKoltseg]] = {}
     for adat in honapok.values():
-        adat.tetelek.sort(key=lambda t: (t.tipus != "alapber", t.id))
+        adat.tetelek.sort(key=lambda t: (TIPUS_SORREND.get(t.tipus, 9), t.id))
         evek.setdefault(adat.ev, []).append(adat)
 
     return [

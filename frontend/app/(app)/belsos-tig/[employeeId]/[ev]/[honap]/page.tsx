@@ -31,7 +31,9 @@ export default async function BelsosTigHonapPage({
   const record = adat.record;
   const zarolt = ZAROLT.includes(record?.allapot ?? "");
   const alapberTetel = adat.tetelek.find((t) => t.tipus === "alapber");
-  const extrak = adat.tetelek.filter((t) => t.tipus !== "alapber");
+  // Az alapbér után az, ami hozzáadódik, végül ami levonódik - ugyanabban a
+  // sorrendben, ahogy az összeg összeáll.
+  const tobbiTetel = adat.tetelek.filter((t) => t.tipus !== "alapber");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -61,9 +63,15 @@ export default async function BelsosTigHonapPage({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Alapbér" value={formatHuf(adat.alapber)} icon={Wallet} />
           <StatCard label="Extrák összesen" value={formatHuf(adat.extra)} icon={Wallet} tone="orange" />
+          <StatCard
+            label="Levonások összesen"
+            value={adat.levonas > 0 ? `− ${formatHuf(adat.levonas)}` : formatHuf(0)}
+            icon={Wallet}
+            tone={adat.levonas > 0 ? "danger" : "default"}
+          />
           <StatCard label="Havi szumma" value={formatHuf(adat.osszesen)} icon={Wallet} tone="accent" />
         </div>
 
@@ -100,12 +108,25 @@ export default async function BelsosTigHonapPage({
                       <td className="text-right tabular-nums">{formatHuf(alapberTetel.osszeg)}</td>
                     </tr>
                   )}
-                  {extrak.map((t) => (
+                  {tobbiTetel.map((t) => (
                     <tr key={t.id}>
-                      <td>{t.megnevezes}</td>
+                      <td>
+                        {t.megnevezes}
+                        {t.tipus === "levonando" && (
+                          <span className="ml-2 align-middle">
+                            <StatusBadge label="Levonandó" tone="danger" />
+                          </span>
+                        )}
+                      </td>
                       <td>{t.projektkod ?? <span className="text-text-muted">Nincs projektkódhoz kötve</span>}</td>
                       <td className="text-text-muted">{formatDate(t.datum)}</td>
-                      <td className="text-right tabular-nums">{formatHuf(t.osszeg)}</td>
+                      <td
+                        className={`text-right tabular-nums ${
+                          t.tipus === "levonando" ? "text-text-danger" : ""
+                        }`}
+                      >
+                        {t.tipus === "levonando" ? `− ${formatHuf(t.osszeg)}` : formatHuf(t.osszeg)}
+                      </td>
                     </tr>
                   ))}
                   {/* A szumma ugyanabban a táblában, hogy az összeadás

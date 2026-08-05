@@ -930,7 +930,9 @@ export type HaviTetel = {
   employee_id: number;
   ev: number;
   honap: number;
-  tipus: "alapber" | "extra";
+  /** alapber | extra | levonando. A "levonando" összege POZITÍV, az előjelet
+   * a típus adja (lásd backend models/employee_monthly_item.elojeles_osszeg). */
+  tipus: "alapber" | "extra" | "levonando";
   megnevezes: string;
   osszeg: number;
   project_code_id: number | null;
@@ -951,6 +953,8 @@ export type HonapReszletek = {
   tetelek: HaviTetel[];
   alapber: number;
   extra: number;
+  /** A levonandó tételek összege POZITÍVAN - az `osszesen`-ből már levonva. */
+  levonas: number;
   osszesen: number;
 };
 
@@ -972,6 +976,8 @@ export type HaviKoltseg = {
   brutto_osszeg: number | null;
   alapber: number;
   extra: number;
+  /** A levonandó tételek összege POZITÍVAN - a nettó összegből már levonva. */
+  levonas: number;
   tetelek: HaviTetel[];
 };
 

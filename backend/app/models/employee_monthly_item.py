@@ -6,11 +6,30 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin
 
-# A tétel szerepe. Az "alapber" a havi fix rész, minden más "extra" (túlóra,
-# benzin, étkezés…). Azért nem egy fix konstans az alapbér a munkatárs
-# törzsadatában, mert hónapról hónapra változhat - így minden hónapnak megvan
-# a SAJÁT, visszakereshető alapbére.
-TETEL_TIPUSOK = ("alapber", "extra")
+# A tétel szerepe:
+#   alapber   - a havi fix rész,
+#   extra     - ami hozzáadódik (túlóra, benzin, étkezés…),
+#   levonando - ami LEVONÓDIK (előleg, hiányzás, kártérítés…).
+#
+# A levonandó tétel összegét POZITÍVAN visszük fel, az előjelet a típus adja
+# (lásd elojeles_osszeg) - így a felületen nem kell mínusszal bajlódni, és nem
+# fordulhat elő, hogy egy elfelejtett mínusz miatt egy levonás hozzáadódik.
+#
+# Az alapbér azért nem fix konstans a munkatárs törzsadatában, mert hónapról
+# hónapra változhat - így minden hónapnak megvan a SAJÁT, visszakereshető
+# alapbére.
+TETEL_TIPUSOK = ("alapber", "extra", "levonando")
+
+# Megjelenítési/összeadási sorrend: előbb az alapbér, aztán ami hozzáadódik,
+# végül ami levonódik - így a lista úgy olvasható, ahogy az összeg összeáll.
+TIPUS_SORREND = {"alapber": 0, "extra": 1, "levonando": 2}
+
+
+def elojeles_osszeg(tipus: str, osszeg: float | None) -> float:
+    """A tétel előjeles hozzájárulása a havi összeghez. A levonandó tétel
+    MÍNUSZ, minden más plusz."""
+    ertek = float(osszeg or 0)
+    return -ertek if tipus == "levonando" else ertek
 
 
 class EmployeeMonthlyItem(TimestampMixin, Base):
