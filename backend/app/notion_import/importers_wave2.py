@@ -26,6 +26,7 @@ from app.models.employee import Employee
 from app.models.equipment import Assignment
 from app.models.feedback import Feedback
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.notion_import import NotionImportMap
 from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.timesheet import Timesheet
@@ -441,6 +442,51 @@ def _lezart_idopontok(props: dict) -> tuple[datetime | None, datetime | None]:
     return start, (start + timedelta(minutes=float(percek))) if percek else start
 
 
+def _meres_kulcsa(employee_id: int, deliverable_id: int | None, start: datetime | None):
+    """Egy MÉRÉS azonossága: ki, melyik anyagon, mikor kezdte (percre).
+
+    Ugyanaz az ember ugyanazon az anyagon nem tud két mérést ugyanabban a
+    percben indítani - ha mégis két sorunk van rá, az ugyanaz a mérés két
+    táblából."""
+    return (employee_id, deliverable_id, start.replace(second=0, microsecond=0) if start else None)
+
+
+def _mar_megvan_publicbol(
+    db: Session,
+    result: ImportResult,
+    page_id: str,
+    props: dict,
+    kulcs,
+    public_page_idk: set[str],
+    public_kulcsok: set,
+) -> bool:
+    """Ez a privát sor ugyanaz a mérés, amit a Public táblából már behoztunk?
+
+    Két jel alapján; az első a biztos: a privát sor "Timesheet Public"
+    relationje pont arra a sorra mutat, amit már importáltunk (a két táblát
+    Notionban egy szinkron-worker tartotta párban). Ha a relation üres (a
+    névalapú párosítás gyakran szakadt), a mérés azonossága dönt.
+
+    Ha egy KORÁBBI import már behozta a duplikátumot, itt töröljük is - így egy
+    újrafuttatás magától rendbe teszi a megkettőzött időket."""
+    parja = props.get("Timesheet Public") or []
+    duplikatum = any(pid in public_page_idk for pid in parja if isinstance(pid, str))
+    if not duplikatum and kulcs[0] is not None and kulcs[2] is not None:
+        duplikatum = kulcs in public_kulcsok
+    if not duplikatum:
+        return False
+
+    mapping = db.scalar(select(NotionImportMap).where(NotionImportMap.notion_page_id == page_id))
+    if mapping is not None:
+        regi = db.get(Timesheet, mapping.entity_id)
+        if regi is not None:
+            db.delete(regi)
+        db.delete(mapping)
+        db.flush()
+    result.skipped += 1
+    return True
+
+
 def _import_timesheet_database(
     client: NotionClient,
     db: Session,
@@ -448,11 +494,18 @@ def _import_timesheet_database(
     result: ImportResult,
     deliverable_relation_field: str,
     *,
+    forras: str,
     leallitasok: dict[int, datetime] | None = None,
+    public_page_idk: set[str] | None = None,
+    public_kulcsok: set | None = None,
 ) -> None:
     """`leallitasok`: ha kap egy szótárat, utómunkánként gyűjti a LEGKÉSŐBBI
     leállítási időpontot (End Date). Csak a 'Timesheet Public' táblánál adjuk
-    át - a felhasználó kérése szerint az utómunka leállítási ideje onnan jön."""
+    át - a felhasználó kérése szerint az utómunka leállítási ideje onnan jön.
+
+    `public_page_idk` / `public_kulcsok`: a Public táblából már behozott sorok -
+    a Public importja tölti fel, a Private importja pedig ezekkel szűri ki a
+    kétszer szereplő méréseket (lásd _mar_megvan_publicbol)."""
     for page in client.query_database(database_id):
         props = extract_properties(page, client)
         employee_id = resolve_relation_id(db, "Employee", props.get("Vágó") or [])
@@ -467,6 +520,15 @@ def _import_timesheet_database(
         start, lezaras = _lezart_idopontok(props)
         vege = _veg_datum(props)
         koltseg = props.get("Költség")
+
+        kulcs = _meres_kulcsa(employee_id, deliverable_id, start)
+        # A duplikátum-szűrés KIZÁRÓLAG a két tábla között értelmes: a public
+        # tábla sorait egymással nem vetjük össze (két külön Notion-sor két
+        # külön mérés, akkor is, ha egy percben indultak).
+        if forras == "private" and public_page_idk is not None and public_kulcsok is not None:
+            if _mar_megvan_publicbol(db, result, page["id"], props, kulcs, public_page_idk, public_kulcsok):
+                continue
+
         safe_upsert(
             db,
             result,
@@ -498,9 +560,17 @@ def _import_timesheet_database(
                 "akkori_orabere": _numeric_or_none(props.get("Akkori órabér")),
                 "timesheet_public_notion_ids": props.get("Timesheet Public"),
                 "percek_lista": props.get("percek"),
+                "notion_forras": forras,
             },
             label=f"Timesheet (employee_id={employee_id})",
         )
+
+        if forras == "public":
+            # A Private import ezekkel ismeri fel, mi jött már be innen.
+            if public_page_idk is not None:
+                public_page_idk.add(page["id"])
+            if public_kulcsok is not None and kulcs[2] is not None:
+                public_kulcsok.add(kulcs)
 
         if leallitasok is not None and deliverable_id is not None and vege is not None:
             # A LEGKÉSŐBBI leállítás számít: egy utómunkán több mérés is futhatott
@@ -516,20 +586,66 @@ def import_timesheets(client: NotionClient, db: Session) -> ImportResult:
     """Timesheet <- 'Timesheet Public' + 'Timesheet Private' (a mi sémánkban nincs
     külön visibility mező, a kettő egy egységes Timesheet listába kerül).
 
+    A két Notion-tábla UGYANAZT a mérést is tartalmazhatja: egy szinkron-worker
+    tartotta párban őket (lásd docs/hype_os_migration_map.md 5. pont). Ezért a
+    Public táblát olvassuk be előbb, és a Private tábla azon sorait, amik
+    ugyanaz a mérés, kihagyjuk - különben ugyanaz a munkaidő kétszer számítana
+    bele az utómunka összesítésébe (ettől lett egy-egy projekten kétszer annyi
+    idő, mint Notionban).
+
     A 'Timesheet Public' sorai emellett az utómunkára is felírják, mikor
     állították le a vágás mérőjét (Deliverable.vagas_leallitva) - ez az adat az
     Utómunka táblában nincs benne, csak itt, az 'End Date' mezőben."""
     result = ImportResult(entity_type="Timesheet")
     leallitasok: dict[int, datetime] = {}
-    _import_timesheet_database(client, db, db_ids.TIMESHEET_PUBLIC, result, "Utómunka_2", leallitasok=leallitasok)
-    _import_timesheet_database(client, db, db_ids.TIMESHEET_PRIVATE, result, "Utómunka_1")
+    public_page_idk: set[str] = set()
+    public_kulcsok: set = set()
+    _import_timesheet_database(
+        client,
+        db,
+        db_ids.TIMESHEET_PUBLIC,
+        result,
+        "Utómunka_2",
+        forras="public",
+        leallitasok=leallitasok,
+        public_page_idk=public_page_idk,
+        public_kulcsok=public_kulcsok,
+    )
+    _import_timesheet_database(
+        client,
+        db,
+        db_ids.TIMESHEET_PRIVATE,
+        result,
+        "Utómunka_1",
+        forras="private",
+        public_page_idk=public_page_idk,
+        public_kulcsok=public_kulcsok,
+    )
 
     # A Timesheet Public a mérvadó forrás: amit ott találtunk, az felülírja a
     # korábbi értéket (akár egy migrációs becslést, akár egy előző futásét) -
     # nem "csak ha későbbi", különben egy téves régi érték örökre beragadna.
+    #
+    # EGY kivétellel: ha azóta a RENDSZERBEN is dolgoztak az anyagon (van
+    # olyan, nem importált mérés, ami később ért véget), akkor az a friss adat
+    # - egy import nem tolhatja vissza a leállítást egy évekkel korábbi
+    # időpontra. Az importált sorok nem számítanak ilyennek, azok maguk is a
+    # Notionból jöttek.
     for deliverable_id, vege in leallitasok.items():
         utomunka = db.get(Deliverable, deliverable_id)
-        if utomunka is not None:
+        if utomunka is None:
+            continue
+        ujabb_sajat = db.scalar(
+            select(Timesheet.end_date)
+            .where(
+                Timesheet.deliverable_id == deliverable_id,
+                Timesheet.notion_forras.is_(None),
+                Timesheet.end_date.is_not(None),
+                Timesheet.end_date > vege,
+            )
+            .limit(1)
+        )
+        if ujabb_sajat is None:
             utomunka.vagas_leallitva = vege
     db.flush()
     return result

@@ -22,6 +22,13 @@ class Timesheet(TimestampMixin, Base):
     statusz: Mapped[str | None] = mapped_column(String(50))
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Melyik Notion-táblából jött a sor: "public" vagy "private". A HYPE
+    # Notionban ugyanaz a mérés MINDKÉT táblában szerepelhet (a két táblát egy
+    # szinkron-worker tartotta párban) - enélkül ugyanaz a munkaidő kétszer
+    # számítana bele az utómunka összesítésébe. Üres a rendszerben indított
+    # (nem importált) méréseknél.
+    notion_forras: Mapped[str | None] = mapped_column(String(20))
+
     # a munkaidő-elszámoló táblák maradék mezői (lásd scripts/dump_extra_keys.py)
     person_notion: Mapped[dict | list | None] = mapped_column(JSON, comment="Person")
     fut: Mapped[bool | None] = mapped_column(Boolean)
