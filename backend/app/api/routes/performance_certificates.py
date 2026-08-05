@@ -36,7 +36,9 @@ from app.services.hu_number_words import szam_betukkel
 
 router = APIRouter(prefix="/teljesitesi-igazolasok", tags=["performance-certificates"])
 
-PAGE = "/teljesitesi-igazolasok"
+# Lásd subcontractor_contracts.py: a TIG-műveletek az Utókövetés oldalhoz
+# tartoznak, külön menüpont nincs hozzájuk.
+PAGE = "/utokovetes"
 
 TERMINAL_STATUSES = {"Kiküldve", "Kihagyva"}
 

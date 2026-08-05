@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { AnchoredPanel } from "@/components/AnchoredPanel";
 import { selectColor } from "@/lib/selectColor";
 
@@ -19,6 +19,7 @@ export function SelectDropdown({
   placeholder = "Üres",
   disabled = false,
   className = "",
+  allowNew = false,
 }: {
   value: string | null;
   options: string[];
@@ -26,6 +27,11 @@ export function SelectDropdown({
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Ha igaz, a listán kívüli érték is megadható: a kereső mezőbe beírt új
+   * szöveg egy "hozzáadása" gombbal (vagy Enterrel) rögtön beállítható. Olyan
+   * mezőkhöz, amiknek van kialakult értékkészlete, de az nem zárt - pl.
+   * "megbízás tárgya" (lásd backend entity_registry.NYITOTT_SELECT_MEZOK). */
+  allowNew?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -44,6 +50,12 @@ export function SelectDropdown({
   }, [open]);
 
   const filtered = query.trim() ? options.filter((o) => o.toLowerCase().includes(query.trim().toLowerCase())) : options;
+  const ujErtek = query.trim();
+  // Új értéket csak akkor kínálunk, ha tényleg új: a már meglévő opciót
+  // (kis/nagybetűtől függetlenül) a listából kell választani, hogy ne
+  // keletkezzen két, csak írásmódban eltérő változat ugyanabból.
+  const felvehetoUj =
+    allowNew && ujErtek.length > 0 && !options.some((o) => o.toLowerCase() === ujErtek.toLowerCase());
   const color = value ? selectColor(value) : { bg: "var(--surface-3)", text: "var(--text-muted)" };
 
   function select(next: string | null) {
@@ -78,9 +90,12 @@ export function SelectDropdown({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") close();
-                if (e.key === "Enter" && filtered.length === 1) select(filtered[0]);
+                if (e.key === "Enter") {
+                  if (filtered.length === 1) select(filtered[0]);
+                  else if (felvehetoUj) select(ujErtek);
+                }
               }}
-              placeholder={value ?? placeholder}
+              placeholder={value ?? (allowNew ? "Válassz vagy írj újat" : placeholder)}
               className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:opacity-70"
               style={{ color: color.text }}
             />
@@ -111,7 +126,21 @@ export function SelectDropdown({
                 </button>
               );
             })}
-            {filtered.length === 0 && <p className="p-2 text-[12px] text-text-muted">Nincs találat.</p>}
+            {felvehetoUj && (
+              <button
+                type="button"
+                onClick={() => select(ujErtek)}
+                className="flex w-full items-center gap-1.5 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-left text-[13px] text-text-secondary hover:bg-surface-3"
+              >
+                <Plus size={12} className="shrink-0" />
+                <span className="truncate">„{ujErtek}" hozzáadása</span>
+              </button>
+            )}
+            {filtered.length === 0 && !felvehetoUj && (
+              <p className="p-2 text-[12px] text-text-muted">
+                {allowNew ? "Írj be egy új értéket." : "Nincs találat."}
+              </p>
+            )}
           </div>
         </AnchoredPanel>
       )}

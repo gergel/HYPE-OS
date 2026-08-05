@@ -121,8 +121,12 @@ export const navGroups: NavGroup[] = [
   {
     label: null,
     items: [
-      { label: "Alvállalkozók szerződése", href: "/alvallalkozoi-szerzodesek", icon: "FileCheck2" },
-      { label: "Teljesítési igazolások", href: "/teljesitesi-igazolasok", icon: "BadgeCheck" },
+      // Az "Alvállalkozók szerződése" és a "Teljesítési igazolások" külön
+      // menüpont megszűnt: az Utókövetés oldal a kettőt EGYBEN kezeli
+      // (projektenként, egymás mellett látszik, mi hiányzik még). A hozzájuk
+      // tartozó műveletek megmaradtak, csak a jogosultságuk az Utókövetés
+      // oldalé lett (lásd backend subcontractor_contracts.py /
+      // performance_certificates.py PAGE konstansa).
       { label: "Belsős TIG", href: "/belsos-tig", icon: "BadgeCheck" },
       { label: "Utókövetés", href: "/utokovetes", icon: "History" },
       { label: "Kampányok", href: "/kampanyok", icon: "Megaphone" },

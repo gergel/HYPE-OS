@@ -658,7 +658,13 @@ export async function getVisibleFields(entityType: string): Promise<string[] | n
   return res?.visible_fields ?? null;
 }
 
-export type FieldTypeInfo = { type: string; options?: string[] };
+export type FieldTypeInfo = {
+  type: string;
+  options?: string[];
+  /** Select mezőnél: a listán kívüli, ÚJ érték is megadható helyben (lásd
+   * backend entity_registry.NYITOTT_SELECT_MEZOK). */
+  allow_new?: boolean;
+};
 
 /** {mezőnév: {type: "boolean"|"date"|"datetime"|"number"|"select"|"text", options?: [...]}}
  * egy entitástípushoz - kell, hogy egy éppen null értékű mezőt (pl. egy még be

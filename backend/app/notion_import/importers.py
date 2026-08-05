@@ -33,6 +33,25 @@ def _text(value) -> str | None:
     return value or None
 
 
+def _mezo(props: dict, *nevek: str):
+    """Az első NEM ÜRES érték a felsorolt mezőnevek közül.
+
+    A HYPE Notion tábláiban ugyanaz az adat több írásmóddal is szerepel
+    ("Vállakozás neve" / "Vállalkozás neve", "Vállakozás székhely" /
+    "Vállalkozás székhelye") - egy elgépelt oszlopnév miatt ne vesszen el a
+    cégadat."""
+    for nev in nevek:
+        if nev in props:
+            ertek = props[nev]
+            if ertek not in (None, "", []):
+                return ertek
+    return None
+
+
+def _szoveg_mezo(props: dict, *nevek: str) -> str | None:
+    return _text(_mezo(props, *nevek))
+
+
 def resolve_client_via_contact(db: Session, notion_contact_page_ids: list[str]) -> int | None:
     """A Client entitás szintetikus kulccsal (cég szerint csoportosítva) jön létre, nem
     1:1 egy Notion page-dzsel - ezért a 'Megrendelői kontaktok'/'Akivel szerződünk' relation
@@ -164,7 +183,7 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
                 "utolso_munkanap": as_date(props.get("Utolsó munkanap")),
                 "ertekeles": props.get("Értékelés"),
                 "technikai_ismeret": _text(props.get("TECHNIKAI ISMERET")),
-                "vallalkozas_kepviselo": _text(props.get("Vállalkozás képviselő")),
+                "vallalkozas_kepviselo": _szoveg_mezo(props, "Vállalkozás képviselő", "Vállalkozás képviselője", "Vállakozás képviselő"),
                 "leltar_notion_ids": props.get("🎥 Leltár"),
                 "hany_visszajelzese_van_notion": props.get("Hány visszajelzése van"),
                 "first_name": _text(props.get("First name")),
@@ -189,14 +208,14 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
                 "leltar_hiany_20240415_notion": props.get("2024.04.15. leltár hiány"),
                 "legutolso_napi_dij_megegyezes": _text(props.get("LEGUTOLSÓ NAPI DÍJ MEGEGYEZÉS")),
                 "milyen_suru_hivjuk": _text(props.get("MILYEN SŰRŰN HÍVJUK")),
-                "megbizas_targya": _text(props.get("Megbízás tárgya")),
+                "megbizas_targya": _szoveg_mezo(props, "Megbízás tárgya", "Megbizas targya"),
                 "szallito_notion_ids": props.get("Szállító"),
                 "keltezes_datuma": as_date(props.get("Keltezés dátuma")),
                 "archive_technika_elhagyas_notion_ids": props.get("Archive technika elhagyás"),
-                "nyilvantartasi_szam": _text(props.get("Nyilvántartási szám:")),
-                "vallakozas_szekhely": _text(props.get("Vállakozás székhely")),
+                "nyilvantartasi_szam": _szoveg_mezo(props, "Nyilvántartási szám:", "Nyilvántartási szám", "Vállalkozás nyilvántartási szám"),
+                "vallakozas_szekhely": _szoveg_mezo(props, "Vállakozás székhely", "Vállalkozás székhelye", "Vállalkozás székhely", "Székhely"),
                 "van_e_email_cime_notion": props.get("van e email címe"),
-                "vallakozas_neve": _text(props.get("Vállakozás neve")),
+                "vallakozas_neve": _szoveg_mezo(props, "Vállakozás neve", "Vállalkozás neve", "Cég neve"),
                 "phone_2": props.get("Phone 2"),
                 "megjegyzes": _text(props.get("MEGJEGYZÉS")),
                 "honnan_ismerjuk": _text(props.get("HONNAN ISMERJÜK")),
@@ -204,7 +223,7 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
                 "kiadas_projektkodja_notion_ids": props.get("Kiadás projektkódja"),
                 "formula_2_notion": props.get("Formula 2"),
                 "main_database_notion_ids": props.get("📅 Main Database"),
-                "vallalkozas_adoszama": _text(props.get("Vállalkozás adószáma")),
+                "vallalkozas_adoszama": _szoveg_mezo(props, "Vállalkozás adószáma", "Vállakozás adószáma", "Adószám"),
                 "plusz_afa": _text(props.get("Plusz ÁFA")),
             },
             label=f"Employee '{full_name}'",
@@ -440,9 +459,197 @@ def import_tasks(client: NotionClient, db: Session) -> ImportResult:
     return result
 
 
+# A "Külsős és belsős" tábla cégadat-mezői - több írásmóddal is előfordulnak.
+CEG_NEV_MEZOK = ("Vállakozás neve", "Vállalkozás neve", "Cég neve")
+CEG_SZEKHELY_MEZOK = ("Vállakozás székhely", "Vállalkozás székhelye", "Vállalkozás székhely", "Székhely")
+CEG_ADOSZAM_MEZOK = ("Vállalkozás adószáma", "Vállakozás adószáma", "Adószám")
+CEG_KEPVISELO_MEZOK = ("Vállalkozás képviselő", "Vállalkozás képviselője", "Vállakozás képviselő")
+CEG_NYILVANTARTAS_MEZOK = ("Nyilvántartási szám:", "Nyilvántartási szám", "Vállalkozás nyilvántartási szám")
+CEG_MEGBIZAS_MEZOK = ("Megbízás tárgya",)
+CEG_EMAIL_MEZOK = ("E-MAIL CÍM", "Email")
+CEG_KELTEZES_MEZOK = ("Keltezés dátuma", "Keltezés")
+
+# A munkatárs oldalán a keretszerződés relationje - innen tudjuk, melyik
+# szerződés-lap kihez tartozik akkor is, ha a szerződés-lapon nincs (vagy más
+# néven van) a visszamutató kapcsolat.
+EMPLOYEE_SZERZODES_RELATIO = (
+    "Alvállakozó keretszerződés (külsős)",
+    "Alvállalkozó keretszerződés (külsős)",
+    "Alvállakozó keretszerződés",
+    "Alvállalkozói keretszerződés",
+    "Keretszerződés",
+)
+
+# A szerződés-lap oldalán a munkatárs relationje.
+SZERZODES_SZEMELY_MEZOK = ("Vállalkozó", "Külsős ", "Külsős", "Személy", "Munkatárs", "Külsős és belsős", "Név")
+
+
+def _kulsos_es_belsos_oldalak(client: NotionClient) -> list[tuple[dict, dict]]:
+    """A 'Külsős és belsős' tábla sorai (oldal + kiolvasott mezők) - a
+    szerződés-import két helyen is használja: innen jön a szerződés->munkatárs
+    párosítás és a cégadat/PDF is."""
+    return [(page, extract_properties(page, client)) for page in client.query_database(db_ids.KULSOS_ES_BELSOS)]
+
+
+def _szerzodes_munkatars_index(db: Session, oldalak: list[tuple[dict, dict]]) -> dict[str, int]:
+    """Szerződés-lap Notion ID -> a mi munkatárs-azonosítónk, a MUNKATÁRS
+    felől nézve (lásd EMPLOYEE_SZERZODES_RELATIO). Ez a legmegbízhatóbb
+    kapocs: a "Külsős és belsős" táblában mindenkinél ott a saját
+    keretszerződése."""
+    index: dict[str, int] = {}
+    for page, props in oldalak:
+        employee_id = resolve_relation_id(db, "Employee", [page["id"]])
+        if employee_id is None:
+            continue
+        for nev in EMPLOYEE_SZERZODES_RELATIO:
+            ertek = props.get(nev)
+            if isinstance(ertek, list):
+                for szerzodes_page_id in ertek:
+                    if isinstance(szerzodes_page_id, str) and szerzodes_page_id:
+                        index.setdefault(szerzodes_page_id, employee_id)
+    return index
+
+
+def _szerzodes_munkatarsa(db: Session, page: dict, props: dict, index: dict[str, int]) -> int | None:
+    """Kihez tartozik ez a szerződés-lap: a munkatárs felőli relation, a
+    lapon lévő személy-relationök, végül BÁRMELY relation, ami munkatársra
+    oldható fel. Enélkül a fel nem oldott szerződések sehol nem látszanak (a
+    Keretszerződések lista csak a munkatárshoz kötött sorokat mutatja)."""
+    talalat = index.get(page["id"])
+    if talalat is not None:
+        return talalat
+    for nev in SZERZODES_SZEMELY_MEZOK:
+        ertek = props.get(nev)
+        if isinstance(ertek, list) and ertek:
+            talalat = resolve_relation_id(db, "Employee", ertek)
+            if talalat is not None:
+                return talalat
+    for ertek in props.values():
+        if isinstance(ertek, list) and ertek and all(isinstance(v, str) for v in ertek):
+            talalat = resolve_relation_id(db, "Employee", ertek)
+            if talalat is not None:
+                return talalat
+    return None
+
+
+def _szerzodes_fajl_urlek(props: dict) -> list[str]:
+    """A munkatárs lapján lévő szerződés-fájlok URL-jei ("Szerződés aláírva" és
+    társai). A mező NEVE alapján válogatunk, mert a HYPE Notion tábláiban
+    következetesen megmondja, mi van benne (ugyanaz az elv, mint
+    files.kategoria_mezonevbol)."""
+    talalatok: list[str] = []
+    for nev, ertek in props.items():
+        nev_kicsi = nev.lower()
+        if "szerződés" not in nev_kicsi and "szerzodes" not in nev_kicsi:
+            continue
+        jeloltek = [ertek] if isinstance(ertek, str) else ertek if isinstance(ertek, list) else []
+        talalatok.extend(u for u in jeloltek if isinstance(u, str) and u.startswith("http"))
+    return talalatok
+
+
+def _keretszerzodes_a_munkatarsbol(db: Session, result: ImportResult, page: dict, props: dict) -> None:
+    """A munkatárs saját lapján lévő cégadatból és aláírt szerződés-PDF-ből
+    álló keretszerződés.
+
+    A HYPE Notionban a keretszerződés adatai NEM csak a szerződés-táblában
+    vannak: a "Külsős és belsős" tábla minden emberénél ott a cégneve,
+    székhelye, adószáma, és a "Szerződés aláírva" mezőben maga az aláírt PDF.
+    Akinek nincs külön szerződés-lapja, annak enélkül sehol nem lenne
+    keretszerződése a rendszerben.
+
+    Ha a munkatársnak MÁR van álló keretszerződése (akár a szerződés-táblából,
+    akár egy korábbi futásból), azt nem duplikáljuk: csak a hiányzó mezőit
+    egészítjük ki - amit a rendszerben már beírtak, azt egy import nem írja
+    felül."""
+    from sqlalchemy import select
+
+    employee_id = resolve_relation_id(db, "Employee", [page["id"]])
+    if employee_id is None:
+        return
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        return
+
+    cegadat = {
+        "ceg_neve": _szoveg_mezo(props, *CEG_NEV_MEZOK),
+        "szekhely": _szoveg_mezo(props, *CEG_SZEKHELY_MEZOK),
+        "adoszam": _szoveg_mezo(props, *CEG_ADOSZAM_MEZOK),
+        "vallalkozas_kepviseloje": _szoveg_mezo(props, *CEG_KEPVISELO_MEZOK),
+        "vallalkozas_nyilvantartasi_szam": _szoveg_mezo(props, *CEG_NYILVANTARTAS_MEZOK),
+        "megbizas_targya": _szoveg_mezo(props, *CEG_MEGBIZAS_MEZOK),
+        "email": _szoveg_mezo(props, *CEG_EMAIL_MEZOK),
+        "keltezes": as_date(_mezo(props, *CEG_KELTEZES_MEZOK)),
+    }
+    fajlok = _szerzodes_fajl_urlek(props)
+    if not any(cegadat.values()) and not fajlok:
+        # Se cégadat, se szerződés-fájl: ennek az embernek nincs mit áthozni.
+        return
+
+    szerzodes = db.scalar(
+        select(Contract).where(
+            Contract.employee_id == employee_id,
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+            Contract.project_id.is_(None),
+        )
+    )
+    try:
+        with db.begin_nested():
+            if szerzodes is None:
+                szerzodes = Contract(
+                    tipus=ContractType.ALVALLALKOZOI,
+                    employee_id=employee_id,
+                    nev=employee.full_name,
+                    **{k: v for k, v in cegadat.items() if v is not None},
+                )
+                db.add(szerzodes)
+                db.flush()
+                result.created += 1
+            else:
+                for mezo, ertek in cegadat.items():
+                    if ertek is not None and getattr(szerzodes, mezo, None) in (None, ""):
+                        setattr(szerzodes, mezo, ertek)
+                db.flush()
+                result.updated += 1
+    except Exception as exc:  # noqa: BLE001 - soronkénti izoláció
+        result.errors.append(f"Keretszerződés '{employee.full_name}': {type(exc).__name__}: {exc}")
+        return
+
+    # Az aláírt PDF a szerződés-rekordhoz is odakerül (a munkatárs
+    # csatolmányai közt is megmarad): a fájlt nem töltjük le még egyszer, a
+    # már átemelt tárhely-objektumra vesszük fel a hivatkozást (lásd
+    # files.atemel).
+    for url in fajlok:
+        try:
+            with db.begin_nested():
+                uj_url = files.atemel(
+                    db,
+                    url,
+                    entity_type="contract",
+                    entity_id=szerzodes.id,
+                    kategoria="szerzodes",
+                    log=result.file_errors.append,
+                )
+        except Exception as exc:  # noqa: BLE001 - fájlonkénti izoláció
+            result.file_errors.append(f"'{employee.full_name}' szerződés-fájlja kimaradt: {type(exc).__name__}: {exc}")
+            continue
+        if uj_url and uj_url != url:
+            result.files_copied += 1
+        if uj_url and not szerzodes.szerzodes_file_url:
+            szerzodes.szerzodes_file_url = uj_url[:500]
+        if uj_url:
+            szerzodes.alairva = True
+
+
 def import_contracts(client: NotionClient, db: Session) -> ImportResult:
-    """Contract <- 'Keretszerződés' (tipus=kereto) + 'Alvállakozó keretszerződés (külsős)' (tipus=alvallalkozoi)."""
+    """Contract <- 'Keretszerződés' (tipus=kereto) + 'Alvállakozó keretszerződés
+    (külsős)' (tipus=alvallalkozoi) + a 'Külsős és belsős' tábla cégadatai.
+
+    A harmadik forrás azért kell, mert a keretszerződés adatai (cégnév,
+    székhely, adószám, és az aláírt PDF a "Szerződés aláírva" mezőben) a
+    munkatárs saját lapján is ott vannak - sokaknak CSAK ott."""
     result = ImportResult(entity_type="Contract")
+    kulsos_belsos = _kulsos_es_belsos_oldalak(client)
+    szerzodes_index = _szerzodes_munkatars_index(db, kulsos_belsos)
 
     for page in client.query_database(db_ids.KERETSZERZODES):
         props = extract_properties(page, client)
@@ -484,7 +691,12 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
 
     for page in client.query_database(db_ids.ALVALLALKOZO_KERETSZERZODES):
         props = extract_properties(page, client)
-        employee_id = resolve_relation_id(db, "Employee", props.get("Vállalkozó") or [])
+        employee_id = _szerzodes_munkatarsa(db, page, props, szerzodes_index)
+        if employee_id is None:
+            result.errors.append(
+                f"Alvállalkozói keretszerződés '{_text(props.get('Name')) or page['id']}': nem azonosítható "
+                "a munkatárs - a szerződés bekerül, de nem jelenik meg senkinél a Keretszerződések alatt."
+            )
         szerzodes_url = _first_url(props.get("Szerződés aláírva"))
         szerzodes = safe_upsert(
             db,
@@ -495,9 +707,9 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
             {
                 "tipus": ContractType.ALVALLALKOZOI,
                 "employee_id": employee_id,
-                "ceg_neve": _text(props.get("Vállalkozás neve")),
-                "szekhely": _text(props.get("Vállalkozás székhelye")),
-                "adoszam": _text(props.get("Vállalkozás adószáma")),
+                "ceg_neve": _szoveg_mezo(props, *CEG_NEV_MEZOK),
+                "szekhely": _szoveg_mezo(props, *CEG_SZEKHELY_MEZOK),
+                "adoszam": _szoveg_mezo(props, *CEG_ADOSZAM_MEZOK),
                 "megbizas_targya": _text(props.get("Megbízás tárgya")),
                 "szerzodes_allapota": _text(props.get("Állapot")),
                 "szerzodes_file_url": szerzodes_url,
@@ -519,6 +731,11 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
         if szerzodes is not None:
             ujak = files.atemel_mindent(db, props, entity_type="contract", entity_id=szerzodes.id, result=result)
             szerzodes.szerzodes_file_url = files.elso(ujak, "Szerződés aláírva") or szerzodes.szerzodes_file_url
+
+    # 3. forrás: a munkatársak saját lapja (cégadat + aláírt PDF) - ez pótolja
+    # azokat a keretszerződéseket, amikhez nincs külön szerződés-lap.
+    for page, props in kulsos_belsos:
+        _keretszerzodes_a_munkatarsbol(db, result, page, props)
 
     return result
 

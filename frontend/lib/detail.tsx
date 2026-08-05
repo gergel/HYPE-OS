@@ -84,6 +84,8 @@ export type EditableDetailField = DetailField & {
   inputType: EditableInputType;
   rawValue: string | number | boolean | null;
   options?: string[];
+  /** Select mezőnél: a listán kívüli, új érték is felvehető helyben. */
+  allowNew?: boolean;
 };
 
 const DATE_KEY_PATTERN = /datum|date|hatarido|keltezes/i;
@@ -98,9 +100,14 @@ function classifyInput(
   key: string,
   value: unknown,
   fieldTypeHint?: FieldTypeInfo,
-): { editable: boolean; inputType: EditableInputType; options?: string[] } {
+): { editable: boolean; inputType: EditableInputType; options?: string[]; allowNew?: boolean } {
   if (fieldTypeHint?.type === "select" && fieldTypeHint.options) {
-    return { editable: true, inputType: "select", options: fieldTypeHint.options };
+    return {
+      editable: true,
+      inputType: "select",
+      options: fieldTypeHint.options,
+      allowNew: fieldTypeHint.allow_new,
+    };
   }
   if (value === null || value === undefined) {
     if (fieldTypeHint?.type === "boolean") return { editable: true, inputType: "boolean" };
@@ -144,12 +151,12 @@ export function toEditableDetailFields(
     .map(([key, value]) => {
       const { node, wide } = formatValue(key, value);
       const classified = classifyInput(key, value, fieldTypes?.[key]);
-      const { inputType, options } = classified;
+      const { inputType, options, allowNew } = classified;
       const editable = FORCE_READONLY_KEYS.has(key) ? false : classified.editable;
       const rawValue =
         typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null
           ? value
           : null;
-      return { key, label: humanizeKey(key), value: node, wide, editable, inputType, rawValue, options };
+      return { key, label: humanizeKey(key), value: node, wide, editable, inputType, rawValue, options, allowNew };
     });
 }

@@ -38,7 +38,9 @@ from app.services.hu_number_words import szam_betukkel
 
 router = APIRouter(prefix="/alvallalkozoi-szerzodesek", tags=["subcontractor-contracts"])
 
-PAGE = "/alvallalkozoi-szerzodesek"
+# A művelet a Utókövetés oldalon (és a projekt adatlapján) érhető el - külön
+# menüpontja nincs, ezért a jogosultsága is az Utókövetés oldalé.
+PAGE = "/utokovetes"
 
 TERMINAL_STATUSES = {"Kiküldve", "Kihagyva"}
 

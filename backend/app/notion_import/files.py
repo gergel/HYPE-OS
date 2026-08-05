@@ -192,6 +192,18 @@ def atemel_tobb(
     return [atemel(db, u, entity_type=entity_type, entity_id=entity_id, kategoria=kategoria, log=log) or u for u in urls]
 
 
+def by_notion_source_url(db: Session, url: str) -> str | None:
+    """Egy Notion fájl-URL-hez a MI (R2-es) linkünk, ha már átemeltük.
+
+    Ezzel tud egy másik importer arra a fájlra hivatkozni, amit egy korábbi
+    lépés már áthozott - anélkül, hogy még egyszer letöltené. Nem Notion-fájl
+    (külső link) esetén, vagy ha még nincs átemelve, None."""
+    if not url or not isinstance(url, str) or not notion_fajl_e(url):
+        return None
+    meglevo = attachments.by_notion_source(db, forras_kulcs(url))
+    return meglevo.url if meglevo is not None else None
+
+
 def kategoria_mezonevbol(prop_nev: str) -> str:
     """A fájl szerepét a Notion mező NEVÉBŐL állapítjuk meg ("Szerződés aláírva",
     "TIG aláírva", "Számla pdf"…). Ez azért működik jól, mert a HYPE Notion

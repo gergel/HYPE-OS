@@ -84,6 +84,7 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
           disabled={busy}
           placeholder="Üres"
           className={boxed ? "w-full" : undefined}
+          allowNew={field.allowNew}
         />
       </dd>
     );

@@ -99,6 +99,10 @@ SELECT_FIELD_OVERRIDES: dict[str, dict[str, list[str]]] = {
 NOT_SELECT_NAME_PATTERN_FRAGMENTS = (
     "nev",
     "name",
+    # A képviselő egy SZEMÉLY neve: bárki lehet, nem egy rögzített lista. Ha
+    # select lenne, csak a már előfordult neveket lehetne kiválasztani - egy új
+    # embert nem lehetne felvenni.
+    "kepvisel",
     "email",
     "telefon",
     "phone",
@@ -123,6 +127,39 @@ NOT_SELECT_NAME_PATTERN_FRAGMENTS = (
 class FieldTypeInfo(TypedDict, total=False):
     type: str
     options: list[str]
+    #: Select mezőnél: a listán kívüli, ÚJ érték is megadható (a felület
+    #: helyben engedi beírni). Lásd NYITOTT_SELECT_MEZOK.
+    allow_new: bool
+
+
+# Olyan mezők, amiknek van egy kialakult értékkészlete (érdemes listából
+# választani), de a lista nem zárt: időnként kell egy új érték, és azt ott
+# helyben kell tudni felvenni, nem egy beállítás-oldalon.
+#
+# A "megbízás tárgya" a szerződéseken/TIG-eken megjelenő szöveg - jellemzően
+# ugyanaz a pár megnevezés ismétlődik ("Operatőri munka", "Vágás"...), de egy
+# új munkatípus bármikor előfordulhat. Az értékkészletet a MEGLÉVŐ adatból
+# szedjük össze (több táblából, mert ugyanaz a szöveg mindegyiken szerepel),
+# így nincs külön karbantartandó lista.
+NYITOTT_SELECT_MEZOK: dict[str, tuple[str, ...]] = {
+    "employee": ("megbizas_targya",),
+    "contract": ("megbizas_targya",),
+    "project": ("megbizas_targya",),
+}
+
+
+def _megbizas_targya_opciok(db: Session) -> list[str]:
+    """A "megbízás tárgya" eddig előfordult értékei - ábécé szerint."""
+    ertekek: set[str] = set()
+    for model in (Employee, Contract):
+        oszlop = getattr(model, "megbizas_targya", None)
+        if oszlop is None:
+            continue
+        for (ertek,) in db.execute(select(oszlop).where(oszlop.is_not(None)).distinct()):
+            szoveg = (ertek or "").strip()
+            if szoveg:
+                ertekek.add(szoveg)
+    return sorted(ertekek, key=lambda s: s.lower())
 
 
 def _select_options(name: str, db: Session, column) -> list[str] | None:
@@ -178,8 +215,16 @@ def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, Fi
         from app.services.entity_fields import hidden_fields
 
         eltavolitott = hidden_fields(db, entity_type)
+    nyitott = NYITOTT_SELECT_MEZOK.get(entity_type, ())
     for name, column in model.__table__.columns.items():
         if name in eltavolitott:
+            continue
+        if name in nyitott and db is not None:
+            result[name] = {
+                "type": "select",
+                "options": _megbizas_targya_opciok(db),
+                "allow_new": True,
+            }
             continue
         if name in overrides:
             result[name] = {"type": "select", "options": overrides[name]}
