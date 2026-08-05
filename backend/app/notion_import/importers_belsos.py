@@ -82,12 +82,17 @@ NEV_HONAP = ("Hónap", "Melyik hónap", "Elszámolás hónapja", "Honap")
 
 # A "Belsős extra kiadások" tábla mezői (ezeket a discovery már kiírta, lásd
 # importers_wave2.import_expenses - ugyanezt a táblát Expense-ként is bevisszük).
-NEV_EXTRA_MEGNEVEZES = ("Megnevezés", "Név")
-NEV_EXTRA_OSSZEG = ("Összeg", "Bruttó", "Nettó")
-NEV_EXTRA_DATUM = ("Kiadás időpontja", "Dátum", "Kiadás dátuma")
-NEV_EXTRA_TIG = ("Belsős TIG", "Belsős Havi TIG", "TIG")
+NEV_EXTRA_MEGNEVEZES = ("Megnevezés", "Név", "Leírás", "Kiadás megnevezése")
+NEV_EXTRA_OSSZEG = ("Összeg", "Kiadás összege", "Bruttó összeg", "Bruttó", "Nettó összeg", "Nettó")
+NEV_EXTRA_DATUM = ("Kiadás időpontja", "Dátum", "Kiadás dátuma", "Időpont")
+NEV_EXTRA_TIG = ("Belsős TIG", "Belsős Havi TIG", "Belsős", "TIG")
 NEV_EXTRA_SZEMELY = ("Személy", "Belsős", "Munkatárs")
 NEV_EXTRA_PROJEKTKOD = ("Projektkód", "HYPE ADMIN projektkódok", "Projekt")
+
+# Ha a mezőnév egyik jelöltre sem illik, ezekre a KULCSSZAVAKRA is ránézünk a
+# mező nevében (öt éve élő táblában a "Túlóra összege"-szerű nevek gyakoriak).
+EXTRA_OSSZEG_KULCSSZAVAK = ("osszeg", "koltseg", "ara", "ar ", "brutto", "netto")
+EXTRA_MEGNEVEZES_KULCSSZAVAK = ("megnevez", "leiras", "nev", "tetel", "mire")
 
 MAX_MEGNEVEZES = 255
 
@@ -138,6 +143,25 @@ def _mezo(props: dict, nevek: tuple[str, ...]) -> Any:
             ertek = props[nev]
             if ertek not in (None, "", []):
                 return ertek
+    return None
+
+
+def _kulcsszo_szerint(props: dict, kulcsszavak: tuple[str, ...], *, szam: bool) -> Any:
+    """Érték keresése a mező NEVÉBEN szereplő kulcsszó alapján.
+
+    Ez a legvégső mentőöv: ha egy öt éve élő táblában az összeg oszlopa épp
+    "Túlóra összege", a nevekre épülő jelölt-lista nem találná meg, pedig az
+    adat ott van. `szam=True` esetén csak számot fogadunk el (egy "Összeg
+    megjegyzés" szövegmező nem lehet az összeg)."""
+    for nev, ertek in props.items():
+        nev_kulcs = _ekezet_nelkul(nev)
+        if not any(k in nev_kulcs for k in kulcsszavak):
+            continue
+        if szam:
+            if _szam(ertek) is not None:
+                return ertek
+        elif _text(ertek):
+            return _text(ertek)
     return None
 
 
@@ -412,7 +436,30 @@ def _utkozik_meglevovel(db: Session, page_id: str, employee_id: int, ev: int, ho
     return mapping is None or mapping.entity_id != letezo_id
 
 
-def _import_tigek(client: NotionClient, db: Session, result: ImportResult) -> None:
+def _tig_extrai(props: dict, extra_idk: set[str]) -> list[str]:
+    """A TIG-hez kapcsolt "Belsős extra kiadások" sorok Notion-ID-i.
+
+    A kapcsolat a TIG FELŐL van (relation), és ez a mérvadó: ezekből az
+    extrákból áll össze a hónap összege, amiről a számla is szól. Nem a mező
+    NEVÉRE szűrünk, hanem arra, hogy a relation célja tényleg az extra
+    kiadások táblájába mutat-e - így akárhogy is hívják azt a mezőt, megvan."""
+    talalatok: list[str] = []
+    for ertek in props.values():
+        if not isinstance(ertek, list):
+            continue
+        egyezo = [v for v in ertek if isinstance(v, str) and v in extra_idk]
+        talalatok.extend(egyezo)
+    # Sorrendtartó egyedivé tétel (ugyanaz a sor több mezőn is beeshet).
+    return list(dict.fromkeys(talalatok))
+
+
+def _import_tigek(
+    client: NotionClient,
+    db: Session,
+    result: ImportResult,
+    extra_idk: set[str],
+    hozzarendeles: dict[str, tuple[int, int, int]],
+) -> None:
     database_id = belsos_tig_database_id(client)
     if database_id is None:
         result.errors.append(
@@ -495,6 +542,11 @@ def _import_tigek(client: NotionClient, db: Session, result: ImportResult) -> No
             continue
         _tig_dokumentum(db, props, tig, result)
         _tig_szamlai(db, props, tig, result)
+        # A hónaphoz kapcsolt extrák innen kapják meg, KIHEZ és MELYIK
+        # hónaphoz tartoznak - az extra-sorban ez az információ sokszor nincs
+        # is benne, csak ez a relation köti össze őket.
+        for extra_id in _tig_extrai(props, extra_idk):
+            hozzarendeles.setdefault(extra_id, (employee_id, ev, honap))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -516,33 +568,53 @@ def _tetel_honapja(db: Session, props: dict, datum: date | None) -> tuple[int, i
     return (datum.year, datum.month) if datum else None
 
 
-def _import_extrak(client: NotionClient, db: Session, result: ImportResult) -> None:
+def _import_extrak(
+    db: Session,
+    result: ImportResult,
+    oldalak: list[tuple[dict, dict]],
+    hozzarendeles: dict[str, tuple[int, int, int]],
+) -> None:
     """A 'Belsős extra kiadások' tábla havi tételként.
+
+    A hovatartozás elsődleges forrása a TIG felőli relation (`hozzarendeles`):
+    Notionban a hónap TIG-je sorolja fel a hozzáadódó extrákat, és pont
+    ezekből jön ki az az összeg, amiről az adott ember a számlát írta. Csak ha
+    egy extra nincs egyetlen TIG-hez sem kötve, akkor próbáljuk a saját
+    személy-relationjéből és dátumából elhelyezni.
 
     Ugyanez a tábla Expense-ként IS bejön (importers_wave2.import_expenses) -
     ott a pénzügyi kimutatás miatt, itt azért, hogy a munkatárs havi
     elszámolásában lássuk, miből állt össze az összeg. A kettőt összekötjük
     (expense_id), hogy a felületen egyszer szerepeljen, ne kétszer."""
-    for page in client.query_database(db_ids.BELSOS_EXTRA_KIADASOK):
-        props = extract_properties(page, client)
-        megnevezes = _text(_mezo(props, NEV_EXTRA_MEGNEVEZES))
+    for page, props in oldalak:
+        megnevezes = (
+            _text(_mezo(props, NEV_EXTRA_MEGNEVEZES))
+            or _page_cim(page, props)
+            or _kulcsszo_szerint(props, EXTRA_MEGNEVEZES_KULCSSZAVAK, szam=False)
+            or "Extra kiadás"
+        )
         osszeg = _szam(_mezo(props, NEV_EXTRA_OSSZEG))
-        if not megnevezes or osszeg is None or osszeg == 0:
-            result.skipped += 1
-            continue
-
-        employee_id = _relaciobol(db, props, NEV_EXTRA_SZEMELY, "Employee")
-        if employee_id is None:
+        if osszeg is None:
+            osszeg = _szam(_kulcsszo_szerint(props, EXTRA_OSSZEG_KULCSSZAVAK, szam=True))
+        if osszeg is None or osszeg == 0:
             result.skipped += 1
             continue
 
         datum = as_date(_mezo(props, NEV_EXTRA_DATUM))
-        honap_par = _tetel_honapja(db, props, datum)
-        if honap_par is None:
-            result.skipped += 1
-            result.errors.append(f"Belsős extra '{megnevezes}': nincs dátuma és TIG-je sem, kihagyva")
-            continue
-        ev, honap = honap_par
+        helye = hozzarendeles.get(page["id"])
+        if helye is not None:
+            employee_id, ev, honap = helye
+        else:
+            employee_id = _relaciobol(db, props, NEV_EXTRA_SZEMELY, "Employee")
+            honap_par = _tetel_honapja(db, props, datum)
+            if employee_id is None or honap_par is None:
+                result.skipped += 1
+                result.errors.append(
+                    f"Belsős extra '{megnevezes}': nincs egyetlen Belsős TIG-hez sem kötve, és a "
+                    "sorból sem derül ki, kihez/melyik hónaphoz tartozik - kihagyva"
+                )
+                continue
+            ev, honap = honap_par
 
         # A negatív összeg levonás. Nálunk a levonandó tétel összege POZITÍV,
         # az előjelet a típus adja (lásd models/employee_monthly_item.py).
@@ -652,9 +724,22 @@ def _alapber_potlas(db: Session, result: ImportResult) -> None:
 
 
 def import_belsos_tig(client: NotionClient, db: Session) -> ImportResult:
-    """Belsős TIG + a hozzá tartozó havi extrák + alapbér-maradék."""
+    """Belsős TIG + a hozzá tartozó havi extrák + alapbér-maradék.
+
+    A sorrend nem cserélhető fel: az extrákat ELŐBB beolvassuk (kellenek az
+    ID-ik ahhoz, hogy a TIG-eken felismerjük, melyik relation mutat rájuk),
+    a TIG-ek feldolgozása közben gyűjtjük össze, melyik extra kihez és melyik
+    hónaphoz tartozik, és csak utána visszük fel őket - végül a maradékból
+    jön az alapbér."""
     result = ImportResult(entity_type="BelsosTig")
-    _import_tigek(client, db, result)
-    _import_extrak(client, db, result)
+    extra_oldalak = [
+        (page, extract_properties(page, client))
+        for page in client.query_database(db_ids.BELSOS_EXTRA_KIADASOK)
+    ]
+    extra_idk = {page["id"] for page, _ in extra_oldalak}
+    hozzarendeles: dict[str, tuple[int, int, int]] = {}
+
+    _import_tigek(client, db, result, extra_idk, hozzarendeles)
+    _import_extrak(db, result, extra_oldalak, hozzarendeles)
     _alapber_potlas(db, result)
     return result
