@@ -50,6 +50,12 @@ class InternalPerformanceCertificate(TimestampMixin, Base):
     keltezes: Mapped[date | None] = mapped_column(Date, comment="A dokumentum keltezése")
     file_url: Mapped[str | None] = mapped_column(String(500), comment="A kiküldött TIG dokumentum Drive linkje")
 
+    # A számla két dátuma. Külön a teljesítés/keltezés párostól: azok a TIG
+    # DOKUMENTUMÁRÓL szólnak, ez a kettő a pénz útjáról - meddig kell fizetni,
+    # és mikor utaltuk el ténylegesen.
+    fizetesi_hatarido: Mapped[date | None] = mapped_column(Date, comment="A számla fizetési határideje")
+    utalas_datuma: Mapped[date | None] = mapped_column(Date, comment="Mikor utaltuk el ténylegesen")
+
     szamla_kifizetve: Mapped[bool] = mapped_column(Boolean, default=False)
     expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
 
@@ -74,5 +80,9 @@ class InternalPerformanceCertificateInvoice(TimestampMixin, Base):
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
     url: Mapped[str] = mapped_column(String(500), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(100))
+    # A Notionból átemelt számla forrás-azonosítója (host + útvonal, aláírás
+    # nélkül - lásd notion_import/files.forras_kulcs). Ettől idempotens az
+    # import: egy újrafuttatás nem tölti le és nem duplikálja ugyanazt a számlát.
+    notion_forras: Mapped[str | None] = mapped_column(String(700), index=True)
 
     certificate: Mapped["InternalPerformanceCertificate"] = relationship(back_populates="invoices")

@@ -40,6 +40,12 @@ VISSZAJELZESSEK = "c20b3377-db65-436e-92a7-76571fc58169"
 OPERATORI_DISZPO = "149c9afd-d53b-8096-bccf-d6f43093c4d7"
 ESZKOZKIVITEL = "240c9afd-d53b-80ee-bd9a-f9eb34e91dea"
 
+# A belsősök havi TIG-jei. A 2026-07-02-i discovery futtatáskor ez a tábla nem
+# volt megosztva az integrációval, ezért nincs ID-ja: az importer NÉV szerint
+# keresi meg (lásd importers_belsos.belsos_tig_database_id). Ha egyszer
+# lefuttatod a discoveryt és megvan az ID, írd ide - onnantól nem kell keresni.
+BELSOS_TIG = ""
+
 # Fázis 2, 3. kör (egyedi logikájú maradék táblák):
 STOCK_IGENYEK = "2edc9afd-d53b-8087-bf72-edd6027147ef"
 GERI_ELSZAMOLAS = "301c9afd-d53b-80f7-be78-f43bdc3f0486"

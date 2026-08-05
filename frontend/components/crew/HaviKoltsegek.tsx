@@ -8,6 +8,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { SearchableIdPicker } from "@/components/SearchableIdPicker";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
+import { HONAP_NEVEK } from "@/lib/ido";
 import { formatHuf } from "@/lib/penz";
 import type { EvesKoltseg, HaviKoltseg, HaviTetel } from "@/lib/api";
 
@@ -31,11 +32,6 @@ function elojelesOsszeg(tipus: string, osszeg: number): string {
  * (SearchableIdPicker), mert több száz projektkódnál egy sima legördülő
  * használhatatlan lenne. */
 export type ProjektkodOpcio = { id: number; projektkod: string };
-
-const HONAP_NEVEK = [
-  "január", "február", "március", "április", "május", "június",
-  "július", "augusztus", "szeptember", "október", "november", "december",
-];
 
 
 /** Egy tétel sora. Kattintásra HELYBEN szerkeszthető (megnevezés, összeg,

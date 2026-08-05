@@ -65,6 +65,16 @@ class EmployeeMonthlyItem(TimestampMixin, Base):
     datum: Mapped[date | None] = mapped_column(Date, comment="A tétel napja a hónapon belül (opcionális)")
     megjegyzes: Mapped[str | None] = mapped_column(String(500))
 
+    # A Notionból ("Belsős extra kiadások") áthozott tételek azonosítója. Saját
+    # oszlop, nem a közös NotionImportMap: ugyanaz a Notion-oldal Expense-ként
+    # IS bekerül (lásd notion_import/importers_wave2.import_expenses), a közös
+    # tábla viszont oldalanként csak egy entitást tud nyilvántartani.
+    notion_page_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
+    # Ha ez a tétel egy pénzügyi kiadás-sorral UGYANAZ a költség (a Notion
+    # "Belsős extra kiadások" mindkettőként bejön), akkor ide mutat - így a
+    # munkatárs adatlapján egyszer szerepel, nem kétszer.
+    expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
+
     employee: Mapped["Employee"] = relationship(back_populates="monthly_items")
     project_code: Mapped["ProjectCode | None"] = relationship()
 

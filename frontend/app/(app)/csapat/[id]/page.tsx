@@ -202,12 +202,13 @@ export default async function EmployeeDetailPage({
               szerkeszthet={szerkeszthet}
               torolhet={torolhet}
             />
-            {expenses.length > 0 && (
-              <div className="mt-6 border-t border-border pt-5">
-                <p className="t-label mb-3">Egyéb kiadások ({expenses.length})</p>
-                <EgyebKiadasok kiadasok={expenses} projektkodNevek={projektkodNevek} />
-              </div>
-            )}
+            {/* Az alapbéren FELÜLI költségek egy összesítésben: a pénzügyi
+                kiadások (számlák) és a havi elszámoláshoz felvitt extrák/
+                levonások együtt, egyetlen végösszeggel. */}
+            <div className="mt-6 border-t border-border pt-5">
+              <p className="t-label mb-3">Egyéb kiadások és havi extrák</p>
+              <EgyebKiadasok kiadasok={expenses} koltsegek={koltsegek} projektkodNevek={projektkodNevek} />
+            </div>
           </Card>
         ),
       },

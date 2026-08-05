@@ -27,6 +27,8 @@ class InternalPerformanceCertificateRead(BaseModel):
     megbizas_targya: str | None = None
     teljesites_datuma: date | None = None
     keltezes: date | None = None
+    fizetesi_hatarido: date | None = None
+    utalas_datuma: date | None = None
     file_url: str | None = None
     invoices: list[InternalPerformanceCertificateInvoiceRead] = []
     szamla_kifizetve: bool = False

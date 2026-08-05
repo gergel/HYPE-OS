@@ -82,7 +82,10 @@ def fajlnev(url: str) -> str:
     return nyers[:255] or "notion-fajl"
 
 
-def _letolt(url: str) -> tuple[bytes, str | None]:
+def letolt(url: str) -> tuple[bytes, str | None]:
+    """Egy Notion fájl tartalma (bájtok, content-type). Nyilvános, mert nem
+    minden átemelt fájl a generikus csatolmány-táblába megy: a Belsős TIG-hez
+    tartozó számlának saját táblája van (lásd importers_belsos.py)."""
     with httpx.Client(timeout=LETOLTES_TIMEOUT, follow_redirects=True) as client:
         with client.stream("GET", url) as valasz:
             valasz.raise_for_status()
@@ -149,7 +152,7 @@ def atemel(
         return url
 
     try:
-        adat, content_type = _letolt(url)
+        adat, content_type = letolt(url)
         # A mentés SAVEPOINT-ban: az attachments.save() előbb felveszi a sort
         # (az id-ból képez tárhely-kulcsot), és csak utána tölt fel. Ha a
         # feltöltés elhasal, e nélkül egy féllábú, üres kulcsú csatolmány-sor

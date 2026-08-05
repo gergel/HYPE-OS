@@ -482,6 +482,10 @@ export type InternalPerformanceCertificate = {
   megbizas_targya: string | null;
   teljesites_datuma: string | null;
   keltezes: string | null;
+  /** A számla fizetési határideje és a tényleges utalás napja - a Notionban
+   * vezetett belsős TIG-eknél ez a két dátum is megvan. */
+  fizetesi_hatarido: string | null;
+  utalas_datuma: string | null;
   /** A kiküldött TIG dokumentum Drive linkje. */
   file_url: string | null;
   /** A hónap betűvel ("május") - a Belsős TIG sehol nem írja ki számmal. */
@@ -939,6 +943,10 @@ export type HaviTetel = {
   projektkod: string | null;
   datum: string | null;
   megjegyzes: string | null;
+  /** Ha ugyanez a költség pénzügyi kiadás-sorként is szerepel (Notionból
+   * mindkettőként bejön), akkor annak az azonosítója - így nem írjuk ki
+   * kétszer ugyanazt az összeget. */
+  expense_id: number | null;
 };
 
 /** Egy munkatárs EGY hónapja teljes egészében - ezt nyitja meg a hónap saját

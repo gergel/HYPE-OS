@@ -14,7 +14,7 @@ from collections.abc import Callable
 
 from sqlalchemy.orm import Session
 
-from app.notion_import import importers, importers_wave2, importers_wave3
+from app.notion_import import importers, importers_belsos, importers_wave2, importers_wave3
 from app.notion_import.client import NotionClient
 from app.notion_import.engine import run_importer
 
@@ -43,6 +43,10 @@ WAVE_3 = [
     ("Assignment (Stock igények)", importers_wave3.import_stock_igenyek),
     ("Expense (Geri elszámolás)", importers_wave3.import_geri_elszamolas),
     ("Media (Törölt anyagok)", importers_wave3.import_torolt_anyagok),
+    # A Belsős TIG a 2. kör UTÁN kell, hogy fusson: a havi extráit összekötjük
+    # az ugyanabból a Notion-oldalból készült Expense sorral (lásd
+    # importers_belsos._import_extrak).
+    ("BelsosTig", importers_belsos.import_belsos_tig),
 ]
 
 ALL_IMPORTERS = WAVE_1 + WAVE_2 + WAVE_3

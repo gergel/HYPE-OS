@@ -394,6 +394,11 @@ class TigDraftIn(BaseModel):
     megbizas_targya: str | None = None
     teljesites_datuma: date | None = None
     keltezes: date | None = None
+    #: A számla útja: meddig kell fizetni, és mikor utaltuk el. (A Notionból
+    #: áthozott régi TIG-eknél ez a két dátum már megvan - lásd
+    #: notion_import/importers_belsos.py.)
+    fizetesi_hatarido: date | None = None
+    utalas_datuma: date | None = None
 
 
 _DRAFT_FIELDS = (
@@ -403,6 +408,8 @@ _DRAFT_FIELDS = (
     "megbizas_targya",
     "teljesites_datuma",
     "keltezes",
+    "fizetesi_hatarido",
+    "utalas_datuma",
 )
 
 
@@ -750,6 +757,10 @@ class HaviTetelRead(BaseModel):
     projektkod: str | None = None
     datum: date | None = None
     megjegyzes: str | None = None
+    #: Ha ez a tétel egy pénzügyi kiadás-sorral ugyanaz a költség (Notionból
+    #: mindkettőként bejön), akkor annak az azonosítója - a munkatárs
+    #: adatlapja ez alapján nem írja ki kétszer ugyanazt az összeget.
+    expense_id: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -801,9 +812,17 @@ def _ujraszamol_tig_osszeget(db: Session, employee: Employee, ev: int, honap: in
     """A hónap TIG-jének nettó összege = a havi tételek összege.
 
     Ha még nincs TIG erre a hónapra, létrehozzuk (piszkozatként) - különben az
-    első felvitt extra sehol nem látszódna."""
+    első felvitt extra sehol nem látszódna.
+
+    Az UTOLSÓ tétel törlésekor az összeg 0-ra áll (nem marad ott az előző,
+    immár fedezet nélküli szám): a hónap összege végig a tételekből jön, tehát
+    ha nem maradt tétel, nincs mi kiadja az összeget. Új TIG-et ilyenkor nem
+    hozunk létre - egy üres hónapnak nem kell igazolás."""
     tetelek = _honap_tetelei(db, employee.id, ev, honap)
     if not tetelek:
+        record = _find(db, employee.id, ev, honap)
+        if record is not None:
+            record.netto_osszeg = 0
         return
     record = _get_or_create(db, employee, ev, honap)
     record.netto_osszeg = float(sum(elojeles_osszeg(t.tipus, t.osszeg) for t in tetelek))
@@ -1051,6 +1070,11 @@ def employee_koltsegek(
     evek: dict[int, list[HaviKoltseg]] = {}
     for adat in honapok.values():
         adat.tetelek.sort(key=lambda t: (TIPUS_SORREND.get(t.tipus, 9), t.id))
+        # Ha a hónapnak még nincs TIG-en rögzített összege, a TÉTELEK adják ki -
+        # különben egy tételekkel teli hónap 0 Ft-ként jelenne meg, és az éves
+        # összesítőből is kimaradna.
+        if adat.netto_osszeg is None and adat.tetelek:
+            adat.netto_osszeg = adat.alapber + adat.extra - adat.levonas
         evek.setdefault(adat.ev, []).append(adat)
 
     return [

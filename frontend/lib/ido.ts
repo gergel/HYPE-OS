@@ -49,6 +49,18 @@ export function formatFt(value: number): string {
   return `${Math.round(value).toLocaleString("hu-HU")} Ft`;
 }
 
+/** A hónapok magyar neve (1 = január). Egy helyen, mert a havi elszámolás
+ * több felületen is hónapnevet ír ki (havi kiadások, egyéb kiadások). */
+export const HONAP_NEVEK = [
+  "január", "február", "március", "április", "május", "június",
+  "július", "augusztus", "szeptember", "október", "november", "december",
+];
+
+/** "2026. május" - egy elszámolási hónap emberi neve. */
+export function honapCimke(ev: number, honap: number): string {
+  return `${ev}. ${HONAP_NEVEK[honap - 1] ?? honap}`;
+}
+
 /** ISO időbélyeg -> "2026. 08. 04. 14:32". Ott kell, ahol nem az eltelt idő,
  * hanem a KONKRÉT időpont a lényeg (pl. mikor állították le a vágást) - a
  * puszta dátum ebből épp a napon belüli időt dobná el. */
