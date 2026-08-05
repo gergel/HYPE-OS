@@ -500,6 +500,9 @@ export type BelsosTigMonthEmployee = {
   megbizas_targya: string | null;
   plusz_afa: boolean | null;
   record: InternalPerformanceCertificate | null;
+  /** A hónap tételei (alapbér + extrák), amikből a TIG összege összeáll -
+   * a munkatárs adatlapján vihetők fel (lásd HaviKoltsegek). */
+  tetelek: HaviTetel[];
 };
 
 /** Egy ember konkrét hiányossága egy hónapban - ebből derül ki, kinek mit
@@ -834,12 +837,10 @@ export async function getRecordsByIds(basePath: string, ids: number[]): Promise<
   return records.filter((r): r is JsonRecord => r !== null);
 }
 
-export function formatHuf(value: number | null): string {
-  if (value === null) return "–";
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(".0", "")}M Ft`;
-  if (Math.abs(value) >= 1_000) return `${Math.round(value / 1_000)}k Ft`;
-  return `${value} Ft`;
-}
+// A tényleges megvalósítás a függőség nélküli lib/penz.ts-ben van (kliens-
+// komponensek is használják) - itt csak újraexportáljuk, hogy a meglévő
+// szerver-oldali hívók importja változatlan maradjon.
+export { formatHuf } from "@/lib/penz";
 
 export function formatDate(value: string | null): string {
   if (!value) return "–";
@@ -909,6 +910,63 @@ export type UtomunkaHonapIdo = {
 };
 
 /** Mennyit vágott ez a munkatárs hónapokra bontva, hónapon belül projektenként. */
+/** Egy anyag, amin a munkatárs VALAHA dolgozott (futott rajta az időmérője). */
+export type VagottAnyag = {
+  id: number;
+  projekt_neve: string;
+  allapot: string | null;
+  projektkod: string | null;
+  utoljara: string | null;
+  osszes_perc: number;
+};
+
+export async function getVagottAnyagok(employeeId: number): Promise<VagottAnyag[]> {
+  return (await apiGet<VagottAnyag[]>(`/api/v1/crew/${employeeId}/vagott-anyagok`)) ?? [];
+}
+
+/** Egy havi juttatás-tétel: az alapbér vagy egy hozzáadódó extra. */
+export type HaviTetel = {
+  id: number;
+  employee_id: number;
+  ev: number;
+  honap: number;
+  tipus: "alapber" | "extra";
+  megnevezes: string;
+  osszeg: number;
+  project_id: number | null;
+  project_nev: string | null;
+  datum: string | null;
+  megjegyzes: string | null;
+};
+
+export type HaviKoltseg = {
+  ev: number;
+  honap: number;
+  honap_nev: string;
+  tig_id: number | null;
+  allapot: string | null;
+  netto_osszeg: number | null;
+  brutto_osszeg: number | null;
+  alapber: number;
+  extra: number;
+  tetelek: HaviTetel[];
+};
+
+export type EvesKoltseg = {
+  ev: number;
+  osszesen: number;
+  honapok: HaviKoltseg[];
+};
+
+/** Mibe került nekünk ez az ember - évekre csoportosítva, évente összesítve. */
+export async function getEmployeeKoltsegek(employeeId: number): Promise<EvesKoltseg[]> {
+  return (await apiGet<EvesKoltseg[]>(`/api/v1/belsos-tig/employee/${employeeId}/koltsegek`)) ?? [];
+}
+
+export async function getHaviTetelek(employeeId: number, ev: number, honap: number): Promise<HaviTetel[]> {
+  return (await apiGet<HaviTetel[]>(`/api/v1/belsos-tig/${employeeId}/${ev}/${honap}/tetelek`)) ?? [];
+}
+
 export async function getUtomunkaIdo(employeeId: number): Promise<UtomunkaHonapIdo[]> {
   return (await apiGet<UtomunkaHonapIdo[]>(`/api/v1/crew/${employeeId}/utomunka-ido`)) ?? [];
 }

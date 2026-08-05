@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { huEvHonap, tigHonapTeljesitesbol } from "@/lib/huDate";
+import { formatHuf } from "@/lib/penz";
 import type { BelsosTigMonthEmployee } from "@/lib/api";
 
 type FormState = {
@@ -466,6 +467,26 @@ export function BelsosTigManager({
                   disabled={!!busyId}
                   className={inputClass}
                 />
+                {/* Ha a hónaphoz vannak tételek (alapbér + extrák), az összeg
+                    NEM kézzel számolt: a munkatárs adatlapján felvitt tételek
+                    adják ki. Itt mutatjuk a bontást, hogy a TIG készítője
+                    lássa, miért annyi - ne kelljen átkattintania érte. */}
+                {openEmployee.tetelek.length > 0 && (
+                  <div className="mt-1.5 rounded-[var(--radius)] border border-border bg-surface-3 p-2.5">
+                    <p className="t-label mb-1.5">A hónap tételeiből</p>
+                    <ul className="space-y-1">
+                      {openEmployee.tetelek.map((t) => (
+                        <li key={t.id} className="flex items-baseline justify-between gap-3 text-[12.5px]">
+                          <span className="min-w-0 truncate text-text-secondary">
+                            {t.megnevezes}
+                            {t.project_nev ? ` · ${t.project_nev}` : ""}
+                          </span>
+                          <span className="shrink-0 text-text-primary tabular-nums">{formatHuf(t.osszeg)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">PLUSZ áfa</label>

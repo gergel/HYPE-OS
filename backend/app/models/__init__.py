@@ -15,6 +15,7 @@ from app.models.document_attachment import DocumentAttachment
 from app.models.dispo_responsible import DispoResponsible, DispoSide
 from app.models.employee import Employee, EmployeeType, SystemRole
 from app.models.employee_document import EmployeeDocument
+from app.models.employee_monthly_item import EmployeeMonthlyItem
 from app.models.entity_field import CustomFieldDef, CustomFieldValue, EntityFieldConfig
 from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.feedback import Feedback
@@ -60,6 +61,7 @@ __all__ = [
     "ContractType",
     "DashboardConfig",
     "DocumentAttachment",
+    "EmployeeMonthlyItem",
     "Deliverable",
     "deliverable_contacts",
     "DeliverableComment",

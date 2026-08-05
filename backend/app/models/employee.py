@@ -119,6 +119,11 @@ class Employee(TimestampMixin, Base):
 
     rates: Mapped[list["Rate"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
     documents: Mapped[list["EmployeeDocument"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    # A havi juttatás-tételek (alapbér + extrák) - ezekből áll össze a havi
+    # Belsős TIG összege (lásd models/employee_monthly_item.py).
+    monthly_items: Mapped[list["EmployeeMonthlyItem"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan"
+    )
     timesheets: Mapped[list["Timesheet"]] = relationship(back_populates="employee")
     expenses: Mapped[list["Expense"]] = relationship(back_populates="employee")
     contracts: Mapped[list["Contract"]] = relationship(back_populates="employee")

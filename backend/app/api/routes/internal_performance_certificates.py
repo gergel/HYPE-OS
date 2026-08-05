@@ -25,6 +25,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee, EmployeeType
+from app.models.employee_monthly_item import TETEL_TIPUSOK, EmployeeMonthlyItem
 from app.models.finance import Expense
 from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
@@ -34,7 +35,7 @@ from app.schemas.internal_performance_certificate import InternalPerformanceCert
 from app.services import document_storage
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
-from app.services.hu_datum import elozo_honap, ev_honap_szoveg, kovetkezo_honap_elseje
+from app.services.hu_datum import elozo_honap, ev_honap_szoveg, honap_neve, kovetkezo_honap_elseje
 from app.services.hu_number_words import szam_betukkel
 
 router = APIRouter(prefix="/belsos-tig", tags=["internal-performance-certificates"])
@@ -137,6 +138,10 @@ class MonthEmployeeInfo(BaseModel):
     megbizas_targya: str | None
     plusz_afa: bool | None
     record: InternalPerformanceCertificateRead | None
+    #: A hónap tételei (alapbér + extrák), amikből a TIG összege összeáll -
+    #: lásd models/employee_monthly_item.py. Így a TIG készítője látja, MIÉRT
+    #: annyi az összeg, nem csak azt, hogy mennyi.
+    tetelek: list["HaviTetelRead"] = []
 
 
 @router.get("", response_model=list[MonthEmployeeInfo])
@@ -166,6 +171,21 @@ def list_month(
         .all()
     )
     lookup = {r.employee_id: r for r in records}
+
+    tetelek = (
+        db.query(EmployeeMonthlyItem)
+        .filter(
+            EmployeeMonthlyItem.ev == ev,
+            EmployeeMonthlyItem.honap == honap,
+            EmployeeMonthlyItem.employee_id.in_([e.id for e in employees]),
+        )
+        .order_by((EmployeeMonthlyItem.tipus != "alapber"), EmployeeMonthlyItem.id)
+        .all()
+    )
+    tetel_lookup: dict[int, list[HaviTetelRead]] = {}
+    for tetel in tetelek:
+        tetel_lookup.setdefault(tetel.employee_id, []).append(_tetel_kimenet(tetel))
+
     return [
         MonthEmployeeInfo(
             id=e.id,
@@ -174,6 +194,7 @@ def list_month(
             megbizas_targya=e.megbizas_targya,
             plusz_afa=e.plusz_afa,
             record=InternalPerformanceCertificateRead.model_validate(lookup[e.id]) if e.id in lookup else None,
+            tetelek=tetel_lookup.get(e.id, []),
         )
         for e in employees
     ]
@@ -669,3 +690,266 @@ def mark_szamla_kifizetve(
     db.commit()
     db.refresh(record)
     return InternalPerformanceCertificateRead.model_validate(record)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Havi tételek: az alapbér és a hozzáadódó extrák
+#
+# Miért nem elég a TIG egyetlen "nettó összeg" mezője: az összeg hónap közben,
+# darabonként áll össze (alapbér + túlóra + benzin + étkezés…), gyakran más
+# ember viszi fel, mint aki majd a TIG-et elkészíti. Ha csak egy szám lenne, a
+# TIG készítőjének kellene fejben összeadnia - és nem is látná, mi miből jött.
+# Ezért a tételek a forrás, a TIG összege pedig belőlük SZÁMOLÓDIK.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class HaviTetelIn(BaseModel):
+    tipus: str = "extra"
+    megnevezes: str
+    osszeg: float = 0
+    project_id: int | None = None
+    datum: date | None = None
+    megjegyzes: str | None = None
+
+
+class HaviTetelRead(BaseModel):
+    id: int
+    employee_id: int
+    ev: int
+    honap: int
+    tipus: str
+    megnevezes: str
+    osszeg: float
+    project_id: int | None = None
+    project_nev: str | None = None
+    datum: date | None = None
+    megjegyzes: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+def _tetel_kimenet(tetel: EmployeeMonthlyItem) -> HaviTetelRead:
+    adat = HaviTetelRead.model_validate(tetel)
+    adat.project_nev = tetel.project.nev if tetel.project else None
+    return adat
+
+
+def _honap_tetelei(db: Session, employee_id: int, ev: int, honap: int) -> list[EmployeeMonthlyItem]:
+    return (
+        db.query(EmployeeMonthlyItem)
+        .filter(
+            EmployeeMonthlyItem.employee_id == employee_id,
+            EmployeeMonthlyItem.ev == ev,
+            EmployeeMonthlyItem.honap == honap,
+        )
+        # Az alapbér mindig elöl, utána az extrák felvitel szerint - így a
+        # lista úgy olvasható, ahogy az összeg összeáll.
+        .order_by((EmployeeMonthlyItem.tipus != "alapber"), EmployeeMonthlyItem.id)
+        .all()
+    )
+
+
+def _tiltsd_ha_lezart(db: Session, employee_id: int, ev: int, honap: int) -> None:
+    """Véglegesített (kiküldött/kész/kihagyott) hónaphoz nem lehet tételt
+    felvinni, módosítani vagy törölni.
+
+    Azért tiltás és nem "csendben engedjük", mert az egész szerkezet azon áll,
+    hogy A TÉTELEK ÖSSZEGE = A TIG ÖSSZEGE. Egy kiküldött igazolás összegét
+    utólag nem írhatjuk át, tehát ha a tételt mégis engednénk, a bontás és a
+    kiküldött összeg némán szétcsúszna - és épp az lenne megtévesztő, amit ez
+    a nézet meg akar mutatni. Egy később felmerülő költség a KÖVETKEZŐ hónapra
+    vihető fel (vagy a hónap állapotát kell visszaállítani)."""
+    record = _find(db, employee_id, ev, honap)
+    if record is not None and record.allapot in TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A(z) {ev_honap_szoveg(ev, honap)} hónap Belsős TIG-je már véglegesítve van "
+                f'("{record.allapot}"), ezért a tételei nem módosíthatók. Vidd fel a következő '
+                "hónapra, vagy állítsd vissza a hónap állapotát."
+            ),
+        )
+
+
+def _ujraszamol_tig_osszeget(db: Session, employee: Employee, ev: int, honap: int) -> None:
+    """A hónap TIG-jének nettó összege = a havi tételek összege.
+
+    Ha még nincs TIG erre a hónapra, létrehozzuk (piszkozatként) - különben az
+    első felvitt extra sehol nem látszódna."""
+    tetelek = _honap_tetelei(db, employee.id, ev, honap)
+    if not tetelek:
+        return
+    record = _get_or_create(db, employee, ev, honap)
+    record.netto_osszeg = float(sum(float(t.osszeg or 0) for t in tetelek))
+
+
+@router.get("/{employee_id}/{ev}/{honap}/tetelek", response_model=list[HaviTetelRead])
+def list_havi_tetelek(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    return [_tetel_kimenet(t) for t in _honap_tetelei(db, employee_id, ev, honap)]
+
+
+@router.post("/{employee_id}/{ev}/{honap}/tetelek", response_model=HaviTetelRead)
+def create_havi_tetel(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    payload: HaviTetelIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    employee = _validate_belsos_employee(db, employee_id)
+    _tiltsd_ha_lezart(db, employee_id, ev, honap)
+    if payload.tipus not in TETEL_TIPUSOK:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen tétel-típus: {payload.tipus}")
+    if payload.tipus == "alapber" and any(
+        t.tipus == "alapber" for t in _honap_tetelei(db, employee_id, ev, honap)
+    ):
+        raise HTTPException(status_code=409, detail="Ehhez a hónaphoz már van alapbér felvéve.")
+
+    tetel = EmployeeMonthlyItem(
+        employee_id=employee_id,
+        ev=ev,
+        honap=honap,
+        tipus=payload.tipus,
+        megnevezes=payload.megnevezes.strip() or ("Alapbér" if payload.tipus == "alapber" else "Extra"),
+        osszeg=payload.osszeg,
+        project_id=payload.project_id,
+        datum=payload.datum,
+        megjegyzes=payload.megjegyzes,
+    )
+    db.add(tetel)
+    db.flush()
+    _ujraszamol_tig_osszeget(db, employee, ev, honap)
+    db.commit()
+    db.refresh(tetel)
+    return _tetel_kimenet(tetel)
+
+
+@router.patch("/tetelek/{tetel_id}", response_model=HaviTetelRead)
+def update_havi_tetel(
+    tetel_id: int,
+    payload: HaviTetelIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    tetel = db.get(EmployeeMonthlyItem, tetel_id)
+    if tetel is None:
+        raise HTTPException(status_code=404, detail="A tétel nem található")
+    _tiltsd_ha_lezart(db, tetel.employee_id, tetel.ev, tetel.honap)
+    tetel.megnevezes = payload.megnevezes.strip() or tetel.megnevezes
+    tetel.osszeg = payload.osszeg
+    tetel.project_id = payload.project_id
+    tetel.datum = payload.datum
+    tetel.megjegyzes = payload.megjegyzes
+    db.flush()
+    _ujraszamol_tig_osszeget(db, tetel.employee, tetel.ev, tetel.honap)
+    db.commit()
+    db.refresh(tetel)
+    return _tetel_kimenet(tetel)
+
+
+@router.delete("/tetelek/{tetel_id}", status_code=204)
+def delete_havi_tetel(
+    tetel_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    tetel = db.get(EmployeeMonthlyItem, tetel_id)
+    if tetel is None:
+        raise HTTPException(status_code=404, detail="A tétel nem található")
+    _tiltsd_ha_lezart(db, tetel.employee_id, tetel.ev, tetel.honap)
+    employee, ev, honap = tetel.employee, tetel.ev, tetel.honap
+    db.delete(tetel)
+    db.flush()
+    _ujraszamol_tig_osszeget(db, employee, ev, honap)
+    db.commit()
+
+
+class HaviKoltseg(BaseModel):
+    """Egy hónap: mibe került nekünk ez az ember."""
+
+    ev: int
+    honap: int
+    honap_nev: str
+    tig_id: int | None = None
+    allapot: str | None = None
+    netto_osszeg: float | None = None
+    brutto_osszeg: float | None = None
+    alapber: float = 0
+    extra: float = 0
+    tetelek: list[HaviTetelRead] = []
+
+
+class EvesKoltseg(BaseModel):
+    ev: int
+    osszesen: float
+    honapok: list[HaviKoltseg]
+
+
+@router.get("/employee/{employee_id}/koltsegek", response_model=list[EvesKoltseg])
+def employee_koltsegek(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Egy munkatárs havi költségei ÉVEKRE csoportosítva, évente összesítve -
+    ez válaszolja meg az adatlapon, hogy "mibe került nekünk ez az ember".
+
+    Két forrásból áll össze, hónapra vetítve: a hónap Belsős TIG-je (ez a
+    kifizetett összeg) és a hónaphoz rögzített tételek (ebből látszik, MIBŐL
+    jött ki). Az évi összeg a TIG-ek nettó összege - a tételek ugyanazt az
+    összeget bontják, nem jönnek hozzá még egyszer."""
+    tigek = (
+        db.query(InternalPerformanceCertificate)
+        .filter(InternalPerformanceCertificate.employee_id == employee_id)
+        .all()
+    )
+    tetelek = (
+        db.query(EmployeeMonthlyItem).filter(EmployeeMonthlyItem.employee_id == employee_id).all()
+    )
+
+    honapok: dict[tuple[int, int], HaviKoltseg] = {}
+
+    def _honap(ev: int, honap: int) -> HaviKoltseg:
+        kulcs = (ev, honap)
+        if kulcs not in honapok:
+            honapok[kulcs] = HaviKoltseg(ev=ev, honap=honap, honap_nev=honap_neve(honap))
+        return honapok[kulcs]
+
+    for tig in tigek:
+        adat = _honap(tig.ev, tig.honap)
+        olvasott = InternalPerformanceCertificateRead.model_validate(tig)
+        adat.tig_id = tig.id
+        adat.allapot = tig.allapot
+        adat.netto_osszeg = olvasott.netto_osszeg
+        adat.brutto_osszeg = olvasott.brutto_osszeg
+
+    for tetel in tetelek:
+        adat = _honap(tetel.ev, tetel.honap)
+        adat.tetelek.append(_tetel_kimenet(tetel))
+        if tetel.tipus == "alapber":
+            adat.alapber += float(tetel.osszeg or 0)
+        else:
+            adat.extra += float(tetel.osszeg or 0)
+
+    evek: dict[int, list[HaviKoltseg]] = {}
+    for adat in honapok.values():
+        adat.tetelek.sort(key=lambda t: (t.tipus != "alapber", t.id))
+        evek.setdefault(adat.ev, []).append(adat)
+
+    return [
+        EvesKoltseg(
+            ev=ev,
+            osszesen=float(sum(h.netto_osszeg or 0 for h in sorted_honapok)),
+            honapok=sorted_honapok,
+        )
+        for ev, sorted_honapok in (
+            (ev, sorted(lista, key=lambda h: h.honap, reverse=True)) for ev, lista in evek.items()
+        )
+    ]

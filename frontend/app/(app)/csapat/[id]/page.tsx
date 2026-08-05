@@ -1,28 +1,35 @@
 import { notFound } from "next/navigation";
+import { FileText, Scissors, Wallet } from "lucide-react";
 import { BackLink } from "@/components/BackLink";
-import { BelsosTigEmployeeList } from "@/components/BelsosTigEmployeeList";
 import { Card } from "@/components/Card";
-import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { DetailSections } from "@/components/DetailSections";
+import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { MunkaszerzodesUpload } from "@/components/MunkaszerzodesUpload";
 import { RelatedTable } from "@/components/RelatedTable";
 import { UtomunkaIdoHavonta } from "@/components/UtomunkaIdoHavonta";
+import { HaviKoltsegek } from "@/components/crew/HaviKoltsegek";
+import { VagottAnyagokLista } from "@/components/crew/VagottAnyagokLista";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
-  getBelsosTigForEmployee,
+  getAttachments,
+  getCurrentUser,
   getDetailTabs,
   getEmployeeDocuments,
+  getEmployeeKoltsegek,
   getFieldTypes,
   getMyPagePermissions,
+  getProjects,
   getRecord,
   getRelated,
   getUtomunkaIdo,
+  getVagottAnyagok,
   getVisibleFields,
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
 import { buildFieldTabs } from "@/lib/detailTabs";
+import { canDoAction } from "@/lib/permissions";
 
 /** Ezek az adatok másolódnak át előtöltésként az alvállalkozói eseti
  * szerződés generálásakor (lásd backend/app/api/routes/subcontractor_contracts.py
@@ -63,38 +70,47 @@ export default async function EmployeeDetailPage({
 
   const [
     rates,
-    timesheets,
     expenses,
     contracts,
-    deliverables,
-    campaigns,
+    vagottAnyagok,
     documents,
-    belsosTigek,
+    attachments,
+    koltsegek,
+    projects,
     utomunkaIdo,
     visibleFields,
     fieldTypes,
     dbTabs,
     pagePermissions,
+    currentUser,
   ] = await Promise.all([
-      getRelated(ENTITY_PATHS.rate, { employee_id: employeeId }),
-      getRelated(ENTITY_PATHS.timesheet, { employee_id: employeeId }),
-      getRelated(ENTITY_PATHS.expense, { employee_id: employeeId }),
-      getRelated(ENTITY_PATHS.contract, { employee_id: employeeId }),
-      getRelated(ENTITY_PATHS.deliverable, { vago_employee_id: employeeId }),
-      getRelated(ENTITY_PATHS.campaign, { felelos_employee_id: employeeId }),
-      getEmployeeDocuments(employeeId),
-      getBelsosTigForEmployee(employeeId),
-      getUtomunkaIdo(employeeId),
-      getVisibleFields("employee"),
-      getFieldTypes("employee"),
-      getDetailTabs("employee"),
-      getMyPagePermissions(),
-    ]);
+    getRelated(ENTITY_PATHS.rate, { employee_id: employeeId }),
+    getRelated(ENTITY_PATHS.expense, { employee_id: employeeId }),
+    getRelated(ENTITY_PATHS.contract, { employee_id: employeeId }),
+    getVagottAnyagok(employeeId),
+    getEmployeeDocuments(employeeId),
+    getAttachments("employee", employeeId),
+    getEmployeeKoltsegek(employeeId),
+    getProjects(),
+    getUtomunkaIdo(employeeId),
+    getVisibleFields("employee"),
+    getFieldTypes("employee"),
+    getDetailTabs("employee"),
+    getMyPagePermissions(),
+    getCurrentUser(),
+  ]);
 
   const vallalkozasFieldKeys = visibleFields
     ? VALLALKOZAS_FIELD_KEYS.filter((k) => visibleFields.includes(k))
     : VALLALKOZAS_FIELD_KEYS;
 
+  const szerkeszthet = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
+  const torolhet = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const projektOpciok = projects.map((p) => ({ id: p.id, nev: p.nev }));
+
+  /* MINDEN blokk szekcióként megy be, nem a lap aljára fixen kirakva - így az
+     admin által beállított sorrend (fogd és vidd) ugyanúgy vonatkozik rájuk,
+     mint az adatlap mező-kártyáira. */
   const tabs = buildFieldTabs({
     page: PAGE,
     patchPath: `${ENTITY_PATHS.employee}/${employee.id}`,
@@ -104,6 +120,128 @@ export default async function EmployeeDetailPage({
     fieldTypes,
     pagePermissions,
     alwaysHidden: ["hashed_password", ...VALLALKOZAS_FIELD_KEYS],
+    extraTabs: [
+      ...(vallalkozasFieldKeys.length > 0
+        ? [
+            {
+              key: "vallalkozas",
+              label: "Vállalkozás adatok",
+              content: (
+                <Card title="Vállalkozás adatok" icon={FileText}>
+                  <EditableDetailGrid
+                    patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
+                    fields={toEditableDetailFields(employee, [], vallalkozasFieldKeys, fieldTypes)}
+                  />
+                  <div className="mt-6 border-t border-border pt-5">
+                    <p className="t-label mb-2">Munkaszerződés</p>
+                    <MunkaszerzodesUpload employeeId={employee.id} documents={documents} />
+                  </div>
+                </Card>
+              ),
+            },
+          ]
+        : []),
+      {
+        key: "berezes",
+        label: "Bérezés",
+        content: (
+          <Card title={`Bérezés (${rates.length})`} icon={Wallet}>
+            <RelatedTable
+              rows={rates}
+              emptyText="Nincs felvett bérezés ehhez a crew taghoz."
+              entityKey="rate"
+              deleteBasePath={ENTITY_PATHS.rate}
+            />
+          </Card>
+        ),
+      },
+      ...(utomunkaIdo.length > 0
+        ? [
+            {
+              key: "utomunka-ido",
+              label: "Utómunkával töltött idő",
+              content: (
+                <Card title="Utómunkával töltött idő havonta" icon={Scissors}>
+                  <UtomunkaIdoHavonta honapok={utomunkaIdo} />
+                </Card>
+              ),
+            },
+          ]
+        : []),
+      {
+        key: "vagott-anyagok",
+        label: "Vágott anyagok",
+        content: (
+          <Card title={`Vágott anyagok (${vagottAnyagok.length})`} icon={Scissors}>
+            <VagottAnyagokLista anyagok={vagottAnyagok} />
+          </Card>
+        ),
+      },
+      {
+        key: "havi-koltsegek",
+        // A Belsős TIG havi összegei ITT jelennek meg (nincs külön TIG-kártya):
+        // ez válaszolja meg, hogy mibe került nekünk ez az ember - és ugyanitt
+        // vihetők fel a hónap tételei, amikből a TIG összege összeáll.
+        //
+        // A név szándékosan egyértelmű: a Notionból örökölt, admin által
+        // konfigurált "Kiadások" mezőcsoport (Extra kiadás megnevezés/összeg/
+        // dátum) még létezhet az adatlapon - ez váltja ki, de a régit csak a
+        // Beállítások > Részletnézet fülek alatt lehet levenni, mert az
+        // beállítás, nem kód.
+        label: "Havi kiadások",
+        content: (
+          <Card title="Havi kiadások (alapbér + extrák)" icon={Wallet}>
+            <HaviKoltsegek
+              employeeId={employee.id}
+              evek={koltsegek}
+              projektek={projektOpciok}
+              szerkeszthet={szerkeszthet}
+              torolhet={torolhet}
+            />
+            {expenses.length > 0 && (
+              <div className="mt-6 border-t border-border pt-5">
+                <p className="t-label mb-3">Egyéb kiadás-tételek ({expenses.length})</p>
+                <RelatedTable
+                  rows={expenses}
+                  emptyText="Nincs egyéb kiadás."
+                  getHref={(e) => `/penzugyek/kiadas/${e.id}`}
+                  deleteBasePath={ENTITY_PATHS.expense}
+                />
+              </div>
+            )}
+          </Card>
+        ),
+      },
+      {
+        key: "szerzodesek",
+        label: "Szerződések",
+        content: (
+          <Card title={`Szerződések (${contracts.length})`} icon={FileText}>
+            <RelatedTable
+              rows={contracts}
+              emptyText="Nincs szerződés ehhez a crew taghoz."
+              getHref={(c) => `/szerzodesek/${c.id}`}
+              deleteBasePath={ENTITY_PATHS.contract}
+            />
+            {/* A keretszerződés (és bármi más aláírt papír) fájlja ITT
+                tölthető fel, akár több is - a tárolás az R2-n van (lásd
+                backend services/attachments.py). */}
+            <div className="mt-6 border-t border-border pt-5">
+              <p className="t-label mb-3">Keretszerződés és egyéb aláírt dokumentumok</p>
+              <DokumentumFeltoltes
+                entityType="employee"
+                entityId={employee.id}
+                attachments={attachments.filter((a) => a.kategoria === "szerzodes")}
+                kategoria="szerzodes"
+                canEdit={szerkeszthet}
+                canDelete={torolhet}
+                emptyText="Nincs feltöltött keretszerződés."
+              />
+            </div>
+          </Card>
+        ),
+      },
+    ],
   });
 
   return (
@@ -115,89 +253,7 @@ export default async function EmployeeDetailPage({
           <h1 className="t-page">{String(employee.full_name ?? `Crew tag #${employee.id}`)}</h1>
         </div>
 
-        <DetailSections sections={tabs} />
-
-        {/* Az alapadatok ALATT, összecsukva: mennyit vágott hónapról hónapra,
-            hónapon belül projektenként (lásd UtomunkaIdoHavonta). Felül az
-            adatlap maradjon, ez a hosszú lista ne tolja le. */}
-        {utomunkaIdo.length > 0 && (
-          <CollapsibleCard title="Utómunkával töltött idő havonta">
-            <UtomunkaIdoHavonta honapok={utomunkaIdo} />
-          </CollapsibleCard>
-        )}
-
-        {vallalkozasFieldKeys.length > 0 && (
-          <Card title="Vállalkozás adatok">
-            <EditableDetailGrid
-              patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
-              fields={toEditableDetailFields(employee, [], vallalkozasFieldKeys, fieldTypes)}
-            />
-            <div className={vallalkozasFieldKeys.length > 0 ? "mt-4 border-t border-border pt-4" : ""}>
-              <p className="mb-2 text-[11px] text-text-muted">Munkaszerződés</p>
-              <MunkaszerzodesUpload employeeId={employee.id} documents={documents} />
-            </div>
-          </Card>
-        )}
-
-        {belsosTigek.length > 0 && (
-          <Card title={`Belsős TIG-ek (${belsosTigek.length})`}>
-            <BelsosTigEmployeeList records={belsosTigek} />
-          </Card>
-        )}
-
-        <Card title={`Díjak (${rates.length})`}>
-          <RelatedTable
-            rows={rates}
-            emptyText="Nincs felvett díj ehhez a crew taghoz."
-            entityKey="rate"
-            deleteBasePath={ENTITY_PATHS.rate}
-          />
-        </Card>
-
-        <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
-          <RelatedTable
-            rows={timesheets}
-            emptyText="Nincs munkaidő-elszámolás ehhez a crew taghoz."
-            entityKey="timesheet"
-            deleteBasePath={ENTITY_PATHS.timesheet}
-          />
-        </Card>
-
-        <Card title={`Kiadások (${expenses.length})`}>
-          <RelatedTable
-            rows={expenses}
-            emptyText="Nincs kiadás ehhez a crew taghoz."
-            getHref={(e) => `/penzugyek/kiadas/${e.id}`}
-            deleteBasePath={ENTITY_PATHS.expense}
-          />
-        </Card>
-
-        <Card title={`Szerződések (${contracts.length})`}>
-          <RelatedTable
-            rows={contracts}
-            emptyText="Nincs szerződés ehhez a crew taghoz."
-            getHref={(c) => `/szerzodesek/${c.id}`}
-            deleteBasePath={ENTITY_PATHS.contract}
-          />
-        </Card>
-
-        <Card title={`Vágott anyagok (${deliverables.length})`}>
-          <RelatedTable
-            rows={deliverables}
-            emptyText="Nincs vágandó anyag ehhez a crew taghoz."
-            getHref={(d) => `/utomunka/${d.id}`}
-            deleteBasePath={ENTITY_PATHS.deliverable}
-          />
-        </Card>
-
-        <Card title={`Felelős kampányok (${campaigns.length})`}>
-          <RelatedTable
-            rows={campaigns}
-            emptyText="Nincs kampány ehhez a crew taghoz."
-            getHref={(c) => `/kampanyok/${c.id}`}
-            deleteBasePath={ENTITY_PATHS.campaign}
-          />
-        </Card>
+        <DetailSections sections={tabs} entityType="employee" canReorder={currentUser?.role === "admin"} />
       </div>
     </div>
   );

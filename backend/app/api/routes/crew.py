@@ -12,6 +12,7 @@ from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.employee_document import EmployeeDocument
 from app.models.project import Project
+from app.models.project_code import ProjectCode
 from app.models.rate import Rate
 from app.models.timesheet import Timesheet
 from app.schemas.employee import (
@@ -91,6 +92,65 @@ class UtomunkaHonapIdo(BaseModel):
     total_minutes: float
     total_cost: float | None = None
     projektek: list[UtomunkaProjektIdo] = []
+
+
+class VagottAnyag(BaseModel):
+    """Egy anyag, amin ez a vágó VALAHA dolgozott."""
+
+    id: int
+    projekt_neve: str
+    allapot: str | None = None
+    projektkod: str | None = None
+    utoljara: datetime | None = None
+    osszes_perc: float = 0
+
+
+@router.get("/{employee_id}/vagott-anyagok", response_model=list[VagottAnyag])
+def get_vagott_anyagok(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Minden anyag, amin ennek a munkatársnak VALAHA futott az időmérője -
+    a legutóbb érintettel elöl.
+
+    Szándékosan nem a Deliverable.vago_employee_id-t nézzük: az csak azt
+    mondja meg, ki a jelenlegi kijelölt vágó. Egy anyagon többen is
+    dolgozhattak, és a kijelölés utólag át is kerülhet másra - a tényleges
+    munkát a munkaidő-sorok (Timesheet) őrzik."""
+    if db.get(Employee, employee_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Munkatárs nem található")
+
+    sorok = (
+        db.query(Timesheet, Deliverable, ProjectCode)
+        .join(Deliverable, Timesheet.deliverable_id == Deliverable.id)
+        .outerjoin(ProjectCode, Deliverable.project_code_id == ProjectCode.id)
+        .filter(Timesheet.employee_id == employee_id)
+        .all()
+    )
+
+    anyagok: dict[int, VagottAnyag] = {}
+    for timesheet, deliverable, projektkod in sorok:
+        adat = anyagok.get(deliverable.id)
+        if adat is None:
+            adat = VagottAnyag(
+                id=deliverable.id,
+                projekt_neve=deliverable.projekt_neve,
+                allapot=deliverable.allapot,
+                projektkod=projektkod.projektkod if projektkod else None,
+            )
+            anyagok[deliverable.id] = adat
+        adat.osszes_perc += float(timesheet.time_minutes or timesheet.idotartam_perc or 0)
+        veg = timesheet.end_date or timesheet.start_date
+        if veg is not None and (adat.utoljara is None or veg > adat.utoljara):
+            adat.utoljara = veg
+
+    # A legutóbb érintett anyag elöl; akinél nincs időpont, a lista végén.
+    return sorted(
+        anyagok.values(),
+        key=lambda a: (a.utoljara is not None, a.utoljara or datetime.min.replace(tzinfo=timezone.utc)),
+        reverse=True,
+    )
 
 
 @router.get("/{employee_id}/utomunka-ido", response_model=list[UtomunkaHonapIdo])
