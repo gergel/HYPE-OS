@@ -35,12 +35,37 @@ function halvany(szin: string | null | undefined, szazalek: number): string | un
 
 const PAGE_SIZE = 10;
 
-function BoardCardView({ card, szin }: { card: BoardCard; szin?: string | null }) {
+/** A húzáskor átadott adat típusa. Saját MIME-típus, hogy egy kívülről
+ * behúzott fájl vagy szöveg ne indítsa el az áthelyezést. */
+const HUZAS_TIPUS = "application/x-hype-anyag";
+
+function BoardCardView({
+  card,
+  szin,
+  huzhato,
+}: {
+  card: BoardCard;
+  szin?: string | null;
+  huzhato: boolean;
+}) {
   return (
     <a
       href={card.href}
+      draggable={huzhato}
+      onDragStart={
+        huzhato
+          ? (e) => {
+              e.dataTransfer.setData(HUZAS_TIPUS, String(card.id));
+              // A böngésző alapból a LINKET vinné (URL-ként) - a saját
+              // adatunk mellé a "move" jelzés adja a helyes egérkurzort.
+              e.dataTransfer.effectAllowed = "move";
+            }
+          : undefined
+      }
       style={szin ? { background: halvany(szin, 14), borderColor: halvany(szin, 38) } : undefined}
-      className="block rounded-[var(--radius)] border border-border bg-surface-3 p-2.5 text-[13px] hover:bg-surface-2"
+      className={`block rounded-[var(--radius)] border border-border bg-surface-3 p-2.5 text-[13px] hover:bg-surface-2 ${
+        huzhato ? "cursor-grab active:cursor-grabbing" : ""
+      }`}
     >
       <p className="font-medium text-text-primary">{card.title}</p>
       {card.subtitle && <p className="mt-0.5 text-[12px] text-text-muted">{card.subtitle}</p>}
@@ -74,16 +99,49 @@ function BoardCardView({ card, szin }: { card: BoardCard; szin?: string | null }
 /** Egyetlen oszlop - alapból legfeljebb 10 kártyát mutat, hogy egy nagy
  * csoportnál (pl. sok "Aktuális" állapotú anyag) ne kelljen egyszerre száz
  * sort görgetni - "további megjelenítése" nyitja ki a többit. */
-function BoardColumnView({ column }: { column: BoardColumn }) {
+function BoardColumnView({
+  column,
+  onAthelyezes,
+}: {
+  column: BoardColumn;
+  /** Ha meg van adva, ide lehet kártyát HÚZNI: (kártya id, cél oszlop kulcsa). */
+  onAthelyezes?: (cardId: number, celOszlop: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [felette, setFelette] = useState(false);
   const visible = expanded ? column.cards : column.cards.slice(0, PAGE_SIZE);
   const remaining = column.cards.length - visible.length;
+  const huzhato = onAthelyezes !== undefined;
 
   return (
     <div
       data-oszlop={column.key}
+      onDragOver={
+        huzhato
+          ? (e) => {
+              if (!e.dataTransfer.types.includes(HUZAS_TIPUS)) return;
+              // preventDefault NÉLKÜL a böngésző nem enged ejteni.
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              setFelette(true);
+            }
+          : undefined
+      }
+      onDragLeave={huzhato ? () => setFelette(false) : undefined}
+      onDrop={
+        huzhato
+          ? (e) => {
+              e.preventDefault();
+              setFelette(false);
+              const id = Number(e.dataTransfer.getData(HUZAS_TIPUS));
+              if (Number.isFinite(id) && id > 0) onAthelyezes(id, column.key);
+            }
+          : undefined
+      }
       style={column.szin ? { background: halvany(column.szin, 8), borderColor: halvany(column.szin, 45) } : undefined}
-      className="flex w-72 shrink-0 flex-col rounded-[var(--radius-lg)] border border-border bg-surface-3 p-3"
+      className={`flex w-72 shrink-0 flex-col rounded-[var(--radius-lg)] border bg-surface-3 p-3 ${
+        felette ? "border-text-accent" : "border-border"
+      }`}
     >
       <p className="mb-2 flex items-center gap-1.5 text-[13px] font-medium text-text-primary">
         {column.szin && (
@@ -98,7 +156,7 @@ function BoardColumnView({ column }: { column: BoardColumn }) {
       <div className="flex flex-col gap-2">
         {visible.length === 0 && <p className="text-[12px] text-text-muted italic">Üres.</p>}
         {visible.map((card) => (
-          <BoardCardView key={card.id} card={card} szin={column.szin} />
+          <BoardCardView key={card.id} card={card} szin={column.szin} huzhato={huzhato} />
         ))}
       </div>
       {remaining > 0 && (
@@ -119,14 +177,23 @@ function BoardColumnView({ column }: { column: BoardColumn }) {
  * böngészniük, hanem egyben lássák, mi hol tart. Ugyanez a komponens adja az
  * "Állapot szerint" és a "Vinyók szerint" nézetet is (lásd Utómunka oldal),
  * csak az oszlopok csoportosítási kulcsa más. */
-export function DeliverableBoard({ columns }: { columns: BoardColumn[] }) {
+export function DeliverableBoard({
+  columns,
+  onAthelyezes,
+}: {
+  columns: BoardColumn[];
+  /** Ha meg van adva, a kártyák megfoghatók és másik oszlopba húzhatók -
+   * ettől változik az anyag állapota (lásd UtomunkaContent). A vinyó szerinti
+   * táblán szándékosan nincs: ott az oszlop nem egy állítható mező. */
+  onAthelyezes?: (cardId: number, celOszlop: string) => void;
+}) {
   if (columns.length === 0) {
     return <p className="text-[13px] text-text-muted">Nincs megjeleníthető anyag.</p>;
   }
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">
       {columns.map((col) => (
-        <BoardColumnView key={col.key} column={col} />
+        <BoardColumnView key={col.key} column={col} onAthelyezes={onAthelyezes} />
       ))}
     </div>
   );

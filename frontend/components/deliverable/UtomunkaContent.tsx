@@ -168,12 +168,21 @@ export function UtomunkaContent({
         szin: szinek.get(s) ?? null,
         cards: (byStatus.get(s) ?? []).map((d) => toCard(d, d.vinyok ?? [])),
       })),
-      ...(byStatus.has(NO_STATUS_KEY)
-        ? [{ key: NO_STATUS_KEY, label: "Nincs állapot", cards: byStatus.get(NO_STATUS_KEY)!.map((d) => toCard(d, d.vinyok ?? [])) }]
+      // Az "állapot nélküli" oszlop akkor is kell, ha épp üres - de csak
+      // annak, aki húzhat: enélkül nem lehetne visszavenni egy anyagról az
+      // állapotot a táblán.
+      ...(byStatus.has(NO_STATUS_KEY) || canEdit
+        ? [
+            {
+              key: NO_STATUS_KEY,
+              label: "Nincs állapot",
+              cards: (byStatus.get(NO_STATUS_KEY) ?? []).map((d) => toCard(d, d.vinyok ?? [])),
+            },
+          ]
         : []),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverables, statusOptions, allapotBeallitasok, kartyaMezok, employeeName]);
+  }, [deliverables, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName]);
 
   const vinyoColumns: BoardColumn[] = useMemo(() => {
     const byVinyo = new Map<string, Deliverable[]>();
@@ -188,6 +197,38 @@ export function UtomunkaContent({
       .map((v) => ({ key: v, label: v, cards: byVinyo.get(v)!.map((d) => toCard(d, d.allapot ? [d.allapot] : [])) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliverables, vinyoOptions, kartyaMezok, employeeName]);
+
+  /** Kártya áthúzása másik oszlopba: ez az anyag ÁLLAPOTÁT írja át.
+   *
+   * A képernyőn azonnal átkerül a kártya (optimista frissítés) - a vágó ne
+   * várjon a szerverre egy ilyen apró lépésnél -, hiba esetén viszont
+   * visszaáll, hogy ne higgyük elmentettnek, ami nem ment el. */
+  async function kartyaAthelyezes(deliverableId: number, celOszlop: string) {
+    const ujAllapot = celOszlop === NO_STATUS_KEY ? null : celOszlop;
+    const eredeti = deliverables.find((d) => d.id === deliverableId);
+    if (!eredeti || eredeti.allapot === ujAllapot) return;
+    setDeliverables((elozo) =>
+      elozo.map((d) => (d.id === deliverableId ? { ...d, allapot: ujAllapot } : d)),
+    );
+    try {
+      const res = await authFetch(`${DELIVERABLE_BASE_PATH}/${deliverableId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ allapot: ujAllapot }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        setDeliverables((elozo) =>
+          elozo.map((d) => (d.id === deliverableId ? { ...d, allapot: eredeti.allapot } : d)),
+        );
+        alert(`Az állapot módosítása nem sikerült: ${detail?.detail ?? res.status}`);
+      }
+    } catch (err) {
+      setDeliverables((elozo) =>
+        elozo.map((d) => (d.id === deliverableId ? { ...d, allapot: eredeti.allapot } : d)),
+      );
+      alert(`Az állapot módosítása nem sikerült (hálózati hiba): ${err}`);
+    }
+  }
 
   const calendarProjects = useMemo(() => projects.filter((p) => p.forgatas_datuma !== null), [projects]);
 
@@ -218,7 +259,9 @@ export function UtomunkaContent({
               ) : undefined
             }
           >
-            <DeliverableBoard columns={statusColumns} />
+            {/* Szerkesztési joggal a kártyák áthúzhatók másik oszlopba - ez
+                írja át az anyag állapotát. */}
+            <DeliverableBoard columns={statusColumns} onAthelyezes={canEdit ? kartyaAthelyezes : undefined} />
           </Card>
           <Card title="Forgatások naptár">
             <ForgatasokCalendar projects={calendarProjects} />
