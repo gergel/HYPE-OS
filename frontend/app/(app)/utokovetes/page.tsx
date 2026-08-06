@@ -1,13 +1,9 @@
-import Link from "next/link";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
-import { UtokovetesLista, UtokovetesTabla, fazisa } from "@/components/UtokovetesTabla";
+import { UtokovetesLista } from "@/components/UtokovetesLista";
+import { UtokovetesNezetek } from "@/components/UtokovetesNezetek";
+import { fazisa } from "@/lib/utokovetes";
 import { getUtokovetesOverview } from "@/lib/api";
-
-const NEZETEK = [
-  { kulcs: "", cimke: "Áttekintés" },
-  { kulcs: "admin", cimke: "Admin lista" },
-] as const;
 
 /** Utókövetés - EGY oldalon mutatja minden diszpózott projekthez tartozó
  * eseti szerződés + teljesítési igazolás + kifizetés + forgatás utáni
@@ -15,18 +11,20 @@ const NEZETEK = [
  * oldalt végignézni. A tényleges kezelés (mentés/generálás/küldés/kihagyás)
  * a projekt utókövetés-oldalán történik - ez csak az áttekintés.
  *
- * Két nézet van, és a nézet a címben is benne van (?nezet=admin), hogy
- * linkelhető és megosztható legyen:
+ * Két nézet van, EGY adatlekérésből (a váltás nem tölt újra - lásd
+ * UtokovetesNezetek):
  *  - ÁTTEKINTÉS (alap): a projektek fázisonként, egymás melletti oszlopokban -
  *    mi kész, hol kell már csak utalni, hol hiányzik a TIG, hol a szerződés.
- *  - ADMIN LISTA: a részletes, szűrhető-rendezhető táblázat minden fázissal. */
+ *    Kereshető, rendezhető, és a kész projektek elrejthetők.
+ *  - ADMIN LISTA: a részletes, szűrhető-rendezhető táblázat minden fázissal.
+ *
+ * A kezdő nézetet a cím adja (?nezet=admin), hogy a link megosztható legyen. */
 export default async function UtokovetesPage({
   searchParams,
 }: {
   searchParams: Promise<{ nezet?: string }>;
 }) {
   const { nezet } = await searchParams;
-  const admin = nezet === "admin";
   const rows = await getUtokovetesOverview();
   const keszDarab = rows.filter((r) => fazisa(r) === "kesz").length;
 
@@ -35,31 +33,13 @@ export default async function UtokovetesPage({
       <TopBar />
       <div className="flex-1 p-8">
         <Card
-          title={
-            admin
-              ? `Utókövetés (${rows.length} diszpózott projekt)`
-              : `Utókövetés – ${keszDarab} kész, ${rows.length - keszDarab} folyamatban`
-          }
-          actions={
-            <div className="flex items-center gap-1 rounded-[var(--radius)] border border-border p-0.5">
-              {NEZETEK.map((n) => {
-                const aktiv = (n.kulcs === "admin") === admin;
-                return (
-                  <Link
-                    key={n.kulcs}
-                    href={n.kulcs ? `/utokovetes?nezet=${n.kulcs}` : "/utokovetes"}
-                    className={`rounded-[var(--radius)] px-2.5 py-1 text-[12.5px] transition-colors ${
-                      aktiv ? "bg-surface-3 text-text-primary" : "text-text-secondary hover:text-text-primary"
-                    }`}
-                  >
-                    {n.cimke}
-                  </Link>
-                );
-              })}
-            </div>
-          }
+          title={`Utókövetés – ${rows.length} projekt, ${keszDarab} kész, ${rows.length - keszDarab} folyamatban`}
         >
-          {admin ? <UtokovetesLista rows={rows} /> : <UtokovetesTabla rows={rows} />}
+          <UtokovetesNezetek
+            rows={rows}
+            kezdeti={nezet === "admin" ? "admin" : "attekintes"}
+            lista={<UtokovetesLista rows={rows} />}
+          />
         </Card>
       </div>
     </div>
