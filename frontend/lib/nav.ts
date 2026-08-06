@@ -116,6 +116,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Pénzügyek", href: "/penzugyek", icon: "Wallet" },
       { label: "Keretszerződések", href: "/penzugyek/keretszerzodesek", icon: "FileSignature", permissionPage: "/penzugyek" },
+      { label: "Eseti szerződések", href: "/penzugyek/eseti-szerzodesek", icon: "FileText", permissionPage: "/penzugyek" },
     ],
   },
   {

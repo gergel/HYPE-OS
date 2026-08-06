@@ -28,6 +28,7 @@ const BY_PREFIX: Record<string, string[]> = {
   "/kampanyok": ["campaigns"],
   "/penzugyek": ["expenses", "revenues", "kpForgalmak"],
   "/penzugyek/keretszerzodesek": ["contracts"],
+  "/penzugyek/eseti-szerzodesek": ["contracts", "projects"],
   "/alvallalkozoi-szerzodesek": ["contracts", "projects"],
   "/szerzodesek": ["contracts"],
   "/teljesitesi-igazolasok": ["performanceCertificates", "internalPerformanceCertificates", "projects"],

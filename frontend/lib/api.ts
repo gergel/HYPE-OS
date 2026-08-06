@@ -404,6 +404,33 @@ export async function getAllContractsForProject(projectId: number): Promise<Elke
   return (await apiGet<ElkeszultSzerzodes[]>(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/all`)) ?? [];
 }
 
+/** Egy sor az "Eseti szerződések" listáján: a szerződés, mellette az EMBER és
+ * a PROJEKT, amihez tartozik (lásd backend routes/eseti_szerzodesek.py). */
+export type EsetiSzerzodes = {
+  id: number;
+  employee_id: number | null;
+  employee_nev: string | null;
+  employee_tipus: string | null;
+  project_id: number | null;
+  project_nev: string | null;
+  projektkod: string | null;
+  forgatas_datuma: string | null;
+  ceg_neve: string | null;
+  megbizas_targya: string | null;
+  szerzodes_allapota: string | null;
+  netto_osszeg: number | null;
+  brutto_osszeg: number | null;
+  plusz_afa: boolean | null;
+  teljesites_szoveg: string | null;
+  keltezes: string | null;
+  alairva: boolean;
+  szerzodes_file_url: string | null;
+};
+
+export async function getEsetiSzerzodesek(): Promise<EsetiSzerzodes[]> {
+  return (await apiGet<EsetiSzerzodes[]>("/api/v1/eseti-szerzodesek")) ?? [];
+}
+
 export type PendingTigProject = {
   project_id: number;
   project_nev: string | null;

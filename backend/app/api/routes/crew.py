@@ -370,9 +370,8 @@ def kulsos_munkak(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Munkatárs nem található")
 
     # Álló keretszerződés - de csak a VALÓDI (lásd models/contract.py
-    # megkotott_keretszerzodes): a Notion-import mindenkinél létrehozott egy
-    # projekt nélküli szerződés-sort, akinél a lapján volt cégadat, és ezek
-    # mögött nincs megkötött keretszerződés.
+    # megkotott_keretszerzodes): a munkatárs Notion-lapjáról átvett, projekt
+    # nélküli sorok eseti megbízási szerződések, nem keretszerződés.
     keretszerzodes = next(
         (
             c
