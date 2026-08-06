@@ -37,6 +37,17 @@ def elozo_honap(nap: date) -> tuple[int, int]:
 
 
 def kovetkezo_honap_elseje(ev: int, honap: int) -> date:
-    """Az alapértelmezett teljesítési dátum egy adott hónap TIG-jéhez: a
-    KÖVETKEZŐ hónap első napja (az elozo_honap() megfordítása)."""
+    """Az elozo_honap() megfordítása: a hónapot KÖVETŐ hónap első napja."""
     return date(ev + 1, 1, 1) if honap == 12 else date(ev, honap + 1, 1)
+
+
+#: A belsős TIG-et mindig a hónapot KÖVETŐ hónapban készítjük (júliusban a
+#: júniusit, augusztusban a júliusit), és a teljesítés/fizetési határidő
+#: ennek a hónapnak a 20-a - tehát a 2026. JÚNIUSI TIG-en 2026.07.20. áll.
+TIG_HATARIDO_NAPJA = 20
+
+
+def tig_hatarido(ev: int, honap: int) -> date:
+    """Egy adott hónap belsős TIG-jének teljesítési és fizetési határideje: a
+    KÖVETKEZŐ hónap 20-a."""
+    return kovetkezo_honap_elseje(ev, honap).replace(day=TIG_HATARIDO_NAPJA)

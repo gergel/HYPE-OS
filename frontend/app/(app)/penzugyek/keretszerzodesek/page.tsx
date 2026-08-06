@@ -7,21 +7,41 @@ import { ENTITY_PATHS, formatDate, getContracts, getEmployees, type Contract } f
 
 type KeretszerzodesRow = Contract & { employee_name: string };
 
-/** Keretszerződések: a crew-tagokhoz (akár belsős, akár külsős) tartozó álló
- * megbízási szerződések - ezek NEM egy konkrét projekthez kötöttek
- * (Contract.project_id == null), ezért az "Alvállalkozók szerződése" nézet
- * kihagyja azokat, akiknek itt már van bejegyzésük (nincs szükség eseti
- * szerződésre projektenként). */
+/** Van-e a bejegyzés mögött tényleg keretszerződés?
+ *
+ * A Notion-import minden munkatárs lapjáról áthozza a cégadatot (cégnév,
+ * székhely, adószám), ezért sokaknál keletkezett olyan sor, ami mögött nincs
+ * megkötött keretszerződés - csak a vállalkozás adatai. Keretszerződése annak
+ * van, akinél megvan az aláírt papír vagy legalább a szerződés állapota (a
+ * kézzel felvett bejegyzés is kap egyet: "Aktív"). */
+function vanKeretszerzodes(c: Contract): boolean {
+  return Boolean(c.alairva || c.szerzodes_file_url || c.szerzodes_allapota);
+}
+
+/** Keretszerződések: a KÜLSŐS munkatársakhoz tartozó álló megbízási
+ * szerződések - ezek NEM egy konkrét projekthez kötöttek
+ * (Contract.project_id == null), ezért az utókövetés nem kér tőlük
+ * projektenként eseti szerződést.
+ *
+ * Csak külsősök, és csak akiknek tényleg van keretszerződésük: a belsősöknél a
+ * havi bérelszámolás és a belsős TIG fedi le ugyanezt. */
 export default async function KeretszerzodesekPage() {
   const [contracts, employees] = await Promise.all([getContracts(), getEmployees()]);
   const employeeById = new Map(employees.map((e) => [e.id, e]));
 
   const rows: KeretszerzodesRow[] = contracts
-    .filter((c) => c.tipus === "alvallalkozoi" && !c.project_id && c.employee_id)
+    .filter((c) => {
+      if (c.tipus !== "alvallalkozoi" || c.project_id || !c.employee_id) return false;
+      if (employeeById.get(c.employee_id)?.tipus !== "kulsos") return false;
+      return vanKeretszerzodes(c);
+    })
     .map((c) => ({ ...c, employee_name: employeeById.get(c.employee_id as number)?.full_name ?? `#${c.employee_id}` }));
 
+  // Felvenni azt a külsőst lehet, akinél még nincs (valódi) keretszerződés - a
+  // cégadat-only bejegyzést a backend előlépteti, nem duplikálja (lásd
+  // routes/contracts.py create_keretszerzodes). Belsőst nem ajánlunk.
   const linkedEmployeeIds = new Set(rows.map((r) => r.employee_id));
-  const candidates = employees.filter((e) => !linkedEmployeeIds.has(e.id));
+  const candidates = employees.filter((e) => e.tipus === "kulsos" && !linkedEmployeeIds.has(e.id));
 
   return (
     <div className="flex flex-1 flex-col">

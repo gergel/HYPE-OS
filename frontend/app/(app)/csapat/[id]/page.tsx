@@ -10,6 +10,7 @@ import { RelatedTable } from "@/components/RelatedTable";
 import { UtomunkaIdoHavonta } from "@/components/UtomunkaIdoHavonta";
 import { HaviKoltsegek } from "@/components/crew/HaviKoltsegek";
 import { EgyebKiadasok } from "@/components/crew/EgyebKiadasok";
+import { KulsosMunkak } from "@/components/crew/KulsosMunkak";
 import { VagottAnyagokLista } from "@/components/crew/VagottAnyagokLista";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -20,6 +21,7 @@ import {
   getEmployeeDocuments,
   getEmployeeKoltsegek,
   getFieldTypes,
+  getKulsosMunkak,
   getMyPagePermissions,
   getProjectCodes,
   getRecord,
@@ -77,6 +79,7 @@ export default async function EmployeeDetailPage({
     documents,
     attachments,
     koltsegek,
+    munkak,
     projektkodok,
     utomunkaIdo,
     visibleFields,
@@ -92,6 +95,7 @@ export default async function EmployeeDetailPage({
     getEmployeeDocuments(employeeId),
     getAttachments("employee", employeeId),
     getEmployeeKoltsegek(employeeId),
+    getKulsosMunkak(employeeId),
     getProjectCodes(),
     getUtomunkaIdo(employeeId),
     getVisibleFields("employee"),
@@ -105,12 +109,73 @@ export default async function EmployeeDetailPage({
     ? VALLALKOZAS_FIELD_KEYS.filter((k) => visibleFields.includes(k))
     : VALLALKOZAS_FIELD_KEYS;
 
+  // A külsős és a belsős elszámolása alapvetően különbözik (havi bér vs.
+  // projektenkénti szerződés + TIG), ezért más blokkok kerülnek az adatlapra.
+  const kulsos = employee.tipus === "kulsos";
   const szerkeszthet = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
   const torolhet = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
   const projektkodOpciok = projektkodok.map((p) => ({ id: p.id, projektkod: p.projektkod }));
   // Az "Egyéb kiadások" tábla a kiadás projektkód-azonosítójából a KÓDOT írja
   // ki, nem a nyers id-t - ehhez kell a feloldás.
   const projektkodNevek = Object.fromEntries(projektkodok.map((p) => [p.id, p.projektkod]));
+
+  /* A BELSŐSÖK havi bérelszámolása. A külsősöknél ez nem értelmezhető:
+     ők projektenként dolgoznak (eseti szerződés vagy keretszerződés), és a
+     TIG mondja meg, mennyiért - ezért náluk a lenti munka-blokk áll a
+     helyén. */
+  const haviKoltsegekTab = {
+    key: "havi-koltsegek",
+    // A Belsős TIG havi összegei ITT jelennek meg (nincs külön TIG-kártya):
+    // ez válaszolja meg, hogy mibe került nekünk ez az ember - és ugyanitt
+    // vihetők fel a hónap tételei, amikből a TIG összege összeáll.
+    //
+    // A név szándékosan egyértelmű: a Notionból örökölt, admin által
+    // konfigurált "Kiadások" mezőcsoport (Extra kiadás megnevezés/összeg/
+    // dátum) még létezhet az adatlapon - ez váltja ki, de a régit csak a
+    // Beállítások > Részletnézet fülek alatt lehet levenni, mert az
+    // beállítás, nem kód.
+    label: "Havi kiadások",
+    content: (
+      <Card title="Havi kiadások (alapbér + extrák)" icon={Wallet}>
+        <HaviKoltsegek
+          employeeId={employee.id}
+          evek={koltsegek}
+          projektkodok={projektkodOpciok}
+          szerkeszthet={szerkeszthet}
+          torolhet={torolhet}
+        />
+        {/* Az alapbéren FELÜLI költségek egy összesítésben: a pénzügyi
+            kiadások (számlák) és a havi elszámoláshoz felvitt extrák/
+            levonások együtt, egyetlen végösszeggel. */}
+        <div className="mt-6 border-t border-border pt-5">
+          <p className="t-label mb-3">Egyéb kiadások és havi extrák</p>
+          <EgyebKiadasok kiadasok={expenses} koltsegek={koltsegek} projektkodNevek={projektkodNevek} />
+        </div>
+      </Card>
+    ),
+  };
+
+  /* A KÜLSŐSÖK elszámolása: miken vett részt, mennyiért, és hol vannak a
+     hozzá tartozó papírok (szerződés / TIG / számla). */
+  const kulsosMunkakTab = {
+    key: "kulsos-munkak",
+    label: "Projektek és kifizetések",
+    content: (
+      <Card title="Projektek és kifizetések" icon={Wallet}>
+        <KulsosMunkak
+          adat={
+            munkak ?? {
+              projektek: [],
+              osszes_netto: 0,
+              osszes_brutto: 0,
+              keretszerzodes_id: null,
+              keretszerzodes_url: null,
+            }
+          }
+        />
+      </Card>
+    ),
+  };
 
   /* MINDEN blokk szekcióként megy be, nem a lap aljára fixen kirakva - így az
      admin által beállított sorrend (fogd és vidd) ugyanúgy vonatkozik rájuk,
@@ -181,37 +246,7 @@ export default async function EmployeeDetailPage({
           </Card>
         ),
       },
-      {
-        key: "havi-koltsegek",
-        // A Belsős TIG havi összegei ITT jelennek meg (nincs külön TIG-kártya):
-        // ez válaszolja meg, hogy mibe került nekünk ez az ember - és ugyanitt
-        // vihetők fel a hónap tételei, amikből a TIG összege összeáll.
-        //
-        // A név szándékosan egyértelmű: a Notionból örökölt, admin által
-        // konfigurált "Kiadások" mezőcsoport (Extra kiadás megnevezés/összeg/
-        // dátum) még létezhet az adatlapon - ez váltja ki, de a régit csak a
-        // Beállítások > Részletnézet fülek alatt lehet levenni, mert az
-        // beállítás, nem kód.
-        label: "Havi kiadások",
-        content: (
-          <Card title="Havi kiadások (alapbér + extrák)" icon={Wallet}>
-            <HaviKoltsegek
-              employeeId={employee.id}
-              evek={koltsegek}
-              projektkodok={projektkodOpciok}
-              szerkeszthet={szerkeszthet}
-              torolhet={torolhet}
-            />
-            {/* Az alapbéren FELÜLI költségek egy összesítésben: a pénzügyi
-                kiadások (számlák) és a havi elszámoláshoz felvitt extrák/
-                levonások együtt, egyetlen végösszeggel. */}
-            <div className="mt-6 border-t border-border pt-5">
-              <p className="t-label mb-3">Egyéb kiadások és havi extrák</p>
-              <EgyebKiadasok kiadasok={expenses} koltsegek={koltsegek} projektkodNevek={projektkodNevek} />
-            </div>
-          </Card>
-        ),
-      },
+      ...(kulsos ? [kulsosMunkakTab] : [haviKoltsegekTab]),
       {
         key: "szerzodesek",
         label: "Szerződések",

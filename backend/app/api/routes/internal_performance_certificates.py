@@ -2,15 +2,21 @@
 (payroll-on lévő) munkatársakhoz: minden belsős embernek pontosan egy TIG-je
 kell havonta, függetlenül attól, hány projekten dolgozott azon a hónapon -
 ez a végpont-csoport ezért nem projektre, hanem (employee_id, ev, honap)
-hármasra épül. Az admin oldal (lásd frontend app/(app)/belsos-tig/page.tsx)
-alapértelmezetten a folyó hónapot mutatja, és felsorolja AZ ÖSSZES belsős
-munkatársat - akinek még nincs TIG-je erre a hónapra, annak létre kell hozni
-vagy kihagyni (ha épp nem dolgozott).
+hármasra épül.
 
-A hónapot MINDIG a teljesítés dátuma határozza meg, és mindig az azt megelőző
-hónapot jelenti (2026.06.20-i teljesítés = a 2026. MÁJUSI TIG) - ha az admin
-átírja a teljesítési dátumot úgy, hogy másik hónapot jelöl, a bejegyzés
-átkerül abba a hónapba (lásd _apply_teljesites_honap)."""
+A TIG-ek VISSZAFELÉ készülnek: mindig az ELŐZŐ hónapé az, amit épp csinálunk -
+júliusban a júniusi, augusztusban a júliusi. Ezért az admin oldal (lásd
+frontend app/(app)/belsos-tig/page.tsx) alapból nem a folyó, hanem az azt
+megelőző hónapot mutatja, és felsorolja AZ ÖSSZES belsős munkatársat - akinek
+még nincs TIG-je arra a hónapra, annak létre kell hozni vagy kihagyni (ha épp
+nem dolgozott).
+
+Ebből következik, hogy a hónapot MINDIG a teljesítés dátuma határozza meg, és
+mindig az azt megelőző hónapot jelenti (2026.07.20-i teljesítés = a 2026.
+JÚNIUSI TIG) - ha az admin átírja a teljesítési dátumot úgy, hogy másik
+hónapot jelöl, a bejegyzés átkerül abba a hónapba (lásd
+_apply_teljesites_honap). A teljesítés és a fizetési határidő alapértéke a
+következő hónap 20-a (lásd services/hu_datum.tig_hatarido)."""
 
 from __future__ import annotations
 
@@ -40,7 +46,7 @@ from app.schemas.internal_performance_certificate import InternalPerformanceCert
 from app.services import document_storage
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
-from app.services.hu_datum import elozo_honap, ev_honap_szoveg, honap_neve, kovetkezo_honap_elseje
+from app.services.hu_datum import elozo_honap, ev_honap_szoveg, honap_neve, tig_hatarido
 from app.services.hu_number_words import szam_betukkel
 
 router = APIRouter(prefix="/belsos-tig", tags=["internal-performance-certificates"])
@@ -118,8 +124,10 @@ def _get_or_create(db: Session, employee: Employee, ev: int, honap: int) -> Inte
         megbizas_targya=employee.megbizas_targya,
         plusz_afa=employee.plusz_afa,
         # A teljesítés a hónapot KÖVETŐ hónapban történik (a hónap onnan
-        # számolódik vissza) - alapból annak az első napja.
-        teljesites_datuma=kovetkezo_honap_elseje(ev, honap),
+        # számolódik vissza) - alapból annak a 20-a, ahogy a fizetési határidő
+        # is: a júniusi TIG-en 07.20. áll. Mindkettő átírható.
+        teljesites_datuma=tig_hatarido(ev, honap),
+        fizetesi_hatarido=tig_hatarido(ev, honap),
     )
     db.add(record)
     db.flush()
@@ -156,13 +164,16 @@ def list_month(
     db: Session = Depends(get_db),
     _user: Employee = Depends(get_current_user),
 ):
-    """Az adott hónap (alapértelmezetten a folyó hónap) összes belsős
-    munkatársa + a hozzájuk tartozó TIG-bejegyzés (ha van) - a frontend ebből
-    dönti el, kinél van még teendő (nincs bejegyzés / Készítés alatt), és
-    kinél van már lezárva (Kész / Kihagyva)."""
-    today = date.today()
-    ev = ev or today.year
-    honap = honap or today.month
+    """Az adott hónap összes belsős munkatársa + a hozzájuk tartozó
+    TIG-bejegyzés (ha van) - a frontend ebből dönti el, kinél van még teendő
+    (nincs bejegyzés / Készítés alatt), és kinél van már lezárva (Kész /
+    Kihagyva).
+
+    Hónap nélkül az ELŐZŐ hónapot adjuk: azt csináljuk éppen (júliusban a
+    júniusit), a folyó hónap TIG-je csak a következő hónapban lesz esedékes."""
+    alap_ev, alap_honap = elozo_honap(date.today())
+    ev = ev or alap_ev
+    honap = honap or alap_honap
     employees = _belsos_employees(db)
     if not employees:
         return []
@@ -282,8 +293,10 @@ def havi_attekintes(
 
     # Az utolsó N hónap (a folyó hónappal együtt) + minden olyan hónap, amiben
     # már van bejegyzés.
+    # A folyó hónap TIG-je még nem esedékes (azt a következő hónapban
+    # készítjük), ezért a visszafelé számolás az ELŐZŐ hónappal indul.
     honap_kulcsok: set[tuple[int, int]] = set(honap_szerint.keys())
-    ev, honap = today.year, today.month
+    ev, honap = elozo_honap(today)
     for _ in range(max(honapok, 1)):
         honap_kulcsok.add((ev, honap))
         ev, honap = elozo_honap(date(ev, honap, 1))
@@ -340,7 +353,7 @@ def havi_attekintes(
                 )
             )
 
-        hatarido = kovetkezo_honap_elseje(ev, honap)
+        hatarido = tig_hatarido(ev, honap)
         van_bejegyzes = bool(sorok)
         if not teendok:
             allapot = "lezarva"

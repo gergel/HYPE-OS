@@ -1,16 +1,18 @@
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
 from app.core.security import Role, get_current_user, hash_password, require_page_action, require_roles
+from app.models.contract import Contract, ContractType
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.employee_document import EmployeeDocument
+from app.models.performance_certificate import PerformanceCertificate
 from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.rate import Rate
@@ -306,3 +308,171 @@ rates_router = build_crud_router(
     tags=["crew"],
     page="/csapat",
 )
+
+
+# --- Külsős munkatárs: min dolgozott és mennyiért ---------------------------
+#
+# A külsősöknél nincs havi bérezés (az a belsősök világa): egy külsős egy
+# PROJEKTEN vesz részt, arra vagy eseti szerződés készül neki, vagy van álló
+# keretszerződése, és a végén a TIG mondja meg, mennyiért csinálta. Ez a
+# végpont ezt gyűjti egy helyre a munkatárs adatlapjára: melyik projekten
+# vett részt, mennyit fizettünk neki, és hol van a hozzá tartozó papír
+# (szerződés, TIG, számla).
+
+
+class MunkaDokumentum(BaseModel):
+    cimke: str
+    url: str
+
+
+class KulsosProjektMunka(BaseModel):
+    project_id: int | None = None
+    project_nev: str | None = None
+    forgatas_datuma: date | None = None
+    projektkod: str | None = None
+    megbizas_targya: str | None = None
+    netto: float | None = None
+    brutto: float | None = None
+    tig_allapot: str | None = None
+    szamla_kifizetve: bool = False
+    #: A projekthez tartozó papírok: eseti szerződés (ha nem keretszerződéssel
+    #: dolgozik), a TIG dokumentuma és a hozzá feltöltött számlák.
+    dokumentumok: list[MunkaDokumentum] = []
+    #: Igaz, ha erre a projektre NEM készült külön szerződés, mert a
+    #: munkatársnak álló keretszerződése van.
+    keretszerzodessel: bool = False
+
+
+class KulsosMunkakOsszesites(BaseModel):
+    projektek: list[KulsosProjektMunka] = []
+    osszes_netto: float = 0
+    osszes_brutto: float = 0
+    #: A munkatárs álló keretszerződése (ha van) - a projekt-soroknál ezért
+    #: nincs külön szerződés.
+    keretszerzodes_id: int | None = None
+    keretszerzodes_url: str | None = None
+
+
+@router.get("/{employee_id}/munkak", response_model=KulsosMunkakOsszesites)
+def kulsos_munkak(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Egy (jellemzően külsős) munkatárs projektjei: min dolgozott, mennyiért,
+    és hol vannak a hozzá tartozó papírok.
+
+    A sorok a TIG-ekből jönnek (az mondja meg, mennyiért csinálta), és mellé
+    kerül a projekthez tartozó eseti szerződés is - ha viszont a munkatársnak
+    álló KERETSZERZŐDÉSE van, projektenként nincs külön szerződés, ezért azt
+    egyszer, a lista fölött mutatjuk."""
+    if db.get(Employee, employee_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Munkatárs nem található")
+
+    # Álló keretszerződés - de csak a VALÓDI: a Notion-import mindenkinél
+    # létrehozott egy projekt nélküli szerződés-sort, akinél a lapján volt
+    # cégadat, és ezek mögött nincs megkötött keretszerződés (lásd
+    # notion_import/importers.py _keretszerzodes_a_munkatarsbol). Keretszerződés
+    # az, amihez van aláírt papír vagy legalább állapot.
+    keretszerzodes = next(
+        (
+            c
+            for c in db.query(Contract)
+            .filter(
+                Contract.employee_id == employee_id,
+                Contract.tipus == ContractType.ALVALLALKOZOI,
+                Contract.project_id.is_(None),
+            )
+            .order_by(Contract.id.desc())
+            .all()
+            if c.alairva or c.szerzodes_file_url or c.szerzodes_allapota
+        ),
+        None,
+    )
+
+    esetiek = {
+        c.project_id: c
+        for c in db.query(Contract)
+        .options(selectinload(Contract.project).selectinload(Project.project_code))
+        .filter(Contract.employee_id == employee_id, Contract.project_id.is_not(None))
+        .order_by(Contract.id)
+        .all()
+    }
+
+    tigek = (
+        db.query(PerformanceCertificate)
+        .options(
+            selectinload(PerformanceCertificate.invoices),
+            selectinload(PerformanceCertificate.project).selectinload(Project.project_code),
+        )
+        .filter(PerformanceCertificate.employee_id == employee_id)
+        .all()
+    )
+
+    def projekt_mezok(projekt: Project | None) -> dict:
+        return {
+            "project_nev": projekt.nev if projekt else None,
+            "forgatas_datuma": projekt.forgatas_datuma if projekt else None,
+            "projektkod": projekt.project_code.projektkod if projekt and projekt.project_code else None,
+        }
+
+    sorok: list[KulsosProjektMunka] = []
+    for tig in tigek:
+        dokumentumok: list[MunkaDokumentum] = []
+        eseti = esetiek.get(tig.project_id)
+        if eseti is not None and eseti.szerzodes_file_url:
+            dokumentumok.append(MunkaDokumentum(cimke="Szerződés", url=eseti.szerzodes_file_url))
+        if tig.file_url:
+            dokumentumok.append(MunkaDokumentum(cimke="TIG", url=tig.file_url))
+        for szamla in tig.invoices:
+            dokumentumok.append(MunkaDokumentum(cimke=f"Számla – {szamla.filename}", url=szamla.url))
+
+        netto = float(tig.netto_osszeg) if tig.netto_osszeg is not None else None
+        brutto = round(netto * 1.27, 2) if (netto is not None and tig.plusz_afa) else netto
+        sorok.append(
+            KulsosProjektMunka(
+                project_id=tig.project_id,
+                **projekt_mezok(tig.project),
+                megbizas_targya=tig.megbizas_targya,
+                netto=netto,
+                brutto=brutto,
+                tig_allapot=tig.allapot,
+                szamla_kifizetve=bool(tig.szamla_kifizetve),
+                dokumentumok=dokumentumok,
+                keretszerzodessel=eseti is None and keretszerzodes is not None,
+            )
+        )
+
+    # Amelyik projektre már van szerződése, de TIG még nincs: az is munka, amin
+    # részt vett - csak még nem tudjuk, mennyiért. Ezek nélkül a lista hiányos
+    # lenne (a szerződés kiküldése és a TIG között hetek is eltelnek).
+    tiges_projektek = {tig.project_id for tig in tigek}
+    for project_id, eseti in esetiek.items():
+        if project_id in tiges_projektek:
+            continue
+        netto = float(eseti.netto_osszeg) if eseti.netto_osszeg is not None else None
+        sorok.append(
+            KulsosProjektMunka(
+                project_id=project_id,
+                **projekt_mezok(eseti.project),
+                megbizas_targya=eseti.megbizas_targya,
+                netto=netto,
+                brutto=round(netto * 1.27, 2) if (netto is not None and eseti.plusz_afa) else netto,
+                tig_allapot=None,
+                dokumentumok=(
+                    [MunkaDokumentum(cimke="Szerződés", url=eseti.szerzodes_file_url)]
+                    if eseti.szerzodes_file_url
+                    else []
+                ),
+            )
+        )
+
+    # A legfrissebb forgatás elöl; dátum nélküli sorok a végén.
+    sorok.sort(key=lambda s: (s.forgatas_datuma is not None, s.forgatas_datuma or date.min), reverse=True)
+    return KulsosMunkakOsszesites(
+        projektek=sorok,
+        osszes_netto=float(sum(s.netto or 0 for s in sorok)),
+        osszes_brutto=float(sum(s.brutto or 0 for s in sorok)),
+        keretszerzodes_id=keretszerzodes.id if keretszerzodes else None,
+        keretszerzodes_url=keretszerzodes.szerzodes_file_url if keretszerzodes else None,
+    )

@@ -26,6 +26,20 @@ class KeretszerzodesCreate(BaseModel):
     employee_id: int
 
 
+def _cegadat(employee: Employee) -> dict:
+    """A munkatárs saját cégadatai a szerződés mezőire képezve."""
+    return {
+        "ceg_neve": employee.vallakozas_neve or employee.full_name,
+        "szekhely": employee.vallakozas_szekhely,
+        "adoszam": employee.vallalkozas_adoszama,
+        "megbizas_targya": employee.megbizas_targya,
+        "vallalkozas_kepviseloje": employee.vallalkozas_kepviselo,
+        "vallalkozas_nyilvantartasi_szam": employee.nyilvantartasi_szam,
+        "keltezes": employee.keltezes_datuma,
+        "email": employee.email,
+    }
+
+
 @router.post("/keretszerzodes", response_model=ContractRead, status_code=201)
 def create_keretszerzodes(
     payload: KeretszerzodesCreate,
@@ -50,21 +64,28 @@ def create_keretszerzodes(
         .first()
     )
     if existing is not None:
-        raise HTTPException(status_code=400, detail="Ennek a munkatársnak már van keretszerződése.")
+        # A Notion-import mindenkinél létrehozott egy álló szerződés-sort, akinél
+        # a saját lapján volt cégadat - ezek mögött nincs megkötött
+        # keretszerződés, csak a vállalkozás adatai (lásd
+        # notion_import/importers.py _keretszerzodes_a_munkatarsbol). Ilyenkor
+        # nem hibázunk és nem duplikálunk: a meglévő sort léptetjük elő valódi
+        # keretszerződéssé, és pótoljuk a hiányzó cégadatokat.
+        if existing.alairva or existing.szerzodes_file_url or existing.szerzodes_allapota:
+            raise HTTPException(status_code=400, detail="Ennek a munkatársnak már van keretszerződése.")
+        for mezo, ertek in _cegadat(employee).items():
+            if ertek is not None and getattr(existing, mezo, None) in (None, ""):
+                setattr(existing, mezo, ertek)
+        existing.szerzodes_allapota = "Aktív"
+        db.commit()
+        db.refresh(existing)
+        return ContractRead.model_validate(existing)
 
     contract = Contract(
         tipus=ContractType.ALVALLALKOZOI,
         employee_id=employee.id,
         project_id=None,
-        ceg_neve=employee.vallakozas_neve or employee.full_name,
-        szekhely=employee.vallakozas_szekhely,
-        adoszam=employee.vallalkozas_adoszama,
-        megbizas_targya=employee.megbizas_targya,
-        vallalkozas_kepviseloje=employee.vallalkozas_kepviselo,
-        vallalkozas_nyilvantartasi_szam=employee.nyilvantartasi_szam,
-        keltezes=employee.keltezes_datuma,
-        email=employee.email,
         szerzodes_allapota="Aktív",
+        **_cegadat(employee),
     )
     db.add(contract)
     db.commit()

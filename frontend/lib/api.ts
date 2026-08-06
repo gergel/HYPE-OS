@@ -1043,6 +1043,39 @@ export async function getUtomunkaIdo(employeeId: number): Promise<UtomunkaHonapI
   return (await apiGet<UtomunkaHonapIdo[]>(`/api/v1/crew/${employeeId}/utomunka-ido`)) ?? [];
 }
 
+/** Egy külsős munkatárs egy projekten végzett munkája: mennyiért csinálta, és
+ * hol vannak a hozzá tartozó papírok (szerződés / TIG / számla). */
+export type MunkaDokumentum = { cimke: string; url: string };
+
+export type KulsosProjektMunka = {
+  project_id: number | null;
+  project_nev: string | null;
+  forgatas_datuma: string | null;
+  projektkod: string | null;
+  megbizas_targya: string | null;
+  netto: number | null;
+  brutto: number | null;
+  tig_allapot: string | null;
+  szamla_kifizetve: boolean;
+  dokumentumok: MunkaDokumentum[];
+  /** Nincs erre a projektre külön szerződés, mert álló keretszerződése van. */
+  keretszerzodessel: boolean;
+};
+
+export type KulsosMunkakOsszesites = {
+  projektek: KulsosProjektMunka[];
+  osszes_netto: number;
+  osszes_brutto: number;
+  keretszerzodes_id: number | null;
+  keretszerzodes_url: string | null;
+};
+
+/** Miken és mennyiért vett részt egy külsős - a TIG-ekből és az eseti
+ * szerződésekből összegyűjtve (lásd backend routes/crew.py kulsos_munkak). */
+export async function getKulsosMunkak(employeeId: number): Promise<KulsosMunkakOsszesites | null> {
+  return apiGet<KulsosMunkakOsszesites>(`/api/v1/crew/${employeeId}/munkak`);
+}
+
 export async function getTimerState(deliverableId: number): Promise<TimerState | null> {
   return apiGet<TimerState>(`/api/v1/deliverables/${deliverableId}/timer/state`);
 }

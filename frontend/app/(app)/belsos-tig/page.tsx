@@ -16,10 +16,14 @@ function shiftMonth(ev: number, honap: number, delta: number): { ev: number; hon
 
 /** Belsős TIG - önálló, NEM projekthez kötött admin oldal (lásd
  * backend/app/api/routes/internal_performance_certificates.py fejléc-
- * kommentje): alapértelmezetten a folyó hónapot mutatja, és felsorolja AZ
- * ÖSSZES belsős munkatársat, akiknek havonta pontosan egy TIG-et kell
- * készíteni (vagy admin kihagyja őket az adott hónapból, ha épp nem
- * dolgoztak). Ellentétben a Külsős TIG-gel, ez sosem projektenkénti. */
+ * kommentje): felsorolja AZ ÖSSZES belsős munkatársat, akiknek havonta
+ * pontosan egy TIG-et kell készíteni (vagy admin kihagyja őket az adott
+ * hónapból, ha épp nem dolgoztak). Ellentétben a Külsős TIG-gel, ez sosem
+ * projektenkénti.
+ *
+ * A TIG-ek VISSZAFELÉ készülnek: mindig az előző hónapé az, amit épp
+ * csinálunk (júliusban a júniusi, augusztusban a júliusi), ezért az oldal
+ * alapból az ELŐZŐ hónapot nyitja meg - a folyó hónap csak a nyilakkal. */
 export default async function BelsosTigPage({
   searchParams,
 }: {
@@ -27,8 +31,9 @@ export default async function BelsosTigPage({
 }) {
   const params = await searchParams;
   const today = new Date();
-  const ev = params.ev ? Number(params.ev) : today.getFullYear();
-  const honap = params.honap ? Number(params.honap) : today.getMonth() + 1;
+  const alap = shiftMonth(today.getFullYear(), today.getMonth() + 1, -1);
+  const ev = params.ev ? Number(params.ev) : alap.ev;
+  const honap = params.honap ? Number(params.honap) : alap.honap;
 
   const [employees, attekintes, pagePermissions] = await Promise.all([
     getBelsosTigMonth(ev, honap),
