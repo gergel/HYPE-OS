@@ -22,7 +22,7 @@ from app.models.internal_performance_certificate import (
 from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateInvoice
 from app.models.project_code import ProjectCode
 from app.services import document_storage
-from app.services.hu_datum import honap_neve
+from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
 from app.services.portal_storage import R2NotConfiguredError
 from app.schemas.finance import (
     ExpenseCreate,
@@ -401,7 +401,7 @@ def szamlak_zip(
         if not _honap_szuro(szamla.created_at.date() if szamla.created_at else None, ev, honap):
             continue
         cert = szamla.certificate
-        honap_jel = f"{cert.ev}-{cert.honap:02d}" if cert else "ismeretlen"
+        honap_jel = "-".join(f"{r:02d}" for r in _belsos_honap(cert)) if cert else "ismeretlen"
         nev = f"belsos_tig_{honap_jel}_{szamla.id}_{szamla.filename}"
         bejovo.append((nev, szamla.storage_key))
         leiras.append(f"bejovo/{nev}\tBelsős TIG ({honap_jel})\tfeltöltve: {szamla.created_at:%Y-%m-%d}")
@@ -484,6 +484,13 @@ class UtalasraVaroTetel(BaseModel):
 
 class UtalasraVaroKeres(BaseModel):
     kulcsok: list[str]
+
+
+def _belsos_honap(tig) -> tuple[int, int]:
+    """Egy belsős TIG elszámolt hónapja a dátumaiból - ezzel nevezzük meg."""
+    return belsos_tig_honapja(
+        tig.ev, tig.honap, tig.teljesites_datuma, tig.fizetesi_hatarido, tig.utalas_datuma
+    )
 
 
 def _szamla_csatolmanyok(db: Session, entity_type: str, entity_ids: list[int]) -> dict[int, list[DocumentAttachment]]:
@@ -589,7 +596,10 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
                 UtalasraVaroTetel(
                     kulcs=f"belsos_tig:{tig.id}",
                     tipus="Belsős TIG",
-                    megnevezes=f"{tig.ev}. {honap_neve(tig.honap)} havi TIG",
+                    # A megnevezés a TIG DÁTUMAIBÓL jön: a 07.20-i fizetési
+                    # határidejű a JÚNIUSI elszámolásé (lásd
+                    # services/hu_datum.belsos_tig_honapja).
+                    megnevezes=f"{ev_honap_szoveg(*_belsos_honap(tig))} havi TIG",
                     kinek=tig.employee.full_name if tig.employee else None,
                     osszeg=float(tig.netto_osszeg) if tig.netto_osszeg is not None else None,
                     penznem="HUF",

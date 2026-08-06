@@ -1,96 +1,65 @@
+import Link from "next/link";
 import { Card } from "@/components/Card";
-import { DataTable } from "@/components/DataTable";
-import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { formatDate, getUtokovetesOverview } from "@/lib/api";
+import { UtokovetesLista, UtokovetesTabla, fazisa } from "@/components/UtokovetesTabla";
+import { getUtokovetesOverview } from "@/lib/api";
 
-function szerzodesBadge(osszes: number, fuggo: number) {
-  if (osszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
-  if (fuggo === 0) return <StatusBadge label={`${osszes}/${osszes} kész`} tone="success" />;
-  return <StatusBadge label={`${fuggo} függő`} tone="warning" />;
-}
-
-function tigBadge(ready: boolean, osszes: number, fuggo: number) {
-  if (osszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
-  if (!ready) return <StatusBadge label="Szerződésre vár" tone="neutral" />;
-  if (fuggo === 0) return <StatusBadge label={`${osszes}/${osszes} kész`} tone="success" />;
-  return <StatusBadge label={`${fuggo} függő`} tone="warning" />;
-}
-
-function kifizetesBadge(osszes: number, fuggo: number) {
-  if (osszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
-  if (fuggo === 0) return <StatusBadge label={`${osszes}/${osszes} kifizetve`} tone="success" />;
-  return <StatusBadge label={`${fuggo} kifizetetlen`} tone="warning" />;
-}
-
-function visszajelzesBadge(darab: number) {
-  if (darab === 0) return <StatusBadge label="Nincs válasz" tone="neutral" />;
-  return <StatusBadge label={`${darab} válasz`} tone="success" />;
-}
+const NEZETEK = [
+  { kulcs: "", cimke: "Áttekintés" },
+  { kulcs: "admin", cimke: "Admin lista" },
+] as const;
 
 /** Utókövetés - EGY oldalon mutatja minden diszpózott projekthez tartozó
- * eseti szerződés + teljesítési igazolás + forgatás utáni kérdőívválasz
- * állapotát, hogy ne kelljen projektenként külön-külön több oldalt
- * végignézni. A tényleges kezelés (mentés/generálás/küldés/kihagyás)
- * továbbra is a projekt oldalán vagy a saját (szerződés/TIG) oldalakon
- * történik - ez csak az áttekintés. */
-export default async function UtokovetesPage() {
+ * eseti szerződés + teljesítési igazolás + kifizetés + forgatás utáni
+ * kérdőívválasz állapotát, hogy ne kelljen projektenként külön-külön több
+ * oldalt végignézni. A tényleges kezelés (mentés/generálás/küldés/kihagyás)
+ * a projekt utókövetés-oldalán történik - ez csak az áttekintés.
+ *
+ * Két nézet van, és a nézet a címben is benne van (?nezet=admin), hogy
+ * linkelhető és megosztható legyen:
+ *  - ÁTTEKINTÉS (alap): a projektek fázisonként, egymás melletti oszlopokban -
+ *    mi kész, hol kell már csak utalni, hol hiányzik a TIG, hol a szerződés.
+ *  - ADMIN LISTA: a részletes, szűrhető-rendezhető táblázat minden fázissal. */
+export default async function UtokovetesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ nezet?: string }>;
+}) {
+  const { nezet } = await searchParams;
+  const admin = nezet === "admin";
   const rows = await getUtokovetesOverview();
+  const keszDarab = rows.filter((r) => fazisa(r) === "kesz").length;
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 p-8">
-        <Card title={`Utókövetés (${rows.length} diszpózott projekt)`}>
-          <DataTable<(typeof rows)[number] & { id: number }>
-            filterable
-            rows={rows.map((r) => ({ ...r, id: r.project_id }))}
-            emptyText="Nincs még diszpózott projekt."
-            getHref={(r) => `/utokovetes/${r.project_id}`}
-            columns={[
-              { header: "Projekt", render: (r) => r.project_nev ?? `#${r.project_id}`, sortAccessor: (r) => r.project_nev },
-              { header: "Projektkód", render: (r) => r.projektkod ?? "–", sortAccessor: (r) => r.projektkod },
-              {
-                header: "Forgatás dátuma",
-                render: (r) => formatDate(r.forgatas_datuma),
-                sortAccessor: (r) => r.forgatas_datuma,
-              },
-              {
-                header: "Szerződések",
-                render: (r) => szerzodesBadge(r.szerzodes_osszes, r.szerzodes_fuggo),
-                sortAccessor: (r) => r.szerzodes_fuggo,
-              },
-              {
-                header: "Teljesítési igazolások",
-                render: (r) => tigBadge(r.tig_ready, r.tig_osszes, r.tig_fuggo),
-                sortAccessor: (r) => r.tig_fuggo,
-              },
-              {
-                header: "Kifizetés",
-                render: (r) => kifizetesBadge(r.kifizetes_osszes, r.kifizetes_fuggo),
-                sortAccessor: (r) => r.kifizetes_fuggo,
-              },
-              {
-                header: "Visszajelzés",
-                render: (r) => visszajelzesBadge(r.visszajelzes_darab),
-                sortAccessor: (r) => r.visszajelzes_darab,
-              },
-              {
-                // Állapot-oszlop ("Kész"/"Folyamatban") - a fejléc korábban
-                // "Kész" volt, amiből a szűrőben nem derült ki, mire lehet
-                // szűrni.
-                header: "Állapot",
-                render: (r) =>
-                  r.kesz ? (
-                    <StatusBadge label="Kész" tone="success" />
-                  ) : (
-                    <StatusBadge label="Folyamatban" tone="neutral" />
-                  ),
-                // A kész projektek kerüljenek a lista végére rendezéskor.
-                sortAccessor: (r) => (r.kesz ? 1 : 0),
-              },
-            ]}
-          />
+        <Card
+          title={
+            admin
+              ? `Utókövetés (${rows.length} diszpózott projekt)`
+              : `Utókövetés – ${keszDarab} kész, ${rows.length - keszDarab} folyamatban`
+          }
+          actions={
+            <div className="flex items-center gap-1 rounded-[var(--radius)] border border-border p-0.5">
+              {NEZETEK.map((n) => {
+                const aktiv = (n.kulcs === "admin") === admin;
+                return (
+                  <Link
+                    key={n.kulcs}
+                    href={n.kulcs ? `/utokovetes?nezet=${n.kulcs}` : "/utokovetes"}
+                    className={`rounded-[var(--radius)] px-2.5 py-1 text-[12.5px] transition-colors ${
+                      aktiv ? "bg-surface-3 text-text-primary" : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    {n.cimke}
+                  </Link>
+                );
+              })}
+            </div>
+          }
+        >
+          {admin ? <UtokovetesLista rows={rows} /> : <UtokovetesTabla rows={rows} />}
         </Card>
       </div>
     </div>

@@ -46,7 +46,13 @@ from app.schemas.internal_performance_certificate import InternalPerformanceCert
 from app.services import document_storage
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
-from app.services.hu_datum import elozo_honap, ev_honap_szoveg, honap_neve, tig_hatarido
+from app.services.hu_datum import (
+    belsos_tig_honapja,
+    elozo_honap,
+    ev_honap_szoveg,
+    honap_neve,
+    tig_hatarido,
+)
 from app.services.hu_number_words import szam_betukkel
 
 router = APIRouter(prefix="/belsos-tig", tags=["internal-performance-certificates"])
@@ -521,7 +527,13 @@ def generate_and_send(
 
     keltezes = record.keltezes or date.today()
     record.keltezes = keltezes
-    honap_szoveg = ev_honap_szoveg(record.ev, record.honap)
+    # A dokumentum és az email tárgya is a DÁTUMOKBÓL számolt hónapot viseli
+    # (lásd hu_datum.belsos_tig_honapja): a 07.20-i teljesítésű a JÚNIUSI.
+    honap_szoveg = ev_honap_szoveg(
+        *belsos_tig_honapja(
+            record.ev, record.honap, record.teljesites_datuma, record.fizetesi_hatarido, record.utalas_datuma
+        )
+    )
     # Fájlnév és tárgy az eredeti program formátumában ("2026. május_Név_TIG").
     base_name = f"{honap_szoveg}_{employee.full_name}_TIG"
 
@@ -780,7 +792,12 @@ def mark_szamla_kifizetve(
     expense = db.get(Expense, record.expense_id) if record.expense_id is not None else None
     if expense is None:
         expense = Expense(
-            megnevezes=f"Belsős TIG - {record.employee.full_name} - {ev_honap_szoveg(record.ev, record.honap)}",
+            # A hónap a TIG dátumaiból (lásd hu_datum.belsos_tig_honapja): a
+            # 07.20-i határidejű a JÚNIUSI elszámolásé.
+            megnevezes=(
+                f"Belsős TIG - {record.employee.full_name} - "
+                f"{ev_honap_szoveg(*belsos_tig_honapja(record.ev, record.honap, record.teljesites_datuma, record.fizetesi_hatarido, record.utalas_datuma))}"
+            ),
             employee_id=record.employee_id,
             tipus="belsos",
             netto=record.netto_osszeg,

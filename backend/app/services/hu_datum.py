@@ -51,3 +51,27 @@ def tig_hatarido(ev: int, honap: int) -> date:
     """Egy adott hónap belsős TIG-jének teljesítési és fizetési határideje: a
     KÖVETKEZŐ hónap 20-a."""
     return kovetkezo_honap_elseje(ev, honap).replace(day=TIG_HATARIDO_NAPJA)
+
+
+def belsos_tig_honapja(
+    ev: int,
+    honap: int,
+    teljesites_datuma: date | None = None,
+    fizetesi_hatarido: date | None = None,
+    utalas_datuma: date | None = None,
+) -> tuple[int, int]:
+    """Melyik hónap elszámolása ez a belsős TIG - MEGNEVEZÉSHEZ.
+
+    A TIG mindig a hónapot KÖVETŐ hónapban készül, ezért a rajta lévő dátumok
+    (teljesítés, fizetési határidő, utalás) is oda esnek: a 2026.07.20-i
+    fizetési határidejű TIG a 2026. JÚNIUSI elszámolásé. Ahol tehát egy TIG-et
+    névvel írunk ki, ott a dátumból számolunk vissza, és nem a tárolt (ev,
+    honap) párt írjuk ki nyersen - így egy régi, elcsúszott bejegyzés is a
+    helyes hónap nevével jelenik meg (a tárolt hónapot migráció igazítja, de a
+    kiírásnak enélkül is stimmelnie kell).
+
+    Dátum híján marad a tárolt hónap: nincs mihez visszaszámolni."""
+    for datum in (teljesites_datuma, fizetesi_hatarido, utalas_datuma):
+        if datum is not None:
+            return elozo_honap(datum)
+    return ev, honap
