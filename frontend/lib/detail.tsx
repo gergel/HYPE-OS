@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { FieldTypeInfo, formatDate, formatHuf } from "@/lib/api";
+import { Hivatkozas, LinkeltSzoveg } from "@/components/LinkeltSzoveg";
+import { tartalmazLinket } from "@/lib/linkek";
 import { humanizeKey } from "@/lib/mezoNev";
 
 const HIDDEN_KEYS = new Set(["id", "created_at", "updated_at"]);
@@ -32,11 +34,7 @@ function isUrl(value: string): boolean {
 }
 
 function LinkValue({ href }: { href: string }) {
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-text-accent break-all hover:underline">
-      {href}
-    </a>
-  );
+  return <Hivatkozas href={href} />;
 }
 
 function formatValue(key: string, value: unknown): { node: ReactNode; wide: boolean } {
@@ -70,9 +68,20 @@ function formatValue(key: string, value: unknown): { node: ReactNode; wide: bool
   if (typeof value === "string" && isUrl(value)) return { node: <LinkValue href={value} />, wide: false };
   if (typeof value === "string" && isLongText(value)) {
     // a Notion rich_text mezők (pl. diszpó szövege, brief, technika lista) sortöréseit
-    // meg kell tartani, különben az egész szöveg egy sorba tördelődik a böngészőben
-    return { node: <span className="whitespace-pre-line">{value}</span>, wide: true };
+    // meg kell tartani, különben az egész szöveg egy sorba tördelődik a böngészőben.
+    // A szövegbe írt linkek (vágás leírása, gyártás komment) kattinthatók.
+    return {
+      node: (
+        <span className="whitespace-pre-line">
+          <LinkeltSzoveg szoveg={value} />
+        </span>
+      ),
+      wide: true,
+    };
   }
+  // Rövid szöveg is tartalmazhat linket ("nyers: https://..."), ilyenkor sem
+  // kell kézzel kimásolni a címet.
+  if (typeof value === "string" && tartalmazLinket(value)) return { node: <LinkeltSzoveg szoveg={value} />, wide: false };
   return { node: String(value), wide: false };
 }
 
