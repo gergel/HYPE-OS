@@ -148,8 +148,9 @@ class DraftInfo(BaseModel):
     vallalkozas_nyilvantartasi_szam: str | None
     megbizas_targya: str | None
     netto_osszeg: float | None
-    teljesites_kezdete: date | None
-    teljesites_vege: date | None
+    #: A teljesítés ideje SZABAD SZÖVEG (a régi, dátumpáros bejegyzéseknél a
+    #: két dátumból képzett szöveg - lásd _teljesites_szovege).
+    teljesites_szoveg: str | None
     keltezes: date | None
     plusz_afa: bool | None
 
@@ -173,7 +174,23 @@ class PendingProjectDetail(BaseModel):
     project_nev: str | None
     forgatas_datuma: date | None
     forgatas_datuma_vege: date | None
+    #: A teljesítés idejének ELŐTÖLTÉSE a forgatás dátumából - a mező szabad
+    #: szöveg, tehát bármire átírható (lásd _projekt_teljesites_szoveg).
+    teljesites_szoveg_alap: str = ""
     pending: list[PendingEmployeeInfo]
+
+
+def _projekt_teljesites_szoveg(project: Project) -> str:
+    """Előtöltés a projekt forgatási dátumából - a teljesítés jellemzően a
+    forgatás ideje. Ugyanaz a szabály, mint a TIG-nél (lásd
+    routes/performance_certificates.py)."""
+    start = project.forgatas_datuma
+    if not start:
+        return ""
+    end = project.forgatas_datuma_vege
+    if end and end != start:
+        return f"{start.strftime('%Y.%m.%d.')} - {end.strftime('%Y.%m.%d.')}"
+    return start.strftime("%Y.%m.%d.")
 
 
 def _get_project_or_404(db: Session, project_id: int) -> Project:
@@ -181,6 +198,23 @@ def _get_project_or_404(db: Session, project_id: int) -> Project:
     if project is None:
         raise HTTPException(status_code=404, detail="Projekt nem található")
     return project
+
+
+def _teljesites_szovege(c: Contract) -> str | None:
+    """A teljesítés ideje, ahogy a szerződésre kerül.
+
+    Elsődlegesen a szabad szöveges mező (ezt írja be a felhasználó), és csak
+    ha az üres - a régi, dátumpárral rögzített szerződéseknél -, akkor
+    képezzük a két dátumból, ugyanabban a formában, ahogy eddig."""
+    szoveg = (c.teljesites_szoveg or "").strip()
+    if szoveg:
+        return szoveg
+    if c.teljesites_vege and c.teljesites_vege != c.teljesites_kezdete:
+        kezdet = c.teljesites_kezdete.strftime("%Y.%m.%d.") if c.teljesites_kezdete else ""
+        return f"{kezdet} - {c.teljesites_vege.strftime('%Y.%m.%d.')}"
+    if c.teljesites_kezdete:
+        return c.teljesites_kezdete.strftime("%Y.%m.%d.")
+    return None
 
 
 def _draft_info(c: Contract | None) -> DraftInfo | None:
@@ -195,8 +229,7 @@ def _draft_info(c: Contract | None) -> DraftInfo | None:
         vallalkozas_nyilvantartasi_szam=c.vallalkozas_nyilvantartasi_szam,
         megbizas_targya=c.megbizas_targya,
         netto_osszeg=c.netto_osszeg,
-        teljesites_kezdete=c.teljesites_kezdete,
-        teljesites_vege=c.teljesites_vege,
+        teljesites_szoveg=_teljesites_szovege(c),
         keltezes=c.keltezes,
         plusz_afa=c.plusz_afa,
     )
@@ -215,6 +248,7 @@ def get_pending_for_project(
         project_nev=project.nev,
         forgatas_datuma=project.forgatas_datuma,
         forgatas_datuma_vege=project.forgatas_datuma_vege,
+        teljesites_szoveg_alap=_projekt_teljesites_szoveg(project),
         pending=[
             PendingEmployeeInfo(
                 id=e.id,
@@ -298,8 +332,7 @@ class ContractDraftIn(BaseModel):
     vallalkozas_nyilvantartasi_szam: str | None = None
     megbizas_targya: str | None = None
     netto_osszeg: float | None = None
-    teljesites_kezdete: date | None = None
-    teljesites_vege: date | None = None
+    teljesites_szoveg: str | None = None
     keltezes: date | None = None
     plusz_afa: bool | None = None
 
@@ -312,8 +345,7 @@ _DRAFT_FIELDS = (
     "vallalkozas_nyilvantartasi_szam",
     "megbizas_targya",
     "netto_osszeg",
-    "teljesites_kezdete",
-    "teljesites_vege",
+    "teljesites_szoveg",
     "keltezes",
     "plusz_afa",
 )
@@ -367,15 +399,7 @@ def generate_and_send(
     keltezes = draft.keltezes or date.today()
     draft.keltezes = keltezes
 
-    if draft.teljesites_vege and draft.teljesites_vege != draft.teljesites_kezdete:
-        teljesites_str = (
-            f"{draft.teljesites_kezdete.strftime('%Y.%m.%d.') if draft.teljesites_kezdete else ''} - "
-            f"{draft.teljesites_vege.strftime('%Y.%m.%d.')}"
-        )
-    elif draft.teljesites_kezdete:
-        teljesites_str = draft.teljesites_kezdete.strftime("%Y.%m.%d.")
-    else:
-        teljesites_str = ""
+    teljesites_str = _teljesites_szovege(draft) or ""
 
     # float(): a Numeric oszlop az adatbázisból Decimal-ként jön vissza (csak a
     # most beírt érték float), a Decimal * float pedig TypeError.

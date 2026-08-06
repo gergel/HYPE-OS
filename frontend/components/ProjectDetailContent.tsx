@@ -293,7 +293,11 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
         content: (
           <>
             <Card title="Szerződés készítés" icon={Wallet}>
-              <SubcontractorContractManager projectId={project.id} pending={pendingContracts?.pending ?? []} />
+              <SubcontractorContractManager
+                projectId={project.id}
+                pending={pendingContracts?.pending ?? []}
+                teljesitesAlap={pendingContracts?.teljesites_szoveg_alap ?? ""}
+              />
             </Card>
             <Card title="Teljesítési igazolás (Külsős TIG)" icon={FileText}>
               {pendingTig?.tig_ready ? (

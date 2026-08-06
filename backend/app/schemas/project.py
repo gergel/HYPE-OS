@@ -49,6 +49,11 @@ class ProjectListItem(ProjectBase):
     # bejárás - azokat nem kell (és nem is lehet) diszponálni.
     nem_diszponalando: bool = False
     naptar_szin: str | None = None
+    # Ha ez a sor egy több napos forgatásból LEVÁLASZTOTT nap, akkor itt az
+    # eredeti projekt azonosítója - a Naptár/Diszpó nézetnek ebből derül ki,
+    # hogy az adott napra már a leválasztott nap a diszponálandó, nem az
+    # egész (lásd services/project_actions.create_feldarabolas).
+    feldarabolas_szulo_id: int | None = None
 
     model_config = {"from_attributes": True}
 

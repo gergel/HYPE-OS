@@ -69,6 +69,9 @@ export type Project = {
   nem_diszponalando: boolean;
   /** A naptáresemény színe magyar néven, ha kapott egyet ("Lila", "Zöld"…). */
   naptar_szin: string | null;
+  /** Ha ez a sor egy több napos forgatásból LEVÁLASZTOTT nap, itt az eredeti
+   * projekt azonosítója - arra a napra már ez a diszponálandó, nem az egész. */
+  feldarabolas_szulo_id: number | null;
 };
 
 export type Employee = {
@@ -340,8 +343,9 @@ export type SubcontractorContractDraft = {
   vallalkozas_nyilvantartasi_szam: string | null;
   megbizas_targya: string | null;
   netto_osszeg: number | null;
-  teljesites_kezdete: string | null;
-  teljesites_vege: string | null;
+  /** A teljesítés ideje SZABAD SZÖVEG (a régi, dátumpáros szerződéseknél a
+   * két dátumból képzett szöveg - lásd backend _teljesites_szovege). */
+  teljesites_szoveg: string | null;
   keltezes: string | null;
   plusz_afa: boolean | null;
 };
@@ -365,6 +369,8 @@ export type PendingSubcontractorProjectDetail = {
   project_nev: string | null;
   forgatas_datuma: string | null;
   forgatas_datuma_vege: string | null;
+  /** A teljesítés idejének előtöltése a forgatás dátumából. */
+  teljesites_szoveg_alap: string;
   pending: PendingSubcontractorEmployee[];
 };
 
@@ -862,6 +868,25 @@ export type AssignableEmployee = { id: number; full_name: string };
 
 export async function getAssignableEmployees(): Promise<AssignableEmployee[]> {
   return (await apiGet<AssignableEmployee[]>("/api/v1/deliverables/assignable-employees")) ?? [];
+}
+
+/** Egy utalásra váró számla (kiadás vagy TIG) - lásd backend
+ * routes/finance.py utalasra_varo. */
+export type UtalasraVaroTetel = {
+  /** "expense:12" / "kulsos_tig:3" / "belsos_tig:7" - a ZIP-kéréshez. */
+  kulcs: string;
+  tipus: string;
+  megnevezes: string;
+  kinek: string | null;
+  osszeg: number | null;
+  penznem: string;
+  hatarido: string | null;
+  szamla_db: number;
+  link: string | null;
+};
+
+export async function getUtalasraVaro(): Promise<UtalasraVaroTetel[]> {
+  return (await apiGet<UtalasraVaroTetel[]>("/api/v1/finance/utalasra-varo")) ?? [];
 }
 
 export async function getVinyoOptions(): Promise<string[]> {

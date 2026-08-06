@@ -46,8 +46,14 @@ class Contract(TimestampMixin, Base):
     # Eseti (projektenkénti) alvállalkozói szerződés mezői - a csatolt
     # "kulsos-eseti-szerzodes" program Notion-mezőinek megfelelői.
     netto_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Nettó összeg")
-    teljesites_kezdete: Mapped[date | None] = mapped_column(Date, comment="Teljesítés kezdete")
-    teljesites_vege: Mapped[date | None] = mapped_column(Date, comment="Teljesítés vége")
+    # A teljesítés ideje SZABAD SZÖVEG: nem mindig egy naptól-napig tartomány
+    # ("2026.05.03.", "május 3-5.", "a projekt teljes időtartama"), és a
+    # szerződésben pontosan az kell szerepeljen, amit ide írnak. A régi,
+    # dátumpáros bejegyzésekhez a két alatta lévő oszlop marad tartaléknak
+    # (lásd routes/subcontractor_contracts.py _teljesites_szovege).
+    teljesites_szoveg: Mapped[str | None] = mapped_column(String(255), comment="Teljesítés ideje - szabad szöveg")
+    teljesites_kezdete: Mapped[date | None] = mapped_column(Date, comment="Teljesítés kezdete (régi, dátumpáros adat)")
+    teljesites_vege: Mapped[date | None] = mapped_column(Date, comment="Teljesítés vége (régi, dátumpáros adat)")
     plusz_afa: Mapped[bool | None] = mapped_column(Boolean, comment="Plusz ÁFA")
 
     # a 'Keretszerződés' / 'Alvállakozó keretszerződés' Notion táblák maradék mezői

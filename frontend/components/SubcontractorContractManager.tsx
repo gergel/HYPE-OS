@@ -14,13 +14,14 @@ type FormState = {
   vallalkozas_nyilvantartasi_szam: string;
   megbizas_targya: string;
   netto_osszeg: string;
-  teljesites_kezdete: string;
-  teljesites_vege: string;
+  teljesites_szoveg: string;
   keltezes: string;
   plusz_afa: boolean;
 };
 
-function formFromEmployee(employee: PendingSubcontractorEmployee): FormState {
+/** `teljesitesAlap`: a projekt forgatási dátumából képzett alapértelmezett
+ * teljesítés-szöveg (lásd backend PendingProjectDetail.teljesites_szoveg_alap). */
+function formFromEmployee(employee: PendingSubcontractorEmployee, teljesitesAlap: string): FormState {
   const draft = employee.draft;
   return {
     ceg_neve: draft?.ceg_neve ?? employee.ceg_neve ?? "",
@@ -30,8 +31,7 @@ function formFromEmployee(employee: PendingSubcontractorEmployee): FormState {
     vallalkozas_nyilvantartasi_szam: draft?.vallalkozas_nyilvantartasi_szam ?? employee.nyilvantartasi_szam ?? "",
     megbizas_targya: draft?.megbizas_targya ?? employee.megbizas_targya ?? "",
     netto_osszeg: draft?.netto_osszeg != null ? String(draft.netto_osszeg) : "",
-    teljesites_kezdete: draft?.teljesites_kezdete ?? "",
-    teljesites_vege: draft?.teljesites_vege ?? "",
+    teljesites_szoveg: draft?.teljesites_szoveg ?? teljesitesAlap,
     keltezes: draft?.keltezes ?? "",
     plusz_afa: draft?.plusz_afa ?? employee.plusz_afa ?? false,
   };
@@ -54,9 +54,13 @@ function computeBrutto(nettoOsszeg: string, pluszAfa: boolean): number | null {
 export function SubcontractorContractManager({
   projectId,
   pending,
+  teljesitesAlap = "",
 }: {
   projectId: number;
   pending: PendingSubcontractorEmployee[];
+  /** A teljesítés idejének előtöltése (a projekt forgatási dátumából) - lásd
+   * backend PendingProjectDetail.teljesites_szoveg_alap. */
+  teljesitesAlap?: string;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -72,7 +76,7 @@ export function SubcontractorContractManager({
     if (!selectedId) return;
     const employee = pending.find((p) => p.id === selectedId);
     if (!employee) return;
-    setForm(formFromEmployee(employee));
+    setForm(formFromEmployee(employee, teljesitesAlap));
     setOpenId(employee.id);
   }
 
@@ -96,8 +100,7 @@ export function SubcontractorContractManager({
       vallalkozas_nyilvantartasi_szam: form.vallalkozas_nyilvantartasi_szam || null,
       megbizas_targya: form.megbizas_targya || null,
       netto_osszeg: netto,
-      teljesites_kezdete: form.teljesites_kezdete || null,
-      teljesites_vege: form.teljesites_vege || null,
+      teljesites_szoveg: form.teljesites_szoveg || null,
       keltezes: form.keltezes || null,
       plusz_afa: form.plusz_afa,
     };
@@ -274,21 +277,15 @@ export function SubcontractorContractManager({
                   className={inputClass}
                 />
               </Field>
-              <Field label="Teljesítés kezdete">
+              {/* Szabad szöveg, nem dátumpár: a szerződésre nem mindig egy
+                  naptól-napig tartomány kerül ("május 3-5.", "a projekt teljes
+                  időtartama") - pontosan az kell megjelenjen, amit ide írnak. */}
+              <Field label="Teljesítés ideje">
                 <input
-                  type="date"
-                  value={form.teljesites_kezdete}
-                  onChange={(e) => update("teljesites_kezdete", e.target.value)}
+                  value={form.teljesites_szoveg}
+                  onChange={(e) => update("teljesites_szoveg", e.target.value)}
                   disabled={busyState}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Teljesítés vége">
-                <input
-                  type="date"
-                  value={form.teljesites_vege}
-                  onChange={(e) => update("teljesites_vege", e.target.value)}
-                  disabled={busyState}
+                  placeholder="Pl. 2026.07.06. - 2026.07.08. vagy 2026. július"
                   className={inputClass}
                 />
               </Field>

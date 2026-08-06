@@ -10,6 +10,7 @@ import {
   getMyPagePermissions,
   getProjectCodes,
   getRevenues,
+  getUtalasraVaro,
   Revenue,
 } from "@/lib/api";
 import { Card } from "@/components/Card";
@@ -19,6 +20,7 @@ import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { FinanceMonthlyChart, OutstandingProjectsTable } from "@/components/finance/FinanceSummaryWidgets";
 import { SzamlaCsomagLetoltes } from "@/components/finance/SzamlaCsomagLetoltes";
+import { UtalasraVaroSzamlak } from "@/components/finance/UtalasraVaroSzamlak";
 import { KimenoSzamlaCella } from "@/components/finance/KimenoSzamlaCella";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RevenueInvoiceStatus } from "@/components/RevenueInvoiceStatus";
@@ -30,15 +32,17 @@ import { canDoAction } from "@/lib/permissions";
 const PAGE = "/penzugyek";
 
 export default async function PenzugyekPage() {
-  const [expenses, revenues, summary, projectCodes, expenseFieldTypes, currentUser, pagePermissions] = await Promise.all([
-    getExpenses(),
-    getRevenues(),
-    getFinanceSummary(),
-    getProjectCodes(),
-    getFieldTypes("expense"),
-    getCurrentUser(),
-    getMyPagePermissions(),
-  ]);
+  const [expenses, revenues, summary, projectCodes, expenseFieldTypes, currentUser, pagePermissions, utalasraVaro] =
+    await Promise.all([
+      getExpenses(),
+      getRevenues(),
+      getFinanceSummary(),
+      getProjectCodes(),
+      getFieldTypes("expense"),
+      getCurrentUser(),
+      getMyPagePermissions(),
+      getUtalasraVaro(),
+    ]);
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
@@ -90,6 +94,13 @@ export default async function PenzugyekPage() {
             )}
           </>
         )}
+
+        {/* Ami már megérkezett számlaként, de még nem utaltuk el - egy
+            listában a három forrásból (kiadás, külsős és belsős TIG), a
+            kijelöltek számlái egyben letölthetők. */}
+        <Card title={`Utalásra váró számlák (${utalasraVaro.length})`}>
+          <UtalasraVaroSzamlak kezdeti={utalasraVaro} />
+        </Card>
 
         {/* Havi számla-csomag a könyvelésnek - egy hónap összes bejövő és
             kimenő számlája egyetlen ZIP-ben. */}

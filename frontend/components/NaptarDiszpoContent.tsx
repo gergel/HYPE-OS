@@ -70,7 +70,19 @@ export function NaptarDiszpoContent({
 
   const projectCodeById = new Map(projectCodes.map((pc) => [pc.id, pc.projektkod]));
 
-  const scheduled = useMemo(() => projects.filter((p) => p.forgatas_datuma !== null), [projects]);
+  const scheduled = useMemo(() => {
+    const datumos = projects.filter((p) => p.forgatas_datuma !== null);
+    // Ha egy forgatásból leválasztottunk egy napot (feldarabolás), akkor arra a
+    // napra MÁR A LEVÁLASZTOTT NAP a diszponálandó - az "egész" nem jön fel
+    // még egyszer. Enélkül ugyanaz a nap kétszer szerepelne: az eredeti
+    // projektként és a leválasztott napként is.
+    const napraDarabolt = new Set(
+      datumos
+        .filter((p) => p.feldarabolas_szulo_id !== null)
+        .map((p) => `${p.feldarabolas_szulo_id}|${(p.forgatas_datuma ?? "").slice(0, 10)}`),
+    );
+    return datumos.filter((p) => !napraDarabolt.has(`${p.id}|${(p.forgatas_datuma ?? "").slice(0, 10)}`));
+  }, [projects]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();

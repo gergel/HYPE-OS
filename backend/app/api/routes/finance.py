@@ -15,10 +15,14 @@ from app.core.security import get_current_user, require_page_action
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense, KpForgalom, Revenue
-from app.models.internal_performance_certificate import InternalPerformanceCertificateInvoice
-from app.models.performance_certificate import PerformanceCertificateInvoice
+from app.models.internal_performance_certificate import (
+    InternalPerformanceCertificate,
+    InternalPerformanceCertificateInvoice,
+)
+from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateInvoice
 from app.models.project_code import ProjectCode
 from app.services import document_storage
+from app.services.hu_datum import honap_neve
 from app.services.portal_storage import R2NotConfiguredError
 from app.schemas.finance import (
     ExpenseCreate,
@@ -452,4 +456,215 @@ def szamlak_zip(
         buffer,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{fajlnev}"'},
+    )
+
+
+# --- Utalásra váró számlák --------------------------------------------------
+#
+# Ami már megérkezett hozzánk számlaként, de még nem utaltuk el. Három helyről
+# jön össze - a felület egyben mutatja őket, hogy az utalási körnél ne kelljen
+# három listát végigkattintani, és a kijelöltek számlái egyetlen ZIP-ben
+# letölthetők legyenek (azt viszi a könyvelő/ügyintéző a banki utaláshoz).
+
+
+class UtalasraVaroTetel(BaseModel):
+    #: "expense:12" / "kulsos_tig:3" / "belsos_tig:7" - a ZIP-kérésben ezt
+    #: küldi vissza a felület, így egyetlen listában kezelhető a három forrás.
+    kulcs: str
+    tipus: str
+    megnevezes: str
+    kinek: str | None = None
+    osszeg: float | None = None
+    penznem: str = "HUF"
+    hatarido: date | None = None
+    szamla_db: int = 0
+    #: Hova visz a sor a felületen (a tétel saját adatlapja).
+    link: str | None = None
+
+
+class UtalasraVaroKeres(BaseModel):
+    kulcsok: list[str]
+
+
+def _szamla_csatolmanyok(db: Session, entity_type: str, entity_ids: list[int]) -> dict[int, list[DocumentAttachment]]:
+    """Rekordonként a SZÁMLA kategóriájú csatolmányok (feltöltve vagy Notionból
+    átemelve) - ez az, ami az utaláshoz kell."""
+    if not entity_ids:
+        return {}
+    sorok = db.scalars(
+        select(DocumentAttachment).where(
+            DocumentAttachment.entity_type == entity_type,
+            DocumentAttachment.entity_id.in_(entity_ids),
+            DocumentAttachment.kategoria == "szamla",
+        )
+    ).all()
+    eredmeny: dict[int, list[DocumentAttachment]] = {}
+    for sor in sorok:
+        eredmeny.setdefault(sor.entity_id, []).append(sor)
+    return eredmeny
+
+
+def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]]:
+    """(tétel, [(fájlnév a ZIP-ben, tárhely-kulcs)]) párok.
+
+    "Utalásra vár" az, amihez VAN feltöltött számla, de még nincs kifizetve:
+      - kiadás, ami nincs késznek jelölve és nincs fizetési dátuma,
+      - külsős/belsős TIG, aminek van számlája, de nincs kifizetettként jelölve.
+    Számla nélküli tétel nem kerül a listára: utalni sem tudnánk mi alapján."""
+    eredmeny: list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]] = []
+
+    kiadasok = list(
+        db.scalars(
+            select(Expense).where(Expense.kesz.is_(False), Expense.fizetes_datuma.is_(None))
+        ).all()
+    )
+    csatolmanyok = _szamla_csatolmanyok(db, "expense", [k.id for k in kiadasok])
+    munkatarsak = {
+        e.id: e.full_name
+        for e in db.scalars(
+            select(Employee).where(Employee.id.in_([k.employee_id for k in kiadasok if k.employee_id]))
+        ).all()
+    } if kiadasok else {}
+    for kiadas in kiadasok:
+        fajlok = csatolmanyok.get(kiadas.id) or []
+        if not fajlok:
+            continue
+        eredmeny.append(
+            (
+                UtalasraVaroTetel(
+                    kulcs=f"expense:{kiadas.id}",
+                    tipus="Kiadás",
+                    megnevezes=kiadas.megnevezes,
+                    kinek=munkatarsak.get(kiadas.employee_id) if kiadas.employee_id else None,
+                    osszeg=float(kiadas.brutto) if kiadas.brutto is not None else (float(kiadas.netto) if kiadas.netto is not None else None),
+                    penznem=kiadas.penznem or "HUF",
+                    hatarido=kiadas.fizetes_hatarideje,
+                    szamla_db=len(fajlok),
+                    link=f"/penzugyek/kiadas/{kiadas.id}",
+                ),
+                [(f"kiadas_{kiadas.id}_{f.id}_{f.filename}", f.storage_key) for f in fajlok],
+            )
+        )
+
+    kulsos = (
+        db.query(PerformanceCertificate)
+        .options(selectinload(PerformanceCertificate.invoices), selectinload(PerformanceCertificate.employee))
+        .filter(PerformanceCertificate.szamla_kifizetve.is_(False))
+        .all()
+    )
+    for tig in kulsos:
+        if not tig.invoices:
+            continue
+        eredmeny.append(
+            (
+                UtalasraVaroTetel(
+                    kulcs=f"kulsos_tig:{tig.id}",
+                    tipus="Külsős TIG",
+                    megnevezes=tig.megbizas_targya or "Külsős teljesítési igazolás",
+                    kinek=tig.employee.full_name if tig.employee else None,
+                    osszeg=float(tig.netto_osszeg) if tig.netto_osszeg is not None else None,
+                    penznem="HUF",
+                    hatarido=None,
+                    szamla_db=len(tig.invoices),
+                    link=f"/projektek/{tig.project_id}" if tig.project_id else None,
+                ),
+                [(f"kulsos_tig_{tig.id}_{sz.id}_{sz.filename}", sz.storage_key) for sz in tig.invoices],
+            )
+        )
+
+    belsos = (
+        db.query(InternalPerformanceCertificate)
+        .options(
+            selectinload(InternalPerformanceCertificate.invoices),
+            selectinload(InternalPerformanceCertificate.employee),
+        )
+        .filter(InternalPerformanceCertificate.szamla_kifizetve.is_(False))
+        .all()
+    )
+    for tig in belsos:
+        if not tig.invoices:
+            continue
+        eredmeny.append(
+            (
+                UtalasraVaroTetel(
+                    kulcs=f"belsos_tig:{tig.id}",
+                    tipus="Belsős TIG",
+                    megnevezes=f"{tig.ev}. {honap_neve(tig.honap)} havi TIG",
+                    kinek=tig.employee.full_name if tig.employee else None,
+                    osszeg=float(tig.netto_osszeg) if tig.netto_osszeg is not None else None,
+                    penznem="HUF",
+                    hatarido=tig.fizetesi_hatarido,
+                    szamla_db=len(tig.invoices),
+                    link=f"/belsos-tig/{tig.employee_id}/{tig.ev}/{tig.honap}",
+                ),
+                [(f"belsos_tig_{tig.id}_{sz.id}_{sz.filename}", sz.storage_key) for sz in tig.invoices],
+            )
+        )
+
+    # A legrégebbi határidő elöl (ami már lejárt, azt kell először utalni), a
+    # határidő nélküliek a végén.
+    eredmeny.sort(key=lambda p: (p[0].hatarido is None, p[0].hatarido or date.max, p[0].megnevezes))
+    return eredmeny
+
+
+@summary_router.get("/utalasra-varo", response_model=list[UtalasraVaroTetel])
+def utalasra_varo(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    return [tetel for tetel, _ in _utalasra_varo_tetelek(db)]
+
+
+@summary_router.post("/utalasra-varo/zip")
+def utalasra_varo_zip(
+    payload: UtalasraVaroKeres,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """A KIJELÖLT tételek számlái egyetlen ZIP-ben - ezt viszi az, aki az
+    utalásokat indítja. A csomagban egy tartalom.txt is van, hogy utólag
+    látszódjon, melyik fájl melyik tételhez (és mekkora összeghez) tartozik."""
+    kert = set(payload.kulcsok)
+    if not kert:
+        raise HTTPException(status_code=400, detail="Nincs kijelölt tétel.")
+
+    valasztott = [(tetel, fajlok) for tetel, fajlok in _utalasra_varo_tetelek(db) if tetel.kulcs in kert]
+    if not valasztott:
+        raise HTTPException(status_code=404, detail="A kijelölt tételekhez nem található számla.")
+
+    buffer = io.BytesIO()
+    hibas: list[str] = []
+    leiras: list[str] = []
+    osszeg = 0.0
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for tetel, fajlok in valasztott:
+            osszeg += tetel.osszeg or 0
+            for nev, kulcs in fajlok:
+                try:
+                    zf.writestr(nev, document_storage.download_bytes(kulcs))
+                except R2NotConfiguredError as exc:
+                    raise HTTPException(status_code=503, detail=str(exc)) from exc
+                except Exception as exc:  # noqa: BLE001 - egy hiányzó fájl ne buktassa a csomagot
+                    hibas.append(f"{nev}\tNEM SIKERÜLT LETÖLTENI: {exc}")
+                    continue
+                leiras.append(
+                    f"{nev}\t{tetel.tipus}\t{tetel.kinek or '-'}\t{tetel.megnevezes}\t"
+                    f"{tetel.osszeg if tetel.osszeg is not None else '-'} {tetel.penznem}\t"
+                    f"határidő: {tetel.hatarido or '-'}"
+                )
+        tartalom = [
+            f"HYPE OS - utalásra váró számlák ({date.today():%Y-%m-%d})",
+            f"{len(valasztott)} tétel, összesen {round(osszeg)} Ft",
+            "",
+            *leiras,
+        ]
+        if hibas:
+            tartalom += ["", "HIÁNYZÓ FÁJLOK:", *hibas]
+        zf.writestr("tartalom.txt", "\n".join(tartalom))
+
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="utalasra_varo_szamlak_{date.today():%Y%m%d}.zip"'},
     )
