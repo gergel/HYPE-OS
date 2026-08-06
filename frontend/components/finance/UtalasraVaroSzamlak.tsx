@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Download, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, RefreshCw, Search } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import type { UtalasraVaroTetel } from "@/lib/api";
 import { formatFt } from "@/lib/ido";
@@ -11,6 +11,27 @@ import { formatFt } from "@/lib/ido";
  * hosszú tud lenni, és utaláskor úgyis a legsürgetőbb (legkorábbi határidejű)
  * tételekkel kezdünk, azok pedig elöl vannak. */
 const ELSO_ADAG = 10;
+
+/** Amire rendezni lehet. A "hatarido" az alapértelmezés: a legkorábbi (már
+ * lejárt) határidejű tételt kell először utalni. */
+type Rendezes = "hatarido" | "megnevezes" | "kinek" | "tipus" | "osszeg";
+
+const OSZLOPOK: { kulcs: Rendezes; cimke: string }[] = [
+  { kulcs: "megnevezes", cimke: "Tétel" },
+  { kulcs: "kinek", cimke: "Kinek" },
+  { kulcs: "tipus", cimke: "Típus" },
+  { kulcs: "hatarido", cimke: "Fizetési határidő" },
+];
+
+/** Rendezési kulcs egy tételhez. A hiányzó érték MINDIG a lista végére kerül
+ * (a határidő nélküli tételt nem lehet sürgősnek venni), ezért külön jelzőt
+ * adunk vissza mellé. */
+function rendezesiKulcs(tetel: UtalasraVaroTetel, szerint: Rendezes): [number, string | number] {
+  if (szerint === "osszeg") return [tetel.osszeg === null ? 1 : 0, tetel.osszeg ?? 0];
+  if (szerint === "hatarido") return [tetel.hatarido === null ? 1 : 0, tetel.hatarido ?? ""];
+  const ertek = szerint === "megnevezes" ? tetel.megnevezes : szerint === "kinek" ? tetel.kinek : tetel.tipus;
+  return [ertek ? 0 : 1, (ertek ?? "").toLocaleLowerCase("hu-HU")];
+}
 
 /** Utalásra váró számlák: ami már megérkezett hozzánk számlaként, de még nem
  * utaltuk el (kiadások, külsős és belsős TIG-ek egy listában).
@@ -25,6 +46,10 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
   const [mindMutat, setMindMutat] = useState(false);
+  const [kereses, setKereses] = useState("");
+  const [tipusSzuro, setTipusSzuro] = useState("");
+  const [rendezes, setRendezes] = useState<Rendezes>("hatarido");
+  const [novekvo, setNovekvo] = useState(true);
 
   // A szerverről frissen kapott lista felülírja a helyben tartottat (amit a
   // "Frissítés" gomb tölt újra). Renderelés közbeni igazítás, nem useEffect:
@@ -46,7 +71,32 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
   const kijeloltOsszeg = tetelek
     .filter((t) => aktivKijeloles.includes(t.kulcs))
     .reduce((sum, t) => sum + (t.osszeg ?? 0), 0);
-  const mindKijelolve = tetelek.length > 0 && aktivKijeloles.length === tetelek.length;
+
+  // Szűrés (keresés + típus) és rendezés. A KIJELÖLÉS ettől független: ami ki
+  // van pipálva, az a szűrő átállítása után is kijelölve marad, különben egy
+  // gyors keresés csendben kidobálna tételeket az utalási körből.
+  const tipusok = useMemo(() => [...new Set(tetelek.map((t) => t.tipus))].sort(), [tetelek]);
+  const szurt = useMemo(() => {
+    const keresett = kereses.trim().toLocaleLowerCase("hu-HU");
+    const talalatok = tetelek.filter((t) => {
+      if (tipusSzuro && t.tipus !== tipusSzuro) return false;
+      if (!keresett) return true;
+      return [t.megnevezes, t.kinek, t.tipus, t.hatarido].some((mezo) =>
+        (mezo ?? "").toLocaleLowerCase("hu-HU").includes(keresett),
+      );
+    });
+    const irany = novekvo ? 1 : -1;
+    return [...talalatok].sort((a, b) => {
+      const [aHianyzik, aErtek] = rendezesiKulcs(a, rendezes);
+      const [bHianyzik, bErtek] = rendezesiKulcs(b, rendezes);
+      if (aHianyzik !== bHianyzik) return aHianyzik - bHianyzik;
+      if (aErtek < bErtek) return -irany;
+      if (aErtek > bErtek) return irany;
+      return a.megnevezes.localeCompare(b.megnevezes, "hu-HU");
+    });
+  }, [tetelek, kereses, tipusSzuro, rendezes, novekvo]);
+
+  const mindKijelolve = szurt.length > 0 && szurt.every((t) => kijelolt.has(t.kulcs));
 
   function valt(kulcs: string) {
     setKijelolt((elozo) => {
@@ -57,8 +107,26 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
     });
   }
 
+  /** A fejléc pipája a SZŰRT tételekre vonatkozik - így lehet egy típust (pl.
+   * a belsős TIG-eket) egy mozdulattal az utalási körbe tenni. */
   function mindet() {
-    setKijelolt(mindKijelolve ? new Set() : new Set(tetelek.map((t) => t.kulcs)));
+    setKijelolt((elozo) => {
+      const uj = new Set(elozo);
+      for (const t of szurt) {
+        if (mindKijelolve) uj.delete(t.kulcs);
+        else uj.add(t.kulcs);
+      }
+      return uj;
+    });
+  }
+
+  /** Ugyanarra az oszlopra kattintva megfordul az irány. */
+  function rendezz(szerint: Rendezes) {
+    if (szerint === rendezes) setNovekvo((elozo) => !elozo);
+    else {
+      setRendezes(szerint);
+      setNovekvo(true);
+    }
   }
 
   async function frissit() {
@@ -116,10 +184,11 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
   }
 
   const ma = new Date().toISOString().slice(0, 10);
-  // A kijelölés, az összegzés és a ZIP MINDIG a teljes listára vonatkozik -
-  // a lenyitás csak azt szabályozza, mennyi látszik belőle.
-  const lathato = mindMutat ? tetelek : tetelek.slice(0, ELSO_ADAG);
-  const rejtett = tetelek.length - lathato.length;
+  // A lenyitás csak azt szabályozza, mennyi látszik a szűrt listából - a ZIP
+  // továbbra is a kijelölt tételekkel megy, akkor is, ha épp nem látszanak.
+  const lathato = mindMutat ? szurt : szurt.slice(0, ELSO_ADAG);
+  const rejtett = szurt.length - lathato.length;
+  const szurtOsszeg = szurt.reduce((sum, t) => sum + (t.osszeg ?? 0), 0);
 
   return (
     <div className="space-y-4">
@@ -148,6 +217,45 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
         {hiba && <span className="text-[12.5px] text-text-danger">{hiba}</span>}
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="relative">
+          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            type="search"
+            value={kereses}
+            onChange={(e) => setKereses(e.target.value)}
+            placeholder="Keresés (tétel, név, típus, határidő)"
+            aria-label="Keresés az utalásra váró tételek közt"
+            className="w-72 rounded-[var(--radius)] border border-border bg-surface-2 py-1.5 pl-7 pr-2 text-[13px] text-text-primary focus:outline-none"
+          />
+        </label>
+        <select
+          value={tipusSzuro}
+          onChange={(e) => setTipusSzuro(e.target.value)}
+          aria-label="Szűrés típusra"
+          className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+        >
+          <option value="">Minden típus</option>
+          {tipusok.map((tipus) => (
+            <option key={tipus} value={tipus}>
+              {tipus}
+            </option>
+          ))}
+        </select>
+        {(kereses || tipusSzuro) && (
+          <button
+            type="button"
+            onClick={() => {
+              setKereses("");
+              setTipusSzuro("");
+            }}
+            className="text-[12.5px] text-text-secondary hover:text-text-primary hover:underline"
+          >
+            Szűrők törlése ({szurt.length}/{tetelek.length})
+          </button>
+        )}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="os-table w-full border-collapse text-[13px]">
           <thead>
@@ -161,12 +269,31 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
                   className="cursor-pointer"
                 />
               </th>
-              <th className="text-left">Tétel</th>
-              <th className="text-left">Kinek</th>
-              <th className="text-left">Típus</th>
-              <th className="text-left">Fizetési határidő</th>
+              {OSZLOPOK.map((oszlop) => (
+                <th key={oszlop.kulcs} className="text-left">
+                  <button
+                    type="button"
+                    onClick={() => rendezz(oszlop.kulcs)}
+                    className="inline-flex items-center gap-1 hover:text-text-primary"
+                  >
+                    {oszlop.cimke}
+                    {rendezes === oszlop.kulcs &&
+                      (novekvo ? <ArrowUp size={12} aria-label="növekvő" /> : <ArrowDown size={12} aria-label="csökkenő" />)}
+                  </button>
+                </th>
+              ))}
               <th className="text-right">Számlák</th>
-              <th className="text-right">Összeg</th>
+              <th className="text-right">
+                <button
+                  type="button"
+                  onClick={() => rendezz("osszeg")}
+                  className="inline-flex items-center gap-1 hover:text-text-primary"
+                >
+                  Összeg
+                  {rendezes === "osszeg" &&
+                    (novekvo ? <ArrowUp size={12} aria-label="növekvő" /> : <ArrowDown size={12} aria-label="csökkenő" />)}
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -227,13 +354,19 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
                 </td>
               </tr>
             )}
+            {szurt.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-3 text-text-muted">
+                  Nincs a keresésnek megfelelő tétel.
+                </td>
+              </tr>
+            )}
             <tr className="font-medium">
               <td colSpan={6} className="text-text-secondary">
-                Összesen ({tetelek.length} tétel)
+                Összesen ({szurt.length} tétel
+                {szurt.length !== tetelek.length && ` a ${tetelek.length}-ból szűrve`})
               </td>
-              <td className="text-right tabular-nums text-text-primary">
-                {formatFt(tetelek.reduce((sum, t) => sum + (t.osszeg ?? 0), 0))}
-              </td>
+              <td className="text-right tabular-nums text-text-primary">{formatFt(szurtOsszeg)}</td>
             </tr>
           </tbody>
         </table>

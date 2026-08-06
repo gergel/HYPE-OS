@@ -3,6 +3,7 @@ import {
   ENTITY_PATHS,
   Expense,
   formatHuf,
+  getClients,
   getCurrentUser,
   getExpenses,
   getFieldTypes,
@@ -32,21 +33,40 @@ import { canDoAction } from "@/lib/permissions";
 const PAGE = "/penzugyek";
 
 export default async function PenzugyekPage() {
-  const [expenses, revenues, summary, projectCodes, expenseFieldTypes, currentUser, pagePermissions, utalasraVaro] =
-    await Promise.all([
-      getExpenses(),
-      getRevenues(),
-      getFinanceSummary(),
-      getProjectCodes(),
-      getFieldTypes("expense"),
-      getCurrentUser(),
-      getMyPagePermissions(),
-      getUtalasraVaro(),
-    ]);
+  const [
+    expenses,
+    revenues,
+    summary,
+    projectCodes,
+    clients,
+    expenseFieldTypes,
+    currentUser,
+    pagePermissions,
+    utalasraVaro,
+  ] = await Promise.all([
+    getExpenses(),
+    getRevenues(),
+    getFinanceSummary(),
+    getProjectCodes(),
+    getClients(),
+    getFieldTypes("expense"),
+    getCurrentUser(),
+    getMyPagePermissions(),
+    getUtalasraVaro(),
+  ]);
   const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
   const fizetesiModOptions = expenseFieldTypes.kifizetes_modja?.options ?? ["Készpénz", "Átutalás", "Bankkártya"];
+  // Honnan jött a bevétel: a projektkód mögötti ügyfél neve. A Revenue maga
+  // csak a project_code_id-t hordozza, ezért itt oldjuk fel.
+  const ugyfelNevById = new Map(clients.map((c) => [c.id, c.nev]));
+  const bevetelForrasa = new Map(
+    projectCodes.map((pc) => [
+      pc.id,
+      { projektkod: pc.projektkod, ugyfel: ugyfelNevById.get(pc.client_id) ?? null },
+    ]),
+  );
 
   return (
     <div className="flex flex-1 flex-col">
@@ -217,6 +237,25 @@ export default async function PenzugyekPage() {
             deleteHref={canDelete ? (r) => `${ENTITY_PATHS.revenue}/${r.id}` : undefined}
             filterable
             columns={[
+              {
+                // Melyik projektkódhoz (és így melyik ügyfélhez) tartozik -
+                // enélkül a soron nem látszik, honnan jött a pénz.
+                header: "Honnan",
+                render: (r) => {
+                  const forras = bevetelForrasa.get(Number(r.project_code_id));
+                  if (!forras) return "–";
+                  return (
+                    <span className="flex flex-col">
+                      <span>{forras.ugyfel ?? forras.projektkod}</span>
+                      {forras.ugyfel && <span className="text-[12px] text-text-muted">{forras.projektkod}</span>}
+                    </span>
+                  );
+                },
+                sortAccessor: (r) => {
+                  const forras = bevetelForrasa.get(Number(r.project_code_id));
+                  return forras ? `${forras.ugyfel ?? ""} ${forras.projektkod}` : "";
+                },
+              },
               {
                 header: "Forma",
                 render: (r) =>

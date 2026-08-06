@@ -17,6 +17,10 @@ export default async function RevenueDetailPage({ params }: { params: Promise<{ 
     getVisibleFields("revenue"),
     getFieldTypes("revenue"),
   ]);
+  // Honnan jött a bevétel: a projektkód mögötti ügyfél.
+  const ugyfel = projectCode?.client_id
+    ? await getRecord(ENTITY_PATHS.client, Number(projectCode.client_id))
+    : null;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -26,6 +30,11 @@ export default async function RevenueDetailPage({ params }: { params: Promise<{ 
 
         <Card title={String(revenue.bevetel_formaja ?? `Bevétel #${revenue.id}`)}>
           <div className="mb-4 flex flex-wrap gap-4 text-[13px] text-text-secondary">
+            {ugyfel && (
+              <a href={`/ugyfelek/${ugyfel.id}`} className="text-text-accent hover:underline">
+                Ügyfél: {String(ugyfel.nev)}
+              </a>
+            )}
             {projectCode && (
               <a href={`/projektek/project-kodok/${projectCode.id}`} className="text-text-accent hover:underline">
                 Project Code: {String(projectCode.projektkod)}

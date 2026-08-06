@@ -312,29 +312,30 @@ def _honap(props: dict, cim: str | None, teljesites: date | None, keltezes: date
     """Melyik hónap TIG-je ez.
 
     A rendszer szabálya: a hónapot a TELJESÍTÉS dátuma adja, és mindig az azt
-    MEGELŐZŐ hónapot jelenti (2026.06.20-i teljesítés = a 2026. MÁJUSI TIG) -
-    lásd services/hu_datum.elozo_honap. Ami ennél erősebb, az a KIMONDOTT
-    hónap: az explicit hónap-mező, illetve a sor címében szereplő hónap.
+    MEGELŐZŐ hónapot jelenti (2026.07.20-i teljesítés = a 2026. JÚNIUSI TIG) -
+    lásd services/hu_datum.elozo_honap. Ugyanez áll a fizetési határidőre és
+    az utalás napjára: azok is a hónapot KÖVETŐ hónapra esnek.
 
-    A végén két gyengébb mentőöv jön (fizetési határidő, utalás napja): ezek
-    is a hónapot KÖVETŐ hónapra esnek, tehát ugyanaz a visszaszámolás
-    érvényes rájuk. Inkább egy jó eséllyel helyes hónap, mint egy kihagyott
-    sor - a hónap a felületen bármikor javítható."""
+    A DÁTUMOK erősebbek a kimondott hónapnál. A Notionban a lapok címe (és
+    sokszor a hónap-mező is) azt a hónapot viseli, AMIKOR a TIG készült - a
+    júliusi lapon a júniusi elszámolás van -, tehát a cím szó szerinti
+    átvétele egy hónappal elcsúsztatná az egészet. A kimondott hónap ezért
+    csak akkor dönt, ha egyetlen dátum sincs a soron.
+
+    Inkább egy jó eséllyel helyes hónap, mint egy kihagyott sor - a hónap a
+    felületen bármikor javítható."""
+    if teljesites is not None:
+        return elozo_honap(teljesites)
+    for nev in (NEV_FIZ_HATARIDO, NEV_UTALAS):
+        datum = as_date(_mezo(props, nev))
+        if datum is not None:
+            return elozo_honap(datum)
+    if keltezes is not None:
+        return elozo_honap(keltezes)
     explicit = as_date(_mezo(props, NEV_HONAP))
     if explicit is not None:
         return explicit.year, explicit.month
-    cimbol = _honap_cimbol(cim)
-    if cimbol is not None:
-        return cimbol
-    if teljesites is not None:
-        return elozo_honap(teljesites)
-    if keltezes is not None:
-        return elozo_honap(keltezes)
-    for nev in (NEV_FIZ_HATARIDO, NEV_UTALAS):
-        tartalek = as_date(_mezo(props, nev))
-        if tartalek is not None:
-            return elozo_honap(tartalek)
-    return None
+    return _honap_cimbol(cim)
 
 
 def _tig_dokumentum(db: Session, props: dict, tig: InternalPerformanceCertificate, result: ImportResult) -> None:
