@@ -54,6 +54,7 @@ from app.models.calendar_sync import CalendarSyncState
 from app.models.client import Client
 from app.models.project import Project
 from app.models.project_code import ProjectCode
+from app.services import project_matching
 from app.services.google_oauth import OAuthError, load_credentials as load_db_credentials
 
 CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
@@ -318,20 +319,13 @@ def _find_unlinked_match(db: Session, nev: str, forgatas_datuma: date | None) ->
     """Lásd modul-fejléc "FONTOS" bekezdése - egyszeri, név+dátum alapú
     egyeztetés a már Notionból behozott (és emiatt még google_calendar_event_id
     nélküli) projektek közül, hogy ne duplikáljunk. Csak azok a projektek
-    jöhetnek szóba, amikhez MÉG nincs naptáresemény kötve."""
-    if forgatas_datuma is None:
-        return None
-    normalized = nev.strip().casefold()
-    candidates = (
-        db.query(Project)
-        .filter(Project.google_calendar_event_id.is_(None))
-        .filter(Project.forgatas_datuma == forgatas_datuma)
-        .all()
-    )
-    for candidate in candidates:
-        if (candidate.nev or "").strip().casefold() == normalized:
-            return candidate
-    return None
+    jöhetnek szóba, amikhez MÉG nincs naptáresemény kötve.
+
+    A párosítás szabálya KÖZÖS a Notion importtal (lásd
+    services/project_matching.py): ugyanaz a név + ugyanaz a kezdő dátum. Így
+    a két irány nem tud egymástól elcsúszni - bármelyik jön előbb, a másik
+    ugyanahhoz a projekthez talál oda."""
+    return project_matching.azonos_forgatas(db, nev, forgatas_datuma, csak_naptar_nelkul=True)
 
 
 def sync_hype_calendar(db: Session) -> dict:

@@ -34,6 +34,7 @@ from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_relation_ids, safe_upsert, upsert
 from app.notion_import.importers import _text, get_or_create_unknown_client
+from app.services import project_matching
 
 UNKNOWN_PROJECT_CODE_KEY = "project_code:unknown-notion-import"
 
@@ -113,6 +114,85 @@ def get_or_create_unknown_project_code(db: Session) -> ProjectCode:
     return project_code
 
 
+def _naptari_parjahoz_kotes(
+    db: Session, result: ImportResult, page_id: str, nev: str, forgatas_datuma
+) -> None:
+    """Ha ezt a Notion-oldalt még nem importáltuk, de UGYANAZ a forgatás már
+    bent van a naptárból, akkor a Notion-oldalt AHHOZ a projekthez kötjük -
+    így a következő lépés (upsert) azt frissíti, nem hoz létre egy másodikat.
+
+    Ez a naptár-szinkron párja: az esemény-oldalról ugyanez történik a
+    Notionból már bejött projektekkel (lásd google_calendar._find_unlinked_match)."""
+    if db.scalar(select(NotionImportMap).where(NotionImportMap.notion_page_id == page_id)) is not None:
+        return
+    parja = project_matching.azonos_forgatas(
+        db, nev, forgatas_datuma, csak_naptarbol=True, csak_notion_nelkul=True
+    )
+    if parja is None:
+        return
+    try:
+        with db.begin_nested():
+            db.add(NotionImportMap(notion_page_id=page_id, entity_type="Project", entity_id=parja.id))
+            db.flush()
+    except Exception as exc:  # noqa: BLE001 - soronkénti izoláció
+        result.errors.append(f"Project '{nev}' naptári párjához kötés: {type(exc).__name__}: {exc}")
+
+
+def _naptar_iker_takaritas(db: Session, result: ImportResult, projekt) -> None:
+    """A korábbi futásokból itt maradt naptár-duplikátum összevonása.
+
+    Ha ugyanarra a forgatásra van egy naptárból létrejött MÁSIK sor is, a
+    naptáresemény átkerül erre a projektre, a másik pedig törlődik - de CSAK
+    ha azon a naptárból jött adatokon kívül nincs semmi. Ha van (pl. már
+    csináltak rá utómunkát), meghagyjuk, és kiírjuk a naplóba, hogy kézzel
+    nézzék meg."""
+    iker = project_matching.azonos_forgatas(
+        db, projekt.nev, projekt.forgatas_datuma, kizart_id=projekt.id, csak_naptarbol=True, csak_notion_nelkul=True
+    )
+    if iker is None:
+        return
+    try:
+        with db.begin_nested():
+            beolvasztva = project_matching.olvaszd_be_a_naptar_ikret(db, projekt, iker)
+    except Exception as exc:  # noqa: BLE001 - soronkénti izoláció
+        result.errors.append(f"Project '{projekt.nev}' naptár-ikrének összevonása: {type(exc).__name__}: {exc}")
+        return
+    if not beolvasztva:
+        result.errors.append(
+            f"Project '{projekt.nev}' ({projekt.forgatas_datuma}): a naptárból van egy másik sor is "
+            f"(#{iker.id}), de már dolgoztak rajta, ezért NEM vontuk össze - nézd át kézzel."
+        )
+
+
+# Amit a NAPTÁR tud, a Notion pedig nem: ezeket egy import nem üresítheti ki
+# egy naptárhoz kötött projekten (lásd _naptar_mezok_vedelme).
+NAPTAR_SAJAT_MEZOK = (
+    "forgatas_kezdes_ido",
+    "forgatas_veg_ido",
+    "helyszin",
+    "description",
+    "naptar_szin",
+)
+
+
+def _naptar_mezok_vedelme(projekt) -> dict:
+    """A naptártól kapott mezők pillanatképe egy naptárhoz kötött projekten.
+
+    A Notion "Main Database"-ben nincs pontos időpont, helyszín és szín - ha
+    az import a saját (üres) értékét ráírná, a naptárból jött adat elveszne.
+    Az import ATTÓL MÉG felülír mindent, amit a Notion tényleg tud: csak az
+    üressel írás ellen véd."""
+    if projekt is None or not projekt.google_calendar_event_id:
+        return {}
+    return {mezo: getattr(projekt, mezo, None) for mezo in NAPTAR_SAJAT_MEZOK}
+
+
+def _naptar_mezok_visszaallitasa(projekt, mentett: dict) -> None:
+    for mezo, ertek in mentett.items():
+        if ertek not in (None, "") and getattr(projekt, mezo, None) in (None, ""):
+            setattr(projekt, mezo, ertek)
+
+
 def import_projects(client: NotionClient, db: Session) -> ImportResult:
     """Project <- 'Main Database'. Ez a legnagyobb/legzajosabb tábla (~140 mező) - a
     felhasználó döntése alapján (2026-07-02) minden mező saját oszlopot kap (lásd
@@ -136,6 +216,20 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
         )
         campaign_id = resolve_relation_id(db, "Campaign", props.get("Kampányok") or [])
         forgatas_datuma, forgatas_datuma_vege = _split_date_range(props.get("Date"))
+
+        # Ugyanaz a forgatás lehet, hogy a NAPTÁRBÓL már bejött - akkor azt
+        # frissítjük, nem csinálunk másodikat (lásd services/project_matching.py).
+        _naptari_parjahoz_kotes(db, result, page["id"], nev, forgatas_datuma)
+
+        # Ha ez a Notion-oldal egy NAPTÁRBÓL jött projektre mutat, a naptár
+        # saját adatait (időpont, helyszín, szín) megjegyezzük - az import nem
+        # üresítheti ki őket, mert a Notion nem is ismeri ezeket.
+        meglevo = db.scalar(
+            select(Project)
+            .join(NotionImportMap, NotionImportMap.entity_id == Project.id)
+            .where(NotionImportMap.entity_type == "Project", NotionImportMap.notion_page_id == page["id"])
+        )
+        naptar_mezok = _naptar_mezok_vedelme(meglevo)
 
         project_obj = safe_upsert(
             db,
@@ -284,6 +378,11 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
         )
 
         if project_obj is not None:
+            _naptar_mezok_visszaallitasa(project_obj, naptar_mezok)
+            # Régről itt maradt naptár-iker beolvasztása (a fenti kötés csak az
+            # ELSŐ importnál segít; ami korábban duplán jött be, azt itt
+            # takarítjuk el).
+            _naptar_iker_takaritas(db, result, project_obj)
             try:
                 _link_leltar_equipment(db, project_obj, props)
             except Exception as exc:  # noqa: BLE001 - egy foglalás-feloldási hiba ne vigye el a teljes sort
