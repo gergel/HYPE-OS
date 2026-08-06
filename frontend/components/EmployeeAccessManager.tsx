@@ -12,7 +12,12 @@ type EmployeeOption = { id: number; full_name: string; email: string | null; rol
 type PageOption = { page: string; label: string };
 type FieldOption = { key: string; label: string };
 type VisibilityEntity = { entityType: string; label: string; availableFields: FieldOption[] };
-type PageAccessConfig = { employee_id: number; page_permissions: Record<string, string[]> | null };
+type PageAccessConfig = {
+  employee_id: number;
+  page_permissions: Record<string, string[]> | null;
+  /** Ha ki van töltve, a felhasználó CSAK ezeket az utómunka-anyagokat látja. */
+  lathato_deliverable_idk: number[] | null;
+};
 type FieldVisibilityConfig = { employee_id: number; entity_type: string; visible_fields: string[] | null };
 type DbTab = { tab_key: string; label: string };
 
@@ -46,6 +51,7 @@ export function EmployeeAccessManager({
   pages,
   visibilityEntities,
   pageAccessConfigs,
+  anyagok = [],
   fieldVisibilityConfigs,
   pageTabsMap = {},
 }: {
@@ -53,6 +59,9 @@ export function EmployeeAccessManager({
   pages: PageOption[];
   visibilityEntities: VisibilityEntity[];
   pageAccessConfigs: PageAccessConfig[];
+  /** Minden utómunka-anyag - a korlátozott (külsős vágó) fiókok
+   * beállításához (lásd UserAccessManager). */
+  anyagok?: { id: number; projekt_neve: string }[];
   fieldVisibilityConfigs: FieldVisibilityConfig[];
   pageTabsMap?: Record<string, DbTab[]>;
 }) {
@@ -83,6 +92,10 @@ export function EmployeeAccessManager({
 
   const pagePermissionsByEmployee = useMemo(
     () => new Map(pageAccessConfigs.map((c) => [c.employee_id, c.page_permissions])),
+    [pageAccessConfigs],
+  );
+  const anyagKorlatByEmployee = useMemo(
+    () => new Map(pageAccessConfigs.map((c) => [c.employee_id, c.lathato_deliverable_idk])),
     [pageAccessConfigs],
   );
 
@@ -204,6 +217,8 @@ export function EmployeeAccessManager({
             pages={pages}
             initialPagePermissions={pagePermissionsByEmployee.get(selected.id) ?? null}
             pageTabsMap={pageTabsMap}
+            anyagok={anyagok}
+            initialAnyagIdk={anyagKorlatByEmployee.get(selected.id) ?? null}
           />
 
           <div className="border-t border-border pt-4">

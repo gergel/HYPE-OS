@@ -14,6 +14,7 @@ import {
   getDispoResponsibles,
   getAllFieldVisibility,
   getAllPageAccess,
+  getDeliverables,
   getCurrentUser,
   getEmployees,
   getSampleRecord,
@@ -78,16 +79,25 @@ const VISIBILITY_ENTITIES: { entityType: string; label: string; basePath: string
 ];
 
 export default async function BeallitasokPage() {
-  const [employees, pageAccessConfigs, fieldVisibilityConfigs, samples, currentUser, allDetailTabs, dispoResponsibles] =
-    await Promise.all([
+  const [
+    employees,
+    pageAccessConfigs,
+    fieldVisibilityConfigs,
+    samples,
+    currentUser,
+    allDetailTabs,
+    dispoResponsibles,
+    anyagok,
+  ] = await Promise.all([
     getEmployees(),
     getAllPageAccess(),
     getAllFieldVisibility(),
     Promise.all(VISIBILITY_ENTITIES.map((e) => getSampleRecord(e.basePath))),
     getCurrentUser(),
     getAllDetailTabs(),
-      getDispoResponsibles(),
-    ]);
+    getDispoResponsibles(),
+    getDeliverables(),
+  ]);
   const pages = pagePermissionGroups();
 
   const visibilityEntities = VISIBILITY_ENTITIES.map((entity, i) => {
@@ -137,6 +147,7 @@ export default async function BeallitasokPage() {
             pages={pages}
             visibilityEntities={visibilityEntities}
             pageAccessConfigs={pageAccessConfigs}
+            anyagok={anyagok.map((d) => ({ id: d.id, projekt_neve: d.projekt_neve }))}
             fieldVisibilityConfigs={fieldVisibilityConfigs}
             pageTabsMap={pageTabsMap}
           />

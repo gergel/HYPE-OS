@@ -510,26 +510,90 @@ def _szerzodes_munkatars_index(db: Session, oldalak: list[tuple[dict, dict]]) ->
     return index
 
 
-def _szerzodes_munkatarsa(db: Session, page: dict, props: dict, index: dict[str, int]) -> int | None:
-    """Kihez tartozik ez a szerződés-lap: a munkatárs felőli relation, a
-    lapon lévő személy-relationök, végül BÁRMELY relation, ami munkatársra
-    oldható fel. Enélkül a fel nem oldott szerződések sehol nem látszanak (a
-    Keretszerződések lista csak a munkatárshoz kötött sorokat mutatja)."""
-    talalat = index.get(page["id"])
-    if talalat is not None:
-        return talalat
+def _szerzodes_munkatarsai(db: Session, page: dict, props: dict, index: dict[str, int]) -> list[int]:
+    """Kikhez tartozik ez a szerződés-lap - MINDENKIHEZ, nem csak az elsőhöz.
+
+    A Notion "Alvállakozó keretszerződés (külsős)" tábláján a Name mező a CÉG,
+    amivel szerződünk, a "Személy" relation pedig az(ok) az ember(ek), aki(k)
+    ezen a cégen keresztül dolgozik/dolgoznak - és ugyanarra a cégre KETTEN is
+    szerződhetnek. Ha csak az elsőt vennénk, a másodiknak sehol nem lenne
+    keretszerződése, és az utókövetés eseti szerződést kérne tőle."""
+    talalatok: list[int] = []
+
+    def hozzaad(employee_id: int | None) -> None:
+        if employee_id is not None and employee_id not in talalatok:
+            talalatok.append(employee_id)
+
+    hozzaad(index.get(page["id"]))
     for nev in SZERZODES_SZEMELY_MEZOK:
         ertek = props.get(nev)
-        if isinstance(ertek, list) and ertek:
-            talalat = resolve_relation_id(db, "Employee", ertek)
-            if talalat is not None:
-                return talalat
-    for ertek in props.values():
-        if isinstance(ertek, list) and ertek and all(isinstance(v, str) for v in ertek):
-            talalat = resolve_relation_id(db, "Employee", ertek)
-            if talalat is not None:
-                return talalat
-    return None
+        if isinstance(ertek, list):
+            for page_id in ertek:
+                if isinstance(page_id, str) and page_id:
+                    hozzaad(resolve_relation_id(db, "Employee", [page_id]))
+    if not talalatok:
+        # Végső próbálkozás: BÁRMELY relation, ami munkatársra oldható fel -
+        # enélkül a fel nem oldott szerződés sehol nem látszana.
+        for ertek in props.values():
+            if isinstance(ertek, list) and ertek and all(isinstance(v, str) for v in ertek):
+                hozzaad(resolve_relation_id(db, "Employee", ertek))
+                if talalatok:
+                    break
+    return talalatok
+
+
+def _tarsult_keretszerzodes(db: Session, result: ImportResult, employee_id: int, mintarol: Contract) -> None:
+    """A cégre szerződő TÖBBI embernek is legyen keretszerződése.
+
+    Egy Contract sor egy emberhez tartozik, a Notion-lap viszont a céget írja
+    le, amin ketten is lehetnek. A második embernek ezért saját sort nyitunk a
+    lap cégadataiból. Idempotens: ha már van álló szerződése, csak a hiányzó
+    mezőit egészítjük ki - amit a rendszerben már beírtak, azt nem írjuk át."""
+    from sqlalchemy import select
+
+    mezok = {
+        "ceg_neve": mintarol.ceg_neve,
+        "szekhely": mintarol.szekhely,
+        "adoszam": mintarol.adoszam,
+        "megbizas_targya": mintarol.megbizas_targya,
+        "szerzodes_allapota": mintarol.szerzodes_allapota,
+        "szerzodes_file_url": mintarol.szerzodes_file_url,
+        "keltezes": mintarol.keltezes,
+        "vallalkozas_kepviseloje": mintarol.vallalkozas_kepviseloje,
+        "vallalkozas_nyilvantartasi_szam": mintarol.vallalkozas_nyilvantartasi_szam,
+        "email": mintarol.email,
+        "nev": mintarol.nev,
+    }
+    meglevo = db.scalar(
+        select(Contract).where(
+            Contract.employee_id == employee_id,
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+            Contract.project_id.is_(None),
+        )
+    )
+    try:
+        with db.begin_nested():
+            if meglevo is None:
+                uj = Contract(
+                    tipus=ContractType.ALVALLALKOZOI,
+                    employee_id=employee_id,
+                    alairva=mintarol.alairva,
+                    **{k: v for k, v in mezok.items() if v is not None},
+                )
+                db.add(uj)
+                result.created += 1
+            else:
+                for mezo, ertek in mezok.items():
+                    if ertek is not None and getattr(meglevo, mezo, None) in (None, ""):
+                        setattr(meglevo, mezo, ertek)
+                if mintarol.alairva and not meglevo.alairva:
+                    meglevo.alairva = True
+                result.updated += 1
+            db.flush()
+    except Exception as exc:  # noqa: BLE001 - soronkénti izoláció
+        result.errors.append(
+            f"Keretszerződés (társ, employee_id={employee_id}, cég='{mintarol.ceg_neve}'): {type(exc).__name__}: {exc}"
+        )
 
 
 def _szerzodes_fajl_urlek(props: dict) -> list[str]:
@@ -691,7 +755,8 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
 
     for page in client.query_database(db_ids.ALVALLALKOZO_KERETSZERZODES):
         props = extract_properties(page, client)
-        employee_id = _szerzodes_munkatarsa(db, page, props, szerzodes_index)
+        munkatarsak = _szerzodes_munkatarsai(db, page, props, szerzodes_index)
+        employee_id = munkatarsak[0] if munkatarsak else None
         if employee_id is None:
             result.errors.append(
                 f"Alvállalkozói keretszerződés '{_text(props.get('Name')) or page['id']}': nem azonosítható "
@@ -707,11 +772,18 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
             {
                 "tipus": ContractType.ALVALLALKOZOI,
                 "employee_id": employee_id,
-                "ceg_neve": _szoveg_mezo(props, *CEG_NEV_MEZOK),
+                # A Name mező a CÉG, amivel szerződünk - ha nincs külön
+                # cégnév-mező, az a cégnév (a "Személy" az ember, lásd
+                # _szerzodes_munkatarsai).
+                "ceg_neve": _szoveg_mezo(props, *CEG_NEV_MEZOK) or _text(props.get("Name")),
                 "szekhely": _szoveg_mezo(props, *CEG_SZEKHELY_MEZOK),
                 "adoszam": _szoveg_mezo(props, *CEG_ADOSZAM_MEZOK),
                 "megbizas_targya": _text(props.get("Megbízás tárgya")),
-                "szerzodes_allapota": _text(props.get("Állapot")),
+                # Aki ebben a táblában szerepel, azzal VAN keretszerződésünk -
+                # ez a tábla épp azokat gyűjti. Ha a Notionban nincs kitöltve
+                # az állapot, akkor is valódi keretszerződés (lásd
+                # models/contract.py megkotott_keretszerzodes).
+                "szerzodes_allapota": _text(props.get("Állapot")) or "Aktív",
                 "szerzodes_file_url": szerzodes_url,
                 "keltezes": as_date(props.get("Keltezés dátuma")),
                 "alairva": bool(szerzodes_url),
@@ -731,6 +803,10 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
         if szerzodes is not None:
             ujak = files.atemel_mindent(db, props, entity_type="contract", entity_id=szerzodes.id, result=result)
             szerzodes.szerzodes_file_url = files.elso(ujak, "Szerződés aláírva") or szerzodes.szerzodes_file_url
+            # Ugyanarra a cégre ketten is szerződhetnek: a többieknek saját
+            # sort nyitunk ugyanezekből az adatokból.
+            for tars_id in munkatarsak[1:]:
+                _tarsult_keretszerzodes(db, result, tars_id, szerzodes)
 
     # 3. forrás: a munkatársak saját lapja (cégadat + aláírt PDF) - ez pótolja
     # azokat a keretszerződéseket, amikhez nincs külön szerződés-lap.

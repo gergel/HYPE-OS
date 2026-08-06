@@ -132,3 +132,32 @@ def require_page_action(page: str, action: str, *write_roles: Role):
         return current_user
 
     return dependency
+
+
+def lathato_anyagok(db: Session, employee: Employee) -> set[int] | None:
+    """Mely utómunka-anyagokat láthatja ez a munkatárs - None, ha mindet.
+
+    A külsős vágóknak adható olyan fiók, amivel EGYETLEN anyagot látnak: azon
+    tudják indítani/leállítani az időmérőt és látják a feladatukat, de a többi
+    projektünkbe nem látnak bele (lásd models/user_access.py
+    lathato_deliverable_idk). Ez a szűkítés a listára és az egyes anyagok
+    minden műveletére is vonatkozik.
+
+    Az ADMIN mindig mindent lát: enélkül egy elrontott beállítással saját
+    magát is ki lehetne zárni a rendszerből."""
+    if employee.role == Role.ADMIN:
+        return None
+    config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
+    if config is None or config.lathato_deliverable_idk is None:
+        return None
+    return {int(i) for i in config.lathato_deliverable_idk}
+
+
+def ellenorizd_anyag_hozzaferest(db: Session, employee: Employee, deliverable_id: int) -> None:
+    """404-et dob, ha ez a munkatárs nem láthatja ezt az anyagot.
+
+    Szándékosan 404 és nem 403: egy korlátozott fióknak az sem információ,
+    hogy létezik-e a kért anyag."""
+    engedett = lathato_anyagok(db, employee)
+    if engedett is not None and deliverable_id not in engedett:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utómunka nem található")

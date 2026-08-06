@@ -7,6 +7,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 
 type PageOption = { page: string; label: string };
 type DbTab = { tab_key: string; label: string };
+type AnyagOption = { id: number; projekt_neve: string };
 
 const EXTRA_ACTIONS: { key: string; label: string }[] = [
   { key: "edit", label: "Szerkesztés" },
@@ -30,12 +31,19 @@ export function UserAccessManager({
   initialEmail,
   initialPagePermissions,
   pageTabsMap = {},
+  anyagok = [],
+  initialAnyagIdk = null,
 }: {
   employeeId: number;
   employeeLabel: string;
   pages: PageOption[];
   initialEmail: string | null;
   initialPagePermissions: Record<string, string[]> | null;
+  /** Minden utómunka-anyag - ebből lehet kiválasztani, hogy egy korlátozott
+   * fiók (pl. külsős vágó) melyeket lássa. */
+  anyagok?: AnyagOption[];
+  /** A jelenleg engedélyezett anyagok azonosítói, vagy null = mindet látja. */
+  initialAnyagIdk?: number[] | null;
   /** {oldal_href: fülek} azokhoz az oldalakhoz, amiknek van admin által
    * konfigurált fül-elrendezése (lásd DetailTabEditor) - ha egy oldal itt
    * szerepel, a bejelölése alatt fülönként külön Látja/Szerkesztheti
@@ -62,6 +70,13 @@ export function UserAccessManager({
   );
   const [accessBusy, setAccessBusy] = useState(false);
   const [revokeBusy, setRevokeBusy] = useState(false);
+
+  // Anyag-korlátozás: külsős vágónak adható olyan fiók, ami CSAK egy (vagy
+  // néhány) utómunka-anyagot lát - azon tudja mérni az idejét és látja a
+  // feladatát, de a többi projektünkbe nem lát bele.
+  const [anyagKorlat, setAnyagKorlat] = useState(initialAnyagIdk !== null);
+  const [anyagIdk, setAnyagIdk] = useState<Set<number>>(new Set(initialAnyagIdk ?? []));
+  const [anyagKereses, setAnyagKereses] = useState("");
 
   function togglePage(page: string) {
     setPermissions((prev) => {
@@ -143,6 +158,7 @@ export function UserAccessManager({
         page_permissions: showAllPages
           ? null
           : Object.fromEntries(Array.from(permissions.entries()).map(([page, actions]) => [page, Array.from(actions)])),
+        lathato_deliverable_idk: anyagKorlat ? Array.from(anyagIdk) : null,
       };
       const res = await authFetch(`/api/v1/user-access/${employeeId}`, { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) {
@@ -294,6 +310,67 @@ export function UserAccessManager({
             </div>
           </>
         )}
+        {/* Anyag-korlátozás: a külsős vágó fiókja. Ha be van kapcsolva, a
+            felhasználó CSAK a kipipált anyagokat látja - az utómunka-listában
+            sem jelenik meg más, és más anyag megnyitása 404. */}
+        <div className="border-t border-border pt-3">
+          <label className="flex cursor-pointer items-center gap-2 text-[13px] text-text-primary">
+            <input
+              type="checkbox"
+              checked={anyagKorlat}
+              onChange={(e) => setAnyagKorlat(e.target.checked)}
+              className="cursor-pointer"
+            />
+            Csak bizonyos utómunka-anyagokat lásson
+          </label>
+          <p className="mt-1 text-[12px] text-text-muted">
+            Külsős vágóhoz: a kipipált anyagokon tudja indítani/leállítani az időmérőt és látja a feladatát, de a többi
+            projektbe nem lát bele. Adj mellé /utomunka oldal-hozzáférést is.
+          </p>
+          {anyagKorlat && (
+            <div className="mt-2 space-y-2">
+              <input
+                type="search"
+                value={anyagKereses}
+                onChange={(e) => setAnyagKereses(e.target.value)}
+                placeholder="Anyag keresése…"
+                aria-label="Anyag keresése"
+                className="w-72 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+              />
+              <p className="text-[12px] text-text-secondary">{anyagIdk.size} anyag kijelölve</p>
+              <div className="max-h-64 space-y-1 overflow-y-auto rounded-[var(--radius)] border border-border p-2">
+                {anyagok
+                  .filter((a) => {
+                    // A már kijelölt mindig látszik, hogy ne lehessen véletlenül
+                    // "elveszíteni" egy keresés mögött.
+                    if (anyagIdk.has(a.id)) return true;
+                    const keresett = anyagKereses.trim().toLocaleLowerCase("hu-HU");
+                    return !keresett || a.projekt_neve.toLocaleLowerCase("hu-HU").includes(keresett);
+                  })
+                  .slice(0, 200)
+                  .map((a) => (
+                    <label key={a.id} className="flex cursor-pointer items-center gap-2 text-[13px] text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={anyagIdk.has(a.id)}
+                        onChange={() =>
+                          setAnyagIdk((elozo) => {
+                            const uj = new Set(elozo);
+                            if (uj.has(a.id)) uj.delete(a.id);
+                            else uj.add(a.id);
+                            return uj;
+                          })
+                        }
+                        className="cursor-pointer"
+                      />
+                      {a.projekt_neve}
+                    </label>
+                  ))}
+                {anyagok.length === 0 && <p className="text-[12.5px] text-text-muted">Nincs felvett utómunka-anyag.</p>}
+              </div>
+            </div>
+          )}
+        </div>
         <button
           type="button"
           disabled={accessBusy}

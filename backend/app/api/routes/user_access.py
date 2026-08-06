@@ -19,7 +19,11 @@ def get_my_access(current_user: Employee = Depends(get_current_user), db: Sessio
     config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == current_user.id))
     permissions = config.page_permissions if config else None
     allowed_pages = list(permissions.keys()) if permissions is not None else None
-    return MyAccess(allowed_pages=allowed_pages, page_permissions=permissions)
+    return MyAccess(
+        allowed_pages=allowed_pages,
+        page_permissions=permissions,
+        lathato_deliverable_idk=config.lathato_deliverable_idk if config else None,
+    )
 
 
 @router.get("", response_model=list[PageAccessRead], dependencies=[Depends(require_roles(Role.ADMIN))])
@@ -38,6 +42,8 @@ def set_access(employee_id: int, payload: PageAccessUpdate, db: Session = Depend
         db.add(config)
     else:
         config.page_permissions = payload.page_permissions
+    # Az anyag-korlátozás külön kapcsoló: None = nincs szűkítés (mindent lát).
+    config.lathato_deliverable_idk = payload.lathato_deliverable_idk
     db.commit()
     db.refresh(config)
     return config

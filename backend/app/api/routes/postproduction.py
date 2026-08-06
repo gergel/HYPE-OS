@@ -6,7 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import Role, get_current_user, require_page_action, require_roles
+from app.core.security import (
+    Role,
+    ellenorizd_anyag_hozzaferest,
+    get_current_user,
+    lathato_anyagok,
+    require_page_action,
+    require_roles,
+)
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.feedback import Feedback
@@ -48,6 +55,16 @@ def _after_deliverable_update(
     db.commit()
 
 
+def _csak_a_sajat_anyagai(stmt, db: Session, user: Employee):
+    """Sorszűrő a korlátozott fiókokhoz: egy külsős vágó csak azt az anyagot
+    látja, amire behívtuk (lásd core/security.lathato_anyagok). Aki nincs
+    korlátozva, annak a lekérdezés változatlan."""
+    engedett = lathato_anyagok(db, user)
+    if engedett is None:
+        return stmt
+    return stmt.where(Deliverable.id.in_(engedett or {0}))
+
+
 deliverables_router = build_crud_router(
     model=Deliverable,
     create_schema=DeliverableCreate,
@@ -59,6 +76,7 @@ deliverables_router = build_crud_router(
     page="/utomunka",
     after_update=_after_deliverable_update,
     entity_type="deliverable",
+    sor_szuro=_csak_a_sajat_anyagai,
 )
 
 timesheets_router = build_crud_router(
@@ -89,10 +107,14 @@ feedback_router = build_crud_router(
 deliverable_actions_router = APIRouter(prefix="/deliverables", tags=["postproduction"])
 
 
-def _get_deliverable_or_404(deliverable_id: int, db: Session) -> Deliverable:
+def _get_deliverable_or_404(deliverable_id: int, db: Session, user: Employee | None = None) -> Deliverable:
     deliverable = db.get(Deliverable, deliverable_id)
     if deliverable is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utómunka nem található")
+    if user is not None:
+        # A korlátozott fiók (külsős vágó) csak a saját anyagán dolgozhat -
+        # az akció-végpontokra ugyanaz a szűkítés vonatkozik, mint a listára.
+        ellenorizd_anyag_hozzaferest(db, user, deliverable_id)
     return deliverable
 
 
@@ -111,8 +133,10 @@ def get_vinyo_options(db: Session = Depends(get_db), _user: Employee = Depends(g
 
 
 @deliverable_actions_router.get("/{deliverable_id}/contacts", response_model=list[ContactOption])
-def get_deliverable_contacts(deliverable_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
-    return deliverable_actions.list_contacts(_get_deliverable_or_404(deliverable_id, db))
+def get_deliverable_contacts(
+    deliverable_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
+):
+    return deliverable_actions.list_contacts(_get_deliverable_or_404(deliverable_id, db, current_user))
 
 
 @deliverable_actions_router.put("/{deliverable_id}/contacts", response_model=list[ContactOption])
@@ -120,18 +144,18 @@ def set_deliverable_contacts(
     deliverable_id: int,
     payload: ContactIdsPayload,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(get_current_user),
 ):
     """Lecseréli a "Megrendelői kontaktok" listát, és újraszámolja a
     megrendeloi_email_cimek formula-mezőt."""
-    deliverable = deliverable_actions.set_contacts(db, _get_deliverable_or_404(deliverable_id, db), payload.contact_ids)
+    deliverable = deliverable_actions.set_contacts(db, _get_deliverable_or_404(deliverable_id, db, current_user), payload.contact_ids)
     return deliverable_actions.list_contacts(deliverable)
 
 
 @deliverable_actions_router.post("/{deliverable_id}/timer/start", status_code=status.HTTP_204_NO_CONTENT)
 def start_timer(deliverable_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     try:
-        deliverable_actions.start_timer(db, _get_deliverable_or_404(deliverable_id, db), current_user)
+        deliverable_actions.start_timer(db, _get_deliverable_or_404(deliverable_id, db, current_user), current_user)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
@@ -139,7 +163,7 @@ def start_timer(deliverable_id: int, db: Session = Depends(get_db), current_user
 @deliverable_actions_router.post("/{deliverable_id}/timer/stop", status_code=status.HTTP_204_NO_CONTENT)
 def stop_timer(deliverable_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     try:
-        deliverable_actions.stop_timer(db, _get_deliverable_or_404(deliverable_id, db), current_user)
+        deliverable_actions.stop_timer(db, _get_deliverable_or_404(deliverable_id, db, current_user), current_user)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -159,20 +183,20 @@ def stop_timer_for_employee(
     mérőt egyébként csak az tudna lezárni, aki elindította; ha ő nincs gépnél,
     egész éjjel futna (és a belőle számolt költség is hibás lenne)."""
     try:
-        deliverable_actions.stop_timer(db, _get_deliverable_or_404(deliverable_id, db), current_user, employee_id)
+        deliverable_actions.stop_timer(db, _get_deliverable_or_404(deliverable_id, db, current_user), current_user, employee_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @deliverable_actions_router.get("/{deliverable_id}/timer/state", response_model=TimerState)
 def get_timer_state(deliverable_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
-    return deliverable_actions.get_timer_state(db, _get_deliverable_or_404(deliverable_id, db), current_user)
+    return deliverable_actions.get_timer_state(db, _get_deliverable_or_404(deliverable_id, db, current_user), current_user)
 
 
 @deliverable_actions_router.post("/{deliverable_id}/kuldes-visszajelzes", response_model=FeedbackRead)
 def send_visszajelzes(deliverable_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     """"Visszajelzés küldése" gomb - lásd services/deliverable_actions.send_visszajelzes."""
-    return deliverable_actions.send_visszajelzes(db, _get_deliverable_or_404(deliverable_id, db), current_user)
+    return deliverable_actions.send_visszajelzes(db, _get_deliverable_or_404(deliverable_id, db, current_user), current_user)
 
 
 class PercekIn(BaseModel):
@@ -211,8 +235,10 @@ def set_timesheet_minutes(
 
 
 @deliverable_actions_router.get("/{deliverable_id}/comments", response_model=list[CommentRead])
-def get_comments(deliverable_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
-    _get_deliverable_or_404(deliverable_id, db)
+def get_comments(
+    deliverable_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
+):
+    _get_deliverable_or_404(deliverable_id, db, current_user)
     return deliverable_actions.list_comments(db, deliverable_id)
 
 
@@ -223,7 +249,7 @@ def post_comment(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
-    _get_deliverable_or_404(deliverable_id, db)
+    _get_deliverable_or_404(deliverable_id, db, current_user)
     if not payload.body.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A hozzászólás nem lehet üres")
     return deliverable_actions.add_comment(db, deliverable_id, current_user, payload.body.strip())

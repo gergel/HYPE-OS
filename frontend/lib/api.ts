@@ -728,7 +728,13 @@ export async function getEntityFields(entityType: string): Promise<EntityField[]
   return data?.fields ?? [];
 }
 
-export type PageAccessConfig = { employee_id: number; page_permissions: Record<string, string[]> | null };
+export type PageAccessConfig = {
+  employee_id: number;
+  page_permissions: Record<string, string[]> | null;
+  /** Ha ki van töltve, a felhasználó CSAK ezeket az utómunka-anyagokat látja
+   * (külsős vágó fiókja) - null esetén mindet. */
+  lathato_deliverable_idk: number[] | null;
+};
 
 /** A bejelentkezett felhasználó saját oldal-hozzáférése - null = minden oldalt
  * lát. A middleware és a Sidebar is ez alapján szűr. */
@@ -1058,6 +1064,24 @@ export async function getHaviTetelek(employeeId: number, ev: number, honap: numb
 
 export async function getUtomunkaIdo(employeeId: number): Promise<UtomunkaHonapIdo[]> {
   return (await apiGet<UtomunkaHonapIdo[]>(`/api/v1/crew/${employeeId}/utomunka-ido`)) ?? [];
+}
+
+/** Egy projekt, amin a munkatárs részt vett - forgatáson, vágáson vagy
+ * mindkettőn (lásd backend routes/crew.py get_reszvetel). */
+export type ReszvetelSor = {
+  project_id: number;
+  project_nev: string | null;
+  forgatas_datuma: string | null;
+  projektkod: string | null;
+  allapot: string | null;
+  stabtag: boolean;
+  vagott: boolean;
+  vagas_percek: number;
+  anyagok_szama: number;
+};
+
+export async function getReszvetel(employeeId: number): Promise<ReszvetelSor[]> {
+  return (await apiGet<ReszvetelSor[]>(`/api/v1/crew/${employeeId}/reszvetel`)) ?? [];
 }
 
 /** Egy külsős munkatárs egy projekten végzett munkája: mennyiért csinálta, és

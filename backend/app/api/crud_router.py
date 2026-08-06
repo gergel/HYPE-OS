@@ -62,6 +62,7 @@ def build_crud_router(
     before_delete: Callable[[Any, Session], None] | None = None,
     entity_type: str | None = None,
     list_options: tuple[Any, ...] = (),
+    sor_szuro: Callable[[Any, Session, Employee], Any] | None = None,
 ) -> APIRouter:
     """page: a frontend/lib/nav.ts oldal-href-je (pl. "/projektek"), amihez ez az
     entitás tartozik - a Beállítások oldalon egyénenként beállított
@@ -101,7 +102,14 @@ def build_crud_router(
     "edit" jogot (lásd core/security.check_tab_action) - így egy admin
     korlátozhatja, hogy egy felhasználó csak bizonyos fülök mezőit
     szerkeszthesse (a durvább, oldal-szintű edit_dependency ellenőrzés MELLETT).
-    Ha nincs megadva, a viselkedés változatlan (csak az oldal-szintű ellenőrzés fut)."""
+    Ha nincs megadva, a viselkedés változatlan (csak az oldal-szintű ellenőrzés fut).
+
+    sor_szuro: (stmt, db, current_user) -> stmt - SORONKÉNTI láthatóság. A
+    lista-lekérdezésre kerül rá, az egyedi GET/PATCH/DELETE pedig 404-gyel
+    válaszol, ha az adott rekord nem fér bele. Erre a korlátozott fiókoknál
+    van szükség: egy külsős vágó csak a SAJÁT anyagát láthatja, semmi mást
+    (lásd core/security.lathato_anyagok). Ha nincs megadva, mindenki minden
+    sort lát (a korábbi viselkedés)."""
     router = APIRouter(prefix=prefix, tags=tags)
     role_dependency = require_roles(*write_roles) if write_roles else get_current_user
     m2m_fields = m2m_fields or {}
@@ -175,6 +183,8 @@ def build_crud_router(
         (pl. egy Project Code összes Projektje) frontend-oldali lekérdezését.
         Bejelentkezés nélkül semmilyen adat nem érhető el (lásd get_current_user)."""
         stmt = select(model)
+        if sor_szuro is not None:
+            stmt = sor_szuro(stmt, db, _user)
         # Eager load a lista-lekérdezéshez: ha a read séma számított mezői
         # kapcsolatokat járnak be (pl. ProjectCode.osszes_koltseg), azok
         # enélkül SORONKÉNT indítanának külön lekérdezést.
@@ -204,9 +214,19 @@ def build_crud_router(
             _kimenet(o, list_read_schema, db, sajat_mezokkel=False, eltavolitott=eltavolitott) for o in sorok
         ]
 
+    def _lathato_vagy_404(db: Session, item_id: int, user: Employee):
+        """A rekord, ha ez a felhasználó láthatja - különben 404 (nem 403: egy
+        korlátozott fióknak az sem információ, hogy létezik-e a rekord)."""
+        obj = _get_or_404(db, item_id)
+        if sor_szuro is not None:
+            engedett = db.scalar(sor_szuro(select(model.id).where(model.id == item_id), db, user))
+            if engedett is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rekord nem található")
+        return obj
+
     @router.get("/{item_id}", response_model=None)
     def get_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
-        return _kimenet(_get_or_404(db, item_id), read_schema, db, sajat_mezokkel=True)
+        return _kimenet(_lathato_vagy_404(db, item_id, _user), read_schema, db, sajat_mezokkel=True)
 
     @router.post("", response_model=None, status_code=status.HTTP_201_CREATED)
     def create_item(payload: create_schema, db: Session = Depends(get_db), _user: Employee = Depends(create_dependency)):
@@ -242,7 +262,7 @@ def build_crud_router(
         részletnézeten bármelyik mező helyben szerkeszthető legyen (lásd
         EditableDetailGrid a frontenden), anélkül hogy minden entitáshoz kézzel
         karban kellene tartani egy külön Update sémát a ~50-140 mezőhöz."""
-        obj = _get_or_404(db, item_id)
+        obj = _lathato_vagy_404(db, item_id, current_user)
         data = await request.json()
         if not isinstance(data, dict):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A kérés törzsének JSON objektumnak kell lennie")
@@ -305,7 +325,7 @@ def build_crud_router(
 
     @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(delete_dependency)):
-        obj = _get_or_404(db, item_id)
+        obj = _lathato_vagy_404(db, item_id, _user)
         if before_delete:
             before_delete(obj, db)
         if entity_type:

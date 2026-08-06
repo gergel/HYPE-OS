@@ -475,3 +475,93 @@ def kulsos_munkak(
         keretszerzodes_id=keretszerzodes.id if keretszerzodes else None,
         keretszerzodes_url=keretszerzodes.szerzodes_file_url if keretszerzodes else None,
     )
+
+
+# --- Miken vett részt: forgatások és vágás -----------------------------------
+#
+# Minden munkatársnál (belsős és külsős egyaránt) meg kell látszania, hogy
+# melyik projekteken dolgozott. Két külön dolog kerül egy listába:
+#   - FORGATÁS: rajta van a projekt stáblistáján (project_crew),
+#   - VÁGÁS: futott az időmérője a projekthez tartozó valamelyik anyagon.
+# A kettő nem ugyanaz - van, aki csak vág, és van, aki csak forgat -, ezért
+# soronként jelezzük, melyikről van szó (és ha vágott, mennyit).
+
+
+class ReszvetelSor(BaseModel):
+    project_id: int
+    project_nev: str | None = None
+    forgatas_datuma: date | None = None
+    projektkod: str | None = None
+    allapot: str | None = None
+    #: Rajta volt a stáblistán (forgatáson vett részt).
+    stabtag: bool = False
+    #: Dolgozott a projekt valamelyik anyagán (vágás).
+    vagott: bool = False
+    #: Vágással töltött idő ezen a projekten, percben (csak ha vágott).
+    vagas_percek: float = 0
+    #: Hány anyagon dolgozott ezen a projekten.
+    anyagok_szama: int = 0
+
+
+@router.get("/{employee_id}/reszvetel", response_model=list[ReszvetelSor])
+def get_reszvetel(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Melyik projekteken vett részt ez a munkatárs - forgatáson, vágáson vagy
+    mindkettőn. A legfrissebb forgatás elöl, a dátum nélküliek a végén."""
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Munkatárs nem található")
+
+    sorok: dict[int, ReszvetelSor] = {}
+
+    def sor(projekt: Project) -> ReszvetelSor:
+        meglevo = sorok.get(projekt.id)
+        if meglevo is None:
+            meglevo = ReszvetelSor(
+                project_id=projekt.id,
+                project_nev=projekt.nev,
+                forgatas_datuma=projekt.forgatas_datuma,
+                projektkod=projekt.project_code.projektkod if projekt.project_code else None,
+                allapot=projekt.allapot,
+            )
+            sorok[projekt.id] = meglevo
+        return meglevo
+
+    # 1) Forgatások: ahol rajta van a stáblistán.
+    stabos = (
+        db.query(Project)
+        .options(selectinload(Project.project_code))
+        .filter(Project.crew.any(Employee.id == employee_id))
+        .all()
+    )
+    for projekt in stabos:
+        sor(projekt).stabtag = True
+
+    # 2) Vágás: ahol futott az időmérője a projekt valamelyik anyagán. Nem a
+    # Deliverable.vago_employee_id-t nézzük (az csak a KIJELÖLT vágó), hanem a
+    # tényleges munkaidő-sorokat - ugyanaz az elv, mint a vágott anyagoknál.
+    meresek = (
+        db.query(Timesheet, Deliverable, Project)
+        .join(Deliverable, Timesheet.deliverable_id == Deliverable.id)
+        .join(Project, Deliverable.project_id == Project.id)
+        .options(selectinload(Project.project_code))
+        .filter(Timesheet.employee_id == employee_id)
+        .all()
+    )
+    anyagok: dict[int, set[int]] = {}
+    for timesheet, deliverable, projekt in meresek:
+        adat = sor(projekt)
+        adat.vagott = True
+        adat.vagas_percek += float(timesheet.time_minutes or timesheet.idotartam_perc or 0)
+        anyagok.setdefault(projekt.id, set()).add(deliverable.id)
+    for project_id, halmaz in anyagok.items():
+        sorok[project_id].anyagok_szama = len(halmaz)
+
+    return sorted(
+        sorok.values(),
+        key=lambda s: (s.forgatas_datuma is not None, s.forgatas_datuma or date.min),
+        reverse=True,
+    )

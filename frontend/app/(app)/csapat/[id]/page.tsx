@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { FileText, Scissors, Wallet } from "lucide-react";
+import { Clapperboard, FileText, Scissors, Wallet } from "lucide-react";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
@@ -11,6 +11,7 @@ import { UtomunkaIdoHavonta } from "@/components/UtomunkaIdoHavonta";
 import { HaviKoltsegek } from "@/components/crew/HaviKoltsegek";
 import { EgyebKiadasok } from "@/components/crew/EgyebKiadasok";
 import { KulsosMunkak } from "@/components/crew/KulsosMunkak";
+import { Reszvetel } from "@/components/crew/Reszvetel";
 import { VagottAnyagokLista } from "@/components/crew/VagottAnyagokLista";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -24,6 +25,7 @@ import {
   getKulsosMunkak,
   getMyPagePermissions,
   getProjectCodes,
+  getReszvetel,
   getRecord,
   getRelated,
   getUtomunkaIdo,
@@ -81,6 +83,7 @@ export default async function EmployeeDetailPage({
     koltsegek,
     munkak,
     projektkodok,
+    reszvetel,
     utomunkaIdo,
     visibleFields,
     fieldTypes,
@@ -97,6 +100,7 @@ export default async function EmployeeDetailPage({
     getEmployeeKoltsegek(employeeId),
     getKulsosMunkak(employeeId),
     getProjectCodes(),
+    getReszvetel(employeeId),
     getUtomunkaIdo(employeeId),
     getVisibleFields("employee"),
     getFieldTypes("employee"),
@@ -237,6 +241,17 @@ export default async function EmployeeDetailPage({
             },
           ]
         : []),
+      {
+        // MINDEN munkatársnál: min dolgozott. A forgatások és a vágás egy
+        // listában, mert ugyanaz a kérdés - csak más a szerep.
+        key: "reszvetel",
+        label: "Projektek",
+        content: (
+          <Card title={`Projektek, amiken részt vett (${reszvetel.length})`} icon={Clapperboard}>
+            <Reszvetel sorok={reszvetel} />
+          </Card>
+        ),
+      },
       {
         key: "vagott-anyagok",
         label: "Vágott anyagok",

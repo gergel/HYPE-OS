@@ -22,3 +22,15 @@ class PageAccessConfig(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), unique=True, nullable=False)
     page_permissions: Mapped[dict[str, list[str]] | None] = mapped_column(JSON)
+
+    # Csak ezeket az UTÓMUNKA-ANYAGOKAT láthatja. None (vagy hiányzó sor) =
+    # nincs szűkítés, minden anyagot lát. Üres lista = egyet sem.
+    #
+    # Erre a külsős vágóknál van szükség: kap egy fiókot, hogy a saját
+    # anyagán tudja indítani/leállítani az időmérőt és lássa a feladatát, de
+    # az összes többi projektünkbe ne lásson bele. A szűkítés az /utomunka
+    # LISTÁRA és az egyes anyagok minden műveletére is vonatkozik (lásd
+    # core/security.lathato_anyagok és api/crud_router row_filter/row_guard).
+    lathato_deliverable_idk: Mapped[list[int] | None] = mapped_column(
+        JSON, comment="Csak ezeket az utómunka-anyagokat láthatja (None = mindet)"
+    )
