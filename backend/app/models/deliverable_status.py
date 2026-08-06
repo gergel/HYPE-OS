@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Integer, String
+from sqlalchemy import JSON, Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -31,3 +31,19 @@ class DeliverableStatusConfig(TimestampMixin, Base):
     #: sorolja a lejárt határidejűek közé - a munka ott már megvan, csak a
     #: papírozás/kiküldés van hátra (lásd api/routes/dashboard.py).
     kesz_allapot: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class DeliverableBoardConfig(TimestampMixin, Base):
+    """Az Utómunka "Vágó nézet" tábláján a KÁRTYÁKON megjelenő adatok.
+
+    Egyetlen sor az egész rendszerre (a tábla mindenkinek ugyanaz) - ezért nem
+    munkatársanként tároljuk, mint a dashboard-widgeteket: itt arról van szó,
+    hogy a csapat mit lát hasznosnak a kártyán, nem egyéni ízlésről.
+
+    kartya_mezok=None -> az alapértelmezés (határidő + kiosztott ember)."""
+
+    __tablename__ = "deliverable_board_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    #: A Deliverable mezőneveinek listája, a kártyán ebben a sorrendben.
+    kartya_mezok: Mapped[list[str] | None] = mapped_column(JSON)

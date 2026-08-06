@@ -183,6 +183,26 @@ def _select_options(name: str, db: Session, column) -> list[str] | None:
     return values
 
 
+def _utomunka_allapotok(db: Session, column) -> list[str]:
+    """Az utómunka választható állapotai: elöl a BEÁLLÍTOTT állapotok (a tábla
+    oszlop-sorrendjében), utánuk minden olyan érték, ami az adatokban szerepel,
+    de még nincs beállítva."""
+    from app.models.deliverable_status import DeliverableStatusConfig
+
+    beallitott = [
+        sor.allapot
+        for sor in db.query(DeliverableStatusConfig)
+        .order_by(DeliverableStatusConfig.sorrend, DeliverableStatusConfig.id)
+        .all()
+    ]
+    hasznalatban = [
+        ertek
+        for (ertek,) in db.execute(select(column).where(column.is_not(None)).distinct()).all()
+        if ertek and ertek not in beallitott
+    ]
+    return beallitott + sorted(hasznalatban)
+
+
 def _sajat_mezok_tipusai(entity_type: str, db: Session) -> dict[str, FieldTypeInfo]:
     """Az admin által létrehozott saját mezők típusai - körkörös import
     elkerülésére itt, függvényen belül importálva (az entity_fields modul
@@ -223,6 +243,18 @@ def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, Fi
             result[name] = {
                 "type": "select",
                 "options": _megbizas_targya_opciok(db),
+                "allow_new": True,
+            }
+            continue
+        if entity_type == "deliverable" and name == "allapot" and db is not None:
+            # Az utómunka-állapotok a TÁBLA beállításából jönnek, a beállított
+            # sorrendben - így egy állapot akkor is választható (és oszlopként
+            # is látszik), ha épp EGYETLEN anyag sincs benne. Enélkül egy üres
+            # állapot (pl. "Javítás") egyszerűen eltűnne a felületről, és nem
+            # is lehetne rátenni semmit. Új érték helyben is felvehető.
+            result[name] = {
+                "type": "select",
+                "options": _utomunka_allapotok(db, column),
                 "allow_new": True,
             }
             continue

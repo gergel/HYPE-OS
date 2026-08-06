@@ -936,6 +936,13 @@ export async function getAllapotBeallitasok(): Promise<AllapotBeallitas[]> {
   return (await apiGet<AllapotBeallitas[]>("/api/v1/deliverables/allapot-beallitasok")) ?? [];
 }
 
+/** Mely mezők látszódjanak a Vágó nézet kártyáin (üres = alapértelmezés:
+ * határidő + kiosztott ember). */
+export async function getKartyaMezok(): Promise<string[]> {
+  const res = await apiGet<{ kartya_mezok: string[] }>("/api/v1/deliverables/kartya-mezok");
+  return res?.kartya_mezok ?? [];
+}
+
 export async function getVinyoOptions(): Promise<string[]> {
   const res = await apiGet<{ options: string[] }>("/api/v1/deliverables/vinyo-options");
   return res?.options ?? [];

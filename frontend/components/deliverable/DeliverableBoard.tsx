@@ -9,6 +9,9 @@ export type BoardCard = {
   title: string;
   subtitle?: string | null;
   badges: string[];
+  /** A kártyán megjelenő további adatok (címke + érték párok) - hogy pontosan
+   * melyik mezők, azt a "Nézet beállítása" panelen lehet megadni. */
+  mezok?: { cimke: string; ertek: string }[];
 };
 
 export type BoardColumn = {
@@ -41,6 +44,16 @@ function BoardCardView({ card, szin }: { card: BoardCard; szin?: string | null }
     >
       <p className="font-medium text-text-primary">{card.title}</p>
       {card.subtitle && <p className="mt-0.5 text-[12px] text-text-muted">{card.subtitle}</p>}
+      {card.mezok && card.mezok.length > 0 && (
+        <dl className="mt-1 space-y-0.5 text-[12px]">
+          {card.mezok.map((m) => (
+            <div key={m.cimke} className="flex gap-1.5">
+              <dt className="shrink-0 text-text-muted">{m.cimke}:</dt>
+              <dd className="min-w-0 truncate text-text-secondary">{m.ertek}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       {card.badges.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {card.badges.map((b) => (

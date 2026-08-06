@@ -9,6 +9,7 @@ import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { formatIdopont } from "@/lib/ido";
+import { humanizeKey } from "@/lib/mezoNev";
 import { useLiveTopic } from "@/lib/live";
 import { AllapotBeallitasok } from "@/components/deliverable/AllapotBeallitasok";
 import { DeliverableBoard, type BoardCard, type BoardColumn } from "@/components/deliverable/DeliverableBoard";
@@ -45,6 +46,7 @@ export function UtomunkaContent({
   employees,
   statusOptions,
   allapotBeallitasok,
+  kartyaMezok,
   vinyoOptions,
   canCreate,
   canDelete,
@@ -58,6 +60,8 @@ export function UtomunkaContent({
   statusOptions: string[];
   /** Az állapot-oszlopok sorrendje/színe (lásd AllapotBeallitasok). */
   allapotBeallitasok: AllapotBeallitas[];
+  /** Mely mezők látszódjanak a tábla kártyáin (üres = alapértelmezés). */
+  kartyaMezok: string[];
   vinyoOptions: string[];
   canCreate: boolean;
   canDelete: boolean;
@@ -103,17 +107,42 @@ export function UtomunkaContent({
 
   const employeeName = useMemo(() => new Map(employees.map((e) => [e.id, e.full_name])), [employees]);
 
+  /** Egy mező értéke emberi alakban a kártyára. A munkatárs-azonosítókat
+   * névre oldjuk, a logikai mezőket Igen/Nem-re - különben "true" és nyers
+   * id-k jelennének meg a kártyán. */
+  function mezoErteke(d: Deliverable, kulcs: string): string | null {
+    const nyers = (d as unknown as Record<string, unknown>)[kulcs];
+    if (nyers === null || nyers === undefined || nyers === "") return null;
+    if (kulcs.endsWith("employee_id")) return employeeName.get(Number(nyers)) ?? `#${nyers}`;
+    if (typeof nyers === "boolean") return nyers ? "Igen" : "Nem";
+    if (Array.isArray(nyers)) return nyers.length > 0 ? nyers.join(", ") : null;
+    const szoveg = String(nyers);
+    // Dátum/időpont: elég a nap (a kártyán nincs hely az ISO-időbélyegre).
+    return /^\d{4}-\d{2}-\d{2}/.test(szoveg) ? formatDate(szoveg) : szoveg;
+  }
+
   function toCard(d: Deliverable, badges: string[]): BoardCard {
-    const subtitleParts = [
-      d.hatarido ? `Határidő: ${formatDate(d.hatarido)}` : null,
-      d.assigned_to_employee_id ? `Kiosztva: ${employeeName.get(d.assigned_to_employee_id) ?? "?"}` : null,
-    ].filter((p): p is string => p !== null);
+    // Beállítás nélkül marad az eddigi alapértelmezés (határidő + kiosztva),
+    // hogy a tábla ne ürüljön ki azoknál, akik sosem nyúlnak a beállításhoz.
+    const alapertelmezett = kartyaMezok.length === 0;
+    const subtitleParts = alapertelmezett
+      ? [
+          d.hatarido ? `Határidő: ${formatDate(d.hatarido)}` : null,
+          d.assigned_to_employee_id ? `Kiosztva: ${employeeName.get(d.assigned_to_employee_id) ?? "?"}` : null,
+        ].filter((p): p is string => p !== null)
+      : [];
+    const mezok = alapertelmezett
+      ? []
+      : kartyaMezok
+          .map((kulcs) => ({ cimke: humanizeKey(kulcs), ertek: mezoErteke(d, kulcs) }))
+          .filter((m): m is { cimke: string; ertek: string } => m.ertek !== null);
     return {
       id: d.id,
       href: `/utomunka/${d.id}`,
       title: d.projekt_neve,
       subtitle: subtitleParts.length > 0 ? subtitleParts.join(" · ") : null,
       badges,
+      mezok,
     };
   }
 
@@ -144,7 +173,7 @@ export function UtomunkaContent({
         : []),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverables, statusOptions, allapotBeallitasok, employeeName]);
+  }, [deliverables, statusOptions, allapotBeallitasok, kartyaMezok, employeeName]);
 
   const vinyoColumns: BoardColumn[] = useMemo(() => {
     const byVinyo = new Map<string, Deliverable[]>();
@@ -158,9 +187,19 @@ export function UtomunkaContent({
       .filter((v) => (byVinyo.get(v)?.length ?? 0) > 0)
       .map((v) => ({ key: v, label: v, cards: byVinyo.get(v)!.map((d) => toCard(d, d.allapot ? [d.allapot] : [])) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverables, vinyoOptions, employeeName]);
+  }, [deliverables, vinyoOptions, kartyaMezok, employeeName]);
 
   const calendarProjects = useMemo(() => projects.filter((p) => p.forgatas_datuma !== null), [projects]);
+
+  // Miből lehet válogatni a kártyára: az anyagok mezői (a nevet és a
+  // technikai azonosítókat kihagyva - azok nem mondanak semmit a kártyán).
+  const mezoValasztek = useMemo(() => {
+    const minta = deliverables[0];
+    const kulcsok = minta ? Object.keys(minta) : [];
+    return kulcsok
+      .filter((k) => !["id", "projekt_neve", "project_id", "project_code_id"].includes(k))
+      .map((kulcs) => ({ kulcs, cimke: humanizeKey(kulcs) }));
+  }, [deliverables]);
 
   return (
     <UtomunkaViewTabs
@@ -168,7 +207,16 @@ export function UtomunkaContent({
         <div className="space-y-6">
           <Card
             title="Állapot szerint"
-            actions={canEdit ? <AllapotBeallitasok allapotok={statusOptions} kezdeti={allapotBeallitasok} /> : undefined}
+            actions={
+              canEdit ? (
+                <AllapotBeallitasok
+                  allapotok={statusOptions}
+                  kezdeti={allapotBeallitasok}
+                  mezoValasztek={mezoValasztek}
+                  kezdetiKartyaMezok={kartyaMezok}
+                />
+              ) : undefined
+            }
           >
             <DeliverableBoard columns={statusColumns} />
           </Card>

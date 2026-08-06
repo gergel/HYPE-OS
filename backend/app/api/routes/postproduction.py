@@ -15,7 +15,7 @@ from app.core.security import (
     require_roles,
 )
 from app.models.deliverable import Deliverable
-from app.models.deliverable_status import DeliverableStatusConfig
+from app.models.deliverable_status import DeliverableBoardConfig, DeliverableStatusConfig
 from app.models.employee import Employee
 from app.models.feedback import Feedback
 from app.models.timesheet import Timesheet
@@ -182,6 +182,49 @@ def set_allapot_beallitasok(
             db.delete(sor)
     db.commit()
     return get_allapot_beallitasok(db)
+
+
+class KartyaMezokIn(BaseModel):
+    kartya_mezok: list[str]
+
+
+class KartyaMezok(BaseModel):
+    """Mely mezők jelenjenek meg a tábla kártyáin (üres = alapértelmezés)."""
+
+    kartya_mezok: list[str] = []
+
+
+def _board_config(db: Session) -> DeliverableBoardConfig:
+    """A tábla egyetlen beállítás-sora - ha még nincs, létrehozzuk."""
+    config = db.query(DeliverableBoardConfig).order_by(DeliverableBoardConfig.id).first()
+    if config is None:
+        config = DeliverableBoardConfig()
+        db.add(config)
+        db.flush()
+    return config
+
+
+@deliverable_actions_router.get("/kartya-mezok", response_model=KartyaMezok)
+def get_kartya_mezok(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """Mely adatok látszódjanak a Vágó nézet kártyáin (lásd
+    models/deliverable_status.py DeliverableBoardConfig)."""
+    config = db.query(DeliverableBoardConfig).order_by(DeliverableBoardConfig.id).first()
+    return KartyaMezok(kartya_mezok=list(config.kartya_mezok or []) if config else [])
+
+
+@deliverable_actions_router.put("/kartya-mezok", response_model=KartyaMezok)
+def set_kartya_mezok(
+    payload: KartyaMezokIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action("/utomunka", "edit")),
+):
+    config = _board_config(db)
+    # Csak valódi Deliverable-oszlopokat fogadunk el: a kártya generikusan
+    # olvassa ki az értéket, egy elgépelt mezőnév csak üres sort adna.
+    mezok = [m for m in payload.kartya_mezok if m in Deliverable.__table__.columns]
+    config.kartya_mezok = mezok or None
+    db.commit()
+    return KartyaMezok(kartya_mezok=mezok)
 
 
 @deliverable_actions_router.get("/vinyo-options", response_model=VinyoOptions)

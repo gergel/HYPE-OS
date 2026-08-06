@@ -9,7 +9,7 @@ from app.models.contract import Contract, ContractType
 from app.models.dashboard_config import DashboardConfig
 from app.models.deliverable import Deliverable, deliverable_contacts
 from app.models.deliverable_comment import DeliverableComment
-from app.models.deliverable_status import DeliverableStatusConfig
+from app.models.deliverable_status import DeliverableBoardConfig, DeliverableStatusConfig
 from app.models.detail_section_order import DetailSectionOrder
 from app.models.detail_tab import DetailTabConfig
 from app.models.document_attachment import DocumentAttachment
@@ -65,6 +65,7 @@ __all__ = [
     "EmployeeMonthlyItem",
     "Deliverable",
     "deliverable_contacts",
+    "DeliverableBoardConfig",
     "DeliverableStatusConfig",
     "DeliverableComment",
     "DetailSectionOrder",

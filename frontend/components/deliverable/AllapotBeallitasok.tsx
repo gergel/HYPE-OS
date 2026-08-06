@@ -23,13 +23,20 @@ const SZIN_MINTAK = ["#6d8f72", "#c98b5a", "#7f8ec4", "#b06a8f", "#5f9ea0", "#a8
 export function AllapotBeallitasok({
   allapotok,
   kezdeti,
+  mezoValasztek,
+  kezdetiKartyaMezok,
 }: {
   allapotok: string[];
   kezdeti: AllapotBeallitas[];
+  /** Miből lehet választani a kártyán megjelenő adatokhoz. */
+  mezoValasztek: { kulcs: string; cimke: string }[];
+  kezdetiKartyaMezok: string[];
 }) {
   const router = useRouter();
   const [nyitva, setNyitva] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ujAllapot, setUjAllapot] = useState("");
+  const [kartyaMezok, setKartyaMezok] = useState<string[]>(kezdetiKartyaMezok);
 
   // A választható állapotok a mérvadóak; a mentett beállítás csak sorrendet és
   // színt ad hozzájuk. Ami be van állítva, az elöl, a beállított sorrendben;
@@ -57,6 +64,24 @@ export function AllapotBeallitasok({
     setSorok((elozo) => elozo.map((sor, i) => (i === index ? { ...sor, ...mezok } : sor)));
   }
 
+  /** Új oszlop felvétele. Enélkül egy olyan állapot, amiben épp EGYETLEN anyag
+   * sincs (pl. "Javítás", miután mindegyiket továbbléptették), nem tudna
+   * megjelenni a táblán - és nem is lehetne rátenni semmit. */
+  function allapotHozzaad() {
+    const nev = ujAllapot.trim();
+    if (!nev || sorok.some((sor) => sor.allapot === nev)) return;
+    setSorok((elozo) => [...elozo, { allapot: nev, sorrend: elozo.length, szin: null, kesz_allapot: false }]);
+    setUjAllapot("");
+  }
+
+  function allapotTorol(index: number) {
+    setSorok((elozo) => elozo.filter((_, i) => i !== index));
+  }
+
+  function kartyaMezoValt(kulcs: string) {
+    setKartyaMezok((elozo) => (elozo.includes(kulcs) ? elozo.filter((k) => k !== kulcs) : [...elozo, kulcs]));
+  }
+
   async function ment() {
     setBusy(true);
     try {
@@ -69,6 +94,15 @@ export function AllapotBeallitasok({
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      const mezoRes = await authFetch("/api/v1/deliverables/kartya-mezok", {
+        method: "PUT",
+        body: JSON.stringify({ kartya_mezok: kartyaMezok }),
+      });
+      if (!mezoRes.ok) {
+        const detail = await mezoRes.json().catch(() => null);
+        alert(`A kártya-mezők mentése nem sikerült: ${detail?.detail ?? mezoRes.status}`);
         return;
       }
       router.refresh();
@@ -160,9 +194,68 @@ export function AllapotBeallitasok({
               />
               Elkészült
             </label>
+            <button
+              type="button"
+              onClick={() => allapotTorol(index)}
+              aria-label={`${sor.allapot} oszlop törlése`}
+              className="text-[12px] text-text-secondary hover:text-text-danger hover:underline"
+            >
+              Oszlop törlése
+            </button>
           </div>
         ))}
         {sorok.length === 0 && <p className="text-[12.5px] text-text-muted">Nincs felvett állapot.</p>}
+      </div>
+
+      {/* Új oszlop: egy állapot akkor is kell a táblára, ha épp egyetlen anyag
+          sincs benne - különben nem is lehetne odatenni egyet. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          value={ujAllapot}
+          onChange={(e) => setUjAllapot(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              allapotHozzaad();
+            }
+          }}
+          placeholder="Új oszlop neve (pl. Javítás)"
+          aria-label="Új állapot neve"
+          className="w-56 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={allapotHozzaad}
+          disabled={!ujAllapot.trim()}
+          className="rounded-[var(--radius)] border border-border px-2.5 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-2 disabled:opacity-40"
+        >
+          + Oszlop hozzáadása
+        </button>
+      </div>
+
+      {/* Mi látszódjon a kártyákon */}
+      <div className="mt-4 border-t border-border pt-3">
+        <p className="mb-1 text-[13px] font-medium text-text-primary">Mi látszódjon a kártyákon</p>
+        <p className="mb-2 text-[12px] text-text-muted">
+          Az anyag neve mindig látszik. Ha egyet sem választasz, a határidő és a kiosztott ember jelenik meg (ez az
+          alapértelmezés).
+        </p>
+        <div className="flex max-h-48 flex-wrap gap-x-4 gap-y-1 overflow-y-auto">
+          {mezoValasztek.map((mezo) => (
+            <label
+              key={mezo.kulcs}
+              className="flex cursor-pointer items-center gap-1.5 text-[12.5px] text-text-secondary"
+            >
+              <input
+                type="checkbox"
+                checked={kartyaMezok.includes(mezo.kulcs)}
+                onChange={() => kartyaMezoValt(mezo.kulcs)}
+                className="cursor-pointer"
+              />
+              {mezo.cimke}
+            </label>
+          ))}
+        </div>
       </div>
       <div className="mt-3 flex items-center gap-2">
         <button type="button" disabled={busy} onClick={ment} className="btn btn-primary disabled:opacity-50">

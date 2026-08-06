@@ -6,6 +6,7 @@ import {
   getDeliverables,
   getEmployees,
   getFieldTypes,
+  getKartyaMezok,
   getMyPagePermissions,
   getProjects,
   getVinyoOptions,
@@ -25,17 +26,27 @@ const PAGE = "/utomunka";
  * nyers adattáblát kelljen böngészniük), és a régi "Admin listát" (a teljes
  * DataTable, szűréssel/rendezéssel/törléssel). */
 export default async function UtomunkaPage() {
-  const [deliverables, employees, projects, fieldTypes, vinyoOptions, allapotBeallitasok, currentUser, pagePermissions] =
-    await Promise.all([
-      getDeliverables(INITIAL_BATCH),
-      getEmployees(),
-      getProjects(INITIAL_BATCH),
-      getFieldTypes("deliverable"),
-      getVinyoOptions(),
-      getAllapotBeallitasok(),
-      getCurrentUser(),
-      getMyPagePermissions(),
-    ]);
+  const [
+    deliverables,
+    employees,
+    projects,
+    fieldTypes,
+    vinyoOptions,
+    allapotBeallitasok,
+    kartyaMezok,
+    currentUser,
+    pagePermissions,
+  ] = await Promise.all([
+    getDeliverables(INITIAL_BATCH),
+    getEmployees(),
+    getProjects(INITIAL_BATCH),
+    getFieldTypes("deliverable"),
+    getVinyoOptions(),
+    getAllapotBeallitasok(),
+    getKartyaMezok(),
+    getCurrentUser(),
+    getMyPagePermissions(),
+  ]);
 
   const statusOptions = fieldTypes.allapot?.options ?? [];
   const calendarProjects = projects.map((p) => ({
@@ -57,6 +68,7 @@ export default async function UtomunkaPage() {
           employees={employees}
           statusOptions={statusOptions}
           allapotBeallitasok={allapotBeallitasok}
+          kartyaMezok={kartyaMezok}
           vinyoOptions={vinyoOptions}
           canCreate={canDoAction(currentUser?.role, pagePermissions, PAGE, "create")}
           canDelete={canDoAction(currentUser?.role, pagePermissions, PAGE, "delete")}
