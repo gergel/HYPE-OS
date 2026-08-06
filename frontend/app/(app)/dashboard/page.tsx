@@ -11,7 +11,16 @@ import {
 } from "@/components/dashboard/DashboardWidgets";
 import { StatCard } from "@/components/StatCard";
 import { TopBar } from "@/components/TopBar";
-import { getDashboardSummary, getMyDashboardConfig, getMyPageAccess, getMyTasksSummary, getProjectCodes } from "@/lib/api";
+import {
+  getDashboardSummary,
+  getDeliverables,
+  getMyAnyagKorlat,
+  getMyDashboardConfig,
+  getMyPageAccess,
+  getMyTasksSummary,
+  getProjectCodes,
+} from "@/lib/api";
+import { KorlatozottDashboard } from "@/components/dashboard/KorlatozottDashboard";
 import { MyTasksCard } from "@/components/dashboard/DashboardWidgets";
 
 const WIDGETS: WidgetOption[] = [
@@ -41,6 +50,26 @@ function normalizedStatusLabel(allapot: string | null): string {
 }
 
 export default async function DashboardPage() {
+  // A KORLÁTOZOTT fiók (külsős vágó) csak a rábízott anyagot látja - neki a
+  // dashboard maga a teendő-lista, semmi más. Ezt előbb kérdezzük le, hogy a
+  // többi (számára úgyis üres) összesítőt el se indítsuk.
+  const anyagKorlat = await getMyAnyagKorlat();
+  if (anyagKorlat !== null) {
+    // A lista a szerver oldalán már eleve csak az engedélyezett anyagokat
+    // adja vissza (lásd backend crud_router sor_szuro).
+    const sajatAnyagok = await getDeliverables(50);
+    return (
+      <div className="flex flex-1 flex-col">
+        <TopBar />
+        <div className="flex-1 p-8">
+          <Card title={`Rád bízott anyagok (${sajatAnyagok.length})`} icon={Clapperboard}>
+            <KorlatozottDashboard anyagok={sajatAnyagok} />
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   const [summary, projectCodes, visibleWidgets, myTasks, allowedPages] = await Promise.all([
     getDashboardSummary(),
     getProjectCodes(),

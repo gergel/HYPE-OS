@@ -57,13 +57,25 @@ const ICONS: Record<string, LucideIcon> = {
  * (vagy ha az nincs megadva, a href-je) szerepel a listában - lásd
  * NavItem.permissionPage kommentje arról, miért nem elég a puszta URL első
  * szegmense. A tényleges belépés-blokkolást a middleware végzi, ez csak a
- * navigáció elrejtése. */
-export function Sidebar({ allowedPages }: { allowedPages: string[] | null }) {
+ * navigáció elrejtése.
+ *
+ * anyagKorlat: ha nem null, a felhasználó CSAK a rábízott utómunka-anyagokat
+ * láthatja (külsős vágó fiókja) - neki a menüben egyáltalán nincs mire
+ * navigálni: a Dashboard maga a teendő-listája, az anyag pedig felugró
+ * ablakban nyílik (lásd KorlatozottDashboard). */
+export function Sidebar({
+  allowedPages,
+  anyagKorlat = null,
+}: {
+  allowedPages: string[] | null;
+  anyagKorlat?: number[] | null;
+}) {
   const pathname = usePathname();
 
   function isAllowed(item: NavItem): boolean {
-    if (!allowedPages) return true;
     const page = item.permissionPage ?? item.href;
+    if (anyagKorlat !== null) return page === "/dashboard";
+    if (!allowedPages) return true;
     return page === "/dashboard" || allowedPages.includes(page);
   }
 

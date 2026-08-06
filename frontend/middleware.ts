@@ -94,6 +94,7 @@ export async function middleware(request: NextRequest) {
   const topSegment = resolvePermissionPage(permissionPath);
 
   let allowedPages: string[] | null = null;
+  let anyagKorlat: number[] | null = null;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/user-access/me`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -109,13 +110,34 @@ export async function middleware(request: NextRequest) {
       // nem bántjuk. Az oldal saját lekérdezései úgyis jelzik, ha nincs adat.
       return NextResponse.next();
     }
-    allowedPages = ((await res.json()) as { allowed_pages: string[] | null }).allowed_pages;
+    const hozzaferes = (await res.json()) as {
+      allowed_pages: string[] | null;
+      lathato_deliverable_idk: number[] | null;
+    };
+    allowedPages = hozzaferes.allowed_pages;
+    anyagKorlat = hozzaferes.lathato_deliverable_idk;
   } catch {
     // Időtúllépés vagy hálózati hiba - ugyanaz a szabály: nem léptetjük ki.
     return NextResponse.next();
   }
 
-  if (allowedPages && allowedPages.length > 0 && topSegment !== "/dashboard" && !allowedPages.includes(topSegment)) {
+  // KORLÁTOZOTT fiók (külsős vágó): a rábízott anyagon kívül semmit nem
+  // nyithat meg. Számára a Dashboard a teendő-listája, az anyag pedig felugró
+  // ablakban (az /embed változaton) nyílik - minden más útvonal a
+  // Dashboardra visz vissza. A tényleges adat-hozzáférést a backend tartja be
+  // (lásd core/security.lathato_anyagok), ez a felület-szintű zár.
+  if (anyagKorlat !== null) {
+    const anyagEgyezes = permissionPath.match(/^\/utomunka\/(\d+)/);
+    const sajatAnyag = anyagEgyezes !== null && anyagKorlat.includes(Number(anyagEgyezes[1]));
+    if (topSegment !== "/dashboard" && !sajatAnyag) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+  } else if (
+    allowedPages &&
+    allowedPages.length > 0 &&
+    topSegment !== "/dashboard" &&
+    !allowedPages.includes(topSegment)
+  ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

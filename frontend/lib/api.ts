@@ -743,6 +743,15 @@ export async function getMyPageAccess(): Promise<string[] | null> {
   return res?.allowed_pages ?? null;
 }
 
+/** Ha nem null, a bejelentkezett felhasználó CSAK ezeket az utómunka-anyagokat
+ * láthatja (külsős vágó fiókja) - ilyenkor a felület is leszűkül: a Dashboard
+ * a saját anyagát adja teendőként, más oldal nem érhető el (lásd
+ * middleware.ts és components/dashboard/KorlatozottDashboard.tsx). */
+export async function getMyAnyagKorlat(): Promise<number[] | null> {
+  const res = await apiGet<{ lathato_deliverable_idk: number[] | null }>("/api/v1/user-access/me");
+  return res?.lathato_deliverable_idk ?? null;
+}
+
 /** A bejelentkezett felhasználó teljes {oldal_vagy_"oldal:fül": [művelet, ...]}
  * térképe - null = nincs korlátozás (mindent lát/szerkeszthet). A fül-szintű
  * nézési/szerkesztési jogosultság ugyanezt a dictet használja, "{page}:{tab_key}"
