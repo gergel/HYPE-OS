@@ -384,6 +384,23 @@ export async function getPendingSubcontractorsForProject(
   return apiGet<PendingSubcontractorProjectDetail>(`/api/v1/alvallalkozoi-szerzodesek/${projectId}`);
 }
 
+/** Egy projekthez MÁR elkészült (vagy kihagyott) eseti szerződés - a függő
+ * listáról a kiküldött szerződés eltűnik, ezért kell külön lekérni, hogy a
+ * kész papír (és a linkje) is látszódjon. */
+export type ElkeszultSzerzodes = {
+  contract_id: number;
+  employee_id: number;
+  full_name: string;
+  szerzodes_allapota: string | null;
+  netto_osszeg: number | null;
+  keltezes: string | null;
+  szerzodes_file_url: string | null;
+};
+
+export async function getAllContractsForProject(projectId: number): Promise<ElkeszultSzerzodes[]> {
+  return (await apiGet<ElkeszultSzerzodes[]>(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/all`)) ?? [];
+}
+
 export type PendingTigProject = {
   project_id: number;
   project_nev: string | null;

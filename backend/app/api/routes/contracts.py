@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
 from app.core.security import require_page_action
-from app.models.contract import Contract, ContractType
+from app.models.contract import Contract, ContractType, megkotott_keretszerzodes
 from app.models.employee import Employee
 from app.schemas.contract import ContractCreate, ContractRead, ContractUpdate
 
@@ -70,7 +70,7 @@ def create_keretszerzodes(
         # notion_import/importers.py _keretszerzodes_a_munkatarsbol). Ilyenkor
         # nem hibázunk és nem duplikálunk: a meglévő sort léptetjük elő valódi
         # keretszerződéssé, és pótoljuk a hiányzó cégadatokat.
-        if existing.alairva or existing.szerzodes_file_url or existing.szerzodes_allapota:
+        if megkotott_keretszerzodes(existing):
             raise HTTPException(status_code=400, detail="Ennek a munkatársnak már van keretszerződése.")
         for mezo, ertek in _cegadat(employee).items():
             if ertek is not None and getattr(existing, mezo, None) in (None, ""):

@@ -113,6 +113,7 @@ export function TigInvoiceManager({
             <tr className="border-b border-border">
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Megbízott</th>
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">TIG állapota</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">TIG dokumentum</th>
               <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Bruttó</th>
               <th className="min-w-[240px] py-1.5 pr-6 text-left font-medium text-text-secondary">Számlák</th>
               <th className="py-1.5 text-right font-medium text-text-secondary">Státusz</th>
@@ -133,6 +134,23 @@ export function TigInvoiceManager({
                       value={c.allapot}
                       canEdit={canEdit}
                     />
+                  </td>
+                  {/* Az elkészült TIG dokumentuma: a generálás+küldés után ez
+                      mutatja meg, mi ment ki - enélkül a kiküldött TIG-hez
+                      nem vezetne út a felületről. */}
+                  <td className="py-3 pr-6">
+                    {c.file_url ? (
+                      <a
+                        href={c.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-text-accent hover:underline"
+                      >
+                        Elkészült TIG
+                      </a>
+                    ) : (
+                      <span className="text-text-muted">–</span>
+                    )}
                   </td>
                   <td className="whitespace-nowrap py-3 pr-6 text-right">
                     {c.brutto_osszeg != null ? `${c.brutto_osszeg.toLocaleString("hu-HU")} Ft` : "–"}

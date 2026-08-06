@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
 from app.core.security import Role, get_current_user, hash_password, require_page_action, require_roles
-from app.models.contract import Contract, ContractType
+from app.models.contract import Contract, ContractType, megkotott_keretszerzodes
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.employee_document import EmployeeDocument
@@ -369,11 +369,10 @@ def kulsos_munkak(
     if db.get(Employee, employee_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Munkatárs nem található")
 
-    # Álló keretszerződés - de csak a VALÓDI: a Notion-import mindenkinél
-    # létrehozott egy projekt nélküli szerződés-sort, akinél a lapján volt
-    # cégadat, és ezek mögött nincs megkötött keretszerződés (lásd
-    # notion_import/importers.py _keretszerzodes_a_munkatarsbol). Keretszerződés
-    # az, amihez van aláírt papír vagy legalább állapot.
+    # Álló keretszerződés - de csak a VALÓDI (lásd models/contract.py
+    # megkotott_keretszerzodes): a Notion-import mindenkinél létrehozott egy
+    # projekt nélküli szerződés-sort, akinél a lapján volt cégadat, és ezek
+    # mögött nincs megkötött keretszerződés.
     keretszerzodes = next(
         (
             c
@@ -385,7 +384,7 @@ def kulsos_munkak(
             )
             .order_by(Contract.id.desc())
             .all()
-            if c.alairva or c.szerzodes_file_url or c.szerzodes_allapota
+            if megkotott_keretszerzodes(c)
         ),
         None,
     )

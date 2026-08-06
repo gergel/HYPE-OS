@@ -4,10 +4,12 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
+import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { TopBar } from "@/components/TopBar";
 import {
   formatDate,
+  getAllContractsForProject,
   getAllTigForProject,
   getEmployees,
   getPendingSubcontractorsForProject,
@@ -26,14 +28,16 @@ import {
 export default async function UtokovetesDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectId = Number(id);
-  const [detail, pendingContracts, pendingTig, allTig, allEmployees, pagePermissions] = await Promise.all([
-    getUtokovetesDetail(projectId),
-    getPendingSubcontractorsForProject(projectId),
-    getPendingTigForProject(projectId),
-    getAllTigForProject(projectId),
-    getEmployees(),
-    getMyPagePermissions(),
-  ]);
+  const [detail, pendingContracts, osszesSzerzodes, pendingTig, allTig, allEmployees, pagePermissions] =
+    await Promise.all([
+      getUtokovetesDetail(projectId),
+      getPendingSubcontractorsForProject(projectId),
+      getAllContractsForProject(projectId),
+      getPendingTigForProject(projectId),
+      getAllTigForProject(projectId),
+      getEmployees(),
+      getMyPagePermissions(),
+    ]);
   if (!detail) notFound();
 
   // Aki az oldalon szerkeszthet, az a TIG állapotát is kézzel át tudja állítani.
@@ -81,6 +85,9 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
 
         <Card title="Szerződés készítés">
           <SubcontractorContractManager projectId={projectId} pending={pendingContracts?.pending ?? []} />
+          {/* A kiküldött szerződés eltűnik a fenti (teendő-)listáról - itt
+              látszik, kinek van kész papírja, és hol van. */}
+          <ElkeszultSzerzodesek szerzodesek={osszesSzerzodes} />
         </Card>
 
         <Card title="Teljesítési igazolás (Külsős TIG)">

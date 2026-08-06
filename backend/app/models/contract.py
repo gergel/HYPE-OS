@@ -72,3 +72,23 @@ class Contract(TimestampMixin, Base):
     employee: Mapped["Employee"] = relationship(back_populates="contracts")
     project: Mapped["Project | None"] = relationship(back_populates="contracts", foreign_keys=[project_id])
     project_codes: Mapped[list["ProjectCode"]] = relationship(back_populates="contract")
+
+
+def megkotott_keretszerzodes(szerzodes: Contract) -> bool:
+    """Valódi, megkötött keretszerződés-e ez a sor?
+
+    A Notion-import MINDENKINEK létrehozott egy projekt nélküli
+    (alvállalkozói) szerződés-sort, akinek a saját lapján volt cégadat - lásd
+    notion_import/importers.py _keretszerzodes_a_munkatarsbol. Ezek mögött
+    nincs megkötött keretszerződés, csak a vállalkozás adatai: cégnév,
+    székhely, adószám. Ha ezeket keretszerződésnek vennénk, az egész
+    utókövetés elromlana - mindenkiről azt hinné a rendszer, hogy van
+    szerződése, és senkinek nem kérné az eseti szerződést.
+
+    Keretszerződése annak van, akinél megvan az aláírt papír (fájl vagy
+    "aláírva" jelölés), vagy legalább a szerződés állapota ki van töltve - a
+    kézzel felvett bejegyzés is kap egyet ("Aktív", lásd
+    api/routes/contracts.py create_keretszerzodes)."""
+    if szerzodes.project_id is not None or szerzodes.tipus != ContractType.ALVALLALKOZOI:
+        return False
+    return bool(szerzodes.alairva or szerzodes.szerzodes_file_url or szerzodes.szerzodes_allapota)

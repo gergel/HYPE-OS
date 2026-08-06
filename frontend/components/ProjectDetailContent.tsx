@@ -22,12 +22,14 @@ import { PerformanceCertificateManager } from "@/components/PerformanceCertifica
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
+import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { TopBar } from "@/components/TopBar";
 import { VagasiKoltsegOsszesen, type FutoMeres } from "@/components/deliverable/VagasiKoltsegOsszesen";
 import {
   ENTITY_PATHS,
+  getAllContractsForProject,
   getAllTigForProject,
   getAttachments,
   getCurrentUser,
@@ -98,6 +100,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     pendingContracts,
     pendingTig,
     allTig,
+    osszesSzerzodes,
     visibleFields,
     fieldTypes,
     dbTabs,
@@ -115,6 +118,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     getPendingSubcontractorsForProject(projectId),
     getPendingTigForProject(projectId),
     getAllTigForProject(projectId),
+    getAllContractsForProject(projectId),
     getVisibleFields("project"),
     getFieldTypes("project"),
     getDetailTabs("project"),
@@ -298,6 +302,9 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 pending={pendingContracts?.pending ?? []}
                 teljesitesAlap={pendingContracts?.teljesites_szoveg_alap ?? ""}
               />
+              {/* A kiküldött szerződés eltűnik a fenti (teendő-)listáról -
+                  itt látszik, kinek van kész papírja, és hol van. */}
+              <ElkeszultSzerzodesek szerzodesek={osszesSzerzodes} />
             </Card>
             <Card title="Teljesítési igazolás (Külsős TIG)" icon={FileText}>
               {pendingTig?.tig_ready ? (

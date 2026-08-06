@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
-from app.models.contract import Contract, ContractType
+from app.models.contract import Contract, ContractType, megkotott_keretszerzodes
 from app.models.employee import Employee, EmployeeType
 from app.models.project import Project
 from app.schemas.contract import ContractRead
@@ -90,7 +90,11 @@ def _load_contract_lookup(db: Session, employee_ids: set[int]) -> tuple[set[int]
         .filter(Contract.tipus == ContractType.ALVALLALKOZOI, Contract.employee_id.in_(employee_ids))
         .all()
     )
-    keretszerzodes_ids = {c.employee_id for c in contracts if c.project_id is None}
+    # CSAK a valódi keretszerződés mentesít az eseti szerződés alól: a
+    # Notion-importból származó, puszta cégadat-sorok nem (lásd
+    # models/contract.py megkotott_keretszerzodes) - különben a rendszer
+    # mindenkiről azt hinné, hogy már van szerződése.
+    keretszerzodes_ids = {c.employee_id for c in contracts if megkotott_keretszerzodes(c)}
     project_contracts = {(c.project_id, c.employee_id): c for c in contracts if c.project_id is not None}
     return keretszerzodes_ids, project_contracts
 
@@ -268,6 +272,53 @@ def get_pending_for_project(
     )
 
 
+class ElkeszultSzerzodes(BaseModel):
+    """Egy projekthez már elkészült (vagy kihagyott) eseti szerződés - a
+    felületen ez mutatja meg, hogy kinek van kész papírja, és hol van."""
+
+    contract_id: int
+    employee_id: int
+    full_name: str
+    szerzodes_allapota: str | None = None
+    netto_osszeg: float | None = None
+    keltezes: date | None = None
+    #: A generált dokumentum linkje (Google Docs), ha a küldés lefutott.
+    szerzodes_file_url: str | None = None
+
+
+@router.get("/{project_id}/all", response_model=list[ElkeszultSzerzodes])
+def list_all_for_project(
+    project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
+):
+    """Az adott projekt ÖSSZES eseti szerződés-bejegyzése, bármilyen
+    állapotban.
+
+    A függő lista (get_pending_for_project) szándékosan csak azokat adja
+    vissza, akikkel még van teendő - a kiküldött szerződés onnan eltűnik.
+    Ezért kell ez a végpont: az Utókövetésen az elkészült szerződésnek is
+    látszania kell, a generált dokumentumra mutató linkkel együtt."""
+    _get_project_or_404(db, project_id)
+    rows = (
+        db.query(Contract)
+        .options(selectinload(Contract.employee))
+        .filter(Contract.project_id == project_id, Contract.tipus == ContractType.ALVALLALKOZOI)
+        .all()
+    )
+    return [
+        ElkeszultSzerzodes(
+            contract_id=c.id,
+            employee_id=c.employee_id,
+            full_name=c.employee.full_name if c.employee else (c.ceg_neve or f"#{c.employee_id}"),
+            szerzodes_allapota=c.szerzodes_allapota,
+            netto_osszeg=float(c.netto_osszeg) if c.netto_osszeg is not None else None,
+            keltezes=c.keltezes,
+            szerzodes_file_url=c.szerzodes_file_url,
+        )
+        for c in rows
+        if c.employee_id is not None
+    ]
+
+
 def _validate_pending_employee(db: Session, project: Project, employee_id: int) -> Employee:
     employee = db.get(Employee, employee_id)
     if employee is None:
@@ -276,14 +327,19 @@ def _validate_pending_employee(db: Session, project: Project, employee_id: int) 
         raise HTTPException(status_code=400, detail="Ez a munkatárs nincs a projekt stábjában.")
     if employee.tipus == EmployeeType.BELSOS:
         raise HTTPException(status_code=400, detail="Belsős munkatársnak nem kell eseti szerződés.")
-    keretszerzodes = (
-        db.query(Contract)
-        .filter(
-            Contract.tipus == ContractType.ALVALLALKOZOI,
-            Contract.employee_id == employee_id,
-            Contract.project_id.is_(None),
-        )
-        .first()
+    keretszerzodes = next(
+        (
+            c
+            for c in db.query(Contract)
+            .filter(
+                Contract.tipus == ContractType.ALVALLALKOZOI,
+                Contract.employee_id == employee_id,
+                Contract.project_id.is_(None),
+            )
+            .all()
+            if megkotott_keretszerzodes(c)
+        ),
+        None,
     )
     if keretszerzodes is not None:
         raise HTTPException(
