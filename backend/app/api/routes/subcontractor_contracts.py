@@ -30,6 +30,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.contract import Contract, ContractType, megkotott_keretszerzodes
 from app.models.employee import Employee, EmployeeType
+from app.models.performance_certificate import PerformanceCertificate
 from app.models.project import Project
 from app.schemas.contract import ContractRead
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
@@ -519,3 +520,48 @@ def skip_contract(
     db.commit()
     db.refresh(draft)
     return ContractRead.model_validate(draft)
+
+
+@router.delete("/{project_id}/{employee_id}", status_code=204)
+def delete_contract(
+    project_id: int,
+    employee_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    """Az eseti szerződés-bejegyzés teljes törlése - a munkatárs ezután újra
+    "hiányzik" ezen a projekten, és készíthető neki új szerződés.
+
+    Az állapot visszaállítása nem mindig elég: ha rossz adattal ment ki a
+    szerződés (vagy tévesen lett kihagyva), tiszta lappal kell újrakezdeni.
+
+    Ha a projekten már készült TIG ehhez az emberhez, azt előbb törölni kell:
+    a TIG a szerződés lezárása UTÁN következő lépés, és a szerződés törlésével
+    a projekt visszalép a szerződés-fázisba - a fázisok ne csúszhassanak
+    egymásba."""
+    contract = (
+        db.query(Contract)
+        .filter(
+            Contract.project_id == project_id,
+            Contract.employee_id == employee_id,
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+        )
+        .first()
+    )
+    if contract is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és emberhez nincs szerződés-bejegyzés.")
+    van_tig = (
+        db.query(PerformanceCertificate)
+        .filter(
+            PerformanceCertificate.project_id == project_id,
+            PerformanceCertificate.employee_id == employee_id,
+        )
+        .first()
+    )
+    if van_tig is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Ehhez az emberhez már készült TIG ezen a projekten - előbb a TIG-et kell törölni.",
+        )
+    db.delete(contract)
+    db.commit()

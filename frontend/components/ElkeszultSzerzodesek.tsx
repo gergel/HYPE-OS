@@ -1,4 +1,11 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useConfirm } from "@/components/ConfirmProvider";
 import { formatFt } from "@/lib/ido";
 import type { ElkeszultSzerzodes } from "@/lib/api";
 
@@ -7,10 +14,49 @@ import type { ElkeszultSzerzodes } from "@/lib/api";
  * A fölötte lévő "Szerződés készítés" blokk csak a TEENDŐKET sorolja fel:
  * amint egy szerződés kiküldésre kerül (vagy kihagyják), az onnan eltűnik.
  * Ez a lista mutatja meg, kinek van kész papírja - a generált dokumentum
- * linkjével és a szerződés adatlapjával, ahová az aláírt PDF feltölthető. */
-export function ElkeszultSzerzodesek({ szerzodesek }: { szerzodesek: ElkeszultSzerzodes[] }) {
+ * linkjével és a szerződés adatlapjával, ahová az aláírt PDF feltölthető.
+ *
+ * Innen törölhető is: ha rossz adattal ment ki (vagy tévesen lett kihagyva),
+ * a törlés után az illető visszakerül a teendők közé, és készíthető neki új
+ * szerződés (lásd backend subcontractor_contracts.py delete_contract). */
+export function ElkeszultSzerzodesek({
+  projectId,
+  szerzodesek,
+  canDelete = true,
+}: {
+  projectId: number;
+  szerzodesek: ElkeszultSzerzodes[];
+  canDelete?: boolean;
+}) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [busyId, setBusyId] = useState<number | null>(null);
+
   const kesz = szerzodesek.filter((s) => s.szerzodes_allapota === "Kiküldve" || s.szerzodes_allapota === "Kihagyva");
   if (kesz.length === 0) return null;
+
+  async function torol(s: ElkeszultSzerzodes) {
+    const ok = await confirm(
+      `Törlöd ${s.full_name} szerződését erről a projektről? Ezután újra a teendők közt jelenik meg, és készíthetsz neki újat.`,
+    );
+    if (!ok) return;
+    setBusyId(s.employee_id);
+    try {
+      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.employee_id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen törlés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="mt-4 border-t border-border pt-4">
@@ -22,7 +68,8 @@ export function ElkeszultSzerzodesek({ szerzodesek }: { szerzodesek: ElkeszultSz
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Megbízott</th>
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Állapot</th>
               <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Nettó</th>
-              <th className="py-1.5 text-left font-medium text-text-secondary">Szerződés</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Szerződés</th>
+              <th className="py-1.5 text-right font-medium text-text-secondary" />
             </tr>
           </thead>
           <tbody>
@@ -39,7 +86,7 @@ export function ElkeszultSzerzodesek({ szerzodesek }: { szerzodesek: ElkeszultSz
                 <td className="whitespace-nowrap py-2.5 pr-6 text-right tabular-nums">
                   {s.netto_osszeg === null ? "–" : formatFt(s.netto_osszeg)}
                 </td>
-                <td className="py-2.5">
+                <td className="py-2.5 pr-6">
                   <span className="flex flex-wrap gap-x-3 gap-y-1">
                     {s.szerzodes_file_url && (
                       <a
@@ -57,6 +104,19 @@ export function ElkeszultSzerzodesek({ szerzodesek }: { szerzodesek: ElkeszultSz
                       Adatlap és fájlok
                     </a>
                   </span>
+                </td>
+                <td className="py-2.5 text-right">
+                  {canDelete && (
+                    <button
+                      type="button"
+                      disabled={busyId === s.employee_id}
+                      onClick={() => torol(s)}
+                      title="Szerződés törlése - utána újra elkészíthető"
+                      className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

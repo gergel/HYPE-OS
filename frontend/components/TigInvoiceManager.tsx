@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Trash2, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
@@ -18,7 +18,12 @@ import type { PerformanceCertificate } from "@/lib/api";
  *
  * Egy TIG-hez több számla is tartozhat (pl. részszámlák), és bármelyik
  * külön-külön törölhető - a törlés a kifizetettséget NEM vonja vissza, mert az
- * már pénzügyi tény (lásd backend delete_szamla). */
+ * már pénzügyi tény (lásd backend delete_szamla).
+ *
+ * Maga a TIG is törölhető innen (amíg nincs kifizetve): ha rossz adattal ment
+ * ki, vagy tévesen lett kihagyva, a törlés után az illető visszakerül a
+ * teendők közé, és készíthető neki új TIG. Ezért jelennek meg itt a KIHAGYOTT
+ * bejegyzések is - különben egy téves kihagyás sehol nem lenne javítható. */
 export function TigInvoiceManager({
   projectId,
   basePath,
@@ -40,7 +45,7 @@ export function TigInvoiceManager({
   const confirm = useConfirm();
   const [busyId, setBusyId] = useState<number | null>(null);
 
-  const ready = certificates.filter((c) => c.allapot === readyStatus);
+  const ready = certificates.filter((c) => c.allapot === readyStatus || c.allapot === "Kihagyva");
 
   /** Egyszerre több kiválasztott fájl is feltölthető - egymás után megy fel,
    * mert minden hívás egy külön számla-sort hoz létre a backenden. */
@@ -84,6 +89,27 @@ export function TigInvoiceManager({
     }
   }
 
+  async function deleteCertificate(employeeId: number, nev: string) {
+    const ok = await confirm(
+      `Törlöd ${nev} teljesítési igazolását erről a projektről? Ezután újra a teendők közt jelenik meg, és készíthetsz neki újat.`,
+    );
+    if (!ok) return;
+    setBusyId(employeeId);
+    try {
+      const res = await authFetch(`${basePath}/${projectId}/${employeeId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen törlés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function markPaid(employeeId: number) {
     if (!(await confirm("Kifizetettként jelölöd a számlát? Ez létrehoz (vagy frissít) egy Kiadás sort a Pénzügyben."))) return;
     setBusyId(employeeId);
@@ -106,7 +132,7 @@ export function TigInvoiceManager({
 
   return (
     <div className="mt-4 border-t border-border pt-4">
-      <p className="mb-2 text-[13px] font-medium text-text-primary">Számlák</p>
+      <p className="mb-2 text-[13px] font-medium text-text-primary">Elkészült TIG-ek és számlák</p>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[13px]">
           <thead>
@@ -116,7 +142,8 @@ export function TigInvoiceManager({
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">TIG dokumentum</th>
               <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Bruttó</th>
               <th className="min-w-[240px] py-1.5 pr-6 text-left font-medium text-text-secondary">Számlák</th>
-              <th className="py-1.5 text-right font-medium text-text-secondary">Státusz</th>
+              <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Státusz</th>
+              <th className="py-1.5 text-right font-medium text-text-secondary" />
             </tr>
           </thead>
           <tbody>
@@ -194,7 +221,7 @@ export function TigInvoiceManager({
                       </label>
                     </div>
                   </td>
-                  <td className="py-3 text-right">
+                  <td className="py-3 pr-6 text-right">
                     {c.szamla_kifizetve ? (
                       <StatusBadge label="Kifizetve" tone="success" />
                     ) : invoices.length > 0 ? (
@@ -208,6 +235,22 @@ export function TigInvoiceManager({
                       </button>
                     ) : (
                       <StatusBadge label="Nincs számla" tone="neutral" />
+                    )}
+                  </td>
+                  <td className="py-3 text-right">
+                    {/* A kifizetett TIG-hez Kiadás sor tartozik a Pénzügyben -
+                        azt a backend nem is engedi törölni (lásd
+                        performance_certificates.py delete_certificate). */}
+                    {canEdit && !c.szamla_kifizetve && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => deleteCertificate(c.employee_id, employeeNameById.get(c.employee_id) ?? "a megbízott")}
+                        title="TIG törlése - utána újra elkészíthető"
+                        className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+                      >
+                        <XCircle size={14} />
+                      </button>
                     )}
                   </td>
                 </tr>

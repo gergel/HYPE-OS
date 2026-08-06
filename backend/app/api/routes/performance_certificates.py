@@ -611,3 +611,39 @@ def mark_szamla_kifizetve(
     db.commit()
     db.refresh(cert)
     return PerformanceCertificateRead.model_validate(cert)
+
+
+@router.delete("/{project_id}/{employee_id}", status_code=204)
+def delete_certificate(
+    project_id: int,
+    employee_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    """A TIG-bejegyzés teljes törlése - a munkatárs ezután újra "hiányzik"
+    ezen a projekten, és készíthető neki új TIG.
+
+    Erre azért van szükség, mert a TIG egy elrontott adattal (rossz összeg,
+    rossz teljesítés) is kiküldhető: az állapot visszaállítása nem elég, ha
+    tiszta lappal akarjuk újrakezdeni. A feltöltött számlák a TIG-gel együtt
+    törlődnek (cascade), a fájlok a tárolóból is.
+
+    Amit MÁR kifizettünk, azt nem töröljük: ahhoz Kiadás (Expense) sor
+    tartozik a Pénzügyben, tehát pénzügyi tény - előbb azt kell rendezni."""
+    cert = (
+        db.query(PerformanceCertificate)
+        .options(selectinload(PerformanceCertificate.invoices))
+        .filter(PerformanceCertificate.project_id == project_id, PerformanceCertificate.employee_id == employee_id)
+        .first()
+    )
+    if cert is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és emberhez nincs TIG bejegyzés.")
+    if cert.szamla_kifizetve:
+        raise HTTPException(
+            status_code=400,
+            detail="Ez a TIG már ki van fizetve (Kiadás sor tartozik hozzá a Pénzügyben) - előbb azt kell rendezni.",
+        )
+    for invoice in cert.invoices:
+        document_storage.delete_object(invoice.storage_key)
+    db.delete(cert)
+    db.commit()

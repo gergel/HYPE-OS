@@ -42,6 +42,9 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
 
   // Aki az oldalon szerkeszthet, az a TIG állapotát is kézzel át tudja állítani.
   const canEdit = pagePermissions === null || !!pagePermissions["/utokovetes"]?.includes("edit");
+  // A szerződés/TIG TÖRLÉSE külön jog (a backend is azt kéri) - ez dobja
+  // vissza az embert a teendők közé, hogy újat lehessen készíteni neki.
+  const canDelete = pagePermissions === null || !!pagePermissions["/utokovetes"]?.includes("delete");
 
   const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
 
@@ -87,7 +90,7 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
           <SubcontractorContractManager projectId={projectId} pending={pendingContracts?.pending ?? []} />
           {/* A kiküldött szerződés eltűnik a fenti (teendő-)listáról - itt
               látszik, kinek van kész papírja, és hol van. */}
-          <ElkeszultSzerzodesek szerzodesek={osszesSzerzodes} />
+          <ElkeszultSzerzodesek projectId={projectId} szerzodesek={osszesSzerzodes} canDelete={canDelete} />
         </Card>
 
         <Card title="Teljesítési igazolás (Külsős TIG)">

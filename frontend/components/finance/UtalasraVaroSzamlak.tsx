@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Download, RefreshCw } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import type { UtalasraVaroTetel } from "@/lib/api";
 import { formatFt } from "@/lib/ido";
+
+/** Ennyi tétel látszik alapból - a többi egy kattintással nyitható. A lista
+ * hosszú tud lenni, és utaláskor úgyis a legsürgetőbb (legkorábbi határidejű)
+ * tételekkel kezdünk, azok pedig elöl vannak. */
+const ELSO_ADAG = 10;
 
 /** Utalásra váró számlák: ami már megérkezett hozzánk számlaként, de még nem
  * utaltuk el (kiadások, külsős és belsős TIG-ek egy listában).
@@ -19,8 +24,16 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
   const [kijelolt, setKijelolt] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
+  const [mindMutat, setMindMutat] = useState(false);
 
-  useEffect(() => setTetelek(kezdeti), [kezdeti]);
+  // A szerverről frissen kapott lista felülírja a helyben tartottat (amit a
+  // "Frissítés" gomb tölt újra). Renderelés közbeni igazítás, nem useEffect:
+  // így nincs egy felesleges, elavult adattal megrajzolt kör.
+  const [elozoKezdeti, setElozoKezdeti] = useState(kezdeti);
+  if (kezdeti !== elozoKezdeti) {
+    setElozoKezdeti(kezdeti);
+    setTetelek(kezdeti);
+  }
 
   // Ami közben eltűnt a listáról (mert kifizetettre került), az a kijelölésből
   // is essen ki - különben egy már elutalt tétel is bekerülne a csomagba.
@@ -103,6 +116,10 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
   }
 
   const ma = new Date().toISOString().slice(0, 10);
+  // A kijelölés, az összegzés és a ZIP MINDIG a teljes listára vonatkozik -
+  // a lenyitás csak azt szabályozza, mennyi látszik belőle.
+  const lathato = mindMutat ? tetelek : tetelek.slice(0, ELSO_ADAG);
+  const rejtett = tetelek.length - lathato.length;
 
   return (
     <div className="space-y-4">
@@ -153,7 +170,7 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
             </tr>
           </thead>
           <tbody>
-            {tetelek.map((t) => {
+            {lathato.map((t) => {
               const lejart = t.hatarido !== null && t.hatarido < ma;
               return (
                 <tr key={t.kulcs}>
@@ -184,6 +201,32 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
                 </tr>
               );
             })}
+            {rejtett > 0 && (
+              <tr>
+                <td colSpan={7} className="py-2">
+                  <button
+                    type="button"
+                    onClick={() => setMindMutat(true)}
+                    className="text-[12.5px] text-text-accent hover:underline"
+                  >
+                    További {rejtett} tétel mutatása
+                  </button>
+                </td>
+              </tr>
+            )}
+            {mindMutat && tetelek.length > ELSO_ADAG && (
+              <tr>
+                <td colSpan={7} className="py-2">
+                  <button
+                    type="button"
+                    onClick={() => setMindMutat(false)}
+                    className="text-[12.5px] text-text-secondary hover:text-text-primary hover:underline"
+                  >
+                    Csak az első {ELSO_ADAG} mutatása
+                  </button>
+                </td>
+              </tr>
+            )}
             <tr className="font-medium">
               <td colSpan={6} className="text-text-secondary">
                 Összesen ({tetelek.length} tétel)

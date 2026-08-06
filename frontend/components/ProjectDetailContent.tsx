@@ -304,7 +304,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
               />
               {/* A kiküldött szerződés eltűnik a fenti (teendő-)listáról -
                   itt látszik, kinek van kész papírja, és hol van. */}
-              <ElkeszultSzerzodesek szerzodesek={osszesSzerzodes} />
+              <ElkeszultSzerzodesek projectId={project.id} szerzodesek={osszesSzerzodes} />
             </Card>
             <Card title="Teljesítési igazolás (Külsős TIG)" icon={FileText}>
               {pendingTig?.tig_ready ? (
