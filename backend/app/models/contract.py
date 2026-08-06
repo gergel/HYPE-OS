@@ -42,6 +42,16 @@ class Contract(TimestampMixin, Base):
     szerzodes_file_url: Mapped[str | None] = mapped_column(String(500))
     keltezes: Mapped[date | None] = mapped_column(Date)
     alairva: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Álló KERETSZERZŐDÉS-e ez a sor, vagy egy ESETI megbízási szerződés?
+    #
+    # A projekt nélküli (project_id IS NULL) alvállalkozói sorok kétfélék:
+    # - a Notion "Alvállakozó keretszerződés (külsős)" táblájából jövők - ezek
+    #   a valódi keretszerződések, ezek mentesítenek a projektenkénti eseti
+    #   szerződés alól (itt True);
+    # - a "Külsős és belsős" tábla emberei mellől jövők (cégadat + a lapjukon
+    #   lévő aláírt PDF) - ezek eseti megbízási szerződések, nem keretszerződés
+    #   (itt False), lásd notion_import/importers.py.
+    keretszerzodes: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Eseti (projektenkénti) alvállalkozói szerződés mezői - a csatolt
     # "kulsos-eseti-szerzodes" program Notion-mezőinek megfelelői.
@@ -75,20 +85,27 @@ class Contract(TimestampMixin, Base):
 
 
 def megkotott_keretszerzodes(szerzodes: Contract) -> bool:
-    """Valódi, megkötött keretszerződés-e ez a sor?
+    """Valódi, álló keretszerződés-e ez a sor?
 
-    A Notion-import MINDENKINEK létrehozott egy projekt nélküli
-    (alvállalkozói) szerződés-sort, akinek a saját lapján volt cégadat - lásd
-    notion_import/importers.py _keretszerzodes_a_munkatarsbol. Ezek mögött
-    nincs megkötött keretszerződés, csak a vállalkozás adatai: cégnév,
-    székhely, adószám. Ha ezeket keretszerződésnek vennénk, az egész
-    utókövetés elromlana - mindenkiről azt hinné a rendszer, hogy van
-    szerződése, és senkinek nem kérné az eseti szerződést.
+    Keretszerződése annak van, aki a Notion "Alvállakozó keretszerződés
+    (külsős)" táblájában szerepel - ezt a `keretszerzodes` jelölő hordozza,
+    amit az import és a kézi felvétel állít be (lásd
+    notion_import/importers.py import_contracts, illetve
+    api/routes/contracts.py create_keretszerzodes).
 
-    Keretszerződése annak van, akinél megvan az aláírt papír (fájl vagy
-    "aláírva" jelölés), vagy legalább a szerződés állapota ki van töltve - a
-    kézzel felvett bejegyzés is kap egyet ("Aktív", lásd
-    api/routes/contracts.py create_keretszerzodes)."""
+    A többi projekt nélküli alvállalkozói sor ESETI megbízási szerződés: ezek
+    a "Külsős és belsős" tábla emberei mellől jönnek (cégadat + a saját
+    lapjukon lévő aláírt PDF). Ha ezeket keretszerződésnek vennénk, az
+    utókövetés elromlana - mindenkiről azt hinné a rendszer, hogy van álló
+    szerződése, és senkinek nem kérné az eseti szerződést."""
     if szerzodes.project_id is not None or szerzodes.tipus != ContractType.ALVALLALKOZOI:
         return False
-    return bool(szerzodes.alairva or szerzodes.szerzodes_file_url or szerzodes.szerzodes_allapota)
+    return bool(szerzodes.keretszerzodes)
+
+
+def eseti_megbizasi_szerzodes(szerzodes: Contract) -> bool:
+    """Eseti megbízási szerződés-e? Minden alvállalkozói szerződés, ami nem
+    álló keretszerződés - akár egy projekthez kötött (lásd
+    services/subcontractor_contracts.py), akár a munkatárs Notion-lapjáról
+    jött, projekt nélküli sor."""
+    return szerzodes.tipus == ContractType.ALVALLALKOZOI and not megkotott_keretszerzodes(szerzodes)

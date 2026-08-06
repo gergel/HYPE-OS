@@ -19,6 +19,9 @@ class ContractBase(BaseModel):
     szerzodes_allapota: str | None = None
     keltezes: date | None = None
     alairva: bool = False
+    # Álló keretszerződés (True) vagy eseti megbízási szerződés (False) -
+    # lásd models/contract.py Contract.keretszerzodes.
+    keretszerzodes: bool = False
     netto_osszeg: float | None = None
     teljesites_kezdete: date | None = None
     teljesites_vege: date | None = None

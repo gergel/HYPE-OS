@@ -116,6 +116,12 @@ export default async function EmployeeDetailPage({
   // A külsős és a belsős elszámolása alapvetően különbözik (havi bér vs.
   // projektenkénti szerződés + TIG), ezért más blokkok kerülnek az adatlapra.
   const kulsos = employee.tipus === "kulsos";
+  // A szerződések kétfélék: az álló KERETSZERZŐDÉS (a Notion "Alvállakozó
+  // keretszerződés (külsős)" táblájából, jelölővel), és minden más, ami ESETI
+  // megbízási szerződés - projekthez kötött vagy a munkatárs saját lapjáról
+  // jövő (lásd backend models/contract.py Contract.keretszerzodes).
+  const keretszerzodesek = contracts.filter((c) => c.keretszerzodes === true && !c.project_id);
+  const esetiSzerzodesek = contracts.filter((c) => !(c.keretszerzodes === true && !c.project_id));
   const szerkeszthet = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
   const torolhet = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
   const projektkodOpciok = projektkodok.map((p) => ({ id: p.id, projektkod: p.projektkod }));
@@ -267,12 +273,40 @@ export default async function EmployeeDetailPage({
         label: "Szerződések",
         content: (
           <Card title={`Szerződések (${contracts.length})`} icon={FileText}>
-            <RelatedTable
-              rows={contracts}
-              emptyText="Nincs szerződés ehhez a crew taghoz."
-              getHref={(c) => `/szerzodesek/${c.id}`}
-              deleteBasePath={ENTITY_PATHS.contract}
-            />
+            {/* A KÜLSŐSÖKNÉL két külön szerződés-rész: a fent álló
+                keretszerződés (a Notion "Alvállakozó keretszerződés (külsős)"
+                táblájából) és az eseti megbízási szerződések (projektenként,
+                illetve a munkatárs saját Notion-lapjáról). A kettő nem
+                cserélhető fel: keretszerződés mellett nem kell projektenkénti
+                eseti szerződés (lásd backend models/contract.py
+                megkotott_keretszerzodes). Belsősnél nincs ilyen bontás. */}
+            {kulsos ? (
+              <>
+                <p className="t-label mb-3">Keretszerződés</p>
+                <RelatedTable
+                  rows={keretszerzodesek}
+                  emptyText="Nincs keretszerződés - ennél a munkatársnál projektenként eseti megbízási szerződés kell."
+                  getHref={(c) => `/szerzodesek/${c.id}`}
+                  deleteBasePath={ENTITY_PATHS.contract}
+                />
+                <div className="mt-6 border-t border-border pt-5">
+                  <p className="t-label mb-3">Eseti megbízási szerződések ({esetiSzerzodesek.length})</p>
+                  <RelatedTable
+                    rows={esetiSzerzodesek}
+                    emptyText="Nincs eseti megbízási szerződés."
+                    getHref={(c) => `/szerzodesek/${c.id}`}
+                    deleteBasePath={ENTITY_PATHS.contract}
+                  />
+                </div>
+              </>
+            ) : (
+              <RelatedTable
+                rows={contracts}
+                emptyText="Nincs szerződés ehhez a crew taghoz."
+                getHref={(c) => `/szerzodesek/${c.id}`}
+                deleteBasePath={ENTITY_PATHS.contract}
+              />
+            )}
             {/* A keretszerződés (és bármi más aláírt papír) fájlja ITT
                 tölthető fel, akár több is - a tárolás az R2-n van (lásd
                 backend services/attachments.py). */}

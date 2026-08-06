@@ -564,11 +564,15 @@ def _tarsult_keretszerzodes(db: Session, result: ImportResult, employee_id: int,
         "email": mintarol.email,
         "nev": mintarol.nev,
     }
+    # Csak a KERETSZERZŐDÉS-sorát keressük: ha az embernek van eseti megbízási
+    # szerződése (a saját Notion-lapjáról, lásd _eseti_szerzodes_a_munkatarsbol),
+    # azt nem léptetjük elő keretszerződéssé - a kettő külön sor, külön szekció.
     meglevo = db.scalar(
         select(Contract).where(
             Contract.employee_id == employee_id,
             Contract.tipus == ContractType.ALVALLALKOZOI,
             Contract.project_id.is_(None),
+            Contract.keretszerzodes.is_(True),
         )
     )
     try:
@@ -577,6 +581,7 @@ def _tarsult_keretszerzodes(db: Session, result: ImportResult, employee_id: int,
                 uj = Contract(
                     tipus=ContractType.ALVALLALKOZOI,
                     employee_id=employee_id,
+                    keretszerzodes=True,
                     alairva=mintarol.alairva,
                     **{k: v for k, v in mezok.items() if v is not None},
                 )
@@ -611,20 +616,21 @@ def _szerzodes_fajl_urlek(props: dict) -> list[str]:
     return talalatok
 
 
-def _keretszerzodes_a_munkatarsbol(db: Session, result: ImportResult, page: dict, props: dict) -> None:
+def _eseti_szerzodes_a_munkatarsbol(db: Session, result: ImportResult, page: dict, props: dict) -> None:
     """A munkatárs saját lapján lévő cégadatból és aláírt szerződés-PDF-ből
-    álló keretszerződés.
+    álló ESETI megbízási szerződés.
 
-    A HYPE Notionban a keretszerződés adatai NEM csak a szerződés-táblában
-    vannak: a "Külsős és belsős" tábla minden emberénél ott a cégneve,
-    székhelye, adószáma, és a "Szerződés aláírva" mezőben maga az aláírt PDF.
-    Akinek nincs külön szerződés-lapja, annak enélkül sehol nem lenne
-    keretszerződése a rendszerben.
+    A "Külsős és belsős" tábla minden emberénél ott a cégneve, székhelye,
+    adószáma, és a "Szerződés aláírva" mezőben maga az aláírt PDF. Ez NEM
+    keretszerződés: keretszerződése annak van, aki az "Alvállakozó
+    keretszerződés (külsős)" táblában szerepel. Ami innen jön, az eseti
+    megbízási szerződés (lásd models/contract.py Contract.keretszerzodes).
 
-    Ha a munkatársnak MÁR van álló keretszerződése (akár a szerződés-táblából,
-    akár egy korábbi futásból), azt nem duplikáljuk: csak a hiányzó mezőit
-    egészítjük ki - amit a rendszerben már beírtak, azt egy import nem írja
-    felül."""
+    Ha a munkatársnak MÁR van álló szerződés-sora (akár a keretszerződés-
+    táblából, akár egy korábbi futásból), azt nem duplikáljuk: csak a hiányzó
+    mezőit egészítjük ki - amit a rendszerben már beírtak, azt egy import nem
+    írja felül. Aki tehát a keretszerződés-táblában is szerepel, annál ez az
+    adat a keretszerződéséhez kerül, nem nyit új sort."""
     from sqlalchemy import select
 
     employee_id = resolve_relation_id(db, "Employee", [page["id"]])
@@ -675,7 +681,7 @@ def _keretszerzodes_a_munkatarsbol(db: Session, result: ImportResult, page: dict
                 db.flush()
                 result.updated += 1
     except Exception as exc:  # noqa: BLE001 - soronkénti izoláció
-        result.errors.append(f"Keretszerződés '{employee.full_name}': {type(exc).__name__}: {exc}")
+        result.errors.append(f"Eseti szerződés '{employee.full_name}': {type(exc).__name__}: {exc}")
         return
 
     # Az aláírt PDF a szerződés-rekordhoz is odakerül (a munkatárs
@@ -772,6 +778,10 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
             {
                 "tipus": ContractType.ALVALLALKOZOI,
                 "employee_id": employee_id,
+                # EZ a tábla a keretszerződéseké: ami innen jön, az álló
+                # keretszerződés - és csak ez jelenik meg a Keretszerződések
+                # fülön (lásd models/contract.py Contract.keretszerzodes).
+                "keretszerzodes": True,
                 # A Name mező a CÉG, amivel szerződünk - ha nincs külön
                 # cégnév-mező, az a cégnév (a "Személy" az ember, lásd
                 # _szerzodes_munkatarsai).
@@ -811,7 +821,7 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
     # 3. forrás: a munkatársak saját lapja (cégadat + aláírt PDF) - ez pótolja
     # azokat a keretszerződéseket, amikhez nincs külön szerződés-lap.
     for page, props in kulsos_belsos:
-        _keretszerzodes_a_munkatarsbol(db, result, page, props)
+        _eseti_szerzodes_a_munkatarsbol(db, result, page, props)
 
     return result
 

@@ -60,30 +60,21 @@ def create_keretszerzodes(
             Contract.tipus == ContractType.ALVALLALKOZOI,
             Contract.employee_id == employee.id,
             Contract.project_id.is_(None),
+            Contract.keretszerzodes.is_(True),
         )
         .first()
     )
-    if existing is not None:
-        # A Notion-import mindenkinél létrehozott egy álló szerződés-sort, akinél
-        # a saját lapján volt cégadat - ezek mögött nincs megkötött
-        # keretszerződés, csak a vállalkozás adatai (lásd
-        # notion_import/importers.py _keretszerzodes_a_munkatarsbol). Ilyenkor
-        # nem hibázunk és nem duplikálunk: a meglévő sort léptetjük elő valódi
-        # keretszerződéssé, és pótoljuk a hiányzó cégadatokat.
-        if megkotott_keretszerzodes(existing):
-            raise HTTPException(status_code=400, detail="Ennek a munkatársnak már van keretszerződése.")
-        for mezo, ertek in _cegadat(employee).items():
-            if ertek is not None and getattr(existing, mezo, None) in (None, ""):
-                setattr(existing, mezo, ertek)
-        existing.szerzodes_allapota = "Aktív"
-        db.commit()
-        db.refresh(existing)
-        return ContractRead.model_validate(existing)
+    if existing is not None and megkotott_keretszerzodes(existing):
+        raise HTTPException(status_code=400, detail="Ennek a munkatársnak már van keretszerződése.")
 
+    # A munkatársnak lehet ESETI megbízási szerződése is (a Notion-lapjáról, a
+    # cégadataiból) - azt nem léptetjük elő és nem írjuk felül: a keretszerződés
+    # külön sor, külön szekció (lásd models/contract.py Contract.keretszerzodes).
     contract = Contract(
         tipus=ContractType.ALVALLALKOZOI,
         employee_id=employee.id,
         project_id=None,
+        keretszerzodes=True,
         szerzodes_allapota="Aktív",
         **_cegadat(employee),
     )

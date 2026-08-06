@@ -227,6 +227,9 @@ export type Contract = {
   szerzodes_allapota: string | null;
   keltezes: string | null;
   alairva: boolean;
+  /** Álló keretszerződés (true) vagy eseti megbízási szerződés (false) -
+   * lásd backend models/contract.py Contract.keretszerzodes. */
+  keretszerzodes: boolean;
   netto_osszeg: number | null;
   teljesites_kezdete: string | null;
   teljesites_vege: string | null;
