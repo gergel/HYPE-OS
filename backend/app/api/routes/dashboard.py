@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.dashboard_config import DashboardConfig
 from app.models.deliverable import Deliverable
+from app.models.deliverable_status import DeliverableStatusConfig
 from app.models.dispo_responsible import DispoResponsible, DispoSide
 from app.models.employee import Employee, SystemRole
 from app.models.finance import Revenue
@@ -139,14 +140,25 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
         RevenueMonth(month=f"{y:04d}-{m:02d}", total=revenue_by_month.get((y, m), 0.0)) for y, m in months
     ]
 
-    lejart_utomunka = (
-        db.scalar(
-            select(func.count())
-            .select_from(Deliverable)
-            .where(Deliverable.hatarido.is_not(None), Deliverable.hatarido < today, Deliverable.anyag_kikuldve.is_(False))
-        )
-        or 0
+    # Ami ELKÉSZÜLT, az nem lejárt határidő - hiába van a határideje a
+    # múltban. Melyik állapot számít elkészültnek, azt az admin állítja be az
+    # Utómunka tábláján (lásd models/deliverable_status.py); alapból a
+    # kiküldött anyag számít csak késznek.
+    kesz_allapotok = list(
+        db.scalars(
+            select(DeliverableStatusConfig.allapot).where(DeliverableStatusConfig.kesz_allapot.is_(True))
+        ).all()
     )
+    lejart_feltetelek = [
+        Deliverable.hatarido.is_not(None),
+        Deliverable.hatarido < today,
+        Deliverable.anyag_kikuldve.is_(False),
+    ]
+    if kesz_allapotok:
+        lejart_feltetelek.append(
+            or_(Deliverable.allapot.is_(None), Deliverable.allapot.not_in(kesz_allapotok))
+        )
+    lejart_utomunka = db.scalar(select(func.count()).select_from(Deliverable).where(*lejart_feltetelek)) or 0
     lejart_feladat = (
         db.scalar(
             select(func.count())

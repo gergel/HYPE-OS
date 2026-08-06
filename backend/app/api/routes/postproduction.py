@@ -15,6 +15,7 @@ from app.core.security import (
     require_roles,
 )
 from app.models.deliverable import Deliverable
+from app.models.deliverable_status import DeliverableStatusConfig
 from app.models.employee import Employee
 from app.models.feedback import Feedback
 from app.models.timesheet import Timesheet
@@ -123,6 +124,64 @@ def get_assignable_employees(db: Session = Depends(get_db), _user: Employee = De
     """Kik jelölhetők ki az "Assigned To" mezőben - csak azok, akiknek van
     bejelentkezési joga és hozzáférése az /utomunka oldalhoz."""
     return deliverable_actions.list_assignable_employees(db)
+
+
+class AllapotBeallitas(BaseModel):
+    """Egy utómunka-állapot megjelenése a táblán."""
+
+    allapot: str
+    sorrend: int = 0
+    #: "#rrggbb" vagy üres - az oszlop (és a kártyái) halvány színe.
+    szin: str | None = None
+    #: Elkészültnek számít-e (ilyenkor nem lesz belőle lejárt határidő).
+    kesz_allapot: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class AllapotBeallitasokIn(BaseModel):
+    beallitasok: list[AllapotBeallitas]
+
+
+@deliverable_actions_router.get("/allapot-beallitasok", response_model=list[AllapotBeallitas])
+def get_allapot_beallitasok(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """Az utómunka-állapotok megjelenése: sorrend, szín, és hogy melyik számít
+    elkészültnek (lásd models/deliverable_status.py)."""
+    sorok = db.query(DeliverableStatusConfig).order_by(DeliverableStatusConfig.sorrend, DeliverableStatusConfig.id).all()
+    return [AllapotBeallitas.model_validate(s) for s in sorok]
+
+
+@deliverable_actions_router.put("/allapot-beallitasok", response_model=list[AllapotBeallitas])
+def set_allapot_beallitasok(
+    payload: AllapotBeallitasokIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action("/utomunka", "edit")),
+):
+    """A teljes beállítás-lista cseréje (a felület mindig az egészet küldi).
+
+    A sorrendet a lista SORRENDJE adja, nem a beküldött szám - így a felületen
+    elég fel/le mozgatni a sorokat, nem kell indexeket számolgatni."""
+    meglevo = {s.allapot: s for s in db.query(DeliverableStatusConfig).all()}
+    kuldott: set[str] = set()
+    for index, elem in enumerate(payload.beallitasok):
+        allapot = (elem.allapot or "").strip()
+        if not allapot:
+            continue
+        kuldott.add(allapot)
+        sor = meglevo.get(allapot)
+        if sor is None:
+            sor = DeliverableStatusConfig(allapot=allapot)
+            db.add(sor)
+        sor.sorrend = index
+        sor.szin = (elem.szin or "").strip() or None
+        sor.kesz_allapot = elem.kesz_allapot
+    # Amit a felület nem küldött vissza, az már nem választható állapot -
+    # a beállítása is elévült.
+    for allapot, sor in meglevo.items():
+        if allapot not in kuldott:
+            db.delete(sor)
+    db.commit()
+    return get_allapot_beallitasok(db)
 
 
 @deliverable_actions_router.get("/vinyo-options", response_model=VinyoOptions)

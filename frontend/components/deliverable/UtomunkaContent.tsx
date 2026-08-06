@@ -10,10 +10,11 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { formatIdopont } from "@/lib/ido";
 import { useLiveTopic } from "@/lib/live";
+import { AllapotBeallitasok } from "@/components/deliverable/AllapotBeallitasok";
 import { DeliverableBoard, type BoardCard, type BoardColumn } from "@/components/deliverable/DeliverableBoard";
 import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar";
 import { UtomunkaViewTabs } from "@/components/deliverable/UtomunkaViewTabs";
-import type { Deliverable, Employee } from "@/lib/api";
+import type { AllapotBeallitas, Deliverable, Employee } from "@/lib/api";
 
 // Nem importáljuk az ENTITY_PATHS-t a lib/api.ts-ből (bár csak egy sima
 // konstans) - az a modul a `next/headers`-t is importálja (szerver-oldali
@@ -43,6 +44,7 @@ export function UtomunkaContent({
   projectsHasMore,
   employees,
   statusOptions,
+  allapotBeallitasok,
   vinyoOptions,
   canCreate,
   canDelete,
@@ -54,6 +56,8 @@ export function UtomunkaContent({
   projectsHasMore: boolean;
   employees: Employee[];
   statusOptions: string[];
+  /** Az állapot-oszlopok sorrendje/színe (lásd AllapotBeallitasok). */
+  allapotBeallitasok: AllapotBeallitas[];
   vinyoOptions: string[];
   canCreate: boolean;
   canDelete: boolean;
@@ -120,10 +124,19 @@ export function UtomunkaContent({
       if (!byStatus.has(key)) byStatus.set(key, []);
       byStatus.get(key)!.push(d);
     }
+    // Az oszlopok sorrendjét és színét az admin állítja (lásd
+    // AllapotBeallitasok); amihez nincs beállítás, az a végére kerül, a
+    // választható értékek sorrendjében.
+    const szinek = new Map(allapotBeallitasok.map((b) => [b.allapot, b.szin]));
+    const helye = new Map(allapotBeallitasok.map((b, i) => [b.allapot, i]));
+    const rendezett = [...statusOptions].sort(
+      (a, b) => (helye.get(a) ?? Number.MAX_SAFE_INTEGER) - (helye.get(b) ?? Number.MAX_SAFE_INTEGER),
+    );
     return [
-      ...statusOptions.map((s) => ({
+      ...rendezett.map((s) => ({
         key: s,
         label: s,
+        szin: szinek.get(s) ?? null,
         cards: (byStatus.get(s) ?? []).map((d) => toCard(d, d.vinyok ?? [])),
       })),
       ...(byStatus.has(NO_STATUS_KEY)
@@ -131,7 +144,7 @@ export function UtomunkaContent({
         : []),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverables, statusOptions, employeeName]);
+  }, [deliverables, statusOptions, allapotBeallitasok, employeeName]);
 
   const vinyoColumns: BoardColumn[] = useMemo(() => {
     const byVinyo = new Map<string, Deliverable[]>();
@@ -153,7 +166,10 @@ export function UtomunkaContent({
     <UtomunkaViewTabs
       board={
         <div className="space-y-6">
-          <Card title="Állapot szerint">
+          <Card
+            title="Állapot szerint"
+            actions={canEdit ? <AllapotBeallitasok allapotok={statusOptions} kezdeti={allapotBeallitasok} /> : undefined}
+          >
             <DeliverableBoard columns={statusColumns} />
           </Card>
           <Card title="Forgatások naptár">

@@ -11,14 +11,32 @@ export type BoardCard = {
   badges: string[];
 };
 
-export type BoardColumn = { key: string; label: string; cards: BoardCard[] };
+export type BoardColumn = {
+  key: string;
+  label: string;
+  cards: BoardCard[];
+  /** Az oszlop halvány színe ("#rrggbb") - a fejléc és MINDEN benne lévő
+   * kártya ezt a színt kapja, halványan (lásd Utómunka -> Nézet beállítása).
+   * Üresen hagyva marad a semleges alapszín. */
+  szin?: string | null;
+};
+
+/** Halvány háttér/keret a megadott színből. A színt nem tömören használjuk:
+ * a kártyáknak olvashatónak kell maradniuk sötét és világos témában is, ezért
+ * csak egy vékony réteget keverünk a felület színéhez (color-mix), a szöveg
+ * pedig marad a téma saját színén. */
+function halvany(szin: string | null | undefined, szazalek: number): string | undefined {
+  if (!szin) return undefined;
+  return `color-mix(in srgb, ${szin} ${szazalek}%, transparent)`;
+}
 
 const PAGE_SIZE = 10;
 
-function BoardCardView({ card }: { card: BoardCard }) {
+function BoardCardView({ card, szin }: { card: BoardCard; szin?: string | null }) {
   return (
     <a
       href={card.href}
+      style={szin ? { background: halvany(szin, 14), borderColor: halvany(szin, 38) } : undefined}
       className="block rounded-[var(--radius)] border border-border bg-surface-3 p-2.5 text-[13px] hover:bg-surface-2"
     >
       <p className="font-medium text-text-primary">{card.title}</p>
@@ -49,14 +67,25 @@ function BoardColumnView({ column }: { column: BoardColumn }) {
   const remaining = column.cards.length - visible.length;
 
   return (
-    <div className="flex w-72 shrink-0 flex-col rounded-[var(--radius-lg)] border border-border bg-surface-3 p-3">
-      <p className="mb-2 text-[13px] font-medium text-text-primary">
+    <div
+      data-oszlop={column.key}
+      style={column.szin ? { background: halvany(column.szin, 8), borderColor: halvany(column.szin, 45) } : undefined}
+      className="flex w-72 shrink-0 flex-col rounded-[var(--radius-lg)] border border-border bg-surface-3 p-3"
+    >
+      <p className="mb-2 flex items-center gap-1.5 text-[13px] font-medium text-text-primary">
+        {column.szin && (
+          <span
+            aria-hidden
+            style={{ background: column.szin }}
+            className="inline-block h-2 w-2 shrink-0 rounded-full"
+          />
+        )}
         {column.label} <span className="text-text-muted">({column.cards.length})</span>
       </p>
       <div className="flex flex-col gap-2">
         {visible.length === 0 && <p className="text-[12px] text-text-muted italic">Üres.</p>}
         {visible.map((card) => (
-          <BoardCardView key={card.id} card={card} />
+          <BoardCardView key={card.id} card={card} szin={column.szin} />
         ))}
       </div>
       {remaining > 0 && (

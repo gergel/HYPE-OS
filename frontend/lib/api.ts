@@ -921,6 +921,21 @@ export async function getUtalasraVaro(): Promise<UtalasraVaroTetel[]> {
   return (await apiGet<UtalasraVaroTetel[]>("/api/v1/finance/utalasra-varo")) ?? [];
 }
 
+/** Egy utómunka-állapot megjelenése a táblán (lásd backend
+ * models/deliverable_status.py). */
+export type AllapotBeallitas = {
+  allapot: string;
+  sorrend: number;
+  /** "#rrggbb" vagy null - az oszlop és a kártyái halvány színe. */
+  szin: string | null;
+  /** Elkészültnek számít: ilyenkor nem lesz belőle lejárt határidő. */
+  kesz_allapot: boolean;
+};
+
+export async function getAllapotBeallitasok(): Promise<AllapotBeallitas[]> {
+  return (await apiGet<AllapotBeallitas[]>("/api/v1/deliverables/allapot-beallitasok")) ?? [];
+}
+
 export async function getVinyoOptions(): Promise<string[]> {
   const res = await apiGet<{ options: string[] }>("/api/v1/deliverables/vinyo-options");
   return res?.options ?? [];
