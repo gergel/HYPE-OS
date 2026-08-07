@@ -7,6 +7,7 @@ import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
 import { EntityFieldManager } from "@/components/EntityFieldManager";
 import { NotionImportPanel } from "@/components/NotionImportPanel";
 import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
+import { szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
@@ -161,7 +162,7 @@ export default async function BeallitasokPage() {
           <DetailTabEditor entities={detailTabEntities} initialConfigsByEntity={detailTabsByEntity} />
         </Card>
 
-        {currentUser?.role === "admin" && (
+        {szerepkorei(currentUser).includes("admin") && (
           <Card title="Mezők kezelése">
             <p className="mb-3 text-[13px] text-text-secondary">
               A Notionből áthozott mezők közül sok itt már nem kell - ezeket eltávolíthatod, és újakat is létrehozhatsz. Az
@@ -173,7 +174,7 @@ export default async function BeallitasokPage() {
           </Card>
         )}
 
-        {currentUser?.role === "admin" && (
+        {szerepkorei(currentUser).includes("admin") && (
           <Card title="Notion import">
             <p className="mb-3 text-[13px] text-text-secondary">
               A teljes (mind a 3 kör) idempotens Notion import elindítása innen, a böngészőből - nincs szükség `railway ssh`-ra, a
@@ -184,7 +185,7 @@ export default async function BeallitasokPage() {
           </Card>
         )}
 
-        {currentUser?.role === "admin" && (
+        {szerepkorei(currentUser).includes("admin") && (
           <Card title="Diszpó felelősök">
             <p className="mb-3 text-[13px] text-text-secondary">
               Akik itt szerepelnek, azoknak a &quot;Teendőim&quot; widget minden nap felhozza a MÁSNAPI forgatások
@@ -195,7 +196,7 @@ export default async function BeallitasokPage() {
           </Card>
         )}
 
-        {currentUser?.role === "admin" && (
+        {szerepkorei(currentUser).includes("admin") && (
           <Card title="Naptár szinkron">
             <p className="mb-3 text-[13px] text-text-secondary">
               A HYPE CALENDAR nevű Google Naptárban létrehozott/módosított/törölt eseményeket percenként automatikusan

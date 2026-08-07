@@ -27,6 +27,9 @@ class TaskUpdate(BaseModel):
 
 class TaskRead(TaskBase):
     id: int
+    #: Melyik projekthez tartozik (az automatikus papírozás-feladatoknál van
+    #: kitöltve, lásd services/papirozas_feladatok.py).
+    project_id: int | None = None
 
     # a TEENDŐK/Ági to do list/HYPE TO-DO LIST/Archive feladatok táblák maradék mezői
     aki_felvezette_notion: JsonScalar = None

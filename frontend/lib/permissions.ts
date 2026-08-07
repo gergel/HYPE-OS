@@ -15,13 +15,31 @@
  * (TIG-ek, szerződések) elkészítse. */
 const WRITE_ROLES = new Set(["admin", "operator", "adminisztracio"]);
 
+/** Akinek a szerepköreit nézzük. Egy embernek TÖBB szerepköre is lehet (pl.
+ * admin ÉS adminisztráció): az elsődleges a `role`, a többi a
+ * `tovabbi_szerepkorok` listában - lásd backend models/employee.szerepkorei. */
+export type SzerepkorForras =
+  | { role: string; tovabbi_szerepkorok?: string[] | null }
+  | string
+  | string[]
+  | null
+  | undefined;
+
+/** A forrás ÖSSZES szerepköre, egy listában. */
+export function szerepkorei(forras: SzerepkorForras): string[] {
+  if (!forras) return [];
+  if (typeof forras === "string") return [forras];
+  if (Array.isArray(forras)) return forras;
+  return [forras.role, ...(forras.tovabbi_szerepkorok ?? [])];
+}
+
 export function canDoAction(
-  role: string | undefined | null,
+  forras: SzerepkorForras,
   pagePermissions: Record<string, string[]> | null,
   page: string,
   action: "create" | "edit" | "delete",
 ): boolean {
-  if (!role || !WRITE_ROLES.has(role)) return false;
+  if (!szerepkorei(forras).some((r) => WRITE_ROLES.has(r))) return false;
   if (pagePermissions === null) return true;
   return !!pagePermissions[page]?.includes(action);
 }

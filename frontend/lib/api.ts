@@ -81,7 +81,9 @@ export type Employee = {
   email: string | null;
   telefon: string | null;
   is_active: boolean;
+  /** Az elsődleges szerepkör; a továbbiak a tovabbi_szerepkorok listában. */
   role: string;
+  tovabbi_szerepkorok?: string[] | null;
   has_password: boolean;
   elso_munkanap: string | null;
   utolso_munkanap: string | null;
@@ -214,6 +216,17 @@ export type Contact = {
   phone: string | null;
 };
 
+/** Egy keretszerződés érvényességi időszaka (lásd backend
+ * models/contract.py ContractPeriod). A nyitott vég azt jelenti: "azóta is
+ * él", a nyitott kezdet azt, hogy "a kezdetektől". */
+export type ContractPeriod = {
+  id: number;
+  contract_id: number;
+  kezdet: string | null;
+  veg: string | null;
+  megjegyzes: string | null;
+};
+
 export type Contract = {
   id: number;
   tipus: string;
@@ -230,6 +243,10 @@ export type Contract = {
   /** Álló keretszerződés (true) vagy eseti megbízási szerződés (false) -
    * lásd backend models/contract.py Contract.keretszerzodes. */
   keretszerzodes: boolean;
+  /** Be van-e kapcsolva a keretszerződés (kézi kapcsoló). */
+  aktiv: boolean;
+  /** Mettől meddig élt - üres lista = időbeli korlát nélkül érvényes. */
+  idoszakok: ContractPeriod[];
   netto_osszeg: number | null;
   teljesites_kezdete: string | null;
   teljesites_vege: string | null;
@@ -832,7 +849,10 @@ export type CurrentUser = {
   id: number;
   full_name: string;
   email: string | null;
+  /** Az elsődleges szerepkör. Több is lehet - lásd tovabbi_szerepkorok, és a
+   * lib/permissions.ts szerepkorei() segédfüggvényét. */
   role: string;
+  tovabbi_szerepkorok?: string[] | null;
   is_active: boolean;
 };
 

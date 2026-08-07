@@ -25,6 +25,7 @@ import { SubcontractorContractManager } from "@/components/SubcontractorContract
 import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
+import { szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
 import { VagasiKoltsegOsszesen, type FutoMeres } from "@/components/deliverable/VagasiKoltsegOsszesen";
 import {
@@ -457,7 +458,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
           }
         />
 
-        <DetailSections sections={tabs} entityType="project" canReorder={currentUser?.role === "admin"} />
+        <DetailSections sections={tabs} entityType="project" canReorder={szerepkorei(currentUser).includes("admin")} />
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
 from app.core.security import Role, get_current_user, hash_password, require_page_action, require_roles
-from app.models.contract import Contract, ContractType, megkotott_keretszerzodes
+from app.models.contract import Contract, ContractType, keretszerzodes_ervenyes, megkotott_keretszerzodes
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.employee_document import EmployeeDocument
@@ -372,21 +372,20 @@ def kulsos_munkak(
     # Álló keretszerződés - de csak a VALÓDI (lásd models/contract.py
     # megkotott_keretszerzodes): a munkatárs Notion-lapjáról átvett, projekt
     # nélküli sorok eseti megbízási szerződések, nem keretszerződés.
-    keretszerzodes = next(
-        (
-            c
-            for c in db.query(Contract)
-            .filter(
-                Contract.employee_id == employee_id,
-                Contract.tipus == ContractType.ALVALLALKOZOI,
-                Contract.project_id.is_(None),
-            )
-            .order_by(Contract.id.desc())
-            .all()
-            if megkotott_keretszerzodes(c)
-        ),
-        None,
-    )
+    keretszerzodesek = [
+        c
+        for c in db.query(Contract)
+        .options(selectinload(Contract.idoszakok))
+        .filter(
+            Contract.employee_id == employee_id,
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+            Contract.project_id.is_(None),
+        )
+        .order_by(Contract.id.desc())
+        .all()
+        if megkotott_keretszerzodes(c)
+    ]
+    keretszerzodes = keretszerzodesek[0] if keretszerzodesek else None
 
     esetiek = {
         c.project_id: c
@@ -437,7 +436,13 @@ def kulsos_munkak(
                 tig_allapot=tig.allapot,
                 szamla_kifizetve=bool(tig.szamla_kifizetve),
                 dokumentumok=dokumentumok,
-                keretszerzodessel=eseti is None and keretszerzodes is not None,
+                # A keretszerződés csak akkor váltja ki az eseti szerződést, ha a
+                # FORGATÁS NAPJÁN élt (lásd models/contract.py idoszakok).
+                keretszerzodessel=eseti is None
+                and any(
+                    keretszerzodes_ervenyes(c, (tig.project.forgatas_datuma if tig.project else None) or date.today())
+                    for c in keretszerzodesek
+                ),
             )
         )
 

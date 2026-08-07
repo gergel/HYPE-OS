@@ -28,9 +28,9 @@ export default async function ProjektekPage() {
           hasMore={projects.length === INITIAL_BATCH}
           projectCodes={projectCodes}
           statusOptions={fieldTypes.allapot?.options ?? []}
-          canCreate={canDoAction(currentUser?.role, pagePermissions, PAGE, "create")}
-          canDelete={canDoAction(currentUser?.role, pagePermissions, PAGE, "delete")}
-          canEdit={canDoAction(currentUser?.role, pagePermissions, PAGE, "edit")}
+          canCreate={canDoAction(currentUser, pagePermissions, PAGE, "create")}
+          canDelete={canDoAction(currentUser, pagePermissions, PAGE, "delete")}
+          canEdit={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
         />
       </div>
     </div>

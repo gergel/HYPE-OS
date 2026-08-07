@@ -1,6 +1,7 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { KeretszerzodesErvenyesseg } from "@/components/finance/KeretszerzodesErvenyesseg";
 import { TopBar } from "@/components/TopBar";
 import { KeretszerzodesAddWidget } from "@/components/KeretszerzodesAddWidget";
 import { StopClickPropagation } from "@/components/StopClickPropagation";
@@ -40,7 +41,7 @@ export default async function KeretszerzodesekPage() {
     getMyPagePermissions(),
   ]);
   const employeeById = new Map(employees.map((e) => [e.id, e]));
-  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
+  const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
 
   const rows: KeretszerzodesRow[] = contracts
     .filter((c) => {
@@ -98,6 +99,23 @@ export default async function KeretszerzodesekPage() {
                     (c.szerzodes_allapota ?? <span className="text-text-muted">Nincs állapot</span>)
                   ),
                 sortAccessor: (c) => c.szerzodes_allapota,
+              },
+              {
+                // Mikor élt a keretszerződés: a kapcsoló és az időszakok.
+                // Csak az számít keretszerződésesnek egy projekten, akinek a
+                // FORGATÁS NAPJÁN élt a szerződése.
+                header: "Érvényesség",
+                render: (c) => (
+                  <StopClickPropagation>
+                    <KeretszerzodesErvenyesseg
+                      contractId={c.id}
+                      aktiv={c.aktiv}
+                      idoszakok={c.idoszakok ?? []}
+                      canEdit={canEdit}
+                    />
+                  </StopClickPropagation>
+                ),
+                sortAccessor: (c) => (c.aktiv ? "1" : "0"),
               },
               {
                 header: "Keltezés",

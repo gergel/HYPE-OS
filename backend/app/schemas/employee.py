@@ -19,6 +19,8 @@ class EmployeeBase(BaseModel):
 
 class EmployeeCreate(EmployeeBase):
     role: SystemRole = SystemRole.OPERATOR
+    #: További szerepkörök az elsődlegesen felül (lásd models/employee.szerepkorei).
+    tovabbi_szerepkorok: list[SystemRole] | None = None
     # opcionális - ha nincs megadva, hashed_password=None marad (ugyanúgy,
     # mint a Notionből importált munkatársaknál), az admin később a
     # Beállítások oldalon állíthat be jelszót neki, ha bejelentkezést igényel.
@@ -27,6 +29,8 @@ class EmployeeCreate(EmployeeBase):
 
 class EmployeeUpdate(BaseModel):
     full_name: str | None = None
+    role: SystemRole | None = None
+    tovabbi_szerepkorok: list[SystemRole] | None = None
     tipus: EmployeeType | None = None
     email: str | None = None
     telefon: str | None = None
@@ -37,6 +41,7 @@ class EmployeeUpdate(BaseModel):
 class EmployeeRead(EmployeeBase):
     id: int
     role: SystemRole
+    tovabbi_szerepkorok: list[str] | None = None
     is_active: bool
     # a nyers jelszó-hash sosem kerül ki a válaszban (exclude=True) - csak azt
     # a bool jelzőt adjuk vissza, hogy van-e egyáltalán beállítva (lásd

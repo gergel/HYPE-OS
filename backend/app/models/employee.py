@@ -60,11 +60,18 @@ class Employee(TimestampMixin, Base):
     utolso_munkanap: Mapped[date | None] = mapped_column(Date)
 
     # --- Auth ---
+    #: Az ELSŐDLEGES szerepkör. Egy embernek több is lehet (pl. admin ÉS
+    #: adminisztráció) - a többit a tovabbi_szerepkorok tartja. Azért maradt
+    #: külön oszlop, mert erre épül a régi adat és a token is; a
+    #: jogosultság-ellenőrzés viszont mindig a teljes halmazt nézi (lásd
+    #: szerepkorei() alább, illetve core/security.py).
     role: Mapped[SystemRole] = mapped_column(
         Enum(SystemRole, name="system_role", values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
         default=SystemRole.OPERATOR,
     )
+    #: További szerepkörök az elsődlegesen felül, SystemRole-értékek listája.
+    tovabbi_szerepkorok: Mapped[list | None] = mapped_column(JSON)
     hashed_password: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -143,3 +150,26 @@ class Employee(TimestampMixin, Base):
     projects: Mapped[list["Project"]] = relationship(
         secondary="project_crew", back_populates="crew"
     )
+
+
+def szerepkorei(employee: Employee) -> set[SystemRole]:
+    """A munkatárs ÖSSZES szerepköre - az elsődleges és a továbbiak együtt.
+
+    Egy ember több szerepkört is betölthet (pl. aki adminisztrációzik, de
+    admin jogot is kap). Minden jogosultság-ellenőrzés ezt a halmazt nézze, ne
+    csak az `employee.role` mezőt (lásd core/security.py require_roles).
+
+    Az ismeretlen (pl. időközben megszűnt) értékeket csendben eldobjuk: egy
+    régi szerepkörnév ne akadályozza meg a belépést."""
+    talalatok = {employee.role}
+    for ertek in employee.tovabbi_szerepkorok or []:
+        try:
+            talalatok.add(SystemRole(str(ertek)))
+        except ValueError:
+            continue
+    return talalatok
+
+
+def van_szerepkore(employee: Employee, *szerepkorok: SystemRole) -> bool:
+    """Megvan-e a felsoroltak KÖZÜL bármelyik szerepköre?"""
+    return bool(szerepkorei(employee) & set(szerepkorok))

@@ -36,8 +36,8 @@ export default async function BelsosTigHonapPage({
   ]);
   if (!adat) notFound();
 
-  const szerkeszthet = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
-  const torolhet = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const szerkeszthet = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  const torolhet = canDoAction(currentUser, pagePermissions, PAGE, "delete");
 
   const record = adat.record;
   const zarolt = ZAROLT.includes(record?.allapot ?? "");

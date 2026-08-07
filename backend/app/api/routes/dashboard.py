@@ -13,7 +13,8 @@ from app.models.dashboard_config import DashboardConfig
 from app.models.deliverable import Deliverable
 from app.models.deliverable_status import DeliverableStatusConfig
 from app.models.dispo_responsible import DispoResponsible, DispoSide
-from app.models.employee import Employee, SystemRole
+from app.models.employee import Employee, SystemRole, van_szerepkore
+from app.services import papirozas_feladatok
 from app.models.finance import Revenue
 from app.models.project import Project
 from app.models.project_code import ProjectCode
@@ -90,6 +91,11 @@ def _last_n_months(today: date, n: int) -> list[tuple[int, int]]:
 @router.get("/summary", response_model=DashboardSummary)
 def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     today = date.today()
+
+    # A lefutott projektek papírozás-feladatai. Ütemező nincs a rendszerben,
+    # ezért itt "érjük utol" a lemaradást - a művelet idempotens, projektenként
+    # legfeljebb egy feladat születik (lásd services/papirozas_feladatok.py).
+    papirozas_feladatok.ensure_papirozas_feladatok(db)
 
     mai_forgatasok = (
         db.scalar(select(func.count()).select_from(Project).where(Project.forgatas_datuma == today)) or 0
@@ -225,7 +231,7 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
     elkészíteni), a megrendelői TIG-nél pedig csak az a projektkód, amin már
     volt kiküldött diszpójú forgatás - amíg a munka el sem kezdődött, nincs
     mit igazolni."""
-    if user.role != SystemRole.ADMINISZTRACIO:
+    if not van_szerepkore(user, SystemRole.ADMINISZTRACIO):
         return []
 
     # A körkörös import elkerülésére a hívás helyén importálunk: ezek a modulok

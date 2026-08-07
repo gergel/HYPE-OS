@@ -54,9 +54,9 @@ export default async function PenzugyekPage() {
     getMyPagePermissions(),
     getUtalasraVaro(),
   ]);
-  const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
-  const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
-  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
+  const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
+  const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const fizetesiModOptions = expenseFieldTypes.kifizetes_modja?.options ?? ["Készpénz", "Átutalás", "Bankkártya"];
   // Honnan jött a bevétel: a projektkód mögötti ügyfél neve. A Revenue maga
   // csak a project_code_id-t hordozza, ezért itt oldjuk fel.

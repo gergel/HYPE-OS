@@ -8,7 +8,15 @@ import { SelectDropdown } from "@/components/SelectDropdown";
 import { UserAccessManager } from "@/components/UserAccessManager";
 import { authFetch } from "@/lib/authFetch";
 
-type EmployeeOption = { id: number; full_name: string; email: string | null; role: string; has_password: boolean };
+type EmployeeOption = {
+  id: number;
+  full_name: string;
+  email: string | null;
+  role: string;
+  /** További szerepkörök az elsődlegesen felül - egy embernek több is lehet. */
+  tovabbi_szerepkorok?: string[] | null;
+  has_password: boolean;
+};
 type PageOption = { page: string; label: string };
 type FieldOption = { key: string; label: string };
 type VisibilityEntity = { entityType: string; label: string; availableFields: FieldOption[] };
@@ -70,12 +78,17 @@ export function EmployeeAccessManager({
   const [szerepkorBusy, setSzerepkorBusy] = useState(false);
   const router = useRouter();
 
-  async function mentSzerepkor(employeeId: number, role: string) {
+  /** A szerepkörök mentése. Egy embernek több szerepköre is lehet (pl. admin
+   * ÉS adminisztráció): az ELSŐ lesz az elsődleges (employees.role), a többi a
+   * tovabbi_szerepkorok listába megy - a jogosultság-ellenőrzés mindkettőt
+   * nézi (lásd backend models/employee.szerepkorei). */
+  async function mentSzerepkorok(employeeId: number, szerepkorok: string[]) {
+    if (szerepkorok.length === 0) return; // szerepkör nélküli fiók nincs
     setSzerepkorBusy(true);
     try {
       const res = await authFetch(`/api/v1/crew/${employeeId}`, {
         method: "PATCH",
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ role: szerepkorok[0], tovabbi_szerepkorok: szerepkorok.slice(1) }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -120,6 +133,11 @@ export function EmployeeAccessManager({
   }, [employees, query]);
 
   const selected = employees.find((e) => e.id === selectedId) ?? null;
+  // Az elsődleges szerepkör és a továbbiak EGY listaként jelennek meg -
+  // a felületen nincs "első" és "többi", csak bejelölt szerepkörök.
+  const valasztottSzerepkorok = selected
+    ? [selected.role, ...(selected.tovabbi_szerepkorok ?? []).filter((r) => r !== selected.role)]
+    : [];
 
   return (
     <div>
@@ -190,24 +208,50 @@ export function EmployeeAccessManager({
             </button>
           </div>
 
-          {/* Szerepkör: eddig csak KIÍRVA volt, átállítani nem lehetett -
-              pedig pl. az Adminisztráció szerepkört valakihez hozzá kell tudni
-              rendelni. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[13px] text-text-secondary">Szerepkör:</span>
-            <SelectDropdown
-              value={ROLE_LABEL[selected.role] ?? selected.role}
-              options={ROLE_ORDER.map((r) => ROLE_LABEL[r])}
-              onChange={(label) => {
-                const role = ROLE_ORDER.find((r) => ROLE_LABEL[r] === label);
-                if (role) void mentSzerepkor(selected.id, role);
-              }}
-              placeholder="Szerepkör"
-              disabled={szerepkorBusy}
-            />
-            {ROLE_LEIRAS[selected.role] && (
-              <span className="text-[12px] text-text-muted">{ROLE_LEIRAS[selected.role]}</span>
-            )}
+          {/* Szerepkör: TÖBB is lehet egyszerre (pl. admin ÉS adminisztráció).
+              Az elsőként bejelölt lesz az elsődleges - ez kerül a tokenbe és a
+              régi mezőbe -, a többi mellé jön. Legalább egy kell: szerepkör
+              nélküli fiókkal semmit nem lehetne csinálni. */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-text-secondary">Szerepkörök (több is lehet):</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {ROLE_ORDER.map((r) => {
+                const bejelolt = valasztottSzerepkorok.includes(r);
+                const utolso = bejelolt && valasztottSzerepkorok.length === 1;
+                return (
+                  <label
+                    key={r}
+                    title={utolso ? "Legalább egy szerepkör kell." : ROLE_LEIRAS[r]}
+                    className={`flex items-center gap-1.5 text-[12.5px] ${
+                      utolso ? "text-text-muted" : "cursor-pointer text-text-secondary"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={bejelolt}
+                      disabled={szerepkorBusy || utolso}
+                      onChange={() =>
+                        void mentSzerepkorok(
+                          selected.id,
+                          bejelolt
+                            ? valasztottSzerepkorok.filter((x) => x !== r)
+                            : [...valasztottSzerepkorok, r],
+                        )
+                      }
+                      className={utolso ? undefined : "cursor-pointer"}
+                    />
+                    {ROLE_LABEL[r] ?? r}
+                  </label>
+                );
+              })}
+            </div>
+            {valasztottSzerepkorok
+              .filter((r) => ROLE_LEIRAS[r])
+              .map((r) => (
+                <span key={r} className="text-[12px] text-text-muted">
+                  {ROLE_LABEL[r]}: {ROLE_LEIRAS[r]}
+                </span>
+              ))}
           </div>
 
           <UserAccessManager

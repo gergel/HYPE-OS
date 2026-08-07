@@ -52,8 +52,8 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
       getAttachments("projectCode", projectCodeId),
     ]);
 
-  const canEditFiles = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
-  const canDeleteFiles = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const canEditFiles = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  const canDeleteFiles = canDoAction(currentUser, pagePermissions, PAGE, "delete");
 
   const pendingEntry = pendingClientContracts.find((p) => p.project_code_id === projectCodeId) ?? null;
 

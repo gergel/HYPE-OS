@@ -24,6 +24,10 @@ class Task(TimestampMixin, Base):
     allapot: Mapped[str | None] = mapped_column(String(50))
     hatarido: Mapped[date | None] = mapped_column(Date)
     kategoria: Mapped[str | None] = mapped_column(String(100))
+    #: Melyik projekthez tartozik a feladat. Az automatikusan generált
+    #: papírozás-feladatoknál ez adja az idempotenciát: projektenként legfeljebb
+    #: egy ilyen születhet (lásd services/papirozas_feladatok.py).
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
     checked: Mapped[bool] = mapped_column(Boolean, default=False)
     leiras: Mapped[str | None] = mapped_column(String(2000))
 

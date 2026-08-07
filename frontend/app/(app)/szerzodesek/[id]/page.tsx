@@ -91,8 +91,8 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
             entityId={contractId}
             attachments={attachments}
             kategoria="szerzodes"
-            canEdit={canDoAction(currentUser?.role, pagePermissions, PAGE, "edit")}
-            canDelete={canDoAction(currentUser?.role, pagePermissions, PAGE, "delete")}
+            canEdit={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
+            canDelete={canDoAction(currentUser, pagePermissions, PAGE, "delete")}
             emptyText="Nincs feltöltött szerződés-fájl."
           />
         </Card>

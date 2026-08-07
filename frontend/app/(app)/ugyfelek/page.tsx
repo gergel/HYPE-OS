@@ -10,9 +10,9 @@ const PAGE = "/ugyfelek";
 
 export default async function UgyfelekPage() {
   const [clients, currentUser, pagePermissions] = await Promise.all([getClients(), getCurrentUser(), getMyPagePermissions()]);
-  const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
-  const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
-  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
+  const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
+  const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
 
   return (
     <div className="flex flex-1 flex-col">

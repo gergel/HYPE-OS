@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
-from app.models.contract import Contract, ContractType, megkotott_keretszerzodes
+from app.models.contract import Contract, ContractType, keretszerzodes_ervenyes, megkotott_keretszerzodes
 from app.models.employee import Employee, EmployeeType
 from app.models.performance_certificate import PerformanceCertificate
 from app.models.project import Project
@@ -83,11 +83,21 @@ _CONTRACT_EMAIL_HTML = """\
 """
 
 
-def _load_contract_lookup(db: Session, employee_ids: set[int]) -> tuple[set[int], dict[tuple[int, int], Contract]]:
+def _load_contract_lookup(
+    db: Session, employee_ids: set[int]
+) -> tuple[dict[int, list[Contract]], dict[tuple[int, int], Contract]]:
+    """Emberenként a KERETSZERZŐDÉSEI, és (projekt, ember) szerint az eseti
+    szerződések.
+
+    Keretszerződésből több is lehet egy embernél (idővel újat kötünk vele),
+    ezért nem egy azonosító-halmazt adunk vissza, hanem a szerződéseket
+    magukat: a mentesség a projekt NAPJÁTÓL függ, azt pedig csak a hívó tudja
+    (lásd models/contract.py keretszerzodes_ervenyes)."""
     if not employee_ids:
-        return set(), {}
+        return {}, {}
     contracts = (
         db.query(Contract)
+        .options(selectinload(Contract.idoszakok))
         .filter(Contract.tipus == ContractType.ALVALLALKOZOI, Contract.employee_id.in_(employee_ids))
         .all()
     )
@@ -95,17 +105,34 @@ def _load_contract_lookup(db: Session, employee_ids: set[int]) -> tuple[set[int]
     # Notion-importból származó, puszta cégadat-sorok nem (lásd
     # models/contract.py megkotott_keretszerzodes) - különben a rendszer
     # mindenkiről azt hinné, hogy már van szerződése.
-    keretszerzodes_ids = {c.employee_id for c in contracts if megkotott_keretszerzodes(c)}
+    keretszerzodesek: dict[int, list[Contract]] = {}
+    for c in contracts:
+        if megkotott_keretszerzodes(c) and c.employee_id is not None:
+            keretszerzodesek.setdefault(c.employee_id, []).append(c)
     project_contracts = {(c.project_id, c.employee_id): c for c in contracts if c.project_id is not None}
-    return keretszerzodes_ids, project_contracts
+    return keretszerzodesek, project_contracts
+
+
+def _mentesul_keretszerzodessel(keretszerzodesek: list[Contract], nap: date | None) -> bool:
+    """Fedi-e valamelyik keretszerződése a projekt napját?
+
+    Dátum nélküli projektnél a MAI napot nézzük: ilyenkor az a kérdés, hogy
+    él-e most keretszerződése - ennél többet a projektről nem tudunk."""
+    return any(keretszerzodes_ervenyes(c, nap or date.today()) for c in keretszerzodesek)
 
 
 def _pending_employees(
-    project: Project, keretszerzodes_ids: set[int], project_contracts: dict[tuple[int, int], Contract]
+    project: Project,
+    keretszerzodesek: dict[int, list[Contract]],
+    project_contracts: dict[tuple[int, int], Contract],
 ) -> list[tuple[Employee, Contract | None]]:
     result: list[tuple[Employee, Contract | None]] = []
     for e in project.crew:
-        if e.tipus == EmployeeType.BELSOS or e.id in keretszerzodes_ids:
+        if e.tipus == EmployeeType.BELSOS:
+            continue
+        # A keretszerződés csak akkor mentesít, ha a FORGATÁS NAPJÁN élt: aki
+        # két időszak közé eső projekten dolgozott, attól eseti szerződés kell.
+        if _mentesul_keretszerzodessel(keretszerzodesek.get(e.id, []), project.forgatas_datuma):
             continue
         existing = project_contracts.get((project.id, e.id))
         if existing is not None and existing.szerzodes_allapota in TERMINAL_STATUSES:
@@ -130,11 +157,11 @@ def list_pending_projects(db: Session = Depends(get_db), _user: Employee = Depen
         .all()
     )
     all_employee_ids = {e.id for p in projects for e in p.crew if e.tipus != EmployeeType.BELSOS}
-    keretszerzodes_ids, project_contracts = _load_contract_lookup(db, all_employee_ids)
+    keretszerzodesek, project_contracts = _load_contract_lookup(db, all_employee_ids)
 
     result: list[PendingProjectSummary] = []
     for p in projects:
-        pending = _pending_employees(p, keretszerzodes_ids, project_contracts)
+        pending = _pending_employees(p, keretszerzodesek, project_contracts)
         if pending:
             result.append(
                 PendingProjectSummary(
@@ -246,8 +273,8 @@ def get_pending_for_project(
 ):
     project = _get_project_or_404(db, project_id)
     employee_ids = {e.id for e in project.crew if e.tipus != EmployeeType.BELSOS}
-    keretszerzodes_ids, project_contracts = _load_contract_lookup(db, employee_ids)
-    pending = _pending_employees(project, keretszerzodes_ids, project_contracts)
+    keretszerzodesek, project_contracts = _load_contract_lookup(db, employee_ids)
+    pending = _pending_employees(project, keretszerzodesek, project_contracts)
     return PendingProjectDetail(
         project_id=project.id,
         project_nev=project.nev,
@@ -328,10 +355,13 @@ def _validate_pending_employee(db: Session, project: Project, employee_id: int) 
         raise HTTPException(status_code=400, detail="Ez a munkatárs nincs a projekt stábjában.")
     if employee.tipus == EmployeeType.BELSOS:
         raise HTTPException(status_code=400, detail="Belsős munkatársnak nem kell eseti szerződés.")
-    keretszerzodes = next(
-        (
+    # A keretszerződés csak akkor váltja ki az esetit, ha a FORGATÁS NAPJÁN
+    # élt - egy lejárt (vagy még meg sem kötött) keretszerződés nem mentesít.
+    fedett = _mentesul_keretszerzodessel(
+        [
             c
             for c in db.query(Contract)
+            .options(selectinload(Contract.idoszakok))
             .filter(
                 Contract.tipus == ContractType.ALVALLALKOZOI,
                 Contract.employee_id == employee_id,
@@ -339,10 +369,10 @@ def _validate_pending_employee(db: Session, project: Project, employee_id: int) 
             )
             .all()
             if megkotott_keretszerzodes(c)
-        ),
-        None,
+        ],
+        project.forgatas_datuma,
     )
-    if keretszerzodes is not None:
+    if fedett:
         raise HTTPException(
             status_code=400, detail="Ennek a munkatársnak már van keretszerződése, nincs szükség eseti szerződésre."
         )

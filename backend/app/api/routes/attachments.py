@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import check_page_action, get_current_user
 from app.models.document_attachment import DocumentAttachment
-from app.models.employee import Employee
+from app.models.employee import Employee, van_szerepkore
 from app.schemas.document_attachment import DocumentAttachmentRead
 from app.services import attachments
 from app.services.entity_registry import ENTITY_MODELS
@@ -35,7 +35,7 @@ def _ellenoriz(db: Session, entity_type: str, entity_id: int) -> None:
 def _jogosultsag(db: Session, user: Employee, entity_type: str, action: str) -> None:
     from app.core.security import DEFAULT_WRITE_ROLES
 
-    if user.role not in DEFAULT_WRITE_ROLES:
+    if not van_szerepkore(user, *DEFAULT_WRITE_ROLES):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Nincs jogosultságod ehhez a művelethez")
     check_page_action(db, user, attachments.ENTITAS_OLDALAK[entity_type], action)
 

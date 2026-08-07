@@ -11,6 +11,7 @@ import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
 import { DetailSections } from "@/components/DetailSections";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TimesheetMinutesTable } from "@/components/deliverable/TimesheetMinutesTable";
+import { szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
@@ -186,7 +187,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               deliverableId={deliverableId}
               initialState={timerState}
               showCost={canSeeCost}
-              isAdmin={currentUser?.role === "admin"}
+              isAdmin={szerepkorei(currentUser).includes("admin")}
             />
             {/* Mikor állították le utoljára a mérőt. A Notionból importált
                 anyagoknál ez a 'Timesheet Public' End Date mezője - ott van az

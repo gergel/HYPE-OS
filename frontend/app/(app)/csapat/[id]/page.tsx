@@ -34,7 +34,7 @@ import {
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
 import { buildFieldTabs } from "@/lib/detailTabs";
-import { canDoAction } from "@/lib/permissions";
+import { canDoAction, szerepkorei } from "@/lib/permissions";
 
 /** Ezek az adatok másolódnak át előtöltésként az alvállalkozói eseti
  * szerződés generálásakor (lásd backend/app/api/routes/subcontractor_contracts.py
@@ -122,8 +122,8 @@ export default async function EmployeeDetailPage({
   // jövő (lásd backend models/contract.py Contract.keretszerzodes).
   const keretszerzodesek = contracts.filter((c) => c.keretszerzodes === true && !c.project_id);
   const esetiSzerzodesek = contracts.filter((c) => !(c.keretszerzodes === true && !c.project_id));
-  const szerkeszthet = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
-  const torolhet = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
+  const szerkeszthet = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  const torolhet = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const projektkodOpciok = projektkodok.map((p) => ({ id: p.id, projektkod: p.projektkod }));
   // Az "Egyéb kiadások" tábla a kiadás projektkód-azonosítójából a KÓDOT írja
   // ki, nem a nyers id-t - ehhez kell a feloldás.
@@ -337,7 +337,7 @@ export default async function EmployeeDetailPage({
           <h1 className="t-page">{String(employee.full_name ?? `Crew tag #${employee.id}`)}</h1>
         </div>
 
-        <DetailSections sections={tabs} entityType="employee" canReorder={currentUser?.role === "admin"} />
+        <DetailSections sections={tabs} entityType="employee" canReorder={szerepkorei(currentUser).includes("admin")} />
       </div>
     </div>
   );

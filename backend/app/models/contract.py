@@ -52,6 +52,9 @@ class Contract(TimestampMixin, Base):
     #   lévő aláírt PDF) - ezek eseti megbízási szerződések, nem keretszerződés
     #   (itt False), lásd notion_import/importers.py.
     keretszerzodes: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: Él-e most a keretszerződés? Ez a kézi kapcsoló: ha ki van kapcsolva, az
+    #: érvényességi időszakoktól függetlenül eseti szerződést kérünk.
+    aktiv: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Eseti (projektenkénti) alvállalkozói szerződés mezői - a csatolt
     # "kulsos-eseti-szerzodes" program Notion-mezőinek megfelelői.
@@ -77,6 +80,12 @@ class Contract(TimestampMixin, Base):
     kulsos_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Külsős")
     vallalkozas_nyilvantartasi_szam: Mapped[str | None] = mapped_column(String(100))
     szerzodes_megjegyzes: Mapped[str | None] = mapped_column(Text)
+
+    #: Mettől meddig élt a keretszerződés - több, egymást követő időszak is
+    #: lehet (lásd ContractPeriod).
+    idoszakok: Mapped[list["ContractPeriod"]] = relationship(
+        back_populates="contract", cascade="all, delete-orphan", order_by="ContractPeriod.kezdet"
+    )
 
     client: Mapped["Client"] = relationship(back_populates="contracts")
     employee: Mapped["Employee"] = relationship(back_populates="contracts")
@@ -109,3 +118,61 @@ def eseti_megbizasi_szerzodes(szerzodes: Contract) -> bool:
     services/subcontractor_contracts.py), akár a munkatárs Notion-lapjáról
     jött, projekt nélküli sor."""
     return szerzodes.tipus == ContractType.ALVALLALKOZOI and not megkotott_keretszerzodes(szerzodes)
+
+
+class ContractPeriod(TimestampMixin, Base):
+    """Egy keretszerződés ÉRVÉNYESSÉGI IDŐSZAKA - mettől meddig élt.
+
+    Egy emberrel nem feltétlenül folyamatos a keretszerződéses viszony: van
+    egy időszakra, aztán fél évig nincs, majd újra kötünk vele egyet. Ezért
+    nem elég egy kezdet/vég dátumpár a szerződésen, hanem tetszőleges számú,
+    egymást követő időszak tartozhat hozzá.
+
+    A nyitott vég (veg IS NULL) azt jelenti: "azóta is él". A nyitott kezdet
+    (kezdet IS NULL) azt, hogy "a kezdetektől" - ez a régi, dátum nélküli
+    bejegyzéseknek kell.
+
+    Ha egy keretszerződéshez EGYETLEN időszak sincs, az időbeli korlátozás
+    nélkül érvényes (így viselkedett a rendszer az időszakok bevezetése
+    előtt is) - lásd keretszerzodes_ervenyes()."""
+
+    __tablename__ = "contract_periods"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contract_id: Mapped[int] = mapped_column(ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    kezdet: Mapped[date | None] = mapped_column(Date)
+    veg: Mapped[date | None] = mapped_column(Date)
+    megjegyzes: Mapped[str | None] = mapped_column(String(255))
+
+    contract: Mapped["Contract"] = relationship(back_populates="idoszakok")
+
+
+def idoszak_tartalmazza(idoszak: ContractPeriod, nap: date) -> bool:
+    """Beleesik-e a nap ebbe az időszakba? A nyitott végek végtelent jelentenek."""
+    if idoszak.kezdet is not None and nap < idoszak.kezdet:
+        return False
+    if idoszak.veg is not None and nap > idoszak.veg:
+        return False
+    return True
+
+
+def keretszerzodes_ervenyes(szerzodes: Contract, nap: date | None = None) -> bool:
+    """Érvényes-e ez a keretszerződés az adott NAPON?
+
+    Ettől függ, hogy egy projekthez kell-e eseti szerződést kérni az embertől:
+    ha a forgatás napján élt a keretszerződése, nem kell; ha épp nem élt (mert
+    lejárt, vagy két időszak közé esik), akkor igen.
+
+    Három feltétel egymás után:
+    1. valódi keretszerződés-e egyáltalán (lásd megkotott_keretszerzodes),
+    2. be van-e kapcsolva (aktiv),
+    3. beleesik-e a nap valamelyik érvényességi időszakba - ha egyetlen
+       időszak sincs felvéve, ez a lépés kimarad (korlátlan érvényesség).
+
+    Nap nélkül a mai napot nézzük: "él-e most?"."""
+    if not megkotott_keretszerzodes(szerzodes) or not szerzodes.aktiv:
+        return False
+    idoszakok = list(szerzodes.idoszakok or [])
+    if not idoszakok:
+        return True
+    return any(idoszak_tartalmazza(i, nap or date.today()) for i in idoszakok)

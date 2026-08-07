@@ -70,9 +70,9 @@ export default async function UtomunkaPage() {
           allapotBeallitasok={allapotBeallitasok}
           kartyaMezok={kartyaMezok}
           vinyoOptions={vinyoOptions}
-          canCreate={canDoAction(currentUser?.role, pagePermissions, PAGE, "create")}
-          canDelete={canDoAction(currentUser?.role, pagePermissions, PAGE, "delete")}
-          canEdit={canDoAction(currentUser?.role, pagePermissions, PAGE, "edit")}
+          canCreate={canDoAction(currentUser, pagePermissions, PAGE, "create")}
+          canDelete={canDoAction(currentUser, pagePermissions, PAGE, "delete")}
+          canEdit={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
         />
       </div>
     </div>

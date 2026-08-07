@@ -20,9 +20,9 @@ export default async function BelsosokPage() {
   const [employees, currentUser, pagePermissions] = await Promise.all([getEmployees(), getCurrentUser(), getMyPagePermissions()]);
   const rows = employees.filter((e) => e.tipus === "belsos");
   const candidates = employees.filter((e) => e.tipus !== "belsos");
-  const canCreate = canDoAction(currentUser?.role, pagePermissions, PAGE, "create");
-  const canDelete = canDoAction(currentUser?.role, pagePermissions, PAGE, "delete");
-  const canEdit = canDoAction(currentUser?.role, pagePermissions, PAGE, "edit");
+  const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
+  const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+  const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
 
   return (
     <div className="flex flex-1 flex-col">

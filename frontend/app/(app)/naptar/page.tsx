@@ -31,7 +31,7 @@ export default async function NaptarPage() {
         <NaptarDiszpoContent
           projects={projects}
           projectCodes={projectCodes}
-          canSend={canDoAction(currentUser?.role, pagePermissions, PAGE, "edit")}
+          canSend={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
         />
       </div>
     </div>

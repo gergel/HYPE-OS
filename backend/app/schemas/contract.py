@@ -22,10 +22,33 @@ class ContractBase(BaseModel):
     # Álló keretszerződés (True) vagy eseti megbízási szerződés (False) -
     # lásd models/contract.py Contract.keretszerzodes.
     keretszerzodes: bool = False
+    #: Él-e a keretszerződés (kézi kapcsoló). Eseti szerződéseknél nincs
+    #: jelentősége.
+    aktiv: bool = True
     netto_osszeg: float | None = None
     teljesites_kezdete: date | None = None
     teljesites_vege: date | None = None
     plusz_afa: bool | None = None
+
+
+class ContractPeriodBase(BaseModel):
+    """Egy keretszerződés érvényességi időszaka. A nyitott vég ("azóta is
+    él") és a nyitott kezdet ("a kezdetektől") egyaránt megengedett."""
+
+    kezdet: date | None = None
+    veg: date | None = None
+    megjegyzes: str | None = None
+
+
+class ContractPeriodCreate(ContractPeriodBase):
+    pass
+
+
+class ContractPeriodRead(ContractPeriodBase):
+    id: int
+    contract_id: int
+
+    model_config = {"from_attributes": True}
 
 
 class ContractCreate(ContractBase):
@@ -34,6 +57,8 @@ class ContractCreate(ContractBase):
 
 class ContractUpdate(BaseModel):
     szerzodes_allapota: str | None = None
+    #: A keretszerződés be-/kikapcsolása (lásd models/contract.py Contract.aktiv).
+    aktiv: bool | None = None
     alairva: bool | None = None
     szerzodes_file_url: str | None = None
     netto_osszeg: float | None = None
@@ -45,6 +70,8 @@ class ContractUpdate(BaseModel):
 class ContractRead(ContractBase):
     id: int
     szerzodes_file_url: str | None = None
+    #: Mettől meddig élt a keretszerződés - üres lista = időbeli korlát nélkül.
+    idoszakok: list[ContractPeriodRead] = []
 
     # a 'Keretszerződés' / 'Alvállakozó keretszerződés' Notion táblák maradék mezői
     letrehozta_notion: JsonScalar = None

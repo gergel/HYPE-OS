@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.employee import Employee, SystemRole as Role
+from app.models.employee import Employee, SystemRole as Role, van_szerepkore
 from app.models.user_access import PageAccessConfig
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -63,7 +63,9 @@ DEFAULT_WRITE_ROLES: tuple[Role, ...] = (Role.ADMIN, Role.OPERATOR, Role.ADMINIS
 
 def require_roles(*roles: Role):
     def dependency(current_user: Employee = Depends(get_current_user)) -> Employee:
-        if current_user.role not in roles:
+        # A TELJES szerepkör-halmazt nézzük, nem csak az elsődlegest: egy
+        # embernek több szerepköre is lehet (lásd models/employee.szerepkorei).
+        if not van_szerepkore(current_user, *roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Nincs jogosultságod ehhez a művelethez",
@@ -145,7 +147,7 @@ def lathato_anyagok(db: Session, employee: Employee) -> set[int] | None:
 
     Az ADMIN mindig mindent lát: enélkül egy elrontott beállítással saját
     magát is ki lehetne zárni a rendszerből."""
-    if employee.role == Role.ADMIN:
+    if van_szerepkore(employee, Role.ADMIN):
         return None
     config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
     if config is None or config.lathato_deliverable_idk is None:

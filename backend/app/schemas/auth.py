@@ -13,5 +13,8 @@ class UserOut(BaseModel):
     full_name: str
     email: str | None
     role: SystemRole
+    #: További szerepkörök az elsődlegesen felül - a felület ezek alapján is
+    #: dönt a gombok megjelenítéséről (lásd frontend lib/permissions.ts).
+    tovabbi_szerepkorok: list[str] | None = None
 
     model_config = {"from_attributes": True}
