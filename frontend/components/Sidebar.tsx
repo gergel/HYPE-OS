@@ -6,6 +6,7 @@ import {
   Clapperboard,
   ClipboardList,
   FileCheck2,
+  Building2,
   FileSignature,
   FileText,
   FolderKanban,
@@ -31,6 +32,7 @@ import { NavItem, navGroups } from "@/lib/nav";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
+  Building2,
   Hash,
   FolderKanban,
   Users,

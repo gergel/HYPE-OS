@@ -117,6 +117,9 @@ export const navGroups: NavGroup[] = [
       { label: "Pénzügyek", href: "/penzugyek", icon: "Wallet" },
       { label: "Keretszerződések", href: "/penzugyek/keretszerzodesek", icon: "FileSignature", permissionPage: "/penzugyek" },
       { label: "Eseti szerződések", href: "/penzugyek/eseti-szerzodesek", icon: "FileText", permissionPage: "/penzugyek" },
+      // Számlázó cégek: akik EMBEREKET küldenek a forgatásra, és a munkájukról
+      // ők számláznak (lásd backend services/szamlazo.py).
+      { label: "Számlázó cégek", href: "/penzugyek/vallalkozasok", icon: "Building2", permissionPage: "/penzugyek" },
     ],
   },
   {

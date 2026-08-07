@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
 import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
+import { SzamlazoFelSzerkeszto } from "@/components/SzamlazoFelSzerkeszto";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -15,7 +16,9 @@ import {
   getPendingSubcontractorsForProject,
   getMyPagePermissions,
   getPendingTigForProject,
+  getProjektSzamlazok,
   getUtokovetesDetail,
+  getVallalkozasok,
 } from "@/lib/api";
 
 /** Az Utókövetés részletnézete NEM csak egy állapot-áttekintés, hanem itt is
@@ -28,16 +31,27 @@ import {
 export default async function UtokovetesDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectId = Number(id);
-  const [detail, pendingContracts, osszesSzerzodes, pendingTig, allTig, allEmployees, pagePermissions] =
-    await Promise.all([
-      getUtokovetesDetail(projectId),
-      getPendingSubcontractorsForProject(projectId),
-      getAllContractsForProject(projectId),
-      getPendingTigForProject(projectId),
-      getAllTigForProject(projectId),
-      getEmployees(),
-      getMyPagePermissions(),
-    ]);
+  const [
+    detail,
+    pendingContracts,
+    osszesSzerzodes,
+    pendingTig,
+    allTig,
+    allEmployees,
+    pagePermissions,
+    szamlazoNezet,
+    cegek,
+  ] = await Promise.all([
+    getUtokovetesDetail(projectId),
+    getPendingSubcontractorsForProject(projectId),
+    getAllContractsForProject(projectId),
+    getPendingTigForProject(projectId),
+    getAllTigForProject(projectId),
+    getEmployees(),
+    getMyPagePermissions(),
+    getProjektSzamlazok(projectId),
+    getVallalkozasok(),
+  ]);
   if (!detail) notFound();
 
   // Aki az oldalon szerkeszthet, az a TIG állapotát is kézzel át tudja állítani.
@@ -86,6 +100,20 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
           </div>
         </Card>
 
+        {/* Ez az első kérdés a papírozásban: kinek a nevére megy a szerződés
+            és a TIG (lásd SzamlazoFelSzerkeszto). */}
+        <Card title="Ki számláz kiért">
+          {szamlazoNezet ? (
+            <SzamlazoFelSzerkeszto
+              nezet={szamlazoNezet}
+              cegek={cegek.filter((c) => c.aktiv).map((c) => ({ id: c.id, nev: c.nev }))}
+              canEdit={canEdit}
+            />
+          ) : (
+            <p className="text-[13px] text-text-secondary">A számlázási beállítás most nem érhető el.</p>
+          )}
+        </Card>
+
         <Card title="Szerződés készítés">
           <SubcontractorContractManager projectId={projectId} pending={pendingContracts?.pending ?? []} />
           {/* A kiküldött szerződés eltűnik a fenti (teendő-)listáról - itt
@@ -113,8 +141,10 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
               </p>
               <ul className="space-y-1">
                 {detail.teljesitesi_igazolasok.map((t) => (
-                  <li key={t.id} className="flex items-center justify-between gap-3 text-[13px]">
-                    <span className="truncate text-text-primary">{t.full_name}</span>
+                  <li key={t.szamlazo} className="flex items-center justify-between gap-3 text-[13px]">
+                    {/* A címke a lefedett embereket is megnevezi, ha a fél
+                        más(ok) munkáját is számlázza. */}
+                    <span className="truncate text-text-primary">{t.cimke}</span>
                     {t.szamla_kifizetve ? (
                       <StatusBadge label="Kifizetve" tone="success" />
                     ) : t.van_szamla ? (

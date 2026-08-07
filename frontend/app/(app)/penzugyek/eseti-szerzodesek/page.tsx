@@ -59,18 +59,36 @@ export default async function EsetiSzerzodesekPage() {
             deleteHref={canDelete ? (s) => `/api/v1/eseti-szerzodesek/${s.id}` : undefined}
             columns={[
               {
-                header: "Munkatárs",
-                render: (s) =>
-                  s.employee_id ? (
-                    <StopClickPropagation>
-                      <a href={`/csapat/${s.employee_id}`} className="text-text-accent hover:underline">
-                        {s.employee_nev ?? `#${s.employee_id}`}
-                      </a>
-                    </StopClickPropagation>
-                  ) : (
-                    <span className="text-text-muted">Nincs megbízott</span>
-                  ),
-                sortAccessor: (s) => s.employee_nev,
+                // A szerződés MÁSIK OLDALA: az ember, akivel kötöttük - vagy a
+                // cég, ha a munkát cég számlázza. Egy szerződés több stábtag
+                // munkáját is fedheti (lásd backend services/szamlazo.py) -
+                // ezért látszik alatta, kikre vonatkozik.
+                header: "Kivel",
+                render: (s) => (
+                  <span>
+                    {s.vallalkozas_id ? (
+                      <StopClickPropagation>
+                        <a href="/penzugyek/vallalkozasok" className="text-text-accent hover:underline">
+                          {s.vallalkozas_nev ?? `#${s.vallalkozas_id}`}
+                        </a>
+                      </StopClickPropagation>
+                    ) : s.employee_id ? (
+                      <StopClickPropagation>
+                        <a href={`/csapat/${s.employee_id}`} className="text-text-accent hover:underline">
+                          {s.employee_nev ?? `#${s.employee_id}`}
+                        </a>
+                      </StopClickPropagation>
+                    ) : (
+                      <span className="text-text-muted">Nincs megbízott</span>
+                    )}
+                    {s.lefedettek.length > 1 && (
+                      <span className="block text-[11px] text-text-muted">
+                        {s.lefedettek.join(", ")} munkájáért
+                      </span>
+                    )}
+                  </span>
+                ),
+                sortAccessor: (s) => s.vallalkozas_nev ?? s.employee_nev,
               },
               {
                 // A projektkód is kell: a projekt neve önmagában sokszor

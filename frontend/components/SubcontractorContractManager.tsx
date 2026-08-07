@@ -64,20 +64,23 @@ export function SubcontractorContractManager({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [selectedId, setSelectedId] = useState<number | "">("");
-  const [openId, setOpenId] = useState<number | null>(null);
+  // A kiválasztás SZÁMLÁZÓ FÉL szerint megy ("e12" / "v3"), nem ember szerint:
+  // egy szerződés több stábtag munkáját is fedheti (lásd backend
+  // services/szamlazo.py).
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [busy, setBusy] = useState<"save" | "send" | "skip" | null>(null);
 
-  const selectedEmployee = pending.find((p) => p.id === openId) ?? null;
+  const selectedEmployee = pending.find((p) => p.szamlazo === openId) ?? null;
   const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
 
   function openForm() {
     if (!selectedId) return;
-    const employee = pending.find((p) => p.id === selectedId);
+    const employee = pending.find((p) => p.szamlazo === selectedId);
     if (!employee) return;
     setForm(formFromEmployee(employee, teljesitesAlap));
-    setOpenId(employee.id);
+    setOpenId(employee.szamlazo);
   }
 
   function closeForm() {
@@ -110,7 +113,7 @@ export function SubcontractorContractManager({
     if (!selectedEmployee || !form) return;
     setBusy("save");
     try {
-      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.id}/save`, {
+      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/save`, {
         method: "POST",
         body: JSON.stringify(buildPayload()),
       });
@@ -138,7 +141,7 @@ export function SubcontractorContractManager({
     setBusy("send");
     try {
       const res = await authFetch(
-        `/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.id}/generate-and-send`,
+        `/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/generate-and-send`,
         { method: "POST", body: JSON.stringify(buildPayload()) },
       );
       if (!res.ok) {
@@ -161,7 +164,7 @@ export function SubcontractorContractManager({
     if (!(await confirm(`Biztosan kihagyod ${selectedEmployee.full_name}-t? A projekt szerződés nélkül zárul vele.`))) return;
     setBusy("skip");
     try {
-      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.id}/skip`, {
+      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/skip`, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -186,22 +189,22 @@ export function SubcontractorContractManager({
     <div>
       <p className="mb-3 text-[13px] text-text-secondary">
         {pending.length === 0
-          ? "Nincs olyan ember a projekten, akinek szerződést kellene készíteni."
-          : `${pending.length} embernek kell szerződés (nincs keretszerződése és nem belsős).`}
+          ? "Nincs olyan fél a projekten, akinek szerződést kellene készíteni."
+          : `${pending.length} félnek kell szerződés (nincs keretszerződése és nem belsős). Ha valaki más nevében számláz, egy szerződés fedi mindkettőjük munkáját.`}
       </p>
       {pending.length > 0 && (
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-text-muted">Megbízott</label>
+            <label className="text-[11px] text-text-muted">Számlázó fél</label>
             <select
               value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : "")}
+              onChange={(e) => setSelectedId(e.target.value)}
               className="min-w-[220px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
             >
               <option value="">Válassz embert…</option>
               {pending.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.full_name}
+                <option key={p.szamlazo} value={p.szamlazo}>
+                  {p.cimke}
                   {p.draft ? ` (${p.draft.szerzodes_allapota ?? "Készítés alatt"})` : ""}
                 </option>
               ))}
@@ -225,9 +228,16 @@ export function SubcontractorContractManager({
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="mb-1 text-[15px] font-medium text-text-primary">Megbízási szerződés – {selectedEmployee.full_name}</h3>
-            <p className="mb-4 text-[12px] text-text-muted">
+            <p className="mb-1 text-[12px] text-text-muted">
               Szerződés állapot: {selectedEmployee.draft?.szerzodes_allapota ?? "Nincs elkezdve"}
             </p>
+            {/* Ha a fél más(ok) munkáját is számlázza, ez az EGY szerződés fedi
+                mindet - a lefedettek attól még teljes értékű stábtagok. */}
+            {selectedEmployee.lefedettek.length > 1 && (
+              <p className="mb-4 text-[12px] text-text-secondary">
+                Ez a szerződés {selectedEmployee.lefedettek.map((l) => l.full_name).join(", ")} munkáját fedi.
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Nyilvántartási szám">
                 <input

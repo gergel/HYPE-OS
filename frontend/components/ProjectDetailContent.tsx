@@ -24,6 +24,7 @@ import { RelatedTable } from "@/components/RelatedTable";
 import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
 import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
+import { SzamlazoFelSzerkeszto } from "@/components/SzamlazoFelSzerkeszto";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
@@ -41,6 +42,8 @@ import {
   getMyPagePermissions,
   getPendingSubcontractorsForProject,
   getPendingTigForProject,
+  getProjektSzamlazok,
+  getVallalkozasok,
   getProjektUtomunkaOsszesites,
   getRecord,
   getRelated,
@@ -109,6 +112,8 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     sectionOrder,
     currentUser,
     attachments,
+    szamlazoNezet,
+    cegek,
   ] = await Promise.all([
     project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
     project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
@@ -127,6 +132,8 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     getSectionOrder("project"),
     getCurrentUser(),
     getAttachments("project", projectId),
+    getProjektSzamlazok(projectId),
+    getVallalkozasok(),
   ]);
 
   const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
@@ -297,6 +304,19 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
         label: "Szerződés & TIG",
         content: (
           <>
+            {/* Ezt ELŐBB kell tisztázni, mint a szerződést: ettől függ, kinek a
+                nevére megy a papír (lásd SzamlazoFelSzerkeszto). */}
+            <Card title="Ki számláz kiért" icon={Wallet}>
+              {szamlazoNezet ? (
+                <SzamlazoFelSzerkeszto
+                  nezet={szamlazoNezet}
+                  cegek={cegek.filter((c) => c.aktiv).map((c) => ({ id: c.id, nev: c.nev }))}
+                  canEdit={szerkeszthet}
+                />
+              ) : (
+                <p className="text-[13px] text-text-secondary">A számlázási beállítás most nem érhető el.</p>
+              )}
+            </Card>
             <Card title="Szerződés készítés" icon={Wallet}>
               <SubcontractorContractManager
                 projectId={project.id}

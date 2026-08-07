@@ -11,6 +11,9 @@ class ContractBase(BaseModel):
     tipus: ContractType
     client_id: int | None = None
     employee_id: int | None = None
+    #: Keretszerződés köthető CÉGGEL is - az embereket küldő vállalkozással
+    #: (lásd models/vallalkozas.py); ilyenkor employee_id üres.
+    vallalkozas_id: int | None = None
     project_id: int | None = None
     ceg_neve: str | None = None
     szekhely: str | None = None

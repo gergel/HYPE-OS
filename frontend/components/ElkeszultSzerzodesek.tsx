@@ -30,7 +30,9 @@ export function ElkeszultSzerzodesek({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [busyId, setBusyId] = useState<number | null>(null);
+  // A számlázó fél kulcsa ("e12" / "v3"), nem ember-azonosító: a
+  // szerződés cég nevére is szólhat (lásd backend services/szamlazo.py).
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const kesz = szerzodesek.filter((s) => s.szerzodes_allapota === "Kiküldve" || s.szerzodes_allapota === "Kihagyva");
   if (kesz.length === 0) return null;
@@ -40,9 +42,9 @@ export function ElkeszultSzerzodesek({
       `Törlöd ${s.full_name} szerződését erről a projektről? Ezután újra a teendők közt jelenik meg, és készíthetsz neki újat.`,
     );
     if (!ok) return;
-    setBusyId(s.employee_id);
+    setBusyId(s.szamlazo);
     try {
-      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.employee_id}`, {
+      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.szamlazo}`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -109,7 +111,7 @@ export function ElkeszultSzerzodesek({
                   {canDelete && (
                     <button
                       type="button"
-                      disabled={busyId === s.employee_id}
+                      disabled={busyId === s.szamlazo}
                       onClick={() => torol(s)}
                       title="Szerződés törlése - utána újra elkészíthető"
                       className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"

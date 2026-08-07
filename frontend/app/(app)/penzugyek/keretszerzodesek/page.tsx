@@ -13,6 +13,7 @@ import {
   getCurrentUser,
   getEmployees,
   getMyPagePermissions,
+  getVallalkozasok,
   type Contract,
 } from "@/lib/api";
 import { canDoAction } from "@/lib/permissions";
@@ -24,7 +25,13 @@ const PAGE = "/penzugyek";
  * backend routes/contracts.py create_keretszerzodes). */
 const ALLAPOT_ALAPOK = ["Aktív", "Lejárt", "Felmondva"];
 
-type KeretszerzodesRow = Contract & { employee_name: string };
+type KeretszerzodesRow = Contract & {
+  /** Kivel kötöttük: a külsős munkatárs neve, vagy - ha a szerződés CÉGGEL
+   * szól - a cég neve (lásd backend models/vallalkozas.py). */
+  employee_name: string;
+  /** Cég nevére szóló keretszerződésnél a hozzá tartozó emberek. */
+  ceg_tagjai: string[];
+};
 
 /** Keretszerződések: a KÜLSŐS munkatársakhoz tartozó ÁLLÓ keretszerződések -
  * azok, akik a Notion "Alvállakozó keretszerződés (külsős)" táblájában
@@ -35,32 +42,50 @@ type KeretszerzodesRow = Contract & { employee_name: string };
  * adatlapján, az "Eseti megbízási szerződések" szekcióban van. Csak külsősök:
  * a belsősöknél a havi bérelszámolás és a belsős TIG fedi le ugyanezt. */
 export default async function KeretszerzodesekPage() {
-  const [contracts, employees, currentUser, pagePermissions] = await Promise.all([
+  const [contracts, employees, vallalkozasok, currentUser, pagePermissions] = await Promise.all([
     getContracts(),
     getEmployees(),
+    getVallalkozasok(),
     getCurrentUser(),
     getMyPagePermissions(),
   ]);
+  const vallalkozasById = new Map(vallalkozasok.map((v) => [v.id, v]));
   const employeeById = new Map(employees.map((e) => [e.id, e]));
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
 
+  // Emberrel ÉS céggel is köthetünk keretszerződést: az embereket küldő
+  // vállalkozás szerződése az összes tőle jövő embert fedi (lásd backend
+  // services/szamlazo.py).
   const rows: KeretszerzodesRow[] = contracts
     .filter((c) => {
-      if (c.tipus !== "alvallalkozoi" || c.project_id || !c.employee_id) return false;
-      if (!c.keretszerzodes) return false;
+      if (c.tipus !== "alvallalkozoi" || c.project_id || !c.keretszerzodes) return false;
+      if (c.vallalkozas_id) return vallalkozasById.has(c.vallalkozas_id);
+      if (!c.employee_id) return false;
       return employeeById.get(c.employee_id)?.tipus === "kulsos";
     })
-    .map((c) => ({
-      ...c,
-      employee_name: employeeById.get(c.employee_id as number)?.full_name ?? `#${c.employee_id}`,
-    }));
+    .map((c) => {
+      const ceg = c.vallalkozas_id ? vallalkozasById.get(c.vallalkozas_id) : undefined;
+      return {
+        ...c,
+        employee_name: ceg
+          ? ceg.nev
+          : (employeeById.get(c.employee_id as number)?.full_name ?? `#${c.employee_id}`),
+        ceg_tagjai: ceg ? ceg.tagok.map((t) => t.full_name) : [],
+      };
+    });
 
   // Felvenni azt a külsőst lehet, akinek még nincs keretszerződése. Akinek van
   // eseti megbízási szerződése, az is felvehető: a kettő külön sor, a backend
   // nem írja felül az esetit (lásd routes/contracts.py create_keretszerzodes).
   const linkedEmployeeIds = new Set(rows.map((r) => r.employee_id));
   const candidates = employees.filter((e) => e.tipus === "kulsos" && !linkedEmployeeIds.has(e.id));
+  // Cég is felvehető: az embereket küldő vállalkozás keretszerződése az összes
+  // tőle jövő embert fedi (lásd backend services/szamlazo.py).
+  const linkedCegIds = new Set(rows.map((r) => r.vallalkozas_id));
+  const cegJeloltek = vallalkozasok
+    .filter((v) => v.aktiv && !linkedCegIds.has(v.id))
+    .map((v) => ({ id: v.id, nev: v.nev }));
   const allapotOpciok = [
     ...new Set([...ALLAPOT_ALAPOK, ...rows.map((r) => r.szerzodes_allapota).filter((a): a is string => !!a)]),
   ];
@@ -70,19 +95,36 @@ export default async function KeretszerzodesekPage() {
       <TopBar />
       <div className="flex-1 p-8">
         <Card title={`Keretszerződések (${rows.length})`}>
-          <KeretszerzodesAddWidget candidates={candidates} />
+          <KeretszerzodesAddWidget candidates={candidates} cegek={cegJeloltek} />
           <p className="mb-3 text-[12.5px] text-text-muted">
-            Csak az álló keretszerződések. Az eseti megbízási szerződések a munkatárs adatlapján, a
-            &quot;Szerződések&quot; fülön vannak.
+            Csak az álló keretszerződések – emberrel vagy{" "}
+            <a href="/penzugyek/vallalkozasok" className="text-text-accent hover:underline">
+              céggel
+            </a>{" "}
+            kötve. Az eseti megbízási szerződések a munkatárs adatlapján, a &quot;Szerződések&quot; fülön vannak.
           </p>
           <DataTable<KeretszerzodesRow>
             filterable
             rows={rows}
             emptyText="Még nincs felvett keretszerződés."
-            getHref={(c) => `/csapat/${c.employee_id}`}
+            getHref={(c) => (c.vallalkozas_id ? "/penzugyek/vallalkozasok" : `/csapat/${c.employee_id}`)}
             deleteHref={(c) => `${ENTITY_PATHS.contract}/${c.id}`}
             columns={[
-              { header: "Munkatárs", render: (c) => c.employee_name, sortAccessor: (c) => c.employee_name },
+              {
+                header: "Kivel",
+                render: (c) => (
+                  <span>
+                    {c.employee_name}
+                    {/* Céges keretszerződésnél az fontos, kiket fed le. */}
+                    {c.vallalkozas_id != null && (
+                      <span className="block text-[11px] text-text-muted">
+                        Cég{c.ceg_tagjai.length > 0 ? ` · ${c.ceg_tagjai.join(", ")}` : ""}
+                      </span>
+                    )}
+                  </span>
+                ),
+                sortAccessor: (c) => c.employee_name,
+              },
               { header: "Cég neve", render: (c) => c.ceg_neve ?? "–", sortAccessor: (c) => c.ceg_neve },
               { header: "Adószám", render: (c) => c.adoszam ?? "–", sortAccessor: (c) => c.adoszam },
               {

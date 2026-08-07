@@ -232,6 +232,9 @@ export type Contract = {
   tipus: string;
   client_id: number | null;
   employee_id: number | null;
+  /** Keretszerződés köthető CÉGGEL is: az embereket küldő vállalkozással
+   * (lásd backend models/vallalkozas.py) - ilyenkor employee_id üres. */
+  vallalkozas_id: number | null;
   project_id: number | null;
   ceg_neve: string | null;
   szekhely: string | null;
@@ -370,9 +373,25 @@ export type SubcontractorContractDraft = {
   plusz_afa: boolean | null;
 };
 
-export type PendingSubcontractorEmployee = {
+/** Egy stábtag, akinek a munkáját egy szerződés/TIG lefedi. */
+export type LefedettEmber = {
   id: number;
   full_name: string;
+};
+
+/** Egy SZÁMLÁZÓ FÉL, akitől szerződés kell egy projekten. Nem feltétlenül egy
+ * ember: lehet cég is, és egy fél több stábtag munkáját is fedheti (lásd
+ * backend services/szamlazo.py). */
+export type PendingSubcontractorEmployee = {
+  /** Az ember azonosítója; cégnél 0. A műveletek a `szamlazo` kulccsal mennek. */
+  id: number;
+  /** "e12" (ember) vagy "v3" (vállalkozás) - ez megy az útvonalba. */
+  szamlazo: string;
+  full_name: string;
+  /** "Ladányi Máté (Balla Berci helyett is)" */
+  cimke: string;
+  lefedettek: LefedettEmber[];
+  vallalkozas_id: number | null;
   email: string | null;
   ceg_neve: string | null;
   szekhely: string | null;
@@ -409,7 +428,9 @@ export async function getPendingSubcontractorsForProject(
  * kész papír (és a linkje) is látszódjon. */
 export type ElkeszultSzerzodes = {
   contract_id: number;
+  /** Cég nevére szóló szerződésnél 0 - a címzés a `szamlazo` kulccsal megy. */
   employee_id: number;
+  szamlazo: string;
   full_name: string;
   szerzodes_allapota: string | null;
   netto_osszeg: number | null;
@@ -428,6 +449,11 @@ export type EsetiSzerzodes = {
   employee_id: number | null;
   employee_nev: string | null;
   employee_tipus: string | null;
+  /** Cég nevére szóló szerződésnél a számlázó vállalkozás. */
+  vallalkozas_id: number | null;
+  vallalkozas_nev: string | null;
+  /** Kiknek a munkáját fedi ez az egy szerződés a projekten. */
+  lefedettek: string[];
   project_id: number | null;
   project_nev: string | null;
   projektkod: string | null;
@@ -448,11 +474,86 @@ export async function getEsetiSzerzodesek(): Promise<EsetiSzerzodes[]> {
   return (await apiGet<EsetiSzerzodes[]>("/api/v1/eseti-szerzodesek")) ?? [];
 }
 
+/** Egy SZÁMLÁZÓ CÉG - az a fél, aki a munkáról a számlát kiállítja, amikor nem
+ * maga az ember számláz (lásd backend models/vallalkozas.py). */
+export type Vallalkozas = {
+  id: number;
+  nev: string;
+  szekhely: string | null;
+  adoszam: string | null;
+  kepviselo: string | null;
+  nyilvantartasi_szam: string | null;
+  email: string | null;
+  megbizas_targya: string | null;
+  plusz_afa: boolean | null;
+  megjegyzes: string | null;
+  aktiv: boolean;
+  tagok: {
+    employee_id: number;
+    full_name: string;
+    tipus: string | null;
+    kezdet: string | null;
+    veg: string | null;
+    megjegyzes: string | null;
+  }[];
+  /** Van-e MA élő keretszerződése - ettől függ, kell-e eseti szerződés a tőle
+   * jövő emberektől. */
+  van_ervenyes_keretszerzodes: boolean;
+  keretszerzodes_id: number | null;
+};
+
+export async function getVallalkozasok(): Promise<Vallalkozas[]> {
+  return (await apiGet<Vallalkozas[]>("/api/v1/vallalkozasok")) ?? [];
+}
+
+export async function getVallalkozas(id: number): Promise<Vallalkozas | null> {
+  return apiGet<Vallalkozas>(`/api/v1/vallalkozasok/${id}`);
+}
+
+/** Egy projekt egy stábtagjánál: ki számláz a munkájáért. */
+export type ProjektSzamlazoSor = {
+  employee_id: number;
+  full_name: string;
+  tipus: string | null;
+  /** "e12" vagy "v3" - saját magánál "e{employee_id}". */
+  szamlazo: string;
+  szamlazo_nev: string;
+  /** Igaz, ha nem ő maga számláz. */
+  felulirva: boolean;
+  megjegyzes: string | null;
+  javaslatok: { szamlazo: string; nev: string; forras: string }[];
+};
+
+export type ProjektSzamlazoNezet = {
+  project_id: number;
+  project_nev: string | null;
+  sorok: ProjektSzamlazoSor[];
+};
+
+export async function getProjektSzamlazok(projectId: number): Promise<ProjektSzamlazoNezet | null> {
+  return apiGet<ProjektSzamlazoNezet>(`/api/v1/projekt-szamlazok/${projectId}`);
+}
+
 export type PendingTigProject = {
   project_id: number;
   project_nev: string | null;
   forgatas_datuma: string | null;
   pending_count: number;
+};
+
+/** Egy TIG-tétel: kinek a munkáját, melyik projekten igazolja. Egy TIG több
+ * ember és több projekt munkáját is fedheti (lásd backend
+ * models/performance_certificate.py PerformanceCertificateTetel). */
+export type TigTetel = {
+  project_id: number;
+  project_nev: string | null;
+  projektkod: string | null;
+  forgatas_datuma: string | null;
+  employee_id: number;
+  employee_nev: string | null;
+  /** Opcionális: nem mindig tudható, egy összevont számlából mi kié. */
+  netto_osszeg: number | null;
+  megnevezes: string | null;
 };
 
 export type TigDraft = {
@@ -468,11 +569,19 @@ export type TigDraft = {
   teljesites_vege: string | null;
   keltezes: string | null;
   plusz_afa: boolean | null;
+  tetelek: TigTetel[];
 };
 
+/** Egy SZÁMLÁZÓ FÉL, akitől TIG kell egy projekten (ember vagy cég). */
 export type PendingTigEmployee = {
+  /** Az ember azonosítója; cégnél 0. */
   id: number;
+  szamlazo: string;
   full_name: string;
+  cimke: string;
+  /** A projekten hozzá tartozó stábtagok - a TIG alap-tétellistája. */
+  lefedettek: TigTetel[];
+  vallalkozas_id: number | null;
   email: string | null;
   ceg_neve: string | null;
   szekhely: string | null;
@@ -503,6 +612,15 @@ export async function getPendingTigForProject(projectId: number): Promise<Pendin
   return apiGet<PendingTigProjectDetail>(`/api/v1/teljesitesi-igazolasok/${projectId}`);
 }
 
+/** Mi mindent tehetünk MÉG rá erre a TIG-re: a fél összes olyan munkája, amiről
+ * még nincs papír - más projektekről is. Ez az "egy ember egyben küld be több
+ * projektet" eset felülete. */
+export async function getNyitottTigTetelek(projectId: number, szamlazo: string): Promise<TigTetel[]> {
+  return (
+    (await apiGet<TigTetel[]>(`/api/v1/teljesitesi-igazolasok/${projectId}/${szamlazo}/nyitott-tetelek`)) ?? []
+  );
+}
+
 export type PerformanceCertificateInvoice = {
   id: number;
   filename: string;
@@ -514,7 +632,10 @@ export type PerformanceCertificateInvoice = {
 export type PerformanceCertificate = {
   id: number;
   project_id: number;
-  employee_id: number;
+  /** A számlázó fél: ember VAGY vállalkozás. */
+  employee_id: number | null;
+  vallalkozas_id: number | null;
+  tetelek: { id: number; project_id: number; employee_id: number; netto_osszeg: number | null; megnevezes: string | null }[];
   allapot: string | null;
   file_url: string | null;
   ceg_neve: string | null;
@@ -662,11 +783,25 @@ export type UtokovetesDetail = {
   projektkod: string | null;
   forgatas_datuma: string | null;
   forgatas_datuma_vege: string | null;
-  szerzodesek: { id: number; full_name: string; email: string | null; draft: SubcontractorContractDraft | null }[];
+  /** A sorok SZÁMLÁZÓ FELENKÉNT állnak, nem emberenként: egy fél több stábtag
+   * munkájáról is szerződhet/igazolhat egyben (lásd backend
+   * services/szamlazo.py). A `cimke` ezt írja ki emberi nyelven. */
+  szerzodesek: {
+    id: number;
+    szamlazo: string;
+    full_name: string;
+    cimke: string;
+    lefedettek: LefedettEmber[];
+    email: string | null;
+    draft: SubcontractorContractDraft | null;
+  }[];
   tig_ready: boolean;
   teljesitesi_igazolasok: {
     id: number;
+    szamlazo: string;
     full_name: string;
+    cimke: string;
+    lefedettek: LefedettEmber[];
     email: string | null;
     draft: TigDraft | null;
     szamla_kifizetve: boolean;

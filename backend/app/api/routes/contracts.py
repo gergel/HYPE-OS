@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.security import require_page_action
 from app.models.contract import Contract, ContractPeriod, ContractType, megkotott_keretszerzodes
 from app.models.employee import Employee
+from app.models.vallalkozas import Vallalkozas
 from app.services import keretszerzodes_kuldes
 from app.schemas.contract import (
     ContractCreate,
@@ -32,7 +33,14 @@ router = build_crud_router(
 
 
 class KeretszerzodesCreate(BaseModel):
-    employee_id: int
+    """A keretszerződés másik oldala: pontosan az egyik van kitöltve.
+
+    Emberrel is köthetünk keretszerződést, és CÉGGEL is - utóbbi az embereket
+    küldő vállalkozás esete, aminek a szerződése az összes tőle jövő embert
+    fedi (lásd models/vallalkozas.py, services/szamlazo.py)."""
+
+    employee_id: int | None = None
+    vallalkozas_id: int | None = None
 
 
 def _get_contract_or_404(db: Session, contract_id: int) -> Contract:
@@ -40,6 +48,19 @@ def _get_contract_or_404(db: Session, contract_id: int) -> Contract:
     if szerzodes is None:
         raise HTTPException(status_code=404, detail="A szerződés nem található.")
     return szerzodes
+
+
+def _ceg_cegadata(vallalkozas: Vallalkozas) -> dict:
+    """A vállalkozás adatai a szerződés mezőire képezve."""
+    return {
+        "ceg_neve": vallalkozas.nev,
+        "szekhely": vallalkozas.szekhely,
+        "adoszam": vallalkozas.adoszam,
+        "megbizas_targya": vallalkozas.megbizas_targya,
+        "vallalkozas_kepviseloje": vallalkozas.kepviselo,
+        "vallalkozas_nyilvantartasi_szam": vallalkozas.nyilvantartasi_szam,
+        "email": vallalkozas.email,
+    }
 
 
 def _cegadat(employee: Employee) -> dict:
@@ -62,37 +83,61 @@ def create_keretszerzodes(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
-    """Egy meglévő crew tag (bármelyik tipus, akár belsős is) felvétele a
-    'Keretszerződések' nézetbe - a cégadatokat az Employee saját, már meglévő
-    (vállalkozás neve/székhely/adószám/képviselő/nyilvántartási szám) mezőiből
-    másoljuk át, ugyanúgy ahogy a projekt-szintű 'Szerződés készítés' teszi
-    (lásd services/contract_actions.py apply_szerzodes_keszites)."""
-    employee = db.get(Employee, payload.employee_id)
-    if employee is None:
-        raise HTTPException(status_code=404, detail="A kiválasztott munkatárs nem található.")
+    """Keretszerződés felvétele egy MUNKATÁRSSAL vagy egy CÉGGEL.
+
+    A cégadatokat a kiválasztott fél saját, már meglévő mezőiből (vállalkozás
+    neve/székhely/adószám/képviselő/nyilvántartási szám) másoljuk át, ugyanúgy
+    ahogy a projekt-szintű 'Szerződés készítés' teszi (lásd
+    services/contract_actions.py apply_szerzodes_keszites).
+
+    Céggel kötött keretszerződés esetén a szerződés az összes olyan ember
+    munkáját fedi, akinél a projekten ezt a céget jelöltük meg számlázó félként
+    (lásd services/szamlazo.py)."""
+    if (payload.employee_id is None) == (payload.vallalkozas_id is None):
+        raise HTTPException(
+            status_code=400, detail="Pontosan egyet válassz: munkatársat VAGY céget."
+        )
+
+    if payload.vallalkozas_id is not None:
+        vallalkozas = db.get(Vallalkozas, payload.vallalkozas_id)
+        if vallalkozas is None:
+            raise HTTPException(status_code=404, detail="A kiválasztott cég nem található.")
+        oldal_szuro = Contract.vallalkozas_id == vallalkozas.id
+        mar_van_uzenet = "Ennek a cégnek már van keretszerződése."
+        oldal = {"vallalkozas_id": vallalkozas.id}
+        cegadat = _ceg_cegadata(vallalkozas)
+    else:
+        employee = db.get(Employee, payload.employee_id)
+        if employee is None:
+            raise HTTPException(status_code=404, detail="A kiválasztott munkatárs nem található.")
+        oldal_szuro = (Contract.employee_id == employee.id) & Contract.vallalkozas_id.is_(None)
+        mar_van_uzenet = "Ennek a munkatársnak már van keretszerződése."
+        oldal = {"employee_id": employee.id}
+        cegadat = _cegadat(employee)
+
     existing = (
         db.query(Contract)
         .filter(
             Contract.tipus == ContractType.ALVALLALKOZOI,
-            Contract.employee_id == employee.id,
+            oldal_szuro,
             Contract.project_id.is_(None),
             Contract.keretszerzodes.is_(True),
         )
         .first()
     )
     if existing is not None and megkotott_keretszerzodes(existing):
-        raise HTTPException(status_code=400, detail="Ennek a munkatársnak már van keretszerződése.")
+        raise HTTPException(status_code=400, detail=mar_van_uzenet)
 
     # A munkatársnak lehet ESETI megbízási szerződése is (a Notion-lapjáról, a
     # cégadataiból) - azt nem léptetjük elő és nem írjuk felül: a keretszerződés
     # külön sor, külön szekció (lásd models/contract.py Contract.keretszerzodes).
     contract = Contract(
         tipus=ContractType.ALVALLALKOZOI,
-        employee_id=employee.id,
         project_id=None,
         keretszerzodes=True,
         szerzodes_allapota="Aktív",
-        **_cegadat(employee),
+        **oldal,
+        **cegadat,
     )
     db.add(contract)
     db.commit()

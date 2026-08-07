@@ -9,6 +9,13 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import type { PerformanceCertificate } from "@/lib/api";
 
+/** A TIG SZÁMLÁZÓ FELÉNEK kulcsa ("e12" ember, "v3" cég) - ez megy az
+ * útvonalba (lásd backend services/szamlazo.py). Egy TIG nem feltétlenül egy
+ * emberről szól: cég nevére is szólhat, és több ember munkáját is igazolhatja. */
+function szamlazoKulcs(c: PerformanceCertificate): string {
+  return c.vallalkozas_id != null ? `v${c.vallalkozas_id}` : `e${c.employee_id}`;
+}
+
 /** A "Kiküldve"/"Kész" állapotú TIG-ekhez (akár Külsős, akár Belsős) tartozó
  * számlák feltöltése, majd kifizetettként jelölése - ez utóbbi hozza létre a
  * Pénzügy -> Kiadások-ban megjelenő Expense sort (lásd backend
@@ -43,19 +50,19 @@ export function TigInvoiceManager({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const ready = certificates.filter((c) => c.allapot === readyStatus || c.allapot === "Kihagyva");
 
   /** Egyszerre több kiválasztott fájl is feltölthető - egymás után megy fel,
    * mert minden hívás egy külön számla-sort hoz létre a backenden. */
-  async function uploadInvoices(employeeId: number, input: HTMLInputElement, files: File[]) {
-    setBusyId(employeeId);
+  async function uploadInvoices(szamlazo: string, input: HTMLInputElement, files: File[]) {
+    setBusyId(szamlazo);
     try {
       for (const file of files) {
         const fd = new FormData();
         fd.append("file", file);
-        const res = await authFetch(`${basePath}/${projectId}/${employeeId}/szamla`, { method: "POST", body: fd });
+        const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/szamla`, { method: "POST", body: fd });
         if (!res.ok) {
           const detail = await res.json().catch(() => null);
           alert(`Sikertelen feltöltés (${file.name}): ${detail?.detail ?? res.status}`);
@@ -71,11 +78,11 @@ export function TigInvoiceManager({
     }
   }
 
-  async function deleteInvoice(employeeId: number, invoiceId: number, filename: string) {
+  async function deleteInvoice(szamlazo: string, invoiceId: number, filename: string) {
     if (!(await confirm(`Biztosan törlöd ezt a számlát: "${filename}"?`))) return;
-    setBusyId(employeeId);
+    setBusyId(szamlazo);
     try {
-      const res = await authFetch(`${basePath}/${projectId}/${employeeId}/szamla/${invoiceId}`, { method: "DELETE" });
+      const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/szamla/${invoiceId}`, { method: "DELETE" });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
@@ -89,14 +96,14 @@ export function TigInvoiceManager({
     }
   }
 
-  async function deleteCertificate(employeeId: number, nev: string) {
+  async function deleteCertificate(szamlazo: string, nev: string) {
     const ok = await confirm(
       `Törlöd ${nev} teljesítési igazolását erről a projektről? Ezután újra a teendők közt jelenik meg, és készíthetsz neki újat.`,
     );
     if (!ok) return;
-    setBusyId(employeeId);
+    setBusyId(szamlazo);
     try {
-      const res = await authFetch(`${basePath}/${projectId}/${employeeId}`, { method: "DELETE" });
+      const res = await authFetch(`${basePath}/${projectId}/${szamlazo}`, { method: "DELETE" });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
@@ -110,11 +117,11 @@ export function TigInvoiceManager({
     }
   }
 
-  async function markPaid(employeeId: number) {
+  async function markPaid(szamlazo: string) {
     if (!(await confirm("Kifizetettként jelölöd a számlát? Ez létrehoz (vagy frissít) egy Kiadás sort a Pénzügyben."))) return;
-    setBusyId(employeeId);
+    setBusyId(szamlazo);
     try {
-      const res = await authFetch(`${basePath}/${projectId}/${employeeId}/szamla-kifizetve`, { method: "POST" });
+      const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/szamla-kifizetve`, { method: "POST" });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen: ${detail?.detail ?? res.status}`);
@@ -137,7 +144,7 @@ export function TigInvoiceManager({
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-border">
-              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Megbízott</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Számlázó fél</th>
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">TIG állapota</th>
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">TIG dokumentum</th>
               <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Bruttó</th>
@@ -148,16 +155,33 @@ export function TigInvoiceManager({
           </thead>
           <tbody>
             {ready.map((c) => {
-              const busy = busyId === c.employee_id;
+              const szamlazo = szamlazoKulcs(c);
+              const busy = busyId === szamlazo;
               const invoices = c.invoices ?? [];
+              // Cég nevére szóló TIG-nél nincs ember - a cégnév a papíron is
+              // szereplő ceg_neve mezőből jön.
+              const nev =
+                (c.employee_id != null ? employeeNameById.get(c.employee_id) : null) ?? c.ceg_neve ?? szamlazo;
+              // Egy TIG több ember munkáját is igazolhatja (lásd tetelek) - ha
+              // igen, azt a név mellett ki is írjuk.
+              const tovabbiak = (c.tetelek ?? [])
+                .filter((t) => t.employee_id !== c.employee_id)
+                .map((t) => employeeNameById.get(t.employee_id) ?? `#${t.employee_id}`);
               return (
                 <tr key={c.id} className="border-b border-border align-top last:border-0">
-                  <td className="py-3 pr-6">{employeeNameById.get(c.employee_id) ?? `#${c.employee_id}`}</td>
+                  <td className="py-3 pr-6">
+                    {nev}
+                    {tovabbiak.length > 0 && (
+                      <span className="block text-[11px] text-text-muted">
+                        + {Array.from(new Set(tovabbiak)).join(", ")} munkája
+                      </span>
+                    )}
+                  </td>
                   <td className="py-3 pr-6">
                     {/* Kézzel is javítható: egy tévesen kiküldöttre állított TIG
                         visszavehető "Készítés alatt"-ra, és újra elkészíthető. */}
                     <TigAllapotSelect
-                      postPath={`${basePath}/${projectId}/${c.employee_id}/allapot`}
+                      postPath={`${basePath}/${projectId}/${szamlazo}/allapot`}
                       value={c.allapot}
                       canEdit={canEdit}
                     />
@@ -198,7 +222,7 @@ export function TigInvoiceManager({
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={() => deleteInvoice(c.employee_id, inv.id, inv.filename)}
+                            onClick={() => deleteInvoice(szamlazo, inv.id, inv.filename)}
                             className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
                             title="Számla törlése"
                           >
@@ -214,7 +238,7 @@ export function TigInvoiceManager({
                           disabled={busy}
                           onChange={(e) => {
                             const files = Array.from(e.target.files ?? []);
-                            if (files.length > 0) uploadInvoices(c.employee_id, e.target, files);
+                            if (files.length > 0) uploadInvoices(szamlazo, e.target, files);
                           }}
                           className="hidden"
                         />
@@ -228,7 +252,7 @@ export function TigInvoiceManager({
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => markPaid(c.employee_id)}
+                        onClick={() => markPaid(szamlazo)}
                         className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
                       >
                         Kifizetve jelölés
@@ -245,7 +269,7 @@ export function TigInvoiceManager({
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => deleteCertificate(c.employee_id, employeeNameById.get(c.employee_id) ?? "a megbízott")}
+                        onClick={() => deleteCertificate(szamlazo, nev)}
                         title="TIG törlése - utána újra elkészíthető"
                         className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
                       >

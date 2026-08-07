@@ -1,0 +1,265 @@
+"use client";
+
+import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { authFetch } from "@/lib/authFetch";
+import { StatusBadge } from "@/components/StatusBadge";
+import { useConfirm } from "@/components/ConfirmProvider";
+import type { Vallalkozas } from "@/lib/api";
+
+/** Számlázó cégek: kik azok, akiket egy cég küld a forgatásra.
+ *
+ * Miért kell? Mert velük magukkal nincs szerződésünk, az őket küldő céggel
+ * viszont igen - ilyenkor tőlük nem kell eseti szerződést kérni, a cég
+ * keretszerződése fedi őket (lásd backend routes/vallalkozasok.py).
+ *
+ * A tagság JAVASLAT, nem szabály: hogy egy konkrét forgatáson kinek a munkáját
+ * ki számlázza, azt a projekt stáblistáján lehet beállítani ("Ki számláz
+ * kiért"). Ugyanaz az ember hol saját nevében, hol egy cég alatt számlázhat. */
+export function VallalkozasKezelo({
+  vallalkozasok,
+  emberek,
+  canEdit,
+  canCreate,
+  canDelete,
+}: {
+  vallalkozasok: Vallalkozas[];
+  emberek: { id: number; full_name: string }[];
+  canEdit: boolean;
+  canCreate: boolean;
+  canDelete: boolean;
+}) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [nyitottId, setNyitottId] = useState<number | null>(null);
+  const [ujNev, setUjNev] = useState("");
+  const [ujAdoszam, setUjAdoszam] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [hiba, setHiba] = useState<string | null>(null);
+
+  async function hivas(path: string, init: RequestInit): Promise<boolean> {
+    setBusy(true);
+    setHiba(null);
+    try {
+      const res = await authFetch(path, init);
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        setHiba(detail?.detail ?? `Sikertelen művelet (HTTP ${res.status})`);
+        return false;
+      }
+      router.refresh();
+      return true;
+    } catch (err) {
+      setHiba(`Sikertelen művelet (hálózati hiba): ${err}`);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function ujCeg() {
+    if (!ujNev.trim()) {
+      setHiba("A cég neve kötelező.");
+      return;
+    }
+    const ok = await hivas("/api/v1/vallalkozasok", {
+      method: "POST",
+      body: JSON.stringify({ nev: ujNev.trim(), adoszam: ujAdoszam.trim() || null }),
+    });
+    if (ok) {
+      setUjNev("");
+      setUjAdoszam("");
+    }
+  }
+
+  async function tagFelvetel(vallalkozasId: number, employeeId: number) {
+    await hivas(`/api/v1/vallalkozasok/${vallalkozasId}/tagok`, {
+      method: "POST",
+      body: JSON.stringify({ employee_id: employeeId }),
+    });
+  }
+
+  async function tagTorles(vallalkozasId: number, employeeId: number, nev: string) {
+    if (!(await confirm(`Leveszed ${nev}-t erről a céglistáról? A már elkészült papírokat ez nem érinti.`))) return;
+    await hivas(`/api/v1/vallalkozasok/${vallalkozasId}/tagok/${employeeId}`, { method: "DELETE" });
+  }
+
+  async function aktivValtas(v: Vallalkozas) {
+    await hivas(`/api/v1/vallalkozasok/${v.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ aktiv: !v.aktiv }),
+    });
+  }
+
+  async function cegTorles(v: Vallalkozas) {
+    if (!(await confirm(`Biztosan törlöd a(z) "${v.nev}" céget?`))) return;
+    await hivas(`/api/v1/vallalkozasok/${v.id}`, { method: "DELETE" });
+  }
+
+  return (
+    <div>
+      <p className="mb-3 text-[12.5px] text-text-muted">
+        Ha egy céggel van keretszerződésünk, az általa küldött emberektől nem kérünk külön eseti szerződést – elég
+        beállítani a projekten, hogy a munkájukat a cég számlázza. Az itteni tagság csak javaslat: az igazságot mindig
+        a projekt „Ki számláz kiért” beállítása hordozza, mert ugyanaz az ember más-más forgatáson más cég alatt (vagy
+        saját nevében) is számlázhat.
+      </p>
+      {hiba && <p className="mb-3 text-[12.5px] text-text-danger">{hiba}</p>}
+
+      {canCreate && (
+        <div className="mb-4 flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] text-text-muted">Új cég neve</label>
+            <input
+              value={ujNev}
+              onChange={(e) => setUjNev(e.target.value)}
+              disabled={busy}
+              className="min-w-[240px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] text-text-muted">Adószám</label>
+            <input
+              value={ujAdoszam}
+              onChange={(e) => setUjAdoszam(e.target.value)}
+              disabled={busy}
+              className="min-w-[160px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={ujCeg}
+            disabled={busy}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+          >
+            <Plus size={13} className="mr-1 inline" />
+            Cég felvétele
+          </button>
+        </div>
+      )}
+
+      {vallalkozasok.length === 0 ? (
+        <p className="text-[13px] text-text-secondary">Még nincs felvéve számlázó cég.</p>
+      ) : (
+        <div className="space-y-2">
+          {vallalkozasok.map((v) => {
+            const nyitva = nyitottId === v.id;
+            const tagIdk = new Set(v.tagok.map((t) => t.employee_id));
+            const felvehetok = emberek.filter((e) => !tagIdk.has(e.id));
+            return (
+              <div key={v.id} className="rounded-[var(--radius)] border border-border">
+                <button
+                  type="button"
+                  onClick={() => setNyitottId(nyitva ? null : v.id)}
+                  className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-3"
+                >
+                  <span className="flex flex-wrap items-center gap-3">
+                    <span className="text-[13.5px] text-text-primary">{v.nev}</span>
+                    {v.adoszam && <span className="text-[12px] text-text-muted">{v.adoszam}</span>}
+                    <span className="text-[12px] text-text-muted">
+                      {v.tagok.length} {v.tagok.length === 1 ? "ember" : "ember"}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {v.van_ervenyes_keretszerzodes ? (
+                      <StatusBadge label="Élő keretszerződés" tone="success" />
+                    ) : (
+                      <StatusBadge label="Nincs élő keretszerződés" tone="warning" />
+                    )}
+                    {!v.aktiv && <StatusBadge label="Inaktív" tone="neutral" />}
+                  </span>
+                </button>
+
+                {nyitva && (
+                  <div className="border-t border-border px-4 py-3">
+                    <div className="mb-3 flex flex-wrap gap-4 text-[12.5px] text-text-secondary">
+                      {v.szekhely && <span>Székhely: {v.szekhely}</span>}
+                      {v.kepviselo && <span>Képviselő: {v.kepviselo}</span>}
+                      {v.email && <span>E-mail: {v.email}</span>}
+                      {v.keretszerzodes_id && (
+                        <a href={`/szerzodesek/${v.keretszerzodes_id}`} className="text-text-accent hover:underline">
+                          Keretszerződés megnyitása →
+                        </a>
+                      )}
+                    </div>
+
+                    <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-text-muted">
+                      Kik tartoznak ide
+                    </p>
+                    {v.tagok.length === 0 ? (
+                      <p className="mb-2 text-[13px] text-text-secondary">Még nincs hozzárendelt ember.</p>
+                    ) : (
+                      <ul className="mb-2 space-y-1">
+                        {v.tagok.map((t) => (
+                          <li key={t.employee_id} className="flex items-center justify-between gap-3 text-[13px]">
+                            <a href={`/csapat/${t.employee_id}`} className="text-text-accent hover:underline">
+                              {t.full_name}
+                            </a>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => tagTorles(v.id, t.employee_id, t.full_name)}
+                                title="Levétel a céglistáról"
+                                className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {canEdit && (
+                      <select
+                        value=""
+                        disabled={busy}
+                        onChange={(e) => e.target.value && tagFelvetel(v.id, Number(e.target.value))}
+                        className="min-w-[240px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[13px] text-text-primary focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">+ Ember hozzáadása…</option>
+                        {felvehetok.map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+                      {canEdit && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => aktivValtas(v)}
+                          className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                        >
+                          {v.aktiv ? "Inaktívra állítás" : "Újra aktívvá tétel"}
+                        </button>
+                      )}
+                      {/* Törölni csak azt lehet, amire semmilyen papír nem
+                          hivatkozik - egyébként az `aktiv` kapcsoló való rá
+                          (lásd backend delete_vallalkozas). */}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => cegTorles(v)}
+                          className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+                        >
+                          Törlés
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
