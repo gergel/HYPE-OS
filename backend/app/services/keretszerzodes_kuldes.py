@@ -15,6 +15,11 @@ Két dolog szándékosan tér el az eredetitől:
   meglévő gdoc_template.py memóriában adja vissza (ugyanaz a minta, mint az
   eseti szerződésnél és a TIG-eknél).
 
+A Drive-on MINDKÉT példány megmarad - a szerkeszthető Google Docs ÉS a kész
+PDF -, méghozzá a SABLON SAJÁT MAPPÁJÁBAN. Az eredeti program két külön
+beállítást használt (a másolat sehova, a PDF a NOTION_FILE_FOLDER_ID mappába);
+itt nincs mit karbantartani: ahol a sablon van, oda kerül a kész szerződés is.
+
 Az állapot az eredeti program szerint "Kiküldve/aláírásra vár" lesz.
 """
 from __future__ import annotations
@@ -24,7 +29,7 @@ from datetime import date
 from app.core.config import settings
 from app.models.contract import Contract
 from app.models.employee import Employee
-from app.services.gdoc_template import gdoc_fill_and_export_pdf
+from app.services.gdoc_template import gdoc_fill_export_and_store_both
 from app.services.google_email import send_message
 
 #: A kiküldés utáni állapot - a csatolt program mark_item_sent()-je ezt írta a
@@ -104,11 +109,17 @@ def _mezok(szerzodes: Contract, employee: Employee | None, keltezes: date) -> di
 
 def generalas_es_kuldes(
     szerzodes: Contract, employee: Employee | None, *, keltezes: date | None = None
-) -> tuple[str, list[str]]:
-    """Legenerálja és kiküldi a keretszerződést. (doc_link, címzettek) párt ad.
+) -> tuple[str, str | None, list[str]]:
+    """Legenerálja és kiküldi a keretszerződést.
 
-    A hívó dolga a szerződés-sor frissítése (állapot, fájl-link) és a commit -
-    így a végpont dönti el, mit tegyen, ha a küldés elhasal."""
+    A Drive-on MINDKÉT példány megmarad, a SABLON SAJÁT MAPPÁJÁBAN: a
+    szerkeszthető Google Docs és a belőle exportált PDF is (lásd
+    gdoc_template.gdoc_fill_export_and_store_both). Így nem kell külön
+    célmappát karbantartani, és a szerződés meg a sablonja egy helyen van.
+
+    Visszatér: (doc_link, pdf_link, címzettek). A hívó dolga a szerződés-sor
+    frissítése (állapot, fájl-link) és a commit - így a végpont dönti el, mit
+    tegyen, ha a küldés elhasal."""
     if not settings.keretszerzodes_template_id:
         raise KeretszerzodesHiba(
             "Nincs beállítva a keretszerződés Google Docs sablonja "
@@ -125,11 +136,13 @@ def generalas_es_kuldes(
         raise KeretszerzodesHiba("Hiányzik a cég neve - enélkül nem lehet szerződést kiállítani.")
 
     base_name = f"{mezok['nev']}_megbizasi_keretszerzodes"
-    pdf_bytes, new_doc_id = gdoc_fill_and_export_pdf(
+    pdf_bytes, new_doc_id, pdf_link = gdoc_fill_export_and_store_both(
         template_file_id=settings.keretszerzodes_template_id,
         base_name=base_name,
         fields=mezok,
-        output_folder_id=settings.keretszerzodes_folder_id or None,
+        # Üresen: a sablon saját mappájába kerül mindkét fájl. A beállítás csak
+        # akkor irányítja máshova, ha kifejezetten kitöltik.
+        output_folder_id=settings.gdoc_keretszerzodes_folder_id or None,
     )
     send_message(
         cim,
@@ -139,4 +152,4 @@ def generalas_es_kuldes(
         pdf_filename=f"{base_name}.pdf",
         sender_name=FELADO_NEV,
     )
-    return f"https://docs.google.com/document/d/{new_doc_id}/edit", cim
+    return f"https://docs.google.com/document/d/{new_doc_id}/edit", pdf_link, cim

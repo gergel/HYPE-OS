@@ -182,7 +182,11 @@ class KeretszerzodesKuldesIn(BaseModel):
 class KeretszerzodesKuldesOut(BaseModel):
     contract_id: int
     szerzodes_allapota: str | None
+    #: A KÉSZ PDF linkje (ez kerül a szerződés fájl-mezőjébe is).
     szerzodes_file_url: str | None
+    #: A szerkeszthető Google Docs példány - ugyanabban a Drive mappában,
+    #: mint a sablon és a PDF.
+    doc_url: str | None = None
     cimzettek: list[str]
 
 
@@ -210,7 +214,9 @@ def send_keretszerzodes(
     keltezes = payload.keltezes or date.today()
 
     try:
-        doc_link, cim = keretszerzodes_kuldes.generalas_es_kuldes(szerzodes, employee, keltezes=keltezes)
+        doc_link, pdf_link, cim = keretszerzodes_kuldes.generalas_es_kuldes(
+            szerzodes, employee, keltezes=keltezes
+        )
     except keretszerzodes_kuldes.KeretszerzodesHiba as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -219,7 +225,10 @@ def send_keretszerzodes(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     szerzodes.szerzodes_allapota = keretszerzodes_kuldes.KIKULDVE_ALLAPOT
-    szerzodes.szerzodes_file_url = doc_link
+    # A KÉSZ PDF-re hivatkozunk: ez az, amit a megbízott is megkapott. A
+    # szerkeszthető Doc ott van mellette a sablon mappájában, és a válaszban
+    # is visszaadjuk.
+    szerzodes.szerzodes_file_url = pdf_link or doc_link
     szerzodes.keltezes = keltezes
     # Kiküldéskor a szerződés még nincs aláírva - a korábbi aláírt papír
     # jelölése nem vonatkozik az újra.
@@ -238,5 +247,6 @@ def send_keretszerzodes(
         contract_id=szerzodes.id,
         szerzodes_allapota=szerzodes.szerzodes_allapota,
         szerzodes_file_url=szerzodes.szerzodes_file_url,
+        doc_url=doc_link,
         cimzettek=cim,
     )

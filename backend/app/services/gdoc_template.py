@@ -68,7 +68,8 @@ def _copy_template(template_file_id: str, name: str, parent_folder_id: str | Non
     body: dict = {"name": name}
     if parent_folder_id:
         body["parents"] = [parent_folder_id]
-    new_file = drive.files().copy(fileId=template_file_id, body=body).execute()
+    # supportsAllDrives: megosztott meghajtón lévő sablon/mappa esetén is működjön.
+    new_file = drive.files().copy(fileId=template_file_id, body=body, supportsAllDrives=True).execute()
     return new_file["id"]
 
 
@@ -110,8 +111,23 @@ def _upload_pdf(filename: str, pdf_bytes: bytes, folder_id: str | None) -> str |
     if folder_id:
         body["parents"] = [folder_id]
     media = MediaIoBaseUpload(BytesIO(pdf_bytes), mimetype="application/pdf", resumable=False)
-    uploaded = drive.files().create(body=body, media_body=media, fields="id, webViewLink").execute()
+    uploaded = drive.files().create(
+        body=body, media_body=media, fields="id, webViewLink", supportsAllDrives=True
+    ).execute()
     return uploaded.get("webViewLink")
+
+
+def szulo_mappa(file_id: str) -> str | None:
+    """Melyik Drive mappában van ez a fájl? (az első szülő azonosítója)
+
+    A sablon MELLÉ generálunk: a kész dokumentum és a PDF is oda kerül, ahol a
+    sablon van - így nem kell külön mappát beállítani és karbantartani, és a
+    kettő sosem csúszhat szét. A supportsAllDrives azért kell, hogy megosztott
+    meghajtón lévő sablon esetén is működjön."""
+    drive = _google_service("drive", "v3")
+    adat = drive.files().get(fileId=file_id, fields="parents", supportsAllDrives=True).execute()
+    szulok = adat.get("parents") or []
+    return szulok[0] if szulok else None
 
 
 def _delete_file(file_id: str) -> None:
@@ -154,6 +170,34 @@ def gdoc_fill_export_and_store_pdf(
         except Exception:  # noqa: BLE001
             pass
     return pdf_bytes, link
+
+
+def gdoc_fill_export_and_store_both(
+    *,
+    template_file_id: str,
+    base_name: str,
+    fields: dict[str, str],
+    output_folder_id: str | None = None,
+) -> tuple[bytes, str, str | None]:
+    """Sablon kitöltése úgy, hogy MINDKÉT végeredmény a Drive-on maradjon: a
+    szerkeszthető Google Docs példány ÉS a belőle exportált PDF is.
+
+    Alapértelmezésben a SABLON SAJÁT MAPPÁJÁBA kerül mindkettő (lásd
+    szulo_mappa) - az output_folder_id csak akkor írja ezt felül, ha a hívó
+    kifejezetten megad egy másikat.
+
+    A másik két változattól ez abban tér el, hogy semmit nem dob el: a
+    gdoc_fill_and_export_pdf csak a Docs példányt hagyja meg (PDF-et nem tölt
+    fel), a gdoc_fill_export_and_store_pdf pedig fordítva, a Doc-ot törli.
+
+    Visszatér: (pdf_bytes, doc_id, a feltöltött PDF webViewLink-je)."""
+    doc_name = (base_name or "Dokumentum").strip() or "Dokumentum"
+    cel_mappa = output_folder_id or szulo_mappa(template_file_id)
+    doc_id = _copy_template(template_file_id, doc_name, cel_mappa)
+    _replace_placeholders(doc_id, fields)
+    pdf_bytes = _export_pdf_bytes(doc_id)
+    pdf_link = _upload_pdf(f"{doc_name}.pdf", pdf_bytes, cel_mappa)
+    return pdf_bytes, doc_id, pdf_link
 
 
 def gdoc_fill_and_export_pdf(

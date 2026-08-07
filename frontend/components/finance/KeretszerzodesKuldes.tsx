@@ -33,7 +33,11 @@ export function KeretszerzodesKuldes({ contractId, cegNeve }: { contractId: numb
         alert(`A kiküldés nem sikerült: ${adat?.detail ?? res.status}`);
         return;
       }
-      alert(`Kiküldve ide: ${(adat?.cimzettek ?? []).join(", ")}`);
+      alert(
+        `Kiküldve ide: ${(adat?.cimzettek ?? []).join(", ")}\n\n` +
+          "A kész PDF és a szerkeszthető dokumentum is a sablon Drive mappájába került. " +
+          "A PDF a sor 'Fájlok' menüjéből nyílik.",
+      );
       setNyitva(false);
       router.refresh();
     } catch (err) {
@@ -58,7 +62,8 @@ export function KeretszerzodesKuldes({ contractId, cegNeve }: { contractId: numb
   return (
     <span className="inline-flex flex-col items-start gap-1.5 rounded-[var(--radius)] border border-border bg-surface-3 p-2 text-left">
       <span className="text-[12px] text-text-muted">
-        A(z) {cegNeve ?? "megbízott"} keretszerződése generálódik a sablonból, és e-mailben kimegy neki.
+        A(z) {cegNeve ?? "megbízott"} keretszerződése generálódik a sablonból, és e-mailben kimegy neki. A kész PDF és
+        a szerkeszthető dokumentum is a sablon Drive mappájába kerül.
       </span>
       <label className="flex items-center gap-1.5 text-[12.5px] text-text-secondary">
         Keltezés
