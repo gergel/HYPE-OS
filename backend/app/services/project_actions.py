@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.project import Project
+from app.models.project_szamlazo import ProjectSzamlazo
 
 
 def create_feldarabolas(db: Session, project: Project) -> Project:
@@ -40,6 +41,18 @@ def create_feldarabolas(db: Session, project: Project) -> Project:
         feldarabolas_szulo_id=project.id,
     )
     new_project.crew = list(project.crew)
+    # A számlázási felállás (ki számláz kiért) a leválasztott napra is
+    # ugyanaz - lásd models/project_szamlazo.py. Enélkül a feldarabolt nap
+    # minden emberénél újra a saját nevére kérné a papírt.
+    new_project.szamlazok = [
+        ProjectSzamlazo(
+            employee_id=sz.employee_id,
+            szamlazo_employee_id=sz.szamlazo_employee_id,
+            szamlazo_vallalkozas_id=sz.szamlazo_vallalkozas_id,
+            megjegyzes=sz.megjegyzes,
+        )
+        for sz in project.szamlazok
+    ]
     db.add(new_project)
 
     _vagd_le_a_leszakitott_napot(project, new_date)

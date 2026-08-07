@@ -28,6 +28,7 @@ from app.api.routes.portal_admin import router as portal_admin_router
 from app.api.routes.portal_public import downloads_router as portal_downloads_router, router as portal_public_router
 from app.api.routes.postproduction import deliverable_actions_router, deliverables_router, feedback_router, timesheets_router
 from app.api.routes.project_codes import router as project_codes_router
+from app.api.routes.project_szamlazok import router as projekt_szamlazok_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.public_utokovetes import router as public_utokovetes_router
 from app.api.routes.realtime import router as realtime_router
@@ -39,6 +40,7 @@ from app.api.routes.tasks import router as tasks_router
 from app.api.routes.timeline import router as timeline_router
 from app.api.routes.user_access import router as user_access_router
 from app.api.routes.utokovetes_admin import router as utokovetes_admin_router
+from app.api.routes.vallalkozasok import router as vallalkozasok_router
 
 api_router = APIRouter()
 
@@ -52,6 +54,7 @@ api_router.include_router(contacts_router)
 # 4-5. Project Codes / Projects
 api_router.include_router(project_codes_router)
 api_router.include_router(projects_router)
+api_router.include_router(projekt_szamlazok_router)
 # 6. Crew (Employee + Rate)
 api_router.include_router(crew_router)
 api_router.include_router(rates_router)
@@ -86,6 +89,7 @@ api_router.include_router(finance_summary_router)
 api_router.include_router(contracts_router)
 api_router.include_router(subcontractor_contracts_router)
 api_router.include_router(eseti_szerzodesek_router)
+api_router.include_router(vallalkozasok_router)
 api_router.include_router(client_contracts_router)
 api_router.include_router(performance_certificates_router)
 api_router.include_router(internal_performance_certificates_router)

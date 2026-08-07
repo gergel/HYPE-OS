@@ -28,6 +28,12 @@ class Contract(TimestampMixin, Base):
 
     client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"))
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
+    # A szerződés másik oldala lehet egy CÉG is, nem csak egy ember: a
+    # forgatásra embereket küldő vállalkozással kötünk keretszerződést, és az
+    # fedi az összes tőle jövő embert (lásd models/vallalkozas.py). Ilyenkor az
+    # employee_id üres. Eseti szerződésnél ugyanígy: ha a projekten a számlázó
+    # fél egy cég, a szerződés a cég nevére szól.
+    vallalkozas_id: Mapped[int | None] = mapped_column(ForeignKey("vallalkozasok.id"))
     # Csak az ALVALLALKOZOI tipusú, egy adott projekthez tartozó eseti
     # szerződéseknél van kitöltve (lásd services/subcontractor_contracts.py) -
     # NULL esetén a Contract egy álló "keretszerződés" (a megbízottnak bármelyik
@@ -89,6 +95,7 @@ class Contract(TimestampMixin, Base):
 
     client: Mapped["Client"] = relationship(back_populates="contracts")
     employee: Mapped["Employee"] = relationship(back_populates="contracts")
+    vallalkozas: Mapped["Vallalkozas | None"] = relationship(back_populates="contracts")
     project: Mapped["Project | None"] = relationship(back_populates="contracts", foreign_keys=[project_id])
     project_codes: Mapped[list["ProjectCode"]] = relationship(back_populates="contract")
 

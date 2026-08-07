@@ -30,7 +30,11 @@ from app.models.internal_performance_certificate import (
 from app.models.media import Folder, Media
 from app.models.notification import Notification
 from app.models.notion_import import NotionImportMap
-from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateInvoice
+from app.models.performance_certificate import (
+    PerformanceCertificate,
+    PerformanceCertificateInvoice,
+    PerformanceCertificateTetel,
+)
 from app.models.post_shoot_feedback import PostShootFeedback
 from app.models.portal import (
     Brand,
@@ -43,6 +47,7 @@ from app.models.portal import (
     PortalVideo,
 )
 from app.models.project import Project, project_crew
+from app.models.project_szamlazo import ProjectSzamlazo
 from app.models.project_code import ProjectCode
 from app.models.rate import Rate
 from app.models.stocktake import StocktakeItem, StocktakeSession
@@ -50,6 +55,7 @@ from app.models.task import Task, task_employees
 from app.models.timesheet import Timesheet
 from app.models.timeline import TimelineEvent
 from app.models.user_access import PageAccessConfig
+from app.models.vallalkozas import Vallalkozas, VallalkozasTag
 
 __all__ = [
     "Base",
@@ -104,6 +110,10 @@ __all__ = [
     "PortalVideo",
     "Project",
     "project_crew",
+    "ProjectSzamlazo",
+    "PerformanceCertificateTetel",
+    "Vallalkozas",
+    "VallalkozasTag",
     "ProjectCode",
     "Rate",
     "StocktakeItem",

@@ -27,7 +27,7 @@ class Task(TimestampMixin, Base):
     #: Melyik projekthez tartozik a feladat. Az automatikusan generált
     #: papírozás-feladatoknál ez adja az idempotenciát: projektenként legfeljebb
     #: egy ilyen születhet (lásd services/papirozas_feladatok.py).
-    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), index=True)
     checked: Mapped[bool] = mapped_column(Boolean, default=False)
     leiras: Mapped[str | None] = mapped_column(String(2000))
 

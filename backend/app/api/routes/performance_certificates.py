@@ -18,21 +18,32 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
+from sqlalchemy import tuple_
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.routes.subcontractor_contracts import _load_contract_lookup, _pending_employees
+from app.api.routes.subcontractor_contracts import (
+    _pending_csoportok,
+    load_szerzodes_kornyezet,
+    szerzodest_igenylo_emberek,
+)
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee, EmployeeType
 from app.models.finance import Expense
-from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateInvoice
+from app.models.performance_certificate import (
+    PerformanceCertificate,
+    PerformanceCertificateInvoice,
+    PerformanceCertificateTetel,
+)
 from app.models.project import Project
+from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.performance_certificate import PerformanceCertificateRead
-from app.services import document_storage
+from app.services import document_storage, szamlazo, tig_fedettseg
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import send_message
 from app.services.hu_number_words import szam_betukkel
+from app.services.szamlazo import SzamlazoCsoport, SzamlazoFel
 
 router = APIRouter(prefix="/teljesitesi-igazolasok", tags=["performance-certificates"])
 
@@ -83,11 +94,61 @@ def _get_project_or_404(db: Session, project_id: int) -> Project:
     return project
 
 
-def _load_tig_lookup(db: Session, employee_ids: set[int]) -> dict[tuple[int, int], PerformanceCertificate]:
-    if not employee_ids:
-        return {}
-    rows = db.query(PerformanceCertificate).filter(PerformanceCertificate.employee_id.in_(employee_ids)).all()
-    return {(r.project_id, r.employee_id): r for r in rows}
+def tig_kulcsa(cert: PerformanceCertificate) -> str | None:
+    """Melyik SZÁMLÁZÓ FÉL nevére szól ez a TIG (lásd services/szamlazo.py)?"""
+    if cert.vallalkozas_id is not None:
+        return f"v{cert.vallalkozas_id}"
+    if cert.employee_id is not None:
+        return f"e{cert.employee_id}"
+    return None
+
+
+#: (projekt, ember) -> az őt lefedő TIG, és (projekt, számlázó kulcs) -> a fél
+#: TIG-je azon a projekten. Az első azt válaszolja meg, hogy egy stábtag
+#: munkájáról van-e már papír, a második azt, hogy melyik piszkozatot kell
+#: szerkeszteni.
+TigLookup = tuple[dict[tuple[int, int], PerformanceCertificate], dict[tuple[int, str], PerformanceCertificate]]
+
+
+def _load_tig_lookup(db: Session, project_ids: set[int]) -> TigLookup:
+    """A megadott projekteket ÉRINTŐ TIG-ek, a tételeiken keresztül.
+
+    Nem a TIG saját project_id-je számít, hanem a tételei: egy TIG több projekt
+    munkáját is igazolhatja (lásd models/performance_certificate.py
+    PerformanceCertificateTetel), és attól még ugyanúgy "megvan a papír" az
+    összes érintett projekten."""
+    if not project_ids:
+        return {}, {}
+    tetelek = (
+        db.query(PerformanceCertificateTetel)
+        .options(selectinload(PerformanceCertificateTetel.certificate))
+        .filter(PerformanceCertificateTetel.project_id.in_(project_ids))
+        .all()
+    )
+    ember_fedettseg: dict[tuple[int, int], PerformanceCertificate] = {}
+    fel_tig: dict[tuple[int, str], PerformanceCertificate] = {}
+    for t in tetelek:
+        cert = t.certificate
+        if cert is None:
+            continue
+        ember_fedettseg[(t.project_id, t.employee_id)] = cert
+        kulcs = tig_kulcsa(cert)
+        if kulcs is not None:
+            fel_tig[(t.project_id, kulcs)] = cert
+
+    # Tétel nélküli TIG-ek (Notion-import, kézi javítás): a saját projektjükön
+    # a saját emberüket fedik - lásd services/tig_fedettseg.py.
+    for cert in (
+        db.query(PerformanceCertificate)
+        .filter(PerformanceCertificate.project_id.in_(project_ids), tig_fedettseg.tetel_nelkuli())
+        .all()
+    ):
+        if cert.employee_id is not None:
+            ember_fedettseg.setdefault((cert.project_id, cert.employee_id), cert)
+        kulcs = tig_kulcsa(cert)
+        if kulcs is not None:
+            fel_tig.setdefault((cert.project_id, kulcs), cert)
+    return ember_fedettseg, fel_tig
 
 
 def _tig_candidates(project: Project) -> list[Employee]:
@@ -97,25 +158,45 @@ def _tig_candidates(project: Project) -> list[Employee]:
     return [e for e in project.crew if e.tipus != EmployeeType.BELSOS]
 
 
+def tig_csoportok(
+    project: Project, felulirasok: dict[tuple[int, int], ProjectSzamlazo]
+) -> list[SzamlazoCsoport]:
+    """A TIG-et igénylő stábtagok SZÁMLÁZÓ FELENKÉNT összefogva - egy fél
+    munkájáról egy TIG szól, akkor is, ha több ember munkáját fedi."""
+    return szamlazo.csoportok(project, _tig_candidates(project), felulirasok)
+
+
 def _is_szerzodes_phase_done(db: Session, project: Project) -> bool:
-    """Igaz, ha a projekten mindenkinek (aki egyáltalán eseti szerződést
-    igényelt: nem belsős és nincs keretszerződése) megvan a szerződés
-    státusza (kiküldve vagy kihagyva) - lásd subcontractor_contracts.py."""
-    employee_ids = {e.id for e in project.crew if e.tipus != EmployeeType.BELSOS}
-    keretszerzodes_ids, project_contracts = _load_contract_lookup(db, employee_ids)
-    pending = _pending_employees(project, keretszerzodes_ids, project_contracts)
-    return len(pending) == 0
+    """Igaz, ha a projekten minden számlázó félnek (aki egyáltalán eseti
+    szerződést igényelt) megvan a szerződés státusza (kiküldve vagy kihagyva) -
+    lásd subcontractor_contracts.py."""
+    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, [project])
+    return not _pending_csoportok(project, keretszerzodesek, project_contracts, felulirasok)
 
 
-def _tig_pending_employees(
-    project: Project, tig_lookup: dict[tuple[int, int], PerformanceCertificate]
-) -> list[tuple[Employee, PerformanceCertificate | None]]:
-    result: list[tuple[Employee, PerformanceCertificate | None]] = []
-    for e in _tig_candidates(project):
-        existing = tig_lookup.get((project.id, e.id))
-        if existing is not None and existing.allapot in TERMINAL_STATUSES:
+def _csoport_fedve(project: Project, csoport: SzamlazoCsoport, ember_fedettseg: dict) -> bool:
+    """Le van-e zárva a TIG ennél a félnél ezen a projekten?
+
+    Akkor és csak akkor, ha az ÖSSZES általa lefedett stábtag munkájáról van
+    véglegesített (kiküldött vagy kihagyott) TIG-tétel. Ha a stáb utólag
+    bővült, a fél újra függővé válik - és jogosan: az új ember munkájáról még
+    nincs papír."""
+    for tag in csoport.tagok:
+        cert = ember_fedettseg.get((project.id, tag.id))
+        if cert is None or cert.allapot not in TERMINAL_STATUSES:
+            return False
+    return True
+
+
+def _tig_pending_csoportok(
+    project: Project, csoportok: list[SzamlazoCsoport], lookup: TigLookup
+) -> list[tuple[SzamlazoCsoport, PerformanceCertificate | None]]:
+    ember_fedettseg, fel_tig = lookup
+    result: list[tuple[SzamlazoCsoport, PerformanceCertificate | None]] = []
+    for csoport in csoportok:
+        if _csoport_fedve(project, csoport, ember_fedettseg):
             continue
-        result.append((e, existing))
+        result.append((csoport, fel_tig.get((project.id, csoport.kulcs))))
     return result
 
 
@@ -134,13 +215,17 @@ def list_tig_ready_projects(db: Session = Depends(get_db), _user: Employee = Dep
         .options(selectinload(Project.crew))
         .all()
     )
-    eligible = [p for p in projects if _tig_candidates(p) and _is_szerzodes_phase_done(db, p)]
-    all_employee_ids = {e.id for p in eligible for e in _tig_candidates(p)}
-    tig_lookup = _load_tig_lookup(db, all_employee_ids)
+    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, projects)
+    eligible = [
+        p
+        for p in projects
+        if _tig_candidates(p) and not _pending_csoportok(p, keretszerzodesek, project_contracts, felulirasok)
+    ]
+    tig_lookup = _load_tig_lookup(db, {p.id for p in eligible})
 
     result: list[PendingProjectSummary] = []
     for p in eligible:
-        pending = _tig_pending_employees(p, tig_lookup)
+        pending = _tig_pending_csoportok(p, tig_csoportok(p, felulirasok), tig_lookup)
         if pending:
             result.append(
                 PendingProjectSummary(
@@ -148,6 +233,19 @@ def list_tig_ready_projects(db: Session = Depends(get_db), _user: Employee = Dep
                 )
             )
     return result
+
+
+class TetelInfo(BaseModel):
+    """Egy TIG-tétel: kinek a munkája, melyik projekten."""
+
+    project_id: int
+    project_nev: str | None = None
+    projektkod: str | None = None
+    forgatas_datuma: date | None = None
+    employee_id: int
+    employee_nev: str | None = None
+    netto_osszeg: float | None = None
+    megnevezes: str | None = None
 
 
 class DraftInfo(BaseModel):
@@ -162,11 +260,21 @@ class DraftInfo(BaseModel):
     teljesites_vege: date | None
     keltezes: date | None
     plusz_afa: bool | None
+    tetelek: list[TetelInfo] = []
 
 
 class PendingEmployeeInfo(BaseModel):
+    """Egy SZÁMLÁZÓ FÉL, akitől még hátra van a TIG ezen a projekten.
+
+    Az `id` a régi felület kedvéért az ember azonosítója (cégnél 0) - az új
+    hívások a `szamlazo` kulccsal címeznek (lásd services/szamlazo.py)."""
+
     id: int
+    szamlazo: str
     full_name: str
+    cimke: str
+    lefedettek: list[TetelInfo] = []
+    vallalkozas_id: int | None = None
     email: str | None
     ceg_neve: str | None
     szekhely: str | None
@@ -189,6 +297,20 @@ class PendingProjectDetail(BaseModel):
     tig_ready: bool
 
 
+def _tetel_info(t: PerformanceCertificateTetel) -> TetelInfo:
+    projekt = t.project
+    return TetelInfo(
+        project_id=t.project_id,
+        project_nev=projekt.nev if projekt else None,
+        projektkod=projekt.projektkod_szoveg if projekt else None,
+        forgatas_datuma=projekt.forgatas_datuma if projekt else None,
+        employee_id=t.employee_id,
+        employee_nev=t.employee.full_name if t.employee else None,
+        netto_osszeg=float(t.netto_osszeg) if t.netto_osszeg is not None else None,
+        megnevezes=t.megnevezes,
+    )
+
+
 def _draft_info(c: PerformanceCertificate | None) -> DraftInfo | None:
     if c is None:
         return None
@@ -204,18 +326,53 @@ def _draft_info(c: PerformanceCertificate | None) -> DraftInfo | None:
         teljesites_vege=c.teljesites_vege,
         keltezes=c.keltezes,
         plusz_afa=c.plusz_afa,
+        tetelek=[_tetel_info(t) for t in c.tetelek],
+    )
+
+
+def _lefedettek_info(project: Project, csoport: SzamlazoCsoport) -> list[TetelInfo]:
+    """A fél által lefedett stábtagok ezen a projekten, TIG-tétel alakban - ez
+    a piszkozat alapértelmezett tétellistája."""
+    return [
+        TetelInfo(
+            project_id=project.id,
+            project_nev=project.nev,
+            projektkod=project.projektkod_szoveg,
+            forgatas_datuma=project.forgatas_datuma,
+            employee_id=tag.id,
+            employee_nev=tag.full_name,
+        )
+        for tag in csoport.tagok
+    ]
+
+
+def _pending_info(project: Project, csoport: SzamlazoCsoport, existing: PerformanceCertificate | None) -> PendingEmployeeInfo:
+    fel = csoport.fel
+    return PendingEmployeeInfo(
+        id=fel.employee.id if fel.employee else 0,
+        szamlazo=fel.kulcs,
+        full_name=fel.nev,
+        cimke=csoport.cimke(),
+        lefedettek=_lefedettek_info(project, csoport),
+        vallalkozas_id=fel.vallalkozas.id if fel.vallalkozas else None,
+        email=fel.email,
+        ceg_neve=fel.ceg_neve,
+        szekhely=fel.szekhely,
+        adoszam=fel.adoszam,
+        megbizas_targya=fel.megbizas_targya,
+        plusz_afa=fel.plusz_afa,
+        draft=_draft_info(existing),
     )
 
 
 @router.get("/{project_id}", response_model=PendingProjectDetail)
 def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     project = _get_project_or_404(db, project_id)
+    felulirasok = szamlazo.load_felulirasok(db, {project.id})
     tig_ready = bool(_tig_candidates(project)) and _is_szerzodes_phase_done(db, project)
-    pending: list[tuple[Employee, PerformanceCertificate | None]] = []
+    pending: list[tuple[SzamlazoCsoport, PerformanceCertificate | None]] = []
     if tig_ready:
-        employee_ids = {e.id for e in _tig_candidates(project)}
-        tig_lookup = _load_tig_lookup(db, employee_ids)
-        pending = _tig_pending_employees(project, tig_lookup)
+        pending = _tig_pending_csoportok(project, tig_csoportok(project, felulirasok), _load_tig_lookup(db, {project.id}))
     return PendingProjectDetail(
         project_id=project.id,
         project_nev=project.nev,
@@ -224,20 +381,7 @@ def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _use
         forgatas_datuma_vege=project.forgatas_datuma_vege,
         teljesites_szoveg_alap=_projekt_teljesites_szoveg(project),
         tig_ready=tig_ready,
-        pending=[
-            PendingEmployeeInfo(
-                id=e.id,
-                full_name=e.full_name,
-                email=e.email,
-                ceg_neve=e.vallakozas_neve,
-                szekhely=e.vallakozas_szekhely,
-                adoszam=e.vallalkozas_adoszama,
-                megbizas_targya=e.megbizas_targya,
-                plusz_afa=e.plusz_afa,
-                draft=_draft_info(existing),
-            )
-            for e, existing in pending
-        ],
+        pending=[_pending_info(project, csoport, existing) for csoport, existing in pending],
     )
 
 
@@ -252,19 +396,82 @@ def list_all_for_project(project_id: int, db: Session = Depends(get_db), _user: 
     return [PerformanceCertificateRead.model_validate(r) for r in rows]
 
 
-def _validate_pending_employee(db: Session, project: Project, employee_id: int) -> Employee:
+def _validate_szamlazo(db: Session, project: Project, szamlazo_kulcs: str) -> SzamlazoCsoport:
     if not _is_szerzodes_phase_done(db, project):
         raise HTTPException(
             status_code=400, detail="Ezen a projekten még nem mindenkinek van meg a szerződése - TIG csak azután készíthető."
         )
-    employee = db.get(Employee, employee_id)
-    if employee is None:
-        raise HTTPException(status_code=404, detail="A munkatárs nem található")
-    if employee not in project.crew:
-        raise HTTPException(status_code=400, detail="Ez a munkatárs nincs a projekt stábjában.")
-    if employee.tipus == EmployeeType.BELSOS:
-        raise HTTPException(status_code=400, detail="Belsős munkatársnak nem kell teljesítési igazolás.")
-    return employee
+    fel = szamlazo.feloldas(db, szamlazo_kulcs)
+    if fel is None:
+        raise HTTPException(status_code=404, detail="A számlázó fél nem található")
+    felulirasok = szamlazo.load_felulirasok(db, {project.id})
+    csoport = next((cs for cs in tig_csoportok(project, felulirasok) if cs.kulcs == fel.kulcs), None)
+    if csoport is None:
+        if fel.employee is not None and fel.employee.tipus == EmployeeType.BELSOS:
+            raise HTTPException(status_code=400, detail="Belsős munkatársnak nem kell teljesítési igazolás.")
+        raise HTTPException(status_code=400, detail="Ezen a projekten senkinek a munkáját nem ez a fél számlázza.")
+    return csoport
+
+
+def _szamlazo_szuro(fel: SzamlazoFel):
+    if fel.vallalkozas is not None:
+        return PerformanceCertificate.vallalkozas_id == fel.vallalkozas.id
+    return (PerformanceCertificate.employee_id == fel.employee.id) & PerformanceCertificate.vallalkozas_id.is_(None)
+
+
+@router.get("/{project_id}/{szamlazo_kulcs}/nyitott-tetelek", response_model=list[TetelInfo])
+def list_nyitott_tetelek(
+    project_id: int,
+    szamlazo_kulcs: str,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Mi mindent tehetünk MÉG rá erre a TIG-re?
+
+    Az "egy ember egyben küld be több projektet" eset felülete: felsorolja az
+    összes olyan (projekt, ember) munkát az ÖSSZES diszpózott projektről, amit
+    ez a fél számláz, amiről még nincs TIG, és aminek a projektjén a
+    szerződés-fázis már lezárult. A felhasználó ebből pipálja ki, mi kerüljön
+    erre az egy számlára.
+
+    A most szerkesztett projekt saját tételei is benne vannak - így a lista
+    egyben mutatja, mi az alap és mi a hozzáadható."""
+    _get_project_or_404(db, project_id)
+    fel = szamlazo.feloldas(db, szamlazo_kulcs)
+    if fel is None:
+        raise HTTPException(status_code=404, detail="A számlázó fél nem található")
+
+    projects = (
+        db.query(Project)
+        .filter(Project.diszpo == "Kiküldve")
+        .options(selectinload(Project.crew), selectinload(Project.project_code))
+        .all()
+    )
+    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, projects)
+    ember_fedettseg, _ = _load_tig_lookup(db, {p.id for p in projects})
+
+    eredmeny: list[TetelInfo] = []
+    for p in projects:
+        if _pending_csoportok(p, keretszerzodesek, project_contracts, felulirasok):
+            continue
+        for csoport in tig_csoportok(p, felulirasok):
+            if csoport.kulcs != fel.kulcs:
+                continue
+            for tag in csoport.tagok:
+                if (p.id, tag.id) in ember_fedettseg:
+                    continue
+                eredmeny.append(
+                    TetelInfo(
+                        project_id=p.id,
+                        project_nev=p.nev,
+                        projektkod=p.projektkod_szoveg,
+                        forgatas_datuma=p.forgatas_datuma,
+                        employee_id=tag.id,
+                        employee_nev=tag.full_name,
+                    )
+                )
+    eredmeny.sort(key=lambda t: (t.forgatas_datuma or date.min, t.project_id, t.employee_id), reverse=True)
+    return eredmeny
 
 
 def _teljesites_datumokbol(cert: PerformanceCertificate) -> str:
@@ -290,34 +497,60 @@ def _projekt_teljesites_szoveg(project: Project) -> str:
     return start.strftime("%Y.%m.%d.")
 
 
-def _get_or_create_draft(db: Session, project: Project, employee: Employee) -> PerformanceCertificate:
-    existing = (
-        db.query(PerformanceCertificate)
-        .filter(PerformanceCertificate.project_id == project.id, PerformanceCertificate.employee_id == employee.id)
-        .first()
-    )
+def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport) -> PerformanceCertificate:
+    """A fél piszkozata ezen a projekten - vagy a meglévő, vagy egy új, a
+    projekten hozzá tartozó stábtagok tételeivel feltöltve.
+
+    A meglévőt a TÉTELEIN keresztül keressük: a fél TIG-je indulhatott egy
+    másik projektről is, ha több forgatását egy számlán küldi be."""
+    _, fel_tig = _load_tig_lookup(db, {project.id})
+    existing = fel_tig.get((project.id, csoport.kulcs))
+    if existing is None:
+        # Piszkozat, aminek még nincs tétele: ilyenkor a saját projektjén és a
+        # saját oldalán keressük.
+        existing = (
+            db.query(PerformanceCertificate)
+            .filter(PerformanceCertificate.project_id == project.id, _szamlazo_szuro(csoport.fel))
+            .first()
+        )
     if existing is not None:
         if existing.allapot in TERMINAL_STATUSES:
             raise HTTPException(
                 status_code=400,
-                detail="Ehhez a projekthez és emberhez már véglegesített TIG-bejegyzés tartozik (kiküldve vagy kihagyva).",
+                detail="Ehhez a projekthez és félhez már véglegesített TIG-bejegyzés tartozik (kiküldve vagy kihagyva).",
             )
         return existing
+    fel = csoport.fel
     draft = PerformanceCertificate(
         project_id=project.id,
-        employee_id=employee.id,
+        employee_id=fel.employee.id if fel.employee else None,
+        vallalkozas_id=fel.vallalkozas.id if fel.vallalkozas else None,
         allapot="Készítés alatt",
-        ceg_neve=employee.vallakozas_neve or employee.full_name,
-        szekhely=employee.vallakozas_szekhely,
-        adoszam=employee.vallalkozas_adoszama,
-        megbizas_targya=employee.megbizas_targya,
-        plusz_afa=employee.plusz_afa,
+        ceg_neve=fel.ceg_neve,
+        szekhely=fel.szekhely,
+        adoszam=fel.adoszam,
+        megbizas_targya=fel.megbizas_targya,
+        plusz_afa=fel.plusz_afa,
         teljesites_szoveg=_projekt_teljesites_szoveg(project),
-        email=employee.email,
+        email=fel.email,
     )
     db.add(draft)
     db.flush()
+    # Alapból pontosan azt fedi, amiért ezen a projekten ő számláz.
+    for tag in csoport.tagok:
+        db.add(PerformanceCertificateTetel(certificate_id=draft.id, project_id=project.id, employee_id=tag.id))
+    db.flush()
     return draft
+
+
+class TetelIn(BaseModel):
+    project_id: int
+    employee_id: int
+    #: Opcionális: "mikor más számláz vagy 4 projektet egybe számláz, akkor nem
+    #: mindig lehet megmondani, hogy mi mennyibe került". A TIG fejösszege az
+    #: igazság, ez csak akkor kell, ha a bontás ismert.
+    netto_osszeg: float | None = None
+    megnevezes: str | None = None
 
 
 class TigDraftIn(BaseModel):
@@ -331,6 +564,93 @@ class TigDraftIn(BaseModel):
     teljesites_vege: date | None = None
     keltezes: date | None = None
     plusz_afa: bool | None = None
+    #: Mit igazol ez a TIG. None = maradjon, ami van (a piszkozat létrehozásakor
+    #: az adott projekten a félhez tartozó stábtagok).
+    tetelek: list[TetelIn] | None = None
+
+
+def _apply_tetelek(db: Session, draft: PerformanceCertificate, fel: SzamlazoFel, tetelek: list[TetelIn] | None) -> None:
+    """A TIG tételeinek cseréje - ellenőrzésekkel.
+
+    Két dolgot kell megvédeni:
+    1. Egy (projekt, ember) munkájáról csak EGY TIG szólhat, különben kétszer
+       igazolnánk (és kétszer fizetnénk) ugyanazt.
+    2. Csak olyan tétel kerülhet rá, aminél tényleg ez a fél a számlázó azon a
+       projekten - különben egy TIG-gel bárki munkáját le lehetne írni."""
+    if tetelek is None:
+        return
+    if not tetelek:
+        raise HTTPException(status_code=400, detail="A TIG-nek legalább egy tételt tartalmaznia kell.")
+
+    parok = {(t.project_id, t.employee_id) for t in tetelek}
+    if len(parok) != len(tetelek):
+        raise HTTPException(status_code=400, detail="Ugyanaz az ember ugyanazon a projekten kétszer szerepel.")
+
+    projektek = {p.id: p for p in db.query(Project).filter(Project.id.in_({t.project_id for t in tetelek})).all()}
+    felulirasok = szamlazo.load_felulirasok(db, set(projektek))
+    for t in tetelek:
+        projekt = projektek.get(t.project_id)
+        if projekt is None:
+            raise HTTPException(status_code=404, detail=f"A(z) #{t.project_id} projekt nem található.")
+        ember = next((e for e in _tig_candidates(projekt) if e.id == t.employee_id), None)
+        if ember is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"A(z) #{t.employee_id} munkatárs nincs a(z) „{projekt.nev}” projekt (nem belsős) stábjában.",
+            )
+        tenyleges = szamlazo.szamlazo_fele(projekt, ember, felulirasok)
+        if tenyleges.kulcs != fel.kulcs:
+            raise HTTPException(
+                status_code=400,
+                detail=f"„{projekt.nev}” projekten {ember.full_name} munkáját nem ez a fél számlázza.",
+            )
+
+    utkozes = (
+        db.query(PerformanceCertificateTetel)
+        .options(selectinload(PerformanceCertificateTetel.employee))
+        .filter(
+            PerformanceCertificateTetel.certificate_id != draft.id,
+            tuple_(PerformanceCertificateTetel.project_id, PerformanceCertificateTetel.employee_id).in_(parok),
+        )
+        .first()
+    )
+    if utkozes is not None:
+        nev = utkozes.employee.full_name if utkozes.employee else f"#{utkozes.employee_id}"
+        raise HTTPException(
+            status_code=400,
+            detail=f"{nev} munkájáról ezen a projekten már szól egy másik TIG - egy munkát csak egy TIG igazolhat.",
+        )
+    # A tétel nélküli (import/kézi) TIG-eket a saját mezőik alapján nézzük -
+    # lásd services/tig_fedettseg.py.
+    regi = (
+        db.query(PerformanceCertificate)
+        .options(selectinload(PerformanceCertificate.employee))
+        .filter(
+            PerformanceCertificate.id != draft.id,
+            tig_fedettseg.tetel_nelkuli(),
+            tuple_(PerformanceCertificate.project_id, PerformanceCertificate.employee_id).in_(parok),
+        )
+        .first()
+    )
+    if regi is not None:
+        nev = regi.employee.full_name if regi.employee else f"#{regi.employee_id}"
+        raise HTTPException(
+            status_code=400,
+            detail=f"{nev} munkájáról ezen a projekten már szól egy másik TIG - egy munkát csak egy TIG igazolhat.",
+        )
+
+    draft.tetelek.clear()
+    db.flush()
+    for t in tetelek:
+        draft.tetelek.append(
+            PerformanceCertificateTetel(
+                project_id=t.project_id,
+                employee_id=t.employee_id,
+                netto_osszeg=t.netto_osszeg,
+                megnevezes=t.megnevezes,
+            )
+        )
+    db.flush()
 
 
 _DRAFT_FIELDS = (
@@ -354,40 +674,46 @@ def _apply_draft_fields(draft: PerformanceCertificate, payload: TigDraftIn) -> N
             setattr(draft, field, value)
 
 
-@router.post("/{project_id}/{employee_id}/save", response_model=PerformanceCertificateRead)
+@router.post("/{project_id}/{szamlazo_kulcs}/save", response_model=PerformanceCertificateRead)
 def save_draft(
     project_id: int,
-    employee_id: int,
+    szamlazo_kulcs: str,
     payload: TigDraftIn,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
+    """A `szamlazo_kulcs` ember ("e12", vagy csak "12") vagy cég ("v3") is
+    lehet - lásd services/szamlazo.py."""
     project = _get_project_or_404(db, project_id)
-    employee = _validate_pending_employee(db, project, employee_id)
-    draft = _get_or_create_draft(db, project, employee)
+    csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
+    draft = _get_or_create_draft(db, project, csoport)
     _apply_draft_fields(draft, payload)
+    _apply_tetelek(db, draft, csoport.fel, payload.tetelek)
     db.commit()
     db.refresh(draft)
     return PerformanceCertificateRead.model_validate(draft)
 
 
-@router.post("/{project_id}/{employee_id}/generate-and-send", response_model=PerformanceCertificateRead)
+@router.post("/{project_id}/{szamlazo_kulcs}/generate-and-send", response_model=PerformanceCertificateRead)
 def generate_and_send(
     project_id: int,
-    employee_id: int,
+    szamlazo_kulcs: str,
     payload: TigDraftIn,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
     project = _get_project_or_404(db, project_id)
-    employee = _validate_pending_employee(db, project, employee_id)
-    draft = _get_or_create_draft(db, project, employee)
+    csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
+    fel = csoport.fel
+    draft = _get_or_create_draft(db, project, csoport)
     _apply_draft_fields(draft, payload)
+    _apply_tetelek(db, draft, fel, payload.tetelek)
 
     if not draft.netto_osszeg or draft.netto_osszeg <= 0:
         raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
-    if not employee.email:
-        raise HTTPException(status_code=400, detail="A munkatársnak nincs email címe.")
+    cimzett = (draft.email or fel.email or "").strip()
+    if not cimzett:
+        raise HTTPException(status_code=400, detail="A számlázó félnek nincs email címe.")
 
     keltezes = draft.keltezes or date.today()
     draft.keltezes = keltezes
@@ -400,11 +726,11 @@ def generate_and_send(
 
     doc_link = None
     pdf_bytes = None
-    base_name = f"{projektdatum}_{draft.ceg_neve or employee.full_name}_{project.projektkod_szoveg or ''}_TIG"
+    base_name = f"{projektdatum}_{draft.ceg_neve or fel.nev}_{project.projektkod_szoveg or ''}_TIG"
     try:
         if settings.gdoc_kulsos_tig_template_id:
             fields = {
-                "nev": draft.ceg_neve or employee.full_name,
+                "nev": draft.ceg_neve or fel.nev,
                 "hely": draft.szekhely or "",
                 "adoszam": draft.adoszam or "",
                 "targy": draft.megbizas_targya or "",
@@ -423,9 +749,9 @@ def generate_and_send(
             )
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
 
-        subject = f"{draft.ceg_neve or employee.full_name}_{project.projektkod_szoveg or ''} - Projekt_TIG"
+        subject = f"{draft.ceg_neve or fel.nev}_{project.projektkod_szoveg or ''} - Projekt_TIG"
         html = _TIG_EMAIL_HTML.format(projektdatum=projektdatum or "–")
-        send_message([employee.email], subject, html, pdf_bytes=pdf_bytes, pdf_filename="teljesitesi_igazolas.pdf")
+        send_message([cimzett], subject, html, pdf_bytes=pdf_bytes, pdf_filename="teljesitesi_igazolas.pdf")
     except RuntimeError as exc:
         # A kitöltött adatokat akkor is mentsük el, ha a küldés elhasal (pl.
         # hiányzó Google hitelesítő adat) - ne vesszen el az eddigi munka.
@@ -439,16 +765,16 @@ def generate_and_send(
     return PerformanceCertificateRead.model_validate(draft)
 
 
-@router.post("/{project_id}/{employee_id}/skip", response_model=PerformanceCertificateRead)
+@router.post("/{project_id}/{szamlazo_kulcs}/skip", response_model=PerformanceCertificateRead)
 def skip_tig(
     project_id: int,
-    employee_id: int,
+    szamlazo_kulcs: str,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
     project = _get_project_or_404(db, project_id)
-    employee = _validate_pending_employee(db, project, employee_id)
-    draft = _get_or_create_draft(db, project, employee)
+    csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
+    draft = _get_or_create_draft(db, project, csoport)
     draft.allapot = "Kihagyva"
     db.commit()
     db.refresh(draft)
@@ -462,10 +788,27 @@ class AllapotIn(BaseModel):
 ALLOWED_STATUSES = ["Készítés alatt", "Kiküldve", "Kihagyva"]
 
 
-@router.post("/{project_id}/{employee_id}/allapot", response_model=PerformanceCertificateRead)
+def _certificate_or_none(db: Session, project_id: int, szamlazo_kulcs: str) -> PerformanceCertificate | None:
+    """A fél TIG-je ezen a projekten - akkor is, ha egy MÁSIK projektről indult,
+    de van ezt a projektet érintő tétele."""
+    fel = szamlazo.feloldas(db, szamlazo_kulcs)
+    if fel is None:
+        return None
+    _, fel_tig = _load_tig_lookup(db, {project_id})
+    cert = fel_tig.get((project_id, fel.kulcs))
+    if cert is not None:
+        return cert
+    return (
+        db.query(PerformanceCertificate)
+        .filter(PerformanceCertificate.project_id == project_id, _szamlazo_szuro(fel))
+        .first()
+    )
+
+
+@router.post("/{project_id}/{szamlazo_kulcs}/allapot", response_model=PerformanceCertificateRead)
 def set_allapot(
     project_id: int,
-    employee_id: int,
+    szamlazo_kulcs: str,
     payload: AllapotIn,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
@@ -476,39 +819,31 @@ def set_allapot(
     generálás/küldés folyamat változatlan - ez csak az állapot javítása."""
     if payload.allapot not in ALLOWED_STATUSES:
         raise HTTPException(status_code=400, detail=f"Ismeretlen állapot. Választható: {', '.join(ALLOWED_STATUSES)}")
-    cert = (
-        db.query(PerformanceCertificate)
-        .filter(PerformanceCertificate.project_id == project_id, PerformanceCertificate.employee_id == employee_id)
-        .first()
-    )
+    cert = _certificate_or_none(db, project_id, szamlazo_kulcs)
     if cert is None:
-        raise HTTPException(status_code=404, detail="Ehhez a projekthez és emberhez nincs TIG bejegyzés.")
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nincs TIG bejegyzés.")
     cert.allapot = payload.allapot
     db.commit()
     db.refresh(cert)
     return PerformanceCertificateRead.model_validate(cert)
 
 
-def _get_sent_certificate_or_404(db: Session, project_id: int, employee_id: int) -> PerformanceCertificate:
+def _get_sent_certificate_or_404(db: Session, project_id: int, szamlazo_kulcs: str) -> PerformanceCertificate:
     """A TIG-hez tartozó számla feltöltése/kifizetése csak azután lehetséges,
     hogy magát a TIG-et már kiküldtük (lásd generate_and_send) - eddig a
     pontig nincs mihez számlát kötni."""
-    cert = (
-        db.query(PerformanceCertificate)
-        .filter(PerformanceCertificate.project_id == project_id, PerformanceCertificate.employee_id == employee_id)
-        .first()
-    )
+    cert = _certificate_or_none(db, project_id, szamlazo_kulcs)
     if cert is None:
-        raise HTTPException(status_code=404, detail="Ehhez a projekthez és emberhez nem tartozik TIG-bejegyzés.")
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nem tartozik TIG-bejegyzés.")
     if cert.allapot != "Kiküldve":
         raise HTTPException(status_code=400, detail="Számla csak kiküldött TIG-hez tölthető fel.")
     return cert
 
 
-@router.post("/{project_id}/{employee_id}/szamla", response_model=PerformanceCertificateRead)
+@router.post("/{project_id}/{szamlazo_kulcs}/szamla", response_model=PerformanceCertificateRead)
 async def upload_szamla(
     project_id: int,
-    employee_id: int,
+    szamlazo_kulcs: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
@@ -521,7 +856,7 @@ async def upload_szamla(
     számla-sort hoz létre (nem írja felül az előzőt) - a storage-kulcs ezért
     tartalmazza a számla id-jét is, különben a második feltöltés felülírná az
     első fájlját (lásd PerformanceCertificateInvoice modell-kommentje)."""
-    cert = _get_sent_certificate_or_404(db, project_id, employee_id)
+    cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
     filename = file.filename or "szamla"
     content_type = file.content_type or "application/octet-stream"
     invoice = PerformanceCertificateInvoice(
@@ -530,7 +865,7 @@ async def upload_szamla(
     db.add(invoice)
     db.flush()
     ext = os.path.splitext(filename)[1]
-    key = f"tig-szamla/{project_id}/{employee_id}-{invoice.id}{ext}"
+    key = f"tig-szamla/{project_id}/{szamlazo_kulcs}-{invoice.id}{ext}"
     data = await file.read()
     url = document_storage.upload_bytes(data, key, content_type)
     invoice.storage_key = key
@@ -540,10 +875,10 @@ async def upload_szamla(
     return PerformanceCertificateRead.model_validate(cert)
 
 
-@router.delete("/{project_id}/{employee_id}/szamla/{invoice_id}", response_model=PerformanceCertificateRead)
+@router.delete("/{project_id}/{szamlazo_kulcs}/szamla/{invoice_id}", response_model=PerformanceCertificateRead)
 def delete_szamla(
     project_id: int,
-    employee_id: int,
+    szamlazo_kulcs: str,
     invoice_id: int,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
@@ -551,7 +886,7 @@ def delete_szamla(
     """Egy tévesen feltöltött számla törlése - a fájl a tárolóból is törlődik.
     A kifizetettség (szamla_kifizetve) és a hozzá tartozó Expense sor NEM
     változik: az már pénzügyi tény, nem a feltöltött dokumentum függvénye."""
-    cert = _get_sent_certificate_or_404(db, project_id, employee_id)
+    cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
     invoice = db.get(PerformanceCertificateInvoice, invoice_id)
     if invoice is None or invoice.certificate_id != cert.id:
         raise HTTPException(status_code=404, detail="A számla nem található.")
@@ -562,10 +897,10 @@ def delete_szamla(
     return PerformanceCertificateRead.model_validate(cert)
 
 
-@router.post("/{project_id}/{employee_id}/szamla-kifizetve", response_model=PerformanceCertificateRead)
+@router.post("/{project_id}/{szamlazo_kulcs}/szamla-kifizetve", response_model=PerformanceCertificateRead)
 def mark_szamla_kifizetve(
     project_id: int,
-    employee_id: int,
+    szamlazo_kulcs: str,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
@@ -573,7 +908,7 @@ def mark_szamla_kifizetve(
     frissíti, ha már létezik) a Pénzügy -> Kiadások-ban megjelenő Expense
     sort, a projekt project_code_id-jához és az alvállalkozóhoz kötve, hogy a
     költség a helyes projekthez kapcsolódjon (lásd spec 2.1)."""
-    cert = _get_sent_certificate_or_404(db, project_id, employee_id)
+    cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
     if not cert.invoices:
         raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
     project = _get_project_or_404(db, project_id)
@@ -588,9 +923,21 @@ def mark_szamla_kifizetve(
     else:
         expense = None
 
+    # Egy TIG több projekt munkáját is igazolhatja - a Kiadás sor a TIG saját
+    # ("otthon") projektjének kódjára kerül, de a megnevezés felsorolja az
+    # összes érintett kódot, hogy a Pénzügyben látszódjon, mi van benne. A
+    # fedezettség (Utalandók fül) az összes érintett kódot külön is nézi, lásd
+    # routes/finance.py.
+    erintett_kodok = [
+        t.project.projektkod_szoveg
+        for t in cert.tetelek
+        if t.project is not None and t.project.projektkod_szoveg
+    ]
+    kodok_szoveg = ", ".join(dict.fromkeys(erintett_kodok)) or project.projektkod_szoveg or project.nev or ""
+
     if expense is None:
         expense = Expense(
-            megnevezes=f"TIG - {cert.ceg_neve or ''} - {project.projektkod_szoveg or project.nev or ''}".strip(" -"),
+            megnevezes=f"TIG - {cert.ceg_neve or ''} - {kodok_szoveg}".strip(" -"),
             project_code_id=project.project_code_id,
             employee_id=cert.employee_id,
             tipus="kulsos",
@@ -613,10 +960,10 @@ def mark_szamla_kifizetve(
     return PerformanceCertificateRead.model_validate(cert)
 
 
-@router.delete("/{project_id}/{employee_id}", status_code=204)
+@router.delete("/{project_id}/{szamlazo_kulcs}", status_code=204)
 def delete_certificate(
     project_id: int,
-    employee_id: int,
+    szamlazo_kulcs: str,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "delete")),
 ):
@@ -630,14 +977,9 @@ def delete_certificate(
 
     Amit MÁR kifizettünk, azt nem töröljük: ahhoz Kiadás (Expense) sor
     tartozik a Pénzügyben, tehát pénzügyi tény - előbb azt kell rendezni."""
-    cert = (
-        db.query(PerformanceCertificate)
-        .options(selectinload(PerformanceCertificate.invoices))
-        .filter(PerformanceCertificate.project_id == project_id, PerformanceCertificate.employee_id == employee_id)
-        .first()
-    )
+    cert = _certificate_or_none(db, project_id, szamlazo_kulcs)
     if cert is None:
-        raise HTTPException(status_code=404, detail="Ehhez a projekthez és emberhez nincs TIG bejegyzés.")
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nincs TIG bejegyzés.")
     if cert.szamla_kifizetve:
         raise HTTPException(
             status_code=400,

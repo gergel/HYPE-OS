@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String
+from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -22,8 +22,16 @@ class PerformanceCertificate(TimestampMixin, Base):
     __tablename__ = "performance_certificates"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    #: A TIG "otthona": az a projekt, ahonnan készült. Egy TIG TÖBB projekt
+    #: munkáját is igazolhatja (egy ember egy számlán küld be több forgatást) -
+    #: azt a tételek hordozzák, lásd PerformanceCertificateTetel.
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    #: A SZÁMLÁZÓ FÉL, akinek a nevére a TIG szól: vagy egy ember, vagy egy
+    #: vállalkozás (pontosan az egyik). Nem feltétlenül az, akinek a munkájáról
+    #: szól - egy ember más(ok) munkáját is számlázhatja, lásd
+    #: services/szamlazo.py.
+    employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
+    vallalkozas_id: Mapped[int | None] = mapped_column(ForeignKey("vallalkozasok.id"))
 
     allapot: Mapped[str | None] = mapped_column(String(50), comment="TIG állapot")
     file_url: Mapped[str | None] = mapped_column(String(500), comment="Generált TIG Google Docs linkje")
@@ -57,9 +65,58 @@ class PerformanceCertificate(TimestampMixin, Base):
 
     project: Mapped["Project"] = relationship(back_populates="performance_certificates")
     employee: Mapped["Employee"] = relationship(back_populates="performance_certificates")
+    vallalkozas: Mapped["Vallalkozas | None"] = relationship()
     invoices: Mapped[list["PerformanceCertificateInvoice"]] = relationship(
         back_populates="certificate", cascade="all, delete-orphan", order_by="PerformanceCertificateInvoice.created_at"
     )
+    tetelek: Mapped[list["PerformanceCertificateTetel"]] = relationship(
+        back_populates="certificate", cascade="all, delete-orphan", order_by="PerformanceCertificateTetel.id"
+    )
+
+
+class PerformanceCertificateTetel(TimestampMixin, Base):
+    """Egy TIG EGY tétele: kinek a munkáját, melyik projekten igazolja.
+
+    Miért kell? Mert a papír nem mindig egy ember egy projektjéről szól:
+
+    - a projekten két stábtag munkáját ugyanaz a fél számlázza (egy számla,
+      egy TIG, két tétel);
+    - valaki több lezárt projektjét egyben számlázza (egy TIG, projektenként
+      egy tétel).
+
+    Ez ugyanaz a felépítés, mint a belsős havi TIG-nél (egy
+    InternalPerformanceCertificate + több EmployeeMonthlyItem, tételenként
+    saját projektkóddal) - csak a külsős oldalon.
+
+    A `netto_osszeg` SZÁNDÉKOSAN opcionális: a felhasználó szerint "mikor más
+    számláz vagy 4 projektet egybe számláz, akkor nem mindig lehet megmondani,
+    hogy mi mennyibe került". A TIG fejösszege (PerformanceCertificate.
+    netto_osszeg) az igazság - ez a mező csak akkor tölthető ki, ha a bontás
+    ismert. Automatikusan SOSEM osztjuk szét egyenlően: az kitalált számokat
+    vinne a projekt-jövedelmezőségbe."""
+
+    __tablename__ = "performance_certificate_tetelek"
+    __table_args__ = (
+        UniqueConstraint("certificate_id", "project_id", "employee_id", name="uq_tig_tetel"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    certificate_id: Mapped[int] = mapped_column(
+        ForeignKey("performance_certificates.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: Melyik projekt melyik emberének a munkája. Egy (projekt, ember) párt
+    #: legfeljebb EGY TIG fedhet - erre az adatbázis nem tud kényszert adni
+    #: (több TIG-en át kellene néznie), ezért a végpont ellenőrzi
+    #: (lásd routes/performance_certificates.py _tetel_utkozes).
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    netto_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Ebből ennyi az övé - ha tudható")
+    megnevezes: Mapped[str | None] = mapped_column(String(255))
+
+    certificate: Mapped["PerformanceCertificate"] = relationship(back_populates="tetelek")
+    project: Mapped["Project"] = relationship()
+    employee: Mapped["Employee"] = relationship()
 
 
 class PerformanceCertificateInvoice(TimestampMixin, Base):

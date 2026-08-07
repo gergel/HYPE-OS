@@ -312,6 +312,11 @@ class Project(TimestampMixin, Base):
     performance_certificates: Mapped[list["PerformanceCertificate"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
+    #: Kinek a nevére megy a szerződés/TIG az egyes stábtagok munkájáért, ha
+    #: nem a sajátjukéra (lásd models/project_szamlazo.py).
+    szamlazok: Mapped[list["ProjectSzamlazo"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
     # A Média Portál tartalma SZÁNDÉKOSAN nem törlődik a projekttel: ügyfélnek
     # kiadott (akár már kifizetett) anyag, amit nem szabad egy projekt-törlés

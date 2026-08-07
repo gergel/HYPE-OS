@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.models.contract import Contract, ContractType
 from app.models.notion_import import NotionImportMap
-from app.models.performance_certificate import PerformanceCertificate
+from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
 from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, extract_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id
@@ -200,6 +200,12 @@ def _tig_importalasa(
             tig = PerformanceCertificate(project_id=project_id, employee_id=employee_id)
             db.add(tig)
         db.flush()
+        # A TIG a TÉTELEIN keresztül mondja meg, kinek a munkáját igazolja
+        # (lásd models/performance_certificate.py). A Notionből jövő sor
+        # egytételes: a saját projektjén a saját emberét fedi.
+        if not tig.tetelek:
+            tig.tetelek.append(PerformanceCertificateTetel(project_id=project_id, employee_id=employee_id))
+            db.flush()
         _jegyezd_fel(db, kulcs, "PerformanceCertificate", tig.id)
         result.created += 1 if uj else 0
         result.updated += 0 if uj else 1

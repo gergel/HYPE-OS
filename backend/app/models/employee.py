@@ -150,6 +150,11 @@ class Employee(TimestampMixin, Base):
     projects: Mapped[list["Project"]] = relationship(
         secondary="project_crew", back_populates="crew"
     )
+    #: Mely számlázó cégekhez tartozik (javaslat-szintű, lásd
+    #: models/vallalkozas.py VallalkozasTag).
+    vallalkozas_tagsagok: Mapped[list["VallalkozasTag"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan"
+    )
 
 
 def szerepkorei(employee: Employee) -> set[SystemRole]:

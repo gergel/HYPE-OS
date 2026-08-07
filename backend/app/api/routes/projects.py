@@ -2,6 +2,7 @@ from datetime import datetime
 
 from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
@@ -10,6 +11,7 @@ from app.core.security import Role, get_current_user, require_roles
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.project import Project
+from app.models.project_szamlazo import ProjectSzamlazo
 from app.models.timesheet import Timesheet
 from app.schemas.deliverable import DeliverableRead
 from app.schemas.deliverable_actions import TimerEmployeeSummary
@@ -46,6 +48,32 @@ def _block_delete_if_portal_content(project: Project, _db: Session) -> None:
         )
 
 
+def _takaritsd_a_szamlazokat(
+    project: Project, _data: dict, m2m_changes: dict[str, dict[str, set[int]]], db: Session, _user: Employee
+) -> None:
+    """Aki lekerült a stáblistáról, annak a számlázó-beállítása is menjen vele.
+
+    Kétféle irányban: a levett ember SAJÁT beállítása fölöslegessé válik, és ha
+    ő volt más(ok) számlázója, azok a sorok is hazuggá válnának - egy olyan
+    embert neveznének meg, aki már nincs a projekten (lásd
+    models/project_szamlazo.py)."""
+    eltavolitott = m2m_changes.get("crew", {}).get("removed") or set()
+    if not eltavolitott:
+        return
+    (
+        db.query(ProjectSzamlazo)
+        .filter(
+            ProjectSzamlazo.project_id == project.id,
+            or_(
+                ProjectSzamlazo.employee_id.in_(eltavolitott),
+                ProjectSzamlazo.szamlazo_employee_id.in_(eltavolitott),
+            ),
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+
+
 router = build_crud_router(
     model=Project,
     create_schema=ProjectCreate,
@@ -56,6 +84,7 @@ router = build_crud_router(
     tags=["projects"],
     page="/projektek",
     m2m_fields={"crew_employee_ids": ("crew", Employee)},
+    after_update=_takaritsd_a_szamlazokat,
     before_delete=_block_delete_if_portal_content,
     entity_type="project",
 )

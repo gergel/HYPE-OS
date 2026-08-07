@@ -6,7 +6,11 @@ kérdőívre (lásd public_utokovetes.py) beérkezett válaszokat. A tényleges
 mentés/generálás/küldés/kihagyás műveletek továbbra is a saját (szerződés
 ill. TIG) végpontjaikon futnak - ez a nézet csak összegyűjti és egy helyen
 mutatja az állapotukat, hogy ne kelljen projektenként külön-külön két oldalt
-végignézni."""
+végignézni.
+
+A sorok SZÁMLÁZÓ FELENKÉNT állnak, nem emberenként: ha egy projekten több
+stábtag munkáját ugyanaz a fél (másik ember vagy egy cég) számlázza, egyetlen
+szerződés és egyetlen TIG kell - lásd services/szamlazo.py."""
 
 from __future__ import annotations
 
@@ -20,24 +24,28 @@ from app.api.routes.performance_certificates import (
     _draft_info as _tig_draft_info,
     _load_tig_lookup,
     _tig_candidates,
-    _tig_pending_employees,
+    _tig_pending_csoportok,
+    tig_csoportok,
     DraftInfo as TigDraftInfo,
+    TigLookup,
 )
 from app.api.routes.subcontractor_contracts import (
     _draft_info as _contract_draft_info,
-    _load_contract_lookup,
     _mentesul_keretszerzodessel,
-    _pending_employees,
+    _pending_csoportok,
+    _szamlazo_csoportok,
+    load_szerzodes_kornyezet,
     DraftInfo as ContractDraftInfo,
 )
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.contract import Contract
-from app.models.employee import Employee, EmployeeType
-from app.models.performance_certificate import PerformanceCertificate
+from app.models.employee import Employee
 from app.models.post_shoot_feedback import PostShootFeedback
 from app.models.project import Project
+from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.post_shoot_feedback import PostShootFeedbackRead
+from app.services.szamlazo import SzamlazoCsoport
 
 router = APIRouter(prefix="/utokovetes", tags=["utokovetes-admin"])
 
@@ -55,82 +63,71 @@ def _get_project_or_404(db: Session, project_id: int) -> Project:
 # három állapotot. Ha ezt projektenként külön lekérdezésekből tennénk, az
 # projektszám x 3 adatbázis-fordulót jelentene - száz projektnél már érezhetően
 # lassú, és a felület minden megnyitásakor újra lefut. Ezért a szerződés- és
-# TIG-táblát EGYSZER olvassuk be az összes érintett emberre, és a lenti
-# függvények ezt a két kész indexet kapják meg (a részletnézet, ahol egyetlen
-# projektről van szó, továbbra is lekérdezhet magának - ott ez nem számít).
-
-
-def _kell_eseti_szerzodes(project: Project, employee: Employee, keretszerzodesek: dict[int, list[Contract]]) -> bool:
-    """Kell-e ettől az embertől eseti szerződés ezen a projekten?
-
-    Ugyanaz a szabály, mint a függő listánál (lásd
-    subcontractor_contracts._pending_employees): belsősnek nem kell, és aki
-    keretszerződése a FORGATÁS NAPJÁN élt, annak sem - egy lejárt vagy
-    szüneteltetett keretszerződés viszont nem mentesít."""
-    if employee.tipus == EmployeeType.BELSOS:
-        return False
-    return not _mentesul_keretszerzodessel(keretszerzodesek.get(employee.id, []), project.forgatas_datuma)
+# TIG-táblát EGYSZER olvassuk be az összes érintett projektre, és a lenti
+# függvények ezt a kész indexet kapják meg.
 
 
 def _szerzodes_candidates(
-    db: Session,
     project: Project,
-    lookup: tuple[dict[int, list[Contract]], dict[tuple[int, int], Contract]] | None = None,
-) -> tuple[int, int]:
-    """(összes, függő) - hányan igényelnek eseti szerződést ezen a projekten
-    (nem belsős, és a FORGATÁS NAPJÁN nem élt a keretszerződése), és ebből
-    hányan függők."""
-    if lookup is None:
-        employee_ids = {e.id for e in project.crew if e.tipus != EmployeeType.BELSOS}
-        lookup = _load_contract_lookup(db, employee_ids)
-    keretszerzodesek, project_contracts = lookup
-    total = sum(1 for e in project.crew if _kell_eseti_szerzodes(project, e, keretszerzodesek))
-    pending = len(_pending_employees(project, keretszerzodesek, project_contracts))
-    return total, pending
+    keretszerzodesek: dict[str, list[Contract]],
+    project_contracts: dict[tuple[int, str], Contract],
+    felulirasok: dict[tuple[int, int], ProjectSzamlazo],
+) -> tuple[int, int, list[tuple[SzamlazoCsoport, Contract | None]]]:
+    """(összes, függő, függő sorok) - hány SZÁMLÁZÓ FÉL igényel eseti
+    szerződést ezen a projekten, és ebből hány van még hátra.
+
+    Az "összes" azért nem a stáblétszám, mert egy fél több ember munkájáról is
+    szerződhet egyben."""
+    csoportok = _szamlazo_csoportok(project, felulirasok)
+    total = sum(
+        1
+        for cs in csoportok
+        if not _mentesul_keretszerzodessel(keretszerzodesek.get(cs.kulcs, []), project.forgatas_datuma)
+    )
+    pending = _pending_csoportok(project, keretszerzodesek, project_contracts, felulirasok)
+    return total, len(pending), pending
 
 
 def _tig_state(
-    db: Session,
     project: Project,
     szerzodes_done: bool,
-    tig_lookup: dict[tuple[int, int], PerformanceCertificate] | None = None,
+    felulirasok: dict[tuple[int, int], ProjectSzamlazo],
+    tig_lookup: TigLookup,
 ) -> tuple[bool, int, int]:
     """(tig_ready, összes, függő) - a TIG populáció a keretszerződéseseket IS
     tartalmazza (lásd performance_certificates.py _tig_candidates), csak akkor
     "kész" (tig_ready), ha a projekt teljes eseti szerződés fázisa lezárult."""
-    candidates = _tig_candidates(project)
-    total = len(candidates)
-    if not candidates or not szerzodes_done:
+    if not _tig_candidates(project):
+        return False, 0, 0
+    csoportok = tig_csoportok(project, felulirasok)
+    total = len(csoportok)
+    if not szerzodes_done:
         return False, total, total
-    if tig_lookup is None:
-        tig_lookup = _load_tig_lookup(db, {e.id for e in candidates})
-    pending = _tig_pending_employees(project, tig_lookup)
-    return True, total, len(pending)
+    return True, total, len(_tig_pending_csoportok(project, csoportok, tig_lookup))
 
 
 def _kifizetes_state(
-    db: Session,
     project: Project,
-    tig_lookup: dict[tuple[int, int], PerformanceCertificate] | None = None,
+    felulirasok: dict[tuple[int, int], ProjectSzamlazo],
+    tig_lookup: TigLookup,
 ) -> tuple[int, int]:
     """(összes, függő) - ki van-e fizetve mindenki, akinek fizetni kell.
 
-    A populáció ugyanaz, mint a TIG-nél: minden NEM belsős stábtag, tehát a
-    külsősök ÉS a keretszerződésesek is (a belsősök havi bérezésűek, nekik
-    projektenként nincs kifizetés - a felhasználó kifejezett kérése).
+    A populáció ugyanaz, mint a TIG-nél: minden nem belsős munkát számlázó fél
+    (a belsősök havi bérezésűek, nekik projektenként nincs kifizetés - a
+    felhasználó kifejezett kérése).
 
     Akinek a TIG-je "Kihagyva", annak nincs mit kifizetni, ezért ki is marad a
-    nevezőből - különben egy szándékosan kihagyott ember örökre "függőben"
+    nevezőből - különben egy szándékosan kihagyott fél örökre "függőben"
     tartaná a projektet."""
-    candidates = _tig_candidates(project)
-    if not candidates:
+    _, fel_tig = tig_lookup
+    csoportok = tig_csoportok(project, felulirasok)
+    if not csoportok:
         return 0, 0
-    if tig_lookup is None:
-        tig_lookup = _load_tig_lookup(db, {e.id for e in candidates})
     total = 0
     pending = 0
-    for e in candidates:
-        tig = tig_lookup.get((project.id, e.id))
+    for csoport in csoportok:
+        tig = fel_tig.get((project.id, csoport.kulcs))
         if tig is not None and tig.allapot == "Kihagyva":
             continue
         total += 1
@@ -170,17 +167,16 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
         .order_by(Project.forgatas_datuma.desc().nullslast())
         .all()
     )
-    # Két lekérdezés az egész listához, nem projektenként három (lásd a fenti
-    # megjegyzést a _szerzodes_candidates fölött).
-    minden_employee_id = {e.id for p in projects for e in p.crew if e.tipus != EmployeeType.BELSOS}
-    szerzodes_lookup = _load_contract_lookup(db, minden_employee_id)
-    tig_lookup = _load_tig_lookup(db, minden_employee_id)
+    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, projects)
+    tig_lookup = _load_tig_lookup(db, {p.id for p in projects})
 
     result: list[ProjectOverviewSummary] = []
     for p in projects:
-        szerzodes_osszes, szerzodes_fuggo = _szerzodes_candidates(db, p, szerzodes_lookup)
-        tig_ready, tig_osszes, tig_fuggo = _tig_state(db, p, szerzodes_fuggo == 0, tig_lookup)
-        kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(db, p, tig_lookup)
+        szerzodes_osszes, szerzodes_fuggo, _ = _szerzodes_candidates(
+            p, keretszerzodesek, project_contracts, felulirasok
+        )
+        tig_ready, tig_osszes, tig_fuggo = _tig_state(p, szerzodes_fuggo == 0, felulirasok, tig_lookup)
+        kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(p, felulirasok, tig_lookup)
         result.append(
             ProjectOverviewSummary(
                 project_id=p.id,
@@ -202,16 +198,30 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
     return result
 
 
-class ContractStatusInfo(BaseModel):
+class LefedettEmber(BaseModel):
     id: int
     full_name: str
+
+
+class ContractStatusInfo(BaseModel):
+    #: A régi felület kedvéért az ember azonosítója (cégnél 0); a műveletek a
+    #: `szamlazo` kulccsal címeznek.
+    id: int
+    szamlazo: str
+    full_name: str
+    #: "Ladányi Máté (Balla Berci helyett is)"
+    cimke: str
+    lefedettek: list[LefedettEmber] = []
     email: str | None
     draft: ContractDraftInfo | None
 
 
 class TigStatusInfo(BaseModel):
     id: int
+    szamlazo: str
     full_name: str
+    cimke: str
+    lefedettek: list[LefedettEmber] = []
     email: str | None
     draft: TigDraftInfo | None
     # A TIG kiküldése utáni lépés: fel van-e töltve a számla és ki van-e fizetve
@@ -235,39 +245,56 @@ class ProjectOverviewDetail(BaseModel):
     visszajelzesek: list[PostShootFeedbackRead]
 
 
+def _lefedettek(csoport: SzamlazoCsoport) -> list[LefedettEmber]:
+    return [LefedettEmber(id=t.id, full_name=t.full_name) for t in csoport.tagok]
+
+
 @router.get("/{project_id}", response_model=ProjectOverviewDetail)
 def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     project = _get_project_or_404(db, project_id)
 
-    employee_ids = {e.id for e in project.crew if e.tipus != EmployeeType.BELSOS}
-    keretszerzodesek, project_contracts = _load_contract_lookup(db, employee_ids)
+    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, [project])
+    _, szerzodes_fuggo, pending_szerzodesek = _szerzodes_candidates(
+        project, keretszerzodesek, project_contracts, felulirasok
+    )
     szerzodesek = [
-        ContractStatusInfo(id=e.id, full_name=e.full_name, email=e.email, draft=_contract_draft_info(project_contracts.get((project.id, e.id))))
-        for e in project.crew
-        if _kell_eseti_szerzodes(project, e, keretszerzodesek)
+        ContractStatusInfo(
+            id=csoport.fel.employee.id if csoport.fel.employee else 0,
+            szamlazo=csoport.kulcs,
+            full_name=csoport.fel.nev,
+            cimke=csoport.cimke(),
+            lefedettek=_lefedettek(csoport),
+            email=csoport.fel.email,
+            draft=_contract_draft_info(existing),
+        )
+        for csoport, existing in pending_szerzodesek
     ]
-    szerzodes_done = len(_pending_employees(project, keretszerzodesek, project_contracts)) == 0
+    szerzodes_done = szerzodes_fuggo == 0
 
+    tig_lookup = _load_tig_lookup(db, {project.id})
+    _, fel_tig = tig_lookup
     tig_ready = False
     teljesitesi_igazolasok: list[TigStatusInfo] = []
     if szerzodes_done:
-        candidates = _tig_candidates(project)
-        tig_ready = bool(candidates)
-        tig_lookup = _load_tig_lookup(db, {e.id for e in candidates})
-        for e in candidates:
-            tig = tig_lookup.get((project.id, e.id))
+        csoportok = tig_csoportok(project, felulirasok)
+        tig_ready = bool(csoportok)
+        for csoport in csoportok:
+            tig = fel_tig.get((project.id, csoport.kulcs))
             teljesitesi_igazolasok.append(
                 TigStatusInfo(
-                    id=e.id,
-                    full_name=e.full_name,
-                    email=e.email,
+                    id=csoport.fel.employee.id if csoport.fel.employee else 0,
+                    szamlazo=csoport.kulcs,
+                    full_name=csoport.fel.nev,
+                    cimke=csoport.cimke(),
+                    lefedettek=_lefedettek(csoport),
+                    email=csoport.fel.email,
                     draft=_tig_draft_info(tig),
                     szamla_kifizetve=bool(tig and tig.szamla_kifizetve),
                     van_szamla=bool(tig and tig.invoices),
                 )
             )
-    kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(db, project)
-    tig_fuggo = len(_tig_pending_employees(project, _load_tig_lookup(db, {e.id for e in _tig_candidates(project)}))) if szerzodes_done else 1
+    kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(project, felulirasok, tig_lookup)
+    _, _, tig_fuggo = _tig_state(project, szerzodes_done, felulirasok, tig_lookup)
 
     feedbacks = (
         db.query(PostShootFeedback)

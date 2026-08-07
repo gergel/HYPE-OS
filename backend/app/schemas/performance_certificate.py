@@ -13,10 +13,26 @@ class PerformanceCertificateInvoiceRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PerformanceCertificateRead(BaseModel):
+class PerformanceCertificateTetelRead(BaseModel):
+    """Egy TIG tétele: kinek a munkája, melyik projekten (lásd
+    models/performance_certificate.py PerformanceCertificateTetel)."""
+
     id: int
     project_id: int
     employee_id: int
+    netto_osszeg: float | None = None
+    megnevezes: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PerformanceCertificateRead(BaseModel):
+    id: int
+    project_id: int
+    #: A számlázó fél: ember VAGY vállalkozás (lásd services/szamlazo.py).
+    employee_id: int | None = None
+    vallalkozas_id: int | None = None
+    tetelek: list[PerformanceCertificateTetelRead] = []
     allapot: str | None = None
     file_url: str | None = None
     ceg_neve: str | None = None

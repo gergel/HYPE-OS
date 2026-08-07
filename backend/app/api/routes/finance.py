@@ -20,7 +20,11 @@ from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
 )
-from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateInvoice
+from app.models.performance_certificate import (
+    PerformanceCertificate,
+    PerformanceCertificateInvoice,
+    PerformanceCertificateTetel,
+)
 from app.models.project_code import ProjectCode
 from app.services import document_storage
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
@@ -647,7 +651,9 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
         .options(
             selectinload(PerformanceCertificate.invoices),
             selectinload(PerformanceCertificate.employee),
+            selectinload(PerformanceCertificate.vallalkozas),
             selectinload(PerformanceCertificate.project),
+            selectinload(PerformanceCertificate.tetelek).selectinload(PerformanceCertificateTetel.project),
         )
         .filter(PerformanceCertificate.szamla_kifizetve.is_(False))
         .all()
@@ -655,10 +661,16 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
     for tig in kulsos:
         if not tig.invoices:
             continue
-        # A külsős TIG egy PROJEKThez tartozik, a fedezet viszont a projekt
-        # PROJEKTKÓDJÁN érkezik meg.
-        tig_kod = tig.project.project_code_id if tig.project else None
-        allapot, minden_kod, fedezetlen = _fedezettseg([tig_kod] if tig_kod else [], kodok, kifizetett)
+        # A fedezet a projektek PROJEKTKÓDJÁN érkezik meg. Egy TIG TÖBB projekt
+        # munkáját is igazolhatja (egy ember több forgatást egy számlán küld
+        # be) - ilyenkor minden érintett projektkódot nézni kell, és a tétel
+        # csak akkor utalható, ha MINDEGYIKRE megjött a pénz. Ez az összevont
+        # számlák esete: részben fedezettként látszik, amíg az egyik ügyfél
+        # még nem fizetett.
+        tig_kodok = [t.project.project_code_id for t in tig.tetelek if t.project is not None]
+        if not tig_kodok and tig.project is not None:
+            tig_kodok = [tig.project.project_code_id]
+        allapot, minden_kod, fedezetlen = _fedezettseg(tig_kodok, kodok, kifizetett)
         eredmeny.append(
             (
                 UtalasraVaroTetel(
@@ -668,7 +680,8 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
                     kulcs=f"kulsos_tig:{tig.id}",
                     tipus="Külsős TIG",
                     megnevezes=tig.megbizas_targya or "Külsős teljesítési igazolás",
-                    kinek=tig.employee.full_name if tig.employee else None,
+                    kinek=(tig.vallalkozas.nev if tig.vallalkozas else None)
+                    or (tig.employee.full_name if tig.employee else None),
                     osszeg=float(tig.netto_osszeg) if tig.netto_osszeg is not None else None,
                     penznem="HUF",
                     hatarido=None,
