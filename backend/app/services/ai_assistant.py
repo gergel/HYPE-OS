@@ -1,4 +1,4 @@
-"""AI Assistant - Anthropic Claude tool-calling réteg a végleges Postgres felett.
+"""AI Assistant - Google Gemini function-calling réteg a végleges Postgres felett.
 
 Minden felhasználó a SAJÁT page_permissions/field_visibility jogosultsága szerint
 lát rá az adatra: a tool-végrehajtás ugyanazt a check_page_action-t (lásd
@@ -15,7 +15,7 @@ típust - a modell akkor is megpróbálhatná közvetlenül hívni).
 Az elérhető entitástípusokat és mezőiket a rendszerüzenetbe már előre
 beleírjuk (lásd _build_system_prompt) - ez azért fontos, mert enélkül a
 modell szinte minden kérdésnél előbb list_entity_types-t, majd
-describe_entity-t hívna, ami két plusz Anthropic API oda-vissza kört (több
+describe_entity-t hívna, ami két plusz Gemini API oda-vissza kört (több
 másodperc) jelentene minden egyes kérdésnél. Az aggregate_entity tool pedig
 azért létezik query_entity mellett, mert egy összeg/átlag/darabszám/
 minimum/maximum kérdésre a helyes válasz az ÖSSZES megfelelő rekordon
@@ -28,7 +28,9 @@ import json
 from datetime import date, datetime
 from typing import Any
 
-import anthropic
+from google import genai
+from google.genai import types
+from google.genai import errors as genai_errors
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -250,6 +252,11 @@ def _aggregate_entity(
     return {"entity_type": entity_type, "field": field, "operation": operation, "result": _jsonable(result)}
 
 
+# A Gemini function-calling sémája az OpenAPI részhalmaza: a szabad alakú
+# "objektum" paramétert (tetszőleges mező -> érték szűrők) nem tudja leírni,
+# ezért a filters JSON SZÖVEGKÉNT megy át, és mi olvassuk vissza (lásd
+# _szurok). Cserébe a séma érvényes marad, és a modell is egyértelmű
+# utasítást kap arról, mit várunk.
 TOOLS: list[dict] = [
     {
         "name": "list_entity_types",
@@ -258,7 +265,7 @@ TOOLS: list[dict] = [
             "(pl. project, client, employee, equipment, campaign, task, expense, revenue, "
             "deliverable) - EZZEL kezdd, mielőtt bármit lekérdezel."
         ),
-        "input_schema": {"type": "object", "properties": {}},
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "describe_entity",
@@ -266,7 +273,7 @@ TOOLS: list[dict] = [
             "Visszaadja egy entitástípus mezőit és típusait (a felhasználónak ténylegesen "
             "látható mezőkre szűrve) - ebből tudod, milyen mezők szerint lehet szűrni/lekérdezni."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {"entity_type": {"type": "string"}},
             "required": ["entity_type"],
@@ -282,14 +289,17 @@ TOOLS: list[dict] = [
             "minimum/maximum kérdésekhez - arra az aggregate_entity a garantáltan helyes eszköz, "
             "mert az ÖSSZES megfelelő rekordra számol, nem csak az itt visszaadott lapra."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "entity_type": {"type": "string"},
-                "filters": {"type": "object", "description": "mező -> érték párok"},
-                "limit": {"type": "integer", "default": 20},
+                "filters": {
+                    "type": "string",
+                    "description": 'JSON objektum szövegként: mező -> érték párok, pl. {"allapot": "Kész"}',
+                },
+                "limit": {"type": "integer", "description": "hány sort kérsz (alapértelmezés 20)"},
                 "order_by": {"type": "string", "description": "melyik mező szerint rendezzen"},
-                "order_dir": {"type": "string", "enum": ["asc", "desc"], "default": "asc"},
+                "order_dir": {"type": "string", "enum": ["asc", "desc"], "description": "alapértelmezés: asc"},
             },
             "required": ["entity_type"],
         },
@@ -303,18 +313,38 @@ TOOLS: list[dict] = [
             "query_entity helyett, mert ez garantáltan helyes eredményt ad, függetlenül attól, "
             "hány rekord van."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "entity_type": {"type": "string"},
                 "field": {"type": "string", "description": "a számolandó mező neve (count esetén elhagyható)"},
                 "operation": {"type": "string", "enum": ["count", "sum", "avg", "min", "max"]},
-                "filters": {"type": "object", "description": "mező -> érték párok"},
+                "filters": {
+                    "type": "string",
+                    "description": 'JSON objektum szövegként: mező -> érték párok, pl. {"allapot": "Kész"}',
+                },
             },
             "required": ["entity_type", "operation"],
         },
     },
 ]
+
+
+def _szurok(ertek) -> dict | None:
+    """A filters paraméter feloldása. A Gemini SZÖVEGKÉNT kapja (a sémája nem
+    tud szabad alakú objektumot leírni), de ha mégis objektumot küldene, azt is
+    elfogadjuk - a hibás JSON-t nem nyeljük el, hanem szólunk a modellnek."""
+    if ertek in (None, ""):
+        return None
+    if isinstance(ertek, dict):
+        return ertek
+    try:
+        ertelmezett = json.loads(str(ertek))
+    except ValueError as exc:
+        raise ValueError(f"A filters nem értelmezhető JSON objektumként: {exc}") from exc
+    if not isinstance(ertelmezett, dict):
+        raise ValueError("A filters JSON objektum kell legyen (mező -> érték párok).")
+    return ertelmezett
 
 
 def _execute_tool(db: Session, employee: Employee, name: str, tool_input: dict) -> dict:
@@ -327,7 +357,7 @@ def _execute_tool(db: Session, employee: Employee, name: str, tool_input: dict) 
             db,
             employee,
             tool_input.get("entity_type", ""),
-            tool_input.get("filters"),
+            _szurok(tool_input.get("filters")),
             tool_input.get("limit", 20),
             tool_input.get("order_by"),
             tool_input.get("order_dir"),
@@ -339,7 +369,7 @@ def _execute_tool(db: Session, employee: Employee, name: str, tool_input: dict) 
             tool_input.get("entity_type", ""),
             tool_input.get("field"),
             tool_input.get("operation", ""),
-            tool_input.get("filters"),
+            _szurok(tool_input.get("filters")),
         )
     return {"error": f"Ismeretlen tool: {name}"}
 
@@ -360,7 +390,7 @@ _BASE_SYSTEM_PROMPT = (
 def _build_system_prompt(db: Session, employee: Employee) -> str:
     """Az elérhető entitástípusokat és mezőiket előre beleírjuk a rendszerüzenetbe, hogy a
     modellnek ne kelljen (majdnem) minden kérdésnél előbb list_entity_types-t, majd
-    describe_entity-t hívnia egy külön-külön Anthropic API oda-vissza körrel (ez kérdésenként
+    describe_entity-t hívnia egy külön-külön Gemini API oda-vissza körrel (ez kérdésenként
     több másodperc plusz válaszidőt jelentett). get_field_types itt db nélkül fut, hogy a
     szöveges mezők select-heurisztikája (ami saját DB-lekérdezésekkel járna) ne fusson le
     minden egyes kérdésnél - csak mező név+típus kell ide, a pontos select-értékekhez a modell
@@ -383,46 +413,60 @@ def _build_system_prompt(db: Session, employee: Employee) -> str:
 
 
 def ask(db: Session, employee: Employee, question: str) -> str:
-    if not settings.anthropic_api_key:
-        return "Az AI Assistant nincs beállítva (hiányzik az ANTHROPIC_API_KEY)."
+    """A kérdés megválaszolása Gemini function-callinggal.
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    messages: list[dict] = [{"role": "user", "content": question}]
-    system_prompt = _build_system_prompt(db, employee)
+    A hurok kézzel megy (nem az SDK automatic function callingjával): minden
+    egyes eszközhívásnál újra le kell futnia a jogosultság-ellenőrzésnek a
+    KÉRDEZŐ nevében, és az eszközök a mi DB-sessionünkön dolgoznak - ezt az
+    automatikus változat nem tudná átadni."""
+    if not settings.gemini_api_key:
+        return "Az AI Assistant nincs beállítva (hiányzik a GEMINI_API_KEY)."
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    config = types.GenerateContentConfig(
+        system_instruction=_build_system_prompt(db, employee),
+        tools=[types.Tool(function_declarations=TOOLS)],
+        # Az SDK alapból MAGA hívná meg a python függvényeket - itt nem ezt
+        # akarjuk (lásd a docstringet), a hurkot mi vezetjük.
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        max_output_tokens=2048,
+    )
+    contents: list[types.Content] = [types.Content(role="user", parts=[types.Part(text=question)])]
 
     try:
         for _ in range(MAX_TOOL_ROUNDS):
-            response = client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=2048,
-                system=system_prompt,
-                tools=TOOLS,
-                messages=messages,
+            response = client.models.generate_content(
+                model=settings.gemini_model, contents=contents, config=config
             )
-            if response.stop_reason != "tool_use":
-                return "".join(block.text for block in response.content if block.type == "text").strip() or (
-                    "Nem érkezett válasz szöveg."
-                )
+            hivasok = response.function_calls or []
+            if not hivasok:
+                return (response.text or "").strip() or "Nem érkezett válasz szöveg."
 
-            messages.append({"role": "assistant", "content": response.content})
-            tool_results = []
-            for block in response.content:
-                if block.type != "tool_use":
-                    continue
-                result = _execute_tool(db, employee, block.name, block.input)
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": json.dumps(result, ensure_ascii=False),
-                    }
+            # A modell saját fordulóját visszatesszük a beszélgetésbe, hogy a
+            # következő körben lássa, mit kért.
+            jelolt = response.candidates[0].content if response.candidates else None
+            contents.append(jelolt or types.Content(role="model", parts=[]))
+
+            valaszok = []
+            for hivas in hivasok:
+                try:
+                    eredmeny = _execute_tool(db, employee, hivas.name or "", dict(hivas.args or {}))
+                except ValueError as exc:
+                    # Rossz paraméter (pl. értelmezhetetlen filters): a modell
+                    # javítani tudja a következő körben, nem kell elhasalnia.
+                    eredmeny = {"error": str(exc)}
+                valaszok.append(
+                    types.Part.from_function_response(name=hivas.name or "", response=eredmeny)
                 )
-            messages.append({"role": "user", "content": tool_results})
-    except anthropic.AuthenticationError:
-        return "Az AI Assistant hitelesítési hibába ütközött (érvénytelen ANTHROPIC_API_KEY)."
-    except anthropic.RateLimitError:
-        return "Az AI Assistant túlterhelt (rate limit) - próbáld újra kicsit később."
-    except (anthropic.APIConnectionError, anthropic.APIStatusError) as exc:
+            contents.append(types.Content(role="user", parts=valaszok))
+    except genai_errors.ClientError as exc:
+        # 401/403: rossz kulcs; 429: rate limit - a felhasználónak más a teendő.
+        if exc.code == 429:
+            return "Az AI Assistant túlterhelt (rate limit) - próbáld újra kicsit később."
+        if exc.code in (401, 403):
+            return "Az AI Assistant hitelesítési hibába ütközött (érvénytelen GEMINI_API_KEY)."
+        return f"Az AI Assistant nem érhető el (API hiba): {exc}"
+    except genai_errors.APIError as exc:
         return f"Az AI Assistant nem érhető el (hálózati/API hiba): {exc}"
 
     return "Nem sikerült választ generálni (túl sok lépés)."

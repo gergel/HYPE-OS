@@ -9,7 +9,7 @@ mindegyik, mennyiről szól, és hol a papír.
 """
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
@@ -17,6 +17,7 @@ from app.core.database import get_db
 from app.core.security import require_page_action
 from app.models.contract import Contract, ContractType, megkotott_keretszerzodes
 from app.models.employee import Employee
+from app.models.performance_certificate import PerformanceCertificate
 from app.models.project import Project
 
 PAGE = "/penzugyek"
@@ -115,3 +116,47 @@ def list_eseti_szerzodesek(
 
     sorok.sort(key=lambda s: (s.forgatas_datuma or s.keltezes or date.min, s.id), reverse=True)
     return sorok
+
+
+@router.delete("/{contract_id}", status_code=204)
+def delete_eseti_szerzodes(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    """Egy eseti megbízási szerződés teljes törlése.
+
+    Ha a szerződés PROJEKTHEZ van kötve, a munkatárs ezután újra "hiányzik"
+    azon a projekten, és készíthető neki új szerződés - ugyanaz, mint az
+    Utókövetés oldali törlés (lásd routes/subcontractor_contracts.py
+    delete_contract). Ha már készült hozzá TIG azon a projekten, előbb azt
+    kell törölni: a TIG a szerződés lezárása UTÁN következő lépés, és a
+    szerződés törlésével a projekt visszalép a szerződés-fázisba - a fázisok
+    ne csúszhassanak egymásba.
+
+    Keretszerződést itt nem lehet törölni: annak külön oldala (és külön
+    jelentése) van."""
+    szerzodes = db.get(Contract, contract_id)
+    if szerzodes is None or szerzodes.tipus != ContractType.ALVALLALKOZOI:
+        raise HTTPException(status_code=404, detail="Az eseti szerződés nem található.")
+    if megkotott_keretszerzodes(szerzodes):
+        raise HTTPException(
+            status_code=400,
+            detail="Ez álló keretszerződés, nem eseti - a Keretszerződések oldalon törölhető.",
+        )
+    if szerzodes.project_id is not None and szerzodes.employee_id is not None:
+        van_tig = (
+            db.query(PerformanceCertificate)
+            .filter(
+                PerformanceCertificate.project_id == szerzodes.project_id,
+                PerformanceCertificate.employee_id == szerzodes.employee_id,
+            )
+            .first()
+        )
+        if van_tig is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Ehhez az emberhez már készült TIG ezen a projekten - előbb a TIG-et kell törölni.",
+            )
+    db.delete(szerzodes)
+    db.commit()

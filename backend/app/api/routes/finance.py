@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
+from app.models.employee_monthly_item import EmployeeMonthlyItem
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
@@ -467,6 +468,20 @@ def szamlak_zip(
 # letölthetők legyenek (azt viszi a könyvelő/ügyintéző a banki utaláshoz).
 
 
+#: A projektkód "Számla státusza" értékei, amik azt jelentik: A MEGRENDELŐ MÁR
+#: KIFIZETETT MINKET. A Notionból ez az érték jön át (lásd
+#: notion_import/importers.py import_project_codes) - a kis/nagybetűtől és a
+#: pontos megfogalmazástól függetlenül a "kifizet" szórészlet dönt, hogy egy
+#: átfogalmazott állapotnév ne csendben ejtse ki a sort a listából.
+KIFIZETETT_STATUSZ_MINTA = "kifizet"
+
+#: A fedezettség lehetséges állapotai (lásd _fedezettseg).
+FEDEZETT = "fedezett"
+RESZBEN_FEDEZETT = "reszben"
+FEDEZETRE_VAR = "var"
+NINCS_PROJEKTKOD = "nincs_projektkod"
+
+
 class UtalasraVaroTetel(BaseModel):
     #: "expense:12" / "kulsos_tig:3" / "belsos_tig:7" - a ZIP-kérésben ezt
     #: küldi vissza a felület, így egyetlen listában kezelhető a három forrás.
@@ -480,6 +495,16 @@ class UtalasraVaroTetel(BaseModel):
     szamla_db: int = 0
     #: Hova visz a sor a felületen (a tétel saját adatlapja).
     link: str | None = None
+    #: Megjött-e a tétel FEDEZETE, azaz kifizette-e már a megrendelő azt a
+    #: projektkódot, amihez a tétel tartozik. Ettől függ, hogy elutalható-e:
+    #: "fedezett" | "reszben" | "var" | "nincs_projektkod" (lásd _fedezettseg).
+    fedezettseg: str = NINCS_PROJEKTKOD
+    #: A tételhez tartozó projektkódok. Több is lehet: egy havi belsős TIG
+    #: több projekt extráit vonja össze - ilyenkor csak akkor utalható
+    #: nyugodtan, ha MINDEGYIK kódot kifizették.
+    projektkodok: list[str] = []
+    #: Ezek közül melyek NINCSENEK még kifizetve (ezekre várunk).
+    fedezetlen_projektkodok: list[str] = []
 
 
 class UtalasraVaroKeres(BaseModel):
@@ -511,14 +536,72 @@ def _szamla_csatolmanyok(db: Session, entity_type: str, entity_ids: list[int]) -
     return eredmeny
 
 
+def _projektkod_fedezet(db: Session) -> tuple[dict[int, str], set[int]]:
+    """(projektkód id -> kód szövege, a KIFIZETETT projektkódok id-jai).
+
+    Kifizetett az a projektkód, amelyiknél
+      - a számla státusza szerint már befolyt a pénz ("Kifizetve és számla
+        feltöltve" - lásd KIFIZETETT_STATUSZ_MINTA), VAGY
+      - a rendszerben rögzített ÖSSZES bevételének van fizetési dátuma.
+
+    A második azért kell, mert a státuszt a Notionban tartják karban, a
+    bevétel-sorokat viszont itt: ha az egyiket vezetik, a másikat nem, attól
+    még megjött a pénz. A "mind" szándékosan szigorú: ha egy projektkód három
+    számlájából csak kettő érkezett meg, a fedezet még nem teljes."""
+    kodok = {pc.id: pc.projektkod for pc in db.scalars(select(ProjectCode)).all()}
+    statusz_szerint = {
+        pc.id
+        for pc in db.scalars(select(ProjectCode)).all()
+        if KIFIZETETT_STATUSZ_MINTA in (pc.szamla_statusza or "").lower()
+    }
+
+    osszes: dict[int, int] = {}
+    fizetett: dict[int, int] = {}
+    for project_code_id, fizetes_datuma in db.execute(
+        select(Revenue.project_code_id, Revenue.fizetes_datuma)
+    ).all():
+        osszes[project_code_id] = osszes.get(project_code_id, 0) + 1
+        if fizetes_datuma is not None:
+            fizetett[project_code_id] = fizetett.get(project_code_id, 0) + 1
+    bevetel_szerint = {kod for kod, db_szam in osszes.items() if fizetett.get(kod, 0) == db_szam}
+
+    return kodok, statusz_szerint | bevetel_szerint
+
+
+def _fedezettseg(
+    projektkod_idk: list[int], kodok: dict[int, str], kifizetett: set[int]
+) -> tuple[str, list[str], list[str]]:
+    """(állapot, minden projektkód, a még fedezetlenek) egy tételhez.
+
+    Projektkód nélkül nem tudjuk eldönteni (ilyen a projekthez nem kötött
+    kiadás, vagy az a havi belsős TIG, aminek egyetlen tétele sincs kódhoz
+    rendelve) - ezeket nem soroljuk sem az utalhatók, sem a várakozók közé,
+    hanem külön mutatjuk, hogy látszódjon: itt kézzel kell dönteni."""
+    egyediek = list(dict.fromkeys(projektkod_idk))
+    if not egyediek:
+        return NINCS_PROJEKTKOD, [], []
+    minden = [kodok.get(i) or f"#{i}" for i in egyediek]
+    fedezetlen = [kodok.get(i) or f"#{i}" for i in egyediek if i not in kifizetett]
+    if not fedezetlen:
+        return FEDEZETT, minden, []
+    if len(fedezetlen) < len(egyediek):
+        return RESZBEN_FEDEZETT, minden, fedezetlen
+    return FEDEZETRE_VAR, minden, fedezetlen
+
+
 def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]]:
     """(tétel, [(fájlnév a ZIP-ben, tárhely-kulcs)]) párok.
 
     "Utalásra vár" az, amihez VAN feltöltött számla, de még nincs kifizetve:
       - kiadás, ami nincs késznek jelölve és nincs fizetési dátuma,
       - külsős/belsős TIG, aminek van számlája, de nincs kifizetettként jelölve.
-    Számla nélküli tétel nem kerül a listára: utalni sem tudnánk mi alapján."""
+    Számla nélküli tétel nem kerül a listára: utalni sem tudnánk mi alapján.
+
+    Minden tételhez kiszámoljuk a FEDEZETTSÉGET is: megjött-e már a pénz arra
+    a projektkódra, amihez tartozik (lásd _fedezettseg) - ebből látszik, kinek
+    mehet nyugodtan az utalás."""
     eredmeny: list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]] = []
+    kodok, kifizetett = _projektkod_fedezet(db)
 
     kiadasok = list(
         db.scalars(
@@ -536,9 +619,15 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
         fajlok = csatolmanyok.get(kiadas.id) or []
         if not fajlok:
             continue
+        allapot, minden_kod, fedezetlen = _fedezettseg(
+            [kiadas.project_code_id] if kiadas.project_code_id else [], kodok, kifizetett
+        )
         eredmeny.append(
             (
                 UtalasraVaroTetel(
+                    fedezettseg=allapot,
+                    projektkodok=minden_kod,
+                    fedezetlen_projektkodok=fedezetlen,
                     kulcs=f"expense:{kiadas.id}",
                     tipus="Kiadás",
                     megnevezes=kiadas.megnevezes,
@@ -555,16 +644,27 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
 
     kulsos = (
         db.query(PerformanceCertificate)
-        .options(selectinload(PerformanceCertificate.invoices), selectinload(PerformanceCertificate.employee))
+        .options(
+            selectinload(PerformanceCertificate.invoices),
+            selectinload(PerformanceCertificate.employee),
+            selectinload(PerformanceCertificate.project),
+        )
         .filter(PerformanceCertificate.szamla_kifizetve.is_(False))
         .all()
     )
     for tig in kulsos:
         if not tig.invoices:
             continue
+        # A külsős TIG egy PROJEKThez tartozik, a fedezet viszont a projekt
+        # PROJEKTKÓDJÁN érkezik meg.
+        tig_kod = tig.project.project_code_id if tig.project else None
+        allapot, minden_kod, fedezetlen = _fedezettseg([tig_kod] if tig_kod else [], kodok, kifizetett)
         eredmeny.append(
             (
                 UtalasraVaroTetel(
+                    fedezettseg=allapot,
+                    projektkodok=minden_kod,
+                    fedezetlen_projektkodok=fedezetlen,
                     kulcs=f"kulsos_tig:{tig.id}",
                     tipus="Külsős TIG",
                     megnevezes=tig.megbizas_targya or "Külsős teljesítési igazolás",
@@ -588,12 +688,33 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
         .filter(InternalPerformanceCertificate.szamla_kifizetve.is_(False))
         .all()
     )
+    # A belsős TIG egy HÓNAP összevont elszámolása: a hónap tételei külön-külön
+    # köthetők projektkódhoz (túlóra, kiszállás), és ezek több projektről is
+    # jöhetnek - ilyenkor csak akkor teljes a fedezet, ha MINDEGYIK kódot
+    # kifizették. Az alapbérnek nincs projektkódja, attól még jár.
+    havi_kodok: dict[tuple[int, int, int], list[int]] = {}
+    for employee_id, ev, honap, project_code_id in db.execute(
+        select(
+            EmployeeMonthlyItem.employee_id,
+            EmployeeMonthlyItem.ev,
+            EmployeeMonthlyItem.honap,
+            EmployeeMonthlyItem.project_code_id,
+        ).where(EmployeeMonthlyItem.project_code_id.is_not(None))
+    ).all():
+        havi_kodok.setdefault((employee_id, ev, honap), []).append(project_code_id)
+
     for tig in belsos:
         if not tig.invoices:
             continue
+        allapot, minden_kod, fedezetlen = _fedezettseg(
+            havi_kodok.get((tig.employee_id, tig.ev, tig.honap), []), kodok, kifizetett
+        )
         eredmeny.append(
             (
                 UtalasraVaroTetel(
+                    fedezettseg=allapot,
+                    projektkodok=minden_kod,
+                    fedezetlen_projektkodok=fedezetlen,
                     kulcs=f"belsos_tig:{tig.id}",
                     tipus="Belsős TIG",
                     # A megnevezés a TIG DÁTUMAIBÓL jön: a 07.20-i fizetési

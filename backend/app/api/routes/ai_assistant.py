@@ -1,4 +1,4 @@
-"""AI Assistant - Anthropic Claude tool-calling a végleges Postgres felett (lásd
+"""AI Assistant - Google Gemini function-calling a végleges Postgres felett (lásd
 app/services/ai_assistant.py). A tényleges adathozzáférés a bejelentkezett
 felhasználó saját page_permissions/field_visibility jogosultsága szerint
 szűrve történik - lásd a service modul docstringjét a részletekért."""

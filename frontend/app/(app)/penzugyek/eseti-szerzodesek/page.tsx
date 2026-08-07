@@ -2,7 +2,17 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { TopBar } from "@/components/TopBar";
-import { formatDate, formatHuf, getEsetiSzerzodesek, type EsetiSzerzodes } from "@/lib/api";
+import {
+  formatDate,
+  formatHuf,
+  getCurrentUser,
+  getEsetiSzerzodesek,
+  getMyPagePermissions,
+  type EsetiSzerzodes,
+} from "@/lib/api";
+import { canDoAction } from "@/lib/permissions";
+
+const PAGE = "/penzugyek";
 
 /** Eseti szerződések: MINDEN alvállalkozói eseti megbízási szerződés egy
  * listában, mellette az EMBER és a PROJEKT, amihez tartozik.
@@ -15,7 +25,12 @@ import { formatDate, formatHuf, getEsetiSzerzodesek, type EsetiSzerzodes } from 
  * Projekt nélküli sor is lehet köztük: a munkatárs Notion-lapjáról átvett
  * szerződések nincsenek egyetlen projekthez sem kötve. */
 export default async function EsetiSzerzodesekPage() {
-  const rows = await getEsetiSzerzodesek();
+  const [rows, currentUser, pagePermissions] = await Promise.all([
+    getEsetiSzerzodesek(),
+    getCurrentUser(),
+    getMyPagePermissions(),
+  ]);
+  const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const alairtak = rows.filter((s) => s.alairva || s.szerzodes_file_url).length;
   const osszesNetto = rows.reduce((sum, s) => sum + (s.netto_osszeg ?? 0), 0);
 
@@ -37,6 +52,11 @@ export default async function EsetiSzerzodesekPage() {
             rows={rows}
             emptyText="Még nincs eseti megbízási szerződés."
             getHref={(s) => `/szerzodesek/${s.id}`}
+            // Törlés: a projekthez kötött szerződésnél a munkatárs ezután újra
+            // "hiányzik" azon a projekten, tehát készíthető neki új - de csak
+            // akkor, ha még nincs TIG-je (lásd backend
+            // routes/eseti_szerzodesek.py delete_eseti_szerzodes).
+            deleteHref={canDelete ? (s) => `/api/v1/eseti-szerzodesek/${s.id}` : undefined}
             columns={[
               {
                 header: "Munkatárs",

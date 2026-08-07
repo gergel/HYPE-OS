@@ -160,13 +160,14 @@ class Settings(BaseSettings):
     def calendar_oauth_client_secret(self) -> str:
         return self.google_calendar_oauth_client_secret or self.gmail_oauth_client_secret
 
-    # ───────── AI Assistant (Anthropic Claude, tool-calling) ─────────
-    # anthropic_api_key hiányában az /ai-assistant/ask végpont egyértelmű
-    # hibaüzenetet ad vissza, de az app egyébként elindul. Sonnet 5-öt
-    # használunk alapértelmezettként (nem Opus-t) - ez egy belső, viszonylag
-    # kis léptékű céges eszköz, ahol a Sonnet ár/érték aránya jobban megéri.
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-5"
+    # ───────── AI Assistant (Google Gemini, function calling) ─────────
+    # gemini_api_key hiányában az /ai-assistant/ask végpont egyértelmű
+    # hibaüzenetet ad vissza, de az app egyébként elindul. Flash az
+    # alapértelmezett: ez egy belső, kis léptékű céges eszköz, ahol a gyors
+    # válasz többet ér, mint a nagyobb modell - GEMINI_MODEL-lel átállítható
+    # (pl. "gemini-2.5-pro").
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
     # ───────── Média Portál (ügyfél videó/kép átadó felület, /p/{slug}) ─────────
     # A Hype-repo-main (különálló client-portál projekt) 1:1 portolt funkciója -

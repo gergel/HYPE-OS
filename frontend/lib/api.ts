@@ -965,6 +965,12 @@ export type UtalasraVaroTetel = {
   hatarido: string | null;
   szamla_db: number;
   link: string | null;
+  /** Megjött-e a tétel fedezete (kifizette-e a megrendelő a projektkódot):
+   * "fedezett" | "reszben" | "var" | "nincs_projektkod" - lásd backend
+   * routes/finance.py _fedezettseg. */
+  fedezettseg: string;
+  projektkodok: string[];
+  fedezetlen_projektkodok: string[];
 };
 
 export async function getUtalasraVaro(): Promise<UtalasraVaroTetel[]> {

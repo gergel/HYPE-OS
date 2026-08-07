@@ -16,6 +16,41 @@ const ELSO_ADAG = 10;
  * lejárt) határidejű tételt kell először utalni. */
 type Rendezes = "hatarido" | "megnevezes" | "kinek" | "tipus" | "osszeg";
 
+/** Fedezettség-csoportok. A LÉNYEG az első: azok a tételek, amiknél a
+ * megrendelő már kifizette a projektkódot, tehát a pénz nálunk van - ezek
+ * mehetnek nyugodtan utalásra. A backend számolja (lásd routes/finance.py
+ * _fedezettseg), itt csak csoportosítunk. */
+const FEDEZET_CSOPORTOK: { kulcs: string; cimke: string; leiras: string }[] = [
+  {
+    kulcs: "fedezett",
+    cimke: "Utalható",
+    leiras: "A projektkódot a megrendelő már kifizette - a fedezet megérkezett.",
+  },
+  {
+    kulcs: "var",
+    cimke: "Fedezetre vár",
+    leiras: "A projektkód még nincs kifizetve: a pénz még nem jött be erre a munkára.",
+  },
+  {
+    kulcs: "reszben",
+    cimke: "Részben fedezett",
+    leiras:
+      "Összevont tétel (pl. havi belsős TIG több projekt extráival): a projektkódok egy részét már kifizették, a többit még nem.",
+  },
+  {
+    kulcs: "nincs_projektkod",
+    cimke: "Nincs projektkód",
+    leiras: "Nincs projektkódhoz kötve, ezért a fedezet nem eldönthető - itt kézzel kell mérlegelni.",
+  },
+];
+
+const FEDEZET_SZIN: Record<string, string> = {
+  fedezett: "text-text-green",
+  var: "text-text-orange",
+  reszben: "text-text-blue",
+  nincs_projektkod: "text-text-muted",
+};
+
 const OSZLOPOK: { kulcs: Rendezes; cimke: string }[] = [
   { kulcs: "megnevezes", cimke: "Tétel" },
   { kulcs: "kinek", cimke: "Kinek" },
@@ -49,6 +84,10 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
   const [kereses, setKereses] = useState("");
   const [tipusSzuro, setTipusSzuro] = useState("");
   const [rendezes, setRendezes] = useState<Rendezes>("hatarido");
+  // Alapból az UTALHATÓKAT mutatjuk: a kérdés az utalási körnél mindig az,
+  // hogy kinek mehet a pénz. A többi csoport egy kattintásra van, a
+  // darabszámuk pedig végig látszik, hogy semmi ne tűnjön el csendben.
+  const [fedezetSzuro, setFedezetSzuro] = useState<string>("fedezett");
   const [novekvo, setNovekvo] = useState(true);
 
   // A szerverről frissen kapott lista felülírja a helyben tartottat (amit a
@@ -76,9 +115,15 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
   // van pipálva, az a szűrő átállítása után is kijelölve marad, különben egy
   // gyors keresés csendben kidobálna tételeket az utalási körből.
   const tipusok = useMemo(() => [...new Set(tetelek.map((t) => t.tipus))].sort(), [tetelek]);
+  const csoportDarab = useMemo(() => {
+    const szamok: Record<string, number> = {};
+    for (const t of tetelek) szamok[t.fedezettseg] = (szamok[t.fedezettseg] ?? 0) + 1;
+    return szamok;
+  }, [tetelek]);
   const szurt = useMemo(() => {
     const keresett = kereses.trim().toLocaleLowerCase("hu-HU");
     const talalatok = tetelek.filter((t) => {
+      if (fedezetSzuro && t.fedezettseg !== fedezetSzuro) return false;
       if (tipusSzuro && t.tipus !== tipusSzuro) return false;
       if (!keresett) return true;
       return [t.megnevezes, t.kinek, t.tipus, t.hatarido].some((mezo) =>
@@ -94,7 +139,7 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
       if (aErtek > bErtek) return irany;
       return a.megnevezes.localeCompare(b.megnevezes, "hu-HU");
     });
-  }, [tetelek, kereses, tipusSzuro, rendezes, novekvo]);
+  }, [tetelek, kereses, tipusSzuro, fedezetSzuro, rendezes, novekvo]);
 
   const mindKijelolve = szurt.length > 0 && szurt.every((t) => kijelolt.has(t.kulcs));
 
@@ -217,6 +262,44 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
         {hiba && <span className="text-[12.5px] text-text-danger">{hiba}</span>}
       </div>
 
+      {/* Fedezettség szerinti csoportok - elöl az, ami most utalható. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {FEDEZET_CSOPORTOK.map((csoport) => {
+          const darab = csoportDarab[csoport.kulcs] ?? 0;
+          const aktiv = fedezetSzuro === csoport.kulcs;
+          return (
+            <button
+              key={csoport.kulcs}
+              type="button"
+              title={csoport.leiras}
+              onClick={() => setFedezetSzuro(csoport.kulcs)}
+              className={`rounded-[var(--radius)] border px-2.5 py-1.5 text-[12.5px] ${
+                aktiv
+                  ? "border-text-accent/50 bg-bg-accent text-text-accent"
+                  : "border-border text-text-secondary hover:bg-surface-3"
+              }`}
+            >
+              {csoport.cimke} ({darab})
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setFedezetSzuro("")}
+          className={`rounded-[var(--radius)] border px-2.5 py-1.5 text-[12.5px] ${
+            fedezetSzuro === ""
+              ? "border-text-accent/50 bg-bg-accent text-text-accent"
+              : "border-border text-text-secondary hover:bg-surface-3"
+          }`}
+        >
+          Mind ({tetelek.length})
+        </button>
+      </div>
+      <p className="-mt-2 text-[12px] text-text-muted">
+        {FEDEZET_CSOPORTOK.find((cs) => cs.kulcs === fedezetSzuro)?.leiras ??
+          "Minden utalásra váró tétel, fedezettségtől függetlenül."}
+      </p>
+
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative">
           <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
@@ -282,6 +365,7 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
                   </button>
                 </th>
               ))}
+              <th className="text-left">Fedezet</th>
               <th className="text-right">Számlák</th>
               <th className="text-right">
                 <button
@@ -323,6 +407,18 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
                   <td className="text-text-secondary">{t.tipus}</td>
                   {/* A lejárt határidő pirosan: ezeket kell először utalni. */}
                   <td className={lejart ? "text-text-danger" : "text-text-secondary"}>{t.hatarido ?? "–"}</td>
+                  {/* Fedezet: melyik projektkódon jött be a pénz, és melyiken
+                      nem - összevont tételnél több kód is szerepelhet. */}
+                  <td className={`text-[12.5px] ${FEDEZET_SZIN[t.fedezettseg] ?? "text-text-secondary"}`}>
+                    {FEDEZET_CSOPORTOK.find((cs) => cs.kulcs === t.fedezettseg)?.cimke ?? t.fedezettseg}
+                    {t.projektkodok.length > 0 && (
+                      <span className="block text-text-muted">
+                        {t.fedezetlen_projektkodok.length > 0
+                          ? `vár: ${t.fedezetlen_projektkodok.join(", ")}`
+                          : t.projektkodok.join(", ")}
+                      </span>
+                    )}
+                  </td>
                   <td className="text-right tabular-nums text-text-secondary">{t.szamla_db}</td>
                   <td className="text-right tabular-nums">{t.osszeg === null ? "–" : formatFt(t.osszeg)}</td>
                 </tr>
@@ -330,7 +426,7 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
             })}
             {rejtett > 0 && (
               <tr>
-                <td colSpan={7} className="py-2">
+                <td colSpan={8} className="py-2">
                   <button
                     type="button"
                     onClick={() => setMindMutat(true)}
@@ -343,7 +439,7 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
             )}
             {mindMutat && tetelek.length > ELSO_ADAG && (
               <tr>
-                <td colSpan={7} className="py-2">
+                <td colSpan={8} className="py-2">
                   <button
                     type="button"
                     onClick={() => setMindMutat(false)}
@@ -356,13 +452,13 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
             )}
             {szurt.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-3 text-text-muted">
+                <td colSpan={8} className="py-3 text-text-muted">
                   Nincs a keresésnek megfelelő tétel.
                 </td>
               </tr>
             )}
             <tr className="font-medium">
-              <td colSpan={6} className="text-text-secondary">
+              <td colSpan={7} className="text-text-secondary">
                 Összesen ({szurt.length} tétel
                 {szurt.length !== tetelek.length && ` a ${tetelek.length}-ból szűrve`})
               </td>
