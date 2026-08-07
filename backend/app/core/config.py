@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     gdoc_dispo_template_id: str = ""
     gdoc_contract_template_id: str = ""
     gdoc_alvallalkozoi_szerzodes_template_id: str = ""
+    # Az ÁLLÓ (alvállalkozói) keretszerződés Google Docs sablonja - a csatolt
+    # "alvallalkozo-keret" Railway program GOOGLE_DRIVE_TEMPLATE_ID-je. Külön
+    # sablon, mint az eseti szerződésé: más a szövege és más mezőket vár.
+    gdoc_keretszerzodes_template_id: str = ""
     gdoc_kulsos_tig_template_id: str = ""
     gdoc_belsos_tig_template_id: str = ""
     gdoc_output_folder_id: str = ""
@@ -89,6 +93,19 @@ class Settings(BaseSettings):
     google_drive_template_id: str = ""
     notion_file_folder_id: str = ""
     tigtoken_json: str = ""
+
+    @property
+    def keretszerzodes_template_id(self) -> str:
+        """A keretszerződés sablonja. A csatolt program a GOOGLE_DRIVE_TEMPLATE_ID
+        alatt tartotta - de azt a belsős TIG is használja, ezért csak akkor
+        esünk vissza rá, ha saját sablon nincs megadva."""
+        return self.gdoc_keretszerzodes_template_id
+
+    @property
+    def keretszerzodes_folder_id(self) -> str:
+        """Hova kerüljön a kész keretszerződés a Drive-on (a csatolt program
+        NOTION_FILE_FOLDER_ID-je)."""
+        return self.notion_file_folder_id or self.gdoc_output_folder_id or self.drive_folder_id
 
     @property
     def belsos_tig_template_id(self) -> str:

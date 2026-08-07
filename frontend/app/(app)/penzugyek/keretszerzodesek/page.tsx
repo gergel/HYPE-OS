@@ -2,6 +2,7 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { KeretszerzodesErvenyesseg } from "@/components/finance/KeretszerzodesErvenyesseg";
+import { KeretszerzodesKuldes } from "@/components/finance/KeretszerzodesKuldes";
 import { TopBar } from "@/components/TopBar";
 import { KeretszerzodesAddWidget } from "@/components/KeretszerzodesAddWidget";
 import { StopClickPropagation } from "@/components/StopClickPropagation";
@@ -42,6 +43,7 @@ export default async function KeretszerzodesekPage() {
   ]);
   const employeeById = new Map(employees.map((e) => [e.id, e]));
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
 
   const rows: KeretszerzodesRow[] = contracts
     .filter((c) => {
@@ -131,9 +133,15 @@ export default async function KeretszerzodesekPage() {
                 align: "right",
                 render: (c) => (
                   <StopClickPropagation>
-                    <a href={`/szerzodesek/${c.id}`} className="text-text-accent hover:underline">
-                      Fájlok
-                    </a>
+                    <span className="flex flex-col items-end gap-1">
+                      <a href={`/szerzodesek/${c.id}`} className="text-text-accent hover:underline">
+                        Fájlok
+                      </a>
+                      {/* Új kiküldés: akkor is, ha már van szerződése - pl. a
+                          régi lejárt (lásd backend routes/contracts.py
+                          send_keretszerzodes). */}
+                      {canCreate && <KeretszerzodesKuldes contractId={c.id} cegNeve={c.ceg_neve} />}
+                    </span>
                   </StopClickPropagation>
                 ),
               },

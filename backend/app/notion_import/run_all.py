@@ -14,7 +14,7 @@ from collections.abc import Callable
 
 from sqlalchemy.orm import Session
 
-from app.notion_import import importers, importers_belsos, importers_wave2, importers_wave3
+from app.notion_import import importers, importers_belsos, importers_kulsos, importers_wave2, importers_wave3
 from app.notion_import.client import NotionClient
 from app.notion_import.engine import run_importer
 
@@ -37,6 +37,9 @@ WAVE_2 = [
     ("Revenue", importers_wave2.import_revenues),
     ("KpForgalom", importers_wave2.import_kp_forgalom),
     ("Feedback", importers_wave2.import_feedback),
+    # A külsősök projektenkénti papírjai (eseti szerződés + TIG) - a Project
+    # UTÁN kell futnia, mert soronként forgatásra és emberre hivatkozik.
+    ("Contract+TIG (Külsős)", importers_kulsos.import_kulsos_papirok),
 ]
 
 WAVE_3 = [

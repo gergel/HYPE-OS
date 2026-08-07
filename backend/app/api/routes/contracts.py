@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -7,6 +9,7 @@ from app.core.database import get_db
 from app.core.security import require_page_action
 from app.models.contract import Contract, ContractPeriod, ContractType, megkotott_keretszerzodes
 from app.models.employee import Employee
+from app.services import keretszerzodes_kuldes
 from app.schemas.contract import (
     ContractCreate,
     ContractPeriodCreate,
@@ -165,3 +168,75 @@ def delete_idoszak(
         raise HTTPException(status_code=404, detail="Az időszak nem található.")
     db.delete(idoszak)
     db.commit()
+
+
+class KeretszerzodesKuldesIn(BaseModel):
+    """Kiküldés paraméterei. A keltezés felülírható: egy ÚJ szerződés (pl. a
+    régi lejárt) rendszerint mai keltezéssel megy ki."""
+
+    keltezes: date | None = None
+    #: Kiküldés után induljon-e új érvényességi időszak ezzel a keltezéssel.
+    uj_idoszak: bool = False
+
+
+class KeretszerzodesKuldesOut(BaseModel):
+    contract_id: int
+    szerzodes_allapota: str | None
+    szerzodes_file_url: str | None
+    cimzettek: list[str]
+
+
+@router.post("/{contract_id}/kuldes", response_model=KeretszerzodesKuldesOut)
+def send_keretszerzodes(
+    contract_id: int,
+    payload: KeretszerzodesKuldesIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """Keretszerződés generálása és kiküldése e-mailben.
+
+    Akkor is használható, ha az embernek MÁR van keretszerződése: pont ez a
+    dolga, hogy a régi (lejárt, felmondott) helyett újat lehessen küldeni.
+    Ilyenkor nem nyitunk új sort - ugyanaz a bejegyzés kap friss papírt -, és
+    kérésre indul hozzá egy új érvényességi időszak is (lásd
+    models/contract.py ContractPeriod)."""
+    szerzodes = _get_contract_or_404(db, contract_id)
+    if not megkotott_keretszerzodes(szerzodes):
+        raise HTTPException(
+            status_code=400,
+            detail="Ez a bejegyzés nem álló keretszerződés - eseti szerződést az Utókövetés oldalon lehet küldeni.",
+        )
+    employee = db.get(Employee, szerzodes.employee_id) if szerzodes.employee_id else None
+    keltezes = payload.keltezes or date.today()
+
+    try:
+        doc_link, cim = keretszerzodes_kuldes.generalas_es_kuldes(szerzodes, employee, keltezes=keltezes)
+    except keretszerzodes_kuldes.KeretszerzodesHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        # Hiányzó/lejárt Google hitelesítő adat - a felhasználó nem tud vele
+        # mit kezdeni, de tudnia kell, hogy nem az ő adatával van baj.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    szerzodes.szerzodes_allapota = keretszerzodes_kuldes.KIKULDVE_ALLAPOT
+    szerzodes.szerzodes_file_url = doc_link
+    szerzodes.keltezes = keltezes
+    # Kiküldéskor a szerződés még nincs aláírva - a korábbi aláírt papír
+    # jelölése nem vonatkozik az újra.
+    szerzodes.alairva = False
+    szerzodes.aktiv = True
+    if payload.uj_idoszak:
+        # Az előző, nyitott végű időszakot lezárjuk az új kezdete előtti napon:
+        # két, egymást átfedő időszak félrevezető lenne.
+        for idoszak in szerzodes.idoszakok:
+            if idoszak.veg is None and (idoszak.kezdet is None or idoszak.kezdet < keltezes):
+                idoszak.veg = keltezes - timedelta(days=1)
+        db.add(ContractPeriod(contract_id=szerzodes.id, kezdet=keltezes, veg=None))
+    db.commit()
+    db.refresh(szerzodes)
+    return KeretszerzodesKuldesOut(
+        contract_id=szerzodes.id,
+        szerzodes_allapota=szerzodes.szerzodes_allapota,
+        szerzodes_file_url=szerzodes.szerzodes_file_url,
+        cimzettek=cim,
+    )

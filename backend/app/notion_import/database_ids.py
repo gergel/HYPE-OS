@@ -22,6 +22,12 @@ ARCHIVE_FELADATOK = "d1e517d5-d92a-471d-9804-6795d76f85b1"
 KERETSZERZODES = "20dc9afd-d53b-8023-a510-e1f70949e9b7"
 ALVALLALKOZO_KERETSZERZODES = "218c9afd-d53b-8080-a094-eff698c1fd89"
 HYPE_ADMIN_PROJEKTKODOK = "20dc9afd-d53b-803e-a6c0-d89c6e2f8c2f"
+# A külsősök PROJEKTENKÉNTI papírjai: soronként egy (ember, forgatás) pár, rajta
+# az eseti szerződés és a TIG állapota/összege/fájljai. A 2026-07-02-i felmérés
+# csak annyit rögzített róla, hogy nem munkatárs-nyilvántartó tábla, ezért
+# kimaradt az importból - emiatt a rendszer nem tudott a Notionban már elkészült
+# papírokról (lásd importers_kulsos.py).
+KULSOS = "20ec9afd-d53b-80d9-a78f-feeb05492d22"
 
 # Fázis 2, 2. kör (Main Database-re épül, később következik):
 MAIN_DATABASE = "4ab04fc0-a826-42b6-bd01-354ae11ea291"

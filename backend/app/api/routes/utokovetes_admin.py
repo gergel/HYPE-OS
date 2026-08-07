@@ -26,6 +26,7 @@ from app.api.routes.performance_certificates import (
 from app.api.routes.subcontractor_contracts import (
     _draft_info as _contract_draft_info,
     _load_contract_lookup,
+    _mentesul_keretszerzodessel,
     _pending_employees,
     DraftInfo as ContractDraftInfo,
 )
@@ -59,19 +60,32 @@ def _get_project_or_404(db: Session, project_id: int) -> Project:
 # projektről van szó, továbbra is lekérdezhet magának - ott ez nem számít).
 
 
+def _kell_eseti_szerzodes(project: Project, employee: Employee, keretszerzodesek: dict[int, list[Contract]]) -> bool:
+    """Kell-e ettől az embertől eseti szerződés ezen a projekten?
+
+    Ugyanaz a szabály, mint a függő listánál (lásd
+    subcontractor_contracts._pending_employees): belsősnek nem kell, és aki
+    keretszerződése a FORGATÁS NAPJÁN élt, annak sem - egy lejárt vagy
+    szüneteltetett keretszerződés viszont nem mentesít."""
+    if employee.tipus == EmployeeType.BELSOS:
+        return False
+    return not _mentesul_keretszerzodessel(keretszerzodesek.get(employee.id, []), project.forgatas_datuma)
+
+
 def _szerzodes_candidates(
     db: Session,
     project: Project,
-    lookup: tuple[set[int], dict[tuple[int, int], Contract]] | None = None,
+    lookup: tuple[dict[int, list[Contract]], dict[tuple[int, int], Contract]] | None = None,
 ) -> tuple[int, int]:
     """(összes, függő) - hányan igényelnek eseti szerződést ezen a projekten
-    (nem belsős és nincs keretszerződése), és ebből hányan függők."""
+    (nem belsős, és a FORGATÁS NAPJÁN nem élt a keretszerződése), és ebből
+    hányan függők."""
     if lookup is None:
         employee_ids = {e.id for e in project.crew if e.tipus != EmployeeType.BELSOS}
         lookup = _load_contract_lookup(db, employee_ids)
-    keretszerzodes_ids, project_contracts = lookup
-    total = sum(1 for e in project.crew if e.tipus != EmployeeType.BELSOS and e.id not in keretszerzodes_ids)
-    pending = len(_pending_employees(project, keretszerzodes_ids, project_contracts))
+    keretszerzodesek, project_contracts = lookup
+    total = sum(1 for e in project.crew if _kell_eseti_szerzodes(project, e, keretszerzodesek))
+    pending = len(_pending_employees(project, keretszerzodesek, project_contracts))
     return total, pending
 
 
@@ -226,13 +240,13 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
     project = _get_project_or_404(db, project_id)
 
     employee_ids = {e.id for e in project.crew if e.tipus != EmployeeType.BELSOS}
-    keretszerzodes_ids, project_contracts = _load_contract_lookup(db, employee_ids)
+    keretszerzodesek, project_contracts = _load_contract_lookup(db, employee_ids)
     szerzodesek = [
         ContractStatusInfo(id=e.id, full_name=e.full_name, email=e.email, draft=_contract_draft_info(project_contracts.get((project.id, e.id))))
         for e in project.crew
-        if e.tipus != EmployeeType.BELSOS and e.id not in keretszerzodes_ids
+        if _kell_eseti_szerzodes(project, e, keretszerzodesek)
     ]
-    szerzodes_done = len(_pending_employees(project, keretszerzodes_ids, project_contracts)) == 0
+    szerzodes_done = len(_pending_employees(project, keretszerzodesek, project_contracts)) == 0
 
     tig_ready = False
     teljesitesi_igazolasok: list[TigStatusInfo] = []
