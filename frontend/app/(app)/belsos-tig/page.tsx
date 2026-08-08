@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { BelsosIdoszakok } from "@/components/BelsosIdoszakok";
 import { BelsosTigHaviAttekintes } from "@/components/BelsosTigHaviAttekintes";
 import { BelsosTigManager } from "@/components/BelsosTigManager";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
-import { getBelsosIdoszakok, getBelsosTigAttekintes, getBelsosTigMonth, getMyPagePermissions } from "@/lib/api";
+import { getBelsosTigAttekintes, getBelsosTigMonth, getMyPagePermissions } from "@/lib/api";
 import { huEvHonap } from "@/lib/huDate";
 
 function shiftMonth(ev: number, honap: number, delta: number): { ev: number; honap: number } {
@@ -36,10 +35,9 @@ export default async function BelsosTigPage({
   const ev = params.ev ? Number(params.ev) : alap.ev;
   const honap = params.honap ? Number(params.honap) : alap.honap;
 
-  const [employees, attekintes, idoszakok, pagePermissions] = await Promise.all([
+  const [employees, attekintes, pagePermissions] = await Promise.all([
     getBelsosTigMonth(ev, honap),
     getBelsosTigAttekintes(12),
-    getBelsosIdoszakok(),
     getMyPagePermissions(),
   ]);
   // Aki az oldalon szerkeszthet, az az állapotot is kézzel át tudja állítani.
@@ -85,6 +83,9 @@ export default async function BelsosTigPage({
             </div>
           }
         >
+          {/* Csak azok, akik EBBEN a hónapban belsősök voltak - ki mettől
+              meddig, azt a munkatárs saját adatlapján lehet megadni (Csapat >
+              az illető lapja > Belsős időszak). */}
           <p className="mb-4 text-[13px] text-text-secondary">
             {employees.length} belsős munkatárs · {kikuldveCount} kiküldve · {kihagyvaCount} kihagyva · {teendoCount} még
             teendő
@@ -94,12 +95,6 @@ export default async function BelsosTigPage({
           ) : (
             <BelsosTigManager ev={ev} honap={honap} employees={employees} canEdit={canEdit} />
           )}
-        </Card>
-
-        {/* Ki mettől meddig volt belsős - ez szabja meg, mely hónapokra
-            kérünk tőle TIG-et (lásd BelsosIdoszakok). */}
-        <Card title="Belsős időszakok">
-          <BelsosIdoszakok sorok={idoszakok} canEdit={canEdit} />
         </Card>
       </div>
     </div>

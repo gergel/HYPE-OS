@@ -35,3 +35,15 @@ export function tigHonapTeljesitesbol(teljesites: string): { ev: number; honap: 
   if (honap < 1 || honap > 12) return null;
   return honap === 1 ? { ev: ev - 1, honap: 12 } : { ev, honap: honap - 1 };
 }
+
+/** ISO dátum ("2026-03-01") magyaros alakban ("2026.03.01."). Üres/érvénytelen
+ * érték esetén gondolatjel.
+ *
+ * A lib/api.ts-ben is van formatDate, de az a modul `next/headers`-t használ,
+ * tehát SZERVER-ONLY - kliens komponens nem importálhat belőle futásidejű
+ * dolgot, csak típust. Ez a változat tiszta függvény, bárhonnan hívható. */
+export function huDatum(value: string | null | undefined): string {
+  if (!value) return "–";
+  const [ev, honap, nap] = value.slice(0, 10).split("-");
+  return ev && honap && nap ? `${ev}.${honap}.${nap}.` : value;
+}

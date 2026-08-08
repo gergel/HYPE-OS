@@ -10,7 +10,11 @@ routes/contracts.py idoszakok végpontjai).
 
 Ha valakinél egyetlen időszak sincs, a rendszer a munkatárs első/utolsó
 munkanapjára esik vissza, annak híján pedig minden hónapra vár TIG-et - lásd
-services/belsos_idoszak.py."""
+services/belsos_idoszak.py.
+
+A felület a MUNKATÁRS SAJÁT ADATLAPJÁN van (Csapat > az illető lapja), az
+első/utolsó munkanap mellett - oda tartozik, hiszen a munkatárs törzsadata.
+Ezért a jogosultsága is a Csapat oldalé."""
 
 from __future__ import annotations
 
@@ -24,13 +28,12 @@ from app.core.database import get_db
 from app.core.security import require_page_action
 from app.models.belsos_idoszak import BelsosIdoszak
 from app.models.employee import Employee, EmployeeType
-from app.services import belsos_idoszak as szolgaltatas
 
 router = APIRouter(prefix="/belsos-idoszakok", tags=["belsos-idoszakok"])
 
-# A belsős TIG oldal jogosultságához kötjük: aki a havi TIG-eket kezeli, az
-# tudja azt is, ki mikor volt itt.
-PAGE = "/belsos-tig"
+# A munkatárs adatlapján szerkesztik (az első/utolsó munkanap mellett), ezért
+# a Csapat oldal jogosultsága vonatkozik rá.
+PAGE = "/csapat"
 
 
 class IdoszakRead(BaseModel):
@@ -142,47 +145,3 @@ def delete_idoszak(
     db.delete(idoszak)
     db.commit()
     return _nezet(_get_employee_or_404(db, employee_id))
-
-
-class BelsosAttekintes(BaseModel):
-    """Egy sor a Belsős TIG oldal "ki mettől meddig" áttekintésén."""
-
-    employee_id: int
-    full_name: str
-    idoszakok: list[IdoszakRead] = []
-    elso_munkanap: date | None = None
-    utolso_munkanap: date | None = None
-    #: Emberi összefoglaló ("2024.03.01. – 2025.08.31., 2026.02.01. –").
-    osszefoglalo: str
-    #: Vár-e tőle a rendszer TIG-et a MOSTANI hónapban.
-    most_belsos: bool
-
-
-@router.get("", response_model=list[BelsosAttekintes])
-def list_belsosok(
-    db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "view")),
-):
-    """Minden belsős, a felvitt időszakaival - a Belsős TIG oldal
-    beállító-szekciója ezt listázza."""
-    ma = date.today()
-    eredmeny: list[BelsosAttekintes] = []
-    for e in szolgaltatas.belsosok(db):
-        idoszakok = list(e.belsos_idoszakok)
-        osszefoglalo = szolgaltatas.idoszak_szoveg(idoszakok)
-        if not osszefoglalo and (e.elso_munkanap or e.utolso_munkanap):
-            kezdet = e.elso_munkanap.strftime("%Y.%m.%d.") if e.elso_munkanap else ""
-            veg = e.utolso_munkanap.strftime("%Y.%m.%d.") if e.utolso_munkanap else ""
-            osszefoglalo = f"{kezdet} – {veg}".strip()
-        eredmeny.append(
-            BelsosAttekintes(
-                employee_id=e.id,
-                full_name=e.full_name,
-                idoszakok=[IdoszakRead.model_validate(i) for i in idoszakok],
-                elso_munkanap=e.elso_munkanap,
-                utolso_munkanap=e.utolso_munkanap,
-                osszefoglalo=osszefoglalo,
-                most_belsos=szolgaltatas.belsos_volt(e, ma.year, ma.month),
-            )
-        )
-    return eredmeny

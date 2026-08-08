@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Clapperboard, FileText, Scissors, Wallet } from "lucide-react";
 import { BackLink } from "@/components/BackLink";
+import { BelsosIdoszakok } from "@/components/BelsosIdoszakok";
 import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
@@ -17,6 +18,7 @@ import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   getAttachments,
+  getBelsosIdoszakok,
   getCurrentUser,
   getDetailTabs,
   getEmployeeDocuments,
@@ -74,6 +76,7 @@ export default async function EmployeeDetailPage({
   const backTarget = (from && BACK_TARGETS[from]) || { href: "/csapat", label: "Külsős" };
 
   const [
+    belsosIdoszakok,
     rates,
     expenses,
     contracts,
@@ -91,6 +94,8 @@ export default async function EmployeeDetailPage({
     pagePermissions,
     currentUser,
   ] = await Promise.all([
+    // Csak belsősnél értelmes: náluk a havi TIG hónapjait szabja meg.
+    employee.tipus === "belsos" ? getBelsosIdoszakok(employeeId) : Promise.resolve(null),
     getRelated(ENTITY_PATHS.rate, { employee_id: employeeId }),
     getRelated(ENTITY_PATHS.expense, { employee_id: employeeId }),
     getRelated(ENTITY_PATHS.contract, { employee_id: employeeId }),
@@ -161,6 +166,15 @@ export default async function EmployeeDetailPage({
           <p className="t-label mb-3">Egyéb kiadások és havi extrák</p>
           <EgyebKiadasok kiadasok={expenses} koltsegek={koltsegek} projektkodNevek={projektkodNevek} />
         </div>
+        {/* Mettől meddig volt belsős: ez szabja meg, mely hónapokra várunk
+            tőle havi TIG-et (lásd BelsosIdoszakok). Azért itt van, mert a
+            fenti havi elszámolás pontosan azokról a hónapokról szól. */}
+        {belsosIdoszakok && (
+          <div className="mt-6 border-t border-border pt-5">
+            <p className="t-label mb-3">Belsős időszak</p>
+            <BelsosIdoszakok adat={belsosIdoszakok} canEdit={szerkeszthet} />
+          </div>
+        )}
       </Card>
     ),
   };

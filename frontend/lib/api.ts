@@ -490,21 +490,19 @@ export type BelsosIdoszak = {
   megjegyzes: string | null;
 };
 
-export type BelsosAttekintes = {
+/** Egy munkatárs belsős időszakai - a saját adatlapján szerkeszthető. */
+export type EmployeeBelsosIdoszakok = {
   employee_id: number;
   full_name: string;
   idoszakok: BelsosIdoszak[];
-  /** Visszaesési adat, ha nincs egyetlen időszak sem. */
+  /** Visszaesési adat, ha nincs egyetlen időszak sem: ilyenkor a munkanapok
+   * döntik el, mely hónapokra várunk TIG-et. */
   elso_munkanap: string | null;
   utolso_munkanap: string | null;
-  /** Emberi összefoglaló ("2024.03.01. – 2025.08.31., 2026.02.01. –"). */
-  osszefoglalo: string;
-  /** Vár-e tőle a rendszer TIG-et a mostani hónapban. */
-  most_belsos: boolean;
 };
 
-export async function getBelsosIdoszakok(): Promise<BelsosAttekintes[]> {
-  return (await apiGet<BelsosAttekintes[]>("/api/v1/belsos-idoszakok")) ?? [];
+export async function getBelsosIdoszakok(employeeId: number): Promise<EmployeeBelsosIdoszakok | null> {
+  return apiGet<EmployeeBelsosIdoszakok>(`/api/v1/belsos-idoszakok/${employeeId}`);
 }
 
 /** Egy SZÁMLÁZÓ CÉG - az a fél, aki a munkáról a számlát kiállítja, amikor nem
