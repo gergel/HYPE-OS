@@ -43,7 +43,7 @@ from app.models.internal_performance_certificate import (
     InternalPerformanceCertificateInvoice,
 )
 from app.schemas.internal_performance_certificate import InternalPerformanceCertificateRead
-from app.services import document_storage
+from app.services import belsos_idoszak, document_storage
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
 from app.services.hu_datum import (
@@ -99,8 +99,14 @@ _BELSOS_TIG_EMAIL_HTML = """\
 """
 
 
-def _belsos_employees(db: Session) -> list[Employee]:
-    return db.query(Employee).filter(Employee.tipus == EmployeeType.BELSOS).order_by(Employee.full_name).all()
+def _belsos_employees(db: Session, ev: int | None = None, honap: int | None = None) -> list[Employee]:
+    """A belsős munkatársak - hónap megadásakor csak azok, akik AKKOR belsősök
+    voltak.
+
+    Enélkül minden belsőstől minden hónapra TIG-et várnánk, azoktól is, akik
+    még nem, vagy már nem dolgoztak nálunk - az ilyen hónapok örökre
+    "hiányzóként" állnának a listán (lásd services/belsos_idoszak.py)."""
+    return belsos_idoszak.belsosok(db, ev, honap)
 
 
 def _find(db: Session, employee_id: int, ev: int, honap: int) -> InternalPerformanceCertificate | None:
@@ -180,7 +186,7 @@ def list_month(
     alap_ev, alap_honap = elozo_honap(date.today())
     ev = ev or alap_ev
     honap = honap or alap_honap
-    employees = _belsos_employees(db)
+    employees = _belsos_employees(db, ev, honap)
     if not employees:
         return []
     records = (
@@ -290,6 +296,7 @@ def havi_attekintes(
     `honapok` hónap - hogy a még el sem kezdett hónapok is látszódjanak,
     ne csak azok, amikhez valaki már hozzányúlt."""
     today = date.today()
+    # Hónaponként szűrünk (ki volt AKKOR belsős), ezért itt a teljes lista kell.
     employees = _belsos_employees(db)
 
     records = db.query(InternalPerformanceCertificate).all()
@@ -319,10 +326,14 @@ def havi_attekintes(
     for kulcs in sorted(honap_kulcsok, reverse=True):
         ev, honap = kulcs
         sorok = {r.employee_id: r for r in honap_szerint.get(kulcs, [])}
-        # A jelenlegi belsősök MELLETT azok is beleszámítanak, akiknek erre a
-        # hónapra van bejegyzésük, de azóta már nem belsősök - különben a
-        # munkájuk (és az összegük) eltűnne a hónap összesítéséből.
-        emberek = list(employees)
+        # Csak azok, akik EBBEN a hónapban belsősök voltak (lásd
+        # services/belsos_idoszak.py) - aki akkor még nem, vagy már nem
+        # dolgozott nálunk, attól nincs mit várni.
+        #
+        # A már nem belsősök MELLETT azok is beleszámítanak, akiknek erre a
+        # hónapra van bejegyzésük - különben a munkájuk (és az összegük)
+        # eltűnne a hónap összesítéséből.
+        emberek = [e for e in employees if belsos_idoszak.belsos_volt(e, ev, honap)]
         ismert = {e.id for e in emberek}
         for employee_id in sorok:
             if employee_id not in ismert:

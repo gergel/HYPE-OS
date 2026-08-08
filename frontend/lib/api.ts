@@ -479,6 +479,34 @@ export async function getEsetiSzerzodesek(): Promise<EsetiSzerzodes[]> {
   return (await apiGet<EsetiSzerzodes[]>("/api/v1/eseti-szerzodesek")) ?? [];
 }
 
+/** Egy belsős munkatárs időszakai: mettől meddig volt belsős. Ettől függ,
+ * mely hónapokra vár a rendszer havi TIG-et (lásd backend
+ * services/belsos_idoszak.py). */
+export type BelsosIdoszak = {
+  id: number;
+  employee_id: number;
+  kezdet: string | null;
+  veg: string | null;
+  megjegyzes: string | null;
+};
+
+export type BelsosAttekintes = {
+  employee_id: number;
+  full_name: string;
+  idoszakok: BelsosIdoszak[];
+  /** Visszaesési adat, ha nincs egyetlen időszak sem. */
+  elso_munkanap: string | null;
+  utolso_munkanap: string | null;
+  /** Emberi összefoglaló ("2024.03.01. – 2025.08.31., 2026.02.01. –"). */
+  osszefoglalo: string;
+  /** Vár-e tőle a rendszer TIG-et a mostani hónapban. */
+  most_belsos: boolean;
+};
+
+export async function getBelsosIdoszakok(): Promise<BelsosAttekintes[]> {
+  return (await apiGet<BelsosAttekintes[]>("/api/v1/belsos-idoszakok")) ?? [];
+}
+
 /** Egy SZÁMLÁZÓ CÉG - az a fél, aki a munkáról a számlát kiállítja, amikor nem
  * maga az ember számláz (lásd backend models/vallalkozas.py). */
 export type Vallalkozas = {

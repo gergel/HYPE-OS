@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { BelsosIdoszakok } from "@/components/BelsosIdoszakok";
 import { BelsosTigHaviAttekintes } from "@/components/BelsosTigHaviAttekintes";
 import { BelsosTigManager } from "@/components/BelsosTigManager";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
-import { getBelsosTigAttekintes, getBelsosTigMonth, getMyPagePermissions } from "@/lib/api";
+import { getBelsosIdoszakok, getBelsosTigAttekintes, getBelsosTigMonth, getMyPagePermissions } from "@/lib/api";
 import { huEvHonap } from "@/lib/huDate";
 
 function shiftMonth(ev: number, honap: number, delta: number): { ev: number; honap: number } {
@@ -35,9 +36,10 @@ export default async function BelsosTigPage({
   const ev = params.ev ? Number(params.ev) : alap.ev;
   const honap = params.honap ? Number(params.honap) : alap.honap;
 
-  const [employees, attekintes, pagePermissions] = await Promise.all([
+  const [employees, attekintes, idoszakok, pagePermissions] = await Promise.all([
     getBelsosTigMonth(ev, honap),
     getBelsosTigAttekintes(12),
+    getBelsosIdoszakok(),
     getMyPagePermissions(),
   ]);
   // Aki az oldalon szerkeszthet, az az állapotot is kézzel át tudja állítani.
@@ -92,6 +94,12 @@ export default async function BelsosTigPage({
           ) : (
             <BelsosTigManager ev={ev} honap={honap} employees={employees} canEdit={canEdit} />
           )}
+        </Card>
+
+        {/* Ki mettől meddig volt belsős - ez szabja meg, mely hónapokra
+            kérünk tőle TIG-et (lásd BelsosIdoszakok). */}
+        <Card title="Belsős időszakok">
+          <BelsosIdoszakok sorok={idoszakok} canEdit={canEdit} />
         </Card>
       </div>
     </div>

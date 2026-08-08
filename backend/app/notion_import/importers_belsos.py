@@ -66,18 +66,46 @@ from app.services.portal_storage import R2NotConfiguredError
 # össze vele.
 BELSOS_TIG_TABLA_NEVEK = ("belsos", "belsos tig", "belsos tigek", "belsos havi tig", "belsos tig-ek")
 
-# Mezőnév-jelöltek. Az ELSŐ nem üres érték nyer (lásd _mezo).
+# Mezőnév-jelöltek. Az ELSŐ nem üres érték nyer (lásd _mezo), ezért a
+# jelöltek sorrendje SZÁMÍT: elöl a HYPE "Belsős" táblájának tényleges
+# mezőnevei (2026-08-08-i ellenőrzés), utánuk a régebbi/variáns nevek.
 NEV_SZEMELY = ("Belsős", "Belsos", "Személy", "Munkatárs", "Külsős és belsős", "👥 Külsős és belsős", "Név")
 NEV_TIG_FAJL = ("TIG aláírva", "TIG aláírás", "Aláírt TIG", "TIG", "TIG link")
 NEV_SZAMLA = ("Számla", "Kiállított számla", "Számla pdf", "Számla fájl")
-NEV_NETTO = ("Nettó", "Nettó összeg", "Netto")
-NEV_BRUTTO = ("Bruttó", "Bruttó összeg", "Brutto")
+#: Alkalmazotti (nem számlás) elszámolásnál a számla helyett ez a papír van.
+NEV_FIZ_JEGYZEK = ("Fizetési jegyzék", "Fizetesi jegyzek", "Bérjegyzék")
+# FONTOS a sorrend: a "Nettó összeg" a kézzel bevitt SZÁM (erről szól a
+# számla), a "Nettó" viszont egy FORMULA ugyanabban a táblában, ami az
+# extrákkal együtt számol. Ha a formula nyerne, más összeg kerülne a TIG-re,
+# mint ami a papíron van.
+NEV_NETTO = ("Nettó összeg", "Netto osszeg", "Nettó", "Netto")
+NEV_BRUTTO = ("Bruttó összeg", "Brutto osszeg", "Bruttó", "Brutto")
+#: A "+ ÁFA" jelölés select mezőben - ez egyértelműbb, mint a bruttó/nettó
+#: arányból következtetni.
+NEV_PLUSZ_AFA = ("Plusz ÁFA", "Plusz AFA", "+ ÁFA", "ÁFA")
 NEV_FIZ_HATARIDO = ("Fizetési határidő", "Fizetesi hatarido", "Fizetési határidő dátuma")
-NEV_UTALAS = ("Utalás dátuma", "Utalas datuma", "Utalás", "Kifizetés dátuma")
-NEV_TELJESITES = ("Teljesítés dátuma", "Teljesítés", "Teljesites datuma", "Teljesítés ideje")
-NEV_KELTEZES = ("Keltezés", "Keltezés dátuma", "Kelt", "Keltezes")
+NEV_UTALAS = ("Utalás időpontja", "Utalás dátuma", "Utalas datuma", "Utalás", "Kifizetés dátuma")
+NEV_TELJESITES = ("Teljesítési idő", "Teljesítés dátuma", "Teljesítés", "Teljesites datuma", "Teljesítés ideje")
+NEV_KELTEZES = ("Keltezési idő", "Keltezés", "Keltezés dátuma", "Kelt", "Keltezes")
 NEV_ALLAPOT = ("Állapot", "Státusz", "Status", "Statusz")
+#: A SZÁMLA külön státusza - ebből derül ki, mit fizettünk már ki.
+NEV_SZAMLA_ALLAPOT = ("Számla státusza", "Szamla statusza", "Számla állapota")
+NEV_MEGBIZAS_TARGYA = ("Megbízás Tárgya", "Megbízás tárgya", "Megbizas targya")
 NEV_MEGJEGYZES = ("Megjegyzés", "Megjegyzes", "Comment")
+
+#: A Notion "Számla státusza" értékei, amik KIFIZETETT állapotot jelentenek.
+#: Kisbetűsítve, ékezet nélkül hasonlítunk, RÉSZLETRE - a teljes szöveg
+#: ("Alkalmazott (Fizetve és fizetési jegyzék feltöltve)") túl törékeny lenne.
+KIFIZETETT_SZAMLA_JELEK = ("kifizettuk", "fizetve")
+
+#: A Notion "Állapot" értékei, amik LEZÁRT TIG-et jelentenek. Nálunk ez a
+#: "Kiküldve" (lásd routes/internal_performance_certificates.py
+#: FINALIZED_STATUSES) - a Notion két kész-állapota egyaránt ezt jelenti.
+NOTION_ALLAPOT_MEGFELELTETES = {
+    "kesz feltoltve": "Kiküldve",
+    "elkeszult es kikuldve": "Kiküldve",
+    "nincs elkezdve": "Készítés alatt",
+}
 NEV_HONAP = ("Hónap", "Melyik hónap", "Elszámolás hónapja", "Honap")
 
 # A "Belsős extra kiadások" tábla mezői (ezeket a discovery már kiírta, lásd
@@ -191,6 +219,59 @@ def _fajl_urlek(ertek: Any) -> list[str]:
     if isinstance(ertek, list):
         return [u for u in ertek if isinstance(u, str) and u]
     return []
+
+
+def _kifizetve(props: dict, utalas: date | None) -> bool:
+    """Ki van-e már fizetve ez a hónap?
+
+    Két, egymást erősítő jel van a Notionban, és MINDKETTŐ elég önmagában:
+
+    - az "Utalás időpontja" ki van töltve (megtörtént a tényleges utalás),
+    - a "Számla státusza" kifizetettre van állítva ("Kifizettük és számla
+      feltöltve", illetve alkalmazottnál "Alkalmazott (Fizetve és fizetési
+      jegyzék feltöltve)").
+
+    Azért nem elég az utalás dátuma: a régi sorokon néha csak a státusz van
+    kitöltve. És azért nem elég a státusz: a most kifizetett soroknál előbb
+    kerül be a dátum."""
+    if utalas is not None:
+        return True
+    statusz = _ekezet_nelkul(_text(_mezo(props, NEV_SZAMLA_ALLAPOT)) or "")
+    return any(jel in statusz for jel in KIFIZETETT_SZAMLA_JELEK)
+
+
+def _allapot(props: dict, netto: float | None, teljesites: date | None) -> str | None:
+    """A Notion "Állapot" a mi állapot-szótárunkra fordítva.
+
+    A Notion "Kész feltöltve" / "Elkészült és kiküldve" nálunk egyaránt
+    "Kiküldve": a TIG elkészült és kiment, nincs vele több teendő (lásd
+    routes/internal_performance_certificates.py FINALIZED_STATUSES). Ha ezt
+    nyersen átvennénk, a régi, lezárt hónapok mind visszakerülnének a
+    "készítendő" listára."""
+    nyers = _text(_mezo(props, NEV_ALLAPOT))
+    if nyers:
+        forditott = NOTION_ALLAPOT_MEGFELELTETES.get(_ekezet_nelkul(nyers))
+        if forditott:
+            return forditott
+        return nyers
+    # Állapot nélküli régi sor: ha van összeg vagy teljesítés, lezártnak
+    # vesszük - különben évekkel később "hiányzóként" jönne vissza.
+    return "Kiküldve" if (netto or teljesites) else None
+
+
+def _plusz_afa(props: dict, netto: float | None, brutto: float | None) -> bool:
+    """Kell-e ÁFA-t felszámolni?
+
+    Ha a soron OTT VAN a "Plusz ÁFA" jelölő mező, az dönt - akkor is, ha üres:
+    az üres jelölő azt jelenti, hogy nincs ÁFA. A bruttó/nettó arány csak
+    akkor tartalék, ha ilyen mező egyáltalán nincs a táblában (régebbi vagy
+    másik szerkezetű nyilvántartás). Fordítva hibás lenne: a "Bruttó" a
+    Notionban FORMULA, ami az extrákkal is számolhat, tehát simán nagyobb a
+    nettónál ÁFA nélkül is."""
+    for nev in NEV_PLUSZ_AFA:
+        if nev in props:
+            return "afa" in _ekezet_nelkul(_text(props[nev]) or "")
+    return bool(netto and brutto and brutto > netto * 1.05)
 
 
 def belsos_tig_database_id(client: NotionClient) -> str | None:
@@ -366,9 +447,17 @@ def _tig_szamlai(db: Session, props: dict, tig: InternalPerformanceCertificate, 
     számla-táblájába (nem a generikus csatolmányok közé: a Belsős TIG felülete
     innen listázza és innen tölti le őket).
 
+    Az ALKALMAZOTTI elszámolásnál nincs számla, hanem "Fizetési jegyzék" -
+    az ugyanide kerül: a felületen ugyanaz a szerepe (ez a papír igazolja a
+    kifizetést), és enélkül azoknál a hónapoknál üresen maradna a számla-oszlop.
+
     Idempotens a notion_forras-on keresztül: egy újrafuttatás nem tölti le és
-    nem duplikálja ugyanazt a számlát."""
-    for url in _fajl_urlek(_mezo(props, NEV_SZAMLA)):
+    nem duplikálja ugyanazt a fájlt."""
+    urlek = [
+        *_fajl_urlek(_mezo(props, NEV_SZAMLA)),
+        *_fajl_urlek(_mezo(props, NEV_FIZ_JEGYZEK)),
+    ]
+    for url in urlek:
         if not files.notion_fajl_e(url):
             continue
         forras = files.forras_kulcs(url)
@@ -505,8 +594,7 @@ def _import_tigek(
         brutto = _szam(_mezo(props, NEV_BRUTTO))
         # A bruttót nem tároljuk külön: nálunk a nettóból és a plusz_afa
         # jelölésből SZÁMOLÓDIK (lásd schemas InternalPerformanceCertificateRead).
-        # Ha a Notionban a bruttó érdemben nagyobb a nettónál, az ÁFA-s eset.
-        plusz_afa = bool(netto and brutto and brutto > netto * 1.05)
+        plusz_afa = _plusz_afa(props, netto, brutto)
         utalas = as_date(_mezo(props, NEV_UTALAS))
 
         tig = safe_upsert(
@@ -519,10 +607,8 @@ def _import_tigek(
                 "employee_id": employee_id,
                 "ev": ev,
                 "honap": honap,
-                # Régi, lezárt hónapok: ha a Notionban nincs állapot, a
-                # meglévő TIG-dokumentum/összeg alapján "Kész" - így nem
-                # kerülnek vissza a "készítendő" listára évekkel később.
-                "allapot": _text(_mezo(props, NEV_ALLAPOT)) or ("Kész" if (netto or teljesites) else None),
+                "allapot": _allapot(props, netto, teljesites),
+                "megbizas_targya": _text(_mezo(props, NEV_MEGBIZAS_TARGYA)),
                 "megjegyzes": (_text(_mezo(props, NEV_MEGJEGYZES)) or None),
                 "netto_osszeg": netto if netto is not None else brutto,
                 "plusz_afa": plusz_afa,
@@ -530,12 +616,13 @@ def _import_tigek(
                 "keltezes": keltezes,
                 "fizetesi_hatarido": as_date(_mezo(props, NEV_FIZ_HATARIDO)),
                 "utalas_datuma": utalas,
-                # Az utalás dátuma maga a kifizetés ténye. Expense sort
-                # SZÁNDÉKOSAN nem hozunk létre hozzá (ellentétben a felületi
-                # "kifizetve" gombbal): a régi kifizetések a Notion 'Kiadások'
-                # tábláján keresztül már bejönnek, egy második sor duplán
-                # terhelné a pénzügyi kimutatásokat.
-                "szamla_kifizetve": utalas is not None,
+                # A kifizetés tényét az utalás dátuma VAGY a számla státusza
+                # adja (lásd _kifizetve). Expense sort SZÁNDÉKOSAN nem hozunk
+                # létre hozzá (ellentétben a felületi "kifizetve" gombbal): a
+                # régi kifizetések a Notion 'Kiadások' tábláján keresztül már
+                # bejönnek, egy második sor duplán terhelné a pénzügyi
+                # kimutatásokat.
+                "szamla_kifizetve": _kifizetve(props, utalas),
             },
             label=f"Belsős TIG '{cim or ''}' ({ev_honap_szoveg(ev, honap)})",
         )

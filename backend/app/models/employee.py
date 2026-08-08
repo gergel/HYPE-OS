@@ -150,6 +150,12 @@ class Employee(TimestampMixin, Base):
     projects: Mapped[list["Project"]] = relationship(
         secondary="project_crew", back_populates="crew"
     )
+    #: Mettől meddig volt belsős - ettől függ, mely hónapokra várunk tőle
+    #: havi TIG-et (lásd services/belsos_idoszak.py). Több időszak is lehet:
+    #: kilép, majd visszajön.
+    belsos_idoszakok: Mapped[list["BelsosIdoszak"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan", order_by="BelsosIdoszak.kezdet"
+    )
     #: Mely számlázó cégekhez tartozik (javaslat-szintű, lásd
     #: models/vallalkozas.py VallalkozasTag).
     vallalkozas_tagsagok: Mapped[list["VallalkozasTag"]] = relationship(
