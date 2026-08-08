@@ -56,15 +56,8 @@ export default async function BelsosTigPage({
   ).length;
   const kihagyvaCount = employees.filter((e) => e.record?.allapot === "Kihagyva").length;
   const teendoCount = tigesek.length - kikuldveCount - tigesek.filter((e) => e.record?.allapot === "Kihagyva").length;
-  // Az alkalmazott hónapja két összegtől kész: a nettó bértől (az emberhez) és
-  // a szuperbruttótól (a kiadásokhoz) - amelyik hiányzik, az teendő.
   const fizetesHianyzik = alkalmazottak.filter(
-    (e) =>
-      e.record?.allapot !== "Kihagyva" &&
-      (e.record?.netto_osszeg == null ||
-        e.record.netto_osszeg === 0 ||
-        e.record.szuperbrutto == null ||
-        e.record.szuperbrutto === 0),
+    (e) => e.record?.allapot !== "Kihagyva" && (e.record?.netto_osszeg == null || e.record.netto_osszeg === 0),
   ).length;
 
   return (

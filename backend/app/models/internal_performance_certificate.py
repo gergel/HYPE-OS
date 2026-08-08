@@ -41,20 +41,6 @@ class InternalPerformanceCertificate(TimestampMixin, Base):
     netto_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     plusz_afa: Mapped[bool | None] = mapped_column(Boolean)
 
-    # CSAK bejelentett alkalmazottnál (lásd models/employee.py
-    # BelsosJogviszony): a bérszámfejtés által számolt TELJES MUNKÁLTATÓI
-    # KÖLTSÉG. A netto_osszeg az, ami az emberhez tartozik ("mennyi a
-    # fizetése"), a szuperbruttó pedig az, ami minket ténylegesen terhel -
-    # ezért a kiadás-sorba EZ kerül (lásd
-    # api/routes/internal_performance_certificates.py _szinkron_berkoltseg).
-    #
-    # Nem számoljuk: a nettó és a szuperbruttó közti szorzó adósávtól,
-    # kedvezményektől, cafeteriától függ - egy kitalált szorzó hamis számokat
-    # vinne a kiadásokba. Kézzel adja meg, aki a bérlapot látja.
-    szuperbrutto: Mapped[float | None] = mapped_column(
-        Numeric(12, 2), comment="Bejelentett alkalmazott teljes munkáltatói költsége"
-    )
-
     megbizas_targya: Mapped[str | None] = mapped_column(
         String(255), comment="Alapból a munkatárs adatlapjáról jön, de TIG-enként átírható"
     )

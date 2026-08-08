@@ -26,8 +26,6 @@ type FormState = {
 type FizetesForm = {
   /** Ami az emberhez tartozik ("mennyi a fizetése") = a hónap alapbér tétele. */
   netto_ber: string;
-  /** A teljes munkáltatói költség - a kiadások közé EZ kerül. */
-  szuperbrutto: string;
 };
 
 /** A hónapot követő hónap első napja - ez az alapértelmezett teljesítési
@@ -127,14 +125,11 @@ export function BelsosTigManager({
     setForm(null);
   }
 
-  /** A fizetés-űrlap a hónap MEGLÉVŐ adataival nyílik: a nettó bér a hónap
-   * alapbér tétele (azt írja felül a mentés), a szuperbruttó a bejegyzésé. */
+  /** A fizetés-űrlap a hónap MEGLÉVŐ nettó bérével nyílik: az a hónap alapbér
+   * tétele, azt írja felül a mentés. */
   function openFizetes(employee: BelsosTigMonthEmployee) {
     const alapber = employee.tetelek.find((t) => t.tipus === "alapber");
-    setFizetesForm({
-      netto_ber: alapber ? String(alapber.osszeg) : "",
-      szuperbrutto: employee.record?.szuperbrutto != null ? String(employee.record.szuperbrutto) : "",
-    });
+    setFizetesForm({ netto_ber: alapber ? String(alapber.osszeg) : "" });
     setFizetesId(employee.id);
   }
 
@@ -154,10 +149,7 @@ export function BelsosTigManager({
     try {
       const res = await authFetch(`/api/v1/belsos-tig/${fizetesEmployee.id}/${ev}/${honap}/fizetes`, {
         method: "POST",
-        body: JSON.stringify({
-          netto_ber: nettoBer,
-          szuperbrutto: fizetesForm.szuperbrutto.trim() ? Number(fizetesForm.szuperbrutto) : null,
-        }),
+        body: JSON.stringify({ netto_ber: nettoBer }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -370,9 +362,6 @@ export function BelsosTigManager({
             // models/employee.py BelsosJogviszony).
             const alkalmazott = !employee.kell_tig;
             const vanFizetes = record?.netto_osszeg != null && record.netto_osszeg !== 0;
-            // A hónap akkor kész, ha MINDKÉT összeg megvan: a nettó bér az
-            // emberhez, a szuperbruttó a kiadásokhoz kell.
-            const vanSzuperbrutto = record?.szuperbrutto != null && record.szuperbrutto !== 0;
             const allapot = record?.allapot;
             // A "Kész" a korábbi, küldés nélküli életciklusból maradt - a régi
             // bejegyzések ugyanúgy lezártnak számítanak, mint a "Kiküldve".
@@ -392,12 +381,10 @@ export function BelsosTigManager({
                   {alkalmazott ? (
                     allapot === "Kihagyva" ? (
                       <StatusBadge label="Kihagyva" tone="neutral" />
-                    ) : !vanFizetes ? (
-                      <StatusBadge label="Fizetés hiányzik" tone="warning" />
-                    ) : !vanSzuperbrutto ? (
-                      <StatusBadge label="Szuperbruttó hiányzik" tone="warning" />
-                    ) : (
+                    ) : vanFizetes ? (
                       <StatusBadge label="Fizetés beírva" tone="success" />
+                    ) : (
+                      <StatusBadge label="Fizetés hiányzik" tone="warning" />
                     )
                   ) : (
                     /* Kézzel is javítható: egy tévesen kiküldöttre állított TIG
@@ -409,14 +396,8 @@ export function BelsosTigManager({
                     />
                   )}
                 </td>
-                {/* Ami nekünk kerül: megbízásosnál a számla bruttója,
-                    alkalmazottnál a szuperbruttó (a nettó bér nem tartalmazza
-                    a munkáltatói terheket). */}
                 <td className="py-3 pr-6 text-right whitespace-nowrap">
-                  {record?.koltseg != null ? `${record.koltseg.toLocaleString("hu-HU")} Ft` : "–"}
-                  {alkalmazott && vanSzuperbrutto && (
-                    <span className="block text-[11px] text-text-muted">szuperbruttó</span>
-                  )}
+                  {record?.brutto_osszeg != null ? `${record.brutto_osszeg.toLocaleString("hu-HU")} Ft` : "–"}
                 </td>
                 <td className="py-3 pr-6">
                   {alkalmazott ? (
@@ -525,10 +506,8 @@ export function BelsosTigManager({
         </tbody>
       </table>
 
-      {/* Bejelentett alkalmazott havi fizetése. Két összeg, mert a kettő nem
-          ugyanaz: a nettó bér az emberhez tartozik, a szuperbruttó a
-          kiadásokhoz - és a szorzójuk adósávtól, kedvezményektől függ, tehát
-          nem számoljuk ki helyette. */}
+      {/* Bejelentett alkalmazott havi fizetése: nála nincs TIG és nincs
+          számla, ezért egyetlen összeg kell - a nettó bér. */}
       {fizetesEmployee && fizetesForm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
@@ -542,7 +521,7 @@ export function BelsosTigManager({
               Fizetés – {fizetesEmployee.full_name} ({huEvHonap(ev, honap)})
             </h3>
             <p className="mb-4 text-[12px] text-text-muted">
-              Bejelentett alkalmazott: nincs TIG és nincs számla, csak ez a két összeg.
+              Bejelentett alkalmazott: nincs TIG és nincs számla, csak a fizetése kell.
             </p>
             <div className="grid grid-cols-1 gap-3">
               <div className="flex flex-col gap-1">
@@ -557,19 +536,6 @@ export function BelsosTigManager({
                 />
                 <p className="text-[11px] text-text-muted">
                   Amit az emberhez írunk fel: ez lesz a hónap alapbér tétele.
-                </p>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Szuperbruttó (Ft)</label>
-                <input
-                  type="number"
-                  value={fizetesForm.szuperbrutto}
-                  onChange={(e) => setFizetesForm({ ...fizetesForm, szuperbrutto: e.target.value })}
-                  disabled={!!busyId}
-                  className={inputClass}
-                />
-                <p className="text-[11px] text-text-muted">
-                  A teljes munkáltatói költség – a kiadások közé ez kerül. Amíg üres, a hónap teendő marad.
                 </p>
               </div>
               {/* A hónap többi tétele (túlóra, benzin, levonás) itt csak
