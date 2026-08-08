@@ -17,6 +17,11 @@ class Expense(TimestampMixin, Base):
 
     project_code_id: Mapped[int | None] = mapped_column(ForeignKey("project_codes.id"))
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
+    #: Melyik céges autóra ment a költség (tankolás, szerviz, matrica). Az autó
+    #: oldala ezeket a sorokat mutatja - de a kiadás ettől ugyanúgy szerepel a
+    #: Pénzügy összesítő kiadásai közt, mert EZ az a rekord, nem egy másolata
+    #: (lásd models/auto.py).
+    auto_id: Mapped[int | None] = mapped_column(ForeignKey("autok.id"), index=True)
 
     tipus: Mapped[str | None] = mapped_column(String(50), comment="belsos / kulsos / extra")
     netto: Mapped[float | None] = mapped_column(Numeric(12, 2))
@@ -59,6 +64,7 @@ class Expense(TimestampMixin, Base):
 
     project_code: Mapped["ProjectCode"] = relationship(back_populates="expenses")
     employee: Mapped["Employee"] = relationship(back_populates="expenses")
+    auto: Mapped["Auto | None"] = relationship(back_populates="kiadasok")
     kp_forgalmak: Mapped[list["KpForgalom"]] = relationship(back_populates="expense")
 
 

@@ -28,6 +28,13 @@ from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
 )
+from app.models.auto import Auto
+from app.models.kotelezettseg import (
+    Kotelezettseg,
+    KotelezettsegCiklus,
+    KotelezettsegIdoszak,
+    KotelezettsegTipus,
+)
 from app.models.media import Folder, Media
 from app.models.notification import Notification
 from app.models.notion_import import NotionImportMap

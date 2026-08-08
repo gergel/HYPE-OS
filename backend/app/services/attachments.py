@@ -43,6 +43,10 @@ ENTITAS_OLDALAK: dict[str, str] = {
     "employee": "/csapat",
     "deliverable": "/utomunka",
     "task": "/feladatok",
+    # Egy kötelezettség adott fordulójához (hónap/év) tartozó számla - az
+    # E-Rezsi, a Biztosítások és az autók lapja is ide tölt (lásd
+    # routes/kotelezettsegek.py CSATOLMANY_ENTITAS).
+    "kotelezettsegIdoszak": "/kotelezettsegek",
 }
 
 MAX_MERET_BAJT = 100 * 1024 * 1024

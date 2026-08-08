@@ -31,6 +31,7 @@ from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
 from app.models.finance import Expense, Revenue
+from app.models.kotelezettseg import KotelezettsegIdoszak
 from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.rate import Rate
@@ -57,6 +58,8 @@ ENTITY_MODELS: dict[str, type] = {
     "timesheet": Timesheet,
     "feedback": Feedback,
     "assignment": Assignment,
+    # Egy kötelezettség egy fordulója - csatolmányt (számlát) fogad.
+    "kotelezettsegIdoszak": KotelezettsegIdoszak,
 }
 
 SELECT_LIKE_MAX_DISTINCT = 20

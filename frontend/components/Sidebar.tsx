@@ -2,6 +2,7 @@
 
 import {
   BadgeCheck,
+  Car,
   CheckSquare,
   Clapperboard,
   ClipboardList,
@@ -17,9 +18,11 @@ import {
   LucideIcon,
   Megaphone,
   Package,
+  Repeat,
   Scissors,
   Send,
   Settings,
+  ShieldCheck,
   Sparkles,
   UserCheck,
   UserRound,
@@ -54,6 +57,9 @@ const ICONS: Record<string, LucideIcon> = {
   CheckSquare,
   Sparkles,
   Settings,
+  Repeat,
+  ShieldCheck,
+  Car,
 };
 
 /** allowedPages: az egyénenként beállított oldal-hozzáférés (lásd Beállítások) -

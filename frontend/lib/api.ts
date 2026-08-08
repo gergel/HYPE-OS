@@ -1589,3 +1589,109 @@ export async function getPortals(): Promise<PortalSummary[]> {
 export async function getPortalDetail(portalId: number): Promise<PortalDetailData | null> {
   return apiGet<PortalDetailData>(`/api/v1/portal-admin/${portalId}`);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Visszatérő kötelezettségek (E-Rezsi, biztosítások) és céges autók
+//
+// Egy modell szolgálja ki mindkét oldalt: az E-Rezsi az "elofizetes" típusú
+// sorokat mutatja, a Biztosítások a többit, az autó lapja pedig a hozzá kötött
+// határidőket (lásd backend models/kotelezettseg.py).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Egy konkrét forduló: ide kerül, hogy PONTOSAN mennyibe került, és ide
+ * tölthető fel a számla. */
+export type KotelezettsegIdoszak = {
+  id: number;
+  kotelezettseg_id: number;
+  esedekesseg: string;
+  osszeg: number | null;
+  penznem: string;
+  huf_osszeg: number | null;
+  fizetve: boolean;
+  megjegyzes: string | null;
+  szamla_db: number;
+  /** "Összeg nincs beírva" / "Számla hiányzik", null = kész. */
+  hianyzik: string | null;
+};
+
+export type Kotelezettseg = {
+  id: number;
+  nev: string;
+  csomag: string | null;
+  /** elofizetes | biztositas | forgalmi | berlet | egyeb */
+  tipus: string;
+  /** havi | eves | egyszeri */
+  ciklus: string;
+  fordulo_nap: number | null;
+  fordulo_honap: number | null;
+  kovetkezo_fordulo: string | null;
+  kezdet: string | null;
+  osztaly: string | null;
+  felelos_id: number | null;
+  felelos_nev: string | null;
+  auto_id: number | null;
+  aktiv: boolean;
+  ar_osszeg: number | null;
+  ar_penznem: string;
+  huf_becsles_honap: number | null;
+  huf_becsles_ev: number | null;
+  szamla_forras: string | null;
+  kartya: string | null;
+  megjegyzes: string | null;
+  ertesites_napokkal: number;
+  kovetkezo_esedekesseg: string | null;
+  napok_hatra: number | null;
+  /** inaktiv | lejart | hamarosan | rendben | nincs_datum */
+  allapot: string;
+  nyitott_idoszakok: number;
+  idoszakok: KotelezettsegIdoszak[];
+};
+
+export async function getKotelezettsegek(params?: { tipus?: string; autoId?: number }): Promise<Kotelezettseg[]> {
+  const qs = new URLSearchParams();
+  if (params?.tipus) qs.set("tipus", params.tipus);
+  if (params?.autoId != null) qs.set("auto_id", String(params.autoId));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return (await apiGet<Kotelezettseg[]>(`/api/v1/kotelezettsegek${suffix}`)) ?? [];
+}
+
+export type AutoKiadas = {
+  id: number;
+  megnevezes: string;
+  datum: string | null;
+  osszeg: number | null;
+  penznem: string;
+  megjegyzes: string | null;
+  kesz: boolean;
+};
+
+export type AutoHatarido = {
+  id: number;
+  nev: string;
+  tipus: string;
+  kovetkezo_esedekesseg: string | null;
+  napok_hatra: number | null;
+  allapot: string;
+};
+
+export type Auto = {
+  id: number;
+  rendszam: string;
+  megnevezes: string | null;
+  tipus: string | null;
+  evjarat: number | null;
+  km_ora: number | null;
+  felelos_id: number | null;
+  felelos_nev: string | null;
+  aktiv: boolean;
+  megjegyzes: string | null;
+  hataridok: AutoHatarido[];
+  kiadasok: AutoKiadas[];
+  koltseg_osszesen: number;
+  /** lejart | hamarosan | rendben | nincs */
+  hatarido_allapot: string;
+};
+
+export async function getAutok(): Promise<Auto[]> {
+  return (await apiGet<Auto[]>("/api/v1/autok")) ?? [];
+}

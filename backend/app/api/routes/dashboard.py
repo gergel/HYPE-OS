@@ -14,6 +14,7 @@ from app.models.deliverable import Deliverable
 from app.models.deliverable_status import DeliverableStatusConfig
 from app.models.dispo_responsible import DispoResponsible, DispoSide
 from app.models.employee import Employee, SystemRole, van_szerepkore
+from app.services import kotelezettseg as kotelezettseg_szolg
 from app.services import papirozas_feladatok
 from app.models.finance import Revenue
 from app.models.project import Project
@@ -96,6 +97,12 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
     # ezért itt "érjük utol" a lemaradást - a művelet idempotens, projektenként
     # legfeljebb egy feladat születik (lásd services/papirozas_feladatok.py).
     papirozas_feladatok.ensure_papirozas_feladatok(db)
+
+    # Ugyanezért fut itt a kötelezettségek (előfizetés, biztosítás, forgalmi)
+    # utolérése is: a fordulóhoz közeledve feladat és értesítés keletkezik a
+    # felelősnek, és megnyílnak az esedékes fordulók, amikhez összeget és
+    # számlát várunk (lásd services/kotelezettseg.py).
+    kotelezettseg_szolg.ensure_mindent(db)
 
     mai_forgatasok = (
         db.scalar(select(func.count()).select_from(Project).where(Project.forgatas_datuma == today)) or 0

@@ -7,6 +7,7 @@ from app.api.routes.ai_assistant import router as ai_assistant_router
 from app.api.routes.attachments import router as attachments_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.automation import router as automation_router
+from app.api.routes.autok import router as autok_router
 from app.api.routes.belsos_idoszakok import router as belsos_idoszakok_router
 from app.api.routes.callsheets import router as callsheets_router
 from app.api.routes.campaigns import router as campaigns_router
@@ -22,6 +23,7 @@ from app.api.routes.entity_fields import router as entity_fields_router
 from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router, summary_router as finance_summary_router
 from app.api.routes.internal_performance_certificates import router as internal_performance_certificates_router
+from app.api.routes.kotelezettsegek import router as kotelezettsegek_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.performance_certificates import router as performance_certificates_router
 from app.api.routes.portal import payments_router, router as portal_router
@@ -92,6 +94,10 @@ api_router.include_router(subcontractor_contracts_router)
 api_router.include_router(eseti_szerzodesek_router)
 api_router.include_router(vallalkozasok_router)
 api_router.include_router(belsos_idoszakok_router)
+# Visszatérő kötelezettségek (E-Rezsi, biztosítások) és a céges autók - a
+# kettő ugyanazt a lejárat-figyelést használja (lásd services/kotelezettseg.py).
+api_router.include_router(kotelezettsegek_router)
+api_router.include_router(autok_router)
 api_router.include_router(client_contracts_router)
 api_router.include_router(performance_certificates_router)
 api_router.include_router(internal_performance_certificates_router)
