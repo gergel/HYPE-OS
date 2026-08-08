@@ -1604,7 +1604,11 @@ export type KotelezettsegIdoszak = {
   id: number;
   kotelezettseg_id: number;
   esedekesseg: string;
+  /** A ténylegesen levont összeg NETTÓBAN. */
   osszeg: number | null;
+  plusz_afa: boolean;
+  /** Nettó + áfa - a backend számolja, nem tárolt mező. */
+  brutto: number | null;
   penznem: string;
   huf_osszeg: number | null;
   fizetve: boolean;
@@ -1631,7 +1635,12 @@ export type Kotelezettseg = {
   felelos_nev: string | null;
   auto_id: number | null;
   aktiv: boolean;
+  /** "Átutalás" | "Készpénz" | "Bankkártya" */
+  fizetesi_mod: string | null;
+  /** Nettó ár ciklusonként; a bruttót a backend számolja. */
   ar_osszeg: number | null;
+  ar_plusz_afa: boolean;
+  ar_brutto: number | null;
   ar_penznem: string;
   huf_becsles_honap: number | null;
   huf_becsles_ev: number | null;
@@ -1644,6 +1653,8 @@ export type Kotelezettseg = {
   /** inaktiv | lejart | hamarosan | rendben | nincs_datum */
   allapot: string;
   nyitott_idoszakok: number;
+  /** Hány papír (kötvény, szerződés) van feltöltve magához a kötelezettséghez. */
+  papir_db: number;
   idoszakok: KotelezettsegIdoszak[];
 };
 
@@ -1659,10 +1670,15 @@ export type AutoKiadas = {
   id: number;
   megnevezes: string;
   datum: string | null;
+  /** Nettó, és a belőle számolt bruttó (`osszeg`) - a Pénzügy a bruttóval számol. */
+  netto: number | null;
+  plusz_afa: boolean;
   osszeg: number | null;
   penznem: string;
+  fizetesi_mod: string | null;
   megjegyzes: string | null;
   kesz: boolean;
+  dokumentum_db: number;
 };
 
 export type AutoHatarido = {
@@ -1694,4 +1710,27 @@ export type Auto = {
 
 export async function getAutok(): Promise<Auto[]> {
   return (await apiGet<Auto[]>("/api/v1/autok")) ?? [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Megrendelői kontaktok
+//
+// Maga az adat a Notion "Megrendelői kontaktok" táblájából jön, és a /contacts
+// CRUD végponton szerkeszthető - ez a lista csak összefogja őket az ügyfelük
+// nevével és azzal, hány anyagnál van beállítva a kiküldésük.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type MegrendeloiKontakt = {
+  id: number;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  client_id: number;
+  client_nev: string | null;
+  /** Hány utómunka-anyagnál van beállítva, hogy neki is ki kell küldeni. */
+  anyagok_szama: number;
+};
+
+export async function getMegrendeloiKontaktok(): Promise<MegrendeloiKontakt[]> {
+  return (await apiGet<MegrendeloiKontakt[]>("/api/v1/megrendeloi-kontaktok")) ?? [];
 }

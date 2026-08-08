@@ -16,7 +16,7 @@ import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   getAssignableEmployees,
-  getContactsByClient,
+  getMegrendeloiKontaktok,
   getDeliverableComments,
   getDeliverableContacts,
   getCurrentUser,
@@ -103,7 +103,11 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
   ]);
 
   const clientId = projectCode ? Number(projectCode.client_id) : null;
-  const contactOptions = clientId ? await getContactsByClient(clientId) : [];
+  // MINDEN megrendelői kontakt a választék, nem csak az anyag ügyfeléé: egy
+  // kész anyagot gyakran olyanoknak is ki kell küldeni, akik máshol vannak
+  // (ügynökség, társproducer). A saját ügyfél kontaktjai a lista elejére
+  // kerülnek (lásd ContactsManager).
+  const contactOptions = await getMegrendeloiKontaktok();
 
   const employeeNameById = Object.fromEntries(allEmployees.map((e) => [e.id, e.full_name]));
   // Aki az Utómunka oldalon szerkeszthet, az javíthatja a rögzített perceket is.
@@ -143,7 +147,12 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
         content: (
           <Card title="Megrendelői kontaktok">
             <p className="mb-2 text-[13px] text-text-secondary">Kinek kell kiküldeni a kész anyagot.</p>
-            <ContactsManager deliverableId={deliverableId} current={contacts} options={contactOptions} />
+            <ContactsManager
+              deliverableId={deliverableId}
+              current={contacts}
+              options={contactOptions}
+              clientId={clientId}
+            />
             {deliverable.megrendeloi_email_cimek != null && (
               <p className="mt-3 text-[12px] text-text-muted">
                 Email címek: <span className="text-text-secondary">{String(deliverable.megrendeloi_email_cimek)}</span>

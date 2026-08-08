@@ -1,28 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Copy } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
-import type { DeliverableContact } from "@/lib/api";
+import { vagolapra } from "@/lib/vagolap";
+import type { DeliverableContact, MegrendeloiKontakt } from "@/lib/api";
 
 /** "Megrendelői kontaktok" - kiknek kell majd kiküldeni a kész anyagot (a
  * megrendeloi_email_cimek formula-mező ebből számolódik újra, lásd
- * services/deliverable_actions.set_contacts). */
+ * services/deliverable_actions.set_contacts).
+ *
+ * A választék az ÖSSZES megrendelői kontakt, nem csak az anyag ügyfeléé: egy
+ * kész anyagot gyakran olyanoknak is ki kell küldeni, akik máshol vannak
+ * (ügynökség, társproducer). Az anyag saját ügyfelének kontaktjai kerülnek a
+ * lista elejére, mert azok a gyakoriak. */
 export function ContactsManager({
   deliverableId,
   current,
   options,
+  clientId,
 }: {
   deliverableId: number;
   current: DeliverableContact[];
-  options: DeliverableContact[];
+  options: MegrendeloiKontakt[];
+  /** Az anyag ügyfele - az ő kontaktjait ajánljuk fel elöl. */
+  clientId?: number | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [selected, setSelected] = useState("");
+  const [kereses, setKereses] = useState("");
+  const [masolasUzenet, setMasolasUzenet] = useState<string | null>(null);
 
   const currentIds = current.map((c) => c.id);
-  const available = options.filter((o) => !currentIds.includes(o.id));
+  const emailek = useMemo(
+    () => Array.from(new Set(current.map((c) => (c.email ?? "").trim()).filter(Boolean))),
+    [current],
+  );
+
+  const valaszthato = useMemo(() => {
+    const q = kereses.trim().toLowerCase();
+    const szurt = options
+      .filter((o) => !currentIds.includes(o.id))
+      .filter((o) =>
+        !q ? true : [o.full_name, o.email, o.client_nev].some((m) => (m ?? "").toLowerCase().includes(q)),
+      );
+    // Az anyag saját ügyfelének kontaktjai elöl, utána a többi - mindkét
+    // csoporton belül név szerint.
+    return szurt.sort((a, b) => {
+      const sajatA = clientId != null && a.client_id === clientId ? 0 : 1;
+      const sajatB = clientId != null && b.client_id === clientId ? 0 : 1;
+      if (sajatA !== sajatB) return sajatA - sajatB;
+      return a.full_name.localeCompare(b.full_name, "hu");
+    });
+  }, [options, currentIds, kereses, clientId]);
 
   async function save(ids: number[]) {
     setBusy(true);
@@ -42,6 +73,19 @@ export function ContactsManager({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function emaileketMasol() {
+    if (emailek.length === 0) {
+      setMasolasUzenet("A hozzáadott kontaktoknak nincs email címe.");
+      return;
+    }
+    const sikeres = await vagolapra(emailek.join(", "));
+    setMasolasUzenet(
+      sikeres
+        ? `${emailek.length} email cím a vágólapon.`
+        : "A böngésző nem engedte a másolást – jelöld ki és másold kézzel.",
+    );
   }
 
   return (
@@ -64,36 +108,60 @@ export function ContactsManager({
           </span>
         ))}
       </div>
-      {available.length > 0 ? (
-        <div className="flex items-center gap-2">
-          <select
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            className="rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+
+      {/* A gomb, amivel a kiküldés tényleg elkezdhető: az összes hozzáadott
+          kontakt email címe egyben, vesszővel elválasztva - ahogy egy levél
+          címzett-mezőjébe kell. */}
+      {current.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={emaileketMasol}
+            className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+            title="Az összes hozzáadott kontakt email címe, vesszővel elválasztva"
           >
-            <option value="">Válassz...</option>
-            {available.map((o) => (
+            <Copy size={13} /> Email címek másolása ({emailek.length})
+          </button>
+          {masolasUzenet && <span className="text-[12px] text-text-accent">{masolasUzenet}</span>}
+        </div>
+      )}
+
+      {options.length === 0 ? (
+        <p className="text-[12px] text-text-muted">
+          Még nincs felvéve megrendelői kontakt (Ügyfelek → Megrendelői kontaktok).
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Kereshető lista: több száz kontaktnál egy sima legördülőben nem
+              lehetne megtalálni valakit. */}
+          <input
+            value={kereses}
+            onChange={(e) => setKereses(e.target.value)}
+            placeholder="Keresés név, email, ügyfél szerint…"
+            className="w-[260px] rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+          />
+          <select
+            value=""
+            onChange={(e) => {
+              if (!e.target.value) return;
+              save([...currentIds, Number(e.target.value)]);
+              setKereses("");
+            }}
+            disabled={busy || valaszthato.length === 0}
+            className="max-w-[420px] rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none disabled:opacity-50"
+          >
+            <option value="">
+              {valaszthato.length === 0 ? "Nincs találat" : `Hozzáadás… (${valaszthato.length})`}
+            </option>
+            {valaszthato.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.full_name}
+                {o.client_nev ? ` – ${o.client_nev}` : ""}
+                {o.email ? ` (${o.email})` : ""}
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            disabled={!selected || busy}
-            onClick={() => {
-              save([...currentIds, Number(selected)]);
-              setSelected("");
-            }}
-            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
-          >
-            Hozzáadás
-          </button>
         </div>
-      ) : (
-        <p className="text-[12px] text-text-muted">
-          {options.length === 0 ? "Ehhez az ügyfélhez nincs felvett kontakt." : "Minden elérhető kontakt már hozzá van rendelve."}
-        </p>
       )}
     </div>
   );

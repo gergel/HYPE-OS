@@ -47,6 +47,13 @@ ENTITAS_OLDALAK: dict[str, str] = {
     # E-Rezsi, a Biztosítások és az autók lapja is ide tölt (lásd
     # routes/kotelezettsegek.py CSATOLMANY_ENTITAS).
     "kotelezettsegIdoszak": "/kotelezettsegek",
+    # Magához a kötelezettséghez tartozó papír: kötvény, szerződés, a forgalmi
+    # másolata - nem egy fizetéshez, hanem az egészhez tartozik.
+    "kotelezettseg": "/kotelezettsegek",
+    # Egy autós költés bizonylata. Ugyanaz a tábla, mint az "expense", de az
+    # AUTÓK oldalának jogosultságával - egy tankolási blokkhoz ne kelljen
+    # hozzáférés a cég teljes pénzügyéhez (lásd routes/autok.py).
+    "autoKiadas": "/autok",
 }
 
 MAX_MERET_BAJT = 100 * 1024 * 1024

@@ -82,7 +82,18 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Ügyfelek",
-    items: [{ label: "Ügyfelek", href: "/ugyfelek", icon: "Users" }],
+    items: [
+      { label: "Ügyfelek", href: "/ugyfelek", icon: "Users" },
+      // A kontaktok az ügyfelek adatához tartoznak (ugyanaz a jogosultság),
+      // csak önálló nézetet kaptak: itt lehet rákeresni valakire anélkül,
+      // hogy tudnánk, melyik cégnél van.
+      {
+        label: "Megrendelői kontaktok",
+        href: "/megrendeloi-kontaktok",
+        icon: "Contact",
+        permissionPage: "/ugyfelek",
+      },
+    ],
   },
   {
     label: "Csapat",

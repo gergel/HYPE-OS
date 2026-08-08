@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { ModalReteg } from "@/components/ModalReteg";
+import { PapirFeltoltes } from "@/components/kotelezettseg/PapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { huDatum } from "@/lib/huDate";
@@ -32,6 +33,17 @@ const CIKLUS_NEVEK: Record<string, string> = {
 
 const PENZNEMEK = ["HUF", "EUR", "USD"];
 
+/** Ugyanaz a szókészlet, mint a Pénzügy kiadásainál - így a kimutatás egyben
+ * látja az itt és az ott rögzített fizetéseket. */
+const FIZETESI_MODOK = ["Átutalás", "Készpénz", "Bankkártya"];
+
+/** Bruttó a nettóból. Ha nincs áfa, a kettő ugyanaz - ugyanaz a szabály, mint
+ * a backendben (routes/kotelezettsegek.brutto). */
+function bruttoBol(netto: number | null, pluszAfa: boolean): number | null {
+  if (netto == null || Number.isNaN(netto)) return null;
+  return pluszAfa ? Math.round(netto * 1.27 * 100) / 100 : netto;
+}
+
 /** Az állapot emberi neve és színe. A "hamarosan" azt jelenti, hogy a forduló
  * a kötelezettség saját figyelmeztetési idején belülre ért - ilyenkor már
  * feladat és értesítés is született róla (lásd backend
@@ -53,10 +65,11 @@ function penzzel(osszeg: number | null, penznem: string): string {
 /** A forduló emberi leírása: "minden hónap 7-én", "minden szeptember 3-án",
  * vagy a konkrét dátum. */
 function forduloSzoveg(k: Kotelezettseg): string {
-  if (k.ciklus === "egyszeri") return k.kovetkezo_fordulo ? huDatum(k.kovetkezo_fordulo) : "–";
+  if (k.kovetkezo_fordulo) return huDatum(k.kovetkezo_fordulo);
+  // Dátum nélküli, a Google-táblázatból importált sor: ott csak a minta van.
   if (k.ciklus === "havi") return k.fordulo_nap ? `minden hónap ${k.fordulo_nap}.` : "–";
   if (k.fordulo_honap && k.fordulo_nap) return `minden ${HONAP_NEVEK[k.fordulo_honap - 1]} ${k.fordulo_nap}.`;
-  return k.kovetkezo_fordulo ? huDatum(k.kovetkezo_fordulo) : "–";
+  return "–";
 }
 
 const inputClass =
@@ -67,13 +80,15 @@ type UrlapAllapot = {
   csomag: string;
   tipus: string;
   ciklus: string;
-  fordulo_nap: string;
-  fordulo_honap: string;
+  /** A forduló EGYETLEN mezője: egy konkrét dátum. A nap és a hónap benne
+   * van - külön mezőben csak ugyanazt kérdeznénk még egyszer. */
   kovetkezo_fordulo: string;
-  osztaly: string;
   felelos_id: string;
   aktiv: boolean;
+  fizetesi_mod: string;
+  /** NETTÓ ár; a bruttó ebből és az áfa-kapcsolóból jön. */
   ar_osszeg: string;
+  ar_plusz_afa: boolean;
   ar_penznem: string;
   szamla_forras: string;
   kartya: string;
@@ -87,13 +102,12 @@ function uresUrlap(alapTipus: string): UrlapAllapot {
     csomag: "",
     tipus: alapTipus,
     ciklus: "havi",
-    fordulo_nap: "",
-    fordulo_honap: "",
     kovetkezo_fordulo: "",
-    osztaly: "",
     felelos_id: "",
     aktiv: true,
+    fizetesi_mod: "",
     ar_osszeg: "",
+    ar_plusz_afa: false,
     ar_penznem: "HUF",
     szamla_forras: "",
     kartya: "",
@@ -108,13 +122,15 @@ function urlapBol(k: Kotelezettseg): UrlapAllapot {
     csomag: k.csomag ?? "",
     tipus: k.tipus,
     ciklus: k.ciklus,
-    fordulo_nap: k.fordulo_nap != null ? String(k.fordulo_nap) : "",
-    fordulo_honap: k.fordulo_honap != null ? String(k.fordulo_honap) : "",
-    kovetkezo_fordulo: k.kovetkezo_fordulo ?? "",
-    osztaly: k.osztaly ?? "",
+    // A Google-táblázatból importált soroknál nincs konkrét dátum, csak minta
+    // ("minden hónap 13."). Az űrlap a KISZÁMOLT következő fordulóval nyílik,
+    // különben a mentés dátum nélkül maradna.
+    kovetkezo_fordulo: k.kovetkezo_fordulo ?? k.kovetkezo_esedekesseg ?? "",
     felelos_id: k.felelos_id != null ? String(k.felelos_id) : "",
     aktiv: k.aktiv,
+    fizetesi_mod: k.fizetesi_mod ?? "",
     ar_osszeg: k.ar_osszeg != null ? String(k.ar_osszeg) : "",
+    ar_plusz_afa: k.ar_plusz_afa,
     ar_penznem: k.ar_penznem,
     szamla_forras: k.szamla_forras ?? "",
     kartya: k.kartya ?? "",
@@ -135,17 +151,19 @@ function IdoszakSor({
 }) {
   const router = useRouter();
   const [osszeg, setOsszeg] = useState(idoszak.osszeg != null ? String(idoszak.osszeg) : "");
+  const [pluszAfa, setPluszAfa] = useState(idoszak.plusz_afa);
   const [hufOsszeg, setHufOsszeg] = useState(idoszak.huf_osszeg != null ? String(idoszak.huf_osszeg) : "");
   const [busy, setBusy] = useState(false);
   const [feltolt, setFeltolt] = useState(false);
 
-  async function ment() {
+  async function ment(afa: boolean = pluszAfa) {
     setBusy(true);
     try {
       const res = await authFetch(`/api/v1/kotelezettsegek/idoszakok/${idoszak.id}`, {
         method: "PUT",
         body: JSON.stringify({
           osszeg: osszeg.trim() ? Number(osszeg) : null,
+          plusz_afa: afa,
           huf_osszeg: hufOsszeg.trim() ? Number(hufOsszeg) : null,
         }),
       });
@@ -188,18 +206,40 @@ function IdoszakSor({
       <td className="py-2 pr-4 whitespace-nowrap text-text-primary">{huDatum(idoszak.esedekesseg)}</td>
       <td className="py-2 pr-4">
         {szerkeszthet ? (
-          <input
-            type="number"
-            value={osszeg}
-            onChange={(e) => setOsszeg(e.target.value)}
-            onBlur={ment}
-            disabled={busy}
-            placeholder="Mennyibe került?"
-            className={`${inputClass} w-[140px]`}
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={osszeg}
+              onChange={(e) => setOsszeg(e.target.value)}
+              onBlur={() => ment()}
+              disabled={busy}
+              placeholder="Nettó"
+              className={`${inputClass} w-[120px]`}
+            />
+            {/* Az áfa-kapcsoló azonnal ment: a bruttó ebből számolódik, és a
+                felhasználó a következő pillanatban azt akarja látni. */}
+            <label className="flex items-center gap-1 whitespace-nowrap text-[12px] text-text-secondary">
+              <input
+                type="checkbox"
+                checked={pluszAfa}
+                disabled={busy}
+                onChange={(e) => {
+                  setPluszAfa(e.target.checked);
+                  ment(e.target.checked);
+                }}
+              />
+              + ÁFA
+            </label>
+          </div>
         ) : (
-          penzzel(idoszak.osszeg, idoszak.penznem)
+          <>
+            {penzzel(idoszak.osszeg, idoszak.penznem)}
+            {idoszak.plusz_afa && <span className="ml-1 text-[11px] text-text-muted">+ ÁFA</span>}
+          </>
         )}
+      </td>
+      <td className="py-2 pr-4 whitespace-nowrap text-text-secondary">
+        {penzzel(bruttoBol(idoszak.osszeg, idoszak.plusz_afa), idoszak.penznem)}
       </td>
       <td className="py-2 pr-4">
         {/* Devizás terhelésnél a bankszámlán forint jelenik meg - azt csak
@@ -210,7 +250,7 @@ function IdoszakSor({
               type="number"
               value={hufOsszeg}
               onChange={(e) => setHufOsszeg(e.target.value)}
-              onBlur={ment}
+              onBlur={() => ment()}
               disabled={busy}
               placeholder="Ft-ban"
               className={`${inputClass} w-[130px]`}
@@ -310,6 +350,10 @@ export function KotelezettsegKezelo({
       alert("Add meg a megnevezést.");
       return;
     }
+    if (!urlap.kovetkezo_fordulo) {
+      alert("Add meg a következő forduló (lejárat) dátumát.");
+      return;
+    }
     setBusy(true);
     try {
       const test = {
@@ -317,14 +361,13 @@ export function KotelezettsegKezelo({
         csomag: urlap.csomag.trim() || null,
         tipus: urlap.tipus,
         ciklus: urlap.ciklus,
-        fordulo_nap: urlap.fordulo_nap.trim() ? Number(urlap.fordulo_nap) : null,
-        fordulo_honap: urlap.fordulo_honap.trim() ? Number(urlap.fordulo_honap) : null,
         kovetkezo_fordulo: urlap.kovetkezo_fordulo || null,
-        osztaly: urlap.osztaly.trim() || null,
         felelos_id: urlap.felelos_id ? Number(urlap.felelos_id) : null,
         auto_id: autoId ?? null,
         aktiv: urlap.aktiv,
+        fizetesi_mod: urlap.fizetesi_mod || null,
         ar_osszeg: urlap.ar_osszeg.trim() ? Number(urlap.ar_osszeg) : null,
+        ar_plusz_afa: urlap.ar_plusz_afa,
         ar_penznem: urlap.ar_penznem,
         szamla_forras: urlap.szamla_forras.trim() || null,
         kartya: urlap.kartya.trim() || null,
@@ -374,7 +417,7 @@ export function KotelezettsegKezelo({
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Megnevezés</th>
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Forduló</th>
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Következő</th>
-              <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Ár</th>
+              <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Nettó ár</th>
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Felelős</th>
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Állapot</th>
               <th className="py-1.5 text-right font-medium text-text-secondary" />
@@ -418,6 +461,11 @@ export function KotelezettsegKezelo({
                     </td>
                     <td className="py-2.5 pr-4 text-right whitespace-nowrap text-text-secondary">
                       {penzzel(k.ar_osszeg, k.ar_penznem)}
+                      {k.ar_plusz_afa && (
+                        <span className="block text-[11px] text-text-muted">
+                          + ÁFA → {penzzel(k.ar_brutto, k.ar_penznem)}
+                        </span>
+                      )}
                     </td>
                     <td className="py-2.5 pr-4 text-text-secondary">{k.felelos_nev ?? "–"}</td>
                     <td className="py-2.5 pr-4">
@@ -455,9 +503,9 @@ export function KotelezettsegKezelo({
                     <tr className="border-b border-border bg-surface-2">
                       <td colSpan={7} className="px-3 py-4">
                         <div className="mb-3 grid grid-cols-1 gap-x-8 gap-y-1 text-[12.5px] text-text-muted sm:grid-cols-2">
-                          {k.osztaly && (
+                          {k.fizetesi_mod && (
                             <p>
-                              Osztály: <span className="text-text-secondary">{k.osztaly}</span>
+                              Fizetés módja: <span className="text-text-secondary">{k.fizetesi_mod}</span>
                             </p>
                           )}
                           {k.kartya && (
@@ -492,6 +540,19 @@ export function KotelezettsegKezelo({
                           )}
                         </div>
 
+                        {/* A kötelezettséghez MAGÁHOZ tartozó papírok: kötvény,
+                            szerződés, a forgalmi másolata. A fordulónkénti
+                            számla ettől külön, lent, az adott fordulónál van. */}
+                        <p className="t-label mb-1.5">Dokumentumok (kötvény, szerződés, bármi)</p>
+                        <div className="mb-4">
+                          <PapirFeltoltes
+                            entityType="kotelezettseg"
+                            entityId={k.id}
+                            canEdit={canEdit}
+                            canDelete={canDelete}
+                          />
+                        </div>
+
                         <p className="t-label mb-1.5">Fordulók – mennyibe került, és hol a számla</p>
                         {k.idoszakok.length === 0 ? (
                           <p className="text-[12.5px] text-text-muted">
@@ -502,7 +563,8 @@ export function KotelezettsegKezelo({
                             <thead>
                               <tr className="border-b border-border">
                                 <th className="py-1 pr-4 text-left font-medium text-text-muted">Forduló</th>
-                                <th className="py-1 pr-4 text-left font-medium text-text-muted">Összeg</th>
+                                <th className="py-1 pr-4 text-left font-medium text-text-muted">Nettó</th>
+                                <th className="py-1 pr-4 text-left font-medium text-text-muted">Bruttó</th>
                                 <th className="py-1 pr-4 text-left font-medium text-text-muted">Ebből forint</th>
                                 <th className="py-1 pr-4 text-left font-medium text-text-muted">Számla</th>
                                 <th className="py-1 text-right font-medium text-text-muted">Állapot</th>
@@ -572,44 +634,12 @@ export function KotelezettsegKezelo({
                 </select>
               </div>
 
-              {/* A forduló kétféleképpen adható meg, és ez szándékos: a
-                  visszatérőnél a MINTA a helyes ("minden hónap 7-én"), a
-                  határozott idejűnél a konkrét dátum. */}
-              {urlap.ciklus !== "egyszeri" && (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11px] text-text-muted">Forduló napja (1-31)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={31}
-                      value={urlap.fordulo_nap}
-                      onChange={(e) => setUrlap({ ...urlap, fordulo_nap: e.target.value })}
-                      className={inputClass}
-                    />
-                  </div>
-                  {urlap.ciklus === "eves" && (
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] text-text-muted">Forduló hónapja</label>
-                      <select
-                        value={urlap.fordulo_honap}
-                        onChange={(e) => setUrlap({ ...urlap, fordulo_honap: e.target.value })}
-                        className={inputClass}
-                      >
-                        <option value="">–</option>
-                        {HONAP_NEVEK.map((nev, i) => (
-                          <option key={nev} value={i + 1}>
-                            {nev}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </>
-              )}
-              <div className="flex flex-col gap-1">
+              {/* A forduló EGY dátum: a nap és a hónap benne van, a ciklus
+                  pedig megmondja, mennyivel lép tovább (havi egy hónapot, éves
+                  egy évet) - lásd backend services/kotelezettseg.py. */}
+              <div className="flex flex-col gap-1 sm:col-span-2">
                 <label className="text-[11px] text-text-muted">
-                  {urlap.ciklus === "egyszeri" ? "Lejárat *" : "Következő konkrét forduló"}
+                  {urlap.ciklus === "egyszeri" ? "Lejárat *" : "Következő forduló *"}
                 </label>
                 <input
                   type="date"
@@ -618,12 +648,16 @@ export function KotelezettsegKezelo({
                   className={inputClass}
                 />
                 <p className="text-[11px] text-text-muted">
-                  Ha ki van töltve, ez erősebb a mintánál – több évre előre kifizetett tételnél ezt használd.
+                  {urlap.ciklus === "egyszeri"
+                    ? "Ekkor jár le – magától nem újul meg."
+                    : "Innentől a ciklus lépteti tovább. Több évre előre kifizetett tételnél a tényleges lejáratot add meg."}
                 </p>
               </div>
 
+              {/* Az ár NETTÓBAN, mellette az áfa-kapcsoló: a bruttót ebből
+                  számoljuk, nem külön mezőben tároljuk. */}
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Ár (ciklusonként)</label>
+                <label className="text-[11px] text-text-muted">Nettó ár (ciklusonként)</label>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -643,6 +677,35 @@ export function KotelezettsegKezelo({
                     ))}
                   </select>
                 </div>
+                <label className="mt-1 flex items-center gap-2 text-[12.5px] text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={urlap.ar_plusz_afa}
+                    onChange={(e) => setUrlap({ ...urlap, ar_plusz_afa: e.target.checked })}
+                  />
+                  Plusz ÁFA
+                </label>
+                <p className="text-[11px] text-text-muted">
+                  Bruttó:{" "}
+                  {urlap.ar_osszeg.trim()
+                    ? penzzel(bruttoBol(Number(urlap.ar_osszeg), urlap.ar_plusz_afa), urlap.ar_penznem)
+                    : "–"}
+                </p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-text-muted">Hogyan fizetjük</label>
+                <select
+                  value={urlap.fizetesi_mod}
+                  onChange={(e) => setUrlap({ ...urlap, fizetesi_mod: e.target.value })}
+                  className={inputClass}
+                >
+                  <option value="">–</option>
+                  {FIZETESI_MODOK.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Felelős</label>
@@ -659,10 +722,6 @@ export function KotelezettsegKezelo({
                   ))}
                 </select>
                 <p className="text-[11px] text-text-muted">Ő kapja az értesítést és a feladatot a fordulóról.</p>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Osztály</label>
-                <input value={urlap.osztaly} onChange={(e) => setUrlap({ ...urlap, osztaly: e.target.value })} className={inputClass} />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Figyelmeztetés (nappal előbb)</label>

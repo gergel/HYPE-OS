@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { KotelezettsegKezelo } from "@/components/kotelezettseg/KotelezettsegKezelo";
+import { PapirFeltoltes } from "@/components/kotelezettseg/PapirFeltoltes";
 import { authFetch } from "@/lib/authFetch";
 import { huDatum } from "@/lib/huDate";
 import { formatHuf } from "@/lib/penz";
@@ -16,6 +17,17 @@ const inputClass =
 
 /** Gyors választék a költés megnevezéséhez - nem korlátozás, bármi beírható. */
 const KOLTSEG_FAJTAK = ["Tankolás", "Szerviz", "Alkatrész", "Gumi", "Autópálya-matrica", "Parkolás", "Mosás"];
+
+/** Ugyanaz a szókészlet, mint a Pénzügy kiadásainál - a kimutatás így egyben
+ * látja az itt és az ott rögzített fizetéseket. */
+const FIZETESI_MODOK = ["Átutalás", "Készpénz", "Bankkártya"];
+
+/** Bruttó a nettóból; áfa nélkül a kettő ugyanaz (ugyanaz a szabály, mint a
+ * backendben - routes/kotelezettsegek.brutto). */
+function bruttoBol(netto: number | null, pluszAfa: boolean): number | null {
+  if (netto == null || Number.isNaN(netto)) return null;
+  return pluszAfa ? Math.round(netto * 1.27 * 100) / 100 : netto;
+}
 
 function hataridoJelzo(allapot: string) {
   if (allapot === "lejart") return { label: "Lejárt papír", tone: "danger" as const };
@@ -33,6 +45,8 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
   const router = useRouter();
   const [megnevezes, setMegnevezes] = useState("");
   const [osszeg, setOsszeg] = useState("");
+  const [pluszAfa, setPluszAfa] = useState(false);
+  const [fizetesiMod, setFizetesiMod] = useState("");
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
   const [megjegyzes, setMegjegyzes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,7 +62,10 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
         method: "POST",
         body: JSON.stringify({
           megnevezes: megnevezes.trim(),
+          // NETTÓ megy fel, a bruttót a backend számolja az áfa-jelölésből.
           osszeg: Number(osszeg),
+          plusz_afa: pluszAfa,
+          fizetesi_mod: fizetesiMod || null,
           datum: datum || null,
           megjegyzes: megjegyzes.trim() || null,
         }),
@@ -60,6 +77,8 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       }
       setMegnevezes("");
       setOsszeg("");
+      setPluszAfa(false);
+      setFizetesiMod("");
       setMegjegyzes("");
       onKesz();
       router.refresh();
@@ -86,8 +105,32 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
         </datalist>
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="t-label">Összeg (Ft)</span>
+        <span className="t-label">Nettó összeg (Ft)</span>
         <input type="number" value={osszeg} onChange={(e) => setOsszeg(e.target.value)} className={`${inputClass} w-[130px]`} />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="t-label">ÁFA</span>
+        <span className="flex h-[34px] items-center gap-2 text-[13px] text-text-primary">
+          <input type="checkbox" checked={pluszAfa} onChange={(e) => setPluszAfa(e.target.checked)} />
+          Plusz ÁFA
+        </span>
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="t-label">Bruttó</span>
+        <span className="flex h-[34px] items-center text-[13px] text-text-secondary">
+          {osszeg.trim() ? formatHuf(bruttoBol(Number(osszeg), pluszAfa)) : "–"}
+        </span>
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="t-label">Hogyan fizettük</span>
+        <select value={fizetesiMod} onChange={(e) => setFizetesiMod(e.target.value)} className={`${inputClass} w-[160px]`}>
+          <option value="">–</option>
+          {FIZETESI_MODOK.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Mikor</span>
@@ -280,8 +323,10 @@ export function AutoKezelo({
                           <tr className="border-b border-border">
                             <th className="py-1 pr-4 text-left font-medium text-text-muted">Mikor</th>
                             <th className="py-1 pr-4 text-left font-medium text-text-muted">Mire</th>
-                            <th className="py-1 pr-4 text-right font-medium text-text-muted">Összeg</th>
-                            <th className="py-1 pr-4 text-left font-medium text-text-muted">Megjegyzés</th>
+                            <th className="py-1 pr-4 text-right font-medium text-text-muted">Nettó</th>
+                            <th className="py-1 pr-4 text-right font-medium text-text-muted">Bruttó</th>
+                            <th className="py-1 pr-4 text-left font-medium text-text-muted">Fizetés</th>
+                            <th className="py-1 pr-4 text-left font-medium text-text-muted">Dokumentum</th>
                             <th className="py-1 text-right font-medium text-text-muted" />
                           </tr>
                         </thead>
@@ -291,7 +336,16 @@ export function AutoKezelo({
                               <td className="py-1.5 pr-4 whitespace-nowrap text-text-secondary">
                                 {kiadas.datum ? huDatum(kiadas.datum) : "–"}
                               </td>
-                              <td className="py-1.5 pr-4 text-text-primary">{kiadas.megnevezes}</td>
+                              <td className="py-1.5 pr-4 text-text-primary">
+                                {kiadas.megnevezes}
+                                {kiadas.megjegyzes && (
+                                  <span className="block text-[11.5px] text-text-muted">{kiadas.megjegyzes}</span>
+                                )}
+                              </td>
+                              <td className="py-1.5 pr-4 text-right tabular-nums text-text-secondary">
+                                {kiadas.netto != null ? formatHuf(kiadas.netto) : "–"}
+                                {kiadas.plusz_afa && <span className="ml-1 text-[11px] text-text-muted">+ ÁFA</span>}
+                              </td>
                               <td className="py-1.5 pr-4 text-right tabular-nums text-text-primary">
                                 {kiadas.osszeg != null
                                   ? kiadas.penznem === "HUF"
@@ -299,7 +353,21 @@ export function AutoKezelo({
                                     : `${kiadas.osszeg.toLocaleString("hu-HU")} ${kiadas.penznem}`
                                   : "–"}
                               </td>
-                              <td className="py-1.5 pr-4 text-text-muted">{kiadas.megjegyzes ?? ""}</td>
+                              <td className="py-1.5 pr-4 text-text-muted">{kiadas.fizetesi_mod ?? "–"}</td>
+                              {/* A bizonylat (számla, blokk) magához a
+                                  kiadás-sorhoz tartozik - az AUTÓK oldalának
+                                  jogosultságával (lásd backend
+                                  routes/autok.py KIADAS_ENTITAS). */}
+                              <td className="py-1.5 pr-4">
+                                <PapirFeltoltes
+                                  entityType="autoKiadas"
+                                  entityId={kiadas.id}
+                                  kategoria="szamla"
+                                  canEdit={canEdit}
+                                  canDelete={canDelete}
+                                  uresSzoveg="–"
+                                />
+                              </td>
                               <td className="py-1.5 text-right">
                                 {canDelete && (
                                   <button

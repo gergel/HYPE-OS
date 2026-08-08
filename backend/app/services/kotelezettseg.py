@@ -69,15 +69,44 @@ def _kovetkezo_minta_szerint(k: Kotelezettseg, tol: date) -> date | None:
 def kovetkezo_esedekesseg(k: Kotelezettseg, ma: date | None = None) -> date | None:
     """A következő forduló dátuma. None = nincs miből kiszámolni.
 
-    A KONKRÉT dátum (`kovetkezo_fordulo`) erősebb a mintánál, amíg el nem
-    múlt: egy négy évre előre kifizetett domain nem évente esedékes, hiába
-    "éves" a ciklusa. Miután elmúlt, a minta viszi tovább - a határozott idejű
-    (EGYSZERI) szerződés viszont nem újul meg magától, ott a múltbeli lejárat
-    marad az utolsó szó."""
+    A KONKRÉT dátum (`kovetkezo_fordulo`) az elsődleges: amíg nem jött el, az a
+    következő forduló (egy négy évre előre kifizetett domain nem évente
+    esedékes, hiába "éves" a ciklusa). Ha már elmúlt, a CIKLUSSAL lépjük
+    tovább, amíg a mai naphoz nem érünk - így a felületen elég egyetlen dátumot
+    megadni, nem kell külön "minden hónap 7-én" mintát is.
+
+    Két kivétel:
+    - a határozott idejű (EGYSZERI) szerződés nem újul meg magától: ott a
+      lejárat marad az utolsó szó, akkor is, ha már elmúlt;
+    - ha nincs konkrét dátum (a Google-táblázatból importált soroknál), a minta
+      viszi tovább."""
     ma = ma or date.today()
-    if k.kovetkezo_fordulo is not None and (k.kovetkezo_fordulo >= ma or k.ciklus == KotelezettsegCiklus.EGYSZERI):
+    if k.kovetkezo_fordulo is None:
+        return _kovetkezo_minta_szerint(k, ma)
+    if k.ciklus == KotelezettsegCiklus.EGYSZERI or k.kovetkezo_fordulo >= ma:
         return k.kovetkezo_fordulo
-    return _kovetkezo_minta_szerint(k, ma)
+
+    jelolt = k.kovetkezo_fordulo
+    # A lépések számát korlátozzuk: egy elgépelt, évtizedekkel korábbi dátum ne
+    # tudjon végtelen ciklusba vinni.
+    for _ in range(600):
+        kovetkezo = _kovetkezo_ciklus(k, jelolt)
+        if kovetkezo is None or kovetkezo <= jelolt:
+            return jelolt
+        jelolt = kovetkezo
+        if jelolt >= ma:
+            return jelolt
+    return jelolt
+
+
+def _kovetkezo_ciklus(k: Kotelezettseg, naptol: date) -> date | None:
+    """A megadott forduló UTÁNI forduló - egy ciklussal előre."""
+    if k.ciklus == KotelezettsegCiklus.HAVI:
+        ev, honap = (naptol.year + 1, 1) if naptol.month == 12 else (naptol.year, naptol.month + 1)
+        return _nap_a_honapban(ev, honap, k.fordulo_nap or naptol.day)
+    if k.ciklus == KotelezettsegCiklus.EVES:
+        return _nap_a_honapban(naptol.year + 1, naptol.month, naptol.day)
+    return None
 
 
 def _elozo_esedekesseg(k: Kotelezettseg, tol: date) -> date | None:

@@ -37,8 +37,12 @@ router = APIRouter(prefix="/kotelezettsegek", tags=["kotelezettsegek"])
 
 PAGE = "/kotelezettsegek"
 
-#: A csatolmányok entity_type-ja egy időszakhoz (lásd services/attachments.py).
+#: A csatolmányok entity_type-jai (lásd services/attachments.py):
+#: az EGY FORDULÓHOZ tartozó számla, és a kötelezettséghez MAGÁHOZ tartozó
+#: papír (kötvény, szerződés, forgalmi másolat) - utóbbi nem egy fizetéshez,
+#: hanem az egészhez tartozik, ezért nem fér el az időszakon.
 CSATOLMANY_ENTITAS = "kotelezettsegIdoszak"
+PAPIR_ENTITAS = "kotelezettseg"
 
 CIKLUSOK = [c.value for c in KotelezettsegCiklus]
 TIPUSOK = [t.value for t in KotelezettsegTipus]
@@ -53,7 +57,12 @@ class IdoszakRead(BaseModel):
     id: int
     kotelezettseg_id: int
     esedekesseg: date
+    #: A ténylegesen levont összeg NETTÓBAN.
     osszeg: float | None = None
+    plusz_afa: bool = False
+    #: A nettóból és az áfa-jelölésből számolva - nem tárolt mező, hogy a
+    #: kettő sose mondhasson ellent egymásnak.
+    brutto: float | None = None
     penznem: str = "HUF"
     huf_osszeg: float | None = None
     fizetve: bool = False
@@ -79,7 +88,11 @@ class KotelezettsegRead(BaseModel):
     felelos_nev: str | None = None
     auto_id: int | None = None
     aktiv: bool = True
+    fizetesi_mod: str | None = None
+    #: Nettó ár ciklusonként; a bruttó ebből és az áfa-jelölésből számolódik.
     ar_osszeg: float | None = None
+    ar_plusz_afa: bool = False
+    ar_brutto: float | None = None
     ar_penznem: str = "HUF"
     huf_becsles_honap: float | None = None
     huf_becsles_ev: float | None = None
@@ -96,7 +109,21 @@ class KotelezettsegRead(BaseModel):
     allapot: str = "rendben"
     #: Hány esedékes fordulónál hiányzik még az összeg vagy a számla.
     nyitott_idoszakok: int = 0
+    #: Hány papír (kötvény, szerződés) van feltöltve magához a kötelezettséghez.
+    papir_db: int = 0
     idoszakok: list[IdoszakRead] = []
+
+
+#: A magyar általános áfakulcs. Egy helyen áll, hogy a nettó -> bruttó
+#: átváltás mindenhol ugyanaz legyen.
+AFA_SZORZO = 1.27
+
+
+def brutto(netto: float | None, plusz_afa: bool) -> float | None:
+    """Bruttó a nettóból. Ha nincs áfa, a kettő ugyanaz."""
+    if netto is None:
+        return None
+    return round(netto * AFA_SZORZO, 2) if plusz_afa else float(netto)
 
 
 def _szamla_db(db: Session, idoszak_idk: list[int]) -> dict[int, int]:
@@ -114,13 +141,31 @@ def _szamla_db(db: Session, idoszak_idk: list[int]) -> dict[int, int]:
     return darab
 
 
-def _kimenet(k: Kotelezettseg, darab: dict[int, int], ma: date) -> KotelezettsegRead:
+def _papir_db(db: Session, kotelezettseg_idk: list[int]) -> dict[int, int]:
+    """Hány papír tartozik magukhoz a kötelezettségekhez (nem a fordulóikhoz)."""
+    if not kotelezettseg_idk:
+        return {}
+    sorok = db.scalars(
+        select(DocumentAttachment).where(
+            DocumentAttachment.entity_type == PAPIR_ENTITAS,
+            DocumentAttachment.entity_id.in_(kotelezettseg_idk),
+        )
+    ).all()
+    darab: dict[int, int] = {}
+    for sor in sorok:
+        darab[sor.entity_id] = darab.get(sor.entity_id, 0) + 1
+    return darab
+
+
+def _kimenet(k: Kotelezettseg, darab: dict[int, int], ma: date, papirok: dict[int, int] | None = None) -> KotelezettsegRead:
     idoszakok = [
         IdoszakRead(
             id=i.id,
             kotelezettseg_id=i.kotelezettseg_id,
             esedekesseg=i.esedekesseg,
             osszeg=float(i.osszeg) if i.osszeg is not None else None,
+            plusz_afa=bool(i.plusz_afa),
+            brutto=brutto(float(i.osszeg) if i.osszeg is not None else None, bool(i.plusz_afa)),
             penznem=i.penznem,
             huf_osszeg=float(i.huf_osszeg) if i.huf_osszeg is not None else None,
             fizetve=i.fizetve,
@@ -145,7 +190,10 @@ def _kimenet(k: Kotelezettseg, darab: dict[int, int], ma: date) -> Kotelezettseg
         felelos_nev=k.felelos.full_name if k.felelos else None,
         auto_id=k.auto_id,
         aktiv=k.aktiv,
+        fizetesi_mod=k.fizetesi_mod,
         ar_osszeg=float(k.ar_osszeg) if k.ar_osszeg is not None else None,
+        ar_plusz_afa=bool(k.ar_plusz_afa),
+        ar_brutto=brutto(float(k.ar_osszeg) if k.ar_osszeg is not None else None, bool(k.ar_plusz_afa)),
         ar_penznem=k.ar_penznem,
         huf_becsles_honap=float(k.huf_becsles_honap) if k.huf_becsles_honap is not None else None,
         huf_becsles_ev=float(k.huf_becsles_ev) if k.huf_becsles_ev is not None else None,
@@ -157,6 +205,7 @@ def _kimenet(k: Kotelezettseg, darab: dict[int, int], ma: date) -> Kotelezettseg
         napok_hatra=szolg.hatralevo_napok(k, ma),
         allapot=szolg.allapot(k, ma),
         nyitott_idoszakok=sum(1 for i in idoszakok if i.hianyzik is not None),
+        papir_db=(papirok or {}).get(k.id, 0),
         idoszakok=idoszakok,
     )
 
@@ -195,7 +244,8 @@ def list_kotelezettsegek(
     if auto_id is not None:
         sorok = [k for k in sorok if k.auto_id == auto_id]
     darab = _szamla_db(db, [i.id for k in sorok for i in k.idoszakok])
-    return [_kimenet(k, darab, ma) for k in sorok]
+    papirok = _papir_db(db, [k.id for k in sorok])
+    return [_kimenet(k, darab, ma, papirok) for k in sorok]
 
 
 @router.get("/{kotelezettseg_id}", response_model=KotelezettsegRead)
@@ -208,7 +258,7 @@ def get_kotelezettseg(
     if k is None:
         raise HTTPException(status_code=404, detail="A kötelezettség nem található.")
     darab = _szamla_db(db, [i.id for i in k.idoszakok])
-    return _kimenet(k, darab, date.today())
+    return _kimenet(k, darab, date.today(), _papir_db(db, [k.id]))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -229,7 +279,10 @@ class KotelezettsegIn(BaseModel):
     felelos_id: int | None = None
     auto_id: int | None = None
     aktiv: bool = True
+    fizetesi_mod: str | None = None
+    #: Nettó ár ciklusonként; a bruttó ebből és az áfa-jelölésből számolódik.
     ar_osszeg: float | None = None
+    ar_plusz_afa: bool = False
     ar_penznem: str = "HUF"
     huf_becsles_honap: float | None = None
     huf_becsles_ev: float | None = None
@@ -253,15 +306,14 @@ def _ellenoriz(payload: KotelezettsegIn) -> None:
     # Enélkül a kötelezettség némán "nincs dátum" állapotban ülne a listán, és
     # sosem szólna a lejáratáról - pont az veszne el, amiért felvitték.
     if payload.kovetkezo_fordulo is None and payload.fordulo_nap is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Add meg a fordulót: vagy egy konkrét dátumot, vagy a hónap napját (éveseknél a hónapot is).",
-        )
+        raise HTTPException(status_code=400, detail="Add meg a következő forduló (lejárat) dátumát.")
     if (
         payload.ciklus == KotelezettsegCiklus.EVES
         and payload.kovetkezo_fordulo is None
         and payload.fordulo_honap is None
     ):
+        # Csak a Google-táblázatból importált, dátum nélküli soroknál fordulhat
+        # elő: ott a minta az egyetlen forrás, és éveshez a hónap is kell.
         raise HTTPException(status_code=400, detail="Éves ciklusnál a forduló hónapját is meg kell adni.")
 
 
@@ -279,7 +331,7 @@ def create_kotelezettseg(
     db.refresh(k)
     szolg.ensure_mindent(db)
     db.refresh(k)
-    return _kimenet(k, _szamla_db(db, [i.id for i in k.idoszakok]), date.today())
+    return _kimenet(k, _szamla_db(db, [i.id for i in k.idoszakok]), date.today(), _papir_db(db, [k.id]))
 
 
 @router.put("/{kotelezettseg_id}", response_model=KotelezettsegRead)
@@ -299,7 +351,7 @@ def update_kotelezettseg(
     db.commit()
     szolg.ensure_mindent(db)
     db.refresh(k)
-    return _kimenet(k, _szamla_db(db, [i.id for i in k.idoszakok]), date.today())
+    return _kimenet(k, _szamla_db(db, [i.id for i in k.idoszakok]), date.today(), _papir_db(db, [k.id]))
 
 
 @router.delete("/{kotelezettseg_id}", status_code=204)
@@ -321,7 +373,9 @@ def delete_kotelezettseg(
 
 
 class IdoszakIn(BaseModel):
+    #: NETTÓ összeg.
     osszeg: float | None = None
+    plusz_afa: bool | None = None
     penznem: str | None = None
     huf_osszeg: float | None = None
     fizetve: bool | None = None
@@ -350,6 +404,8 @@ def update_idoszak(
         kotelezettseg_id=idoszak.kotelezettseg_id,
         esedekesseg=idoszak.esedekesseg,
         osszeg=float(idoszak.osszeg) if idoszak.osszeg is not None else None,
+        plusz_afa=bool(idoszak.plusz_afa),
+        brutto=brutto(float(idoszak.osszeg) if idoszak.osszeg is not None else None, bool(idoszak.plusz_afa)),
         penznem=idoszak.penznem,
         huf_osszeg=float(idoszak.huf_osszeg) if idoszak.huf_osszeg is not None else None,
         fizetve=idoszak.fizetve,

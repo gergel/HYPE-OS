@@ -74,17 +74,16 @@ class Kotelezettseg(TimestampMixin, Base):
     ciklus: Mapped[str] = mapped_column(String(20), nullable=False, default=KotelezettsegCiklus.HAVI)
 
     # ── A forduló ─────────────────────────────────────────────────────────────
-    # Kétféleképpen ismerhetjük, és a kettő nem ugyanaz:
+    # A forduló EGY KONKRÉT DÁTUM (`kovetkezo_fordulo`), és a ciklus mondja meg,
+    # mennyivel lép tovább: a havi egy hónapot, az éves egy évet. A felületen
+    # is csak ezt az egy mezőt kérjük - a dátumban benne van a nap és a hónap
+    # is, két külön mező csak ugyanazt kérdezné még egyszer.
     #
-    #   `fordulo_nap` (+ éveseknél `fordulo_honap`) a MINTA: "minden hónap
-    #   7-én", "minden szeptember 3-án". Ebből bármelyik évre kiszámolható a
-    #   következő esedékesség.
-    #
-    #   `kovetkezo_fordulo` egy KONKRÉT dátum: "2029. 06. 17.". Ez erősebb a
-    #   mintánál, mert lehet több évre előre kifizetve (egy négy évre megvett
-    #   domain nem évente esedékes), és a határozott idejű szerződés lejárata
-    #   is ez. Ha ki van töltve és még nem múlt el, ez a következő forduló;
-    #   miután elmúlt, a minta viszi tovább (lásd services/kotelezettseg.py).
+    # A `fordulo_nap` / `fordulo_honap` a MINTA ("minden hónap 7-én"), és csak
+    # azért maradt meg, mert a Google-táblázat így vezette: az onnan importált
+    # soroknál nincs konkrét dátum, csak ez. Ha nincs konkrét forduló, ebből
+    # számoljuk ki (lásd services/kotelezettseg.py); ha van, az erősebb - egy
+    # több évre előre kifizetett domain nem évente esedékes.
     fordulo_nap: Mapped[int | None] = mapped_column(comment="A hónap napja, 1-31")
     fordulo_honap: Mapped[int | None] = mapped_column(comment="Éves ciklusnál a hónap, 1-12")
     kovetkezo_fordulo: Mapped[date | None] = mapped_column(
@@ -105,11 +104,21 @@ class Kotelezettseg(TimestampMixin, Base):
     #: (lásd models/auto.py).
     auto_id: Mapped[int | None] = mapped_column(ForeignKey("autok.id"), index=True)
 
+    #: Hogyan fizetjük: "Átutalás" | "Készpénz" | "Bankkártya". Ugyanaz a
+    #: szókészlet, mint a Pénzügy kiadásainál (Expense.kifizetes_modja), hogy a
+    #: kimutatások ne kétféle néven lássák ugyanazt.
+    fizetesi_mod: Mapped[str | None] = mapped_column(String(50))
+
     # ── Ár ────────────────────────────────────────────────────────────────────
     # Ez a VÁRT ár (a szolgáltató árlistája), nem a tényleges terhelés: azt
     # fordulónként az időszak `osszeg` mezője hordozza. Devizás előfizetésnél a
     # kettő szinte sosem egyezik, ezért nem közös mező.
-    ar_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    #
+    # Az összeg mindig NETTÓ. A bruttót nem tároljuk, mert az két számból
+    # következik (nettó + van-e áfa), és két tárolt szám előbb-utóbb
+    # ellentmond egymásnak - a séma számolja (lásd api/routes/kotelezettsegek.py).
+    ar_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Nettó ár")
+    ar_plusz_afa: Mapped[bool] = mapped_column(nullable=False, default=False, server_default="false")
     ar_penznem: Mapped[str] = mapped_column(String(3), nullable=False, default="HUF")
     #: A táblázatból hozott forintosított becslés - tájékoztató, nem számolunk
     #: vele (nincs a rendszerben árfolyam-forrás).
@@ -154,8 +163,11 @@ class KotelezettsegIdoszak(TimestampMixin, Base):
     kotelezettseg_id: Mapped[int] = mapped_column(ForeignKey("kotelezettsegek.id"), nullable=False, index=True)
     esedekesseg: Mapped[date] = mapped_column(Date, nullable=False)
 
-    #: Amennyit TÉNYLEGESEN levontak. Amíg üres, az időszak teendő.
-    osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    #: Amennyit TÉNYLEGESEN levontak, NETTÓBAN. Amíg üres, az időszak teendő.
+    osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Nettó összeg")
+    #: Jön-e rá áfa. Ha igen, a bruttó a nettó 1,27-szerese; ha nem, a kettő
+    #: ugyanaz - a bruttót ezért nem tároljuk külön.
+    plusz_afa: Mapped[bool] = mapped_column(nullable=False, default=False, server_default="false")
     penznem: Mapped[str] = mapped_column(String(3), nullable=False, default="HUF")
     #: Ha devizás a terhelés, ennyi forint ment el ténylegesen - ezt a
     #: bankszámla mutatja meg, nem tudjuk kiszámolni.

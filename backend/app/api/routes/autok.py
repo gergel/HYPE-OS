@@ -23,6 +23,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.auto import Auto
+from app.api.routes import kotelezettsegek
+from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense
 from app.models.kotelezettseg import Kotelezettseg
@@ -36,16 +38,30 @@ PAGE = "/autok"
 #: választás a felületen, nem korlátozás.
 KOLTSEG_FAJTAK = ("Tankolás", "Szerviz", "Alkatrész", "Gumi", "Autópálya-matrica", "Parkolás", "Mosás", "Egyéb")
 
+#: A költéshez feltöltött dokumentum (számla, blokk) entity_type-ja. Külön név
+#: a sima "expense"-től, pedig ugyanaz a tábla: a jogosultsága így az AUTÓK
+#: oldaláé, nem a Pénzügyé - egy tankolási blokk feltöltéséhez ne kelljen
+#: hozzáférés a cég teljes pénzügyéhez (lásd services/attachments.py).
+KIADAS_ENTITAS = "autoKiadas"
+
 
 class AutoKiadasRead(BaseModel):
     id: int
     megnevezes: str
     datum: date | None = None
+    #: Nettó és bruttó: a bruttó a nettóból és az áfa-jelölésből áll elő
+    #: (lásd routes/kotelezettsegek.brutto), de a kiadás-soron mindkettő ott
+    #: van, mert a Pénzügy a bruttóval számol.
+    netto: float | None = None
+    plusz_afa: bool = False
     osszeg: float | None = None
     penznem: str = "HUF"
+    fizetesi_mod: str | None = None
     megjegyzes: str | None = None
     #: Ki lett-e már fizetve (a Pénzügy oldal ezt is kezeli).
     kesz: bool = False
+    #: Hány dokumentum (számla, blokk) van feltöltve hozzá.
+    dokumentum_db: int = 0
 
 
 class AutoHataridoRead(BaseModel):
@@ -81,18 +97,39 @@ class AutoRead(BaseModel):
     hatarido_allapot: str = "nincs"
 
 
-def _kiadas_kimenet(e: Expense) -> AutoKiadasRead:
+def _kiadas_kimenet(e: Expense, dokumentumok: dict[int, int] | None = None) -> AutoKiadasRead:
     # A kiadásnál a bruttó a fizetett összeg; ha csak nettó van, azt adjuk.
     osszeg = e.brutto if e.brutto is not None else e.netto
     return AutoKiadasRead(
         id=e.id,
         megnevezes=e.megnevezes,
         datum=e.kiadas_datuma or e.fizetes_datuma,
+        netto=float(e.netto) if e.netto is not None else None,
+        # A "+ÁFA" jelölést a kiadás szöveges mezője hordozza (a Notionból
+        # örökölt alak) - a felületnek viszont igen/nem kell.
+        plusz_afa=(e.plusz_afa or "").strip().lower() in ("igen", "true", "+afa", "+áfa"),
         osszeg=float(osszeg) if osszeg is not None else None,
         penznem=e.penznem or "HUF",
+        fizetesi_mod=e.kifizetes_modja,
         megjegyzes=e.megjegyzes,
         kesz=bool(e.kesz),
+        dokumentum_db=(dokumentumok or {}).get(e.id, 0),
     )
+
+
+def _kiadas_dokumentumok(db: Session, kiadas_idk: list[int]) -> dict[int, int]:
+    if not kiadas_idk:
+        return {}
+    sorok = db.scalars(
+        select(DocumentAttachment).where(
+            DocumentAttachment.entity_type == KIADAS_ENTITAS,
+            DocumentAttachment.entity_id.in_(kiadas_idk),
+        )
+    ).all()
+    darab: dict[int, int] = {}
+    for sor in sorok:
+        darab[sor.entity_id] = darab.get(sor.entity_id, 0) + 1
+    return darab
 
 
 def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
@@ -141,7 +178,7 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
         aktiv=auto.aktiv,
         megjegyzes=auto.megjegyzes,
         hataridok=hataridok,
-        kiadasok=[_kiadas_kimenet(e) for e in kiadasok],
+        kiadasok=[_kiadas_kimenet(e, _kiadas_dokumentumok(db, [x.id for x in kiadasok])) for e in kiadasok],
         koltseg_osszesen=osszesen,
         hatarido_allapot=allapot,
     )
@@ -266,8 +303,14 @@ class AutoKiadasIn(BaseModel):
     #: Mire ment ("Tankolás", "Szerviz - fékbetét"…).
     megnevezes: str
     datum: date | None = None
+    #: NETTÓ összeg. A bruttót ebből és az áfa-jelölésből számoljuk, hogy a
+    #: kettő sose mondhasson ellent egymásnak.
     osszeg: float
+    plusz_afa: bool = False
     penznem: str = "HUF"
+    #: "Átutalás" | "Készpénz" | "Bankkártya" - ugyanaz a szókészlet, mint a
+    #: Pénzügy kiadásainál, hogy a kimutatás egyben lássa őket.
+    fizetesi_mod: str | None = None
     megjegyzes: str | None = None
     #: Ki van-e már fizetve. Alapból igen: ami az autónál felmerül (tankolás,
     #: parkolás), azt jellemzően a helyszínen kifizetik.
@@ -297,8 +340,11 @@ def create_auto_kiadas(
         megnevezes=f"{auto.rendszam} – {payload.megnevezes.strip()}",
         auto_id=auto.id,
         tipus="extra",
-        brutto=payload.osszeg,
+        netto=payload.osszeg,
+        brutto=kotelezettsegek.brutto(payload.osszeg, payload.plusz_afa),
+        plusz_afa="Igen" if payload.plusz_afa else None,
         penznem=payload.penznem or "HUF",
+        kifizetes_modja=payload.fizetesi_mod,
         kiadas_datuma=datum,
         fizetes_datuma=datum if payload.kifizetve else None,
         kesz=payload.kifizetve,
