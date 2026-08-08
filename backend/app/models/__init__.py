@@ -15,7 +15,7 @@ from app.models.detail_section_order import DetailSectionOrder
 from app.models.detail_tab import DetailTabConfig
 from app.models.document_attachment import DocumentAttachment
 from app.models.dispo_responsible import DispoResponsible, DispoSide
-from app.models.employee import Employee, EmployeeType, SystemRole
+from app.models.employee import BelsosJogviszony, Employee, EmployeeType, SystemRole
 from app.models.employee_document import EmployeeDocument
 from app.models.employee_monthly_item import EmployeeMonthlyItem
 from app.models.entity_field import CustomFieldDef, CustomFieldValue, EntityFieldConfig
@@ -112,6 +112,7 @@ __all__ = [
     "Project",
     "project_crew",
     "BelsosIdoszak",
+    "BelsosJogviszony",
     "ProjectSzamlazo",
     "ContractTetel",
     "PerformanceCertificateTetel",

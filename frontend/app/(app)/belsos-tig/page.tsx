@@ -45,13 +45,20 @@ export default async function BelsosTigPage({
   const prev = shiftMonth(ev, honap, -1);
   const next = shiftMonth(ev, honap, 1);
 
+  // A bejelentett alkalmazottakat külön számoljuk: náluk nincs TIG, a havi
+  // teendő csak a fizetés beírása (lásd backend BelsosJogviszony).
+  const tigesek = employees.filter((e) => e.kell_tig);
+  const alkalmazottak = employees.filter((e) => !e.kell_tig);
   // A "Kész" a korábbi, email-küldés nélküli életciklusból maradt állapot -
   // a régi bejegyzések így vannak eltárolva (lásd backend TERMINAL_STATUSES).
-  const kikuldveCount = employees.filter(
+  const kikuldveCount = tigesek.filter(
     (e) => e.record?.allapot === "Kiküldve" || e.record?.allapot === "Kész",
   ).length;
   const kihagyvaCount = employees.filter((e) => e.record?.allapot === "Kihagyva").length;
-  const teendoCount = employees.length - kikuldveCount - kihagyvaCount;
+  const teendoCount = tigesek.length - kikuldveCount - tigesek.filter((e) => e.record?.allapot === "Kihagyva").length;
+  const fizetesHianyzik = alkalmazottak.filter(
+    (e) => e.record?.allapot !== "Kihagyva" && (e.record?.netto_osszeg == null || e.record.netto_osszeg === 0),
+  ).length;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -89,6 +96,13 @@ export default async function BelsosTigPage({
           <p className="mb-4 text-[13px] text-text-secondary">
             {employees.length} belsős munkatárs · {kikuldveCount} kiküldve · {kihagyvaCount} kihagyva · {teendoCount} még
             teendő
+            {alkalmazottak.length > 0 && (
+              <>
+                {" · "}
+                {alkalmazottak.length} bejelentett alkalmazott
+                {fizetesHianyzik > 0 ? ` (${fizetesHianyzik} fizetés hiányzik)` : " (fizetés beírva)"}
+              </>
+            )}
           </p>
           {employees.length === 0 ? (
             <p className="text-[13px] text-text-secondary">Nincs belsős munkatárs.</p>

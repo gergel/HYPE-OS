@@ -162,6 +162,12 @@ class MonthEmployeeInfo(BaseModel):
     # lenne miből kitölteni).
     megbizas_targya: str | None
     plusz_afa: bool | None
+    #: Kell-e tőle havi TIG. Bejelentett alkalmazottnál NEM: nála a havi
+    #: teendő csak a fizetés beírása (lásd models/employee.py
+    #: BelsosJogviszony) - a felület ettől függően más vezérlőket mutat.
+    kell_tig: bool = True
+    #: "megbizas" | "alkalmazott"
+    jogviszony: str = "megbizas"
     record: InternalPerformanceCertificateRead | None
     #: A hónap tételei (alapbér + extrák), amikből a TIG összege összeáll -
     #: lásd models/employee_monthly_item.py. Így a TIG készítője látja, MIÉRT
@@ -221,6 +227,8 @@ def list_month(
             email=e.email,
             megbizas_targya=e.megbizas_targya,
             plusz_afa=e.plusz_afa,
+            kell_tig=belsos_idoszak.kell_havi_tig(e),
+            jogviszony=e.belsos_jogviszony.value,
             record=InternalPerformanceCertificateRead.model_validate(lookup[e.id]) if e.id in lookup else None,
             tetelek=tetel_lookup.get(e.id, []),
         )
@@ -260,12 +268,21 @@ class HaviOsszesito(BaseModel):
     teendok: list[HaviTeendo]
 
 
-def _honap_teendoje(record: InternalPerformanceCertificate | None) -> str | None:
-    """Mi hiányzik még ehhez az emberhez ebben a hónapban? None = kész."""
+def _honap_teendoje(record: InternalPerformanceCertificate | None, *, kell_tig: bool = True) -> str | None:
+    """Mi hiányzik még ehhez az emberhez ebben a hónapban? None = kész.
+
+    BEJELENTETT ALKALMAZOTTNÁL (kell_tig=False) a folyamat lényegesen rövidebb:
+    a bérét bérszámfejtés fizeti, tehát nincs TIG, nincs számla és nincs
+    "kifizetve" lépés - egyedül az számít, be van-e írva a hónapra a fizetése
+    (lásd services/belsos_idoszak.kell_havi_tig)."""
+    if record is not None and record.allapot == "Kihagyva":
+        return None
+    if not kell_tig:
+        if record is None or record.netto_osszeg is None or float(record.netto_osszeg) == 0:
+            return "Fizetés nincs beírva"
+        return None
     if record is None:
         return "Nincs elkezdve"
-    if record.allapot == "Kihagyva":
-        return None
     if record.allapot not in FINALIZED_STATUSES:
         if record.netto_osszeg is None:
             return "Készítés alatt – összeg nincs megadva"
@@ -354,7 +371,7 @@ def havi_attekintes(
                 if osszeg is not None:
                     brutto += float(osszeg)
                     van_brutto = True
-            hianyzik = _honap_teendoje(record)
+            hianyzik = _honap_teendoje(record, kell_tig=belsos_idoszak.kell_havi_tig(e))
             if hianyzik is None:
                 if record is not None and record.allapot == "Kihagyva":
                     kihagyva += 1

@@ -18,6 +18,26 @@ class EmployeeType(StrEnum):
     STAB = "stab"
 
 
+class BelsosJogviszony(StrEnum):
+    """Milyen formában dolgozik nálunk egy BELSŐS munkatárs.
+
+    Ettől függ, kell-e tőle havi teljesítési igazolás:
+
+    - MEGBIZAS: folyamatos megbízási szerződéssel dolgozik, tehát havonta
+      számláz - neki kell a TIG, a számla és a kifizetés végigkövetése.
+    - ALKALMAZOTT: bejelentett munkavállaló, a bérét bérszámfejtés fizeti.
+      Tőle NINCS havi TIG és nincs számla - nála a havi teendő pusztán annyi,
+      hogy a fizetése be legyen írva az adott hónapra (lásd
+      services/belsos_idoszak.kell_havi_tig).
+
+    Az alapértelmezés a MEGBIZAS: ez a rendszer korábbi (és a többségre igaz)
+    viselkedése, tehát a mező bevezetése önmagában senkinél nem változtat
+    semmit, amíg át nem állítják."""
+
+    MEGBIZAS = "megbizas"
+    ALKALMAZOTT = "alkalmazott"
+
+
 class SystemRole(StrEnum):
     """Auth/jogosultsági szerepkör - független az üzleti tipus mezőtől."""
 
@@ -58,6 +78,16 @@ class Employee(TimestampMixin, Base):
     ertekeles: Mapped[float | None] = mapped_column()
     elso_munkanap: Mapped[date | None] = mapped_column(Date)
     utolso_munkanap: Mapped[date | None] = mapped_column(Date)
+
+    #: Belsősnél: bejelentett alkalmazott vagy megbízási szerződéses. A
+    #: bejelentett alkalmazottól nem várunk havi TIG-et (lásd
+    #: BelsosJogviszony). Külsősnél nincs jelentése.
+    belsos_jogviszony: Mapped[BelsosJogviszony] = mapped_column(
+        Enum(BelsosJogviszony, name="belsos_jogviszony", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
+        default=BelsosJogviszony.MEGBIZAS,
+        server_default=BelsosJogviszony.MEGBIZAS.value,
+    )
 
     # --- Auth ---
     #: Az ELSŐDLEGES szerepkör. Egy embernek több is lehet (pl. admin ÉS

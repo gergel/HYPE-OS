@@ -8,7 +8,21 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { huDatum } from "@/lib/huDate";
 import type { EmployeeBelsosIdoszakok } from "@/lib/api";
 
-/** EGY munkatárs belsős időszakai: mettől meddig dolgozott nálunk belsősként.
+const JOGVISZONYOK = [
+  {
+    ertek: "megbizas",
+    cimke: "Folyamatos megbízási szerződés",
+    magyarazat: "Havonta számláz – kell tőle havi TIG, számla és kifizetés-jelölés.",
+  },
+  {
+    ertek: "alkalmazott",
+    cimke: "Bejelentett alkalmazott",
+    magyarazat: "A bérét bérszámfejtés fizeti – nincs TIG és nincs számla, csak a fizetését kell beírni havonta.",
+  },
+];
+
+/** EGY munkatárs belsős beállításai: milyen JOGVISZONYBAN dolgozik, és mettől
+ * meddig volt belsős.
  *
  * Ettől függ, mely hónapokra vár a rendszer havi TIG-et: aki márciusban lépett
  * be, attól januárra nincs mit kérni; aki augusztusban elment, attól
@@ -31,6 +45,7 @@ export function BelsosIdoszakok({
   const router = useRouter();
   const confirm = useConfirm();
   const [nyitva, setNyitva] = useState(false);
+  const [jogviszony, setJogviszony] = useState(adat.jogviszony);
   const [kezdet, setKezdet] = useState("");
   const [veg, setVeg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -86,12 +101,55 @@ export function BelsosIdoszakok({
         }`
       : null;
 
+  async function jogviszonyValtas(ertek: string) {
+    // Optimistán váltunk, hogy a rádiógomb azonnal reagáljon; hiba esetén
+    // visszaáll (a router.refresh() úgyis a szerver állapotát hozza).
+    const elozo = jogviszony;
+    setJogviszony(ertek);
+    const ok = await hivas(`/api/v1/belsos-idoszakok/${adat.employee_id}/jogviszony`, {
+      method: "PUT",
+      body: JSON.stringify({ jogviszony: ertek }),
+    });
+    if (!ok) setJogviszony(elozo);
+  }
+
+  const alkalmazott = jogviszony === "alkalmazott";
+
   return (
     <div>
+      {/* Ez dönti el, kell-e egyáltalán havi TIG - ezért van legelöl. */}
+      <div className="mb-4">
+        <p className="mb-2 text-[12.5px] text-text-muted">Milyen formában dolgozik nálunk?</p>
+        <div className="flex flex-col gap-1.5">
+          {JOGVISZONYOK.map((j) => (
+            <label
+              key={j.ertek}
+              className={`flex cursor-pointer items-start gap-2 rounded-[var(--radius)] border px-2.5 py-2 text-[13px] ${
+                jogviszony === j.ertek ? "border-text-accent bg-bg-accent" : "border-border hover:bg-surface-3"
+              } ${canEdit ? "" : "cursor-default opacity-80"}`}
+            >
+              <input
+                type="radio"
+                name={`jogviszony-${adat.employee_id}`}
+                className="mt-0.5"
+                checked={jogviszony === j.ertek}
+                disabled={busy || !canEdit}
+                onChange={() => jogviszonyValtas(j.ertek)}
+              />
+              <span>
+                <span className="text-text-primary">{j.cimke}</span>
+                <span className="block text-[11.5px] text-text-muted">{j.magyarazat}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
       <p className="mb-3 text-[12.5px] text-text-muted">
-        Csak azokra a hónapokra várunk tőle havi TIG-et, amikor tényleg belsős volt. Több időszak is felvehető – ha
-        kilépett, majd visszajött, a köztes hónapok kimaradnak. Üres kezdet = „a kezdetektől”, üres vég = „azóta is itt
-        van”.
+        {alkalmazott
+          ? "Csak azokra a hónapokra várjuk el a fizetése beírását, amikor tényleg belsős volt."
+          : "Csak azokra a hónapokra várunk tőle havi TIG-et, amikor tényleg belsős volt."} Több időszak is felvehető – ha kilépett, majd visszajött, a köztes hónapok
+        kimaradnak. Üres kezdet = „a kezdetektől”, üres vég = „azóta is itt van”.
       </p>
       {hiba && <p className="mb-3 text-[12.5px] text-text-danger">{hiba}</p>}
 
@@ -99,7 +157,9 @@ export function BelsosIdoszakok({
         <p className="mb-3 text-[13px] text-text-secondary">
           {munkanapSzoveg
             ? `Nincs külön időszak megadva – a munkanapjai alapján számolunk: ${munkanapSzoveg}.`
-            : "Nincs megadva – minden hónapra várunk tőle TIG-et."}
+            : alkalmazott
+              ? "Nincs megadva – minden hónapra várjuk a fizetése beírását."
+              : "Nincs megadva – minden hónapra várunk tőle TIG-et."}
         </p>
       ) : (
         <ul className="mb-3 space-y-1">

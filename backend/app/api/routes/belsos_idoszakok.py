@@ -1,4 +1,14 @@
-"""Mettől meddig volt valaki belsős - a havi TIG-teendők időbeli határa.
+"""Belsős beállítások: JOGVISZONY és IDŐSZAKOK - a havi TIG-teendők határai.
+
+Két, egymást kiegészítő beállítás:
+
+- a JOGVISZONY azt mondja meg, KELL-E egyáltalán havi TIG. A bejelentett
+  alkalmazott bérét bérszámfejtés fizeti: nála nincs TIG, nincs számla és nincs
+  kifizetés-lépés, a havi teendő pusztán annyi, hogy a fizetése be legyen írva
+  (lásd models/employee.py BelsosJogviszony);
+- az IDŐSZAKOK azt, hogy MELY HÓNAPOKRA várjuk el.
+
+Mettől meddig volt valaki belsős - a havi TIG-teendők időbeli határa.
 
 Ha egy belsős munkatárs csak márciusban lépett be, januárra és februárra nincs
 mit kérni tőle; ha augusztusban kilépett, szeptemberre sincs. E nélkül az ilyen
@@ -27,7 +37,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import require_page_action
 from app.models.belsos_idoszak import BelsosIdoszak
-from app.models.employee import Employee, EmployeeType
+from app.models.employee import BelsosJogviszony, Employee, EmployeeType
 
 router = APIRouter(prefix="/belsos-idoszakok", tags=["belsos-idoszakok"])
 
@@ -52,9 +62,17 @@ class IdoszakIn(BaseModel):
     megjegyzes: str | None = None
 
 
+class JogviszonyIn(BaseModel):
+    #: "megbizas" | "alkalmazott"
+    jogviszony: BelsosJogviszony
+
+
 class EmployeeIdoszakok(BaseModel):
     employee_id: int
     full_name: str
+    #: "megbizas" (havonta számláz, kell TIG) | "alkalmazott" (bejelentett,
+    #: nem kell TIG - csak a fizetését kell beírni).
+    jogviszony: str = BelsosJogviszony.MEGBIZAS.value
     idoszakok: list[IdoszakRead] = []
     #: A visszaesési adat, ha nincs egyetlen időszak sem - a felület ezt írja
     #: ki magyarázatként.
@@ -73,6 +91,7 @@ def _nezet(employee: Employee) -> EmployeeIdoszakok:
     return EmployeeIdoszakok(
         employee_id=employee.id,
         full_name=employee.full_name,
+        jogviszony=employee.belsos_jogviszony.value,
         idoszakok=[IdoszakRead.model_validate(i) for i in employee.belsos_idoszakok],
         elso_munkanap=employee.elso_munkanap,
         utolso_munkanap=employee.utolso_munkanap,
@@ -145,3 +164,28 @@ def delete_idoszak(
     db.delete(idoszak)
     db.commit()
     return _nezet(_get_employee_or_404(db, employee_id))
+
+
+@router.put("/{employee_id}/jogviszony", response_model=EmployeeIdoszakok)
+def set_jogviszony(
+    employee_id: int,
+    payload: JogviszonyIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Bejelentett alkalmazott vagy folyamatos megbízási szerződéses?
+
+    Alkalmazottra állítva a rendszer nem vár tőle havi TIG-et, számlát és
+    kifizetés-jelölést - a havi teendő csak a fizetés beírása lesz. A MÁR
+    elkészült TIG-eket ez nem törli: azok megmaradnak, csak új hónapokra nem
+    kérünk többet."""
+    employee = _get_employee_or_404(db, employee_id)
+    if employee.tipus != EmployeeType.BELSOS:
+        raise HTTPException(
+            status_code=400,
+            detail="A jogviszony csak belsős munkatársnál értelmezhető.",
+        )
+    employee.belsos_jogviszony = payload.jogviszony
+    db.commit()
+    db.refresh(employee)
+    return _nezet(employee)

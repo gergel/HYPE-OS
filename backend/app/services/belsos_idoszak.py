@@ -24,7 +24,7 @@ from datetime import date
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.belsos_idoszak import BelsosIdoszak
-from app.models.employee import Employee
+from app.models.employee import BelsosJogviszony, Employee
 
 
 def honap_hatarok(ev: int, honap: int) -> tuple[date, date]:
@@ -80,3 +80,18 @@ def idoszak_szoveg(idoszakok: list[BelsosIdoszak]) -> str:
         veg = i.veg.strftime("%Y.%m.%d.") if i.veg else ""
         reszek.append(f"{kezdet} – {veg}".strip())
     return ", ".join(reszek)
+
+
+def kell_havi_tig(employee: Employee) -> bool:
+    """Kell-e ettől a belsőstől havi teljesítési igazolás?
+
+    A bejelentett ALKALMAZOTT bérét bérszámfejtés fizeti: nála nincs TIG,
+    nincs számla és nincs "kifizetve" lépés - a havi teendő pusztán annyi,
+    hogy a fizetése be legyen írva az adott hónapra (lásd
+    models/employee.py BelsosJogviszony).
+
+    Aki folyamatos MEGBÍZÁSI szerződéssel dolgozik, az havonta számláz, tehát
+    nála marad a teljes TIG -> számla -> kifizetés folyamat. Ez az
+    alapértelmezés, vagyis a mező bevezetése önmagában senkinél nem változtat
+    a viselkedésen."""
+    return employee.belsos_jogviszony != BelsosJogviszony.ALKALMAZOTT

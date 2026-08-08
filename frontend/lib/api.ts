@@ -494,6 +494,10 @@ export type BelsosIdoszak = {
 export type EmployeeBelsosIdoszakok = {
   employee_id: number;
   full_name: string;
+  /** "megbizas" = havonta számláz, kell havi TIG. "alkalmazott" = bejelentett,
+   * a bérét bérszámfejtés fizeti - tőle nincs TIG, csak a fizetését kell
+   * beírni (lásd backend models/employee.py BelsosJogviszony). */
+  jogviszony: string;
   idoszakok: BelsosIdoszak[];
   /** Visszaesési adat, ha nincs egyetlen időszak sem: ilyenkor a munkanapok
    * döntik el, mely hónapokra várunk TIG-et. */
@@ -725,6 +729,11 @@ export type BelsosTigMonthEmployee = {
    * (esetleg felülírt) értéke a hónap bejegyzésének. */
   megbizas_targya: string | null;
   plusz_afa: boolean | null;
+  /** Kell-e tőle havi TIG. Bejelentett alkalmazottnál NEM: nála a havi teendő
+   * csak a fizetés beírása (lásd backend models/employee.py BelsosJogviszony). */
+  kell_tig: boolean;
+  /** "megbizas" | "alkalmazott" */
+  jogviszony: string;
   record: InternalPerformanceCertificate | null;
   /** A hónap tételei (alapbér + extrák), amikből a TIG összege összeáll -
    * a munkatárs adatlapján vihetők fel (lásd HaviKoltsegek). */

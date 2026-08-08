@@ -301,6 +301,12 @@ export function BelsosTigManager({
         <tbody>
           {szurtEmployees.map((employee) => {
             const record = employee.record;
+            // Bejelentett alkalmazott: a bérét bérszámfejtés fizeti, tehát
+            // nincs TIG, nincs számla és nincs kifizetés-jelölés - egyedül az
+            // számít, be van-e írva a hónapra a fizetése (lásd backend
+            // models/employee.py BelsosJogviszony).
+            const alkalmazott = !employee.kell_tig;
+            const vanFizetes = record?.netto_osszeg != null && record.netto_osszeg !== 0;
             const allapot = record?.allapot;
             // A "Kész" a korábbi, küldés nélküli életciklusból maradt - a régi
             // bejegyzések ugyanúgy lezártnak számítanak, mint a "Kiküldve".
@@ -310,21 +316,40 @@ export function BelsosTigManager({
             const invoices = record?.invoices ?? [];
             return (
               <tr key={employee.id} className="border-b border-border last:border-0 align-top">
-                <td className="py-3 pr-6">{employee.full_name}</td>
                 <td className="py-3 pr-6">
-                  {/* Kézzel is javítható: egy tévesen kiküldöttre állított TIG
-                      visszavehető "Készítés alatt"-ra, és újra elkészíthető. */}
-                  <TigAllapotSelect
-                    postPath={`/api/v1/belsos-tig/${employee.id}/${ev}/${honap}/allapot`}
-                    value={record?.allapot ?? null}
-                    canEdit={canEdit}
-                  />
+                  {employee.full_name}
+                  {alkalmazott && (
+                    <span className="block text-[11px] text-text-muted">bejelentett alkalmazott</span>
+                  )}
+                </td>
+                <td className="py-3 pr-6">
+                  {alkalmazott ? (
+                    allapot === "Kihagyva" ? (
+                      <StatusBadge label="Kihagyva" tone="neutral" />
+                    ) : vanFizetes ? (
+                      <StatusBadge label="Fizetés beírva" tone="success" />
+                    ) : (
+                      <StatusBadge label="Fizetés hiányzik" tone="warning" />
+                    )
+                  ) : (
+                    /* Kézzel is javítható: egy tévesen kiküldöttre állított TIG
+                       visszavehető "Készítés alatt"-ra, és újra elkészíthető. */
+                    <TigAllapotSelect
+                      postPath={`/api/v1/belsos-tig/${employee.id}/${ev}/${honap}/allapot`}
+                      value={record?.allapot ?? null}
+                      canEdit={canEdit}
+                    />
+                  )}
                 </td>
                 <td className="py-3 pr-6 text-right whitespace-nowrap">
                   {record?.brutto_osszeg != null ? `${record.brutto_osszeg.toLocaleString("hu-HU")} Ft` : "–"}
                 </td>
                 <td className="py-3 pr-6">
-                  {record?.file_url ? (
+                  {alkalmazott ? (
+                    <span className="text-text-muted" title="Bejelentett alkalmazottnál nincs TIG.">
+                      nem kell
+                    </span>
+                  ) : record?.file_url ? (
                     <a
                       href={record.file_url}
                       target="_blank"
@@ -338,7 +363,11 @@ export function BelsosTigManager({
                   )}
                 </td>
                 <td className="py-3 pr-6">
-                  {!isKesz ? (
+                  {alkalmazott ? (
+                    <span className="text-text-muted" title="Bejelentett alkalmazottnál nincs számla.">
+                      nem kell
+                    </span>
+                  ) : !isKesz ? (
                     <span className="text-text-muted">–</span>
                   ) : (
                     <div className="flex flex-col gap-1.5">
@@ -381,7 +410,18 @@ export function BelsosTigManager({
                   )}
                 </td>
                 <td className="py-3 text-right">
-                  {!isTerminal ? (
+                  {alkalmazott ? (
+                    /* Az egyetlen teendő: legyen beírva a havi fizetése. Az
+                       összeg a havi tételekből (alapbér + extrák) áll össze,
+                       azokat a munkatárs adatlapján lehet felvinni. */
+                    <a
+                      href={`/csapat/${employee.id}`}
+                      className="text-[12px] text-text-accent hover:underline"
+                      title="A havi tételek (alapbér, extrák) a munkatárs adatlapján vihetők fel."
+                    >
+                      {vanFizetes ? "Fizetés módosítása" : "Fizetés beírása"}
+                    </a>
+                  ) : !isTerminal ? (
                     <button
                       type="button"
                       onClick={() => openForm(employee)}
