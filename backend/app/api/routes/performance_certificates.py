@@ -39,7 +39,7 @@ from app.models.performance_certificate import (
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.performance_certificate import PerformanceCertificateRead
-from app.services import document_storage, szamlazo, tig_fedettseg
+from app.services import document_storage, papir_fedettseg, papir_tetelek, szamlazo
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import send_message
 from app.services.hu_number_words import szam_betukkel
@@ -137,10 +137,10 @@ def _load_tig_lookup(db: Session, project_ids: set[int]) -> TigLookup:
             fel_tig[(t.project_id, kulcs)] = cert
 
     # Tétel nélküli TIG-ek (Notion-import, kézi javítás): a saját projektjükön
-    # a saját emberüket fedik - lásd services/tig_fedettseg.py.
+    # a saját emberüket fedik - lásd services/papir_fedettseg.py.
     for cert in (
         db.query(PerformanceCertificate)
-        .filter(PerformanceCertificate.project_id.in_(project_ids), tig_fedettseg.tetel_nelkuli())
+        .filter(PerformanceCertificate.project_id.in_(project_ids), papir_fedettseg.tetel_nelkuli(PerformanceCertificate))
         .all()
     ):
         if cert.employee_id is not None:
@@ -598,8 +598,12 @@ def _apply_tetelek(db: Session, draft: PerformanceCertificate, fel: SzamlazoFel,
                 status_code=400,
                 detail=f"A(z) #{t.employee_id} munkatárs nincs a(z) „{projekt.nev}” projekt (nem belsős) stábjában.",
             )
-        tenyleges = szamlazo.szamlazo_fele(projekt, ember, felulirasok)
-        if tenyleges.kulcs != fel.kulcs:
+        if not _is_szerzodes_phase_done(db, projekt):
+            raise HTTPException(
+                status_code=400,
+                detail=f"„{projekt.nev}” projekten még nem mindenkinek van meg a szerződése - TIG csak azután készíthető.",
+            )
+        if szamlazo.szamlazo_fele(projekt, ember, felulirasok).kulcs != fel.kulcs:
             raise HTTPException(
                 status_code=400,
                 detail=f"„{projekt.nev}” projekten {ember.full_name} munkáját nem ez a fél számlázza.",
@@ -621,13 +625,13 @@ def _apply_tetelek(db: Session, draft: PerformanceCertificate, fel: SzamlazoFel,
             detail=f"{nev} munkájáról ezen a projekten már szól egy másik TIG - egy munkát csak egy TIG igazolhat.",
         )
     # A tétel nélküli (import/kézi) TIG-eket a saját mezőik alapján nézzük -
-    # lásd services/tig_fedettseg.py.
+    # lásd services/papir_fedettseg.py.
     regi = (
         db.query(PerformanceCertificate)
         .options(selectinload(PerformanceCertificate.employee))
         .filter(
             PerformanceCertificate.id != draft.id,
-            tig_fedettseg.tetel_nelkuli(),
+            papir_fedettseg.tetel_nelkuli(PerformanceCertificate),
             tuple_(PerformanceCertificate.project_id, PerformanceCertificate.employee_id).in_(parok),
         )
         .first()
@@ -720,7 +724,14 @@ def generate_and_send(
 
     # A teljesítés ideje szabad szöveg - a régi, dátum-alapú bejegyzésekhez
     # (amiknél ez még üres) a korábbi formázás a tartalék.
-    teljesites_str = (draft.teljesites_szoveg or "").strip() or _teljesites_datumokbol(draft)
+    # A papírra a TÉTELEK kerülnek: ha a TIG több munkát igazol (három forgatás
+    # egy számlán, vagy két ember munkája egy fél nevében), a dokumentumból is
+    # ki kell derülnie, mit fed - lásd services/papir_tetelek.py. Egytételes
+    # TIG-nél minden pontosan úgy néz ki, mint eddig.
+    tetelek = list(draft.tetelek)
+    teljesites_str = papir_tetelek.teljesites_szovege(
+        draft.teljesites_szoveg, tetelek, _teljesites_datumokbol(draft)
+    )
 
     projektdatum = project.forgatas_datuma.strftime("%Y.%m.%d.") if project.forgatas_datuma else ""
 
@@ -733,9 +744,9 @@ def generate_and_send(
                 "nev": draft.ceg_neve or fel.nev,
                 "hely": draft.szekhely or "",
                 "adoszam": draft.adoszam or "",
-                "targy": draft.megbizas_targya or "",
+                "targy": papir_tetelek.targy_szovege(draft.megbizas_targya, tetelek),
                 "tido": teljesites_str,
-                "projkod": project.projektkod_szoveg or "",
+                "projkod": papir_tetelek.projektkodok_szovege(tetelek, project.projektkod_szoveg or ""),
                 "netto": f"{draft.netto_osszeg:,.0f}".replace(",", " "),
                 "kelt": keltezes.strftime("%Y.%m.%d."),
                 "afa": "+ ÁFA" if draft.plusz_afa else "",

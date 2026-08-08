@@ -4,14 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { PapirTetelValaszto, tetelKulcs } from "@/components/PapirTetelValaszto";
 import type { PendingTigEmployee, TigTetel } from "@/lib/api";
-
-/** Egy tétel azonosítója a felületen: melyik ember melyik projekten végzett
- * munkája. Ez a TIG-tétel kulcsa (lásd backend
- * models/performance_certificate.py PerformanceCertificateTetel). */
-function tetelKulcs(t: { project_id: number; employee_id: number }): string {
-  return `${t.project_id}:${t.employee_id}`;
-}
 
 type FormState = {
   ceg_neve: string;
@@ -377,7 +371,7 @@ export function PerformanceCertificateManager({
               </Field>
             </div>
 
-            <TetelValaszto
+            <PapirTetelValaszto
               tetelek={valaszthato}
               kivalasztott={kivalasztott}
               osszegek={osszegek}
@@ -386,6 +380,8 @@ export function PerformanceCertificateManager({
               onBillen={billen}
               onOsszeg={(kulcs, ertek) => setOsszegek((elozo) => ({ ...elozo, [kulcs]: ertek }))}
               fejOsszeg={form.netto_osszeg}
+              cim="Mit igazol ez a TIG?"
+              leiras="Pipáld ki, kinek a munkája kerül erre az egy igazolásra. Más projekt munkája is rátehető, ha egy számlán érkezik. A tételenkénti összeg elhagyható – ha nem tudható, mi mennyibe került, elég a fenti nettó összeg."
             />
             <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-border pt-4">
               <button
@@ -423,95 +419,6 @@ export function PerformanceCertificateManager({
             </div>
           </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-/** Mit igazol ez a TIG: kinek a munkáját, melyik projekten.
- *
- * Két dolgot old meg egyszerre:
- * - a projekten belül több ember munkáját (ha valaki más nevében is számláz),
- * - és MÁS projektek munkáit (ha valaki több forgatást egy számlán küld be).
- *
- * A tételenkénti összeg szándékosan elhagyható: összevont számlánál nem mindig
- * tudható, mi mennyibe került. Ha kitöltik, a projekt-jövedelmezőség abból
- * számol; ha nem, a TIG fejösszege marad az egyetlen igazság - egyenlően
- * SOSEM osztjuk szét, mert az kitalált számokat vinne a kimutatásokba. */
-function TetelValaszto({
-  tetelek,
-  kivalasztott,
-  osszegek,
-  toltodik,
-  tiltva,
-  onBillen,
-  onOsszeg,
-  fejOsszeg,
-}: {
-  tetelek: TigTetel[];
-  kivalasztott: Set<string>;
-  osszegek: Record<string, string>;
-  toltodik: boolean;
-  tiltva: boolean;
-  onBillen: (kulcs: string) => void;
-  onOsszeg: (kulcs: string, ertek: string) => void;
-  fejOsszeg: string;
-}) {
-  if (toltodik) {
-    return <p className="mt-4 border-t border-border pt-4 text-[12px] text-text-muted">Tételek betöltése…</p>;
-  }
-  if (tetelek.length === 0) return null;
-
-  const bontott = tetelek
-    .filter((t) => kivalasztott.has(tetelKulcs(t)))
-    .map((t) => Number((osszegek[tetelKulcs(t)] ?? "").trim()))
-    .filter((n) => !Number.isNaN(n) && n > 0);
-  const bontasOsszege = bontott.reduce((a, b) => a + b, 0);
-  const fej = Number(fejOsszeg);
-  const elter = bontott.length > 0 && !Number.isNaN(fej) && fej > 0 && Math.abs(bontasOsszege - fej) > 0.5;
-
-  return (
-    <div className="mt-4 border-t border-border pt-4">
-      <p className="mb-1 text-[13px] font-medium text-text-primary">Mit igazol ez a TIG?</p>
-      <p className="mb-3 text-[12px] text-text-muted">
-        Pipáld ki, kinek a munkája kerül erre az egy igazolásra. Más projekt munkája is rátehető, ha egy számlán
-        érkezik. A tételenkénti összeg elhagyható – ha nem tudható, mi mennyibe került, elég a fenti nettó összeg.
-      </p>
-      <div className="flex flex-col gap-1.5">
-        {tetelek.map((t) => {
-          const kulcs = tetelKulcs(t);
-          const be = kivalasztott.has(kulcs);
-          return (
-            <div key={kulcs} className="flex flex-wrap items-center gap-2 text-[13px]">
-              <label className="flex min-w-[280px] flex-1 items-center gap-2 text-text-primary">
-                <input type="checkbox" checked={be} onChange={() => onBillen(kulcs)} disabled={tiltva} />
-                <span>
-                  {t.employee_nev ?? `#${t.employee_id}`}
-                  <span className="text-text-muted">
-                    {" – "}
-                    {t.projektkod ? `${t.projektkod} · ` : ""}
-                    {t.project_nev ?? `#${t.project_id}`}
-                    {t.forgatas_datuma ? ` (${t.forgatas_datuma})` : ""}
-                  </span>
-                </span>
-              </label>
-              <input
-                type="number"
-                value={osszegek[kulcs] ?? ""}
-                onChange={(e) => onOsszeg(kulcs, e.target.value)}
-                disabled={tiltva || !be}
-                placeholder="ebből ennyi az övé (nem kötelező)"
-                className="w-[240px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary focus:outline-none disabled:opacity-40"
-              />
-            </div>
-          );
-        })}
-      </div>
-      {elter && (
-        <p className="mt-2 text-[12px] text-text-secondary">
-          A kitöltött tételek összege {bontasOsszege.toLocaleString("hu-HU")} Ft, a TIG nettó összege{" "}
-          {fej.toLocaleString("hu-HU")} Ft. Ez nem hiba – a bontás lehet részleges –, de érdemes ránézni.
-        </p>
       )}
     </div>
   );

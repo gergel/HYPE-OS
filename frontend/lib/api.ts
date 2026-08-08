@@ -371,6 +371,10 @@ export type SubcontractorContractDraft = {
   teljesites_szoveg: string | null;
   keltezes: string | null;
   plusz_afa: boolean | null;
+  /** Mire szól a szerződés: kinek a munkájára, melyik projekten. Több tétel
+   * akkor, ha egy fél több ember munkájáról vagy több forgatásról szerződik
+   * egyben (lásd backend models/contract.py ContractTetel). */
+  tetelek: TigTetel[];
 };
 
 /** Egy stábtag, akinek a munkáját egy szerződés/TIG lefedi. */
@@ -390,7 +394,8 @@ export type PendingSubcontractorEmployee = {
   full_name: string;
   /** "Ladányi Máté (Balla Berci helyett is)" */
   cimke: string;
-  lefedettek: LefedettEmber[];
+  /** A projekten hozzá tartozó stábtagok - a szerződés alap-tétellistája. */
+  lefedettek: TigTetel[];
   vallalkozas_id: number | null;
   email: string | null;
   ceg_neve: string | null;

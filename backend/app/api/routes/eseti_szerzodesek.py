@@ -17,9 +17,9 @@ from app.core.database import get_db
 from app.core.security import require_page_action
 from app.models.contract import Contract, ContractType, megkotott_keretszerzodes
 from app.models.employee import Employee, EmployeeType
-from app.models.performance_certificate import PerformanceCertificate
+from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
 from app.models.project import Project
-from app.services import szamlazo, tig_fedettseg
+from app.services import papir_fedettseg, szamlazo
 
 PAGE = "/penzugyek"
 
@@ -177,7 +177,7 @@ def delete_eseti_szerzodes(
         # projektet igazolja.
         van_tig = (
             db.query(PerformanceCertificate.id)
-            .filter(tig_fedettseg.fedi_a_projektet(szerzodes.project_id))
+            .filter(papir_fedettseg.fedi_a_projektet(PerformanceCertificate, PerformanceCertificateTetel, szerzodes.project_id))
             .filter(
                 PerformanceCertificate.vallalkozas_id == szerzodes.vallalkozas_id
                 if szerzodes.vallalkozas_id is not None

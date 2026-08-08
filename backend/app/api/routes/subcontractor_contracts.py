@@ -23,19 +23,25 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import or_
+from sqlalchemy import or_, tuple_
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
-from app.models.contract import Contract, ContractType, keretszerzodes_ervenyes, megkotott_keretszerzodes
+from app.models.contract import (
+    Contract,
+    ContractTetel,
+    ContractType,
+    keretszerzodes_ervenyes,
+    megkotott_keretszerzodes,
+)
 from app.models.employee import Employee, EmployeeType
-from app.models.performance_certificate import PerformanceCertificate
+from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.contract import ContractRead
-from app.services import szamlazo, tig_fedettseg
+from app.services import papir_fedettseg, papir_tetelek, szamlazo
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import send_message
 from app.services.hu_number_words import szam_betukkel
@@ -121,7 +127,7 @@ def _load_contract_lookup(
         feltetelek.append(Contract.vallalkozas_id.in_(vallalkozas_ids))
     contracts = (
         db.query(Contract)
-        .options(selectinload(Contract.idoszakok))
+        .options(selectinload(Contract.idoszakok), selectinload(Contract.tetelek))
         .filter(Contract.tipus == ContractType.ALVALLALKOZOI, or_(*feltetelek))
         .all()
     )
@@ -137,8 +143,16 @@ def _load_contract_lookup(
             continue
         if megkotott_keretszerzodes(c):
             keretszerzodesek.setdefault(kulcs, []).append(c)
-        if c.project_id is not None:
-            project_contracts[(c.project_id, kulcs)] = c
+            continue
+        # Egy eseti szerződés TÖBB projektet is fedhet (három nap forgatás egy
+        # szerződéssel) - a lefedettséget a tételei hordozzák, nem a saját
+        # project_id-je. Tétel nélküli (import/régi) sornál az utóbbi marad,
+        # lásd services/papir_fedettseg.py.
+        erintett = {t.project_id for t in c.tetelek} or (
+            {c.project_id} if c.project_id is not None else set()
+        )
+        for project_id in erintett:
+            project_contracts[(project_id, kulcs)] = c
     return keretszerzodesek, project_contracts
 
 
@@ -243,6 +257,19 @@ def list_pending_projects(db: Session = Depends(get_db), _user: Employee = Depen
     return result
 
 
+class TetelInfo(BaseModel):
+    """Egy szerződés-tétel: kinek a munkájára, melyik projekten."""
+
+    project_id: int
+    project_nev: str | None = None
+    projektkod: str | None = None
+    forgatas_datuma: date | None = None
+    employee_id: int
+    employee_nev: str | None = None
+    netto_osszeg: float | None = None
+    megnevezes: str | None = None
+
+
 class DraftInfo(BaseModel):
     szerzodes_allapota: str | None
     ceg_neve: str | None
@@ -257,13 +284,7 @@ class DraftInfo(BaseModel):
     teljesites_szoveg: str | None
     keltezes: date | None
     plusz_afa: bool | None
-
-
-class LefedettEmber(BaseModel):
-    """Egy stábtag, akinek a munkáját ez a szerződés fedi."""
-
-    id: int
-    full_name: str
+    tetelek: list[TetelInfo] = []
 
 
 class PendingEmployeeInfo(BaseModel):
@@ -277,8 +298,9 @@ class PendingEmployeeInfo(BaseModel):
     full_name: str
     #: "Ladányi Máté (Balla Berci helyett is)" - ez megy a felületre.
     cimke: str
-    #: Kiknek a munkáját fedi ez az egy szerződés.
-    lefedettek: list[LefedettEmber] = []
+    #: Kiknek a munkáját fedi ez az egy szerződés EZEN a projekten - egyben a
+    #: piszkozat alapértelmezett tétellistája.
+    lefedettek: list[TetelInfo] = []
     vallalkozas_id: int | None = None
     email: str | None
     ceg_neve: str | None
@@ -339,6 +361,20 @@ def _teljesites_szovege(c: Contract) -> str | None:
     return None
 
 
+def _tetel_info(t: ContractTetel) -> TetelInfo:
+    projekt = t.project
+    return TetelInfo(
+        project_id=t.project_id,
+        project_nev=projekt.nev if projekt else None,
+        projektkod=projekt.projektkod_szoveg if projekt else None,
+        forgatas_datuma=projekt.forgatas_datuma if projekt else None,
+        employee_id=t.employee_id,
+        employee_nev=t.employee.full_name if t.employee else None,
+        netto_osszeg=float(t.netto_osszeg) if t.netto_osszeg is not None else None,
+        megnevezes=t.megnevezes,
+    )
+
+
 def _draft_info(c: Contract | None) -> DraftInfo | None:
     if c is None:
         return None
@@ -354,6 +390,7 @@ def _draft_info(c: Contract | None) -> DraftInfo | None:
         teljesites_szoveg=_teljesites_szovege(c),
         keltezes=c.keltezes,
         plusz_afa=c.plusz_afa,
+        tetelek=[_tetel_info(t) for t in c.tetelek],
     )
 
 
@@ -370,18 +407,33 @@ def get_pending_for_project(
         forgatas_datuma=project.forgatas_datuma,
         forgatas_datuma_vege=project.forgatas_datuma_vege,
         teljesites_szoveg_alap=_projekt_teljesites_szoveg(project),
-        pending=[pending_info(csoport, existing) for csoport, existing in pending],
+        pending=[pending_info(project, csoport, existing) for csoport, existing in pending],
     )
 
 
-def pending_info(csoport: SzamlazoCsoport, existing: Contract | None) -> PendingEmployeeInfo:
+def _lefedettek_info(project: Project, csoport: SzamlazoCsoport) -> list[TetelInfo]:
+    """A fél által lefedett stábtagok ezen a projekten, tétel alakban."""
+    return [
+        TetelInfo(
+            project_id=project.id,
+            project_nev=project.nev,
+            projektkod=project.projektkod_szoveg,
+            forgatas_datuma=project.forgatas_datuma,
+            employee_id=tag.id,
+            employee_nev=tag.full_name,
+        )
+        for tag in csoport.tagok
+    ]
+
+
+def pending_info(project: Project, csoport: SzamlazoCsoport, existing: Contract | None) -> PendingEmployeeInfo:
     fel = csoport.fel
     return PendingEmployeeInfo(
         id=fel.employee.id if fel.employee else 0,
         szamlazo=fel.kulcs,
         full_name=fel.nev,
         cimke=csoport.cimke(),
-        lefedettek=[LefedettEmber(id=t.id, full_name=t.full_name) for t in csoport.tagok],
+        lefedettek=_lefedettek_info(project, csoport),
         vallalkozas_id=fel.vallalkozas.id if fel.vallalkozas else None,
         email=fel.email,
         ceg_neve=fel.ceg_neve,
@@ -409,6 +461,51 @@ class ElkeszultSzerzodes(BaseModel):
     keltezes: date | None = None
     #: A generált dokumentum linkje (Google Docs), ha a küldés lefutott.
     szerzodes_file_url: str | None = None
+
+
+@router.get("/{project_id}/{szamlazo_kulcs}/nyitott-tetelek", response_model=list[TetelInfo])
+def list_nyitott_tetelek(
+    project_id: int,
+    szamlazo_kulcs: str,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Mi mindent tehetünk MÉG rá erre a szerződésre?
+
+    A "három nap forgatás egy szerződéssel" eset felülete: felsorolja az összes
+    olyan (projekt, ember) munkát az ÖSSZES diszpózott projektről, amit ez a fél
+    számláz, és amiről még nincs eseti szerződés. A felhasználó ebből pipálja
+    ki, mi kerüljön erre az egy papírra - ugyanaz a logika, mint a TIG-nél
+    (lásd routes/performance_certificates.py list_nyitott_tetelek), hogy az
+    összevont TIG mellé összevont szerződés is tartozhasson."""
+    _get_project_or_404(db, project_id)
+    fel = szamlazo.feloldas(db, szamlazo_kulcs)
+    if fel is None:
+        raise HTTPException(status_code=404, detail="A számlázó fél nem található")
+
+    projects = (
+        db.query(Project)
+        .filter(Project.diszpo == "Kiküldve")
+        .options(selectinload(Project.crew), selectinload(Project.project_code))
+        .all()
+    )
+    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, projects)
+
+    eredmeny: list[TetelInfo] = []
+    for p in projects:
+        # Ahol keretszerződés fedi, ott nincs mit szerződni.
+        if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), p.forgatas_datuma):
+            continue
+        meglevo = project_contracts.get((p.id, fel.kulcs))
+        # A már véglegesített (kiküldött/kihagyott) szerződést nem bontjuk meg.
+        if meglevo is not None and meglevo.szerzodes_allapota in TERMINAL_STATUSES:
+            continue
+        for csoport in _szamlazo_csoportok(p, felulirasok):
+            if csoport.kulcs != fel.kulcs:
+                continue
+            eredmeny.extend(_lefedettek_info(p, csoport))
+    eredmeny.sort(key=lambda t: (t.forgatas_datuma or date.min, t.project_id, t.employee_id), reverse=True)
+    return eredmeny
 
 
 @router.get("/{project_id}/all", response_model=list[ElkeszultSzerzodes])
@@ -497,10 +594,21 @@ def _szamlazo_szuro(fel: SzamlazoFel):
     return (Contract.employee_id == fel.employee.id) & Contract.vallalkozas_id.is_(None)
 
 
-def _get_or_create_draft(db: Session, project: Project, fel: SzamlazoFel) -> Contract:
+def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport) -> Contract:
+    """A fél szerződés-piszkozata ezen a projekten - vagy a meglévő, vagy egy
+    új, a projekten hozzá tartozó stábtagok tételeivel feltöltve.
+
+    A meglévőt a TÉTELEIN keresztül is keressük: a szerződés indulhatott egy
+    másik projektről is, ha három nap forgatás egy szerződéssel megy."""
+    fel = csoport.fel
     existing = (
         db.query(Contract)
-        .filter(Contract.project_id == project.id, _szamlazo_szuro(fel))
+        .filter(
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+            Contract.keretszerzodes.is_(False),
+            _szamlazo_szuro(fel),
+            papir_fedettseg.fedi_a_projektet(Contract, ContractTetel, project.id),
+        )
         .first()
     )
     if existing is not None:
@@ -527,10 +635,122 @@ def _get_or_create_draft(db: Session, project: Project, fel: SzamlazoFel) -> Con
     )
     db.add(draft)
     db.flush()
+    # Alapból pontosan azt fedi, amiért ezen a projekten ő számláz.
+    for tag in csoport.tagok:
+        db.add(ContractTetel(contract_id=draft.id, project_id=project.id, employee_id=tag.id))
+    db.flush()
     return draft
 
 
+class TetelIn(BaseModel):
+    project_id: int
+    employee_id: int
+    #: Opcionális: összevont szerződésnél nem mindig tudható, melyik nap
+    #: mennyibe került. A szerződés fejösszege az igazság.
+    netto_osszeg: float | None = None
+    megnevezes: str | None = None
+
+
+def _apply_tetelek(db: Session, draft: Contract, fel: SzamlazoFel, tetelek: list[TetelIn] | None) -> None:
+    """A szerződés tételeinek cseréje - ugyanazokkal az ellenőrzésekkel, mint a
+    TIG-nél (lásd routes/performance_certificates.py _apply_tetelek):
+
+    1. egy (projekt, ember) munkájáról csak EGY eseti szerződés szólhat;
+    2. csak olyan tétel kerülhet rá, aminél tényleg ez a fél a számlázó azon a
+       projekten;
+    3. és csak olyan projekt, ahol a félnek egyáltalán kell szerződés (nem
+       fedi keretszerződés)."""
+    if tetelek is None:
+        return
+    if not tetelek:
+        raise HTTPException(status_code=400, detail="A szerződésnek legalább egy tételt tartalmaznia kell.")
+
+    parok = {(t.project_id, t.employee_id) for t in tetelek}
+    if len(parok) != len(tetelek):
+        raise HTTPException(status_code=400, detail="Ugyanaz az ember ugyanazon a projekten kétszer szerepel.")
+
+    projektek = {p.id: p for p in db.query(Project).filter(Project.id.in_({t.project_id for t in tetelek})).all()}
+    felulirasok = szamlazo.load_felulirasok(db, set(projektek))
+    keretszerzodesek, _ = _load_contract_lookup(
+        db,
+        {fel.employee.id} if fel.employee else set(),
+        {fel.vallalkozas.id} if fel.vallalkozas else set(),
+    )
+    for t in tetelek:
+        projekt = projektek.get(t.project_id)
+        if projekt is None:
+            raise HTTPException(status_code=404, detail=f"A(z) #{t.project_id} projekt nem található.")
+        ember = next((e for e in szerzodest_igenylo_emberek(projekt) if e.id == t.employee_id), None)
+        if ember is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"A(z) #{t.employee_id} munkatárs nincs a(z) „{projekt.nev}” projekt (nem belsős) stábjában.",
+            )
+        if szamlazo.szamlazo_fele(projekt, ember, felulirasok).kulcs != fel.kulcs:
+            raise HTTPException(
+                status_code=400,
+                detail=f"„{projekt.nev}” projekten {ember.full_name} munkáját nem ez a fél számlázza.",
+            )
+        if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), projekt.forgatas_datuma):
+            raise HTTPException(
+                status_code=400,
+                detail=f"„{projekt.nev}” projekten keretszerződés fedi ezt a felet - oda nem kell eseti szerződés.",
+            )
+
+    utkozes = (
+        db.query(ContractTetel)
+        .options(selectinload(ContractTetel.employee))
+        .filter(
+            ContractTetel.contract_id != draft.id,
+            tuple_(ContractTetel.project_id, ContractTetel.employee_id).in_(parok),
+        )
+        .first()
+    )
+    if utkozes is not None:
+        nev = utkozes.employee.full_name if utkozes.employee else f"#{utkozes.employee_id}"
+        raise HTTPException(
+            status_code=400,
+            detail=f"{nev} munkájáról ezen a projekten már szól egy másik szerződés - egy munkára csak egy szerződés köthető.",
+        )
+    # A tétel nélküli (import/régi) szerződéseket a saját mezőik alapján
+    # nézzük - lásd services/papir_fedettseg.py.
+    regi = (
+        db.query(Contract)
+        .options(selectinload(Contract.employee))
+        .filter(
+            Contract.id != draft.id,
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+            Contract.keretszerzodes.is_(False),
+            papir_fedettseg.tetel_nelkuli(Contract),
+            tuple_(Contract.project_id, Contract.employee_id).in_(parok),
+        )
+        .first()
+    )
+    if regi is not None:
+        nev = regi.employee.full_name if regi.employee else f"#{regi.employee_id}"
+        raise HTTPException(
+            status_code=400,
+            detail=f"{nev} munkájáról ezen a projekten már szól egy másik szerződés - egy munkára csak egy szerződés köthető.",
+        )
+
+    draft.tetelek.clear()
+    db.flush()
+    for t in tetelek:
+        draft.tetelek.append(
+            ContractTetel(
+                project_id=t.project_id,
+                employee_id=t.employee_id,
+                netto_osszeg=t.netto_osszeg,
+                megnevezes=t.megnevezes,
+            )
+        )
+    db.flush()
+
+
 class ContractDraftIn(BaseModel):
+    #: Mire szól a szerződés. None = maradjon, ami van (a piszkozat
+    #: létrehozásakor az adott projekten a félhez tartozó stábtagok).
+    tetelek: list[TetelIn] | None = None
     ceg_neve: str | None = None
     szekhely: str | None = None
     adoszam: str | None = None
@@ -580,8 +800,9 @@ def save_draft(
     lásd services/szamlazo.py."""
     project = _get_project_or_404(db, project_id)
     csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
-    draft = _get_or_create_draft(db, project, csoport.fel)
+    draft = _get_or_create_draft(db, project, csoport)
     _apply_draft_fields(draft, payload)
+    _apply_tetelek(db, draft, csoport.fel, payload.tetelek)
     db.commit()
     db.refresh(draft)
     return ContractRead.model_validate(draft)
@@ -598,8 +819,9 @@ def generate_and_send(
     project = _get_project_or_404(db, project_id)
     csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
     fel = csoport.fel
-    draft = _get_or_create_draft(db, project, fel)
+    draft = _get_or_create_draft(db, project, csoport)
     _apply_draft_fields(draft, payload)
+    _apply_tetelek(db, draft, fel, payload.tetelek)
 
     if not draft.netto_osszeg or draft.netto_osszeg <= 0:
         raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
@@ -610,7 +832,12 @@ def generate_and_send(
     keltezes = draft.keltezes or date.today()
     draft.keltezes = keltezes
 
-    teljesites_str = _teljesites_szovege(draft) or ""
+    # A papírra a TÉTELEK kerülnek: ha a szerződés több munkát fed (három nap
+    # forgatás egy szerződéssel, vagy két ember munkája egy fél nevében), a
+    # dokumentumból is ki kell derülnie, mit fed - lásd services/papir_tetelek.py.
+    # Egytételes szerződésnél minden pontosan úgy néz ki, mint eddig.
+    tetelek = list(draft.tetelek)
+    teljesites_str = papir_tetelek.teljesites_szovege(_teljesites_szovege(draft), tetelek)
 
     # float(): a Numeric oszlop az adatbázisból Decimal-ként jön vissza (csak a
     # most beírt érték float), a Decimal * float pedig TypeError.
@@ -625,7 +852,7 @@ def generate_and_send(
                 "nev": draft.ceg_neve or fel.nev,
                 "hely": draft.szekhely or "",
                 "adoszam": draft.adoszam or "",
-                "targy": draft.megbizas_targya or "",
+                "targy": papir_tetelek.targy_szovege(draft.megbizas_targya, tetelek),
                 "tido": teljesites_str,
                 "netto": f"{draft.netto_osszeg:,.0f}".replace(",", " "),
                 "kelt": keltezes.strftime("%Y.%m.%d."),
@@ -634,7 +861,7 @@ def generate_and_send(
                 "nettoki": szam_betukkel(draft.netto_osszeg),
                 "nyilvszam": draft.vallalkozas_nyilvantartasi_szam or "",
                 "kepvis": draft.vallalkozas_kepviseloje or "",
-                "projektnev": project.nev or "",
+                "projektnev": papir_tetelek.projektnevek_szovege(tetelek, project.nev or ""),
             }
             pdf_bytes, new_doc_id = gdoc_fill_and_export_pdf(
                 template_file_id=settings.gdoc_alvallalkozoi_szerzodes_template_id,
@@ -669,7 +896,7 @@ def skip_contract(
     ő ezután nem jelenik meg többé a függő listán ennél a projektnél."""
     project = _get_project_or_404(db, project_id)
     csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
-    draft = _get_or_create_draft(db, project, csoport.fel)
+    draft = _get_or_create_draft(db, project, csoport)
     draft.szerzodes_allapota = "Kihagyva"
     db.commit()
     db.refresh(draft)
@@ -722,7 +949,9 @@ def _van_tig_a_projekten(db: Session, project_id: int, fel: SzamlazoFel) -> bool
     A TIG akkor is ide tartozik, ha egy MÁSIK projektről indult, de van ezt a
     projektet érintő tétele (egy fél több projektjét egy TIG-en igazolhatja) -
     ezért a tételeken keresztül keresünk, nem a TIG saját project_id-jén."""
-    lekerdezes = db.query(PerformanceCertificate.id).filter(tig_fedettseg.fedi_a_projektet(project_id))
+    lekerdezes = db.query(PerformanceCertificate.id).filter(
+        papir_fedettseg.fedi_a_projektet(PerformanceCertificate, PerformanceCertificateTetel, project_id)
+    )
     if fel.vallalkozas is not None:
         lekerdezes = lekerdezes.filter(PerformanceCertificate.vallalkozas_id == fel.vallalkozas.id)
     else:

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -93,6 +93,12 @@ class Contract(TimestampMixin, Base):
         back_populates="contract", cascade="all, delete-orphan", order_by="ContractPeriod.kezdet"
     )
 
+    #: Mire szól az ESETI szerződés: kinek a munkájára, melyik projekteken
+    #: (lásd ContractTetel). Keretszerződésnél üres - az nincs projekthez kötve.
+    tetelek: Mapped[list["ContractTetel"]] = relationship(
+        back_populates="contract", cascade="all, delete-orphan", order_by="ContractTetel.id"
+    )
+
     client: Mapped["Client"] = relationship(back_populates="contracts")
     employee: Mapped["Employee"] = relationship(back_populates="contracts")
     vallalkozas: Mapped["Vallalkozas | None"] = relationship(back_populates="contracts")
@@ -125,6 +131,46 @@ def eseti_megbizasi_szerzodes(szerzodes: Contract) -> bool:
     services/subcontractor_contracts.py), akár a munkatárs Notion-lapjáról
     jött, projekt nélküli sor."""
     return szerzodes.tipus == ContractType.ALVALLALKOZOI and not megkotott_keretszerzodes(szerzodes)
+
+
+class ContractTetel(TimestampMixin, Base):
+    """Egy ESETI szerződés EGY tétele: kinek a munkájára, melyik projekten.
+
+    Ugyanaz a felépítés, mint a TIG-nél (lásd
+    models/performance_certificate.py PerformanceCertificateTetel), és
+    ugyanazért kell: a papír nem mindig egy ember egy projektjéről szól.
+
+    - Egy projekten két stábtag munkáját ugyanaz a fél számlázza: egy
+      szerződés, két tétel.
+    - Három nap forgatásról egy számla (és egy TIG) készül: akkor egy
+      szerződésnek is kell tartoznia hozzá, projektenként egy tétellel.
+
+    A második eset miatt nem elég a Contract.project_id: az csak az "otthon"
+    projekt (ahonnan a szerződés készült), a tényleges lefedettséget a tételek
+    hordozzák.
+
+    A `netto_osszeg` itt is opcionális: összevont szerződésnél nem mindig
+    tudható, melyik nap mennyibe került - a szerződés fejösszege az igazság."""
+
+    __tablename__ = "contract_tetelek"
+    __table_args__ = (UniqueConstraint("contract_id", "project_id", "employee_id", name="uq_szerzodes_tetel"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contract_id: Mapped[int] = mapped_column(
+        ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: Egy (projekt, ember) párra legfeljebb EGY eseti szerződés szólhat - erre
+    #: az adatbázis nem tud kényszert adni (több szerződésen át kellene
+    #: néznie), ezért a végpont ellenőrzi.
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    netto_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Ebből ennyi az övé - ha tudható")
+    megnevezes: Mapped[str | None] = mapped_column(String(255))
+
+    contract: Mapped["Contract"] = relationship(back_populates="tetelek")
+    project: Mapped["Project"] = relationship()
+    employee: Mapped["Employee"] = relationship()
 
 
 class ContractPeriod(TimestampMixin, Base):

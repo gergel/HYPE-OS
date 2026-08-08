@@ -21,10 +21,11 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee, EmployeeType
+from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.models.vallalkozas import Vallalkozas, VallalkozasTag
-from app.services import szamlazo, tig_fedettseg
+from app.services import papir_fedettseg, szamlazo
 
 router = APIRouter(prefix="/projekt-szamlazok", tags=["projekt-szamlazok"])
 
@@ -129,7 +130,9 @@ def get_projekt_szamlazok(
 def _van_papir(db: Session, project_id: int, employee_id: int) -> bool:
     """Készült-e már TIG erről a munkáról? Ha igen, a számlázó fél átállítása
     utólag hazuggá tenné a papírt - előbb a TIG-et kell rendezni."""
-    return tig_fedettseg.van_tig_a_munkara(db, project_id, employee_id)
+    return papir_fedettseg.van_papir_a_munkara(
+        db, PerformanceCertificate, PerformanceCertificateTetel, project_id, employee_id
+    )
 
 
 @router.put("/{project_id}/{employee_id}", response_model=ProjektSzamlazoNezet)

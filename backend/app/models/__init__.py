@@ -5,7 +5,7 @@ from app.models.callsheet import Callsheet
 from app.models.calendar_sync import CalendarSyncState
 from app.models.campaign import Campaign
 from app.models.client import Client, Contact
-from app.models.contract import Contract, ContractType
+from app.models.contract import Contract, ContractTetel, ContractType
 from app.models.dashboard_config import DashboardConfig
 from app.models.deliverable import Deliverable, deliverable_contacts
 from app.models.deliverable_comment import DeliverableComment
@@ -111,6 +111,7 @@ __all__ = [
     "Project",
     "project_crew",
     "ProjectSzamlazo",
+    "ContractTetel",
     "PerformanceCertificateTetel",
     "Vallalkozas",
     "VallalkozasTag",

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { PapirTetelValaszto, tetelKulcs, type PapirTetel } from "@/components/PapirTetelValaszto";
 import type { PendingSubcontractorEmployee } from "@/lib/api";
 
 type FormState = {
@@ -72,8 +73,54 @@ export function SubcontractorContractManager({
   const [form, setForm] = useState<FormState | null>(null);
   const [busy, setBusy] = useState<"save" | "send" | "skip" | null>(null);
 
+  // A szerződés TÉTELEI: mire szól a papír. Alapból a projekten hozzá tartozó
+  // stábtagok, de más projektek nyitott munkái is rátehetők - így három nap
+  // forgatásról egy szerződés köthető, az összevont TIG mellé.
+  const [valaszthato, setValaszthato] = useState<PapirTetel[]>([]);
+  const [kivalasztott, setKivalasztott] = useState<Set<string>>(new Set());
+  const [osszegek, setOsszegek] = useState<Record<string, string>>({});
+  const [tetelekToltodnek, setTetelekToltodnek] = useState(false);
+
   const selectedEmployee = pending.find((p) => p.szamlazo === openId) ?? null;
   const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
+
+  // A nyitott tételeket a fél kiválasztásakor kérjük le - más projektek
+  // munkái csak a szerveren láthatók (lásd backend list_nyitott_tetelek).
+  useEffect(() => {
+    if (!selectedEmployee) return;
+    let ervenyes = true;
+    setTetelekToltodnek(true);
+    authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/nyitott-tetelek`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((nyitott: PapirTetel[]) => {
+        if (!ervenyes) return;
+        const mar = selectedEmployee.draft?.tetelek ?? selectedEmployee.lefedettek;
+        const egyben = [...mar];
+        for (const t of nyitott) {
+          if (!egyben.some((m) => tetelKulcs(m) === tetelKulcs(t))) egyben.push(t);
+        }
+        setValaszthato(egyben);
+        setKivalasztott(new Set(mar.map(tetelKulcs)));
+        setOsszegek(
+          Object.fromEntries(
+            mar.filter((t) => t.netto_osszeg != null).map((t) => [tetelKulcs(t), String(t.netto_osszeg)]),
+          ),
+        );
+      })
+      .finally(() => ervenyes && setTetelekToltodnek(false));
+    return () => {
+      ervenyes = false;
+    };
+  }, [projectId, selectedEmployee]);
+
+  function billen(kulcs: string) {
+    setKivalasztott((elozo) => {
+      const uj = new Set(elozo);
+      if (uj.has(kulcs)) uj.delete(kulcs);
+      else uj.add(kulcs);
+      return uj;
+    });
+  }
 
   function openForm() {
     if (!selectedId) return;
@@ -86,6 +133,9 @@ export function SubcontractorContractManager({
   function closeForm() {
     setOpenId(null);
     setForm(null);
+    setValaszthato([]);
+    setKivalasztott(new Set());
+    setOsszegek({});
   }
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -95,7 +145,20 @@ export function SubcontractorContractManager({
   function buildPayload() {
     if (!form) return null;
     const netto = form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null;
+    // A tétel-összeg elhagyható: összevont szerződésnél nem mindig tudható,
+    // melyik nap mennyibe került. A szerződés fejösszege az igazság.
+    const tetelek = valaszthato
+      .filter((t) => kivalasztott.has(tetelKulcs(t)))
+      .map((t) => {
+        const nyers = (osszegek[tetelKulcs(t)] ?? "").trim();
+        return {
+          project_id: t.project_id,
+          employee_id: t.employee_id,
+          netto_osszeg: nyers && !Number.isNaN(Number(nyers)) ? Number(nyers) : null,
+        };
+      });
     return {
+      tetelek,
       ceg_neve: form.ceg_neve || null,
       szekhely: form.szekhely || null,
       adoszam: form.adoszam || null,
@@ -235,7 +298,8 @@ export function SubcontractorContractManager({
                 mindet - a lefedettek attól még teljes értékű stábtagok. */}
             {selectedEmployee.lefedettek.length > 1 && (
               <p className="mb-4 text-[12px] text-text-secondary">
-                Ez a szerződés {selectedEmployee.lefedettek.map((l) => l.full_name).join(", ")} munkáját fedi.
+                Ez a szerződés {selectedEmployee.lefedettek.map((l) => l.employee_nev ?? `#${l.employee_id}`).join(", ")}{" "}
+                munkáját fedi.
               </p>
             )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -334,6 +398,20 @@ export function SubcontractorContractManager({
                 />
               </Field>
             </div>
+
+            <PapirTetelValaszto
+              tetelek={valaszthato}
+              kivalasztott={kivalasztott}
+              osszegek={osszegek}
+              toltodik={tetelekToltodnek}
+              tiltva={busyState}
+              onBillen={billen}
+              onOsszeg={(kulcs, ertek) => setOsszegek((elozo) => ({ ...elozo, [kulcs]: ertek }))}
+              fejOsszeg={form.netto_osszeg}
+              cim="Mire szól ez a szerződés?"
+              leiras="Pipáld ki, kinek a munkájára szól ez az egy szerződés. Más projekt munkája is rátehető – így három nap forgatásról egy szerződés köthető, az összevont TIG mellé. A tételenkénti összeg elhagyható."
+            />
+
             <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-border pt-4">
               <button
                 type="button"
