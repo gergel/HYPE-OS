@@ -438,6 +438,13 @@ function HonapSor({
                   {" · "}Levonások: <span className="text-text-danger">− {formatHuf(honap.levonas)}</span>
                 </>
               )}
+              {/* Bejelentett alkalmazottnál a fenti számok azt mutatják, mit
+                  kap az ember - a munkáltatói terhekkel együtt ennyibe kerül. */}
+              {honap.szuperbrutto != null && (
+                <>
+                  {" · "}Szuperbruttó: <span className="text-text-secondary">{formatHuf(honap.szuperbrutto)}</span>
+                </>
+              )}
             </p>
           )}
           <TetelSzerkeszto

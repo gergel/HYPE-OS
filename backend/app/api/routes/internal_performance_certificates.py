@@ -273,13 +273,18 @@ def _honap_teendoje(record: InternalPerformanceCertificate | None, *, kell_tig: 
 
     BEJELENTETT ALKALMAZOTTNÁL (kell_tig=False) a folyamat lényegesen rövidebb:
     a bérét bérszámfejtés fizeti, tehát nincs TIG, nincs számla és nincs
-    "kifizetve" lépés - egyedül az számít, be van-e írva a hónapra a fizetése
-    (lásd services/belsos_idoszak.kell_havi_tig)."""
+    "kifizetve" lépés - a hónap két számmal kész: a nettó bérrel (ez tartozik
+    az emberhez) és a szuperbruttóval (ez kerül a kiadások közé). A szuperbruttó
+    azért teendő, és nem opcionális kiegészítés, mert nélküle a hónap
+    bérköltsége hiányozna a kiadásokból (lásd
+    services/belsos_idoszak.kell_havi_tig)."""
     if record is not None and record.allapot == "Kihagyva":
         return None
     if not kell_tig:
         if record is None or record.netto_osszeg is None or float(record.netto_osszeg) == 0:
             return "Fizetés nincs beírva"
+        if record.szuperbrutto is None or float(record.szuperbrutto) == 0:
+            return "Szuperbruttó nincs megadva"
         return None
     if record is None:
         return "Nincs elkezdve"
@@ -365,9 +370,10 @@ def havi_attekintes(
         for e in emberek:
             record = sorok.get(e.id)
             if record is not None:
-                # A bruttó a séma számított mezője (nettó + ÁFA, ha kell) -
-                # szándékosan onnan vesszük, hogy a képlet egy helyen legyen.
-                osszeg = InternalPerformanceCertificateRead.model_validate(record).brutto_osszeg
+                # A hónap költsége a séma számított mezője (megbízásosnál a
+                # bruttó, alkalmazottnál a szuperbruttó) - szándékosan onnan
+                # vesszük, hogy a képlet egy helyen legyen.
+                osszeg = InternalPerformanceCertificateRead.model_validate(record).koltseg
                 if osszeg is not None:
                     brutto += float(osszeg)
                     van_brutto = True
@@ -966,9 +972,14 @@ def _ujraszamol_tig_osszeget(db: Session, employee: Employee, ev: int, honap: in
         record = _find(db, employee.id, ev, honap)
         if record is not None:
             record.netto_osszeg = 0
-        return
-    record = _get_or_create(db, employee, ev, honap)
-    record.netto_osszeg = float(sum(elojeles_osszeg(t.tipus, t.osszeg) for t in tetelek))
+    else:
+        record = _get_or_create(db, employee, ev, honap)
+        record.netto_osszeg = float(sum(elojeles_osszeg(t.tipus, t.osszeg) for t in tetelek))
+    # Bejelentett alkalmazottnál a hónapnak kiadás-sora is van (a bérköltség),
+    # és annak a nettója ugyanez az összeg - különben egy utólag felvitt extra
+    # után a kiadás egy régi számot mutatna.
+    if record is not None and not belsos_idoszak.kell_havi_tig(employee):
+        _szinkron_berkoltseg(db, record)
 
 
 @router.get("/{employee_id}/{ev}/{honap}/tetelek", response_model=list[HaviTetelRead])
@@ -1075,6 +1086,114 @@ def delete_havi_tetel(
     db.commit()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Bejelentett alkalmazott havi fizetése
+#
+# Nála nincs TIG és nincs számla, ezért a fenti folyamat egyetlen lépéssé
+# rövidül: beírjuk a hónap két összegét. A kettő NEM ugyanaz, és szándékosan
+# külön mező:
+#   - NETTÓ BÉR: ami az emberhez tartozik ("mennyi a fizetése") - ez lesz a
+#     hónap alapbér tétele, tehát ugyanúgy látszik az adatlapján, mint bárki
+#     másnál, és az extrák (túlóra, benzin) továbbra is hozzáadódnak;
+#   - SZUPERBRUTTÓ: a teljes munkáltatói költség - EZ kerül a kiadások közé,
+#     mert minket ez terhel.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class FizetesIn(BaseModel):
+    """A bejelentett alkalmazott havi fizetése."""
+
+    #: A hónap nettó bére (az alapbér tétel összege).
+    netto_ber: float
+    #: A teljes munkáltatói költség. Üresen hagyható (a hónap ilyenkor teendő
+    #: marad), de kitalálni nem tudjuk - lásd a modell kommentjét.
+    szuperbrutto: float | None = None
+
+
+def _berkoltseg_megnevezes(record: InternalPerformanceCertificate) -> str:
+    return f"Munkabér - {record.employee.full_name} - {ev_honap_szoveg(record.ev, record.honap)}"
+
+
+def _szinkron_berkoltseg(db: Session, record: InternalPerformanceCertificate) -> None:
+    """A bejelentett alkalmazott havi bérköltsége a Pénzügy -> Kiadások közt.
+
+    A kiadás összege a SZUPERBRUTTÓ (ez terhel minket), a nettó bér csak
+    tájékoztatásul kerül a sorra - a kettő összekeverése pont annyival mérné
+    alul az évi bérköltséget, amennyi a munkáltatói teher.
+
+    A kiadás-sort NEM jelöljük kifizetettnek: a bér utalása ugyanúgy a
+    Kiadások oldalon zárul le, mint bármelyik másik kiadásé. Ha a szuperbruttót
+    törlik (vagy nullára írják), a még ki nem fizetett sort elvisszük -
+    különben egy 0 Ft-os szellemsor maradna a kiadások közt. A már kifizetettet
+    viszont sosem töröljük: az megtörtént pénzmozgás."""
+    expense = db.get(Expense, record.expense_id) if record.expense_id is not None else None
+    szuperbrutto = float(record.szuperbrutto) if record.szuperbrutto is not None else 0.0
+
+    if szuperbrutto <= 0:
+        if expense is not None and not expense.kesz and expense.fizetes_datuma is None:
+            record.expense_id = None
+            db.delete(expense)
+        return
+
+    if expense is None:
+        expense = Expense(megnevezes=_berkoltseg_megnevezes(record), employee_id=record.employee_id, tipus="belsos")
+        db.add(expense)
+        db.flush()
+        record.expense_id = expense.id
+    expense.megnevezes = _berkoltseg_megnevezes(record)
+    expense.netto = record.netto_osszeg
+    expense.brutto = szuperbrutto
+    expense.hozzaadas_a_kiadasokhoz = True
+    # A költség annak a hónapnak a költsége, amelyikre a bér jár (nem annak,
+    # amelyikben utaljuk) - ezért a hónap utolsó napja.
+    expense.kiadas_datuma = belsos_idoszak.honap_hatarok(record.ev, record.honap)[1]
+
+
+@router.post("/{employee_id}/{ev}/{honap}/fizetes", response_model=InternalPerformanceCertificateRead)
+def save_fizetes(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    payload: FizetesIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """A bejelentett alkalmazott havi fizetésének rögzítése egy lépésben.
+
+    A nettó bért a hónap ALAPBÉR TÉTELEKÉNT tesszük el, nem közvetlenül a
+    bejegyzés összegébe: a hónap nettó összege mindenkinél a tételekből
+    számolódik (lásd _ujraszamol_tig_osszeget), tehát ha ezt megkerülnénk, egy
+    később felvitt extra némán felülírná a beírt fizetést."""
+    employee = _validate_belsos_employee(db, employee_id)
+    if belsos_idoszak.kell_havi_tig(employee):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{employee.full_name} megbízási szerződéssel dolgozik, nála havi TIG készül. "
+                "A fizetés beírása bejelentett alkalmazotthoz való."
+            ),
+        )
+    _tiltsd_ha_lezart(db, employee_id, ev, honap)
+
+    alapber = next((t for t in _honap_tetelei(db, employee_id, ev, honap) if t.tipus == "alapber"), None)
+    if alapber is None:
+        alapber = EmployeeMonthlyItem(
+            employee_id=employee_id, ev=ev, honap=honap, tipus="alapber", megnevezes="Munkabér", osszeg=payload.netto_ber
+        )
+        db.add(alapber)
+    else:
+        alapber.osszeg = payload.netto_ber
+    db.flush()
+
+    _ujraszamol_tig_osszeget(db, employee, ev, honap)
+    record = _get_or_create(db, employee, ev, honap)
+    record.szuperbrutto = payload.szuperbrutto
+    _szinkron_berkoltseg(db, record)
+    db.commit()
+    db.refresh(record)
+    return InternalPerformanceCertificateRead.model_validate(record)
+
+
 class HaviKoltseg(BaseModel):
     """Egy hónap: mibe került nekünk ez az ember."""
 
@@ -1085,6 +1204,9 @@ class HaviKoltseg(BaseModel):
     allapot: str | None = None
     netto_osszeg: float | None = None
     brutto_osszeg: float | None = None
+    #: Bejelentett alkalmazottnál a hónap teljes munkáltatói költsége - a
+    #: nettó összeg ezt nem tartalmazza (lásd a modell kommentjét).
+    szuperbrutto: float | None = None
     alapber: float = 0
     extra: float = 0
     #: A levonandó tételek összege POZITÍVAN - a nettó összegből már le van vonva.
@@ -1199,6 +1321,7 @@ def employee_koltsegek(
         adat.allapot = tig.allapot
         adat.netto_osszeg = olvasott.netto_osszeg
         adat.brutto_osszeg = olvasott.brutto_osszeg
+        adat.szuperbrutto = olvasott.szuperbrutto
 
     for tetel in tetelek:
         adat = _honap(tetel.ev, tetel.honap)

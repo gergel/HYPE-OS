@@ -170,6 +170,14 @@ export default async function BelsosTigHonapPage({
               Plusz ÁFA-val: <span className="text-text-secondary">{formatHuf(record.brutto_osszeg)}</span>
             </p>
           )}
+          {/* Bejelentett alkalmazottnál a fenti összegek azt mutatják, mit kap
+              az ember; a kiadások közé a szuperbruttó kerül. */}
+          {record?.szuperbrutto != null && (
+            <p className="mt-4 text-[12.5px] text-text-muted">
+              Szuperbruttó (teljes munkáltatói költség):{" "}
+              <span className="text-text-secondary">{formatHuf(record.szuperbrutto)}</span>
+            </p>
+          )}
           {!zarolt && (
             <p className="mt-4 text-[12.5px] text-text-muted">
               A tételek a{" "}

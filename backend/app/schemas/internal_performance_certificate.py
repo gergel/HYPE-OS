@@ -24,6 +24,9 @@ class InternalPerformanceCertificateRead(BaseModel):
     megjegyzes: str | None = None
     netto_osszeg: float | None = None
     plusz_afa: bool | None = None
+    #: Csak bejelentett alkalmazottnál: a teljes munkáltatói költség (lásd a
+    #: modell kommentjét). Megbízásosnál mindig üres.
+    szuperbrutto: float | None = None
     megbizas_targya: str | None = None
     teljesites_datuma: date | None = None
     keltezes: date | None = None
@@ -43,6 +46,20 @@ class InternalPerformanceCertificateRead(BaseModel):
         if self.netto_osszeg is None:
             return None
         return round(self.netto_osszeg * 1.27, 2) if self.plusz_afa else self.netto_osszeg
+
+    @computed_field
+    @property
+    def koltseg(self) -> float | None:
+        """Amennyibe ez a hónap NEKÜNK kerül.
+
+        Megbízásosnál ez a bruttó (a számla végösszege), bejelentett
+        alkalmazottnál a szuperbruttó - a nettó bér ott csak az, ami az
+        emberhez tartozik, a munkáltatói terhek nem látszanak benne. Az
+        összesítők ezt adják össze, hogy a kétféle jogviszony egy hónapon
+        belül is összeadható legyen."""
+        if self.szuperbrutto is not None:
+            return self.szuperbrutto
+        return self.brutto_osszeg
 
     @computed_field
     @property

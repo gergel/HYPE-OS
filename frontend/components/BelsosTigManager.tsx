@@ -21,6 +21,15 @@ type FormState = {
   keltezes: string;
 };
 
+/** A bejelentett alkalmazott havi fizetése - nála ez a TIG-űrlap helyett áll,
+ * mert nincs TIG, nincs számla és nincs kifizetés-jelölés. */
+type FizetesForm = {
+  /** Ami az emberhez tartozik ("mennyi a fizetése") = a hónap alapbér tétele. */
+  netto_ber: string;
+  /** A teljes munkáltatói költség - a kiadások közé EZ kerül. */
+  szuperbrutto: string;
+};
+
 /** A hónapot követő hónap első napja - ez az alapértelmezett teljesítési
  * dátum, mert a teljesítés MINDIG a lefedett hónap utáni hónapban történik
  * (ebből számolja vissza a rendszer, melyik hónapé a TIG). */
@@ -92,10 +101,15 @@ export function BelsosTigManager({
   const confirm = useConfirm();
   const [openId, setOpenId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
+  // A fizetés-űrlap szándékosan külön állapot, nem a TIG-űrlap egy módja: más
+  // mezői vannak, más végpontra megy, és a kettő sosem nyílik meg egyszerre.
+  const [fizetesId, setFizetesId] = useState<number | null>(null);
+  const [fizetesForm, setFizetesForm] = useState<FizetesForm | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [allapotSzuro, setAllapotSzuro] = useState(MIND);
 
   const openEmployee = employees.find((e) => e.id === openId) ?? null;
+  const fizetesEmployee = employees.find((e) => e.id === fizetesId) ?? null;
   const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
   // A teljesítés dátuma dönti el, melyik hónapé a TIG (mindig az azt megelőző
   // hónap) - ha az admin olyat ír be, ami másik hónapra mutat, ezt előre
@@ -111,6 +125,52 @@ export function BelsosTigManager({
   function closeForm() {
     setOpenId(null);
     setForm(null);
+  }
+
+  /** A fizetés-űrlap a hónap MEGLÉVŐ adataival nyílik: a nettó bér a hónap
+   * alapbér tétele (azt írja felül a mentés), a szuperbruttó a bejegyzésé. */
+  function openFizetes(employee: BelsosTigMonthEmployee) {
+    const alapber = employee.tetelek.find((t) => t.tipus === "alapber");
+    setFizetesForm({
+      netto_ber: alapber ? String(alapber.osszeg) : "",
+      szuperbrutto: employee.record?.szuperbrutto != null ? String(employee.record.szuperbrutto) : "",
+    });
+    setFizetesId(employee.id);
+  }
+
+  function closeFizetes() {
+    setFizetesId(null);
+    setFizetesForm(null);
+  }
+
+  async function handleFizetesSave() {
+    if (!fizetesEmployee || !fizetesForm) return;
+    const nettoBer = Number(fizetesForm.netto_ber);
+    if (!fizetesForm.netto_ber.trim() || Number.isNaN(nettoBer) || nettoBer <= 0) {
+      alert("Add meg a nettó bért.");
+      return;
+    }
+    setBusyId(fizetesEmployee.id);
+    try {
+      const res = await authFetch(`/api/v1/belsos-tig/${fizetesEmployee.id}/${ev}/${honap}/fizetes`, {
+        method: "POST",
+        body: JSON.stringify({
+          netto_ber: nettoBer,
+          szuperbrutto: fizetesForm.szuperbrutto.trim() ? Number(fizetesForm.szuperbrutto) : null,
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      closeFizetes();
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
   }
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -191,7 +251,10 @@ export function BelsosTigManager({
         alert(`Sikertelen kihagyás: ${detail?.detail ?? res.status}`);
         return;
       }
+      // A kihagyás mindkét űrlapról indítható (TIG és fizetés) - amelyik
+      // nyitva van, azt zárjuk.
       closeForm();
+      closeFizetes();
       router.refresh();
     } catch (err) {
       alert(`Sikertelen kihagyás (hálózati hiba): ${err}`);
@@ -307,6 +370,9 @@ export function BelsosTigManager({
             // models/employee.py BelsosJogviszony).
             const alkalmazott = !employee.kell_tig;
             const vanFizetes = record?.netto_osszeg != null && record.netto_osszeg !== 0;
+            // A hónap akkor kész, ha MINDKÉT összeg megvan: a nettó bér az
+            // emberhez, a szuperbruttó a kiadásokhoz kell.
+            const vanSzuperbrutto = record?.szuperbrutto != null && record.szuperbrutto !== 0;
             const allapot = record?.allapot;
             // A "Kész" a korábbi, küldés nélküli életciklusból maradt - a régi
             // bejegyzések ugyanúgy lezártnak számítanak, mint a "Kiküldve".
@@ -326,10 +392,12 @@ export function BelsosTigManager({
                   {alkalmazott ? (
                     allapot === "Kihagyva" ? (
                       <StatusBadge label="Kihagyva" tone="neutral" />
-                    ) : vanFizetes ? (
-                      <StatusBadge label="Fizetés beírva" tone="success" />
-                    ) : (
+                    ) : !vanFizetes ? (
                       <StatusBadge label="Fizetés hiányzik" tone="warning" />
+                    ) : !vanSzuperbrutto ? (
+                      <StatusBadge label="Szuperbruttó hiányzik" tone="warning" />
+                    ) : (
+                      <StatusBadge label="Fizetés beírva" tone="success" />
                     )
                   ) : (
                     /* Kézzel is javítható: egy tévesen kiküldöttre állított TIG
@@ -341,8 +409,14 @@ export function BelsosTigManager({
                     />
                   )}
                 </td>
+                {/* Ami nekünk kerül: megbízásosnál a számla bruttója,
+                    alkalmazottnál a szuperbruttó (a nettó bér nem tartalmazza
+                    a munkáltatói terheket). */}
                 <td className="py-3 pr-6 text-right whitespace-nowrap">
-                  {record?.brutto_osszeg != null ? `${record.brutto_osszeg.toLocaleString("hu-HU")} Ft` : "–"}
+                  {record?.koltseg != null ? `${record.koltseg.toLocaleString("hu-HU")} Ft` : "–"}
+                  {alkalmazott && vanSzuperbrutto && (
+                    <span className="block text-[11px] text-text-muted">szuperbruttó</span>
+                  )}
                 </td>
                 <td className="py-3 pr-6">
                   {alkalmazott ? (
@@ -411,16 +485,18 @@ export function BelsosTigManager({
                 </td>
                 <td className="py-3 text-right">
                   {alkalmazott ? (
-                    /* Az egyetlen teendő: legyen beírva a havi fizetése. Az
-                       összeg a havi tételekből (alapbér + extrák) áll össze,
-                       azokat a munkatárs adatlapján lehet felvinni. */
-                    <a
-                      href={`/csapat/${employee.id}`}
-                      className="text-[12px] text-text-accent hover:underline"
-                      title="A havi tételek (alapbér, extrák) a munkatárs adatlapján vihetők fel."
-                    >
-                      {vanFizetes ? "Fizetés módosítása" : "Fizetés beírása"}
-                    </a>
+                    /* Az egyetlen teendő: a hónap két összegének beírása
+                       (nettó bér + szuperbruttó) - ezt nyitja ez a gomb. */
+                    allapot === "Kihagyva" ? null : (
+                      <button
+                        type="button"
+                        onClick={() => openFizetes(employee)}
+                        disabled={busy}
+                        className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                      >
+                        {vanFizetes ? "Fizetés módosítása" : "Fizetés megadása"}
+                      </button>
+                    )
                   ) : !isTerminal ? (
                     <button
                       type="button"
@@ -448,6 +524,114 @@ export function BelsosTigManager({
           })}
         </tbody>
       </table>
+
+      {/* Bejelentett alkalmazott havi fizetése. Két összeg, mert a kettő nem
+          ugyanaz: a nettó bér az emberhez tartozik, a szuperbruttó a
+          kiadásokhoz - és a szorzójuk adósávtól, kedvezményektől függ, tehát
+          nem számoljuk ki helyette. */}
+      {fizetesEmployee && fizetesForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
+          onClick={busyId ? undefined : closeFizetes}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-1 text-[15px] font-medium text-text-primary">
+              Fizetés – {fizetesEmployee.full_name} ({huEvHonap(ev, honap)})
+            </h3>
+            <p className="mb-4 text-[12px] text-text-muted">
+              Bejelentett alkalmazott: nincs TIG és nincs számla, csak ez a két összeg.
+            </p>
+            <div className="grid grid-cols-1 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-text-muted">Nettó bér (Ft) *</label>
+                <input
+                  type="number"
+                  value={fizetesForm.netto_ber}
+                  onChange={(e) => setFizetesForm({ ...fizetesForm, netto_ber: e.target.value })}
+                  disabled={!!busyId}
+                  autoFocus
+                  className={inputClass}
+                />
+                <p className="text-[11px] text-text-muted">
+                  Amit az emberhez írunk fel: ez lesz a hónap alapbér tétele.
+                </p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-text-muted">Szuperbruttó (Ft)</label>
+                <input
+                  type="number"
+                  value={fizetesForm.szuperbrutto}
+                  onChange={(e) => setFizetesForm({ ...fizetesForm, szuperbrutto: e.target.value })}
+                  disabled={!!busyId}
+                  className={inputClass}
+                />
+                <p className="text-[11px] text-text-muted">
+                  A teljes munkáltatói költség – a kiadások közé ez kerül. Amíg üres, a hónap teendő marad.
+                </p>
+              </div>
+              {/* A hónap többi tétele (túlóra, benzin, levonás) itt csak
+                  látszik: azokat a munkatárs adatlapján lehet szerkeszteni. */}
+              {fizetesEmployee.tetelek.filter((t) => t.tipus !== "alapber").length > 0 && (
+                <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-2.5">
+                  <p className="t-label mb-1.5">A hónap további tételei</p>
+                  <ul className="space-y-1">
+                    {fizetesEmployee.tetelek
+                      .filter((t) => t.tipus !== "alapber")
+                      .map((t) => (
+                        <li key={t.id} className="flex items-baseline justify-between gap-3 text-[12.5px]">
+                          <span className="min-w-0 truncate text-text-secondary">
+                            {t.megnevezes}
+                            {t.projektkod ? ` · ${t.projektkod}` : ""}
+                          </span>
+                          <span className="shrink-0 tabular-nums text-text-primary">
+                            {t.tipus === "levonando" ? `− ${formatHuf(t.osszeg)}` : formatHuf(t.osszeg)}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-text-muted">
+                    Ezek is beleszámítanak a hónap nettó összegébe – a{" "}
+                    <a href={`/csapat/${fizetesEmployee.id}`} className="text-text-accent hover:underline">
+                      munkatárs adatlapján
+                    </a>{" "}
+                    szerkeszthetők.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={closeFizetes}
+                disabled={!!busyId}
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Bezárás
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSkip(fizetesEmployee)}
+                disabled={!!busyId}
+                title="Ebben a hónapban nem dolgozott nálunk"
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Kihagyás
+              </button>
+              <button
+                type="button"
+                onClick={handleFizetesSave}
+                disabled={!!busyId}
+                className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+              >
+                {busyId === fizetesEmployee.id ? "Mentés…" : "Mentés"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {openEmployee && form && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={busyId ? undefined : closeForm}>

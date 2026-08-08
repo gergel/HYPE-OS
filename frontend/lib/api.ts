@@ -705,6 +705,13 @@ export type InternalPerformanceCertificate = {
   netto_osszeg: number | null;
   plusz_afa: boolean | null;
   brutto_osszeg: number | null;
+  /** Csak bejelentett alkalmazottnál: a teljes munkáltatói költség. A nettó
+   * bér az, ami az emberhez tartozik, ez pedig az, ami minket terhel - a
+   * kiadások közé ez kerül. */
+  szuperbrutto: number | null;
+  /** Amennyibe a hónap NEKÜNK kerül: megbízásosnál a bruttó, bejelentett
+   * alkalmazottnál a szuperbruttó. */
+  koltseg: number | null;
   megbizas_targya: string | null;
   teljesites_datuma: string | null;
   keltezes: string | null;
@@ -1302,6 +1309,9 @@ export type HaviKoltseg = {
   allapot: string | null;
   netto_osszeg: number | null;
   brutto_osszeg: number | null;
+  /** Bejelentett alkalmazottnál a hónap teljes munkáltatói költsége - a nettó
+   * összeg ezt nem tartalmazza. */
+  szuperbrutto: number | null;
   alapber: number;
   extra: number;
   /** A levonandó tételek összege POZITÍVAN - a nettó összegből már levonva. */
