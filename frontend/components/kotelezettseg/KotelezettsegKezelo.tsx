@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { ModalReteg } from "@/components/ModalReteg";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { huDatum } from "@/lib/huDate";
@@ -531,9 +532,9 @@ export function KotelezettsegKezelo({
       )}
 
       {urlap && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={busy ? undefined : bezar}>
+        <ModalReteg onClose={busy ? undefined : bezar}>
           <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 p-6"
+            className="my-auto w-full max-w-2xl rounded-[var(--radius)] border border-border bg-surface-2 p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="mb-4 text-[15px] font-medium text-text-primary">
@@ -718,7 +719,7 @@ export function KotelezettsegKezelo({
               </button>
             </div>
           </div>
-        </div>
+        </ModalReteg>
       )}
     </div>
   );
