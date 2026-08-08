@@ -12,10 +12,14 @@ kapcsolat élettartamától, csak magának a backend service-nek kell futnia.
 Használat (Railway-en, `railway ssh` után, ahol a NOTION_API_KEY env var be van
 állítva a backend service Variables fülén):
 
-    python scripts/notion_import.py                  # teljes import (mind a 3 kör)
-    python scripts/notion_import.py --only Equipment  # csak egyetlen entitás (lásd az
-                                                       # app/notion_import/run_all.py
-                                                       # WAVE_1/2/3 listáiban a pontos nevet)
+    python scripts/notion_import.py                   # teljes import (mind a 3 kör)
+    python scripts/notion_import.py --only Equipment  # csak egyetlen adatbázis
+    python scripts/notion_import.py --only Employee --only Rate   # több, kiválasztva
+    python scripts/notion_import.py --lista           # mit lehet importálni
+
+A választható adatbázisokat a app/notion_import/katalogus.py sorolja fel (a
+felület, a CLI és a teljes import ugyanabból dolgozik). Ugyanez a választás a
+Beállítások oldalon kattintással is elérhető.
 
 Bármikor újrafuttatható - a NotionImportMap tábla (notion_page_id -> a mi entitásunk)
 miatt nem duplikál, csak frissíti a már importált rekordokat. A körök egymásra épülnek
@@ -53,31 +57,43 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.core.database import SessionLocal  # noqa: E402
-from app.notion_import.run_all import ALL_IMPORTERS, find_importer, run_full_import, run_only_import  # noqa: E402
+from app.notion_import import katalogus  # noqa: E402
+from app.notion_import.run_all import run_import  # noqa: E402
+
+
+def _lista_kiirasa() -> None:
+    print("Importálható adatbázisok:\n")
+    for info in katalogus.KATALOGUS:
+        print(f"  {info.nev:28} {info.kor}. kör  <- {', '.join(info.forrasok)}")
+        print(f"  {'':28} {info.leiras}")
 
 
 def main() -> None:
-    only = None
-    if len(sys.argv) > 1:
-        if sys.argv[1] != "--only" or len(sys.argv) < 3:
-            print("Használat: python scripts/notion_import.py [--only <importer neve>]")
-            sys.exit(1)
-        only = sys.argv[2]
+    argumentumok = sys.argv[1:]
+    if argumentumok and argumentumok[0] in ("--lista", "--list"):
+        _lista_kiirasa()
+        return
 
-    only_fn = None
-    if only:
-        only_fn = find_importer(only)
-        if only_fn is None:
-            available = ", ".join(importer_name for importer_name, _ in ALL_IMPORTERS)
-            print(f"Ismeretlen importer: '{only}'.\nVálaszthatók: {available}")
+    # Több --only is megadható: "--only Employee --only Rate".
+    nevek: list[str] = []
+    i = 0
+    while i < len(argumentumok):
+        if argumentumok[i] != "--only" or i + 1 >= len(argumentumok):
+            print("Használat: python scripts/notion_import.py [--only <név> ...] [--lista]")
+            sys.exit(1)
+        nevek.append(argumentumok[i + 1])
+        i += 2
+
+    if nevek:
+        ismeretlen = katalogus.ismeretlen_nevek(nevek)
+        if ismeretlen:
+            print(f"Ismeretlen adatbázis: {', '.join(ismeretlen)}.\n")
+            _lista_kiirasa()
             sys.exit(1)
 
     db = SessionLocal()
     try:
-        if only:
-            run_only_import(only, only_fn, db)
-        else:
-            run_full_import(db)
+        run_import(db, nevek or None)
     finally:
         db.close()
 
