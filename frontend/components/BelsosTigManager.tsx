@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
+import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { huEvHonap, tigHonapTeljesitesbol } from "@/lib/huDate";
@@ -138,14 +139,15 @@ export function BelsosTigManager({
     setFizetesForm(null);
   }
 
-  async function handleFizetesSave() {
-    if (!fizetesEmployee || !fizetesForm) return;
+  /** A havi fizetés mentése - a fizetési jegyzék feltöltése előtt is ez fut
+   * le, hogy a papír mellett ott legyen a beírt bér. */
+  async function fizetesMentes(): Promise<boolean> {
+    if (!fizetesEmployee || !fizetesForm) return false;
     const nettoBer = Number(fizetesForm.netto_ber);
     if (!fizetesForm.netto_ber.trim() || Number.isNaN(nettoBer) || nettoBer <= 0) {
       alert("Add meg a nettó bért.");
-      return;
+      return false;
     }
-    setBusyId(fizetesEmployee.id);
     try {
       const res = await authFetch(`/api/v1/belsos-tig/${fizetesEmployee.id}/${ev}/${honap}/fizetes`, {
         method: "POST",
@@ -154,12 +156,22 @@ export function BelsosTigManager({
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
-        return;
+        return false;
       }
-      closeFizetes();
-      router.refresh();
+      return true;
     } catch (err) {
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+      return false;
+    }
+  }
+
+  async function handleFizetesSave() {
+    if (!fizetesEmployee) return;
+    setBusyId(fizetesEmployee.id);
+    try {
+      if (!(await fizetesMentes())) return;
+      closeFizetes();
+      router.refresh();
     } finally {
       setBusyId(null);
     }
@@ -181,9 +193,10 @@ export function BelsosTigManager({
     };
   }
 
-  async function handleSave() {
-    if (!openEmployee) return;
-    setBusyId(openEmployee.id);
+  /** A TIG űrlap mentése - a saját TIG feltöltése előtt is ez fut le, hogy a
+   * beírt összeg a feltöltött papír mellett legyen. */
+  async function mentes(): Promise<boolean> {
+    if (!openEmployee) return false;
     try {
       const res = await authFetch(`/api/v1/belsos-tig/${openEmployee.id}/${ev}/${honap}/save`, {
         method: "POST",
@@ -192,12 +205,22 @@ export function BelsosTigManager({
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
-        return;
+        return false;
       }
-      closeForm();
-      router.refresh();
+      return true;
     } catch (err) {
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+      return false;
+    }
+  }
+
+  async function handleSave() {
+    if (!openEmployee) return;
+    setBusyId(openEmployee.id);
+    try {
+      if (!(await mentes())) return;
+      closeForm();
+      router.refresh();
     } finally {
       setBusyId(null);
     }
@@ -586,6 +609,18 @@ export function BelsosTigManager({
               >
                 Kihagyás
               </button>
+              {/* Alkalmazottnál nincs kiküldés, amit ki lehetne hagyni - itt
+                  a saját papír a fizetési jegyzék, ami a hónaphoz kerül. */}
+              <SajatPapirFeltoltes
+                cimke="Fizetési jegyzék feltöltése"
+                feltoltesPath={`/api/v1/belsos-tig/${fizetesEmployee.id}/${ev}/${honap}/tig-fajl`}
+                elokeszit={fizetesMentes}
+                disabled={!!busyId}
+                onKesz={() => {
+                  closeFizetes();
+                  router.refresh();
+                }}
+              />
               <button
                 type="button"
                 onClick={handleFizetesSave}
@@ -731,6 +766,18 @@ export function BelsosTigManager({
               >
                 {busyId === openEmployee.id ? "Mentés…" : "Mentés"}
               </button>
+              {/* A kiküldés kihagyása: kész TIG feltöltése. A hónap ettől
+                  ugyanúgy "Kiküldve" lesz, tehát mehet rá számla. */}
+              <SajatPapirFeltoltes
+                cimke="Saját TIG feltöltése"
+                feltoltesPath={`/api/v1/belsos-tig/${openEmployee.id}/${ev}/${honap}/tig-fajl`}
+                elokeszit={mentes}
+                disabled={!!busyId}
+                onKesz={() => {
+                  closeForm();
+                  router.refresh();
+                }}
+              />
               <button
                 type="button"
                 onClick={handleKuldes}

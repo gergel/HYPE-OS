@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { PapirTetelValaszto, tetelKulcs } from "@/components/PapirTetelValaszto";
+import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingTigEmployee, TigTetel } from "@/lib/api";
 
 type FormState = {
@@ -169,9 +170,10 @@ export function PerformanceCertificateManager({
     };
   }
 
-  async function handleSave() {
-    if (!selectedEmployee || !form) return;
-    setBusy("save");
+  /** Az űrlap mentése - a saját TIG feltöltése előtt is ez fut le, hogy a
+   * beírt adatok (összeg, tételek) a feltöltött papír mellett legyenek. */
+  async function mentes(): Promise<boolean> {
+    if (!selectedEmployee || !form) return false;
     try {
       const res = await authFetch(`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/save`, {
         method: "POST",
@@ -180,12 +182,21 @@ export function PerformanceCertificateManager({
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
-        return;
+        return false;
       }
-      closeForm();
-      router.refresh();
+      return true;
     } catch (err) {
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+      return false;
+    }
+  }
+
+  async function handleSave() {
+    setBusy("save");
+    try {
+      if (!(await mentes())) return;
+      closeForm();
+      router.refresh();
     } finally {
       setBusy(null);
     }
@@ -408,6 +419,19 @@ export function PerformanceCertificateManager({
               >
                 {busy === "save" ? "Mentés…" : "Mentés"}
               </button>
+              {/* A kiküldés kihagyása: kész TIG feltöltése. A bejegyzés
+                  ugyanúgy "Kiküldve" lesz, tehát mehet rá számla. */}
+              <SajatPapirFeltoltes
+                cimke="Saját TIG feltöltése"
+                feltoltesPath={`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/sajat-fajl`}
+                elokeszit={mentes}
+                disabled={busyState}
+                onKesz={() => {
+                  closeForm();
+                  setSelectedId("");
+                  router.refresh();
+                }}
+              />
               <button
                 type="button"
                 onClick={handleGenerateAndSend}

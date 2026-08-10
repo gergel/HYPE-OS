@@ -741,17 +741,27 @@ async def upload_tig_fajl(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
-    """Az aláírt TIG dokumentum feltöltése egy hónaphoz.
+    """A hónap TIG dokumentumának feltöltése - egyben a KIKÜLDÉS KIHAGYÁSA.
 
     A rendszerben készülő TIG-et a generálás teszi be (az a Drive-on marad),
-    de a régi hónapok igazolása papíron/Drive-on van, és aláírás után is
-    vissza kell tölteni valahova - ez az a hely. A fájl az R2-re kerül, és a
-    hónap `file_url`-je erre mutat.
+    de van, amikor a papír nem itt készül: régi, Notionból hozott hónapok
+    igazolása, vagy egy máshol megírt/aláírva visszakapott TIG. Ilyenkor
+    nincs mit generálni és nincs kinek kiküldeni, csak rögzíteni: a fájl az
+    R2-re kerül, és a hónap `file_url`-je erre mutat.
+
+    Megbízásos belsősnél a feltöltés az ÁLLAPOTOT is átállítja "Kiküldve"-re
+    (ha még nem volt lezárva): a hónap papírja megvan, tehát ugyanoda jut,
+    mint a generálás és kiküldés útján - innentől számla is tölthető hozzá.
+    Bejelentett alkalmazottnál az állapotot NEM nyúljuk: nála nincs kiküldés,
+    amit ki lehetne hagyni (a bérét bérszámfejtés fizeti), a feltöltött papír
+    a fizetési jegyzék - a "Kiküldve" ott csak lezárná a hónapot, és nem
+    lehetne javítani a beírt fizetést.
 
     Egy hónapnak EGY TIG dokumentuma van (ellentétben a számlákkal, amikből
     több is lehet): egy újabb feltöltés lecseréli az előzőt, és ha az a mi
     tárhelyünkön volt, azt az objektumot el is dobjuk."""
     record = _honap_rekordja(db, employee_id, ev, honap)
+    employee = _validate_belsos_employee(db, employee_id)
     filename = file.filename or "tig"
     content_type = file.content_type or "application/octet-stream"
     data = await file.read()
@@ -760,6 +770,8 @@ async def upload_tig_fajl(
     kulcs = f"belsos-tig-dokumentum/{employee_id}/{ev}-{honap:02d}-{record.id}{os.path.splitext(filename)[1]}"
     record.file_url = document_storage.upload_bytes(data, kulcs, content_type)
     record.file_storage_key = kulcs
+    if belsos_idoszak.kell_havi_tig(employee) and record.allapot not in TERMINAL_STATUSES:
+        record.allapot = "Kiküldve"
     db.commit()
     # A cserélt fájl törlése CSAK a mentés után, és csak ha tényleg másik
     # objektum volt - így egy elhasalt feltöltésnél nem marad se régi, se új.

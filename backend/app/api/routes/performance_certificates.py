@@ -839,6 +839,53 @@ def set_allapot(
     return PerformanceCertificateRead.model_validate(cert)
 
 
+@router.post("/{project_id}/{szamlazo_kulcs}/sajat-fajl", response_model=PerformanceCertificateRead)
+async def upload_sajat_tig(
+    project_id: int,
+    szamlazo_kulcs: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """A KIKÜLDÉS KIHAGYÁSA: egy már meglévő TIG dokumentum feltöltése.
+
+    Van, amikor a papír nem itt készül - kézzel írt, máshonnan kapott vagy már
+    aláírt igazolás. Ilyenkor nincs mit generálni és nincs kinek kiküldeni,
+    csak rögzíteni: a fájl a tárhelyünkre kerül, a bejegyzés `file_url`-je
+    erre mutat, az állapot pedig "Kiküldve" lesz - ugyanoda jut a TIG, mint a
+    generálás és küldés útján, tehát innentől számla is tölthető hozzá.
+
+    Az összeget előtte menteni kell (POST /save): TIG-et összeg nélkül nem
+    tekintünk késznek, ugyanúgy, ahogy a kiküldésnél sem.
+
+    Rossz fájl esetén ugyanaz a javítás, mint tévesen KIKÜLDÖTT TIG-nél: a
+    listán vissza kell venni az állapotot "Készítés alatt"-ra (lásd /allapot),
+    utána újra feltölthető - a csere a régi objektumot a tárhelyről is
+    eldobja. Egy TIG-nek ugyanis EGY dokumentuma van."""
+    project = _get_project_or_404(db, project_id)
+    csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
+    draft = _get_or_create_draft(db, project, csoport)
+    if not draft.netto_osszeg or draft.netto_osszeg <= 0:
+        raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
+
+    filename = file.filename or "tig"
+    content_type = file.content_type or "application/octet-stream"
+    data = await file.read()
+
+    regi_kulcs = draft.file_storage_key
+    kulcs = f"tig-dokumentum/{project_id}/{szamlazo_kulcs}-{draft.id}{os.path.splitext(filename)[1]}"
+    draft.file_url = document_storage.upload_bytes(data, kulcs, content_type)
+    draft.file_storage_key = kulcs
+    draft.allapot = "Kiküldve"
+    db.commit()
+    # A cserélt fájl törlése CSAK a mentés után, és csak ha tényleg másik
+    # objektum volt - így egy elhasalt feltöltésnél nem marad se régi, se új.
+    if regi_kulcs and regi_kulcs != kulcs:
+        document_storage.delete_object(regi_kulcs)
+    db.refresh(draft)
+    return PerformanceCertificateRead.model_validate(draft)
+
+
 def _get_sent_certificate_or_404(db: Session, project_id: int, szamlazo_kulcs: str) -> PerformanceCertificate:
     """A TIG-hez tartozó számla feltöltése/kifizetése csak azután lehetséges,
     hogy magát a TIG-et már kiküldtük (lásd generate_and_send) - eddig a

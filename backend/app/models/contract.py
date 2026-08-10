@@ -46,6 +46,10 @@ class Contract(TimestampMixin, Base):
     megbizas_targya: Mapped[str | None] = mapped_column(String(255))
     szerzodes_allapota: Mapped[str | None] = mapped_column(String(50))
     szerzodes_file_url: Mapped[str | None] = mapped_column(String(500))
+    # Lásd PerformanceCertificate.file_storage_key: csak a MI tárhelyünkre
+    # feltöltött saját szerződésnél van kitöltve, a generált, Drive-on maradó
+    # dokumentumnál üres.
+    szerzodes_file_storage_key: Mapped[str | None] = mapped_column(String(500))
     keltezes: Mapped[date | None] = mapped_column(Date)
     alairva: Mapped[bool] = mapped_column(Boolean, default=False)
     # Álló KERETSZERZŐDÉS-e ez a sor, vagy egy ESETI megbízási szerződés?

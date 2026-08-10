@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { PapirTetelValaszto, tetelKulcs, type PapirTetel } from "@/components/PapirTetelValaszto";
+import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingSubcontractorEmployee } from "@/lib/api";
 
 type FormState = {
@@ -172,9 +173,10 @@ export function SubcontractorContractManager({
     };
   }
 
-  async function handleSave() {
-    if (!selectedEmployee || !form) return;
-    setBusy("save");
+  /** Az űrlap mentése - a saját szerződés feltöltése előtt is ez fut le, hogy
+   * a beírt adatok (összeg, tételek) a feltöltött papír mellett legyenek. */
+  async function mentes(): Promise<boolean> {
+    if (!selectedEmployee || !form) return false;
     try {
       const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/save`, {
         method: "POST",
@@ -183,12 +185,21 @@ export function SubcontractorContractManager({
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
-        return;
+        return false;
       }
-      closeForm();
-      router.refresh();
+      return true;
     } catch (err) {
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+      return false;
+    }
+  }
+
+  async function handleSave() {
+    setBusy("save");
+    try {
+      if (!(await mentes())) return;
+      closeForm();
+      router.refresh();
     } finally {
       setBusy(null);
     }
@@ -437,6 +448,19 @@ export function SubcontractorContractManager({
               >
                 {busy === "save" ? "Mentés…" : "Mentés"}
               </button>
+              {/* A kiküldés kihagyása: kész szerződés feltöltése. A bejegyzés
+                  ugyanúgy "Kiküldve" lesz, tehát mehet tovább a TIG-fázisba. */}
+              <SajatPapirFeltoltes
+                cimke="Saját szerződés feltöltése"
+                feltoltesPath={`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/sajat-fajl`}
+                elokeszit={mentes}
+                disabled={busyState}
+                onKesz={() => {
+                  closeForm();
+                  setSelectedId("");
+                  router.refresh();
+                }}
+              />
               <button
                 type="button"
                 onClick={handleGenerateAndSend}

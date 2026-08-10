@@ -34,7 +34,12 @@ class PerformanceCertificate(TimestampMixin, Base):
     vallalkozas_id: Mapped[int | None] = mapped_column(ForeignKey("vallalkozasok.id"))
 
     allapot: Mapped[str | None] = mapped_column(String(50), comment="TIG állapot")
-    file_url: Mapped[str | None] = mapped_column(String(500), comment="Generált TIG Google Docs linkje")
+    file_url: Mapped[str | None] = mapped_column(String(500), comment="A TIG dokumentum linkje")
+    # Csak akkor van kitöltve, ha a TIG dokumentumot MI tároljuk (a kiküldés
+    # helyett feltöltött saját papír az R2-n) - a rendszer által generált,
+    # Drive-on maradó dokumentumnál üres, mert azt nem a mi tárhelyünkről
+    # törölnénk. Ugyanaz a minta, mint a Belsős TIG-nél.
+    file_storage_key: Mapped[str | None] = mapped_column(String(500))
 
     ceg_neve: Mapped[str | None] = mapped_column(String(255))
     szekhely: Mapped[str | None] = mapped_column(String(255))
