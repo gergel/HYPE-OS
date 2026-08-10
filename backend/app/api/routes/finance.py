@@ -14,9 +14,9 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
-from app.models.employee_monthly_item import EmployeeMonthlyItem
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.internal_performance_certificate import (
+    LEZART_ALLAPOTOK,
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
 )
@@ -596,14 +596,17 @@ def _fedezettseg(
 def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]]:
     """(tétel, [(fájlnév a ZIP-ben, tárhely-kulcs)]) párok.
 
-    "Utalásra vár" az, amihez VAN feltöltött számla, de még nincs kifizetve:
-      - kiadás, ami nincs késznek jelölve és nincs fizetési dátuma,
-      - külsős/belsős TIG, aminek van számlája, de nincs kifizetettként jelölve.
-    Számla nélküli tétel nem kerül a listára: utalni sem tudnánk mi alapján.
+    "Utalásra vár" az, ami még nincs kifizetve:
+      - kiadás, ami nincs késznek jelölve, nincs fizetési dátuma, és VAN
+        feltöltött számlája (enélkül utalni sem tudnánk mi alapján),
+      - külsős TIG, aminek van számlája, de nincs kifizetettként jelölve,
+      - belsős TIG, amint ELKÉSZÜLT - ehhez számla nem kell, mert a belsős
+        munkatárs nem számlázik.
 
-    Minden tételhez kiszámoljuk a FEDEZETTSÉGET is: megjött-e már a pénz arra
-    a projektkódra, amihez tartozik (lásd _fedezettseg) - ebből látszik, kinek
-    mehet nyugodtan az utalás."""
+    A kiadásokhoz és a külsős TIG-ekhez kiszámoljuk a FEDEZETTSÉGET is: megjött-e
+    már a pénz arra a projektkódra, amihez tartozik (lásd _fedezettseg) - ebből
+    látszik, kinek mehet nyugodtan az utalás. A belsős TIG ebből kimarad: a bér
+    nem a megrendelő pénzéből megy, tehát sosem vár fedezetre."""
     eredmeny: list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]] = []
     kodok, kifizetett = _projektkod_fedezet(db)
 
@@ -701,33 +704,18 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
         .filter(InternalPerformanceCertificate.szamla_kifizetve.is_(False))
         .all()
     )
-    # A belsős TIG egy HÓNAP összevont elszámolása: a hónap tételei külön-külön
-    # köthetők projektkódhoz (túlóra, kiszállás), és ezek több projektről is
-    # jöhetnek - ilyenkor csak akkor teljes a fedezet, ha MINDEGYIK kódot
-    # kifizették. Az alapbérnek nincs projektkódja, attól még jár.
-    havi_kodok: dict[tuple[int, int, int], list[int]] = {}
-    for employee_id, ev, honap, project_code_id in db.execute(
-        select(
-            EmployeeMonthlyItem.employee_id,
-            EmployeeMonthlyItem.ev,
-            EmployeeMonthlyItem.honap,
-            EmployeeMonthlyItem.project_code_id,
-        ).where(EmployeeMonthlyItem.project_code_id.is_not(None))
-    ).all():
-        havi_kodok.setdefault((employee_id, ev, honap), []).append(project_code_id)
-
+    # A belsős TIG a havi BÉR elszámolása, nem egy megrendelő munkájáé: a
+    # fizetés akkor is jár, ha az ügyfél még nem fizetett, tehát belsős TIG
+    # SOSEM vár fedezetre - amint elkészült (kiküldtük), utalandó. Ezért nem is
+    # nézzük a hónap tételeinek projektkódjait, és számlát sem várunk hozzá: a
+    # belsős munkatárs nem számlázik, a TIG maga a papír.
     for tig in belsos:
-        if not tig.invoices:
+        if tig.allapot not in LEZART_ALLAPOTOK:
             continue
-        allapot, minden_kod, fedezetlen = _fedezettseg(
-            havi_kodok.get((tig.employee_id, tig.ev, tig.honap), []), kodok, kifizetett
-        )
         eredmeny.append(
             (
                 UtalasraVaroTetel(
-                    fedezettseg=allapot,
-                    projektkodok=minden_kod,
-                    fedezetlen_projektkodok=fedezetlen,
+                    fedezettseg=FEDEZETT,
                     kulcs=f"belsos_tig:{tig.id}",
                     tipus="Belsős TIG",
                     # A megnevezés a TIG DÁTUMAIBÓL jön: a 07.20-i fizetési
@@ -783,6 +771,15 @@ def utalasra_varo_zip(
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for tetel, fajlok in valasztott:
             osszeg += tetel.osszeg or 0
+            if not fajlok:
+                # Van olyan tétel, amihez nem is tartozik számla (belsős TIG:
+                # a bejelentett munkatárs nem számlázik) - a csomagban ettől
+                # még szerepelnie kell, különben az utaló nem látja a listán.
+                leiras.append(
+                    f"(nincs számla fájl)\t{tetel.tipus}\t{tetel.kinek or '-'}\t{tetel.megnevezes}\t"
+                    f"{tetel.osszeg if tetel.osszeg is not None else '-'} {tetel.penznem}\t"
+                    f"határidő: {tetel.hatarido or '-'}"
+                )
             for nev, kulcs in fajlok:
                 try:
                     zf.writestr(nev, document_storage.download_bytes(kulcs))

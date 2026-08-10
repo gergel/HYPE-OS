@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     drive_kulsos_tig: str = ""
     # Ugyanez a Belsős TIG-hez (lásd api/routes/internal_performance_certificates.py).
     drive_belsos_tig: str = ""
+    # A kiküldött diszpók kész PDF-jének célmappája (lásd services/dispo.py
+    # send_diszpo) - ha üres, a generikus gdoc_output_folder_id/drive_folder_id
+    # a cél, és ha az sincs, a Drive gyökere.
+    drive_diszpo: str = ""
 
     # A különálló belsős-TIG program (belsos-TIG-main) env-nevei. Azért
     # fogadjuk el őket, hogy a HYPE OS ugyanazzal a Railway beállítással
@@ -117,6 +121,10 @@ class Settings(BaseSettings):
             or self.gdoc_output_folder_id
             or self.drive_folder_id
         )
+
+    @property
+    def diszpo_folder_id(self) -> str:
+        return self.drive_diszpo or self.gdoc_output_folder_id or self.drive_folder_id
 
     @property
     def hype_cc_list(self) -> list[str]:

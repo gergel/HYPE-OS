@@ -6,6 +6,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin
 
+#: Az az állapot-készlet, amiben egy belsős TIG ELKÉSZÜLTNEK számít. A "Kész" a
+#: korábbi, küldés nélküli életciklusból maradt: a régi bejegyzések ebben az
+#: állapotban vannak, és ugyanúgy lezártnak számítanak, mint az azóta bevezetett
+#: "Kiküldve". Itt, a modell mellett van, mert két route modul is használja
+#: (belsos-tig és a pénzügyek utalandó listája), azok pedig nem importálnak
+#: egymásból.
+LEZART_ALLAPOTOK = frozenset({"Kész", "Kiküldve"})
+
 
 class InternalPerformanceCertificate(TimestampMixin, Base):
     """Belsős TIG - a PerformanceCertificate (Külsős TIG) párja belsős

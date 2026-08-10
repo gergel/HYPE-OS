@@ -39,6 +39,7 @@ from app.models.employee_monthly_item import (
 )
 from app.models.finance import Expense
 from app.models.internal_performance_certificate import (
+    LEZART_ALLAPOTOK,
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
 )
@@ -59,11 +60,10 @@ router = APIRouter(prefix="/belsos-tig", tags=["internal-performance-certificate
 
 PAGE = "/belsos-tig"
 
-# A "Kész" a korábbi, küldés nélküli életciklusból maradt itt: a régi
-# bejegyzések ebben az állapotban vannak, és ugyanúgy lezártnak számítanak,
-# mint az azóta bevezetett "Kiküldve".
 TERMINAL_STATUSES = {"Kész", "Kiküldve", "Kihagyva"}
-FINALIZED_STATUSES = {"Kész", "Kiküldve"}
+#: Lásd models/internal_performance_certificate.LEZART_ALLAPOTOK - az utalandó
+#: lista is ebből dolgozik, ezért a modell mellett lakik.
+FINALIZED_STATUSES = LEZART_ALLAPOTOK
 
 _BELSOS_TIG_EMAIL_HTML = """\
 <p>Kedves {nev},</p>

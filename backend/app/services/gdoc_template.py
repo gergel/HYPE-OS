@@ -117,6 +117,18 @@ def _upload_pdf(filename: str, pdf_bytes: bytes, folder_id: str | None) -> str |
     return uploaded.get("webViewLink")
 
 
+def pdf_feltoltes(*, filename: str, pdf_bytes: bytes, folder_id: str | None) -> str | None:
+    """Egy MÁR MEGLÉVŐ PDF feltöltése a Drive-ra, a webViewLink-jével visszatérve.
+
+    A fenti gdoc_* függvények egy menetben generálnak és töltenek fel; ez az
+    azoktól független belépő azoknak a folyamatoknak, ahol a feltöltésnek
+    később kell megtörténnie, mint a generálásnak - a diszpónál például csak
+    AZUTÁN kerül fel a PDF, hogy a levél tényleg kiment (lásd
+    services/dispo.py send_diszpo), hogy egy sikertelen küldés ne hagyjon
+    maga után fájlt a mappában."""
+    return _upload_pdf(filename, pdf_bytes, folder_id)
+
+
 def szulo_mappa(file_id: str) -> str | None:
     """Melyik Drive mappában van ez a fájl? (az első szülő azonosítója)
 

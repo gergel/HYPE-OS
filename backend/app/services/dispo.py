@@ -33,7 +33,7 @@ from app.core.config import settings
 from app.models.employee import Employee
 from app.models.project import Project
 from app.services import attachments, document_storage
-from app.services.gdoc_template import gdoc_fill_and_export_pdf
+from app.services.gdoc_template import gdoc_fill_and_export_pdf, pdf_feltoltes
 from app.services.google_calendar import PLACEHOLDER_PROJEKTKOD
 from app.services.google_email import send_message
 
@@ -346,12 +346,38 @@ def _schedule_utokovetes_email(project: Project) -> None:
         logger.exception("Nem sikerült beütemezni az utókövető emailt project_id=%s", project.id)
 
 
+def _pdf_a_drive_ra(project: Project, pdf_bytes: bytes | None) -> str | None:
+    """A kiküldött diszpó kész PDF-jét felteszi a Drive célmappájába, és a
+    linkjével tér vissza.
+
+    Csak a KIKÜLDÉS UTÁN hívjuk: így egy sikertelen küldés nem hagy maga után
+    fájlt a mappában, és ami ott van, az tényleg kiment. Ha a feltöltés
+    elhasal (nincs Drive hitelesítés, rossz mappa-azonosító), azt csak
+    naplózzuk - a levél már kiment, azt visszacsinálni úgysem tudnánk, a
+    hiányzó archív példány miatt pedig nem érdemes hibát mutatni a küldőnek."""
+    if not pdf_bytes:
+        return None
+    try:
+        return pdf_feltoltes(
+            filename=_pdf_filename(project),
+            pdf_bytes=pdf_bytes,
+            folder_id=settings.diszpo_folder_id or None,
+        )
+    except Exception:  # noqa: BLE001 - a kiküldést ez nem buktathatja meg
+        logger.exception("Nem sikerült feltölteni a diszpó PDF-et a Drive-ra project_id=%s", project.id)
+        return None
+
+
 def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     """'Diszpó küldése' gomb - teljes diszpó email a technika listával, stábbal,
     brief-fel stb., és (ha GDOC_DISPO_TEMPLATE_ID be van állítva) egy Google Docs
     sablonból generált, csatolt PDF-fel. Ha a projektnek már van
     gmail_thread_id-je (előzetes diszpó már ment), ugyanabba a szálba válaszol -
-    valódi email-válaszként (lásd gmail_last_message_id), nem külön levélként."""
+    valódi email-válaszként (lásd gmail_last_message_id), nem külön levélként.
+
+    A kiküldés UTÁN a kész PDF felkerül a diszpók Drive mappájába is (lásd
+    _pdf_a_drive_ra), és a projekt "Drive diszpó pdf" mezője erre a kész
+    fájlra mutat - nem a szerkeszthető Docs példányra."""
     _require_projektkod(project)
     _require_crew_emails(project)
     to_list = _recipients(project)
@@ -403,12 +429,21 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
         sender_name=settings.dispo_sender_name,
     )
 
+    # A levél kiment - a kész PDF innentől archiválható a Drive mappájába.
+    pdf_link = _pdf_a_drive_ra(project, pdf_bytes)
+
     project.diszpo = "Kiküldve"
-    project.drive_diszpo_pdf_url = doc_link or project.drive_diszpo_pdf_url
+    project.drive_diszpo_pdf_url = pdf_link or doc_link or project.drive_diszpo_pdf_url
     project.gmail_thread_id = thread_id or project.gmail_thread_id
     project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     project.aki_kikuldte_a_diszpot = [current_user.full_name]
     _schedule_utokovetes_email(project)
     db.commit()
     db.refresh(project)
-    return {"status": "OK", "message": "Diszpó elküldve.", "thread_id": project.gmail_thread_id, "doc_link": doc_link}
+    return {
+        "status": "OK",
+        "message": "Diszpó elküldve.",
+        "thread_id": project.gmail_thread_id,
+        "doc_link": doc_link,
+        "pdf_link": pdf_link,
+    }

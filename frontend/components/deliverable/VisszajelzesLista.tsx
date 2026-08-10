@@ -8,8 +8,16 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { huDatum } from "@/lib/huDate";
-import { allapotJelzo, VISSZAJELZES_ALLAPOTOK } from "@/lib/visszajelzesAllapot";
+import { SelectDropdown } from "@/components/SelectDropdown";
+import {
+  allapotCimke,
+  allapotErtek,
+  allapotJelzo,
+  VISSZAJELZES_ALLAPOTOK,
+} from "@/lib/visszajelzesAllapot";
 import type { VagoiVisszajelzes } from "@/lib/api";
+
+const ALLAPOT_CIMKEK = VISSZAJELZES_ALLAPOTOK.map((a) => a.cimke);
 
 function pont(ertek: number | null): string {
   return ertek == null ? "–" : `${ertek}/10`;
@@ -233,23 +241,20 @@ export function VisszajelzesLista({
                       {pont(v.kreativ_kepivilag)}
                     </td>
                     <td className="py-2.5 pr-4 text-right tabular-nums text-text-primary">{pont(v.atlag)}</td>
+                    {/* Az állapot magára a jelzőre kattintva szerkeszthető -
+                        ugyanaz a legördülő, mint az app többi állapot-mezőjén
+                        (SelectDropdown). Akinek nincs joga állítani, az a
+                        sima jelzőt látja. */}
                     <td className="py-2.5 pr-4 whitespace-nowrap">
-                      <StatusBadge {...allapotJelzo(v.allapot)} />
-                      {canSend && (
-                        <select
-                          value={v.allapot}
-                          onChange={(e) => allapotValtas(v, e.target.value)}
+                      {canSend ? (
+                        <SelectDropdown
+                          value={allapotCimke(v.allapot)}
+                          options={ALLAPOT_CIMKEK}
+                          onChange={(cimke) => allapotValtas(v, allapotErtek(cimke))}
                           disabled={busyId === v.id}
-                          aria-label="Állapot átállítása"
-                          title="Állapot átállítása"
-                          className="mt-1 block w-full rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[11.5px] text-text-secondary focus:outline-none disabled:opacity-50"
-                        >
-                          {VISSZAJELZES_ALLAPOTOK.map((a) => (
-                            <option key={a.ertek} value={a.ertek}>
-                              {a.cimke}
-                            </option>
-                          ))}
-                        </select>
+                        />
+                      ) : (
+                        <StatusBadge {...allapotJelzo(v.allapot)} />
                       )}
                     </td>
                     <td className="py-2.5 text-right whitespace-nowrap">

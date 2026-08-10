@@ -35,7 +35,7 @@ const FEDEZET_CSOPORTOK: { kulcs: string; cimke: string; leiras: string }[] = [
     kulcs: "reszben",
     cimke: "Részben fedezett",
     leiras:
-      "Összevont tétel (pl. havi belsős TIG több projekt extráival): a projektkódok egy részét már kifizették, a többit még nem.",
+      "Összevont tétel (pl. egy külsős TIG több forgatásról): a projektkódok egy részét már kifizették, a többit még nem.",
   },
   {
     kulcs: "nincs_projektkod",
