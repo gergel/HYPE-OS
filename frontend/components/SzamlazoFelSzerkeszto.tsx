@@ -34,7 +34,11 @@ export function SzamlazoFelSzerkeszto({
   const [hiba, setHiba] = useState<string | null>(null);
 
   if (nezet.sorok.length === 0) {
-    return <p className="text-[13px] text-text-secondary">Nincs stábtag a projekten.</p>;
+    return (
+      <p className="text-[13px] text-text-secondary">
+        Nincs olyan (nem belsős) stábtag a projekten, akinél a számlázás kérdés lenne.
+      </p>
+    );
   }
 
   async function allit(employeeId: number, szamlazo: string) {
@@ -63,9 +67,7 @@ export function SzamlazoFelSzerkeszto({
       <p className="mb-3 text-[12.5px] text-text-muted">
         Alapból mindenki a saját nevében számláz. Itt lehet beállítani, ha valakiért másik ember vagy egy cég állítja
         ki a számlát – ilyenkor a szerződés és a TIG is az ő nevére megy, egyben. A lefedett ember stábtag marad:
-        diszpót kap és rajta van a projekten. Belsősnél alapból a havi bér fedi a munkát (nincs papír); ha ezt a
-        projektjét a saját cégéről számlázza, itt válaszd ki a céget – onnantól erre a projektre ugyanúgy készül
-        szerződés és TIG, mint egy külsősnél.
+        diszpót kap és rajta van a projekten.
       </p>
       {hiba && <p className="mb-3 text-[12.5px] text-text-danger">{hiba}</p>}
       <div className="overflow-x-auto">
@@ -85,14 +87,12 @@ export function SzamlazoFelSzerkeszto({
               const tovabbiCegek = cegek
                 .map((c) => ({ szamlazo: `v${c.id}`, nev: c.nev }))
                 .filter((c) => !javasoltKulcsok.has(c.szamlazo));
-              const belsos = sor.tipus === "belsos";
               return (
                 <tr key={sor.employee_id} className="border-b border-border last:border-0">
                   <td className="py-2.5 pr-6">
                     <a href={`/csapat/${sor.employee_id}`} className="text-text-accent hover:underline">
                       {sor.full_name}
                     </a>
-                    {belsos && <span className="block text-[11px] text-text-muted">belsős</span>}
                   </td>
                   <td className="py-2.5">
                     {canEdit ? (
@@ -104,7 +104,7 @@ export function SzamlazoFelSzerkeszto({
                       >
                         {sor.javaslatok.map((j) => (
                           <option key={j.szamlazo} value={j.szamlazo}>
-                            {j.forras === "sajat" && !belsos ? `${j.nev} (saját nevében)` : j.nev}
+                            {j.forras === "sajat" ? `${j.nev} (saját nevében)` : j.nev}
                             {j.forras === "vallalkozas-tagsag" ? " – cége" : ""}
                           </option>
                         ))}
@@ -120,7 +120,7 @@ export function SzamlazoFelSzerkeszto({
                       </select>
                     ) : (
                       <span className={sor.felulirva ? "text-text-primary" : "text-text-muted"}>
-                        {sor.felulirva ? sor.szamlazo_nev : belsos ? "Havi bérben" : "Saját nevében"}
+                        {sor.felulirva ? sor.szamlazo_nev : "Saját nevében"}
                       </span>
                     )}
                   </td>

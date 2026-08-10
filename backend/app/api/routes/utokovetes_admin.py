@@ -97,7 +97,7 @@ def _tig_state(
     """(tig_ready, összes, függő) - a TIG populáció a keretszerződéseseket IS
     tartalmazza (lásd performance_certificates.py _tig_candidates), csak akkor
     "kész" (tig_ready), ha a projekt teljes eseti szerződés fázisa lezárult."""
-    if not _tig_candidates(project, felulirasok):
+    if not _tig_candidates(project):
         return False, 0, 0
     csoportok = tig_csoportok(project, felulirasok)
     total = len(csoportok)

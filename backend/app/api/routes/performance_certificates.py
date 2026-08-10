@@ -151,14 +151,11 @@ def _load_tig_lookup(db: Session, project_ids: set[int]) -> TigLookup:
     return ember_fedettseg, fel_tig
 
 
-def _tig_candidates(
-    project: Project, felulirasok: dict[tuple[int, int], ProjectSzamlazo]
-) -> list[Employee]:
-    """A TIG-et igénylő emberek egy projekten - lásd
-    services/szamlazo.papirt_igenylo_emberek. FÜGGETLENÜL attól, hogy van-e
-    keretszerződésük (szemben az eseti szerződés-populációval, ahol a
-    keretszerződésesek ki vannak zárva)."""
-    return szamlazo.papirt_igenylo_emberek(project, felulirasok)
+def _tig_candidates(project: Project) -> list[Employee]:
+    """A TIG-et igénylő emberek egy projekten: minden nem belsős stábtag,
+    FÜGGETLENÜL attól, hogy van-e keretszerződése (szemben az eseti
+    szerződés-populációval, ahol a keretszerződésesek ki vannak zárva)."""
+    return [e for e in project.crew if e.tipus != EmployeeType.BELSOS]
 
 
 def tig_csoportok(
@@ -166,7 +163,7 @@ def tig_csoportok(
 ) -> list[SzamlazoCsoport]:
     """A TIG-et igénylő stábtagok SZÁMLÁZÓ FELENKÉNT összefogva - egy fél
     munkájáról egy TIG szól, akkor is, ha több ember munkáját fedi."""
-    return szamlazo.csoportok(project, _tig_candidates(project, felulirasok), felulirasok)
+    return szamlazo.csoportok(project, _tig_candidates(project), felulirasok)
 
 
 def _is_szerzodes_phase_done(db: Session, project: Project) -> bool:
@@ -222,7 +219,7 @@ def list_tig_ready_projects(db: Session = Depends(get_db), _user: Employee = Dep
     eligible = [
         p
         for p in projects
-        if _tig_candidates(p, felulirasok) and not _pending_csoportok(p, keretszerzodesek, project_contracts, felulirasok)
+        if _tig_candidates(p) and not _pending_csoportok(p, keretszerzodesek, project_contracts, felulirasok)
     ]
     tig_lookup = _load_tig_lookup(db, {p.id for p in eligible})
 
@@ -372,7 +369,7 @@ def _pending_info(project: Project, csoport: SzamlazoCsoport, existing: Performa
 def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     project = _get_project_or_404(db, project_id)
     felulirasok = szamlazo.load_felulirasok(db, {project.id})
-    tig_ready = bool(_tig_candidates(project, felulirasok)) and _is_szerzodes_phase_done(db, project)
+    tig_ready = bool(_tig_candidates(project)) and _is_szerzodes_phase_done(db, project)
     pending: list[tuple[SzamlazoCsoport, PerformanceCertificate | None]] = []
     if tig_ready:
         pending = _tig_pending_csoportok(project, tig_csoportok(project, felulirasok), _load_tig_lookup(db, {project.id}))
@@ -595,7 +592,7 @@ def _apply_tetelek(db: Session, draft: PerformanceCertificate, fel: SzamlazoFel,
         projekt = projektek.get(t.project_id)
         if projekt is None:
             raise HTTPException(status_code=404, detail=f"A(z) #{t.project_id} projekt nem található.")
-        ember = next((e for e in _tig_candidates(projekt, felulirasok) if e.id == t.employee_id), None)
+        ember = next((e for e in _tig_candidates(projekt) if e.id == t.employee_id), None)
         if ember is None:
             raise HTTPException(
                 status_code=400,

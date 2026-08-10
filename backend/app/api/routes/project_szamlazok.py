@@ -79,12 +79,7 @@ def _javaslatok(db: Session, project: Project, employee: Employee) -> list[Javas
     Sorrendben: saját maga (az alapeset), a cégei (ahol tag), végül a projekt
     többi nem belsős stábtagja - ez utóbbi az "egyikük számlázza a másikat"
     eset, ami a felhasználó szerint gyakori."""
-    sajat_nev = (
-        f"{employee.full_name} (havi bérben)"
-        if employee.tipus == EmployeeType.BELSOS
-        else employee.full_name
-    )
-    javaslatok = [JavaslatInfo(szamlazo=f"e{employee.id}", nev=sajat_nev, forras="sajat")]
+    javaslatok = [JavaslatInfo(szamlazo=f"e{employee.id}", nev=employee.full_name, forras="sajat")]
     tagsagok = (
         db.query(VallalkozasTag)
         .options(selectinload(VallalkozasTag.vallalkozas))
@@ -96,10 +91,6 @@ def _javaslatok(db: Session, project: Project, employee: Employee) -> list[Javas
             javaslatok.append(
                 JavaslatInfo(szamlazo=f"v{t.vallalkozas.id}", nev=t.vallalkozas.nev, forras="vallalkozas-tagsag")
             )
-    # Belsősnél csak a saját cégei jöhetnek szóba: a havi bérben végzett munkát
-    # nem számlázhatja helyette egy stábtárs.
-    if employee.tipus == EmployeeType.BELSOS:
-        return javaslatok
     for tars in project.crew:
         if tars.id == employee.id or tars.tipus == EmployeeType.BELSOS:
             continue
@@ -111,17 +102,14 @@ def _javaslatok(db: Session, project: Project, employee: Employee) -> list[Javas
 def get_projekt_szamlazok(
     project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
 ):
-    """A projekt stábtagjai, mindegyiknél a jelenlegi számlázó féllel és a
-    választható lehetőségekkel.
-
-    A belsősök is itt vannak: alapból a havi bérük fedi a munkájukat (nincs
-    papír), de ha valamelyik projektjüket a saját cégükről számlázzák, azt itt
-    lehet beállítani - onnantól arra a projektre ugyanúgy készül szerződés és
-    TIG, mint egy külsősnél (lásd services/szamlazo.papirt_igenylo_emberek)."""
+    """A projekt nem belsős stábtagjai, mindegyiknél a jelenlegi számlázó
+    féllel és a választható lehetőségekkel."""
     project = _get_project_or_404(db, project_id)
     felulirasok = szamlazo.load_felulirasok(db, {project.id})
     sorok: list[SzamlazoSor] = []
     for e in project.crew:
+        if e.tipus == EmployeeType.BELSOS:
+            continue
         fel = szamlazo.szamlazo_fele(project, e, felulirasok)
         sor = felulirasok.get((project.id, e.id))
         sorok.append(
@@ -163,6 +151,11 @@ def set_szamlazo(
         raise HTTPException(status_code=404, detail="A munkatárs nem található")
     if employee not in project.crew:
         raise HTTPException(status_code=400, detail="Ez a munkatárs nincs a projekt stábjában.")
+    if employee.tipus == EmployeeType.BELSOS:
+        raise HTTPException(
+            status_code=400,
+            detail="Belsős munkatárs havi bérezésű - nála nincs projektenkénti számlázó fél.",
+        )
     if _van_papir(db, project.id, employee.id):
         raise HTTPException(
             status_code=400,
@@ -182,17 +175,6 @@ def set_szamlazo(
     fel = szamlazo.feloldas(db, kulcs)
     if fel is None:
         raise HTTPException(status_code=404, detail="A választott számlázó fél nem található.")
-    # Belsősnél csak CÉG jöhet szóba: a havi bérben végzett munkáját nem
-    # számlázhatja helyette egy másik ember - az ő saját cége viszont igen,
-    # olyankor az a projekt vállalkozói munkaként fut (szerződés + TIG).
-    if employee.tipus == EmployeeType.BELSOS and fel.vallalkozas is None:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"{employee.full_name} belsős munkatárs - az ő munkáját csak a saját cégéről lehet "
-                "számlázni, másik ember nem számlázhatja helyette."
-            ),
-        )
     if fel.employee is not None and fel.employee.tipus == EmployeeType.BELSOS:
         raise HTTPException(status_code=400, detail="Belsős munkatárs nem lehet számlázó fél.")
     if fel.vallalkozas is not None and not fel.vallalkozas.aktiv:
