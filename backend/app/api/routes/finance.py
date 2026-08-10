@@ -16,7 +16,7 @@ from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.internal_performance_certificate import (
-    LEZART_ALLAPOTOK,
+    KIHAGYVA,
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
 )
@@ -600,8 +600,9 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
       - kiadás, ami nincs késznek jelölve, nincs fizetési dátuma, és VAN
         feltöltött számlája (enélkül utalni sem tudnánk mi alapján),
       - külsős TIG, aminek van számlája, de nincs kifizetettként jelölve,
-      - belsős TIG, amint ELKÉSZÜLT - ehhez számla nem kell, mert a belsős
-        munkatárs nem számlázik.
+      - MINDEN belsős TIG, aminek van összege és nem kihagyott hónap - ehhez
+        se számla, se elkészült állapot nem kell: a bért mindig rögtön
+        utaljuk.
 
     A kiadásokhoz és a külsős TIG-ekhez kiszámoljuk a FEDEZETTSÉGET is: megjött-e
     már a pénz arra a projektkódra, amihez tartozik (lásd _fedezettseg) - ebből
@@ -706,11 +707,16 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
     )
     # A belsős TIG a havi BÉR elszámolása, nem egy megrendelő munkájáé: a
     # fizetés akkor is jár, ha az ügyfél még nem fizetett, tehát belsős TIG
-    # SOSEM vár fedezetre - amint elkészült (kiküldtük), utalandó. Ezért nem is
-    # nézzük a hónap tételeinek projektkódjait, és számlát sem várunk hozzá: a
-    # belsős munkatárs nem számlázik, a TIG maga a papír.
+    # SOSEM vár fedezetre - ezeket mindig rögtön utaljuk. Ezért nem nézzük a
+    # hónap tételeinek projektkódjait, számlát sem várunk hozzá (a belsős
+    # munkatárs nem számlázik, a TIG maga a papír), és az állapotát sem
+    # szűrjük: ami nincs kifizetve, az utalandó.
+    #
+    # Két dolog marad ki: a KIHAGYOTT hónap (akkor nem dolgozott, nincs mit
+    # utalni) és az, aminek még nincs összege - azt nem tudnánk mennyivel
+    # elutalni, csak üres sorként állna a listán.
     for tig in belsos:
-        if tig.allapot not in LEZART_ALLAPOTOK:
+        if tig.allapot == KIHAGYVA or tig.netto_osszeg is None:
             continue
         eredmeny.append(
             (

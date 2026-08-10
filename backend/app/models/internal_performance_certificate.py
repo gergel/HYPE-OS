@@ -9,10 +9,14 @@ from app.models.base import TimestampMixin
 #: Az az állapot-készlet, amiben egy belsős TIG ELKÉSZÜLTNEK számít. A "Kész" a
 #: korábbi, küldés nélküli életciklusból maradt: a régi bejegyzések ebben az
 #: állapotban vannak, és ugyanúgy lezártnak számítanak, mint az azóta bevezetett
-#: "Kiküldve". Itt, a modell mellett van, mert két route modul is használja
-#: (belsos-tig és a pénzügyek utalandó listája), azok pedig nem importálnak
-#: egymásból.
+#: "Kiküldve".
 LEZART_ALLAPOTOK = frozenset({"Kész", "Kiküldve"})
+
+#: A "nem kell TIG erre a hónapra" állapot (az admin kihagyta, mert a munkatárs
+#: akkor nem dolgozott) - ilyenkor nincs mit kifizetni. Itt, a modell mellett
+#: van, mert a pénzügyek utalandó listája is használja, a route modulok pedig
+#: nem importálnak egymásból.
+KIHAGYVA = "Kihagyva"
 
 
 class InternalPerformanceCertificate(TimestampMixin, Base):
