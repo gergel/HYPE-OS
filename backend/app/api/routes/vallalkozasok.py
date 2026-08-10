@@ -37,6 +37,10 @@ router = APIRouter(prefix="/vallalkozasok", tags=["vallalkozasok"])
 # A cégek a Pénzügyek alatt élnek, a Keretszerződések fül mellett.
 PAGE = "/penzugyek"
 
+# Az ember felőli (adatlapos) cég-kezelés a Csapat oldalhoz tartozik: ott
+# vezetjük fel, kinek melyik cége van.
+CSAPAT_PAGE = "/csapat"
+
 
 class TagInfo(BaseModel):
     employee_id: int
@@ -167,6 +171,147 @@ def list_vallalkozasok(db: Session = Depends(get_db), _user: Employee = Depends(
     )
     keretek = _keretszerzodesei(db, {v.id for v in rows})
     return [_olvasas(v, keretek.get(v.id, [])) for v in rows]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ember felől: melyik cégekhez tartozik, mettől meddig
+#
+# Ugyanaz a VallalkozasTag tábla, csak a MÁSIK irányból nézve - a munkatárs
+# adatlapján itt lehet felvezetni a cégeit. Az időszak azért kell, mert egy
+# ember hónapról hónapra más cégről számlázhat: a belsős havi TIG ebből tudja,
+# melyik céget ajánlja fel az adott hónapra (lásd
+# routes/internal_performance_certificates.py).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class EmberCegInfo(BaseModel):
+    #: A TAGSÁG azonosítója (nem a cégé) - ezzel szerkeszthető/törölhető a sor.
+    id: int
+    vallalkozas_id: int
+    nev: str
+    aktiv: bool = True
+    kezdet: date | None = None
+    veg: date | None = None
+    megjegyzes: str | None = None
+
+
+class EmberCegIn(BaseModel):
+    vallalkozas_id: int
+    kezdet: date | None = None
+    veg: date | None = None
+    megjegyzes: str | None = None
+
+
+class EmberCegModosit(BaseModel):
+    kezdet: date | None = None
+    veg: date | None = None
+    megjegyzes: str | None = None
+
+
+def _ember_cegei(db: Session, employee_id: int) -> list[EmberCegInfo]:
+    """A munkatárs cégei, a legfrissebb időszakkal elöl."""
+    tagsagok = (
+        db.query(VallalkozasTag)
+        .options(selectinload(VallalkozasTag.vallalkozas))
+        .filter(VallalkozasTag.employee_id == employee_id)
+        .all()
+    )
+    sorok = [
+        EmberCegInfo(
+            id=t.id,
+            vallalkozas_id=t.vallalkozas_id,
+            nev=t.vallalkozas.nev if t.vallalkozas else f"#{t.vallalkozas_id}",
+            aktiv=t.vallalkozas.aktiv if t.vallalkozas else True,
+            kezdet=t.kezdet,
+            veg=t.veg,
+            megjegyzes=t.megjegyzes,
+        )
+        for t in tagsagok
+    ]
+    # A nyitott végű (ma is élő) időszak elöl, utána a kezdet szerint csökkenőben.
+    sorok.sort(key=lambda x: (x.veg is not None, -(x.kezdet.toordinal() if x.kezdet else 0)))
+    return sorok
+
+
+def _tagsag_or_404(db: Session, tagsag_id: int) -> VallalkozasTag:
+    tag = db.get(VallalkozasTag, tagsag_id)
+    if tag is None:
+        raise HTTPException(status_code=404, detail="Ez a cég-tagság nem található.")
+    return tag
+
+
+@router.get("/ember/{employee_id}", response_model=list[EmberCegInfo])
+def ember_cegei(employee_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    if db.get(Employee, employee_id) is None:
+        raise HTTPException(status_code=404, detail="A munkatárs nem található.")
+    return _ember_cegei(db, employee_id)
+
+
+@router.post("/ember/{employee_id}", response_model=list[EmberCegInfo])
+def ember_ceg_felvetel(
+    employee_id: int,
+    payload: EmberCegIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(CSAPAT_PAGE, "edit")),
+):
+    """Cég felvezetése a munkatárshoz, időszakkal.
+
+    Egy emberhez több cég is tartozhat - de ugyanaz a cég csak egyszer: ha
+    időben visszatér ugyanahhoz a céghez, a meglévő sor időszakát kell
+    bővíteni, különben nem lenne eldönthető, melyik sor érvényes."""
+    if db.get(Employee, employee_id) is None:
+        raise HTTPException(status_code=404, detail="A munkatárs nem található.")
+    if db.get(Vallalkozas, payload.vallalkozas_id) is None:
+        raise HTTPException(status_code=404, detail="A cég nem található.")
+    if payload.kezdet and payload.veg and payload.veg < payload.kezdet:
+        raise HTTPException(status_code=400, detail="Az időszak vége nem lehet korábbi, mint a kezdete.")
+    letezo = (
+        db.query(VallalkozasTag)
+        .filter(
+            VallalkozasTag.employee_id == employee_id,
+            VallalkozasTag.vallalkozas_id == payload.vallalkozas_id,
+        )
+        .first()
+    )
+    if letezo is not None:
+        raise HTTPException(status_code=400, detail="Ez a cég már fel van véve ehhez a munkatárshoz.")
+    db.add(VallalkozasTag(employee_id=employee_id, **payload.model_dump()))
+    db.commit()
+    return _ember_cegei(db, employee_id)
+
+
+@router.patch("/tagsagok/{tagsag_id}", response_model=list[EmberCegInfo])
+def ember_ceg_modositas(
+    tagsag_id: int,
+    payload: EmberCegModosit,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(CSAPAT_PAGE, "edit")),
+):
+    """Az időszak (és a megjegyzés) módosítása."""
+    tag = _tagsag_or_404(db, tagsag_id)
+    if payload.kezdet and payload.veg and payload.veg < payload.kezdet:
+        raise HTTPException(status_code=400, detail="Az időszak vége nem lehet korábbi, mint a kezdete.")
+    tag.kezdet = payload.kezdet
+    tag.veg = payload.veg
+    tag.megjegyzes = payload.megjegyzes
+    db.commit()
+    return _ember_cegei(db, tag.employee_id)
+
+
+@router.delete("/tagsagok/{tagsag_id}", response_model=list[EmberCegInfo])
+def ember_ceg_torles(
+    tagsag_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(CSAPAT_PAGE, "delete")),
+):
+    """A cég levétele a munkatársról.
+
+    A már elkészült papírokat nem érinti: azok a saját másolatukban őrzik a
+    cég adatait."""
+    tag = _tagsag_or_404(db, tagsag_id)
+    employee_id = tag.employee_id
+    db.delete(tag)
+    db.commit()
+    return _ember_cegei(db, employee_id)
 
 
 @router.get("/{vallalkozas_id}", response_model=VallalkozasRead)

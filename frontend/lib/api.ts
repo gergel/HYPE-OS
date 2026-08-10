@@ -701,6 +701,8 @@ export type InternalPerformanceCertificate = {
   ev: number;
   honap: number;
   allapot: string | null;
+  /** Melyik saját cégéről számlázza ezt a hónapot (üres = saját nevében). */
+  vallalkozas_id: number | null;
   megjegyzes: string | null;
   netto_osszeg: number | null;
   plusz_afa: boolean | null;
@@ -735,9 +737,25 @@ export type BelsosTigMonthEmployee = {
   /** "megbizas" | "alkalmazott" */
   jogviszony: string;
   record: InternalPerformanceCertificate | null;
+  /** A munkatárs cégei erre a hónapra - a TIG készítésekor ebből lehet
+   * választani, melyikről számlázza (az adatlapján vezethetők fel). */
+  cegek: BelsosTigCeg[];
+  /** A hónapra érvényes cég - ezzel indul az űrlap, ha még nincs kézzel
+   * választva. Több érvényes cégnél üres: olyankor dönteni kell. */
+  javasolt_vallalkozas_id: number | null;
   /** A hónap tételei (alapbér + extrák), amikből a TIG összege összeáll -
    * a munkatárs adatlapján vihetők fel (lásd HaviKoltsegek). */
   tetelek: HaviTetel[];
+};
+
+/** Egy felajánlható cég a havi TIG-hez. */
+export type BelsosTigCeg = {
+  vallalkozas_id: number;
+  nev: string;
+  kezdet: string | null;
+  veg: string | null;
+  /** Erre a hónapra érvényes-e az időszaka. */
+  ervenyes: boolean;
 };
 
 /** Egy ember konkrét hiányossága egy hónapban - ebből derül ki, kinek mit
@@ -1769,6 +1787,22 @@ export type VagoiVisszajelzes = {
   /** Ha nem küldhető ki, ez mondja meg, miért. */
   kikuldes_akadalya: string | null;
 };
+
+/** Egy munkatárs cégei (a VallalkozasTag tagságok az ember felől nézve). */
+export type EmberCeg = {
+  /** A TAGSÁG azonosítója, nem a cégé - ezzel szerkeszthető a sor. */
+  id: number;
+  vallalkozas_id: number;
+  nev: string;
+  aktiv: boolean;
+  kezdet: string | null;
+  veg: string | null;
+  megjegyzes: string | null;
+};
+
+export async function getEmberCegei(employeeId: number): Promise<EmberCeg[]> {
+  return (await apiGet<EmberCeg[]>(`/api/v1/vallalkozasok/ember/${employeeId}`)) ?? [];
+}
 
 export async function getVagoiVisszajelzesek(deliverableId?: number): Promise<VagoiVisszajelzes[]> {
   const qs = deliverableId != null ? `?deliverable_id=${deliverableId}` : "";

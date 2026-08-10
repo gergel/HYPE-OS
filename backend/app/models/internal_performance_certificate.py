@@ -49,6 +49,12 @@ class InternalPerformanceCertificate(TimestampMixin, Base):
     honap: Mapped[int] = mapped_column(nullable=False, comment="Hónap, 1-12")
 
     allapot: Mapped[str | None] = mapped_column(String(50), comment="Belsős TIG állapot")
+    #: Melyik SAJÁT CÉGÉRŐL számlázza ezt a hónapot? Üresen a saját nevében -
+    #: ilyenkor a TIG-re a munkatárs adatlapján lévő vállalkozás-adatok
+    #: kerülnek. Egy belsősnek több cége is lehet (időszakokkal, lásd
+    #: models/vallalkozas.py VallalkozasTag), és hónapról hónapra változhat,
+    #: melyikről számláz - ezért a hónap bejegyzésén ül, nem az emberen.
+    vallalkozas_id: Mapped[int | None] = mapped_column(ForeignKey("vallalkozasok.id"))
     megjegyzes: Mapped[str | None] = mapped_column(String(500))
     netto_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     plusz_afa: Mapped[bool | None] = mapped_column(Boolean)
@@ -77,6 +83,7 @@ class InternalPerformanceCertificate(TimestampMixin, Base):
     expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
 
     employee: Mapped["Employee"] = relationship(back_populates="internal_performance_certificates")
+    vallalkozas: Mapped["Vallalkozas | None"] = relationship()
     invoices: Mapped[list["InternalPerformanceCertificateInvoice"]] = relationship(
         back_populates="certificate", cascade="all, delete-orphan", order_by="InternalPerformanceCertificateInvoice.created_at"
     )

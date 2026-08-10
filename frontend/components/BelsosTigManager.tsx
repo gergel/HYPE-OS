@@ -14,6 +14,8 @@ import { formatHuf } from "@/lib/penz";
 import type { BelsosTigMonthEmployee } from "@/lib/api";
 
 type FormState = {
+  /** Melyik saját cégéről számlázza ezt a hónapot. Üres = a saját nevében. */
+  vallalkozas_id: string;
   netto_osszeg: string;
   plusz_afa: boolean;
   megjegyzes: string;
@@ -45,6 +47,9 @@ function alapTeljesitesDatum(ev: number, honap: number): string {
 function formFromRecord(employee: BelsosTigMonthEmployee, ev: number, honap: number): FormState {
   const record = employee.record;
   return {
+    // Ha még nincs kézzel választva, a hónapra érvényes cégével indulunk (lásd
+    // backend _ceg_valasztek) - így nem kell minden hónapban újra beállítani.
+    vallalkozas_id: String(record?.vallalkozas_id ?? employee.javasolt_vallalkozas_id ?? ""),
     netto_osszeg: record?.netto_osszeg != null ? String(record.netto_osszeg) : "",
     plusz_afa: record?.plusz_afa ?? employee.plusz_afa ?? false,
     megjegyzes: record?.megjegyzes ?? "",
@@ -184,6 +189,9 @@ export function BelsosTigManager({
   function buildPayload() {
     if (!form) return null;
     return {
+      // A -1 a "vissza a saját nevére" jelzés: egy sima null azt jelentené,
+      // hogy nem küldtük a mezőt (lásd backend TigDraftIn).
+      vallalkozas_id: form.vallalkozas_id ? Number(form.vallalkozas_id) : -1,
       netto_osszeg: form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null,
       plusz_afa: form.plusz_afa,
       megjegyzes: form.megjegyzes || null,
@@ -645,6 +653,29 @@ export function BelsosTigManager({
             </h3>
             <p className="mb-4 text-[12px] text-text-muted">Állapot: {openEmployee.record?.allapot ?? "Nincs elkezdve"}</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {/* Melyik cégéről számlázza ezt a hónapot? A papírra ennek a
+                  cégnek a neve, székhelye és adószáma kerül. A választék a
+                  munkatárs adatlapjáról jön, az időszakhoz illő céggel
+                  előtöltve (lásd EmberCegek). */}
+              {openEmployee.cegek.length > 0 && (
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-[11px] text-text-muted">Melyik cégéről számlázza?</label>
+                  <select
+                    value={form.vallalkozas_id}
+                    onChange={(e) => update("vallalkozas_id", e.target.value)}
+                    disabled={!!busyId}
+                    className={inputClass}
+                  >
+                    <option value="">Saját nevében ({openEmployee.full_name})</option>
+                    {openEmployee.cegek.map((c) => (
+                      <option key={c.vallalkozas_id} value={String(c.vallalkozas_id)}>
+                        {c.nev}
+                        {c.ervenyes ? "" : " – erre a hónapra nem érvényes"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex flex-col gap-1 sm:col-span-2">
                 <label className="text-[11px] text-text-muted">Megbízás tárgya</label>
                 <input

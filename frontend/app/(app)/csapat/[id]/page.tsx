@@ -6,6 +6,7 @@ import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
+import { EmberCegek } from "@/components/crew/EmberCegek";
 import { MunkaszerzodesUpload } from "@/components/MunkaszerzodesUpload";
 import { RelatedTable } from "@/components/RelatedTable";
 import { UtomunkaIdoHavonta } from "@/components/UtomunkaIdoHavonta";
@@ -22,6 +23,7 @@ import {
   getCurrentUser,
   getDetailTabs,
   getEmployeeDocuments,
+  getEmberCegei,
   getEmployeeKoltsegek,
   getFieldTypes,
   getKulsosMunkak,
@@ -31,6 +33,7 @@ import {
   getRecord,
   getRelated,
   getUtomunkaIdo,
+  getVallalkozasok,
   getVagottAnyagok,
   getVisibleFields,
 } from "@/lib/api";
@@ -93,6 +96,8 @@ export default async function EmployeeDetailPage({
     dbTabs,
     pagePermissions,
     currentUser,
+    emberCegei,
+    osszesCeg,
   ] = await Promise.all([
     // Csak belsősnél értelmes: náluk a havi TIG hónapjait szabja meg.
     employee.tipus === "belsos" ? getBelsosIdoszakok(employeeId) : Promise.resolve(null),
@@ -112,6 +117,8 @@ export default async function EmployeeDetailPage({
     getDetailTabs("employee"),
     getMyPagePermissions(),
     getCurrentUser(),
+    getEmberCegei(employeeId),
+    getVallalkozasok(),
   ]);
 
   const vallalkozasFieldKeys = visibleFields
@@ -214,26 +221,35 @@ export default async function EmployeeDetailPage({
     pagePermissions,
     alwaysHidden: ["hashed_password", ...VALLALKOZAS_FIELD_KEYS],
     extraTabs: [
-      ...(vallalkozasFieldKeys.length > 0
-        ? [
-            {
-              key: "vallalkozas",
-              label: "Vállalkozás adatok",
-              content: (
-                <Card title="Vállalkozás adatok" icon={FileText}>
-                  <EditableDetailGrid
-                    patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
-                    fields={toEditableDetailFields(employee, [], vallalkozasFieldKeys, fieldTypes)}
-                  />
-                  <div className="mt-6 border-t border-border pt-5">
-                    <p className="t-label mb-2">Munkaszerződés</p>
-                    <MunkaszerzodesUpload employeeId={employee.id} documents={documents} />
-                  </div>
-                </Card>
-              ),
-            },
-          ]
-        : []),
+      {
+        key: "vallalkozas",
+        label: "Vállalkozás adatok",
+        content: (
+          <Card title="Vállalkozás adatok" icon={FileText}>
+            {vallalkozasFieldKeys.length > 0 && (
+              <EditableDetailGrid
+                patchPath={`${ENTITY_PATHS.employee}/${employee.id}`}
+                fields={toEditableDetailFields(employee, [], vallalkozasFieldKeys, fieldTypes)}
+              />
+            )}
+            {/* Egy emberhez több cég is tartozhat, időszakkal - ebből választ
+                a havi TIG, hogy melyikről számlázza az adott hónapot. */}
+            <div className={vallalkozasFieldKeys.length > 0 ? "mt-6 border-t border-border pt-5" : ""}>
+              <p className="t-label mb-2">Cégei</p>
+              <EmberCegek
+                employeeId={employee.id}
+                cegek={emberCegei}
+                valaszthato={osszesCeg.filter((c) => c.aktiv).map((c) => ({ id: c.id, nev: c.nev }))}
+                canEdit={szerkeszthet}
+              />
+            </div>
+            <div className="mt-6 border-t border-border pt-5">
+              <p className="t-label mb-2">Munkaszerződés</p>
+              <MunkaszerzodesUpload employeeId={employee.id} documents={documents} />
+            </div>
+          </Card>
+        ),
+      },
       {
         key: "berezes",
         label: "Bérezés",

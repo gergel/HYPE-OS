@@ -21,6 +21,8 @@ class InternalPerformanceCertificateRead(BaseModel):
     ev: int
     honap: int
     allapot: str | None = None
+    #: Melyik saját cégéről számlázza ezt a hónapot (üres = saját nevében).
+    vallalkozas_id: int | None = None
     megjegyzes: str | None = None
     netto_osszeg: float | None = None
     plusz_afa: bool | None = None

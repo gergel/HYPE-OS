@@ -21,11 +21,11 @@ következő hónap 20-a (lásd services/hu_datum.tig_hatarido)."""
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -38,6 +38,7 @@ from app.models.employee_monthly_item import (
     elojeles_osszeg,
 )
 from app.models.finance import Expense
+from app.models.vallalkozas import VallalkozasTag
 from app.models.internal_performance_certificate import (
     LEZART_ALLAPOTOK,
     InternalPerformanceCertificate,
@@ -146,6 +147,62 @@ def _get_or_create(db: Session, employee: Employee, ev: int, honap: int) -> Inte
     return record
 
 
+class CegValasztek(BaseModel):
+    """Egy felajánlható cég a havi TIG-hez."""
+
+    vallalkozas_id: int
+    nev: str
+    kezdet: date | None = None
+    veg: date | None = None
+    #: Erre a hónapra érvényes-e az időszaka. A lejárt/még nem kezdődött
+    #: cégeket is felsoroljuk (hogy egy régi hónapot utólag is lehessen
+    #: javítani), de a felület ezeket megkülönbözteti.
+    ervenyes: bool = False
+
+
+def _honap_hatarai(ev: int, honap: int) -> tuple[date, date]:
+    elso = date(ev, honap, 1)
+    utolso = date(ev + (honap == 12), 1 if honap == 12 else honap + 1, 1) - timedelta(days=1)
+    return elso, utolso
+
+
+def _ceg_valasztek(tagsagok: list[VallalkozasTag], ev: int, honap: int) -> list[CegValasztek]:
+    """A munkatárs cégei erre a hónapra, az érvényesekkel elöl.
+
+    Egy tagság akkor érvényes a hónapra, ha az időszaka BELELÓG a hónapba: a
+    nyitott (kezdet/vég nélküli) oldal mindig belefér. Így az veszi át a
+    javaslatot, aki tényleg akkor volt érvényben."""
+    elso, utolso = _honap_hatarai(ev, honap)
+    sorok = [
+        CegValasztek(
+            vallalkozas_id=t.vallalkozas_id,
+            nev=t.vallalkozas.nev if t.vallalkozas else f"#{t.vallalkozas_id}",
+            kezdet=t.kezdet,
+            veg=t.veg,
+            ervenyes=(t.kezdet is None or t.kezdet <= utolso) and (t.veg is None or t.veg >= elso),
+        )
+        for t in tagsagok
+        if t.vallalkozas is None or t.vallalkozas.aktiv
+    ]
+    sorok.sort(key=lambda x: (not x.ervenyes, x.nev))
+    return sorok
+
+
+def _tagsagok(db: Session, employee_ids: list[int]) -> dict[int, list[VallalkozasTag]]:
+    if not employee_ids:
+        return {}
+    sorok = (
+        db.query(VallalkozasTag)
+        .options(selectinload(VallalkozasTag.vallalkozas))
+        .filter(VallalkozasTag.employee_id.in_(employee_ids))
+        .all()
+    )
+    eredmeny: dict[int, list[VallalkozasTag]] = {}
+    for t in sorok:
+        eredmeny.setdefault(t.employee_id, []).append(t)
+    return eredmeny
+
+
 def _validate_belsos_employee(db: Session, employee_id: int) -> Employee:
     employee = db.get(Employee, employee_id)
     if employee is None or employee.tipus != EmployeeType.BELSOS:
@@ -169,6 +226,13 @@ class MonthEmployeeInfo(BaseModel):
     #: "megbizas" | "alkalmazott"
     jogviszony: str = "megbizas"
     record: InternalPerformanceCertificateRead | None
+    #: A munkatárs cégei erre a hónapra - a TIG készítésekor ebből lehet
+    #: választani, melyikről számlázza (lásd _ceg_valasztek).
+    cegek: list[CegValasztek] = []
+    #: A hónapra érvényes cég azonosítója - ezzel indul az űrlap, ha még nincs
+    #: kézzel választva. Több érvényes cégnél nincs javaslat: olyankor
+    #: kifejezetten dönteni kell.
+    javasolt_vallalkozas_id: int | None = None
     #: A hónap tételei (alapbér + extrák), amikből a TIG összege összeáll -
     #: lásd models/employee_monthly_item.py. Így a TIG készítője látja, MIÉRT
     #: annyi az összeg, nem csak azt, hogy mennyi.
@@ -220,6 +284,15 @@ def list_month(
     for tetel in tetelek:
         tetel_lookup.setdefault(tetel.employee_id, []).append(_tetel_kimenet(tetel))
 
+    tagsag_lookup = _tagsagok(db, [e.id for e in employees])
+
+    def _cegek(employee_id: int) -> list[CegValasztek]:
+        return _ceg_valasztek(tagsag_lookup.get(employee_id, []), ev, honap)
+
+    def _javaslat(cegek: list[CegValasztek]) -> int | None:
+        ervenyesek = [c for c in cegek if c.ervenyes]
+        return ervenyesek[0].vallalkozas_id if len(ervenyesek) == 1 else None
+
     return [
         MonthEmployeeInfo(
             id=e.id,
@@ -230,6 +303,8 @@ def list_month(
             kell_tig=belsos_idoszak.kell_havi_tig(e),
             jogviszony=e.belsos_jogviszony.value,
             record=InternalPerformanceCertificateRead.model_validate(lookup[e.id]) if e.id in lookup else None,
+            cegek=_cegek(e.id),
+            javasolt_vallalkozas_id=_javaslat(_cegek(e.id)),
             tetelek=tetel_lookup.get(e.id, []),
         )
         for e in employees
@@ -435,6 +510,11 @@ def list_for_employee(
 
 
 class TigDraftIn(BaseModel):
+    #: Melyik saját cégéről számlázza ezt a hónapot. A None azt jelenti: "nem
+    #: küldted meg a mezőt" (a régi hívások így működnek tovább), a -1 pedig
+    #: azt, hogy "állítsd vissza a saját nevére" - egy sima None-nal nem lehet
+    #: kitörölni egy már beállított céget.
+    vallalkozas_id: int | None = None
     netto_osszeg: float | None = None
     plusz_afa: bool | None = None
     megjegyzes: str | None = None
@@ -465,6 +545,9 @@ def _apply_draft_fields(record: InternalPerformanceCertificate, payload: TigDraf
         value = getattr(payload, field)
         if value is not None:
             setattr(record, field, value)
+    if payload.vallalkozas_id is not None:
+        # A -1 a "vissza a saját nevére" jelzés, lásd TigDraftIn.
+        record.vallalkozas_id = None if payload.vallalkozas_id < 0 else payload.vallalkozas_id
 
 
 def _apply_teljesites_honap(db: Session, record: InternalPerformanceCertificate) -> None:
@@ -563,12 +646,16 @@ def generate_and_send(
         )
     )
     # Fájlnév és tárgy az eredeti program formátumában ("2026. május_Név_TIG").
-    base_name = f"{honap_szoveg}_{employee.full_name}_TIG"
+    base_name = f"{honap_szoveg}_{(record.vallalkozas.nev if record.vallalkozas else employee.full_name)}_TIG"
 
+    # Ha a hónapot valamelyik SAJÁT CÉGÉRŐL számlázza, a papír a cég nevére
+    # szól (név, székhely, adószám) - a levél viszont továbbra is a
+    # munkatársnak megy, mert a cég az övé, ő intézi.
+    ceg = record.vallalkozas
     fields = {
-        "nev": employee.full_name,
-        "hely": employee.vallakozas_szekhely or "",
-        "adoszam": employee.vallalkozas_adoszama or "",
+        "nev": ceg.nev if ceg else employee.full_name,
+        "hely": (ceg.szekhely if ceg else employee.vallakozas_szekhely) or "",
+        "adoszam": (ceg.adoszam if ceg else employee.vallalkozas_adoszama) or "",
         "targy": record.megbizas_targya or "",
         # Az eredeti sablonban a {{tido}} a HÓNAP szövege (nem a teljesítés
         # napja) - a teljesítés dátuma csak a hónap kiszámolására szolgál.
