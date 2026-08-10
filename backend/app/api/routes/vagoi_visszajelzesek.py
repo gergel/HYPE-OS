@@ -153,15 +153,14 @@ def list_visszajelzesek(
 _LEVEL_HTML = """\
 <p>Sziasztok,</p>
 <p>
-  Megérkezett a vágói visszajelzés a(z) <b>{anyag}</b> anyagról{forgatas_resz}.
-  Köszönjük a munkátokat – az alábbi észrevétel a következő forgatáshoz szól:
+  Elkészült a vágás, és a vágóktól érkezett hozzá visszajelzés a forgatásról –
+  megosztjuk veletek:
 </p>
 <blockquote style="margin: 12px 0; padding: 8px 14px; border-left: 3px solid #ddd; color: #333;">
   {megjegyzes}
 </blockquote>
 {link_resz}
-<p>Ha bármi kérdés merül fel ezzel kapcsolatban, írjatok nyugodtan.</p>
-<p>Köszönettel,</p>
+<p>Köszönjük a munkátokat!</p>
 """
 
 _LINK_HTML = '<p>A kész anyag: <a href="{url}">{url}</a></p>'
@@ -170,17 +169,18 @@ _LINK_HTML = '<p>A kész anyag: <a href="{url}">{url}</a></p>'
 def _levelszoveg(feedback: Feedback, project: Project) -> str:
     """A kiküldött levél törzse.
 
-    Csak a megjegyzés és a kész anyag linkje - lásd a modul kommentjét arról,
-    miért nem megy ki a pontszám."""
-    anyag = feedback.deliverable.projekt_neve if feedback.deliverable else "anyag"
-    idopont = dispo._format_hu_date_range(project)
-    forgatas_resz = f" ({idopont} forgatás)" if idopont else ""
+    Két dolgot NEM írunk le, pedig kézenfekvő lenne: melyik forgatásról és
+    melyik anyagról van szó. A levél az adott forgatás DISZPÓ-LEVELÉRE megy
+    válaszként, tehát aki megkapja, pontosan tudja, melyik napról beszélünk -
+    kiírva csak zaj lenne. Ami helyette hangsúlyos: a visszajelzés a VÁGÓKTÓL
+    jön, nem a gyártástól.
+
+    A tartalom így a szöveges megjegyzés és a kész anyag linkje - a
+    pontszámok belső mérőszámok, azok nem mennek ki (lásd a modul kommentjét)."""
     url = feedback.kesz_anyag_url or (feedback.deliverable.kesz_anyag_url if feedback.deliverable else None)
     # A szöveg sortöréseit meg kell tartani: a vágó bekezdésekben ír.
     megjegyzes = (feedback.visszajelzes_szoveg or "").strip().replace("\n", "<br>")
     return _LEVEL_HTML.format(
-        anyag=anyag,
-        forgatas_resz=forgatas_resz,
         megjegyzes=megjegyzes,
         link_resz=_LINK_HTML.format(url=url) if url else "",
     )
@@ -221,7 +221,9 @@ def diszpo_valasz(
     try:
         thread_id, _msg_id, rfc822 = send_message(
             cimzettek,
-            # A diszpó tárgyára válaszolunk, hogy a szálban egyértelmű legyen.
+            # A diszpó tárgyára válaszolunk, hogy a szálban egyértelmű legyen,
+            # melyik forgatásról van szó - a levél szövegének ezért nem kell
+            # külön leírnia.
             f"Re: {dispo._subject(project)}",
             _levelszoveg(feedback, project) + dispo._SIGNATURE_HTML,
             thread_id=project.gmail_thread_id,

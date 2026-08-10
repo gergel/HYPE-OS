@@ -6,6 +6,7 @@ import { CommentsSection } from "@/components/deliverable/CommentsSection";
 import { ContactsManager } from "@/components/deliverable/ContactsManager";
 import { CreatePortalButton } from "@/components/deliverable/CreatePortalButton";
 import { FeedbackSendButton } from "@/components/deliverable/FeedbackSendButton";
+import { VisszajelzesLista } from "@/components/deliverable/VisszajelzesLista";
 import { TimerControls } from "@/components/deliverable/TimerControls";
 import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
 import { DetailSections } from "@/components/DetailSections";
@@ -17,6 +18,7 @@ import {
   ENTITY_PATHS,
   getAssignableEmployees,
   getMegrendeloiKontaktok,
+  getVagoiVisszajelzesek,
   getDeliverableComments,
   getDeliverableContacts,
   getCurrentUser,
@@ -108,6 +110,9 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
   // (ügynökség, társproducer). A saját ügyfél kontaktjai a lista elejére
   // kerülnek (lásd ContactsManager).
   const contactOptions = await getMegrendeloiKontaktok();
+  // A visszajelzések saját, részletes alakja (ki írta, mikor, pontszámok) -
+  // a nyers `feedbacks` sorokból ez nem állna elő.
+  const vagoiVisszajelzesek = await getVagoiVisszajelzesek(deliverableId);
 
   const employeeNameById = Object.fromEntries(allEmployees.map((e) => [e.id, e.full_name]));
   // Aki az Utómunka oldalon szerkeszthet, az javíthatja a rögzített perceket is.
@@ -233,15 +238,18 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
         key: "visszajelzesek",
         label: "Visszajelzések",
         content: (
-          <Card title={`Visszajelzések (${feedbacks.length})`}>
+          <Card title={`Visszajelzések (${vagoiVisszajelzesek.length})`}>
             <div className="mb-3">
               <FeedbackSendButton deliverableId={deliverableId} />
             </div>
-            <RelatedTable
-              rows={feedbacks}
-              emptyText="Nincs visszajelzés ehhez az anyaghoz."
-              entityKey="feedback"
-              deleteBasePath={ENTITY_PATHS.feedback}
+            {/* A generikus kapcsolt-tábla helyett a visszajelzés SAJÁT
+                nézete: ott a pontszám, a megjegyzés, és - ami a lényeg -
+                hogy KI írta és MIKOR (lásd VisszajelzesLista). */}
+            <VisszajelzesLista
+              visszajelzesek={vagoiVisszajelzesek}
+              canSend={canEditPage}
+              canDelete={canEditPage}
+              kompakt
             />
           </Card>
         ),

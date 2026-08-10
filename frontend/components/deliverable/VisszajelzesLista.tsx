@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Send } from "lucide-react";
+import { ChevronDown, ChevronRight, Send, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
@@ -22,9 +22,15 @@ function pont(ertek: number | null): string {
 export function VisszajelzesLista({
   visszajelzesek,
   canSend,
+  canDelete = false,
+  /** Az ANYAG lapján az anyag és a forgatás oszlop csak ismételné, ami a lap
+   * tetején úgyis ott van - ott ezért kompakt alakban jelenik meg. */
+  kompakt = false,
 }: {
   visszajelzesek: VagoiVisszajelzes[];
   canSend: boolean;
+  canDelete?: boolean;
+  kompakt?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -41,6 +47,22 @@ export function VisszajelzesLista({
       ),
     );
   }, [visszajelzesek, kereses]);
+
+  async function torol(v: VagoiVisszajelzes) {
+    if (!(await confirm(`Törlöd ezt a visszajelzést (${v.visszajelzo_nev ?? "ismeretlen"})?`))) return;
+    setBusyId(v.id);
+    try {
+      const res = await authFetch(`/api/v1/feedbacks/${v.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function kikuld(v: VagoiVisszajelzes) {
     const cimzettek = v.resztvevok.filter((r) => r.email).length;
@@ -67,7 +89,7 @@ export function VisszajelzesLista({
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className={`mb-4 flex-wrap items-center gap-2 ${kompakt ? "hidden" : "flex"}`}>
         <input
           value={kereses}
           onChange={(e) => setKereses(e.target.value)}
@@ -92,8 +114,12 @@ export function VisszajelzesLista({
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Mikor / ki</th>
-              <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Anyag</th>
-              <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Forgatás</th>
+              {!kompakt && (
+                <>
+                  <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Anyag</th>
+                  <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Forgatás</th>
+                </>
+              )}
               <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Nyersanyag</th>
               <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Technika</th>
               <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Kreatív</th>
@@ -126,6 +152,8 @@ export function VisszajelzesLista({
                         </span>
                       </button>
                     </td>
+                    {!kompakt && (
+                      <>
                     <td className="py-2.5 pr-4">
                       <Link href={`/utomunka/${v.deliverable_id}`} className="text-text-accent hover:underline">
                         {v.deliverable_nev ?? `#${v.deliverable_id}`}
@@ -156,6 +184,8 @@ export function VisszajelzesLista({
                         <span className="text-text-muted">nincs forgatás</span>
                       )}
                     </td>
+                      </>
+                    )}
                     <td className="py-2.5 pr-4 text-right tabular-nums text-text-secondary">
                       {pont(v.nyersanyag_felhasznalhatosaga)}
                     </td>
@@ -184,12 +214,23 @@ export function VisszajelzesLista({
                           {busyId === v.id ? "Küldés…" : v.diszpora_kikuldve ? "Újraküldés" : "Diszpóra"}
                         </button>
                       )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => torol(v)}
+                          disabled={busyId === v.id}
+                          title="Visszajelzés törlése"
+                          className="ml-1 rounded-[var(--radius)] p-1 align-middle text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </td>
                   </tr>
 
                   {nyitva && (
                     <tr className="border-b border-border bg-surface-2">
-                      <td colSpan={8} className="px-3 py-4">
+                      <td colSpan={kompakt ? 6 : 8} className="px-3 py-4">
                         <p className="t-label mb-1.5">Megjegyzés</p>
                         <p className="mb-4 whitespace-pre-line text-[13px] text-text-secondary">
                           {v.megjegyzes || "Nincs szöveges megjegyzés."}
