@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.employee import Employee
+from app.models.employee import Employee, EmployeeType
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.models.vallalkozas import Vallalkozas
@@ -178,6 +178,30 @@ class SzamlazoCsoport:
             return self.fel.nev
         nevek = ", ".join(t.full_name for t in self.helyettesitettek)
         return f"{self.fel.nev} ({nevek} helyett is)" if self.sajat else f"{self.fel.nev} ({nevek} munkájáért)"
+
+
+def papirt_igenylo_emberek(
+    project: Project, felulirasok: dict[tuple[int, int], ProjectSzamlazo]
+) -> list[Employee]:
+    """Kinek a munkájáról kell ezen a projekten papír (eseti szerződés, TIG)?
+
+    Minden nem belsős stábtag - ÉS az a belsős, akinek a munkáját ezen a
+    projekten egy CÉG számlázza. A belsős havi bére ugyanis csak azt fedi le,
+    amit a SAJÁT nevében csinál; ha egy konkrét projektet a saját cégéről
+    számláz, az ugyanolyan vállalkozói munka, mint egy külsősé - kell hozzá
+    szerződés és TIG, a cég nevére (lásd routes/project_szamlazok.py).
+
+    Egyetlen helyen, mert három fázis is erre a listára épül: a szerződés-
+    fázis, a TIG-fázis és az utókövetés összesítő."""
+    eredmeny: list[Employee] = []
+    for e in project.crew:
+        if e.tipus != EmployeeType.BELSOS:
+            eredmeny.append(e)
+            continue
+        sor = felulirasok.get((project.id, e.id))
+        if sor is not None and sor.szamlazo_vallalkozas_id is not None:
+            eredmeny.append(e)
+    return eredmeny
 
 
 def csoportok(
