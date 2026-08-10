@@ -1763,6 +1763,8 @@ export type VagoiVisszajelzes = {
   forgatas_datuma: string | null;
   resztvevok: VisszajelzesResztvevo[];
   diszpora_kikuldve: string | null;
+  /** "uj" | "kikuldve" | "nem_kuldjuk" */
+  allapot: string;
   kikuldheto: boolean;
   /** Ha nem küldhető ki, ez mondja meg, miért. */
   kikuldes_akadalya: string | null;

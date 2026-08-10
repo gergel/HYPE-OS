@@ -31,7 +31,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
-from app.models.feedback import Feedback
+from app.models.feedback import Feedback, VisszajelzesAllapot
 from app.models.project import Project
 from app.services import dispo
 from app.services.google_email import send_message
@@ -75,7 +75,10 @@ class VisszajelzesRead(BaseModel):
     resztvevok: list[ResztvevoRead] = []
 
     diszpora_kikuldve: datetime | None = None
-    #: Kiküldhető-e a diszpóra: kell hozzá forgatás, címzett és megjegyzés.
+    #: uj | kikuldve | nem_kuldjuk - lásd models/feedback.VisszajelzesAllapot.
+    allapot: str = VisszajelzesAllapot.UJ.value
+    #: Kiküldhető-e a diszpóra: kell hozzá forgatás, címzett és megjegyzés -
+    #: és az sem lehet, hogy eldöntöttük, ezt nem küldjük ki.
     kikuldheto: bool = False
     #: Ha nem küldhető ki, ez mondja meg, miért - a felület ezt írja ki a
     #: letiltott gomb mellé, hogy ne kelljen találgatni.
@@ -84,6 +87,10 @@ class VisszajelzesRead(BaseModel):
 
 def _kikuldes_akadalya(feedback: Feedback, project: Project | None) -> str | None:
     """Miért nem küldhető ki ez a visszajelzés a diszpóra? None = kiküldhető."""
+    # A kézi döntés a legerősebb: amiről kimondtuk, hogy marad nálunk, azt
+    # semmilyen más feltétel nem teheti újra kiküldhetővé.
+    if feedback.allapot == VisszajelzesAllapot.NEM_KULDJUK:
+        return "Ezt a visszajelzést nem küldjük ki."
     if project is None:
         return "Ehhez az anyaghoz nincs forgatás."
     if not (feedback.visszajelzes_szoveg or "").strip():
@@ -121,6 +128,7 @@ def _kimenet(feedback: Feedback) -> VisszajelzesRead:
             ResztvevoRead(id=e.id, full_name=e.full_name, email=e.email) for e in (project.crew if project else [])
         ],
         diszpora_kikuldve=feedback.diszpora_kikuldve,
+        allapot=feedback.allapot,
         kikuldheto=akadaly is None,
         kikuldes_akadalya=akadaly,
     )
@@ -129,6 +137,7 @@ def _kimenet(feedback: Feedback) -> VisszajelzesRead:
 @router.get("", response_model=list[VisszajelzesRead])
 def list_visszajelzesek(
     deliverable_id: int | None = None,
+    allapot: str | None = None,
     db: Session = Depends(get_db),
     _user: Employee = Depends(get_current_user),
 ):
@@ -147,6 +156,8 @@ def list_visszajelzesek(
     )
     if deliverable_id is not None:
         stmt = stmt.where(Feedback.deliverable_id == deliverable_id)
+    if allapot:
+        stmt = stmt.where(Feedback.allapot == allapot)
     return [_kimenet(f) for f in db.scalars(stmt).all()]
 
 
@@ -184,6 +195,37 @@ def _levelszoveg(feedback: Feedback, project: Project) -> str:
         megjegyzes=megjegyzes,
         link_resz=_LINK_HTML.format(url=url) if url else "",
     )
+
+
+ALLAPOTOK = [a.value for a in VisszajelzesAllapot]
+
+
+class AllapotIn(BaseModel):
+    allapot: str
+
+
+@router.put("/{feedback_id}/allapot", response_model=VisszajelzesRead)
+def set_allapot(
+    feedback_id: int,
+    payload: AllapotIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A visszajelzés állapotának kézi átállítása.
+
+    Ez a "nem küldjük ki" döntés helye - és a visszavonásáé is: ami tévedésből
+    került oda, azt vissza lehet állítani újnak. A KIKULDVE állapotot
+    jellemzően a kiküldés írja be magától, de kézzel is beállítható (pl. ha a
+    stáb a rendszeren kívül kapta meg)."""
+    feedback = db.get(Feedback, feedback_id)
+    if feedback is None:
+        raise HTTPException(status_code=404, detail="A visszajelzés nem található.")
+    if payload.allapot not in ALLAPOTOK:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen állapot. Választható: {', '.join(ALLAPOTOK)}")
+    feedback.allapot = payload.allapot
+    db.commit()
+    db.refresh(feedback)
+    return _kimenet(feedback)
 
 
 class KikuldesEredmeny(BaseModel):
@@ -236,6 +278,7 @@ def diszpo_valasz(
     project.gmail_thread_id = thread_id or project.gmail_thread_id
     project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     feedback.diszpora_kikuldve = datetime.now()
+    feedback.allapot = VisszajelzesAllapot.KIKULDVE
     db.commit()
 
     return KikuldesEredmeny(

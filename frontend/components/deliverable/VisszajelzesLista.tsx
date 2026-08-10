@@ -8,6 +8,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { huDatum } from "@/lib/huDate";
+import { allapotJelzo, VISSZAJELZES_ALLAPOTOK } from "@/lib/visszajelzesAllapot";
 import type { VagoiVisszajelzes } from "@/lib/api";
 
 function pont(ertek: number | null): string {
@@ -37,16 +38,20 @@ export function VisszajelzesLista({
   const [nyitott, setNyitott] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [kereses, setKereses] = useState("");
+  const [allapotSzuro, setAllapotSzuro] = useState("");
 
   const szurt = useMemo(() => {
     const q = kereses.trim().toLowerCase();
-    if (!q) return visszajelzesek;
-    return visszajelzesek.filter((v) =>
-      [v.visszajelzo_nev, v.deliverable_nev, v.project_nev, v.megjegyzes].some((m) =>
-        (m ?? "").toLowerCase().includes(q),
-      ),
-    );
-  }, [visszajelzesek, kereses]);
+    return visszajelzesek
+      .filter((v) => (allapotSzuro ? v.allapot === allapotSzuro : true))
+      .filter((v) =>
+        !q
+          ? true
+          : [v.visszajelzo_nev, v.deliverable_nev, v.project_nev, v.megjegyzes].some((m) =>
+              (m ?? "").toLowerCase().includes(q),
+            ),
+      );
+  }, [visszajelzesek, kereses, allapotSzuro]);
 
   async function torol(v: VagoiVisszajelzes) {
     if (!(await confirm(`Törlöd ezt a visszajelzést (${v.visszajelzo_nev ?? "ismeretlen"})?`))) return;
@@ -56,6 +61,24 @@ export function VisszajelzesLista({
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function allapotValtas(v: VagoiVisszajelzes, allapot: string) {
+    setBusyId(v.id);
+    try {
+      const res = await authFetch(`/api/v1/vagoi-visszajelzesek/${v.id}/allapot`, {
+        method: "PUT",
+        body: JSON.stringify({ allapot }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
         return;
       }
       router.refresh();
@@ -96,6 +119,19 @@ export function VisszajelzesLista({
           placeholder="Keresés vágó, anyag, forgatás, szöveg szerint…"
           className="w-full max-w-[340px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
         />
+        <select
+          value={allapotSzuro}
+          onChange={(e) => setAllapotSzuro(e.target.value)}
+          aria-label="Szűrés állapotra"
+          className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+        >
+          <option value="">Összes állapot</option>
+          {VISSZAJELZES_ALLAPOTOK.map((a) => (
+            <option key={a.ertek} value={a.ertek}>
+              {a.cimke}
+            </option>
+          ))}
+        </select>
         <span className="text-[12px] text-text-muted">
           {szurt.length === visszajelzesek.length
             ? `${visszajelzesek.length} visszajelzés`
@@ -124,6 +160,7 @@ export function VisszajelzesLista({
               <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Technika</th>
               <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Kreatív</th>
               <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Átlag</th>
+              <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Állapot</th>
               <th className="py-1.5 text-right font-medium text-text-secondary">Kiküldés</th>
             </tr>
           </thead>
@@ -196,13 +233,30 @@ export function VisszajelzesLista({
                       {pont(v.kreativ_kepivilag)}
                     </td>
                     <td className="py-2.5 pr-4 text-right tabular-nums text-text-primary">{pont(v.atlag)}</td>
-                    <td className="py-2.5 text-right whitespace-nowrap">
-                      {v.diszpora_kikuldve && (
-                        <span className="mr-2 align-middle">
-                          <StatusBadge label="Kiküldve" tone="success" />
-                        </span>
-                      )}
+                    <td className="py-2.5 pr-4 whitespace-nowrap">
+                      <StatusBadge {...allapotJelzo(v.allapot)} />
                       {canSend && (
+                        <select
+                          value={v.allapot}
+                          onChange={(e) => allapotValtas(v, e.target.value)}
+                          disabled={busyId === v.id}
+                          aria-label="Állapot átállítása"
+                          title="Állapot átállítása"
+                          className="mt-1 block w-full rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[11.5px] text-text-secondary focus:outline-none disabled:opacity-50"
+                        >
+                          {VISSZAJELZES_ALLAPOTOK.map((a) => (
+                            <option key={a.ertek} value={a.ertek}>
+                              {a.cimke}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td className="py-2.5 text-right whitespace-nowrap">
+                      {/* Amiről eldöntöttük, hogy nem küldjük ki, ott a gomb
+                          nem letiltva áll, hanem EL IS TŰNIK - ne is kelljen
+                          rágondolni. */}
+                      {canSend && v.allapot !== "nem_kuldjuk" && (
                         <button
                           type="button"
                           onClick={() => kikuld(v)}
@@ -230,7 +284,7 @@ export function VisszajelzesLista({
 
                   {nyitva && (
                     <tr className="border-b border-border bg-surface-2">
-                      <td colSpan={kompakt ? 6 : 8} className="px-3 py-4">
+                      <td colSpan={kompakt ? 7 : 9} className="px-3 py-4">
                         <p className="t-label mb-1.5">Megjegyzés</p>
                         <p className="mb-4 whitespace-pre-line text-[13px] text-text-secondary">
                           {v.megjegyzes || "Nincs szöveges megjegyzés."}

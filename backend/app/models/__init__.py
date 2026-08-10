@@ -20,7 +20,7 @@ from app.models.employee_document import EmployeeDocument
 from app.models.employee_monthly_item import EmployeeMonthlyItem
 from app.models.entity_field import CustomFieldDef, CustomFieldValue, EntityFieldConfig
 from app.models.equipment import Assignment, Equipment, TrackMode
-from app.models.feedback import Feedback
+from app.models.feedback import Feedback, VisszajelzesAllapot
 from app.models.field_visibility import FieldVisibilityConfig
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.google_oauth_token import GoogleOAuthToken

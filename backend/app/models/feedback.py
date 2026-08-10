@@ -1,10 +1,28 @@
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
+
+
+class VisszajelzesAllapot(StrEnum):
+    """Hol tart egy visszajelzés a stáb felé vezető úton.
+
+    Azért kell, mert a lista magától nem tudja megmondani, mi az, amit MÁR
+    elintéztünk: kiküldés nélkül minden sor egyformán néz ki, és a régi,
+    lezárt visszajelzések elfedik az újakat.
+
+    A NEM_KULDJUK nem "elutasítás": van, amit szándékosan nem viszünk ki a
+    stáb elé (belső megjegyzés, kényes helyzet, régi anyag). Ilyenkor a
+    kiküldés lehetősége el is TŰNIK a soron - ne lehessen véletlenül
+    kiküldeni azt, amiről eldöntöttük, hogy marad nálunk."""
+
+    UJ = "uj"
+    KIKULDVE = "kikuldve"
+    NEM_KULDJUK = "nem_kuldjuk"
 
 
 class Feedback(TimestampMixin, Base):
@@ -46,6 +64,11 @@ class Feedback(TimestampMixin, Base):
     #: Mikor ment ki válaszként a forgatás diszpó-levelére. Amíg üres, még nem
     #: küldtük ki - ettől lehet egyszer kiküldeni, és látni, hogy megtörtént.
     diszpora_kikuldve: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: uj | kikuldve | nem_kuldjuk - lásd VisszajelzesAllapot. A kiküldés
+    #: magától átállítja "kikuldve"-re; a "nem_kuldjuk" kézi döntés.
+    allapot: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=VisszajelzesAllapot.UJ, server_default=VisszajelzesAllapot.UJ.value
+    )
 
     deliverable: Mapped["Deliverable"] = relationship(back_populates="feedbacks")
     forgatta: Mapped["Employee"] = relationship(back_populates="feedbacks", foreign_keys=[forgatta_employee_id])
