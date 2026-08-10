@@ -301,26 +301,63 @@ def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employe
     )
 
 
-def send_visszajelzes(db: Session, deliverable: Deliverable, current_user: Employee) -> Feedback:
-    """"Visszajelzés küldése" gomb - a csatolt Notion automatizmus portolása:
-    új Feedback sort hoz létre a jelenlegi értékelés-mezőkből, majd
-    visszaállítja (kiüríti) azokat az anyagon, hogy a következő körhöz újra
-    kitölthetők legyenek."""
+#: A pontozás skálája. Egy helyen áll, hogy a felület és az ellenőrzés
+#: sose csússzon szét.
+PONT_MIN, PONT_MAX = 1, 10
+
+
+def _ellenoriz_pont(nev: str, ertek: float | None) -> None:
+    if ertek is None:
+        return
+    if not PONT_MIN <= ertek <= PONT_MAX:
+        raise ValueError(f"A(z) {nev} pontszám {PONT_MIN} és {PONT_MAX} közé eshet (kapott: {ertek}).")
+
+
+def send_visszajelzes(
+    db: Session,
+    deliverable: Deliverable,
+    current_user: Employee,
+    *,
+    nyersanyag_felhasznalhatosaga: float | None = None,
+    technikai_helyesseg: float | None = None,
+    kreativ_kepivilag: float | None = None,
+    megjegyzes: str | None = None,
+) -> Feedback:
+    """Egy vágói visszajelzés rögzítése az űrlapról.
+
+    Három pontszám (1-10) és egy szöveges rész. A pontszámok üresen is
+    hagyhatók - van, amikor csak leírni akar valamit a vágó -, de legalább az
+    egyiket kérjük, különben a visszajelzés nem mond semmit.
+
+    A kész anyag linkjét MÁSOLJUK a rekordba (lásd models/feedback.py), és az
+    anyagra is ráírjuk a mostani pontszámokat, hogy a listákban a legutóbbi
+    értékelés látszódjon - a történetet viszont a Feedback sorok őrzik."""
+    _ellenoriz_pont("nyersanyag felhasználhatósága", nyersanyag_felhasznalhatosaga)
+    _ellenoriz_pont("technikai helyesség", technikai_helyesseg)
+    _ellenoriz_pont("kreativitás és képi világ", kreativ_kepivilag)
+
+    szoveg = (megjegyzes or "").strip() or None
+    if nyersanyag_felhasznalhatosaga is None and technikai_helyesseg is None and kreativ_kepivilag is None and not szoveg:
+        raise ValueError("Adj legalább egy pontszámot vagy írj megjegyzést.")
+
     feedback = Feedback(
         deliverable_id=deliverable.id,
         project_id=deliverable.project_id,
         visszajelzo_employee_id=current_user.id,
-        technikai_helyesseg=deliverable.technikai_helyesseg,
-        kreativ_kepivilag=deliverable.kreativ_es_kepi_vilag,
-        nyersanyag_felhasznalhatosaga=deliverable.nyersanyag_felhasznalhatosaga,
-        visszajelzes_szoveg=deliverable.egyeb_megjegyzes,
+        technikai_helyesseg=technikai_helyesseg,
+        kreativ_kepivilag=kreativ_kepivilag,
+        nyersanyag_felhasznalhatosaga=nyersanyag_felhasznalhatosaga,
+        visszajelzes_szoveg=szoveg,
+        kesz_anyag_url=deliverable.kesz_anyag_url,
     )
     db.add(feedback)
 
-    deliverable.technikai_helyesseg = None
-    deliverable.kreativ_es_kepi_vilag = None
-    deliverable.nyersanyag_felhasznalhatosaga = None
-    deliverable.egyeb_megjegyzes = None
+    # Az anyagon a LEGUTÓBBI értékelés látszik (a listák ezt mutatják) - a
+    # korábbi köröket a Feedback sorok őrzik.
+    deliverable.technikai_helyesseg = technikai_helyesseg
+    deliverable.kreativ_es_kepi_vilag = kreativ_kepivilag
+    deliverable.nyersanyag_felhasznalhatosaga = nyersanyag_felhasznalhatosaga
+    deliverable.egyeb_megjegyzes = szoveg
 
     db.commit()
     db.refresh(feedback)

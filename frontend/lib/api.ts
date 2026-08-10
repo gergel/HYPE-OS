@@ -1734,3 +1734,41 @@ export type MegrendeloiKontakt = {
 export async function getMegrendeloiKontaktok(): Promise<MegrendeloiKontakt[]> {
   return (await apiGet<MegrendeloiKontakt[]>("/api/v1/megrendeloi-kontaktok")) ?? [];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vágói visszajelzések
+//
+// Amit a vágó ír a leforgatott anyagról: három pontszám (1-10) és a szöveges
+// rész. A gyűjtő nézet mindegyikhez odateszi, mihez tartozik - anyag, forgatás,
+// és kik voltak ott (lásd backend routes/vagoi_visszajelzesek.py).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type VisszajelzesResztvevo = { id: number; full_name: string; email: string | null };
+
+export type VagoiVisszajelzes = {
+  id: number;
+  letrehozva: string;
+  visszajelzo_id: number | null;
+  visszajelzo_nev: string | null;
+  nyersanyag_felhasznalhatosaga: number | null;
+  technikai_helyesseg: number | null;
+  kreativ_kepivilag: number | null;
+  atlag: number | null;
+  megjegyzes: string | null;
+  deliverable_id: number;
+  deliverable_nev: string | null;
+  kesz_anyag_url: string | null;
+  project_id: number | null;
+  project_nev: string | null;
+  forgatas_datuma: string | null;
+  resztvevok: VisszajelzesResztvevo[];
+  diszpora_kikuldve: string | null;
+  kikuldheto: boolean;
+  /** Ha nem küldhető ki, ez mondja meg, miért. */
+  kikuldes_akadalya: string | null;
+};
+
+export async function getVagoiVisszajelzesek(deliverableId?: number): Promise<VagoiVisszajelzes[]> {
+  const qs = deliverableId != null ? `?deliverable_id=${deliverableId}` : "";
+  return (await apiGet<VagoiVisszajelzes[]>(`/api/v1/vagoi-visszajelzesek${qs}`)) ?? [];
+}

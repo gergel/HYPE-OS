@@ -43,6 +43,7 @@ from app.api.routes.subcontractor_contracts import router as subcontractor_contr
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.timeline import router as timeline_router
 from app.api.routes.user_access import router as user_access_router
+from app.api.routes.vagoi_visszajelzesek import router as vagoi_visszajelzesek_router
 from app.api.routes.utokovetes_admin import router as utokovetes_admin_router
 from app.api.routes.vallalkozasok import router as vallalkozasok_router
 
@@ -79,6 +80,8 @@ api_router.include_router(deliverable_actions_router)
 api_router.include_router(deliverables_router)
 api_router.include_router(timesheets_router)
 api_router.include_router(feedback_router)
+# Vágói visszajelzések: a gyűjtő nézet és a diszpóra kiküldés.
+api_router.include_router(vagoi_visszajelzesek_router)
 # 12. Portál / Fizetés
 api_router.include_router(portal_router)
 api_router.include_router(payments_router)

@@ -116,7 +116,17 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Utómunka",
-    items: [{ label: "Deliverable-ök", href: "/utomunka", icon: "Clapperboard" }],
+    items: [
+      { label: "Deliverable-ök", href: "/utomunka", icon: "Clapperboard" },
+      // A vágói visszajelzések ugyanannak az oldalnak a jogosultságával
+      // olvashatók, csak külön nézetben gyűlnek.
+      {
+        label: "Vágói visszajelzések",
+        href: "/utomunka/visszajelzesek",
+        icon: "MessageSquare",
+        permissionPage: "/utomunka",
+      },
+    ],
   },
   {
     label: "Média & Portál",

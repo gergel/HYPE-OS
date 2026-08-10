@@ -295,10 +295,36 @@ def get_timer_state(deliverable_id: int, db: Session = Depends(get_db), current_
     return deliverable_actions.get_timer_state(db, _get_deliverable_or_404(deliverable_id, db, current_user), current_user)
 
 
-@deliverable_actions_router.post("/{deliverable_id}/kuldes-visszajelzes", response_model=FeedbackRead)
-def send_visszajelzes(deliverable_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
-    """"Visszajelzés küldése" gomb - lásd services/deliverable_actions.send_visszajelzes."""
-    return deliverable_actions.send_visszajelzes(db, _get_deliverable_or_404(deliverable_id, db, current_user), current_user)
+class VisszajelzesIn(BaseModel):
+    """A vágói visszajelzés űrlapja: három pontszám (1-10) és a megjegyzés."""
+
+    nyersanyag_felhasznalhatosaga: float | None = None
+    technikai_helyesseg: float | None = None
+    kreativ_kepivilag: float | None = None
+    megjegyzes: str | None = None
+
+
+@deliverable_actions_router.post("/{deliverable_id}/visszajelzes", response_model=FeedbackRead)
+def send_visszajelzes(
+    deliverable_id: int,
+    payload: VisszajelzesIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """A vágói visszajelzés rögzítése az űrlapról - lásd
+    services/deliverable_actions.send_visszajelzes."""
+    try:
+        return deliverable_actions.send_visszajelzes(
+            db,
+            _get_deliverable_or_404(deliverable_id, db, current_user),
+            current_user,
+            nyersanyag_felhasznalhatosaga=payload.nyersanyag_felhasznalhatosaga,
+            technikai_helyesseg=payload.technikai_helyesseg,
+            kreativ_kepivilag=payload.kreativ_kepivilag,
+            megjegyzes=payload.megjegyzes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 class PercekIn(BaseModel):
