@@ -457,15 +457,18 @@ def havi_attekintes(
         # services/belsos_idoszak.py) - aki akkor még nem, vagy már nem
         # dolgozott nálunk, attól nincs mit várni.
         #
-        # A már nem belsősök MELLETT azok is beleszámítanak, akiknek erre a
-        # hónapra van bejegyzésük - különben a munkájuk (és az összegük)
-        # eltűnne a hónap összesítéséből.
+        # A MÁR NEM belsősök is beleszámítanak, ha erre a hónapra van
+        # bejegyzésük - különben a munkájuk (és az összegük) eltűnne a hónap
+        # összesítéséből. Ez viszont CSAK belsősökre igaz: egy sosem-belsős
+        # emberhez tartozó (jellemzően importból maradt) bejegyzés nem
+        # csinálhat teendőt. Enélkül az áttekintés olyan nevet is felsorolt,
+        # ami a hónap megnyitásakor nincs is a listán - lásd _belsos_employees.
         emberek = [e for e in employees if belsos_idoszak.belsos_volt(e, ev, honap, nyomok.get(e.id))]
         ismert = {e.id for e in emberek}
         for employee_id in sorok:
             if employee_id not in ismert:
                 korabbi = db.get(Employee, employee_id)
-                if korabbi is not None:
+                if korabbi is not None and korabbi.tipus == EmployeeType.BELSOS:
                     emberek.append(korabbi)
 
         teendok: list[HaviTeendo] = []
