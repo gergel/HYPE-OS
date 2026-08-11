@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { KotelezettsegKezelo } from "@/components/kotelezettseg/KotelezettsegKezelo";
@@ -50,6 +50,11 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
   const [fizetesiMod, setFizetesiMod] = useState("");
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
   const [megjegyzes, setMegjegyzes] = useState("");
+  // A bizonylat (számla PDF, blokk-fotó) MÁR A FELVITELKOR csatolható: a
+  // költést jellemzően a papírral a kézben rögzítik, és külön lépésben
+  // megkeresni a sort, majd ott feltölteni, fölösleges kör - abból lesz a
+  // bizonylat nélküli kiadás.
+  const [fajlok, setFajlok] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
 
   async function ment() {
@@ -76,11 +81,35 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
         return;
       }
+      // A fájlok csak a mentés UTÁN mehetnek fel: a csatolmány a most
+      // létrejött kiadás-sorhoz tartozik, tehát kell az azonosítója. Ha a
+      // feltöltés hibázik, a KÖLTÉS attól még megvan - csak szólunk, hogy a
+      // bizonylat kimaradt, és utólag a sorból pótolható.
+      if (fajlok.length > 0) {
+        const kiadas = (await res.json()) as { id: number };
+        for (const file of fajlok) {
+          const fd = new FormData();
+          fd.append("file", file);
+          const fel = await authFetch(`/api/v1/csatolmanyok/autoKiadas/${kiadas.id}?kategoria=szamla`, {
+            method: "POST",
+            body: fd,
+          });
+          if (!fel.ok) {
+            const detail = await fel.json().catch(() => null);
+            alert(
+              `A költés elmentve, de a bizonylat feltöltése nem sikerült (${file.name}): ` +
+                `${detail?.detail ?? fel.status}. A sorból utólag pótolhatod.`,
+            );
+            break;
+          }
+        }
+      }
       setMegnevezes("");
       setOsszeg("");
       setPluszAfa(false);
       setFizetesiMod("");
       setMegjegyzes("");
+      setFajlok([]);
       onKesz();
       router.refresh();
     } finally {
@@ -139,6 +168,27 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Megjegyzés</span>
         <input value={megjegyzes} onChange={(e) => setMegjegyzes(e.target.value)} className={`${inputClass} w-[220px]`} />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="t-label">Bizonylat</span>
+        <span
+          className={`flex h-[34px] w-fit items-center gap-1.5 rounded-[var(--radius)] border border-border px-2 text-[12.5px] ${
+            busy ? "opacity-50" : "cursor-pointer text-text-secondary hover:bg-surface-2"
+          }`}
+        >
+          <Upload size={13} />
+          {fajlok.length === 0
+            ? "Számla vagy fotó a gépről"
+            : `${fajlok.length} fájl kiválasztva`}
+          <input
+            type="file"
+            multiple
+            accept="application/pdf,image/*"
+            disabled={busy}
+            onChange={(e) => setFajlok(Array.from(e.target.files ?? []))}
+            className="hidden"
+          />
+        </span>
       </label>
       <button type="button" onClick={ment} disabled={busy} className="btn btn-primary">
         {busy ? "Mentés…" : "Hozzáadás"}

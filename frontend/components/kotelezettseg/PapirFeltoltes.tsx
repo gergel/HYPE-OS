@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Paperclip, Trash2 } from "lucide-react";
+import { Paperclip, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { authFetch } from "@/lib/authFetch";
 import type { DocumentAttachment } from "@/lib/api";
@@ -120,11 +120,23 @@ export function PapirFeltoltes({
         </ul>
       )}
       {canEdit && (
-        <label className="inline-block w-fit cursor-pointer text-[12px] text-text-accent hover:underline">
-          {busy ? "Feltöltés…" : "+ Dokumentum feltöltése"}
+        // GOMB, nem link-stílusú szöveg: a korábbi, aláhúzott-kék változatot
+        // több felhasználó URL-beírásnak olvasta, pedig a gépről tölt fel
+        // fájlt. A címke is kimondja, mit vár (PDF vagy fotó).
+        <label
+          className={`inline-flex w-fit items-center gap-1.5 rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary ${
+            busy ? "opacity-50" : "cursor-pointer hover:bg-surface-3"
+          }`}
+        >
+          <Upload size={12} />
+          {busy ? "Feltöltés…" : "Fájl feltöltése a gépről (PDF, fotó)"}
           <input
             type="file"
             multiple
+            // A telefon így a kamerát és a galériát is felajánlja, a gépen
+            // pedig eleve a fájlválasztó nyílik - a lista csak szűkítés, nem
+            // korlátozás (az "egyéb papír" bármi lehet).
+            accept="application/pdf,image/*"
             disabled={busy}
             onChange={(e) => {
               const files = Array.from(e.target.files ?? []);
