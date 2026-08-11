@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Paperclip, Plus, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { ModalReteg } from "@/components/ModalReteg";
 import { PapirFeltoltes } from "@/components/kotelezettseg/PapirFeltoltes";
@@ -151,6 +151,7 @@ function IdoszakSor({
   szerkeszthet: boolean;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [osszeg, setOsszeg] = useState(idoszak.osszeg != null ? String(idoszak.osszeg) : "");
   const [pluszAfa, setPluszAfa] = useState(idoszak.plusz_afa);
   const [hufOsszeg, setHufOsszeg] = useState(idoszak.huf_osszeg != null ? String(idoszak.huf_osszeg) : "");
@@ -199,6 +200,22 @@ function IdoszakSor({
     } finally {
       setFeltolt(false);
       input.value = "";
+    }
+  }
+
+  async function szamlaTorles(fajl: { id: number; filename: string }) {
+    if (!(await confirm(`Törlöd ezt a fájlt: "${fajl.filename}"?`))) return;
+    setFeltolt(true);
+    try {
+      const res = await authFetch(`/api/v1/csatolmanyok/${fajl.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setFeltolt(false);
     }
   }
 
@@ -264,17 +281,53 @@ function IdoszakSor({
         )}
       </td>
       <td className="py-2 pr-4">
-        {idoszak.szamla_db > 0 ? (
-          <span className="text-text-secondary">{idoszak.szamla_db} db</span>
-        ) : (
+        {/* Korábban csak a DARABSZÁM látszott: a feltöltött számlát megnyitni
+            vagy törölni nem lehetett. Most maguk a fájlok állnak itt, és a
+            feltöltés gomb - nem link-stílusú szöveg, amit URL-beírásnak lehet
+            olvasni. */}
+        {idoszak.szamlak.length === 0 ? (
           <span className="text-text-muted">nincs</span>
+        ) : (
+          <ul className="space-y-1">
+            {idoszak.szamlak.map((f) => (
+              <li key={f.id} className="flex items-center gap-1.5">
+                <Paperclip size={11} className="shrink-0 text-text-muted" />
+                <a
+                  href={f.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="max-w-[180px] truncate text-text-accent hover:underline"
+                  title={f.filename}
+                >
+                  {f.filename}
+                </a>
+                {szerkeszthet && (
+                  <button
+                    type="button"
+                    onClick={() => szamlaTorles(f)}
+                    disabled={feltolt}
+                    title="Fájl törlése"
+                    className="rounded-[var(--radius)] p-0.5 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
         {szerkeszthet && (
-          <label className="ml-2 cursor-pointer text-[12px] text-text-accent hover:underline">
-            {feltolt ? "Feltöltés…" : "+ Számla"}
+          <label
+            className={`mt-1 inline-flex w-fit items-center gap-1.5 rounded-[var(--radius)] border border-border px-2 py-0.5 text-[12px] text-text-secondary ${
+              feltolt ? "opacity-50" : "cursor-pointer hover:bg-surface-3"
+            }`}
+          >
+            <Upload size={11} />
+            {feltolt ? "Feltöltés…" : "Számla feltöltése (PDF, fotó)"}
             <input
               type="file"
               multiple
+              accept="application/pdf,image/*"
               disabled={feltolt}
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []);

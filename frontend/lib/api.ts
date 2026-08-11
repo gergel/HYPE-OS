@@ -1667,6 +1667,9 @@ export type KotelezettsegIdoszak = {
   fizetve: boolean;
   megjegyzes: string | null;
   szamla_db: number;
+  /** A feltöltött számlák - a darabszám mellett maguk a fájlok, hogy a
+   * felületen meg lehessen nyitni és törölni őket. */
+  szamlak: DocumentAttachment[];
   /** "Összeg nincs beírva" / "Számla hiányzik", null = kész. */
   hianyzik: string | null;
 };

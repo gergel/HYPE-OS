@@ -24,6 +24,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
+from app.schemas.document_attachment import DocumentAttachmentRead
 from app.models.kotelezettseg import (
     Kotelezettseg,
     KotelezettsegCiklus,
@@ -69,6 +70,11 @@ class IdoszakRead(BaseModel):
     megjegyzes: str | None = None
     #: Hány számla van feltöltve ehhez a fordulóhoz.
     szamla_db: int = 0
+    #: MAGUK a feltöltött számlák - enélkül a felület csak a darabszámot tudta
+    #: kiírni, a fájlt megnyitni vagy törölni nem lehetett. A lista ugyanabból
+    #: a lekérdezésből jön, amiből a darabszám (lásd _szamlak), tehát nem kerül
+    #: plusz adatbázis-fordulóba.
+    szamlak: list[DocumentAttachmentRead] = []
     #: Mi hiányzik még ("Összeg nincs beírva" / "Számla hiányzik"), None = kész.
     hianyzik: str | None = None
 
@@ -126,7 +132,8 @@ def brutto(netto: float | None, plusz_afa: bool) -> float | None:
     return round(netto * AFA_SZORZO, 2) if plusz_afa else float(netto)
 
 
-def _szamla_db(db: Session, idoszak_idk: list[int]) -> dict[int, int]:
+def _szamlak(db: Session, idoszak_idk: list[int]) -> dict[int, list[DocumentAttachment]]:
+    """Fordulónként a feltöltött számlák. Egy lekérdezés az egész listához."""
     if not idoszak_idk:
         return {}
     sorok = db.scalars(
@@ -135,10 +142,10 @@ def _szamla_db(db: Session, idoszak_idk: list[int]) -> dict[int, int]:
             DocumentAttachment.entity_id.in_(idoszak_idk),
         )
     ).all()
-    darab: dict[int, int] = {}
+    szerint: dict[int, list[DocumentAttachment]] = {}
     for sor in sorok:
-        darab[sor.entity_id] = darab.get(sor.entity_id, 0) + 1
-    return darab
+        szerint.setdefault(sor.entity_id, []).append(sor)
+    return szerint
 
 
 def _papir_db(db: Session, kotelezettseg_idk: list[int]) -> dict[int, int]:
@@ -157,7 +164,12 @@ def _papir_db(db: Session, kotelezettseg_idk: list[int]) -> dict[int, int]:
     return darab
 
 
-def _kimenet(k: Kotelezettseg, darab: dict[int, int], ma: date, papirok: dict[int, int] | None = None) -> KotelezettsegRead:
+def _kimenet(
+    k: Kotelezettseg,
+    darab: dict[int, list[DocumentAttachment]],
+    ma: date,
+    papirok: dict[int, int] | None = None,
+) -> KotelezettsegRead:
     idoszakok = [
         IdoszakRead(
             id=i.id,
@@ -170,8 +182,9 @@ def _kimenet(k: Kotelezettseg, darab: dict[int, int], ma: date, papirok: dict[in
             huf_osszeg=float(i.huf_osszeg) if i.huf_osszeg is not None else None,
             fizetve=i.fizetve,
             megjegyzes=i.megjegyzes,
-            szamla_db=darab.get(i.id, 0),
-            hianyzik=szolg.hianyzo_teendo(i, darab.get(i.id, 0) > 0),
+            szamla_db=len(darab.get(i.id, [])),
+            szamlak=[DocumentAttachmentRead.model_validate(f) for f in darab.get(i.id, [])],
+            hianyzik=szolg.hianyzo_teendo(i, bool(darab.get(i.id))),
         )
         for i in sorted(k.idoszakok, key=lambda i: i.esedekesseg, reverse=True)
     ]
@@ -243,7 +256,7 @@ def list_kotelezettsegek(
         sorok = [k for k in sorok if k.tipus in kertek]
     if auto_id is not None:
         sorok = [k for k in sorok if k.auto_id == auto_id]
-    darab = _szamla_db(db, [i.id for k in sorok for i in k.idoszakok])
+    darab = _szamlak(db, [i.id for k in sorok for i in k.idoszakok])
     papirok = _papir_db(db, [k.id for k in sorok])
     return [_kimenet(k, darab, ma, papirok) for k in sorok]
 
@@ -257,7 +270,7 @@ def get_kotelezettseg(
     k = db.get(Kotelezettseg, kotelezettseg_id)
     if k is None:
         raise HTTPException(status_code=404, detail="A kötelezettség nem található.")
-    darab = _szamla_db(db, [i.id for i in k.idoszakok])
+    darab = _szamlak(db, [i.id for i in k.idoszakok])
     return _kimenet(k, darab, date.today(), _papir_db(db, [k.id]))
 
 
@@ -331,7 +344,7 @@ def create_kotelezettseg(
     db.refresh(k)
     szolg.ensure_mindent(db)
     db.refresh(k)
-    return _kimenet(k, _szamla_db(db, [i.id for i in k.idoszakok]), date.today(), _papir_db(db, [k.id]))
+    return _kimenet(k, _szamlak(db, [i.id for i in k.idoszakok]), date.today(), _papir_db(db, [k.id]))
 
 
 @router.put("/{kotelezettseg_id}", response_model=KotelezettsegRead)
@@ -351,7 +364,7 @@ def update_kotelezettseg(
     db.commit()
     szolg.ensure_mindent(db)
     db.refresh(k)
-    return _kimenet(k, _szamla_db(db, [i.id for i in k.idoszakok]), date.today(), _papir_db(db, [k.id]))
+    return _kimenet(k, _szamlak(db, [i.id for i in k.idoszakok]), date.today(), _papir_db(db, [k.id]))
 
 
 @router.delete("/{kotelezettseg_id}", status_code=204)
@@ -398,7 +411,7 @@ def update_idoszak(
         setattr(idoszak, mezo, ertek)
     db.commit()
     db.refresh(idoszak)
-    darab = _szamla_db(db, [idoszak.id])
+    darab = _szamlak(db, [idoszak.id])
     return IdoszakRead(
         id=idoszak.id,
         kotelezettseg_id=idoszak.kotelezettseg_id,
@@ -410,8 +423,9 @@ def update_idoszak(
         huf_osszeg=float(idoszak.huf_osszeg) if idoszak.huf_osszeg is not None else None,
         fizetve=idoszak.fizetve,
         megjegyzes=idoszak.megjegyzes,
-        szamla_db=darab.get(idoszak.id, 0),
-        hianyzik=szolg.hianyzo_teendo(idoszak, darab.get(idoszak.id, 0) > 0),
+        szamla_db=len(darab.get(idoszak.id, [])),
+        szamlak=[DocumentAttachmentRead.model_validate(f) for f in darab.get(idoszak.id, [])],
+        hianyzik=szolg.hianyzo_teendo(idoszak, bool(darab.get(idoszak.id))),
     )
 
 
