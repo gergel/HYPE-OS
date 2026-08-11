@@ -205,7 +205,9 @@ def start_payment(slug: str, payload: PayPayload, db: Session = Depends(get_db))
     ts = int(datetime.now(timezone.utc).timestamp())
     payment_request_id = f"{portal.id}_{payload.package}_{ts}"
 
-    front = settings.frontend_base_url.rstrip("/")
+    # A fizetés az ügyfél-oldali portál-domainen zajlik, oda is kell
+    # visszatérnie - a Barionnál regisztrált domainnek ezzel kell egyeznie.
+    front = settings.portal_front_base
     api = settings.api_base_url.rstrip("/")
     # A visszairányítás vissza is hozza, MI sikerült: ebből tudja a portál
     # megköszönni a vásárlást és elküldeni a Barion Pixel purchase eseményét

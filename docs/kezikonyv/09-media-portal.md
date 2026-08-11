@@ -19,6 +19,14 @@ Portal mindig egy meglévő Projecthez van kötve** (1:1) - a cím, ügyfélnév
 a Project mezőire esik vissza, hacsak az admin felül nem írja
 (`services/portal_resolve.py`).
 
+## Saját domain
+
+A portál az ügyfeleknek szóló **hypeclient.com** domainen fut, az admin felület a
+HYPE OS eddigi domainjén - ugyanabból a Next.js telepítésből. A portál domainjén
+minden nem-portál útvonal 404-et ad, és minden kiküldött link (megosztó link,
+"Kész anyag URL", fizetés utáni visszatérés) a portál domainjére mutat.
+Beállítás és a teljes átállási lista: [13-domain-es-atallas.md](13-domain-es-atallas.md).
+
 ## Fontos: a publikus kliens sosem küld Authorization headert
 
 A `lib/portalApi.ts` szándékosan **külön fájl** a `lib/api.ts`-től. Az utóbbi

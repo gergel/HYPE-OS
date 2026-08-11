@@ -327,7 +327,9 @@ def regenerate_share(
     db.commit()
     from app.core.config import settings
 
-    front = settings.frontend_base_url.rstrip("/")
+    # A megosztó link az ÜGYFÉLNEK megy, tehát a portál saját domainjére mutat
+    # (settings.portal_base_url), nem az admin felületére.
+    front = settings.portal_front_base
     return PortalShareLink(token=portal.share_token, url=f"{front}/p/{portal.slug}?share={portal.share_token}")
 
 

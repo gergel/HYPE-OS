@@ -34,6 +34,7 @@ Helyette a szabály:
 | [10-integraciok.md](10-integraciok.md) | Google (Gmail/Docs/Drive/Calendar), Notion import, R2, Barion, Számlázz.hu, Gemini |
 | [11-uzemeltetes.md](11-uzemeltetes.md) | Env változók, indítás, migrációk, deploy, mit tegyél, ha valami nem megy |
 | [12-migracio.md](12-migracio.md) | Átállás a régi rendszerről: kód, adat és média külön útja, cutover |
+| [13-domain-es-atallas.md](13-domain-es-atallas.md) | A portál saját domainje (hypeclient.com), és az átállás lépésről lépésre |
 
 A tervezési előzményeket (termékspecifikáció, AS-IS rendszertérkép, migration
 map, roadmap, ER-diagram) a szülő `docs/` mappa őrzi - azok a rendszer

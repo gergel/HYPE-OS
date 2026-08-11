@@ -22,6 +22,31 @@ const BACKEND_TIMEOUT_MS = 4000;
 // kell elérhetőnek lennie, mint maga a portál.
 const PUBLIC_PATHS = ["/login", "/p", "/kerdoiv", "/adatvedelem"];
 
+// A publikus portál SAJÁT domainen fut (hypeclient.com), az admin felület a
+// magáén. Ugyanaz a Next.js telepítés szolgálja ki mindkettőt - ezért itt kell
+// gondoskodni arról, hogy a portál domainjén NE legyen elérhető a HYPE OS
+// belső felülete (se a /login, se egyetlen admin oldal). Enélkül a
+// hypeclient.com/projektek is behozná a bejelentkező képernyőt, ami az
+// ügyfeleknek szóló domainen zavaró és fölösleges támadási felület.
+//
+// Beállítás nélkül (NEXT_PUBLIC_PORTAL_HOST üres) minden marad a régiben: egy
+// domain, minden útvonal - így a fejlesztői környezet és az egydomaines
+// telepítés változtatás nélkül működik.
+const PORTAL_HOST = (process.env.NEXT_PUBLIC_PORTAL_HOST ?? "").trim().toLowerCase();
+// Amit a portál domainje kiszolgál. Az /adatvedelem azért kell ide, mert a
+// portál fizetési űrlapja és a süti-sáv is hivatkozik rá: ugyanazon a
+// domainen kell elérhetőnek lennie, ahol a fizetés történik.
+const PORTAL_HOST_PATHS = ["/p", "/adatvedelem"];
+
+/** A kérés a portál domainjére érkezett-e. A portot levágjuk (localhost:3000),
+ * a "www." előtagot pedig ugyanannak a domainnek tekintjük - aki a
+ * www.hypeclient.com/p/... linket kapja, ugyanazt kell lássa. */
+function portalDomainrolJon(request: NextRequest): boolean {
+  if (PORTAL_HOST === "") return false;
+  const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
+  return host === PORTAL_HOST || host === `www.${PORTAL_HOST}`;
+}
+
 /** A tokenből kiolvassa a lejáratot (exp), ALÁÍRÁS-ELLENŐRZÉS NÉLKÜL - itt csak
  * arról döntünk, kérjünk-e frisset. Az érvényességet mindig a backend mondja
  * meg, a middleware ebből semmilyen jogosultságot nem vezet le. */
@@ -69,12 +94,22 @@ function loginraKuld(request: NextRequest, { tokentTorol }: { tokentTorol: boole
  * jelentkeznie. */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const statikus = pathname.startsWith("/_next") || pathname === "/favicon.ico";
 
-  if (
-    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
-    pathname.startsWith("/_next") ||
-    pathname === "/favicon.ico"
-  ) {
+  // A portál domainjén CSAK a portál él. Ami nem oda tartozik, az nem
+  // átirányítást kap (az elárulná az admin felület címét), hanem 404-et.
+  if (portalDomainrolJon(request) && !statikus) {
+    const portalhozTartozik = PORTAL_HOST_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    if (!portalhozTartozik) {
+      return new NextResponse("Nincs ilyen oldal.", {
+        status: 404,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
+    }
+    return NextResponse.next();
+  }
+
+  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) || statikus) {
     return NextResponse.next();
   }
 

@@ -35,6 +35,7 @@ import {
 } from "@/lib/portalAdminApi";
 import { Card } from "@/components/Card";
 import { formatDuration, formatBytes } from "@/lib/portalUtils";
+import { portalUrl } from "@/lib/portalUrl";
 import type { PortalDetailData, PortalFolderItem, PortalImageItem, PortalVideoItem } from "@/lib/api";
 
 const inputClass =
@@ -363,7 +364,9 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
   }
 
   function makeShare() {
-    const url = `${window.location.origin}/p/${form.slug}`;
+    // A PORTÁL domainje, nem az adminé, ahol ez a gomb megnyomódik - ez a link
+    // megy ki az ügyfélnek (lásd lib/portalUrl.ts).
+    const url = portalUrl(form.slug);
     setShareUrl(url);
     navigator.clipboard?.writeText(url).catch(() => {});
   }
@@ -531,7 +534,9 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     });
   }
 
-  const portalUrl = `/p/${form.slug}`;
+  // A "Portál megtekintése" is a valódi, ügyfél-oldali domainre visz - így az
+  // admin pontosan azt látja előnézetben, amit a megrendelő kap.
+  const portalHref = portalUrl(form.slug);
 
   const visibleVideos = videos.filter((v) => (currentFolder ? v.folder_id === currentFolder : !v.folder_id));
   const visibleImages = images.filter((i) => (currentFolder ? i.folder_id === currentFolder : !i.folder_id));
@@ -705,7 +710,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
               {saved ? "Mentve" : "Mentés"}
             </button>
             <a
-              href={portalUrl}
+              href={portalHref}
               target="_blank"
               rel="noreferrer"
               className="rounded-[var(--radius)] border border-border px-4 py-2 text-[13px] text-text-secondary hover:bg-surface-3"

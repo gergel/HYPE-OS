@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ExternalLink, Globe } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { createPortalFromDeliverable } from "@/lib/portalAdminApi";
+import { portalUrl } from "@/lib/portalUrl";
 
 /** Az Utómunka részletnézetén megjelenő "Portál létrehozása" gomb - egy Média
  * Portált hoz létre közvetlenül ehhez a Deliverable-hez kötve (nem a
@@ -12,10 +13,11 @@ import { createPortalFromDeliverable } from "@/lib/portalAdminApi";
  * a Portál TELJES, kiküldhető publikus linkjét (megosztó token-nel, mint a
  * Portál admin "Megosztó link" gombja) automatikusan beírja a "Kész anyag
  * URL" mezőbe. Az abszolút URL-t szándékosan itt, a böngészőben rakjuk
- * össze (window.location.origin-ból), nem a backend teszi ezt - a backend
- * nem tudhatja megbízhatóan a publikus domain-t minden környezetben, és
- * enélkül csak a relatív "/p/{slug}..." útvonal kerülne a mezőbe, amit nem
- * lehet közvetlenül kiküldeni a megrendelőnek.
+ * össze (lib/portalUrl.ts), nem a backend teszi ezt - a backend nem tudhatja
+ * megbízhatóan a publikus domain-t minden környezetben, és enélkül csak a
+ * relatív "/p/{slug}..." útvonal kerülne a mezőbe, amit nem lehet közvetlenül
+ * kiküldeni a megrendelőnek. A link a PORTÁL domainjére mutat, nem az admin
+ * felületére, ahol ez a gomb megnyomódik.
  * A Portál Admin listában (/media-portal) is megjelenik, mert ugyanabba a
  * `portals` táblába kerül, mint a projekt-alapú vagy kézi Portálok. */
 export function CreatePortalButton({
@@ -61,7 +63,7 @@ export function CreatePortalButton({
     setError(null);
     try {
       const portal = await createPortalFromDeliverable(deliverableId);
-      const fullUrl = `${window.location.origin}/p/${portal.slug}${portal.share_token ? `?share=${portal.share_token}` : ""}`;
+      const fullUrl = portalUrl(portal.slug, portal.share_token);
       const res = await authFetch(`/api/v1/deliverables/${deliverableId}`, {
         method: "PATCH",
         body: JSON.stringify({ kesz_anyag_url: fullUrl }),

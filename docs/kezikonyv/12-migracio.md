@@ -138,6 +138,9 @@ támaszkodni kell - egy migráció, amit nem lehet kétszer lefuttatni, használ
 - **Jelszavas portálok**: a régi jelszó-hash formátuma egyezik-e. Ha nem, a
   jelszót újra kell adni - ez nem hiba, de az ügyfeleket értesíteni kell róla.
 
+A konkrét, elvégzendő lépések listája (hozzáférések, parancsok, ellenőrzés):
+[13-domain-es-atallas.md](13-domain-es-atallas.md).
+
 ## Amit ne csinálj
 
 - **Ne töltsd le a médiát laptopra, és ne töltsd fel újra a felületen.** Sok

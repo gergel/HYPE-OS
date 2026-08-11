@@ -184,6 +184,17 @@ class Settings(BaseSettings):
     frontend_base_url: str = ""
     api_base_url: str = ""
 
+    # A publikus portál SAJÁT domainje (hypeclient.com) - ez megy ki az
+    # ügyfeleknek, míg a HYPE OS admin felület a frontend_base_url-en marad.
+    # Minden ügyfél felé menő link (megosztó link, fizetés utáni
+    # visszairányítás) ezt használja. Üresen hagyva a frontend_base_url-ra esik
+    # vissza, tehát egydomaines telepítésnél nincs teendő.
+    portal_base_url: str = ""
+
+    @property
+    def portal_front_base(self) -> str:
+        return (self.portal_base_url or self.frontend_base_url).rstrip("/")
+
     barion_pos_key: str = ""
     barion_env: str = "test"  # test | prod
     barion_payee: str = ""
