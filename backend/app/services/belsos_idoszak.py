@@ -78,6 +78,27 @@ def belsos_volt(
     return nyom_kezdet is not None and _atfedi(nyom_kezdet, None, eleje, vege)
 
 
+def bizonyithatoan_nem_belsos(employee: Employee, nap: date | None) -> bool:
+    """Tudjuk-e BIZONYÍTANI, hogy ez az ember EKKOR nem volt belsős?
+
+    Nem ugyanaz, mint a `not belsos_volt(...)`: itt csak akkor mondunk igent,
+    ha van mire alapozni. Adat híján nemet adunk - a "nincs róla adat, tehát
+    biztosan nem volt belsős" következtetés éppen a hibás irányba téved.
+
+    Azért kell, mert a belsős státusz IDŐSZAKOS: aki ma belsős, tavaly még
+    külsősként dolgozhatott, és fordítva. Egy tavalyi projekten tehát simán
+    lehetett ő a számlázó fél valaki más munkájáért - a mai típusa alapján
+    viszont a rendszer kizárná (lásd routes/project_szamlazok.py)."""
+    if nap is None:
+        return False
+    idoszakok = list(employee.belsos_idoszakok or [])
+    if idoszakok:
+        return not any(_atfedi(i.kezdet, i.veg, nap, nap) for i in idoszakok)
+    if employee.elso_munkanap is not None or employee.utolso_munkanap is not None:
+        return not _atfedi(employee.elso_munkanap, employee.utolso_munkanap, nap, nap)
+    return False
+
+
 def nyom_kezdetek(db: Session, employee_ids: list[int]) -> dict[int, date]:
     """Kiről mikortól van NYOMUNK, hogy belsősként dolgozott?
 

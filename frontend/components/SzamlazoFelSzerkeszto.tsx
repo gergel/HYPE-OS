@@ -22,19 +22,11 @@ import type { ProjektSzamlazoNezet } from "@/lib/api";
 export function SzamlazoFelSzerkeszto({
   nezet,
   cegek,
-  emberek = [],
   canEdit,
 }: {
   nezet: ProjektSzamlazoNezet;
   /** Minden aktív cég - a tagsági javaslaton felül bármelyik választható. */
   cegek: { id: number; nev: string }[];
-  /** Minden (nem belsős) munkatárs - a javaslatokon felül olyan is
-   * választható, aki NINCS rajta ezen a projekten. Ez valós eset: van, hogy a
-   * számlát olyan vállalkozó állítja ki, aki maga nem volt a forgatáson (pl. a
-   * csapat "gazdája" számláz a nála dolgozókért). A stábtagságnak semmi köze
-   * ahhoz, ki a számlázó fél - a backend sem kötötte ki soha (lásd
-   * routes/project_szamlazok.py set_szamlazo), csak a felület nem kínálta fel. */
-  emberek?: { id: number; full_name: string }[];
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -98,10 +90,13 @@ export function SzamlazoFelSzerkeszto({
               // Ugyanez emberekre: aki nincs a stábban, az sem javaslat, de
               // választható. Magát a lefedett embert kihagyjuk (ő a "saját
               // nevében" opció), és azokat is, akik már javaslatként szerepelnek.
-              const tovabbiEmberek = emberek
-                .filter((e) => e.id !== sor.employee_id)
-                .map((e) => ({ szamlazo: `e${e.id}`, nev: e.full_name }))
-                .filter((e) => !javasoltKulcsok.has(e.szamlazo));
+              // A listát a SZERVER adja (nezet.valaszthato_emberek): azt, hogy
+              // ki lehet számlázó fél, a belsős IDŐSZAKOK döntik el a forgatás
+              // napjára nézve, és az az adat csak ott van meg. Aki nincs a
+              // stábban, ugyanúgy választható - a számlát gyakran olyan
+              // vállalkozó állítja ki, aki maga nem volt a forgatáson.
+              const tovabbiEmberek = nezet.valaszthato_emberek
+                .filter((e) => e.szamlazo !== `e${sor.employee_id}` && !javasoltKulcsok.has(e.szamlazo));
               return (
                 <tr key={sor.employee_id} className="border-b border-border last:border-0">
                   <td className="py-2.5 pr-6">

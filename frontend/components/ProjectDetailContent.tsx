@@ -52,7 +52,6 @@ import {
 } from "@/lib/api";
 import { buildFieldTabs, EQUIPMENT_WIDGET_FIELD_KEY, FORGATAS_IDOPONT_WIDGET_FIELD_KEY } from "@/lib/detailTabs";
 import { formatFt, formatPercek } from "@/lib/ido";
-import { szamlazokentValaszthatoak } from "@/lib/szamlazo";
 
 // A projekt mezői eredetileg a Notion "Main Database" ~140 oszlopát tükrözik
 // (lásd backend/app/models/project.py osztály-kommentje) - ahelyett hogy
@@ -312,8 +311,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 <SzamlazoFelSzerkeszto
                   nezet={szamlazoNezet}
                   cegek={cegek.filter((c) => c.aktiv).map((c) => ({ id: c.id, nev: c.nev }))}
-                  emberek={szamlazokentValaszthatoak(allEmployees)}
-                  canEdit={szerkeszthet}
+                      canEdit={szerkeszthet}
                 />
               ) : (
                 <p className="text-[13px] text-text-secondary">A számlázási beállítás most nem érhető el.</p>

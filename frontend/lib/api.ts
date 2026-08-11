@@ -565,10 +565,16 @@ export type ProjektSzamlazoSor = {
   javaslatok: { szamlazo: string; nev: string; forras: string }[];
 };
 
+/** Egy ember, aki EZEN a projekten számlázó fél lehet. A listát a szerver
+ * állítja össze: a "belsős-e" kérdés időszakos, és csak ott van hozzá adat
+ * (lásd backend project_szamlazok._valaszthato_emberek). */
+export type ValaszthatoSzamlazoFel = { szamlazo: string; nev: string };
+
 export type ProjektSzamlazoNezet = {
   project_id: number;
   project_nev: string | null;
   sorok: ProjektSzamlazoSor[];
+  valaszthato_emberek: ValaszthatoSzamlazoFel[];
 };
 
 export async function getProjektSzamlazok(projectId: number): Promise<ProjektSzamlazoNezet | null> {

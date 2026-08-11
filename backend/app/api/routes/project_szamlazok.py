@@ -14,8 +14,11 @@ Két tipikus beállítás:
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
@@ -25,7 +28,7 @@ from app.models.performance_certificate import PerformanceCertificate, Performan
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.models.vallalkozas import Vallalkozas, VallalkozasTag
-from app.services import papir_fedettseg, szamlazo
+from app.services import belsos_idoszak, papir_fedettseg, szamlazo
 
 router = APIRouter(prefix="/projekt-szamlazok", tags=["projekt-szamlazok"])
 
@@ -54,10 +57,22 @@ class SzamlazoSor(BaseModel):
     javaslatok: list[JavaslatInfo] = []
 
 
+class ValaszthatoFel(BaseModel):
+    """Egy ember, aki EZEN a projekten számlázó fél lehet."""
+
+    szamlazo: str
+    nev: str
+
+
 class ProjektSzamlazoNezet(BaseModel):
     project_id: int
     project_nev: str | None = None
     sorok: list[SzamlazoSor]
+    #: Kik választhatók számlázó félként ezen a projekten - a javaslatokon
+    #: FELÜL, tehát olyanok is, akik nincsenek rajta a projekten. A listát a
+    #: szerver állítja össze, mert a "belsős-e" kérdés IDŐSZAKOS, és csak itt
+    #: van meg hozzá az adat (lásd _valaszthato_emberek).
+    valaszthato_emberek: list[ValaszthatoFel] = []
 
 
 class SzamlazoIn(BaseModel):
@@ -71,6 +86,34 @@ def _get_project_or_404(db: Session, project_id: int) -> Project:
     if project is None:
         raise HTTPException(status_code=404, detail="Projekt nem található")
     return project
+
+
+def _lehet_szamlazo(employee: Employee, nap: date | None) -> bool:
+    """Lehet-e ez az ember számlázó fél egy adott NAPON zajló projekten?
+
+    A belsős munkatárs havi bérezésű, nála nincs projektenkénti számlázás -
+    DE a belsős státusz időszakos: aki ma belsős, tavaly még külsősként
+    dolgozhatott, és akkor simán ő számlázhatott más helyett. Ezért nem a mai
+    típus dönt önmagában, hanem az, hogy az adott napon belsős volt-e."""
+    if employee.tipus != EmployeeType.BELSOS:
+        return True
+    return belsos_idoszak.bizonyithatoan_nem_belsos(employee, nap)
+
+
+def _valaszthato_emberek(db: Session, project: Project) -> list[ValaszthatoFel]:
+    """Minden ember, aki ezen a projekten számlázó fél lehet.
+
+    Szándékosan a szerver állítja össze: a felület nem tudhatja, ki mikor volt
+    belsős (a belsős időszakok itt vannak), és a szabályt sem akarjuk két
+    helyen karbantartani."""
+    emberek = db.scalars(
+        select(Employee).options(selectinload(Employee.belsos_idoszakok)).order_by(Employee.full_name)
+    ).all()
+    return [
+        ValaszthatoFel(szamlazo=f"e{e.id}", nev=e.full_name)
+        for e in emberek
+        if _lehet_szamlazo(e, project.forgatas_datuma)
+    ]
 
 
 def _javaslatok(db: Session, project: Project, employee: Employee) -> list[JavaslatInfo]:
@@ -92,7 +135,9 @@ def _javaslatok(db: Session, project: Project, employee: Employee) -> list[Javas
                 JavaslatInfo(szamlazo=f"v{t.vallalkozas.id}", nev=t.vallalkozas.nev, forras="vallalkozas-tagsag")
             )
     for tars in project.crew:
-        if tars.id == employee.id or tars.tipus == EmployeeType.BELSOS:
+        # A belsős stábtárs is lehet számlázó, ha a forgatás napján épp NEM
+        # volt belsős (lásd _lehet_szamlazo).
+        if tars.id == employee.id or not _lehet_szamlazo(tars, project.forgatas_datuma):
             continue
         javaslatok.append(JavaslatInfo(szamlazo=f"e{tars.id}", nev=tars.full_name, forras="stabtars"))
     return javaslatok
@@ -124,7 +169,12 @@ def get_projekt_szamlazok(
                 javaslatok=_javaslatok(db, project, e),
             )
         )
-    return ProjektSzamlazoNezet(project_id=project.id, project_nev=project.nev, sorok=sorok)
+    return ProjektSzamlazoNezet(
+        project_id=project.id,
+        project_nev=project.nev,
+        sorok=sorok,
+        valaszthato_emberek=_valaszthato_emberek(db, project),
+    )
 
 
 def _van_papir(db: Session, project_id: int, employee_id: int) -> bool:
@@ -175,8 +225,11 @@ def set_szamlazo(
     fel = szamlazo.feloldas(db, kulcs)
     if fel is None:
         raise HTTPException(status_code=404, detail="A választott számlázó fél nem található.")
-    if fel.employee is not None and fel.employee.tipus == EmployeeType.BELSOS:
-        raise HTTPException(status_code=400, detail="Belsős munkatárs nem lehet számlázó fél.")
+    if fel.employee is not None and not _lehet_szamlazo(fel.employee, project.forgatas_datuma):
+        raise HTTPException(
+            status_code=400,
+            detail="Belsős munkatárs nem lehet számlázó fél - a forgatás idején belsősként dolgozott.",
+        )
     if fel.vallalkozas is not None and not fel.vallalkozas.aktiv:
         raise HTTPException(status_code=400, detail="Ez a vállalkozás inaktív.")
     # Láncot nem engedünk: ha A-t B számlázza, B-t nem számlázhatja C - a papír
