@@ -16,6 +16,7 @@ import { Button } from "@/components/media-portal/ui/button";
 import { VideoCard } from "@/components/media-portal/video-card";
 import { VideoPlayer } from "@/components/media-portal/video-player";
 import { downloadVideo, downloadImage, downloadImagesAll } from "@/lib/portalUtils";
+import { pixelContentView, pixelInitiateCheckout } from "@/lib/barionPixel";
 
 const CONTENTBEE_ACCENT = "rgb(243, 199, 68)";
 
@@ -34,6 +35,12 @@ export function PortalView({
   const [aszfOpen, setAszfOpen] = useState(false);
   const hasCustomCover = !!project.cover_image_url;
   const isExpired = !!expiredContactEmail;
+
+  // Barion Pixel: oldalmegtekintés a portál betöltésekor. A hozzájárulás
+  // hiányában a Pixel magától nem küld marketing adatot (lásd CookieConsent).
+  useEffect(() => {
+    pixelContentView(project.title || "HYPE portál");
+  }, [project.title]);
 
   const isContentBee = project.brand === "contentbee";
   const brandLabel = isContentBee ? "ContentBee" : "HYPE Productions";
@@ -705,6 +712,16 @@ function ImagesDownloadButton({ images, label }: { images: ImageType[]; label: s
 function PaymentPackages({ slug, accent, onOpenAszf }: { slug: string; accent?: string; onOpenAszf: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
+  // Számlázási adatok: a fizetés INDÍTÁSAKOR kell megadni, mert a Barion
+  // visszahívásában már csak egy azonosító jön - akkor nincs kitől megkérdezni,
+  // kinek szóljon a számla (lásd backend portal_public.start_payment).
+  const [billingType, setBillingType] = useState<"individual" | "company">("individual");
+  const [name, setName] = useState("");
+  const [taxNumber, setTaxNumber] = useState("");
+  const [zip, setZip] = useState("");
+  const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
+  const [email, setEmail] = useState("");
 
   const packages = [
     { code: "1month", label: "1 hónap", price: "6 000 Ft" },
@@ -712,20 +729,97 @@ function PaymentPackages({ slug, accent, onOpenAszf }: { slug: string; accent?: 
     { code: "1year", label: "1 év", price: "50 000 Ft" },
   ];
 
+  const billingValid =
+    name.trim() !== "" &&
+    zip.trim() !== "" &&
+    city.trim() !== "" &&
+    address.trim() !== "" &&
+    (billingType === "individual" || taxNumber.trim() !== "");
+  const canPay = accepted && billingValid && !busy;
+
   async function pay(code: string) {
-    if (busy || !accepted) return;
+    if (!canPay) return;
     setBusy(code);
     try {
-      const url = await startPayment(slug, code);
+      const csomag = packages.find((p) => p.code === code);
+      pixelInitiateCheckout(code, csomag?.label ?? code, Number((csomag?.price ?? "").replace(/\D/g, "")) || 0);
+      const url = await startPayment(slug, code, {
+        type: billingType,
+        name: name.trim(),
+        zip: zip.trim(),
+        city: city.trim(),
+        address: address.trim(),
+        tax_number: billingType === "company" ? taxNumber.trim() : "",
+        email: email.trim(),
+      });
       window.location.href = url;
     } catch {
       setBusy(null);
     }
   }
 
+  const inputClass =
+    "w-full rounded-xl border border-ink-line bg-ink px-3 py-2.5 text-sm text-bone outline-none focus:border-ember/60";
+
   return (
     <div className="mt-6">
-      <label className="flex cursor-pointer items-start justify-center gap-2.5 text-left text-sm text-mist">
+      <div className="mx-auto max-w-md text-left">
+        <p className="mb-3 text-center font-mono text-[11px] uppercase tracking-eyebrow text-mist">
+          Számlázási adatok
+        </p>
+        <div className="mb-3 flex gap-2">
+          {([
+            ["individual", "Magánszemély"],
+            ["company", "Cég"],
+          ] as const).map(([ertek, cimke]) => (
+            <button
+              key={ertek}
+              type="button"
+              onClick={() => setBillingType(ertek)}
+              className={`flex-1 rounded-full border px-4 py-2 text-sm transition ${
+                billingType === ertek
+                  ? "border-ember bg-ember/10 text-bone"
+                  : "border-ink-line text-mist hover:text-bone"
+              }`}
+            >
+              {cimke}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2.5">
+          <input
+            className={inputClass}
+            placeholder={billingType === "company" ? "Cégnév" : "Név"}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          {billingType === "company" && (
+            <input
+              className={inputClass}
+              placeholder="Adószám (pl. 12345678-2-42)"
+              value={taxNumber}
+              onChange={(e) => setTaxNumber(e.target.value)}
+            />
+          )}
+          <input className={inputClass} placeholder="Irányítószám" value={zip} onChange={(e) => setZip(e.target.value)} />
+          <input className={inputClass} placeholder="Város" value={city} onChange={(e) => setCity(e.target.value)} />
+          <input
+            className={inputClass}
+            placeholder="Cím (utca, házszám)"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+          <input
+            className={inputClass}
+            type="email"
+            placeholder="E-mail (ide küldjük a számlát)"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <label className="mt-5 flex cursor-pointer items-start justify-center gap-2.5 text-left text-sm text-mist">
         <input
           type="checkbox"
           checked={accepted}
@@ -746,7 +840,7 @@ function PaymentPackages({ slug, accent, onOpenAszf }: { slug: string; accent?: 
           <button
             key={p.code}
             onClick={() => pay(p.code)}
-            disabled={!!busy || !accepted}
+            disabled={!canPay}
             className="flex flex-col items-center gap-1 rounded-2xl border border-ink-line bg-ink px-4 py-5 transition hover:border-ember/60 disabled:cursor-not-allowed disabled:opacity-40"
             style={busy === p.code && accent ? { borderColor: accent } : undefined}
           >
@@ -755,6 +849,10 @@ function PaymentPackages({ slug, accent, onOpenAszf }: { slug: string; accent?: 
           </button>
         ))}
       </div>
+
+      {!billingValid && (
+        <p className="mt-3 text-center text-xs text-mist">A fizetéshez töltsd ki a számlázási adatokat.</p>
+      )}
 
       <div className="mt-6 flex flex-col items-center gap-2">
         <p className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">Biztonságos fizetés</p>

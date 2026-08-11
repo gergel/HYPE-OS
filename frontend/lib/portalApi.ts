@@ -114,10 +114,27 @@ export async function getImageDownloadUrl(imageId: number): Promise<string> {
   return data.url;
 }
 
-export async function startPayment(slug: string, packageCode: string): Promise<string> {
+/** A vevő számlázási adatai - ezekből állítja ki a rendszer a számlát a
+ * sikeres fizetés után (lásd backend services/portal_szamlazz.py). */
+export type PortalBilling = {
+  type: "individual" | "company";
+  name: string;
+  zip: string;
+  city: string;
+  address: string;
+  /** Csak cégnél. */
+  tax_number: string;
+  email: string;
+};
+
+export async function startPayment(
+  slug: string,
+  packageCode: string,
+  billing: PortalBilling,
+): Promise<string> {
   const data = await req<{ gateway_url: string }>(`/${slug}/pay`, {
     method: "POST",
-    body: JSON.stringify({ package: packageCode }),
+    body: JSON.stringify({ package: packageCode, billing }),
   });
   return data.gateway_url;
 }

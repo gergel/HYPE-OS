@@ -8,6 +8,7 @@ történik (lásd _create_unlock_token/_decode_unlock_token), ami nem keverendő
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -19,11 +20,14 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import verify_password
-from app.models.portal import PortalImage, PortalVideo, Portal
+from app.models.portal import Payment, PortalImage, PortalVideo, Portal
 from app.schemas.portal import PortalFolderOut, PortalImageOut, PortalVideoOut, PublicPortal
 from app.services import portal_barion as barion
 from app.services import portal_storage as storage
+from app.services import portal_szamlazz as szamlazz
 from app.services.portal_resolve import resolve_client_name, resolve_project_date, resolve_title
+
+logger = logging.getLogger("hype_os")
 
 router = APIRouter(prefix="/public/portal", tags=["portal-public"])
 
@@ -146,8 +150,25 @@ def get_by_share(token: str, db: Session = Depends(get_db)):
     return {"locked": False, "project": _serialize(portal).model_dump()}
 
 
+class BillingPayload(BaseModel):
+    """A vevő számlázási adatai a portál fizetési űrlapjáról.
+
+    A számlához mindig kell név és cím; cégnél az adószám is - enélkül a
+    Számlázz.hu sem tudna érvényes számlát kiállítani, ezért itt kérjük be, a
+    fizetés INDÍTÁSA előtt, nem utólag."""
+
+    type: str = "individual"
+    name: str = ""
+    zip: str = ""
+    city: str = ""
+    address: str = ""
+    tax_number: str = ""
+    email: str = ""
+
+
 class PayPayload(BaseModel):
     package: str
+    billing: BillingPayload | None = None
 
 
 @router.post("/{slug}/pay")
@@ -162,12 +183,37 @@ def start_payment(slug: str, payload: PayPayload, db: Session = Depends(get_db))
     if not pkg:
         raise HTTPException(status_code=400, detail="Érvénytelen csomag")
 
+    # A számlázási adatokat a fizetés INDÍTÁSAKOR kérjük be és mentjük el: a
+    # Barion visszahívásában már csak egy azonosító jön, akkor nincs kitől
+    # megkérdezni, kinek szóljon a számla.
+    billing = payload.billing or BillingPayload()
+    hianyzik = [
+        cimke
+        for cimke, ertek in (
+            ("név", billing.name),
+            ("irányítószám", billing.zip),
+            ("település", billing.city),
+            ("cím", billing.address),
+        )
+        if not (ertek or "").strip()
+    ]
+    if hianyzik:
+        raise HTTPException(status_code=400, detail=f"Hiányzó számlázási adat: {', '.join(hianyzik)}.")
+    if billing.type == "company" and not billing.tax_number.strip():
+        raise HTTPException(status_code=400, detail="Cégnél az adószám is kötelező.")
+
     ts = int(datetime.now(timezone.utc).timestamp())
     payment_request_id = f"{portal.id}_{payload.package}_{ts}"
 
     front = settings.frontend_base_url.rstrip("/")
     api = settings.api_base_url.rstrip("/")
-    redirect_url = f"{front}/p/{portal.slug}"
+    # A visszairányítás vissza is hozza, MI sikerült: ebből tudja a portál
+    # megköszönni a vásárlást és elküldeni a Barion Pixel purchase eseményét
+    # (a fizetés tényét a szerver a visszahívásból tudja, ez csak a nézőnek szól).
+    redirect_url = (
+        f"{front}/p/{portal.slug}?paid=1&pkg={payload.package}"
+        f"&amt={pkg['amount']}&pid={payment_request_id}"
+    )
     callback_url = f"{api}/api/v1/public/portal/barion/callback"
 
     data = barion.start_payment(
@@ -182,6 +228,27 @@ def start_payment(slug: str, payload: PayPayload, db: Session = Depends(get_db))
     gateway_url = data.get("GatewayUrl")
     if not gateway_url:
         raise HTTPException(status_code=502, detail="Nincs GatewayUrl a válaszban")
+
+    db.add(
+        Payment(
+            payment_request_id=payment_request_id,
+            portal_id=portal.id,
+            project_id=portal.project_id,
+            osszeg_huf=pkg["amount"],
+            mode=portal.payment_mode,
+            allapot="started",
+            barion_payment_id=data.get("PaymentId", ""),
+            package_code=payload.package,
+            billing_type=billing.type,
+            billing_name=billing.name.strip(),
+            billing_zip=billing.zip.strip(),
+            billing_city=billing.city.strip(),
+            billing_address=billing.address.strip(),
+            billing_tax_number=billing.tax_number.strip() if billing.type == "company" else "",
+            billing_email=billing.email.strip(),
+        )
+    )
+    db.commit()
     return {"gateway_url": gateway_url}
 
 
@@ -221,7 +288,44 @@ async def barion_callback(request: Request, db: Session = Depends(get_db)):
                 portal.expires_at = base_date + timedelta(days=pkg["days"])
                 db.commit()
 
+            _fizetes_lezarasa(db, request_id, pkg)
+
     return {"ok": True}
+
+
+def _fizetes_lezarasa(db: Session, request_id: str, pkg: dict | None) -> None:
+    """A sikeres fizetés rögzítése és a számla kiállítása.
+
+    A Barion többször is meghívhat ugyanarra a fizetésre, ezért mindkét lépés
+    egyszeri: a már kifizetettként jelölt sort nem írjuk át, és ha a számlaszám
+    megvan, nem állítunk ki másodikat.
+
+    A számlázás hibája NEM buktatja meg a visszahívást: a pénz megérkezett, a
+    hosszabbítás jár - a számlát legfeljebb kézzel kell pótolni. Ezért csak
+    naplózunk."""
+    payment = db.scalar(select(Payment).where(Payment.payment_request_id == request_id))
+    if payment is None or payment.allapot == "succeeded":
+        return
+    payment.allapot = "succeeded"
+    db.commit()
+
+    if payment.invoice_number:
+        return
+    eredmeny = szamlazz.create_invoice(
+        buyer_name=payment.billing_name or "",
+        buyer_zip=payment.billing_zip or "",
+        buyer_city=payment.billing_city or "",
+        buyer_address=payment.billing_address or "",
+        buyer_tax_number=payment.billing_tax_number or "",
+        buyer_email=payment.billing_email or "",
+        item_name=(pkg or {}).get("label") or "Tárhely-hosszabbítás",
+        gross_amount=int(payment.osszeg_huf or 0),
+    )
+    if eredmeny.get("ok"):
+        payment.invoice_number = eredmeny.get("invoice_number", "")
+        db.commit()
+    else:
+        logger.warning("A számla nem készült el (%s): %s", request_id, eredmeny.get("error"))
 
 
 downloads_router = APIRouter(prefix="/public", tags=["portal-public"])

@@ -17,7 +17,10 @@ const BACKEND_TIMEOUT_MS = 4000;
 // backend/app/api/routes/portal_public.py). "/kerdoiv" az utókövető kérdőív -
 // a diszpó-résztvevő crew tagok emailben kapják a linket, ők sem feltétlenül
 // HYPE OS felhasználók (lásd backend/app/api/routes/public_utokovetes.py).
-const PUBLIC_PATHS = ["/login", "/p", "/kerdoiv"];
+// "/adatvedelem" az adatkezelési tájékoztató - a portál fizetési űrlapja és a
+// süti-sáv is ide hivatkozik, tehát ugyanazoknak a kijelentkezett ügyfeleknek
+// kell elérhetőnek lennie, mint maga a portál.
+const PUBLIC_PATHS = ["/login", "/p", "/kerdoiv", "/adatvedelem"];
 
 /** A tokenből kiolvassa a lejáratot (exp), ALÁÍRÁS-ELLENŐRZÉS NÉLKÜL - itt csak
  * arról döntünk, kérjünk-e frisset. Az érvényességet mindig a backend mondja

@@ -103,8 +103,29 @@ class Payment(TimestampMixin, Base):
         default=PaymentMode.CONTACT,
         nullable=False,
     )
-    allapot: Mapped[str | None] = mapped_column(String(50))
+    allapot: Mapped[str | None] = mapped_column(String(50), comment="started | succeeded | failed")
     barion_payment_id: Mapped[str | None] = mapped_column(String(255))
+    #: Melyik hosszabbítás-csomagot vette (lásd routes/portal_public.py PACKAGES) -
+    #: ebből tudja a visszahívás, hány nappal hosszabbítson és mi kerüljön a
+    #: számla tételsorába.
+    package_code: Mapped[str | None] = mapped_column(String(50))
+
+    # ── Számlázási adatok ────────────────────────────────────────────────────
+    # A vevő a portál fizetési űrlapján adja meg őket, és a sikeres fizetés
+    # után EBBŐL állítjuk ki a számlát (lásd services/portal_szamlazz.py). Azért
+    # a fizetés sorában ülnek, nem az ügyfélen, mert a számla a vásárlás
+    # pillanatának adatait kell hogy őrizze - egy későbbi cégadat-változás nem
+    # írhatja át a már kiállított számlát.
+    billing_type: Mapped[str | None] = mapped_column(String(20), comment="individual | company")
+    billing_name: Mapped[str | None] = mapped_column(String(255))
+    billing_zip: Mapped[str | None] = mapped_column(String(20))
+    billing_city: Mapped[str | None] = mapped_column(String(120))
+    billing_address: Mapped[str | None] = mapped_column(String(255))
+    billing_tax_number: Mapped[str | None] = mapped_column(String(50), comment="Csak cégnél")
+    billing_email: Mapped[str | None] = mapped_column(String(255))
+    #: A Számlázz.hu által adott számla sorszáma - ha ki van töltve, a számla
+    #: megvan, és egy ismételt visszahívás nem állít ki másodikat.
+    invoice_number: Mapped[str | None] = mapped_column(String(100))
 
     portal: Mapped["Portal"] = relationship(back_populates="payments")
     revenue: Mapped["Revenue"] = relationship(back_populates="payments")

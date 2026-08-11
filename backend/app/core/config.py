@@ -192,6 +192,11 @@ class Settings(BaseSettings):
     def barion_api_base(self) -> str:
         return "https://api.test.barion.com" if self.barion_env == "test" else "https://api.barion.com"
 
+    # A Számlázz.hu Számla Agent kulcsa: ebből állítjuk ki a számlát a portálon
+    # keresztül fizetett tárhely-hosszabbításról (lásd services/portal_szamlazz.py).
+    # Üresen hagyva a fizetés ugyanúgy működik, csak számla nem készül.
+    szamlazz_agent_key: str = ""
+
     # Külön Notion adatbázis a portál-projektekhez (NEM ugyanaz, mint a fő
     # HYPE OS Notion importja) - opcionális "Notion szinkron" admin gombhoz.
     portal_notion_api_key: str = ""

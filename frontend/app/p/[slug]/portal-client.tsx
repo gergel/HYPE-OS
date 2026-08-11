@@ -4,10 +4,16 @@ import { useParams, useSearchParams } from "next/navigation";
 import { getPublicProject, getByShare, PublicPortal } from "@/lib/portalApi";
 import { PortalView } from "@/components/media-portal/portal-view";
 import { PasswordGate } from "@/components/media-portal/password-gate";
+import { BarionPixel } from "@/components/media-portal/BarionPixel";
+import { CookieConsent } from "@/components/media-portal/CookieConsent";
+import { pixelPurchase } from "@/lib/barionPixel";
 
 export default function PortalClient() {
   return (
     <div className="hype-portal dark grain min-h-screen bg-ink text-bone">
+      {/* A Barion Pixel és a süti-sáv csak itt, az ügyfeleknek szóló portálon
+          fut - a belső HYPE OS oldalakon nincs követés. */}
+      <BarionPixel />
       <Suspense
         fallback={
           <main className="flex min-h-screen items-center justify-center">
@@ -17,6 +23,7 @@ export default function PortalClient() {
       >
         <PortalContent />
       </Suspense>
+      <CookieConsent />
     </div>
   );
 }
@@ -27,6 +34,25 @@ function PortalContent() {
   const slug = params.slug as string;
   const shareToken = search.get("share");
   const [project, setProject] = useState<PublicPortal | null>(null);
+  // Sikeres fizetés utáni visszatérés: a backend a visszairányításba teszi,
+  // mit vettek (?paid=1&pkg=&amt=&pid=) - ebből megy a Barion Pixel purchase
+  // eseménye. A paramétereket utána kitöröljük az URL-ből, hogy egy frissítés
+  // ne küldje el még egyszer.
+  useEffect(() => {
+    if (search.get("paid") !== "1") return;
+    const pkg = search.get("pkg") || "";
+    const osszeg = parseInt(search.get("amt") || "0", 10) || 0;
+    const cimkek: Record<string, string> = { "1month": "1 hónap", "180days": "180 nap", "1year": "1 év" };
+    pixelPurchase(pkg, cimkek[pkg] || "Tárhely-hosszabbítás", osszeg, search.get("pid") || "");
+    try {
+      const url = new URL(window.location.href);
+      ["paid", "pkg", "amt", "pid"].forEach((k) => url.searchParams.delete(k));
+      window.history.replaceState({}, "", url.pathname + url.search);
+    } catch {
+      /* a takarítás elmaradása nem baj: legfeljebb ott marad a query string */
+    }
+  }, [search]);
+
   const [locked, setLocked] = useState(false);
   const [lockMeta, setLockMeta] = useState<{ title?: string; cover?: string }>({});
   const [expired, setExpired] = useState<{
