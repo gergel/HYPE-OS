@@ -333,6 +333,12 @@ class DolgozoRead(BaseModel):
     ora_osszesen: float = 0
     fizetes_osszesen: float = 0
     borravalo_osszesen: float = 0
+    #: Ebből mennyit fizettünk már ki, és mennyi van még hátra. A "még jár" a
+    #: gyakorlatban használt szám: ezt kell elutalni.
+    kifizetve_osszesen: float = 0
+    hatralek: float = 0
+    #: Hány napja van még jelöletlenül - ebből látszik, van-e egyáltalán teendő.
+    hatralekos_napok: int = 0
     #: Az utolsó nap, amikor dolgozott - ebből látszik, ki aktív MOST.
     utolso_nap: date | None = None
 
@@ -372,6 +378,8 @@ class MunkaoraPatch(BaseModel):
     fizetes: float | None = None
     borravalo: float | None = None
     megjegyzes: str | None = None
+    kifizetve: bool | None = None
+    kifizetes_datuma: date | None = None
 
 
 class MunkaoraRead(BaseModel):
@@ -384,6 +392,8 @@ class MunkaoraRead(BaseModel):
     fizetes: float | None = None
     borravalo: float | None = None
     megjegyzes: str | None = None
+    kifizetve: bool = False
+    kifizetes_datuma: date | None = None
 
 
 def _szamolt_fizetes(payload: MunkaoraIn) -> float | None:
@@ -408,6 +418,8 @@ def _munkaora_kimenet(m: KrumpelloMunkaora) -> MunkaoraRead:
         fizetes=_f(m.fizetes),
         borravalo=_f(m.borravalo),
         megjegyzes=m.megjegyzes,
+        kifizetve=m.kifizetve,
+        kifizetes_datuma=m.kifizetes_datuma,
     )
 
 
@@ -444,6 +456,12 @@ def list_dolgozok(
                 ora_osszesen=sum(_f(o.ora) or 0 for o in sajat),
                 fizetes_osszesen=sum(_f(o.fizetes) or 0 for o in sajat),
                 borravalo_osszesen=sum(_f(o.borravalo) or 0 for o in sajat),
+                # A borravaló SZÁNDÉKOSAN nincs a hátralékban: az a vendégektől
+                # jön, jellemzően aznap a kasszából kapják meg - nem a bérrel
+                # együtt utaljuk (lásd models/krumpello.py).
+                kifizetve_osszesen=sum(_f(o.fizetes) or 0 for o in sajat if o.kifizetve),
+                hatralek=sum(_f(o.fizetes) or 0 for o in sajat if not o.kifizetve),
+                hatralekos_napok=sum(1 for o in sajat if not o.kifizetve),
                 utolso_nap=max((o.datum for o in sajat), default=None),
             )
         )
@@ -554,6 +572,63 @@ def update_munkaora(
     return _munkaora_kimenet(m)
 
 
+class KifizetesJelolesIn(BaseModel):
+    """Egy ember adott időszakának kifizetettre (vagy vissza) állítása.
+
+    A kifizetés a gyakorlatban időszakonként történik: "Horváth Patrik,
+    július 22. - augusztus 3., 455 550 Ft". Soronként kattintgatni ugyanezt
+    tizennyolcszor kellene, és pont a végén, a legfáradtabb pillanatban
+    maradna ki egy nap."""
+
+    dolgozo_id: int
+    tol: date | None = None
+    ig: date | None = None
+    kifizetve: bool = True
+    #: Mikor történt a kifizetés. Üresen a mai nap - de átírható, mert a
+    #: jelölés gyakran később készül el, mint maga az utalás.
+    kifizetes_datuma: date | None = None
+
+
+class KifizetesJelolesOut(BaseModel):
+    #: Hány napot érintett a jelölés.
+    erintett_napok: int
+    #: Mennyi bér összege ez - a felület ezt írja vissza megerősítésként.
+    osszeg: float
+
+
+@router.post("/munkaorak/kifizetes", response_model=KifizetesJelolesOut)
+def jelold_kifizetettnek(
+    payload: KifizetesJelolesIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Egy ember időszakának tömeges jelölése kifizetettként.
+
+    CSAK a még nem jelölt napokat nyúlja (illetve visszavonásnál csak a
+    jelölteket): így a kifizetés dátuma nem íródik felül egy korábbi,
+    már elszámolt időszakon, ha valaki tágabb intervallumot ad meg."""
+    if db.get(KrumpelloDolgozo, payload.dolgozo_id) is None:
+        raise HTTPException(status_code=404, detail="Ez a dolgozó nem található.")
+    stmt = select(KrumpelloMunkaora).where(
+        KrumpelloMunkaora.dolgozo_id == payload.dolgozo_id,
+        KrumpelloMunkaora.kifizetve.is_(not payload.kifizetve),
+    )
+    if payload.tol is not None:
+        stmt = stmt.where(KrumpelloMunkaora.datum >= payload.tol)
+    if payload.ig is not None:
+        stmt = stmt.where(KrumpelloMunkaora.datum <= payload.ig)
+
+    sorok = db.scalars(stmt).all()
+    for m in sorok:
+        m.kifizetve = payload.kifizetve
+        m.kifizetes_datuma = (payload.kifizetes_datuma or date.today()) if payload.kifizetve else None
+    db.commit()
+    return KifizetesJelolesOut(
+        erintett_napok=len(sorok),
+        osszeg=sum(float(m.fizetes) if m.fizetes is not None else 0.0 for m in sorok),
+    )
+
+
 @router.delete("/munkaorak/{munkaora_id}", status_code=204)
 def delete_munkaora(
     munkaora_id: int,
@@ -605,6 +680,7 @@ class OsszesitoOut(BaseModel):
     munkaora: float
     munkaber: float
     munkaber_borravalo: float
+    munkaber_hatralek: float
 
 
 @router.get("/osszesito", response_model=OsszesitoOut)
@@ -645,6 +721,7 @@ def get_osszesito(
         munkaora=o.munkaora,
         munkaber=o.munkaber,
         munkaber_borravalo=o.munkaber_borravalo,
+        munkaber_hatralek=o.munkaber_hatralek,
     )
 
 

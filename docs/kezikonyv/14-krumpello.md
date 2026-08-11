@@ -58,6 +58,40 @@ fizikailag áthalad a kasszán.
 > eltér a táblázatétól - és ez a helyes. A másik 11 összesítő-sor tételesen
 > egyezik.
 
+## Mit fizettünk már ki
+
+A munkanap-soron van egy `kifizetve` jelölés (+ `kifizetes_datuma`), és ebből
+jön a Munkabér oldal két oszlopa: **Kifizetve** és **Még jár**. Az utóbbi a
+gyakorlatban használt szám - ezt kell elutalni -, ezért a felső összesítő
+sorban és az Áttekintésen is szerepel, figyelmeztető színnel, amíg nem nulla.
+
+**Miért a napon van a jelölés, és nem egy külön "kifizetés" rekordon?** Mert a
+kérdés, amire válaszolni kell, mindig egy napra vonatkozik: "ez a nap benne
+volt már egy kifizetésben?" Kifizetés-rekordokból ezt csak összeadogatással
+lehetne kitalálni, és egy utólag felvitt nap (amit egy már kifizetett
+időszakba írtak be) némán beleolvadna egy korábbi összegbe.
+
+A kifizetés viszont a gyakorlatban **időszakonként** történik (lásd a
+kassza-táblázat "ZÁRÁS" sorait), ezért két út van rá:
+
+| Hol | Mit csinál |
+|---|---|
+| A napló sorában | Egy nap ki/be kapcsolása. Kattintásra azonnal vált, nincs megerősítés - a téves kattintás ára egy újabb kattintás. |
+| Az emberenkénti táblában | `POST /munkaorak/kifizetes`: az adott ember **szűrt időszakának** összes jelöletlen napja egyben. |
+
+A tömeges jelölés **csak a még jelöletlen napokat nyúlja** (visszavonásnál csak
+a jelölteket): így egy tágabb intervallum megadása nem írja felül egy korábbi,
+már elszámolt időszak kifizetési dátumát.
+
+A **borravaló nincs a hátralékban**: az a vendégektől jön, jellemzően aznap a
+kasszából kapják meg, nem a bérrel együtt utaljuk.
+
+A betöltött történeti adat mind **jelöletlenül** indul. Ez szándékos: a
+táblázatból nem derül ki, mit utaltak el ténylegesen - a "ZÁRÁS" sorok
+összegeznek, de nem mondják meg, hogy meg is történt-e. A hamis "kifizetve"
+rosszabb, mint a jelöletlen: az egyik miatt elmarad egy utalás, a másik miatt
+csak egyszer rá kell nézni.
+
 ## Adat-áthozatal a táblázatból
 
 A **kezdőadat már bent van**: a `c5b71e29d840` migráció betölti
@@ -145,7 +179,7 @@ ez a **márkája**, nem beállítás.
 | `/krumpello` | Összesítő: extra egyenleg elöl, majd bevétel/kiadás/egyenlegek/munkabér |
 | `/krumpello/bevetel` | Napi kassza-zárások, felvitel és javítás |
 | `/krumpello/kiadas` | Kiadások a három forrás szerint bontva |
-| `/krumpello/munkaber` | Emberenkénti összesítés + naponkénti napló |
+| `/krumpello/munkaber` | Emberenkénti összesítés + naponkénti napló, kifizetés-jelöléssel |
 
 Az időszak-szűrő **URL-ben** él (`?tol=&ig=`): így egy nézet linkelhető, a
 frissítés nem dobja vissza, és a szerver is látja - nem kell a böngészőben

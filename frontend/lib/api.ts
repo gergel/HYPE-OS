@@ -1960,6 +1960,11 @@ export type KrumpelloDolgozo = {
   ora_osszesen: number;
   fizetes_osszesen: number;
   borravalo_osszesen: number;
+  /** Ebből mennyit fizettünk már ki, és mennyi van még hátra. A "még jár" a
+   * gyakorlatban használt szám: ezt kell elutalni. */
+  kifizetve_osszesen: number;
+  hatralek: number;
+  hatralekos_napok: number;
   utolso_nap: string | null;
 };
 
@@ -1973,6 +1978,9 @@ export type KrumpelloMunkaora = {
   fizetes: number | null;
   borravalo: number | null;
   megjegyzes: string | null;
+  /** Kifizettük-e már ezt a napot. */
+  kifizetve: boolean;
+  kifizetes_datuma: string | null;
 };
 
 export type KrumpelloOsszesito = {
@@ -2001,6 +2009,8 @@ export type KrumpelloOsszesito = {
   munkaora: number;
   munkaber: number;
   munkaber_borravalo: number;
+  /** Amit még el kell utalni (a jelöletlen napok bére). */
+  munkaber_hatralek: number;
 };
 
 function krumpelloIdoszak(tol?: string, ig?: string): string {

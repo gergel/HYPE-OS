@@ -156,4 +156,21 @@ class KrumpelloMunkaora(TimestampMixin, Base):
     borravalo: Mapped[float | None] = mapped_column(Numeric(12, 2))
     megjegyzes: Mapped[str | None] = mapped_column(Text)
 
+    #: Kifizettük-e már ezt a napot.
+    #:
+    #: Miért a NAPON van, és nem egy külön "kifizetés" rekordon? Mert a kérdés,
+    #: amire válaszolni kell, mindig egy napra vonatkozik: "ez a nap benne volt
+    #: már egy kifizetésben?" Kifizetés-rekordokból ezt csak összeadogatással
+    #: lehetne kitalálni, és egy elmaradt nap (pl. amit utólag vittek fel egy
+    #: már kifizetett időszakba) némán beleolvadna egy korábbi összegbe.
+    #:
+    #: A kifizetés a gyakorlatban IDŐSZAKONKÉNT történik (lásd a kassza-táblázat
+    #: "ZÁRÁS" sorait), ezért a felület tömegesen is tudja jelölni egy ember
+    #: adott időszakát - de a jelölés akkor is soronként kerül fel, hogy egy
+    #: később hozzáírt nap ne látszódjon automatikusan kifizetettnek.
+    kifizetve: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    #: Mikor fizettük ki. A jelölés napja csak alapérték - a tényleges utalás
+    #: dátuma ettől eltérhet, ezért átírható.
+    kifizetes_datuma: Mapped[date | None] = mapped_column(Date)
+
     dolgozo: Mapped["KrumpelloDolgozo"] = relationship(back_populates="munkaorak")

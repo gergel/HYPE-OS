@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import case as sa_case, func, select
 from sqlalchemy.orm import Session
 
 from app.models.krumpello import EXTRA_FORRAS, KrumpelloKiadas, KrumpelloMunkaora, KrumpelloNap
@@ -111,20 +111,29 @@ def kiadas_osszesito(db: Session, tol: date | None = None, ig: date | None = Non
     return eredmeny
 
 
-def munkaber_osszesen(db: Session, tol: date | None = None, ig: date | None = None) -> tuple[float, float, float]:
-    """(ledolgozott óra, kifizetett bér, borravaló) az időszakban."""
+def munkaber_osszesen(
+    db: Session, tol: date | None = None, ig: date | None = None
+) -> tuple[float, float, float, float]:
+    """(ledolgozott óra, teljes bér, borravaló, még KI NEM fizetett bér).
+
+    A negyedik a gyakorlatban használt szám: ennyit kell még elutalni. A
+    borravaló nincs benne - az a vendégektől jön, jellemzően aznap a kasszából
+    kapják meg, nem a bérrel együtt utaljuk."""
     stmt = _idoszak_szures(
         select(
             func.sum(KrumpelloMunkaora.ora),
             func.sum(KrumpelloMunkaora.fizetes),
             func.sum(KrumpelloMunkaora.borravalo),
+            func.sum(
+                sa_case((KrumpelloMunkaora.kifizetve.is_(False), KrumpelloMunkaora.fizetes), else_=0)
+            ),
         ),
         KrumpelloMunkaora.datum,
         tol,
         ig,
     )
-    ora, fizetes, borravalo = db.execute(stmt).one()
-    return _f(ora), _f(fizetes), _f(borravalo)
+    ora, fizetes, borravalo, hatralek = db.execute(stmt).one()
+    return _f(ora), _f(fizetes), _f(borravalo), _f(hatralek)
 
 
 @dataclass
@@ -144,6 +153,8 @@ class Osszesito:
     munkaora: float
     munkaber: float
     munkaber_borravalo: float
+    #: Amit még el kell utalni (a jelöletlen napok bére).
+    munkaber_hatralek: float
 
 
 def osszesito(db: Session, tol: date | None = None, ig: date | None = None) -> Osszesito:
@@ -153,7 +164,7 @@ def osszesito(db: Session, tol: date | None = None, ig: date | None = None) -> O
     utalas = kiad.get("utalas", ures)
     keszpenz = kiad.get("keszpenz", ures)
     extra_kiadas = kiad.get(EXTRA_FORRAS, ures).brutto
-    ora, ber, borravalo = munkaber_osszesen(db, tol, ig)
+    ora, ber, borravalo, hatralek = munkaber_osszesen(db, tol, ig)
 
     return Osszesito(
         bevetel=bev,
@@ -179,4 +190,5 @@ def osszesito(db: Session, tol: date | None = None, ig: date | None = None) -> O
         munkaora=ora,
         munkaber=ber,
         munkaber_borravalo=borravalo,
+        munkaber_hatralek=hatralek,
     )

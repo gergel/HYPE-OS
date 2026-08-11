@@ -67,7 +67,14 @@ export default async function KrumpelloAttekintesPage({
               <p className="t-card mb-3">Munkabér</p>
               <div className="flex flex-wrap gap-8">
                 <Adat cimke="Ledolgozott óra" ertek={`${o.munkaora.toLocaleString("hu-HU")} óra`} />
-                <Adat cimke="Kifizetett bér" ertek={formatFt(o.munkaber)} />
+                <Adat cimke="Bér összesen" ertek={formatFt(o.munkaber)} />
+                {/* A "még jár" az egyetlen szám itt, ami TEENDŐ - ezért kap
+                    figyelmeztető színt, amíg nem nulla. */}
+                <Adat
+                  cimke="Még jár"
+                  ertek={o.munkaber_hatralek ? formatFt(o.munkaber_hatralek) : "rendezve"}
+                  veszely={o.munkaber_hatralek > 0}
+                />
                 <Adat cimke="Borravaló" ertek={formatFt(o.munkaber_borravalo)} />
                 <Adat
                   cimke="Átlagos órabér"
