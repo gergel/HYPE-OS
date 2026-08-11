@@ -8,6 +8,8 @@ import { EditableBooleanCell } from "@/components/EditableBooleanCell";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { RelatedTable } from "@/components/RelatedTable";
 import { StatCard } from "@/components/StatCard";
+import { StatusBadge } from "@/components/StatusBadge";
+import { DataTable } from "@/components/DataTable";
 import { TopBar } from "@/components/TopBar";
 import {
   Contract,
@@ -16,12 +18,14 @@ import {
   getAttachments,
   getCurrentUser,
   getDetailTabs,
+  getEmployees,
   getFieldTypes,
   getMyPagePermissions,
   getPendingClientContracts,
   getRecord,
   getRelated,
   getVisibleFields,
+  type JsonRecord,
 } from "@/lib/api";
 import { buildFieldTabs } from "@/lib/detailTabs";
 import { canDoAction } from "@/lib/permissions";
@@ -29,13 +33,36 @@ import { FileText, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const PAGE = "/projektek/project-kodok";
 
+/** MELYIK NAP ment ki a pénz.
+ *
+ * A Kiadásnak három dátuma lehet, és nem mindegyik van kitöltve: a
+ * `fizetes_datuma` a tényleges kifizetés napja (ez a kérdés), a
+ * `kiadas_datuma` a költség felmerülése, a `fizetes_hatarideje` pedig csak
+ * terv. Ebben a sorrendben esünk vissza, hogy a régi, importált soroknál se
+ * maradjon üres az oszlop - ott gyakran csak az utóbbi kettő van meg. */
+function kiadasNapja(e: JsonRecord): string {
+  for (const kulcs of ["fizetes_datuma", "kiadas_datuma", "fizetes_hatarideje"]) {
+    const ertek = e[kulcs];
+    if (typeof ertek === "string" && ertek) return ertek.slice(0, 10);
+  }
+  return "–";
+}
+
+/** KINEK fizettünk. A kiadás vagy egy munkatárshoz kötődik (túlóra, napidíj),
+ * vagy dologi költség (benzin, parkolás) - utóbbinál nincs címzett. */
+function kiadasCimzettje(e: JsonRecord, nevek: Map<number, string>): string {
+  const id = typeof e.employee_id === "number" ? e.employee_id : null;
+  if (id === null) return "–";
+  return nevek.get(id) ?? `#${id}`;
+}
+
 export default async function ProjectCodeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectCodeId = Number(id);
   const projectCode = await getRecord(ENTITY_PATHS.projectCode, projectCodeId);
   if (!projectCode) notFound();
 
-  const [client, contract, projects, expenses, revenues, deliverables, pendingClientContracts, visibleFields, fieldTypes, dbTabs, pagePermissions, currentUser, attachments] =
+  const [client, contract, projects, expenses, revenues, deliverables, pendingClientContracts, visibleFields, fieldTypes, dbTabs, pagePermissions, currentUser, attachments, allEmployees] =
     await Promise.all([
       projectCode.client_id ? getRecord(ENTITY_PATHS.client, Number(projectCode.client_id)) : null,
       projectCode.contract_id ? getRecord(ENTITY_PATHS.contract, Number(projectCode.contract_id)) : null,
@@ -50,7 +77,11 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
       getMyPagePermissions(),
       getCurrentUser(),
       getAttachments("projectCode", projectCodeId),
+      // A kiadásoknál csak employee_id van, a táblában viszont nevet kell mutatni.
+      getEmployees(),
     ]);
+
+  const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
 
   const canEditFiles = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const canDeleteFiles = canDoAction(currentUser, pagePermissions, PAGE, "delete");
@@ -192,12 +223,52 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           />
         </Card>
 
+        {/* A kiadásoknál a generikus kapcsolt-tábla (RelatedTable) használhatatlan
+            volt: az "Állapot" és a "Dátum" oszlopa végig üres maradt, mert a
+            Kiadás nem `allapot`/`datum` néven tárolja ezeket. Itt az a kérdés,
+            hogy MELYIK NAP, KINEK és MENNYIT fizettünk ki - ezért saját tábla. */}
         <Card title={`Kiadások (${expenses.length})`}>
-          <RelatedTable
+          <DataTable<JsonRecord>
             rows={expenses}
             emptyText="Nincs kiadás ehhez a Project Code-hoz."
             getHref={(e) => `/penzugyek/kiadas/${e.id}`}
-            deleteBasePath={ENTITY_PATHS.expense}
+            deleteHref={canDeleteFiles ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}
+            filterable
+            columns={[
+              {
+                header: "Dátum",
+                render: (e) => kiadasNapja(e),
+                sortAccessor: (e) => kiadasNapja(e),
+              },
+              {
+                header: "Kinek",
+                render: (e) => kiadasCimzettje(e, employeeNameById),
+                sortAccessor: (e) => kiadasCimzettje(e, employeeNameById),
+              },
+              {
+                header: "Megnevezés",
+                render: (e) => (typeof e.megnevezes === "string" ? e.megnevezes : "–"),
+                sortAccessor: (e) => (typeof e.megnevezes === "string" ? e.megnevezes : ""),
+              },
+              {
+                header: "Nettó",
+                align: "right",
+                render: (e) => formatHuf(typeof e.netto === "number" ? e.netto : null),
+                sortAccessor: (e) => (typeof e.netto === "number" ? e.netto : 0),
+              },
+              {
+                header: "Bruttó",
+                align: "right",
+                render: (e) => formatHuf(typeof e.brutto === "number" ? e.brutto : null),
+                sortAccessor: (e) => (typeof e.brutto === "number" ? e.brutto : 0),
+              },
+              {
+                header: "Állapot",
+                align: "right",
+                render: (e) => <StatusBadge label={e.kesz ? "Kifizetve" : "Nyitott"} tone={e.kesz ? "success" : "warning"} />,
+                sortAccessor: (e) => (e.kesz ? 1 : 0),
+              },
+            ]}
           />
         </Card>
 

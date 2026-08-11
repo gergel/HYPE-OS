@@ -50,7 +50,14 @@ TIG-fázis és az utókövetés egyaránt épül:
 > de a projekten felülírható másik emberre vagy egy vállalkozásra.
 
 A kulcs rövid szöveges azonosító: `"e12"` = 12-es ember, `"v3"` = 3-as
-vállalkozás. Azért szöveg, hogy ugyanaz az útvonal (`.../{szamlazo}/save`) embert
+vállalkozás.
+
+A számlázó fél **nem kell, hogy rajta legyen a projekten**: gyakori, hogy a
+számlát olyan vállalkozó állítja ki, aki maga nem volt a forgatáson. A backend
+ezt sosem kötötte stábtagsághoz, a választó pedig a javaslatokon felül minden
+nem belsős munkatársat és minden aktív céget felkínál (lásd
+`lib/szamlazo.ts` - ott áll az egyetlen valódi kizáró ok: belsős munkatárs havi
+bérezésű, ezért nem lehet számlázó fél). Azért szöveg, hogy ugyanaz az útvonal (`.../{szamlazo}/save`) embert
 és céget is fogadjon - és mivel a puszta szám továbbra is embert jelent, a régi,
 ember-azonosítós hívások változtatás nélkül működnek.
 

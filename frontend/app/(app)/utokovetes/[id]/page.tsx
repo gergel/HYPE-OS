@@ -8,6 +8,7 @@ import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
 import { SzamlazoFelSzerkeszto } from "@/components/SzamlazoFelSzerkeszto";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { TopBar } from "@/components/TopBar";
+import { szamlazokentValaszthatoak } from "@/lib/szamlazo";
 import {
   formatDate,
   getAllContractsForProject,
@@ -107,6 +108,7 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
             <SzamlazoFelSzerkeszto
               nezet={szamlazoNezet}
               cegek={cegek.filter((c) => c.aktiv).map((c) => ({ id: c.id, nev: c.nev }))}
+              emberek={szamlazokentValaszthatoak(allEmployees)}
               canEdit={canEdit}
             />
           ) : (

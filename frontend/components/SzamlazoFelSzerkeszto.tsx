@@ -22,11 +22,19 @@ import type { ProjektSzamlazoNezet } from "@/lib/api";
 export function SzamlazoFelSzerkeszto({
   nezet,
   cegek,
+  emberek = [],
   canEdit,
 }: {
   nezet: ProjektSzamlazoNezet;
   /** Minden aktív cég - a tagsági javaslaton felül bármelyik választható. */
   cegek: { id: number; nev: string }[];
+  /** Minden (nem belsős) munkatárs - a javaslatokon felül olyan is
+   * választható, aki NINCS rajta ezen a projekten. Ez valós eset: van, hogy a
+   * számlát olyan vállalkozó állítja ki, aki maga nem volt a forgatáson (pl. a
+   * csapat "gazdája" számláz a nála dolgozókért). A stábtagságnak semmi köze
+   * ahhoz, ki a számlázó fél - a backend sem kötötte ki soha (lásd
+   * routes/project_szamlazok.py set_szamlazo), csak a felület nem kínálta fel. */
+  emberek?: { id: number; full_name: string }[];
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -66,8 +74,8 @@ export function SzamlazoFelSzerkeszto({
     <div>
       <p className="mb-3 text-[12.5px] text-text-muted">
         Alapból mindenki a saját nevében számláz. Itt lehet beállítani, ha valakiért másik ember vagy egy cég állítja
-        ki a számlát – ilyenkor a szerződés és a TIG is az ő nevére megy, egyben. A lefedett ember stábtag marad:
-        diszpót kap és rajta van a projekten.
+        ki a számlát – ilyenkor a szerződés és a TIG is az ő nevére megy, egyben. A számlázó fél olyan is lehet, aki
+        nincs rajta ezen a projekten. A lefedett ember stábtag marad: diszpót kap és rajta van a projekten.
       </p>
       {hiba && <p className="mb-3 text-[12.5px] text-text-danger">{hiba}</p>}
       <div className="overflow-x-auto">
@@ -87,6 +95,13 @@ export function SzamlazoFelSzerkeszto({
               const tovabbiCegek = cegek
                 .map((c) => ({ szamlazo: `v${c.id}`, nev: c.nev }))
                 .filter((c) => !javasoltKulcsok.has(c.szamlazo));
+              // Ugyanez emberekre: aki nincs a stábban, az sem javaslat, de
+              // választható. Magát a lefedett embert kihagyjuk (ő a "saját
+              // nevében" opció), és azokat is, akik már javaslatként szerepelnek.
+              const tovabbiEmberek = emberek
+                .filter((e) => e.id !== sor.employee_id)
+                .map((e) => ({ szamlazo: `e${e.id}`, nev: e.full_name }))
+                .filter((e) => !javasoltKulcsok.has(e.szamlazo));
               return (
                 <tr key={sor.employee_id} className="border-b border-border last:border-0">
                   <td className="py-2.5 pr-6">
@@ -108,6 +123,15 @@ export function SzamlazoFelSzerkeszto({
                             {j.forras === "vallalkozas-tagsag" ? " – cége" : ""}
                           </option>
                         ))}
+                        {tovabbiEmberek.length > 0 && (
+                          <optgroup label="További munkatársak (nincsenek a stábban)">
+                            {tovabbiEmberek.map((e) => (
+                              <option key={e.szamlazo} value={e.szamlazo}>
+                                {e.nev}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                         {tovabbiCegek.length > 0 && (
                           <optgroup label="További cégek">
                             {tovabbiCegek.map((c) => (
