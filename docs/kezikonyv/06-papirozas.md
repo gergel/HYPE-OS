@@ -5,14 +5,14 @@ Ez a rendszer legsűrűbb doménje. Ha egyetlen dolgot jegyzel meg róla, ez leg
 > **A papír nem emberhez tartozik, hanem SZÁMLÁZÓ FÉLHEZ.**
 > Ha egy projekten több stábtag munkáját ugyanaz a fél számlázza (egy másik
 > ember vagy egy cég), akkor **egy** szerződés és **egy** TIG kell mindannyiukra.
+> A csoportosítás egy helyen dől el: `services/szamlazo.py` (`SzamlazoFel`,
+> `SzamlazoCsoport`).
 >
 > Ebből következik: ha a félnek **már van kiküldött TIG-je** ezen a projekten, a
 > rendszer nem kér tőle újat akkor sem, ha utólag kerül alá egy másik ember.
 > Ilyenkor a hiányzó tételt a meglévő TIG-en kell rendezni (állapot vissza
 > „Készítés alatt”-ra, tétel hozzáadása) - egy megbízott ne kapjon két
 > igazolást ugyanarról a projektről.
-> A csoportosítás egy helyen dől el: `services/szamlazo.py` (`SzamlazoFel`,
-> `SzamlazoCsoport`).
 
 ## Ami kimarad: a HYPE24-es sorozat
 
