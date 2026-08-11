@@ -3,32 +3,40 @@
 import { useState } from "react";
 import { ModalReteg } from "@/components/ModalReteg";
 
-/** Kihagyás INDOKLÁSSAL - felugró ablak, ami nem enged tovább üres mezővel.
+/** Felugró ablak, ami INDOKLÁST kér, és üres mezővel nem enged tovább.
  *
- * Egy hiányzó szerződés vagy TIG önmagában gyanús: a puszta "Kihagyva"
- * jelölésről fél év múlva senki nem tudja megmondani, hogy szándékos volt-e,
- * vagy elfelejtődött. Ezért a backend is kötelezővé teszi az indokot (lásd
- * routes/subcontractor_contracts.py skip_contract, performance_certificates.py
- * skip_tig) - ez az ablak csak azt biztosítja, hogy a felhasználó ne egy
- * hibaüzenetből tudja meg.
+ * Két helyen kell, ugyanazzal a logikával:
  *
- * A megerősítést szándékosan NEM a közös useConfirm() adja: az csak igen/nem
- * kérdést tud, itt viszont szöveget kell bekérni.
+ * - kihagyásnál (szerződés/TIG) - egy hiányzó papír önmagában gyanús: a puszta
+ *   "Kihagyva" jelölésről fél év múlva senki nem tudná megmondani, szándékos
+ *   volt-e vagy elfelejtődött;
+ * - a "projekt kiadásként elszámolva" jelölésnél - enélkül a jelölés csak
+ *   annyit mondana, hogy ettől az embertől nem kell papír, azt nem, hogy hol
+ *   keressük a pénzt.
  *
- * A hívó FELTÉTELESEN rendereli ({nyitva && <KihagyasDialog .../>}), nem egy
+ * Mindkettőnél a backend is megköveteli az indokot; ez az ablak csak azt
+ * biztosítja, hogy a felhasználó ne egy hibaüzenetből tudja meg.
+ *
+ * A hívó FELTÉTELESEN rendereli ({nyitva && <IndoklasDialog .../>}), nem egy
  * `nyitva` propot kap: így minden megnyitás friss példányt jelent, üres
  * mezővel. Egy belső "nyitáskor ürítsd ki" effekt ugyanezt érné el, csak
  * fölösleges újrarendereléssel. */
-export function KihagyasDialog({
+export function IndoklasDialog({
   cim,
   leiras,
+  mezoCimke = "Indoklás",
+  placeholder,
+  gombCimke,
   onMegse,
-  onKihagy,
+  onKesz,
 }: {
   cim: string;
   leiras: string;
+  mezoCimke?: string;
+  placeholder?: string;
+  gombCimke: string;
   onMegse: () => void;
-  onKihagy: (indok: string) => void;
+  onKesz: (indok: string) => void;
 }) {
   const [indok, setIndok] = useState("");
   const [hiba, setHiba] = useState(false);
@@ -39,7 +47,7 @@ export function KihagyasDialog({
       setHiba(true);
       return;
     }
-    onKihagy(tisztitott);
+    onKesz(tisztitott);
   }
 
   return (
@@ -53,7 +61,7 @@ export function KihagyasDialog({
         <h3 className="mb-2 text-[14px] font-medium text-text-primary">{cim}</h3>
         <p className="mb-4 text-[13px] text-text-secondary">{leiras}</p>
         <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-text-muted">
-          A kihagyás oka
+          {mezoCimke}
         </label>
         <textarea
           autoFocus
@@ -63,10 +71,10 @@ export function KihagyasDialog({
             setIndok(e.target.value);
             if (hiba) setHiba(false);
           }}
-          placeholder="Pl. a munkát a partnercég számlázza, nálunk nincs vele szerződés"
+          placeholder={placeholder}
           className="w-full rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[13px] text-text-primary outline-none focus:border-text-accent/40"
         />
-        {hiba && <p className="mt-1.5 text-[12px] text-text-danger">Az indoklás nem maradhat üresen.</p>}
+        {hiba && <p className="mt-1.5 text-[12px] text-text-danger">Ez a mező nem maradhat üresen.</p>}
         <div className="mt-5 flex justify-end gap-3">
           <button
             type="button"
@@ -80,7 +88,7 @@ export function KihagyasDialog({
             onClick={megerosit}
             className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-primary hover:bg-surface-3"
           >
-            Kihagyás
+            {gombCimke}
           </button>
         </div>
       </div>

@@ -56,6 +56,8 @@ class SzamlazoSor(BaseModel):
     #: Projekt kiadásként van elszámolva, nem résztvevőként - ilyenkor nem kell
     #: tőle sem szerződés, sem TIG (lásd models/project_szamlazo.py).
     kiadaskent_elszamolva: bool = False
+    #: Hova és miért került a kiadásba - a jelöléshez kötelező.
+    kiadas_megjegyzes: str | None = None
     megjegyzes: str | None = None
     javaslatok: list[JavaslatInfo] = []
 
@@ -86,6 +88,8 @@ class SzamlazoIn(BaseModel):
 
 class KiadaskentIn(BaseModel):
     kiadaskent_elszamolva: bool
+    #: Hova és miért került a kiadásba. Bekapcsoláskor kötelező.
+    kiadas_megjegyzes: str | None = None
 
 
 def _get_project_or_404(db: Session, project_id: int) -> Project:
@@ -173,6 +177,7 @@ def get_projekt_szamlazok(
                 szamlazo_nev=fel.nev,
                 felulirva=fel.kulcs != f"e{e.id}",
                 kiadaskent_elszamolva=bool(sor.kiadaskent_elszamolva) if sor else False,
+                kiadas_megjegyzes=sor.kiadas_megjegyzes if sor else None,
                 megjegyzes=sor.megjegyzes if sor else None,
                 javaslatok=_javaslatok(db, project, e),
             )
@@ -287,6 +292,11 @@ def set_kiadaskent(
     van - tőle nincs mit szerződni és igazolni, mert nem a munkájáért fizetünk
     külön. Stábtag attól még marad: kap diszpót, rajta van a projekten.
 
+    A jelöléshez KÖTELEZŐ megadni, hova és miért került a kiadásba: enélkül a
+    jelölés csak annyit mondana, hogy tőle nem kell papír, azt nem, hogy hol
+    keressük a pénzt - és pont ez a kérdés fél év múlva vagy egy könyvelői
+    egyeztetésnél.
+
     Utólag is állítható, mindkét irányba: sokszor csak a számla megérkezésekor
     derül ki, hogy valakinek a díja már egy másik tételben szerepel.
 
@@ -299,6 +309,12 @@ def set_kiadaskent(
         raise HTTPException(status_code=404, detail="A munkatárs nem található")
     if employee not in project.crew:
         raise HTTPException(status_code=400, detail="Ez a munkatárs nincs a projekt stábjában.")
+    indok = (payload.kiadas_megjegyzes or "").strip()
+    if payload.kiadaskent_elszamolva and not indok:
+        raise HTTPException(
+            status_code=400,
+            detail="Add meg, hova és miért került a kiadásba - enélkül nem derül ki, hol keressük a pénzt.",
+        )
     if payload.kiadaskent_elszamolva and _van_papir(db, project.id, employee.id):
         raise HTTPException(
             status_code=400,
@@ -312,6 +328,8 @@ def set_kiadaskent(
         sor = ProjectSzamlazo(project_id=project.id, employee_id=employee.id)
         db.add(sor)
     sor.kiadaskent_elszamolva = payload.kiadaskent_elszamolva
+    # A magyarázat a jelöléssel együtt él: kikapcsoláskor nincs mit magyarázni.
+    sor.kiadas_megjegyzes = indok if payload.kiadaskent_elszamolva else None
     # Ha a sor már semmit nem hordoz, ne maradjon üres nyoma.
     if (
         not sor.kiadaskent_elszamolva

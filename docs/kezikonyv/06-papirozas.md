@@ -89,6 +89,12 @@ Két, egymástól független ok van rá:
   átjelölhető mindkét irányba, mert sokszor csak a számla megérkezésekor derül
   ki, hogy valakinek a díja már egy másik tételben szerepel. Ha már készült róla
   TIG, előbb azt kell rendezni.
+
+  A jelöléshez **kötelező megadni, hova és miért került** a kiadásba
+  (`kiadas_megjegyzes`) - enélkül a jelölés csak annyit mondana, hogy tőle nem
+  kell papír, azt nem, hogy hol keressük a pénzt. A magyarázat külön mezőben él,
+  nem a számlázó-megjegyzésben: azt a számlázó fél beállítása írja, és egy
+  számlázó-módosítás elfújná.
 - **Belsős munkatárs** - havi bérezésű, nála nincs projektenkénti papír.
 
 ### A lezárás három módja

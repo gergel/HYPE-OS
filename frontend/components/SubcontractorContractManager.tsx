@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
-import { KihagyasDialog } from "@/components/KihagyasDialog";
+import { IndoklasDialog } from "@/components/IndoklasDialog";
 import { PapirTetelValaszto, tetelKulcs, type PapirTetel } from "@/components/PapirTetelValaszto";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingSubcontractorEmployee } from "@/lib/api";
@@ -520,11 +520,14 @@ export function SubcontractorContractManager({
         </div>
       )}
       {kihagyasNyitva && (
-      <KihagyasDialog
+      <IndoklasDialog
         cim={`${selectedEmployee?.full_name ?? "A megbízott"} kihagyása`}
         leiras="A projekt szerződés nélkül zárul vele. Írd le, miért - fél év múlva ebből fog kiderülni, hogy szándékos volt."
         onMegse={() => setKihagyasNyitva(false)}
-        onKihagy={handleSkip}
+        mezoCimke="A kihagyás oka"
+        placeholder="Pl. a munkát a partnercég számlázza, nálunk nincs vele szerződés"
+        gombCimke="Kihagyás"
+        onKesz={handleSkip}
       />
       )}
     </div>

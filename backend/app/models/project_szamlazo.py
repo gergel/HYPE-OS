@@ -25,7 +25,7 @@ mentése (PATCH crew_employee_ids) a teljes listát cseréli - egy társított
 oszlopot minden egyes stáb-módosítás kitörölne. Külön táblában a beállítás
 túléli a stáblista szerkesztését."""
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -62,6 +62,15 @@ class ProjectSzamlazo(TimestampMixin, Base):
     #: Utólag is állítható: sokszor csak a számla megérkezésekor derül ki, hogy
     #: valakinek a díja már egy másik tételben szerepel.
     kiadaskent_elszamolva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: HOVA és MIÉRT került a kiadásba - a jelöléskor kötelező megadni.
+    #:
+    #: Enélkül a jelölés csak annyit mondana, hogy "ettől az embertől nem kell
+    #: papír", de azt nem, hogy hol keresd a pénzt. Fél év múlva - vagy egy
+    #: könyvelői kérdésnél - pont ez a kérdés: melyik tételben van benne.
+    #:
+    #: Külön mező a `megjegyzes`-től: azt a számlázó fél beállítása írja, és egy
+    #: számlázó-módosítás elfújná ezt a magyarázatot.
+    kiadas_megjegyzes: Mapped[str | None] = mapped_column(Text)
 
     megjegyzes: Mapped[str | None] = mapped_column(String(255))
 

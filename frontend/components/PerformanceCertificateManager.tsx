@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
-import { KihagyasDialog } from "@/components/KihagyasDialog";
+import { IndoklasDialog } from "@/components/IndoklasDialog";
 import { PapirTetelValaszto, tetelKulcs } from "@/components/PapirTetelValaszto";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingTigEmployee, TigTetel } from "@/lib/api";
@@ -448,11 +448,14 @@ export function PerformanceCertificateManager({
         </div>
       )}
       {kihagyasNyitva && (
-      <KihagyasDialog
+      <IndoklasDialog
         cim={`${selectedEmployee?.full_name ?? "A megbízott"} kihagyása`}
         leiras="A projekt teljesítési igazolás nélkül zárul vele. Írd le, miért - egy hiányzó TIG-ről később ebből derül ki, hogy szándékos volt."
         onMegse={() => setKihagyasNyitva(false)}
-        onKihagy={handleSkip}
+        mezoCimke="A kihagyás oka"
+        placeholder="Pl. a munkát a partnercég számlázza, nálunk nincs vele szerződés"
+        gombCimke="Kihagyás"
+        onKesz={handleSkip}
       />
       )}
     </div>

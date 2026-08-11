@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { KeresosSelect, type KeresosOpcio } from "@/components/KeresosSelect";
+import { IndoklasDialog } from "@/components/IndoklasDialog";
 import type { ProjektSzamlazoNezet } from "@/lib/api";
 
 /** Ki számláz kinek a munkájáért ezen a projekten?
@@ -33,6 +34,8 @@ export function SzamlazoFelSzerkeszto({
   const router = useRouter();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
+  // Melyik sornál kérjük épp a "hova és miért került a kiadásba" magyarázatot.
+  const [kiadasIndokSor, setKiadasIndokSor] = useState<ProjektSzamlazoNezet["sorok"][number] | null>(null);
 
   if (nezet.sorok.length === 0) {
     return (
@@ -44,13 +47,14 @@ export function SzamlazoFelSzerkeszto({
 
   /** "Projekt kiadásként elszámolva" - a stábtag marad, csak papír nem kell
    * tőle: a díja egy másik tételben (pl. a technika bérleti árában) szerepel. */
-  async function kiadaskentAllit(employeeId: number, ertek: boolean) {
+  async function kiadaskentAllit(employeeId: number, ertek: boolean, megjegyzes?: string) {
+    setKiadasIndokSor(null);
     setBusyId(employeeId);
     setHiba(null);
     try {
       const res = await authFetch(`/api/v1/projekt-szamlazok/${nezet.project_id}/${employeeId}/kiadaskent`, {
         method: "PUT",
-        body: JSON.stringify({ kiadaskent_elszamolva: ertek }),
+        body: JSON.stringify({ kiadaskent_elszamolva: ertek, kiadas_megjegyzes: megjegyzes ?? null }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -182,11 +186,21 @@ export function SzamlazoFelSzerkeszto({
                         type="checkbox"
                         checked={sor.kiadaskent_elszamolva}
                         disabled={!canEdit || busyId === sor.employee_id}
-                        onChange={(e) => kiadaskentAllit(sor.employee_id, e.target.checked)}
+                        // Bekapcsoláskor előbb a magyarázat kell (hova és miért
+                        // került a kiadásba); kikapcsoláskor nincs mit indokolni.
+                        onChange={(e) =>
+                          e.target.checked ? setKiadasIndokSor(sor) : kiadaskentAllit(sor.employee_id, false)
+                        }
                         className="h-3.5 w-3.5 accent-[var(--text-accent)] disabled:opacity-50"
                       />
                       {sor.kiadaskent_elszamolva ? "Kiadásban elszámolva" : "Nem"}
                     </label>
+                    {/* A magyarázat ott van a jelölés alatt: enélkül a sor csak
+                        annyit mondana, hogy tőle nem kell papír - azt nem, hogy
+                        hol keressük a pénzt. */}
+                    {sor.kiadaskent_elszamolva && sor.kiadas_megjegyzes && (
+                      <p className="mt-1 max-w-[20rem] text-[11.5px] text-text-muted">{sor.kiadas_megjegyzes}</p>
+                    )}
                   </td>
                 </tr>
               );
@@ -194,6 +208,17 @@ export function SzamlazoFelSzerkeszto({
           </tbody>
         </table>
       </div>
+      {kiadasIndokSor && (
+        <IndoklasDialog
+          cim={`${kiadasIndokSor.full_name} a projekt kiadásba kerül`}
+          leiras="Tőle nem kérünk sem szerződést, sem TIG-et. Írd le, hova és miért került a költsége - ebből fog kiderülni, hol keressük a pénzt."
+          mezoCimke="Hova és miért került"
+          placeholder="Pl. a technika bérleti díjában van benne, a Média Kft. számláján"
+          gombCimke="Jelölés"
+          onMegse={() => setKiadasIndokSor(null)}
+          onKesz={(indok) => kiadaskentAllit(kiadasIndokSor.employee_id, true, indok)}
+        />
+      )}
     </div>
   );
 }
