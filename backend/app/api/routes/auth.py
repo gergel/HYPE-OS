@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import create_access_token, get_current_user, verify_password
 from app.models.employee import Employee
-from app.schemas.auth import Token, UserOut
+from app.schemas.auth import TEMAK, TemaIn, Token, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -54,4 +54,31 @@ def refresh(current_user: Employee = Depends(get_current_user)):
 
 @router.get("/me", response_model=UserOut)
 def me(current_user: Employee = Depends(get_current_user)):
+    return current_user
+
+
+@router.put("/me/tema", response_model=UserOut)
+def set_tema(
+    payload: TemaIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """A felület témájának (világos/sötét) mentése a BEJELENTKEZETT emberhez.
+
+    Önkiszolgáló, mint a Dashboard widget-beállítás: tisztán megjelenítési
+    preferencia, mindenki csak a sajátját írja (a rekordot a tokenből kapjuk,
+    nem az útvonalból), ezért nincs hozzá oldal-jogosultság.
+
+    Azért a szerveren tároljuk és nem a böngészőben, mert a választás az
+    EMBERHEZ tartozik: aki otthon világosra állítja, az az irodai gépen is
+    világosat vár, egy közös gépen pedig a következő belépő ne örökölje az
+    előző ízlését."""
+    if payload.tema not in TEMAK:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ismeretlen téma. Választható: {', '.join(TEMAK)}",
+        )
+    current_user.tema = payload.tema
+    db.commit()
+    db.refresh(current_user)
     return current_user

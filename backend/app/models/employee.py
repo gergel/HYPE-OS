@@ -105,6 +105,15 @@ class Employee(TimestampMixin, Base):
     hashed_password: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    #: A felület témája ehhez az emberhez: "sotet" vagy "vilagos". NULL = még
+    #: nem választott, olyankor a sötét alap érvényes.
+    #:
+    #: Miért az emberen és nem a böngészőben? Mert "az adott ember hogy szereti
+    #: használni" - aki otthon a laptopján világosra állítja, az az irodai gépen
+    #: is világosat vár. A böngészőben tárolt beállítás gépenként újrakezdődne,
+    #: és egy közös gépen a következő belépő az előző ízlését örökölné.
+    tema: Mapped[str | None] = mapped_column(String(10), comment="Felület témája: sotet / vilagos")
+
     # --- a 'Külsős és belsős' Notion tábla maradék mezői ---
     technikai_ismeret: Mapped[str | None] = mapped_column(Text, comment="TECHNIKAI ISMERET")
     vallalkozas_kepviselo: Mapped[str | None] = mapped_column(String(255), comment="Vállalkozás képviselő")

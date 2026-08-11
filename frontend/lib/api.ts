@@ -1145,6 +1145,9 @@ export type CurrentUser = {
   role: string;
   tovabbi_szerepkorok?: string[] | null;
   is_active: boolean;
+  /** A felület témája ehhez az emberhez ("sotet" / "vilagos"). null = még nem
+   * választott, olyankor a sötét alap érvényes (lásd lib/tema.ts). */
+  tema?: string | null;
 };
 
 /** A bejelentkezett felhasználó saját adatai (TopBar üdvözlés/avatar,

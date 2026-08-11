@@ -89,6 +89,41 @@ billentyűzetes választást is tud.
 Rövid listánál sem térünk el ettől: két különböző viselkedésű legördülő egy
 felületen zavaróbb, mint egy fölösleges keresőmező három elem fölött.
 
+## Világos és sötét nézet
+
+A felület minden színe **token** (`frontend/app/globals.css`) - a komponensek
+sosem írnak be nyers hex-kódot. Ezért a világos nézet nem külön stíluslap: egy
+`:root[data-theme="light"]` blokk írja felül ugyanazokat a tokeneket, a
+SZEREPEK megtartásával (a `surface-1` ott is a váz - oldalsáv, fejléc -, a
+`surface-2` a kártyák lapja). Új komponensnél tehát nincs teendő, ha tokeneket
+használ.
+
+Az állapotszínek nem ugyanazok az árnyalatok a két nézetben: a sötét nézet halk
+tónusai fehér papíron olvashatatlanok lennének, ezért világosban sötétebb,
+telítettebb párjuk áll. Ami nem tokenből él (görgetősáv, kijelölés,
+`.btn-primary` hover), annak külön `[data-theme="light"]` szabálya van -
+ezekből összesen hat darab van, és a `globals.css`-en kívül nincs több.
+
+**A választás emberhez tartozik, nem géphez.** A beállítás a munkatárs
+rekordján él (`employees.tema`, `PUT /api/v1/auth/me/tema`), tehát aki otthon
+világosra állítja, az az irodai gépen is világosat kap - és egy közös gépen a
+következő belépő nem örökli az előző ízlését. Kapcsoló: a fejlécben
+(`components/TemaKapcsolo.tsx`), az érték a `TopBar` `getCurrentUser()`
+hívásából jön.
+
+Két apróság, ami nem magától értetődő (`frontend/lib/tema.ts`):
+
+- **Süti + blokkoló inline script a `<head>`-ben.** A szerver a legelső
+  festéskor még nem tudja, ki néz oda, a `data-theme`-nek viszont ott kell
+  lennie, mielőtt bármi kirajzolódik - különben minden oldalbetöltés sötéten
+  villanna fel. A süti csak GYORSÍTÓTÁR: ütközéskor a szerverről jövő érték
+  nyer, azt a kapcsoló csendben javítja. Azért nem a gyökér-elrendezés olvassa
+  a sütit, mert a `cookies()` ott minden oldalt kérésenként renderelővé tenne -
+  a bejelentkezés és az adatvédelmi oldal ma statikus.
+- **Nincs `prefers-color-scheme`-igazodás.** A HYPE OS sötét alapra tervezett
+  felület; akinek az operációs rendszere világos, attól még nem biztos, hogy
+  ezt is világosan akarja használni. Aki igen, egy kattintással megkapja.
+
 ## Konvenciók
 
 - **Magyar domén-nyelv a kódban is.** Ahol a fogalomnak van bevett magyar neve

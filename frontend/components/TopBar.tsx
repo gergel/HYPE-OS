@@ -1,6 +1,7 @@
 import { getCurrentUser, getNotifications } from "@/lib/api";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { NotificationBell } from "@/components/NotificationBell";
+import { TemaKapcsolo } from "@/components/TemaKapcsolo";
 import { UserMenu } from "@/components/UserMenu";
 
 const WEEKDAYS = ["vasárnap", "hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat"];
@@ -63,6 +64,9 @@ export async function TopBar() {
       </div>
       <div className="flex items-center gap-2.5">
         <GlobalSearch />
+        {/* A mentett beállítás a SZERVERRŐL jön (employees.tema) - a süti
+            csak az első festés gyorsítótára, lásd lib/tema.ts. */}
+        <TemaKapcsolo kezdeti={user?.tema ?? null} />
         <NotificationBell initial={notifications} />
         <UserMenu name={name || "Ismeretlen"} email={user?.email ?? null} initials={initials} />
       </div>

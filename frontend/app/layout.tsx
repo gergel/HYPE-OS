@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
+import { TEMA_INIT_SCRIPT } from "@/lib/tema";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -46,6 +47,24 @@ export default function RootLayout({
       lang="hu"
       className={`${geistSans.variable} ${geistMono.variable} ${portalDisplay.variable} h-full antialiased`}
     >
+      <head>
+        {/* A téma a bejelentkezett ember beállítása (backend `employees.tema`),
+            de a legelső festésnek nincs ideje megkérdezni a szervert - ezért a
+            sütiből (lib/tema.ts) állítjuk be, MÉG a body kirajzolása előtt.
+            Enélkül minden oldalbetöltés sötéten villanna fel, mielőtt
+            világosra vált.
+
+            Miért blokkoló inline script, és nem szerveroldali attribútum? Mert
+            a `cookies()` a gyökér-elrendezésben MINDEN oldalt kérésenként
+            renderelővé tenne - a bejelentkezés és az adatvédelmi oldal ma
+            statikus, és semmi okuk nem lenne dinamikussá válni egy szín
+            miatt. A React nem kezeli ezt az attribútumot (nincs a JSX-ben),
+            így hidratálási eltérést sem okoz.
+
+            Az ütközést (más gép, más böngésző, ugyanazon a gépen másik ember)
+            a fejlécben ülő kapcsoló javítja - lásd TemaKapcsolo.tsx. */}
+        <script dangerouslySetInnerHTML={{ __html: TEMA_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full bg-background text-text-primary">{children}</body>
     </html>
   );

@@ -118,7 +118,10 @@ export function Sidebar({
               stroke="currentColor"
               strokeWidth="1.5"
               strokeLinejoin="round"
-              fill="rgba(255,255,255,0.05)"
+              // currentColor, nem fix fehér: világos nézetben a fehér kitöltés
+              // eltűnne a világos lapkán (lásd globals.css data-theme="light").
+              fill="currentColor"
+              fillOpacity={0.08}
             />
             <path d="M3 7l9 5 9-5M12 12v10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
           </svg>

@@ -90,6 +90,65 @@
   --dur-slow: 250ms;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   VILÁGOS NÉZET
+
+   Ugyanaz az anyag, másik megvilágításban: nem "kifordított sötét", hanem
+   meleg papír és matt alumínium. A SZEREPEK viszont pontosan ugyanazok, ezért
+   a surface-1 itt is SÖTÉTEBB a tartalomnál (a váz: oldalsáv, fejléc), a
+   surface-2 pedig a kártyák világos lapja - így egyetlen komponenst sem kell
+   átírni, elég a tokeneket felülírni.
+
+   Nem `prefers-color-scheme`: a rendszer szándékosan sötét alapú, és aki nem
+   választ, annak nem akarjuk átrendezni a felületét az operációs rendszere
+   beállítása miatt. A választás EMBERHEZ tartozik, nem géphez - a
+   `data-theme` értékét a bejelentkezett munkatárs mentett beállítása adja
+   (lásd components/TemaKapcsolo.tsx).
+
+   Az állapotszínek nem ugyanazok az árnyalatok: a sötét nézet halk tónusai
+   fehér papíron olvashatatlanok lennének, ezért itt sötétebb, telítettebb
+   párjuk áll - a SZEREPÜK (siker/figyelmeztetés/hiba) változatlan.
+   ───────────────────────────────────────────────────────────────────────── */
+:root[data-theme="light"] {
+  --background: #f4f4f2;
+  --foreground: #16181c;
+
+  --surface-1: #eaeae6;
+  --surface-2: #ffffff;
+  --surface-3: #f1f1ed;
+  --surface-4: #e4e4df;
+  --border: rgba(16, 18, 22, 0.1);
+  --border-strong: rgba(16, 18, 22, 0.18);
+
+  --text-primary: #16181c;
+  --text-secondary: #55595f;
+  --text-muted: #74787f;
+
+  --text-accent: #5c5646;
+  --bg-accent: rgba(92, 86, 70, 0.1);
+  --accent-solid: #5c5646;
+  --accent-solid-hover: #423d31;
+  --accent-gradient: #e4e4df;
+
+  --text-success: #3f6446;
+  --bg-success: rgba(63, 100, 70, 0.12);
+  --text-warning: #7a5d20;
+  --bg-warning: rgba(122, 93, 32, 0.13);
+  --text-danger: #8f3b3b;
+  --bg-danger: rgba(143, 59, 59, 0.12);
+
+  --text-blue: #45566d;
+  --bg-blue: rgba(69, 86, 109, 0.11);
+  --text-teal: #345f5a;
+  --bg-teal: rgba(52, 95, 90, 0.11);
+  --text-orange: #7a5330;
+  --bg-orange: rgba(122, 83, 48, 0.11);
+  --text-pink: #764c58;
+  --bg-pink: rgba(118, 76, 88, 0.11);
+  --text-yellow: #6d5c1f;
+  --bg-yellow: rgba(109, 92, 31, 0.11);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -156,6 +215,9 @@ body {
   ::selection {
     background: rgba(212, 208, 200, 0.18);
   }
+  :root[data-theme="light"] ::selection {
+    background: rgba(92, 86, 70, 0.2);
+  }
 
   /* Diszkrét görgetősáv - a natív, világos sáv kilógna a sötét felületből. */
   * {
@@ -177,6 +239,19 @@ body {
   }
   *::-webkit-scrollbar-thumb:hover {
     background-color: rgba(255, 255, 255, 0.18);
+  }
+
+  /* A görgetősáv az egyetlen elem, ami nem tokenből él (a natív vezérlő nem
+     ismeri a változóinkat ott, ahol színt vár) - világos nézetben ezért a
+     fehér helyett sötét tintát kap, különben eltűnne a papírfelületen. */
+  :root[data-theme="light"] * {
+    scrollbar-color: rgba(16, 18, 22, 0.2) transparent;
+  }
+  :root[data-theme="light"] *::-webkit-scrollbar-thumb {
+    background-color: rgba(16, 18, 22, 0.16);
+  }
+  :root[data-theme="light"] *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(16, 18, 22, 0.26);
   }
 }
 
@@ -265,6 +340,15 @@ body {
   .btn-primary:hover:not(:disabled) {
     background: #22262c;
     border-color: rgba(255, 255, 255, 0.16);
+  }
+  /* Világos nézetben a hover nem világosodik, hanem SÖTÉTEDIK - a "megnyomva"
+     érzet ott ez, és a titán-hex fehér papíron amúgy is fekete folt lenne. */
+  :root[data-theme="light"] .btn-primary {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+  :root[data-theme="light"] .btn-primary:hover:not(:disabled) {
+    background: #d9d9d3;
+    border-color: rgba(16, 18, 22, 0.24);
   }
   .btn-ghost {
     background: transparent;
