@@ -26,7 +26,7 @@ from app.models.performance_certificate import (
     PerformanceCertificateTetel,
 )
 from app.models.project_code import ProjectCode
-from app.services import document_storage
+from app.services import document_storage, kiadas_kapcsolatok
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
 from app.services.portal_storage import R2NotConfiguredError
 from app.schemas.finance import (
@@ -41,6 +41,19 @@ from app.schemas.finance import (
     RevenueUpdate,
 )
 
+
+def _kiadas_torles_elott(expense: Expense, db: Session) -> None:
+    """Egy kiadás akkor is törölhető legyen, ha van hozzá kapcsolódó rekord.
+
+    A TIG "kifizetve" jelölése hozza létre ezt a sort, tehát a törlésének
+    éppen az a jelentése, hogy MÉGSEM fizettük ki - ilyenkor az érintett papír
+    visszakerül "nincs kifizetve" állapotba, és újra teendő lesz. Enélkül a
+    tévesen felvezetett kifizetés visszavonhatatlan volt: a kiadást a TIG
+    hivatkozása, a TIG-et pedig a kifizetettsége védte
+    (lásd services/kiadas_kapcsolatok.py)."""
+    kiadas_kapcsolatok.bontsd_le_a_kapcsolatokat(expense, db)
+
+
 expenses_router = build_crud_router(
     model=Expense,
     create_schema=ExpenseCreate,
@@ -49,6 +62,7 @@ expenses_router = build_crud_router(
     prefix="/expenses",
     tags=["finance"],
     page="/penzugyek",
+    before_delete=_kiadas_torles_elott,
 )
 
 revenues_router = build_crud_router(

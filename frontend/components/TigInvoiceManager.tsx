@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { TigAllapotSelect } from "@/components/TigAllapotSelect";
+import { KifizetesJeloloDialog } from "@/components/KifizetesJeloloDialog";
 import type { PerformanceCertificate } from "@/lib/api";
 
 /** A TIG SZÁMLÁZÓ FELÉNEK kulcsa ("e12" ember, "v3" cég) - ez megy az
@@ -51,6 +52,9 @@ export function TigInvoiceManager({
   const router = useRouter();
   const confirm = useConfirm();
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Melyik TIG-et jelöljük épp kifizetettnek - a "kerüljön-e Kiadás sorba"
+  // döntés miatt nem elég egy igen/nem megerősítés.
+  const [kifizetendo, setKifizetendo] = useState<{ szamlazo: string; nev: string; osszeg: string | null } | null>(null);
 
   const ready = certificates.filter((c) => c.allapot === readyStatus || c.allapot === "Kihagyva");
 
@@ -117,11 +121,14 @@ export function TigInvoiceManager({
     }
   }
 
-  async function markPaid(szamlazo: string) {
-    if (!(await confirm("Kifizetettként jelölöd a számlát? Ez létrehoz (vagy frissít) egy Kiadás sort a Pénzügyben."))) return;
+  async function markPaid(szamlazo: string, kiadasbaKerul: boolean) {
+    setKifizetendo(null);
     setBusyId(szamlazo);
     try {
-      const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/szamla-kifizetve`, { method: "POST" });
+      const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/szamla-kifizetve`, {
+        method: "POST",
+        body: JSON.stringify({ kiadasba_kerul: kiadasbaKerul }),
+      });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen: ${detail?.detail ?? res.status}`);
@@ -252,7 +259,14 @@ export function TigInvoiceManager({
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => markPaid(szamlazo)}
+                        onClick={() =>
+                          setKifizetendo({
+                            szamlazo,
+                            nev,
+                            osszeg:
+                              c.brutto_osszeg != null ? `${c.brutto_osszeg.toLocaleString("hu-HU")} Ft bruttó` : null,
+                          })
+                        }
                         className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
                       >
                         Kifizetve jelölés
@@ -262,10 +276,12 @@ export function TigInvoiceManager({
                     )}
                   </td>
                   <td className="py-3 text-right">
-                    {/* A kifizetett TIG-hez Kiadás sor tartozik a Pénzügyben -
-                        azt a backend nem is engedi törölni (lásd
-                        performance_certificates.py delete_certificate). */}
-                    {canEdit && !c.szamla_kifizetve && (
+                    {/* Amihez KIADÁS SOR tartozik a Pénzügyben, azt a backend
+                        nem engedi törölni: előbb ott kell törölni a kiadást
+                        (az visszaállítja ezt a TIG-et "nincs kifizetve"-be,
+                        lásd services/kiadas_kapcsolatok.py). A Kiadás sor
+                        nélküli "kifizetve" jelölés viszont nem akadály. */}
+                    {canEdit && c.expense_id == null && (
                       <button
                         type="button"
                         disabled={busy}
@@ -283,6 +299,16 @@ export function TigInvoiceManager({
           </tbody>
         </table>
       </div>
+
+      {/* Feltételes renderelés, hogy minden megnyitás friss példány legyen. */}
+      {kifizetendo && (
+        <KifizetesJeloloDialog
+          nev={kifizetendo.nev}
+          osszeg={kifizetendo.osszeg}
+          onMegse={() => setKifizetendo(null)}
+          onJelol={(kiadasbaKerul) => markPaid(kifizetendo.szamlazo, kiadasbaKerul)}
+        />
+      )}
     </div>
   );
 }

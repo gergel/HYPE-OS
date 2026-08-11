@@ -20,6 +20,27 @@ tételek nem külön világ - amit a papírozás oldalon rögzítenek, az itt l�
 Csatolmányok és számlaképek: `services/document_storage.py`; a kiadások mellé
 feltöltött fájlok tömegesen letölthetők (ZIP-be csomagolva, `routes/finance.py`).
 
+### A kifizetés és a Kiadás sor két külön dolog
+
+Egy TIG-et kifizetettként jelölni alapból **Kiadás sort is létrehoz** - a kettő
+általában együtt jár. De nem mindig: van olyan kifizetés, ami **máshol van
+elszámolva** (a bankban vagy a könyvelőnél már szerepel), és ott egy itteni
+Kiadás sor csak megkétszerezné az összeget a pénzügyi összesítőkben. Ezért a
+"Kifizetve jelölés" ablakában kikapcsolható, hogy bekerüljön-e a Kiadásokba
+(`schemas/finance.KifizetesIn` `kiadasba_kerul`; a mező elhagyása = bekerül,
+tehát a régi hívások viselkedése változatlan). A papír állapota így is
+"kifizetve" lesz, tehát nem marad teendőként a havi listán.
+
+**Visszafelé is jár az út:** egy Kiadás sor akkor is törölhető, ha TIG (vagy
+havi tétel, KP-forgalom) hivatkozik rá. A törlés leoldja a hivatkozásokat, és az
+érintett TIG-et visszadobja "nincs kifizetve" állapotba - a kapcsolódó rekordok
+maguk megmaradnak, csak újra teendővé válnak
+(`services/kiadas_kapcsolatok.py`). Ez szándékosan ilyen irányú: a "ki van
+fizetve" állítás bizonyítéka éppen az a Kiadás sor volt, tehát ha az nincs
+többé, a papír állapota sem maradhat. Enélkül egy tévesen felvezetett kifizetés
+visszavonhatatlan volt: a kiadást a TIG hivatkozása védte, a TIG-et pedig a
+kifizetettsége.
+
 Frontend: `components/finance/`, `RevenueInvoiceStatus.tsx`,
 `TigInvoiceManager.tsx`, `TigAllapotSelect.tsx`.
 
@@ -38,6 +59,13 @@ szerződésre és TIG-re - ha bármelyik hiányzik, a kiküldött dokumentumon �
 hely marad, amit utólag csak új papírral lehet javítani. Ezért a felvitelnél
 kérjük be, nem a kiküldés pillanatában. Szerkesztéssel sem lehet kiüríteni őket
 (`routes/vallalkozasok.py` `KOTELEZO_CEG_MEZOK`).
+
+A már felvitt cég adatai a cég panelján **szerkeszthetők** (a hat kötelező mező
++ e-mail, `PATCH /api/v1/vallalkozasok/{id}`, csak a ténylegesen megváltozott
+mezőkkel). Ez azért fontos, mert az elgépelt adószám vagy a közben megváltozott
+székhely különben csak új cég felvételével lenne javítható - és akkor a régi
+papírok gazdája kettévált volna. A **már kiküldött papírokat a szerkesztés nem
+írja át**: azok a saját másolatukban őrzik az akkori adatokat.
 
 Két szabály, ami itt dől el:
 

@@ -13,6 +13,8 @@ import { huEvHonap, tigHonapTeljesitesbol } from "@/lib/huDate";
 import { formatHuf } from "@/lib/penz";
 import type { BelsosTigMonthEmployee } from "@/lib/api";
 import { KeresosSelect } from "@/components/KeresosSelect";
+import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
+import { KifizetesJeloloDialog } from "@/components/KifizetesJeloloDialog";
 
 type FormState = {
   /** Melyik saját cégéről számlázza ezt a hónapot. Üres = a saját nevében. */
@@ -112,9 +114,17 @@ export function BelsosTigManager({
   const [fizetesForm, setFizetesForm] = useState<FizetesForm | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [allapotSzuro, setAllapotSzuro] = useState(MIND);
+  // Kiküldés előtti áttekintő: a TIG generálása egy Google Docs sablon
+  // kitöltése + azonnali e-mail, tehát ami egyszer kiment, azt már csak új
+  // papírral lehet javítani (lásd KuldesEllenorzo).
+  const [ellenorzoNyitva, setEllenorzoNyitva] = useState(false);
+  // Kinek a hónapját jelöljük épp kifizetettnek - a "kerüljön-e Kiadás sorba"
+  // döntés miatt nem elég egy igen/nem megerősítés.
+  const [kifizetendoId, setKifizetendoId] = useState<number | null>(null);
 
   const openEmployee = employees.find((e) => e.id === openId) ?? null;
   const fizetesEmployee = employees.find((e) => e.id === fizetesId) ?? null;
+  const kifizetendoEmployee = employees.find((e) => e.id === kifizetendoId) ?? null;
   const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
   // A teljesítés dátuma dönti el, melyik hónapé a TIG (mindig az azt megelőző
   // hónap) - ha az admin olyat ír be, ami másik hónapra mutat, ezt előre
@@ -130,6 +140,35 @@ export function BelsosTigManager({
   function closeForm() {
     setOpenId(null);
     setForm(null);
+    setEllenorzoNyitva(false);
+  }
+
+  /** PONTOSAN azok a mezők, amiket a backend a sablonba behelyettesít (lásd
+   * internal_performance_certificates.generate_and_send `fields`) - ha itt
+   * bármi üresen marad, ott is üres hely lesz a kiküldött PDF-en.
+   *
+   * A cég adatai a választott cégről jönnek, saját névben számlázásnál pedig a
+   * munkatárs adatlapjáról - ugyanaz a "cég vagy ember" elágazás, mint a
+   * backendben. */
+  function ellenorzoSorok(): EllenorzoSor[] {
+    if (!openEmployee || !form) return [];
+    const ceg = openEmployee.cegek.find((c) => String(c.vallalkozas_id) === form.vallalkozas_id) ?? null;
+    const honapCel = form.teljesites_datuma ? tigHonapTeljesitesbol(form.teljesites_datuma) : null;
+    return [
+      { cimke: "Név a papíron", ertek: ceg ? ceg.nev : openEmployee.full_name },
+      { cimke: "Székhely", ertek: ceg ? ceg.szekhely : openEmployee.szekhely },
+      { cimke: "Adószám", ertek: ceg ? ceg.adoszam : openEmployee.adoszam },
+      { cimke: "Megbízás tárgya", ertek: form.megbizas_targya },
+      { cimke: "Melyik hónapról szól", ertek: honapCel ? huEvHonap(honapCel.ev, honapCel.honap) : null },
+      {
+        cimke: "Nettó összeg",
+        ertek: form.netto_osszeg.trim() ? `${formatHuf(Number(form.netto_osszeg))}${form.plusz_afa ? " + ÁFA" : ""}` : null,
+      },
+      { cimke: "Bruttó összeg", ertek: bruttoOsszeg != null ? formatHuf(bruttoOsszeg) : null },
+      // Üresen a backend a kiküldés napját írja rá - itt is azt mutatjuk, hogy
+      // ne "hiányzó adatnak" látszódjon, ami valójában automatikus.
+      { cimke: "Keltezés", ertek: form.keltezes || new Date().toISOString().slice(0, 10) },
+    ];
   }
 
   /** A fizetés-űrlap a hónap MEGLÉVŐ nettó bérével nyílik: az a hónap alapbér
@@ -235,12 +274,21 @@ export function BelsosTigManager({
     }
   }
 
-  async function handleKuldes() {
+  /** A "Generálás és kiküldés" gomb: előbb az áttekintő nyílik meg, a küldés
+   * csak a megerősítés után indul. Az összeg-ellenőrzés itt fut, hogy egy
+   * biztosan elhasaló küldéshez ne kelljen végignézni az adatokat. */
+  function kuldesInditasa() {
     if (!openEmployee || !form) return;
     if (!form.netto_osszeg.trim() || Number.isNaN(Number(form.netto_osszeg)) || Number(form.netto_osszeg) <= 0) {
       alert("Add meg a nettó összeget.");
       return;
     }
+    setEllenorzoNyitva(true);
+  }
+
+  async function handleKuldes() {
+    if (!openEmployee || !form) return;
+    setEllenorzoNyitva(false);
     if (!openEmployee.email) {
       alert(`${openEmployee.full_name} nem kapott email címet, így nem lehet kiküldeni a TIG-et.`);
       return;
@@ -329,11 +377,14 @@ export function BelsosTigManager({
     }
   }
 
-  async function markKifizetve(employee: BelsosTigMonthEmployee) {
-    if (!(await confirm("Kifizetettként jelölöd a számlát? Ez létrehoz (vagy frissít) egy Kiadás sort a Pénzügyben."))) return;
+  async function markKifizetve(employee: BelsosTigMonthEmployee, kiadasbaKerul: boolean) {
+    setKifizetendoId(null);
     setBusyId(employee.id);
     try {
-      const res = await authFetch(`/api/v1/belsos-tig/${employee.id}/${ev}/${honap}/szamla-kifizetve`, { method: "POST" });
+      const res = await authFetch(`/api/v1/belsos-tig/${employee.id}/${ev}/${honap}/szamla-kifizetve`, {
+        method: "POST",
+        body: JSON.stringify({ kiadasba_kerul: kiadasbaKerul }),
+      });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen: ${detail?.detail ?? res.status}`);
@@ -525,7 +576,7 @@ export function BelsosTigManager({
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => markKifizetve(employee)}
+                      onClick={() => setKifizetendoId(employee.id)}
                       className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
                     >
                       Kifizetve jelölés
@@ -810,7 +861,7 @@ export function BelsosTigManager({
               />
               <button
                 type="button"
-                onClick={handleKuldes}
+                onClick={kuldesInditasa}
                 disabled={!!busyId}
                 title={openEmployee.email ?? "Nincs email cím"}
                 className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
@@ -820,6 +871,32 @@ export function BelsosTigManager({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Feltételes renderelés, hogy minden megnyitás friss példány legyen. */}
+      {kifizetendoEmployee && (
+        <KifizetesJeloloDialog
+          nev={`${kifizetendoEmployee.full_name} (${huEvHonap(ev, honap)})`}
+          osszeg={
+            kifizetendoEmployee.record?.brutto_osszeg != null
+              ? `${kifizetendoEmployee.record.brutto_osszeg.toLocaleString("hu-HU")} Ft bruttó`
+              : null
+          }
+          onMegse={() => setKifizetendoId(null)}
+          onJelol={(kiadasbaKerul) => markKifizetve(kifizetendoEmployee, kiadasbaKerul)}
+        />
+      )}
+
+      {ellenorzoNyitva && openEmployee && form && (
+        <KuldesEllenorzo
+          cim={`Belsős TIG kiküldése – ${openEmployee.full_name}`}
+          cimzett={openEmployee.email}
+          bevezeto="Ezekkel az adatokkal készül el a PDF, és megy ki azonnal e-mailben. Kiküldés után csak új papírral javítható."
+          sorok={ellenorzoSorok()}
+          gombCimke="Generálás és kiküldés"
+          onMegse={() => setEllenorzoNyitva(false)}
+          onKuld={handleKuldes}
+        />
       )}
     </div>
   );

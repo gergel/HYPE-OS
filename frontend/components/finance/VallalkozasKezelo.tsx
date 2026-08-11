@@ -30,6 +30,28 @@ const UJ_CEG_MEZOK: { mezo: string; cimke: string; pelda: string; szeles?: boole
   { mezo: "megbizas_targya", cimke: "Megbízás tárgya", pelda: "Operatőri munka", szeles: true },
 ];
 
+/** A már felvitt cégnél szerkeszthető mezők.
+ *
+ * A hat kötelező adaton felül itt van az e-mail is: a papírok a cég e-mail
+ * címére mennek, és ez az egyetlen olyan mező, ami nem kerül rá a
+ * dokumentumra, mégis a cég adata. A kötelezőket a backend sem engedi
+ * kiüríteni (lásd routes/vallalkozasok.py update_vallalkozas), ezért itt is
+ * jelezzük őket - de a szerkesztés maga fontos: a felvitelkor elgépelt adószám
+ * vagy a közben megváltozott székhely különben csak új cég felvételével lenne
+ * javítható, és a régi papírok gazdája ketté válna. */
+const SZERKESZTHETO_MEZOK: { mezo: string; cimke: string; kotelezo: boolean; szeles?: boolean }[] = [
+  ...UJ_CEG_MEZOK.map((m) => ({ mezo: m.mezo, cimke: m.cimke, kotelezo: true, szeles: m.szeles })),
+  { mezo: "email", cimke: "E-mail", kotelezo: false, szeles: true },
+];
+
+/** Az elkészült papírokat a szerkesztés NEM írja át: azok a saját másolatukban
+ * őrzik a cég akkori adatait (lásd backend PerformanceCertificate.ceg_neve). */
+function cegErtekek(v: Vallalkozas): Record<string, string> {
+  return Object.fromEntries(
+    SZERKESZTHETO_MEZOK.map((m) => [m.mezo, (v[m.mezo as keyof Vallalkozas] as string | null) ?? ""]),
+  );
+}
+
 export function VallalkozasKezelo({
   vallalkozasok,
   emberek,
@@ -51,6 +73,11 @@ export function VallalkozasKezelo({
   // új papírral lehet javítani. Ezért a felvitelnél kérjük be, nem a kiküldés
   // pillanatában (a backend is ezt követeli, lásd KOTELEZO_CEG_MEZOK).
   const [ujCegAdat, setUjCegAdat] = useState<Record<string, string>>({});
+  // Melyik cég adatlapja van épp szerkesztés alatt, és milyen értékekkel. A
+  // szerkesztő azért külön állapot, nem a nyitott panel része, hogy a panel
+  // megnyitása ne induljon rögtön szerkesztő módban.
+  const [szerkesztettId, setSzerkesztettId] = useState<number | null>(null);
+  const [szerkesztettAdat, setSzerkesztettAdat] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
 
@@ -87,6 +114,41 @@ export function VallalkozasKezelo({
       ),
     });
     if (ok) setUjCegAdat({});
+  }
+
+  function szerkesztesInditasa(v: Vallalkozas) {
+    setHiba(null);
+    setSzerkesztettAdat(cegErtekek(v));
+    setSzerkesztettId(v.id);
+  }
+
+  async function szerkesztesMentes(v: Vallalkozas) {
+    const hianyzik = SZERKESZTHETO_MEZOK.filter(
+      (m) => m.kotelezo && !(szerkesztettAdat[m.mezo] ?? "").trim(),
+    ).map((m) => m.cimke);
+    if (hianyzik.length > 0) {
+      setHiba(`Ezek a mezők nem maradhatnak üresen: ${hianyzik.join(", ")}.`);
+      return;
+    }
+    // Csak a TÉNYLEGESEN megváltozott mezőket küldjük: a backend PATCH-e
+    // exclude_unset szerint dolgozik, tehát amit nem küldünk, azt nem bántja.
+    const eredeti = cegErtekek(v);
+    const valtozas = Object.fromEntries(
+      SZERKESZTHETO_MEZOK.map((m) => [m.mezo, (szerkesztettAdat[m.mezo] ?? "").trim()])
+        .filter(([mezo, ertek]) => ertek !== eredeti[mezo as string])
+        // Az e-mail kiüríthető (nem kötelező) - ott az üres string helyett
+        // null megy, hogy tényleg törlődjön, ne üres szöveg maradjon.
+        .map(([mezo, ertek]) => [mezo, ertek === "" ? null : ertek]),
+    );
+    if (Object.keys(valtozas).length === 0) {
+      setSzerkesztettId(null);
+      return;
+    }
+    const ok = await hivas(`/api/v1/vallalkozasok/${v.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(valtozas),
+    });
+    if (ok) setSzerkesztettId(null);
   }
 
   async function tagFelvetel(vallalkozasId: number, employeeId: number) {
@@ -186,16 +248,82 @@ export function VallalkozasKezelo({
 
                 {nyitva && (
                   <div className="border-t border-border px-4 py-3">
-                    <div className="mb-3 flex flex-wrap gap-4 text-[12.5px] text-text-secondary">
-                      {v.szekhely && <span>Székhely: {v.szekhely}</span>}
-                      {v.kepviselo && <span>Képviselő: {v.kepviselo}</span>}
-                      {v.email && <span>E-mail: {v.email}</span>}
-                      {v.keretszerzodes_id && (
-                        <a href={`/szerzodesek/${v.keretszerzodes_id}`} className="text-text-accent hover:underline">
-                          Keretszerződés megnyitása →
-                        </a>
-                      )}
-                    </div>
+                    {szerkesztettId === v.id ? (
+                      <div className="mb-3 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+                        <p className="mb-2 text-[12px] text-text-muted">
+                          A cég adatai – ezekkel készül a nevére szóló szerződés és TIG. A már kiküldött papírokat a
+                          módosítás nem írja át, azok a saját másolatukban őrzik az akkori adatokat.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {SZERKESZTHETO_MEZOK.map((m) => (
+                            <div key={m.mezo} className="flex flex-col gap-1">
+                              <label className="text-[11px] text-text-muted">
+                                {m.cimke}
+                                {m.kotelezo && " *"}
+                              </label>
+                              <input
+                                value={szerkesztettAdat[m.mezo] ?? ""}
+                                onChange={(e) =>
+                                  setSzerkesztettAdat((elozo) => ({ ...elozo, [m.mezo]: e.target.value }))
+                                }
+                                disabled={busy}
+                                className={`${m.szeles ? "min-w-[280px]" : "min-w-[190px]"} rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => szerkesztesMentes(v)}
+                            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[12.5px] text-text-accent hover:opacity-90 disabled:opacity-50"
+                          >
+                            {busy ? "Mentés…" : "Mentés"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setSzerkesztettId(null)}
+                            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                          >
+                            Mégse
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-3 flex flex-wrap items-center gap-4 text-[12.5px] text-text-secondary">
+                        {SZERKESZTHETO_MEZOK.map((m) => {
+                          const ertek = (v[m.mezo as keyof Vallalkozas] as string | null) ?? "";
+                          if (m.mezo === "nev") return null;
+                          return ertek ? (
+                            <span key={m.mezo}>
+                              {m.cimke}: {ertek}
+                            </span>
+                          ) : m.kotelezo ? (
+                            // A hiányzó kötelező adat a kiküldött papíron üres
+                            // helyként jelenne meg - ezért itt is kiemeljük.
+                            <span key={m.mezo} className="text-text-danger">
+                              {m.cimke}: hiányzik
+                            </span>
+                          ) : null;
+                        })}
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => szerkesztesInditasa(v)}
+                            className="text-text-accent hover:underline"
+                          >
+                            Adatok szerkesztése
+                          </button>
+                        )}
+                        {v.keretszerzodes_id && (
+                          <a href={`/szerzodesek/${v.keretszerzodes_id}`} className="text-text-accent hover:underline">
+                            Keretszerződés megnyitása →
+                          </a>
+                        )}
+                      </div>
+                    )}
 
                     <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-text-muted">
                       Kik tartoznak ide

@@ -39,6 +39,7 @@ from app.models.performance_certificate import (
 )
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
+from app.schemas.finance import KifizetesIn
 from app.schemas.performance_certificate import PerformanceCertificateRead
 from app.services import document_storage, papir_fedettseg, papir_tetelek, papirozas_hatokor, szamlazo
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
@@ -1036,16 +1037,27 @@ def delete_szamla(
 def mark_szamla_kifizetve(
     project_id: int,
     szamlazo_kulcs: str,
+    payload: KifizetesIn | None = None,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
     """A feltöltött számla kifizetettként jelölése - ez hozza létre (vagy
     frissíti, ha már létezik) a Pénzügy -> Kiadások-ban megjelenő Expense
     sort, a projekt project_code_id-jához és az alvállalkozóhoz kötve, hogy a
-    költség a helyes projekthez kapcsolódjon (lásd spec 2.1)."""
+    költség a helyes projekthez kapcsolódjon (lásd spec 2.1).
+
+    `kiadasba_kerul=false` esetén CSAK a papír állapotát jelöljük: a kifizetés
+    megtörtént, de máshol van elszámolva (lásd KifizetesIn)."""
     cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
     if not cert.invoices:
         raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
+
+    if payload is not None and not payload.kiadasba_kerul:
+        cert.szamla_kifizetve = True
+        db.commit()
+        db.refresh(cert)
+        return PerformanceCertificateRead.model_validate(cert)
+
     project = _get_project_or_404(db, project_id)
 
     # float(): a Numeric oszlop az adatbázisból Decimal-ként jön vissza, és a
@@ -1110,15 +1122,25 @@ def delete_certificate(
     tiszta lappal akarjuk újrakezdeni. A feltöltött számlák a TIG-gel együtt
     törlődnek (cascade), a fájlok a tárolóból is.
 
-    Amit MÁR kifizettünk, azt nem töröljük: ahhoz Kiadás (Expense) sor
-    tartozik a Pénzügyben, tehát pénzügyi tény - előbb azt kell rendezni."""
+    Amihez KIADÁS SOR tartozik a Pénzügyben, azt nem töröljük: az pénzügyi
+    tény, amit előbb ott kell rendezni (a Kiadás törlése ezt a TIG-et is
+    visszadobja "nincs kifizetve" állapotba, lásd
+    services/kiadas_kapcsolatok.py - onnantól ez a törlés is megy).
+
+    A pusztán "kifizetve" jelölés viszont NEM akadály, ha nem tartozik hozzá
+    Kiadás sor (lásd schemas/finance.KifizetesIn kiadasba_kerul=False): ott
+    csak egy jelölés áll a papíron, nincs mit előbb rendezni - ha az is téves
+    volt, a TIG-gel együtt szűnik meg."""
     cert = _certificate_or_none(db, project_id, szamlazo_kulcs)
     if cert is None:
         raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nincs TIG bejegyzés.")
-    if cert.szamla_kifizetve:
+    if cert.expense_id is not None:
         raise HTTPException(
             status_code=400,
-            detail="Ez a TIG már ki van fizetve (Kiadás sor tartozik hozzá a Pénzügyben) - előbb azt kell rendezni.",
+            detail=(
+                "Ehhez a TIG-hez Kiadás sor tartozik a Pénzügyben - előbb azt töröld ott. "
+                "A Kiadás törlése ezt a TIG-et is visszaállítja „nincs kifizetve” állapotba."
+            ),
         )
     for invoice in cert.invoices:
         document_storage.delete_object(invoice.storage_key)

@@ -128,3 +128,25 @@ class KpForgalomRead(KpForgalomBase):
     megnevezes: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class KifizetesIn(BaseModel):
+    """Egy TIG "kifizetve" jelölésének kérése (külsős és belsős egyaránt).
+
+    A `kiadasba_kerul=False` arra való, amikor a pénz TÉNYLEG el lett utalva,
+    de a költség NEM ebben a rendszerben van elszámolva - például a bank- vagy
+    a könyvelői oldalon már szerepel, és egy itteni Kiadás sor csak
+    megkétszerezné a Pénzügy összesítőiben. A papír állapota ilyenkor is
+    "kifizetve" lesz (a havi áttekintésben nem marad teendőként), csak nem
+    keletkezik hozzá Expense sor.
+
+    Alapértéke True, tehát aki nem küldi a mezőt (régi hívások), annál a
+    viselkedés változatlan: keletkezik a Kiadás sor.
+
+    Ha a TIG-hez MÁR tartozik Kiadás sor, azt a False nem szedi ki: egy
+    meglévő pénzügyi tételt csak a Pénzügy -> Kiadások alatt lehet törölni -
+    onnan viszont igen, és a törlés a papírt is visszadobja "nincs kifizetve"
+    állapotba (lásd services/kiadas_kapcsolatok.py).
+    """
+
+    kiadasba_kerul: bool = True

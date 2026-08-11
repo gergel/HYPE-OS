@@ -44,6 +44,7 @@ from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
 )
+from app.schemas.finance import KifizetesIn
 from app.schemas.internal_performance_certificate import InternalPerformanceCertificateRead
 from app.services import belsos_idoszak, document_storage
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
@@ -152,6 +153,11 @@ class CegValasztek(BaseModel):
 
     vallalkozas_id: int
     nev: str
+    #: Ami a cég nevére szóló TIG-re RÁKERÜL (lásd generate_and_send `fields`) -
+    #: azért utazik a listával, hogy a kiküldés előtti áttekintő pontosan azt
+    #: mutathassa, ami a papírra megy, ne egy másik forrásból vett közelítést.
+    szekhely: str | None = None
+    adoszam: str | None = None
     kezdet: date | None = None
     veg: date | None = None
     #: Erre a hónapra érvényes-e az időszaka. A lejárt/még nem kezdődött
@@ -177,6 +183,8 @@ def _ceg_valasztek(tagsagok: list[VallalkozasTag], ev: int, honap: int) -> list[
         CegValasztek(
             vallalkozas_id=t.vallalkozas_id,
             nev=t.vallalkozas.nev if t.vallalkozas else f"#{t.vallalkozas_id}",
+            szekhely=t.vallalkozas.szekhely if t.vallalkozas else None,
+            adoszam=t.vallalkozas.adoszam if t.vallalkozas else None,
             kezdet=t.kezdet,
             veg=t.veg,
             ervenyes=(t.kezdet is None or t.kezdet <= utolso) and (t.veg is None or t.veg >= elso),
@@ -219,6 +227,10 @@ class MonthEmployeeInfo(BaseModel):
     # lenne miből kitölteni).
     megbizas_targya: str | None
     plusz_afa: bool | None
+    #: A SAJÁT nevére szóló TIG-re kerülő adatok (amikor nem cégről számláz) -
+    #: a kiküldés előtti áttekintő ezekkel mutatja, mi megy ki a papírra.
+    szekhely: str | None = None
+    adoszam: str | None = None
     #: Kell-e tőle havi TIG. Bejelentett alkalmazottnál NEM: nála a havi
     #: teendő csak a fizetés beírása (lásd models/employee.py
     #: BelsosJogviszony) - a felület ettől függően más vezérlőket mutat.
@@ -300,6 +312,8 @@ def list_month(
             email=e.email,
             megbizas_targya=e.megbizas_targya,
             plusz_afa=e.plusz_afa,
+            szekhely=e.vallakozas_szekhely,
+            adoszam=e.vallalkozas_adoszama,
             kell_tig=belsos_idoszak.kell_havi_tig(e),
             jogviszony=e.belsos_jogviszony.value,
             record=InternalPerformanceCertificateRead.model_validate(lookup[e.id]) if e.id in lookup else None,
@@ -939,12 +953,26 @@ def mark_szamla_kifizetve(
     employee_id: int,
     ev: int,
     honap: int,
+    payload: KifizetesIn | None = None,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
+    """A hónap számlájának kifizetettként jelölése - alapból Kiadás sort is
+    hoz létre a Pénzügyben.
+
+    `kiadasba_kerul=false` esetén CSAK a papír állapotát jelöljük: a pénz
+    tényleg elment, de a költség máshol van elszámolva, és egy itteni Kiadás
+    sor megkétszerezné a Pénzügy összesítőit (lásd
+    schemas/finance.KifizetesIn)."""
     record = _get_finalized_or_404(db, employee_id, ev, honap)
     if not record.invoices:
         raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
+
+    if payload is not None and not payload.kiadasba_kerul:
+        record.szamla_kifizetve = True
+        db.commit()
+        db.refresh(record)
+        return InternalPerformanceCertificateRead.model_validate(record)
 
     # float(): a Numeric oszlop az adatbázisból Decimal-ként jön vissza, és a
     # Decimal * float TypeError-t dob (lásd performance_certificates.py).

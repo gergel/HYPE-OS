@@ -803,6 +803,10 @@ export type BelsosTigMonthEmployee = {
    * (esetleg felülírt) értéke a hónap bejegyzésének. */
   megbizas_targya: string | null;
   plusz_afa: boolean | null;
+  /** A SAJÁT nevére szóló TIG-re kerülő adatok (amikor nem cégről számláz) -
+   * a kiküldés előtti áttekintő ezekkel mutatja, mi megy ki a papírra. */
+  szekhely: string | null;
+  adoszam: string | null;
   /** Kell-e tőle havi TIG. Bejelentett alkalmazottnál NEM: nála a havi teendő
    * csak a fizetés beírása (lásd backend models/employee.py BelsosJogviszony). */
   kell_tig: boolean;
@@ -824,6 +828,10 @@ export type BelsosTigMonthEmployee = {
 export type BelsosTigCeg = {
   vallalkozas_id: number;
   nev: string;
+  /** Ami a cég nevére szóló TIG-re rákerül - a kiküldés előtti áttekintő
+   * ebből mutatja, mi megy ki a papírra. */
+  szekhely: string | null;
+  adoszam: string | null;
   kezdet: string | null;
   veg: string | null;
   /** Erre a hónapra érvényes-e az időszaka. */

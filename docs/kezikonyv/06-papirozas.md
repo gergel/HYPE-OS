@@ -179,10 +179,26 @@ oldalról (és a projekt adatlapjáról) mindkettőnél két út van:
   Végpontok: `POST .../{project_id}/{szamlazo}/allapot` - szerződésnél és
   TIG-nél azonos alakban.
 - **Törlés** → a bejegyzés megszűnik, tiszta lappal lehet újrakezdeni.
-  Két védelem van rajta: kifizetett TIG-et nem törlünk (Kiadás sor tartozik
-  hozzá a Pénzügyben, tehát pénzügyi tény), és olyan szerződést sem, amihez a
-  projekten már készült TIG - előbb a TIG-et kell törölni, hogy a fázisok ne
-  csússzanak egymásba.
+  Két védelem van rajta: olyan TIG-et nem törlünk, amihez **Kiadás sor**
+  tartozik a Pénzügyben (az pénzügyi tény - előbb ott kell törölni, lásd
+  [07-penzugyek.md](07-penzugyek.md#a-kifizetés-és-a-kiadás-sor-két-külön-dolog)),
+  és olyan szerződést sem, amihez a projekten már készült TIG - előbb a TIG-et
+  kell törölni, hogy a fázisok ne csússzanak egymásba.
+
+### Kiküldés előtti áttekintő
+
+Szerződésnél és TIG-nél (külsősnél és belsősnél egyaránt) a "Generálás és
+kiküldés" nem indul azonnal: előbb felugrik, hogy **pontosan milyen adatokkal**
+megy ki a papír, és kinek. A generálás egy Google Docs sablon kitöltése +
+azonnali e-mail - ami egyszer elment, az már a megbízottnál van, és csak új
+papírral javítható. Az üres mezőket az ablak kiemelve mutatja (azok üres helyként
+kerülnének a dokumentumra), de a küldés attól még engedélyezett: van, amit
+tényleg nem kell kitölteni - csak legyen tudatos döntés.
+
+Komponens: `components/KuldesEllenorzo.tsx`. A soroknak PONTOSAN azt kell
+tükrözniük, amit a backend a sablonba behelyettesít (`fields` szótár a
+`generalas-es-kuldes` végpontokban) - ha ott új mező kerül a sablonba, ide is be
+kell venni, különben az áttekintő hazudik.
 
 ### Tételek: több ember, több projekt egy papíron
 
