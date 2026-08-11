@@ -67,10 +67,27 @@ beállítás elmaradása senkit nem hoz hátrányba. A 0 munkanap sem száll el
 
 | Rész | Mi |
 |---|---|
-| Nyeremény-kártya | A hónap nyereménye, legfelül. Ha nincs kihirdetve, figyelmeztet - a verseny akkor működik, ha a hónap elején tudják, miért mennek. |
+| Nyeremény-kártya | A hónap nyereménye **fotóval**, legfelül. Ha nincs kihirdetve, figyelmeztet - a verseny akkor működik, ha a hónap elején tudják, miért mennek. |
 | Versenypálya | Sávos futam: a sáv hossza a pont az **éllovashoz** mérve (nem fix maximumhoz), így a hónap elején is van mit nézni. Kupa az elsőnek. |
 | Pontok bontása | Miből jött ki a szám, + a munkanap helyben szerkeszthető. |
-| Korábbi hónapok | Ki nyert (kupával), ki hányadik lett, hány ponttal, mi volt a nyeremény. |
+| Korábbi hónapok | Ki nyert (kupával), ki hányadik lett, hány ponttal, mi volt a nyeremény (bélyegképpel). |
+
+### A nyeremény fotója
+
+Egy kép többet mond, mint a "20 000 Ft utalvány". Feltöltés a nyeremény
+szerkesztő ablakában, a gépről vagy telefonról - JPG, PNG, WEBP, GIF, HEIC,
+AVIF, max. 10 MB. A kép **azonnal felmegy**, nem a "Mentés" gombra vár: két
+külön művelet két külön végponton (a szöveg JSON-nal, a fájl multipart-tal), és
+így a feltöltés eredménye rögtön látszik.
+
+Egy hónapnak **egy képe** van - az újabb feltöltés lecseréli az előzőt, és a
+régi objektumot eldobjuk a tárhelyről. A tárolási kulcs **egyedi** (uuid), nem
+a hónapból képzett: azonos kulcson a csere ugyanarra az URL-re írna, és a
+böngésző (meg a CDN) a gyorsítótárból továbbra is a régi képet mutatná.
+
+A típus-ellenőrzés szűk, zárt listával megy: a kép publikus URL-ről jelenik
+meg, tehát nem lehet bármilyen fájlt "képként" feltölteni és a tárhelyen
+keresztül kiszolgálni.
 
 **Holtversenynél azonos hely**, és a következő hely ugyanannyival ugrik
 (1., 1., 3.) - egy versenyben a holtversenyt nem lehet önkényesen, mondjuk

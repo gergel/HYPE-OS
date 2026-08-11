@@ -48,6 +48,7 @@ export default async function VagoiJatekPage() {
               honap={honap.honap}
               nyeremeny={honap.nyeremeny}
               megjegyzes={honap.megjegyzes}
+              kepUrl={honap.kep_url}
             />
           )}
         </div>
@@ -97,12 +98,25 @@ function NyeremenyKartya({ honap, szerkesztheto }: { honap: VagoHonap; szerkeszt
     );
   }
   return (
-    <div className="rounded-[var(--radius-lg)] border border-[color:var(--text-warning)]/35 bg-bg-warning p-6">
-      <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">
-        <Gift size={13} />A hónap nyereménye
-      </p>
-      <p className="mt-1.5 text-[26px] font-semibold leading-tight text-text-warning">{honap.nyeremeny}</p>
-      {honap.megjegyzes && <p className="mt-1.5 text-[13px] text-text-secondary">{honap.megjegyzes}</p>}
+    <div className="flex flex-wrap items-center gap-6 rounded-[var(--radius-lg)] border border-[color:var(--text-warning)]/35 bg-bg-warning p-6">
+      {/* A kép a szöveg MELLETT, nem alatta: a nyeremény egyetlen mondat, és
+          együtt olvassa a szem a képpel - egymás alá téve a kártya kétszer
+          olyan magas lenne, és eltolná a versenypályát a hajtás alá. */}
+      {honap.kep_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={honap.kep_url}
+          alt={honap.nyeremeny ?? "A hónap nyereménye"}
+          className="h-28 w-40 shrink-0 rounded-[var(--radius)] border border-[color:var(--text-warning)]/30 object-cover"
+        />
+      )}
+      <div className="min-w-0">
+        <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+          <Gift size={13} />A hónap nyereménye
+        </p>
+        <p className="mt-1.5 text-[26px] font-semibold leading-tight text-text-warning">{honap.nyeremeny}</p>
+        {honap.megjegyzes && <p className="mt-1.5 text-[13px] text-text-secondary">{honap.megjegyzes}</p>}
+      </div>
     </div>
   );
 }
@@ -192,7 +206,21 @@ function DicsosegTabla({ honapok }: { honapok: VagoHonap[] }) {
                   </span>
                 )}
               </span>
-              {h.nyeremeny && <span className="text-[12.5px] text-text-muted">Nyeremény: {h.nyeremeny}</span>}
+              {h.nyeremeny && (
+                <span className="flex items-center gap-2 text-[12.5px] text-text-muted">
+                  {/* Bélyegkép: a régi hónapoknál a kép emlékeztet rá, mi volt
+                      a tét - egy név önmagában pár hónap múlva nem mond semmit. */}
+                  {h.kep_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={h.kep_url}
+                      alt=""
+                      className="h-7 w-10 rounded-[var(--radius)] border border-border object-cover"
+                    />
+                  )}
+                  Nyeremény: {h.nyeremeny}
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-1">
               {h.allas

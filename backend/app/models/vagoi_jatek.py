@@ -56,6 +56,15 @@ class VagoJatekHonap(TimestampMixin, Base):
     nyeremeny: Mapped[str | None] = mapped_column(String(255))
     megjegyzes: Mapped[str | None] = mapped_column(Text)
 
+    #: Fotó a nyereményről. Egy kép többet mond, mint a "20 000 Ft utalvány" -
+    #: a verseny attól megy, hogy LÁTJÁK, miért mennek.
+    #:
+    #: A `kep_storage_key` azért van a URL mellett, mert csere/törléskor a régi
+    #: objektumot is el kell dobni a tárhelyről - a publikus URL-ből ez nem
+    #: mindig fejthető vissza (lásd services/document_storage.py).
+    kep_url: Mapped[str | None] = mapped_column(String(500))
+    kep_storage_key: Mapped[str | None] = mapped_column(String(500))
+
 
 class VagoJatekNap(TimestampMixin, Base):
     """Hány munkanapja van egy embernek abban a hónapban.

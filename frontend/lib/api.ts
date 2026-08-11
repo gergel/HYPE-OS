@@ -2073,6 +2073,8 @@ export type VagoHonap = {
   honap: number;
   nyeremeny: string | null;
   megjegyzes: string | null;
+  /** Fotó a nyereményről. */
+  kep_url: string | null;
   folyamatban: boolean;
   allas: VagoAllas[];
   gyoztes_nev: string | null;

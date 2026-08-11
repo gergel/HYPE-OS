@@ -13,7 +13,10 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,7 +31,7 @@ from app.models.vagoi_jatek import (
     VagoJatekHonap,
     VagoJatekNap,
 )
-from app.services import vagoi_jatek
+from app.services import document_storage, vagoi_jatek
 
 router = APIRouter(prefix="/vagoi-jatek", tags=["vagoi-jatek"])
 
@@ -54,6 +57,8 @@ class HonapOut(BaseModel):
     #: Mi a nyeremény. Üres = még nincs kihirdetve.
     nyeremeny: str | None = None
     megjegyzes: str | None = None
+    #: Fotó a nyereményről.
+    kep_url: str | None = None
     #: Folyamatban van-e még (a mai hónap), vagy már lezárult.
     folyamatban: bool = False
     allas: list[AllasOut] = []
@@ -104,6 +109,7 @@ def _honap_kimenet(db: Session, ev: int, honap: int) -> HonapOut:
         honap=honap,
         nyeremeny=beallitas.nyeremeny if beallitas else None,
         megjegyzes=beallitas.megjegyzes if beallitas else None,
+        kep_url=beallitas.kep_url if beallitas else None,
         folyamatban=(ev, honap) == (folyo_ev, folyo_honap),
         allas=_allas_kimenet(allas),
         gyoztes_nev=gyoztes.nev if gyoztes else None,
@@ -173,6 +179,94 @@ def set_nyeremeny(
     sor.megjegyzes = (payload.megjegyzes or "").strip() or None
     db.commit()
     return _honap_kimenet(db, payload.ev, payload.honap)
+
+
+#: Amit képként elfogadunk. Szűk, zárt lista: ez a kép egy publikus URL-ről
+#: jelenik meg a felületen, tehát nem lehet bármilyen fájlt "képként"
+#: feltölteni és a tárhelyen keresztül kiszolgálni.
+KEP_TIPUSOK = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/avif"}
+#: Egy nyeremény-fotóhoz ennél nagyobb fájl nem kell (telefonos kép is elfér).
+MAX_KEP_MERET = 10 * 1024 * 1024
+
+
+def _honap_sor(db: Session, ev: int, honap: int) -> VagoJatekHonap:
+    sor = vagoi_jatek.honap_beallitas(db, ev, honap)
+    if sor is None:
+        sor = VagoJatekHonap(ev=ev, honap=honap)
+        db.add(sor)
+        db.flush()
+    return sor
+
+
+@router.post("/nyeremeny-kep", response_model=HonapOut)
+async def upload_nyeremeny_kep(
+    ev: int,
+    honap: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Fotó feltöltése a hónap nyereményéről.
+
+    Egy hónapnak EGY képe van: az újabb feltöltés lecseréli az előzőt, és a
+    régi objektumot el is dobjuk a tárhelyről - egy nyereményből nem lesz
+    galéria, viszont a lecserélt kép sem marad ott örökre.
+
+    A csere törlése CSAK a sikeres mentés után történik: ha a feltöltés
+    elhasal, ne maradjunk se régi, se új képpel."""
+    content_type = (file.content_type or "").lower()
+    if content_type not in KEP_TIPUSOK:
+        raise HTTPException(
+            status_code=400,
+            detail="Csak képet lehet feltölteni (JPG, PNG, WEBP, GIF, HEIC, AVIF).",
+        )
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="A fájl üres.")
+    if len(data) > MAX_KEP_MERET:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A kép túl nagy ({len(data) // 1024 // 1024} MB). A megengedett méret {MAX_KEP_MERET // 1024 // 1024} MB.",
+        )
+
+    sor = _honap_sor(db, ev, honap)
+    regi_kulcs = sor.kep_storage_key
+    kiterjesztes = os.path.splitext(file.filename or "")[1] or ".jpg"
+    # A kulcs EGYEDI (uuid), nem csak a hónapból képzett - különben a csere
+    # ugyanarra az URL-re írna, és a böngésző (meg a CDN) a gyorsítótárból
+    # továbbra is a RÉGI képet mutatná. Új kulcs = új URL = azonnal látszik,
+    # amit feltöltöttek; a régi objektumot pedig a mentés után eldobjuk.
+    kulcs = f"vagoi-jatek-nyeremeny/{ev}-{honap:02d}-{uuid4().hex[:12]}{kiterjesztes}"
+    try:
+        sor.kep_url = document_storage.upload_bytes(data, kulcs, content_type)
+    except RuntimeError as exc:
+        # Nincs beállítva a tárhely - beszédes hiba a néma 500 helyett.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    sor.kep_storage_key = kulcs
+    db.commit()
+
+    if regi_kulcs and regi_kulcs != kulcs:
+        document_storage.delete_object(regi_kulcs)
+    return _honap_kimenet(db, ev, honap)
+
+
+@router.delete("/nyeremeny-kep", response_model=HonapOut)
+def delete_nyeremeny_kep(
+    ev: int,
+    honap: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    sor = vagoi_jatek.honap_beallitas(db, ev, honap)
+    if sor is None or not sor.kep_url:
+        raise HTTPException(status_code=404, detail="Ehhez a hónaphoz nincs feltöltött kép.")
+    kulcs = sor.kep_storage_key
+    sor.kep_url = None
+    sor.kep_storage_key = None
+    db.commit()
+    if kulcs:
+        document_storage.delete_object(kulcs)
+    return _honap_kimenet(db, ev, honap)
 
 
 class MunkanapIn(BaseModel):
