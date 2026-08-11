@@ -22,13 +22,14 @@ from sqlalchemy import tuple_
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.routes.subcontractor_contracts import (
-    _pending_csoportok,
+    csoport_szerzodes_kesz,
     load_szerzodes_kornyezet,
     szerzodest_igenylo_emberek,
 )
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
+from app.models.contract import Contract
 from app.models.employee import Employee, EmployeeType
 from app.models.finance import Expense
 from app.models.performance_certificate import (
@@ -166,12 +167,30 @@ def tig_csoportok(
     return szamlazo.csoportok(project, _tig_candidates(project), felulirasok)
 
 
-def _is_szerzodes_phase_done(db: Session, project: Project) -> bool:
-    """Igaz, ha a projekten minden számlázó félnek (aki egyáltalán eseti
-    szerződést igényelt) megvan a szerződés státusza (kiküldve vagy kihagyva) -
-    lásd subcontractor_contracts.py."""
-    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, [project])
-    return not _pending_csoportok(project, keretszerzodesek, project_contracts, felulirasok)
+def tig_keszitheto_csoportok(
+    project: Project,
+    felulirasok: dict[tuple[int, int], ProjectSzamlazo],
+    keretszerzodesek: dict[str, list[Contract]],
+    project_contracts: dict[tuple[int, str], Contract],
+) -> list[SzamlazoCsoport]:
+    """Azok a számlázó felek, akikről MÁR most készíthető TIG ezen a projekten.
+
+    A feltétel FELENKÉNT áll: akinek megvan az eseti szerződése (kiküldve vagy
+    kihagyva), vagy akit keretszerződés mentesít, arról azonnal mehet a TIG.
+    Korábban a teljes projekt szerződés-fázisának le kellett zárulnia ahhoz,
+    hogy bárkiről készülhessen TIG - egyetlen késlekedő stábtag így az egész
+    projekt papírozását megállította."""
+    return [
+        cs
+        for cs in tig_csoportok(project, felulirasok)
+        if csoport_szerzodes_kesz(project, cs, keretszerzodesek, project_contracts)
+    ]
+
+
+def _tig_keszitheto(db: Session, project: Project, csoport: SzamlazoCsoport) -> bool:
+    """Egyetlen félre nézve: készíthető-e róla TIG ezen a projekten."""
+    keretszerzodesek, project_contracts, _ = load_szerzodes_kornyezet(db, [project])
+    return csoport_szerzodes_kesz(project, csoport, keretszerzodesek, project_contracts)
 
 
 def _csoport_fedve(project: Project, csoport: SzamlazoCsoport, ember_fedettseg: dict) -> bool:
@@ -216,16 +235,17 @@ def list_tig_ready_projects(db: Session = Depends(get_db), _user: Employee = Dep
         .all()
     )
     keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, projects)
-    eligible = [
-        p
-        for p in projects
-        if _tig_candidates(p) and not _pending_csoportok(p, keretszerzodesek, project_contracts, felulirasok)
-    ]
+    # Projektenként AZOK a felek, akikről már mehet a TIG - nem az egész projekt
+    # szerződés-fázisának lezárultát várjuk meg.
+    keszitheto = {
+        p.id: tig_keszitheto_csoportok(p, felulirasok, keretszerzodesek, project_contracts) for p in projects
+    }
+    eligible = [p for p in projects if keszitheto[p.id]]
     tig_lookup = _load_tig_lookup(db, {p.id for p in eligible})
 
     result: list[PendingProjectSummary] = []
     for p in eligible:
-        pending = _tig_pending_csoportok(p, tig_csoportok(p, felulirasok), tig_lookup)
+        pending = _tig_pending_csoportok(p, keszitheto[p.id], tig_lookup)
         if pending:
             result.append(
                 PendingProjectSummary(
@@ -368,11 +388,14 @@ def _pending_info(project: Project, csoport: SzamlazoCsoport, existing: Performa
 @router.get("/{project_id}", response_model=PendingProjectDetail)
 def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     project = _get_project_or_404(db, project_id)
-    felulirasok = szamlazo.load_felulirasok(db, {project.id})
-    tig_ready = bool(_tig_candidates(project)) and _is_szerzodes_phase_done(db, project)
+    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, [project])
+    # Csak azok a felek jelennek meg, akikről MÁR készíthető TIG - a többi
+    # addig a szerződés-fázisban vár (lásd tig_keszitheto_csoportok).
+    keszitheto = tig_keszitheto_csoportok(project, felulirasok, keretszerzodesek, project_contracts)
+    tig_ready = bool(keszitheto)
     pending: list[tuple[SzamlazoCsoport, PerformanceCertificate | None]] = []
     if tig_ready:
-        pending = _tig_pending_csoportok(project, tig_csoportok(project, felulirasok), _load_tig_lookup(db, {project.id}))
+        pending = _tig_pending_csoportok(project, keszitheto, _load_tig_lookup(db, {project.id}))
     return PendingProjectDetail(
         project_id=project.id,
         project_nev=project.nev,
@@ -397,10 +420,6 @@ def list_all_for_project(project_id: int, db: Session = Depends(get_db), _user: 
 
 
 def _validate_szamlazo(db: Session, project: Project, szamlazo_kulcs: str) -> SzamlazoCsoport:
-    if not _is_szerzodes_phase_done(db, project):
-        raise HTTPException(
-            status_code=400, detail="Ezen a projekten még nem mindenkinek van meg a szerződése - TIG csak azután készíthető."
-        )
     fel = szamlazo.feloldas(db, szamlazo_kulcs)
     if fel is None:
         raise HTTPException(status_code=404, detail="A számlázó fél nem található")
@@ -410,6 +429,13 @@ def _validate_szamlazo(db: Session, project: Project, szamlazo_kulcs: str) -> Sz
         if fel.employee is not None and fel.employee.tipus == EmployeeType.BELSOS:
             raise HTTPException(status_code=400, detail="Belsős munkatársnak nem kell teljesítési igazolás.")
         raise HTTPException(status_code=400, detail="Ezen a projekten senkinek a munkáját nem ez a fél számlázza.")
+    # A feltétel csak ERRE a félre vonatkozik: a projekt többi szereplőjének
+    # hiányzó szerződése nem akadálya annak, hogy erről a félről TIG készüljön.
+    if not _tig_keszitheto(db, project, csoport):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{csoport.cimke()} szerződése még nincs meg ezen a projekten - TIG csak azután készíthető róla.",
+        )
     return csoport
 
 
@@ -452,9 +478,9 @@ def list_nyitott_tetelek(
 
     eredmeny: list[TetelInfo] = []
     for p in projects:
-        if _pending_csoportok(p, keretszerzodesek, project_contracts, felulirasok):
-            continue
-        for csoport in tig_csoportok(p, felulirasok):
+        # Csak az a kérdés, hogy EZ a fél rendben van-e a projekten - a többiek
+        # hiányzó szerződése nem tartja vissza az ő tételeit.
+        for csoport in tig_keszitheto_csoportok(p, felulirasok, keretszerzodesek, project_contracts):
             if csoport.kulcs != fel.kulcs:
                 continue
             for tag in csoport.tagok:
@@ -587,7 +613,13 @@ def _apply_tetelek(db: Session, draft: PerformanceCertificate, fel: SzamlazoFel,
         raise HTTPException(status_code=400, detail="Ugyanaz az ember ugyanazon a projekten kétszer szerepel.")
 
     projektek = {p.id: p for p in db.query(Project).filter(Project.id.in_({t.project_id for t in tetelek})).all()}
-    felulirasok = szamlazo.load_felulirasok(db, set(projektek))
+    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, list(projektek.values()))
+    # Projektenként azok a felek, akikről már mehet a TIG - felenként dől el,
+    # tehát a projekt többi szereplőjének hiányzó szerződése nem akadály.
+    keszitheto_kulcsok = {
+        pid: {cs.kulcs for cs in tig_keszitheto_csoportok(p, felulirasok, keretszerzodesek, project_contracts)}
+        for pid, p in projektek.items()
+    }
     for t in tetelek:
         projekt = projektek.get(t.project_id)
         if projekt is None:
@@ -598,10 +630,13 @@ def _apply_tetelek(db: Session, draft: PerformanceCertificate, fel: SzamlazoFel,
                 status_code=400,
                 detail=f"A(z) #{t.employee_id} munkatárs nincs a(z) „{projekt.nev}” projekt (nem belsős) stábjában.",
             )
-        if not _is_szerzodes_phase_done(db, projekt):
+        if fel.kulcs not in keszitheto_kulcsok.get(projekt.id, set()):
             raise HTTPException(
                 status_code=400,
-                detail=f"„{projekt.nev}” projekten még nem mindenkinek van meg a szerződése - TIG csak azután készíthető.",
+                detail=(
+                    f"„{projekt.nev}” projekten ennek a félnek még nincs meg a szerződése - "
+                    "TIG csak azután készíthető róla."
+                ),
             )
         if szamlazo.szamlazo_fele(projekt, ember, felulirasok).kulcs != fel.kulcs:
             raise HTTPException(

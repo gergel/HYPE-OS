@@ -26,6 +26,7 @@ from app.api.routes.performance_certificates import (
     _tig_candidates,
     _tig_pending_csoportok,
     tig_csoportok,
+    tig_keszitheto_csoportok,
     DraftInfo as TigDraftInfo,
     TigLookup,
 )
@@ -90,20 +91,26 @@ def _szerzodes_candidates(
 
 def _tig_state(
     project: Project,
-    szerzodes_done: bool,
+    keretszerzodesek: dict[str, list[Contract]],
+    project_contracts: dict[tuple[int, str], Contract],
     felulirasok: dict[tuple[int, int], ProjectSzamlazo],
     tig_lookup: TigLookup,
 ) -> tuple[bool, int, int]:
     """(tig_ready, összes, függő) - a TIG populáció a keretszerződéseseket IS
-    tartalmazza (lásd performance_certificates.py _tig_candidates), csak akkor
-    "kész" (tig_ready), ha a projekt teljes eseti szerződés fázisa lezárult."""
+    tartalmazza (lásd performance_certificates.py _tig_candidates).
+
+    A "kész" állapot FELENKÉNT dől el: amint egy félnek megvan a szerződése
+    (vagy keretszerződés mentesíti), róla azonnal készíthető TIG - nem kell
+    megvárni, hogy a projekt összes szereplőjének meglegyen a papírja. A
+    `tig_fuggo` így csak azokat számolja, akikről MÁR lehetne TIG-et készíteni,
+    de még nincs; akinél a szerződés is hiányzik, az a szerződés-oszlopban vár."""
     if not _tig_candidates(project):
         return False, 0, 0
-    csoportok = tig_csoportok(project, felulirasok)
-    total = len(csoportok)
-    if not szerzodes_done:
+    total = len(tig_csoportok(project, felulirasok))
+    keszitheto = tig_keszitheto_csoportok(project, felulirasok, keretszerzodesek, project_contracts)
+    if not keszitheto:
         return False, total, total
-    return True, total, len(_tig_pending_csoportok(project, csoportok, tig_lookup))
+    return True, total, len(_tig_pending_csoportok(project, keszitheto, tig_lookup))
 
 
 def _kifizetes_state(
@@ -175,7 +182,9 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
         szerzodes_osszes, szerzodes_fuggo, _ = _szerzodes_candidates(
             p, keretszerzodesek, project_contracts, felulirasok
         )
-        tig_ready, tig_osszes, tig_fuggo = _tig_state(p, szerzodes_fuggo == 0, felulirasok, tig_lookup)
+        tig_ready, tig_osszes, tig_fuggo = _tig_state(
+            p, keretszerzodesek, project_contracts, felulirasok, tig_lookup
+        )
         kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(p, felulirasok, tig_lookup)
         result.append(
             ProjectOverviewSummary(
@@ -273,28 +282,30 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
 
     tig_lookup = _load_tig_lookup(db, {project.id})
     _, fel_tig = tig_lookup
-    tig_ready = False
+    # A TIG-oszlopban azok a felek jelennek meg, akikről MÁR készíthető TIG:
+    # akinek megvan az eseti szerződése, vagy akit keretszerződés mentesít. Aki
+    # még szerződésre vár, az a szerződés-oszlopban látszik - így egy késlekedő
+    # stábtag nem tartja fel a többiek papírozását.
+    keszitheto = tig_keszitheto_csoportok(project, felulirasok, keretszerzodesek, project_contracts)
+    tig_ready = bool(keszitheto)
     teljesitesi_igazolasok: list[TigStatusInfo] = []
-    if szerzodes_done:
-        csoportok = tig_csoportok(project, felulirasok)
-        tig_ready = bool(csoportok)
-        for csoport in csoportok:
-            tig = fel_tig.get((project.id, csoport.kulcs))
-            teljesitesi_igazolasok.append(
-                TigStatusInfo(
-                    id=csoport.fel.employee.id if csoport.fel.employee else 0,
-                    szamlazo=csoport.kulcs,
-                    full_name=csoport.fel.nev,
-                    cimke=csoport.cimke(),
-                    lefedettek=_lefedettek(csoport),
-                    email=csoport.fel.email,
-                    draft=_tig_draft_info(tig),
-                    szamla_kifizetve=bool(tig and tig.szamla_kifizetve),
-                    van_szamla=bool(tig and tig.invoices),
-                )
+    for csoport in keszitheto:
+        tig = fel_tig.get((project.id, csoport.kulcs))
+        teljesitesi_igazolasok.append(
+            TigStatusInfo(
+                id=csoport.fel.employee.id if csoport.fel.employee else 0,
+                szamlazo=csoport.kulcs,
+                full_name=csoport.fel.nev,
+                cimke=csoport.cimke(),
+                lefedettek=_lefedettek(csoport),
+                email=csoport.fel.email,
+                draft=_tig_draft_info(tig),
+                szamla_kifizetve=bool(tig and tig.szamla_kifizetve),
+                van_szamla=bool(tig and tig.invoices),
             )
+        )
     kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(project, felulirasok, tig_lookup)
-    _, _, tig_fuggo = _tig_state(project, szerzodes_done, felulirasok, tig_lookup)
+    _, _, tig_fuggo = _tig_state(project, keretszerzodesek, project_contracts, felulirasok, tig_lookup)
 
     feedbacks = (
         db.query(PostShootFeedback)

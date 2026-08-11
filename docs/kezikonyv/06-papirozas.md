@@ -26,10 +26,16 @@ Ez a rendszer legsűrűbb doménje. Ha egyetlen dolgot jegyzel meg róla, ez leg
 1. **Diszpó kimegy** → megvan, ki vett részt a projekten.
 2. **Eseti szerződés**: azokra kell, akik *sem nem belsősök*, *sem nincs érvényes
    keretszerződésük*. Aki keretszerződéses, az itt mentesül.
-3. Ha a projekten mindenkinél megvan a szerződés ("Kiküldve" vagy "Kihagyva"),
-   a projekt **"TIG-re kész"** állapotba kerül.
-4. **Külsős TIG**: minden nem belsős stábtagnak - **a keretszerződéseseknek is**.
+3. **Külsős TIG**: minden nem belsős stábtagnak - **a keretszerződéseseknek is**.
    A TIG a konkrét munka elvégzését igazolja, nem azt, hogy van-e álló szerződés.
+
+**A TIG felenként nyílik meg, nem projektenként.** Amint egy számlázó félnek
+megvan a szerződése (kiküldve vagy kihagyva) - vagy keretszerződés mentesíti -,
+róla **azonnal** készíthető TIG, akkor is, ha a projekt többi szereplője még
+szerződésre vár. Korábban az egész projekt szerződés-fázisának le kellett
+zárulnia, így egyetlen késlekedő stábtag megállította mindenki papírozását.
+A szabály egy helyen áll: `subcontractor_contracts.csoport_szerzodes_kesz()`,
+a TIG-oldali szűrő pedig `performance_certificates.tig_keszitheto_csoportok()`.
 
 ### A kétlépéses életciklus
 

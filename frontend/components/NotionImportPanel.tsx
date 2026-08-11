@@ -154,6 +154,12 @@ export function NotionImportPanel() {
         (szerződések, TIG-ek, számlák) is áthozza, és a saját tárhelyünkre (R2) menti – a Notion linkjei ugyanis egy óra
         után lejárnak. A külső hivatkozások (pl. Google Docs) érintetlenül maradnak.
       </p>
+      <p className="mb-3 text-[12px] text-text-muted">
+        Az import <strong className="text-text-secondary">csak az újakat és a változásokat</strong> hozza át: amit itt,
+        a HYPE OS-ben módosítottál az előző import óta, azt nem írja felül. Ha tehát egy TIG-et vagy egy utókövetést itt
+        fejeztél be, a Notion (elavult vagy hiányzó) adata nem írja vissza. A napló mezőnként megmutatja, mit hagyott
+        érintetlenül.
+      </p>
 
       {importerek.length > 0 && (
         <div className="mb-4 rounded-[var(--radius)] border border-border p-3">

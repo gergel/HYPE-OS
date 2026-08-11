@@ -336,8 +336,9 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 />
               ) : (
                 <p className="text-[13px] text-text-secondary">
-                  Teljesítési igazolás csak azután készíthető, hogy ezen a projekten mindenkinek megvan a szerződés
-                  státusza (kiküldve vagy kihagyva) - lásd a fenti &quot;Szerződés készítés&quot; kártyát.
+                  Teljesítési igazolás félenként készíthető: amint valakinek megvan a szerződése (vagy
+                  keretszerződés fedi), róla azonnal mehet a TIG. Itt még senkinél nincs meg - lásd a fenti
+                  &quot;Szerződés készítés&quot; kártyát.
                 </p>
               )}
               <TigInvoiceManager

@@ -50,6 +50,34 @@ futott, és ne kelljen ugyanazt a sablont új néven még egyszer felvenni.
 adatáthozatalra szolgál a cutover előtt: `app/notion_import/`, katalógus +
 `run_all.py`.
 
+### Az import nem írja felül a helyi munkát
+
+Újrafuttatáskor az import **csak az újakat és a valódi változásokat** hozza át.
+Amit a HYPE OS-ben módosítottak az előző import óta, azt érintetlenül hagyja -
+enélkül egy ismételt import visszaírná a Notion elavult adatát arra, amit itt
+már befejeztek (pl. egy megírt és kiküldött TIG-re vagy egy lezárt utókövetésre).
+
+Hogyan dönti el (`notion_import/engine.py`): a `notion_import_map` rekordonként
+eltárolja, **mit írt bele legutóbb az import** (`imported_fields`). Ha a mostani
+adatbázis-érték ezzel egyezik, azóta senki nem nyúlt hozzá → a Notion frissítése
+felülírhatja. Ha eltér → helyben dolgoztak rajta → kimarad. A döntés
+**mezőnkénti**, nem rekord-szintű: egy helyben átírt összeg nem akadályozza meg,
+hogy a mellette lévő, érintetlen mező frissüljön.
+
+Két részlet, ami miatt ez a gyakorlatban is működik:
+
+- Az összehasonlítás **normalizált** (`_ertek_kulcs`): `Decimal("1000.00")` és
+  `1000` ugyanaz. Enélkül a típuskülönbség minden mezőt tévesen "módosítottnak"
+  mutatna, és az import soha többé nem frissítene semmit.
+- **Baseline nélküli** sornál (a védelem bevezetése előtt importált rekord) a
+  kitöltött mezőt védettnek tekintjük, az üreset kitöltjük - a legóvatosabb
+  viselkedés, mert üres mezőből nem veszhet el munka.
+
+A napló mezőnként számol be róla: *"12 mező védve 5 rekordon (helyben
+módosították)"*. Vészkijáratként `NOTION_IMPORT_OVERWRITE=1` mellett az import a
+régi módon fut, és mindent felülír - ez nem alapértelmezés, csak akkor kell, ha
+egy elrontott helyi szerkesztést szándékosan a Notion állapotára állítanánk vissza.
+
 Indítás a böngészőből: `/api/v1/admin/notion-import` (admin). Ez azért kellett,
 mert a `railway ssh` kapcsolat rendszeresen megszakad, mielőtt a - Notion
 rate-limitje miatt akár órákig tartó - import lefutna, és a megszakadt SSH-val

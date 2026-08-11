@@ -75,7 +75,7 @@ def get_or_create_unknown_client(db: Session) -> Client:
     mapping = db.scalar(select(NotionImportMap).where(NotionImportMap.notion_page_id == UNKNOWN_CLIENT_KEY))
     if mapping:
         return db.get(Client, mapping.entity_id)
-    client, _ = upsert(db, Client, "Client", UNKNOWN_CLIENT_KEY, {"nev": "Ismeretlen ügyfél (Notion import)"})
+    client, _, _ = upsert(db, Client, "Client", UNKNOWN_CLIENT_KEY, {"nev": "Ismeretlen ügyfél (Notion import)"})
     return client
 
 

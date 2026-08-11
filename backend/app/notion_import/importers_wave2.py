@@ -104,7 +104,7 @@ def get_or_create_unknown_project_code(db: Session) -> ProjectCode:
     if mapping:
         return db.get(ProjectCode, mapping.entity_id)
     unknown_client = get_or_create_unknown_client(db)
-    project_code, _ = upsert(
+    project_code, _, _ = upsert(
         db,
         ProjectCode,
         "ProjectCode",

@@ -10,7 +10,11 @@ még bekerül."""
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from enum import Enum
 from typing import Any
 
 from sqlalchemy import select
@@ -31,9 +35,18 @@ class ImportResult:
     # attól még rendben bekerült - csak a fájlja nem jött vele.
     files_copied: int = 0
     file_errors: list[str] = field(default_factory=list)
+    # Hány mezőt hagyott érintetlenül az import, mert azt a HYPE OS-ben
+    # módosították az előző import óta (lásd _helyben_modositott). Ez NEM hiba:
+    # pontosan ez a védelem a lényege.
+    protected_fields: int = 0
+    protected_rows: int = 0
 
     def __str__(self) -> str:
         summary = f"{self.entity_type}: {self.created} új, {self.updated} frissítve, {self.skipped} kihagyva"
+        if self.protected_fields:
+            summary += (
+                f", {self.protected_fields} mező védve {self.protected_rows} rekordon (helyben módosították)"
+            )
         if self.files_copied:
             summary += f", {self.files_copied} fájl átemelve"
         if self.errors:
@@ -87,9 +100,74 @@ def _eltavolitott_mezok_nelkul(db: Session, model: type, fields: dict[str, Any])
     return {k: v for k, v in fields.items() if k not in eltavolitott}
 
 
-def upsert(db: Session, model: type, entity_type: str, notion_page_id: str, fields: dict[str, Any]) -> tuple[Any, bool]:
+def _ertek_kulcs(value: Any) -> str:
+    """Egy mezőérték stabil, szöveges lenyomata - ezt hasonlítjuk össze.
+
+    Azért szöveg, és nem a nyers érték, mert ugyanaz az adat sokféle típusban
+    fordul meg ugyanazon az úton: a Notionból str/int jön, az adatbázisból
+    Decimal/date/Enum jöhet vissza, és egy `Decimal("1000.00") != 1000`
+    összehasonlítás tévesen "helyben módosítottnak" mutatna egy változatlan
+    mezőt - onnantól pedig az import soha többé nem frissítené."""
+    if value is None:
+        return ""
+    if isinstance(value, Enum):
+        return _ertek_kulcs(value.value)
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        # A jelentéktelen záró nullák nélkül: 1000.00 és 1000 ugyanaz az összeg.
+        return format(value.normalize(), "f")
+    if isinstance(value, float):
+        return _ertek_kulcs(Decimal(str(value)))
+    if isinstance(value, (list, tuple, set)):
+        return "|".join(sorted(_ertek_kulcs(v) for v in value))
+    # ORM objektum (pl. relation) - az azonosítója a stabil lenyomat.
+    azonosito = getattr(value, "id", None)
+    if azonosito is not None and not isinstance(value, (str, int)):
+        return f"#{azonosito}"
+    return str(value).strip()
+
+
+def _felulirhato() -> bool:
+    """NOTION_IMPORT_OVERWRITE=1 mellett az import a RÉGI módon fut: mindent
+    felülír a Notion tartalmával, a helyi módosításokat is.
+
+    Vészkijárat, nem alapértelmezés - akkor kell, ha egy elrontott helyi
+    szerkesztést szándékosan a Notion állapotára akarunk visszaállítani."""
+    return os.environ.get("NOTION_IMPORT_OVERWRITE", "0").strip().lower() in ("1", "true", "yes")
+
+
+def _helyben_modositott(obj: Any, key: str, baseline: dict[str, str] | None) -> bool:
+    """Hozzányúltak-e ehhez a mezőhöz a HYPE OS-ben az utolsó import óta?
+
+    A `baseline` azt tartja nyilván, mit írt bele LEGUTÓBB az import. Ha a
+    mostani adatbázis-érték ezzel egyezik, azóta senki nem módosította -
+    ilyenkor a Notion frissítése nyugodtan felülírhatja. Ha eltér, akkor itt
+    dolgoztak rajta, és az import nem nyúl hozzá.
+
+    Ha nincs baseline (a rekord még a védelem bevezetése előtt jött be, vagy
+    szintetikus kulccsal készült), a KITÖLTÖTT mezőt tekintjük védendőnek, az
+    üreset pedig szabadon kitölthetőnek: üres mezőből nem veszhet el munka,
+    egy kitöltöttből viszont igen."""
+    jelenlegi = _ertek_kulcs(getattr(obj, key, None))
+    if baseline is None or key not in baseline:
+        return jelenlegi != ""
+    return jelenlegi != baseline[key]
+
+
+def upsert(
+    db: Session, model: type, entity_type: str, notion_page_id: str, fields: dict[str, Any]
+) -> tuple[Any, bool, list[str]]:
     """Létrehoz vagy frissít egy rekordot a notion_page_id alapján - ez teszi idempotenssé
-    az importot (újrafuttatásnál nem duplikál). (rekord, is_new) párt ad vissza.
+    az importot (újrafuttatásnál nem duplikál). (rekord, is_new, védett_mezők) hármast ad
+    vissza.
+
+    FRISSÍTÉSKOR nem ír felül mindent: azokat a mezőket, amiket az előző import óta a
+    HYPE OS-ben módosítottak, érintetlenül hagyja (lásd _helyben_modositott). Enélkül egy
+    újrafuttatott import visszaírná a Notion elavult adatát arra, amit itt már befejeztek -
+    például egy itt megírt és kiküldött TIG-re vagy egy lezárt utókövetésre.
 
     Nincs benne hibakezelés - importeren belül a safe_upsert()-öt használd, hacsak nem
     vagy biztos benne, hogy a hívó már véd egy savepoint-tal (lásd get_or_create_unknown_client)."""
@@ -98,17 +176,37 @@ def upsert(db: Session, model: type, entity_type: str, notion_page_id: str, fiel
 
     if mapping:
         obj = db.get(model, mapping.entity_id)
+        baseline = mapping.imported_fields if isinstance(mapping.imported_fields, dict) else None
+        uj_baseline = dict(baseline or {})
+        vedett: list[str] = []
         for key, value in fields.items():
+            if not _felulirhato() and _helyben_modositott(obj, key, baseline):
+                vedett.append(key)
+                continue
             setattr(obj, key, value)
+            # A baseline CSAK arra a mezőre frissül, amit tényleg beírtunk - a
+            # védett mezőknél megmarad a régi referenciapont, különben a
+            # következő futás már nem ismerné fel a helyi módosítást.
+            uj_baseline[key] = _ertek_kulcs(value)
+        mapping.imported_fields = uj_baseline
+        mapping.last_imported_at = datetime.now(timezone.utc)
         db.flush()
-        return obj, False
+        return obj, False, vedett
 
     obj = model(**fields)
     db.add(obj)
     db.flush()  # kell az obj.id-hoz, mielőtt a mapping sort felvesszük
-    db.add(NotionImportMap(notion_page_id=notion_page_id, entity_type=entity_type, entity_id=obj.id))
+    db.add(
+        NotionImportMap(
+            notion_page_id=notion_page_id,
+            entity_type=entity_type,
+            entity_id=obj.id,
+            imported_fields={key: _ertek_kulcs(value) for key, value in fields.items()},
+            last_imported_at=datetime.now(timezone.utc),
+        )
+    )
     db.flush()
-    return obj, True
+    return obj, True, []
 
 
 def safe_upsert(
@@ -127,11 +225,14 @@ def safe_upsert(
     az importer ilyenkor `continue`-zzon a ciklusban."""
     try:
         with db.begin_nested():
-            obj, created = upsert(db, model, entity_type, notion_page_id, fields)
+            obj, created, vedett = upsert(db, model, entity_type, notion_page_id, fields)
         if created:
             result.created += 1
         else:
             result.updated += 1
+        if vedett:
+            result.protected_fields += len(vedett)
+            result.protected_rows += 1
         return obj
     except Exception as exc:  # noqa: BLE001 - soronkénti izoláció, szándékosan széles
         result.errors.append(f"{label} (notion_page_id={notion_page_id}): {type(exc).__name__}: {exc}")

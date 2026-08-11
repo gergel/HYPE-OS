@@ -179,6 +179,31 @@ def _szamlazo_csoportok(
     return szamlazo.csoportok(project, szerzodest_igenylo_emberek(project), felulirasok)
 
 
+def csoport_szerzodes_kesz(
+    project: Project,
+    csoport: SzamlazoCsoport,
+    keretszerzodesek: dict[str, list[Contract]],
+    project_contracts: dict[tuple[int, str], Contract],
+) -> bool:
+    """Megvan-e MÁR ENNEK a félnek a szerződéses háttere ezen a projekten?
+
+    Kétféleképpen lehet meg: vagy keretszerződés mentesíti a forgatás napján
+    (akkor eseti szerződés sem kell tőle), vagy az eseti szerződése lezárult
+    (kiküldve vagy kihagyva).
+
+    Szándékosan FELENKÉNT dől el, nem projektszinten: aki már aláírt - vagy
+    akinek álló keretszerződése van -, arról azonnal készülhet a teljesítési
+    igazolás, nem kell megvárnia a projekt összes többi szereplőjét. Egy
+    lassan válaszoló stábtag korábban az egész projekt TIG-fázisát blokkolta
+    (lásd performance_certificates.py)."""
+    # A keretszerződés csak akkor mentesít, ha a FORGATÁS NAPJÁN élt: aki két
+    # időszak közé eső projekten dolgozott, attól eseti szerződés kell.
+    if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project.forgatas_datuma):
+        return True
+    existing = project_contracts.get((project.id, csoport.kulcs))
+    return existing is not None and existing.szerzodes_allapota in TERMINAL_STATUSES
+
+
 def _pending_csoportok(
     project: Project,
     keretszerzodesek: dict[str, list[Contract]],
@@ -190,17 +215,11 @@ def _pending_csoportok(
     A lista SZÁMLÁZÓ FELENKÉNT egy sor, nem emberenként: ha egy projekten két
     stábtag munkáját ugyanaz a fél számlázza, egyetlen szerződés kell, nem
     kettő (lásd services/szamlazo.py)."""
-    result: list[tuple[SzamlazoCsoport, Contract | None]] = []
-    for csoport in _szamlazo_csoportok(project, felulirasok):
-        # A keretszerződés csak akkor mentesít, ha a FORGATÁS NAPJÁN élt: aki
-        # két időszak közé eső projekten dolgozott, attól eseti szerződés kell.
-        if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project.forgatas_datuma):
-            continue
-        existing = project_contracts.get((project.id, csoport.kulcs))
-        if existing is not None and existing.szerzodes_allapota in TERMINAL_STATUSES:
-            continue
-        result.append((csoport, existing))
-    return result
+    return [
+        (csoport, project_contracts.get((project.id, csoport.kulcs)))
+        for csoport in _szamlazo_csoportok(project, felulirasok)
+        if not csoport_szerzodes_kesz(project, csoport, keretszerzodesek, project_contracts)
+    ]
 
 
 class PendingProjectSummary(BaseModel):

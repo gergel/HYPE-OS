@@ -29,7 +29,7 @@ def get_or_create_geri_employee(db: Session) -> Employee:
     mapping = db.scalar(select(NotionImportMap).where(NotionImportMap.notion_page_id == GERI_EMPLOYEE_KEY))
     if mapping:
         return db.get(Employee, mapping.entity_id)
-    employee, _ = upsert(
+    employee, _, _ = upsert(
         db,
         Employee,
         "Employee",
