@@ -64,10 +64,8 @@ kizárás: a "nincs róla időszak, tehát biztosan nem volt belsős" következt
 
 A számlázó fél **nem kell, hogy rajta legyen a projekten**: gyakori, hogy a
 számlát olyan vállalkozó állítja ki, aki maga nem volt a forgatáson. A backend
-ezt sosem kötötte stábtagsághoz, a választó pedig a javaslatokon felül minden nem
-belsős munkatársat és minden aktív céget felkínál. Az egyetlen valódi kizáró ok
-egy helyen áll (`frontend/lib/szamlazo.ts`, és ugyanez a backendben): belsős
-munkatárs havi bérezésű, ezért nem lehet számlázó fél.
+ezt sosem kötötte stábtagsághoz, a választó pedig a javaslatokon felül minden
+választható munkatársat és minden aktív céget felkínál.
 
 Miért számít: a papírok **számlázó felenként** készülnek, nem emberenként. Három
 ember munkáját ugyanaz a cég számlázza → egy szerződés és egy TIG, nem három.
