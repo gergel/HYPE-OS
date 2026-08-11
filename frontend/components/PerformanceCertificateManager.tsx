@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
-import { useConfirm } from "@/components/ConfirmProvider";
 import { IndoklasDialog } from "@/components/IndoklasDialog";
+import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
+import { formatFt } from "@/lib/ido";
 import { PapirTetelValaszto, tetelKulcs } from "@/components/PapirTetelValaszto";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingTigEmployee, TigTetel } from "@/lib/api";
@@ -65,7 +66,6 @@ export function PerformanceCertificateManager({
   teljesitesAlap?: string;
 }) {
   const router = useRouter();
-  const confirm = useConfirm();
   // A kiválasztás SZÁMLÁZÓ FÉL szerint megy ("e12" / "v3"): egy TIG több ember
   // munkájáról is szólhat (lásd backend services/szamlazo.py).
   const [selectedId, setSelectedId] = useState<string>("");
@@ -73,6 +73,7 @@ export function PerformanceCertificateManager({
   const [form, setForm] = useState<FormState | null>(null);
   const [busy, setBusy] = useState<"save" | "send" | "skip" | null>(null);
   const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
+  const [kuldesNyitva, setKuldesNyitva] = useState(false);
 
   // A TIG TÉTELEI: mit igazol ez a papír. Alapból a projekten hozzá tartozó
   // stábtagok, de más projektek nyitott munkái is rátehetők - ez az "egy ember
@@ -205,13 +206,39 @@ export function PerformanceCertificateManager({
     }
   }
 
-  async function handleGenerateAndSend() {
+  /** A küldés előtt megnyitjuk az áttekintőt: a generálás + e-mail egy
+   * lépésben megy, tehát a hibás adat már a megbízottnál landol, és csak új
+   * papírral javítható. */
+  function kuldesInditasa() {
     if (!selectedEmployee || !form) return;
     if (!form.netto_osszeg.trim() || Number.isNaN(Number(form.netto_osszeg)) || Number(form.netto_osszeg) <= 0) {
       alert("Add meg a nettó összeget.");
       return;
     }
-    if (!(await confirm(`Elküldi a teljesítési igazolást ${selectedEmployee.full_name} email címére?`))) return;
+    setKuldesNyitva(true);
+  }
+
+  /** Amit a TIG-sablon ténylegesen megkap (lásd buildPayload). */
+  function ellenorzoSorok(): EllenorzoSor[] {
+    if (!form) return [];
+    const netto = form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null;
+    return [
+      { cimke: "Cég neve", ertek: form.ceg_neve },
+      { cimke: "Székhely", ertek: form.szekhely },
+      { cimke: "Adószám", ertek: form.adoszam },
+      { cimke: "Megbízás tárgya", ertek: form.megbizas_targya },
+      {
+        cimke: "Nettó összeg",
+        ertek: netto === null ? null : `${formatFt(netto)}${form.plusz_afa ? " + ÁFA" : ""}`,
+      },
+      { cimke: "Teljesítés ideje", ertek: form.teljesites_szoveg },
+      { cimke: "Keltezés", ertek: form.keltezes },
+    ];
+  }
+
+  async function handleGenerateAndSend() {
+    if (!selectedEmployee || !form) return;
+    setKuldesNyitva(false);
     setBusy("send");
     try {
       const res = await authFetch(
@@ -437,7 +464,7 @@ export function PerformanceCertificateManager({
               />
               <button
                 type="button"
-                onClick={handleGenerateAndSend}
+                onClick={kuldesInditasa}
                 disabled={busyState}
                 className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
               >
@@ -446,6 +473,20 @@ export function PerformanceCertificateManager({
             </div>
           </div>
         </div>
+      )}
+      {kuldesNyitva && selectedEmployee && (
+        <KuldesEllenorzo
+          cim="Teljesítési igazolás kiküldése"
+          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben."
+          cimzett={selectedEmployee.email}
+          sorok={ellenorzoSorok()}
+          tetelek={valaszthato
+            .filter((t) => kivalasztott.has(tetelKulcs(t)))
+            .map((t) => `${t.employee_nev} – ${t.projektkod ? `${t.projektkod} – ` : ""}${t.project_nev ?? ""}`)}
+          gombCimke="Generálás és küldés"
+          onMegse={() => setKuldesNyitva(false)}
+          onKuld={handleGenerateAndSend}
+        />
       )}
       {kihagyasNyitva && (
       <IndoklasDialog

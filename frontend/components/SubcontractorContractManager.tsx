@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { IndoklasDialog } from "@/components/IndoklasDialog";
+import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
+import { formatFt } from "@/lib/ido";
 import { PapirTetelValaszto, tetelKulcs, type PapirTetel } from "@/components/PapirTetelValaszto";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingSubcontractorEmployee } from "@/lib/api";
@@ -76,6 +78,7 @@ export function SubcontractorContractManager({
   const [form, setForm] = useState<FormState | null>(null);
   const [busy, setBusy] = useState<"save" | "send" | "skip" | "marvan" | null>(null);
   const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
+  const [kuldesNyitva, setKuldesNyitva] = useState(false);
 
   // A szerződés TÉTELEI: mire szól a papír. Alapból a projekten hozzá tartozó
   // stábtagok, de más projektek nyitott munkái is rátehetők - így három nap
@@ -208,13 +211,41 @@ export function SubcontractorContractManager({
     }
   }
 
-  async function handleGenerateAndSend() {
+  /** A küldés előtt megnyitjuk az áttekintőt: a generálás + e-mail egy
+   * lépésben megy, tehát az elgépelt adószám vagy a hiányzó székhely már a
+   * megbízottnál landol, és csak új papírral javítható. */
+  function kuldesInditasa() {
     if (!selectedEmployee || !form) return;
     if (!form.netto_osszeg.trim() || Number.isNaN(Number(form.netto_osszeg)) || Number(form.netto_osszeg) <= 0) {
       alert("Add meg a nettó összeget.");
       return;
     }
-    if (!(await confirm(`Elküldi a megbízási szerződést ${selectedEmployee.full_name} email címére?`))) return;
+    setKuldesNyitva(true);
+  }
+
+  /** Amit a szerződés-sablon ténylegesen megkap (lásd buildPayload). */
+  function ellenorzoSorok(): EllenorzoSor[] {
+    if (!form) return [];
+    const netto = form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null;
+    return [
+      { cimke: "Cég neve", ertek: form.ceg_neve },
+      { cimke: "Képviselő", ertek: form.vallalkozas_kepviseloje },
+      { cimke: "Székhely", ertek: form.szekhely },
+      { cimke: "Adószám", ertek: form.adoszam },
+      { cimke: "Nyilvántartási szám", ertek: form.vallalkozas_nyilvantartasi_szam },
+      { cimke: "Megbízás tárgya", ertek: form.megbizas_targya },
+      {
+        cimke: "Nettó összeg",
+        ertek: netto === null ? null : `${formatFt(netto)}${form.plusz_afa ? " + ÁFA" : ""}`,
+      },
+      { cimke: "Teljesítés ideje", ertek: form.teljesites_szoveg },
+      { cimke: "Keltezés", ertek: form.keltezes },
+    ];
+  }
+
+  async function handleGenerateAndSend() {
+    if (!selectedEmployee || !form) return;
+    setKuldesNyitva(false);
     setBusy("send");
     try {
       const res = await authFetch(
@@ -509,7 +540,7 @@ export function SubcontractorContractManager({
               />
               <button
                 type="button"
-                onClick={handleGenerateAndSend}
+                onClick={kuldesInditasa}
                 disabled={busyState}
                 className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
               >
@@ -518,6 +549,20 @@ export function SubcontractorContractManager({
             </div>
           </div>
         </div>
+      )}
+      {kuldesNyitva && selectedEmployee && (
+        <KuldesEllenorzo
+          cim="Megbízási szerződés kiküldése"
+          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben."
+          cimzett={selectedEmployee.email}
+          sorok={ellenorzoSorok()}
+          tetelek={valaszthato
+            .filter((t) => kivalasztott.has(tetelKulcs(t)))
+            .map((t) => `${t.employee_nev} – ${t.projektkod ? `${t.projektkod} – ` : ""}${t.project_nev ?? ""}`)}
+          gombCimke="Generálás és küldés"
+          onMegse={() => setKuldesNyitva(false)}
+          onKuld={handleGenerateAndSend}
+        />
       )}
       {kihagyasNyitva && (
       <IndoklasDialog

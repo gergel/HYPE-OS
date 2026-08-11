@@ -71,14 +71,40 @@ class VallalkozasRead(BaseModel):
     keretszerzodes_id: int | None = None
 
 
+#: Amit egy számlázó cégről KÖTELEZŐ tudni, mert mind rákerül a papírra.
+#:
+#: A cég nevére szóló szerződés és TIG ezekből a mezőkből áll össze (lásd
+#: routes/subcontractor_contracts.py és performance_certificates.py) - ha
+#: bármelyik hiányzik, a kiküldött dokumentumon üres hely marad, amit utólag
+#: csak új papírral lehet javítani. Ezért a felvitelnél kérjük be mindet, nem
+#: a kiküldés pillanatában.
+KOTELEZO_CEG_MEZOK: dict[str, str] = {
+    "nev": "Cég neve",
+    "kepviselo": "Képviselő",
+    "szekhely": "Székhely",
+    "adoszam": "Adószám",
+    "nyilvantartasi_szam": "Nyilvántartási szám",
+    "megbizas_targya": "Megbízás tárgya",
+}
+
+
+def _hianyzo_kotelezo(ertekek: dict[str, object]) -> list[str]:
+    """Mely kötelező mezők hiányoznak (üres string is hiánynak számít)?"""
+    return [
+        cimke
+        for mezo, cimke in KOTELEZO_CEG_MEZOK.items()
+        if mezo in ertekek and not str(ertekek.get(mezo) or "").strip()
+    ]
+
+
 class VallalkozasIn(BaseModel):
     nev: str
-    szekhely: str | None = None
-    adoszam: str | None = None
-    kepviselo: str | None = None
-    nyilvantartasi_szam: str | None = None
+    szekhely: str
+    adoszam: str
+    kepviselo: str
+    nyilvantartasi_szam: str
+    megbizas_targya: str
     email: str | None = None
-    megbizas_targya: str | None = None
     plusz_afa: bool | None = None
     megjegyzes: str | None = None
     aktiv: bool = True
@@ -326,8 +352,12 @@ def create_vallalkozas(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
-    if not payload.nev.strip():
-        raise HTTPException(status_code=400, detail="A cég neve kötelező.")
+    hianyzik = _hianyzo_kotelezo(payload.model_dump())
+    if hianyzik:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ezek a mezők kötelezőek: {', '.join(hianyzik)}. Mind rákerül a cég nevére szóló papírra.",
+        )
     v = Vallalkozas(**payload.model_dump())
     db.add(v)
     db.commit()
@@ -343,7 +373,17 @@ def update_vallalkozas(
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
     v = _get_or_404(db, vallalkozas_id)
-    for mezo, ertek in payload.model_dump(exclude_unset=True).items():
+    valtozas = payload.model_dump(exclude_unset=True)
+    # A kötelező mezőt szerkesztéskor sem lehet KIÜRÍTENI - különben a
+    # felvitelnél bekért adat egy javítással eltűnhetne, és a következő papír
+    # már hiányosan menne ki. Amit nem küld a kérés, azt nem bántjuk.
+    hianyzik = _hianyzo_kotelezo(valtozas)
+    if hianyzik:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ezek a mezők nem maradhatnak üresen: {', '.join(hianyzik)}.",
+        )
+    for mezo, ertek in valtozas.items():
         setattr(v, mezo, ertek)
     db.commit()
     db.refresh(v)

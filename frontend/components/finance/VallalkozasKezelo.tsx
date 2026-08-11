@@ -18,6 +18,18 @@ import { KeresosSelect } from "@/components/KeresosSelect";
  * A tagság JAVASLAT, nem szabály: hogy egy konkrét forgatáson kinek a munkáját
  * ki számlázza, azt a projekt stáblistáján lehet beállítani ("Ki számláz
  * kiért"). Ugyanaz az ember hol saját nevében, hol egy cég alatt számlázhat. */
+/** Amit egy számlázó cégről KÖTELEZŐ megadni - ugyanaz a hat mező, amit a
+ * backend is megkövetel (lásd routes/vallalkozasok.py KOTELEZO_CEG_MEZOK).
+ * Mind rákerül a cég nevére szóló papírra. */
+const UJ_CEG_MEZOK: { mezo: string; cimke: string; pelda: string; szeles?: boolean }[] = [
+  { mezo: "nev", cimke: "Cég neve", pelda: "Média Kft." },
+  { mezo: "kepviselo", cimke: "Képviselő", pelda: "Kiss Péter" },
+  { mezo: "szekhely", cimke: "Székhely", pelda: "1011 Budapest, Fő utca 1.", szeles: true },
+  { mezo: "adoszam", cimke: "Adószám", pelda: "12345678-2-41" },
+  { mezo: "nyilvantartasi_szam", cimke: "Nyilvántartási szám", pelda: "01-09-123456" },
+  { mezo: "megbizas_targya", cimke: "Megbízás tárgya", pelda: "Operatőri munka", szeles: true },
+];
+
 export function VallalkozasKezelo({
   vallalkozasok,
   emberek,
@@ -34,8 +46,11 @@ export function VallalkozasKezelo({
   const router = useRouter();
   const confirm = useConfirm();
   const [nyitottId, setNyitottId] = useState<number | null>(null);
-  const [ujNev, setUjNev] = useState("");
-  const [ujAdoszam, setUjAdoszam] = useState("");
+  // MINDEN mező kötelező, ami a cég nevére szóló papírra rákerül: ha bármelyik
+  // hiányzik, a kiküldött szerződésen/TIG-en üres hely marad, amit utólag csak
+  // új papírral lehet javítani. Ezért a felvitelnél kérjük be, nem a kiküldés
+  // pillanatában (a backend is ezt követeli, lásd KOTELEZO_CEG_MEZOK).
+  const [ujCegAdat, setUjCegAdat] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
 
@@ -60,18 +75,18 @@ export function VallalkozasKezelo({
   }
 
   async function ujCeg() {
-    if (!ujNev.trim()) {
-      setHiba("A cég neve kötelező.");
+    const hianyzik = UJ_CEG_MEZOK.filter((m) => !(ujCegAdat[m.mezo] ?? "").trim()).map((m) => m.cimke);
+    if (hianyzik.length > 0) {
+      setHiba(`Ezek a mezők kötelezőek: ${hianyzik.join(", ")}. Mind rákerül a cég nevére szóló papírra.`);
       return;
     }
     const ok = await hivas("/api/v1/vallalkozasok", {
       method: "POST",
-      body: JSON.stringify({ nev: ujNev.trim(), adoszam: ujAdoszam.trim() || null }),
+      body: JSON.stringify(
+        Object.fromEntries(UJ_CEG_MEZOK.map((m) => [m.mezo, (ujCegAdat[m.mezo] ?? "").trim()])),
+      ),
     });
-    if (ok) {
-      setUjNev("");
-      setUjAdoszam("");
-    }
+    if (ok) setUjCegAdat({});
   }
 
   async function tagFelvetel(vallalkozasId: number, employeeId: number) {
@@ -109,25 +124,22 @@ export function VallalkozasKezelo({
       {hiba && <p className="mb-3 text-[12.5px] text-text-danger">{hiba}</p>}
 
       {canCreate && (
-        <div className="mb-4 flex flex-wrap items-end gap-2">
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-text-muted">Új cég neve</label>
-            <input
-              value={ujNev}
-              onChange={(e) => setUjNev(e.target.value)}
-              disabled={busy}
-              className="min-w-[240px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-text-muted">Adószám</label>
-            <input
-              value={ujAdoszam}
-              onChange={(e) => setUjAdoszam(e.target.value)}
-              disabled={busy}
-              className="min-w-[160px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
-            />
-          </div>
+        <div className="mb-4 flex flex-wrap items-end gap-2 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+          <p className="w-full text-[12px] text-text-muted">
+            Új cég felvétele – mindegyik mező kötelező, mert mind rákerül a cég nevére szóló szerződésre és TIG-re.
+          </p>
+          {UJ_CEG_MEZOK.map((m) => (
+            <div key={m.mezo} className="flex flex-col gap-1">
+              <label className="text-[11px] text-text-muted">{m.cimke}</label>
+              <input
+                value={ujCegAdat[m.mezo] ?? ""}
+                onChange={(e) => setUjCegAdat((elozo) => ({ ...elozo, [m.mezo]: e.target.value }))}
+                placeholder={m.pelda}
+                disabled={busy}
+                className={`${m.szeles ? "min-w-[280px]" : "min-w-[190px]"} rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none`}
+              />
+            </div>
+          ))}
           <button
             type="button"
             onClick={ujCeg}

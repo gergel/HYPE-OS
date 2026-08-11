@@ -93,7 +93,12 @@ Szerződésnél és TIG-nél azonos, a régi Notion-os "Adatok átemelése" →
 - **Mentés** - az adatok egy "Készítés alatt" állapotú sorba kerülnek. Nincs
   PDF, nincs email; bármikor be lehet zárni és később folytatni.
 - **Generálás és küldés** - ugyanez elmentve, majd azonnal PDF + kiküldés
-  (`services/gdoc_template.py` + `services/google_email.py`).
+  (`services/gdoc_template.py` + `services/google_email.py`). Előtte felugró
+  **áttekintő** mutatja, pontosan milyen adatokkal megy ki a papír, és kinek:
+  a generálás és az e-mail egy lépésben fut, tehát egy elgépelt adószám már a
+  megbízottnál landol, és csak új papírral javítható. A **hiányzó** mezők
+  kiemelve látszanak - az üres hely a dokumentumon a legkésőbb észrevett hiba -,
+  de a küldés attól még mehet: van, amit tényleg nem kell kitölteni.
 - **Kihagyás** - lezárja az adott felet erre a projektre nézve, papír nélkül.
 - **Saját, kész papír feltöltése** - ha a dokumentum máshol készült, fel lehet
   tölteni generálás helyett (`components/SajatPapirFeltoltes.tsx`).

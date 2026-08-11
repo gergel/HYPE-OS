@@ -32,6 +32,13 @@ Cégek, akik **embereket küldenek** a forgatásra, és ők számláznak a munk�
 A modul két dolgot ad: a cégek listáját/adatlapját (van-e velük élő
 keretszerződés), és a tagság szerkesztését.
 
+Új cég felvitelekor **hat mező kötelező**: cég neve, képviselő, székhely,
+adószám, nyilvántartási szám, megbízás tárgya. Mind rákerül a cég nevére szóló
+szerződésre és TIG-re - ha bármelyik hiányzik, a kiküldött dokumentumon üres
+hely marad, amit utólag csak új papírral lehet javítani. Ezért a felvitelnél
+kérjük be, nem a kiküldés pillanatában. Szerkesztéssel sem lehet kiüríteni őket
+(`routes/vallalkozasok.py` `KOTELEZO_CEG_MEZOK`).
+
 Két szabály, ami itt dől el:
 
 - **A tagság csak javaslat.** Hogy egy konkrét forgatáson kinek a munkáját ki
