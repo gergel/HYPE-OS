@@ -34,6 +34,8 @@ class PerformanceCertificateRead(BaseModel):
     vallalkozas_id: int | None = None
     tetelek: list[PerformanceCertificateTetelRead] = []
     allapot: str | None = None
+    #: Miért hagytuk ki - a kihagyásnál kötelező (lásd routes skip_tig).
+    kihagyas_oka: str | None = None
     file_url: str | None = None
     ceg_neve: str | None = None
     szekhely: str | None = None

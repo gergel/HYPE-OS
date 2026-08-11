@@ -15,6 +15,12 @@ import { authFetch } from "@/lib/authFetch";
  * legördíthető. */
 export const TIG_ALLAPOTOK = ["Készítés alatt", "Kiküldve", "Kihagyva"];
 
+/** A szerződésnek van egy negyedik, lezáró állapota is: a papír létezik, csak
+ * nem itt készült (jellemzően a Notionból áthozott soroknál). Ez NEM kihagyás -
+ * lásd backend subcontractor_contracts.MAR_VAN_ALLAPOT. */
+export const SZERZODES_MAR_VAN = "Van már szerződés";
+export const SZERZODES_ALLAPOTOK = [...TIG_ALLAPOTOK, SZERZODES_MAR_VAN];
+
 const TONES: Record<string, "success" | "warning" | "neutral"> = {
   Kiküldve: "success",
   // A "Kész" a Belsős TIG korábbi, email-küldés nélküli életciklusából
@@ -22,18 +28,24 @@ const TONES: Record<string, "success" | "warning" | "neutral"> = {
   Kész: "success",
   "Készítés alatt": "warning",
   Kihagyva: "neutral",
+  // A papír megvan, csak nem itt készült - ez lezárt, rendben lévő állapot.
+  "Van már szerződés": "success",
 };
 
 export function TigAllapotSelect({
   postPath,
   value,
   canEdit,
+  allapotok = TIG_ALLAPOTOK,
   placeholder = "Nincs elkezdve",
 }: {
   /** A backend végpont, ami az állapotot állítja (POST {allapot}). */
   postPath: string;
   value: string | null;
   canEdit: boolean;
+  /** A választható állapotok. A szerződésnél eggyel több van, mint a TIG-nél
+   * ("Van már szerződés"), ezért állítható - lásd SZERZODES_ALLAPOTOK. */
+  allapotok?: string[];
   placeholder?: string;
 }) {
   const router = useRouter();
@@ -65,7 +77,7 @@ export function TigAllapotSelect({
     <span onClick={(e) => e.stopPropagation()}>
       <SelectDropdown
         value={value}
-        options={TIG_ALLAPOTOK}
+        options={allapotok}
         onChange={onChange}
         placeholder={placeholder}
         disabled={busy}

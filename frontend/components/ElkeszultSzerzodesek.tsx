@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { StatusBadge } from "@/components/StatusBadge";
-import { TigAllapotSelect } from "@/components/TigAllapotSelect";
+import { SZERZODES_ALLAPOTOK, SZERZODES_MAR_VAN, TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { formatFt } from "@/lib/ido";
 import type { ElkeszultSzerzodes } from "@/lib/api";
@@ -45,7 +45,14 @@ export function ElkeszultSzerzodesek({
   // szerződés cég nevére is szólhat (lásd backend services/szamlazo.py).
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const kesz = szerzodesek.filter((s) => s.szerzodes_allapota === "Kiküldve" || s.szerzodes_allapota === "Kihagyva");
+  // Minden LEZÁRT szerződés ide tartozik - a "Van már szerződés" is, ami a
+  // máshol elkészült papírt jelöli (lásd backend MAR_VAN_ALLAPOT).
+  const kesz = szerzodesek.filter(
+    (s) =>
+      s.szerzodes_allapota === "Kiküldve" ||
+      s.szerzodes_allapota === "Kihagyva" ||
+      s.szerzodes_allapota === SZERZODES_MAR_VAN,
+  );
   if (kesz.length === 0) return null;
 
   /** Az ALÁÍRVA visszaérkezett példány feltöltése. Külön a generált/feltöltött
@@ -143,8 +150,14 @@ export function ElkeszultSzerzodesek({
                   <TigAllapotSelect
                     postPath={`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.szamlazo}/allapot`}
                     value={s.szerzodes_allapota}
+                    allapotok={SZERZODES_ALLAPOTOK}
                     canEdit={canEdit}
                   />
+                  {/* A kihagyás indoka a jelölés mellett látszik: enélkül egy
+                      hiányzó papírról később nem derülne ki, hogy szándékos volt. */}
+                  {s.kihagyas_oka && (
+                    <p className="mt-1 max-w-[22rem] text-[11.5px] text-text-muted">{s.kihagyas_oka}</p>
+                  )}
                 </td>
                 <td className="whitespace-nowrap py-2.5 pr-6 text-right tabular-nums">
                   {s.netto_osszeg === null ? "–" : formatFt(s.netto_osszeg)}

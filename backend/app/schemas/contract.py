@@ -73,6 +73,10 @@ class ContractUpdate(BaseModel):
 class ContractRead(ContractBase):
     id: int
     szerzodes_file_url: str | None = None
+    #: Miért hagytuk ki, vagy hol van a máshol készült papír.
+    kihagyas_oka: str | None = None
+    #: A megbízott által aláírva visszaküldött példány.
+    alairt_file_url: str | None = None
     #: Mettől meddig élt a keretszerződés - üres lista = időbeli korlát nélkül.
     idoszakok: list[ContractPeriodRead] = []
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { KihagyasDialog } from "@/components/KihagyasDialog";
 import { PapirTetelValaszto, tetelKulcs } from "@/components/PapirTetelValaszto";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingTigEmployee, TigTetel } from "@/lib/api";
@@ -70,6 +71,7 @@ export function PerformanceCertificateManager({
   const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [busy, setBusy] = useState<"save" | "send" | "skip" | null>(null);
+  const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
 
   // A TIG TÉTELEI: mit igazol ez a papír. Alapból a projekten hozzá tartozó
   // stábtagok, de más projektek nyitott munkái is rátehetők - ez az "egy ember
@@ -230,14 +232,17 @@ export function PerformanceCertificateManager({
     }
   }
 
-  async function handleSkip() {
+  /** Kihagyás - az indoklás kötelező (lásd KihagyasDialog és a backend
+   * skip_tig végpontja): egy hiányzó teljesítési igazolásról fél év múlva
+   * kiderülnie kell, hogy szándékos volt. */
+  async function handleSkip(indok: string) {
     if (!selectedEmployee) return;
-    if (!(await confirm(`Biztosan kihagyod ${selectedEmployee.full_name}-t? A projekt teljesítési igazolás nélkül zárul vele.`))) return;
+    setKihagyasNyitva(false);
     setBusy("skip");
     try {
       const res = await authFetch(`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/skip`, {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ kihagyas_oka: indok }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -405,7 +410,7 @@ export function PerformanceCertificateManager({
               </button>
               <button
                 type="button"
-                onClick={handleSkip}
+                onClick={() => setKihagyasNyitva(true)}
                 disabled={busyState}
                 className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
               >
@@ -443,6 +448,14 @@ export function PerformanceCertificateManager({
             </div>
           </div>
         </div>
+      )}
+      {kihagyasNyitva && (
+      <KihagyasDialog
+        cim={`${selectedEmployee?.full_name ?? "A megbízott"} kihagyása`}
+        leiras="A projekt teljesítési igazolás nélkül zárul vele. Írd le, miért - egy hiányzó TIG-ről később ebből derül ki, hogy szándékos volt."
+        onMegse={() => setKihagyasNyitva(false)}
+        onKihagy={handleSkip}
+      />
       )}
     </div>
   );

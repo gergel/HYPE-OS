@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -34,6 +34,10 @@ class PerformanceCertificate(TimestampMixin, Base):
     vallalkozas_id: Mapped[int | None] = mapped_column(ForeignKey("vallalkozasok.id"))
 
     allapot: Mapped[str | None] = mapped_column(String(50), comment="TIG állapot")
+    #: MIÉRT hagytuk ki - a kihagyáskor kötelező megadni. Fél év múlva senki
+    #: nem fogja fejből tudni, miért maradt el egy teljesítési igazolás, és a
+    #: puszta "Kihagyva" jelölés ilyenkor gyanúsabb, mint amilyen indokolt.
+    kihagyas_oka: Mapped[str | None] = mapped_column(Text)
     file_url: Mapped[str | None] = mapped_column(String(500), comment="A TIG dokumentum linkje")
     # Csak akkor van kitöltve, ha a TIG dokumentumot MI tároljuk (a kiküldés
     # helyett feltöltött saját papír az R2-n) - a rendszer által generált,

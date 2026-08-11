@@ -297,6 +297,8 @@ class DraftInfo(BaseModel):
     teljesites_vege: date | None
     keltezes: date | None
     plusz_afa: bool | None
+    #: Miért hagytuk ki - a kihagyásnál kötelező.
+    kihagyas_oka: str | None = None
     tetelek: list[TetelInfo] = []
 
 
@@ -363,6 +365,7 @@ def _draft_info(c: PerformanceCertificate | None) -> DraftInfo | None:
         teljesites_vege=c.teljesites_vege,
         keltezes=c.keltezes,
         plusz_afa=c.plusz_afa,
+        kihagyas_oka=c.kihagyas_oka,
         tetelek=[_tetel_info(t) for t in c.tetelek],
     )
 
@@ -828,17 +831,31 @@ def generate_and_send(
     return PerformanceCertificateRead.model_validate(draft)
 
 
+class TigKihagyasIn(BaseModel):
+    kihagyas_oka: str | None = None
+
+
 @router.post("/{project_id}/{szamlazo_kulcs}/skip", response_model=PerformanceCertificateRead)
 def skip_tig(
     project_id: int,
     szamlazo_kulcs: str,
+    payload: TigKihagyasIn,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
+    """A fél kihagyása a TIG-ből, KÖTELEZŐ indoklással.
+
+    Egy hiányzó teljesítési igazolás önmagában gyanús: a puszta "Kihagyva"
+    jelölésről fél év múlva senki nem tudja megmondani, hogy szándékos volt-e,
+    vagy elfelejtődött. Az indok a bejegyzésen marad, és a listán is látszik."""
+    indok = (payload.kihagyas_oka or "").strip()
+    if not indok:
+        raise HTTPException(status_code=400, detail="A kihagyás okát meg kell adni.")
     project = _get_project_or_404(db, project_id)
     csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
     draft = _get_or_create_draft(db, project, csoport)
     draft.allapot = "Kihagyva"
+    draft.kihagyas_oka = indok
     db.commit()
     db.refresh(draft)
     return PerformanceCertificateRead.model_validate(draft)

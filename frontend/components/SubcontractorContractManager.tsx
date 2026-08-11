@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { KihagyasDialog } from "@/components/KihagyasDialog";
 import { PapirTetelValaszto, tetelKulcs, type PapirTetel } from "@/components/PapirTetelValaszto";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingSubcontractorEmployee } from "@/lib/api";
@@ -72,7 +73,8 @@ export function SubcontractorContractManager({
   const [selectedId, setSelectedId] = useState<string>("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
-  const [busy, setBusy] = useState<"save" | "send" | "skip" | null>(null);
+  const [busy, setBusy] = useState<"save" | "send" | "skip" | "marvan" | null>(null);
+  const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
 
   // A szerződés TÉTELEI: mire szól a papír. Alapból a projekten hozzá tartozó
   // stábtagok, de más projektek nyitott munkái is rátehetők - így három nap
@@ -233,14 +235,16 @@ export function SubcontractorContractManager({
     }
   }
 
-  async function handleSkip() {
+  /** Kihagyás - az indoklás kötelező, ezért felugró ablakban kérjük be
+   * (lásd KihagyasDialog), nem sima igen/nem megerősítéssel. */
+  async function handleSkip(indok: string) {
     if (!selectedEmployee) return;
-    if (!(await confirm(`Biztosan kihagyod ${selectedEmployee.full_name}-t? A projekt szerződés nélkül zárul vele.`))) return;
+    setKihagyasNyitva(false);
     setBusy("skip");
     try {
       const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/skip`, {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ kihagyas_oka: indok }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -252,6 +256,39 @@ export function SubcontractorContractManager({
       router.refresh();
     } catch (err) {
       alert(`Sikertelen kihagyás (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** "Van már kész szerződése" - a fél lekerül a listáról, de NEM
+   * kihagyottként. A Notionból áthozott embereknél gyakori: van érvényes,
+   * aláírt papír, a rendszer mégis kérné. Itt nincs indoklás-kényszer, mert
+   * maga az állapot megmondja, mi történt. */
+  async function handleMarVan() {
+    if (!selectedEmployee) return;
+    if (
+      !(await confirm(
+        `${selectedEmployee.full_name}: van már kész szerződése, ezért lekerül a listáról. Nem kihagyottként fog szerepelni, hanem "${"Van már szerződés"}" állapotban, és a TIG-je is elkészíthető lesz.`,
+      ))
+    )
+      return;
+    setBusy("marvan");
+    try {
+      const res = await authFetch(
+        `/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/mar-van`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      closeForm();
+      setSelectedId("");
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
     } finally {
       setBusy(null);
     }
@@ -434,11 +471,20 @@ export function SubcontractorContractManager({
               </button>
               <button
                 type="button"
-                onClick={handleSkip}
+                onClick={() => setKihagyasNyitva(true)}
                 disabled={busyState}
                 className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
               >
                 {busy === "skip" ? "Kihagyás…" : "Kihagyás (szerződés nélkül)"}
+              </button>
+              <button
+                type="button"
+                onClick={handleMarVan}
+                disabled={busyState}
+                title="A papír létezik, csak nem itt készült - nem kihagyásként kerül rá a jelölés"
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                {busy === "marvan" ? "Mentés…" : "Van már kész szerződése"}
               </button>
               <button
                 type="button"
@@ -472,6 +518,14 @@ export function SubcontractorContractManager({
             </div>
           </div>
         </div>
+      )}
+      {kihagyasNyitva && (
+      <KihagyasDialog
+        cim={`${selectedEmployee?.full_name ?? "A megbízott"} kihagyása`}
+        leiras="A projekt szerződés nélkül zárul vele. Írd le, miért - fél év múlva ebből fog kiderülni, hogy szándékos volt."
+        onMegse={() => setKihagyasNyitva(false)}
+        onKihagy={handleSkip}
+      />
       )}
     </div>
   );

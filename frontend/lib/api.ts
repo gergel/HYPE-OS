@@ -445,6 +445,8 @@ export type ElkeszultSzerzodes = {
    * nincs meg, a projekt "aláírt szerződésre vár" az utókövetésben. */
   alairva: boolean;
   alairt_file_url: string | null;
+  /** Miért hagytuk ki, vagy hol van a máshol készült papír. */
+  kihagyas_oka: string | null;
 };
 
 export async function getAllContractsForProject(projectId: number): Promise<ElkeszultSzerzodes[]> {

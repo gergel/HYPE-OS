@@ -98,6 +98,11 @@ class Contract(TimestampMixin, Base):
     kulsos_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Külsős")
     vallalkozas_nyilvantartasi_szam: Mapped[str | None] = mapped_column(String(100))
     szerzodes_megjegyzes: Mapped[str | None] = mapped_column(Text)
+    #: MIÉRT hagytuk ki, vagy miért nem itt készült a papír. Külön a fenti,
+    #: Notionból örökölt általános megjegyzéstől: ez kizárólag a lezárás
+    #: indoklása, és a kihagyáskor kötelező megadni - fél év múlva senki nem
+    #: fogja fejből tudni, miért maradt el egy szerződés.
+    kihagyas_oka: Mapped[str | None] = mapped_column(Text)
 
     #: Mettől meddig élt a keretszerződés - több, egymást követő időszak is
     #: lehet (lásd ContractPeriod).

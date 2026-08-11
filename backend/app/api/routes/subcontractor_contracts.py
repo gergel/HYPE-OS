@@ -54,7 +54,14 @@ router = APIRouter(prefix="/alvallalkozoi-szerzodesek", tags=["subcontractor-con
 # menüpontja nincs, ezért a jogosultsága is az Utókövetés oldalé.
 PAGE = "/utokovetes"
 
-TERMINAL_STATUSES = {"Kiküldve", "Kihagyva"}
+#: A szerződés MÁSHOL is elkészülhetett: a Notionból áthozott soroknál gyakran
+#: van már aláírt papír, a rendszer mégis kérné. Ez nem kihagyás - a szerződés
+#: létezik, csak nem itt készült -, ezért külön állapot jelöli. A "Kihagyva"
+#: azt jelenti, hogy egyáltalán NINCS szerződés; a kettőt nem szabad
+#: összemosni, mert utólag nem lehetne szétválogatni őket.
+MAR_VAN_ALLAPOT = "Van már szerződés"
+
+TERMINAL_STATUSES = {"Kiküldve", "Kihagyva", MAR_VAN_ALLAPOT}
 
 # A csatolt program email-sablonjának 1:1 portja (aláírás: "ADMINISZTRÁCIÓ",
 # nem "GYÁRTÁS" - lásd services/dispo.py _SIGNATURE_HTML, ami a diszpóhoz
@@ -337,6 +344,8 @@ class DraftInfo(BaseModel):
     #: "aláírt szerződésre vár" az utókövetésben.
     alairva: bool = False
     alairt_file_url: str | None = None
+    #: Miért hagytuk ki (vagy hol a máshol készült papír).
+    kihagyas_oka: str | None = None
     tetelek: list[TetelInfo] = []
 
 
@@ -445,6 +454,7 @@ def _draft_info(c: Contract | None) -> DraftInfo | None:
         plusz_afa=c.plusz_afa,
         alairva=bool(c.alairva),
         alairt_file_url=c.alairt_file_url,
+        kihagyas_oka=c.kihagyas_oka,
         tetelek=[_tetel_info(t) for t in c.tetelek],
     )
 
@@ -520,6 +530,8 @@ class ElkeszultSzerzodes(BaseModel):
     #: "aláírt szerződésre vár" (lásd alairasra_varo_csoportok).
     alairva: bool = False
     alairt_file_url: str | None = None
+    #: Miért hagytuk ki (vagy hol a máshol készült papír).
+    kihagyas_oka: str | None = None
 
 
 @router.get("/{project_id}/{szamlazo_kulcs}/nyitott-tetelek", response_model=list[TetelInfo])
@@ -608,6 +620,7 @@ def list_all_for_project(
                 szerzodes_file_url=c.szerzodes_file_url,
                 alairva=bool(c.alairva),
                 alairt_file_url=c.alairt_file_url,
+                kihagyas_oka=c.kihagyas_oka,
             )
         )
     return eredmeny
@@ -1063,19 +1076,66 @@ def delete_alairt_szerzodes(
     return ContractRead.model_validate(szerzodes)
 
 
+class KihagyasIn(BaseModel):
+    #: A kihagyásnál kötelező, a "van már szerződés" lezárásnál opcionális.
+    kihagyas_oka: str | None = None
+
+
 @router.post("/{project_id}/{szamlazo_kulcs}/skip", response_model=ContractRead)
 def skip_contract(
     project_id: int,
     szamlazo_kulcs: str,
+    payload: KihagyasIn,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
     """A megbízott kihagyása - a projekt lezárható vele szerződés nélkül is,
-    ő ezután nem jelenik meg többé a függő listán ennél a projektnél."""
+    ő ezután nem jelenik meg többé a függő listán ennél a projektnél.
+
+    Az INDOKLÁS kötelező: a "Kihagyva" jelölés önmagában egy hiányzó papír,
+    amiről fél év múlva senki nem fogja tudni, hogy szándékos volt-e. Ha a
+    szerződés valójában létezik, csak nem itt készült, NE ezt használd - arra
+    a /mar-van végpont való."""
+    indok = (payload.kihagyas_oka or "").strip()
+    if not indok:
+        raise HTTPException(status_code=400, detail="A kihagyás okát meg kell adni.")
     project = _get_project_or_404(db, project_id)
     csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
     draft = _get_or_create_draft(db, project, csoport)
     draft.szerzodes_allapota = "Kihagyva"
+    draft.kihagyas_oka = indok
+    db.commit()
+    db.refresh(draft)
+    return ContractRead.model_validate(draft)
+
+
+@router.post("/{project_id}/{szamlazo_kulcs}/mar-van", response_model=ContractRead)
+def mar_van_szerzodes(
+    project_id: int,
+    szamlazo_kulcs: str,
+    payload: KihagyasIn | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """VAN MÁR kész szerződése - a fél lekerül a listáról, de NEM kihagyottként.
+
+    Erre azért van szükség, mert a Notionból áthozott embereknél sokszor van
+    már érvényes, aláírt papír, a rendszer mégis kéri. Ilyenkor a "Kihagyva"
+    hazugság volna (az azt jelenti, hogy nincs szerződés), a generálás pedig
+    fölösleges duplikátum.
+
+    Ez lezáró állapot, tehát a fél TIG-fázisa is megnyílik utána - ugyanúgy,
+    mintha kiküldtük volna. Aláírt példányt viszont nem várunk vissza tőle: nem
+    mi küldtük ki (lásd alairasra_varo_csoportok).
+
+    Az indoklás itt NEM kötelező - maga az állapot megmondja, mi történt -, de
+    megadható (pl. hol van a papír)."""
+    project = _get_project_or_404(db, project_id)
+    csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
+    draft = _get_or_create_draft(db, project, csoport)
+    draft.szerzodes_allapota = MAR_VAN_ALLAPOT
+    if payload is not None and (payload.kihagyas_oka or "").strip():
+        draft.kihagyas_oka = payload.kihagyas_oka.strip()
     db.commit()
     db.refresh(draft)
     return ContractRead.model_validate(draft)
@@ -1085,7 +1145,7 @@ class SzerzodesAllapotIn(BaseModel):
     allapot: str
 
 
-SZERZODES_ALLAPOTOK = ["Készítés alatt", "Kiküldve", "Kihagyva"]
+SZERZODES_ALLAPOTOK = ["Készítés alatt", "Kiküldve", "Kihagyva", MAR_VAN_ALLAPOT]
 
 
 @router.post("/{project_id}/{szamlazo_kulcs}/allapot", response_model=ContractRead)
