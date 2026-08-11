@@ -46,6 +46,7 @@ from app.api.routes.timeline import router as timeline_router
 from app.api.routes.user_access import router as user_access_router
 from app.api.routes.vagoi_visszajelzesek import router as vagoi_visszajelzesek_router
 from app.api.routes.utokovetes_admin import router as utokovetes_admin_router
+from app.api.routes.krumpello import router as krumpello_router
 from app.api.routes.vallalkozasok import router as vallalkozasok_router
 
 api_router = APIRouter()
@@ -97,6 +98,7 @@ api_router.include_router(finance_summary_router)
 api_router.include_router(contracts_router)
 api_router.include_router(subcontractor_contracts_router)
 api_router.include_router(eseti_szerzodesek_router)
+api_router.include_router(krumpello_router)
 api_router.include_router(vallalkozasok_router)
 api_router.include_router(belsos_idoszakok_router)
 # Visszatérő kötelezettségek (E-Rezsi, biztosítások) és a céges autók - a

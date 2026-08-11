@@ -63,6 +63,12 @@ from app.models.task import Task, task_employees
 from app.models.timesheet import Timesheet
 from app.models.timeline import TimelineEvent
 from app.models.user_access import PageAccessConfig
+from app.models.krumpello import (
+    KrumpelloDolgozo,
+    KrumpelloKiadas,
+    KrumpelloMunkaora,
+    KrumpelloNap,
+)
 from app.models.vallalkozas import Vallalkozas, VallalkozasTag
 
 __all__ = [
@@ -123,6 +129,10 @@ __all__ = [
     "ProjectSzamlazo",
     "ContractTetel",
     "PerformanceCertificateTetel",
+    "KrumpelloDolgozo",
+    "KrumpelloKiadas",
+    "KrumpelloMunkaora",
+    "KrumpelloNap",
     "Vallalkozas",
     "VallalkozasTag",
     "ProjectCode",

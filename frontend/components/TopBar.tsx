@@ -1,5 +1,6 @@
 import { getCurrentUser, getNotifications } from "@/lib/api";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { KrumpelloKapcsolo } from "@/components/KrumpelloKapcsolo";
 import { NotificationBell } from "@/components/NotificationBell";
 import { TemaKapcsolo } from "@/components/TemaKapcsolo";
 import { UserMenu } from "@/components/UserMenu";
@@ -63,6 +64,8 @@ export async function TopBar() {
         <p className="mt-1 text-[12.5px] text-text-muted">{today}</p>
       </div>
       <div className="flex items-center gap-2.5">
+        {/* Átlépés a Krumpello pénzügyre - csak jogosultsággal látszik. */}
+        <KrumpelloKapcsolo />
         <GlobalSearch />
         {/* A mentett beállítás a SZERVERRŐL jön (employees.tema) - a süti
             csak az első festés gyorsítótára, lásd lib/tema.ts. */}

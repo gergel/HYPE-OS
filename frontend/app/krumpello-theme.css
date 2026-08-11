@@ -1,0 +1,101 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   KRUMPELLO arculat
+
+   A Krumpello nem a HYPE OS egy oldala, hanem egy MÁSIK ÜZLET pénzügye
+   ugyanabban a rendszerben - és ezt a szem is meg kell hogy erősítse. Ha
+   ugyanúgy nézne ki, egy fáradt pillanatban bárki a rossz kasszába vezetne be
+   egy tételt; a markánsan más felület viszont már a kapcsoló utáni első
+   másodpercben megmondja, hol jár.
+
+   A színek a Krumpello saját arculatából jönnek (sötét éjkék alap, meleg
+   narancs jel, krém szöveg) - lásd a nyitó plakátot.
+
+   MŰSZAKILAG viszont NEM új design-rendszer: ugyanazokat a tokeneket írja
+   felül, amiket a HYPE OS használ (lásd globals.css). Ezért minden meglévő
+   komponens - tábla, gomb, mező, badge - változtatás nélkül működik itt is,
+   és egy jövőbeli komponensnél sincs teendő. Egy párhuzamos osztálynév-
+   készlet (mint a Média Portálé) itt csak duplikáció lenne: az admin-felület
+   ugyanaz, csak más a bőre.
+
+   Hatókör: a `.krumpello-root` osztályt viselő elem és leszármazottai (lásd
+   app/(krumpello)/layout.tsx) - így a HYPE OS-t egyáltalán nem érinti, és a
+   világos/sötét kapcsoló sem hat rá: a Krumpello mindig sötét éjkék marad,
+   mert ez a MÁRKÁJA, nem beállítás kérdése.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.krumpello-root {
+  --background: #131c26;
+  --foreground: #faf7f0;
+
+  /* Ugyanazok a SZEREPEK, mint a HYPE OS-ben: surface-1 a váz (oldalsáv,
+     fejléc), surface-2 a kártyák, surface-3 a kártyán belüli kiemelés. */
+  --surface-1: #0f161e;
+  --surface-2: #1a242f;
+  --surface-3: #202c39;
+  --surface-4: #293747;
+  --border: rgba(250, 247, 240, 0.09);
+  --border-strong: rgba(250, 247, 240, 0.17);
+
+  --text-primary: #faf7f0;
+  --text-secondary: #b3b9c2;
+  --text-muted: #7d8794;
+
+  /* A narancs itt VALÓDI akcentus (a HYPE OS matt titánjával szemben): ez a
+     márka jele, és egyben az egyetlen erős szín a felületen. */
+  --text-accent: #e8843f;
+  --bg-accent: rgba(232, 132, 63, 0.14);
+  --accent-solid: #e8843f;
+  --accent-solid-hover: #f09a5e;
+  --accent-gradient: #293747;
+
+  /* Az állapotszínek melegebbre hangolva, hogy a narancs mellett ne
+     "hidegedjenek ki" - a szerepük változatlan. */
+  --text-success: #7ba97f;
+  --bg-success: rgba(123, 169, 127, 0.15);
+  --text-warning: #d9a45f;
+  --bg-warning: rgba(217, 164, 95, 0.15);
+  --text-danger: #d47a6a;
+  --bg-danger: rgba(212, 122, 106, 0.15);
+
+  --text-blue: #7f97b3;
+  --bg-blue: rgba(127, 151, 179, 0.14);
+  --text-teal: #6fa39c;
+  --bg-teal: rgba(111, 163, 156, 0.14);
+  --text-orange: #e8843f;
+  --bg-orange: rgba(232, 132, 63, 0.14);
+  --text-pink: #b98d94;
+  --bg-pink: rgba(185, 141, 148, 0.14);
+  --text-yellow: #c9ad6f;
+  --bg-yellow: rgba(201, 173, 111, 0.14);
+
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+/* A gombok és a görgetősáv nem tokenből élnek (lásd globals.css), ezért itt
+   is külön kell őket megadni - különben a HYPE OS titánszürke hovere maradna
+   rajtuk. */
+.krumpello-root .btn-primary {
+  background: var(--accent-solid);
+  border-color: transparent;
+  color: #131c26;
+  box-shadow: none;
+  font-weight: 600;
+}
+.krumpello-root .btn-primary:hover:not(:disabled) {
+  background: var(--accent-solid-hover);
+  border-color: transparent;
+}
+.krumpello-root ::selection {
+  background: rgba(232, 132, 63, 0.28);
+}
+.krumpello-root *,
+.krumpello-root {
+  scrollbar-color: rgba(250, 247, 240, 0.14) transparent;
+}
+.krumpello-root *::-webkit-scrollbar-thumb {
+  background-color: rgba(250, 247, 240, 0.12);
+}
+.krumpello-root *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(232, 132, 63, 0.5);
+}

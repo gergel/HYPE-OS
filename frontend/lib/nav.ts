@@ -35,6 +35,21 @@ export type PagePermissionGroup = { page: string; label: string };
  * jogosultságok), mindegyik a saját nevén, külön sorban jelenik meg. Lásd
  * UserAccessManager - a Beállítások oldal ez alapján sorolja fel a per-oldal
  * megtekintés/szerkesztés/létrehozás/törlés checkboxokat. */
+/** Jogosultsági oldalak, amiknek NINCS bejegyzésük az oldalsávban.
+ *
+ * A Krumpello nem a HYPE OS egyik menüpontja, hanem egy külön felület, amire
+ * a fejlécben ülő kapcsoló visz át (lásd components/KrumpelloKapcsolo.tsx) -
+ * a saját navigációját már ő maga hozza. A jogosultságának viszont ugyanúgy
+ * meg kell jelennie a Beállítások oldalon, hogy admin egyenként adhassa meg,
+ * ki lássa egyáltalán a kapcsolót.
+ *
+ * A middleware-nek nem kell külön kezelnie: a resolvePermissionPage
+ * visszaesése az útvonal első szeletét adja ("/krumpello"), ami pont ez a
+ * kulcs - ugyanaz, amit a backend is használ (routes/krumpello.py PAGE). */
+export const KULON_JOGOSULTSAGOK: PagePermissionGroup[] = [
+  { page: "/krumpello", label: "Krumpello (külön pénzügy)" },
+];
+
 export function pagePermissionGroups(): PagePermissionGroup[] {
   const seen = new Set<string>();
   const result: PagePermissionGroup[] = [];
@@ -47,6 +62,9 @@ export function pagePermissionGroups(): PagePermissionGroup[] {
       const sharedCount = group.items.filter((i) => pageOf(i) === page).length;
       result.push({ page, label: sharedCount > 1 ? (group.label ?? item.label) : item.label });
     }
+  }
+  for (const kulon of KULON_JOGOSULTSAGOK) {
+    if (!seen.has(kulon.page)) result.push(kulon);
   }
   return result;
 }

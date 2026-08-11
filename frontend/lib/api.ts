@@ -1912,3 +1912,128 @@ export async function getVagoiVisszajelzesek(deliverableId?: number): Promise<Va
   const qs = deliverableId != null ? `?deliverable_id=${deliverableId}` : "";
   return (await apiGet<VagoiVisszajelzes[]>(`/api/v1/vagoi-visszajelzesek${qs}`)) ?? [];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Krumpello - önálló pénzügy (lásd backend routes/krumpello.py)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Egy nap kassza-zárása. Naponta pontosan egy sor. */
+export type KrumpelloNap = {
+  id: number;
+  datum: string;
+  brutto_kp: number | null;
+  brutto_kartya: number | null;
+  netto_kp: number | null;
+  netto_kartya: number | null;
+  borravalo_kp: number | null;
+  borravalo_kartya: number | null;
+  /** Számla nélküli bevétel aznap. */
+  extra: number | null;
+  megjegyzes: string | null;
+  brutto_osszesen: number;
+  netto_osszesen: number;
+  borravalo_osszesen: number;
+};
+
+/** "utalas" | "keszpenz" | "extra" - melyik kasszából ment ki a pénz. */
+export type KrumpelloForras = "utalas" | "keszpenz" | "extra";
+
+export type KrumpelloKiadas = {
+  id: number;
+  forras: KrumpelloForras;
+  kedvezmenyezett: string;
+  datum: string | null;
+  megnevezes: string | null;
+  netto: number | null;
+  afa: number | null;
+  brutto: number | null;
+  megjegyzes: string | null;
+};
+
+export type KrumpelloDolgozo = {
+  id: number;
+  nev: string;
+  alap_orabar: number | null;
+  aktiv: boolean;
+  megjegyzes: string | null;
+  employee_id: number | null;
+  ora_osszesen: number;
+  fizetes_osszesen: number;
+  borravalo_osszesen: number;
+  utolso_nap: string | null;
+};
+
+export type KrumpelloMunkaora = {
+  id: number;
+  dolgozo_id: number;
+  dolgozo_nev: string;
+  datum: string;
+  ora: number | null;
+  orabar: number | null;
+  fizetes: number | null;
+  borravalo: number | null;
+  megjegyzes: string | null;
+};
+
+export type KrumpelloOsszesito = {
+  bevetel: {
+    brutto_kp: number;
+    brutto_kartya: number;
+    brutto: number;
+    netto_kp: number;
+    netto_kartya: number;
+    netto: number;
+    borravalo_kp: number;
+    borravalo_kartya: number;
+    borravalo: number;
+    extra: number;
+  };
+  kiadas_utalas: { netto: number; afa: number; brutto: number };
+  kiadas_keszpenz: { netto: number; afa: number; brutto: number };
+  kiadas_extra: number;
+  szamla_egyenleg_netto: number;
+  szamla_egyenleg_brutto: number;
+  keszpenz_egyenleg_netto: number;
+  keszpenz_egyenleg_brutto: number;
+  extra_bevetel: number;
+  /** Extra bevétel − extra kiadás. Negatív = több számlázatlan pénz ment ki. */
+  extra_egyenleg: number;
+  munkaora: number;
+  munkaber: number;
+  munkaber_borravalo: number;
+};
+
+function krumpelloIdoszak(tol?: string, ig?: string): string {
+  const p = new URLSearchParams();
+  if (tol) p.set("tol", tol);
+  if (ig) p.set("ig", ig);
+  const qs = p.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function getKrumpelloOsszesito(tol?: string, ig?: string): Promise<KrumpelloOsszesito | null> {
+  return apiGet<KrumpelloOsszesito>(`/api/v1/krumpello/osszesito${krumpelloIdoszak(tol, ig)}`);
+}
+
+export async function getKrumpelloNapok(tol?: string, ig?: string): Promise<KrumpelloNap[]> {
+  return (await apiGet<KrumpelloNap[]>(`/api/v1/krumpello/napok${krumpelloIdoszak(tol, ig)}`)) ?? [];
+}
+
+export async function getKrumpelloKiadasok(tol?: string, ig?: string): Promise<KrumpelloKiadas[]> {
+  return (await apiGet<KrumpelloKiadas[]>(`/api/v1/krumpello/kiadasok${krumpelloIdoszak(tol, ig)}`)) ?? [];
+}
+
+export async function getKrumpelloDolgozok(tol?: string, ig?: string): Promise<KrumpelloDolgozo[]> {
+  return (await apiGet<KrumpelloDolgozo[]>(`/api/v1/krumpello/dolgozok${krumpelloIdoszak(tol, ig)}`)) ?? [];
+}
+
+export async function getKrumpelloMunkaorak(tol?: string, ig?: string): Promise<KrumpelloMunkaora[]> {
+  return (await apiGet<KrumpelloMunkaora[]>(`/api/v1/krumpello/munkaorak${krumpelloIdoszak(tol, ig)}`)) ?? [];
+}
+
+/** Látja-e a bejelentkezett ember a Krumpellót? A HYPE OS fejlécében ülő
+ * kapcsoló ezt kérdezi - jog nélkül a kapcsoló meg sem jelenik. */
+export async function getKrumpelloHozzaferes(): Promise<boolean> {
+  const res = await apiGet<{ van_hozzaferes: boolean }>("/api/v1/krumpello/hozzaferes");
+  return res?.van_hozzaferes ?? false;
+}
