@@ -193,6 +193,10 @@ export const navGroups: NavGroup[] = [
         icon: "FileCheck2",
         permissionPage: "/utokovetes",
       },
+      // A vágói játék az utómunkához tartozik, de SAJÁT jogosultsága van: az
+      // állás mindenkinek látszik, akit beengedünk (a verseny lényege, hogy
+      // lássák egymást), a nyeremény és a munkanapok viszont adminé.
+      { label: "Vágói játék", href: "/vagoi-jatek", icon: "Trophy" },
       { label: "Kampányok", href: "/kampanyok", icon: "Megaphone" },
       { label: "Feladatok", href: "/feladatok", icon: "CheckSquare" },
       { label: "AI Assistant", href: "/ai-assistant", icon: "Sparkles" },

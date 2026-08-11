@@ -69,6 +69,11 @@ from app.models.krumpello import (
     KrumpelloMunkaora,
     KrumpelloNap,
 )
+from app.models.vagoi_jatek import (
+    VagoEllenorzesEsemeny,
+    VagoJatekHonap,
+    VagoJatekNap,
+)
 from app.models.vallalkozas import Vallalkozas, VallalkozasTag
 
 __all__ = [
@@ -133,6 +138,9 @@ __all__ = [
     "KrumpelloKiadas",
     "KrumpelloMunkaora",
     "KrumpelloNap",
+    "VagoEllenorzesEsemeny",
+    "VagoJatekHonap",
+    "VagoJatekNap",
     "Vallalkozas",
     "VallalkozasTag",
     "ProjectCode",

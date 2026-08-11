@@ -36,6 +36,7 @@ Helyette a szabály:
 | [12-migracio.md](12-migracio.md) | Átállás a régi rendszerről: kód, adat és média külön útja, cutover |
 | [13-domain-es-atallas.md](13-domain-es-atallas.md) | A portál saját domainje (hypeclient.com), és az átállás lépésről lépésre |
 | [14-krumpello.md](14-krumpello.md) | A Krumpello önálló pénzügye: napi kassza, kiadás-források, munkabér, "extra" |
+| [15-vagoi-jatek.md](15-vagoi-jatek.md) | Havi pontverseny a vágóknak: pontozás, arányosítás munkanapra, nyeremény |
 
 A tervezési előzményeket (termékspecifikáció, AS-IS rendszertérkép, migration
 map, roadmap, ER-diagram) a szülő `docs/` mappa őrzi - azok a rendszer

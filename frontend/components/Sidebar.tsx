@@ -26,6 +26,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Trophy,
   UserCheck,
   UserRound,
   Users,
@@ -64,6 +65,7 @@ const ICONS: Record<string, LucideIcon> = {
   Repeat,
   ShieldCheck,
   Car,
+  Trophy,
 };
 
 /** allowedPages: az egyénenként beállított oldal-hozzáférés (lásd Beállítások) -

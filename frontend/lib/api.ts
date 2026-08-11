@@ -2047,3 +2047,62 @@ export async function getKrumpelloHozzaferes(): Promise<boolean> {
   const res = await apiGet<{ van_hozzaferes: boolean }>("/api/v1/krumpello/hozzaferes");
   return res?.van_hozzaferes ?? false;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vágói játék - havi pontverseny (lásd backend routes/vagoi_jatek.py)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type VagoAllas = {
+  employee_id: number;
+  nev: string;
+  ellenorzes_db: number;
+  ellenorzes_pont: number;
+  vagas_perc: number;
+  vagas_pont: number;
+  /** Arányosítás ELŐTT. */
+  nyers_pont: number;
+  munkanap: number;
+  /** A verseny hivatalos pontszáma: nyers × (20 / munkanap). */
+  pont: number;
+  /** 1-től; holtversenynél azonos. 0 = nincs helyezése (0 pont). */
+  helyezes: number;
+};
+
+export type VagoHonap = {
+  ev: number;
+  honap: number;
+  nyeremeny: string | null;
+  megjegyzes: string | null;
+  folyamatban: boolean;
+  allas: VagoAllas[];
+  gyoztes_nev: string | null;
+  gyoztes_pont: number;
+};
+
+export type VagoSzabalyok = {
+  ellenorzes_pont: number;
+  perc_per_pont: number;
+  alap_munkanap: number;
+};
+
+export async function getVagoHonap(ev?: number, honap?: number): Promise<VagoHonap | null> {
+  const p = new URLSearchParams();
+  if (ev) p.set("ev", String(ev));
+  if (honap) p.set("honap", String(honap));
+  const qs = p.toString();
+  return apiGet<VagoHonap>(`/api/v1/vagoi-jatek/honap${qs ? `?${qs}` : ""}`);
+}
+
+export async function getVagoKorabbiHonapok(darab = 6): Promise<VagoHonap[]> {
+  return (await apiGet<VagoHonap[]>(`/api/v1/vagoi-jatek/korabbi?darab=${darab}`)) ?? [];
+}
+
+export async function getVagoSzabalyok(): Promise<VagoSzabalyok> {
+  return (
+    (await apiGet<VagoSzabalyok>("/api/v1/vagoi-jatek/szabalyok")) ?? {
+      ellenorzes_pont: 50,
+      perc_per_pont: 3,
+      alap_munkanap: 20,
+    }
+  );
+}

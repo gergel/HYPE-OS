@@ -31,14 +31,21 @@ from app.schemas.deliverable_actions import (
 )
 from app.schemas.feedback import FeedbackCreate, FeedbackRead, FeedbackUpdate
 from app.schemas.timesheet import TimesheetCreate, TimesheetRead, TimesheetUpdate
-from app.services import deliverable_actions, notifications
+from app.services import deliverable_actions, notifications, vagoi_jatek
 
 
 def _after_deliverable_update(
     obj: Deliverable, data: dict, m2m_changes: dict, db: Session, current_user: Employee
 ) -> None:
-    """Ha a PATCH kiosztotta (Assigned To) az anyagot valakinek, azt a
-    munkatársat értesíti - lásd AssignedToPicker.tsx."""
+    """A PATCH utáni mellékhatások: kiosztás-értesítés és a vágói játék pontja."""
+    # Ellenőrzésbe került az anyag -> a vágói játékban pont jár érte annak, aki
+    # odatette (lásd services/vagoi_jatek.py). Idempotens: ugyanaz az anyag
+    # akkor sem hoz még egyszer pontot, ha kiveszik és visszateszik.
+    if "allapot" in data and vagoi_jatek.ellenorzes_allapot(obj.allapot):
+        if vagoi_jatek.rogzitsd_ellenorzest(db, obj, current_user):
+            db.commit()
+
+    # Kiosztás (Assigned To) -> értesítés a munkatársnak, lásd AssignedToPicker.tsx.
     if "assigned_to_employee_id" not in data:
         return
     new_id = data["assigned_to_employee_id"]
