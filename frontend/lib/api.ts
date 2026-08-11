@@ -512,6 +512,26 @@ export type KulsosTig = {
   szamla_kifizetve: boolean;
 };
 
+/** Egy TIG teljes adatlapja - a listasor mezőin FELÜL a papírra kerülő adatok,
+ * a tételek és a feltöltött számlák (lásd backend get_kulsos_tig). */
+export type KulsosTigReszlet = KulsosTig & {
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  email: string | null;
+  tetelek: {
+    project_id: number;
+    project_nev: string | null;
+    projektkod: string | null;
+    forgatas_datuma: string | null;
+    employee_id: number;
+    employee_nev: string | null;
+    netto_osszeg: number | null;
+    megnevezes: string | null;
+  }[];
+  szamlak: { id: number; filename: string; url: string }[];
+};
+
 export async function getKulsosTigek(): Promise<KulsosTig[]> {
   return (await apiGet<KulsosTig[]>("/api/v1/kulsos-tigek")) ?? [];
 }

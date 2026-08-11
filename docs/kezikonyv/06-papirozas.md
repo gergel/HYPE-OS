@@ -62,6 +62,13 @@ mint egy kiküldött, csak dokumentum nélkül - és pont az a néhány tétel, 
 később a legvalószínűbben számon kérnek. Az Utókövetés ezeket már nem mutatja
 (lezártnak számítanak), tehát nélkülük nem lenne hol utánanézni.
 
+A külsős TIG-ek listáján egy sorra kattintva **magának a TIG-nek az adatlapja**
+nyílik meg felugró ablakban (`GET /kulsos-tigek/{id}`), nem a projekt teljes
+utókövetése: ott a projekt összes papírja van, itt viszont pont az a kérdés,
+hogy ennek az egy embernek erre az egy projektre mi van a papírján. Az ablak
+**olvasó** - a szerkesztés az utókövetés-oldalon marad, ahová egy gomb visz.
+Kettőzött szerkesztő-felületből előbb-utóbb két, egymástól elcsúszó igazság lenne.
+
 ## Az alvállalkozói folyamat sorrendje
 
 1. **Diszpó kimegy** → megvan, ki vett részt a projekten.
