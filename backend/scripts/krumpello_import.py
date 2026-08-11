@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import re
 import sys
 from pathlib import Path
 
@@ -61,6 +62,48 @@ def _datum(ertek) -> datetime.date | None:
 
 def _szam(ertek) -> float | None:
     return float(ertek) if isinstance(ertek, (int, float)) and not isinstance(ertek, bool) else None
+
+
+#: Szövegben álló összeg: "6535FT", "BÓNUSZ: 5000 FT", "1700 Ft - Tüdőszűrés",
+#: "borravaló összesen : 35 585Ft". A táblázatban a borravaló oszlopba
+#: rendszeresen kerül jegyzet is, nem csak szám - ha ezeket egyszerűen
+#: eldobnánk (a _szam None-t ad rájuk), némán tűnne el egy bónusz vagy egy
+#: üzemorvosi térítés.
+_OSSZEG_MINTA = re.compile(r"-?\s*\d[\d\s .]*", re.UNICODE)
+
+#: Ha ez szerepel a szövegben, az összeg egy IDŐSZAKI VÉGÖSSZEG, nem az adott
+#: napé - napi értékként felvéve megduplázná az elszámolást.
+_VEGOSSZEG_SZAVAK = ("összesen", "osszesen", "kiegészítés", "kiegeszites")
+
+
+def _szam_szovegbol(ertek) -> tuple[float | None, str | None]:
+    """(összeg, eredeti szöveg) egy cellából.
+
+    Szám cellánál az összeg maga, jegyzet nélkül. Szöveges cellánál kiolvassuk
+    belőle az első számot, ÉS megtartjuk a teljes szöveget megjegyzésnek - a
+    "8400 - Üzemorvos" esetében a 8400 az összeg, de az, hogy MIÉRT, legalább
+    ilyen fontos.
+
+    Végösszeget jelölő szövegnél (lásd _VEGOSSZEG_SZAVAK) az összeget NEM
+    adjuk vissza, csak a szöveget: az egy időszak összesítése, nem az adott
+    napé."""
+    szam = _szam(ertek)
+    if szam is not None:
+        return szam, None
+    szoveg = _szoveg(ertek)
+    if szoveg is None:
+        return None, None
+    egysoros = " ".join(szoveg.split())
+    if any(sz in egysoros.casefold() for sz in _VEGOSSZEG_SZAVAK):
+        return None, egysoros
+    talalat = _OSSZEG_MINTA.search(egysoros)
+    if talalat is None:
+        return None, egysoros
+    nyers = talalat.group(0).replace(" ", "").replace(" ", "").replace(".", "")
+    try:
+        return float(nyers), egysoros
+    except ValueError:
+        return None, egysoros
 
 
 def _szoveg(ertek) -> str | None:
@@ -140,8 +183,13 @@ def importal(xlsx: Path, *, szarazon: bool, felulir: bool) -> None:
                     ertekek[f"{kulcs}_kp"] = _szam(ws.cell(r, kp).value)
                     ertekek[f"{kulcs}_kartya"] = _szam(ws.cell(r, kartya).value)
             ertekek["extra"] = _szam(ws.cell(r, extra_oszlop).value) if extra_oszlop else None
-            if not any(v for v in ertekek.values()):
-                continue  # üres nap - nem hozunk létre sort, csak zajt adna
+            # A csupa NULLÁS nap is bejön (`is not None`, nem `if v`): a "aznap
+            # nyitva voltunk és nem volt bevétel" állítás információ, a hiányzó
+            # zárástól különbözik. A táblázatban viszont az egész év előre ki
+            # van rajzolva üres sorokkal - azokból nem csinálunk bejegyzést,
+            # mert csak zajt adnának.
+            if all(v is None for v in ertekek.values()):
+                continue
             meglevo = letezo_napok.get(d)
             if meglevo is None:
                 db.add(KrumpelloNap(datum=d, **ertekek))
@@ -189,6 +237,41 @@ def importal(xlsx: Path, *, szarazon: bool, felulir: bool) -> None:
         dolgozok = {d.nev.casefold(): d for d in db.query(KrumpelloDolgozo).all()}
         letezo_ora = {(o.dolgozo_id, o.datum) for o in db.query(KrumpelloMunkaora).all()}
 
+        # A munkabér-lap SORAI DÁTUM SZERINT IGAZODNAK: ugyanabban a sorban
+        # minden embernél ugyanaz a nap áll (ellenőrizve: egyetlen sorban sincs
+        # két különböző dátum). Ezért ha valakinél üresen maradt a dátum-cella,
+        # a sor dátuma a többiek oszlopából pótolható - enélkül az a munkanap
+        # némán kimaradna az elszámolásból.
+        sor_datumok: dict[int, datetime.date] = {}
+        #: A "ZÁRÁS" sorokat SORSZINTEN ismerjük fel, nem oszloponként: a
+        #: feliratot ("2026.05.06.-2026.05.31. ZÁRÁS") jellemzően csak az első
+        #: ember oszlopába írják be, a többieknél üresen marad a dátum-cella,
+        #: pedig ugyanaz a sor az ő időszaki elszámolásuk is. Oszloponként
+        #: nézve ezek "dátum nélküli" soroknak látszanának, és vagy kimaradnának
+        #: figyelmeztetéssel, vagy - ha a sor dátumát rájuk húznánk - az
+        #: időszak teljes bérét egyetlen napra könyvelnénk.
+        zaras_sorok: dict[int, str] = {}
+        for _, kezdo in emberek:
+            for r in range(3, ws2.max_row + 1):
+                nyers = ws2.cell(r, kezdo).value
+                d = _datum(nyers)
+                if d is not None:
+                    sor_datumok.setdefault(r, d)
+                    continue
+                szoveg = _szoveg(nyers)
+                if szoveg and "ZÁRÁS" in szoveg.upper():
+                    zaras_sorok.setdefault(r, " ".join(szoveg.split()))
+        # Ahol egyetlen oszlopban sincs se dátum, se felirat, de van kifizetés,
+        # az is időszaki zárás (a táblázat nem mindig írja ki a feliratot).
+        for r in range(3, ws2.max_row + 1):
+            if r in sor_datumok or r in zaras_sorok:
+                continue
+            if any(_szam(ws2.cell(r, kezdo + 4).value) for _, kezdo in emberek):
+                zaras_sorok[r] = f"{r}. sor (felirat nélküli időszaki zárás)"
+
+        zarasok: list[str] = []
+        datum_nelkul: list[str] = []
+
         for nyers_nev, kezdo in emberek:
             # A táblázatban van, aki csupa nagybetűvel szerepel, van, aki nem -
             # a rendszerben egységesen olvasható alakban tároljuk.
@@ -202,33 +285,66 @@ def importal(xlsx: Path, *, szarazon: bool, felulir: bool) -> None:
                 uj_dolgozo += 1
             oszlopok = _blokk_oszlopai(ws2, 2, kezdo, kezdo + 6)
             for r in range(3, ws2.max_row + 1):
-                d = _datum(ws2.cell(r, oszlopok["DÁTUM"]).value) if "DÁTUM" in oszlopok else None
-                if d is None:
-                    continue
+                nyers_datum = ws2.cell(r, oszlopok["DÁTUM"]).value if "DÁTUM" in oszlopok else None
                 ora = _szam(ws2.cell(r, oszlopok["ÓRA"]).value) if "ÓRA" in oszlopok else None
-                borravalo = _szam(ws2.cell(r, oszlopok["BORRAVALÓ"]).value) if "BORRAVALÓ" in oszlopok else None
-                # A táblázatban minden embernek minden nap van sora, a nem
-                # dolgozott napok 0/üres értékkel - azokból nem csinálunk
-                # bejegyzést, mert csak felhígítanák az elszámolást.
-                if not ora and not borravalo:
+                orabar = _szam(ws2.cell(r, oszlopok["ÓRABÉR"]).value) if "ÓRABÉR" in oszlopok else None
+                fizetes = _szam(ws2.cell(r, oszlopok["FIZETÉS"]).value) if "FIZETÉS" in oszlopok else None
+                # A borravaló oszlopba rendszeresen jegyzet is kerül ("BÓNUSZ:
+                # 5000 FT", "8400 - Üzemorvos") - az összeget kiolvassuk, a
+                # szöveget megtartjuk. Az időszaki VÉGÖSSZEGEK csak jegyzetként
+                # jönnek át, összegként nem (megdupláznák az elszámolást).
+                borravalo, jegyzet = (
+                    _szam_szovegbol(ws2.cell(r, oszlopok["BORRAVALÓ"]).value)
+                    if "BORRAVALÓ" in oszlopok
+                    else (None, None)
+                )
+
+                # A "ZÁRÁS" sorok egy IDŐSZAK kifizetését összegzik (dátum
+                # helyett intervallum áll bennük). Nem munkanapok: napként
+                # felvéve a napi sorokkal együtt duplán számítanának. Csak
+                # jelentjük őket, hogy a futás után látszódjon, mi maradt ki.
+                if r in zaras_sorok:
+                    if fizetes or borravalo or jegyzet:
+                        zarasok.append(f"{nev}: {zaras_sorok[r]} → {fizetes or 0:,.0f} Ft")
+                    continue
+
+                d = _datum(nyers_datum) or sor_datumok.get(r)
+                if d is None:
+                    if ora or fizetes or borravalo:
+                        datum_nelkul.append(f"{nev} ({ws2.title} {r}. sor)")
+                    continue
+
+                # Van olyan nap, amikor nem dolgozott, de kapott valamit
+                # (üzemorvos, tüdőszűrés térítése) - ezeknek nincs órájuk, de
+                # attól még kifizetés. A régi feltétel ("csak ha van óra vagy
+                # borravaló") ezeket eldobta.
+                if not ora and not borravalo and not fizetes and not jegyzet:
                     continue
                 if (dolgozo.id, d) in letezo_ora:
                     continue
                 letezo_ora.add((dolgozo.id, d))
-                orabar = _szam(ws2.cell(r, oszlopok["ÓRABÉR"]).value) if "ÓRABÉR" in oszlopok else None
-                fizetes = _szam(ws2.cell(r, oszlopok["FIZETÉS"]).value) if "FIZETÉS" in oszlopok else None
                 if fizetes is None and ora is not None and orabar is not None:
                     fizetes = round(ora * orabar, 2)
                 db.add(
                     KrumpelloMunkaora(
                         dolgozo_id=dolgozo.id, datum=d, ora=ora, orabar=orabar,
-                        fizetes=fizetes, borravalo=borravalo,
+                        fizetes=fizetes, borravalo=borravalo, megjegyzes=jegyzet,
                     )
                 )
                 uj_ora += 1
                 if orabar:
                     dolgozo.alap_orabar = orabar
 
+        if zarasok:
+            print("\nIDŐSZAKI ZÁRÁS-sorok (nem munkanapok, ezért NEM jönnek át -")
+            print("a napi soraik összege adja ki ugyanezt):")
+            for z in zarasok:
+                print(f"  {z}")
+        if datum_nelkul:
+            print("\nFIGYELEM - ezekhez nem volt dátum, és a sorból sem volt pótolható:")
+            for x in datum_nelkul:
+                print(f"  {x}")
+        print()
         print(f"Új nap:      {uj_nap}" + (f" (frissítve: {frissitett})" if felulir else ""))
         print(f"Új kiadás:   {uj_kiadas}")
         print(f"Új dolgozó:  {uj_dolgozo}")

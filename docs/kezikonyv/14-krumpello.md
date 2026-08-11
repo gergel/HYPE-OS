@@ -60,6 +60,14 @@ fizikailag áthalad a kasszán.
 
 ## Adat-áthozatal a táblázatból
 
+A **kezdőadat már bent van**: a `c5b71e29d840` migráció betölti
+(`app/data/krumpello_kezdoadat.json` - 25 kassza-nap, 122 kiadás, 7 dolgozó,
+70 munkanap), tehát a deploy után az adat minden környezetben ott van. A
+migráció idempotens, és a `downgrade` szándékosan nem töröl: pénzügyi sorokat
+nem dobunk el egy séma-visszalépés mellékhatásaként.
+
+A **későbbi** hónapokat a szkripttel lehet behúzni:
+
 ```bash
 # a munkafüzet letöltése .xlsx-ként (Fájl -> Letöltés -> Excel), majd:
 python scripts/krumpello_import.py penzugy.xlsx --szarazon   # csak jelentés
@@ -68,6 +76,29 @@ python scripts/krumpello_import.py penzugy.xlsx
 
 Forrás: a "HYPE PRODUCTIONS KFT. 2026 - PÉNZÜGY" munkafüzet
 **KRUMPELLO - KASSZA** és **KRUMPELLO - MUNKABÉR** lapja.
+
+### Amit a munkabér-lapról tudni kell
+
+Három olyan szerkezeti sajátosság van, ami nélkül némán veszne el adat:
+
+- **A sorok dátum szerint igazodnak**: ugyanabban a sorban minden embernél
+  ugyanaz a nap áll (ellenőrizve: egyetlen sorban sincs két különböző dátum).
+  Ezért ha valakinél üresen maradt a dátum-cella, a sor dátuma a többiek
+  oszlopából pótolható - enélkül az a munkanap kimaradna.
+- **A borravaló oszlopba jegyzet is kerül** ("BÓNUSZ: 5000 FT",
+  "8400 - Üzemorvos"). Az összeget kiolvassuk, a szöveget megjegyzésként
+  megtartjuk. Van olyan nap, amikor nem dolgozott, csak kapott valamit
+  (üzemorvos, tüdőszűrés) - az is kifizetés, tehát átjön.
+- **A "ZÁRÁS" sorok egy IDŐSZAK kifizetését összegzik**, nem munkanapok - ezért
+  nem jönnek át, különben a napi soraikkal együtt duplán számítanának. A
+  feliratot jellemzően csak az első ember oszlopába írják be, ezért ezeket
+  SORSZINTEN kell felismerni. Az importáló ki is listázza őket, hogy látszódjon,
+  mi maradt ki és miért. *(Ellenőrizve: mind a 7 dolgozónál a napi sorok összege
+  pontosan kiadja a zárás-sorát, tehát semmi nem vész el.)*
+
+A csupa **nullás** nap is átjön: az "aznap nyitva voltunk és nem volt bevétel"
+állítás információ, a hiányzó zárástól különbözik. A táblázatban előre
+kirajzolt, teljesen üres évi sorokból viszont nem lesz bejegyzés.
 
 **Idempotens**: kétszer lefuttatva sem duplikál (a nap a dátummal, a kiadás a
 forrás+kedvezményezett+dátum+megnevezés+bruttó ötösével, a munkaóra a

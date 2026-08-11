@@ -1,0 +1,1966 @@
+{
+ "forras": "HYPE PRODUCTIONS KFT. 2026 - PÉNZÜGY / KRUMPELLO - KASSZA + KRUMPELLO - MUNKABÉR",
+ "napok": [
+  {
+   "datum": "2026-01-01",
+   "brutto_kp": 0.0,
+   "brutto_kartya": 0.0,
+   "netto_kp": 0.0,
+   "netto_kartya": 0.0,
+   "borravalo_kp": 0.0,
+   "borravalo_kartya": 0.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-05-07",
+   "brutto_kp": 18040.0,
+   "brutto_kartya": 0.0,
+   "netto_kp": 17181.0,
+   "netto_kartya": 0.0,
+   "borravalo_kp": null,
+   "borravalo_kartya": null,
+   "extra": null
+  },
+  {
+   "datum": "2026-05-08",
+   "brutto_kp": 8470.0,
+   "brutto_kartya": 0.0,
+   "netto_kp": 8067.0,
+   "netto_kartya": 0.0,
+   "borravalo_kp": null,
+   "borravalo_kartya": null,
+   "extra": null
+  },
+  {
+   "datum": "2026-05-25",
+   "brutto_kp": 107710.0,
+   "brutto_kartya": 575760.0,
+   "netto_kp": 98276.0,
+   "netto_kartya": 524304.0,
+   "borravalo_kp": 13070.0,
+   "borravalo_kartya": 0.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-05-28",
+   "brutto_kp": 0.0,
+   "brutto_kartya": 101040.0,
+   "netto_kp": 0.0,
+   "netto_kartya": 1261908.0,
+   "borravalo_kp": null,
+   "borravalo_kartya": null,
+   "extra": null
+  },
+  {
+   "datum": "2026-05-29",
+   "brutto_kp": 0.0,
+   "brutto_kartya": 328500.0,
+   "netto_kp": 0.0,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": null,
+   "extra": null
+  },
+  {
+   "datum": "2026-05-30",
+   "brutto_kp": 0.0,
+   "brutto_kartya": 1623760.0,
+   "netto_kp": 0.0,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": null,
+   "extra": null
+  },
+  {
+   "datum": "2026-06-12",
+   "brutto_kp": 23030.0,
+   "brutto_kartya": 133780.0,
+   "netto_kp": 21225.0,
+   "netto_kartya": 312224.0,
+   "borravalo_kp": 4130.0,
+   "borravalo_kartya": 6293.0,
+   "extra": 75830.0
+  },
+  {
+   "datum": "2026-06-13",
+   "brutto_kp": 5400.0,
+   "brutto_kartya": 51200.0,
+   "netto_kp": 5063.0,
+   "netto_kartya": null,
+   "borravalo_kp": 2320.0,
+   "borravalo_kartya": 3850.0,
+   "extra": 56270.0
+  },
+  {
+   "datum": "2026-06-14",
+   "brutto_kp": 16440.0,
+   "brutto_kartya": 136380.0,
+   "netto_kp": 15657.0,
+   "netto_kartya": null,
+   "borravalo_kp": 620.0,
+   "borravalo_kartya": 10608.0,
+   "extra": 48980.0
+  },
+  {
+   "datum": "2026-06-19",
+   "brutto_kp": 7420.0,
+   "brutto_kartya": 842500.0,
+   "netto_kp": 7067.0,
+   "netto_kartya": 802335.0,
+   "borravalo_kp": 4270.0,
+   "borravalo_kartya": 12466.0,
+   "extra": 248260.0
+  },
+  {
+   "datum": "2026-07-08",
+   "brutto_kp": 0.0,
+   "brutto_kartya": 346810.0,
+   "netto_kp": 0.0,
+   "netto_kartya": null,
+   "borravalo_kp": 0.0,
+   "borravalo_kartya": 6739.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-09",
+   "brutto_kp": 0.0,
+   "brutto_kartya": 872940.0,
+   "netto_kp": 0.0,
+   "netto_kartya": null,
+   "borravalo_kp": 0.0,
+   "borravalo_kartya": 23209.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-10",
+   "brutto_kp": 0.0,
+   "brutto_kartya": 1335260.0,
+   "netto_kp": 0.0,
+   "netto_kartya": null,
+   "borravalo_kp": 0.0,
+   "borravalo_kartya": 37660.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-11",
+   "brutto_kp": 0.0,
+   "brutto_kartya": 1706590.0,
+   "netto_kp": 0.0,
+   "netto_kartya": null,
+   "borravalo_kp": 0.0,
+   "borravalo_kartya": 38241.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-24",
+   "brutto_kp": null,
+   "brutto_kartya": 722550.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 22871.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-25",
+   "brutto_kp": null,
+   "brutto_kartya": 1243880.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 37662.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-26",
+   "brutto_kp": null,
+   "brutto_kartya": 1275430.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 34534.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-27",
+   "brutto_kp": null,
+   "brutto_kartya": 1082640.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 27214.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-28",
+   "brutto_kp": null,
+   "brutto_kartya": 905880.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 27726.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-29",
+   "brutto_kp": null,
+   "brutto_kartya": 680290.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 17556.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-30",
+   "brutto_kp": null,
+   "brutto_kartya": 708960.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 19025.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-07-31",
+   "brutto_kp": null,
+   "brutto_kartya": 1064700.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 23171.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-08-01",
+   "brutto_kp": null,
+   "brutto_kartya": 886480.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 25554.0,
+   "extra": null
+  },
+  {
+   "datum": "2026-08-02",
+   "brutto_kp": null,
+   "brutto_kartya": 537590.0,
+   "netto_kp": null,
+   "netto_kartya": null,
+   "borravalo_kp": null,
+   "borravalo_kartya": 17271.0,
+   "extra": null
+  }
+ ],
+ "kiadasok": [
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "B Consulting Kft.",
+   "datum": "2026-01-19",
+   "megnevezes": "Raktár bérleti díj",
+   "netto": 60000.0,
+   "afa": 16200.0,
+   "brutto": 76200.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Fruitsys Zrt.",
+   "datum": "2026-01-19",
+   "megnevezes": "licensz havidíj",
+   "netto": 15000.0,
+   "afa": 4050.0,
+   "brutto": 19050.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "David Hegedus",
+   "datum": null,
+   "megnevezes": "weblap fejlesztés",
+   "netto": 463000.0,
+   "afa": 0.0,
+   "brutto": 463000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Kató Tamás",
+   "datum": null,
+   "megnevezes": "PPC - december",
+   "netto": 90000.0,
+   "afa": 0.0,
+   "brutto": 90000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Fruitsys Zrt.",
+   "datum": "2026-02-23",
+   "megnevezes": "licensz havidíj",
+   "netto": 15000.0,
+   "afa": 4050.0,
+   "brutto": 19050.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "B Consulting Kft.",
+   "datum": "2026-02-19",
+   "megnevezes": "raktár bérleti díj",
+   "netto": 60000.0,
+   "afa": 16200.0,
+   "brutto": 76200.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": null,
+   "megnevezes": "turizmus fejlesztés - január",
+   "netto": 20000.0,
+   "afa": 0.0,
+   "brutto": 20000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Díjbeszedő Holding Zrt.",
+   "datum": "2026-02-20",
+   "megnevezes": "vízművek számla",
+   "netto": 360480.0,
+   "afa": 0.0,
+   "brutto": 360480.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Díjbeszedő Holding Zrt.",
+   "datum": "2026-02-23",
+   "megnevezes": "Mohu számlák",
+   "netto": 429764.0,
+   "afa": 0.0,
+   "brutto": 429764.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "E.ON Energiamegoldások Kft",
+   "datum": "2026-02-23",
+   "megnevezes": "Eon számlák",
+   "netto": 167189.0,
+   "afa": 0.0,
+   "brutto": 167189.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Klarstein HU",
+   "datum": "2026-02-25",
+   "megnevezes": "páraelszívó",
+   "netto": 44796.0,
+   "afa": 0.0,
+   "brutto": 44796.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Vevor",
+   "datum": "2026-02-25",
+   "megnevezes": "olajgyüjtő tartály",
+   "netto": 22235.0,
+   "afa": 0.0,
+   "brutto": 22235.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "TRADEINN",
+   "datum": "2026-02-25",
+   "megnevezes": "szivattyú a csaphoz",
+   "netto": 32700.0,
+   "afa": 0.0,
+   "brutto": 32700.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "B Consulting Kft.",
+   "datum": "2026-03-10",
+   "megnevezes": "raktár bérleti díj",
+   "netto": 60000.0,
+   "afa": 16200.0,
+   "brutto": 76200.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Fruitsys Zrt.",
+   "datum": "2026-03-24",
+   "megnevezes": "licensz havidíj",
+   "netto": 15000.0,
+   "afa": 4050.0,
+   "brutto": 19050.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Gyetkó Valter",
+   "datum": "2026-03-24",
+   "megnevezes": "villanyszerelés",
+   "netto": 255000.0,
+   "afa": 0.0,
+   "brutto": 255000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "OBI Hungary Retail Kft.",
+   "datum": "2026-03-26",
+   "megnevezes": "L vasak",
+   "netto": 8019.0,
+   "afa": 0.0,
+   "brutto": 8019.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Bauhaus",
+   "datum": "2026-03-26",
+   "megnevezes": "felújítás",
+   "netto": 24147.0,
+   "afa": 0.0,
+   "brutto": 24147.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "SÍRÓ ILLÉS EV.",
+   "datum": "2026-03-18",
+   "megnevezes": "truck javítás előleg",
+   "netto": 495552.0,
+   "afa": 0.0,
+   "brutto": 495552.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "B Consulting Kft.",
+   "datum": "2026-04-10",
+   "megnevezes": "raktár bérleti díj",
+   "netto": 60000.0,
+   "afa": 16200.0,
+   "brutto": 76200.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Fruitsys Zrt.",
+   "datum": "2026-04-27",
+   "megnevezes": "licensz havidíj",
+   "netto": 15000.0,
+   "afa": 4050.0,
+   "brutto": 19050.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Balerpack Kft.",
+   "datum": "2026-04-23",
+   "megnevezes": "csomagoló anyagok",
+   "netto": 1528200.0,
+   "afa": 412614.0,
+   "brutto": 1940814.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "B Consulting Kft.",
+   "datum": "2026-05-04",
+   "megnevezes": "raktár bérleti díj",
+   "netto": 60000.0,
+   "afa": 16200.0,
+   "brutto": 76200.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-05-06",
+   "megnevezes": "alapanyag",
+   "netto": 190571.0,
+   "afa": 46175.0,
+   "brutto": 236746.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Mol Nyrt.",
+   "datum": "2026-05-06",
+   "megnevezes": "trafic tankolás",
+   "netto": 48480.0,
+   "afa": 0.0,
+   "brutto": 48480.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Stagehome Kft.",
+   "datum": "2026-05-12",
+   "megnevezes": "dekortáblák",
+   "netto": 45000.0,
+   "afa": 12150.0,
+   "brutto": 57150.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "SÍRÓ ILLÉS EV.",
+   "datum": "2026-05-12",
+   "megnevezes": "truck javítás",
+   "netto": 1356053.0,
+   "afa": 0.0,
+   "brutto": 1356053.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Gyetkó Valter",
+   "datum": "2026-05-12",
+   "megnevezes": "sütő javítás, fűtőszálak",
+   "netto": 315000.0,
+   "afa": 0.0,
+   "brutto": 315000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Kató Tamás",
+   "datum": "2026-05-16",
+   "megnevezes": "PPC - március",
+   "netto": 90000.0,
+   "afa": 0.0,
+   "brutto": 90000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Kató Tamás",
+   "datum": "2026-05-16",
+   "megnevezes": "PPC - április",
+   "netto": 90000.0,
+   "afa": 0.0,
+   "brutto": 90000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-06-01",
+   "megnevezes": "alapanyag",
+   "netto": 229016.71,
+   "afa": 51578.71,
+   "brutto": 280595.42
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-06-01",
+   "megnevezes": "alapanyag",
+   "netto": 253998.63,
+   "afa": 52560.64,
+   "brutto": 306559.27
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "B Consulting Kft.",
+   "datum": "2026-06-01",
+   "megnevezes": "raktár bérleti díj",
+   "netto": 60000.0,
+   "afa": 16200.0,
+   "brutto": 76200.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Gódor Titanilla",
+   "datum": "2026-06-01",
+   "megnevezes": "munkabér",
+   "netto": 133848.0,
+   "afa": 0.0,
+   "brutto": 133848.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Csiák Tibor",
+   "datum": "2026-06-01",
+   "megnevezes": "munkabér",
+   "netto": 89232.0,
+   "afa": 0.0,
+   "brutto": 89232.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Gyurik Titanilla",
+   "datum": "2026-06-01",
+   "megnevezes": "munkabér",
+   "netto": 22308.0,
+   "afa": 0.0,
+   "brutto": 22308.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": "2026-06-04",
+   "megnevezes": "EFO járulék - május",
+   "netto": 52800.0,
+   "afa": 0.0,
+   "brutto": 52800.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Fruitsys Zrt.",
+   "datum": "2026-06-08",
+   "megnevezes": "licensz havidíj",
+   "netto": 15000.0,
+   "afa": 4050.0,
+   "brutto": 19050.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Three Project Kft.",
+   "datum": "2026-06-08",
+   "megnevezes": "Területhasználati díj, Érdi Piknik 7.0",
+   "netto": 250000.0,
+   "afa": 0.0,
+   "brutto": 250000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Kató Tamás",
+   "datum": "2026-06-08",
+   "megnevezes": "PPC - május",
+   "netto": 90000.0,
+   "afa": null,
+   "brutto": 90000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-06-13",
+   "megnevezes": "alapanyag",
+   "netto": 38563.93,
+   "afa": 9432.97,
+   "brutto": 47996.9
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Sybell Informatikai Kft.",
+   "datum": "2026-03-04",
+   "megnevezes": "domain",
+   "netto": 25070.0,
+   "afa": 6769.0,
+   "brutto": 31839.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "David Hegedus",
+   "datum": "2026-03-01",
+   "megnevezes": "Marketing-eszközök beállítása\n és GDPR kompatibilitás",
+   "netto": 48000.0,
+   "afa": 0.0,
+   "brutto": 48000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Google",
+   "datum": "2026-02-28",
+   "megnevezes": "hirdetési számla",
+   "netto": 69981.0,
+   "afa": 0.0,
+   "brutto": 69981.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Google",
+   "datum": "2026-03-31",
+   "megnevezes": "hirdetési számla",
+   "netto": 145062.0,
+   "afa": 0.0,
+   "brutto": 145062.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Google",
+   "datum": "2026-04-30",
+   "megnevezes": "hirdetési számla",
+   "netto": 139819.0,
+   "afa": 0.0,
+   "brutto": 139819.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Meta",
+   "datum": "2026-01-25",
+   "megnevezes": "hirdetési számla",
+   "netto": 29135.0,
+   "afa": 0.0,
+   "brutto": 29135.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Meta",
+   "datum": "2026-02-25",
+   "megnevezes": "hirdetési számla",
+   "netto": 1533.0,
+   "afa": 0.0,
+   "brutto": 1533.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Google",
+   "datum": "2026-05-31",
+   "megnevezes": "hirdetési számla",
+   "netto": 126020.0,
+   "afa": 0.0,
+   "brutto": 126020.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Fruitsys Zrt.",
+   "datum": null,
+   "megnevezes": "licensz havidíj",
+   "netto": 15000.0,
+   "afa": 4050.0,
+   "brutto": 19050.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-06-23",
+   "megnevezes": "alapanyag",
+   "netto": 20541.0,
+   "afa": 5546.0,
+   "brutto": 26087.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-06-23",
+   "megnevezes": "alapanyag",
+   "netto": 126608.0,
+   "afa": 28164.0,
+   "brutto": 154772.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-06-23",
+   "megnevezes": "alapanyag",
+   "netto": 124923.0,
+   "afa": 31613.0,
+   "brutto": 156536.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-06-23",
+   "megnevezes": "alapanyag",
+   "netto": 186968.0,
+   "afa": 41584.0,
+   "brutto": 228552.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Turai Ákos Ev.",
+   "datum": "2026-06-23",
+   "megnevezes": "Efott szállás",
+   "netto": 108400.0,
+   "afa": 0.0,
+   "brutto": 108400.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Gódor Titanilla",
+   "datum": "2026-06-23",
+   "megnevezes": "munkabér",
+   "netto": 66924.0,
+   "afa": 0.0,
+   "brutto": 66924.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Liguria Mercante Kft.",
+   "datum": "2026-06-23",
+   "megnevezes": "linóleum padló",
+   "netto": 56679.0,
+   "afa": 15303.33,
+   "brutto": 71982.33
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Fruitsys Zrt.",
+   "datum": "2026-06-23",
+   "megnevezes": "licensz havidíj",
+   "netto": 15000.0,
+   "afa": 4050.0,
+   "brutto": 19050.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "B Consulting Kft.",
+   "datum": "2026-07-02",
+   "megnevezes": "raktár bérleti díj",
+   "netto": 60000.0,
+   "afa": 16200.0,
+   "brutto": 76200.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Kató Tamás",
+   "datum": "2026-07-03",
+   "megnevezes": "PPC - június",
+   "netto": 90000.0,
+   "afa": 0.0,
+   "brutto": 90000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Microsound Kft",
+   "datum": "2026-07-16",
+   "megnevezes": "áram kábelek",
+   "netto": 86378.0,
+   "afa": 23322.06,
+   "brutto": 109700.06
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-07-14",
+   "megnevezes": "alapanyag",
+   "netto": 319845.0,
+   "afa": 74658.0,
+   "brutto": 394503.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-07-10",
+   "megnevezes": "alapanyag",
+   "netto": 85669.0,
+   "afa": 16645.0,
+   "brutto": 102314.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Metro Kereskedelmi Kft.",
+   "datum": "2026-07-11",
+   "megnevezes": "alapanyag",
+   "netto": 134083.0,
+   "afa": 32623.0,
+   "brutto": 166706.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Tulkán Tímea Ev.",
+   "datum": "2026-07-14",
+   "megnevezes": "HACCP",
+   "netto": 42000.0,
+   "afa": 0.0,
+   "brutto": 42000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Mol Nyrt.",
+   "datum": "2026-07-11",
+   "megnevezes": "diesel",
+   "netto": 49581.0,
+   "afa": 0.0,
+   "brutto": 49581.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": null,
+   "megnevezes": "turizmus fejlesztés - június",
+   "netto": 46000.0,
+   "afa": 0.0,
+   "brutto": 46000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Fruitsys Zrt.",
+   "datum": "2026-07-24",
+   "megnevezes": "licensz havidíj",
+   "netto": 15000.0,
+   "afa": 4050.0,
+   "brutto": 19050.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Horváth Patrik",
+   "datum": "2026-07-28",
+   "megnevezes": "munkabér",
+   "netto": 111540.0,
+   "afa": 0.0,
+   "brutto": 111540.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Horváth Gergely",
+   "datum": "2026-07-28",
+   "megnevezes": "munkabér",
+   "netto": 111540.0,
+   "afa": 0.0,
+   "brutto": 111540.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Horváth Gergely",
+   "datum": "2026-08-04",
+   "megnevezes": "munkabér",
+   "netto": 68630.0,
+   "afa": 0.0,
+   "brutto": 68630.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Horváth Patrik",
+   "datum": "2026-08-04",
+   "megnevezes": "munkabér",
+   "netto": 68630.0,
+   "afa": 0.0,
+   "brutto": 68630.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Kovács Balázs",
+   "datum": "2026-08-04",
+   "megnevezes": "munkabér",
+   "netto": 68630.0,
+   "afa": 0.0,
+   "brutto": 68630.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Iker Flóra",
+   "datum": "2026-08-04",
+   "megnevezes": "munkabér",
+   "netto": 111540.0,
+   "afa": 0.0,
+   "brutto": 111540.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "B Consulting Kft.",
+   "datum": "2026-08-04",
+   "megnevezes": "raktár bérleti díj",
+   "netto": 60000.0,
+   "afa": 16200.0,
+   "brutto": 76200.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Groupama Biztosító Zrt.",
+   "datum": "2026-08-04",
+   "megnevezes": "Felelősségbiztosítás - SZIGET",
+   "netto": 45000.0,
+   "afa": 0.0,
+   "brutto": 45000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Országos Foglalkozás-Egészségügyi Szolgálat Kft.",
+   "datum": "2026-08-04",
+   "megnevezes": "üzemorvos",
+   "netto": 70560.0,
+   "afa": 0.0,
+   "brutto": 70560.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Google",
+   "datum": "2026-07-31",
+   "megnevezes": "hirdetési számla",
+   "netto": 86143.0,
+   "afa": 0.0,
+   "brutto": 86143.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "RÁDKÖZ Kft.",
+   "datum": "2026-07-30",
+   "megnevezes": "Efott üditő",
+   "netto": 145781.0,
+   "afa": 33691.0,
+   "brutto": 179472.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": null,
+   "megnevezes": "Horváth Gergely - TB - július",
+   "netto": 18011.0,
+   "afa": 0.0,
+   "brutto": 18011.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": null,
+   "megnevezes": "Horváth Patrik - TB - július",
+   "netto": 18011.0,
+   "afa": 0.0,
+   "brutto": 18011.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": null,
+   "megnevezes": "Horváth Gergely - KIVA - július",
+   "netto": 9736.0,
+   "afa": 0.0,
+   "brutto": 9736.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": null,
+   "megnevezes": "Horváth Patrik - KIVA - július",
+   "netto": 9736.0,
+   "afa": 0.0,
+   "brutto": 9736.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": null,
+   "megnevezes": "Kovács Balázs - TB - július",
+   "netto": 18011.0,
+   "afa": 0.0,
+   "brutto": 18011.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": null,
+   "megnevezes": "Kovács Balázs - KIVA - július",
+   "netto": 9736.0,
+   "afa": 0.0,
+   "brutto": 9736.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "NAV",
+   "datum": null,
+   "megnevezes": "EFO járulék - július",
+   "netto": 72000.0,
+   "afa": 0.0,
+   "brutto": 72000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Kató Tamás",
+   "datum": "2026-08-10",
+   "megnevezes": "PPC - július",
+   "netto": 90000.0,
+   "afa": 0.0,
+   "brutto": 90000.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "WIM Group Kft.",
+   "datum": null,
+   "megnevezes": "sátorbérlés - EFOTT",
+   "netto": 60000.0,
+   "afa": 16200.0,
+   "brutto": 76200.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Horváth Patrik",
+   "datum": "2026-08-11",
+   "megnevezes": "munkabér kiegészítés",
+   "netto": 10716.0,
+   "afa": 0.0,
+   "brutto": 10716.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Horváth Gergely",
+   "datum": "2026-08-11",
+   "megnevezes": "munkabér kiegészítés",
+   "netto": 10716.0,
+   "afa": 0.0,
+   "brutto": 10716.0
+  },
+  {
+   "forras": "utalas",
+   "kedvezmenyezett": "Kovács Balázs",
+   "datum": "2026-08-11",
+   "megnevezes": "munkabér kiegészítés",
+   "netto": 10716.0,
+   "afa": 0.0,
+   "brutto": 10716.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "Ikea",
+   "datum": "2026-03-30",
+   "megnevezes": "zárak",
+   "netto": 9955.0,
+   "afa": 0.0,
+   "brutto": 9955.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "Praktiker",
+   "datum": "2026-03-30",
+   "megnevezes": "aluminium szalag",
+   "netto": 9397.0,
+   "afa": 0.0,
+   "brutto": 9397.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "Túri Zsolt",
+   "datum": "2026-03-31",
+   "megnevezes": "tankolás",
+   "netto": 51783.0,
+   "afa": 0.0,
+   "brutto": 51783.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "Rafano 88 Kft.",
+   "datum": "2026-05-06",
+   "megnevezes": "krumpli",
+   "netto": 18110.0,
+   "afa": 4890.0,
+   "brutto": 23000.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "Rafano 88 Kft.",
+   "datum": "2026-05-27",
+   "megnevezes": "krumpli",
+   "netto": 27165.0,
+   "afa": 7355.0,
+   "brutto": 34520.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "METRO Kereskedelmi Kft.",
+   "datum": "2026-05-30",
+   "megnevezes": "alapanyag",
+   "netto": 69388.97,
+   "afa": 18735.02,
+   "brutto": 88123.99
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "Rafano 88 Kft.",
+   "datum": "2026-06-04",
+   "megnevezes": "krumpli",
+   "netto": 18400.0,
+   "afa": 0.0,
+   "brutto": 18400.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "Mol Nyrt.",
+   "datum": "2026-06-18",
+   "megnevezes": "diesel",
+   "netto": 48501.0,
+   "afa": 0.0,
+   "brutto": 48501.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "OBI Hungary Retail Kft.",
+   "datum": "2026-07-06",
+   "megnevezes": "kellékek",
+   "netto": 24220.0,
+   "afa": 0.0,
+   "brutto": 24220.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "MOl Nyrt.",
+   "datum": "2026-07-06",
+   "megnevezes": "diesel",
+   "netto": 47270.0,
+   "afa": 0.0,
+   "brutto": 47270.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "Nagy Balázsné Kovács Ilona Mária",
+   "datum": "2026-07-06",
+   "megnevezes": "krumpli",
+   "netto": 39600.0,
+   "afa": 0.0,
+   "brutto": 39600.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "Nagy Balázsné Kovács Ilona Mária",
+   "datum": "2026-07-23",
+   "megnevezes": "krumpli",
+   "netto": 165000.0,
+   "afa": 0.0,
+   "brutto": 165000.0
+  },
+  {
+   "forras": "keszpenz",
+   "kedvezmenyezett": "MOl Nyrt.",
+   "datum": "2026-07-30",
+   "megnevezes": "diesel",
+   "netto": 12706.0,
+   "afa": 0.0,
+   "brutto": 12706.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Barna Blanka",
+   "datum": "2026-01-09",
+   "megnevezes": "decemberi munkabér",
+   "netto": null,
+   "afa": null,
+   "brutto": 420000.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Bogár Panna",
+   "datum": "2026-02-10",
+   "megnevezes": "decemberi kitelepülés munkabér",
+   "netto": null,
+   "afa": null,
+   "brutto": 27600.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Pintér Attila",
+   "datum": "2026-03-27",
+   "megnevezes": "rozsdamentes lemezek vásárlás",
+   "netto": null,
+   "afa": null,
+   "brutto": 75000.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Pintér Attila",
+   "datum": "2026-03-31",
+   "megnevezes": "alumínium fólia",
+   "netto": null,
+   "afa": null,
+   "brutto": 15000.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Kovács Balázs",
+   "datum": "2026-04-24",
+   "megnevezes": "munkabér",
+   "netto": null,
+   "afa": null,
+   "brutto": 80000.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "BASICS",
+   "datum": "2026-05-25",
+   "megnevezes": "leadó",
+   "netto": null,
+   "afa": null,
+   "brutto": 136000.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Gódor Titanilla",
+   "datum": "2026-06-01",
+   "megnevezes": "munkabér",
+   "netto": null,
+   "afa": null,
+   "brutto": null
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Csiák Tibor",
+   "datum": "2026-06-01",
+   "megnevezes": "munkabér",
+   "netto": null,
+   "afa": null,
+   "brutto": null
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Gódor Titanilla",
+   "datum": "2026-06-23",
+   "megnevezes": "munkabér",
+   "netto": null,
+   "afa": null,
+   "brutto": 122250.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Barna Blanka",
+   "datum": "2026-07-15",
+   "megnevezes": "Krumpello - június",
+   "netto": null,
+   "afa": null,
+   "brutto": 150000.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Auchan",
+   "datum": "2026-07-07",
+   "megnevezes": "EFOTT bevásárlás - staff catering",
+   "netto": null,
+   "afa": null,
+   "brutto": 32398.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "McDonald's",
+   "datum": "2026-07-07",
+   "megnevezes": "EFOTT - staff catering",
+   "netto": null,
+   "afa": null,
+   "brutto": 6850.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Rahman Martin",
+   "datum": "2026-07-12",
+   "megnevezes": "EFOTT költések",
+   "netto": null,
+   "afa": null,
+   "brutto": 38303.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Dobosi Zsuzsa",
+   "datum": "2026-07-23",
+   "megnevezes": "Művészetek Völgye - helypénz",
+   "netto": null,
+   "afa": null,
+   "brutto": 400000.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Tesco",
+   "datum": "2026-07-23",
+   "megnevezes": "Művészetek Völgye - staff catering",
+   "netto": null,
+   "afa": null,
+   "brutto": 17463.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Horváth Patrik",
+   "datum": "2026-08-06",
+   "megnevezes": "munkabér - Efott",
+   "netto": null,
+   "afa": null,
+   "brutto": 113345.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Horváth Gergely",
+   "datum": "2026-08-06",
+   "megnevezes": "munkabér - Efott",
+   "netto": null,
+   "afa": null,
+   "brutto": 77195.0
+  },
+  {
+   "forras": "extra",
+   "kedvezmenyezett": "Iker Flóra",
+   "datum": "2026-08-06",
+   "megnevezes": "munkabér - MV",
+   "netto": null,
+   "afa": null,
+   "brutto": 170000.0
+  }
+ ],
+ "dolgozok": [
+  {
+   "nev": "Csiák Tibor",
+   "alap_orabar": 3000.0,
+   "aktiv": true,
+   "munkaorak": [
+    {
+     "datum": "2026-05-25",
+     "ora": 15.0,
+     "orabar": 2900.0,
+     "fizetes": 43500.0,
+     "borravalo": 6535.0,
+     "megjegyzes": "6535 FT"
+    },
+    {
+     "datum": "2026-05-28",
+     "ora": 14.0,
+     "orabar": 2500.0,
+     "fizetes": 35000.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-05-29",
+     "ora": 6.0,
+     "orabar": 2500.0,
+     "fizetes": 15000.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-05-30",
+     "ora": 11.0,
+     "orabar": 3000.0,
+     "fizetes": 33000.0,
+     "borravalo": 5000.0,
+     "megjegyzes": "BÓNUSZ: 5000 FT"
+    }
+   ]
+  },
+  {
+   "nev": "Gyurik Titanilla",
+   "alap_orabar": 2500.0,
+   "aktiv": true,
+   "munkaorak": [
+    {
+     "datum": "2026-05-29",
+     "ora": 6.5,
+     "orabar": 2500.0,
+     "fizetes": 16250.0,
+     "borravalo": null,
+     "megjegyzes": null
+    }
+   ]
+  },
+  {
+   "nev": "Gódor Titanilla",
+   "alap_orabar": 3000.0,
+   "aktiv": true,
+   "munkaorak": [
+    {
+     "datum": "2026-05-06",
+     "ora": 8.0,
+     "orabar": 2800.0,
+     "fizetes": 22400.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-05-07",
+     "ora": 14.0,
+     "orabar": 2800.0,
+     "fizetes": 39200.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-05-08",
+     "ora": 11.0,
+     "orabar": 2800.0,
+     "fizetes": 30800.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-05-25",
+     "ora": 13.0,
+     "orabar": 3200.0,
+     "fizetes": 41600.0,
+     "borravalo": 6535.0,
+     "megjegyzes": "6535FT"
+    },
+    {
+     "datum": "2026-05-26",
+     "ora": 1.5,
+     "orabar": 2800.0,
+     "fizetes": 4200.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-05-28",
+     "ora": 11.0,
+     "orabar": 2800.0,
+     "fizetes": 30800.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-05-29",
+     "ora": 12.0,
+     "orabar": 2800.0,
+     "fizetes": 33600.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-05-30",
+     "ora": 13.5,
+     "orabar": 3300.0,
+     "fizetes": 44550.0,
+     "borravalo": 5000.0,
+     "megjegyzes": "BÓNUSZ: 5000 FT"
+    },
+    {
+     "datum": "2026-06-12",
+     "ora": 13.0,
+     "orabar": 2800.0,
+     "fizetes": 36400.0,
+     "borravalo": 5211.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-06-13",
+     "ora": 12.5,
+     "orabar": 2800.0,
+     "fizetes": 35000.0,
+     "borravalo": 3085.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-06-14",
+     "ora": 10.0,
+     "orabar": 2800.0,
+     "fizetes": 28000.0,
+     "borravalo": 5614.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-06-19",
+     "ora": 22.5,
+     "orabar": 3000.0,
+     "fizetes": 67500.0,
+     "borravalo": 8368.0,
+     "megjegyzes": null
+    }
+   ]
+  },
+  {
+   "nev": "Horváth Gergely",
+   "alap_orabar": 2500.0,
+   "aktiv": true,
+   "munkaorak": [
+    {
+     "datum": "2026-06-24",
+     "ora": null,
+     "orabar": null,
+     "fizetes": 0.0,
+     "borravalo": 5000.0,
+     "megjegyzes": "5000 Ft - Üzemorvos"
+    },
+    {
+     "datum": "2026-06-25",
+     "ora": null,
+     "orabar": null,
+     "fizetes": 0.0,
+     "borravalo": 1700.0,
+     "megjegyzes": "1700 Ft - Tüdőszűrés"
+    },
+    {
+     "datum": "2026-07-08",
+     "ora": 13.5,
+     "orabar": 2500.0,
+     "fizetes": 33750.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-09",
+     "ora": 12.0,
+     "orabar": 2600.0,
+     "fizetes": 31200.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-10",
+     "ora": 13.0,
+     "orabar": 3000.0,
+     "fizetes": 39000.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-11",
+     "ora": 12.5,
+     "orabar": 3000.0,
+     "fizetes": 37500.0,
+     "borravalo": 5000.0,
+     "megjegyzes": "5000 ft bónusz"
+    },
+    {
+     "datum": "2026-07-12",
+     "ora": null,
+     "orabar": null,
+     "fizetes": 0.0,
+     "borravalo": null,
+     "megjegyzes": "borravaló összesen : 35 585Ft"
+    },
+    {
+     "datum": "2026-07-23",
+     "ora": 13.0,
+     "orabar": 2500.0,
+     "fizetes": 32500.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-24",
+     "ora": 16.5,
+     "orabar": 2500.0,
+     "fizetes": 41250.0,
+     "borravalo": 4574.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-25",
+     "ora": 17.0,
+     "orabar": 2700.0,
+     "fizetes": 45900.0,
+     "borravalo": 7532.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-26",
+     "ora": 18.0,
+     "orabar": 2700.0,
+     "fizetes": 48600.0,
+     "borravalo": 6906.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-28",
+     "ora": 17.0,
+     "orabar": 2500.0,
+     "fizetes": 42500.0,
+     "borravalo": 5545.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-29",
+     "ora": 17.0,
+     "orabar": 2500.0,
+     "fizetes": 42500.0,
+     "borravalo": 5852.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-30",
+     "ora": 18.0,
+     "orabar": 2500.0,
+     "fizetes": 45000.0,
+     "borravalo": 9512.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-31",
+     "ora": 18.0,
+     "orabar": 2600.0,
+     "fizetes": 46800.0,
+     "borravalo": 7723.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-08-01",
+     "ora": 18.0,
+     "orabar": 2500.0,
+     "fizetes": 45000.0,
+     "borravalo": 6388.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-08-02",
+     "ora": 15.5,
+     "orabar": 2500.0,
+     "fizetes": 38750.0,
+     "borravalo": 4317.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-08-03",
+     "ora": 9.0,
+     "orabar": 2500.0,
+     "fizetes": 22500.0,
+     "borravalo": 58349.0,
+     "megjegyzes": null
+    }
+   ]
+  },
+  {
+   "nev": "Horváth Patrik",
+   "alap_orabar": 2500.0,
+   "aktiv": true,
+   "munkaorak": [
+    {
+     "datum": "2026-06-24",
+     "ora": null,
+     "orabar": null,
+     "fizetes": 0.0,
+     "borravalo": 1700.0,
+     "megjegyzes": "1700 Ft - Tüdőszűrés"
+    },
+    {
+     "datum": "2026-06-25",
+     "ora": null,
+     "orabar": null,
+     "fizetes": 0.0,
+     "borravalo": 8400.0,
+     "megjegyzes": "8400 - Üzemorvos"
+    },
+    {
+     "datum": "2026-07-08",
+     "ora": 14.5,
+     "orabar": 2500.0,
+     "fizetes": 36250.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-09",
+     "ora": 12.0,
+     "orabar": 2600.0,
+     "fizetes": 31200.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-10",
+     "ora": 15.5,
+     "orabar": 3000.0,
+     "fizetes": 46500.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-11",
+     "ora": 15.5,
+     "orabar": 3000.0,
+     "fizetes": 46500.0,
+     "borravalo": 5000.0,
+     "megjegyzes": "5000 ft bónusz"
+    },
+    {
+     "datum": "2026-07-12",
+     "ora": 5.5,
+     "orabar": 2500.0,
+     "fizetes": 13750.0,
+     "borravalo": null,
+     "megjegyzes": "borravaló összesen : 35 585Ft"
+    },
+    {
+     "datum": "2026-07-23",
+     "ora": 13.0,
+     "orabar": 2500.0,
+     "fizetes": 32500.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-24",
+     "ora": 16.5,
+     "orabar": 2500.0,
+     "fizetes": 41250.0,
+     "borravalo": 4574.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-25",
+     "ora": 17.0,
+     "orabar": 2700.0,
+     "fizetes": 45900.0,
+     "borravalo": 7532.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-26",
+     "ora": 18.0,
+     "orabar": 2700.0,
+     "fizetes": 48600.0,
+     "borravalo": 6906.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-27",
+     "ora": 17.5,
+     "orabar": 2600.0,
+     "fizetes": 45500.0,
+     "borravalo": 6803.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-28",
+     "ora": 17.5,
+     "orabar": 2500.0,
+     "fizetes": 43750.0,
+     "borravalo": 5545.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-29",
+     "ora": 17.0,
+     "orabar": 2500.0,
+     "fizetes": 42500.0,
+     "borravalo": 5852.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-31",
+     "ora": 18.0,
+     "orabar": 2600.0,
+     "fizetes": 46800.0,
+     "borravalo": 7723.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-08-01",
+     "ora": 19.0,
+     "orabar": 2500.0,
+     "fizetes": 47500.0,
+     "borravalo": 6388.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-08-02",
+     "ora": 15.5,
+     "orabar": 2500.0,
+     "fizetes": 38750.0,
+     "borravalo": 4317.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-08-03",
+     "ora": 9.0,
+     "orabar": 2500.0,
+     "fizetes": 22500.0,
+     "borravalo": null,
+     "megjegyzes": null
+    }
+   ]
+  },
+  {
+   "nev": "Iker Flóra",
+   "alap_orabar": 2400.0,
+   "aktiv": true,
+   "munkaorak": [
+    {
+     "datum": "2026-07-24",
+     "ora": 16.5,
+     "orabar": 2400.0,
+     "fizetes": 39600.0,
+     "borravalo": 4574.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-25",
+     "ora": 17.0,
+     "orabar": 2400.0,
+     "fizetes": 40800.0,
+     "borravalo": 7532.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-26",
+     "ora": 17.5,
+     "orabar": 2600.0,
+     "fizetes": 45500.0,
+     "borravalo": 6906.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-27",
+     "ora": 14.5,
+     "orabar": 2600.0,
+     "fizetes": 37700.0,
+     "borravalo": 6803.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-28",
+     "ora": 17.0,
+     "orabar": 2400.0,
+     "fizetes": 40800.0,
+     "borravalo": 5545.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-29",
+     "ora": 16.5,
+     "orabar": 2400.0,
+     "fizetes": 39600.0,
+     "borravalo": 5852.0,
+     "megjegyzes": null
+    }
+   ]
+  },
+  {
+   "nev": "Kovács Balázs",
+   "alap_orabar": 2800.0,
+   "aktiv": true,
+   "munkaorak": [
+    {
+     "datum": "2026-07-23",
+     "ora": 13.0,
+     "orabar": 2800.0,
+     "fizetes": 36400.0,
+     "borravalo": null,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-24",
+     "ora": 16.5,
+     "orabar": 2800.0,
+     "fizetes": 46200.0,
+     "borravalo": 4574.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-25",
+     "ora": 17.0,
+     "orabar": 3000.0,
+     "fizetes": 51000.0,
+     "borravalo": 7532.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-26",
+     "ora": 18.0,
+     "orabar": 3000.0,
+     "fizetes": 54000.0,
+     "borravalo": 6906.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-27",
+     "ora": 17.5,
+     "orabar": 2900.0,
+     "fizetes": 50750.0,
+     "borravalo": 6803.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-28",
+     "ora": 19.0,
+     "orabar": 2800.0,
+     "fizetes": 53200.0,
+     "borravalo": 5545.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-30",
+     "ora": 18.0,
+     "orabar": 2800.0,
+     "fizetes": 50400.0,
+     "borravalo": 9512.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-07-31",
+     "ora": 18.0,
+     "orabar": 2900.0,
+     "fizetes": 52200.0,
+     "borravalo": 7723.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-08-01",
+     "ora": 19.0,
+     "orabar": 2800.0,
+     "fizetes": 53200.0,
+     "borravalo": 6388.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-08-02",
+     "ora": 15.5,
+     "orabar": 2800.0,
+     "fizetes": 43400.0,
+     "borravalo": 4317.0,
+     "megjegyzes": null
+    },
+    {
+     "datum": "2026-08-03",
+     "ora": 9.0,
+     "orabar": 2800.0,
+     "fizetes": 25200.0,
+     "borravalo": null,
+     "megjegyzes": null
+    }
+   ]
+  }
+ ]
+}
