@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
-import { StatusBadge } from "@/components/StatusBadge";
+import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { formatFt } from "@/lib/ido";
 import type { ElkeszultSzerzodes } from "@/lib/api";
@@ -16,16 +16,26 @@ import type { ElkeszultSzerzodes } from "@/lib/api";
  * Ez a lista mutatja meg, kinek van kész papírja - a generált dokumentum
  * linkjével és a szerződés adatlapjával, ahová az aláírt PDF feltölthető.
  *
- * Innen törölhető is: ha rossz adattal ment ki (vagy tévesen lett kihagyva),
- * a törlés után az illető visszakerül a teendők közé, és készíthető neki új
- * szerződés (lásd backend subcontractor_contracts.py delete_contract). */
+ * Egy kész papír itt VISSZAVEHETŐ és TÖRÖLHETŐ:
+ *
+ * - az állapot "Készítés alatt"-ra állításával az illető visszakerül a fenti
+ *   teendő-listára, ahol az adatai újra szerkeszthetők és a szerződés
+ *   újragenerálható - anélkül, hogy bármit elölről kellene felvinni (lásd
+ *   backend subcontractor_contracts.py set_szerzodes_allapot);
+ * - a törlés a bejegyzést szünteti meg, ha tiszta lappal kell újrakezdeni
+ *   (lásd delete_contract).
+ *
+ * Ugyanaz a két lehetőség, ami a TIG-nél már megvolt - a papírozás két oldala
+ * ne viselkedjen máshogy. */
 export function ElkeszultSzerzodesek({
   projectId,
   szerzodesek,
+  canEdit = true,
   canDelete = true,
 }: {
   projectId: number;
   szerzodesek: ElkeszultSzerzodes[];
+  canEdit?: boolean;
   canDelete?: boolean;
 }) {
   const router = useRouter();
@@ -79,11 +89,13 @@ export function ElkeszultSzerzodesek({
               <tr key={s.contract_id} className="border-b border-border last:border-0">
                 <td className="py-2.5 pr-6">{s.full_name}</td>
                 <td className="py-2.5 pr-6">
-                  {s.szerzodes_allapota === "Kihagyva" ? (
-                    <StatusBadge label="Kihagyva" tone="neutral" />
-                  ) : (
-                    <StatusBadge label="Kiküldve" tone="success" />
-                  )}
+                  {/* Legördíthető: "Készítés alatt"-ra visszavéve a fél újra a
+                      teendők közé kerül, és a szerződése szerkeszthető. */}
+                  <TigAllapotSelect
+                    postPath={`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.szamlazo}/allapot`}
+                    value={s.szerzodes_allapota}
+                    canEdit={canEdit}
+                  />
                 </td>
                 <td className="whitespace-nowrap py-2.5 pr-6 text-right tabular-nums">
                   {s.netto_osszeg === null ? "–" : formatFt(s.netto_osszeg)}

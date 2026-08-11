@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Search } from "lucide-react";
+import { UtokovetesDetailModal } from "@/components/UtokovetesDetailModal";
 import type { UtokovetesOverview } from "@/lib/api";
 import { FAZISOK, type Fazis, datum, fazisa, hianyzik, hianyzikDarab } from "@/lib/utokovetes";
 
@@ -30,6 +30,7 @@ export function UtokovetesTabla({ rows }: { rows: UtokovetesOverview[] }) {
   const [rendezes, setRendezes] = useState<Rendezes>("ujabb");
   const [csakTeendo, setCsakTeendo] = useState(false);
   const [nyitott, setNyitott] = useState<Fazis[]>([]);
+  const [nyitottProjekt, setNyitottProjekt] = useState<number | null>(null);
 
   const szurt = useMemo(() => {
     const keresett = kereses.trim().toLocaleLowerCase("hu-HU");
@@ -124,10 +125,14 @@ export function UtokovetesTabla({ rows }: { rows: UtokovetesOverview[] }) {
                   </p>
                 ) : (
                   lathato.map((sor) => (
-                    <Link
+                    // Felugró ablak, nem új oldal: a kártyáról a projekt
+                    // papírozása azonnal elvégezhető anélkül, hogy a szűrés és
+                    // a görgetési hely elveszne (lásd UtokovetesDetailModal).
+                    <button
                       key={sor.project_id}
-                      href={`/utokovetes/${sor.project_id}`}
-                      className="block rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 transition-colors hover:border-text-accent/40"
+                      type="button"
+                      onClick={() => setNyitottProjekt(sor.project_id)}
+                      className="block w-full rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-left transition-colors hover:border-text-accent/40"
                     >
                       <p className="truncate text-[13px] text-text-primary">{sor.project_nev ?? `#${sor.project_id}`}</p>
                       <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[11.5px] text-text-muted">
@@ -141,7 +146,7 @@ export function UtokovetesTabla({ rows }: { rows: UtokovetesOverview[] }) {
                       >
                         {hianyzik(sor)}
                       </p>
-                    </Link>
+                    </button>
                   ))
                 )}
                 {rejtett > 0 && (
@@ -158,6 +163,7 @@ export function UtokovetesTabla({ rows }: { rows: UtokovetesOverview[] }) {
           );
         })}
       </div>
+      <UtokovetesDetailModal projectId={nyitottProjekt} onClose={() => setNyitottProjekt(null)} />
     </div>
   );
 }

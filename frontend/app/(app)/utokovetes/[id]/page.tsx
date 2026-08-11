@@ -118,7 +118,12 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
           <SubcontractorContractManager projectId={projectId} pending={pendingContracts?.pending ?? []} />
           {/* A kiküldött szerződés eltűnik a fenti (teendő-)listáról - itt
               látszik, kinek van kész papírja, és hol van. */}
-          <ElkeszultSzerzodesek projectId={projectId} szerzodesek={osszesSzerzodes} canDelete={canDelete} />
+          <ElkeszultSzerzodesek
+            projectId={projectId}
+            szerzodesek={osszesSzerzodes}
+            canEdit={canEdit}
+            canDelete={canDelete}
+          />
         </Card>
 
         <Card title="Teljesítési igazolás (Külsős TIG)">
@@ -130,8 +135,9 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
             />
           ) : (
             <p className="text-[13px] text-text-secondary">
-              Teljesítési igazolás csak azután készíthető, hogy mindenkinek megvan a szerződés státusza (kiküldve vagy
-              kihagyva) - lásd a fenti &quot;Szerződés készítés&quot; kártyát.
+              Teljesítési igazolás félenként készíthető: amint valakinek megvan a szerződése (vagy keretszerződés
+              fedi), róla azonnal mehet a TIG. Itt még senkinél nincs meg - lásd a fenti &quot;Szerződés
+              készítés&quot; kártyát.
             </p>
           )}
           {detail.teljesitesi_igazolasok.length > 0 && (

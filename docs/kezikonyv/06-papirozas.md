@@ -8,6 +8,27 @@ Ez a rendszer legsűrűbb doménje. Ha egyetlen dolgot jegyzel meg róla, ez leg
 > A csoportosítás egy helyen dől el: `services/szamlazo.py` (`SzamlazoFel`,
 > `SzamlazoCsoport`).
 
+## Ami kimarad: a HYPE24-es sorozat
+
+A HYPE24 projektkódú munkák papírjai a HYPE OS bevezetése **előtt**, egy másik
+rendszerben készültek el - nincs velük teendő. Ezért kimaradnak mindenhonnan,
+ahol a rendszer hiányzó papírt számol vagy feladatot gyárt: az alvállalkozói
+szerződésből, a külsős TIG-ből, az utókövetésből, a megrendelői szerződésből és
+TIG-ből, és az automatikus papírozás-feladatokból.
+
+A szabály egy helyen áll: `services/papirozas_hatokor.py`. Előtag-alapú (a
+sorozat minden tagját érinti), és környezeti változóval bővíthető vagy
+kikapcsolható a kódhoz nyúlás nélkül:
+
+```
+PAPIROZAS_KIVETT_PROJEKTKODOK=HYPE24,HYPE23
+```
+
+Üres értékkel a kizárás teljesen kikapcsol. A projektkódot két helyen keressük -
+a kapcsolt Project Code-on és a Notionból örökölt `projektkod_szoveg` mezőn -,
+mert a párját nem találó importált soroknál csak az utóbbiban maradt meg az
+eredeti kód.
+
 ## Áttekintés
 
 | Papír | API prefix | Kinek |
@@ -49,6 +70,21 @@ Szerződésnél és TIG-nél azonos, a régi Notion-os "Adatok átemelése" →
 - **Kihagyás** - lezárja az adott felet erre a projektre nézve, papír nélkül.
 - **Saját, kész papír feltöltése** - ha a dokumentum máshol készült, fel lehet
   tölteni generálás helyett (`components/SajatPapirFeltoltes.tsx`).
+
+### A kész papír javítható és törölhető
+
+Egy már kiküldött szerződés vagy TIG nem zárt le véglegesen - az Utókövetés
+oldalról (és a projekt adatlapjáról) mindkettőnél két út van:
+
+- **Állapot visszavétele "Készítés alatt"-ra** → a fél visszakerül a
+  teendő-listára, az adatai újra szerkeszthetők, a papír újragenerálható.
+  Végpontok: `POST .../{project_id}/{szamlazo}/allapot` - szerződésnél és
+  TIG-nél azonos alakban.
+- **Törlés** → a bejegyzés megszűnik, tiszta lappal lehet újrakezdeni.
+  Két védelem van rajta: kifizetett TIG-et nem törlünk (Kiadás sor tartozik
+  hozzá a Pénzügyben, tehát pénzügyi tény), és olyan szerződést sem, amihez a
+  projekten már készült TIG - előbb a TIG-et kell törölni, hogy a fázisok ne
+  csússzanak egymásba.
 
 ### Tételek: több ember, több projekt egy papíron
 
@@ -111,6 +147,13 @@ projekt teljes adminisztrációs "utóéletét":
 A tényleges mentés/generálás/küldés/kihagyás továbbra is a saját végpontjain fut -
 ez a nézet csak összegyűjt, hogy ne kelljen projektenként két oldalt végignézni.
 **A sorok számlázó felenként állnak**, nem emberenként.
+
+Egy projekt a listából **felugró ablakban** nyílik, nem új oldalként
+(`components/UtokovetesDetailModal.tsx`): a tartalom iframe-ben, az
+`/embed/utokovetes/[id]` útvonalról jön, tehát szó szerint ugyanaz a nézet
+minden művelettel együtt - így aki tíz projekten megy végig, nem veszíti el a
+szűrését és a helyét a listában. Az ablak bezárása frissíti a mögötte lévő
+táblázatot, hogy ne a régi állapot maradjon ott.
 
 Emiatt szűnt meg az "Alvállalkozók szerződése" és a "Teljesítési igazolások"
 külön menüpont: a műveletek megmaradtak, csak a jogosultságuk az Utókövetés

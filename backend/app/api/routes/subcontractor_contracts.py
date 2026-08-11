@@ -42,7 +42,7 @@ from app.models.performance_certificate import PerformanceCertificate, Performan
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.contract import ContractRead
-from app.services import document_storage, papir_fedettseg, papir_tetelek, szamlazo
+from app.services import document_storage, papir_fedettseg, papir_tetelek, papirozas_hatokor, szamlazo
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import send_message
 from app.services.hu_number_words import szam_betukkel
@@ -257,10 +257,10 @@ def load_szerzodes_kornyezet(
 
 @router.get("", response_model=list[PendingProjectSummary])
 def list_pending_projects(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
-    projects = (
+    projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
         .filter(Project.diszpo == "Kiküldve")
-        .options(selectinload(Project.crew))
+        .options(selectinload(Project.crew), selectinload(Project.project_code))
         .all()
     )
     keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, projects)
@@ -503,7 +503,7 @@ def list_nyitott_tetelek(
     if fel is None:
         raise HTTPException(status_code=404, detail="A számlázó fél nem található")
 
-    projects = (
+    projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
         .filter(Project.diszpo == "Kiküldve")
         .options(selectinload(Project.crew), selectinload(Project.project_code))
@@ -971,6 +971,62 @@ def skip_contract(
     db.commit()
     db.refresh(draft)
     return ContractRead.model_validate(draft)
+
+
+class SzerzodesAllapotIn(BaseModel):
+    allapot: str
+
+
+SZERZODES_ALLAPOTOK = ["Készítés alatt", "Kiküldve", "Kihagyva"]
+
+
+@router.post("/{project_id}/{szamlazo_kulcs}/allapot", response_model=ContractRead)
+def set_szerzodes_allapot(
+    project_id: int,
+    szamlazo_kulcs: str,
+    payload: SzerzodesAllapotIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Az eseti szerződés állapotának KÉZI átállítása - ugyanaz a javítási
+    lehetőség, ami a TIG-nél már megvolt (lásd performance_certificates.py
+    set_allapot).
+
+    Ez a visszaút egy már kiküldött szerződéshez: "Készítés alatt"-ra állítva a
+    fél visszakerül a teendő-listára, az adatai újra szerkeszthetők, és a papír
+    újragenerálható - anélkül, hogy a bejegyzést törölni és mindent elölről
+    felvinni kellene. Kiküldöttnek jelölni is lehet olyat, ami a rendszeren
+    kívül ment el.
+
+    A generálás/küldés folyamat változatlan, ez csak az állapot javítása."""
+    if payload.allapot not in SZERZODES_ALLAPOTOK:
+        raise HTTPException(
+            status_code=400, detail=f"Ismeretlen állapot. Választható: {', '.join(SZERZODES_ALLAPOTOK)}"
+        )
+    contract = _szerzodes_vagy_none(db, project_id, szamlazo_kulcs)
+    if contract is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nincs szerződés-bejegyzés.")
+    contract.szerzodes_allapota = payload.allapot
+    db.commit()
+    db.refresh(contract)
+    return ContractRead.model_validate(contract)
+
+
+def _szerzodes_vagy_none(db: Session, project_id: int, szamlazo_kulcs: str) -> Contract | None:
+    """A fél eseti szerződése ezen a projekten - akkor is, ha egy MÁSIK
+    projektről indult, de van ezt a projektet érintő tétele."""
+    fel = szamlazo.feloldas(db, szamlazo_kulcs)
+    if fel is None:
+        return None
+    return (
+        db.query(Contract)
+        .filter(
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+            papir_fedettseg.fedi_a_projektet(Contract, ContractTetel, project_id),
+            _szamlazo_szuro(fel),
+        )
+        .first()
+    )
 
 
 @router.delete("/{project_id}/{szamlazo_kulcs}", status_code=204)

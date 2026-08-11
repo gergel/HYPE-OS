@@ -16,6 +16,7 @@ from app.models.dispo_responsible import DispoResponsible, DispoSide
 from app.models.employee import Employee, SystemRole, van_szerepkore
 from app.services import kotelezettseg as kotelezettseg_szolg
 from app.services import papirozas_feladatok
+from app.services import papirozas_hatokor
 from app.models.finance import Revenue
 from app.models.project import Project
 from app.models.project_code import ProjectCode
@@ -290,6 +291,10 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
 
     # 3. Megrendelői szerződés és TIG - projektkódonként.
     for pc in db.scalars(select(ProjectCode).order_by(ProjectCode.projektkod)):
+        # A papírozásból kivett sorozatok (HYPE24) papírjai máshol készültek el -
+        # nincs velük teendő (lásd services/papirozas_hatokor.py).
+        if papirozas_hatokor.projektkod_kivett(pc.projektkod):
+            continue
         if pc.contract_id is None:
             items.append(
                 MyTaskItem(

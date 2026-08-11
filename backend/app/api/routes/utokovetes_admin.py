@@ -46,6 +46,7 @@ from app.models.post_shoot_feedback import PostShootFeedback
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.post_shoot_feedback import PostShootFeedbackRead
+from app.services import papirozas_hatokor
 from app.services.szamlazo import SzamlazoCsoport
 
 router = APIRouter(prefix="/utokovetes", tags=["utokovetes-admin"])
@@ -167,10 +168,14 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
     """Minden diszpózott projekt egy sorban, a szerződés/TIG/visszajelzés
     állapotával - nem csak a még függőket listázza (mint a két külön oldal),
     hanem MINDENT, hogy áttekintés is legyen, nem csak teendő-lista."""
-    projects = (
+    projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
         .filter(Project.diszpo == "Kiküldve")
-        .options(selectinload(Project.crew), selectinload(Project.post_shoot_feedbacks))
+        .options(
+            selectinload(Project.crew),
+            selectinload(Project.project_code),
+            selectinload(Project.post_shoot_feedbacks),
+        )
         .order_by(Project.forgatas_datuma.desc().nullslast())
         .all()
     )

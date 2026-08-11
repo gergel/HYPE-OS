@@ -1,5 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
+import { UtokovetesDetailModal } from "@/components/UtokovetesDetailModal";
 import { formatDate, type UtokovetesOverview } from "@/lib/api";
 
 function szerzodesBadge(osszes: number, fuggo: number) {
@@ -30,12 +34,20 @@ function visszajelzesBadge(darab: number) {
  * szűrhető és rendezhető. Ez a részletes kép; a fázisokra bontott tábla (lásd
  * UtokovetesTabla) az alap. */
 export function UtokovetesLista({ rows }: { rows: UtokovetesOverview[] }) {
+  // A sor felugró ablakot nyit, nem új oldalt: aki végigmegy több projekten,
+  // ne veszítse el a szűrését és a helyét a listában (lásd
+  // UtokovetesDetailModal). A getHref azért marad meg mellette, hogy a
+  // középső egérgombbal/Ctrl-lal továbbra is új fülre lehessen nyitni.
+  const [nyitottProjekt, setNyitottProjekt] = useState<number | null>(null);
+
   return (
+    <>
     <DataTable<UtokovetesOverview & { id: number }>
       filterable
       rows={rows.map((r) => ({ ...r, id: r.project_id }))}
       emptyText="Nincs még diszpózott projekt."
       getHref={(r) => `/utokovetes/${r.project_id}`}
+      onRowClick={setNyitottProjekt}
       columns={[
         { header: "Projekt", render: (r) => r.project_nev ?? `#${r.project_id}`, sortAccessor: (r) => r.project_nev },
         { header: "Projektkód", render: (r) => r.projektkod ?? "–", sortAccessor: (r) => r.projektkod },
@@ -75,5 +87,7 @@ export function UtokovetesLista({ rows }: { rows: UtokovetesOverview[] }) {
         },
       ]}
     />
+      <UtokovetesDetailModal projectId={nyitottProjekt} onClose={() => setNyitottProjekt(null)} />
+    </>
   );
 }

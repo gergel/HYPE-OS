@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.employee import Employee, EmployeeType, SystemRole
 from app.models.project import Project
 from app.models.task import Task
+from app.services import papirozas_hatokor
 
 #: A feladat kategóriája - ez különbözteti meg a kézzel felvett feladatoktól.
 KATEGORIA = "Papírozás"
@@ -92,6 +93,10 @@ def ensure_papirozas_feladatok(db: Session, ma: date | None = None) -> list[Task
     ujak: list[Task] = []
     for projekt in projektek:
         if projekt.id in mar_van:
+            continue
+        # A papírozásból kivett sorozatok (HYPE24) papírjai máshol készültek el,
+        # ezért feladatot sem gyártunk hozzájuk (lásd papirozas_hatokor.py).
+        if papirozas_hatokor.projekt_kivett(projekt):
             continue
         if not any(e.tipus != EmployeeType.BELSOS for e in projekt.crew):
             continue

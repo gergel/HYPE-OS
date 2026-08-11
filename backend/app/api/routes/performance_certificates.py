@@ -40,7 +40,7 @@ from app.models.performance_certificate import (
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.performance_certificate import PerformanceCertificateRead
-from app.services import document_storage, papir_fedettseg, papir_tetelek, szamlazo
+from app.services import document_storage, papir_fedettseg, papir_tetelek, papirozas_hatokor, szamlazo
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import send_message
 from app.services.hu_number_words import szam_betukkel
@@ -228,10 +228,10 @@ class PendingProjectSummary(BaseModel):
 
 @router.get("", response_model=list[PendingProjectSummary])
 def list_tig_ready_projects(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
-    projects = (
+    projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
         .filter(Project.diszpo == "Kiküldve")
-        .options(selectinload(Project.crew))
+        .options(selectinload(Project.crew), selectinload(Project.project_code))
         .all()
     )
     keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, projects)
@@ -467,7 +467,7 @@ def list_nyitott_tetelek(
     if fel is None:
         raise HTTPException(status_code=404, detail="A számlázó fél nem található")
 
-    projects = (
+    projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
         .filter(Project.diszpo == "Kiküldve")
         .options(selectinload(Project.crew), selectinload(Project.project_code))
