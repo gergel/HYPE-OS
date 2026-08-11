@@ -54,6 +54,14 @@ vállalkozás. Azért szöveg, hogy ugyanaz az útvonal (`.../{szamlazo}/save`) 
 és céget is fogadjon - és mivel a puszta szám továbbra is embert jelent, a régi,
 ember-azonosítós hívások változtatás nélkül működnek.
 
+A "ki lehet számlázó fél" lista a **szerverről** jön
+(`project_szamlazok._valaszthato_emberek`), mert a belsős státusz **időszakos**:
+aki ma belsős, tavaly még külsősként dolgozhatott, és akkor simán ő számlázhatott
+más helyett. Ezért nem a mai típus dönt, hanem az, hogy a **forgatás napján**
+belsős volt-e (`belsos_idoszak.bizonyithatoan_nem_belsos`). Adat híján marad a
+kizárás: a "nincs róla időszak, tehát biztosan nem volt belsős" következtetés
+éppen a hibás irányba téved.
+
 A számlázó fél **nem kell, hogy rajta legyen a projekten**: gyakori, hogy a
 számlát olyan vállalkozó állítja ki, aki maga nem volt a forgatáson. A backend
 ezt sosem kötötte stábtagsághoz, a választó pedig a javaslatokon felül minden nem

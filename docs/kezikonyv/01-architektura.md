@@ -70,6 +70,19 @@ beállításokat nézd meg, csak utána a kódot.
 | Storage | `/api/v1/media`, `/api/v1/folders` | R2-alapú fájltár |
 | Automation | `/api/v1/automation` | Dokumentum-generálás Google Docs sablonból |
 
+## Legördülők és keresés
+
+Hosszú listás választónál (munkatársak, cégek, oszlopok) `KeresosSelect` a
+komponens, nem natív `<select>`: az utóbbi "keresése" a böngésző betű-ugrálása,
+ami nem szűkíti a listát és pár száz ezredmásodperc után elfelejti a beírtat.
+A `KeresosSelect` panelje tetején valódi, megmaradó keresőmező áll, és
+**ékezet-független** (aki "arvai"-t ír, megtalálja Árvait).
+
+Rövid listánál (állapot, típus, rendezés) marad a natív select - három elem közt
+keresni csak zaj. Szöveges értékkészletű mezőknél a `SelectDropdown` a
+megfelelő komponens (az új értéket is felvehet), azonosító-választásnál a
+`KeresosSelect`.
+
 ## Konvenciók
 
 - **Magyar domén-nyelv a kódban is.** Ahol a fogalomnak van bevett magyar neve

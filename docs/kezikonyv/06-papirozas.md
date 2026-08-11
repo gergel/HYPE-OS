@@ -77,6 +77,41 @@ Szerződésnél és TIG-nél azonos, a régi Notion-os "Adatok átemelése" →
 - **Saját, kész papír feltöltése** - ha a dokumentum máshol készült, fel lehet
   tölteni generálás helyett (`components/SajatPapirFeltoltes.tsx`).
 
+### Aki kimarad a papírozásból
+
+Két, egymástól független ok van rá:
+
+- **Projekt kiadásként elszámolva** - valaki ott volt a forgatáson, de nem
+  résztvevőként számoljuk el: technikát hozott, és a díja a bérleti árban már
+  benne van. Tőle nincs mit szerződni és igazolni. A jelölő a (projekt, ember)
+  páron él (`ProjectSzamlazo.kiadaskent_elszamolva`), a számlázó fél felülírása
+  mellett - **stábtag marad**: kap diszpót, rajta van a projekten. Utólag is
+  átjelölhető mindkét irányba, mert sokszor csak a számla megérkezésekor derül
+  ki, hogy valakinek a díja már egy másik tételben szerepel. Ha már készült róla
+  TIG, előbb azt kell rendezni.
+- **Belsős munkatárs** - havi bérezésű, nála nincs projektenkénti papír.
+
+### A lezárás három módja
+
+Egy fél háromféleképp kerülhet le a teendő-listáról:
+
+| Mód | Mit jelent | Indoklás |
+|---|---|---|
+| **Kiküldve** | Elkészült és kiment a papír | – |
+| **Kihagyva** | Egyáltalán NINCS papír, szándékosan | **kötelező** |
+| **Van már szerződés** | A papír létezik, csak nem itt készült | opcionális |
+
+A harmadik a Notionból áthozott soroké: gyakran van már érvényes, aláírt
+szerződés, a rendszer mégis kérné. A "Kihagyva" erre hazugság volna - az azt
+jelenti, hogy nincs szerződés -, és a kettőt utólag nem lehetne szétválogatni.
+Lezáró állapot, tehát a TIG-fázis megnyílik utána, de aláírt példányt nem várunk
+vissza tőle: nem mi küldtük ki.
+
+A **kihagyás indoklása kötelező** (szerződésnél és TIG-nél is): a puszta
+"Kihagyva" jelölésről fél év múlva senki nem tudná megmondani, szándékos volt-e
+vagy elfelejtődött. Az indok külön mezőbe kerül (`kihagyas_oka`), nem a
+Notionból örökölt általános megjegyzésbe, és a listán a jelölés mellett látszik.
+
 ### A kiküldött szerződést aláírva visszavárjuk
 
 A kiküldés nem zárja le az ügyet: a papírnak vissza is kell érkeznie aláírva.
