@@ -11,7 +11,14 @@ A forrás sorrendje szándékosan ilyen:
 2. ha nincs egy időszak sem, a munkatárs `elso_munkanap` / `utolso_munkanap`
    mezője - ez a Notion-importból már ott van a legtöbb embernél, tehát
    külön adatbevitel nélkül is helyes eredményt ad;
-3. ha az sincs, minden hónap beleszámít - vagyis a korábbi viselkedés.
+3. ha az sincs, akkor a NYOMAI: a legkorábbi havi TIG-je vagy havi tétele. Aki
+   sehol nem szerepel, arról nem állítjuk, hogy dolgozott.
+
+A harmadik pont korábban azt mondta, hogy "minden hónap beleszámít". Ez csendes
+elcsúszást okozott: aki tévedésből lett belsősnek jelölve (vagy csak nincs
+kitöltve az időszaka), az MINDEN hónap listáján ott állt, évekre visszamenőleg
+is - pedig ott semmi keresnivalója. Ha nincs adat, inkább nem találgatunk; a
+hiányzó időszakokat a felület külön kiírja, hogy pótolni lehessen.
 
 Egy hónap akkor számít, ha a belsős viszony a hónap BÁRMELY napján élt: aki
 15-én lépett be, attól arra a hónapra is jár TIG (a fél hónapra)."""
@@ -42,13 +49,57 @@ def _atfedi(kezdet: date | None, veg: date | None, honap_eleje: date, honap_vege
     return True
 
 
-def belsos_volt(employee: Employee, ev: int, honap: int) -> bool:
-    """Belsős volt-e ez az ember az adott hónapban (akár csak részben)?"""
+def van_idoszak_adat(employee: Employee) -> bool:
+    """Tudjuk-e egyáltalán, hogy MIKOR volt belsős ez az ember?
+
+    Ha se felvitt időszaka, se első/utolsó munkanapja nincs, akkor nem tudjuk -
+    ilyenkor a havi listákhoz a nyomaiból (meglévő TIG-ek, havi tételek)
+    következtetünk, és a felület jelzi, hogy az időszakot pótolni kell."""
+    return bool(employee.belsos_idoszakok) or employee.elso_munkanap is not None or (
+        employee.utolso_munkanap is not None
+    )
+
+
+def belsos_volt(
+    employee: Employee, ev: int, honap: int, nyom_kezdet: date | None = None
+) -> bool:
+    """Belsős volt-e ez az ember az adott hónapban (akár csak részben)?
+
+    A `nyom_kezdet` csak akkor számít, ha semmilyen időszak-adata nincs: ez a
+    legkorábbi hónap, amiről tudjuk, hogy már nálunk volt (lásd
+    nyom_kezdetek). Enélkül - adat és nyom híján - NEM soroljuk be a hónapba:
+    az "alapból mindenhol ott van" feltevés csak hamis teendőt szülne."""
     eleje, vege = honap_hatarok(ev, honap)
     idoszakok = list(employee.belsos_idoszakok or [])
     if idoszakok:
         return any(_atfedi(i.kezdet, i.veg, eleje, vege) for i in idoszakok)
-    return _atfedi(employee.elso_munkanap, employee.utolso_munkanap, eleje, vege)
+    if employee.elso_munkanap is not None or employee.utolso_munkanap is not None:
+        return _atfedi(employee.elso_munkanap, employee.utolso_munkanap, eleje, vege)
+    return nyom_kezdet is not None and _atfedi(nyom_kezdet, None, eleje, vege)
+
+
+def nyom_kezdetek(db: Session, employee_ids: list[int]) -> dict[int, date]:
+    """Kiről mikortól van NYOMUNK, hogy belsősként dolgozott?
+
+    A legkorábbi havi TIG-je vagy havi tétele hónapjának első napja. Ez a
+    tartalék azoknál, akiknek nincs felvitt belsős időszaka: így a lista nem
+    csúszik el visszamenőleg olyan hónapokra, ahol az illető nem szerepel
+    sehol - de aki egyszer már megjelent, az onnantól ott is marad."""
+    if not employee_ids:
+        return {}
+    from app.models.employee_monthly_item import EmployeeMonthlyItem
+    from app.models.internal_performance_certificate import InternalPerformanceCertificate
+
+    legkorabbi: dict[int, tuple[int, int]] = {}
+    for tabla in (InternalPerformanceCertificate, EmployeeMonthlyItem):
+        for employee_id, ev, honap in db.query(tabla.employee_id, tabla.ev, tabla.honap).filter(
+            tabla.employee_id.in_(employee_ids)
+        ):
+            kulcs = (ev, honap)
+            meglevo = legkorabbi.get(employee_id)
+            if meglevo is None or kulcs < meglevo:
+                legkorabbi[employee_id] = kulcs
+    return {emp: date(ev, honap, 1) for emp, (ev, honap) in legkorabbi.items()}
 
 
 def belsosok(db: Session, ev: int | None = None, honap: int | None = None) -> list[Employee]:
@@ -67,7 +118,8 @@ def belsosok(db: Session, ev: int | None = None, honap: int | None = None) -> li
     )
     if ev is None or honap is None:
         return emberek
-    return [e for e in emberek if belsos_volt(e, ev, honap)]
+    nyomok = nyom_kezdetek(db, [e.id for e in emberek if not van_idoszak_adat(e)])
+    return [e for e in emberek if belsos_volt(e, ev, honap, nyomok.get(e.id))]
 
 
 def idoszak_szoveg(idoszakok: list[BelsosIdoszak]) -> str:

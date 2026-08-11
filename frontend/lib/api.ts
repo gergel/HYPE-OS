@@ -789,6 +789,18 @@ export async function getBelsosTigAttekintes(honapok = 12): Promise<BelsosTigHon
   return (await apiGet<BelsosTigHonap[]>(`/api/v1/belsos-tig/attekintes?honapok=${honapok}`)) ?? [];
 }
 
+/** Egy belsős, akinél nincs megadva, mettől meddig volt az. */
+export type BelsosIdoszakHianyzik = {
+  employee_id: number;
+  full_name: string;
+  /** Mettől soroljuk be a nyomai alapján; üres, ha semmilyen nyoma nincs. */
+  nyom_kezdet: string | null;
+};
+
+export async function getBelsosIdoszakHianyzik(): Promise<BelsosIdoszakHianyzik[]> {
+  return (await apiGet<BelsosIdoszakHianyzik[]>("/api/v1/belsos-tig/idoszak-hianyzik")) ?? [];
+}
+
 export async function getBelsosTigMonth(ev?: number, honap?: number): Promise<BelsosTigMonthEmployee[]> {
   const params = new URLSearchParams();
   if (ev) params.set("ev", String(ev));

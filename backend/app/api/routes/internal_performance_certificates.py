@@ -369,6 +369,34 @@ def _honap_teendoje(record: InternalPerformanceCertificate | None, *, kell_tig: 
     return None
 
 
+class IdoszakHianyzik(BaseModel):
+    """Egy belsős, akiről nem tudjuk, mettől meddig volt az."""
+
+    employee_id: int
+    full_name: str
+    #: Mettől soroljuk be a nyomai alapján (legkorábbi TIG-je/havi tétele).
+    #: Üres, ha semmilyen nyoma nincs - ő sehol nem jelenik meg a havi
+    #: listákon, amíg az időszaka nincs megadva.
+    nyom_kezdet: date | None = None
+
+
+@router.get("/idoszak-hianyzik", response_model=list[IdoszakHianyzik])
+def idoszak_hianyzik(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """Azok a belsősök, akiknek nincs megadva a belsős időszaka.
+
+    Miért kell külön kiírni? Mert a havi listák időszak nélkül nem
+    találgatnak: aki sehol nem szerepel, az nem is jelenik meg egyik hónapnál
+    sem (lásd services/belsos_idoszak.py). Ez így pontos, de csak akkor
+    biztonságos, ha a hiány LÁTSZIK - különben egy elfelejtett időszak miatt
+    csendben kimaradna valakinek a havi TIG-je."""
+    emberek = [e for e in belsos_idoszak.belsosok(db) if not belsos_idoszak.van_idoszak_adat(e)]
+    nyomok = belsos_idoszak.nyom_kezdetek(db, [e.id for e in emberek])
+    return [
+        IdoszakHianyzik(employee_id=e.id, full_name=e.full_name, nyom_kezdet=nyomok.get(e.id))
+        for e in emberek
+    ]
+
+
 @router.get("/attekintes", response_model=list[HaviOsszesito])
 def havi_attekintes(
     honapok: int = 12,
@@ -414,6 +442,13 @@ def havi_attekintes(
         legkorabbi = min(honap_szerint)
         honap_kulcsok = {k for k in honap_kulcsok if k >= legkorabbi}
 
+    # Akinek nincs felvitt belsős időszaka, annál a NYOMAI mondják meg,
+    # mettől számít belsősnek (lásd services/belsos_idoszak.py) - enélkül
+    # minden hónapban ott állna a neve.
+    nyomok = belsos_idoszak.nyom_kezdetek(
+        db, [e.id for e in employees if not belsos_idoszak.van_idoszak_adat(e)]
+    )
+
     eredmeny: list[HaviOsszesito] = []
     for kulcs in sorted(honap_kulcsok, reverse=True):
         ev, honap = kulcs
@@ -425,7 +460,7 @@ def havi_attekintes(
         # A már nem belsősök MELLETT azok is beleszámítanak, akiknek erre a
         # hónapra van bejegyzésük - különben a munkájuk (és az összegük)
         # eltűnne a hónap összesítéséből.
-        emberek = [e for e in employees if belsos_idoszak.belsos_volt(e, ev, honap)]
+        emberek = [e for e in employees if belsos_idoszak.belsos_volt(e, ev, honap, nyomok.get(e.id))]
         ismert = {e.id for e in emberek}
         for employee_id in sorok:
             if employee_id not in ismert:

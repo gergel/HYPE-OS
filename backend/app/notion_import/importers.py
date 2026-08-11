@@ -16,6 +16,7 @@ from app.models.rate import Rate
 from app.models.task import Task
 from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
+from app.services.hu_szoveg import ekezet_nelkul
 from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert, upsert
 
 UNKNOWN_CLIENT_KEY = "client:unknown-notion-import"
@@ -145,6 +146,30 @@ def import_clients_and_contacts(client: NotionClient, db: Session) -> ImportResu
 
 
 
+def _munkatars_tipusa(nyers) -> EmployeeType:
+    """Külsős vagy belsős a Notion "Külsős vagy belsős" mezője alapján.
+
+    A mező egy opció-LISTA, és a szövege nem mindig csak "Belsős": előfordul
+    "Volt belsős", "Nem belsős", "Külsős (korábban belsős)" is. Egy sima
+    "benne van-e a szóban, hogy bels" ezeket mind belsősnek vette volna - és
+    onnantól az illető minden hónapban ott állt a belsős TIG listán, pedig
+    sosem volt belsős. Ezért az opciót EGÉSZBEN nézzük: csak az számít
+    belsősnek, ami tényleg azzal kezdődik ("Belsős", "Belsős munkatárs"), a
+    tagadó és múlt idejű változatok nem.
+
+    Ha egyik opció sem mond belsőst, külsős marad - az a biztonságos irány: a
+    külsősnél nem várunk havi TIG-et, tehát nem keletkezik hamis teendő."""
+    if nyers is None:
+        return EmployeeType.KULSOS
+    opciok = nyers if isinstance(nyers, list) else str(nyers).split(",")
+    for opcio in opciok:
+        if not isinstance(opcio, str):
+            continue
+        if ekezet_nelkul(opcio).lstrip("-–— ").startswith("belsos"):
+            return EmployeeType.BELSOS
+    return EmployeeType.KULSOS
+
+
 def import_employees(client: NotionClient, db: Session) -> ImportResult:
     """Employee <- 'Külsős és belsős' (a valódi crew-directory tábla; a doksi által
     feltételezett további forrásokból - Belsős, Külsős - a discovery alapján kiderült,
@@ -159,11 +184,7 @@ def import_employees(client: NotionClient, db: Session) -> ImportResult:
             result.skipped += 1
             continue
 
-        tipus_raw = props.get("Külsős vagy belsős") or []
-        tipus = EmployeeType.KULSOS
-        joined = " ".join(tipus_raw).lower() if isinstance(tipus_raw, list) else str(tipus_raw).lower()
-        if "bels" in joined:
-            tipus = EmployeeType.BELSOS
+        tipus = _munkatars_tipusa(props.get("Külsős vagy belsős"))
 
         munkatars = safe_upsert(
             db,

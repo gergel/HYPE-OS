@@ -45,6 +45,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.employee import Employee
+from app.services.hu_szoveg import ekezet_nelkul
 from app.models.employee_monthly_item import EmployeeMonthlyItem
 from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
@@ -126,11 +127,7 @@ MAX_MEGNEVEZES = 255
 
 
 def _ekezet_nelkul(szoveg: str) -> str:
-    import unicodedata
-
-    return "".join(
-        c for c in unicodedata.normalize("NFKD", szoveg.lower()) if not unicodedata.combining(c)
-    ).strip()
+    return ekezet_nelkul(szoveg)
 
 
 HONAP_NEVEK_EKEZET_NELKUL = tuple(_ekezet_nelkul(nev) for nev in HONAP_NEVEK)

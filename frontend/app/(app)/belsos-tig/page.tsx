@@ -4,8 +4,13 @@ import { BelsosTigHaviAttekintes } from "@/components/BelsosTigHaviAttekintes";
 import { BelsosTigManager } from "@/components/BelsosTigManager";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
-import { getBelsosTigAttekintes, getBelsosTigMonth, getMyPagePermissions } from "@/lib/api";
-import { huEvHonap } from "@/lib/huDate";
+import {
+  getBelsosIdoszakHianyzik,
+  getBelsosTigAttekintes,
+  getBelsosTigMonth,
+  getMyPagePermissions,
+} from "@/lib/api";
+import { huDatum, huEvHonap } from "@/lib/huDate";
 
 function shiftMonth(ev: number, honap: number, delta: number): { ev: number; honap: number } {
   const zeroBased = honap - 1 + delta;
@@ -35,9 +40,10 @@ export default async function BelsosTigPage({
   const ev = params.ev ? Number(params.ev) : alap.ev;
   const honap = params.honap ? Number(params.honap) : alap.honap;
 
-  const [employees, attekintes, pagePermissions] = await Promise.all([
+  const [employees, attekintes, idoszakHianyzik, pagePermissions] = await Promise.all([
     getBelsosTigMonth(ev, honap),
     getBelsosTigAttekintes(12),
+    getBelsosIdoszakHianyzik(),
     getMyPagePermissions(),
   ]);
   // Aki az oldalon szerkeszthet, az az állapotot is kézzel át tudja állítani.
@@ -67,6 +73,35 @@ export default async function BelsosTigPage({
         {/* Havi "mappázás": hónaponként külön dobozban, hogy ne folyjanak
             egybe - melyik hónap van kész, és ahol nincs, ott kinek mi
             hiányzik, meddig (lásd BelsosTigHaviAttekintes). */}
+        {/* A havi listák időszak nélkül nem találgatnak: aki nincs felvezetve,
+            az nem is jelenik meg. Ez csak akkor biztonságos, ha a hiány
+            LÁTSZIK - különben egy elfelejtett időszak miatt csendben kimaradna
+            valakinek a havi TIG-je. */}
+        {idoszakHianyzik.length > 0 && (
+          <div className="rounded-[var(--radius)] border border-border bg-bg-warning px-4 py-3">
+            <p className="text-[13px] font-medium text-text-warning">
+              {idoszakHianyzik.length} belsősnél nincs megadva a belsős időszak
+            </p>
+            <p className="mt-1 text-[12.5px] text-text-secondary">
+              Amíg nincs megadva, hogy mettől meddig belsős, a havi listákon csak onnantól jelenik meg, ahonnan
+              van róla bejegyzés – akiről semmi sincs, az egyik hónapon sem. Az időszakot a munkatárs adatlapján
+              lehet felvinni.
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
+              {idoszakHianyzik.map((e) => (
+                <li key={e.employee_id}>
+                  <a href={`/csapat/${e.employee_id}`} className="text-text-accent hover:underline">
+                    {e.full_name}
+                  </a>
+                  <span className="ml-1 text-text-muted">
+                    {e.nyom_kezdet ? `(${huDatum(e.nyom_kezdet)}-tól számítva)` : "(nincs róla bejegyzés)"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <Card title="Havi áttekintés">
           <BelsosTigHaviAttekintes honapok={attekintes} />
         </Card>
