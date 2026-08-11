@@ -5,6 +5,12 @@ Ez a rendszer legsűrűbb doménje. Ha egyetlen dolgot jegyzel meg róla, ez leg
 > **A papír nem emberhez tartozik, hanem SZÁMLÁZÓ FÉLHEZ.**
 > Ha egy projekten több stábtag munkáját ugyanaz a fél számlázza (egy másik
 > ember vagy egy cég), akkor **egy** szerződés és **egy** TIG kell mindannyiukra.
+>
+> Ebből következik: ha a félnek **már van kiküldött TIG-je** ezen a projekten, a
+> rendszer nem kér tőle újat akkor sem, ha utólag kerül alá egy másik ember.
+> Ilyenkor a hiányzó tételt a meglévő TIG-en kell rendezni (állapot vissza
+> „Készítés alatt”-ra, tétel hozzáadása) - egy megbízott ne kapjon két
+> igazolást ugyanarról a projektről.
 > A csoportosítás egy helyen dől el: `services/szamlazo.py` (`SzamlazoFel`,
 > `SzamlazoCsoport`).
 
@@ -70,6 +76,31 @@ Szerződésnél és TIG-nél azonos, a régi Notion-os "Adatok átemelése" →
 - **Kihagyás** - lezárja az adott felet erre a projektre nézve, papír nélkül.
 - **Saját, kész papír feltöltése** - ha a dokumentum máshol készült, fel lehet
   tölteni generálás helyett (`components/SajatPapirFeltoltes.tsx`).
+
+### A kiküldött szerződést aláírva visszavárjuk
+
+A kiküldés nem zárja le az ügyet: a papírnak vissza is kell érkeznie aláírva.
+Amíg az aláírt példány nincs feltöltve (`POST .../{szamlazo}/alairt-fajl`), a
+projekt az utókövetésben az **„Aláírt szerződésre vár”** oszlopban áll, és nem
+lehet „Kész”.
+
+Két külön mező, és ez a különbség lényeges:
+
+- `szerzodes_file_url` - a **mi** dokumentumunk (generált, vagy generálás
+  helyett feltöltött saját papír),
+- `alairt_file_url` + `alairva` - a **visszaérkező**, aláírt példány.
+
+A kettő egyszerre is létezik, ezért az aláírt feltöltése nem nyúl a szerződés
+állapotához: a „Kiküldve” attól még igaz marad.
+
+Csak a **kiküldött** szerződéseket várjuk vissza: a „Kihagyva” jelölésnél nincs
+papír, a keretszerződéssel mentesülőknél pedig eseti szerződés sem készült.
+
+A fázis-sorrendben az aláírás-várás **a sor végén** áll (utalás után,
+„Kész” előtt), nem a szerződés mellett. Ez tudatos: a kiküldött szerződés elég
+ahhoz, hogy a TIG és a kifizetés elinduljon, tehát egy visszavárt aláírás nem
+takarhatja el a sürgősebb teendőket - viszont megakadályozza, hogy egy projekt
+lezártnak látsszon úgy, hogy a papír sosem jött vissza.
 
 ### A kész papír javítható és törölhető
 

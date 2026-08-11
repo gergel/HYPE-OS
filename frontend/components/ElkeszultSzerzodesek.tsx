@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
+import { StatusBadge } from "@/components/StatusBadge";
 import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { formatFt } from "@/lib/ido";
@@ -47,6 +48,53 @@ export function ElkeszultSzerzodesek({
   const kesz = szerzodesek.filter((s) => s.szerzodes_allapota === "Kiküldve" || s.szerzodes_allapota === "Kihagyva");
   if (kesz.length === 0) return null;
 
+  /** Az ALÁÍRVA visszaérkezett példány feltöltése. Külön a generált/feltöltött
+   * saját dokumentumtól: az a mi papírunk, ez a visszakapott - a kettő
+   * egyszerre is létezik. Amíg ez nincs meg, a projekt "aláírt szerződésre
+   * vár" az utókövetés áttekintőjén. */
+  async function alairtFeltolt(s: ElkeszultSzerzodes, file: File) {
+    setBusyId(s.szamlazo);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.szamlazo}/alairt-fajl`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen feltöltés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen feltöltés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function alairtTorol(s: ElkeszultSzerzodes) {
+    const ok = await confirm(`Eldobod ${s.full_name} feltöltött aláírt szerződését? Utána újra visszavárjuk.`);
+    if (!ok) return;
+    setBusyId(s.szamlazo);
+    try {
+      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.szamlazo}/alairt-fajl`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen törlés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function torol(s: ElkeszultSzerzodes) {
     const ok = await confirm(
       `Törlöd ${s.full_name} szerződését erről a projektről? Ezután újra a teendők közt jelenik meg, és készíthetsz neki újat.`,
@@ -81,6 +129,7 @@ export function ElkeszultSzerzodesek({
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Állapot</th>
               <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Nettó</th>
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Szerződés</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Aláírva visszaérkezett</th>
               <th className="py-1.5 text-right font-medium text-text-secondary" />
             </tr>
           </thead>
@@ -118,6 +167,59 @@ export function ElkeszultSzerzodesek({
                       Adatlap és fájlok
                     </a>
                   </span>
+                </td>
+                <td className="py-2.5 pr-6">
+                  {/* A KIHAGYOTT szerződésnél nincs papír, amit vissza lehetne
+                      várni - ott nincs mit mutatni. */}
+                  {s.szerzodes_allapota !== "Kiküldve" ? (
+                    <span className="text-text-muted">–</span>
+                  ) : s.alairva ? (
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <StatusBadge label="Megérkezett" tone="success" />
+                      {s.alairt_file_url && (
+                        <a
+                          href={s.alairt_file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-text-accent hover:underline"
+                        >
+                          Aláírt példány
+                        </a>
+                      )}
+                      {canEdit && (
+                        <button
+                          type="button"
+                          disabled={busyId === s.szamlazo}
+                          onClick={() => alairtTorol(s)}
+                          className="text-[12px] text-text-muted hover:text-text-danger disabled:opacity-50"
+                        >
+                          Eldobás
+                        </button>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <StatusBadge label="Visszavárjuk" tone="warning" />
+                      {canEdit && (
+                        <label className="cursor-pointer text-[12px] text-text-accent hover:underline">
+                          Feltöltés
+                          <input
+                            type="file"
+                            className="hidden"
+                            disabled={busyId === s.szamlazo}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              // Az input értékét nullázzuk, hogy ugyanazt a
+                              // fájlt újra ki lehessen választani egy hibás
+                              // feltöltés után.
+                              e.target.value = "";
+                              if (file) alairtFeltolt(s, file);
+                            }}
+                          />
+                        </label>
+                      )}
+                    </span>
+                  )}
                 </td>
                 <td className="py-2.5 text-right">
                   {canDelete && (

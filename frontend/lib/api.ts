@@ -441,6 +441,10 @@ export type ElkeszultSzerzodes = {
   netto_osszeg: number | null;
   keltezes: string | null;
   szerzodes_file_url: string | null;
+  /** Visszaérkezett-e a MEGBÍZOTT által aláírt példány, és hol van. Amíg
+   * nincs meg, a projekt "aláírt szerződésre vár" az utókövetésben. */
+  alairva: boolean;
+  alairt_file_url: string | null;
 };
 
 export async function getAllContractsForProject(projectId: number): Promise<ElkeszultSzerzodes[]> {
@@ -826,13 +830,17 @@ export type UtokovetesOverview = {
   tig_ready: boolean;
   tig_osszes: number;
   tig_fuggo: number;
+  /** Hány kiküldött szerződést várunk még vissza ALÁÍRVA - a kiküldés
+   * önmagában nem zárja le az ügyet (lásd backend
+   * subcontractor_contracts.alairasra_varo_csoportok). */
+  alairas_varo: number;
   /** Kifizetés: a nem belsős stábtagok (külsős + keretszerződéses) közül
    * hánynak kell fizetni, és hány van még hátra (lásd backend
    * utokovetes_admin.py _kifizetes_state). */
   kifizetes_osszes: number;
   kifizetes_fuggo: number;
-  /** Csak akkor igaz, ha a szerződések, a TIG-ek ÉS a kifizetések is mind
-   * rendben vannak - ekkor a projekt teljesen le van zárva. */
+  /** Csak akkor igaz, ha a szerződések, az aláírt példányok, a TIG-ek ÉS a
+   * kifizetések is mind rendben vannak - ekkor a projekt teljesen le van zárva. */
   kesz: boolean;
   visszajelzes_darab: number;
 };
@@ -866,6 +874,8 @@ export type UtokovetesDetail = {
     draft: SubcontractorContractDraft | null;
   }[];
   tig_ready: boolean;
+  /** Hány kiküldött szerződést várunk még vissza aláírva. */
+  alairas_varo: number;
   teljesitesi_igazolasok: {
     id: number;
     szamlazo: string;

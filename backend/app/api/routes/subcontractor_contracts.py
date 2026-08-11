@@ -204,6 +204,35 @@ def csoport_szerzodes_kesz(
     return existing is not None and existing.szerzodes_allapota in TERMINAL_STATUSES
 
 
+def alairasra_varo_csoportok(
+    project: Project,
+    keretszerzodesek: dict[str, list[Contract]],
+    project_contracts: dict[tuple[int, str], Contract],
+    felulirasok: dict[tuple[int, int], ProjectSzamlazo],
+) -> list[tuple[SzamlazoCsoport, Contract]]:
+    """Kiktől várjuk még vissza ALÁÍRVA a szerződést ezen a projekten?
+
+    A kiküldés nem zárja le az ügyet: a papírnak vissza is kell érkeznie
+    aláírva, és azt fel kell tölteni (lásd upload_alairt_szerzodes). Addig a
+    projekt nem tekinthető késznek, akkor sem, ha a TIG és a kifizetés már
+    megvan.
+
+    Csak a KIKÜLDÖTT szerződések számítanak: a "Kihagyva" jelölésnél nincs
+    papír, amit vissza lehetne várni, a keretszerződéssel mentesülőknél pedig
+    eseti szerződés sem készült."""
+    result: list[tuple[SzamlazoCsoport, Contract]] = []
+    for csoport in _szamlazo_csoportok(project, felulirasok):
+        if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project.forgatas_datuma):
+            continue
+        szerzodes = project_contracts.get((project.id, csoport.kulcs))
+        if szerzodes is None or szerzodes.szerzodes_allapota != "Kiküldve":
+            continue
+        if szerzodes.alairva:
+            continue
+        result.append((csoport, szerzodes))
+    return result
+
+
 def _pending_csoportok(
     project: Project,
     keretszerzodesek: dict[str, list[Contract]],
@@ -304,6 +333,10 @@ class DraftInfo(BaseModel):
     teljesites_szoveg: str | None
     keltezes: date | None
     plusz_afa: bool | None
+    #: Visszaérkezett-e ALÁÍRVA, és hol a papír. Amíg nincs meg, a projekt
+    #: "aláírt szerződésre vár" az utókövetésben.
+    alairva: bool = False
+    alairt_file_url: str | None = None
     tetelek: list[TetelInfo] = []
 
 
@@ -410,6 +443,8 @@ def _draft_info(c: Contract | None) -> DraftInfo | None:
         teljesites_szoveg=_teljesites_szovege(c),
         keltezes=c.keltezes,
         plusz_afa=c.plusz_afa,
+        alairva=bool(c.alairva),
+        alairt_file_url=c.alairt_file_url,
         tetelek=[_tetel_info(t) for t in c.tetelek],
     )
 
@@ -481,6 +516,10 @@ class ElkeszultSzerzodes(BaseModel):
     keltezes: date | None = None
     #: A generált dokumentum linkje (Google Docs), ha a küldés lefutott.
     szerzodes_file_url: str | None = None
+    #: Visszaérkezett-e ALÁÍRVA, és hol a papír. Amíg nincs meg, a projekt
+    #: "aláírt szerződésre vár" (lásd alairasra_varo_csoportok).
+    alairva: bool = False
+    alairt_file_url: str | None = None
 
 
 @router.get("/{project_id}/{szamlazo_kulcs}/nyitott-tetelek", response_model=list[TetelInfo])
@@ -567,6 +606,8 @@ def list_all_for_project(
                 netto_osszeg=float(c.netto_osszeg) if c.netto_osszeg is not None else None,
                 keltezes=c.keltezes,
                 szerzodes_file_url=c.szerzodes_file_url,
+                alairva=bool(c.alairva),
+                alairt_file_url=c.alairt_file_url,
             )
         )
     return eredmeny
@@ -953,6 +994,73 @@ async def upload_sajat_szerzodes(
         document_storage.delete_object(regi_kulcs)
     db.refresh(draft)
     return ContractRead.model_validate(draft)
+
+
+@router.post("/{project_id}/{szamlazo_kulcs}/alairt-fajl", response_model=ContractRead)
+async def upload_alairt_szerzodes(
+    project_id: int,
+    szamlazo_kulcs: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A megbízott által ALÁÍRVA visszaküldött szerződés rögzítése.
+
+    Külön a `sajat-fajl`-tól, és ez a különbség lényeges: az a MI
+    dokumentumunkat cseréli le (amit generálás helyett máshol írtunk meg), ez
+    viszont a VISSZAÉRKEZŐ papír - a kettő egyszerre is létezik, és külön
+    mezőben. Ezért ez nem is nyúl a szerződés állapotához: a "Kiküldve" attól
+    még igaz marad, csak innentől nem várunk vissza semmit.
+
+    Amíg ez nincs meg, a projekt az utókövetésben "aláírt szerződésre vár"
+    (lásd routes/utokovetes_admin.py) - egy kiküldött szerződés ugyanis nem
+    lezárt ügy, csak a folyamat közepe.
+
+    Újabb feltöltés lecseréli az előzőt (a régi objektumot a tárhelyről is
+    eldobva): egy szerződésnek egy aláírt példánya van."""
+    project = _get_project_or_404(db, project_id)
+    szerzodes = _szerzodes_vagy_none(db, project.id, szamlazo_kulcs)
+    if szerzodes is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nincs szerződés-bejegyzés.")
+
+    filename = file.filename or "alairt-szerzodes"
+    content_type = file.content_type or "application/octet-stream"
+    data = await file.read()
+
+    regi_kulcs = szerzodes.alairt_file_storage_key
+    kulcs = f"alairt-szerzodes/{project_id}/{szamlazo_kulcs}-{szerzodes.id}{os.path.splitext(filename)[1]}"
+    szerzodes.alairt_file_url = document_storage.upload_bytes(data, kulcs, content_type)
+    szerzodes.alairt_file_storage_key = kulcs
+    szerzodes.alairva = True
+    db.commit()
+    # A cserélt fájl törlése CSAK a mentés után (lásd upload_sajat_szerzodes).
+    if regi_kulcs and regi_kulcs != kulcs:
+        document_storage.delete_object(regi_kulcs)
+    db.refresh(szerzodes)
+    return ContractRead.model_validate(szerzodes)
+
+
+@router.delete("/{project_id}/{szamlazo_kulcs}/alairt-fajl", response_model=ContractRead)
+def delete_alairt_szerzodes(
+    project_id: int,
+    szamlazo_kulcs: str,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A tévesen feltöltött aláírt példány eldobása - a projekt ezzel
+    visszakerül az "aláírt szerződésre vár" állapotba."""
+    szerzodes = _szerzodes_vagy_none(db, project_id, szamlazo_kulcs)
+    if szerzodes is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nincs szerződés-bejegyzés.")
+    kulcs = szerzodes.alairt_file_storage_key
+    szerzodes.alairt_file_url = None
+    szerzodes.alairt_file_storage_key = None
+    szerzodes.alairva = False
+    db.commit()
+    if kulcs:
+        document_storage.delete_object(kulcs)
+    db.refresh(szerzodes)
+    return ContractRead.model_validate(szerzodes)
 
 
 @router.post("/{project_id}/{szamlazo_kulcs}/skip", response_model=ContractRead)

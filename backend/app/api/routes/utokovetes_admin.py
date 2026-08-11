@@ -35,6 +35,7 @@ from app.api.routes.subcontractor_contracts import (
     _mentesul_keretszerzodessel,
     _pending_csoportok,
     _szamlazo_csoportok,
+    alairasra_varo_csoportok,
     load_szerzodes_kornyezet,
     DraftInfo as ContractDraftInfo,
 )
@@ -155,6 +156,9 @@ class ProjectOverviewSummary(BaseModel):
     tig_ready: bool
     tig_osszes: int
     tig_fuggo: int
+    #: Hány kiküldött szerződést várunk még vissza ALÁÍRVA (lásd
+    #: subcontractor_contracts.alairasra_varo_csoportok).
+    alairas_varo: int
     kifizetes_osszes: int
     kifizetes_fuggo: int
     # Akkor és csak akkor teljesen kész a projekt, ha az adminisztráció mindhárom
@@ -191,6 +195,7 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
             p, keretszerzodesek, project_contracts, felulirasok, tig_lookup
         )
         kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(p, felulirasok, tig_lookup)
+        alairas_varo = len(alairasra_varo_csoportok(p, keretszerzodesek, project_contracts, felulirasok))
         result.append(
             ProjectOverviewSummary(
                 project_id=p.id,
@@ -203,9 +208,15 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
                 tig_ready=tig_ready,
                 tig_osszes=tig_osszes,
                 tig_fuggo=tig_fuggo,
+                alairas_varo=alairas_varo,
                 kifizetes_osszes=kifizetes_osszes,
                 kifizetes_fuggo=kifizetes_fuggo,
-                kesz=szerzodes_fuggo == 0 and tig_fuggo == 0 and kifizetes_fuggo == 0,
+                # A kiküldött szerződés még nem lezárt ügy: amíg aláírva vissza
+                # nem érkezett, a projekt sem kész.
+                kesz=szerzodes_fuggo == 0
+                and tig_fuggo == 0
+                and kifizetes_fuggo == 0
+                and alairas_varo == 0,
                 visszajelzes_darab=len(p.post_shoot_feedbacks),
             )
         )
@@ -253,6 +264,8 @@ class ProjectOverviewDetail(BaseModel):
     szerzodesek: list[ContractStatusInfo]
     tig_ready: bool
     teljesitesi_igazolasok: list[TigStatusInfo]
+    #: Hány kiküldött szerződést várunk még vissza aláírva.
+    alairas_varo: int
     kifizetes_osszes: int
     kifizetes_fuggo: int
     kesz: bool
@@ -311,6 +324,7 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
         )
     kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(project, felulirasok, tig_lookup)
     _, _, tig_fuggo = _tig_state(project, keretszerzodesek, project_contracts, felulirasok, tig_lookup)
+    alairas_varo = len(alairasra_varo_csoportok(project, keretszerzodesek, project_contracts, felulirasok))
 
     feedbacks = (
         db.query(PostShootFeedback)
@@ -328,8 +342,9 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
         szerzodesek=szerzodesek,
         tig_ready=tig_ready,
         teljesitesi_igazolasok=teljesitesi_igazolasok,
+        alairas_varo=alairas_varo,
         kifizetes_osszes=kifizetes_osszes,
         kifizetes_fuggo=kifizetes_fuggo,
-        kesz=szerzodes_done and tig_fuggo == 0 and kifizetes_fuggo == 0,
+        kesz=szerzodes_done and tig_fuggo == 0 and kifizetes_fuggo == 0 and alairas_varo == 0,
         visszajelzesek=[PostShootFeedbackRead.model_validate(f) for f in feedbacks],
     )

@@ -193,13 +193,30 @@ def _tig_keszitheto(db: Session, project: Project, csoport: SzamlazoCsoport) -> 
     return csoport_szerzodes_kesz(project, csoport, keretszerzodesek, project_contracts)
 
 
-def _csoport_fedve(project: Project, csoport: SzamlazoCsoport, ember_fedettseg: dict) -> bool:
+def _csoport_fedve(project: Project, csoport: SzamlazoCsoport, lookup: TigLookup) -> bool:
     """Le van-e zárva a TIG ennél a félnél ezen a projekten?
 
-    Akkor és csak akkor, ha az ÖSSZES általa lefedett stábtag munkájáról van
-    véglegesített (kiküldött vagy kihagyott) TIG-tétel. Ha a stáb utólag
-    bővült, a fél újra függővé válik - és jogosan: az új ember munkájáról még
-    nincs papír."""
+    EGY FÉLRE EGY PROJEKTEN EGY TIG JÁR. Ezért ha a félnek már van
+    véglegesített (kiküldött vagy kihagyott) TIG-je erre a projektre, a fél
+    kész - akkor is, ha közben újabb ember került alá.
+
+    Ez a gyakorlatból jött: ha valaki egyben számlázott egy másik stábtaggal,
+    de a "ki számláz kiért" beállítás csak KÉSŐBB, a TIG kiküldése után
+    került rögzítésre, a rendszer korábban újra kérte a papírt - pedig a munka
+    egyetlen, már kiküldött igazoláson szerepelt. A tétel-szintű ellenőrzés
+    csak azoknál marad, akiknek még egyáltalán nincs TIG-jük.
+
+    Az ára tudatos: ha az utólag alákerült ember munkája ÖSSZEGSZERŰEN nincs
+    rajta a már kiküldött TIG-en, azt kézzel kell rendezni (a TIG állapotát
+    vissza kell venni "Készítés alatt"-ra, és a tételt hozzáadni). A rendszer
+    nem gyárt helyette egy második papírt ugyanarra a félre, mert abból a
+    megbízott két igazolást kapna ugyanarról a projektről."""
+    _, fel_tig = lookup
+    fel_cert = fel_tig.get((project.id, csoport.kulcs))
+    if fel_cert is not None and fel_cert.allapot in TERMINAL_STATUSES:
+        return True
+
+    ember_fedettseg, _ = lookup
     for tag in csoport.tagok:
         cert = ember_fedettseg.get((project.id, tag.id))
         if cert is None or cert.allapot not in TERMINAL_STATUSES:
@@ -210,10 +227,10 @@ def _csoport_fedve(project: Project, csoport: SzamlazoCsoport, ember_fedettseg: 
 def _tig_pending_csoportok(
     project: Project, csoportok: list[SzamlazoCsoport], lookup: TigLookup
 ) -> list[tuple[SzamlazoCsoport, PerformanceCertificate | None]]:
-    ember_fedettseg, fel_tig = lookup
+    _, fel_tig = lookup
     result: list[tuple[SzamlazoCsoport, PerformanceCertificate | None]] = []
     for csoport in csoportok:
-        if _csoport_fedve(project, csoport, ember_fedettseg):
+        if _csoport_fedve(project, csoport, lookup):
             continue
         result.append((csoport, fel_tig.get((project.id, csoport.kulcs))))
     return result

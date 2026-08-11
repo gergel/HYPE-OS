@@ -24,6 +24,14 @@ function tigBadge(ready: boolean, osszes: number, fuggo: number) {
   return <StatusBadge label={`${fuggo} függő`} tone="warning" />;
 }
 
+/** A kiküldött szerződés még nem lezárt ügy: aláírva vissza is kell érkeznie.
+ * Amíg ez hiányzik, a projekt nem lehet "Kész" (lásd lib/utokovetes fazisa). */
+function alairasBadge(varo: number, szerzodesOsszes: number) {
+  if (szerzodesOsszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
+  if (varo === 0) return <StatusBadge label="Megvan" tone="success" />;
+  return <StatusBadge label={`${varo} visszavárva`} tone="warning" />;
+}
+
 function kifizetesBadge(osszes: number, fuggo: number) {
   if (osszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
   if (fuggo === 0) return <StatusBadge label={`${osszes}/${osszes} kifizetve`} tone="success" />;
@@ -70,6 +78,11 @@ export function UtokovetesLista({ rows }: { rows: UtokovetesOverview[] }) {
           header: "Teljesítési igazolások",
           render: (r) => tigBadge(r.tig_ready, r.tig_osszes, r.tig_fuggo),
           sortAccessor: (r) => r.tig_fuggo,
+        },
+        {
+          header: "Aláírt szerződés",
+          render: (r) => alairasBadge(r.alairas_varo, r.szerzodes_osszes),
+          sortAccessor: (r) => r.alairas_varo,
         },
         {
           header: "Kifizetés",

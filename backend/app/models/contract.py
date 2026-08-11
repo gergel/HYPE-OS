@@ -50,7 +50,15 @@ class Contract(TimestampMixin, Base):
     # feltöltött saját szerződésnél van kitöltve, a generált, Drive-on maradó
     # dokumentumnál üres.
     szerzodes_file_storage_key: Mapped[str | None] = mapped_column(String(500))
+    #: A megbízott által ALÁÍRVA visszaküldött példány - külön a fentitől, mert
+    #: az a MI dokumentumunk (generált vagy feltöltött), ez pedig a visszaérkező
+    #: papír. Amíg ez nincs meg, a projekt "aláírt szerződésre vár" az
+    #: utókövetésben (lásd routes/utokovetes_admin.py).
+    alairt_file_url: Mapped[str | None] = mapped_column(String(500))
+    alairt_file_storage_key: Mapped[str | None] = mapped_column(String(500))
     keltezes: Mapped[date | None] = mapped_column(Date)
+    #: Visszaérkezett-e aláírva. A feltöltés állítja be, de kézzel is
+    #: jelölhető: van, hogy a papír máshol landol, és csak a tény kell.
     alairva: Mapped[bool] = mapped_column(Boolean, default=False)
     # Álló KERETSZERZŐDÉS-e ez a sor, vagy egy ESETI megbízási szerződés?
     #
