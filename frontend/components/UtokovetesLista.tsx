@@ -4,7 +4,12 @@ import { useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UtokovetesDetailModal } from "@/components/UtokovetesDetailModal";
-import { formatDate, type UtokovetesOverview } from "@/lib/api";
+// CSAK típus a lib/api-ból: az érték szerinti import behúzná a `next/headers`-t
+// (a modul szerver oldalon süti-alapú hitelesítéssel hív), ami klienskomponensben
+// build-hibát okoz. A dátumformázó ezért a kliens-biztos lib/utokovetes-ből jön -
+// ugyanaz a függvény, mint amit a másik nézet (UtokovetesTabla) is használ.
+import type { UtokovetesOverview } from "@/lib/api";
+import { datum } from "@/lib/utokovetes";
 
 function szerzodesBadge(osszes: number, fuggo: number) {
   if (osszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
@@ -53,7 +58,7 @@ export function UtokovetesLista({ rows }: { rows: UtokovetesOverview[] }) {
         { header: "Projektkód", render: (r) => r.projektkod ?? "–", sortAccessor: (r) => r.projektkod },
         {
           header: "Forgatás dátuma",
-          render: (r) => formatDate(r.forgatas_datuma),
+          render: (r) => datum(r.forgatas_datuma),
           sortAccessor: (r) => r.forgatas_datuma,
         },
         {
