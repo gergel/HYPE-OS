@@ -4,19 +4,28 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
+import { useToast } from "@/components/ToastProvider";
 import { formatFt } from "@/lib/ido";
 import type { KrumpelloMunkaora } from "@/lib/api";
 
 /** Egy MUNKANAP kifizetve-jelölése, a napló sorában.
  *
- * Kattintásra azonnal vált (nincs megerősítő ablak): a jelölés visszavonható
- * ugyanazzal a kattintással, tehát a téves kattintás ára egy újabb kattintás -
- * ehhez képest egy megerősítő ablak minden jelölésnél útban lenne.
+ * A felirat a MŰVELETET mondja, nem az állapotot: amíg nincs kifizetve, a
+ * gombon "Fizetve" áll - azt csinálja, ha megnyomod. A már kifizetett napnál
+ * viszont az állapot a fontos ("Kifizetve", pipával), a visszavonás pedig
+ * másodlagos - azt a tooltip mondja el. Egy állapotot kiíró gomb ("Még jár")
+ * arra hagyná a felhasználót, hogy kitalálja, mit csinál a kattintás.
+ *
+ * Kattintásra azonnal vált, megerősítés nélkül: a jelölés ugyanazzal a
+ * kattintással visszavonható, tehát a téves kattintás ára egy újabb kattintás -
+ * ehhez képest egy kérdés minden egyes napnál útban lenne.
  *
  * A dátum a mai napra kerül; ha az utalás máskor történt, a sor szerkesztőjében
  * átírható. */
 export function KifizetesKapcsolo({ munkaora }: { munkaora: KrumpelloMunkaora }) {
   const router = useRouter();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
 
   async function valt() {
@@ -31,12 +40,12 @@ export function KifizetesKapcsolo({ munkaora }: { munkaora: KrumpelloMunkaora })
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
-        alert(`Sikertelen: ${detail?.detail ?? res.status}`);
+        toast(`Sikertelen: ${detail?.detail ?? res.status}`);
         return;
       }
       router.refresh();
     } catch (err) {
-      alert(`Sikertelen (hálózati hiba): ${err}`);
+      toast(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
       setBusy(false);
     }
@@ -52,14 +61,14 @@ export function KifizetesKapcsolo({ munkaora }: { munkaora: KrumpelloMunkaora })
           ? `Kifizetve${munkaora.kifizetes_datuma ? ` – ${munkaora.kifizetes_datuma}` : ""}. Kattints a visszavonáshoz.`
           : "Kattints, ha ezt a napot kifizettük."
       }
-      className={`inline-flex items-center gap-1.5 rounded-[var(--radius)] border px-2 py-1 text-[11.5px] transition-colors disabled:opacity-50 ${
+      className={`inline-flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1 text-[11.5px] transition-colors disabled:opacity-50 ${
         munkaora.kifizetve
           ? "border-[color:var(--text-success)]/40 bg-bg-success text-text-success"
-          : "border-border text-text-muted hover:bg-surface-3 hover:text-text-primary"
+          : "border-[color:var(--text-accent)]/40 text-text-accent hover:bg-bg-accent"
       }`}
     >
-      {munkaora.kifizetve ? <Check size={12} /> : null}
-      {munkaora.kifizetve ? "Kifizetve" : "Még jár"}
+      {munkaora.kifizetve && <Check size={12} />}
+      {munkaora.kifizetve ? "Kifizetve" : "Fizetve"}
     </button>
   );
 }
@@ -87,19 +96,22 @@ export function IdoszakKifizetes({
   ig?: string;
 }) {
   const router = useRouter();
+  // A rendszer saját megerősítő ablaka, NEM a böngésző confirm()-ja: az
+  // utóbbi a gép sajátja, nem lehet a felület arculatába hozni - egy narancs
+  // felületen egy szürke rendszerablak épp a szétválasztást rontaná el.
+  const confirm = useConfirm();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
 
   if (hatralekosNapok === 0) return null;
 
   async function jelol() {
     const idoszak = tol || ig ? `${tol ?? "…"} – ${ig ?? "…"}` : "a teljes eddigi időszak";
-    if (
-      !confirm(
-        `${nev}: ${hatralekosNapok} nap, ${formatFt(hatralek)} jelölése kifizetettként (${idoszak}).\n\n` +
-          "Csak a még jelöletlen napokat érinti.",
-      )
-    )
-      return;
+    const ok = await confirm(
+      `${nev}: ${hatralekosNapok} nap, ${formatFt(hatralek)} jelölése kifizetettként (${idoszak}).\n\n` +
+        "Csak a még jelöletlen napokat érinti.",
+    );
+    if (!ok) return;
     setBusy(true);
     try {
       const res = await authFetch("/api/v1/krumpello/munkaorak/kifizetes", {
@@ -108,12 +120,14 @@ export function IdoszakKifizetes({
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
-        alert(`Sikertelen: ${detail?.detail ?? res.status}`);
+        toast(`Sikertelen: ${detail?.detail ?? res.status}`);
         return;
       }
+      const eredmeny = (await res.json()) as { erintett_napok: number; osszeg: number };
+      toast(`${nev}: ${eredmeny.erintett_napok} nap kifizetve (${formatFt(eredmeny.osszeg)}).`);
       router.refresh();
     } catch (err) {
-      alert(`Sikertelen (hálózati hiba): ${err}`);
+      toast(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
       setBusy(false);
     }
@@ -124,9 +138,9 @@ export function IdoszakKifizetes({
       type="button"
       onClick={jelol}
       disabled={busy}
-      className="whitespace-nowrap rounded-[var(--radius)] border border-border px-2 py-1 text-[11.5px] text-text-secondary transition-colors hover:bg-surface-3 hover:text-text-primary disabled:opacity-50"
+      className="whitespace-nowrap rounded-[var(--radius)] border border-[color:var(--text-accent)]/40 px-2.5 py-1 text-[11.5px] text-text-accent transition-colors hover:bg-bg-accent disabled:opacity-50"
     >
-      {busy ? "Jelölés…" : `Kifizetve (${hatralekosNapok} nap)`}
+      {busy ? "Jelölés…" : `Fizetve (${hatralekosNapok} nap)`}
     </button>
   );
 }

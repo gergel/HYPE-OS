@@ -76,7 +76,8 @@ kassza-táblázat "ZÁRÁS" sorait), ezért két út van rá:
 
 | Hol | Mit csinál |
 |---|---|
-| A napló sorában | Egy nap ki/be kapcsolása. Kattintásra azonnal vált, nincs megerősítés - a téves kattintás ára egy újabb kattintás. |
+| A napló sorában | Egy nap ki/be kapcsolása. A gomb a MŰVELETET mondja ("Fizetve"), nem az állapotot - egy "Még jár" feliratú gombról nem derülne ki, mit csinál a kattintás. Nincs megerősítés: a téves kattintás ára egy újabb kattintás. |
+| A nap szerkesztőjében | Ugyanez, de a kifizetés DÁTUMÁVAL együtt - a jelölés gyakran később készül el, mint maga az utalás. |
 | Az emberenkénti táblában | `POST /munkaorak/kifizetes`: az adott ember **szűrt időszakának** összes jelöletlen napja egyben. |
 
 A tömeges jelölés **csak a még jelöletlen napokat nyúlja** (visszavonásnál csak
@@ -173,6 +174,15 @@ Műszakilag viszont nem új design-rendszer: ugyanazokat a tokeneket írja felü
 amiket a HYPE OS használ, ezért minden meglévő komponens változtatás nélkül
 működik. A világos/sötét kapcsoló nem hat rá: a Krumpello mindig sötét, mert
 ez a **márkája**, nem beállítás.
+
+**A felugró ablakokra is vonatkozik**, és ehhez két dolog kell. A megerősítő
+ablak és a toast a providerek saját JSX-ében renderelődik, a tartalom
+TESTVÉREKÉNT - ezért a `.krumpello-root` a providereken KÍVÜL van, nem csak a
+tartalom körül. A `ModalReteg` viszont a `<body>` végére portálozik, tehát
+abból a dobozból is kilép: neki a `<body>`-ra tett osztály viszi át az
+arculatot (`components/krumpello/KrumpelloTemaTest.tsx`). Böngésző-natív
+`confirm()`/`alert()` ezért nincs a Krumpellóban - azok a gép ablakai, nem
+lehet őket a felület arculatába hozni.
 
 | Oldal | Mi van rajta |
 |---|---|

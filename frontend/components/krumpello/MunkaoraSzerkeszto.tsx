@@ -57,6 +57,10 @@ function MunkaoraUrlap({
   const [fizetes, setFizetes] = useState(munkaora?.fizetes != null ? String(munkaora.fizetes) : "");
   const [borravalo, setBorravalo] = useState(munkaora?.borravalo != null ? String(munkaora.borravalo) : "");
   const [megjegyzes, setMegjegyzes] = useState(munkaora?.megjegyzes ?? "");
+  // A kifizetés a naplóban egy kattintás, itt viszont a DÁTUMA is megadható:
+  // a jelölés gyakran később készül el, mint maga az utalás.
+  const [kifizetve, setKifizetve] = useState(munkaora?.kifizetve ?? false);
+  const [kifizetesDatuma, setKifizetesDatuma] = useState(munkaora?.kifizetes_datuma ?? "");
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
 
@@ -111,6 +115,10 @@ function MunkaoraUrlap({
             fizetes: szam(fizetes),
             borravalo: szam(borravalo),
             megjegyzes: megjegyzes.trim() || null,
+            kifizetve,
+            // Kifizetettnél a mai nap az alapérték - jelöletlennél nincs
+            // dátum, mert nem történt kifizetés.
+            kifizetes_datuma: kifizetve ? kifizetesDatuma || new Date().toISOString().slice(0, 10) : null,
           }),
         },
       );
@@ -228,6 +236,30 @@ function MunkaoraUrlap({
               <label className="text-[11px] text-text-muted">Megjegyzés</label>
               <input value={megjegyzes} onChange={(e) => setMegjegyzes(e.target.value)} disabled={busy} className={mezoClass} />
             </div>
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label className="flex cursor-pointer items-center gap-2 text-[13px] text-text-primary">
+                <input
+                  type="checkbox"
+                  checked={kifizetve}
+                  onChange={(e) => setKifizetve(e.target.checked)}
+                  disabled={busy}
+                />
+                Ezt a napot már kifizettük
+              </label>
+            </div>
+            {kifizetve && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-text-muted">Kifizetés dátuma</label>
+                <input
+                  type="date"
+                  value={kifizetesDatuma}
+                  onChange={(e) => setKifizetesDatuma(e.target.value)}
+                  disabled={busy}
+                  className={mezoClass}
+                />
+                <p className="text-[11px] text-text-muted">Üresen hagyva a mai nap kerül rá.</p>
+              </div>
+            )}
           </div>
         </div>
 
