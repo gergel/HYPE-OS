@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 type Option = { id: number; label: string; href?: string };
 
@@ -72,18 +73,13 @@ export function SingleRelationPicker({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <select
-          value={selected}
-          onChange={(e) => setSelected(e.target.value)}
-          className="rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
-        >
-          <option value="">Válassz...</option>
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <KeresosSelect
+          value={selected || null}
+          options={options.map((o) => ({ value: String(o.id), label: o.label }))}
+          onChange={setSelected}
+          placeholder="Válassz..."
+          className="min-w-[220px]"
+        />
         <button
           type="button"
           disabled={!selected || busy}

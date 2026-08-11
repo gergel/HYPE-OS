@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { huDatum } from "@/lib/huDate";
 import type { EmberCeg } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 /** A munkatárs cégei, időszakkal.
  *
@@ -164,19 +165,14 @@ export function EmberCegek({
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-text-muted">Cég</label>
-            <select
-              value={ujCeg}
-              onChange={(e) => setUjCeg(e.target.value)}
+            <KeresosSelect
+              value={ujCeg || null}
+              options={felvehetok.map((c) => ({ value: String(c.id), label: c.nev }))}
+              onChange={setUjCeg}
               disabled={busy || felvehetok.length === 0}
-              className="min-w-[200px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none disabled:opacity-50"
-            >
-              <option value="">{felvehetok.length === 0 ? "Nincs több cég" : "Válassz céget…"}</option>
-              {felvehetok.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nev}
-                </option>
-              ))}
-            </select>
+              placeholder={felvehetok.length === 0 ? "Nincs több cég" : "Válassz céget…"}
+              className="min-w-[200px]"
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-text-muted">Mettől</label>

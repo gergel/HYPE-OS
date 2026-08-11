@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import type { AssignableEmployee } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 /** "Assigned To" mező - csak azok közül lehet választani, akiknek van
  * bejelentkezési joguk és hozzáférésük az /utomunka oldalhoz (lásd
@@ -41,18 +42,15 @@ export function AssignedToPicker({
   }
 
   return (
-    <select
+    <KeresosSelect
       disabled={busy}
-      value={currentId ?? ""}
-      onChange={(e) => handleChange(e.target.value)}
-      className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
-    >
-      <option value="">Nincs kijelölve</option>
-      {employees.map((e) => (
-        <option key={e.id} value={e.id}>
-          {e.full_name}
-        </option>
-      ))}
-    </select>
+      value={currentId === null || currentId === undefined ? "" : String(currentId)}
+      options={[
+        { value: "", label: "Nincs kijelölve" },
+        ...employees.map((e) => ({ value: String(e.id), label: e.full_name })),
+      ]}
+      onChange={handleChange}
+      className="min-w-[200px]"
+    />
   );
 }

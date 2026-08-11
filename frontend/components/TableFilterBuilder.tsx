@@ -11,6 +11,7 @@ import {
   type FilterOperator,
   type FilterRule,
 } from "@/lib/tableFilters";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 export type FilterColumn = {
   header: string;
@@ -144,24 +145,19 @@ export function TableFilterBuilder({
               return (
                 <div key={rule.id} className="flex flex-wrap items-center gap-2">
                   <span className="w-10 text-[12px] text-text-muted">{index === 0 ? "Ahol" : "és"}</span>
-                  <select
-                    value={rule.columnIndex}
-                    onChange={(e) => {
-                      const columnIndex = Number(e.target.value);
+                  <KeresosSelect
+                    value={String(rule.columnIndex)}
+                    options={columns.map((col, i) => ({ value: String(i), label: col.header }))}
+                    onChange={(ertek) => {
+                      const columnIndex = Number(ertek);
                       const operators = operatorsFor(columns[columnIndex].kind);
                       updateRule(rule.id, {
                         columnIndex,
                         operator: operators.includes(rule.operator) ? rule.operator : operators[0],
                       });
                     }}
-                    className={`${selectClass} max-w-[150px]`}
-                  >
-                    {columns.map((col, i) => (
-                      <option key={i} value={i}>
-                        {col.header}
-                      </option>
-                    ))}
-                  </select>
+                    className="w-[150px]"
+                  />
                   <select
                     value={rule.operator}
                     onChange={(e) => updateRule(rule.id, { operator: e.target.value as FilterOperator })}
@@ -178,18 +174,13 @@ export function TableFilterBuilder({
                   ) : options && LISTAS_MUVELETEK.includes(rule.operator) ? (
                     // Az oszlopban előforduló értékek listája - állapot-jellegű
                     // mezőknél így nem kell kitalálni, pontosan mit kell beírni.
-                    <select
-                      value={rule.value}
-                      onChange={(e) => updateRule(rule.id, { value: e.target.value })}
-                      className={`${selectClass} min-w-0 flex-1`}
-                    >
-                      <option value="">Válassz értéket…</option>
-                      {options.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
+                    <KeresosSelect
+                      value={rule.value || null}
+                      options={options.map((opt) => ({ value: opt, label: opt }))}
+                      onChange={(ertek) => updateRule(rule.id, { value: ertek })}
+                      placeholder="Válassz értéket…"
+                      className="min-w-0 flex-1"
+                    />
                   ) : (
                     <input
                       value={rule.value}

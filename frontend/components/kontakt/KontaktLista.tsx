@@ -8,6 +8,7 @@ import { ModalReteg } from "@/components/ModalReteg";
 import { authFetch } from "@/lib/authFetch";
 import { vagolapra } from "@/lib/vagolap";
 import type { MegrendeloiKontakt } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 const inputClass =
   "w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none";
@@ -261,18 +262,13 @@ export function KontaktLista({
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Ügyfél *</label>
-                <select
-                  value={urlap.client_id}
-                  onChange={(e) => setUrlap({ ...urlap, client_id: e.target.value })}
+                <KeresosSelect
+                  value={urlap.client_id || null}
+                  options={ugyfelek.map((u) => ({ value: String(u.id), label: u.nev }))}
+                  onChange={(ertek) => setUrlap({ ...urlap, client_id: ertek })}
                   disabled={!!szerkesztettId}
-                  className={inputClass}
-                >
-                  {ugyfelek.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nev}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Válassz ügyfelet…"
+                />
                 {szerkesztettId && (
                   <p className="text-[11px] text-text-muted">
                     Meglévő kontaktot nem tesszük át másik ügyfélhez – vedd fel újként ott.

@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { Vallalkozas } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 /** Számlázó cégek: kik azok, akiket egy cég küld a forgatásra.
  *
@@ -213,19 +214,14 @@ export function VallalkozasKezelo({
                     )}
 
                     {canEdit && (
-                      <select
-                        value=""
+                      <KeresosSelect
+                        value={null}
                         disabled={busy}
-                        onChange={(e) => e.target.value && tagFelvetel(v.id, Number(e.target.value))}
-                        className="min-w-[240px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[13px] text-text-primary focus:outline-none disabled:opacity-50"
-                      >
-                        <option value="">+ Ember hozzáadása…</option>
-                        {felvehetok.map((e) => (
-                          <option key={e.id} value={e.id}>
-                            {e.full_name}
-                          </option>
-                        ))}
-                      </select>
+                        options={felvehetok.map((e) => ({ value: String(e.id), label: e.full_name }))}
+                        onChange={(ertek) => tagFelvetel(v.id, Number(ertek))}
+                        placeholder="+ Ember hozzáadása…"
+                        className="min-w-[240px]"
+                      />
                     )}
 
                     <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">

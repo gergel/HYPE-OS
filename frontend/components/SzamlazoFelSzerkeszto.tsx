@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { KeresosSelect, type KeresosOpcio } from "@/components/KeresosSelect";
 import type { ProjektSzamlazoNezet } from "@/lib/api";
 
 /** Ki számláz kinek a munkájáért ezen a projekten?
@@ -126,6 +127,28 @@ export function SzamlazoFelSzerkeszto({
               // vállalkozó állítja ki, aki maga nem volt a forgatáson.
               const tovabbiEmberek = nezet.valaszthato_emberek
                 .filter((e) => e.szamlazo !== `e${sor.employee_id}` && !javasoltKulcsok.has(e.szamlazo));
+              const opciok: KeresosOpcio[] = [
+                ...sor.javaslatok.map((j) => ({
+                  value: j.szamlazo,
+                  label:
+                    j.forras === "sajat"
+                      ? `${j.nev} (saját nevében)`
+                      : j.forras === "vallalkozas-tagsag"
+                        ? `${j.nev} – cége`
+                        : j.nev,
+                  group: "Javaslatok",
+                })),
+                ...tovabbiEmberek.map((e) => ({
+                  value: e.szamlazo,
+                  label: e.nev,
+                  group: "További munkatársak (nincsenek a stábban)",
+                })),
+                ...tovabbiCegek.map((c) => ({
+                  value: c.szamlazo,
+                  label: c.nev,
+                  group: "További cégek",
+                })),
+              ];
               return (
                 <tr key={sor.employee_id} className="border-b border-border last:border-0">
                   <td className="py-2.5 pr-6">
@@ -135,37 +158,16 @@ export function SzamlazoFelSzerkeszto({
                   </td>
                   <td className="py-2.5 pr-6">
                     {canEdit ? (
-                      <select
+                      // Kereshető legördülő, nem natív <select>: a lista minden
+                      // munkatársat és céget tartalmaz, abban a böngésző
+                      // betű-ugrálásával nem lehet megtalálni senkit.
+                      <KeresosSelect
                         value={sor.szamlazo}
+                        options={opciok}
                         disabled={busyId === sor.employee_id}
-                        onChange={(e) => allit(sor.employee_id, e.target.value)}
-                        className="min-w-[260px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[13px] text-text-primary focus:outline-none disabled:opacity-50"
-                      >
-                        {sor.javaslatok.map((j) => (
-                          <option key={j.szamlazo} value={j.szamlazo}>
-                            {j.forras === "sajat" ? `${j.nev} (saját nevében)` : j.nev}
-                            {j.forras === "vallalkozas-tagsag" ? " – cége" : ""}
-                          </option>
-                        ))}
-                        {tovabbiEmberek.length > 0 && (
-                          <optgroup label="További munkatársak (nincsenek a stábban)">
-                            {tovabbiEmberek.map((e) => (
-                              <option key={e.szamlazo} value={e.szamlazo}>
-                                {e.nev}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {tovabbiCegek.length > 0 && (
-                          <optgroup label="További cégek">
-                            {tovabbiCegek.map((c) => (
-                              <option key={c.szamlazo} value={c.szamlazo}>
-                                {c.nev}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
+                        onChange={(ertek) => allit(sor.employee_id, ertek)}
+                        className="min-w-[260px]"
+                      />
                     ) : (
                       <span className={sor.felulirva ? "text-text-primary" : "text-text-muted"}>
                         {sor.felulirva ? sor.szamlazo_nev : "Saját nevében"}

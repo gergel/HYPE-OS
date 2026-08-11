@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import type { Employee } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 /** Bármelyik crew tag felvétele a Belsősök közé - a tipus mezőt "belsos"-ra
  * állítja (lásd Vágók oldal, ahol a tipus=="vago" jelöli ki a listát; itt
@@ -37,18 +38,13 @@ export function BelsosAddWidget({ candidates }: { candidates: Employee[] }) {
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
-      <select
-        value={selectedId}
-        onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : "")}
-        className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
-      >
-        <option value="">Válassz munkatársat…</option>
-        {candidates.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.full_name}
-          </option>
-        ))}
-      </select>
+      <KeresosSelect
+        value={selectedId === "" ? null : String(selectedId)}
+        options={candidates.map((e) => ({ value: String(e.id), label: e.full_name }))}
+        onChange={(ertek) => setSelectedId(Number(ertek))}
+        placeholder="Válassz munkatársat…"
+        className="min-w-[220px]"
+      />
       <button
         type="button"
         onClick={handleAdd}

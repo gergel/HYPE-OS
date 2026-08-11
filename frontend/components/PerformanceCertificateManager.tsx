@@ -8,6 +8,7 @@ import { KihagyasDialog } from "@/components/KihagyasDialog";
 import { PapirTetelValaszto, tetelKulcs } from "@/components/PapirTetelValaszto";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingTigEmployee, TigTetel } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 type FormState = {
   ceg_neve: string;
@@ -272,19 +273,16 @@ export function PerformanceCertificateManager({
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-text-muted">Számlázó fél</label>
-            <select
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              className="min-w-[220px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
-            >
-              <option value="">Válassz embert…</option>
-              {pending.map((p) => (
-                <option key={p.szamlazo} value={p.szamlazo}>
-                  {p.cimke}
-                  {p.draft ? ` (${p.draft.allapot ?? "Készítés alatt"})` : ""}
-                </option>
-              ))}
-            </select>
+            <KeresosSelect
+              value={selectedId || null}
+              options={pending.map((p) => ({
+                value: p.szamlazo,
+                label: `${p.cimke}${p.draft ? ` (${p.draft.allapot ?? "Készítés alatt"})` : ""}`,
+              }))}
+              onChange={setSelectedId}
+              placeholder="Válassz embert…"
+              className="min-w-[220px]"
+            />
           </div>
           <button
             type="button"

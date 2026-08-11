@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import type { Employee } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 /** Keretszerződés felvétele egy MUNKATÁRSSAL vagy egy CÉGGEL.
  *
@@ -52,27 +53,16 @@ export function KeretszerzodesAddWidget({
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
-      <select
-        value={selectedId}
-        onChange={(e) => setSelectedId(e.target.value)}
-        className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
-      >
-        <option value="">Válassz munkatársat vagy céget…</option>
-        {candidates.map((e) => (
-          <option key={`e${e.id}`} value={`e${e.id}`}>
-            {e.full_name}
-          </option>
-        ))}
-        {cegek.length > 0 && (
-          <optgroup label="Számlázó cégek">
-            {cegek.map((c) => (
-              <option key={`v${c.id}`} value={`v${c.id}`}>
-                {c.nev}
-              </option>
-            ))}
-          </optgroup>
-        )}
-      </select>
+      <KeresosSelect
+        value={selectedId || null}
+        options={[
+          ...candidates.map((e) => ({ value: `e${e.id}`, label: e.full_name, group: "Munkatársak" })),
+          ...cegek.map((c) => ({ value: `v${c.id}`, label: c.nev, group: "Számlázó cégek" })),
+        ]}
+        onChange={setSelectedId}
+        placeholder="Válassz munkatársat vagy céget…"
+        className="min-w-[260px]"
+      />
       <button
         type="button"
         onClick={handleAdd}
