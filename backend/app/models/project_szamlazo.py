@@ -25,7 +25,7 @@ mentése (PATCH crew_employee_ids) a teljes listát cseréli - egy társított
 oszlopot minden egyes stáb-módosítás kitörölne. Külön táblában a beállítás
 túléli a stáblista szerkesztését."""
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -50,6 +50,18 @@ class ProjectSzamlazo(TimestampMixin, Base):
     #: A számlázó fél: pontosan az egyik van kitöltve (lásd szamlazo_kulcs).
     szamlazo_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
     szamlazo_vallalkozas_id: Mapped[int | None] = mapped_column(ForeignKey("vallalkozasok.id", ondelete="CASCADE"))
+
+    #: Ez az ember a projekten NEM résztvevőként, hanem PROJEKT KIADÁSKÉNT van
+    #: elszámolva - jellemzően azért, mert a díja egy másik tételben (pl. a
+    #: technika bérleti árában) már benne van.
+    #:
+    #: Ilyenkor nem kell tőle sem szerződés, sem TIG: nem a munkájáért fizetünk
+    #: neki külön, hanem a kiadás fedezi. Stábtag attól még marad - kap diszpót,
+    #: rajta van a projekten -, csak a papírozásból esik ki.
+    #:
+    #: Utólag is állítható: sokszor csak a számla megérkezésekor derül ki, hogy
+    #: valakinek a díja már egy másik tételben szerepel.
+    kiadaskent_elszamolva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     megjegyzes: Mapped[str | None] = mapped_column(String(255))
 

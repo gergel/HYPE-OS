@@ -53,6 +53,9 @@ class SzamlazoSor(BaseModel):
     szamlazo_nev: str
     #: Igaz, ha nem ő maga számláz (ilyenkor van felülírás-sor).
     felulirva: bool
+    #: Projekt kiadásként van elszámolva, nem résztvevőként - ilyenkor nem kell
+    #: tőle sem szerződés, sem TIG (lásd models/project_szamlazo.py).
+    kiadaskent_elszamolva: bool = False
     megjegyzes: str | None = None
     javaslatok: list[JavaslatInfo] = []
 
@@ -79,6 +82,10 @@ class SzamlazoIn(BaseModel):
     #: "e12" / "v3", vagy None/üres: álljon vissza saját magára.
     szamlazo: str | None = None
     megjegyzes: str | None = None
+
+
+class KiadaskentIn(BaseModel):
+    kiadaskent_elszamolva: bool
 
 
 def _get_project_or_404(db: Session, project_id: int) -> Project:
@@ -165,6 +172,7 @@ def get_projekt_szamlazok(
                 szamlazo=fel.kulcs,
                 szamlazo_nev=fel.nev,
                 felulirva=fel.kulcs != f"e{e.id}",
+                kiadaskent_elszamolva=bool(sor.kiadaskent_elszamolva) if sor else False,
                 megjegyzes=sor.megjegyzes if sor else None,
                 javaslatok=_javaslatok(db, project, e),
             )
@@ -215,10 +223,17 @@ def set_szamlazo(
     sor = db.query(ProjectSzamlazo).filter_by(project_id=project.id, employee_id=employee.id).first()
     kulcs = (payload.szamlazo or "").strip()
 
-    # Üres érték vagy önmaga: nincs mit felülírni, a sor törlődik.
+    # Üres érték vagy önmaga: nincs mit felülírni, a sor törölhető - DE csak
+    # akkor, ha nem hordoz más beállítást is. A "kiadásként elszámolva" jelölő
+    # ugyanezen a soron él, azt egy számlázó-visszaállítás nem törölheti el.
     if not kulcs or kulcs == f"e{employee.id}":
         if sor is not None:
-            db.delete(sor)
+            if sor.kiadaskent_elszamolva:
+                sor.szamlazo_employee_id = None
+                sor.szamlazo_vallalkozas_id = None
+                sor.megjegyzes = payload.megjegyzes
+            else:
+                db.delete(sor)
             db.commit()
         return get_projekt_szamlazok(project.id, db, _user)
 
@@ -254,6 +269,56 @@ def set_szamlazo(
     sor.szamlazo_employee_id = fel.employee.id if fel.employee else None
     sor.szamlazo_vallalkozas_id = fel.vallalkozas.id if fel.vallalkozas else None
     sor.megjegyzes = payload.megjegyzes
+    db.commit()
+    return get_projekt_szamlazok(project.id, db, _user)
+
+
+@router.put("/{project_id}/{employee_id}/kiadaskent", response_model=ProjektSzamlazoNezet)
+def set_kiadaskent(
+    project_id: int,
+    employee_id: int,
+    payload: KiadaskentIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Ez a stábtag PROJEKT KIADÁSKÉNT van elszámolva, nem résztvevőként.
+
+    Tipikus eset: valaki technikát hozott, és a díja a bérleti árban már benne
+    van - tőle nincs mit szerződni és igazolni, mert nem a munkájáért fizetünk
+    külön. Stábtag attól még marad: kap diszpót, rajta van a projekten.
+
+    Utólag is állítható, mindkét irányba: sokszor csak a számla megérkezésekor
+    derül ki, hogy valakinek a díja már egy másik tételben szerepel.
+
+    Ha már készült róla papír, előbb azt kell rendezni - különben egy kiküldött
+    szerződés vagy TIG lógna a levegőben olyasvalakinél, aki a rendszer szerint
+    nem is igényel papírt."""
+    project = _get_project_or_404(db, project_id)
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="A munkatárs nem található")
+    if employee not in project.crew:
+        raise HTTPException(status_code=400, detail="Ez a munkatárs nincs a projekt stábjában.")
+    if payload.kiadaskent_elszamolva and _van_papir(db, project.id, employee.id):
+        raise HTTPException(
+            status_code=400,
+            detail="Erről a munkáról már készült TIG - előbb azt kell törölni, csak utána jelölhető kiadásként.",
+        )
+
+    sor = db.query(ProjectSzamlazo).filter_by(project_id=project.id, employee_id=employee.id).first()
+    if sor is None:
+        if not payload.kiadaskent_elszamolva:
+            return get_projekt_szamlazok(project.id, db, _user)
+        sor = ProjectSzamlazo(project_id=project.id, employee_id=employee.id)
+        db.add(sor)
+    sor.kiadaskent_elszamolva = payload.kiadaskent_elszamolva
+    # Ha a sor már semmit nem hordoz, ne maradjon üres nyoma.
+    if (
+        not sor.kiadaskent_elszamolva
+        and sor.szamlazo_employee_id is None
+        and sor.szamlazo_vallalkozas_id is None
+    ):
+        db.delete(sor)
     db.commit()
     return get_projekt_szamlazok(project.id, db, _user)
 

@@ -131,6 +131,26 @@ def load_felulirasok(db: Session, project_ids: set[int]) -> dict[tuple[int, int]
     return {(r.project_id, r.employee_id): r for r in rows}
 
 
+def kiadaskent_elszamolt(
+    project_id: int, employee_id: int, felulirasok: dict[tuple[int, int], ProjectSzamlazo]
+) -> bool:
+    """Ez az ember PROJEKT KIADÁSKÉNT van elszámolva ezen a projekten?
+
+    Ha igen, nem kell tőle sem szerződés, sem TIG: nem a munkájáért fizetünk
+    neki külön, hanem a díja egy másik tételben (pl. a technika bérleti árában)
+    már benne van. Stábtag attól még marad - lásd models/project_szamlazo.py."""
+    sor = felulirasok.get((project_id, employee_id))
+    return sor is not None and bool(sor.kiadaskent_elszamolva)
+
+
+def papirt_igenylo_emberek(
+    project, emberek: list, felulirasok: dict[tuple[int, int], ProjectSzamlazo]
+) -> list:
+    """A megadott emberekből azok, akikről egyáltalán kell papír - a kiadásként
+    elszámoltak kiesnek."""
+    return [e for e in emberek if not kiadaskent_elszamolt(project.id, e.id, felulirasok)]
+
+
 def szamlazo_fele(
     project: Project, employee: Employee, felulirasok: dict[tuple[int, int], ProjectSzamlazo]
 ) -> SzamlazoFel:

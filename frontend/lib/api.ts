@@ -561,6 +561,9 @@ export type ProjektSzamlazoSor = {
   szamlazo_nev: string;
   /** Igaz, ha nem ő maga számláz. */
   felulirva: boolean;
+  /** Projekt kiadásként van elszámolva, nem résztvevőként - ilyenkor nem kell
+   * tőle sem szerződés, sem TIG (lásd backend models/project_szamlazo.py). */
+  kiadaskent_elszamolva: boolean;
   megjegyzes: string | null;
   javaslatok: { szamlazo: string; nev: string; forras: string }[];
 };

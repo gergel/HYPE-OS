@@ -172,18 +172,27 @@ def _mentesul_keretszerzodessel(keretszerzodesek: list[Contract], nap: date | No
     return any(keretszerzodes_ervenyes(c, nap or date.today()) for c in keretszerzodesek)
 
 
-def szerzodest_igenylo_emberek(project: Project) -> list[Employee]:
+def szerzodest_igenylo_emberek(
+    project: Project, felulirasok: dict[tuple[int, int], ProjectSzamlazo] | None = None
+) -> list[Employee]:
     """Akiknek a munkájáról egyáltalán szerződés kell: a nem belsős stáb.
+
+    Kiesnek belőle azok, akik PROJEKT KIADÁSKÉNT vannak elszámolva (pl. a
+    technikát hozó ember, akinek a díja a bérleti árban van) - tőlük nincs mit
+    szerződni, mert nem a munkájukért fizetünk külön.
 
     Hogy kinek a NEVÉRE megy a papír, azt ebből a listából a számlázó felek
     csoportosítása dönti el (lásd _szamlazo_csoportok)."""
-    return [e for e in project.crew if e.tipus != EmployeeType.BELSOS]
+    emberek = [e for e in project.crew if e.tipus != EmployeeType.BELSOS]
+    if felulirasok is None:
+        return emberek
+    return szamlazo.papirt_igenylo_emberek(project, emberek, felulirasok)
 
 
 def _szamlazo_csoportok(
     project: Project, felulirasok: dict[tuple[int, int], ProjectSzamlazo]
 ) -> list[SzamlazoCsoport]:
-    return szamlazo.csoportok(project, szerzodest_igenylo_emberek(project), felulirasok)
+    return szamlazo.csoportok(project, szerzodest_igenylo_emberek(project, felulirasok), felulirasok)
 
 
 def csoport_szerzodes_kesz(
@@ -754,7 +763,7 @@ def _apply_tetelek(db: Session, draft: Contract, fel: SzamlazoFel, tetelek: list
         projekt = projektek.get(t.project_id)
         if projekt is None:
             raise HTTPException(status_code=404, detail=f"A(z) #{t.project_id} projekt nem található.")
-        ember = next((e for e in szerzodest_igenylo_emberek(projekt) if e.id == t.employee_id), None)
+        ember = next((e for e in szerzodest_igenylo_emberek(projekt, felulirasok) if e.id == t.employee_id), None)
         if ember is None:
             raise HTTPException(
                 status_code=400,

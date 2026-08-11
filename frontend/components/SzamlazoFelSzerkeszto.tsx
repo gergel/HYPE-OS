@@ -41,6 +41,29 @@ export function SzamlazoFelSzerkeszto({
     );
   }
 
+  /** "Projekt kiadásként elszámolva" - a stábtag marad, csak papír nem kell
+   * tőle: a díja egy másik tételben (pl. a technika bérleti árában) szerepel. */
+  async function kiadaskentAllit(employeeId: number, ertek: boolean) {
+    setBusyId(employeeId);
+    setHiba(null);
+    try {
+      const res = await authFetch(`/api/v1/projekt-szamlazok/${nezet.project_id}/${employeeId}/kiadaskent`, {
+        method: "PUT",
+        body: JSON.stringify({ kiadaskent_elszamolva: ertek }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        setHiba(detail?.detail ?? `Sikertelen mentés (HTTP ${res.status})`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      setHiba(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function allit(employeeId: number, szamlazo: string) {
     setBusyId(employeeId);
     setHiba(null);
@@ -69,13 +92,19 @@ export function SzamlazoFelSzerkeszto({
         ki a számlát – ilyenkor a szerződés és a TIG is az ő nevére megy, egyben. A számlázó fél olyan is lehet, aki
         nincs rajta ezen a projekten. A lefedett ember stábtag marad: diszpót kap és rajta van a projekten.
       </p>
+      <p className="mb-3 text-[12.5px] text-text-muted">
+        A <strong className="text-text-secondary">Projekt kiadásként</strong> jelölés azoké, akiknek a díja egy másik
+        tételben (pl. a technika bérleti árában) már benne van: tőlük nem kérünk sem szerződést, sem TIG-et, mert nem
+        a munkájukért fizetünk külön. Stábtagok maradnak, és utólag is átjelölhetők.
+      </p>
       {hiba && <p className="mb-3 text-[12.5px] text-text-danger">{hiba}</p>}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Stábtag</th>
-              <th className="py-1.5 text-left font-medium text-text-secondary">Ki számláz a munkájáért</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Ki számláz a munkájáért</th>
+              <th className="py-1.5 text-left font-medium text-text-secondary">Projekt kiadásként</th>
             </tr>
           </thead>
           <tbody>
@@ -104,7 +133,7 @@ export function SzamlazoFelSzerkeszto({
                       {sor.full_name}
                     </a>
                   </td>
-                  <td className="py-2.5">
+                  <td className="py-2.5 pr-6">
                     {canEdit ? (
                       <select
                         value={sor.szamlazo}
@@ -142,6 +171,20 @@ export function SzamlazoFelSzerkeszto({
                         {sor.felulirva ? sor.szamlazo_nev : "Saját nevében"}
                       </span>
                     )}
+                  </td>
+                  <td className="py-2.5">
+                    {/* Aki kiadásként van elszámolva, stábtag marad (diszpót
+                        kap, rajta van a projekten), csak papír nem kell tőle. */}
+                    <label className="flex items-center gap-2 text-[12.5px] text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={sor.kiadaskent_elszamolva}
+                        disabled={!canEdit || busyId === sor.employee_id}
+                        onChange={(e) => kiadaskentAllit(sor.employee_id, e.target.checked)}
+                        className="h-3.5 w-3.5 accent-[var(--text-accent)] disabled:opacity-50"
+                      />
+                      {sor.kiadaskent_elszamolva ? "Kiadásban elszámolva" : "Nem"}
+                    </label>
                   </td>
                 </tr>
               );

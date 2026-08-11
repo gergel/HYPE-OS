@@ -106,7 +106,7 @@ def _tig_state(
     megvárni, hogy a projekt összes szereplőjének meglegyen a papírja. A
     `tig_fuggo` így csak azokat számolja, akikről MÁR lehetne TIG-et készíteni,
     de még nincs; akinél a szerződés is hiányzik, az a szerződés-oszlopban vár."""
-    if not _tig_candidates(project):
+    if not _tig_candidates(project, felulirasok):
         return False, 0, 0
     total = len(tig_csoportok(project, felulirasok))
     keszitheto = tig_keszitheto_csoportok(project, felulirasok, keretszerzodesek, project_contracts)

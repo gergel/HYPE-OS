@@ -152,11 +152,19 @@ def _load_tig_lookup(db: Session, project_ids: set[int]) -> TigLookup:
     return ember_fedettseg, fel_tig
 
 
-def _tig_candidates(project: Project) -> list[Employee]:
+def _tig_candidates(
+    project: Project, felulirasok: dict[tuple[int, int], ProjectSzamlazo] | None = None
+) -> list[Employee]:
     """A TIG-et igénylő emberek egy projekten: minden nem belsős stábtag,
     FÜGGETLENÜL attól, hogy van-e keretszerződése (szemben az eseti
-    szerződés-populációval, ahol a keretszerződésesek ki vannak zárva)."""
-    return [e for e in project.crew if e.tipus != EmployeeType.BELSOS]
+    szerződés-populációval, ahol a keretszerződésesek ki vannak zárva).
+
+    Kiesnek azok, akik PROJEKT KIADÁSKÉNT vannak elszámolva: az ő díjuk egy
+    másik tételben szerepel, tehát nincs mit igazolni."""
+    emberek = [e for e in project.crew if e.tipus != EmployeeType.BELSOS]
+    if felulirasok is None:
+        return emberek
+    return szamlazo.papirt_igenylo_emberek(project, emberek, felulirasok)
 
 
 def tig_csoportok(
@@ -164,7 +172,7 @@ def tig_csoportok(
 ) -> list[SzamlazoCsoport]:
     """A TIG-et igénylő stábtagok SZÁMLÁZÓ FELENKÉNT összefogva - egy fél
     munkájáról egy TIG szól, akkor is, ha több ember munkáját fedi."""
-    return szamlazo.csoportok(project, _tig_candidates(project), felulirasok)
+    return szamlazo.csoportok(project, _tig_candidates(project, felulirasok), felulirasok)
 
 
 def tig_keszitheto_csoportok(
@@ -644,7 +652,7 @@ def _apply_tetelek(db: Session, draft: PerformanceCertificate, fel: SzamlazoFel,
         projekt = projektek.get(t.project_id)
         if projekt is None:
             raise HTTPException(status_code=404, detail=f"A(z) #{t.project_id} projekt nem található.")
-        ember = next((e for e in _tig_candidates(projekt) if e.id == t.employee_id), None)
+        ember = next((e for e in _tig_candidates(projekt, felulirasok) if e.id == t.employee_id), None)
         if ember is None:
             raise HTTPException(
                 status_code=400,
