@@ -9,6 +9,17 @@ Ez a repó a **vadonatúj, önálló** HYPE OS kódbázisa - a `docs/` mappában
 specifikáció, AS-IS rendszertérkép, migration map, Railway-integráció, build roadmap, ER-diagram)
 alapján épül, de semmilyen meglévő Notion/Railway kódra nem támaszkodik.
 
+## Dokumentáció
+
+**A rendszer működési leírása: [`docs/kezikonyv/`](docs/kezikonyv/README.md)** - témánként külön,
+rövid fájlokban (architektúra, jogosultság, projektek, csapat, diszpó, papírozás, pénzügyek,
+utómunka, portál, integrációk, üzemeltetés). Szándékosan nincs "egy nagy dokumentum": a rendszer
+mérete mellett az kezelhetetlenné válik. A részletes indoklások a kód melletti docstringekben
+élnek, a kézikönyv térkép hozzájuk.
+
+A `docs/` gyökerében lévő 6 dokumentum a rendszer **megépítése előtti** tervezési anyag - az alábbi
+modultábla is azt a Fázis 1 állapotot tükrözi. A jelenlegi működésre mindig a kézikönyv a hiteles.
+
 ## Architektúra
 
 ```
