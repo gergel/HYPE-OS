@@ -107,6 +107,7 @@ beállítás nélkül is:
 | Videó feltöltve, de nem játszható | Fut-e a `media-worker`; R2 beállítás; ffmpeg a konténerben |
 | Egy papír "hiányzónak" látszik, pedig megvan | `services/papir_fedettseg.py` - tétel nélküli sor esete ([06](06-papirozas.md)) |
 | Notion import megszakad | Ne `railway ssh`-ból indítsd, hanem az admin végponton ([10](10-integraciok.md)) |
+| A frontend build elhasal `Module not found: @vercel/turbopack-next/internal/font/google/font`-tal | A Google 404-et ad egy kért betűtípus-fájlra. Változó (variable) fontnál NE sorolj fel konkrét súlyokat (`weight`) - a Google már nem vágja belőlük a statikus példányokat (lásd `app/layout.tsx`) |
 
 ## Ami nincs kész
 

@@ -15,10 +15,19 @@ const geistMono = Geist_Mono({
 // Csak a Média Portál ügyfél-nézetéhez (/p/[slug]) kell - a "font-display"
 // Tailwind utility (lásd app/portal-theme.css) ezt használja, a HYPE OS admin
 // felület sehol nem hivatkozik rá.
+//
+// NINCS `weight` felsorolás, és ez fontos: a Fraunces VÁLTOZÓ (variable) font,
+// a Google pedig már nem szolgálja ki a belőle vágott statikus súlyokat - a
+// konkrét 400/500/600 kérésre 404-et ad, amitől a production build elhasal
+// ("Module not found: @vercel/turbopack-next/internal/font/google/font").
+// Weight nélkül a változó fájl jön, ami a teljes 100-900 tartományt lefedi,
+// tehát a portál megjelenése nem változik - csak egy fájlból.
+//
+// A "latin-ext" azért kell, mert az ő és az ű a Latin Extended-A blokkban van:
+// enélkül a magyar szövegben pont ez a két betű esne vissza egy másik fontra.
 const portalDisplay = Fraunces({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   variable: "--font-portal-display",
-  weight: ["400", "500", "600"],
   style: ["normal", "italic"],
 });
 
