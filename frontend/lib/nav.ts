@@ -166,6 +166,15 @@ export const navGroups: NavGroup[] = [
       // performance_certificates.py PAGE konstansa).
       { label: "Belsős TIG", href: "/belsos-tig", icon: "BadgeCheck" },
       { label: "Utókövetés", href: "/utokovetes", icon: "History" },
+      // Az összes külsős TIG egy listában, a kihagyottakkal együtt. Ugyanaz a
+      // backend jogosultság, mint az Utókövetésé (a TIG-műveletek oda
+      // tartoznak, lásd backend performance_certificates.py PAGE).
+      {
+        label: "Külsős TIG-ek",
+        href: "/utokovetes/kulsos-tigek",
+        icon: "FileCheck2",
+        permissionPage: "/utokovetes",
+      },
       { label: "Kampányok", href: "/kampanyok", icon: "Megaphone" },
       { label: "Feladatok", href: "/feladatok", icon: "CheckSquare" },
       { label: "AI Assistant", href: "/ai-assistant", icon: "Sparkles" },

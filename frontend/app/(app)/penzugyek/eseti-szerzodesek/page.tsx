@@ -125,8 +125,18 @@ export default async function EsetiSzerzodesekPage() {
                 sortAccessor: (s) => s.teljesites_szoveg,
               },
               {
+                // A kihagyás INDOKA is itt látszik: egy "Kihagyva" sor
+                // magyarázat nélkül pont azt a kérdést hagyná nyitva, ami miatt
+                // az ember ránéz a listára.
                 header: "Állapot",
-                render: (s) => s.szerzodes_allapota ?? <span className="text-text-muted">Nincs állapot</span>,
+                render: (s) => (
+                  <span>
+                    {s.szerzodes_allapota ?? <span className="text-text-muted">Nincs állapot</span>}
+                    {s.kihagyas_oka && (
+                      <span className="block max-w-[18rem] text-[11px] text-text-muted">{s.kihagyas_oka}</span>
+                    )}
+                  </span>
+                ),
                 sortAccessor: (s) => s.szerzodes_allapota,
               },
               {

@@ -46,7 +46,21 @@ eredeti kód.
 | **Belsős TIG** | `/api/v1/belsos-tig` | Belsős munkatárs, havonta |
 | Céges keretszerződés | `/api/v1/vallalkozasok` | Számlázó cégek |
 
-Összefoglaló nézet mindegyikről: **Utókövetés** (`/utokovetes`).
+Összefoglaló nézet mindegyikről: **Utókövetés** (`/utokovetes`) - ott
+projektenként látszik, mi hiányzik.
+
+Két **gyűjtő lista** van, amelyik nem projektenként, hanem papíronként néz rá
+ugyanerre, és a **kihagyottakat is mutatja az indokukkal**:
+
+| Oldal | Mit sorol fel |
+|---|---|
+| `/penzugyek/eseti-szerzodesek` | Minden eseti alvállalkozói szerződés |
+| `/utokovetes/kulsos-tigek` | Minden külsős TIG |
+
+A kihagyottak azért vannak bennük, mert egy kihagyott papír ugyanúgy elszámolás,
+mint egy kiküldött, csak dokumentum nélkül - és pont az a néhány tétel, amit
+később a legvalószínűbben számon kérnek. Az Utókövetés ezeket már nem mutatja
+(lezártnak számítanak), tehát nélkülük nem lenne hol utánanézni.
 
 ## Az alvállalkozói folyamat sorrendje
 

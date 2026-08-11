@@ -24,6 +24,7 @@ from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router, summary_router as finance_summary_router
 from app.api.routes.internal_performance_certificates import router as internal_performance_certificates_router
 from app.api.routes.kotelezettsegek import router as kotelezettsegek_router
+from app.api.routes.kulsos_tigek import router as kulsos_tigek_router
 from app.api.routes.megrendeloi_kontaktok import router as megrendeloi_kontaktok_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.performance_certificates import router as performance_certificates_router
@@ -106,6 +107,8 @@ api_router.include_router(autok_router)
 api_router.include_router(megrendeloi_kontaktok_router)
 api_router.include_router(client_contracts_router)
 api_router.include_router(performance_certificates_router)
+# Az összes külsős TIG egy listában (a kihagyottakkal együtt).
+api_router.include_router(kulsos_tigek_router)
 api_router.include_router(internal_performance_certificates_router)
 api_router.include_router(utokovetes_admin_router)
 # 14. Kampányok

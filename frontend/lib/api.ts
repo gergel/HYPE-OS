@@ -472,6 +472,8 @@ export type EsetiSzerzodes = {
   ceg_neve: string | null;
   megbizas_targya: string | null;
   szerzodes_allapota: string | null;
+  /** Miért hagytuk ki - csak a kihagyottaknál van kitöltve. */
+  kihagyas_oka: string | null;
   netto_osszeg: number | null;
   brutto_osszeg: number | null;
   plusz_afa: boolean | null;
@@ -480,6 +482,39 @@ export type EsetiSzerzodes = {
   alairva: boolean;
   szerzodes_file_url: string | null;
 };
+
+/** Egy sor az "Összes külsős TIG" listán - a KIHAGYOTTAK is benne vannak, az
+ * indokukkal együtt (lásd backend routes/kulsos_tigek.py). */
+export type KulsosTig = {
+  id: number;
+  employee_id: number | null;
+  employee_nev: string | null;
+  vallalkozas_id: number | null;
+  vallalkozas_nev: string | null;
+  /** Kinek a munkáját igazolja - egynél több, ha a fél mások nevében is számláz. */
+  lefedettek: string[];
+  project_id: number | null;
+  project_nev: string | null;
+  projektkod: string | null;
+  forgatas_datuma: string | null;
+  /** Hány projekt munkáját igazolja összesen (1 = csak a sajátját). */
+  projektek_szama: number;
+  allapot: string | null;
+  kihagyas_oka: string | null;
+  megbizas_targya: string | null;
+  netto_osszeg: number | null;
+  brutto_osszeg: number | null;
+  plusz_afa: boolean | null;
+  teljesites_szoveg: string | null;
+  keltezes: string | null;
+  file_url: string | null;
+  szamla_db: number;
+  szamla_kifizetve: boolean;
+};
+
+export async function getKulsosTigek(): Promise<KulsosTig[]> {
+  return (await apiGet<KulsosTig[]>("/api/v1/kulsos-tigek")) ?? [];
+}
 
 export async function getEsetiSzerzodesek(): Promise<EsetiSzerzodes[]> {
   return (await apiGet<EsetiSzerzodes[]>("/api/v1/eseti-szerzodesek")) ?? [];

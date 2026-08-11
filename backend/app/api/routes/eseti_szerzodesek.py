@@ -51,6 +51,9 @@ class EsetiSzerzodes(BaseModel):
     ceg_neve: str | None = None
     megbizas_targya: str | None = None
     szerzodes_allapota: str | None = None
+    #: MIÉRT hagytuk ki - csak a kihagyottaknál van kitöltve. Enélkül a listán
+    #: egy "Kihagyva" sor magyarázat nélkül állna, holott pont az a kérdés.
+    kihagyas_oka: str | None = None
     netto_osszeg: float | None = None
     brutto_osszeg: float | None = None
     plusz_afa: bool | None = None
@@ -131,6 +134,7 @@ def list_eseti_szerzodesek(
                 ceg_neve=c.ceg_neve,
                 megbizas_targya=c.megbizas_targya,
                 szerzodes_allapota=c.szerzodes_allapota,
+                kihagyas_oka=c.kihagyas_oka,
                 netto_osszeg=netto,
                 brutto_osszeg=round(netto * 1.27, 2) if (netto is not None and c.plusz_afa) else netto,
                 plusz_afa=c.plusz_afa,
