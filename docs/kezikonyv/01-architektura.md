@@ -72,16 +72,22 @@ beállításokat nézd meg, csak utána a kódot.
 
 ## Legördülők és keresés
 
-Hosszú listás választónál (munkatársak, cégek, oszlopok) `KeresosSelect` a
-komponens, nem natív `<select>`: az utóbbi "keresése" a böngésző betű-ugrálása,
-ami nem szűkíti a listát és pár száz ezredmásodperc után elfelejti a beírtat.
-A `KeresosSelect` panelje tetején valódi, megmaradó keresőmező áll, és
-**ékezet-független** (aki "arvai"-t ír, megtalálja Árvait).
+**Natív `<select>` nincs az alkalmazásban.** A böngésző beépített "keresése"
+betű-ugrálás: nem szűkíti a listát, és pár száz ezredmásodperc után elfelejti a
+beírtat. Helyette két komponens van, mindkettő kereshető:
 
-Rövid listánál (állapot, típus, rendezés) marad a natív select - három elem közt
-keresni csak zaj. Szöveges értékkészletű mezőknél a `SelectDropdown` a
-megfelelő komponens (az új értéket is felvehet), azonosító-választásnál a
-`KeresosSelect`.
+| Komponens | Mikor |
+|---|---|
+| `KeresosSelect` | Azonosítót vagy rögzített értékkészletet választunk (emberek, cégek, oszlopok, típusok, rendezés) |
+| `SelectDropdown` | Szöveges értékkészletű mező, ahol ÚJ érték is felvehető (pl. "megbízás tárgya") |
+
+Mindkettő panelje tetején valódi, megmaradó keresőmező áll. A `KeresosSelect`
+keresése **ékezet-független** (aki "arvai"-t ír, megtalálja Árvait), a névben és
+a kiegészítésben (pl. e-mail) is keres, csoportokat (`optgroup` megfelelője) és
+billentyűzetes választást is tud.
+
+Rövid listánál sem térünk el ettől: két különböző viselkedésű legördülő egy
+felületen zavaróbb, mint egy fölösleges keresőmező három elem fölött.
 
 ## Konvenciók
 

@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
-import { selectColor } from "@/lib/selectColor";
 import type { StocktakeItem } from "@/lib/api";
+import { SelectDropdown } from "@/components/SelectDropdown";
 
 /** Egy eszköz sora a leltározás oldalon - az állapotát (színes select) a
  * "stock" track_mode-ú eszközök KIVÉTELÉVEL mindenki kaphat (a track_mode
@@ -69,20 +69,14 @@ export function StocktakeItemRow({
           </div>
         )}
         {item.track_mode !== "stock" && (
-          <select
+          <SelectDropdown
             disabled={busy}
-            value={item.status ?? ""}
-            onChange={(e) => save({ status: e.target.value || null })}
-            className="rounded-[var(--radius)] border border-border px-2 py-1 text-[13px] focus:outline-none"
-            style={item.status ? { background: selectColor(item.status).bg, color: selectColor(item.status).text } : undefined}
-          >
-            <option value="">Nincs beállítva</option>
-            {allapotOptions.map((opt) => (
-              <option key={opt} value={opt} style={{ background: selectColor(opt).bg, color: selectColor(opt).text }}>
-                {opt}
-              </option>
-            ))}
-          </select>
+            value={item.status ?? null}
+            options={allapotOptions}
+            onChange={(next) => save({ status: next })}
+            placeholder="Nincs beállítva"
+            className="min-w-[160px]"
+          />
         )}
       </div>
     </div>

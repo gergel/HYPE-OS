@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 type FieldSpec = {
   name: string;
@@ -94,19 +95,13 @@ export function QuickCreateForm({
             {f.required && " *"}
           </label>
           {f.type === "select" ? (
-            <select
-              required={f.required}
-              value={values[f.name] ?? ""}
-              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-              className="field"
-            >
-              <option value="">Válassz…</option>
-              {f.options?.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <KeresosSelect
+              value={values[f.name] || null}
+              options={(f.options ?? []).map((opt) => ({ value: String(opt.value), label: opt.label }))}
+              onChange={(ertek) => setValues((v) => ({ ...v, [f.name]: ertek }))}
+              placeholder="Válassz…"
+              className="min-w-[200px]"
+            />
           ) : (
             <input
               type={f.type ?? "text"}

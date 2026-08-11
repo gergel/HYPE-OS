@@ -11,6 +11,7 @@ import { authFetch } from "@/lib/authFetch";
 import { huDatum } from "@/lib/huDate";
 import { formatHuf } from "@/lib/penz";
 import type { Kotelezettseg, KotelezettsegIdoszak } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 const HONAP_NEVEK = [
   "január", "február", "március", "április", "május", "június",
@@ -614,24 +615,20 @@ export function KotelezettsegKezelo({
               {tipusValaszthato && (
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] text-text-muted">Típus</label>
-                  <select value={urlap.tipus} onChange={(e) => setUrlap({ ...urlap, tipus: e.target.value })} className={inputClass}>
-                    {Object.entries(TIPUS_NEVEK).map(([ertek, nev]) => (
-                      <option key={ertek} value={ertek}>
-                        {nev}
-                      </option>
-                    ))}
-                  </select>
+                  <KeresosSelect
+                    value={urlap.tipus}
+                    options={Object.entries(TIPUS_NEVEK).map(([ertek, nev]) => ({ value: ertek, label: nev }))}
+                    onChange={(ertek) => setUrlap({ ...urlap, tipus: ertek })}
+                  />
                 </div>
               )}
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Ciklus</label>
-                <select value={urlap.ciklus} onChange={(e) => setUrlap({ ...urlap, ciklus: e.target.value })} className={inputClass}>
-                  {Object.entries(CIKLUS_NEVEK).map(([ertek, nev]) => (
-                    <option key={ertek} value={ertek}>
-                      {nev}
-                    </option>
-                  ))}
-                </select>
+                <KeresosSelect
+                  value={urlap.ciklus}
+                  options={Object.entries(CIKLUS_NEVEK).map(([ertek, nev]) => ({ value: ertek, label: nev }))}
+                  onChange={(ertek) => setUrlap({ ...urlap, ciklus: ertek })}
+                />
               </div>
 
               {/* A forduló EGY dátum: a nap és a hónap benne van, a ciklus
@@ -665,17 +662,12 @@ export function KotelezettsegKezelo({
                     onChange={(e) => setUrlap({ ...urlap, ar_osszeg: e.target.value })}
                     className={inputClass}
                   />
-                  <select
+                  <KeresosSelect
                     value={urlap.ar_penznem}
-                    onChange={(e) => setUrlap({ ...urlap, ar_penznem: e.target.value })}
-                    className={`${inputClass} w-[90px]`}
-                  >
-                    {PENZNEMEK.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
+                    options={PENZNEMEK.map((p) => ({ value: p, label: p }))}
+                    onChange={(ertek) => setUrlap({ ...urlap, ar_penznem: ertek })}
+                    className="w-[90px]"
+                  />
                 </div>
                 <label className="mt-1 flex items-center gap-2 text-[12.5px] text-text-primary">
                   <input
@@ -694,33 +686,21 @@ export function KotelezettsegKezelo({
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Hogyan fizetjük</label>
-                <select
-                  value={urlap.fizetesi_mod}
-                  onChange={(e) => setUrlap({ ...urlap, fizetesi_mod: e.target.value })}
-                  className={inputClass}
-                >
-                  <option value="">–</option>
-                  {FIZETESI_MODOK.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                <KeresosSelect
+                  value={urlap.fizetesi_mod || null}
+                  options={FIZETESI_MODOK.map((m) => ({ value: m, label: m }))}
+                  onChange={(ertek) => setUrlap({ ...urlap, fizetesi_mod: ertek })}
+                  placeholder="–"
+                />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Felelős</label>
-                <select
-                  value={urlap.felelos_id}
-                  onChange={(e) => setUrlap({ ...urlap, felelos_id: e.target.value })}
-                  className={inputClass}
-                >
-                  <option value="">–</option>
-                  {emberek.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.full_name}
-                    </option>
-                  ))}
-                </select>
+                <KeresosSelect
+                  value={urlap.felelos_id || null}
+                  options={emberek.map((e) => ({ value: String(e.id), label: e.full_name }))}
+                  onChange={(ertek) => setUrlap({ ...urlap, felelos_id: ertek })}
+                  placeholder="–"
+                />
                 <p className="text-[11px] text-text-muted">Ő kapja az értesítést és a feladatot a fordulóról.</p>
               </div>
               <div className="flex flex-col gap-1">

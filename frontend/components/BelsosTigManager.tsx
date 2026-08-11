@@ -12,6 +12,7 @@ import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { huEvHonap, tigHonapTeljesitesbol } from "@/lib/huDate";
 import { formatHuf } from "@/lib/penz";
 import type { BelsosTigMonthEmployee } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 type FormState = {
   /** Melyik saját cégéről számlázza ezt a hónapot. Üres = a saját nevében. */
@@ -660,20 +661,18 @@ export function BelsosTigManager({
               {openEmployee.cegek.length > 0 && (
                 <div className="flex flex-col gap-1 sm:col-span-2">
                   <label className="text-[11px] text-text-muted">Melyik cégéről számlázza?</label>
-                  <select
-                    value={form.vallalkozas_id}
-                    onChange={(e) => update("vallalkozas_id", e.target.value)}
+                  <KeresosSelect
+                    value={form.vallalkozas_id ?? ""}
+                    options={[
+                      { value: "", label: `Saját nevében (${openEmployee.full_name})` },
+                      ...openEmployee.cegek.map((c) => ({
+                        value: String(c.vallalkozas_id),
+                        label: `${c.nev}${c.ervenyes ? "" : " – erre a hónapra nem érvényes"}`,
+                      })),
+                    ]}
+                    onChange={(ertek) => update("vallalkozas_id", ertek)}
                     disabled={!!busyId}
-                    className={inputClass}
-                  >
-                    <option value="">Saját nevében ({openEmployee.full_name})</option>
-                    {openEmployee.cegek.map((c) => (
-                      <option key={c.vallalkozas_id} value={String(c.vallalkozas_id)}>
-                        {c.nev}
-                        {c.ervenyes ? "" : " – erre a hónapra nem érvényes"}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               )}
               <div className="flex flex-col gap-1 sm:col-span-2">

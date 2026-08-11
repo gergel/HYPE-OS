@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { UtokovetesDetailModal } from "@/components/UtokovetesDetailModal";
 import type { UtokovetesOverview } from "@/lib/api";
 import { FAZISOK, type Fazis, datum, fazisa, hianyzik, hianyzikDarab } from "@/lib/utokovetes";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 type Rendezes = "ujabb" | "regebbi" | "nev" | "hianyzo";
 
@@ -70,18 +71,12 @@ export function UtokovetesTabla({ rows }: { rows: UtokovetesOverview[] }) {
             className="w-72 rounded-[var(--radius)] border border-border bg-surface-2 py-1.5 pl-7 pr-2 text-[13px] text-text-primary focus:outline-none"
           />
         </label>
-        <select
+        <KeresosSelect
           value={rendezes}
-          onChange={(e) => setRendezes(e.target.value as Rendezes)}
-          aria-label="Rendezés"
-          className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
-        >
-          {RENDEZESEK.map((r) => (
-            <option key={r.kulcs} value={r.kulcs}>
-              {r.cimke}
-            </option>
-          ))}
-        </select>
+          options={RENDEZESEK.map((r) => ({ value: r.kulcs, label: r.cimke }))}
+          onChange={(ertek) => setRendezes(ertek as Rendezes)}
+          className="w-[220px]"
+        />
         <label className="flex cursor-pointer items-center gap-1.5 text-[13px] text-text-secondary">
           <input
             type="checkbox"

@@ -15,6 +15,7 @@ import {
 } from "@/lib/portalAdminApi";
 import { useLiveTopic } from "@/lib/live";
 import type { PortalSummary, Project } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 const inputClass =
   "w-full min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface-3 px-3.5 py-2.5 text-[13px] text-text-primary outline-none focus:border-text-accent/40 sm:w-auto";
@@ -225,18 +226,13 @@ export function MediaPortalDashboard({
 
           {createMode === "project" ? (
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <select
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value ? Number(e.target.value) : "")}
-                className={inputClass}
-              >
-                <option value="">Válassz projektet…</option>
-                {availableProjects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nev}
-                  </option>
-                ))}
-              </select>
+              <KeresosSelect
+                value={selectedProjectId === "" ? null : String(selectedProjectId)}
+                options={availableProjects.map((p) => ({ value: String(p.id), label: p.nev }))}
+                onChange={(ertek) => setSelectedProjectId(Number(ertek))}
+                placeholder="Válassz projektet…"
+                className="min-w-[240px]"
+              />
               <button
                 type="button"
                 onClick={doCreate}
@@ -288,11 +284,16 @@ export function MediaPortalDashboard({
           onChange={(e) => setSearch(e.target.value)}
           className={inputClass}
         />
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className={inputClass}>
-          <option value="date_desc">Dátum (legújabb elöl)</option>
-          <option value="date_asc">Dátum (legrégebbi elöl)</option>
-          <option value="name">Név (A–Z)</option>
-        </select>
+        <KeresosSelect
+          value={sortBy}
+          options={[
+            { value: "date_desc", label: "Dátum (legújabb elöl)" },
+            { value: "date_asc", label: "Dátum (legrégebbi elöl)" },
+            { value: "name", label: "Név (A–Z)" },
+          ]}
+          onChange={(ertek) => setSortBy(ertek as typeof sortBy)}
+          className="w-[220px]"
+        />
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius-lg)] border border-border">

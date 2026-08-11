@@ -11,6 +11,7 @@ import { authFetch } from "@/lib/authFetch";
 import { HONAP_NEVEK } from "@/lib/ido";
 import { formatHuf } from "@/lib/penz";
 import type { EvesKoltseg, HaviKoltseg, HaviTetel } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 type TetelTipus = "alapber" | "extra" | "levonando";
 
@@ -100,11 +101,16 @@ function TetelSor({
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1.5">
             <span className="t-label">Típus</span>
-            <select value={tipus} onChange={(e) => setTipus(e.target.value as TetelTipus)} className="field">
-              <option value="extra">Extra (hozzáadódik)</option>
-              <option value="levonando">Levonandó (levonódik)</option>
-              <option value="alapber">Alapbér</option>
-            </select>
+            <KeresosSelect
+              value={tipus}
+              options={[
+                { value: "extra", label: "Extra (hozzáadódik)" },
+                { value: "levonando", label: "Levonandó (levonódik)" },
+                { value: "alapber", label: "Alapbér" },
+              ]}
+              onChange={(ertek) => setTipus(ertek as TetelTipus)}
+              className="min-w-[200px]"
+            />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="t-label">Megnevezés</span>
@@ -318,13 +324,19 @@ function TetelSzerkeszto({
           <div className="fade-in flex flex-wrap items-end gap-3 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
             <label className="flex flex-col gap-1.5">
               <span className="t-label">Típus</span>
-              <select value={tipus} onChange={(e) => setTipus(e.target.value as TetelTipus)} className="field">
-                <option value="extra">Extra (hozzáadódik)</option>
-                <option value="levonando">Levonandó (levonódik)</option>
-                <option value="alapber" disabled={vanAlapber}>
-                  Alapbér{vanAlapber ? " (már van)" : ""}
-                </option>
-              </select>
+              <KeresosSelect
+                value={tipus}
+                options={[
+                  { value: "extra", label: "Extra (hozzáadódik)" },
+                  { value: "levonando", label: "Levonandó (levonódik)" },
+                  // Az alapbért nem tiltjuk le, csak jelezzük: a natív select
+                  // disabled option-jét a kereső panel nem tudja megjeleníteni,
+                  // és a mentés úgyis visszaszól, ha már van.
+                  { value: "alapber", label: `Alapbér${vanAlapber ? " (már van)" : ""}` },
+                ]}
+                onChange={(ertek) => setTipus(ertek as TetelTipus)}
+                className="min-w-[200px]"
+              />
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="t-label">Megnevezés</span>
@@ -520,18 +532,19 @@ export function HaviKoltsegek({
           <div className="fade-in space-y-3 rounded-[var(--radius)] border border-border bg-surface-3 p-4">
             <label className="flex flex-col gap-1.5">
               <span className="t-label">Melyik hónaphoz</span>
-              <select value={ujHonap} onChange={(e) => setUjHonap(e.target.value)} className="field w-[220px]">
-                {/* Az idei és a tavalyi év hónapjai - ennél régebbi hónapra
-                    visszamenőleg tételt felvinni már nem életszerű. */}
-                {[most.getFullYear(), most.getFullYear() - 1].flatMap((ev) =>
-                  HONAP_NEVEK.map((nev, i) => (
-                    <option key={`${ev}-${i + 1}`} value={`${ev}-${i + 1}`}>
-                      {ev}. {nev}
-                      {megvanHonap.has(`${ev}-${i + 1}`) ? " (már van)" : ""}
-                    </option>
-                  )),
+              {/* Az idei és a tavalyi év hónapjai - ennél régebbi hónapra
+                  visszamenőleg tételt felvinni már nem életszerű. */}
+              <KeresosSelect
+                value={ujHonap}
+                options={[most.getFullYear(), most.getFullYear() - 1].flatMap((ev) =>
+                  HONAP_NEVEK.map((nev, i) => ({
+                    value: `${ev}-${i + 1}`,
+                    label: `${ev}. ${nev}${megvanHonap.has(`${ev}-${i + 1}`) ? " (már van)" : ""}`,
+                  })),
                 )}
-              </select>
+                onChange={setUjHonap}
+                className="w-[220px]"
+              />
               <span className="mt-1 text-[12px] text-text-muted">
                 A tételhez megadható pontos dátum is - az elszámolás hónapját attól függetlenül mindig ez a
                 választás dönti el.

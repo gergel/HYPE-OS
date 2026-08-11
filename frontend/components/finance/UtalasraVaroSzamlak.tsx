@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, Download, RefreshCw, Search } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import type { UtalasraVaroTetel } from "@/lib/api";
 import { formatFt } from "@/lib/ido";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 /** Ennyi tétel látszik alapból - a többi egy kattintással nyitható. A lista
  * hosszú tud lenni, és utaláskor úgyis a legsürgetőbb (legkorábbi határidejű)
@@ -312,19 +313,15 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
             className="w-72 rounded-[var(--radius)] border border-border bg-surface-2 py-1.5 pl-7 pr-2 text-[13px] text-text-primary focus:outline-none"
           />
         </label>
-        <select
+        <KeresosSelect
           value={tipusSzuro}
-          onChange={(e) => setTipusSzuro(e.target.value)}
-          aria-label="Szűrés típusra"
-          className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
-        >
-          <option value="">Minden típus</option>
-          {tipusok.map((tipus) => (
-            <option key={tipus} value={tipus}>
-              {tipus}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "", label: "Minden típus" },
+            ...tipusok.map((tipus) => ({ value: tipus, label: tipus })),
+          ]}
+          onChange={setTipusSzuro}
+          className="w-[200px]"
+        />
         {(kereses || tipusSzuro) && (
           <button
             type="button"

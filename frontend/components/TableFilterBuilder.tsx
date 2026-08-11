@@ -158,17 +158,12 @@ export function TableFilterBuilder({
                     }}
                     className="w-[150px]"
                   />
-                  <select
+                  <KeresosSelect
                     value={rule.operator}
-                    onChange={(e) => updateRule(rule.id, { operator: e.target.value as FilterOperator })}
-                    className={selectClass}
-                  >
-                    {operatorsFor(kind).map((op) => (
-                      <option key={op} value={op}>
-                        {OPERATOR_LABELS[op]}
-                      </option>
-                    ))}
-                  </select>
+                    options={operatorsFor(kind).map((op) => ({ value: op, label: OPERATOR_LABELS[op] }))}
+                    onChange={(ertek) => updateRule(rule.id, { operator: ertek as FilterOperator })}
+                    className="w-[150px]"
+                  />
                   {!needsValue(rule.operator) ? (
                     <span className="flex-1" />
                   ) : options && LISTAS_MUVELETEK.includes(rule.operator) ? (

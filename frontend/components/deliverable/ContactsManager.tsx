@@ -6,6 +6,7 @@ import { Copy } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { vagolapra } from "@/lib/vagolap";
 import type { DeliverableContact, MegrendeloiKontakt } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 /** "Megrendelői kontaktok" - kiknek kell majd kiküldeni a kész anyagot (a
  * megrendeloi_email_cimek formula-mező ebből számolódik újra, lásd
@@ -140,27 +141,21 @@ export function ContactsManager({
             placeholder="Keresés név, email, ügyfél szerint…"
             className="w-[260px] rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
           />
-          <select
-            value=""
-            onChange={(e) => {
-              if (!e.target.value) return;
-              save([...currentIds, Number(e.target.value)]);
+          <KeresosSelect
+            value={null}
+            options={valaszthato.map((o) => ({
+              value: String(o.id),
+              label: `${o.full_name}${o.client_nev ? ` – ${o.client_nev}` : ""}`,
+              sublabel: o.email ?? undefined,
+            }))}
+            onChange={(ertek) => {
+              save([...currentIds, Number(ertek)]);
               setKereses("");
             }}
             disabled={busy || valaszthato.length === 0}
-            className="max-w-[420px] rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none disabled:opacity-50"
-          >
-            <option value="">
-              {valaszthato.length === 0 ? "Nincs találat" : `Hozzáadás… (${valaszthato.length})`}
-            </option>
-            {valaszthato.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.full_name}
-                {o.client_nev ? ` – ${o.client_nev}` : ""}
-                {o.email ? ` (${o.email})` : ""}
-              </option>
-            ))}
-          </select>
+            placeholder={valaszthato.length === 0 ? "Nincs találat" : `Hozzáadás… (${valaszthato.length})`}
+            className="max-w-[420px]"
+          />
         </div>
       )}
     </div>

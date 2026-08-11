@@ -16,6 +16,7 @@ import {
   VISSZAJELZES_ALLAPOTOK,
 } from "@/lib/visszajelzesAllapot";
 import type { VagoiVisszajelzes } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 const ALLAPOT_CIMKEK = VISSZAJELZES_ALLAPOTOK.map((a) => a.cimke);
 
@@ -127,19 +128,15 @@ export function VisszajelzesLista({
           placeholder="Keresés vágó, anyag, forgatás, szöveg szerint…"
           className="w-full max-w-[340px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
         />
-        <select
+        <KeresosSelect
           value={allapotSzuro}
-          onChange={(e) => setAllapotSzuro(e.target.value)}
-          aria-label="Szűrés állapotra"
-          className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
-        >
-          <option value="">Összes állapot</option>
-          {VISSZAJELZES_ALLAPOTOK.map((a) => (
-            <option key={a.ertek} value={a.ertek}>
-              {a.cimke}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "", label: "Összes állapot" },
+            ...VISSZAJELZES_ALLAPOTOK.map((a) => ({ value: a.ertek, label: a.cimke })),
+          ]}
+          onChange={setAllapotSzuro}
+          className="w-[200px]"
+        />
         <span className="text-[12px] text-text-muted">
           {szurt.length === visszajelzesek.length
             ? `${visszajelzesek.length} visszajelzés`

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { ICON_NAMES } from "@/components/icon-map";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 type FieldOption = { key: string; label: string };
 type DbTab = { tab_key: string; label: string; icon: string | null; field_keys: string[] };
@@ -162,18 +163,15 @@ function EntityTabEditor({ entityType, label: entityLabel, availableFields, init
               placeholder="Fül neve"
               className="min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[13px] text-text-primary focus:outline-none"
             />
-            <select
+            <KeresosSelect
               value={tab.icon ?? ""}
-              onChange={(e) => updateIcon(index, e.target.value)}
-              className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary focus:outline-none"
-            >
-              <option value="">(nincs ikon)</option>
-              {ICON_NAMES.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: "(nincs ikon)" },
+                ...ICON_NAMES.map((name) => ({ value: name, label: name })),
+              ]}
+              onChange={(ertek) => updateIcon(index, ertek)}
+              className="w-[170px]"
+            />
             <span className="text-[11px] text-text-muted">{fieldCounts.get(tab.tab_key) ?? 0} mező</span>
             <button type="button" onClick={() => moveTab(index, -1)} disabled={index === 0} className="rounded border border-border px-1.5 py-0.5 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-30">
               ↑
@@ -203,24 +201,16 @@ function EntityTabEditor({ entityType, label: entityLabel, availableFields, init
           {tabs.length > 0 && (
             <span className="flex items-center gap-1.5 text-[12px] text-text-muted">
               Találatok:
-              <select
-                onChange={(e) => {
-                  if (e.target.value) bulkAssign(filteredFields, e.target.value);
-                  e.target.value = "";
-                }}
-                defaultValue=""
-                className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary focus:outline-none"
-              >
-                <option value="" disabled>
-                  mind ide →
-                </option>
-                <option value={UNASSIGNED_VALUE}>Egyéb</option>
-                {tabs.map((t) => (
-                  <option key={t.tab_key} value={t.tab_key}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+              <KeresosSelect
+                value={null}
+                options={[
+                  { value: UNASSIGNED_VALUE, label: "Egyéb" },
+                  ...tabs.map((t) => ({ value: t.tab_key, label: t.label })),
+                ]}
+                onChange={(ertek) => bulkAssign(filteredFields, ertek)}
+                placeholder="mind ide →"
+                className="w-[170px]"
+              />
             </span>
           )}
         </div>
@@ -230,18 +220,15 @@ function EntityTabEditor({ entityType, label: entityLabel, availableFields, init
           {filteredFields.map((f) => (
             <div key={f.key} className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-[13px] last:border-b-0">
               <span className="text-text-secondary">{f.label}</span>
-              <select
+              <KeresosSelect
                 value={assignment.get(f.key) ?? UNASSIGNED_VALUE}
-                onChange={(e) => assignField(f.key, e.target.value)}
-                className="shrink-0 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary focus:outline-none"
-              >
-                <option value={UNASSIGNED_VALUE}>Egyéb</option>
-                {tabs.map((t) => (
-                  <option key={t.tab_key} value={t.tab_key}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: UNASSIGNED_VALUE, label: "Egyéb" },
+                  ...tabs.map((t) => ({ value: t.tab_key, label: t.label })),
+                ]}
+                onChange={(ertek) => assignField(f.key, ertek)}
+                className="w-[170px] shrink-0"
+              />
             </div>
           ))}
         </div>

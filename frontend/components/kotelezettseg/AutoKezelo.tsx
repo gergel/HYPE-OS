@@ -11,6 +11,7 @@ import { authFetch } from "@/lib/authFetch";
 import { huDatum } from "@/lib/huDate";
 import { formatHuf } from "@/lib/penz";
 import type { Auto, Kotelezettseg } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
 
 const inputClass =
   "w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none";
@@ -123,14 +124,13 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       </label>
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Hogyan fizettük</span>
-        <select value={fizetesiMod} onChange={(e) => setFizetesiMod(e.target.value)} className={`${inputClass} w-[160px]`}>
-          <option value="">–</option>
-          {FIZETESI_MODOK.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+        <KeresosSelect
+          value={fizetesiMod || null}
+          options={FIZETESI_MODOK.map((m) => ({ value: m, label: m }))}
+          onChange={setFizetesiMod}
+          placeholder="–"
+          className="w-[160px]"
+        />
       </label>
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Mikor</span>
@@ -422,14 +422,13 @@ export function AutoKezelo({
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="t-label">Felelős</span>
-              <select value={felelosId} onChange={(e) => setFelelosId(e.target.value)} className={`${inputClass} w-[200px]`}>
-                <option value="">–</option>
-                {emberek.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.full_name}
-                  </option>
-                ))}
-              </select>
+              <KeresosSelect
+                value={felelosId || null}
+                options={emberek.map((e) => ({ value: String(e.id), label: e.full_name }))}
+                onChange={setFelelosId}
+                placeholder="–"
+                className="w-[200px]"
+              />
             </label>
             <button type="button" onClick={autoMentes} disabled={busy} className="btn btn-primary">
               {busy ? "Mentés…" : "Hozzáadás"}
