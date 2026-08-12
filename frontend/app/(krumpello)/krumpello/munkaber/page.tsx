@@ -5,14 +5,12 @@ import {
   getKrumpelloMunkaorak,
   getMyPagePermissions,
   krumpelloBejelentesCimke,
-  type KrumpelloMunkaora,
 } from "@/lib/api";
 import { canDoAction } from "@/lib/permissions";
 import { IdoszakKezelo } from "@/components/krumpello/IdoszakKezelo";
 import { KrumpelloFejlec } from "@/components/krumpello/KrumpelloFejlec";
 import { MunkaoraSzerkeszto } from "@/components/krumpello/MunkaoraSzerkeszto";
 import { IdoszakKifizetes, KifizetesKapcsolo } from "@/components/krumpello/KifizetesKapcsolo";
-import { Fragment } from "react";
 import { formatFt } from "@/lib/ido";
 
 export const metadata = { title: "Krumpello – Munkabér" };
@@ -51,11 +49,6 @@ export default async function KrumpelloMunkaberPage({
   // A KIFIZETÉS két száma: a bejelentett napi bérek utalással mennek, a
   // fölöttük lévő rész készpénzben. Csak a még ki nem fizetett napokból, mert
   // a kérdés az, hogy MOST mit kell fizetni.
-  // A napló DÁTUM szerint csoportosítva: minden nap végén ott az összesítő.
-  // Így látszik, hogy aznap összesen mennyit kerestek, és mennyi készpénzt kell
-  // kivenni a kasszából - a kassza zárásakor pont ez a két szám kell.
-  const naponta = csoportositsdNapokra(orak);
-
   const nyitottNapok = orak.filter((m) => !m.kifizetve);
   const utalandoOsszesen = nyitottNapok.reduce((s, m) => s + m.utalando, 0);
   const keszpenzOsszesen = nyitottNapok.reduce((s, m) => s + m.keszpenz, 0);
@@ -185,25 +178,24 @@ export default async function KrumpelloMunkaberPage({
                     <th className="px-4 py-2 text-right font-medium text-text-muted">Utalás</th>
                     <th className="px-4 py-2 text-right font-medium text-text-muted">Készpénz</th>
                     <th className="px-4 py-2 text-right font-medium text-text-muted">Borravaló</th>
+                    <th className="px-4 py-2 text-right font-medium text-text-muted">Összesen</th>
                     <th className="px-4 py-2 text-left font-medium text-text-muted">Állapot</th>
                     <th className="px-4 py-2 text-left font-medium text-text-muted">Megjegyzés</th>
                     <th className="px-4 py-2" />
                   </tr>
                 </thead>
                 <tbody>
-                  {naponta.map(({ datum, sorok, osszesen }) => (
-                    <Fragment key={datum}>
-                  {sorok.map((m) => (
-                    <tr key={m.id} className="border-b border-border">
+                  {orak.map((m) => (
+                    <tr key={m.id} className="border-b border-border last:border-0">
                       <td className="whitespace-nowrap px-4 py-2.5 text-text-primary">{m.datum}</td>
-                      <td className="px-4 py-2.5 text-text-primary">{m.dolgozo_nev}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-text-secondary">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-text-primary">{m.dolgozo_nev}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-text-secondary">
                         {m.ora != null ? `${m.ora} óra` : "–"}
                       </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-text-secondary">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-text-secondary">
                         {m.orabar != null ? `${formatFt(m.orabar)}/óra` : "–"}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-medium tabular-nums text-text-primary">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium tabular-nums text-text-primary">
                         {m.fizetes != null ? formatFt(m.fizetes) : "–"}
                       </td>
                       <td className="px-4 py-2.5 text-text-secondary">
@@ -215,11 +207,11 @@ export default async function KrumpelloMunkaberPage({
                           <span className="ml-1 text-[11px] text-text-muted">(napra)</span>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-text-secondary">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-text-secondary">
                         {m.utalando ? formatFt(m.utalando) : "–"}
                       </td>
                       <td
-                        className={`px-4 py-2.5 text-right tabular-nums ${
+                        className={`whitespace-nowrap px-4 py-2.5 text-right tabular-nums ${
                           m.keszpenz < 0 ? "text-text-danger" : "text-text-secondary"
                         }`}
                         title={
@@ -230,8 +222,25 @@ export default async function KrumpelloMunkaberPage({
                       >
                         {m.keszpenz ? formatFt(m.keszpenz) : "–"}
                       </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-text-secondary">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-text-secondary">
                         {m.borravalo ? formatFt(m.borravalo) : "–"}
+                      </td>
+                      {/* A SOR VÉGÖSSZEGE: amit ez az ember ezen a napon
+                          összesen keresett (bér + borravaló), és ebből mennyit
+                          kap készpénzben. A borravaló is készpénz, ezért benne
+                          van mindkettőben - a kezébe adott összeg ez, nem a
+                          puszta bér. */}
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <span className="block font-semibold tabular-nums text-text-primary">
+                          {formatFt((m.fizetes ?? 0) + (m.borravalo ?? 0))}
+                        </span>
+                        <span
+                          className={`block text-[11px] tabular-nums ${
+                            m.keszpenz + (m.borravalo ?? 0) < 0 ? "text-text-danger" : "text-text-muted"
+                          }`}
+                        >
+                          ebből kp: {formatFt(m.keszpenz + (m.borravalo ?? 0))}
+                        </span>
                       </td>
                       <td className="px-4 py-2.5">
                         <KifizetesKapcsolo munkaora={m} />
@@ -242,42 +251,6 @@ export default async function KrumpelloMunkaberPage({
                       </td>
                     </tr>
                   ))}
-                      {/* A nap összesítője. AKKOR IS kiírjuk, ha aznap csak egy
-                          ember dolgozott: így a szem mindig ugyanott találja a
-                          napi számot, és nem kell azon gondolkodni, hogy most
-                          miért nincs összesen. */}
-                      <tr className="border-b-2 border-border bg-surface-3/60">
-                        <td className="whitespace-nowrap px-4 py-2 font-medium text-text-primary" colSpan={2}>
-                          {datum} összesen
-                          <span className="ml-2 text-[11px] font-normal text-text-muted">
-                            {sorok.length} ember
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-text-secondary">
-                          {osszesen.ora ? `${osszesen.ora.toLocaleString("hu-HU")} óra` : "–"}
-                        </td>
-                        <td className="px-4 py-2" />
-                        <td className="px-4 py-2 text-right font-semibold tabular-nums text-text-primary">
-                          {formatFt(osszesen.fizetes)}
-                        </td>
-                        <td className="px-4 py-2" />
-                        <td className="px-4 py-2 text-right tabular-nums text-text-secondary">
-                          {osszesen.utalando ? formatFt(osszesen.utalando) : "–"}
-                        </td>
-                        <td
-                          className={`px-4 py-2 text-right font-semibold tabular-nums ${
-                            osszesen.keszpenz < 0 ? "text-text-danger" : "text-text-primary"
-                          }`}
-                        >
-                          {formatFt(osszesen.keszpenz)}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-text-secondary">
-                          {osszesen.borravalo ? formatFt(osszesen.borravalo) : "–"}
-                        </td>
-                        <td className="px-4 py-2" colSpan={3} />
-                      </tr>
-                    </Fragment>
-                  ))}
                 </tbody>
               </table>
             </div>
@@ -286,38 +259,6 @@ export default async function KrumpelloMunkaberPage({
       </div>
     </>
   );
-}
-
-/** Egy nap összesítője a naplóban. */
-type NapiOsszesen = { ora: number; fizetes: number; utalando: number; keszpenz: number; borravalo: number };
-
-/** A lapos munkaóra-listát NAPOKRA bontja, mindegyikhez összesítéssel.
- *
- * A sorrendet megtartja (a backend dátum szerint csökkenőben adja), tehát nem
- * rendez újra - ha egyszer a szűrő vagy a rendezés változik, ez a nézet
- * magától követi. */
-function csoportositsdNapokra(
-  orak: KrumpelloMunkaora[],
-): { datum: string; sorok: KrumpelloMunkaora[]; osszesen: NapiOsszesen }[] {
-  const csoportok: { datum: string; sorok: KrumpelloMunkaora[]; osszesen: NapiOsszesen }[] = [];
-  for (const m of orak) {
-    let utolso = csoportok[csoportok.length - 1];
-    if (!utolso || utolso.datum !== m.datum) {
-      utolso = {
-        datum: m.datum,
-        sorok: [],
-        osszesen: { ora: 0, fizetes: 0, utalando: 0, keszpenz: 0, borravalo: 0 },
-      };
-      csoportok.push(utolso);
-    }
-    utolso.sorok.push(m);
-    utolso.osszesen.ora += m.ora ?? 0;
-    utolso.osszesen.fizetes += m.fizetes ?? 0;
-    utolso.osszesen.utalando += m.utalando;
-    utolso.osszesen.keszpenz += m.keszpenz;
-    utolso.osszesen.borravalo += m.borravalo ?? 0;
-  }
-  return csoportok;
 }
 
 function Osszesen({

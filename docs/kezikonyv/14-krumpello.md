@@ -110,17 +110,16 @@ adnak oda, nem kettőt.
 időszak szintjén kiegyenlítődik, épp úgy, ahogy a valóságban; a felület
 viszont kiemeli, hogy látszódjon.
 
-### Napi összesítő a naplóban
+### Sor végösszege a naplóban
 
-A naponkénti napló minden nap után egy **összesítő sort** zár: aznap összesen
-mennyit kerestek a dolgozók, ebből mennyi megy utalással, és **mennyi készpénz
-kell** - plusz az óraszám és a borravaló. A kassza zárásakor pont ez a két szám
-kell (mennyi bér, mennyi kivétel), és több emberes napokon fejben összeadni
-őket pont a legfáradtabb pillanatban kellene.
+A naponkénti napló minden sorát egy **Összesen** oszlop zárja: amit az az ember
+azon a napon összesen keresett (**bér + borravaló**), alatta pedig hogy ebből
+**mennyit kap készpénzben** (készpénz + borravaló).
 
-Az összesítő **akkor is ott van, ha aznap csak egy ember dolgozott**: így a
-szem mindig ugyanott találja a napi számot, és nem kell azon gondolkodni, hogy
-most miért nincs összesen.
+A borravaló azért van benne mindkettőben, mert az is a dolgozóé és készpénzben
+megy - a kezébe adott összeg ez, nem a puszta bér. Az összesítés soronként van,
+nem naponként: a kifizetés emberenként történik, tehát az a szám kell, amit
+ennek az egy embernek ezen az egy napon oda kell adni.
 
 ## Mit fizettünk már ki
 
@@ -253,7 +252,7 @@ lehet őket a felület arculatába hozni.
 | `/krumpello` | Összesítő: extra egyenleg elöl, majd bevétel/kiadás/egyenlegek/munkabér |
 | `/krumpello/bevetel` | Napi kassza-zárások, felvitel és javítás |
 | `/krumpello/kiadas` | Kiadások a három forrás szerint bontva |
-| `/krumpello/munkaber` | Foglalkoztatási időszakok elszámolása + emberenkénti összesítés + naponkénti napló, naponta összesítő sorral |
+| `/krumpello/munkaber` | Foglalkoztatási időszakok elszámolása + emberenkénti összesítés + naponkénti napló |
 
 Az időszak-szűrő **URL-ben** él (`?tol=&ig=`): így egy nézet linkelhető, a
 frissítés nem dobja vissza, és a szerver is látja - nem kell a böngészőben
