@@ -92,6 +92,18 @@ beállítás nélkül is:
 - `CORS_ORIGINS` alapértéke `*`. Ez itt biztonságos, mert az API kizárólag Bearer
   tokennel hitelesít (nincs cookie → nincs CSRF). A korábbi szigorú alapérték
   éles deployon néma hálózati hibát okozott minden írásnál, ezért lett wildcard.
+- Ha csak a **megrendelői keretszerződések** kellenek a Notionból, van rájuk
+  célzott szkript - a katalógus "Keretszerződések" lépése ugyanis a másik két
+  forrása miatt a több száz soros "Külsős és belsős" táblát is végigolvassa:
+
+  ```
+  python scripts/megrendeloi_keretek_atmentese.py --proba   # mit tenne
+  python scripts/megrendeloi_keretek_atmentese.py           # áthozatal
+  ```
+
+  Soronként kiírja, mi lett az adott céggel (képviselő, nyilvántartási szám,
+  ügyfél-kapcsolat, fájl), és idempotens - újrafuttatva frissít, nem duplikál.
+
 - `ACCESS_TOKEN_EXPIRE_MINUTES` alapja 30 nap, gördülő megújítással - lásd
   [02-auth-jogosultsag.md](02-auth-jogosultsag.md).
 
