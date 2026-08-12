@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import JSON, Boolean, Date, ForeignKey, Numeric, String, Text, false
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, Numeric, String, Text, false, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -40,6 +40,37 @@ class ProjectCode(TimestampMixin, Base):
     szamla_statusza: Mapped[str | None] = mapped_column(String(50))
 
     megjegyzes: Mapped[str | None] = mapped_column(Text)
+
+    #: Van-e szerződés emögött a projekt mögött.
+    #:
+    #: Ez a kapcsoló dönti el, hogy kérünk-e papírt: ha VAN szerződés, akkor a
+    #: megrendelői eseti szerződés ÉS a teljesítési igazolás is jár hozzá
+    #: (lásd models/megrendeloi_papir.py). Ha nincs, a projektkód
+    #: papírozás-szempontból lezártnak számít.
+    #:
+    #: Alapértéke True: a szokásos eset az, hogy szerződünk - a kivételt kell
+    #: külön jelölni, nem a szabályt.
+    van_szerzodes: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+
+    #: Papír nélkül elszámolt projekt.
+    #:
+    #: Van olyan eset, amikor nem kell se szerződés, se TIG, mert a
+    #: teljesítés nem klasszikus megrendelés: pl. a cégvezető be van jelentve
+    #: a megrendelő céghez vállalkozóként, és a projekt ellenértéke úgy
+    #: rendeződik, hogy ő ANNYIVAL KEVESEBB fizetést vesz fel onnan.
+    #:
+    #: Ilyenkor a bevétel NEM bejövő pénz, hanem el nem költött pénz - a
+    #: pénzmozgás elmarad, a teljesítés viszont megtörtént. Ezért a projektkód
+    #: nem "hiányos papírozású", hanem külön, megindokolt kategória: enélkül
+    #: minden ilyen tétel örökre ott állna a teendők között.
+    papir_nelkul: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    #: MIÉRT nincs papír. A jelöléshez kötelező (lásd routes/project_codes.py):
+    #: fél év múlva ez az egyetlen dolog, amiből kiderül, mi történt.
+    papir_nelkul_indoka: Mapped[str | None] = mapped_column(Text)
     teljesites_datuma: Mapped[date | None] = mapped_column(Date)
     utalas_datuma: Mapped[date | None] = mapped_column(Date)
     szamla_url: Mapped[str | None] = mapped_column(String(500))

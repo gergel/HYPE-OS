@@ -1,18 +1,16 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { ClientContractManager } from "@/components/ClientContractManager";
 import { DetailSections } from "@/components/DetailSections";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
-import { EditableBooleanCell } from "@/components/EditableBooleanCell";
-import { EditableTableCell } from "@/components/EditableTableCell";
+import { MegrendeloiPapirKezelo } from "@/components/megrendeloi/MegrendeloiPapirKezelo";
+import { PapirKapcsolok } from "@/components/megrendeloi/PapirKapcsolok";
 import { RelatedTable } from "@/components/RelatedTable";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DataTable } from "@/components/DataTable";
 import { TopBar } from "@/components/TopBar";
 import {
-  Contract,
   ENTITY_PATHS,
   formatHuf,
   getAttachments,
@@ -20,8 +18,10 @@ import {
   getDetailTabs,
   getEmployees,
   getFieldTypes,
+  getMegrendeloiKeretek,
+  getMegrendeloiKontaktok,
+  getMegrendeloiPapirok,
   getMyPagePermissions,
-  getPendingClientContracts,
   getRecord,
   getRelated,
   getVisibleFields,
@@ -29,7 +29,7 @@ import {
 } from "@/lib/api";
 import { buildFieldTabs } from "@/lib/detailTabs";
 import { canDoAction } from "@/lib/permissions";
-import { FileText, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { FileCheck2, FileSignature, FileText, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const PAGE = "/projektek/project-kodok";
 
@@ -62,31 +62,59 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   const projectCode = await getRecord(ENTITY_PATHS.projectCode, projectCodeId);
   if (!projectCode) notFound();
 
-  const [client, contract, projects, expenses, revenues, deliverables, pendingClientContracts, visibleFields, fieldTypes, dbTabs, pagePermissions, currentUser, attachments, allEmployees] =
-    await Promise.all([
-      projectCode.client_id ? getRecord(ENTITY_PATHS.client, Number(projectCode.client_id)) : null,
-      projectCode.contract_id ? getRecord(ENTITY_PATHS.contract, Number(projectCode.contract_id)) : null,
-      getRelated(ENTITY_PATHS.project, { project_code_id: projectCodeId }),
-      getRelated(ENTITY_PATHS.expense, { project_code_id: projectCodeId }),
-      getRelated(ENTITY_PATHS.revenue, { project_code_id: projectCodeId }),
-      getRelated(ENTITY_PATHS.deliverable, { project_code_id: projectCodeId }),
-      getPendingClientContracts(),
-      getVisibleFields("projectCode"),
-      getFieldTypes("projectCode"),
-      getDetailTabs("projectCode"),
-      getMyPagePermissions(),
-      getCurrentUser(),
-      getAttachments("projectCode", projectCodeId),
-      // A kiadásoknál csak employee_id van, a táblában viszont nevet kell mutatni.
-      getEmployees(),
-    ]);
+  const [
+    client,
+    contract,
+    projects,
+    expenses,
+    revenues,
+    deliverables,
+    megrendeloiSzerzodesek,
+    megrendeloiTigek,
+    megrendeloiKeretek,
+    megrendeloiKontaktok,
+    visibleFields,
+    fieldTypes,
+    dbTabs,
+    pagePermissions,
+    currentUser,
+    attachments,
+    allEmployees,
+  ] = await Promise.all([
+    projectCode.client_id ? getRecord(ENTITY_PATHS.client, Number(projectCode.client_id)) : null,
+    projectCode.contract_id ? getRecord(ENTITY_PATHS.contract, Number(projectCode.contract_id)) : null,
+    getRelated(ENTITY_PATHS.project, { project_code_id: projectCodeId }),
+    getRelated(ENTITY_PATHS.expense, { project_code_id: projectCodeId }),
+    getRelated(ENTITY_PATHS.revenue, { project_code_id: projectCodeId }),
+    getRelated(ENTITY_PATHS.deliverable, { project_code_id: projectCodeId }),
+    // A megrendelői papírok (lásd backend routes/megrendeloi_papirok.py): a
+    // szerződő fél a keretszerződésekből vagy a megrendelői kontaktokból
+    // választható, ezért mindkét lista kell a szerkesztőhöz.
+    getMegrendeloiPapirok("szerzodes", projectCodeId),
+    getMegrendeloiPapirok("tig", projectCodeId),
+    getMegrendeloiKeretek(),
+    getMegrendeloiKontaktok(),
+    getVisibleFields("projectCode"),
+    getFieldTypes("projectCode"),
+    getDetailTabs("projectCode"),
+    getMyPagePermissions(),
+    getCurrentUser(),
+    getAttachments("projectCode", projectCodeId),
+    // A kiadásoknál csak employee_id van, a táblában viszont nevet kell mutatni.
+    getEmployees(),
+  ]);
 
   const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
 
   const canEditFiles = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const canDeleteFiles = canDoAction(currentUser, pagePermissions, PAGE, "delete");
 
-  const pendingEntry = pendingClientContracts.find((p) => p.project_code_id === projectCodeId) ?? null;
+  // A papírozás kapcsolói (lásd backend models/project_code.py): a régi,
+  // migráció előtti sorokon még hiányozhatnak, ezért az alapértéket itt is
+  // ugyanúgy vesszük fel, ahogy a modell teszi.
+  const vanSzerzodes = projectCode.van_szerzodes !== false;
+  const papirNelkul = projectCode.papir_nelkul === true;
+  const kellPapir = vanSzerzodes && !papirNelkul;
 
   const tabs = buildFieldTabs({
     page: PAGE,
@@ -96,7 +124,11 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     visibleFields,
     fieldTypes,
     pagePermissions,
-    alwaysHidden: ["client_id", "contract_id"],
+    // A papírozás kapcsolóinak SAJÁT kártyájuk van (lásd PapirKapcsolok): a
+    // generikus mezőrácsban megjelenve nemcsak kétszer látszanának, hanem a
+    // "papír nélkül" jelölés az indokot kérő ablakot is megkerülné - a
+    // backend ugyan így is visszadobná, de hibaüzenettel, nem kérdéssel.
+    alwaysHidden: ["client_id", "contract_id", "van_szerzodes", "papir_nelkul", "papir_nelkul_indoka"],
   });
 
   return (
@@ -139,52 +171,40 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           />
         </div>
 
+        {/* A papírozás onnan indul, hogy KELL-E egyáltalán papír - ezért van
+            ez a kártya a két papír FÖLÖTT, nem valahol a mezők között. */}
+        <Card title="Papírozás" icon={FileSignature}>
+          <PapirKapcsolok
+            patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
+            vanSzerzodes={vanSzerzodes}
+            papirNelkul={papirNelkul}
+            papirNelkulIndoka={typeof projectCode.papir_nelkul_indoka === "string" ? projectCode.papir_nelkul_indoka : null}
+            canEdit={canEditFiles}
+          />
+        </Card>
+
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <Card title="Megrendelői szerződés" icon={FileText}>
-            <ClientContractManager
+            <MegrendeloiPapirKezelo
               projectCodeId={projectCodeId}
-              existingContract={contract as unknown as Contract | null}
-              existingKeretszerzodesId={pendingEntry?.existing_keretszerzodes_id ?? null}
+              fajta="szerzodes"
+              papirok={megrendeloiSzerzodesek}
+              keretek={megrendeloiKeretek}
+              kontaktok={megrendeloiKontaktok}
+              canEdit={canEditFiles}
+              kellPapir={kellPapir}
             />
           </Card>
-          <Card title="Megrendelői TIG" icon={FileText}>
-            <div className="space-y-3 text-[13px]">
-              <label className="flex items-center gap-2 text-text-primary">
-                <EditableBooleanCell
-                  patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
-                  field="tig_kikuldve"
-                  value={typeof projectCode.tig_kikuldve === "boolean" ? projectCode.tig_kikuldve : false}
-                />
-                Projekt teljesítése igazolva (TIG kiküldve)
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-text-secondary">Státusz:</span>
-                <EditableTableCell
-                  patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
-                  field="tig_statusza"
-                  value={typeof projectCode.tig_statusza === "string" ? projectCode.tig_statusza : null}
-                  placeholder="Nincs megadva"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-text-secondary">TIG link:</span>
-                <EditableTableCell
-                  patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
-                  field="tig_url"
-                  value={typeof projectCode.tig_url === "string" ? projectCode.tig_url : null}
-                  placeholder="Nincs link"
-                />
-              </div>
-              <DokumentumFeltoltes
-                entityType="projectCode"
-                entityId={projectCodeId}
-                attachments={attachments.filter((a) => a.kategoria === "tig")}
-                kategoria="tig"
-                canEdit={canEditFiles}
-                canDelete={canDeleteFiles}
-                emptyText="Nincs feltöltött (aláírt) TIG."
-              />
-            </div>
+          <Card title="Megrendelői TIG" icon={FileCheck2}>
+            <MegrendeloiPapirKezelo
+              projectCodeId={projectCodeId}
+              fajta="tig"
+              papirok={megrendeloiTigek}
+              keretek={megrendeloiKeretek}
+              kontaktok={megrendeloiKontaktok}
+              canEdit={canEditFiles}
+              kellPapir={kellPapir}
+            />
           </Card>
         </div>
 
@@ -200,11 +220,16 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               emptyText="Nincs feltöltött számla."
             />
           </Card>
+          {/* A "tig"/"szerzodes" kategóriájú régi feltöltések is itt maradnak
+              elérhetők: a papírok saját fájljai már a fenti kezelőkben vannak,
+              de a rendszer előtti, kézzel feltöltött példányok nem tűnhetnek el. */}
           <Card title="További dokumentumok" icon={FileText}>
             <DokumentumFeltoltes
               entityType="projectCode"
               entityId={projectCodeId}
-              attachments={attachments.filter((a) => a.kategoria === "egyeb" || a.kategoria === "szerzodes")}
+              attachments={attachments.filter(
+                (a) => a.kategoria === "egyeb" || a.kategoria === "szerzodes" || a.kategoria === "tig",
+              )}
               kategoria="egyeb"
               canEdit={canEditFiles}
               canDelete={canDeleteFiles}

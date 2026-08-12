@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     # SAJÁT mappájába megy - ezt kérte a felhasználó, és így nem kell külön
     # mappát karbantartani. Csak akkor töltsd ki, ha máshova akarod irányítani.
     gdoc_keretszerzodes_folder_id: str = ""
+    # A MEGRENDELŐI papírok sablonjai (a csatolt Notion-programok
+    # GOOGLE_DRIVE_TEMPLATE_ID-jai) - a placeholder-nevek egyeznek, tehát a
+    # meglévő sablonok változtatás nélkül használhatók.
+    gdoc_megrendeloi_eseti_template_id: str = ""
+    gdoc_megrendeloi_tig_template_id: str = ""
+    gdoc_megrendeloi_keret_template_id: str = ""
     gdoc_kulsos_tig_template_id: str = ""
     gdoc_belsos_tig_template_id: str = ""
     gdoc_output_folder_id: str = ""

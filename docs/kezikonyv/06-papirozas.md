@@ -41,7 +41,8 @@ eredeti kód.
 |---|---|---|
 | Alvállalkozói **keretszerződés** (álló) | `/api/v1/contracts` | Külsős, tartós együttműködés |
 | **Eseti** alvállalkozói szerződés | `/api/v1/alvallalkozoi-szerzodesek`, lista: `/api/v1/eseti-szerzodesek` | Külsős, projekthez kötve |
-| **Megrendelői** szerződés | `/api/v1/megrendeloi-szerzodesek` | Ügyfél felé, Project Code-onként |
+| Megrendelői **keretszerződés** (álló) | `/api/v1/megrendeloi-keretszerzodesek` | Ügyfél felé, tartós együttműködés |
+| **Megrendelői** eseti szerződés és TIG | `/api/v1/megrendeloi-papirok/{szerzodes\|tig}` | Ügyfél felé, Project Code-onként |
 | **Külsős TIG** | `/api/v1/teljesitesi-igazolasok` | Nem belsős stábtag, projektenként |
 | **Belsős TIG** | `/api/v1/belsos-tig` | Belsős munkatárs, havonta |
 | Céges keretszerződés | `/api/v1/vallalkozasok` | Számlázó cégek |
@@ -49,13 +50,15 @@ eredeti kód.
 Összefoglaló nézet mindegyikről: **Utókövetés** (`/utokovetes`) - ott
 projektenként látszik, mi hiányzik.
 
-Két **gyűjtő lista** van, amelyik nem projektenként, hanem papíronként néz rá
+Négy **gyűjtő lista** van, amelyik nem projektenként, hanem papíronként néz rá
 ugyanerre, és a **kihagyottakat is mutatja az indokukkal**:
 
 | Oldal | Mit sorol fel |
 |---|---|
 | `/penzugyek/eseti-szerzodesek` | Minden eseti alvállalkozói szerződés |
 | `/utokovetes/kulsos-tigek` | Minden külsős TIG |
+| `/projektek/megrendeloi-szerzodesek` | Minden megrendelői eseti szerződés |
+| `/projektek/megrendeloi-tigek` | Minden megrendelői TIG |
 
 A kihagyottak azért vannak bennük, mert egy kihagyott papír ugyanúgy elszámolás,
 mint egy kiküldött, csak dokumentum nélkül - és pont az a néhány tétel, amit
@@ -238,16 +241,96 @@ Amit tudni kell:
   előjeles összegzéssel. Frontend: `components/BelsosTigManager.tsx`,
   `BelsosTigHaviAttekintes.tsx`, `BelsosTigEmployeeList.tsx`, `TigInvoiceManager.tsx`.
 
-## Megrendelői szerződés
+## Megrendelői papírozás
 
-Minden Project Code-hoz kell tartoznia egy szerződésnek
-(`ProjectCode.contract_id`): ha a megrendelőnek van álló keretszerződése, azt újra
-lehet használni; ha nincs, új, erre a Project Code-ra szóló szerződés kell.
+Ugyanaz a folyamat, mint az alvállalkozói oldalon, csak a **másik irányba** - a
+megrendelő felé. Ezért ugyanazok a lépések is:
 
-Itt **nincs** Google Docs generálás és automata email (nincs sablon a megrendelői
-szerződéshez) - a dokumentumot admin tölti fel kézzel. A modul csak az állapotot
-és a Project Code ↔ Contract összerendelést kezeli.
-Frontend: `components/ClientContractManager.tsx`.
+```
+piszkozat mentése -> generálás és kiküldés -> aláírt példány feltöltése
+                  \-> kihagyás (indokkal)   \-> saját papír feltöltése
+```
+
+Backend: `routes/megrendeloi_papirok.py` (eseti szerződés + TIG, egy modul két
+`fajta` úton: `szerzodes` / `tig`), `routes/megrendeloi_keretszerzodesek.py`,
+a szabályok pedig `services/megrendeloi_papir.py`-ben.
+Frontend: `components/megrendeloi/` (`MegrendeloiPapirKezelo`, `PapirKapcsolok`,
+`KeretszerzodesKezelo`, `MegrendeloiPapirokOldal`).
+
+### Kell-e egyáltalán papír?
+
+A projektkódon **két külön kapcsoló** dönti el, szándékosan nem egy:
+
+| Kapcsoló | Mit jelent | Papír |
+|---|---|---|
+| `van_szerzodes` (alap: igen) | Van-e szerződés a projekt mögött | Ha igen: eseti szerződés **és** TIG jár hozzá |
+| `papir_nelkul` + **kötelező indok** | Van ügylet, de nem pénzmozgással rendeződik | Nincs, mert értelmezhetetlen |
+
+A `papir_nelkul` esete: a cégvezető be van jelentve a megrendelőhöz
+vállalkozóként, és annyival kevesebb fizetést vesz fel onnan - a bevétel ilyenkor
+**nem bejövő pénz, hanem el nem költött pénz**. A kettő azért nem egy mező, mert
+az egyik azt mondja, hogy NINCS ügylet, a másik azt, hogy VAN, csak másképp
+számolódik el; a pénzügyi képük is más.
+
+Az indok a bekapcsoláshoz kötelező (`routes/project_codes.py`
+`_papir_kapcsolok_ellenorzese`, a CRUD-generátor `before_update` horgán) -
+enélkül fél év múlva csak annyi látszana, hogy erről az egy munkáról nincs papír,
+és nem lehetne megkülönböztetni a döntést a mulasztástól. Kikapcsoláskor az indok
+**megmarad**, hogy egy véletlen billentés ne törölje.
+
+### Ki a szerződő fél?
+
+A papír a cégadatokat **lemásolja** magának, nem hivatkozza - a kiküldött papíron
+az van, ami a küldés pillanatában igaz volt. Az előtöltés
+(`szerzodo_fel_adatai()`) a megbízhatóság sorrendjében keres:
+
+1. kifejezetten megadott **keretszerződés** (ott a cégadatok már kimentek egy
+   aláírt papíron),
+2. kifejezetten megadott **ügyfél** (a megrendelői kontaktok cége),
+3. a **projektkód ügyfele** - ez az alapeset,
+4. a projektkódra Notionból örökölt megrendelő-mezők - csak ha máshonnan semmi
+   nincs (lapos szövegek import-korból, nem tudni, mikor frissültek).
+
+A **kontakt csak az e-mail címet adja**: a levél egy embernek megy, a cégadat a
+cégé. A felületen utána minden mező szerkeszthető.
+
+### Keretszerződés vs. TIG
+
+Az **élő** megrendelői keretszerződés kiváltja az eseti szerződést, a TIG-et
+**nem**: a keret arról szól, milyen feltételekkel dolgozunk együtt, a TIG arról,
+hogy egy konkrét munka elkészült.
+
+Az érvényesség saját függvényt kapott (`megrendeloi_keret_ervenyes()`), mert a
+`models/contract.keretszerzodes_ervenyes()` az alvállalkozói oldalé: ott a
+`keretszerzodes` jelölő különbözteti meg a keretet az esetitől, ezért
+`tipus == ALVALLALKOZOI`-t vár - egy megrendelői keret (`tipus =
+KERETSZERZODES`) azon a szűrőn sosem menne át, és a "fedi-e a keret ezt a
+projektet" kérdésre mindig némán nem lenne a válasz.
+
+Az adat maga már megvolt: a Notion "Keretszerződés" adatbázisa a `Contract`
+táblába importálódik - ez a modul a felületet és a kiküldést adja hozzá. Ha egy
+papír keretszerződésre hivatkozik, a projektkód `contract_id`-ja is odaköt (ha
+még üres) - ebből számol a keret-oldal "hány projektkódnál használjuk"
+számlálója és a törlésvédelem.
+
+### Sablonok
+
+Mindhárom papírnak van Google Docs sablonja, és a placeholder-nevek a korábbi
+Notion-programokéval **egyeznek**, tehát a meglévő sablonok változtatás nélkül
+használhatók:
+
+| Papír | Env változó | Placeholderek |
+|---|---|---|
+| Eseti szerződés | `GDOC_MEGRENDELOI_ESETI_TEMPLATE_ID` | `nev hely adoszam targy tido netto nettoki kelt afa nyilvszam kepvis projektnev napok` |
+| TIG | `GDOC_MEGRENDELOI_TIG_TEMPLATE_ID` | ugyanaz `projektnev`/`napok` nélkül, plusz `projkod` |
+| Keretszerződés | `GDOC_MEGRENDELOI_KERET_TEMPLATE_ID` | `nev hely adoszam targy kelt nyilvszam kepvis` |
+
+**Mindhárom helyen saját papír is feltölthető** a generálás helyett: van, amit a
+megrendelő ad a saját sablonjával, és van, ami még a rendszer előtti. Ilyenkor
+nincs mit generálni és nincs kinek kiküldeni, csak rögzíteni - a feltöltés a
+papírt egyben kiküldött állapotba is teszi, mert a folyamat innentől ugyanott
+tart. Az aláírva visszakapott példány külön mezőbe megy: amíg az nincs meg, a
+papír "aláírásra vár".
 
 ## Utókövetés - az összefoglaló nézet
 

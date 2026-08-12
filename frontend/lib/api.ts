@@ -258,18 +258,6 @@ export type Contract = {
   szerzodes_file_url: string | null;
 };
 
-export type PendingClientContract = {
-  project_code_id: number;
-  projektkod: string;
-  client_id: number;
-  client_nev: string | null;
-  existing_keretszerzodes_id: number | null;
-};
-
-export async function getPendingClientContracts(): Promise<PendingClientContract[]> {
-  return (await apiGet<PendingClientContract[]>("/api/v1/megrendeloi-szerzodesek")) ?? [];
-}
-
 /** A backend GET végpontok mostantól bejelentkezést igényelnek (lásd
  * app/api/crud_router.py), ezért a szerver-oldali (SSR) lekérdezéseknek is
  * kell egy érvényes Bearer token - ezt a login-kor beállított cookie-ból
@@ -2107,4 +2095,102 @@ export async function getVagoSzabalyok(): Promise<VagoSzabalyok> {
       alap_munkanap: 20,
     }
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Megrendelői papírozás (lásd backend routes/megrendeloi_papirok.py)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** "szerzodes" = eseti szerződés a megrendelővel, "tig" = teljesítési igazolás. */
+export type MegrendeloiPapirFajta = "szerzodes" | "tig";
+
+export type MegrendeloiPapir = {
+  id: number;
+  project_code_id: number;
+  fajta: MegrendeloiPapirFajta;
+  client_id: number | null;
+  contact_id: number | null;
+  keretszerzodes_id: number | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  kepviselo: string | null;
+  nyilvantartasi_szam: string | null;
+  email: string | null;
+  megbizas_targya: string | null;
+  projekt_nev: string | null;
+  teljesites_szoveg: string | null;
+  netto_osszeg: number | null;
+  plusz_afa: boolean | null;
+  keltezes: string | null;
+  megjegyzes: string | null;
+  allapot: string | null;
+  file_url: string | null;
+  alairt_file_url: string | null;
+  kihagyas_oka: string | null;
+  /** Kiment, de az aláírt példány még nem jött vissza. */
+  alairasra_var: boolean;
+  projektkod: string | null;
+};
+
+/** Amivel egy ÚJ papír indul - a legjobb ismert forrásból előtöltve. */
+export type MegrendeloiElotoltes = {
+  client_id: number | null;
+  contact_id: number | null;
+  keretszerzodes_id: number | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  kepviselo: string | null;
+  nyilvantartasi_szam: string | null;
+  email: string | null;
+  megbizas_targya: string | null;
+  projekt_nev: string | null;
+  teljesites_szoveg: string | null;
+  netto_osszeg: number | null;
+  plusz_afa: boolean | null;
+  /** "keretszerzodes" | "ugyfel" | "kontakt" | "projektkod" */
+  forras: string;
+  /** Van-e élő keretszerződés - ilyenkor az eseti szerződés elhagyható. */
+  van_elo_keretszerzodes: boolean;
+};
+
+export type MegrendeloiKeret = {
+  id: number;
+  client_id: number | null;
+  client_nev: string | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  kepviselo: string | null;
+  nyilvantartasi_szam: string | null;
+  email: string | null;
+  megbizas_targya: string | null;
+  keltezes: string | null;
+  allapot: string | null;
+  file_url: string | null;
+  alairt_file_url: string | null;
+  alairva: boolean;
+  /** Érvényes-e MA - ettől függ, kiváltja-e az eseti szerződést. */
+  ervenyes: boolean;
+  projektkod_db: number;
+};
+
+export async function getMegrendeloiPapirok(
+  fajta: MegrendeloiPapirFajta,
+  projectCodeId?: number,
+): Promise<MegrendeloiPapir[]> {
+  const qs = projectCodeId != null ? `?project_code_id=${projectCodeId}` : "";
+  return (await apiGet<MegrendeloiPapir[]>(`/api/v1/megrendeloi-papirok/${fajta}${qs}`)) ?? [];
+}
+
+export async function getMegrendeloiElotoltes(
+  fajta: MegrendeloiPapirFajta,
+  projectCodeId: number,
+): Promise<MegrendeloiElotoltes | null> {
+  return apiGet<MegrendeloiElotoltes>(`/api/v1/megrendeloi-papirok/${fajta}/elotoltes/${projectCodeId}`);
+}
+
+export async function getMegrendeloiKeretek(): Promise<MegrendeloiKeret[]> {
+  return (await apiGet<MegrendeloiKeret[]>("/api/v1/megrendeloi-keretszerzodesek")) ?? [];
 }

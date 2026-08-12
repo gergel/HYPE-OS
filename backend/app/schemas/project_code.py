@@ -30,12 +30,21 @@ class ProjectCodeUpdate(BaseModel):
     tig_statusza: str | None = None
     szamla_statusza: str | None = None
     megjegyzes: str | None = None
+    van_szerzodes: bool | None = None
+    papir_nelkul: bool | None = None
+    papir_nelkul_indoka: str | None = None
 
 
 class ProjectCodeRead(ProjectCodeBase):
     id: int
     osszes_koltseg: float
     becsult_profit: float
+
+    # A papírozás kapcsolói (lásd models/project_code.py): van-e szerződés a
+    # projekt mögött, illetve papír nélkül számoljuk-e el.
+    van_szerzodes: bool = True
+    papir_nelkul: bool = False
+    papir_nelkul_indoka: str | None = None
 
     # a 'HYPE ADMIN projektkódok' Notion tábla maradék mezői, egyenként (lásd
     # app/models/project_code.py) - nem egy közös 'extra' JSON-ban.

@@ -11,7 +11,6 @@ from app.api.routes.autok import router as autok_router
 from app.api.routes.belsos_idoszakok import router as belsos_idoszakok_router
 from app.api.routes.callsheets import router as callsheets_router
 from app.api.routes.campaigns import router as campaigns_router
-from app.api.routes.client_contracts import router as client_contracts_router
 from app.api.routes.clients import contacts_router, router as clients_router
 from app.api.routes.contracts import router as contracts_router
 from app.api.routes.crew import rates_router, router as crew_router
@@ -47,6 +46,8 @@ from app.api.routes.user_access import router as user_access_router
 from app.api.routes.vagoi_visszajelzesek import router as vagoi_visszajelzesek_router
 from app.api.routes.utokovetes_admin import router as utokovetes_admin_router
 from app.api.routes.krumpello import router as krumpello_router
+from app.api.routes.megrendeloi_keretszerzodesek import router as megrendeloi_keretszerzodesek_router
+from app.api.routes.megrendeloi_papirok import router as megrendeloi_papirok_router
 from app.api.routes.vagoi_jatek import router as vagoi_jatek_router
 from app.api.routes.vallalkozasok import router as vallalkozasok_router
 
@@ -100,6 +101,8 @@ api_router.include_router(contracts_router)
 api_router.include_router(subcontractor_contracts_router)
 api_router.include_router(eseti_szerzodesek_router)
 api_router.include_router(krumpello_router)
+api_router.include_router(megrendeloi_keretszerzodesek_router)
+api_router.include_router(megrendeloi_papirok_router)
 api_router.include_router(vagoi_jatek_router)
 api_router.include_router(vallalkozasok_router)
 api_router.include_router(belsos_idoszakok_router)
@@ -109,7 +112,6 @@ api_router.include_router(kotelezettsegek_router)
 api_router.include_router(autok_router)
 # A megrendelői kontaktok önálló listája (az adat maga a /contacts CRUD-é).
 api_router.include_router(megrendeloi_kontaktok_router)
-api_router.include_router(client_contracts_router)
 api_router.include_router(performance_certificates_router)
 # Az összes külsős TIG egy listában (a kihagyottakkal együtt).
 api_router.include_router(kulsos_tigek_router)

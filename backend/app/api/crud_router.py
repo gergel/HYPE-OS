@@ -58,6 +58,7 @@ def build_crud_router(
     before_create: Callable[[dict, Session], dict] | None = None,
     m2m_fields: dict[str, tuple[str, type]] | None = None,
     list_read_schema: type[BaseModel] | None = None,
+    before_update: Callable[[Any, dict, Session], None] | None = None,
     after_update: Callable[[Any, dict, dict[str, dict[str, set[int]]], Session, Employee], None] | None = None,
     before_delete: Callable[[Any, Session], None] | None = None,
     entity_type: str | None = None,
@@ -85,6 +86,15 @@ def build_crud_router(
     ahol a listanézet ténylegesen csak pár mezőt jelenít meg, de a teljes séma
     soronkénti validálása/JSON-ba szerializálása felesleges terhelés minden egyes
     listaoldal-betöltésnél. Az egyedi rekord GET továbbra is a teljes read_schema-t adja.
+
+    before_update: PATCH közben, MÉG A MENTÉS ELŐTT hívódik (obj, data, db)
+    paraméterekkel - itt kell ellenőrizni, hogy a beküldött mezők együtt
+    értelmesek-e (pl. a projektkódnál a "papír nélkül" jelöléshez kötelező az
+    indok, lásd routes/project_codes.py). Azért nem az after_update való erre:
+    az a commit UTÁN fut, tehát az ott dobott hiba már egy elmentett állapotra
+    panaszkodna. `obj` még a RÉGI értékeket tartalmazza, `data` a beküldött
+    mezőket - a kettőt együtt kell nézni, mert egy PATCH tipikusan csak a
+    változó mezőt küldi el.
 
     after_update: PATCH után hívódik (obj, data, m2m_changes, db, current_user) paraméterekkel,
     miután a rekord már commitolva/refresh-elve van - side effect-ekhez (pl. értesítés
@@ -291,6 +301,9 @@ def build_crud_router(
         # külön táblában vannak - ezeket innen emeljük ki, hogy a felületnek ne
         # kelljen külön végpontot hívnia: a részletnézet ugyanúgy PATCH-eli
         # őket, mint bármelyik valódi mezőt (lásd services/entity_fields.py).
+        if before_update:
+            before_update(obj, data, db)
+
         eltavolitott = entity_fields.hidden_fields(db, entity_type) if entity_type else set()
         sajat_ertekek = (
             {k: v for k, v in data.items() if k in entity_fields.custom_keys(db, entity_type)} if entity_type else {}

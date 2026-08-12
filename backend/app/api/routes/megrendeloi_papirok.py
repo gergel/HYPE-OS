@@ -1,0 +1,541 @@
+"""Megrendelői papírozás: eseti szerződés és TIG a MEGRENDELŐ felé.
+
+Ugyanaz a folyamat, mint az alvállalkozói oldalon (lásd
+routes/subcontractor_contracts.py és performance_certificates.py), csak a
+másik irányba - ezért ugyanazok a műveletek is:
+
+    piszkozat mentése -> generálás és kiküldés -> aláírt példány feltöltése
+                      \\-> kihagyás (indokkal)  \\-> saját papír feltöltése
+
+A sablonok a csatolt Notion-programokból jönnek (megrendelo-eseti,
+megrendelo-keretszerzodes, TIG-megrendelo-email): a placeholder-nevek egy az
+egyben azok, amiket azok a programok cserélnek - így ugyanaz a Google Docs
+sablon használható tovább, nem kell újat gyártani.
+"""
+
+from __future__ import annotations
+
+import os
+from datetime import date
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.database import get_db
+from app.core.security import get_current_user, require_page_action
+from app.models.employee import Employee
+from app.models.megrendeloi_papir import ALLAPOTOK, LEZART_ALLAPOTOK, MegrendeloiSzerzodes, MegrendeloiTig
+from app.models.project_code import ProjectCode
+from app.services import document_storage, megrendeloi_papir
+from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
+from app.services.google_email import send_message
+from app.services.hu_number_words import szam_betukkel
+
+router = APIRouter(prefix="/megrendeloi-papirok", tags=["megrendeloi-papirok"])
+
+PAGE = "/projektek/project-kodok"
+
+#: A két papírfajta. A `kulcs` megy az útvonalba, hogy egy komponens
+#: szolgálhassa ki mindkettőt a felületen.
+SZERZODES = "szerzodes"
+TIG = "tig"
+
+
+def _modell(fajta: str):
+    if fajta == SZERZODES:
+        return MegrendeloiSzerzodes
+    if fajta == TIG:
+        return MegrendeloiTig
+    raise HTTPException(status_code=404, detail=f"Ismeretlen papírfajta: {fajta}")
+
+
+def _sablon(fajta: str) -> tuple[str, str]:
+    """(sablon-azonosító, beállítás neve) - a hibaüzenethez is kell a név."""
+    if fajta == SZERZODES:
+        return settings.gdoc_megrendeloi_eseti_template_id, "GDOC_MEGRENDELOI_ESETI_TEMPLATE_ID"
+    return settings.gdoc_megrendeloi_tig_template_id, "GDOC_MEGRENDELOI_TIG_TEMPLATE_ID"
+
+
+def _projektkod_vagy_404(db: Session, project_code_id: int) -> ProjectCode:
+    pk = db.get(ProjectCode, project_code_id)
+    if pk is None:
+        raise HTTPException(status_code=404, detail="Ez a projektkód nem található.")
+    return pk
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Séma
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PapirIn(BaseModel):
+    """A papír adatai. MINDEN mező szerkeszthető, azok is, amiket az ügyfél
+    adatlapjáról töltöttünk elő - a papírra a beküldött érték kerül."""
+
+    client_id: int | None = None
+    contact_id: int | None = None
+    keretszerzodes_id: int | None = None
+
+    ceg_neve: str | None = None
+    szekhely: str | None = None
+    adoszam: str | None = None
+    kepviselo: str | None = None
+    nyilvantartasi_szam: str | None = None
+    email: str | None = None
+
+    megbizas_targya: str | None = None
+    projekt_nev: str | None = None
+    teljesites_szoveg: str | None = None
+    netto_osszeg: float | None = None
+    plusz_afa: bool | None = None
+    keltezes: date | None = None
+    megjegyzes: str | None = None
+
+
+class PapirRead(PapirIn):
+    id: int
+    project_code_id: int
+    fajta: str
+    allapot: str | None = None
+    file_url: str | None = None
+    alairt_file_url: str | None = None
+    kihagyas_oka: str | None = None
+    #: Kiment, de az aláírt példány még nem jött vissza.
+    alairasra_var: bool = False
+    projektkod: str | None = None
+
+
+class ElotoltesOut(BaseModel):
+    """Amivel egy ÚJ papír indul - a legjobb ismert forrásból előtöltve."""
+
+    client_id: int | None = None
+    contact_id: int | None = None
+    keretszerzodes_id: int | None = None
+    ceg_neve: str | None = None
+    szekhely: str | None = None
+    adoszam: str | None = None
+    kepviselo: str | None = None
+    nyilvantartasi_szam: str | None = None
+    email: str | None = None
+    megbizas_targya: str | None = None
+    projekt_nev: str | None = None
+    teljesites_szoveg: str | None = None
+    netto_osszeg: float | None = None
+    plusz_afa: bool | None = None
+    #: Honnan jöttek az adatok: "keretszerzodes" | "ugyfel" | "kontakt" | "projektkod"
+    forras: str = "ugyfel"
+    #: Van-e élő keretszerződés a céggel - ilyenkor az eseti szerződés
+    #: elhagyható (a TIG NEM, lásd services/megrendeloi_papir.py).
+    van_elo_keretszerzodes: bool = False
+
+
+def _f(ertek) -> float | None:
+    return float(ertek) if ertek is not None else None
+
+
+def _kimenet(papir, fajta: str) -> PapirRead:
+    return PapirRead(
+        id=papir.id,
+        project_code_id=papir.project_code_id,
+        fajta=fajta,
+        client_id=papir.client_id,
+        contact_id=papir.contact_id,
+        keretszerzodes_id=papir.keretszerzodes_id,
+        ceg_neve=papir.ceg_neve,
+        szekhely=papir.szekhely,
+        adoszam=papir.adoszam,
+        kepviselo=papir.kepviselo,
+        nyilvantartasi_szam=papir.nyilvantartasi_szam,
+        email=papir.email,
+        megbizas_targya=papir.megbizas_targya,
+        projekt_nev=papir.projekt_nev,
+        teljesites_szoveg=papir.teljesites_szoveg,
+        netto_osszeg=_f(papir.netto_osszeg),
+        plusz_afa=papir.plusz_afa,
+        keltezes=papir.keltezes,
+        megjegyzes=papir.megjegyzes,
+        allapot=papir.allapot,
+        file_url=papir.file_url,
+        alairt_file_url=papir.alairt_file_url,
+        kihagyas_oka=papir.kihagyas_oka,
+        alairasra_var=papir.allapot == "Kiküldve" and not papir.alairt_file_url,
+        projektkod=papir.project_code.projektkod if papir.project_code else None,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lekérdezés
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/{fajta}/elotoltes/{project_code_id}", response_model=ElotoltesOut)
+def get_elotoltes(
+    fajta: str,
+    project_code_id: int,
+    client_id: int | None = None,
+    contact_id: int | None = None,
+    keretszerzodes_id: int | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Egy új papír előtöltése.
+
+    A szerződő fél a keretszerződésből VAGY a megrendelői kontaktokból jön, és
+    az összes cégadatot hozza magával (lásd
+    services/megrendeloi_papir.szerzodo_fel_adatai) - a felületen mind
+    szerkeszthető."""
+    _modell(fajta)
+    pk = _projektkod_vagy_404(db, project_code_id)
+    fel = megrendeloi_papir.szerzodo_fel_adatai(
+        db, pk, client_id=client_id, contact_id=contact_id, keretszerzodes_id=keretszerzodes_id
+    )
+    keret = megrendeloi_papir.keretszerzodes_fedi(db, fel.client_id, pk.datum)
+    return ElotoltesOut(
+        client_id=fel.client_id,
+        contact_id=fel.contact_id,
+        keretszerzodes_id=fel.keretszerzodes_id,
+        ceg_neve=fel.ceg_neve,
+        szekhely=fel.szekhely,
+        adoszam=fel.adoszam,
+        kepviselo=fel.kepviselo,
+        nyilvantartasi_szam=fel.nyilvantartasi_szam,
+        email=fel.email,
+        # A tárgy és az összeg a projektkódról jön: azt ott vezetik.
+        megbizas_targya=pk.megbizas_targya or pk.szerzodes_targya,
+        projekt_nev=pk.szerzodes_projekt_nev or pk.project_nev or pk.tig_projektnev,
+        teljesites_szoveg=(pk.tig_teljesitesi_ido or pk.teljesites)
+        if fajta == TIG
+        else (pk.teljesites or pk.tig_teljesitesi_ido),
+        # A papírfajtájához tartozó összeg az elsődleges, de ha az üres, a
+        # projektkód általános nettója is jobb, mint egy üresen induló mező -
+        # ugyanez a visszaesés van a tárgynál és a projekt nevénél is. A két
+        # oszlop külön Notion-örökség, és a régi sorokon jellemzően csak az
+        # egyik van kitöltve.
+        netto_osszeg=_f(
+            (pk.szerzodes_netto_osszeg or pk.netto_osszeg)
+            if fajta == SZERZODES
+            else (pk.netto_osszeg or pk.szerzodes_netto_osszeg)
+        ),
+        plusz_afa=bool(pk.szerzodes_plusz_afa or pk.plusz_afa),
+        forras=fel.forras,
+        van_elo_keretszerzodes=keret is not None,
+    )
+
+
+@router.get("/{fajta}", response_model=list[PapirRead])
+def list_papirok(
+    fajta: str,
+    project_code_id: int | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Gyűjtőlista - projektkód nélkül az ÖSSZES papír, a kihagyottakkal együtt.
+
+    A kihagyottak azért maradnak benne, mert a kihagyás indoka is információ:
+    ha eltűnnének, csak az látszana, hogy "nincs papír", az pedig hiányosságnak
+    néz ki, nem döntésnek (ugyanaz a szabály, mint a külsős TIG-eknél)."""
+    modell = _modell(fajta)
+    stmt = select(modell)
+    if project_code_id is not None:
+        stmt = stmt.where(modell.project_code_id == project_code_id)
+    sorok = db.scalars(stmt.order_by(modell.id.desc())).all()
+    return [_kimenet(p, fajta) for p in sorok]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Írás
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _alkalmaz(papir, payload: PapirIn) -> None:
+    for mezo, ertek in payload.model_dump(exclude_unset=True).items():
+        setattr(papir, mezo, ertek)
+
+
+def _keret_visszakotese(db: Session, papir, project_code_id: int) -> None:
+    """Ha a papír keretszerződésre hivatkozik, a PROJEKTKÓD is kösse oda.
+
+    A projektkód `contract_id` mezője eddig is azt jelentette, hogy melyik
+    szerződés fedi ezt a munkát - erre épül a keretszerződések oldalán a
+    "hány projektkódnál használjuk" számláló és a törlés védelme is. A
+    papírhoz választott keret ugyanaz az információ, csak egy szinttel
+    lejjebb: ha nem vezetnénk vissza, a két hely némán elcsúszna egymástól.
+
+    Meglévő kapcsolatot NEM írunk felül: azt valaki szándékosan állította be
+    (vagy a Notion-import hozta), és nem egy papír mentése a hely, ahol ez
+    csendben megváltozik."""
+    if papir.keretszerzodes_id is None:
+        return
+    pk = db.get(ProjectCode, project_code_id)
+    if pk is not None and pk.contract_id is None:
+        pk.contract_id = papir.keretszerzodes_id
+
+
+def _uj_vagy_meglevo(db: Session, fajta: str, project_code_id: int, papir_id: int | None):
+    modell = _modell(fajta)
+    if papir_id is not None:
+        papir = db.get(modell, papir_id)
+        if papir is None:
+            raise HTTPException(status_code=404, detail="Ez a papír nem található.")
+        return papir
+    papir = modell(project_code_id=project_code_id, allapot="Készítés alatt")
+    db.add(papir)
+    return papir
+
+
+@router.post("/{fajta}/{project_code_id}/mentes", response_model=PapirRead)
+def save_papir(
+    fajta: str,
+    project_code_id: int,
+    payload: PapirIn,
+    papir_id: int | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Piszkozat mentése kiküldés nélkül."""
+    _projektkod_vagy_404(db, project_code_id)
+    papir = _uj_vagy_meglevo(db, fajta, project_code_id, papir_id)
+    _alkalmaz(papir, payload)
+    _keret_visszakotese(db, papir, project_code_id)
+    db.commit()
+    db.refresh(papir)
+    return _kimenet(papir, fajta)
+
+
+def _sablon_mezok(papir, fajta: str) -> dict[str, str]:
+    """A Google Docs sablon placeholder-ei.
+
+    A nevek a csatolt Notion-programokból származnak (megrendelo-eseti/gdocs.py
+    és TIG-megrendelo-email/gdocs.py) - egy az egyben, hogy a MEGLÉVŐ sablonok
+    változtatás nélkül működjenek tovább."""
+    netto = float(papir.netto_osszeg or 0)
+    mezok = {
+        "nev": papir.ceg_neve or "",
+        "hely": papir.szekhely or "",
+        "adoszam": papir.adoszam or "",
+        "targy": papir.megbizas_targya or "",
+        "tido": papir.teljesites_szoveg or "",
+        # Ezres elválasztó szóközzel, ahogy az eredeti programok írják.
+        "netto": f"{netto:,.0f}".replace(",", " "),
+        "nettoki": szam_betukkel(netto),
+        "kelt": papir.keltezes.strftime("%Y.%m.%d.") if papir.keltezes else "",
+        "afa": "+ ÁFA" if papir.plusz_afa else "",
+        "nyilvszam": papir.nyilvantartasi_szam or "",
+        "kepvis": papir.kepviselo or "",
+    }
+    if fajta == SZERZODES:
+        mezok["projektnev"] = papir.projekt_nev or ""
+        # Az eredeti program a teljesítés szövegét teszi a {{napok}} helyére is.
+        mezok["napok"] = papir.teljesites_szoveg or ""
+    else:
+        mezok["projkod"] = papir.project_code.projektkod if papir.project_code else ""
+    return mezok
+
+
+_EMAIL_HTML = """\
+<p>Kedves Partnerünk!</p>
+<p>Mellékelten küldjük a(z) <b>{projekt}</b> projekthez tartozó {papir}.<br>
+Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszaküldeni.</p>
+<p>Köszönettel,<br>HYPE Productions Kft.</p>
+"""
+
+
+@router.post("/{fajta}/{project_code_id}/generalas-es-kuldes", response_model=PapirRead)
+def generate_and_send(
+    fajta: str,
+    project_code_id: int,
+    payload: PapirIn,
+    papir_id: int | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """A papír generálása a sablonból és azonnali kiküldése e-mailben.
+
+    Sablon nélkül nem küldünk: egy PDF nélküli levél nem ér semmit, ezért
+    inkább beszédes hibát adunk a hiányzó beállítás nevével."""
+    pk = _projektkod_vagy_404(db, project_code_id)
+    papir = _uj_vagy_meglevo(db, fajta, project_code_id, papir_id)
+    _alkalmaz(papir, payload)
+    _keret_visszakotese(db, papir, project_code_id)
+    db.flush()
+
+    if not papir.email:
+        raise HTTPException(status_code=400, detail="Nincs e-mail cím, így nem lehet kiküldeni a papírt.")
+    sablon_id, beallitas_nev = _sablon(fajta)
+    if not sablon_id:
+        db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Nincs beállítva a dokumentum-sablon, így a PDF nem generálható. "
+                f"Állítsd be a {beallitas_nev} környezeti változót a backendhez."
+            ),
+        )
+
+    papir.keltezes = papir.keltezes or date.today()
+    cimke = "megrendelői szerződés" if fajta == SZERZODES else "teljesítési igazolás"
+    base_name = f"{pk.projektkod}_{papir.ceg_neve or 'megrendelo'}_{'szerzodes' if fajta == SZERZODES else 'TIG'}"
+    try:
+        pdf_bytes, pdf_link = gdoc_fill_export_and_store_pdf(
+            template_file_id=sablon_id,
+            base_name=base_name,
+            fields=_sablon_mezok(papir, fajta),
+            output_folder_id=settings.gdoc_output_folder_id or settings.drive_folder_id or None,
+        )
+        send_message(
+            [papir.email],
+            f"{pk.projektkod} – {cimke}",
+            _EMAIL_HTML.format(projekt=pk.projektkod, papir=cimke),
+            pdf_bytes=pdf_bytes,
+            pdf_filename=f"{base_name}.pdf",
+        )
+    except RuntimeError as exc:
+        # A kitöltött adatokat akkor is mentsük, ha a küldés elhasal (pl.
+        # hiányzó Google hitelesítő adat) - ne vesszen el az eddigi munka.
+        db.commit()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    papir.allapot = "Kiküldve"
+    papir.file_url = pdf_link
+    db.commit()
+    db.refresh(papir)
+    return _kimenet(papir, fajta)
+
+
+class AllapotIn(BaseModel):
+    allapot: str
+
+
+@router.post("/{fajta}/{papir_id}/allapot", response_model=PapirRead)
+def set_allapot(
+    fajta: str,
+    papir_id: int,
+    payload: AllapotIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Az állapot kézi átállítása - egy tévesen kiküldöttre állított papír
+    visszavehető, és újra elkészíthető."""
+    if payload.allapot not in ALLAPOTOK:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen állapot. Választható: {', '.join(ALLAPOTOK)}")
+    papir = db.get(_modell(fajta), papir_id)
+    if papir is None:
+        raise HTTPException(status_code=404, detail="Ez a papír nem található.")
+    papir.allapot = payload.allapot
+    db.commit()
+    db.refresh(papir)
+    return _kimenet(papir, fajta)
+
+
+class KihagyasIn(BaseModel):
+    kihagyas_oka: str | None = None
+
+
+@router.post("/{fajta}/{project_code_id}/kihagyas", response_model=PapirRead)
+def skip_papir(
+    fajta: str,
+    project_code_id: int,
+    payload: KihagyasIn,
+    papir_id: int | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Kihagyás - INDOKKAL.
+
+    Az indok kötelező: enélkül fél év múlva csak annyi látszana, hogy nincs
+    papír, és nem lehetne megkülönböztetni a döntést a mulasztástól."""
+    if not (payload.kihagyas_oka or "").strip():
+        raise HTTPException(status_code=400, detail="A kihagyáshoz meg kell adni az okát.")
+    _projektkod_vagy_404(db, project_code_id)
+    papir = _uj_vagy_meglevo(db, fajta, project_code_id, papir_id)
+    papir.allapot = "Kihagyva"
+    papir.kihagyas_oka = payload.kihagyas_oka.strip()
+    db.commit()
+    db.refresh(papir)
+    return _kimenet(papir, fajta)
+
+
+@router.post("/{fajta}/{project_code_id}/sajat-papir", response_model=PapirRead)
+async def upload_sajat_papir(
+    fajta: str,
+    project_code_id: int,
+    papir_id: int | None = None,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """SAJÁT papír feltöltése a generálás helyett.
+
+    Nem minden papír itt készül: van, amit a megrendelő ad (a saját
+    sablonjával), és van, ami régebbi, még a rendszer előtti. Ilyenkor nincs
+    mit generálni és nincs kinek kiküldeni, csak rögzíteni - a feltöltés a
+    papírt egyben KIKÜLDÖTT állapotba is teszi, mert a folyamat innentől
+    ugyanott tart."""
+    _projektkod_vagy_404(db, project_code_id)
+    papir = _uj_vagy_meglevo(db, fajta, project_code_id, papir_id)
+    db.flush()
+    data = await file.read()
+    regi_kulcs = papir.file_storage_key
+    kulcs = f"megrendelo-{fajta}/{project_code_id}/{papir.id}{os.path.splitext(file.filename or '')[1] or '.pdf'}"
+    papir.file_url = document_storage.upload_bytes(
+        data, kulcs, file.content_type or "application/octet-stream"
+    )
+    papir.file_storage_key = kulcs
+    if papir.allapot not in LEZART_ALLAPOTOK:
+        papir.allapot = "Kiküldve"
+    db.commit()
+    if regi_kulcs and regi_kulcs != kulcs:
+        document_storage.delete_object(regi_kulcs)
+    db.refresh(papir)
+    return _kimenet(papir, fajta)
+
+
+@router.post("/{fajta}/{papir_id}/alairt-fajl", response_model=PapirRead)
+async def upload_alairt(
+    fajta: str,
+    papir_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Az ALÁÍRVA visszakapott példány. Amíg ez nincs meg, a papír
+    "aláírásra vár" - a kiküldés önmagában még nem lezárt ügy."""
+    papir = db.get(_modell(fajta), papir_id)
+    if papir is None:
+        raise HTTPException(status_code=404, detail="Ez a papír nem található.")
+    data = await file.read()
+    regi_kulcs = papir.alairt_file_storage_key
+    kulcs = f"megrendelo-{fajta}-alairt/{papir.project_code_id}/{papir.id}{os.path.splitext(file.filename or '')[1] or '.pdf'}"
+    papir.alairt_file_url = document_storage.upload_bytes(
+        data, kulcs, file.content_type or "application/octet-stream"
+    )
+    papir.alairt_file_storage_key = kulcs
+    db.commit()
+    if regi_kulcs and regi_kulcs != kulcs:
+        document_storage.delete_object(regi_kulcs)
+    db.refresh(papir)
+    return _kimenet(papir, fajta)
+
+
+@router.delete("/{fajta}/{papir_id}", status_code=204)
+def delete_papir(
+    fajta: str,
+    papir_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    """A papír törlése - utána tiszta lappal újrakezdhető.
+
+    A tárhelyre feltöltött fájlokat is eldobjuk; a Drive-on lévő generált
+    PDF-hez nem nyúlunk, mert az nem a mi tárhelyünk."""
+    papir = db.get(_modell(fajta), papir_id)
+    if papir is None:
+        raise HTTPException(status_code=404, detail="Ez a papír nem található.")
+    kulcsok = [k for k in (papir.file_storage_key, papir.alairt_file_storage_key) if k]
+    db.delete(papir)
+    db.commit()
+    for k in kulcsok:
+        document_storage.delete_object(k)

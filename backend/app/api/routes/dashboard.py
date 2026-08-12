@@ -15,6 +15,7 @@ from app.models.deliverable_status import DeliverableStatusConfig
 from app.models.dispo_responsible import DispoResponsible, DispoSide
 from app.models.employee import Employee, SystemRole, van_szerepkore
 from app.services import kotelezettseg as kotelezettseg_szolg
+from app.services import megrendeloi_papir
 from app.services import papirozas_feladatok
 from app.services import papirozas_hatokor
 from app.models.finance import Revenue
@@ -289,13 +290,24 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
                 )
             )
 
-    # 3. Megrendelői szerződés és TIG - projektkódonként.
-    for pc in db.scalars(select(ProjectCode).order_by(ProjectCode.projektkod)):
+    # 3. Megrendelői szerződés és TIG - projektkódonként, a papírok VALÓDI
+    #    állapotából (lásd services/megrendeloi_papir.py). A kihagyott és a
+    #    "van már papír" jelölésű tételek lezártnak számítanak: azok nem
+    #    elmaradtak, hanem eldőltek.
+    projektkodok = list(db.scalars(select(ProjectCode).order_by(ProjectCode.projektkod)))
+    allasok = megrendeloi_papir.papir_allasok(db, projektkodok)
+    for pc in projektkodok:
         # A papírozásból kivett sorozatok (HYPE24) papírjai máshol készültek el -
         # nincs velük teendő (lásd services/papirozas_hatokor.py).
         if papirozas_hatokor.projektkod_kivett(pc.projektkod):
             continue
-        if pc.contract_id is None:
+        allas = allasok[pc.id]
+        # A projektkód kapcsolói kivehetik a papírozásból: nincs szerződés a
+        # projekt mögött, vagy papír nélkül számoljuk el. Ilyenkor nem "hiányzik"
+        # a papír, hanem nincs is neki helye.
+        if not allas.kell_papir:
+            continue
+        if not allas.szerzodes_kesz:
             items.append(
                 MyTaskItem(
                     id=pc.id,
@@ -307,7 +319,7 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
             )
         # TIG csak akkor, ha a munka már el is indult (volt kiküldött diszpójú
         # forgatás) - enélkül minden jövőbeli projektkód örökre teendő lenne.
-        elif not pc.tig_kikuldve and any(p.diszpo == "Kiküldve" for p in pc.projects):
+        if not allas.tig_kesz and any(p.diszpo == "Kiküldve" for p in pc.projects):
             items.append(
                 MyTaskItem(
                     id=pc.id,
