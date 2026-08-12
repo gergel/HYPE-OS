@@ -85,6 +85,22 @@ együtt a Python-processz is meghal. A végpont ehelyett a **futó backend
 processzében**, háttérszálon indítja az importot, ami a HTTP-válasz után is tovább
 fut. Redeploy/újraindítás viszont elviszi (memóriabeli állapot).
 
+### A mezőnevek táblánként eltérnek
+
+Ugyanaz az adat a HYPE Notion tábláiban más-más oszlopnéven szerepel. A
+megrendelői **Keretszerződés** tábla például `Képviselő` és
+`Nyilvántartásiszám` néven vezeti azt, amit az alvállalkozói oldal
+`Vállalkozás képviselője` / `Vállalkozás nyilvántartási szám` néven - az import
+pedig sokáig csak az utóbbit kereste, tehát **egyik sem jött át** (23, illetve
+21 cégnél volt kitöltve). Épp ez a kettő kell a keretszerződés generálásához
+(`{{kepvis}}`, `{{nyilvszam}}`).
+
+Ezért használ az import `_mezo()` / `_szoveg_mezo()` segédfüggvényt, ami TÖBB
+lehetséges nevet próbál sorban, és az első nem üreset veszi. Új tábla
+bekötésekor érdemes előbb kiíratni a tényleges mezőneveket
+(`extract_properties` egy sorra), és nem feltételezni, hogy egyeznek egy másik
+tábláéval - a hiányzó mező ugyanis némán üres marad, nem hibázik.
+
 ### Törölt rekord: a leképezést is vinni kell
 
 A `notion_import_map` generikus tábla (Notion oldal → entitástípus + id),

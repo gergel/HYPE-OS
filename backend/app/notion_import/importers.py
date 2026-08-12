@@ -846,15 +846,25 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
                 "keltezes": as_date(props.get("Keltezés")),
                 "alairva": bool(szerzodes_url),
                 "letrehozta_notion": props.get("Created by"),
-                "vallalkozas_kepviseloje": _text(props.get("Vállalkozás képviselője")),
+                # A MEGRENDELŐI keretszerződés-tábla más néven vezeti ezt a két
+                # mezőt, mint az alvállalkozói ("Képviselő" és
+                # "Nyilvántartásiszám", nem "Vállalkozás ..."). Emiatt eddig
+                # egyik sem jött át - pedig épp ez a kettő kell a
+                # keretszerződés generálásához ({{kepvis}} és {{nyilvszam}},
+                # lásd routes/megrendeloi_keretszerzodesek.py). A régi nevek
+                # tartalékként maradnak, hogy egy másképp elnevezett workspace
+                # se essen szét.
+                "vallalkozas_kepviseloje": _szoveg_mezo(props, "Képviselő", "Vállalkozás képviselője"),
                 "created_at_notion": as_datetime(props.get("Created time")),
-                "keretszerzodes_kuld": props.get("Keretszerződés küld"),
+                "keretszerzodes_kuld": _mezo(props, "Keretszerződés küldése", "Keretszerződés küld"),
                 "email": _text(props.get("Email")),
                 "szemely_notion_ids": props.get("Személy"),
                 "nev": _text(props.get("Name")),
                 "kulsos_notion_ids": props.get("Külsős "),
-                "vallalkozas_nyilvantartasi_szam": _text(props.get("Vállalkozás nyilvántartási szám")),
-                "szerzodes_megjegyzes": _text(props.get("Szerződés megjegyzés")),
+                "vallalkozas_nyilvantartasi_szam": _szoveg_mezo(
+                    props, "Nyilvántartásiszám", "Nyilvántartási szám", "Vállalkozás nyilvántartási szám"
+                ),
+                "szerzodes_megjegyzes": _szoveg_mezo(props, "Szerződés megjegyzés", "Megjegyzés"),
             },
             label="Contract (keretszerződés)",
         )
