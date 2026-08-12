@@ -7,18 +7,38 @@ import type { ColumnKind } from "@/lib/tableFilters";
  * szűrni, ami a cellában LÁTSZIK, és ne kelljen minden listaoldalon külön
  * szűrő-mezőket deklarálni.
  *
- * A StatusBadge-szerű komponensek a szövegüket nem gyerekként, hanem `label`
- * propban kapják, ezért azt is megnézzük - enélkül pl. egy státusz-oszlopra
- * egyáltalán nem lehetne szűrni. */
+ * Három helyről szedjük ki a szöveget, ebben a sorrendben:
+ *
+ * 1. `children` - a szokásos eset;
+ * 2. `label` - a StatusBadge-szerű komponensek így kapják a szövegüket;
+ * 3. `value` (és üres értéknél a `placeholder`) - a HELYBEN SZERKESZTHETŐ
+ *    cellák (EditableTableCell, EditableStatusBadge) így kapják.
+ *
+ * A harmadik nélkül a szűrő ott hallgatott, ahol a legtöbb oszlop szerkeszthető
+ * cella: a Kiadások listáján a megnevezés, a nettó, a fizetési mód és az
+ * állapot MIND ilyen, tehát az oszlop-szűrő egyáltalán nem talált semmit, és
+ * legördülő értékkészletet sem tudott kínálni. Kívülről ez úgy néz ki, hogy
+ * "a szűrő nem működik". */
 function nodeToText(node: ReactNode): string {
   if (node === null || node === undefined || typeof node === "boolean") return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(nodeToText).join(" ");
   if (isValidElement(node)) {
-    const props = node.props as { children?: ReactNode; label?: ReactNode };
+    const props = node.props as {
+      children?: ReactNode;
+      label?: ReactNode;
+      value?: ReactNode;
+      placeholder?: ReactNode;
+    };
     const fromChildren = nodeToText(props.children);
     if (fromChildren.trim()) return fromChildren;
-    return nodeToText(props.label);
+    const fromLabel = nodeToText(props.label);
+    if (fromLabel.trim()) return fromLabel;
+    const fromValue = nodeToText(props.value);
+    if (fromValue.trim()) return fromValue;
+    // Üres értéknél a cellában a helykitöltő látszik ("Nincs megadva"), tehát
+    // a szűrőben is arra kell tudni szűrni.
+    return nodeToText(props.placeholder);
   }
   return "";
 }

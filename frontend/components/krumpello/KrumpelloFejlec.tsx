@@ -33,7 +33,22 @@ export function KrumpelloFejlec({
           <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-text-primary">{cim}</h1>
           {leiras && <p className="mt-1 text-[12.5px] text-text-muted">{leiras}</p>}
         </div>
-        <div className="flex items-center gap-2">{jobbOldal}</div>
+        <div className="flex items-center gap-2">
+          {jobbOldal}
+          {/* Átlépés vissza a HYPE OS-be - a fejléc jobb szélén, ugyanott és
+              ugyanúgy, ahogy a HYPE OS-ben a "krumpello →" gomb áll (lásd
+              components/KrumpelloKapcsolo.tsx). Az oldalsáv alján is ott a
+              link, de az a hosszú lapok aljára szorul; az átlépés viszont
+              ugyanolyan gyakori mozdulat mindkét irányban. */}
+          <Link
+            href="/dashboard"
+            title="Vissza a HYPE OS-be"
+            className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[12.5px] font-semibold text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+          >
+            <span aria-hidden>←</span>
+            hype os
+          </Link>
+        </div>
       </div>
       <IdoszakSzuro tol={tol} ig={ig} utvonal={utvonal} />
     </div>

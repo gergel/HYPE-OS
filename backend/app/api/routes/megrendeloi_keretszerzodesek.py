@@ -38,7 +38,7 @@ from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.megrendeloi_papir import MegrendeloiSzerzodes, MegrendeloiTig
 from app.models.project_code import ProjectCode
-from app.services import document_storage, megrendeloi_papir, notion_mapping
+from app.services import admin_level, document_storage, megrendeloi_papir, notion_mapping
 from app.services.megrendeloi_papir import megrendeloi_keret_ervenyes
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
@@ -331,11 +331,13 @@ def update_keretszerzodes(
     return _kimenet(c)
 
 
+#: A keretszerződés kísérőlevele. Aláírás NINCS benne: azt a küldő fiók
+#: Gmail-beállításából tesszük a végére (lásd services/admin_level.py) - így
+#: egy aláírás-változás nem igényel kódmódosítást.
 _EMAIL_HTML = """\
 <p>Kedves Partnerünk!</p>
 <p>Mellékelten küldjük a keretszerződésünket.<br>
 Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszaküldeni.</p>
-<p>Köszönettel,<br>HYPE Productions Kft.</p>
 """
 
 
@@ -379,8 +381,18 @@ def generate_and_send(
             },
             output_folder_id=settings.gdoc_keretszerzodes_folder_id or settings.gdoc_output_folder_id or None,
         )
-        send_message([c.email], f"{nev} – keretszerződés", _EMAIL_HTML, pdf_bytes=pdf_bytes,
-                     pdf_filename=f"{base_name}.pdf")
+        # A keretszerződés az ADMIN fiókból megy, annak a Gmailben beállított
+        # aláírásával - ugyanúgy, mint a hozzá tartozó szerződésmódosítás.
+        felado_nev, torzs = admin_level.felado_es_torzs(_EMAIL_HTML)
+        send_message(
+            [c.email],
+            f"{nev} – keretszerződés",
+            torzs,
+            pdf_bytes=pdf_bytes,
+            pdf_filename=f"{base_name}.pdf",
+            sender_name=felado_nev,
+            sender_email=settings.modositas_sender,
+        )
     except RuntimeError as exc:
         db.commit()
         raise HTTPException(status_code=503, detail=str(exc)) from exc

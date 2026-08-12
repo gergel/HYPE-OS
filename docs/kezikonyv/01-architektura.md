@@ -109,6 +109,24 @@ bezárásával lehetett válaszolni - vagyis a törlést nem lehetett befejezni.
 Új felugró elemnél ne találj ki új számot: válaszd a fenti négy közül azt,
 amelyik a szerepének megfelel.
 
+**A portálozott panel DOM szerint mindig "kívül" van.** Az `AnchoredPanel` a
+`<body>` végére renderel, tehát egy felugró panel, ami kívül-kattintásra
+záródik, a SAJÁT legördülőjére kattintva is bezárult - a `pointerdown` a
+`click` előtt fut, a gomb eltűnt, és a választás sosem ért célba. A panel
+ezért `data-anchored-panel` jelölőt visel, a kívül-kattintást figyelő
+komponensek pedig ezt kihagyják (lásd `TableFilterBuilder`). Ha új helyen
+figyelsz kívül-kattintást, és lehet benne legördülő, ugyanezt kell tenned.
+
+## Táblázat-szűrő: mire szűrünk
+
+A mezőnkénti szűrő nem külön deklarált szűrőmezőkből dolgozik, hanem abból,
+ami a cellában **látszik** (`DataTable` → `nodeToText`). A szöveget három
+helyről szedjük ki: `children` → `label` (StatusBadge) → `value`/`placeholder`
+(helyben szerkeszthető cellák). A harmadik nélkül a szűrő ott hallgatott, ahol
+a legtöbb oszlop szerkeszthető - a Kiadások listáján a megnevezés, a nettó, a
+fizetési mód és az állapot MIND ilyen, tehát az oszlop-szűrőnek se találata,
+se értékkészlete nem volt.
+
 ## Világos és sötét nézet
 
 A felület minden színe **token** (`frontend/app/globals.css`) - a komponensek

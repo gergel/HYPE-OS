@@ -435,7 +435,8 @@ amit a szerződés mellé évekig meg kell őrizni.
 A folyamat ugyanaz, mint a keretszerződésé (Google Docs sablon → PDF → Drive
 mappa → e-mail), **három ponton** tér el:
 
-1. **Más címről megy.** A levél az admin fiókból indul (`MODOSITAS_SENDER`,
+1. **Más címről megy.** Ahogy maga a keretszerződés is: a levél az admin
+   fiókból indul (`MODOSITAS_SENDER`,
    alapból `admin@hypest.hu`), az aláírása pedig az abban a fiókban **beállított
    Gmail-aláírás** - nem egy külön, itt karbantartott szöveg. Ha valaki a
    Gmailben átírja az aláírást, a HYPE OS-ből kimenő levél is azzal megy. Ha a

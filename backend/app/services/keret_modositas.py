@@ -30,7 +30,6 @@ a módosítás hivatkozni akar - és ami a papírra kerül, azt a küldő lássa
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from html import escape
 
 from sqlalchemy.orm import Session
 
@@ -38,12 +37,9 @@ from app.core.config import settings
 from app.models.contract import Contract
 from app.models.employee import Employee
 from app.models.keret_modositas import KeretModositas
-from app.services import gdoc_template
-from app.services.google_email import sendas_adatok, send_message
-
-#: Ha a fiókban nincs beállított aláírás (vagy nem tudjuk kiolvasni), ez megy
-#: a levél aljára. Nem véletlenül semleges: a valódi aláírás helye a Gmail.
-TARTALEK_ALAIRAS = "<p>Üdvözlettel,<br>HYPE Productions Kft.</p>"
+from app.services import admin_level, gdoc_template
+from app.services.admin_level import TARTALEK_ALAIRAS, szoveg_html  # noqa: F401 - a modul régi belépői
+from app.services.google_email import send_message
 
 #: A kísérőlevél alapszövege. A felületen ez töltődik be a szerkeszthető
 #: mezőbe, tehát a felhasználó minden kiküldésnél átírhatja - ez csak a
@@ -55,20 +51,6 @@ Kedves Partnerünk!
 
 Mellékelten küldjük a köztünk fennálló megbízási szerződés módosítását.
 Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszaküldeni."""
-
-
-def szoveg_html(szoveg: str) -> str:
-    """Sima szöveg -> a levél HTML törzse.
-
-    A felhasználó egy sima szövegdobozba ír, a levél viszont HTML - a
-    kettő között valakinek fordítania kell. Az üres sorok bekezdést, az
-    egyszerű sortörések `<br>`-t adnak.
-
-    A tartalmat ESCAPE-eljük: egy `<` a szövegben (pl. "díj < 100e") elrontaná
-    a levél szerkezetét, egy beillesztett HTML-részlet pedig olyat is
-    megjeleníthetne, amire a küldő nem számít."""
-    bekezdesek = [b.strip() for b in szoveg.replace("\r\n", "\n").split("\n\n") if b.strip()]
-    return "".join(f"<p>{escape(b).replace(chr(10), '<br>')}</p>" for b in bekezdesek)
 
 
 def _datum(nap: date | None) -> str:
@@ -120,14 +102,10 @@ def celmappa() -> str | None:
 def level_adatok(szoveg: str | None = None) -> tuple[str | None, str]:
     """(feladónév, kész levéltörzs) a megírt szövegből.
 
-    A feladónév és az aláírás is a küldő fiók Gmail-beállításából jön - egy
-    lekérdezés adja mindkettőt, ezért jönnek együtt. Ha a beállítás nem
-    olvasható, a név marad a globális alapérték, az aláírás a beépített
-    tartalék. Az ALÁÍRÁST mindig mi tesszük a végére: azt nem a felhasználó
-    gépeli be minden alkalommal."""
-    nev, alairas = sendas_adatok(settings.modositas_sender)
-    torzs = szoveg_html((szoveg or "").strip() or ALAP_LEVEL_SZOVEG)
-    return nev, torzs + (alairas or TARTALEK_ALAIRAS)
+    Az ALÁÍRÁST mindig mi tesszük a végére a küldő fiók Gmail-beállításából
+    (lásd services/admin_level.py): azt nem a felhasználó gépeli be minden
+    alkalommal."""
+    return admin_level.felado_es_torzs(admin_level.szoveg_html((szoveg or "").strip() or ALAP_LEVEL_SZOVEG))
 
 
 def uj_modositas(

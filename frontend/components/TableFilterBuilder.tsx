@@ -52,7 +52,14 @@ export function TableFilterBuilder({
 
   useEffect(() => {
     function onPointerDown(e: PointerEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) {
+      const target = e.target as Element | null;
+      // A szabály-sor legördülői (KeresosSelect) a `<body>` végére
+      // portáloznak, tehát DOM szerint KÍVÜL esnek ezen a panelen. Enélkül a
+      // pointerdown - ami a click ELŐTT fut - bezárta a panelt, a gomb
+      // eltűnt, és a kattintás sosem ért célba: a szabály értéke üres maradt,
+      // vagyis a szűrő látszólag nem csinált semmit.
+      if (target?.closest?.("[data-anchored-panel]")) return;
+      if (!containerRef.current?.contains(target as Node)) {
         setPickerOpen(false);
         setPanelOpen(false);
       }

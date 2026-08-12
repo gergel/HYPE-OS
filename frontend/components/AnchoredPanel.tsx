@@ -71,6 +71,11 @@ export function AnchoredPanel({
   return createPortal(
     <div
       ref={panelRef}
+      // Jelölő a kívül-kattintást figyelő komponenseknek: ez a doboz a
+      // `<body>` végén él, tehát DOM szerint mindig "kívül" van azon, ami
+      // megnyitotta. Enélkül egy legördülőt tartalmazó felugró panel a saját
+      // legördülőjére kattintva bezárul (lásd TableFilterBuilder).
+      data-anchored-panel=""
       // Amíg nincs kiszámolt pozíció, láthatatlanul rendereljük - így meg
       // tudjuk mérni a magasságát anélkül, hogy rossz helyen felvillanna.
       style={{
