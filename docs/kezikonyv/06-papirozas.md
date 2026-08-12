@@ -367,6 +367,15 @@ mappa → e-mail), **három ponton** tér el:
    folyamatot az aláírt példány feltöltése zárja le. (A többi papírnál a
    "Kiküldve" a végállapot, mert ott a kiküldés a lényeg.)
 3. **Több is lehet belőle** ugyanazon a kereten - minden kiküldés új sort nyit.
+4. **A kísérőlevelet a felhasználó írja.** A többi papír fix szöveggel megy; itt
+   a levél maga is része az ügynek (mit módosítunk, mire hivatkozva), ezért a
+   kiküldési ablakban szerkeszthető - alapszöveggel nyílik, hogy ne nulláról
+   kelljen kezdeni. Amit kiküldtünk, azt el is tesszük (`level_szoveg`), és az
+   adatlapon visszaolvasható: fél év múlva az a kérdés, hogy MIT írtunk nekik.
+   A szöveget sima szövegként írjuk, a levéltörzs HTML-jét a backend állítja
+   elő belőle - **escape-elve**, hogy egy `<` jel vagy beillesztett részlet ne
+   tudja elrontani a levél szerkezetét. Az **aláírás** nincs a mezőben: azt
+   mindig a küldő fiók Gmail-beállításából tesszük a végére.
 
 A küldő cím a Gmailben legyen a fiók saját címe vagy **felvett álneve**
 (Beállítások → Fiókok → Küldés mint); egyébként a Gmail elutasítja a levelet,
@@ -374,6 +383,9 @@ A küldő cím a Gmailben legyen a fiók saját címe vagy **felvett álneve**
 
 Ahol nem itt készült a papír, ott **saját módosítás is feltölthető** a generálás
 helyett - ilyenkor nem megy ki levél, a sor rögtön aláírásra vár.
+
+A kész PDF a `GDOC_KERET_MODOSITAS_FOLDER_ID` Drive mappájába kerül (alapból a
+módosításoknak kijelölt mappa, env-ből átirányítható).
 
 A keretszerződés törlése a módosításait is elviszi (adatbázisban cascade, a
 feltöltött fájlok a tárhelyről).

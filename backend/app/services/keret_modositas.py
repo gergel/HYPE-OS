@@ -13,6 +13,9 @@ PDF -> Drive mappa -> e-mail), három eltéréssel:
    az aláírt példány feltöltése zárja le (lásd models/keret_modositas.py).
 3. **Több is lehet belőle.** Minden kiküldés új sort nyit, mert egy
    keretszerződést az évek alatt többször is módosítanak.
+4. **A kísérőlevelet a felhasználó írja.** A többi papír fix szöveggel megy; itt
+   a levél maga is része az ügynek (mit módosítunk, mire hivatkozva), ezért a
+   kiküldés előtt szerkeszthető, és amit kiküldtünk, azt el is tesszük.
 
 A sablon placeholder-nevei megegyeznek a keretszerződésével ({{nev}} {{hely}}
 {{nyilvszam}} {{adoszam}} {{kepvis}}), tehát a meglévő dokumentum változtatás
@@ -21,6 +24,7 @@ nélkül használható."""
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from html import escape
 
 from sqlalchemy.orm import Session
 
@@ -35,11 +39,30 @@ from app.services.google_email import sendas_adatok, send_message
 #: a levél aljára. Nem véletlenül semleges: a valódi aláírás helye a Gmail.
 TARTALEK_ALAIRAS = "<p>Üdvözlettel,<br>HYPE Productions Kft.</p>"
 
-_LEVEL_TORZS = """\
-<p>Kedves Partnerünk!</p>
-<p>Mellékelten küldjük a köztünk fennálló megbízási szerződés módosítását.<br>
-Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszaküldeni.</p>
-"""
+#: A kísérőlevél alapszövege. A felületen ez töltődik be a szerkeszthető
+#: mezőbe, tehát a felhasználó minden kiküldésnél átírhatja - ez csak a
+#: kiindulás, és az API-ból érkező, szöveg nélküli hívás tartaléka.
+#: Ha itt változik, változtasd a frontend ALAP_LEVEL_SZOVEG-ét is
+#: (components/megrendeloi/KeretModositasok.tsx).
+ALAP_LEVEL_SZOVEG = """\
+Kedves Partnerünk!
+
+Mellékelten küldjük a köztünk fennálló megbízási szerződés módosítását.
+Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszaküldeni."""
+
+
+def szoveg_html(szoveg: str) -> str:
+    """Sima szöveg -> a levél HTML törzse.
+
+    A felhasználó egy sima szövegdobozba ír, a levél viszont HTML - a
+    kettő között valakinek fordítania kell. Az üres sorok bekezdést, az
+    egyszerű sortörések `<br>`-t adnak.
+
+    A tartalmat ESCAPE-eljük: egy `<` a szövegben (pl. "díj < 100e") elrontaná
+    a levél szerkezetét, egy beillesztett HTML-részlet pedig olyat is
+    megjeleníthetne, amire a küldő nem számít."""
+    bekezdesek = [b.strip() for b in szoveg.replace("\r\n", "\n").split("\n\n") if b.strip()]
+    return "".join(f"<p>{escape(b).replace(chr(10), '<br>')}</p>" for b in bekezdesek)
 
 
 def sablon_mezok(c: Contract) -> dict[str, str]:
@@ -73,14 +96,17 @@ def celmappa() -> str | None:
         return None
 
 
-def level_adatok() -> tuple[str | None, str]:
-    """(feladónév, levéltörzs) - mindkettő a küldő fiók Gmail-beállításából.
+def level_adatok(szoveg: str | None = None) -> tuple[str | None, str]:
+    """(feladónév, kész levéltörzs) a megírt szövegből.
 
-    Egy lekérdezés adja a megjelenő nevet és az aláírást is; ezért jön együtt.
-    Ha a fiók beállításai nem olvashatók, a név marad a globális alapérték, az
-    aláírás pedig a beépített tartalék."""
+    A feladónév és az aláírás is a küldő fiók Gmail-beállításából jön - egy
+    lekérdezés adja mindkettőt, ezért jönnek együtt. Ha a beállítás nem
+    olvasható, a név marad a globális alapérték, az aláírás a beépített
+    tartalék. Az ALÁÍRÁST mindig mi tesszük a végére: azt nem a felhasználó
+    gépeli be minden alkalommal."""
     nev, alairas = sendas_adatok(settings.modositas_sender)
-    return nev, _LEVEL_TORZS + (alairas or TARTALEK_ALAIRAS)
+    torzs = szoveg_html((szoveg or "").strip() or ALAP_LEVEL_SZOVEG)
+    return nev, torzs + (alairas or TARTALEK_ALAIRAS)
 
 
 def uj_modositas(c: Contract, *, keltezes: date | None = None) -> KeretModositas:
@@ -106,7 +132,9 @@ def fajlnev(c: Contract) -> str:
     return f"{nev}_szerzodesmodositas"
 
 
-def generalj_es_kuldj(db: Session, c: Contract, user: Employee | None) -> KeretModositas:
+def generalj_es_kuldj(
+    db: Session, c: Contract, user: Employee | None, *, level_szoveg: str | None = None
+) -> KeretModositas:
     """A módosítás legyártása és kiküldése. Hibánál RuntimeError-t dob.
 
     A sorrend szándékos: a sort ELŐBB felvesszük, de csak a sikeres kiküldés
@@ -135,7 +163,7 @@ def generalj_es_kuldj(db: Session, c: Contract, user: Employee | None) -> KeretM
     m.file_url = pdf_link
 
     nev = c.ceg_neve or (c.client.nev if c.client else "") or "Partnerünk"
-    felado_nev, torzs = level_adatok()
+    felado_nev, torzs = level_adatok(level_szoveg)
     send_message(
         [c.email],
         f"{nev} – szerződésmódosítás",
@@ -146,6 +174,9 @@ def generalj_es_kuldj(db: Session, c: Contract, user: Employee | None) -> KeretM
         sender_email=settings.modositas_sender,
     )
 
+    # A kiküldött szöveget úgy tesszük el, ahogy ténylegesen kiment - beleértve
+    # azt is, ha a felhasználó nem írt semmit, és az alapszöveg ment.
+    m.level_szoveg = (level_szoveg or "").strip() or ALAP_LEVEL_SZOVEG
     m.allapot = "Aláírásra vár"
     m.kikuldve = datetime.now(timezone.utc)
     m.kikuldte_id = user.id if user else None

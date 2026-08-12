@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeretszerzodesModal } from "@/components/megrendeloi/KeretszerzodesModal";
-import { kuldjModositast, modositasEllenorzoSorok } from "@/components/megrendeloi/KeretModositasok";
+import { ModositasKuldesModal, kuldjModositast } from "@/components/megrendeloi/KeretModositasok";
 import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -179,10 +179,10 @@ export function KeretszerzodesKezelo({
   /** Szerződésmódosítás kiküldése a listasorból. A részletek (előzmények,
    * aláírt példány feltöltése) az adatlapon vannak - ide csak a leggyakoribb
    * művelet kerül ki, hogy ne kelljen érte megnyitni a keretet. */
-  async function modositasKuldes(k: MegrendeloiKeret) {
+  async function modositasKuldes(k: MegrendeloiKeret, levelSzoveg: string) {
     setModositando(null);
     setBusy(true);
-    const hiba = await kuldjModositast(k.id);
+    const hiba = await kuldjModositast(k.id, levelSzoveg);
     setBusy(false);
     if (hiba) {
       toast(`Sikertelen küldés: ${hiba}`);
@@ -476,14 +476,10 @@ export function KeretszerzodesKezelo({
       )}
 
       {modositando && (
-        <KuldesEllenorzo
-          cim="Szerződésmódosítás kiküldése"
-          bevezeto="A módosítás ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben az admin címről. A kész PDF a Drive mappába kerül."
-          cimzett={modositando.email}
-          sorok={modositasEllenorzoSorok(modositando)}
-          gombCimke="Generálás és küldés"
+        <ModositasKuldesModal
+          keret={modositando}
           onMegse={() => setModositando(null)}
-          onKuld={() => modositasKuldes(modositando)}
+          onKuld={(szoveg) => modositasKuldes(modositando, szoveg)}
         />
       )}
 

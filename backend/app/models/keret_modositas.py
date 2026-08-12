@@ -64,6 +64,11 @@ class KeretModositas(TimestampMixin, Base):
     kikuldve: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     kikuldte_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
 
+    #: A kiküldött levél szövege, ahogy a felhasználó megírta (sima szöveg, a
+    #: Gmail-aláírás nélkül). Azért tároljuk, mert a módosításnál a levél maga
+    #: is része az ügynek: fél év múlva az a kérdés, hogy MIT írtunk nekik,
+    #: nem csak az, hogy küldtünk-e valamit.
+    level_szoveg: Mapped[str | None] = mapped_column(Text)
     megjegyzes: Mapped[str | None] = mapped_column(Text)
 
     contract: Mapped["Contract"] = relationship(back_populates="modositasok")

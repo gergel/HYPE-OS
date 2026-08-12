@@ -106,10 +106,11 @@ class Settings(BaseSettings):
     # beállítás nélkül is működjön - env-ből felülírható, ha új sablon kell.
     # Placeholderek: {{nev}} {{hely}} {{nyilvszam}} {{adoszam}} {{kepvis}}.
     gdoc_keret_modositas_template_id: str = "1EcuVGgyUvazBFDzFmDSYUfcioQWFH6-tvLmSDh5ASNY"
-    # Hova kerüljön a kész módosítás-PDF. Üresen a keretszerződések mappája,
-    # majd a generikus kimeneti mappa, végül a SABLON SAJÁT mappája a cél -
-    # így nincs külön karbantartandó beállítás (lásd a route-ot).
-    gdoc_keret_modositas_folder_id: str = ""
+    # Hova kerüljön a kész módosítás-PDF. A felhasználó által megadott mappa az
+    # alapérték, hogy beállítás nélkül is a helyére kerüljön; env-ből
+    # felülírható. Ha üresre állítják, a keretszerződések mappája, majd a
+    # generikus kimeneti mappa, végül a SABLON saját mappája a cél.
+    gdoc_keret_modositas_folder_id: str = "133PHLNx2dksUyeoVKPdhIoqjhhWsNdty"
     # A szerződésmódosítás levele MÁS címről megy, mint a többi papír: a
     # felhasználó kérése szerint az admin fiókból, annak a Gmailben beállított
     # aláírásával. A cím legyen a küldő fiók saját címe vagy annak felvett

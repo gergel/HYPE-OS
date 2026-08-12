@@ -26,6 +26,7 @@ export function KuldesEllenorzo({
   gombCimke,
   onMegse,
   onKuld,
+  children,
 }: {
   cim: string;
   /** Kinek megy az e-mail. Üresen a küldés hibára fut, ezért ez is kiemelt. */
@@ -37,6 +38,9 @@ export function KuldesEllenorzo({
   gombCimke: string;
   onMegse: () => void;
   onKuld: () => void;
+  /** Amit még a küldés előtt meg kell adni (pl. a kísérőlevél szövege).
+   * Az adatok ALATT jelenik meg: előbb az ellenőrzés, aztán a szerkesztés. */
+  children?: React.ReactNode;
 }) {
   const hianyzok = sorok.filter((s) => !(s.ertek ?? "").trim()).map((s) => s.cimke);
 
@@ -93,6 +97,8 @@ export function KuldesEllenorzo({
               </ul>
             </div>
           )}
+
+          {children}
 
           {hianyzok.length > 0 && (
             <p className="mt-4 text-[12.5px] text-text-danger">

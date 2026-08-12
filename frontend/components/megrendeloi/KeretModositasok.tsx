@@ -1,14 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 import { authFetch } from "@/lib/authFetch";
 import { datum } from "@/lib/utokovetes";
-import type { EllenorzoSor } from "@/components/KuldesEllenorzo";
 import type { MegrendeloiKeret, MegrendeloiKeretModositas } from "@/lib/api";
+
+/** A kísérőlevél alapszövege - ezzel nyílik a szerkesztő mező, és innentől a
+ * felhasználóé a szöveg. Ugyanez a backend tartaléka is (lásd
+ * services/keret_modositas.py ALAP_LEVEL_SZOVEG); ha itt változik, ott is
+ * változtasd. Az aláírást NEM ide írjuk: azt a küldő fiók Gmail-beállításából
+ * teszi a levél végére a backend. */
+export const ALAP_LEVEL_SZOVEG = `Kedves Partnerünk!
+
+Mellékelten küldjük a köztünk fennálló megbízási szerződés módosítását.
+Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszaküldeni.`;
 
 /** A szerződésmódosítás ugyanazokkal a cégadatokkal generálódik, mint a
  * keretszerződés - a sablon ezt az öt mezőt írja át. A kiküldés előtti
@@ -30,11 +40,11 @@ export function modositasEllenorzoSorok(k: MegrendeloiKeret): EllenorzoSor[] {
  * Azért van kiemelve a komponensből, mert két helyről indul ugyanez a
  * folyamat: a keretszerződés listasorából és az adatlapról. Két másolatból
  * előbb-utóbb két különböző viselkedés lenne. */
-export async function kuldjModositast(keretId: number): Promise<string | null> {
+export async function kuldjModositast(keretId: number, levelSzoveg: string): Promise<string | null> {
   try {
     const res = await authFetch(
       `/api/v1/megrendeloi-keretszerzodesek/${keretId}/modositasok/generalas-es-kuldes`,
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify({ level_szoveg: levelSzoveg }) },
     );
     if (!res.ok) {
       const reszlet = await res.json().catch(() => null);
@@ -44,6 +54,52 @@ export async function kuldjModositast(keretId: number): Promise<string | null> {
   } catch (err) {
     return `hálózati hiba: ${err}`;
   }
+}
+
+/** A kiküldés előtti ablak: az adatok ellenőrzése ÉS a kísérőlevél megírása.
+ *
+ * A többi papír fix szöveggel megy; a módosításnál a levél maga is része az
+ * ügynek (mit módosítunk, mire hivatkozva), ezért itt szerkeszthető. Az
+ * aláírás nincs benne: azt a küldő fiók Gmail-beállításából teszi a levél
+ * végére a backend, hogy egy helyen legyen karbantartva. */
+export function ModositasKuldesModal({
+  keret,
+  onMegse,
+  onKuld,
+}: {
+  keret: MegrendeloiKeret;
+  onMegse: () => void;
+  onKuld: (levelSzoveg: string) => void;
+}) {
+  const [szoveg, setSzoveg] = useState(ALAP_LEVEL_SZOVEG);
+
+  return (
+    <KuldesEllenorzo
+      cim="Szerződésmódosítás kiküldése"
+      bevezeto="A módosítás ezekkel az adatokkal generálódik, és a lenti levéllel megy ki az admin címről. A kész PDF a Drive mappába kerül."
+      cimzett={keret.email}
+      sorok={modositasEllenorzoSorok(keret)}
+      gombCimke="Generálás és küldés"
+      onMegse={onMegse}
+      onKuld={() => onKuld(szoveg)}
+    >
+      <div className="mt-4">
+        <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-text-muted">
+          A levél szövege
+        </label>
+        <textarea
+          value={szoveg}
+          onChange={(e) => setSzoveg(e.target.value)}
+          rows={7}
+          className="w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-2 text-[13px] leading-relaxed text-text-primary focus:outline-none"
+        />
+        <p className="mt-1 text-[11.5px] text-text-muted">
+          Az aláírás automatikusan a végére kerül (az admin fiók Gmail-aláírása), a módosítás PDF-je
+          pedig csatolmányként megy.
+        </p>
+      </div>
+    </KuldesEllenorzo>
+  );
 }
 
 function Jelzo({ m }: { m: MegrendeloiKeretModositas }) {
@@ -79,20 +135,12 @@ export function KeretModositasok({
   const toast = useToast();
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
+  const [kuldendo, setKuldendo] = useState(false);
 
-  async function kuldes() {
-    if (!keret.email?.trim()) {
-      toast("Nincs e-mail cím a keretszerződésen, így nem lehet kiküldeni a módosítást.");
-      return;
-    }
-    if (
-      !(await confirm(
-        `Kimegy a szerződésmódosítás a(z) ${keret.email} címre, a keretszerződés adataival. Küldjük?`,
-      ))
-    )
-      return;
+  async function kuldes(levelSzoveg: string) {
+    setKuldendo(false);
     setBusy(true);
-    const hiba = await kuldjModositast(keret.id);
+    const hiba = await kuldjModositast(keret.id, levelSzoveg);
     setBusy(false);
     if (hiba) {
       toast(`Sikertelen küldés: ${hiba}`);
@@ -153,7 +201,13 @@ export function KeretModositasok({
           {canCreate && (
             <button
               type="button"
-              onClick={kuldes}
+              onClick={() => {
+                if (!keret.email?.trim()) {
+                  toast("Nincs e-mail cím a keretszerződésen, így nem lehet kiküldeni a módosítást.");
+                  return;
+                }
+                setKuldendo(true);
+              }}
               disabled={busy}
               className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-text-accent hover:opacity-90 disabled:opacity-50"
             >
@@ -188,6 +242,14 @@ export function KeretModositasok({
                 {m.kikuldte ? ` · ${m.kikuldte}` : ""}
                 {m.email ? ` · ${m.email}` : ""}
               </p>
+              {m.level_szoveg && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-[11.5px] text-text-muted hover:text-text-secondary">
+                    A kiküldött levél szövege
+                  </summary>
+                  <p className="mt-1 whitespace-pre-wrap text-[12px] text-text-secondary">{m.level_szoveg}</p>
+                </details>
+              )}
               {m.megjegyzes && <p className="mt-0.5 text-text-secondary">{m.megjegyzes}</p>}
               <div className="mt-2 flex flex-wrap items-center gap-3">
                 {m.file_url && (
@@ -238,6 +300,10 @@ export function KeretModositasok({
             </li>
           ))}
         </ul>
+      )}
+
+      {kuldendo && (
+        <ModositasKuldesModal keret={keret} onMegse={() => setKuldendo(false)} onKuld={kuldes} />
       )}
     </div>
   );

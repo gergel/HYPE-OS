@@ -86,6 +86,8 @@ class KeretModositasRead(BaseModel):
     email: str | None = None
     kikuldve: date | None = None
     kikuldte: str | None = None
+    #: A kiküldött kísérőlevél szövege, ahogy megírták (aláírás nélkül).
+    level_szoveg: str | None = None
     megjegyzes: str | None = None
 
 
@@ -469,6 +471,7 @@ def _modositas_kimenet(m: KeretModositas) -> KeretModositasRead:
         email=m.email,
         kikuldve=m.kikuldve.date() if m.kikuldve else None,
         kikuldte=m.kikuldte.full_name if m.kikuldte else None,
+        level_szoveg=m.level_szoveg,
         megjegyzes=m.megjegyzes,
     )
 
@@ -490,20 +493,32 @@ def list_modositasok(
     return [_modositas_kimenet(m) for m in c.modositasok]
 
 
+class ModositasKuldesIn(BaseModel):
+    """A kiküldés bemenete: a felhasználó által megírt kísérőlevél.
+
+    Üresen (vagy törzs nélküli hívásnál) az alapszöveg megy - a végpont így
+    kívülről is használható marad, de a felületen mindig a megírt szöveg jön."""
+
+    level_szoveg: str | None = None
+
+
 @router.post("/{keret_id}/modositasok/generalas-es-kuldes", response_model=KeretModositasRead, status_code=201)
 def modositas_generalas_es_kuldes(
     keret_id: int,
+    payload: ModositasKuldesIn | None = None,
     db: Session = Depends(get_db),
     user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
     """Szerződésmódosítás generálása a sablonból és kiküldése.
 
-    A levél az admin fiókból megy, annak a Gmailben beállított aláírásával, a
-    kész PDF pedig a Drive-ra kerül - a részletek és az OK a
-    services/keret_modositas.py leírásában."""
+    A levél az admin fiókból megy, a felhasználó által megírt szöveggel és a
+    fiók Gmailben beállított aláírásával; a kész PDF a Drive mappába kerül - a
+    részletek és az OK a services/keret_modositas.py leírásában."""
     c = _get_or_404(db, keret_id)
     try:
-        m = keret_modositas.generalj_es_kuldj(db, c, user)
+        m = keret_modositas.generalj_es_kuldj(
+            db, c, user, level_szoveg=payload.level_szoveg if payload else None
+        )
     except RuntimeError as exc:
         # A félbemaradt sor MARADJON meg "Készítés alatt" állapotban: abból
         # látszik, hogy elindult egy kiküldés és hol akadt el.

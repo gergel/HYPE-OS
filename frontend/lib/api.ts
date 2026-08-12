@@ -2265,6 +2265,8 @@ export type MegrendeloiKeretModositas = {
   email: string | null;
   kikuldve: string | null;
   kikuldte: string | null;
+  /** A kiküldött kísérőlevél szövege, ahogy megírták (aláírás nélkül). */
+  level_szoveg: string | null;
   megjegyzes: string | null;
 };
 

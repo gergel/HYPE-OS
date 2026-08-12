@@ -85,7 +85,7 @@ beállítás nélkül is:
 - Belsős TIG mappa: `DRIVE_BELSOS_TIG` → `NOTION_FILE_FOLDER_ID` → `GDOC_OUTPUT_FOLDER_ID` → `DRIVE_FOLDER_ID`
 - Diszpó mappa: `DRIVE_DISZPO_FOLDER_ID` → `GDOC_OUTPUT_FOLDER_ID` → `DRIVE_FOLDER_ID` → Drive gyökér
 - Keretszerződés mappa: üresen a **sablon saját mappájába** kerül (szándékos, így nincs külön karbantartandó mappa)
-- Szerződésmódosítás mappa: `GDOC_KERET_MODOSITAS_FOLDER_ID` → `GDOC_KERETSZERZODES_FOLDER_ID` → `GDOC_OUTPUT_FOLDER_ID` → a **sablon saját mappája**
+- Szerződésmódosítás mappa: `GDOC_KERET_MODOSITAS_FOLDER_ID` (van alapértéke: a módosításoknak kijelölt mappa) → `GDOC_KERETSZERZODES_FOLDER_ID` → `GDOC_OUTPUT_FOLDER_ID` → a **sablon saját mappája**
 - Naptár OAuth kliens: `GOOGLE_CALENDAR_OAUTH_CLIENT_ID/SECRET` → `GMAIL_OAUTH_CLIENT_ID/SECRET`
 
 ### CORS és munkamenet
