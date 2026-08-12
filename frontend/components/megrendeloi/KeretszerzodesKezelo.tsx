@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeretszerzodesModal } from "@/components/megrendeloi/KeretszerzodesModal";
-import { ModositasKuldesModal, kuldjModositast } from "@/components/megrendeloi/KeretModositasok";
+import {
+  ModositasKuldesModal,
+  kuldjModositast,
+  type ModositasUrlap,
+} from "@/components/megrendeloi/KeretModositasok";
 import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -179,10 +183,10 @@ export function KeretszerzodesKezelo({
   /** Szerződésmódosítás kiküldése a listasorból. A részletek (előzmények,
    * aláírt példány feltöltése) az adatlapon vannak - ide csak a leggyakoribb
    * művelet kerül ki, hogy ne kelljen érte megnyitni a keretet. */
-  async function modositasKuldes(k: MegrendeloiKeret, levelSzoveg: string) {
+  async function modositasKuldes(k: MegrendeloiKeret, levelSzoveg: string, urlap: ModositasUrlap) {
     setModositando(null);
     setBusy(true);
-    const hiba = await kuldjModositast(k.id, levelSzoveg);
+    const hiba = await kuldjModositast(k.id, levelSzoveg, urlap);
     setBusy(false);
     if (hiba) {
       toast(`Sikertelen küldés: ${hiba}`);
@@ -479,7 +483,7 @@ export function KeretszerzodesKezelo({
         <ModositasKuldesModal
           keret={modositando}
           onMegse={() => setModositando(null)}
-          onKuld={(szoveg) => modositasKuldes(modositando, szoveg)}
+          onKuld={(szoveg, urlap) => modositasKuldes(modositando, szoveg, urlap)}
         />
       )}
 

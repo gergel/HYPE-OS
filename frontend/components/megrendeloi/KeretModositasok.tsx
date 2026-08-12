@@ -20,10 +20,18 @@ export const ALAP_LEVEL_SZOVEG = `Kedves Partnerünk!
 Mellékelten küldjük a köztünk fennálló megbízási szerződés módosítását.
 Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszaküldeni.`;
 
-/** A szerződésmódosítás ugyanazokkal a cégadatokkal generálódik, mint a
- * keretszerződés - a sablon ezt az öt mezőt írja át. A kiküldés előtti
- * áttekintő ezért pont ezeket mutatja: ami itt üres, az a papíron is üres
- * lesz. */
+/** A kiküldéskor megadható adatok - amit a sablon a keret cégadatain FELÜL
+ * kér: mikor kelt a módosítás, és mire/mikor jött létre az eredeti szerződés,
+ * amire a szövege visszahivatkozik. */
+export type ModositasUrlap = {
+  keltezes: string;
+  megbizas_targya: string;
+  szerzodes_letrejotte: string;
+};
+
+/** A szerződésmódosítás cégadatai a keretszerződésről jönnek - a sablon ezt az
+ * öt mezőt írja át magától. A kiküldés előtti áttekintő ezért pont ezeket
+ * mutatja: ami itt üres, az a papíron is üres lesz. */
 export function modositasEllenorzoSorok(k: MegrendeloiKeret): EllenorzoSor[] {
   return [
     { cimke: "Cég neve", ertek: k.ceg_neve ?? k.client_nev },
@@ -40,11 +48,25 @@ export function modositasEllenorzoSorok(k: MegrendeloiKeret): EllenorzoSor[] {
  * Azért van kiemelve a komponensből, mert két helyről indul ugyanez a
  * folyamat: a keretszerződés listasorából és az adatlapról. Két másolatból
  * előbb-utóbb két különböző viselkedés lenne. */
-export async function kuldjModositast(keretId: number, levelSzoveg: string): Promise<string | null> {
+export async function kuldjModositast(
+  keretId: number,
+  levelSzoveg: string,
+  urlap: ModositasUrlap,
+): Promise<string | null> {
   try {
     const res = await authFetch(
       `/api/v1/megrendeloi-keretszerzodesek/${keretId}/modositasok/generalas-es-kuldes`,
-      { method: "POST", body: JSON.stringify({ level_szoveg: levelSzoveg }) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          level_szoveg: levelSzoveg,
+          // Üres dátumot null-ként küldünk: a "" nem érvényes dátum, és a
+          // backend a hiányzót a keret adatából pótolja.
+          keltezes: urlap.keltezes || null,
+          megbizas_targya: urlap.megbizas_targya || null,
+          szerzodes_letrejotte: urlap.szerzodes_letrejotte || null,
+        }),
+      },
     );
     if (!res.ok) {
       const reszlet = await res.json().catch(() => null);
@@ -69,20 +91,74 @@ export function ModositasKuldesModal({
 }: {
   keret: MegrendeloiKeret;
   onMegse: () => void;
-  onKuld: (levelSzoveg: string) => void;
+  onKuld: (levelSzoveg: string, urlap: ModositasUrlap) => void;
 }) {
   const [szoveg, setSzoveg] = useState(ALAP_LEVEL_SZOVEG);
+  // A keret adataiból töltünk elő, de a módosítás sajátja lesz: az eredeti
+  // szerződés kelte és a megbízás tárgya a kereten is ott van, csak nem
+  // biztos, hogy pont arra hivatkozik a módosítás.
+  const [urlap, setUrlap] = useState<ModositasUrlap>({
+    keltezes: new Date().toISOString().slice(0, 10),
+    megbizas_targya: keret.megbizas_targya ?? "",
+    szerzodes_letrejotte: keret.keltezes ?? "",
+  });
+
+  function frissit<K extends keyof ModositasUrlap>(kulcs: K, ertek: ModositasUrlap[K]) {
+    setUrlap((elozo) => ({ ...elozo, [kulcs]: ertek }));
+  }
 
   return (
     <KuldesEllenorzo
       cim="Szerződésmódosítás kiküldése"
       bevezeto="A módosítás ezekkel az adatokkal generálódik, és a lenti levéllel megy ki az admin címről. A kész PDF a Drive mappába kerül."
       cimzett={keret.email}
-      sorok={modositasEllenorzoSorok(keret)}
+      sorok={[
+        ...modositasEllenorzoSorok(keret),
+        { cimke: "Keltezés", ertek: papirDatum(urlap.keltezes) },
+        { cimke: "Megbízás tárgya", ertek: urlap.megbizas_targya },
+        { cimke: "A szerződés létrejötte", ertek: papirDatum(urlap.szerzodes_letrejotte) },
+      ]}
       gombCimke="Generálás és küldés"
       onMegse={onMegse}
-      onKuld={() => onKuld(szoveg)}
+      onKuld={() => onKuld(szoveg, urlap)}
     >
+      {/* A dokumentum három kitöltendő mezője. A cégadatok fent, olvasásra
+          vannak - azokat a keret adatlapján kell javítani; ez a három viszont
+          módosításonként más, ezért itt kérjük be. */}
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Mezo cimke="A módosítás keltezése">
+          <input
+            type="date"
+            value={urlap.keltezes}
+            onChange={(e) => frissit("keltezes", e.target.value)}
+            className={MEZO_OSZTALY}
+          />
+        </Mezo>
+        <Mezo cimke="Mikor jött létre a szerződés">
+          <input
+            type="date"
+            value={urlap.szerzodes_letrejotte}
+            onChange={(e) => frissit("szerzodes_letrejotte", e.target.value)}
+            className={MEZO_OSZTALY}
+          />
+        </Mezo>
+        {/* Teljes szélességben: ez a leghosszabb szöveg, és szó szerint a
+            dokumentum mondatába kerül. */}
+        <Mezo cimke="Megbízás tárgya" teljesSor>
+          <input
+            value={urlap.megbizas_targya}
+            onChange={(e) => frissit("megbizas_targya", e.target.value)}
+            placeholder="pl. social media content gyártási"
+            className={MEZO_OSZTALY}
+          />
+        </Mezo>
+      </div>
+      <p className="mt-1 text-[11.5px] text-text-muted">
+        A dokumentum ezekkel a szavakkal folytatja: „…{" "}
+        {papirDatum(urlap.szerzodes_letrejotte) || "…"}-án/én Megbízási Szerződést kötöttek{" "}
+        {urlap.megbizas_targya || "…"} feladatok ellátása tárgyában”.
+      </p>
+
       <div className="mt-4">
         <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-text-muted">
           A levél szövege
@@ -99,6 +175,34 @@ export function ModositasKuldesModal({
         </p>
       </div>
     </KuldesEllenorzo>
+  );
+}
+
+/** A dokumentumon használt dátumforma (2026.07.10.) - a záró pont szándékos:
+ * a sablon "-án/én" és "napján" szavakkal folytatja. Ugyanaz, amit a backend
+ * ír a PDF-be (services/keret_modositas._datum), hogy az előnézet ne mást
+ * mutasson, mint ami a papírra kerül. */
+function papirDatum(iso: string): string {
+  return iso ? iso.replaceAll("-", ".") + "." : "";
+}
+
+const MEZO_OSZTALY =
+  "w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none";
+
+function Mezo({
+  cimke,
+  teljesSor = false,
+  children,
+}: {
+  cimke: string;
+  teljesSor?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`flex flex-col gap-1 ${teljesSor ? "sm:col-span-2" : ""}`}>
+      <label className="text-[11px] text-text-muted">{cimke}</label>
+      {children}
+    </div>
   );
 }
 
@@ -137,10 +241,10 @@ export function KeretModositasok({
   const [busy, setBusy] = useState(false);
   const [kuldendo, setKuldendo] = useState(false);
 
-  async function kuldes(levelSzoveg: string) {
+  async function kuldes(levelSzoveg: string, urlap: ModositasUrlap) {
     setKuldendo(false);
     setBusy(true);
-    const hiba = await kuldjModositast(keret.id, levelSzoveg);
+    const hiba = await kuldjModositast(keret.id, levelSzoveg, urlap);
     setBusy(false);
     if (hiba) {
       toast(`Sikertelen küldés: ${hiba}`);
@@ -242,6 +346,12 @@ export function KeretModositasok({
                 {m.kikuldte ? ` · ${m.kikuldte}` : ""}
                 {m.email ? ` · ${m.email}` : ""}
               </p>
+              {(m.megbizas_targya || m.szerzodes_letrejotte) && (
+                <p className="mt-0.5 text-text-muted">
+                  Eredeti szerződés: {datum(m.szerzodes_letrejotte)}
+                  {m.megbizas_targya ? ` · ${m.megbizas_targya}` : ""}
+                </p>
+              )}
               {m.level_szoveg && (
                 <details className="mt-1">
                   <summary className="cursor-pointer text-[11.5px] text-text-muted hover:text-text-secondary">

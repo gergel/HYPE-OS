@@ -84,6 +84,10 @@ class KeretModositasRead(BaseModel):
     file_url: str | None = None
     alairt_file_url: str | None = None
     email: str | None = None
+    #: Mire és mikor szólt az EREDETI szerződés - a módosítás szövege ezekre
+    #: hivatkozik vissza.
+    megbizas_targya: str | None = None
+    szerzodes_letrejotte: date | None = None
     kikuldve: date | None = None
     kikuldte: str | None = None
     #: A kiküldött kísérőlevél szövege, ahogy megírták (aláírás nélkül).
@@ -469,6 +473,8 @@ def _modositas_kimenet(m: KeretModositas) -> KeretModositasRead:
         file_url=m.file_url,
         alairt_file_url=m.alairt_file_url,
         email=m.email,
+        megbizas_targya=m.megbizas_targya,
+        szerzodes_letrejotte=m.szerzodes_letrejotte,
         kikuldve=m.kikuldve.date() if m.kikuldve else None,
         kikuldte=m.kikuldte.full_name if m.kikuldte else None,
         level_szoveg=m.level_szoveg,
@@ -494,12 +500,17 @@ def list_modositasok(
 
 
 class ModositasKuldesIn(BaseModel):
-    """A kiküldés bemenete: a felhasználó által megírt kísérőlevél.
+    """A kiküldés bemenete: a kísérőlevél és a dokumentum kitöltendő mezői.
 
-    Üresen (vagy törzs nélküli hívásnál) az alapszöveg megy - a végpont így
-    kívülről is használható marad, de a felületen mindig a megírt szöveg jön."""
+    Mindegyik elhagyható, és a végpont törzs nélkül is hívható - ilyenkor a
+    levél alapszövege megy, a három dokumentum-mezőt pedig a keret adja (lásd
+    services/keret_modositas.uj_modositas). A felületen viszont mindig kitöltve
+    érkeznek, mert ott a küldő előtt van, mi kerül a papírra."""
 
     level_szoveg: str | None = None
+    keltezes: date | None = None
+    megbizas_targya: str | None = None
+    szerzodes_letrejotte: date | None = None
 
 
 @router.post("/{keret_id}/modositasok/generalas-es-kuldes", response_model=KeretModositasRead, status_code=201)
@@ -517,7 +528,13 @@ def modositas_generalas_es_kuldes(
     c = _get_or_404(db, keret_id)
     try:
         m = keret_modositas.generalj_es_kuldj(
-            db, c, user, level_szoveg=payload.level_szoveg if payload else None
+            db,
+            c,
+            user,
+            level_szoveg=payload.level_szoveg if payload else None,
+            keltezes=payload.keltezes if payload else None,
+            megbizas_targya=payload.megbizas_targya if payload else None,
+            szerzodes_letrejotte=payload.szerzodes_letrejotte if payload else None,
         )
     except RuntimeError as exc:
         # A félbemaradt sor MARADJON meg "Készítés alatt" állapotban: abból
@@ -588,6 +605,8 @@ async def modositas_alairt_fajl(
 
 class ModositasIn(BaseModel):
     keltezes: date | None = None
+    megbizas_targya: str | None = None
+    szerzodes_letrejotte: date | None = None
     allapot: str | None = None
     megjegyzes: str | None = None
 

@@ -17,9 +17,15 @@ PDF -> Drive mappa -> e-mail), három eltéréssel:
    a levél maga is része az ügynek (mit módosítunk, mire hivatkozva), ezért a
    kiküldés előtt szerkeszthető, és amit kiküldtünk, azt el is tesszük.
 
-A sablon placeholder-nevei megegyeznek a keretszerződésével ({{nev}} {{hely}}
-{{nyilvszam}} {{adoszam}} {{kepvis}}), tehát a meglévő dokumentum változtatás
-nélkül használható."""
+A sablon placeholderei: a MEGBÍZÓ cégadatai ({{nev}} {{hely}} {{nyilvszam}}
+{{adoszam}} {{kepvis}}) - ezek a keretszerződésével egyeznek -, plusz három
+adat, amit a módosítás szövege hoz magával: {{keltezes}} (mikor kelt a
+módosítás), {{megbizastargya}} és {{szerzodesletrejotte}} (mire és mikor jött
+létre az EREDETI szerződés, amire a módosítás hivatkozik).
+
+Mindhármat a kiküldés előtt kérjük be, a keret adataiból előtöltve: a kereten
+ott a megbízás tárgya és a keltezése, de ezek nem mindig egyeznek azzal, amire
+a módosítás hivatkozni akar - és ami a papírra kerül, azt a küldő lássa is."""
 
 from __future__ import annotations
 
@@ -65,14 +71,29 @@ def szoveg_html(szoveg: str) -> str:
     return "".join(f"<p>{escape(b).replace(chr(10), '<br>')}</p>" for b in bekezdesek)
 
 
-def sablon_mezok(c: Contract) -> dict[str, str]:
-    """A dokumentumba behelyettesített értékek - a MEGBÍZÓ (a megrendelő) adatai."""
+def _datum(nap: date | None) -> str:
+    """A dokumentumokon használt dátumforma (2026.07.10.).
+
+    A sablon "-án/én" és "napján" szavakkal folytatja, tehát a záró pont
+    szándékos: enélkül "2026.07.10-án" helyett hiányos alakot kapnánk."""
+    return nap.strftime("%Y.%m.%d.") if nap else ""
+
+
+def sablon_mezok(m: KeretModositas) -> dict[str, str]:
+    """A dokumentumba behelyettesített értékek - a MÓDOSÍTÁS SORÁRÓL.
+
+    Szándékosan a sorról, nem a keretszerződésről: a papírra kerülő adatok
+    pillanatképként a soron vannak (lásd models/keret_modositas.py), így egy
+    későbbi keret-szerkesztés nem írja át visszamenőleg azt, ami már kiment."""
     return {
-        "nev": c.ceg_neve or (c.client.nev if c.client else "") or "",
-        "hely": c.szekhely or "",
-        "nyilvszam": c.vallalkozas_nyilvantartasi_szam or "",
-        "adoszam": c.adoszam or "",
-        "kepvis": c.vallalkozas_kepviseloje or "",
+        "nev": m.ceg_neve or "",
+        "hely": m.szekhely or "",
+        "nyilvszam": m.nyilvantartasi_szam or "",
+        "adoszam": m.adoszam or "",
+        "kepvis": m.kepviselo or "",
+        "keltezes": _datum(m.keltezes),
+        "megbizastargya": m.megbizas_targya or "",
+        "szerzodesletrejotte": _datum(m.szerzodes_letrejotte),
     }
 
 
@@ -109,11 +130,21 @@ def level_adatok(szoveg: str | None = None) -> tuple[str | None, str]:
     return nev, torzs + (alairas or TARTALEK_ALAIRAS)
 
 
-def uj_modositas(c: Contract, *, keltezes: date | None = None) -> KeretModositas:
+def uj_modositas(
+    c: Contract,
+    *,
+    keltezes: date | None = None,
+    megbizas_targya: str | None = None,
+    szerzodes_letrejotte: date | None = None,
+) -> KeretModositas:
     """Üres módosítás-sor a keret ADATAINAK PILLANATKÉPÉVEL.
 
     A cégadatokat itt másoljuk át, nem kiküldéskor olvassuk ki élőben: a papír
-    azt kell hogy őrizze, ami rajta van (lásd models/keret_modositas.py)."""
+    azt kell hogy őrizze, ami rajta van (lásd models/keret_modositas.py).
+
+    A megadható három mező a kiküldő ablakból jön; ami nem érkezik, azt a keret
+    adja (megbízás tárgya, illetve a keret keltezése mint a szerződés
+    létrejötte) - a keltezés pedig alapból a mai nap."""
     return KeretModositas(
         contract_id=c.id,
         ceg_neve=c.ceg_neve or (c.client.nev if c.client else None),
@@ -123,6 +154,8 @@ def uj_modositas(c: Contract, *, keltezes: date | None = None) -> KeretModositas
         nyilvantartasi_szam=c.vallalkozas_nyilvantartasi_szam,
         email=c.email,
         keltezes=keltezes or date.today(),
+        megbizas_targya=(megbizas_targya or "").strip() or c.megbizas_targya,
+        szerzodes_letrejotte=szerzodes_letrejotte or c.keltezes,
         allapot="Készítés alatt",
     )
 
@@ -133,7 +166,14 @@ def fajlnev(c: Contract) -> str:
 
 
 def generalj_es_kuldj(
-    db: Session, c: Contract, user: Employee | None, *, level_szoveg: str | None = None
+    db: Session,
+    c: Contract,
+    user: Employee | None,
+    *,
+    level_szoveg: str | None = None,
+    keltezes: date | None = None,
+    megbizas_targya: str | None = None,
+    szerzodes_letrejotte: date | None = None,
 ) -> KeretModositas:
     """A módosítás legyártása és kiküldése. Hibánál RuntimeError-t dob.
 
@@ -149,7 +189,12 @@ def generalj_es_kuldj(
             "GDOC_KERET_MODOSITAS_TEMPLATE_ID környezeti változót a backendhez."
         )
 
-    m = uj_modositas(c)
+    m = uj_modositas(
+        c,
+        keltezes=keltezes,
+        megbizas_targya=megbizas_targya,
+        szerzodes_letrejotte=szerzodes_letrejotte,
+    )
     db.add(m)
     db.flush()
 
@@ -157,7 +202,7 @@ def generalj_es_kuldj(
     pdf_bytes, pdf_link = gdoc_template.gdoc_fill_export_and_store_pdf(
         template_file_id=settings.gdoc_keret_modositas_template_id,
         base_name=alap_nev,
-        fields=sablon_mezok(c),
+        fields=sablon_mezok(m),
         output_folder_id=celmappa(),
     )
     m.file_url = pdf_link

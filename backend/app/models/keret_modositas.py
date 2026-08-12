@@ -49,7 +49,16 @@ class KeretModositas(TimestampMixin, Base):
     nyilvantartasi_szam: Mapped[str | None] = mapped_column(String(100))
     #: Melyik címre ment ki - a keret e-mail címének pillanatképe.
     email: Mapped[str | None] = mapped_column(String(255))
+    #: A módosítás keltezése ("Budapest, ... napján").
     keltezes: Mapped[date | None] = mapped_column(Date)
+    #: Mire szólt az EREDETI megbízás, és mikor jött létre - a módosítás
+    #: szövege ezekre hivatkozik vissza ("... -án/én Megbízási Szerződést
+    #: kötöttek ... feladatok ellátása tárgyában"). A kereten is ott van
+    #: mindkettő, de itt a PILLANATKÉP kell: ha a keret adatlapján később
+    #: átírják a megbízás tárgyát, a már kiküldött módosításon attól még az
+    #: marad, ami rajta van.
+    megbizas_targya: Mapped[str | None] = mapped_column(String(255))
+    szerzodes_letrejotte: Mapped[date | None] = mapped_column(Date)
 
     allapot: Mapped[str | None] = mapped_column(String(50), default="Készítés alatt")
     #: A generált (Drive-link) vagy feltöltött (R2) módosítás.

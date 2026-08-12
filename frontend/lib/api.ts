@@ -2263,6 +2263,9 @@ export type MegrendeloiKeretModositas = {
   file_url: string | null;
   alairt_file_url: string | null;
   email: string | null;
+  /** Mire és mikor szólt az EREDETI szerződés, amire a módosítás hivatkozik. */
+  megbizas_targya: string | null;
+  szerzodes_letrejotte: string | null;
   kikuldve: string | null;
   kikuldte: string | null;
   /** A kiküldött kísérőlevél szövege, ahogy megírták (aláírás nélkül). */

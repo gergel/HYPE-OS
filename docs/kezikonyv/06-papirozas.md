@@ -367,7 +367,16 @@ mappa → e-mail), **három ponton** tér el:
    folyamatot az aláírt példány feltöltése zárja le. (A többi papírnál a
    "Kiküldve" a végállapot, mert ott a kiküldés a lényeg.)
 3. **Több is lehet belőle** ugyanazon a kereten - minden kiküldés új sort nyit.
-4. **A kísérőlevelet a felhasználó írja.** A többi papír fix szöveggel megy; itt
+4. **Három mezőt a kiküldés előtt bekérünk.** A sablon a cégadatokon felül a
+   módosítás **keltezését**, a **megbízás tárgyát** és azt kéri, hogy **mikor
+   jött létre az eredeti szerződés** - a szövege ezekre hivatkozik vissza
+   ("… -án/én Megbízási Szerződést kötöttek … feladatok ellátása tárgyában").
+   A keret adataiból előtöltjük (megbízás tárgya, illetve a keret keltezése),
+   de módosításonként más lehet, ezért a küldő ablakban szerkeszthető - és ott
+   is látszik, hogyan folytatódik velük a mondat. Mindhárom **pillanatképként**
+   a módosítás sorára kerül, mint a többi papíradat: egy későbbi
+   keret-szerkesztés nem írja át, ami már kiment.
+5. **A kísérőlevelet a felhasználó írja.** A többi papír fix szöveggel megy; itt
    a levél maga is része az ügynek (mit módosítunk, mire hivatkozva), ezért a
    kiküldési ablakban szerkeszthető - alapszöveggel nyílik, hogy ne nulláról
    kelljen kezdeni. Amit kiküldtünk, azt el is tesszük (`level_szoveg`), és az
@@ -422,7 +431,7 @@ használhatók:
 | Eseti szerződés | `GDOC_MEGRENDELOI_ESETI_TEMPLATE_ID` | `nev hely adoszam targy tido netto nettoki kelt afa nyilvszam kepvis projektnev napok` |
 | TIG | `GDOC_MEGRENDELOI_TIG_TEMPLATE_ID` | ugyanaz `projektnev`/`napok` nélkül, plusz `projkod` |
 | Keretszerződés | `GDOC_MEGRENDELOI_KERET_TEMPLATE_ID` | `nev hely adoszam targy kelt nyilvszam kepvis` |
-| Szerződésmódosítás | `GDOC_KERET_MODOSITAS_TEMPLATE_ID` | `nev hely nyilvszam adoszam kepvis` |
+| Szerződésmódosítás | `GDOC_KERET_MODOSITAS_TEMPLATE_ID` | `nev hely nyilvszam adoszam kepvis keltezes megbizastargya szerzodesletrejotte` |
 
 ### A Notionból örökölt papírok átvétele
 
