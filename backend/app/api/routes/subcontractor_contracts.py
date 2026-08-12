@@ -1143,6 +1143,12 @@ def delete_alairt_szerzodes(
 
 
 class KihagyasIn(BaseModel):
+    #: Mire szóljon a lezárás. Ugyanaz a lista, mint a mentésnél: a kihagyás és
+    #: a "van már szerződés" is TÖBB projektre vonatkozhat - ha valakinek egy
+    #: papírja fedi a hét mind a négy forgatását, akkor a kihagyása is
+    #: mind a négyre szól, nem csak arra, ahonnan épp rákattintottak.
+    #: None = maradjon, ami a bejegyzésen van.
+    tetelek: list[TetelIn] | None = None
     #: A kihagyásnál kötelező, a "van már szerződés" lezárásnál opcionális.
     kihagyas_oka: str | None = None
 
@@ -1161,13 +1167,18 @@ def skip_contract(
     Az INDOKLÁS kötelező: a "Kihagyva" jelölés önmagában egy hiányzó papír,
     amiről fél év múlva senki nem fogja tudni, hogy szándékos volt-e. Ha a
     szerződés valójában létezik, csak nem itt készült, NE ezt használd - arra
-    a /mar-van végpont való."""
+    a /mar-van végpont való.
+
+    A `tetelek` itt ugyanúgy megadható, mint a mentésnél: a kihagyás TÖBB
+    projektre is szólhat. Enélkül a többi napon a fél újra szerződésre várna -
+    pedig épp azt mondtuk ki, hogy tőle nem lesz papír."""
     indok = (payload.kihagyas_oka or "").strip()
     if not indok:
         raise HTTPException(status_code=400, detail="A kihagyás okát meg kell adni.")
     project = _get_project_or_404(db, project_id)
     csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
     draft = _get_or_create_draft(db, project, csoport)
+    _apply_tetelek(db, draft, csoport.fel, payload.tetelek)
     draft.szerzodes_allapota = "Kihagyva"
     draft.kihagyas_oka = indok
     db.commit()
@@ -1195,10 +1206,12 @@ def mar_van_szerzodes(
     mi küldtük ki (lásd alairasra_varo_csoportok).
 
     Az indoklás itt NEM kötelező - maga az állapot megmondja, mi történt -, de
-    megadható (pl. hol van a papír)."""
+    megadható (pl. hol van a papír). A `tetelek` ugyanúgy megadható, mint a
+    mentésnél: a máshol lévő papír TÖBB projektet is fedhet."""
     project = _get_project_or_404(db, project_id)
     csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
     draft = _get_or_create_draft(db, project, csoport)
+    _apply_tetelek(db, draft, csoport.fel, payload.tetelek if payload else None)
     draft.szerzodes_allapota = MAR_VAN_ALLAPOT
     if payload is not None and (payload.kihagyas_oka or "").strip():
         draft.kihagyas_oka = payload.kihagyas_oka.strip()

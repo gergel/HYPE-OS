@@ -149,9 +149,11 @@ export function SubcontractorContractManager({
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
-  function buildPayload() {
-    if (!form) return null;
-    const netto = form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null;
+  /** A kipipált tételek - MIRE szól ez a papír. A lezáró műveletek (kihagyás,
+   * "van már szerződés") ugyanezt küldik, mint a mentés: ha valakinek egy
+   * papírja fedi a hét mind a négy forgatását, akkor a kihagyása is mind a
+   * négyre szól, nem csak arra, ahonnan épp rákattintottunk. */
+  function buildTetelek() {
     // A tétel-összeg elhagyható: összevont szerződésnél nem mindig tudható,
     // melyik nap mennyibe került. A szerződés fejösszege az igazság.
     const tetelek = valaszthato
@@ -164,8 +166,17 @@ export function SubcontractorContractManager({
           netto_osszeg: nyers && !Number.isNaN(Number(nyers)) ? Number(nyers) : null,
         };
       });
+    // Üres lista helyett `null`: a lezáró műveleteknél az azt jelenti, hogy
+    // maradjon, ami a bejegyzésen van (a mentés viszont üresen hibát ad, ott
+    // ez tudatos hiba).
+    return tetelek.length > 0 ? tetelek : null;
+  }
+
+  function buildPayload() {
+    if (!form) return null;
+    const netto = form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null;
     return {
-      tetelek,
+      tetelek: buildTetelek() ?? [],
       ceg_neve: form.ceg_neve || null,
       szekhely: form.szekhely || null,
       adoszam: form.adoszam || null,
@@ -276,7 +287,10 @@ export function SubcontractorContractManager({
     try {
       const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/skip`, {
         method: "POST",
-        body: JSON.stringify({ kihagyas_oka: indok }),
+        // Üres kiválasztásnál NULL megy: az azt jelenti, hogy maradjon, ami a
+        // bejegyzésen van. Üres LISTA hibát adna, és a kihagyás elhasalna
+        // azon, hogy a tételek épp töltődnek.
+        body: JSON.stringify({ kihagyas_oka: indok, tetelek: buildTetelek() || null }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -309,7 +323,7 @@ export function SubcontractorContractManager({
     try {
       const res = await authFetch(
         `/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/mar-van`,
-        { method: "POST", body: JSON.stringify({}) },
+        { method: "POST", body: JSON.stringify({ tetelek: buildTetelek() || null }) },
       );
       if (!res.ok) {
         const detail = await res.json().catch(() => null);

@@ -172,9 +172,10 @@ export function PerformanceCertificateManager({
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
-  function buildPayload() {
-    if (!form) return null;
-    const netto = form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null;
+  /** A kipipált tételek - MIT igazol ez a papír. A kihagyás ugyanezt küldi,
+   * mint a mentés: egy TIG több projekt munkájáról is szólhat, tehát a
+   * kihagyása is - különben a többi projekten a fél újra TIG-re várna. */
+  function buildTetelek() {
     // A tétel-összeg szándékosan elhagyható: összevont számlánál nem mindig
     // tudható, mi mennyibe került. A TIG fejösszege az igazság.
     const tetelek = valaszthato
@@ -187,8 +188,17 @@ export function PerformanceCertificateManager({
           netto_osszeg: nyers && !Number.isNaN(Number(nyers)) ? Number(nyers) : null,
         };
       });
+    // Üres lista helyett `null`: a lezáró műveleteknél az azt jelenti, hogy
+    // maradjon, ami a bejegyzésen van (a mentés viszont üresen hibát ad, ott
+    // ez tudatos hiba).
+    return tetelek.length > 0 ? tetelek : null;
+  }
+
+  function buildPayload() {
+    if (!form) return null;
+    const netto = form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null;
     return {
-      tetelek,
+      tetelek: buildTetelek() ?? [],
       ceg_neve: form.ceg_neve || null,
       szekhely: form.szekhely || null,
       adoszam: form.adoszam || null,
@@ -296,7 +306,10 @@ export function PerformanceCertificateManager({
     try {
       const res = await authFetch(`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/skip`, {
         method: "POST",
-        body: JSON.stringify({ kihagyas_oka: indok }),
+        // Üres kiválasztásnál NULL megy: az azt jelenti, hogy maradjon, ami a
+        // bejegyzésen van. Üres LISTA hibát adna, és a kihagyás elhasalna
+        // azon, hogy a tételek épp töltődnek.
+        body: JSON.stringify({ kihagyas_oka: indok, tetelek: buildTetelek() || null }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);

@@ -943,6 +943,11 @@ def generate_and_send(
 
 class TigKihagyasIn(BaseModel):
     kihagyas_oka: str | None = None
+    #: Mire szóljon a kihagyás. Ugyanaz a lista, mint a mentésnél: egy TIG
+    #: több projekt munkájáról is szólhat, tehát a kihagyása is - különben a
+    #: többi projekten a fél újra TIG-re várna, pedig épp azt mondtuk ki, hogy
+    #: tőle nem lesz papír. None = maradjon, ami a bejegyzésen van.
+    tetelek: list[TetelIn] | None = None
 
 
 @router.post("/{project_id}/{szamlazo_kulcs}/skip", response_model=PerformanceCertificateRead)
@@ -964,6 +969,7 @@ def skip_tig(
     project = _get_project_or_404(db, project_id)
     csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
     draft = _get_or_create_draft(db, project, csoport)
+    _apply_tetelek(db, draft, csoport.fel, payload.tetelek)
     draft.allapot = "Kihagyva"
     draft.kihagyas_oka = indok
     db.commit()

@@ -108,6 +108,14 @@ Ezért a lefedettség szerint szűr:
 - a papír törlése is - egy négynapos szerződést arról a napról is le lehessen
   venni, ahonnan nem ő indult.
 
+Ugyanezen az alapon a **lezáró műveletek** (`/skip`, `/mar-van` és a TIG
+`/skip`) is átveszik a kipipált tételeket, nem csak a mentés és a kiküldés: ha
+egy papír a hét mind a négy forgatását fedi, akkor a **kihagyása** és a "van
+már szerződés" jelölése is mind a négyre szól. Enélkül a többi napon a fél újra
+szerződésre várt volna - pedig épp azt mondtuk ki róla, hogy tőle nem lesz
+papír. Üres kiválasztásnál a lezárás a bejegyzésen lévő tételeket hagyja
+érintetlenül (a mentés viszont üres listára szándékosan hibázik).
+
 A sor **kiírja, hány projektre szól** (`projektek`), és a törlés megerősítése
 is figyelmeztet rá: a törlés a PAPÍRT viszi, tehát mind a négy napról eltűnik,
 nem csak arról, ahol épp állunk.
