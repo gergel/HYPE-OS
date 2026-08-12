@@ -111,6 +111,30 @@ def szerzodes_kulcsa(c: Contract) -> str | None:
     return None
 
 
+def eseti_szerzodesek_a_projekten(db: Session, project_id: int) -> dict[str, Contract]:
+    """Számlázó fél kulcsa -> az ő ESETI szerződése ezen a projekten.
+
+    A TIG ebből tölti elő az adatait (lásd routes/performance_certificates.py):
+    amit a szerződésbe egyszer beírtak - megbízás tárgya, összeg, teljesítés
+    ideje -, azt ne kelljen a TIG-nél még egyszer begépelni.
+
+    A KIHAGYOTT szerződés kimarad: ott épp az a lényeg, hogy nem készült papír,
+    tehát nincs is mit átemelni. Ha egy félnek több szerződése is fedi a
+    projektet (pl. egy elrontott és egy javított), a LEGUTÓBBIT vesszük."""
+    sorok = (
+        db.query(Contract)
+        .filter(
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+            Contract.keretszerzodes.is_(False),
+            Contract.szerzodes_allapota != "Kihagyva",
+            papir_fedettseg.fedi_a_projektet(Contract, ContractTetel, project_id),
+        )
+        .order_by(Contract.id)
+        .all()
+    )
+    return {kulcs: c for c in sorok if (kulcs := szerzodes_kulcsa(c))}
+
+
 def _load_contract_lookup(
     db: Session, employee_ids: set[int], vallalkozas_ids: set[int] | None = None
 ) -> tuple[dict[str, list[Contract]], dict[tuple[int, str], Contract]]:

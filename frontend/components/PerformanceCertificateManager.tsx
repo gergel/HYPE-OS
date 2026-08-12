@@ -22,20 +22,38 @@ type FormState = {
   plusz_afa: boolean;
 };
 
-/** `teljesitesAlap`: a projekt forgatási dátumából képzett alapértelmezett
- * szöveg - az űrlap ezzel indul, amíg nincs mentett bejegyzés (az akkor még
- * nem is létezik, tehát nem lenne miből előtölteni). */
+/** Az űrlap kiindulása három forrásból, ebben a sorrendben:
+ *
+ * 1. a **mentett TIG-piszkozat** - ha van, az az igazság, azon dolgoztak;
+ * 2. a fél **ESETI SZERZŐDÉSE** ezen a projekten - ugyanarról a munkáról szól,
+ *    tehát a megbízás tárgyát, az összeget és a teljesítés idejét onnan
+ *    vesszük át, hogy ne kelljen még egyszer begépelni;
+ * 3. a fél saját adatai, illetve a projekt forgatási dátumából képzett
+ *    alapértelmezett teljesítés-szöveg (`teljesitesAlap`).
+ *
+ * Ez ELŐTÖLTÉS, nem kényszer: minden mező szerkeszthető marad, és a mentés a
+ * TIG saját adatait írja - a szerződéshez nem nyúl. */
 function formFromEmployee(employee: PendingTigEmployee, teljesitesAlap: string): FormState {
   const draft = employee.draft;
+  const sz = employee.szerzodes;
+  // A ?? csak a null/undefined-et engedi tovább, az üres szöveget nem - a
+  // szerződésen üresen hagyott mezőnél a fél saját adata a jobb kiindulás.
+  const ures = (ertek: string | null | undefined) => (ertek?.trim() ? ertek : null);
   return {
-    ceg_neve: draft?.ceg_neve ?? employee.ceg_neve ?? "",
-    szekhely: draft?.szekhely ?? employee.szekhely ?? "",
-    adoszam: draft?.adoszam ?? employee.adoszam ?? "",
-    megbizas_targya: draft?.megbizas_targya ?? employee.megbizas_targya ?? "",
-    netto_osszeg: draft?.netto_osszeg != null ? String(draft.netto_osszeg) : "",
-    teljesites_szoveg: draft?.teljesites_szoveg ?? teljesitesAlap,
+    ceg_neve: draft?.ceg_neve ?? ures(sz?.ceg_neve) ?? employee.ceg_neve ?? "",
+    szekhely: draft?.szekhely ?? ures(sz?.szekhely) ?? employee.szekhely ?? "",
+    adoszam: draft?.adoszam ?? ures(sz?.adoszam) ?? employee.adoszam ?? "",
+    megbizas_targya:
+      draft?.megbizas_targya ?? ures(sz?.megbizas_targya) ?? employee.megbizas_targya ?? "",
+    netto_osszeg:
+      draft?.netto_osszeg != null
+        ? String(draft.netto_osszeg)
+        : sz?.netto_osszeg != null
+          ? String(sz.netto_osszeg)
+          : "",
+    teljesites_szoveg: draft?.teljesites_szoveg ?? ures(sz?.teljesites_szoveg) ?? teljesitesAlap,
     keltezes: draft?.keltezes ?? "",
-    plusz_afa: draft?.plusz_afa ?? employee.plusz_afa ?? false,
+    plusz_afa: draft?.plusz_afa ?? sz?.plusz_afa ?? employee.plusz_afa ?? false,
   };
 }
 
@@ -105,11 +123,19 @@ export function PerformanceCertificateManager({
         }
         setValaszthato(egyben);
         setKivalasztott(new Set(mar.map(tetelKulcs)));
-        setOsszegek(
-          Object.fromEntries(
+        // A tételösszegek is a szerződésről jönnek, ha a TIG-en még nincsenek:
+        // ott már megadták, kinek mennyi jár ezen a projekten.
+        const szerzodesOsszegek = Object.fromEntries(
+          (selectedEmployee.szerzodes?.tetelek ?? [])
+            .filter((t) => t.netto_osszeg != null)
+            .map((t) => [tetelKulcs(t), String(t.netto_osszeg)]),
+        );
+        setOsszegek({
+          ...szerzodesOsszegek,
+          ...Object.fromEntries(
             mar.filter((t) => t.netto_osszeg != null).map((t) => [tetelKulcs(t), String(t.netto_osszeg)]),
           ),
-        );
+        });
       })
       .finally(() => ervenyes && setTetelekToltodnek(false));
     return () => {
@@ -329,9 +355,20 @@ export function PerformanceCertificateManager({
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="mb-1 text-[15px] font-medium text-text-primary">Teljesítési igazolás – {selectedEmployee.full_name}</h3>
-            <p className="mb-4 text-[12px] text-text-muted">
+            <p className="mb-1 text-[12px] text-text-muted">
               TIG állapot: {selectedEmployee.draft?.allapot ?? "Nincs elkezdve"}
             </p>
+            {/* Ha még nincs mentett TIG, de van szerződés, az űrlap ONNAN
+                indul - mondjuk is meg, hogy honnan jöttek az adatok, és hogy
+                nyugodtan át lehet írni őket. */}
+            {!selectedEmployee.draft && selectedEmployee.szerzodes && (
+              <p className="mb-4 text-[12px] text-text-secondary">
+                Az adatok az eseti szerződésből vannak előtöltve
+                {selectedEmployee.szerzodes.allapot ? ` (${selectedEmployee.szerzodes.allapot})` : ""} – itt
+                szabadon átírhatók, a szerződéshez nem nyúlnak.
+              </p>
+            )}
+            {(selectedEmployee.draft || !selectedEmployee.szerzodes) && <div className="mb-4" />}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Megbízott neve">
                 <input

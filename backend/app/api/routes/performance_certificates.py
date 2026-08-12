@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.routes.subcontractor_contracts import (
     csoport_szerzodes_kesz,
+    eseti_szerzodesek_a_projekten,
     load_szerzodes_kornyezet,
     szerzodest_igenylo_emberek,
 )
@@ -311,6 +312,55 @@ class DraftInfo(BaseModel):
     tetelek: list[TetelInfo] = []
 
 
+class SzerzodesElotoltes(BaseModel):
+    """Amit a fél ESETI SZERZŐDÉSÉBŐL átveszünk a TIG-hez.
+
+    Ugyanarról a munkáról szól a két papír, tehát a megbízás tárgya, az összeg
+    és a teljesítés ideje ugyanaz - amit egyszer beírtak a szerződésbe, azt ne
+    kelljen a TIG-nél még egyszer begépelni. ELŐTÖLTÉS, nem kényszer: az
+    űrlapon minden mező marad szerkeszthető, és a mentés a TIG saját adatait
+    írja, nem a szerződését."""
+
+    allapot: str | None = None
+    ceg_neve: str | None = None
+    szekhely: str | None = None
+    adoszam: str | None = None
+    megbizas_targya: str | None = None
+    netto_osszeg: float | None = None
+    teljesites_szoveg: str | None = None
+    plusz_afa: bool | None = None
+    #: A szerződés tételeinek összegei - a TIG tételeire ugyanígy előtöltjük.
+    tetelek: list[TetelInfo] = []
+
+
+def _szerzodes_elotoltes(c: Contract | None) -> SzerzodesElotoltes | None:
+    if c is None:
+        return None
+    return SzerzodesElotoltes(
+        allapot=c.szerzodes_allapota,
+        ceg_neve=c.ceg_neve,
+        szekhely=c.szekhely,
+        adoszam=c.adoszam,
+        megbizas_targya=c.megbizas_targya,
+        netto_osszeg=float(c.netto_osszeg) if c.netto_osszeg is not None else None,
+        teljesites_szoveg=c.teljesites_szoveg,
+        plusz_afa=c.plusz_afa,
+        tetelek=[
+            TetelInfo(
+                project_id=t.project_id,
+                project_nev=t.project.nev if t.project else None,
+                projektkod=t.project.projektkod_szoveg if t.project else None,
+                forgatas_datuma=t.project.forgatas_datuma if t.project else None,
+                employee_id=t.employee_id,
+                employee_nev=t.employee.full_name if t.employee else None,
+                netto_osszeg=float(t.netto_osszeg) if t.netto_osszeg is not None else None,
+                megnevezes=t.megnevezes,
+            )
+            for t in c.tetelek
+        ],
+    )
+
+
 class PendingEmployeeInfo(BaseModel):
     """Egy SZÁMLÁZÓ FÉL, akitől még hátra van a TIG ezen a projekten.
 
@@ -330,6 +380,9 @@ class PendingEmployeeInfo(BaseModel):
     megbizas_targya: str | None
     plusz_afa: bool | None
     draft: DraftInfo | None
+    #: A fél eseti szerződése ezen a projekten - ebből tölti elő az űrlap azt,
+    #: amit ott már megadtak (lásd SzerzodesElotoltes).
+    szerzodes: SzerzodesElotoltes | None = None
 
 
 class PendingProjectDetail(BaseModel):
@@ -395,7 +448,12 @@ def _lefedettek_info(project: Project, csoport: SzamlazoCsoport) -> list[TetelIn
     ]
 
 
-def _pending_info(project: Project, csoport: SzamlazoCsoport, existing: PerformanceCertificate | None) -> PendingEmployeeInfo:
+def _pending_info(
+    project: Project,
+    csoport: SzamlazoCsoport,
+    existing: PerformanceCertificate | None,
+    szerzodes: Contract | None = None,
+) -> PendingEmployeeInfo:
     fel = csoport.fel
     return PendingEmployeeInfo(
         id=fel.employee.id if fel.employee else 0,
@@ -411,6 +469,7 @@ def _pending_info(project: Project, csoport: SzamlazoCsoport, existing: Performa
         megbizas_targya=fel.megbizas_targya,
         plusz_afa=fel.plusz_afa,
         draft=_draft_info(existing),
+        szerzodes=_szerzodes_elotoltes(szerzodes),
     )
 
 
@@ -425,6 +484,8 @@ def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _use
     pending: list[tuple[SzamlazoCsoport, PerformanceCertificate | None]] = []
     if tig_ready:
         pending = _tig_pending_csoportok(project, keszitheto, _load_tig_lookup(db, {project.id}))
+    # A felek eseti szerződései EGY lekérdezésből - ebből tölt elő az űrlap.
+    szerzodesek = eseti_szerzodesek_a_projekten(db, project.id) if pending else {}
     return PendingProjectDetail(
         project_id=project.id,
         project_nev=project.nev,
@@ -433,7 +494,10 @@ def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _use
         forgatas_datuma_vege=project.forgatas_datuma_vege,
         teljesites_szoveg_alap=_projekt_teljesites_szoveg(project),
         tig_ready=tig_ready,
-        pending=[_pending_info(project, csoport, existing) for csoport, existing in pending],
+        pending=[
+            _pending_info(project, csoport, existing, szerzodesek.get(csoport.kulcs))
+            for csoport, existing in pending
+        ],
     )
 
 
@@ -576,24 +640,47 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
             )
         return existing
     fel = csoport.fel
+    # A fél ESETI SZERZŐDÉSE ugyanerről a munkáról szól, tehát amit oda már
+    # beírtak, azt innen vesszük át (lásd SzerzodesElotoltes). Ami a
+    # szerződésen üres, arra marad a fél saját adata.
+    szerzodes = eseti_szerzodesek_a_projekten(db, project.id).get(csoport.kulcs)
+
+    def _szerzodesbol(mezo: str, tartalek):
+        ertek = getattr(szerzodes, mezo, None) if szerzodes is not None else None
+        return tartalek if ertek in (None, "") else ertek
+
     draft = PerformanceCertificate(
         project_id=project.id,
         employee_id=fel.employee.id if fel.employee else None,
         vallalkozas_id=fel.vallalkozas.id if fel.vallalkozas else None,
         allapot="Készítés alatt",
-        ceg_neve=fel.ceg_neve,
-        szekhely=fel.szekhely,
-        adoszam=fel.adoszam,
-        megbizas_targya=fel.megbizas_targya,
-        plusz_afa=fel.plusz_afa,
-        teljesites_szoveg=_projekt_teljesites_szoveg(project),
+        ceg_neve=_szerzodesbol("ceg_neve", fel.ceg_neve),
+        szekhely=_szerzodesbol("szekhely", fel.szekhely),
+        adoszam=_szerzodesbol("adoszam", fel.adoszam),
+        megbizas_targya=_szerzodesbol("megbizas_targya", fel.megbizas_targya),
+        netto_osszeg=_szerzodesbol("netto_osszeg", None),
+        plusz_afa=_szerzodesbol("plusz_afa", fel.plusz_afa),
+        teljesites_szoveg=_szerzodesbol("teljesites_szoveg", _projekt_teljesites_szoveg(project)),
         email=fel.email,
     )
     db.add(draft)
     db.flush()
-    # Alapból pontosan azt fedi, amiért ezen a projekten ő számláz.
+    # Alapból pontosan azt fedi, amiért ezen a projekten ő számláz - a
+    # tételösszegeket is a szerződésről hozva, ahol ott már megadták.
+    szerzodes_tetelei = (
+        {(t.project_id, t.employee_id): t for t in szerzodes.tetelek} if szerzodes is not None else {}
+    )
     for tag in csoport.tagok:
-        db.add(PerformanceCertificateTetel(certificate_id=draft.id, project_id=project.id, employee_id=tag.id))
+        forras = szerzodes_tetelei.get((project.id, tag.id))
+        db.add(
+            PerformanceCertificateTetel(
+                certificate_id=draft.id,
+                project_id=project.id,
+                employee_id=tag.id,
+                netto_osszeg=forras.netto_osszeg if forras is not None else None,
+                megnevezes=forras.megnevezes if forras is not None else None,
+            )
+        )
     db.flush()
     return draft
 

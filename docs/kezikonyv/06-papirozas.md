@@ -88,6 +88,29 @@ zárulnia, így egyetlen késlekedő stábtag megállította mindenki papírozá
 A szabály egy helyen áll: `subcontractor_contracts.csoport_szerzodes_kesz()`,
 a TIG-oldali szűrő pedig `performance_certificates.tig_keszitheto_csoportok()`.
 
+### A TIG a szerződésből indul
+
+A két papír UGYANARRÓL A MUNKÁRÓL szól, tehát a megbízás tárgya, az összeg és
+a teljesítés ideje ugyanaz - amit az eseti szerződésbe egyszer beírtak, azt a
+TIG-nél nem kell még egyszer begépelni. A TIG űrlapja ezért a fél **eseti
+szerződéséből** töltődik elő (a tételenkénti összegekkel együtt), és a mentett
+piszkozat is onnan indul, ha még nincs saját adata.
+
+A sorrend, amiből az űrlap dolgozik:
+
+1. a **mentett TIG-piszkozat** - ha van, azon dolgoztak, az az igazság;
+2. a fél **eseti szerződése** ezen a projekten;
+3. a fél saját adatai + a projekt forgatási dátumából képzett teljesítés-szöveg.
+
+Ez **előtöltés, nem kényszer**: minden mező szerkeszthető marad, a TIG mentése
+pedig a saját adatait írja - a szerződéshez nem nyúl. A felület ki is írja, ha
+az adatok a szerződésből jöttek, hogy ne tűnjön varázslatnak.
+
+A **kihagyott** szerződés kimarad a forrásból: ott épp az a lényeg, hogy nem
+készült papír, tehát nincs is mit átemelni. Ha egy félnek több szerződése fedi
+a projektet (egy elrontott és egy javított), a legutóbbit vesszük
+(`subcontractor_contracts.eseti_szerzodesek_a_projekten`).
+
 ### A kétlépéses életciklus
 
 Szerződésnél és TIG-nél azonos, a régi Notion-os "Adatok átemelése" →

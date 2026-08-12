@@ -684,6 +684,23 @@ export type PendingTigEmployee = {
   megbizas_targya: string | null;
   plusz_afa: boolean | null;
   draft: TigDraft | null;
+  /** A fél ESETI SZERZŐDÉSE ezen a projekten - ugyanarról a munkáról szól,
+   * ezért amit oda beírtak (megbízás tárgya, összeg, teljesítés ideje), azzal
+   * indul a TIG űrlapja. Előtöltés, nem kényszer: minden mező szerkeszthető. */
+  szerzodes: TigSzerzodesElotoltes | null;
+};
+
+/** Amit a fél eseti szerződéséből átveszünk a TIG-hez. */
+export type TigSzerzodesElotoltes = {
+  allapot: string | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  megbizas_targya: string | null;
+  netto_osszeg: number | null;
+  teljesites_szoveg: string | null;
+  plusz_afa: boolean | null;
+  tetelek: TigTetel[];
 };
 
 export type PendingTigProjectDetail = {
