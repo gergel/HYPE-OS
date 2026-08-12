@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { KeretszerzodesModal } from "@/components/megrendeloi/KeretszerzodesModal";
 import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -78,6 +79,7 @@ export function KeretszerzodesKezelo({
   const [urlap, setUrlap] = useState<Urlap>(URES);
   const [busy, setBusy] = useState(false);
   const [kuldendo, setKuldendo] = useState<MegrendeloiKeret | null>(null);
+  const [nyitottKeret, setNyitottKeret] = useState<number | null>(null);
 
   function frissit<K extends keyof Urlap>(kulcs: K, ertek: Urlap[K]) {
     setUrlap((elozo) => ({ ...elozo, [kulcs]: ertek }));
@@ -189,8 +191,15 @@ export function KeretszerzodesKezelo({
     }
   }
 
+  /** A törlés LEOLDJA a projektkódokat, amitől azoknak megint kell szerződés -
+   * ezt előre kimondjuk, mert ez a művelet lényege, nem a mellékhatása. */
   async function torles(k: MegrendeloiKeret) {
-    if (!(await confirm(`Biztosan törlöd a(z) "${k.ceg_neve ?? k.client_nev}" keretszerződését?`))) return;
+    const nev = k.ceg_neve ?? k.client_nev ?? `#${k.id}`;
+    const kovetkezmeny =
+      k.projektkod_db > 0
+        ? ` A hozzá tartozó ${k.projektkod_db} projektkód leoldódik róla, és onnantól megint kell nekik megrendelői szerződés.`
+        : "";
+    if (!(await confirm(`Biztosan törlöd a(z) "${nev}" keretszerződését?${kovetkezmeny}`))) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/v1/megrendeloi-keretszerzodesek/${k.id}`, { method: "DELETE" });
@@ -198,6 +207,13 @@ export function KeretszerzodesKezelo({
         const reszlet = await res.json().catch(() => null);
         toast(`Sikertelen törlés: ${reszlet?.detail ?? res.status}`);
         return;
+      }
+      const eredmeny = await res.json().catch(() => null);
+      if (eredmeny?.leoldott_projektkod) {
+        const ujra = eredmeny.ujranyitott_papir
+          ? `, ${eredmeny.ujranyitott_papir} korábban kihagyott szerződés újranyílt`
+          : "";
+        toast(`Törölve. ${eredmeny.leoldott_projektkod} projektkódnak megint kell szerződés${ujra}.`);
       }
       router.refresh();
     } catch (err) {
@@ -227,7 +243,13 @@ export function KeretszerzodesKezelo({
           {keretek.map((k) => (
             <li key={k.id} className="rounded-[var(--radius)] border border-border p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[14px] text-text-primary">{k.ceg_neve ?? k.client_nev ?? `#${k.id}`}</span>
+                <button
+                  type="button"
+                  onClick={() => setNyitottKeret(k.id)}
+                  className="text-left text-[14px] text-text-primary hover:text-text-accent hover:underline"
+                >
+                  {k.ceg_neve ?? k.client_nev ?? `#${k.id}`}
+                </button>
                 <span className="flex items-center gap-2">
                   {k.ervenyes ? (
                     <StatusBadge label="Élő keret" tone="success" />
@@ -251,6 +273,13 @@ export function KeretszerzodesKezelo({
                 {k.projektkod_db > 0 ? `${k.projektkod_db} projektkódnál használjuk` : "Még nincs hozzá projektkód"}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setNyitottKeret(k.id)}
+                  className="text-text-accent hover:underline"
+                >
+                  Megnyitás
+                </button>
                 {k.file_url && (
                   <a href={k.file_url} target="_blank" rel="noopener noreferrer" className="text-text-accent hover:underline">
                     Keretszerződés megnyitása
@@ -391,6 +420,10 @@ export function KeretszerzodesKezelo({
             </div>
           </div>
         </div>
+      )}
+
+      {nyitottKeret !== null && (
+        <KeretszerzodesModal keretId={nyitottKeret} onClose={() => setNyitottKeret(null)} />
       )}
 
       {kuldendo && (

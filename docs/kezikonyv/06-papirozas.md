@@ -311,7 +311,41 @@ Az adat maga már megvolt: a Notion "Keretszerződés" adatbázisa a `Contract`
 táblába importálódik - ez a modul a felületet és a kiküldést adja hozzá. Ha egy
 papír keretszerződésre hivatkozik, a projektkód `contract_id`-ja is odaköt (ha
 még üres) - ebből számol a keret-oldal "hány projektkódnál használjuk"
-számlálója és a törlésvédelem.
+számlálója.
+
+### A keretszerződés adatlapja
+
+A listasorból csak annyi látszott, hogy "3 projektkódnál használjuk" - hogy
+melyik háromnál és mi a helyzet velük, sehol. A cégnévre (vagy a *Megnyitás*-ra)
+kattintva ezért felugrik az adatlap (`GET /megrendeloi-keretszerzodesek/{id}`,
+`components/megrendeloi/KeretszerzodesModal.tsx`): a keret saját adatai, és
+alattuk **minden projekt, amit lefed** - projektenként azzal együtt, hol tart a
+szerződése és a teljesítési igazolása, mennyi a nettó, és megnyitható-e a papír.
+
+A nézet **olvasó**: a papírokat a projektkód adatlapján lehet szerkeszteni,
+ahová innen egy kattintással el lehet jutni. Ugyanaz a papír két helyen
+szerkesztve előbb-utóbb két különböző viselkedést jelentene.
+
+### Törlés: a projekteknek megint kell szerződés
+
+A keretszerződés **akkor is törölhető, ha projektkódok tartoznak hozzá**.
+Korábban ilyenkor elutasítottuk ("előbb oldd le a projektkódokat") - csakhogy
+leoldani sehol nem lehetett, tehát a felhasználó zsákutcába futott.
+
+Most a törlés maga oldja le őket, és pontosan azt az állapotot állítja helyre,
+ami keretszerződés nélkül igaz:
+
+1. a projektkódok `contract_id`-ja kiürül;
+2. azok a megrendelői szerződések, amiket **ezért a keretért** hagytak ki,
+   újranyílnak ("Készítés alatt") - a kihagyás oka megszűnt, tehát a papír
+   megint hiányzik. A korábbi indok nem vész el: átkerül a megjegyzésbe.
+
+A már **kiküldött** papírokhoz nem nyúlunk, csak a keretre mutató hivatkozásukat
+töröljük: ami egyszer kiment, az kiment. A **TIG-et** sem nyitjuk újra - azt a
+keretszerződés úgysem váltotta ki, tehát egy kihagyott TIG-nek más oka volt.
+
+A válasz megmondja, mi történt (`leoldott_projektkod`, `ujranyitott_papir`), a
+felület pedig a megerősítő kérdésben előre kiírja a következményt.
 
 ### Sablonok
 

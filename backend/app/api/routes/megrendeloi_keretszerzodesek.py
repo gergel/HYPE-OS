@@ -30,8 +30,9 @@ from app.core.security import get_current_user, require_page_action
 from app.models.client import Client
 from app.models.contract import Contract, ContractType
 from app.models.employee import Employee
+from app.models.megrendeloi_papir import MegrendeloiSzerzodes, MegrendeloiTig
 from app.models.project_code import ProjectCode
-from app.services import document_storage, notion_mapping
+from app.services import document_storage, megrendeloi_papir, notion_mapping
 from app.services.megrendeloi_papir import megrendeloi_keret_ervenyes
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
@@ -126,6 +127,93 @@ def list_keretszerzodesek(db: Session = Depends(get_db), _user: Employee = Depen
     kimenet = [_kimenet(c, darabok.get(c.id, 0)) for c in sorok]
     kimenet.sort(key=lambda k: (not k.ervenyes, (k.ceg_neve or k.client_nev or "").casefold()))
     return kimenet
+
+
+class PapirAllapot(BaseModel):
+    """Egy papír a keretszerződés részletnézetében - annyi, amennyiből látszik,
+    hol tart. A szerkesztés a projektkód adatlapján marad."""
+
+    id: int
+    allapot: str | None = None
+    netto_osszeg: float | None = None
+    plusz_afa: bool | None = None
+    keltezes: date | None = None
+    file_url: str | None = None
+    alairt_file_url: str | None = None
+    kihagyas_oka: str | None = None
+
+
+class KeretProjektkod(BaseModel):
+    """A keretszerződéshez tartozó egy projektkód, a papírjaival együtt."""
+
+    id: int
+    projektkod: str
+    project_nev: str | None = None
+    datum: date | None = None
+    netto_osszeg: float | None = None
+    #: Kell-e ide egyáltalán papír (a projektkód kapcsolói szerint).
+    kell_papir: bool = True
+    szerzodes: PapirAllapot | None = None
+    tig: PapirAllapot | None = None
+
+
+class KeretReszletek(KeretRead):
+    """A keretszerződés adatlapja: a saját adatai + MINDEN hozzá tartozó
+    projektkód és azok papírjai.
+
+    Azért egy hívásban, mert pont az összefüggés a kérdés: mire használjuk ezt
+    a keretet, és hol tart a papírozás alatta. Projektkódonként külön
+    lekérdezéssel ugyanez tíz-húsz kör lenne egy adatlap megnyitásához."""
+
+    projektkodok: list[KeretProjektkod] = []
+
+
+def _papir_allapot(papir) -> PapirAllapot | None:
+    if papir is None:
+        return None
+    return PapirAllapot(
+        id=papir.id,
+        allapot=papir.allapot,
+        netto_osszeg=float(papir.netto_osszeg) if papir.netto_osszeg is not None else None,
+        plusz_afa=papir.plusz_afa,
+        keltezes=papir.keltezes,
+        file_url=papir.file_url,
+        alairt_file_url=papir.alairt_file_url,
+        kihagyas_oka=papir.kihagyas_oka,
+    )
+
+
+@router.get("/{keret_id}", response_model=KeretReszletek)
+def get_keretszerzodes(
+    keret_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Egy keretszerződés adatlapja a hozzá tartozó projektekkel és papírokkal."""
+    c = _get_or_404(db, keret_id)
+    projektkodok = list(
+        db.scalars(
+            select(ProjectCode).where(ProjectCode.contract_id == c.id).order_by(ProjectCode.datum.desc(), ProjectCode.id.desc())
+        )
+    )
+    allasok = megrendeloi_papir.papir_allasok(db, projektkodok)
+    alap = _kimenet(c, len(projektkodok))
+    return KeretReszletek(
+        **alap.model_dump(),
+        projektkodok=[
+            KeretProjektkod(
+                id=pk.id,
+                projektkod=pk.projektkod,
+                project_nev=pk.project_nev,
+                datum=pk.datum,
+                netto_osszeg=float(pk.netto_osszeg) if pk.netto_osszeg is not None else None,
+                kell_papir=allasok[pk.id].kell_papir,
+                szerzodes=_papir_allapot(allasok[pk.id].szerzodes),
+                tig=_papir_allapot(allasok[pk.id].tig),
+            )
+            for pk in projektkodok
+        ],
+    )
 
 
 @router.post("", response_model=KeretRead, status_code=201)
@@ -291,20 +379,61 @@ async def upload_alairt(
     return _kimenet(c)
 
 
-@router.delete("/{keret_id}", status_code=204)
+class TorlesEredmeny(BaseModel):
+    """Mi történt a törléskor - a felület ezt írja ki visszajelzésként."""
+
+    leoldott_projektkod: int = 0
+    ujranyitott_papir: int = 0
+
+
+@router.delete("/{keret_id}", response_model=TorlesEredmeny)
 def delete_keretszerzodes(
     keret_id: int,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "delete")),
 ):
-    """Csak akkor törölhető, ha nem hivatkozik rá projektkód - különben a
-    projektkód szerződés nélkül maradna, némán."""
+    """A keretszerződés törlése - AKKOR IS, ha projektkódok tartoznak hozzá.
+
+    Korábban ilyenkor elutasítottuk a törlést ("előbb oldd le a projektkódokat"),
+    csakhogy leoldani sehol nem lehetett: a felhasználó egy zsákutcába futott.
+    Most a törlés maga oldja le őket - és pontosan azt az állapotot állítja
+    helyre, ami keretszerződés nélkül igaz: **a projektnek megint kell
+    szerződés**.
+
+    Két lépésben:
+
+    1. a projektkódok `contract_id`-ja kiürül, tehát nem hivatkoznak többé egy
+       nem létező keretre;
+    2. azok a megrendelői szerződések, amiket EPPEN EZERT a keretért hagytak ki,
+       újranyílnak - a kihagyás oka megszűnt, tehát a papír megint hiányzik. A
+       korábbi indok nem vész el: átkerül a megjegyzésbe, hogy fél év múlva is
+       látszódjon, mi történt.
+
+    A már KIKÜLDÖTT papírokhoz nem nyúlunk, csak a keretre mutató hivatkozásukat
+    töröljük: ami egyszer kiment, az kiment."""
     c = _get_or_404(db, keret_id)
-    if db.scalars(select(ProjectCode.id).where(ProjectCode.contract_id == c.id)).first():
-        raise HTTPException(
-            status_code=400,
-            detail="Ez a keretszerződés projektkódokhoz van kapcsolva - előbb azokat kell leoldani róla.",
-        )
+
+    projektkodok = db.scalars(select(ProjectCode).where(ProjectCode.contract_id == c.id)).all()
+    for pk in projektkodok:
+        pk.contract_id = None
+
+    ujranyitott = 0
+    for modell in (MegrendeloiSzerzodes, MegrendeloiTig):
+        for papir in db.scalars(select(modell).where(modell.keretszerzodes_id == c.id)):
+            papir.keretszerzodes_id = None
+            # Csak a SZERZŐDÉST nyitjuk újra: a TIG-et a keretszerződés úgysem
+            # váltja ki (lásd services/megrendeloi_papir.py), tehát egy kihagyott
+            # TIG-nek más oka volt, amihez ennek a törlésnek semmi köze.
+            if modell is MegrendeloiSzerzodes and papir.allapot == "Kihagyva":
+                regi_indok = (papir.kihagyas_oka or "").strip()
+                papir.allapot = "Készítés alatt"
+                papir.kihagyas_oka = None
+                nyom = "A keretszerződés törlésekor újranyitva."
+                if regi_indok:
+                    nyom += f" A korábbi kihagyás oka: {regi_indok}"
+                papir.megjegyzes = f"{(papir.megjegyzes or '').strip()}\n{nyom}".strip()
+                ujranyitott += 1
+
     kulcsok = [k for k in (c.szerzodes_file_storage_key, c.alairt_file_storage_key) if k]
     # A Notion-leképezés is menjen vele: enélkül ez a keretszerződés soha többé
     # nem tudna visszaimportálódni a Notionból (lásd services/notion_mapping.py).
@@ -313,3 +442,4 @@ def delete_keretszerzodes(
     db.commit()
     for k in kulcsok:
         document_storage.delete_object(k)
+    return TorlesEredmeny(leoldott_projektkod=len(projektkodok), ujranyitott_papir=ujranyitott)

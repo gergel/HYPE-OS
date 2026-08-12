@@ -2182,6 +2182,37 @@ export type MegrendeloiKeret = {
   projektkod_db: number;
 };
 
+/** Egy papír állapota a keretszerződés adatlapján - annyi, amennyiből látszik,
+ * hol tart. A szerkesztés a projektkód adatlapján marad. */
+export type MegrendeloiKeretPapir = {
+  id: number;
+  allapot: string | null;
+  netto_osszeg: number | null;
+  plusz_afa: boolean | null;
+  keltezes: string | null;
+  file_url: string | null;
+  alairt_file_url: string | null;
+  kihagyas_oka: string | null;
+};
+
+export type MegrendeloiKeretProjektkod = {
+  id: number;
+  projektkod: string;
+  project_nev: string | null;
+  datum: string | null;
+  netto_osszeg: number | null;
+  /** Kell-e ide egyáltalán papír (a projektkód kapcsolói szerint). */
+  kell_papir: boolean;
+  szerzodes: MegrendeloiKeretPapir | null;
+  tig: MegrendeloiKeretPapir | null;
+};
+
+/** A keretszerződés adatlapja: a saját adatai + minden hozzá tartozó projektkód
+ * és azok papírjai. */
+export type MegrendeloiKeretReszletek = MegrendeloiKeret & {
+  projektkodok: MegrendeloiKeretProjektkod[];
+};
+
 export async function getMegrendeloiPapirok(
   fajta: MegrendeloiPapirFajta,
   projectCodeId?: number,
