@@ -2,6 +2,7 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { KeretszerzodesErvenyesseg } from "@/components/finance/KeretszerzodesErvenyesseg";
+import { KeretAlairasok } from "@/components/finance/KeretAlairasok";
 import { KeretszerzodesKuldes } from "@/components/finance/KeretszerzodesKuldes";
 import { TopBar } from "@/components/TopBar";
 import { KeretszerzodesAddWidget } from "@/components/KeretszerzodesAddWidget";
@@ -12,6 +13,7 @@ import {
   getContracts,
   getCurrentUser,
   getEmployees,
+  getKeretAlairasAllapot,
   getMyPagePermissions,
   getVallalkozasok,
   type Contract,
@@ -42,13 +44,17 @@ type KeretszerzodesRow = Contract & {
  * adatlapján, az "Eseti megbízási szerződések" szekcióban van. Csak külsősök:
  * a belsősöknél a havi bérelszámolás és a belsős TIG fedi le ugyanezt. */
 export default async function KeretszerzodesekPage() {
-  const [contracts, employees, vallalkozasok, currentUser, pagePermissions] = await Promise.all([
+  const [contracts, employees, vallalkozasok, currentUser, pagePermissions, alairasok] = await Promise.all([
     getContracts(),
     getEmployees(),
     getVallalkozasok(),
     getCurrentUser(),
     getMyPagePermissions(),
+    getKeretAlairasAllapot(),
   ]);
+  // Szerződésenként: mit várunk még aláírva - magát a keretszerződést és/vagy
+  // a módosításait (lásd backend routes/contracts.py alairas-allapot).
+  const alairasById = new Map(alairasok.map((a) => [a.contract_id, a]));
   const vallalkozasById = new Map(vallalkozasok.map((v) => [v.id, v]));
   const employeeById = new Map(employees.map((e) => [e.id, e]));
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
@@ -166,6 +172,23 @@ export default async function KeretszerzodesekPage() {
                 align: "right",
                 render: (c) => formatDate(c.keltezes),
                 sortAccessor: (c) => c.keltezes,
+              },
+              {
+                // A keretszerződést és MINDEN módosítását külön várjuk vissza
+                // aláírva - itt látszik, melyik hiányzik és mikori.
+                header: "Aláírva visszavárjuk",
+                align: "right",
+                render: (c) => (
+                  <StopClickPropagation>
+                    <KeretAlairasok
+                      contractId={c.id}
+                      allapot={alairasById.get(c.id)}
+                      cegNeve={c.employee_name}
+                      canEdit={canEdit}
+                    />
+                  </StopClickPropagation>
+                ),
+                sortAccessor: (c) => -(alairasById.get(c.id)?.varunk.length ?? 0),
               },
               {
                 // A szerződés saját adatlapja: itt tölthető fel és nézhető meg

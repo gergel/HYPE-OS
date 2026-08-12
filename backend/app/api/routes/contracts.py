@@ -1,16 +1,18 @@
+import os
 from datetime import date, timedelta
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
+from app.api.routes.keret_modositasok import epits_modositas_utvonalakat
 from app.core.database import get_db
-from app.core.security import require_page_action
+from app.core.security import get_current_user, require_page_action
 from app.models.contract import Contract, ContractPeriod, ContractType, megkotott_keretszerzodes
 from app.models.employee import Employee
 from app.models.vallalkozas import Vallalkozas
-from app.services import keretszerzodes_kuldes
+from app.services import document_storage, keretszerzodes_kuldes
 from app.schemas.contract import (
     ContractCreate,
     ContractPeriodCreate,
@@ -48,6 +50,167 @@ def _get_contract_or_404(db: Session, contract_id: int) -> Contract:
     if szerzodes is None:
         raise HTTPException(status_code=404, detail="A szerződés nem található.")
     return szerzodes
+
+
+def _keret_or_404(db: Session, contract_id: int) -> Contract:
+    """Álló keretszerződés (emberrel vagy céggel) - a módosításokhoz.
+
+    Eseti szerződéshez nem tartozik módosítás: azt nem módosítani szokás,
+    hanem újat kötni a következő munkára."""
+    szerzodes = _get_contract_or_404(db, contract_id)
+    if not megkotott_keretszerzodes(szerzodes):
+        raise HTTPException(
+            status_code=400,
+            detail="Ez a bejegyzés nem álló keretszerződés - szerződésmódosítás csak ahhoz tartozhat.",
+        )
+    return szerzodes
+
+
+class VartAlairas(BaseModel):
+    """Egy KONKRÉT dokumentum, amit aláírva visszavárunk.
+
+    Azért dokumentumonként külön sor, mert a keretszerződés és minden
+    módosítása külön papír, külön aláírással: ha csak egy "aláírásra vár"
+    jelölés lenne a szerződésen, abból sosem derülne ki, hogy a szerződést
+    magát várjuk-e még, vagy a tavaly kiküldött módosítást."""
+
+    #: "Keretszerződés" vagy "Szerződésmódosítás".
+    fajta: str
+    #: A módosítás azonosítója (a keretszerződésnél None) - ide kell feltölteni.
+    modositas_id: int | None = None
+    #: Mikori a papír, és mikor ment ki - ebből lehet azonosítani, melyiket.
+    keltezes: date | None = None
+    kikuldve: date | None = None
+    file_url: str | None = None
+
+
+class KeretAlairasAllapot(BaseModel):
+    """Egy keretszerződés aláírás-állapota: mi van meg, és mi hiányzik."""
+
+    contract_id: int
+    #: Megvan-e MAGÁNAK a keretszerződésnek az aláírt példánya.
+    szerzodes_alairva: bool = False
+    szerzodes_kikuldve: bool = False
+    #: Hány módosítás tartozik hozzá összesen.
+    modositas_db: int = 0
+    #: Amit aláírva visszavárunk - dokumentumonként.
+    varunk: list[VartAlairas] = []
+
+
+def _alairas_allapot(c: Contract) -> KeretAlairasAllapot:
+    # Mikor van MIT visszavárni? Ha a rendszerből ment ki (az állapota ezt
+    # mondja), VAGY ha van papírja - az importált szerződéseknél ugyanis az
+    # állapot bármi lehet ("Aktív", "Kiküldve", üres), de ha egyszer van
+    # dokumentum, akkor van mit aláírva visszakérni. Papír nélküli sornál
+    # viszont nem állítjuk, hogy várunk valamit: ott még nem ment ki semmi.
+    kikuldve = bool(
+        (c.szerzodes_allapota or "") == keretszerzodes_kuldes.KIKULDVE_ALLAPOT or c.szerzodes_file_url
+    )
+    varunk: list[VartAlairas] = []
+    # A szerződés magát csak akkor várjuk vissza, ha ki is ment: amíg nincs
+    # kiküldve, nincs mit aláírni (lásd send_keretszerzodes).
+    if kikuldve and not c.alairva:
+        varunk.append(
+            VartAlairas(
+                fajta="Keretszerződés",
+                keltezes=c.keltezes,
+                file_url=c.szerzodes_file_url,
+            )
+        )
+    for m in c.modositasok:
+        if m.allapot == "Kész" or m.alairt_file_url:
+            continue
+        varunk.append(
+            VartAlairas(
+                fajta="Szerződésmódosítás",
+                modositas_id=m.id,
+                keltezes=m.keltezes,
+                kikuldve=m.kikuldve.date() if m.kikuldve else None,
+                file_url=m.file_url,
+            )
+        )
+    return KeretAlairasAllapot(
+        contract_id=c.id,
+        szerzodes_alairva=bool(c.alairva),
+        szerzodes_kikuldve=kikuldve,
+        modositas_db=len(c.modositasok),
+        varunk=varunk,
+    )
+
+
+@router.get("/keretszerzodesek/alairas-allapot", response_model=list[KeretAlairasAllapot])
+def keretszerzodesek_alairas_allapota(
+    db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
+):
+    """MINDEN álló keretszerződés aláírás-állapota, egy hívásban.
+
+    A Keretszerződések oldal soronként mutatja, mit várunk még aláírva - a
+    szerződést magát és/vagy a módosításokat, dátummal. Soronkénti lekérdezés
+    ehhez néhány tucat szerződésnél is fölösleges körözés lenne."""
+    sorok = (
+        db.query(Contract)
+        .options(selectinload(Contract.modositasok), selectinload(Contract.idoszakok))
+        .filter(Contract.tipus == ContractType.ALVALLALKOZOI, Contract.project_id.is_(None))
+        .all()
+    )
+    return [_alairas_allapot(c) for c in sorok if megkotott_keretszerzodes(c)]
+
+
+@router.post("/{contract_id}/alairt-fajl", response_model=ContractRead)
+async def upload_alairt_keretszerzodes(
+    contract_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A keretszerződés ALÁÍRVA visszakapott példányának feltöltése.
+
+    Enélkül az "aláírásra vár" jelzést nem lehetett levenni a szerződésről: a
+    kiküldés `alairva=False`-ra állítja (lásd send_keretszerzodes), és eddig
+    csak a rekord kézi átírásával lehetett lezárni. A módosításoknál ugyanez a
+    lépés zárja a folyamatot (lásd routes/keret_modositasok.py)."""
+    szerzodes = _keret_or_404(db, contract_id)
+    data = await file.read()
+    kiterjesztes = os.path.splitext(file.filename or "")[1] or ".pdf"
+    kulcs = f"keretszerzodes-alairt/{szerzodes.id}{kiterjesztes}"
+    regi = szerzodes.alairt_file_storage_key
+    szerzodes.alairt_file_url = document_storage.upload_bytes(
+        data, kulcs, file.content_type or "application/octet-stream"
+    )
+    szerzodes.alairt_file_storage_key = kulcs
+    szerzodes.alairva = True
+    db.commit()
+    # A cserélt fájl CSAK a sikeres mentés után törlődik: egy elhasalt
+    # feltöltésnél ne maradjunk se régi, se új papírral.
+    if regi and regi != kulcs:
+        document_storage.delete_object(regi)
+    db.refresh(szerzodes)
+    return ContractRead.model_validate(szerzodes)
+
+
+@router.delete("/{contract_id}/alairt-fajl", response_model=ContractRead)
+def delete_alairt_keretszerzodes(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A tévesen feltöltött aláírt példány visszavonása - a szerződés újra
+    aláírásra vár."""
+    szerzodes = _keret_or_404(db, contract_id)
+    kulcs = szerzodes.alairt_file_storage_key
+    szerzodes.alairt_file_url = None
+    szerzodes.alairt_file_storage_key = None
+    szerzodes.alairva = False
+    db.commit()
+    if kulcs:
+        document_storage.delete_object(kulcs)
+    db.refresh(szerzodes)
+    return ContractRead.model_validate(szerzodes)
+
+
+# A szerződésmódosítás végpontjai KÖZÖSEK a megrendelői keretszerződéssel -
+# lásd routes/keret_modositasok.py.
+epits_modositas_utvonalakat(router, page=PAGE, keret_betoltes=_keret_or_404, generalas=False)
 
 
 def _ceg_cegadata(vallalkozas: Vallalkozas) -> dict:

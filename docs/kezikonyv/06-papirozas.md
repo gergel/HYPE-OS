@@ -390,6 +390,31 @@ Ugyanaz a papír két helyen szerkesztve előbb-utóbb két különböző viselk
 jelentene. A szerződésmódosítás viszont itt intézhető (lásd lent) - az magához
 a kerethez tartozik, nincs másik hely, ahol dolga lenne.
 
+### Aláírva visszavárjuk - dokumentumonként
+
+A keretszerződés és **minden módosítása külön papír, külön aláírással**. Ezért
+nem egyetlen "aláírásra vár" jelölés van a szerződésen, hanem
+**dokumentumonként** egy sor: abból sosem derülne ki, hogy magát a szerződést
+várjuk-e még, vagy a tavaly kiküldött módosítást.
+
+A **céges keretszerződéseknél** (`/penzugyek/keretszerzodesek`) ez külön
+oszlop: kiírja, hány papírt várunk vissza, és fajtánként-dátumonként azt is,
+melyiket (`GET /contracts/keretszerzodesek/alairas-allapot`). A sorból nyíló
+kezelőben tölthető fel a hiányzó aláírt példány - a szerződésé és a
+módosításoké külön-külön -, és ott vehető fel új módosító dokumentum is.
+
+Mikor várunk vissza valamit? Ha a papír **kiment** (a rendszerből küldve, vagy
+egyszerűen: van dokumentuma), és **nincs aláírt példánya**. Papír nélküli
+sornál nem állítjuk, hogy várunk valamit - ott még nem ment ki semmi.
+
+A **módosítás-végpontok közösek** a megrendelői és a céges oldal között
+(`routes/keret_modositasok.py`), mert a folyamat is ugyanaz. Egy különbség
+van: a céges oldalon **nincs sablonból generálás**. A meglévő sablon a
+megrendelői viszonyra szól (ott mi vagyunk a megbízott), egy alvállalkozói
+keret módosításán viszont a szerepek fordítottak - abból ott hibás papír
+lenne. Ezen az oldalon a kész módosító dokumentum feltölthető, és onnantól
+ugyanúgy aláírásra vár.
+
 ### Szerződésmódosítás
 
 Egy keretszerződést az évek alatt **többször is módosítanak** (székhely,

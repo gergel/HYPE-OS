@@ -338,6 +338,49 @@ export async function getContracts(limit = 5000): Promise<Contract[]> {
   return (await apiGet<Contract[]>(`/api/v1/contracts?limit=${limit}`)) ?? [];
 }
 
+/** Egy KONKRÉT dokumentum, amit aláírva visszavárunk: maga a keretszerződés
+ * vagy annak egy módosítása. Azért dokumentumonként külön, mert mindegyik
+ * külön papír, külön aláírással - egyetlen "aláírásra vár" jelölésből sosem
+ * derülne ki, melyiket várjuk. */
+export type VartAlairas = {
+  fajta: string;
+  /** A módosítás azonosítója (a keretszerződésnél null) - ide kell feltölteni. */
+  modositas_id: number | null;
+  keltezes: string | null;
+  kikuldve: string | null;
+  file_url: string | null;
+};
+
+export type KeretAlairasAllapot = {
+  contract_id: number;
+  szerzodes_alairva: boolean;
+  szerzodes_kikuldve: boolean;
+  modositas_db: number;
+  varunk: VartAlairas[];
+};
+
+export type KeretModositas = {
+  id: number;
+  contract_id: number;
+  keltezes: string | null;
+  allapot: string | null;
+  file_url: string | null;
+  alairt_file_url: string | null;
+  email: string | null;
+  megbizas_targya: string | null;
+  szerzodes_letrejotte: string | null;
+  kikuldve: string | null;
+  kikuldte: string | null;
+  level_szoveg: string | null;
+  megjegyzes: string | null;
+};
+
+/** MINDEN álló keretszerződés aláírás-állapota, egy hívásban - a
+ * Keretszerződések oldal soronként ebből írja ki, mit várunk még. */
+export async function getKeretAlairasAllapot(): Promise<KeretAlairasAllapot[]> {
+  return (await apiGet<KeretAlairasAllapot[]>("/api/v1/contracts/keretszerzodesek/alairas-allapot")) ?? [];
+}
+
 export type PendingSubcontractorProject = {
   project_id: number;
   project_nev: string | null;
