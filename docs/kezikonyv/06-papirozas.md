@@ -88,6 +88,30 @@ zárulnia, így egyetlen késlekedő stábtag megállította mindenki papírozá
 A szabály egy helyen áll: `subcontractor_contracts.csoport_szerzodes_kesz()`,
 a TIG-oldali szűrő pedig `performance_certificates.tig_keszitheto_csoportok()`.
 
+### Egy papír, több forgatási nap
+
+Egy eseti szerződés (és ugyanígy egy TIG) **több projektre is szólhat** - három
+nap forgatás egy szerződéssel, vagy több nap egy számlán. Ilyenkor a papír
+`project_id`-je csak azt mondja meg, **melyik napról indítva készült**; hogy
+mit FED, azt a tételei hordozzák (`services/papir_fedettseg.py`).
+
+Ezt minden lekérdezésnek a **lefedettség** szerint kell néznie, nem a saját
+`project_id` szerint. Ahol ez elmaradt, ott a papír a többi napon egyszerűen
+nem látszott - a felhasználó azt látta, hogy "négy napra jelöltem, de csak
+egyhez mentette el". A teendő-lista és a fázis-számítás mindig jól számolt (a
+többi nap nem kért új szerződést), csak az *Elkészült szerződések* és az
+*Elkészült TIG-ek* táblája hiányzott róluk, ami ugyanolyan riasztó.
+
+Ezért a lefedettség szerint szűr:
+
+- `alvallalkozoi-szerzodesek/{id}/all` és `teljesitesi-igazolasok/{id}/all`;
+- a papír törlése is - egy négynapos szerződést arról a napról is le lehessen
+  venni, ahonnan nem ő indult.
+
+A sor **kiírja, hány projektre szól** (`projektek`), és a törlés megerősítése
+is figyelmeztet rá: a törlés a PAPÍRT viszi, tehát mind a négy napról eltűnik,
+nem csak arról, ahol épp állunk.
+
 ### A TIG a szerződésből indul
 
 A két papír UGYANARRÓL A MUNKÁRÓL szól, tehát a megbízás tárgya, az összeg és

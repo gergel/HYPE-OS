@@ -507,8 +507,22 @@ def list_all_for_project(project_id: int, db: Session = Depends(get_db), _user: 
     kiküldött (Kiküldve) tételekhez itt jelenik meg a számla-feltöltés és
     kifizetettként jelölés vezérlő a frontenden (lásd
     PerformanceCertificateManager), a still-pending (Készítés alatt) tételek
-    a get_pending_for_project végpontból jönnek."""
-    rows = db.query(PerformanceCertificate).filter(PerformanceCertificate.project_id == project_id).all()
+    a get_pending_for_project végpontból jönnek.
+
+    A szűrés LEFEDETTSÉG szerint megy, nem a TIG saját `project_id`-ja szerint:
+    egy TIG több projekt munkáját is igazolhatja, és ilyenkor a project_id csak
+    azt mondja meg, melyik projektről indítva készült. A többi projekten a
+    kiküldött TIG korábban egyáltalán nem látszott (lásd
+    services/papir_fedettseg.py)."""
+    rows = (
+        db.query(PerformanceCertificate)
+        .filter(
+            papir_fedettseg.fedi_a_projektet(
+                PerformanceCertificate, PerformanceCertificateTetel, project_id
+            )
+        )
+        .all()
+    )
     return [PerformanceCertificateRead.model_validate(r) for r in rows]
 
 

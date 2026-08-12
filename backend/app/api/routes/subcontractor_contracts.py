@@ -545,6 +545,20 @@ def pending_info(project: Project, csoport: SzamlazoCsoport, existing: Contract 
     )
 
 
+def _fedett_projektek(c: Contract) -> list[str]:
+    """Melyik projekteket fedi ez a papír, olvasható néven - a felület ebből
+    írja ki, hogy "4 nap egy szerződésen"."""
+    nevek = []
+    for t in c.tetelek:
+        p = t.project
+        if p is None:
+            continue
+        nev = p.projektkod_szoveg or p.nev or f"#{p.id}"
+        if nev not in nevek:
+            nevek.append(nev)
+    return nevek
+
+
 class ElkeszultSzerzodes(BaseModel):
     """Egy projekthez már elkészült (vagy kihagyott) eseti szerződés - a
     felületen ez mutatja meg, hogy kinek van kész papírja, és hol van."""
@@ -565,6 +579,10 @@ class ElkeszultSzerzodes(BaseModel):
     alairt_file_url: str | None = None
     #: Miért hagytuk ki (vagy hol a máshol készült papír).
     kihagyas_oka: str | None = None
+    #: MELYIK projekteket fedi ez az egy papír. Egy szerződés több forgatási
+    #: napra is szólhat - ha csak azon az egy napon látszana, ahonnan indult, a
+    #: többin úgy tűnne, mintha el sem készült volna.
+    projektek: list[str] = []
 
 
 @router.get("/{project_id}/{szamlazo_kulcs}/nyitott-tetelek", response_model=list[TetelInfo])
@@ -622,12 +640,26 @@ def list_all_for_project(
     A függő lista (get_pending_for_project) szándékosan csak azokat adja
     vissza, akikkel még van teendő - a kiküldött szerződés onnan eltűnik.
     Ezért kell ez a végpont: az Utókövetésen az elkészült szerződésnek is
-    látszania kell, a generált dokumentumra mutató linkkel együtt."""
+    látszania kell, a generált dokumentumra mutató linkkel együtt.
+
+    A szűrés LEFEDETTSÉG szerint megy, nem a szerződés saját `project_id`-ja
+    szerint: egy papír több forgatási napra is szólhat, és ilyenkor a saját
+    project_id-je csak azt mondja meg, MELYIK napról indítva készült. A többi
+    napon a szerződés korábban egyáltalán nem látszott - ami úgy nézett ki,
+    mintha oda nem is mentődött volna el (lásd services/papir_fedettseg.py)."""
     _get_project_or_404(db, project_id)
     rows = (
         db.query(Contract)
-        .options(selectinload(Contract.employee), selectinload(Contract.vallalkozas))
-        .filter(Contract.project_id == project_id, Contract.tipus == ContractType.ALVALLALKOZOI)
+        .options(
+            selectinload(Contract.employee),
+            selectinload(Contract.vallalkozas),
+            selectinload(Contract.tetelek).selectinload(ContractTetel.project),
+        )
+        .filter(
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+            Contract.keretszerzodes.is_(False),
+            papir_fedettseg.fedi_a_projektet(Contract, ContractTetel, project_id),
+        )
         .all()
     )
     eredmeny: list[ElkeszultSzerzodes] = []
@@ -654,6 +686,7 @@ def list_all_for_project(
                 alairva=bool(c.alairva),
                 alairt_file_url=c.alairt_file_url,
                 kihagyas_oka=c.kihagyas_oka,
+                projektek=_fedett_projektek(c),
             )
         )
     return eredmeny
@@ -1250,15 +1283,10 @@ def delete_contract(
     fel = szamlazo.feloldas(db, szamlazo_kulcs)
     if fel is None:
         raise HTTPException(status_code=404, detail="A számlázó fél nem található")
-    contract = (
-        db.query(Contract)
-        .filter(
-            Contract.project_id == project_id,
-            Contract.tipus == ContractType.ALVALLALKOZOI,
-            _szamlazo_szuro(fel),
-        )
-        .first()
-    )
+    # LEFEDETTSÉG szerint keressük, nem a szerződés saját project_id-ja
+    # szerint: egy több napra szóló szerződést arról a napról is törölni
+    # lehessen, amelyikről nem ő indult (lásd _szerzodes_vagy_none).
+    contract = _szerzodes_vagy_none(db, project_id, szamlazo_kulcs)
     if contract is None:
         raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nincs szerződés-bejegyzés.")
     if _van_tig_a_projekten(db, project_id, fel):

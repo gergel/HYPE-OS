@@ -103,8 +103,14 @@ export function ElkeszultSzerzodesek({
   }
 
   async function torol(s: ElkeszultSzerzodes) {
+    // A több napra szóló papír törlése MINDEGYIK napról leveszi a szerződést -
+    // ezt előre kimondjuk, mert a törlés a papírt viszi, nem a kapcsolatot.
+    const tobbNapos =
+      s.projektek.length > 1
+        ? ` Ez a szerződés ${s.projektek.length} projektre szól (${s.projektek.join(", ")}), tehát mindegyikről eltűnik.`
+        : "";
     const ok = await confirm(
-      `Törlöd ${s.full_name} szerződését erről a projektről? Ezután újra a teendők közt jelenik meg, és készíthetsz neki újat.`,
+      `Törlöd ${s.full_name} szerződését erről a projektről? Ezután újra a teendők közt jelenik meg, és készíthetsz neki újat.${tobbNapos}`,
     );
     if (!ok) return;
     setBusyId(s.szamlazo);
@@ -143,7 +149,17 @@ export function ElkeszultSzerzodesek({
           <tbody>
             {kesz.map((s) => (
               <tr key={s.contract_id} className="border-b border-border last:border-0">
-                <td className="py-2.5 pr-6">{s.full_name}</td>
+                <td className="py-2.5 pr-6">
+                  {s.full_name}
+                  {/* Egy szerződés több forgatási napra is szólhat. Enélkül a
+                      többi napon úgy tűnne, hogy oda nem készült papír - vagy
+                      hogy ott egy másik, külön szerződés van. */}
+                  {s.projektek.length > 1 && (
+                    <span className="mt-0.5 block text-[11.5px] text-text-muted">
+                      Közös papír {s.projektek.length} projektre: {s.projektek.join(", ")}
+                    </span>
+                  )}
+                </td>
                 <td className="py-2.5 pr-6">
                   {/* Legördíthető: "Készítés alatt"-ra visszavéve a fél újra a
                       teendők közé kerül, és a szerződése szerkeszthető. */}

@@ -435,6 +435,9 @@ export type ElkeszultSzerzodes = {
   alairt_file_url: string | null;
   /** Miért hagytuk ki, vagy hol van a máshol készült papír. */
   kihagyas_oka: string | null;
+  /** MELYIK projekteket fedi ez az egy papír - egy szerződés több forgatási
+   * napra is szólhat. Egynél több elemnél a felület kiírja, hogy közös. */
+  projektek: string[];
 };
 
 export async function getAllContractsForProject(projectId: number): Promise<ElkeszultSzerzodes[]> {
