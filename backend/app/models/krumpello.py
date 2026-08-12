@@ -31,6 +31,23 @@ from app.models.base import TimestampMixin
 #: egyenlege van (számla, készpénz, extra), és a felület is így összesít.
 KIADAS_FORRASOK: tuple[str, ...] = ("utalas", "keszpenz", "extra")
 
+#: Hogyan volt bejelentve valaki egy adott napon.
+#:
+#: Ez nem adminisztratív cimke, hanem a KIFIZETÉS MÓDJÁT dönti el: a bejelentett
+#: napi bér utalással megy (az szerepel a bérszámfejtésben), a fölötte lévő
+#: rész pedig készpénzben. Bejelentés nélkül az egész nap készpénz.
+BEJELENTESEK: tuple[str, ...] = ("efo", "hatarozott", "nincs")
+
+#: Emberi címkék - a felület és a napló ezt írja ki.
+BEJELENTES_CIMKEK: dict[str, str] = {
+    "efo": "EFO (egyszerűsített foglalkoztatás)",
+    "hatarozott": "Határozott idejű munkaszerződés",
+    "nincs": "Nem volt bejelentve",
+}
+
+#: Ha se a napon, se az időszakon nincs megadva, ezt vesszük.
+ALAP_BEJELENTES = "nincs"
+
 #: Az "extra" a kulcs fogalom az egész modulban: olyan bevétel vagy kiadás,
 #: amihez NINCS számla, ami megmagyarázná, honnan jött vagy hova ment. Ezek
 #: nem hibák - a valóságban léteznek -, de külön kell látszaniuk, mert csak
@@ -128,6 +145,57 @@ class KrumpelloDolgozo(TimestampMixin, Base):
     munkaorak: Mapped[list["KrumpelloMunkaora"]] = relationship(
         back_populates="dolgozo", cascade="all, delete-orphan"
     )
+    idoszakok: Mapped[list["KrumpelloIdoszak"]] = relationship(
+        back_populates="dolgozo", cascade="all, delete-orphan", order_by="KrumpelloIdoszak.kezdet"
+    )
+
+
+class KrumpelloIdoszak(TimestampMixin, Base):
+    """Egy ember FOGLALKOZTATÁSI IDŐSZAKA: mettől meddig, milyen bejelentéssel.
+
+    Miért kell? Mert a Krumpellóban ugyanaz az ember év közben többféleképpen
+    dolgozik: nyáron EFO-val pár hétig, ősztől határozott idejű
+    munkaszerződéssel, közben pedig van olyan nap, amire egyáltalán nincs
+    bejelentve. A bejelentés módja és a bejelentett napi bér nem az EMBER
+    tulajdonsága, hanem az IDŐSZAKÉ - egy közös mező a dolgozón visszamenőleg
+    átírná a korábbi hetek elszámolását.
+
+    Az időszak egyben az ELSZÁMOLÁS EGYSÉGE is: a kifizetés a gyakorlatban egy
+    időszakra szól ("július 22. - augusztus 3."), nem naponta.
+
+    A napokat NEM idegen kulcs köti ide, hanem a DÁTUM: a
+    (dolgozó, kezdet..vég) intervallumba eső munkaóra-sorok tartoznak az
+    időszakhoz. Így egy utólag felvitt nap magától a helyére kerül, és nem
+    fordulhat elő, hogy egy sor kimarad az elszámolásból, mert elfelejtették
+    hozzákötni. Cserébe egy emberre az időszakok nem fedhetik egymást - ezt a
+    mentés ellenőrzi (lásd routes/krumpello.py).
+
+    A nyitott vég (`veg IS NULL`) azt jelenti: "azóta is tart".
+    """
+
+    __tablename__ = "krumpello_idoszakok"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dolgozo_id: Mapped[int] = mapped_column(ForeignKey("krumpello_dolgozok.id"), nullable=False, index=True)
+
+    kezdet: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    veg: Mapped[date | None] = mapped_column(Date, comment="Üresen: azóta is tart")
+
+    #: Hogyan van bejelentve EBBEN az időszakban (lásd BEJELENTESEK).
+    bejelentes: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=ALAP_BEJELENTES, comment="efo / hatarozott / nincs"
+    )
+    #: A bejelentett ALAP NAPI BÉR - ez megy utalással, a fölötte lévő rész
+    #: készpénzben. Bejelentés nélkül nincs értelme, ilyenkor üres.
+    napi_ber: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), comment="A bejelentett napi bér, ami utalással megy"
+    )
+
+    #: Az időszak neve, ha van ("Nyári szezon") - csak a felület kedvéért.
+    nev: Mapped[str | None] = mapped_column(String(255))
+    megjegyzes: Mapped[str | None] = mapped_column(Text)
+
+    dolgozo: Mapped["KrumpelloDolgozo"] = relationship(back_populates="idoszakok")
 
 
 class KrumpelloMunkaora(TimestampMixin, Base):
@@ -155,6 +223,18 @@ class KrumpelloMunkaora(TimestampMixin, Base):
     fizetes: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="A napra járó bér")
     borravalo: Mapped[float | None] = mapped_column(Numeric(12, 2))
     megjegyzes: Mapped[str | None] = mapped_column(Text)
+
+    #: Hogyan volt bejelentve EZEN a napon (lásd BEJELENTESEK).
+    #:
+    #: Üresen hagyva az időszakából örökli (lásd KrumpelloIdoszak és
+    #: services/krumpello_munkaber.py). Azért lehet mégis naponta felülírni,
+    #: mert a valóságban előfordul kivétel: egy beugrás a szerződéses időszak
+    #: közepén, amire aznap nem jelentették be.
+    bejelentes: Mapped[str | None] = mapped_column(String(20), comment="efo / hatarozott / nincs")
+    #: A bejelentett napi bér EZEN a napon. Üresen az időszakéból örökli.
+    bejelentett_napi_ber: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), comment="Az utalással fizetett alap napi bér"
+    )
 
     #: Kifizettük-e már ezt a napot.
     #:

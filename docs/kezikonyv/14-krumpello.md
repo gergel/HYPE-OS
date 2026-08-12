@@ -58,6 +58,58 @@ fizikailag áthalad a kasszán.
 > eltér a táblázatétól - és ez a helyes. A másik 11 összesítő-sor tételesen
 > egyezik.
 
+## Bejelentés: mennyi megy utalással, mennyi készpénzben
+
+Ugyanaz az ember év közben többféleképpen dolgozik: nyáron **EFO**-val, ősztől
+**határozott idejű munkaszerződéssel**, közben pedig van nap, amire egyáltalán
+**nincs bejelentve**. Ez nem adminisztratív címke, hanem a kifizetés módját
+dönti el:
+
+> **készpénz = óra × órabér − bejelentett napi bér**
+
+A bejelentett napi bér **utalással** megy (az szerepel a bérszámfejtésben), a
+fölötte lévő rész **készpénzben**. Bejelentés nélkül az egész nap készpénz.
+
+### Foglalkoztatási időszak
+
+A bejelentés az **időszakhoz** tartozik (`KrumpelloIdoszak`: dolgozó, mettől
+meddig, milyen bejelentéssel, mennyi a napi bér), nem az emberhez - egy közös
+mező a dolgozón visszamenőleg átírná a korábbi hetek elszámolását. A nyitott
+vég (`veg IS NULL`) azt jelenti: "azóta is tart".
+
+A napokat **nem idegen kulcs** köti az időszakhoz, hanem a **dátum**: a
+(dolgozó, kezdet..vég) intervallumba eső munkaóra-sorok tartoznak oda. Így egy
+utólag felvitt nap magától a helyére kerül, és nem maradhat ki az
+elszámolásból, mert elfelejtették hozzákötni. Cserébe egy emberre az időszakok
+**nem fedhetik egymást** - ezt a mentés ellenőrzi, mert két egymást fedő
+időszakból nem lehetne eldönteni, melyik szerint kell elszámolni azt a napot.
+
+A napon **felülírható** a bejelentés és a napi bér (`bejelentes`,
+`bejelentett_napi_ber`): a valóságban van kivétel - egy beugrás a szerződéses
+időszak közepén, amire aznap nem jelentették be. A felület jelzi, ha egy érték
+napra van megadva, nem örökölt.
+
+Az időszak törlése a **munkanapokat nem viszi el**: csak a bejelentés esik le
+róluk (visszaesnek "nem volt bejelentve"-re), a ledolgozott óra és a bér
+megmarad.
+
+### Elszámolás
+
+Az időszak egyben az **elszámolás egysége**: a Munkabér oldalon kijelölhető
+egy vagy több időszak, és egyben elszámolható. A visszajelzés a két szám,
+amivel a felhasználó a bankhoz és a kasszához megy: **mennyit kell utalni** és
+**mennyit készpénzben odaadni**.
+
+Több időszak azért kell egyszerre, mert ha valakinél egy EFO-s és egy
+szerződéses szakasz is nyitva maradt, egyszerre rendezik őket - és egy összeget
+adnak oda, nem kettőt.
+
+**Rövid nap:** ha a bejelentett napi bér többet fizet, mint amennyi aznap járt
+(4 óra × 2500 = 10 000, de a bejelentett napi bér 15 000), a nap készpénze
+**negatív** - az utalás előre fizetett. Ezt nem vágjuk nullára, mert az
+időszak szintjén kiegyenlítődik, épp úgy, ahogy a valóságban; a felület
+viszont kiemeli, hogy látszódjon.
+
 ## Mit fizettünk már ki
 
 A munkanap-soron van egy `kifizetve` jelölés (+ `kifizetes_datuma`), és ebből
@@ -189,7 +241,7 @@ lehet őket a felület arculatába hozni.
 | `/krumpello` | Összesítő: extra egyenleg elöl, majd bevétel/kiadás/egyenlegek/munkabér |
 | `/krumpello/bevetel` | Napi kassza-zárások, felvitel és javítás |
 | `/krumpello/kiadas` | Kiadások a három forrás szerint bontva |
-| `/krumpello/munkaber` | Emberenkénti összesítés + naponkénti napló, kifizetés-jelöléssel |
+| `/krumpello/munkaber` | Foglalkoztatási időszakok elszámolása + emberenkénti összesítés + naponkénti napló |
 
 Az időszak-szűrő **URL-ben** él (`?tol=&ig=`): így egy nézet linkelhető, a
 frissítés nem dobja vissza, és a szerver is látja - nem kell a böngészőben

@@ -7,6 +7,7 @@ import { ModalReteg } from "@/components/ModalReteg";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { KeresosSelect } from "@/components/KeresosSelect";
 import { formatFt } from "@/lib/ido";
+import { KRUMPELLO_BEJELENTESEK } from "@/lib/krumpello";
 import type { KrumpelloDolgozo, KrumpelloMunkaora } from "@/lib/api";
 
 /** Egy munkanap felvitele/javítása, plusz új dolgozó felvétele.
@@ -57,6 +58,12 @@ function MunkaoraUrlap({
   const [fizetes, setFizetes] = useState(munkaora?.fizetes != null ? String(munkaora.fizetes) : "");
   const [borravalo, setBorravalo] = useState(munkaora?.borravalo != null ? String(munkaora.borravalo) : "");
   const [megjegyzes, setMegjegyzes] = useState(munkaora?.megjegyzes ?? "");
+  // A bejelentés ÜRESEN az időszakból öröklődik - ezért van külön "öröklés"
+  // választás, és nem az "efo" az alapérték.
+  const [bejelentes, setBejelentes] = useState(munkaora?.bejelentes ?? "");
+  const [napiBer, setNapiBer] = useState(
+    munkaora?.bejelentett_napi_ber != null ? String(munkaora.bejelentett_napi_ber) : "",
+  );
   // A kifizetés a naplóban egy kattintás, itt viszont a DÁTUMA is megadható:
   // a jelölés gyakran később készül el, mint maga az utalás.
   const [kifizetve, setKifizetve] = useState(munkaora?.kifizetve ?? false);
@@ -115,6 +122,8 @@ function MunkaoraUrlap({
             fizetes: szam(fizetes),
             borravalo: szam(borravalo),
             megjegyzes: megjegyzes.trim() || null,
+            bejelentes: bejelentes || null,
+            bejelentett_napi_ber: szam(napiBer),
             kifizetve,
             // Kifizetettnél a mai nap az alapérték - jelöletlennél nincs
             // dátum, mert nem történt kifizetés.
@@ -231,6 +240,40 @@ function MunkaoraUrlap({
             <div className="flex flex-col gap-1">
               <label className="text-[11px] text-text-muted">Borravaló</label>
               <input type="number" value={borravalo} onChange={(e) => setBorravalo(e.target.value)} disabled={busy} className={mezoClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] text-text-muted">Bejelentés ezen a napon</label>
+              <select
+                value={bejelentes}
+                onChange={(e) => setBejelentes(e.target.value)}
+                disabled={busy}
+                className={mezoClass}
+              >
+                <option value="">Az időszakából (alapértelmezett)</option>
+                {KRUMPELLO_BEJELENTESEK.map((b) => (
+                  <option key={b.ertek} value={b.ertek}>
+                    {b.cimke}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-text-muted">
+                {munkaora && bejelentes === ""
+                  ? `Jelenleg: ${munkaora.ervenyes_bejelentes === "nincs" ? "nincs bejelentve" : munkaora.ervenyes_bejelentes}`
+                  : "Csak akkor állítsd, ha ez a nap kivétel."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] text-text-muted">Bejelentett napi bér erre a napra</label>
+              <input
+                type="number"
+                value={napiBer}
+                onChange={(e) => setNapiBer(e.target.value)}
+                disabled={busy}
+                className={mezoClass}
+              />
+              <p className="text-[11px] text-text-muted">
+                Üresen az időszakéból. Ennyi megy utalással, a többi készpénzben.
+              </p>
             </div>
             <div className="flex flex-col gap-1 sm:col-span-2">
               <label className="text-[11px] text-text-muted">Megjegyzés</label>

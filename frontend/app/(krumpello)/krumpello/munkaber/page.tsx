@@ -1,4 +1,13 @@
-import { getKrumpelloDolgozok, getKrumpelloMunkaorak } from "@/lib/api";
+import {
+  getCurrentUser,
+  getKrumpelloDolgozok,
+  getKrumpelloIdoszakok,
+  getKrumpelloMunkaorak,
+  getMyPagePermissions,
+  krumpelloBejelentesCimke,
+} from "@/lib/api";
+import { canDoAction } from "@/lib/permissions";
+import { IdoszakKezelo } from "@/components/krumpello/IdoszakKezelo";
 import { KrumpelloFejlec } from "@/components/krumpello/KrumpelloFejlec";
 import { MunkaoraSzerkeszto } from "@/components/krumpello/MunkaoraSzerkeszto";
 import { IdoszakKifizetes, KifizetesKapcsolo } from "@/components/krumpello/KifizetesKapcsolo";
@@ -21,7 +30,14 @@ export default async function KrumpelloMunkaberPage({
   searchParams: Promise<{ tol?: string; ig?: string }>;
 }) {
   const { tol, ig } = await searchParams;
-  const [dolgozok, orak] = await Promise.all([getKrumpelloDolgozok(tol, ig), getKrumpelloMunkaorak(tol, ig)]);
+  const [dolgozok, orak, idoszakok, currentUser, pagePermissions] = await Promise.all([
+    getKrumpelloDolgozok(tol, ig),
+    getKrumpelloMunkaorak(tol, ig),
+    getKrumpelloIdoszakok(),
+    getCurrentUser(),
+    getMyPagePermissions(),
+  ]);
+  const canEdit = canDoAction(currentUser, pagePermissions, "/krumpello", "edit");
 
   const dolgozokOraval = dolgozok.filter((d) => d.ora_osszesen > 0 || d.aktiv);
   const berOsszesen = dolgozok.reduce((s, d) => s + d.fizetes_osszesen, 0);
@@ -30,6 +46,12 @@ export default async function KrumpelloMunkaberPage({
   // A "még jár" a nap végén az egyetlen szám, ami teendőt jelent - ezért van
   // a felső sorban, kiemelve, nem a táblázat egy oszlopában elbújva.
   const hatralekOsszesen = dolgozok.reduce((s, d) => s + d.hatralek, 0);
+  // A KIFIZETÉS két száma: a bejelentett napi bérek utalással mennek, a
+  // fölöttük lévő rész készpénzben. Csak a még ki nem fizetett napokból, mert
+  // a kérdés az, hogy MOST mit kell fizetni.
+  const nyitottNapok = orak.filter((m) => !m.kifizetve);
+  const utalandoOsszesen = nyitottNapok.reduce((s, m) => s + m.utalando, 0);
+  const keszpenzOsszesen = nyitottNapok.reduce((s, m) => s + m.keszpenz, 0);
 
   return (
     <>
@@ -50,12 +72,25 @@ export default async function KrumpelloMunkaberPage({
             ertek={formatFt(hatralekOsszesen)}
             hangsuly={hatralekOsszesen > 0 ? "figyelem" : "rendben"}
           />
+          <Osszesen cimke="Ebből utalás" ertek={formatFt(utalandoOsszesen)} />
+          <Osszesen cimke="Ebből készpénz" ertek={formatFt(keszpenzOsszesen)} />
           <Osszesen cimke="Borravaló" ertek={formatFt(borravaloOsszesen)} />
           <Osszesen
             cimke="Átlagos órabér"
             ertek={oraOsszesen > 0 ? formatFt(Math.round(berOsszesen / oraOsszesen)) : "–"}
           />
         </div>
+
+        <section>
+          <h2 className="t-section mb-1">Foglalkoztatási időszakok</h2>
+          <p className="mb-3 text-[12.5px] text-text-muted">
+            Ki mettől meddig, milyen bejelentéssel dolgozott. A bejelentett napi bér utalással megy, a fölötte
+            lévő rész készpénzben – az időszak egyben az elszámolás egysége is.
+          </p>
+          <div className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4">
+            <IdoszakKezelo dolgozok={dolgozok} idoszakok={idoszakok} canEdit={canEdit} />
+          </div>
+        </section>
 
         <section>
           <h2 className="t-section mb-3">Emberenként</h2>
@@ -139,6 +174,9 @@ export default async function KrumpelloMunkaberPage({
                     <th className="px-4 py-2 text-right font-medium text-text-muted">Óra</th>
                     <th className="px-4 py-2 text-right font-medium text-text-muted">Órabér</th>
                     <th className="px-4 py-2 text-right font-medium text-text-muted">Fizetés</th>
+                    <th className="px-4 py-2 text-left font-medium text-text-muted">Bejelentés</th>
+                    <th className="px-4 py-2 text-right font-medium text-text-muted">Utalás</th>
+                    <th className="px-4 py-2 text-right font-medium text-text-muted">Készpénz</th>
                     <th className="px-4 py-2 text-right font-medium text-text-muted">Borravaló</th>
                     <th className="px-4 py-2 text-left font-medium text-text-muted">Állapot</th>
                     <th className="px-4 py-2 text-left font-medium text-text-muted">Megjegyzés</th>
@@ -158,6 +196,30 @@ export default async function KrumpelloMunkaberPage({
                       </td>
                       <td className="px-4 py-2.5 text-right font-medium tabular-nums text-text-primary">
                         {m.fizetes != null ? formatFt(m.fizetes) : "–"}
+                      </td>
+                      <td className="px-4 py-2.5 text-text-secondary">
+                        {krumpelloBejelentesCimke(m.ervenyes_bejelentes)}
+                        {/* Az örökölt és a napra kézzel megadott érték nem
+                            ugyanaz: ha valakit egy napra kivettek a
+                            bejelentésből, azt látni kell. */}
+                        {m.bejelentes_forrasa === "nap" && (
+                          <span className="ml-1 text-[11px] text-text-muted">(napra)</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-text-secondary">
+                        {m.utalando ? formatFt(m.utalando) : "–"}
+                      </td>
+                      <td
+                        className={`px-4 py-2.5 text-right tabular-nums ${
+                          m.keszpenz < 0 ? "text-text-danger" : "text-text-secondary"
+                        }`}
+                        title={
+                          m.keszpenz < 0
+                            ? "A bejelentett napi bér többet fizet, mint amennyi aznap járt – az időszak végén kiegyenlítődik."
+                            : undefined
+                        }
+                      >
+                        {m.keszpenz ? formatFt(m.keszpenz) : "–"}
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-text-secondary">
                         {m.borravalo ? formatFt(m.borravalo) : "–"}

@@ -1975,7 +1975,67 @@ export type KrumpelloMunkaora = {
   /** Kifizettük-e már ezt a napot. */
   kifizetve: boolean;
   kifizetes_datuma: string | null;
+
+  /** A NAPRA beírt saját érték (null = az időszakából örökli). */
+  bejelentes: string | null;
+  bejelentett_napi_ber: number | null;
+  /** A ténylegesen érvényes bejelentés és a belőle következő pénzbontás:
+   * a bejelentett napi bér utalással megy, a többi készpénzben. */
+  ervenyes_bejelentes: string;
+  bejelentes_forrasa: "nap" | "idoszak";
+  idoszak_id: number | null;
+  utalando: number;
+  keszpenz: number;
 };
+
+// A bejelentés-lista a lib/krumpello.ts-ben él, hogy kliens-komponensből is
+// behúzható legyen - itt csak újraexportáljuk, hogy a szerver-oldali hívók
+// importja változatlan maradjon (ugyanaz a minta, mint a formatHuf-nál).
+export { KRUMPELLO_BEJELENTESEK, krumpelloBejelentesCimke } from "@/lib/krumpello";
+
+/** Egy ember foglalkoztatási időszaka - egyben az elszámolás egysége. */
+export type KrumpelloIdoszak = {
+  id: number;
+  dolgozo_id: number;
+  dolgozo_nev: string;
+  kezdet: string;
+  veg: string | null;
+  bejelentes: string;
+  bejelentes_cimke: string;
+  napi_ber: number | null;
+  nev: string | null;
+  megjegyzes: string | null;
+  napok_szama: number;
+  ora_osszesen: number;
+  jarandosag: number;
+  utalando: number;
+  keszpenz: number;
+  borravalo: number;
+  kifizetett: number;
+  hatralek: number;
+  kifizetett_napok: number;
+  teljesen_kifizetve: boolean;
+};
+
+export type KrumpelloIdoszakNap = {
+  munkaora_id: number;
+  datum: string;
+  ora: number;
+  orabar: number;
+  jarandosag: number;
+  borravalo: number;
+  bejelentes: string;
+  bejelentes_cimke: string;
+  bejelentes_forrasa: "nap" | "idoszak";
+  utalando: number;
+  keszpenz: number;
+  /** A bejelentett bér többet fizet, mint amennyi aznap járt (rövid nap). */
+  tulfizetett: boolean;
+  kifizetve: boolean;
+  kifizetes_datuma: string | null;
+};
+
+export type KrumpelloIdoszakReszletek = KrumpelloIdoszak & { napok: KrumpelloIdoszakNap[] };
 
 export type KrumpelloOsszesito = {
   bevetel: {
@@ -2033,6 +2093,11 @@ export async function getKrumpelloDolgozok(tol?: string, ig?: string): Promise<K
 
 export async function getKrumpelloMunkaorak(tol?: string, ig?: string): Promise<KrumpelloMunkaora[]> {
   return (await apiGet<KrumpelloMunkaora[]>(`/api/v1/krumpello/munkaorak${krumpelloIdoszak(tol, ig)}`)) ?? [];
+}
+
+export async function getKrumpelloIdoszakok(dolgozoId?: number): Promise<KrumpelloIdoszak[]> {
+  const qs = dolgozoId != null ? `?dolgozo_id=${dolgozoId}` : "";
+  return (await apiGet<KrumpelloIdoszak[]>(`/api/v1/krumpello/idoszakok${qs}`)) ?? [];
 }
 
 /** Látja-e a bejelentkezett ember a Krumpellót? A HYPE OS fejlécében ülő

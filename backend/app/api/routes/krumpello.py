@@ -25,14 +25,18 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee
 from app.models.krumpello import (
+    ALAP_BEJELENTES,
+    BEJELENTES_CIMKEK,
+    BEJELENTESEK,
     KIADAS_FORRASOK,
     KrumpelloDolgozo,
     KrumpelloKiadas,
+    KrumpelloIdoszak,
     KrumpelloMunkaora,
     KrumpelloNap,
 )
 from app.models.user_access import PageAccessConfig
-from app.services import krumpello_osszesito
+from app.services import krumpello_munkaber, krumpello_osszesito
 
 router = APIRouter(prefix="/krumpello", tags=["krumpello"])
 
@@ -362,6 +366,9 @@ class MunkaoraIn(BaseModel):
     fizetes: float | None = None
     borravalo: float | None = None
     megjegyzes: str | None = None
+    #: Üresen hagyva az időszakából örökli (lásd services/krumpello_munkaber.py).
+    bejelentes: str | None = None
+    bejelentett_napi_ber: float | None = None
 
 
 class MunkaoraPatch(BaseModel):
@@ -380,6 +387,8 @@ class MunkaoraPatch(BaseModel):
     megjegyzes: str | None = None
     kifizetve: bool | None = None
     kifizetes_datuma: date | None = None
+    bejelentes: str | None = None
+    bejelentett_napi_ber: float | None = None
 
 
 class MunkaoraRead(BaseModel):
@@ -395,6 +404,29 @@ class MunkaoraRead(BaseModel):
     kifizetve: bool = False
     kifizetes_datuma: date | None = None
 
+    #: A NAPRA beírt saját érték (üres = az időszakból örökli).
+    bejelentes: str | None = None
+    bejelentett_napi_ber: float | None = None
+    #: A ténylegesen érvényes bejelentés és a belőle következő pénzbontás
+    #: (lásd services/krumpello_munkaber.py). A felület ezt írja ki: az
+    #: örökölt értéket ugyanúgy látni kell, mint a kézzel megadottat.
+    ervenyes_bejelentes: str = ALAP_BEJELENTES
+    bejelentes_forrasa: str = "idoszak"
+    idoszak_id: int | None = None
+    utalando: float = 0.0
+    keszpenz: float = 0.0
+
+
+def _ellenorizd_a_bejelentest(ertek: str | None) -> None:
+    """A bejelentés zárt értékkészlet: ami ide bekerül, abból elszámolás lesz.
+
+    Az üres érték megengedett: az azt jelenti, hogy a nap az IDŐSZAKÁBÓL
+    örökli a bejelentést (lásd services/krumpello_munkaber.py)."""
+    if ertek is not None and ertek not in BEJELENTESEK:
+        raise HTTPException(
+            status_code=400, detail=f"Ismeretlen bejelentés. Választható: {', '.join(BEJELENTESEK)}"
+        )
+
 
 def _szamolt_fizetes(payload: MunkaoraIn) -> float | None:
     """A napra járó bér. A beküldött érték mindig erősebb: a kerekítés, a
@@ -407,7 +439,13 @@ def _szamolt_fizetes(payload: MunkaoraIn) -> float | None:
     return None
 
 
-def _munkaora_kimenet(m: KrumpelloMunkaora) -> MunkaoraRead:
+def _munkaora_kimenet(m: KrumpelloMunkaora, idoszakok: list[KrumpelloIdoszak] | None = None) -> MunkaoraRead:
+    """Egy munkanap kimenete, a bejelentésből következő pénzbontással együtt.
+
+    Az `idoszakok` azért paraméter, mert a listánál EGYSZER kérjük le
+    dolgozónként - soronként újralekérdezve több száz sornál ugyanannyi
+    fölösleges kör lenne."""
+    bontas = krumpello_munkaber.bontsd_a_napot(m, idoszakok or [])
     return MunkaoraRead(
         id=m.id,
         dolgozo_id=m.dolgozo_id,
@@ -420,7 +458,28 @@ def _munkaora_kimenet(m: KrumpelloMunkaora) -> MunkaoraRead:
         megjegyzes=m.megjegyzes,
         kifizetve=m.kifizetve,
         kifizetes_datuma=m.kifizetes_datuma,
+        bejelentes=m.bejelentes,
+        bejelentett_napi_ber=_f(m.bejelentett_napi_ber),
+        ervenyes_bejelentes=bontas.bejelentes,
+        bejelentes_forrasa=bontas.bejelentes_forrasa,
+        idoszak_id=bontas.idoszak_id,
+        utalando=bontas.utalando,
+        keszpenz=bontas.keszpenz,
     )
+
+
+def _idoszak_terkep(db: Session, dolgozo_idk: set[int]) -> dict[int, list[KrumpelloIdoszak]]:
+    """Dolgozónként az időszakai - EGY lekérdezésből."""
+    if not dolgozo_idk:
+        return {}
+    terkep: dict[int, list[KrumpelloIdoszak]] = {}
+    for i in db.scalars(
+        select(KrumpelloIdoszak)
+        .where(KrumpelloIdoszak.dolgozo_id.in_(dolgozo_idk))
+        .order_by(KrumpelloIdoszak.kezdet)
+    ):
+        terkep.setdefault(i.dolgozo_id, []).append(i)
+    return terkep
 
 
 @router.get("/dolgozok", response_model=list[DolgozoRead])
@@ -523,7 +582,8 @@ def list_munkaorak(
     if ig is not None:
         stmt = stmt.where(KrumpelloMunkaora.datum <= ig)
     sorok = db.scalars(stmt.order_by(KrumpelloMunkaora.datum.desc(), KrumpelloMunkaora.id)).all()
-    return [_munkaora_kimenet(m) for m in sorok]
+    terkep = _idoszak_terkep(db, {m.dolgozo_id for m in sorok})
+    return [_munkaora_kimenet(m, terkep.get(m.dolgozo_id, [])) for m in sorok]
 
 
 @router.post("/munkaorak", response_model=MunkaoraRead, status_code=201)
@@ -535,6 +595,7 @@ def create_munkaora(
     dolgozo = db.get(KrumpelloDolgozo, payload.dolgozo_id)
     if dolgozo is None:
         raise HTTPException(status_code=404, detail="Ez a dolgozó nem található.")
+    _ellenorizd_a_bejelentest(payload.bejelentes)
     adat = payload.model_dump()
     adat["fizetes"] = _szamolt_fizetes(payload)
     m = KrumpelloMunkaora(**adat)
@@ -545,7 +606,7 @@ def create_munkaora(
         dolgozo.alap_orabar = payload.orabar
     db.commit()
     db.refresh(m)
-    return _munkaora_kimenet(m)
+    return _munkaora_kimenet(m, krumpello_munkaber.dolgozo_idoszakai(db, m.dolgozo_id))
 
 
 @router.patch("/munkaorak/{munkaora_id}", response_model=MunkaoraRead)
@@ -559,6 +620,8 @@ def update_munkaora(
     if m is None:
         raise HTTPException(status_code=404, detail="Ez a munkaóra-sor nem található.")
     valtozas = payload.model_dump(exclude_unset=True)
+    if "bejelentes" in valtozas:
+        _ellenorizd_a_bejelentest(valtozas["bejelentes"])
     for mezo, ertek in valtozas.items():
         setattr(m, mezo, ertek)
     # Ha az órát vagy az órabért írták át, de a fizetést nem, újraszámoljuk -
@@ -569,7 +632,7 @@ def update_munkaora(
             m.fizetes = round(float(m.ora) * float(m.orabar), 2)
     db.commit()
     db.refresh(m)
-    return _munkaora_kimenet(m)
+    return _munkaora_kimenet(m, krumpello_munkaber.dolgozo_idoszakai(db, m.dolgozo_id))
 
 
 class KifizetesJelolesIn(BaseModel):
@@ -626,6 +689,306 @@ def jelold_kifizetettnek(
     return KifizetesJelolesOut(
         erintett_napok=len(sorok),
         osszeg=sum(float(m.fizetes) if m.fizetes is not None else 0.0 for m in sorok),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Foglalkoztatási időszakok és elszámolás
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class IdoszakIn(BaseModel):
+    dolgozo_id: int
+    kezdet: date
+    #: Üresen: azóta is tart.
+    veg: date | None = None
+    bejelentes: str = ALAP_BEJELENTES
+    napi_ber: float | None = None
+    nev: str | None = None
+    megjegyzes: str | None = None
+
+
+class IdoszakPatch(BaseModel):
+    """Részleges módosítás. A dolgozó nincs benne: egy időszakot nem lehet
+    átrakni másik emberre - az valójában "rossz helyre vittem fel", amire a
+    törlés és az újrafelvitel a helyes út."""
+
+    kezdet: date | None = None
+    veg: date | None = None
+    bejelentes: str | None = None
+    napi_ber: float | None = None
+    nev: str | None = None
+    megjegyzes: str | None = None
+
+
+class IdoszakRead(BaseModel):
+    id: int
+    dolgozo_id: int
+    dolgozo_nev: str
+    kezdet: date
+    veg: date | None = None
+    bejelentes: str
+    bejelentes_cimke: str
+    napi_ber: float | None = None
+    nev: str | None = None
+    megjegyzes: str | None = None
+
+    #: Az időszak elszámolása - ezért van egyáltalán ez a nézet.
+    napok_szama: int = 0
+    ora_osszesen: float = 0.0
+    jarandosag: float = 0.0
+    utalando: float = 0.0
+    keszpenz: float = 0.0
+    borravalo: float = 0.0
+    kifizetett: float = 0.0
+    hatralek: float = 0.0
+    kifizetett_napok: int = 0
+    teljesen_kifizetve: bool = False
+
+
+class IdoszakNap(BaseModel):
+    """Egy nap az időszak részletes bontásában."""
+
+    munkaora_id: int
+    datum: date
+    ora: float = 0.0
+    orabar: float = 0.0
+    jarandosag: float = 0.0
+    borravalo: float = 0.0
+    bejelentes: str
+    bejelentes_cimke: str
+    bejelentes_forrasa: str
+    utalando: float = 0.0
+    keszpenz: float = 0.0
+    #: A bejelentett bér többet fizet, mint amennyi aznap járt (rövid nap).
+    tulfizetett: bool = False
+    kifizetve: bool = False
+    kifizetes_datuma: date | None = None
+
+
+class IdoszakReszletek(IdoszakRead):
+    napok: list[IdoszakNap] = []
+
+
+def _idoszak_kimenet(i: KrumpelloIdoszak, e: krumpello_munkaber.Elszamolas) -> IdoszakRead:
+    return IdoszakRead(
+        id=i.id,
+        dolgozo_id=i.dolgozo_id,
+        dolgozo_nev=i.dolgozo.nev if i.dolgozo else f"#{i.dolgozo_id}",
+        kezdet=i.kezdet,
+        veg=i.veg,
+        bejelentes=i.bejelentes,
+        bejelentes_cimke=BEJELENTES_CIMKEK.get(i.bejelentes, i.bejelentes),
+        napi_ber=_f(i.napi_ber),
+        nev=i.nev,
+        megjegyzes=i.megjegyzes,
+        napok_szama=e.napok_szama,
+        ora_osszesen=e.ora_osszesen,
+        jarandosag=e.jarandosag,
+        utalando=e.utalando,
+        keszpenz=e.keszpenz,
+        borravalo=e.borravalo,
+        kifizetett=e.kifizetett,
+        hatralek=e.hatralek,
+        kifizetett_napok=e.kifizetett_napok,
+        teljesen_kifizetve=e.teljesen_kifizetve,
+    )
+
+
+def _idoszak_vagy_404(db: Session, idoszak_id: int) -> KrumpelloIdoszak:
+    i = db.get(KrumpelloIdoszak, idoszak_id)
+    if i is None:
+        raise HTTPException(status_code=404, detail="Ez az időszak nem található.")
+    return i
+
+
+def _ellenorizd_az_idoszakot(
+    db: Session, dolgozo_id: int, kezdet: date, veg: date | None, kihagyott_id: int | None = None
+) -> None:
+    """Érvényes-e az időszak? Két dolgot nézünk, és mindkettő némán rossz
+    elszámolást okozna: a fordított dátumpárt, és az ütközést."""
+    if veg is not None and veg < kezdet:
+        raise HTTPException(status_code=400, detail="Az időszak vége nem lehet a kezdete előtt.")
+    utkozo = krumpello_munkaber.atfedes(
+        krumpello_munkaber.dolgozo_idoszakai(db, dolgozo_id), kezdet, veg, kihagyott_id
+    )
+    if utkozo is not None:
+        vege = utkozo.veg.isoformat() if utkozo.veg else "nyitott"
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Ütközik egy meglévő időszakkal ({utkozo.kezdet.isoformat()} - {vege}). "
+                "Egy napra csak egy bejelentés tartozhat, ezért az időszakok nem fedhetik egymást."
+            ),
+        )
+
+
+@router.get("/idoszakok", response_model=list[IdoszakRead])
+def list_idoszakok(
+    dolgozo_id: int | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(olvashat),
+):
+    """A foglalkoztatási időszakok, mindegyik a saját elszámolásával."""
+    stmt = select(KrumpelloIdoszak)
+    if dolgozo_id is not None:
+        stmt = stmt.where(KrumpelloIdoszak.dolgozo_id == dolgozo_id)
+    sorok = db.scalars(stmt.order_by(KrumpelloIdoszak.kezdet.desc(), KrumpelloIdoszak.id.desc())).all()
+    return [_idoszak_kimenet(i, krumpello_munkaber.idoszak_elszamolasa(db, i)) for i in sorok]
+
+
+@router.get("/idoszakok/{idoszak_id}", response_model=IdoszakReszletek)
+def get_idoszak(
+    idoszak_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(olvashat),
+):
+    """Egy időszak elszámolása NAPI BONTÁSSAL - ebből látszik, melyik napból
+    mennyi megy utalással és mennyi készpénzben."""
+    i = _idoszak_vagy_404(db, idoszak_id)
+    e = krumpello_munkaber.idoszak_elszamolasa(db, i)
+    alap = _idoszak_kimenet(i, e)
+    return IdoszakReszletek(
+        **alap.model_dump(),
+        napok=[
+            IdoszakNap(
+                munkaora_id=b.munkaora_id,
+                datum=b.datum,
+                ora=b.ora,
+                orabar=b.orabar,
+                jarandosag=b.jarandosag,
+                borravalo=b.borravalo,
+                bejelentes=b.bejelentes,
+                bejelentes_cimke=b.bejelentes_cimke,
+                bejelentes_forrasa=b.bejelentes_forrasa,
+                utalando=b.utalando,
+                keszpenz=b.keszpenz,
+                tulfizetett=b.tulfizetett,
+                kifizetve=b.kifizetve,
+                kifizetes_datuma=b.kifizetes_datuma,
+            )
+            for b in e.bontasok
+        ],
+    )
+
+
+@router.post("/idoszakok", response_model=IdoszakRead, status_code=201)
+def create_idoszak(
+    payload: IdoszakIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    if db.get(KrumpelloDolgozo, payload.dolgozo_id) is None:
+        raise HTTPException(status_code=404, detail="Ez a dolgozó nem található.")
+    if payload.bejelentes not in BEJELENTESEK:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen bejelentés. Választható: {', '.join(BEJELENTESEK)}")
+    _ellenorizd_az_idoszakot(db, payload.dolgozo_id, payload.kezdet, payload.veg)
+    i = KrumpelloIdoszak(**payload.model_dump())
+    db.add(i)
+    db.commit()
+    db.refresh(i)
+    return _idoszak_kimenet(i, krumpello_munkaber.idoszak_elszamolasa(db, i))
+
+
+@router.patch("/idoszakok/{idoszak_id}", response_model=IdoszakRead)
+def update_idoszak(
+    idoszak_id: int,
+    payload: IdoszakPatch,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    i = _idoszak_vagy_404(db, idoszak_id)
+    adat = payload.model_dump(exclude_unset=True)
+    if "bejelentes" in adat and adat["bejelentes"] not in BEJELENTESEK:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen bejelentés. Választható: {', '.join(BEJELENTESEK)}")
+    # A dátumokat a MOSTANI értékekkel együtt kell nézni: egy PATCH tipikusan
+    # csak az egyik végét küldi el.
+    _ellenorizd_az_idoszakot(
+        db,
+        i.dolgozo_id,
+        adat.get("kezdet", i.kezdet),
+        adat.get("veg", i.veg),
+        kihagyott_id=i.id,
+    )
+    for mezo, ertek in adat.items():
+        setattr(i, mezo, ertek)
+    db.commit()
+    db.refresh(i)
+    return _idoszak_kimenet(i, krumpello_munkaber.idoszak_elszamolasa(db, i))
+
+
+@router.delete("/idoszakok/{idoszak_id}", status_code=204)
+def delete_idoszak(
+    idoszak_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    """Az időszak törlése a MUNKANAPOKAT nem viszi el.
+
+    Csak a bejelentés esik le róluk (visszaesnek "nem volt bejelentve"-re,
+    hacsak a napon nincs saját érték) - a ledolgozott óra és a bér megmarad.
+    Így egy elrontott időszak javítható anélkül, hogy elszámolt munkanapok
+    tűnnének el."""
+    db.delete(_idoszak_vagy_404(db, idoszak_id))
+    db.commit()
+
+
+class IdoszakElszamolasIn(BaseModel):
+    """Egy vagy TÖBB időszak elszámolása egyben.
+
+    Több azért, mert a kifizetés a gyakorlatban nem mindig egy időszakra szól:
+    ha valakinél egy EFO-s és egy szerződéses szakasz is nyitva maradt, egyszerre
+    rendezik őket - és a felhasználó egy összeget ad oda, nem kettőt."""
+
+    idoszak_idk: list[int]
+    kifizetve: bool = True
+    kifizetes_datuma: date | None = None
+
+
+class IdoszakElszamolasOut(BaseModel):
+    erintett_napok: int
+    #: A teljes járandóság, és a bontása - ennyit kell utalni, ennyit kp-ban adni.
+    jarandosag: float
+    utalando: float
+    keszpenz: float
+
+
+@router.post("/idoszakok/elszamolas", response_model=IdoszakElszamolasOut)
+def szamold_el_az_idoszakokat(
+    payload: IdoszakElszamolasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Időszak(ok) kifizetettre jelölése, a bontás visszaadásával.
+
+    CSAK a még nem jelölt napokat nyúlja (visszavonásnál csak a jelölteket) -
+    ugyanaz az elv, mint a napi jelölésnél: egy tágabb elszámolás ne írja felül
+    egy korábbi kifizetés dátumát.
+
+    A válasz megmondja, MENNYIT kell utalni és mennyit készpénzben odaadni -
+    ez az a két szám, amivel a felhasználó a bankhoz és a kasszához megy."""
+    napok: list[KrumpelloMunkaora] = []
+    bontasok: list[krumpello_munkaber.NapiBontas] = []
+    for idoszak_id in payload.idoszak_idk:
+        i = _idoszak_vagy_404(db, idoszak_id)
+        idoszakok = krumpello_munkaber.dolgozo_idoszakai(db, i.dolgozo_id)
+        for m in krumpello_munkaber.idoszak_napjai(db, i):
+            if m.kifizetve == payload.kifizetve or m.id in {n.id for n in napok}:
+                continue
+            napok.append(m)
+            bontasok.append(krumpello_munkaber.bontsd_a_napot(m, idoszakok))
+
+    for m in napok:
+        m.kifizetve = payload.kifizetve
+        m.kifizetes_datuma = (payload.kifizetes_datuma or date.today()) if payload.kifizetve else None
+    db.commit()
+
+    e = krumpello_munkaber.szamold_ki(bontasok)
+    return IdoszakElszamolasOut(
+        erintett_napok=len(napok),
+        jarandosag=e.jarandosag,
+        utalando=e.utalando,
+        keszpenz=e.keszpenz,
     )
 
 
