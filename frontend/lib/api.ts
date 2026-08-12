@@ -2272,9 +2272,21 @@ export type MegrendeloiKeretProjektkod = {
   tig: MegrendeloiKeretPapir | null;
 };
 
+/** Egy a keretszerződéshez feltöltött fájl. */
+export type MegrendeloiKeretFajl = {
+  id: number;
+  filename: string;
+  url: string;
+  kategoria: string;
+  feltoltve: string | null;
+};
+
 /** A keretszerződés adatlapja: a saját adatai + minden hozzá tartozó projektkód
- * és azok papírjai. */
+ * és azok papírjai + MINDEN feltöltött fájl. */
 export type MegrendeloiKeretReszletek = MegrendeloiKeret & {
+  nev: string | null;
+  megjegyzes: string | null;
+  fajlok: MegrendeloiKeretFajl[];
   projektkodok: MegrendeloiKeretProjektkod[];
 };
 

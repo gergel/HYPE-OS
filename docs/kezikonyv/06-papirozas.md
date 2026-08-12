@@ -322,6 +322,14 @@ kattintva ezért felugrik az adatlap (`GET /megrendeloi-keretszerzodesek/{id}`,
 alattuk **minden projekt, amit lefed** - projektenként azzal együtt, hol tart a
 szerződése és a teljesítési igazolása, mennyi a nettó, és megnyitható-e a papír.
 
+Az adatlap a **feltöltött fájlokat is felsorolja** - nem csak a két nevesített
+mezőt (`file_url`, `alairt_file_url`). A Notion-import a lap ÖSSZES fájlját
+áthozza a tárhelyünkre és a rekordhoz csatolja (lásd
+`notion_import/files.atemel_mindent`), csak ezekre eddig nem volt hova ránézni:
+az aláírt példány, a mellékletek és a korábbi verziók átjöttek, de a felületen
+nem látszottak. Ugyanígy megjelenik a Notion "Name" mezője és a szerződés
+megjegyzése is.
+
 A nézet **olvasó**: a papírokat a projektkód adatlapján lehet szerkeszteni,
 ahová innen egy kattintással el lehet jutni. Ugyanaz a papír két helyen
 szerkesztve előbb-utóbb két különböző viselkedést jelentene.

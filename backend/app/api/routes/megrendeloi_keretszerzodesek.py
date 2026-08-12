@@ -29,6 +29,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.client import Client
 from app.models.contract import Contract, ContractType
+from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.megrendeloi_papir import MegrendeloiSzerzodes, MegrendeloiTig
 from app.models.project_code import ProjectCode
@@ -157,15 +158,55 @@ class KeretProjektkod(BaseModel):
     tig: PapirAllapot | None = None
 
 
+class KeretFajl(BaseModel):
+    """Egy a keretszerződéshez feltöltött fájl."""
+
+    id: int
+    filename: str
+    url: str
+    kategoria: str
+    feltoltve: date | None = None
+
+
 class KeretReszletek(KeretRead):
     """A keretszerződés adatlapja: a saját adatai + MINDEN hozzá tartozó
-    projektkód és azok papírjai.
+    projektkód és azok papírjai + MINDEN feltöltött fájl.
 
     Azért egy hívásban, mert pont az összefüggés a kérdés: mire használjuk ezt
     a keretet, és hol tart a papírozás alatta. Projektkódonként külön
     lekérdezéssel ugyanez tíz-húsz kör lenne egy adatlap megnyitásához."""
 
+    #: A Notion "Name" mezője és a szerződés megjegyzése - az import ezeket
+    #: kitölti, de eddig sehol nem látszottak.
+    nev: str | None = None
+    megjegyzes: str | None = None
+    #: MINDEN fájl, ami ehhez a keretszerződéshez tartozik.
+    #:
+    #: Nem csak a két nevesített mező (`file_url`, `alairt_file_url`): a
+    #: Notion-import a lap ÖSSZES fájlját áthozza a tárhelyünkre és a
+    #: rekordhoz csatolja (lásd notion_import/files.atemel_mindent), csak
+    #: ezekre eddig nem volt hova ránézni. Így bármit is töltöttek fel oda -
+    #: aláírt példány, melléklet, korábbi verzió -, itt megtalálható.
+    fajlok: list[KeretFajl] = []
     projektkodok: list[KeretProjektkod] = []
+
+
+def _keret_fajljai(db: Session, keret_id: int) -> list[KeretFajl]:
+    sorok = db.scalars(
+        select(DocumentAttachment)
+        .where(DocumentAttachment.entity_type == "contract", DocumentAttachment.entity_id == keret_id)
+        .order_by(DocumentAttachment.id)
+    ).all()
+    return [
+        KeretFajl(
+            id=a.id,
+            filename=a.filename,
+            url=a.url,
+            kategoria=a.kategoria,
+            feltoltve=a.created_at.date() if a.created_at else None,
+        )
+        for a in sorok
+    ]
 
 
 def _papir_allapot(papir) -> PapirAllapot | None:
@@ -200,6 +241,9 @@ def get_keretszerzodes(
     alap = _kimenet(c, len(projektkodok))
     return KeretReszletek(
         **alap.model_dump(),
+        nev=c.nev,
+        megjegyzes=c.szerzodes_megjegyzes,
+        fajlok=_keret_fajljai(db, c.id),
         projektkodok=[
             KeretProjektkod(
                 id=pk.id,

@@ -107,6 +107,9 @@ export function KeretszerzodesModal({ keretId, onClose }: { keretId: number; onC
                 {adat.megbizas_targya ? `${adat.megbizas_targya} · ` : ""}
                 Keltezés: {datum(adat.keltezes)}
               </p>
+              {adat.megjegyzes && (
+                <p className="mt-1 text-[12.5px] text-text-secondary">{adat.megjegyzes}</p>
+              )}
               <div className="mt-2 flex flex-wrap gap-3 text-[12.5px]">
                 {adat.file_url && (
                   <a href={adat.file_url} target="_blank" rel="noopener noreferrer" className="text-text-accent hover:underline">
@@ -125,6 +128,35 @@ export function KeretszerzodesModal({ keretId, onClose }: { keretId: number; onC
                 )}
               </div>
             </div>
+
+            {/* MINDEN feltöltött fájl - nem csak a két nevesített mező. A
+                Notion-import a lap összes fájlját áthozza, de eddig nem volt
+                hova ránézni rájuk. */}
+            {adat.fajlok.length > 0 && (
+              <div className="border-b border-border px-5 py-4">
+                <p className="mb-2 text-[13px] font-medium text-text-primary">
+                  Feltöltött fájlok ({adat.fajlok.length})
+                </p>
+                <ul className="space-y-1">
+                  {adat.fajlok.map((f) => (
+                    <li key={f.id} className="text-[12.5px]">
+                      <a
+                        href={f.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-text-accent hover:underline"
+                      >
+                        {f.filename}
+                      </a>
+                      <span className="ml-2 text-[11.5px] text-text-muted">
+                        {f.kategoria}
+                        {f.feltoltve ? ` · ${f.feltoltve}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="p-5">
               <p className="mb-3 text-[13px] font-medium text-text-primary">
