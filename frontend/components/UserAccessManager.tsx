@@ -27,6 +27,7 @@ const FULL_ACCESS = ["view", "edit", "create", "delete"];
 export function UserAccessManager({
   employeeId,
   employeeLabel,
+  vedett = false,
   pages,
   initialEmail,
   initialPagePermissions,
@@ -36,6 +37,11 @@ export function UserAccessManager({
 }: {
   employeeId: number;
   employeeLabel: string;
+  /** VÉDETT RENDSZERGAZDA: nála a korlátozás és a visszavonás értelmetlen -
+   * a backend úgyis elutasítja (lásd routes/user_access.py), itt pedig fel
+   * sem kínáljuk, hogy ne úgy nézzen ki, mintha menne. A jelszóváltás marad:
+   * azt épp neki is kell tudnia. */
+  vedett?: boolean;
   pages: PageOption[];
   initialEmail: string | null;
   initialPagePermissions: Record<string, string[]> | null;
@@ -240,6 +246,12 @@ export function UserAccessManager({
 
       <div className="border-t border-border pt-4">
         <p className="mb-2 text-[13px] font-medium text-text-primary">Oldal-hozzáférés</p>
+        {vedett ? (
+          <p className="text-[12.5px] text-text-muted">
+            Minden oldalt lát, és ez nem is korlátozható.
+          </p>
+        ) : (
+        <>
         <label className="mb-3 flex items-center gap-2 text-[13px] text-text-secondary">
           <input type="checkbox" checked={showAllPages} onChange={(e) => setShowAllPages(e.target.checked)} />
           Minden oldalt lát (nincs szűrés)
@@ -379,8 +391,11 @@ export function UserAccessManager({
         >
           Mentés
         </button>
+        </>
+        )}
       </div>
 
+      {!vedett && (
       <div className="border-t border-border pt-4">
         <button
           type="button"
@@ -391,6 +406,7 @@ export function UserAccessManager({
           Hozzáférés törlése
         </button>
       </div>
+      )}
     </div>
   );
 }

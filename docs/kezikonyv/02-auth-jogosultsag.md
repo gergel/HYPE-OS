@@ -47,6 +47,42 @@ bekerül az adott hónapra).
 Ezenfelül a vágói anyag-hozzáférés külön korlátozható: `lathato_anyagok()` /
 `ellenorizd_anyag_hozzaferest()` (`PageAccessConfig.lathato_deliverable_idk`).
 
+## A védett rendszergazda - a rendszer végső kiútja
+
+Mind a három réteget ugyanazon a felületen állítjuk, amit azok védenek. Ebből
+következik egy csapda: **egyetlen félrekattintás kizárhatja azt az embert, aki
+egyedül tudná visszaadni a jogot** - elég inaktívra állítani, átírni a
+szerepkörét, vagy rányomni a "Hozzáférés törlése" gombra. Adatbázis-hozzáférés
+nélkül ez kívülről nem javítható.
+
+Ezért van egy **védett rendszergazda** fiók (`core/security.vedett_rendszergazda`),
+amit a `VEDETT_ADMIN_EMAILEK` beállítás jelöl ki (vesszővel több is lehet).
+Erre a fiókra:
+
+- **mindig aktív** - az `is_active = false` nem tartja kint, és a belépés vissza
+  is állítja a rekordot (`routes/auth.py _vedett_fiok_helyreallitasa`), tehát a
+  javítás útja: *jelentkezz be újra*;
+- **mindig admin** - a `require_roles` átengedi akkor is, ha a tárolt szerepköre
+  más lenne;
+- **nincs korlátozás** - a `check_page_action`, a `check_tab_action`, a
+  `/user-access/me` és a `/field-visibility/me/...` is "nincs szűrés"-t ad rá
+  (utóbbi kettő azért fontos, mert a menü és a middleware azokból dolgozik: e
+  nélkül a backend beengedné, a felület viszont mégis elrejtené az oldalakat);
+- **nem is rontható el** - az `is_active`, a szerepkör, az e-mail és a jelszó
+  módosítása, a fiók törlése, a jogosultság-korlátozás és a hozzáférés
+  visszavonása mind hibát ad rá (a tömeges "mindenki más hozzáférésének
+  visszavonása" pedig kihagyja).
+
+A védettség **a címen múlik**, nem azonosítón: a rekord törölhető és újra
+felvehető, importálás után más id-t kaphat, a cím viszont ugyanaz marad. Ebből
+következik, hogy az **e-mail módosítása is tiltott** ezen a fiókon - átírni
+annyi lenne, mint kikapcsolni a védelmet. Mivel a cím a rendszerben nem egyedi,
+a beállításba **személyes címet** adj meg, közös postafiókot ne.
+
+A meglévő, elrontott állapotot a `b7d3f1a90c24` adatmigráció teszi rendbe
+(aktív + admin, a korlátozó sorok törlésével) - így nem kell megvárni a
+következő belépést, és nem kell adatbázishoz nyúlni.
+
 ## A "page" kulcs - ahol a leggyakoribb hiba születik
 
 A jogosultsági "oldal" kulcsa a **frontend nav-elem href-je** (`frontend/lib/nav.ts`),

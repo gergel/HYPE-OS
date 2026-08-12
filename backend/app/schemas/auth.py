@@ -16,9 +16,17 @@ class UserOut(BaseModel):
     #: További szerepkörök az elsődlegesen felül - a felület ezek alapján is
     #: dönt a gombok megjelenítéséről (lásd frontend lib/permissions.ts).
     tovabbi_szerepkorok: list[str] | None = None
+    #: Aktív-e a fiók. Enélkül a "Fiókom" kártya állapotjelzője MINDENKINÉL
+    #: "Inaktív"-ot mutatott (a mező hiányzott a válaszból, tehát a felületen
+    #: undefined lett) - lásd frontend components/AccountCard.tsx.
+    is_active: bool = True
     #: A felület témája ehhez az emberhez ("sotet" / "vilagos"). None = még nem
     #: választott, olyankor a sötét alap érvényes.
     tema: str | None = None
+    #: VÉDETT RENDSZERGAZDA-e (lásd core/security.vedett_rendszergazda). A
+    #: felület ebből tudja, hogy ennek a fióknak minden gombot mutasson, és
+    #: hogy a saját sorát ne engedje inaktívra/korlátozásra állítani.
+    vedett_admin: bool = False
 
     model_config = {"from_attributes": True}
 

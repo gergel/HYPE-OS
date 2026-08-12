@@ -28,6 +28,23 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24 * 30
     algorithm: str = "HS256"
 
+    #: A VÉDETT RENDSZERGAZDA fiók(ok) e-mail címe, vesszővel elválasztva.
+    #:
+    #: Ez a fiók sosem eshet ki a rendszerből: nem lehet inaktívvá tenni, nem
+    #: veszítheti el az admin szerepkörét, és nem lehet neki oldal- vagy
+    #: mező-korlátozást beállítani (lásd core/security.vedett_rendszergazda).
+    #:
+    #: Miért kell? Mert a jogosultságokat ugyanazon a felületen állítjuk, amit
+    #: azok védenek - egyetlen félrekattintás (inaktívra állítás, szerepkör
+    #: átírása, "hozzáférés visszavonása") ki tudja zárni azt az embert, aki
+    #: egyedül tudná visszaadni a jogot. Adatbázis-hozzáférés nélkül ez
+    #: kívülről nem javítható, tehát kell egy fiók, amit a rendszer maga tart
+    #: életben.
+    #:
+    #: Beállításként (env változó) és nem a kódba égetve, hogy tulajdonosváltás
+    #: vagy címcsere ne igényeljen kódmódosítást és új deployt.
+    vedett_admin_emailek: str = "vidor.gergely@gmail.com"
+
     r2_account_id: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""

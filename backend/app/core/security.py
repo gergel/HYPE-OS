@@ -54,6 +54,34 @@ def get_current_user(
     return user
 
 
+def vedett_admin_emailek() -> set[str]:
+    """A védett rendszergazda címek, kisbetűsítve (lásd settings)."""
+    return {cim.strip().casefold() for cim in settings.vedett_admin_emailek.split(",") if cim.strip()}
+
+
+def vedett_rendszergazda(employee: Employee | None) -> bool:
+    """VÉDETT RENDSZERGAZDA-e ez a fiók?
+
+    Ez a fiók sosem eshet ki a rendszerből: mindig aktív, mindig admin, és
+    sosem korlátozza oldal- vagy mező-jogosultság. A jogosultságokat ugyanazon
+    a felületen állítjuk, amit azok védenek, tehát egyetlen félrekattintás
+    (inaktívra állítás, szerepkör átírása, "hozzáférés visszavonása") ki tudja
+    zárni azt az embert, aki egyedül tudná visszaadni a jogot - adatbázis
+    nélkül pedig kívülről nem javítható.
+
+    A cím alapján dől el, nem azonosító alapján: a rekord törölhető és újra
+    felvehető, importálás után más id-t kaphat, a cím viszont ugyanaz marad.
+
+    FONTOS: az e-mail cím a rendszerben NEM egyedi (lásd models/employee.py),
+    tehát ha valaki más rekordjába ugyanez a cím kerül, az a fiók is védetté
+    válna. Ez tudatos csere: a bezárkózás kockázata nagyobb, mint egy közös
+    postafiók-címé, és a belépéshez a jelszó úgyis kell. Ezért viszont a
+    védett címre csak SAJÁT, személyes címet adj meg, közös postafiókot ne."""
+    if employee is None or not employee.email:
+        return False
+    return employee.email.strip().casefold() in vedett_admin_emailek()
+
+
 #: Kik írhatnak alapértelmezetten (a page_permissions ezt tovább szűkítheti,
 #: de sosem bővítheti). Az Adminisztráció szerepkör azért van itt, mert épp az
 #: a dolga, hogy a papírokat (TIG-ek, szerződések) elkészítse - olvasási joggal
@@ -63,6 +91,10 @@ DEFAULT_WRITE_ROLES: tuple[Role, ...] = (Role.ADMIN, Role.OPERATOR, Role.ADMINIS
 
 def require_roles(*roles: Role):
     def dependency(current_user: Employee = Depends(get_current_user)) -> Employee:
+        # A védett rendszergazda minden szerepkört visel: ha az adatbázisban
+        # valahogy mégis átíródott a szerepköre, attól még nem zárható ki.
+        if vedett_rendszergazda(current_user):
+            return current_user
         # A TELJES szerepkör-halmazt nézzük, nem csak az elsődlegest: egy
         # embernek több szerepköre is lehet (lásd models/employee.szerepkorei).
         if not van_szerepkore(current_user, *roles):
@@ -82,7 +114,12 @@ def check_page_action(db: Session, employee: Employee, page: str, action: str) -
     van állítva, csak azokon az oldalakon/műveleteken enged, amiket admin
     kifejezetten megadott neki (lásd Beállítások oldal). Ha nincs sora, vagy a
     page_permissions None, korlátozás nélkül enged (ugyanaz az alapértelmezett
-    viselkedés, mint az oldal-láthatóságnál)."""
+    viselkedés, mint az oldal-láthatóságnál).
+
+    A védett rendszergazdát semmilyen beállítás nem korlátozza: ha valakinél
+    elrontanak egy jogosultságot, ő az egyetlen biztos kiút."""
+    if vedett_rendszergazda(employee):
+        return
     config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
     if config is None or config.page_permissions is None:
         return
@@ -107,7 +144,11 @@ def check_tab_action(db: Session, employee: Employee, page: str, tab_key: str, a
     olyan fülhöz, amihez admin még nem konfigurált explicit fül-szintű
     engedélyt - beleértve a bespoke widgeteket (pl. eszközfoglalás, szerződés
     készítés) is, amik nem is mező-szerkesztést jelentenek, hanem önálló
-    akció-gombok egy adott fülön belül."""
+    akció-gombok egy adott fülön belül.
+
+    A védett rendszergazdára ez sem vonatkozik (lásd vedett_rendszergazda)."""
+    if vedett_rendszergazda(employee):
+        return
     config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
     if config is None or config.page_permissions is None:
         return

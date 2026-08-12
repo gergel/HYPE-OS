@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import Role, get_current_user, require_roles
+from app.core.security import Role, get_current_user, require_roles, vedett_rendszergazda
 from app.models.employee import Employee
 from app.models.field_visibility import FieldVisibilityConfig
 from app.schemas.field_visibility import FieldVisibilityRead, FieldVisibilityUpdate, MyFieldVisibility
@@ -25,7 +25,13 @@ def get_entity_field_types(entity_type: str, db: Session = Depends(get_db)):
 def get_my_field_visibility(entity_type: str, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """A bejelentkezett felhasználó saját mező-láthatósága egy entitástípushoz -
     ezt használják a részletnézet oldalak, hogy csak a neki engedélyezett
-    mezőket jelenítsék meg. Nincs config sor -> minden mező látszik."""
+    mezőket jelenítsék meg. Nincs config sor -> minden mező látszik.
+
+    A védett rendszergazdának mindig "minden mező" a válasz: ha egy régi,
+    szűkítő sor jönne vissza, a felület akkor is elrejtené előle a mezőket,
+    amiket a backend már beenged (lásd core/security.vedett_rendszergazda)."""
+    if vedett_rendszergazda(current_user):
+        return MyFieldVisibility(visible_fields=None)
     config = db.scalar(
         select(FieldVisibilityConfig).where(
             FieldVisibilityConfig.employee_id == current_user.id, FieldVisibilityConfig.entity_type == entity_type
@@ -58,7 +64,17 @@ def list_field_visibility(employee_id: int, db: Session = Depends(get_db)):
 def set_field_visibility(employee_id: int, entity_type: str, payload: FieldVisibilityUpdate, db: Session = Depends(get_db)):
     """Admin beállítja, mely mezők látszanak egy adott munkatársnak egy adott
     entitástípusnál - egyénenként, csak admin szerkesztheti. visible_fields=null
-    vagy [] törli a szűrést (a munkatárs újra minden mezőt lát)."""
+    vagy [] törli a szűrést (a munkatárs újra minden mezőt lát).
+
+    A védett rendszergazdának nem állítható be mező-szűrés: a futásidejű
+    ellenőrzés úgyis átengedi, egy elmentett szűrés tehát csak félrevezető
+    lenne a Beállítások oldalon."""
+    employee = db.get(Employee, employee_id)
+    if employee is not None and vedett_rendszergazda(employee):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ez a védett rendszergazda fiók: a mező-láthatósága nem korlátozható.",
+        )
     config = db.scalar(
         select(FieldVisibilityConfig).where(
             FieldVisibilityConfig.employee_id == employee_id, FieldVisibilityConfig.entity_type == entity_type

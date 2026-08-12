@@ -7,7 +7,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import Role, get_current_user, hash_password, require_page_action, require_roles
+from app.core.security import (
+    Role,
+    get_current_user,
+    hash_password,
+    require_page_action,
+    require_roles,
+    vedett_rendszergazda,
+)
 from app.models.contract import Contract, ContractType, keretszerzodes_ervenyes, megkotott_keretszerzodes
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
@@ -37,6 +44,47 @@ def _hash_employee_password(data: dict, db: Session) -> dict:
     return data
 
 
+#: Amit a védett rendszergazda fiókján nem lehet elállítani. Az `email` is itt
+#: van, mert a védettség A CÍMEN múlik (lásd core/security.vedett_rendszergazda):
+#: átírni annyi lenne, mint kikapcsolni a védelmet.
+_VEDETT_MEZOK = ("is_active", "role", "tovabbi_szerepkorok", "email", "hashed_password")
+
+
+def _vedett_fiok_vedelme(obj: Employee, data: dict, _db: Session) -> None:
+    """A védett rendszergazda fiókját nem lehet kikapcsolni vagy lefokozni.
+
+    A futásidejű ellenőrzések ugyan átengedik akkor is, ha a rekordban rossz
+    érték áll (lásd core/security.py), de attól még ne lehessen elrontani: a
+    Beállítások és a Csapat oldal mást mutatna, mint ami igaz, és a következő
+    ránéző azt hinné, hogy a fiók tényleg ki van kapcsolva.
+
+    Csak akkor szólunk, ha a beküldött érték TÉNYLEG változtatna - így a
+    részletnézet "mentsük az egész űrlapot" jellegű PATCH-e nem akad fenn
+    azon, hogy a változatlan szerepkört is elküldi."""
+    if not vedett_rendszergazda(obj):
+        return
+    valtoztat = [
+        mezo for mezo in _VEDETT_MEZOK if mezo in data and data[mezo] != getattr(obj, mezo, None)
+    ]
+    if valtoztat:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Ez a védett rendszergazda fiók: a bejelentkezéséhez és a jogosultságához tartozó "
+                f"mezői ({', '.join(valtoztat)}) nem módosíthatók. Ha át kell adni, előbb a "
+                "VEDETT_ADMIN_EMAILEK beállítást kell átírni."
+            ),
+        )
+
+
+def _vedett_fiok_torlese(obj: Employee, _db: Session) -> None:
+    if vedett_rendszergazda(obj):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ez a védett rendszergazda fiók: nem törölhető.",
+        )
+
+
 router = build_crud_router(
     model=Employee,
     create_schema=EmployeeCreate,
@@ -46,6 +94,8 @@ router = build_crud_router(
     tags=["crew"],
     page="/csapat",
     before_create=_hash_employee_password,
+    before_update=_vedett_fiok_vedelme,
+    before_delete=_vedett_fiok_torlese,
     entity_type="employee",
 )
 

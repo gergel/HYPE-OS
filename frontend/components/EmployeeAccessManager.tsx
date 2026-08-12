@@ -16,6 +16,9 @@ type EmployeeOption = {
   /** További szerepkörök az elsődlegesen felül - egy embernek több is lehet. */
   tovabbi_szerepkorok?: string[] | null;
   has_password: boolean;
+  /** VÉDETT RENDSZERGAZDA: a hozzáférése nem korlátozható és nem vonható
+   * vissza (lásd backend core/security.vedett_rendszergazda). */
+  vedett_admin?: boolean;
 };
 type PageOption = { page: string; label: string };
 type FieldOption = { key: string; label: string };
@@ -254,8 +257,18 @@ export function EmployeeAccessManager({
               ))}
           </div>
 
+          {selected.vedett_admin && (
+            <p className="rounded-[var(--radius)] border border-border bg-surface-3 p-3 text-[12.5px] text-text-secondary">
+              Ez a <b>védett rendszergazda</b> fiók: mindig aktív, mindig mindenhez hozzáfér, és a jogosultsága nem
+              korlátozható. Ez a rendszer végső kiútja – enélkül egyetlen félrekattintás kizárhatná azt az embert, aki
+              egyedül tudná visszaadni a jogokat. Ha át kell adni, a backend <code>VEDETT_ADMIN_EMAILEK</code>{" "}
+              beállítását kell átírni.
+            </p>
+          )}
+
           <UserAccessManager
             employeeId={selected.id}
+            vedett={selected.vedett_admin ?? false}
             employeeLabel={selected.full_name}
             initialEmail={selected.email}
             pages={pages}
@@ -267,6 +280,9 @@ export function EmployeeAccessManager({
 
           <div className="border-t border-border pt-4">
             <p className="mb-2 text-[13px] font-medium text-text-primary">Mező-láthatóság</p>
+            {selected.vedett_admin ? (
+              <p className="text-[12.5px] text-text-muted">Minden mezőt lát, és ez nem is korlátozható.</p>
+            ) : (
             <div className="space-y-2">
               {visibilityEntities.map((entity) => (
                 <FieldVisibilityManager
@@ -278,6 +294,7 @@ export function EmployeeAccessManager({
                 />
               ))}
             </div>
+            )}
           </div>
         </div>
       )}

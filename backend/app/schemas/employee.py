@@ -101,6 +101,22 @@ class EmployeeRead(EmployeeBase):
     def has_password(self) -> bool:
         return bool(self.hashed_password)
 
+    @computed_field
+    @property
+    def vedett_admin(self) -> bool:
+        """VÉDETT RENDSZERGAZDA-e ez a fiók (lásd core/security.py).
+
+        Számolt mező, nem oszlop: a védettség a beállításból következik, tehát
+        egy tárolt jelölő csak egy újabb dolog lenne, ami elcsúszhat a
+        valóságtól. A felület ebből tudja, hogy ennél a munkatársnál ne
+        kínálja fel a kikapcsolást és a jogosultság-korlátozást."""
+        # Itt importálunk, nem a fájl tetején: a core.security a modelleket
+        # húzza be, a sémák pedig a modelleket - a felső szintű import körkörös
+        # lenne.
+        from app.core.security import vedett_admin_emailek
+
+        return bool(self.email) and self.email.strip().casefold() in vedett_admin_emailek()
+
 
 class EmployeeDocumentRead(BaseModel):
     id: int

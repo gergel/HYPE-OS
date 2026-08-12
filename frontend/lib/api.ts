@@ -1136,6 +1136,12 @@ export type CurrentUser = {
   /** A felület témája ehhez az emberhez ("sotet" / "vilagos"). null = még nem
    * választott, olyankor a sötét alap érvényes (lásd lib/tema.ts). */
   tema?: string | null;
+  /** VÉDETT RENDSZERGAZDA: sosem inaktív, mindig mindenhez hozzáfér, és a
+   * hozzáférése nem is korlátozható (lásd backend
+   * core/security.vedett_rendszergazda). A felület ebből tudja, hogy neki
+   * minden gombot mutasson, és hogy a Beállítások oldalon ne kínálja fel a
+   * korlátozását. */
+  vedett_admin?: boolean;
 };
 
 /** A bejelentkezett felhasználó saját adatai (TopBar üdvözlés/avatar,
