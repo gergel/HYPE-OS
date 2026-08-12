@@ -31,7 +31,7 @@ from app.models.client import Client
 from app.models.contract import Contract, ContractType
 from app.models.employee import Employee
 from app.models.project_code import ProjectCode
-from app.services import document_storage
+from app.services import document_storage, notion_mapping
 from app.services.megrendeloi_papir import megrendeloi_keret_ervenyes
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
@@ -306,6 +306,9 @@ def delete_keretszerzodes(
             detail="Ez a keretszerződés projektkódokhoz van kapcsolva - előbb azokat kell leoldani róla.",
         )
     kulcsok = [k for k in (c.szerzodes_file_storage_key, c.alairt_file_storage_key) if k]
+    # A Notion-leképezés is menjen vele: enélkül ez a keretszerződés soha többé
+    # nem tudna visszaimportálódni a Notionból (lásd services/notion_mapping.py).
+    notion_mapping.torold_a_leképezest(db, "Contract", c.id)
     db.delete(c)
     db.commit()
     for k in kulcsok:

@@ -174,8 +174,22 @@ def upsert(
     mapping = db.scalar(select(NotionImportMap).where(NotionImportMap.notion_page_id == notion_page_id))
     fields = _eltavolitott_mezok_nelkul(db, model, fields)
 
+    obj = db.get(model, mapping.entity_id) if mapping else None
+    if mapping is not None and obj is None:
+        # ÁRVA LEKÉPEZÉS: a leképezés megvan, a rekord viszont már nincs (kézzel
+        # törölték, vagy egy tábla ürítése vitte el). Ilyenkor a leképezést
+        # ÚJRAHASZNOSÍTJUK, és a rekordot újra létrehozzuk.
+        #
+        # Enélkül ez a sor VÉGLEG kiesett az importból: a régi kód a hiányzó
+        # objektumra hívott setattr()-t, ami AttributeError-ral elszállt, a
+        # safe_upsert pedig kihagyta a sort - minden további futásnál újra. Egy
+        # egyszer törölt rekordot tehát nem lehetett visszaimportálni, és a
+        # napló is csak egy rejtélyes AttributeError-t mutatott.
+        db.delete(mapping)
+        db.flush()
+        mapping = None
+
     if mapping:
-        obj = db.get(model, mapping.entity_id)
         baseline = mapping.imported_fields if isinstance(mapping.imported_fields, dict) else None
         uj_baseline = dict(baseline or {})
         vedett: list[str] = []

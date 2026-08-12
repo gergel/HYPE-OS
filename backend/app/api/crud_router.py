@@ -23,7 +23,7 @@ from app.core.security import (
     require_roles,
 )
 from app.models.employee import Employee
-from app.services import entity_fields
+from app.services import entity_fields, notion_mapping
 from app.services.detail_tabs import OTHER_TAB_KEY, get_field_tab_map
 
 # Soha nem PATCH-elhető mezők, még akkor sem, ha valódi oszlopok - a "minden
@@ -345,6 +345,10 @@ def build_crud_router(
             # A saját mezők értékeit nem idegen kulcs köti a rekordhoz (a tábla
             # generikus), ezért kézzel kell vinni őket a rekorddal együtt.
             entity_fields.delete_values_for_record(db, entity_type, obj.id)
+        # Ugyanez a Notion-leképezésre: ha itt maradna, az adott Notion-oldal
+        # kiesne az importból (lásd services/notion_mapping.py). Az importer az
+        # OSZTÁLYNEVET használja entitástípusként ("Contract", "Employee").
+        notion_mapping.torold_a_leképezest(db, model.__name__, obj.id)
         db.delete(obj)
         try:
             db.commit()

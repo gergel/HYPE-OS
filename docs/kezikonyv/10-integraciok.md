@@ -85,6 +85,26 @@ együtt a Python-processz is meghal. A végpont ehelyett a **futó backend
 processzében**, háttérszálon indítja az importot, ami a HTTP-válasz után is tovább
 fut. Redeploy/újraindítás viszont elviszi (memóriabeli állapot).
 
+### Törölt rekord: a leképezést is vinni kell
+
+A `notion_import_map` generikus tábla (Notion oldal → entitástípus + id),
+**idegen kulcs nélkül** - tehát a rekord törlésekor nincs semmi, ami magától
+elvinné a hozzá tartozó sort. Az árván maradt leképezés viszont **véglegesen
+kizárta** azt a Notion-oldalt az importból: a motor a leképezésből azt hitte,
+hogy a rekord megvan, és frissíteni próbálta - de nem volt mit, amitől minden
+további futás ugyanazzal a rejtélyes `AttributeError`-ral hagyta ki a sort.
+
+Két oldalról van megoldva:
+
+- **törléskor takarítunk** (`services/notion_mapping.py`) - a generikus CRUD
+  törlés és a megrendelői keretszerződés törlése is elviszi a leképezést;
+- **importkor öngyógyítunk** - ha a leképezés mégis árva (régi törlésekből),
+  a motor újrahasznosítja: eldobja és a rekordot újra létrehozza
+  (`notion_import/engine.upsert`).
+
+Ez a gyakorlatban azt jelenti, hogy egy egyszer törölt sor **újraimportálható**
+- korábban nem volt az.
+
 ### Egy katalógus-elem, ami nem hív Notiont
 
 A *"Megrendelői papírok"* lépés (`importers_megrendeloi.py`) kivétel: a MÁR
