@@ -26,7 +26,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from app.notion_import import importers, importers_belsos, importers_kulsos, importers_wave2, importers_wave3
+from app.notion_import import (
+    importers,
+    importers_belsos,
+    importers_kulsos,
+    importers_megrendeloi,
+    importers_wave2,
+    importers_wave3,
+)
 
 
 @dataclass(frozen=True)
@@ -197,6 +204,20 @@ KATALOGUS: tuple[ImporterInfo, ...] = (
         ),
         fn=importers_kulsos.import_kulsos_papirok,
         fuggosegek=("Project", "Employee"),
+    ),
+    ImporterInfo(
+        nev="Megrendelői papírok",
+        cimke="Megrendelői papírok (eseti szerződés + TIG)",
+        kor=2,
+        forrasok=("HYPE ADMIN projektkódok",),
+        leiras=(
+            "A projektkódokhoz a Notionban feltöltött MEGRENDELŐI eseti szerződések és "
+            "teljesítési igazolások - névvel, dátummal, összeggel és magával a papírral. "
+            "Nem hív Notiont: a már importált projektkódokból és csatolmányokból dolgozik, "
+            "ezért a ProjectCode import UTÁN kell futnia."
+        ),
+        fn=importers_megrendeloi.import_megrendeloi_papirok,
+        fuggosegek=("ProjectCode",),
     ),
     # ── 3. kör: egyedi logikájú maradék ──────────────────────────────────────
     ImporterInfo(

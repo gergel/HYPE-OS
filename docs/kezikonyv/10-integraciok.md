@@ -85,6 +85,15 @@ együtt a Python-processz is meghal. A végpont ehelyett a **futó backend
 processzében**, háttérszálon indítja az importot, ami a HTTP-válasz után is tovább
 fut. Redeploy/újraindítás viszont elviszi (memóriabeli állapot).
 
+### Egy katalógus-elem, ami nem hív Notiont
+
+A *"Megrendelői papírok"* lépés (`importers_megrendeloi.py`) kivétel: a MÁR
+importált projektkódokból és csatolmányokból dolgozik, nem a Notion API-ból.
+Ezért kell a `ProjectCode` **után** futnia - és ezért futtatható újra
+önmagában, anélkül hogy az egész projektkód-táblát újra le kellene kérni.
+Ugyanaz a kód fut benne, mint a `c9e4a71b2f08` adatmigrációban, tehát a kettő
+nem csúszhat el (lásd [06-papirozas.md](06-papirozas.md)).
+
 Külön ügy a portál Notion-szinkronja (`PORTAL_NOTION_*`,
 `services/portal_notion.py`) - az **másik** adatbázis, lásd
 [09-media-portal.md](09-media-portal.md).

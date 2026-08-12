@@ -325,6 +325,48 @@ használhatók:
 | TIG | `GDOC_MEGRENDELOI_TIG_TEMPLATE_ID` | ugyanaz `projektnev`/`napok` nélkül, plusz `projkod` |
 | Keretszerződés | `GDOC_MEGRENDELOI_KERET_TEMPLATE_ID` | `nev hely adoszam targy kelt nyilvszam kepvis` |
 
+### A Notionból örökölt papírok átvétele
+
+A HYPE ADMIN projektkódok Notion-táblában minden projektnél ott van, hogy
+készült-e megrendelői szerződés és TIG - névvel, dátummal, összeggel -, és oda
+vannak feltöltve maguk a papírok is. Ezt a ProjectCode import már áthozta, de
+**lapos mezőkbe** (`szerzodes_statusza`, `tig_statusza`, `megrendelo_neve`, …)
+és általános csatolmányokba, amikből a rendszer nem tud papírt csinálni.
+
+A `services/megrendeloi_papir_atvetel.py` ebből készít valódi
+`MegrendeloiSzerzodes` / `MegrendeloiTig` rekordot. **Két helyről fut, ugyanaz
+a kód:** a `c9e4a71b2f08` adatmigrációból (így a deploykor azonnal megvan,
+Notion-hozzáférés nélkül) és az import-katalógus *"Megrendelői papírok"*
+lépéséből (így egy újraimportálás naprakészen tartja).
+
+Mikor számít késznek egy papír? A sorrend a bizonyíték erőssége:
+
+1. **van feltöltött fájl** - ez a legerősebb, a régi sorokon az állapot sokszor
+   elmaradt a valóságtól;
+2. **az állapot-szöveg** - a tagadó jelzőket (`Nincs elkezdve`, `Készíthető a
+   TIG`, `Keretszerződése van`) **előbb** vizsgáljuk, mint a "kész" jelzőket,
+   mert részstringként azok is késznek látszanának;
+3. **egyéb jelölő** (`TIG kiküldve`, `Szerződés küldés`).
+
+Az átvett papír állapota **"Van már papír"**, nem "Kiküldve": megvan, csak nem
+innen ment ki. A fájl az **aláírt példány** mezőbe kerül, mert a Notionba a kész,
+aláírt dokumentumot töltötték fel.
+
+A cégadatoknál itt a **Notion-örökség az elsődleges**, nem az ügyfél mai
+adatlapja - fordítva, mint az új papírok előtöltésénél. Egy már megírt papír azt
+kell hogy őrizze, ami rajta van: ha a cég azóta székhelyet váltott, a mai adat
+visszamenőleg átírná a történelmet.
+
+Idempotens, és a **kézzel készített papírhoz nem nyúl**: az átvett sorokat a
+megjegyzésük különbözteti meg, ahol pedig a felületen már csináltak papírt, ott
+az import nem készít mellé másodpéldányt.
+
+Ugyanez a lépés **köti be a keretszerződéseket az ügyfelükhöz**, ahol a Notionban
+üresen maradt az "Akivel szerződünk" reláció: a hivatkozó projektkódok ügyfelét
+veszi át - de csak ha mind ugyanaz, mert egy rossz kapcsolat rosszabb, mint a
+hiányzó (némán elhagyná az eseti szerződést egy olyan cégnél, amelyikkel
+valójában nincs keretünk).
+
 **Mindhárom helyen saját papír is feltölthető** a generálás helyett: van, amit a
 megrendelő ad a saját sablonjával, és van, ami még a rendszer előtti. Ilyenkor
 nincs mit generálni és nincs kinek kiküldeni, csak rögzíteni - a feltöltés a
