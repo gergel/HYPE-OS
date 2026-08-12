@@ -89,6 +89,26 @@ billentyűzetes választást is tud.
 Rövid listánál sem térünk el ettől: két különböző viselkedésű legördülő egy
 felületen zavaróbb, mint egy fölösleges keresőmező három elem fölött.
 
+## Rétegek: mi kerül mi fölé
+
+A felugró elemeknek **rögzített sorrendjük** van - enélkül minden új ablak
+véletlenszerűen bújt volna a másik alá:
+
+| Réteg | z-index | Mi |
+|---|---|---|
+| Modál | 120 | `ModalReteg` és a saját felugró ablakok |
+| Panel | 200 | `AnchoredPanel` (legördülők) - modálon belül is látszania kell |
+| Kérdés | 300 | `ConfirmProvider` megerősítő/figyelmeztető ablaka |
+| Értesítés | 310 | `ToastProvider` |
+
+A kérdés és az értesítés azért van a tetején, mert MINDEN más rétegből
+indulhat. Amíg a megerősítő ablak 110-en volt, egy modálból indított törlés
+kérdése a modál **alá** került: a gombjai nem látszottak, és csak az ablak
+bezárásával lehetett válaszolni - vagyis a törlést nem lehetett befejezni.
+
+Új felugró elemnél ne találj ki új számot: válaszd a fenti négy közül azt,
+amelyik a szerepének megfelel.
+
 ## Világos és sötét nézet
 
 A felület minden színe **token** (`frontend/app/globals.css`) - a komponensek

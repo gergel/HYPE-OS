@@ -47,7 +47,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       <AlertContext.Provider value={alertDialog}>{children}</AlertContext.Provider>
       {pending && (
         <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 px-6"
+          // A megerősítő kérdés MINDEN felugró ablak fölött van (a modálok
+          // 120-ig, a legördülő panelek 200-on élnek). Korábban 110-en volt,
+          // tehát egy modálból indított törlés kérdése a modál ALÁ került: a
+          // gombjai láthatatlanok voltak, és csak az ablakot bezárva lehetett
+          // válaszolni. Réteg-sorrend: modál < panel < kérdés < értesítés.
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 px-6"
           onClick={() => respond(false)}
         >
           <div

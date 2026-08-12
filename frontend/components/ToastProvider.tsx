@@ -52,7 +52,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={showToast}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[100] flex flex-col items-center gap-2 px-4">
+      {/* Az értesítés a legfelső réteg: egy modálból vagy megerősítő ablakból
+          jövő visszajelzés ("Sikertelen törlés…") ne tűnjön el alattuk.
+          Réteg-sorrend: modál (120) < panel (200) < kérdés (300) < értesítés. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[310] flex flex-col items-center gap-2 px-4">
         {toasts.map((t) => (
           <div
             key={t.id}

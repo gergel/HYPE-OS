@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeretszerzodesModal } from "@/components/megrendeloi/KeretszerzodesModal";
+import { StopClickPropagation } from "@/components/StopClickPropagation";
 import {
   ModositasKuldesModal,
   kuldjModositast,
@@ -265,15 +266,19 @@ export function KeretszerzodesKezelo({
       ) : (
         <ul className="space-y-2">
           {keretek.map((k) => (
-            <li key={k.id} className="rounded-[var(--radius)] border border-border p-3">
+            // A KÁRTYA maga nyitja az adatlapot - nem egy külön "Megnyitás"
+            // gomb. A gombokat és linkeket tartalmazó sáv megállítja az
+            // eseményt, hogy a törlés vagy egy fájl-link ne nyissa meg
+            // egyúttal az ablakot is (lásd StopClickPropagation).
+            <li
+              key={k.id}
+              onClick={() => setNyitottKeret(k.id)}
+              className="cursor-pointer rounded-[var(--radius)] border border-border p-3 hover:border-text-muted"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setNyitottKeret(k.id)}
-                  className="text-left text-[14px] text-text-primary hover:text-text-accent hover:underline"
-                >
+                <span className="text-left text-[14px] text-text-primary">
                   {k.ceg_neve ?? k.client_nev ?? `#${k.id}`}
-                </button>
+                </span>
                 <span className="flex items-center gap-2">
                   {k.ervenyes ? (
                     <StatusBadge label="Élő keret" tone="success" />
@@ -304,14 +309,7 @@ export function KeretszerzodesKezelo({
                 Keltezés: {datum(k.keltezes)} ·{" "}
                 {k.projektkod_db > 0 ? `${k.projektkod_db} projektkódnál használjuk` : "Még nincs hozzá projektkód"}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setNyitottKeret(k.id)}
-                  className="text-text-accent hover:underline"
-                >
-                  Megnyitás
-                </button>
+              <StopClickPropagation className="mt-2 flex flex-wrap items-center gap-3">
                 {k.file_url && (
                   <a href={k.file_url} target="_blank" rel="noopener noreferrer" className="text-text-accent hover:underline">
                     Keretszerződés megnyitása
@@ -385,7 +383,7 @@ export function KeretszerzodesKezelo({
                     Törlés
                   </button>
                 )}
-              </div>
+              </StopClickPropagation>
             </li>
           ))}
         </ul>
