@@ -101,6 +101,33 @@ bekötésekor érdemes előbb kiíratni a tényleges mezőneveket
 (`extract_properties` egy sorra), és nem feltételezni, hogy egyeznek egy másik
 tábláéval - a hiányzó mező ugyanis némán üres marad, nem hibázik.
 
+### Kétirányú relation: a hiányzó kapcsolat némán marad üres
+
+A Notionban a keretszerződés és a projektkód **két irányból** is össze van
+kötve: a projektkód `Keretszerződés` mezőjéből és a keretszerződés
+`HYPE ADMIN projektkódok` mezőjéből. Az import sokáig csak az elsőt használta -
+csakhogy a projektkódok importja akkor fut, amikor a keretszerződések még nem
+feltétlenül vannak bent, egy feloldatlan hivatkozás pedig **nem hiba**:
+`resolve_relation_id` csendben `None`-t ad (ez másutt helyes viselkedés, mert
+az 5 éves adatban rengeteg a törölt vagy soha nem importált célpont). Így a
+projektkódok `contract_id`-ja tömegesen üresen maradt, és utólag semmi nem
+hozta helyre - a keretszerződések importja nem nyúlt a projektkódokhoz, a
+projektkódoké meg nem futott újra. A felületen ez úgy látszott, hogy a 28
+keretszerződés bejött, de **egyikhez sem tartozott projekt**.
+
+Ezért kötünk a **keret felől is** (`kosd_a_keret_projektkodjait`), a
+keretszerződések importja után - ekkorra már mindkét oldal bent van.
+Két szabály tartja biztonságosan ismételhetőnek:
+
+- csak az **üres** `contract_id`-t tölti ki - amit a projektkód saját importja
+  vagy egy ember már beállított, ahhoz nem nyúl;
+- a bekötések száma a napló saját mezőjébe megy (`bekotott_kapcsolatok`), nem a
+  hibák közé. Egy ismételt futásnál épp az a jó jel, ha itt már **nulla** áll.
+
+Általános tanulság új tábla bekötéséhez: ha egy relation mindkét oldalon meg
+van adva, azt az oldalt használd, amelyik a **később importált** entitásnál
+van - vagy kösd be mindkét irányból, ahogy itt.
+
 ### Törölt rekord: a leképezést is vinni kell
 
 A `notion_import_map` generikus tábla (Notion oldal → entitástípus + id),

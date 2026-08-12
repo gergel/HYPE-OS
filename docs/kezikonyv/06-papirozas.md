@@ -313,6 +313,13 @@ papír keretszerződésre hivatkozik, a projektkód `contract_id`-ja is odaköt 
 még üres) - ebből számol a keret-oldal "hány projektkódnál használjuk"
 számlálója.
 
+Ugyanez a kapcsolat a Notionban a **keretszerződés felől** is meg van adva
+(`HYPE ADMIN projektkódok`), és az importnak azt is olvasnia kell: a projektkód
+saját `Keretszerződés` mezője akkor oldódna fel, amikor a keretszerződések még
+nincsenek bent, tehát üresen maradt. Emiatt jött be a 28 keret úgy, hogy
+**egyikhez sem tartozott projekt** - a javítás a
+[10-integraciok.md](10-integraciok.md) *"Kétirányú relation"* szakaszában.
+
 ### A keretszerződés adatlapja
 
 A listasorból csak annyi látszott, hogy "3 projektkódnál használjuk" - hogy

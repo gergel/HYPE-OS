@@ -40,6 +40,10 @@ class ImportResult:
     # pontosan ez a védelem a lényege.
     protected_fields: int = 0
     protected_rows: int = 0
+    # Utólag bekötött kapcsolatok száma (pl. a keretszerződés alá tartozó
+    # projektkódok). Ez sem hiba, de a naplóból látszania kell, mert egy
+    # ismételt futásnál épp az a jó jel, ha már nulla.
+    bekotott_kapcsolatok: int = 0
 
     def __str__(self) -> str:
         summary = f"{self.entity_type}: {self.created} új, {self.updated} frissítve, {self.skipped} kihagyva"
@@ -49,6 +53,8 @@ class ImportResult:
             )
         if self.files_copied:
             summary += f", {self.files_copied} fájl átemelve"
+        if self.bekotott_kapcsolatok:
+            summary += f", {self.bekotott_kapcsolatok} kapcsolat bekötve"
         if self.errors:
             summary += f", {len(self.errors)} hiba"
         if self.file_errors:

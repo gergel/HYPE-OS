@@ -17,7 +17,13 @@ from app.models.task import Task
 from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
 from app.services.hu_szoveg import ekezet_nelkul
-from app.notion_import.engine import ImportResult, resolve_relation_id, safe_upsert, upsert
+from app.notion_import.engine import (
+    ImportResult,
+    resolve_relation_id,
+    resolve_relation_ids,
+    safe_upsert,
+    upsert,
+)
 
 UNKNOWN_CLIENT_KEY = "client:unknown-notion-import"
 
@@ -813,6 +819,39 @@ def _eseti_szerzodes_a_munkatarsbol(db: Session, result: ImportResult, page: dic
             szerzodes.alairva = True
 
 
+def kosd_a_keret_projektkodjait(db: Session, szerzodes_id: int, notion_projektkod_idk: list) -> int:
+    """A keretszerződés alá tartozó projektkódok bekötése - a KERET felől.
+
+    A kapcsolat a Notionban KÉT irányból is meg van adva: a projektkód
+    "Keretszerződés" mezőjéből és a keretszerződés "HYPE ADMIN projektkódok"
+    mezőjéből. A ProjectCode importja eddig csak az elsőt használta - csakhogy
+    az akkor fut, amikor a keretszerződések még nem feltétlenül vannak bent, és
+    egy feloldatlan hivatkozás NÉMÁN üresen marad (a hiányzó kapcsolat nem
+    hiba). Emiatt a projektkódok `contract_id`-ja tömegesen üres maradt, és
+    utólag semmi nem hozta helyre: a keretszerződések importja nem nyúlt a
+    projektkódokhoz, a projektkódoké meg nem futott újra.
+
+    Ezért kötünk a keret felől is. Csak az ÜRES `contract_id`-t töltjük ki: ha
+    egy projektkódnál már áll valamelyik szerződés, azt vagy a saját importja
+    írta be, vagy kézzel állították - egyik sem a mi dolgunk felülírni.
+
+    A visszatérési érték a most bekötött projektkódok száma."""
+    from sqlalchemy import select
+
+    from app.models.project_code import ProjectCode
+
+    if not notion_projektkod_idk:
+        return 0
+    idk = resolve_relation_ids(db, "ProjectCode", notion_projektkod_idk)
+    if not idk:
+        return 0
+    darab = 0
+    for pk in db.scalars(select(ProjectCode).where(ProjectCode.id.in_(idk), ProjectCode.contract_id.is_(None))):
+        pk.contract_id = szerzodes_id
+        darab += 1
+    return darab
+
+
 def import_contracts(client: NotionClient, db: Session) -> ImportResult:
     """Contract <- 'Keretszerződés' (tipus=kereto) + 'Alvállakozó keretszerződés
     (külsős)' (tipus=alvallalkozoi) + a 'Külsős és belsős' tábla cégadatai.
@@ -821,6 +860,7 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
     székhely, adószám, és az aláírt PDF a "Szerződés aláírva" mezőben) a
     munkatárs saját lapján is ott vannak - sokaknak CSAK ott."""
     result = ImportResult(entity_type="Contract")
+    bekotott = 0
     kulsos_belsos = _kulsos_es_belsos_oldalak(client)
     szerzodes_index = _szerzodes_munkatars_index(db, kulsos_belsos)
 
@@ -871,6 +911,8 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
         if szerzodes is not None:
             ujak = files.atemel_mindent(db, props, entity_type="contract", entity_id=szerzodes.id, result=result)
             szerzodes.szerzodes_file_url = files.elso(ujak, "Szerződés") or szerzodes.szerzodes_file_url
+            # A keret alá tartozó projektek bekötése - lásd a függvény leírását.
+            bekotott += kosd_a_keret_projektkodjait(db, szerzodes.id, props.get("HYPE ADMIN projektkódok") or [])
 
     for page in client.query_database(db_ids.ALVALLALKOZO_KERETSZERZODES):
         props = extract_properties(page, client)
@@ -897,6 +939,7 @@ def import_contracts(client: NotionClient, db: Session) -> ImportResult:
     for page, props in kulsos_belsos:
         _eseti_szerzodes_a_munkatarsbol(db, result, page, props)
 
+    result.bekotott_kapcsolatok += bekotott
     return result
 
 

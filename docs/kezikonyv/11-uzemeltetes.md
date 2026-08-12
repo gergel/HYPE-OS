@@ -102,7 +102,10 @@ beállítás nélkül is:
   ```
 
   Soronként kiírja, mi lett az adott céggel (képviselő, nyilvántartási szám,
-  ügyfél-kapcsolat, fájl), és idempotens - újrafuttatva frissít, nem duplikál.
+  ügyfél-kapcsolat, fájl, és `projekt=bekötött/hivatkozott`), és idempotens -
+  újrafuttatva frissít, nem duplikál. A `projekt` oszlop a keret alá tartozó
+  projektkódokat köti be a keretszerződés felől is - lásd
+  [10-integraciok.md](10-integraciok.md).
 
 - `ACCESS_TOKEN_EXPIRE_MINUTES` alapja 30 nap, gördülő megújítással - lásd
   [02-auth-jogosultsag.md](02-auth-jogosultsag.md).

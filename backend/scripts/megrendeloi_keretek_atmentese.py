@@ -18,7 +18,10 @@ mi lett vele. Ugyanazt a motort használja, mint a rendes import
   import óta, azt érintetlenül hagyja (lásd notion_import/engine.py);
 - **a fájlokat átemeli** az R2-re, mert a Notion fájl-linkjei kb. egy óra alatt
   lejárnak - a Notion URL-t beírni annyi lenne, mint holnapra döglött linkeket
-  hagyni.
+  hagyni;
+- **beköti a keret alá tartozó projektkódokat** a keretszerződés felőli
+  relationből (`HYPE ADMIN projektkódok`) - a projektkódok saját importja ezt
+  nem tudta megtenni, mert ő fut előbb (lásd kosd_a_keret_projektkodjait).
 
 Használat (Railway-en, `railway ssh` után, ahol a NOTION_API_KEY és a
 DATABASE_URL már be van állítva):
@@ -43,7 +46,11 @@ from app.models.notion_import import NotionImportMap
 from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, extract_properties
 from app.notion_import.engine import ImportResult, safe_upsert
-from app.notion_import.importers import _szoveg_mezo, _text, resolve_client_via_contact
+from app.notion_import.importers import (
+    _szoveg_mezo,
+    kosd_a_keret_projektkodjait,
+    resolve_client_via_contact,
+)
 from app.services import document_storage
 from app.services.megrendeloi_papir_atvetel import kosd_ugyfelhez_a_kereteket
 
@@ -81,10 +88,8 @@ def main() -> int:
     db = SessionLocal()
     notion = NotionClient()
     result = ImportResult(entity_type="Megrendelői keretszerződés")
+    projektkod_osszesen = 0
 
-    elotte = db.scalar(
-        select(Contract).where(Contract.tipus == ContractType.KERETSZERZODES).limit(1)
-    )
     darab_elotte = len(
         db.scalars(select(Contract.id).where(Contract.tipus == ContractType.KERETSZERZODES)).all()
     )
@@ -112,7 +117,8 @@ def main() -> int:
                 print(
                     f"  {nev[:45]:<45} kepv={'✓' if mezok['vallalkozas_kepviseloje'] else '·'} "
                     f"nyilv={'✓' if mezok['vallalkozas_nyilvantartasi_szam'] else '·'} "
-                    f"ugyfel={'✓' if mezok['client_id'] else '·'} fájl={fajl_db}"
+                    f"ugyfel={'✓' if mezok['client_id'] else '·'} fájl={fajl_db} "
+                    f"projekt={len(props.get('HYPE ADMIN projektkódok') or [])}"
                 )
                 continue
 
@@ -136,15 +142,23 @@ def main() -> int:
             uj_url = files.elso(ujak, "Szerződés")
             if uj_url:
                 szerzodes.szerzodes_file_url = uj_url
+            # A keret ALÁ TARTOZÓ projektek bekötése - a Notionban a
+            # keretszerződés felől is meg van adva a kapcsolat.
+            bekotott = kosd_a_keret_projektkodjait(
+                db, szerzodes.id, props.get("HYPE ADMIN projektkódok") or []
+            )
+            projektkod_osszesen += bekotott
             db.commit()
 
+            hivatkozott = len(props.get("HYPE ADMIN projektkódok") or [])
             jelzes = "↻ árva leképezés helyreállítva" if arva else "✓"
             print(
                 f"  {jelzes} {nev[:43]:<43} "
                 f"kepv={'✓' if szerzodes.vallalkozas_kepviseloje else '·'} "
                 f"nyilv={'✓' if szerzodes.vallalkozas_nyilvantartasi_szam else '·'} "
                 f"ugyfel={'✓' if szerzodes.client_id else '·'} "
-                f"fájl={'✓' if szerzodes.szerzodes_file_url else '·'}"
+                f"fájl={'✓' if szerzodes.szerzodes_file_url else '·'} "
+                f"projekt={bekotott}/{hivatkozott}"
             )
     finally:
         notion.close()
@@ -162,6 +176,8 @@ def main() -> int:
         db.scalars(select(Contract.id).where(Contract.tipus == ContractType.KERETSZERZODES)).all()
     )
     print(f"\n{result}")
+    if projektkod_osszesen:
+        print(f"{projektkod_osszesen} projektkód bekötve a keretszerződéséhez.")
     if kotve:
         print(f"{kotve} keretszerződés kapott ügyfelet a projektkódjai felől.")
     print(f"Most {darab_utana} megrendelői keretszerződés van az adatbázisban (előtte {darab_elotte}).")
