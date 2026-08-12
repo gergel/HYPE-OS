@@ -31,9 +31,10 @@ from app.models.client import Client
 from app.models.contract import Contract, ContractType
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
+from app.models.keret_modositas import ALLAPOTOK as MODOSITAS_ALLAPOTOK, KeretModositas
 from app.models.megrendeloi_papir import MegrendeloiSzerzodes, MegrendeloiTig
 from app.models.project_code import ProjectCode
-from app.services import document_storage, megrendeloi_papir, notion_mapping
+from app.services import document_storage, keret_modositas, megrendeloi_papir, notion_mapping
 from app.services.megrendeloi_papir import megrendeloi_keret_ervenyes
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
@@ -63,6 +64,29 @@ class KeretRead(BaseModel):
     ervenyes: bool = False
     #: Hány projektkódnál használjuk.
     projektkod_db: int = 0
+    #: Hány szerződésmódosítás tartozik hozzá, és hány vár még aláírásra - a
+    #: listasorban ennyi kell ahhoz, hogy látszódjon, van-e nyitott ügy.
+    modositas_db: int = 0
+    modositas_alairasra_var: int = 0
+
+
+class KeretModositasRead(BaseModel):
+    """Egy szerződésmódosítás a keretszerződéshez.
+
+    Az `allapot` útja: Készítés alatt -> Aláírásra vár -> Kész. A keretszerződés
+    papírjaitól eltérően itt a KIKÜLDÉS még nem a végállomás: a módosítás akkor
+    ér valamit, ha aláírva visszajött (lásd models/keret_modositas.py)."""
+
+    id: int
+    contract_id: int
+    keltezes: date | None = None
+    allapot: str | None = None
+    file_url: str | None = None
+    alairt_file_url: str | None = None
+    email: str | None = None
+    kikuldve: date | None = None
+    kikuldte: str | None = None
+    megjegyzes: str | None = None
 
 
 class KeretIn(BaseModel):
@@ -96,6 +120,8 @@ def _kimenet(c: Contract, projektkod_db: int = 0) -> KeretRead:
         alairva=bool(c.alairva),
         ervenyes=megrendeloi_keret_ervenyes(c),
         projektkod_db=projektkod_db,
+        modositas_db=len(c.modositasok),
+        modositas_alairasra_var=sum(1 for m in c.modositasok if m.allapot != "Kész"),
     )
 
 
@@ -111,7 +137,13 @@ def list_keretszerzodesek(db: Session = Depends(get_db), _user: Employee = Depen
     """Az összes megrendelői keretszerződés, az élőkkel elöl."""
     sorok = db.scalars(
         select(Contract)
-        .options(selectinload(Contract.client), selectinload(Contract.idoszakok))
+        .options(
+            selectinload(Contract.client),
+            selectinload(Contract.idoszakok),
+            # A módosítások számához kell - enélkül soronként egy külön
+            # lekérdezés menne el rá.
+            selectinload(Contract.modositasok),
+        )
         .where(Contract.tipus == ContractType.KERETSZERZODES)
     ).all()
     # A projektkódok számát EGY lekérdezésből vesszük - soronkénti count()
@@ -189,6 +221,8 @@ class KeretReszletek(KeretRead):
     #: aláírt példány, melléklet, korábbi verzió -, itt megtalálható.
     fajlok: list[KeretFajl] = []
     projektkodok: list[KeretProjektkod] = []
+    #: A kerethez tartozó szerződésmódosítások, a legrégebbivel elöl.
+    modositasok: list[KeretModositasRead] = []
 
 
 def _keret_fajljai(db: Session, keret_id: int) -> list[KeretFajl]:
@@ -244,6 +278,7 @@ def get_keretszerzodes(
         nev=c.nev,
         megjegyzes=c.szerzodes_megjegyzes,
         fajlok=_keret_fajljai(db, c.id),
+        modositasok=[_modositas_kimenet(m) for m in c.modositasok],
         projektkodok=[
             KeretProjektkod(
                 id=pk.id,
@@ -423,6 +458,164 @@ async def upload_alairt(
     return _kimenet(c)
 
 
+def _modositas_kimenet(m: KeretModositas) -> KeretModositasRead:
+    return KeretModositasRead(
+        id=m.id,
+        contract_id=m.contract_id,
+        keltezes=m.keltezes,
+        allapot=m.allapot,
+        file_url=m.file_url,
+        alairt_file_url=m.alairt_file_url,
+        email=m.email,
+        kikuldve=m.kikuldve.date() if m.kikuldve else None,
+        kikuldte=m.kikuldte.full_name if m.kikuldte else None,
+        megjegyzes=m.megjegyzes,
+    )
+
+
+def _modositas_or_404(db: Session, keret_id: int, modositas_id: int) -> KeretModositas:
+    m = db.get(KeretModositas, modositas_id)
+    if m is None or m.contract_id != keret_id:
+        raise HTTPException(status_code=404, detail="Ez a szerződésmódosítás nem található.")
+    return m
+
+
+@router.get("/{keret_id}/modositasok", response_model=list[KeretModositasRead])
+def list_modositasok(
+    keret_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    c = _get_or_404(db, keret_id)
+    return [_modositas_kimenet(m) for m in c.modositasok]
+
+
+@router.post("/{keret_id}/modositasok/generalas-es-kuldes", response_model=KeretModositasRead, status_code=201)
+def modositas_generalas_es_kuldes(
+    keret_id: int,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """Szerződésmódosítás generálása a sablonból és kiküldése.
+
+    A levél az admin fiókból megy, annak a Gmailben beállított aláírásával, a
+    kész PDF pedig a Drive-ra kerül - a részletek és az OK a
+    services/keret_modositas.py leírásában."""
+    c = _get_or_404(db, keret_id)
+    try:
+        m = keret_modositas.generalj_es_kuldj(db, c, user)
+    except RuntimeError as exc:
+        # A félbemaradt sor MARADJON meg "Készítés alatt" állapotban: abból
+        # látszik, hogy elindult egy kiküldés és hol akadt el.
+        db.commit()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(m)
+    return _modositas_kimenet(m)
+
+
+async def _modositas_fajl(db: Session, m: KeretModositas, file: UploadFile, *, alairt: bool) -> None:
+    """Feltöltés a módosításhoz - saját vagy aláírt példány.
+
+    Az ALÁÍRT példány zárja le a folyamatot: ettől lesz "Kész". A saját fájl
+    csak a papírt pótolja (van, amit nem itt generáltak), tehát az továbbra is
+    aláírásra vár."""
+    data = await file.read()
+    kiterjesztes = os.path.splitext(file.filename or "")[1] or ".pdf"
+    kulcs = f"keret-modositas{'-alairt' if alairt else ''}/{m.id}{kiterjesztes}"
+    regi = m.alairt_file_storage_key if alairt else m.file_storage_key
+    url = document_storage.upload_bytes(data, kulcs, file.content_type or "application/octet-stream")
+    if alairt:
+        m.alairt_file_url, m.alairt_file_storage_key = url, kulcs
+        m.allapot = "Kész"
+    else:
+        m.file_url, m.file_storage_key = url, kulcs
+        if m.allapot == "Készítés alatt":
+            m.allapot = "Aláírásra vár"
+    db.commit()
+    if regi and regi != kulcs:
+        document_storage.delete_object(regi)
+
+
+@router.post("/{keret_id}/modositasok/sajat-fajl", response_model=KeretModositasRead, status_code=201)
+async def modositas_sajat_fajl(
+    keret_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """SAJÁT módosítás feltöltése a generálás helyett - van, amit a megrendelő
+    ad a saját sablonjával, és van, ami még a rendszer előtti."""
+    c = _get_or_404(db, keret_id)
+    m = keret_modositas.uj_modositas(c)
+    db.add(m)
+    db.flush()
+    await _modositas_fajl(db, m, file, alairt=False)
+    db.refresh(m)
+    return _modositas_kimenet(m)
+
+
+@router.post("/{keret_id}/modositasok/{modositas_id}/alairt-fajl", response_model=KeretModositasRead)
+async def modositas_alairt_fajl(
+    keret_id: int,
+    modositas_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Az aláírva visszakapott módosítás feltöltése - ettől lesz kész."""
+    _get_or_404(db, keret_id)
+    m = _modositas_or_404(db, keret_id, modositas_id)
+    await _modositas_fajl(db, m, file, alairt=True)
+    db.refresh(m)
+    return _modositas_kimenet(m)
+
+
+class ModositasIn(BaseModel):
+    keltezes: date | None = None
+    allapot: str | None = None
+    megjegyzes: str | None = None
+
+
+@router.patch("/{keret_id}/modositasok/{modositas_id}", response_model=KeretModositasRead)
+def modositas_update(
+    keret_id: int,
+    modositas_id: int,
+    payload: ModositasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    _get_or_404(db, keret_id)
+    m = _modositas_or_404(db, keret_id, modositas_id)
+    adat = payload.model_dump(exclude_unset=True)
+    if "allapot" in adat and adat["allapot"] not in MODOSITAS_ALLAPOTOK:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ismeretlen állapot. Használható: {', '.join(MODOSITAS_ALLAPOTOK)}.",
+        )
+    for mezo, ertek in adat.items():
+        setattr(m, mezo, ertek)
+    db.commit()
+    db.refresh(m)
+    return _modositas_kimenet(m)
+
+
+@router.delete("/{keret_id}/modositasok/{modositas_id}", status_code=204)
+def modositas_delete(
+    keret_id: int,
+    modositas_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    _get_or_404(db, keret_id)
+    m = _modositas_or_404(db, keret_id, modositas_id)
+    kulcsok = [k for k in (m.file_storage_key, m.alairt_file_storage_key) if k]
+    db.delete(m)
+    db.commit()
+    for k in kulcsok:
+        document_storage.delete_object(k)
+
+
 class TorlesEredmeny(BaseModel):
     """Mi történt a törléskor - a felület ezt írja ki visszajelzésként."""
 
@@ -478,7 +671,10 @@ def delete_keretszerzodes(
                 papir.megjegyzes = f"{(papir.megjegyzes or '').strip()}\n{nyom}".strip()
                 ujranyitott += 1
 
+    # A szerződésmódosításokat az adatbázisban a cascade viszi, a hozzájuk
+    # feltöltött fájlokat viszont nekünk kell letakarítani a tárhelyről.
     kulcsok = [k for k in (c.szerzodes_file_storage_key, c.alairt_file_storage_key) if k]
+    kulcsok += [k for m in c.modositasok for k in (m.file_storage_key, m.alairt_file_storage_key) if k]
     # A Notion-leképezés is menjen vele: enélkül ez a keretszerződés soha többé
     # nem tudna visszaimportálódni a Notionból (lásd services/notion_mapping.py).
     notion_mapping.torold_a_leképezest(db, "Contract", c.id)

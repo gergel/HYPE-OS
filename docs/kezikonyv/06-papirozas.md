@@ -337,9 +337,46 @@ az aláírt példány, a mellékletek és a korábbi verziók átjöttek, de a f
 nem látszottak. Ugyanígy megjelenik a Notion "Name" mezője és a szerződés
 megjegyzése is.
 
-A nézet **olvasó**: a papírokat a projektkód adatlapján lehet szerkeszteni,
-ahová innen egy kattintással el lehet jutni. Ugyanaz a papír két helyen
-szerkesztve előbb-utóbb két különböző viselkedést jelentene.
+A **projektkódok papírjai** tekintetében a nézet olvasó: azokat a projektkód
+adatlapján lehet szerkeszteni, ahová innen egy kattintással el lehet jutni.
+Ugyanaz a papír két helyen szerkesztve előbb-utóbb két különböző viselkedést
+jelentene. A szerződésmódosítás viszont itt intézhető (lásd lent) - az magához
+a kerethez tartozik, nincs másik hely, ahol dolga lenne.
+
+### Szerződésmódosítás
+
+Egy keretszerződést az évek alatt **többször is módosítanak** (székhely,
+cégjegyzékszám, díjazás), és mindegyik módosítás önálló papír: saját
+keltezéssel, kiküldéssel és aláírt példánnyal. Ezért külön tábla
+(`keret_modositasok`), nem néhány mező a `contracts`-on - egyetlen
+`modositas_file_url` a másodiknál felülírná az elsőt, és pont az veszne el,
+amit a szerződés mellé évekig meg kell őrizni.
+
+A folyamat ugyanaz, mint a keretszerződésé (Google Docs sablon → PDF → Drive
+mappa → e-mail), **három ponton** tér el:
+
+1. **Más címről megy.** A levél az admin fiókból indul (`MODOSITAS_SENDER`,
+   alapból `admin@hypest.hu`), az aláírása pedig az abban a fiókban **beállított
+   Gmail-aláírás** - nem egy külön, itt karbantartott szöveg. Ha valaki a
+   Gmailben átírja az aláírást, a HYPE OS-ből kimenő levél is azzal megy. Ha a
+   beállítás nem olvasható (a token nem kapta meg a jogot), a levél attól még
+   kimegy, csak a beépített tartalék aláírással: egy hiányzó aláírás nem ér
+   annyit, hogy egy kiküldés elhasaljon rajta.
+2. **Nem a kiküldés a végállomás.** A módosítás akkor ér valamit, ha **aláírva
+   visszajött**, ezért az útja `Készítés alatt → Aláírásra vár → Kész`, és a
+   folyamatot az aláírt példány feltöltése zárja le. (A többi papírnál a
+   "Kiküldve" a végállapot, mert ott a kiküldés a lényeg.)
+3. **Több is lehet belőle** ugyanazon a kereten - minden kiküldés új sort nyit.
+
+A küldő cím a Gmailben legyen a fiók saját címe vagy **felvett álneve**
+(Beállítások → Fiókok → Küldés mint); egyébként a Gmail elutasítja a levelet,
+és a felület pontosan ezt írja ki.
+
+Ahol nem itt készült a papír, ott **saját módosítás is feltölthető** a generálás
+helyett - ilyenkor nem megy ki levél, a sor rögtön aláírásra vár.
+
+A keretszerződés törlése a módosításait is elviszi (adatbázisban cascade, a
+feltöltött fájlok a tárhelyről).
 
 ### Törlés: a projekteknek megint kell szerződés
 
@@ -373,6 +410,7 @@ használhatók:
 | Eseti szerződés | `GDOC_MEGRENDELOI_ESETI_TEMPLATE_ID` | `nev hely adoszam targy tido netto nettoki kelt afa nyilvszam kepvis projektnev napok` |
 | TIG | `GDOC_MEGRENDELOI_TIG_TEMPLATE_ID` | ugyanaz `projektnev`/`napok` nélkül, plusz `projkod` |
 | Keretszerződés | `GDOC_MEGRENDELOI_KERET_TEMPLATE_ID` | `nev hely adoszam targy kelt nyilvszam kepvis` |
+| Szerződésmódosítás | `GDOC_KERET_MODOSITAS_TEMPLATE_ID` | `nev hely nyilvszam adoszam kepvis` |
 
 ### A Notionból örökölt papírok átvétele
 

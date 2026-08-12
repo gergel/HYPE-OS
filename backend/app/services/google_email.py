@@ -29,23 +29,29 @@ GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.readonly",
 ]
+#: A fiókban BEÁLLÍTOTT aláírás kiolvasásához kell (users.settings.sendAs.get).
+#: Külön lista, mert service accountnál a kért scope-ok a token-kérésbe mennek:
+#: ha ez a scope nincs engedélyezve a domain-wide delegationben, a kérés
+#: elhasal - és azt nem viheti magával a KÜLDÉST is (lásd alairas_html).
+SETTINGS_SCOPES = [*GMAIL_SCOPES, "https://www.googleapis.com/auth/gmail.settings.basic"]
 
 
-def _gmail_service():
+def _gmail_service(scopes: list[str] | None = None):
     # A TIGTOKEN_JSON a különálló belsős-TIG program token-neve - azért
     # fogadjuk el, hogy a HYPE OS ugyanazzal a Railway beállítással működjön.
+    scopes = scopes or GMAIL_SCOPES
     token_json = settings.gmail_oauth_token_json or settings.tigtoken_json
     if token_json:
         data = json.loads(token_json)
         data.setdefault("token_uri", "https://oauth2.googleapis.com/token")
-        creds = UserCredentials.from_authorized_user_info(data, scopes=GMAIL_SCOPES)
+        creds = UserCredentials.from_authorized_user_info(data, scopes=scopes)
         if not creds.valid:
             creds.refresh(Request())
         return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
     if settings.gmail_service_account_json:
         info = json.loads(settings.gmail_service_account_json)
-        sa = ServiceAccountCredentials.from_service_account_info(info, scopes=GMAIL_SCOPES)
+        sa = ServiceAccountCredentials.from_service_account_info(info, scopes=scopes)
         if settings.gmail_impersonate_user:
             sa = sa.with_subject(settings.gmail_impersonate_user)
         return build("gmail", "v1", credentials=sa, cache_discovery=False)
@@ -57,7 +63,7 @@ def _gmail_service():
             token_uri="https://oauth2.googleapis.com/token",
             client_id=settings.gmail_oauth_client_id,
             client_secret=settings.gmail_oauth_client_secret,
-            scopes=GMAIL_SCOPES,
+            scopes=scopes,
         )
         if not creds.valid:
             creds.refresh(Request())
@@ -69,7 +75,7 @@ def _gmail_service():
     )
 
 
-def _format_sender(sender_name: str | None = None) -> str:
+def _format_sender(sender_name: str | None = None, sender_email: str | None = None) -> str:
     """A From fejléc értéke: "Megjelenő Név <cim@domain>".
 
     formataddr-ral építjük, mert a megjelenő név ékezetes lehet (pl. "HYPE
@@ -79,13 +85,50 @@ def _format_sender(sender_name: str | None = None) -> str:
     nevet kódolja, a <cim> érintetlen marad.
 
     A sender_name felülírja a globális GMAIL_SENDER_NAME-et (a diszpó pl. a
-    saját nevén megy ki, lásd services/dispo.py)."""
-    if not settings.gmail_sender:
+    saját nevén megy ki, lásd services/dispo.py).
+
+    A sender_email a küldő CÍMET írja felül (alapból GMAIL_SENDER). Ezt csak
+    ott használjuk, ahol a levél szándékosan más fiók nevében megy - a
+    szerződésmódosítás az admin címről (lásd config.modositas_sender). A Gmail
+    csak akkor engedi, ha a cím a küldő fiók saját címe vagy felvett álneve
+    (send-as alias); egyébként a küldés hibára fut, és a hívó ezt kapja meg."""
+    cim = (sender_email or settings.gmail_sender or "").strip()
+    if not cim:
         raise RuntimeError("GMAIL_SENDER nincs beállítva.")
     name = sender_name or settings.gmail_sender_name
     if name:
-        return formataddr((name, settings.gmail_sender), charset="utf-8")
-    return settings.gmail_sender
+        return formataddr((name, cim), charset="utf-8")
+    return cim
+
+
+def _sendas_beallitas(cim: str) -> dict | None:
+    """A fiókban BEÁLLÍTOTT feladó-adatok (aláírás, megjelenő név) egy címhez.
+
+    Kétszer próbálkozunk: előbb a szokásos scope-okkal (a gmail.readonly a
+    beállítások olvasására is jó szokott lenni), utána a settings.basic
+    scope-pal. Ha egyik sem megy - mert a token nem kapta meg a jogot, vagy a
+    cím nincs felvéve a fiókban -, `None`-nal térünk vissza: a levél attól még
+    kimegy, csak a beépített aláírás kerül rá. Egy hiányzó aláírás nem ér
+    annyit, hogy egy kiküldés elhasaljon rajta."""
+    for scopes in (None, SETTINGS_SCOPES):
+        try:
+            svc = _gmail_service(scopes)
+            return svc.users().settings().sendAs().get(userId="me", sendAsEmail=cim).execute()
+        except Exception:  # noqa: BLE001 - lásd a docstringet: ez nem hiba
+            continue
+    return None
+
+
+def sendas_adatok(cim: str) -> tuple[str | None, str | None]:
+    """(megjelenő név, aláírás HTML) a fiókban beállított feladó-adatokból.
+
+    Egy hívás, két érték - szándékosan együtt, mert ugyanaz az egy API-kérés
+    adja mindkettőt, és külön függvényként minden kiküldés kétszer kérdezné le
+    ugyanazt."""
+    adat = _sendas_beallitas(cim) or {}
+    nev = (adat.get("displayName") or "").strip()
+    alairas = (adat.get("signature") or "").strip()
+    return nev or None, alairas or None
 
 
 def _extract_header(headers: list[dict], name: str) -> str | None:
@@ -153,15 +196,17 @@ def send_message(
     thread_id: str | None = None,
     in_reply_to: str | None = None,
     sender_name: str | None = None,
+    sender_email: str | None = None,
 ) -> tuple[str | None, str | None, str | None]:
     """Visszatér: (gmailThreadId, gmailMessageId, rfc822MessageId). CC mindig a
     HYPE_CC env-ben megadott lista. thread_id + in_reply_to esetén ugyanabban a
     Gmail szálban válaszol, nem új levelet indít.
 
     sender_name: a címzett által látott feladónév erre a levélre (alapból a
-    GMAIL_SENDER_NAME) - a küldő cím ettől függetlenül mindig GMAIL_SENDER."""
+    GMAIL_SENDER_NAME). sender_email: a küldő CÍM (alapból GMAIL_SENDER) -
+    lásd _format_sender."""
     svc = _gmail_service()
-    sender = _format_sender(sender_name)
+    sender = _format_sender(sender_name, sender_email)
     body = _build_mime(
         html=html_body,
         subject=subject,
@@ -176,7 +221,19 @@ def send_message(
     if thread_id:
         body["threadId"] = thread_id
 
-    r = svc.users().messages().send(userId="me", body=body).execute()
+    try:
+        r = svc.users().messages().send(userId="me", body=body).execute()
+    except Exception as exc:  # noqa: BLE001
+        # A leggyakoribb ok, ha eltérő feladó-címmel küldünk: a Gmail csak a
+        # fiók saját címét vagy felvett álnevét engedi From-nak. A nyers
+        # HttpError-ból ez nem derül ki, ezért mondjuk meg, mit kell tenni.
+        if sender_email and sender_email.strip().lower() != (settings.gmail_sender or "").strip().lower():
+            raise RuntimeError(
+                f"A Gmail nem engedte a küldést a(z) {sender_email} címről. Ez a cím a küldő fiókban "
+                "legyen felvéve álnévként (Gmail → Beállítások → Fiókok → Küldés mint), vagy állítsd "
+                f"át a MODOSITAS_SENDER környezeti változót. A Gmail hibája: {exc}"
+            ) from exc
+        raise
     thr = r.get("threadId")
     mid = r.get("id")
 

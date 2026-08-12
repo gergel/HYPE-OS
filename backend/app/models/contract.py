@@ -116,6 +116,12 @@ class Contract(TimestampMixin, Base):
         back_populates="contract", cascade="all, delete-orphan", order_by="ContractTetel.id"
     )
 
+    #: A MEGRENDELŐI keretszerződés módosításai - egy kereten több is lehet,
+    #: mindegyik önálló papír (lásd models/keret_modositas.py).
+    modositasok: Mapped[list["KeretModositas"]] = relationship(
+        back_populates="contract", cascade="all, delete-orphan", order_by="KeretModositas.id"
+    )
+
     client: Mapped["Client"] = relationship(back_populates="contracts")
     employee: Mapped["Employee"] = relationship(back_populates="contracts")
     vallalkozas: Mapped["Vallalkozas | None"] = relationship(back_populates="contracts")

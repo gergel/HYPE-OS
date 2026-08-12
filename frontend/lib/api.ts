@@ -2245,6 +2245,27 @@ export type MegrendeloiKeret = {
   /** Érvényes-e MA - ettől függ, kiváltja-e az eseti szerződést. */
   ervenyes: boolean;
   projektkod_db: number;
+  /** Hány szerződésmódosítás tartozik hozzá, és hány vár még aláírásra. */
+  modositas_db: number;
+  modositas_alairasra_var: number;
+};
+
+/** Egy szerződésmódosítás a keretszerződéshez.
+ *
+ * Az állapot útja: Készítés alatt -> Aláírásra vár -> Kész. A többi papírtól
+ * eltérően itt a KIKÜLDÉS még nem a végállomás: a módosítás akkor ér valamit,
+ * ha aláírva visszajött. */
+export type MegrendeloiKeretModositas = {
+  id: number;
+  contract_id: number;
+  keltezes: string | null;
+  allapot: string | null;
+  file_url: string | null;
+  alairt_file_url: string | null;
+  email: string | null;
+  kikuldve: string | null;
+  kikuldte: string | null;
+  megjegyzes: string | null;
 };
 
 /** Egy papír állapota a keretszerződés adatlapján - annyi, amennyiből látszik,
@@ -2288,6 +2309,7 @@ export type MegrendeloiKeretReszletek = MegrendeloiKeret & {
   megjegyzes: string | null;
   fajlok: MegrendeloiKeretFajl[];
   projektkodok: MegrendeloiKeretProjektkod[];
+  modositasok: MegrendeloiKeretModositas[];
 };
 
 export async function getMegrendeloiPapirok(

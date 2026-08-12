@@ -64,8 +64,8 @@ nagybetűs env-névvel). A `backend/.env.example` a fontosabbakat gyűjti egybe.
 | Terület | Változók |
 |---|---|
 | Storage | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL` |
-| Gmail | `GMAIL_SENDER`, `GMAIL_SENDER_NAME`, `DISPO_SENDER_NAME`, `GMAIL_OAUTH_TOKEN_JSON` *vagy* `GMAIL_SERVICE_ACCOUNT_JSON` + `GMAIL_IMPERSONATE_USER`, `HYPE_CC` |
-| Docs/Drive | `GOOGLE_DOCS_OAUTH_TOKEN_JSON`, `GDOC_DISPO_TEMPLATE_ID`, `GDOC_CONTRACT_TEMPLATE_ID`, `GDOC_ALVALLALKOZOI_SZERZODES_TEMPLATE_ID`, `GDOC_KERETSZERZODES_TEMPLATE_ID`, `GDOC_KULSOS_TIG_TEMPLATE_ID`, `GDOC_BELSOS_TIG_TEMPLATE_ID`, `GDOC_MEGRENDELOI_ESETI_TEMPLATE_ID`, `GDOC_MEGRENDELOI_TIG_TEMPLATE_ID`, `GDOC_MEGRENDELOI_KERET_TEMPLATE_ID`, `GDOC_OUTPUT_FOLDER_ID`, `DRIVE_FOLDER_ID`, `DRIVE_KULSOS_TIG`, `DRIVE_BELSOS_TIG`, `DRIVE_DISZPO_FOLDER_ID` |
+| Gmail | `GMAIL_SENDER`, `GMAIL_SENDER_NAME`, `DISPO_SENDER_NAME`, `MODOSITAS_SENDER`, `GMAIL_OAUTH_TOKEN_JSON` *vagy* `GMAIL_SERVICE_ACCOUNT_JSON` + `GMAIL_IMPERSONATE_USER`, `HYPE_CC` |
+| Docs/Drive | `GOOGLE_DOCS_OAUTH_TOKEN_JSON`, `GDOC_DISPO_TEMPLATE_ID`, `GDOC_CONTRACT_TEMPLATE_ID`, `GDOC_ALVALLALKOZOI_SZERZODES_TEMPLATE_ID`, `GDOC_KERETSZERZODES_TEMPLATE_ID`, `GDOC_KULSOS_TIG_TEMPLATE_ID`, `GDOC_BELSOS_TIG_TEMPLATE_ID`, `GDOC_MEGRENDELOI_ESETI_TEMPLATE_ID`, `GDOC_MEGRENDELOI_TIG_TEMPLATE_ID`, `GDOC_MEGRENDELOI_KERET_TEMPLATE_ID`, `GDOC_KERET_MODOSITAS_TEMPLATE_ID`, `GDOC_KERET_MODOSITAS_FOLDER_ID`, `GDOC_OUTPUT_FOLDER_ID`, `DRIVE_FOLDER_ID`, `DRIVE_KULSOS_TIG`, `DRIVE_BELSOS_TIG`, `DRIVE_DISZPO_FOLDER_ID` |
 | Naptár | `GOOGLE_CALENDAR_OAUTH_TOKEN_JSON` *vagy* `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON` + `GOOGLE_CALENDAR_IMPERSONATE_USER`, `GOOGLE_CALENDAR_ID`, `GOOGLE_CALENDAR_NAME`, `NAPTAR_MEETING_SZINEK`, `GOOGLE_CALENDAR_OAUTH_CLIENT_ID/SECRET` |
 | Portál/fizetés | `FRONTEND_BASE_URL` (admin domain), `PORTAL_BASE_URL` (portál domain), `API_BASE_URL`, `BARION_POS_KEY`, `BARION_ENV`, `BARION_PAYEE`, `SZAMLAZZ_AGENT_KEY`, `PORTAL_NOTION_API_KEY`, `PORTAL_NOTION_DATABASE_ID` |
 | AI | `GEMINI_API_KEY`, `GEMINI_MODEL` |
@@ -85,6 +85,7 @@ beállítás nélkül is:
 - Belsős TIG mappa: `DRIVE_BELSOS_TIG` → `NOTION_FILE_FOLDER_ID` → `GDOC_OUTPUT_FOLDER_ID` → `DRIVE_FOLDER_ID`
 - Diszpó mappa: `DRIVE_DISZPO_FOLDER_ID` → `GDOC_OUTPUT_FOLDER_ID` → `DRIVE_FOLDER_ID` → Drive gyökér
 - Keretszerződés mappa: üresen a **sablon saját mappájába** kerül (szándékos, így nincs külön karbantartandó mappa)
+- Szerződésmódosítás mappa: `GDOC_KERET_MODOSITAS_FOLDER_ID` → `GDOC_KERETSZERZODES_FOLDER_ID` → `GDOC_OUTPUT_FOLDER_ID` → a **sablon saját mappája**
 - Naptár OAuth kliens: `GOOGLE_CALENDAR_OAUTH_CLIENT_ID/SECRET` → `GMAIL_OAUTH_CLIENT_ID/SECRET`
 
 ### CORS és munkamenet
@@ -116,6 +117,8 @@ beállítás nélkül is:
 |---|---|
 | Egy oldal 403-at ad | A `nav.ts` `permissionPage` értéke egyezik-e a backend `page=`/`PAGE` konstansával ([02](02-auth-jogosultsag.md)) |
 | Nem megy ki levél | `GMAIL_*` hitelesítés; a route hibaüzenete megmondja, mi hiányzik |
+| A szerződésmódosítás nem megy ki, a többi levél igen | A `MODOSITAS_SENDER` cím nincs felvéve a küldő fiókban álnévként (Gmail → Beállítások → Fiókok → Küldés mint) ([06](06-papirozas.md)) |
+| A módosítás levelén nem a fiók aláírása van | A token nem tudta kiolvasni a Gmail-beállítást (`gmail.settings.basic`/`gmail.readonly`) - ilyenkor a beépített tartalék aláírás megy, a küldés nem hasal el |
 | Nem generálódik PDF | `GOOGLE_DOCS_OAUTH_TOKEN_JSON` scope-jai (`drive` + `documents`), sablon-ID |
 | Nem frissül a naptár | `/api/v1/admin/calendar-sync` állapot; fut-e a Celery Beat |
 | Nem indul a fizetés | `BARION_POS_KEY`, `BARION_ENV`, `FRONTEND_BASE_URL`/`API_BASE_URL` (a redirect és callback URL-hez) |

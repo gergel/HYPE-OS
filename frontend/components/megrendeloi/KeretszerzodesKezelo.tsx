@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeretszerzodesModal } from "@/components/megrendeloi/KeretszerzodesModal";
+import { kuldjModositast, modositasEllenorzoSorok } from "@/components/megrendeloi/KeretModositasok";
 import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -79,6 +80,9 @@ export function KeretszerzodesKezelo({
   const [urlap, setUrlap] = useState<Urlap>(URES);
   const [busy, setBusy] = useState(false);
   const [kuldendo, setKuldendo] = useState<MegrendeloiKeret | null>(null);
+  // Külön a keretszerződés küldésétől: ugyanaz a gomb-minta, de MÁS papír megy
+  // ki, más sablonból és más címről (lásd backend services/keret_modositas.py).
+  const [modositando, setModositando] = useState<MegrendeloiKeret | null>(null);
   const [nyitottKeret, setNyitottKeret] = useState<number | null>(null);
 
   function frissit<K extends keyof Urlap>(kulcs: K, ertek: Urlap[K]) {
@@ -172,6 +176,22 @@ export function KeretszerzodesKezelo({
     }
   }
 
+  /** Szerződésmódosítás kiküldése a listasorból. A részletek (előzmények,
+   * aláírt példány feltöltése) az adatlapon vannak - ide csak a leggyakoribb
+   * művelet kerül ki, hogy ne kelljen érte megnyitni a keretet. */
+  async function modositasKuldes(k: MegrendeloiKeret) {
+    setModositando(null);
+    setBusy(true);
+    const hiba = await kuldjModositast(k.id);
+    setBusy(false);
+    if (hiba) {
+      toast(`Sikertelen küldés: ${hiba}`);
+      return;
+    }
+    toast("A szerződésmódosítás kiment. Most már aláírásra vár.");
+    router.refresh();
+  }
+
   async function alairtFeltoltes(keretId: number, file: File) {
     const fd = new FormData();
     fd.append("file", file);
@@ -256,6 +276,14 @@ export function KeretszerzodesKezelo({
                   ) : (
                     <StatusBadge label="Nem élő" tone="neutral" />
                   )}
+                  {k.modositas_alairasra_var > 0 ? (
+                    <StatusBadge
+                      label={`${k.modositas_alairasra_var} módosítás aláírásra vár`}
+                      tone="warning"
+                    />
+                  ) : k.modositas_db > 0 ? (
+                    <StatusBadge label={`${k.modositas_db} módosítás`} tone="neutral" />
+                  ) : null}
                   {k.alairva ? (
                     <StatusBadge label="Aláírva" tone="success" />
                   ) : k.allapot === "Kiküldve" ? (
@@ -308,6 +336,16 @@ export function KeretszerzodesKezelo({
                     className="text-text-secondary hover:underline disabled:opacity-50"
                   >
                     Generálás és küldés
+                  </button>
+                )}
+                {canCreate && (
+                  <button
+                    type="button"
+                    onClick={() => setModositando(k)}
+                    disabled={busy}
+                    className="text-text-secondary hover:underline disabled:opacity-50"
+                  >
+                    Szerződésmódosítás küldése
                   </button>
                 )}
                 {/* Saját sablonnal készült vagy még a rendszer előtti papír. */}
@@ -423,7 +461,30 @@ export function KeretszerzodesKezelo({
       )}
 
       {nyitottKeret !== null && (
-        <KeretszerzodesModal keretId={nyitottKeret} onClose={() => setNyitottKeret(null)} />
+        <KeretszerzodesModal
+          keretId={nyitottKeret}
+          onClose={() => {
+            setNyitottKeret(null);
+            // Az adatlapon is lehet módosítást küldeni/lezárni - a lista
+            // számlálói csak akkor stimmelnek, ha bezáráskor frissítünk.
+            router.refresh();
+          }}
+          canCreate={canCreate}
+          canEdit={canEdit}
+          canDelete={canDelete}
+        />
+      )}
+
+      {modositando && (
+        <KuldesEllenorzo
+          cim="Szerződésmódosítás kiküldése"
+          bevezeto="A módosítás ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben az admin címről. A kész PDF a Drive mappába kerül."
+          cimzett={modositando.email}
+          sorok={modositasEllenorzoSorok(modositando)}
+          gombCimke="Generálás és küldés"
+          onMegse={() => setModositando(null)}
+          onKuld={() => modositasKuldes(modositando)}
+        />
       )}
 
       {kuldendo && (

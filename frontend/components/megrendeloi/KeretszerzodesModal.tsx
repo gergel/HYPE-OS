@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { KeretModositasok } from "@/components/megrendeloi/KeretModositasok";
 import { ModalReteg } from "@/components/ModalReteg";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
@@ -47,26 +48,42 @@ function PapirLink({ papir }: { papir: MegrendeloiKeretPapir | null }) {
  * csak az látszott, hogy "3 projektkódnál használjuk" - hogy melyik háromnál és
  * mi a helyzet velük, sehol.
  *
- * Ez a nézet OLVASÓ: a papírokat a projektkód adatlapján lehet szerkeszteni,
- * ahová innen egy kattintással el lehet jutni. Két helyen szerkeszthető
- * ugyanaz a papír előbb-utóbb két különböző viselkedést jelentene. */
-export function KeretszerzodesModal({ keretId, onClose }: { keretId: number; onClose: () => void }) {
+ * A PROJEKTKÓDOK papírjai tekintetében a nézet OLVASÓ: azokat a projektkód
+ * adatlapján lehet szerkeszteni, ahová innen egy kattintással el lehet jutni.
+ * Két helyen szerkeszthető ugyanaz a papír előbb-utóbb két különböző
+ * viselkedést jelentene.
+ *
+ * A SZERZŐDÉSMÓDOSÍTÁS viszont itt intézhető, mert az magához a kerethez
+ * tartozik - nincs másik hely, ahol dolga lenne. */
+export function KeretszerzodesModal({
+  keretId,
+  onClose,
+  canCreate = false,
+  canEdit = false,
+  canDelete = false,
+}: {
+  keretId: number;
+  onClose: () => void;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+}) {
   const [adat, setAdat] = useState<MegrendeloiKeretReszletek | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
 
-  useEffect(() => {
-    let ervenyes = true;
-    authFetch(`/api/v1/megrendeloi-keretszerzodesek/${keretId}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`${res.status}`);
-        return res.json();
-      })
-      .then((json) => ervenyes && setAdat(json))
-      .catch((err) => ervenyes && setHiba(String(err)));
-    return () => {
-      ervenyes = false;
-    };
+  const betolt = useCallback(async () => {
+    try {
+      const res = await authFetch(`/api/v1/megrendeloi-keretszerzodesek/${keretId}`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      setAdat(await res.json());
+    } catch (err) {
+      setHiba(String(err));
+    }
   }, [keretId]);
+
+  useEffect(() => {
+    void betolt();
+  }, [betolt]);
 
   return (
     <ModalReteg onClose={onClose}>
@@ -128,6 +145,15 @@ export function KeretszerzodesModal({ keretId, onClose }: { keretId: number; onC
                 )}
               </div>
             </div>
+
+            <KeretModositasok
+              keret={adat}
+              modositasok={adat.modositasok}
+              canCreate={canCreate}
+              canEdit={canEdit}
+              canDelete={canDelete}
+              onValtozas={betolt}
+            />
 
             {/* MINDEN feltöltött fájl - nem csak a két nevesített mező. A
                 Notion-import a lap összes fájlját áthozza, de eddig nem volt

@@ -29,6 +29,7 @@ from app.models.internal_performance_certificate import (
     InternalPerformanceCertificateInvoice,
 )
 from app.models.auto import Auto
+from app.models.keret_modositas import KeretModositas
 from app.models.kotelezettseg import (
     Kotelezettseg,
     KotelezettsegCiklus,
@@ -139,6 +140,7 @@ __all__ = [
     "KrumpelloKiadas",
     "KrumpelloMunkaora",
     "KrumpelloNap",
+    "KeretModositas",
     "MegrendeloiSzerzodes",
     "MegrendeloiTig",
     "VagoEllenorzesEsemeny",

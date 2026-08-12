@@ -101,6 +101,20 @@ class Settings(BaseSettings):
     gdoc_megrendeloi_eseti_template_id: str = ""
     gdoc_megrendeloi_tig_template_id: str = ""
     gdoc_megrendeloi_keret_template_id: str = ""
+    # A megrendelői keretszerződéshez tartozó SZERZŐDÉSMÓDOSÍTÁS sablonja.
+    # Alapértéknek a felhasználó által megadott dokumentum van beírva, hogy
+    # beállítás nélkül is működjön - env-ből felülírható, ha új sablon kell.
+    # Placeholderek: {{nev}} {{hely}} {{nyilvszam}} {{adoszam}} {{kepvis}}.
+    gdoc_keret_modositas_template_id: str = "1EcuVGgyUvazBFDzFmDSYUfcioQWFH6-tvLmSDh5ASNY"
+    # Hova kerüljön a kész módosítás-PDF. Üresen a keretszerződések mappája,
+    # majd a generikus kimeneti mappa, végül a SABLON SAJÁT mappája a cél -
+    # így nincs külön karbantartandó beállítás (lásd a route-ot).
+    gdoc_keret_modositas_folder_id: str = ""
+    # A szerződésmódosítás levele MÁS címről megy, mint a többi papír: a
+    # felhasználó kérése szerint az admin fiókból, annak a Gmailben beállított
+    # aláírásával. A cím legyen a küldő fiók saját címe vagy annak felvett
+    # álneve (send-as alias), különben a Gmail elutasítja a levelet.
+    modositas_sender: str = "admin@hypest.hu"
     gdoc_kulsos_tig_template_id: str = ""
     gdoc_belsos_tig_template_id: str = ""
     gdoc_output_folder_id: str = ""

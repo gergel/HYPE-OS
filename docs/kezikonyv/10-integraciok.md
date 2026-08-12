@@ -24,6 +24,12 @@ env változóba. Ha nincs külön naptár-OAuth-kliens megadva, a Gmail OAuth kl
 esik vissza (ugyanabban a Google Cloud projektben lévő kliens több scope-ra is
 használható).
 
+A levelek feladó CÍME alapból `GMAIL_SENDER`. Egyetlen kivétel van: a
+megrendelői **szerződésmódosítás** az admin fiókból megy (`MODOSITAS_SENDER`),
+és a levél aláírását is abból a fiókból olvassuk ki (`users.settings.sendAs`),
+hogy a Gmailben beállított aláírás legyen a hiteles forrás - lásd
+[06-papirozas.md](06-papirozas.md).
+
 ### Dokumentum-generálás
 
 `services/gdoc_template.py`: Docs sablon másolása → placeholder csere → PDF export.
