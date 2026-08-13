@@ -124,7 +124,11 @@ class PerformanceCertificateTetel(TimestampMixin, Base):
     megnevezes: Mapped[str | None] = mapped_column(String(255))
 
     certificate: Mapped["PerformanceCertificate"] = relationship(back_populates="tetelek")
-    project: Mapped["Project"] = relationship()
+    #: Két irányban is kell: a TIG-től a projekt felé (a papír szövegéhez), és a
+    #: projekt felől a rá szóló tételekhez - a projektkód költsége abból tudja
+    #: meg, mennyi külsős munka jut rá akkor is, ha a TIG egy MÁSIK projekt
+    #: "otthonában" készült (lásd services/kulsos_koltseg.py).
+    project: Mapped["Project"] = relationship(back_populates="tig_tetelek")
     employee: Mapped["Employee"] = relationship()
 
 

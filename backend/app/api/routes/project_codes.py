@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.models.finance import Expense
+from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
 from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.schemas.project_code import ProjectCodeCreate, ProjectCodeRead, ProjectCodeUpdate
@@ -57,8 +58,16 @@ router = build_crud_router(
         selectinload(ProjectCode.deliverables),
         selectinload(ProjectCode.revenues),
         # A belsős napidíj a forgatások STÁBJÁBÓL jön (lásd
-        # services/belsos_koltseg.py) - a stáb betöltése nélkül ez soronként
-        # két további lekérdezés lenne.
+        # services/belsos_koltseg.py), a külsős rész pedig a rájuk szóló
+        # TIG-ekből és TIG-tételekből (services/kulsos_koltseg.py) - eager load
+        # nélkül ez soronként négy további lekérdezés lenne.
         selectinload(ProjectCode.projects).selectinload(Project.crew),
+        selectinload(ProjectCode.projects)
+        .selectinload(Project.performance_certificates)
+        .selectinload(PerformanceCertificate.tetelek),
+        selectinload(ProjectCode.projects)
+        .selectinload(Project.tig_tetelek)
+        .selectinload(PerformanceCertificateTetel.certificate)
+        .selectinload(PerformanceCertificate.tetelek),
     ),
 )

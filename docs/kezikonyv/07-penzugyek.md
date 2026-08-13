@@ -40,16 +40,32 @@ ment el a pénz:
 
 | Rész | Mi ez | Honnan |
 |---|---|---|
-| Külsős stáb | a külsős közreműködők kifizetései | `Expense.tipus == "kulsos"` (TIG-ből így keletkezik), vagy a kiadáshoz kötött ember külsős |
+| Külsős stáb | az ide tartozó forgatásokra szóló TIG-ek rá eső része + a TIG-en kívüli külsős kifizetések | `services/kulsos_koltseg.py` |
 | Vágás (utómunka) | a vágások mért idejéből számolt ár | `Deliverable.koltseg` |
 | Belsős munkanapok | a saját stáb napidíja | `services/belsos_koltseg.py` |
 | Egyéb kiadás | minden más kiadás-sor (bérlés, utazás, kellék) | MARADÉK - így a négy rész összege pontosan az összes költség |
 
-A külsős/egyéb szétválasztás azért néz két jelet, mert a Notionból hozott
-soroknál a "Kiadás formája" szabad szöveg volt (bármi lehet benne), a hozzájuk
-kötött EMBER típusa viszont megbízható. Aki még nem kapott kifizetést (nincs
-Kiadás sora), az nem szerepel a külsős részben: ez a ténylegesen KIFIZETETT
-külsős munka ára.
+**A külsős munka ára a TIG-eken áll, nem a Kiadás sorokon.** A kifizetéskor a
+TIG-ből ugyan keletkezik Kiadás sor, de a költség már a kifizetés ELŐTT is
+valóságos: a számla be van adva, a pénz ki fog menni. Ha csak a kifizetett
+sorokat néznénk, minden még nem rendezett projekt profitja hazudna - épp az,
+amelyik friss. A TIG-ből származó Kiadás sort ezért kihagyjuk az összegzésből
+(ugyanaz a pénz lenne kétszer), a TIG összegét pedig bruttóban számoljuk, ha a
+megbízott ÁFÁ-s - annyi megy ki a házból.
+
+**Több projektre szóló TIG-nél csak a rá eső rész számít.** Egy ember egy
+számlán beküldheti az egész hetet (`PerformanceCertificateTetel`): ha a
+tételeken van összeg, azok döntenek, ha nincs, a TIG összegét egyenlően
+osztjuk el a tételei közt. Ez becslés, de közelebb van a valósághoz, mint az
+egészet ide írni (a többi projekt költségét is idehúzná) vagy nullázni
+(mintha ingyen lett volna). A TIG akkor is beleszámít ebbe a projektkódba, ha
+egy MÁSIK projekt "otthonában" készült - a tételei kötik ide
+(`Project.tig_tetelek`).
+
+A TIG-en kívüli külsős kifizetéseket két jelről ismerjük fel, mert a Notionból
+hozott soroknál a "Kiadás formája" szabad szöveg volt (bármi lehet benne), a
+hozzájuk kötött EMBER típusa viszont megbízható: `Expense.tipus == "kulsos"`
+vagy külsős a kiadáshoz kötött ember.
 
 A belsős napidíjnak nincs és nem is lesz Kiadás sora: a belsős alapbér a hónap
 végén, egy tételben megy be (Belsős TIG). Ezért a projektkód költsége és a

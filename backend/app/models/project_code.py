@@ -151,28 +151,44 @@ class ProjectCode(TimestampMixin, Base):
     revenues: Mapped[list["Revenue"]] = relationship(back_populates="project_code")
     deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project_code")
 
+    def _kulsos_bontas(self) -> tuple[float, float]:
+        """(külsős, egyéb) - egy menetben, mert a kettő ugyanazon a szűrésen
+        osztozik, és külön-külön kiszámolva kétszer járnánk be mindent."""
+        from app.models.employee import EmployeeType
+        from app.services import kulsos_koltseg
+
+        # A külsős munka ára a TIG-eken áll (az ide tartozó forgatásokra eső
+        # rész), nem a belőlük keletkezett Kiadás soron: így a még KI NEM
+        # FIZETETT, de már beadott számla is látszik a projekt költségében.
+        # A TIG-ből származó Kiadás sorokat ezért kihagyjuk - ugyanaz a pénz.
+        tig_osszeg, tig_kiadas_idk = kulsos_koltseg.projektkod_kulsos(self)
+
+        kulsos = tig_osszeg
+        egyeb = 0.0
+        for e in self.expenses:
+            if e.id in tig_kiadas_idk:
+                continue
+            osszeg = float(e.brutto or 0)
+            # A TIG-en kívüli külsős kifizetéseket két jelről ismerjük fel: a
+            # sor `tipus="kulsos"` jelöléséről, vagy a hozzá kötött EMBER
+            # típusáról - a Notionból hozott soroknál a "Kiadás formája"
+            # szabad szöveg volt, arra nem lehet szabályt építeni.
+            if (e.tipus or "").strip().lower() == "kulsos" or (
+                e.employee is not None and e.employee.tipus == EmployeeType.KULSOS
+            ):
+                kulsos += osszeg
+            else:
+                egyeb += osszeg
+        return kulsos, egyeb
+
     @property
     def kulsos_koltseg(self) -> float:
-        """A KÜLSŐS közreműködők kifizetései (bruttó).
+        """A KÜLSŐS közreműködők ára: az ide tartozó forgatásokra szóló TIG-ek
+        (a rájuk eső rész, bruttóban) + a TIG-en kívüli külsős kifizetések.
 
-        Két jelből ismerjük fel: a TIG kifizetéséből keletkező Kiadás sor
-        `tipus="kulsos"` jelölést kap (lásd
-        routes/performance_certificates.py), a régi, Notionból hozott soroknál
-        pedig a hozzájuk kötött EMBER típusa dönt - ott a "Kiadás formája"
-        szabad szöveg volt, arra nem lehet szabályt építeni.
-
-        Aki még nem kapott kifizetést (nincs Kiadás sora), az itt nem
-        szerepel: ez a valóban KIFIZETETT külsős munka ára."""
-        from app.models.employee import EmployeeType
-
-        return float(
-            sum(
-                e.brutto or 0
-                for e in self.expenses
-                if (e.tipus or "").strip().lower() == "kulsos"
-                or (e.employee is not None and e.employee.tipus == EmployeeType.KULSOS)
-            )
-        )
+        A be nem fizetett számla is ide tartozik: a pénz akkor is ki fog menni,
+        és a projekt profitja addig sem hazudhat."""
+        return self._kulsos_bontas()[0]
 
     @property
     def egyeb_kiadas(self) -> float:
@@ -180,7 +196,7 @@ class ProjectCode(TimestampMixin, Base):
 
         Nem felsorolás, hanem MARADÉK - így a négy költség-rész összege pontosan
         az `osszes_koltseg`, nem marad ki semmi egy hiányzó kategória miatt."""
-        return float(sum(e.brutto or 0 for e in self.expenses)) - self.kulsos_koltseg
+        return self._kulsos_bontas()[1]
 
     @property
     def vagas_koltseg(self) -> float:
@@ -218,7 +234,8 @@ class ProjectCode(TimestampMixin, Base):
         # kiadás, vágás, belsős munkanapok. Mindegyik float (a pénzoszlopok
         # Numeric-ek, a napidíj viszont számított float - a kettő közvetlen
         # összeadása TypeError-t dobna).
-        return self.kulsos_koltseg + self.egyeb_kiadas + self.vagas_koltseg + self.belsos_munka_koltseg
+        kulsos, egyeb = self._kulsos_bontas()
+        return kulsos + egyeb + self.vagas_koltseg + self.belsos_munka_koltseg
 
     @property
     def bevetel(self) -> float:

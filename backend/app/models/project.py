@@ -316,6 +316,13 @@ class Project(TimestampMixin, Base):
     performance_certificates: Mapped[list["PerformanceCertificate"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
+    #: A rá SZÓLÓ TIG-tételek. Nem ugyanaz, mint a fenti: egy TIG egy projekt
+    #: "otthonában" készül, de több forgatás munkáját is igazolhatja - ide
+    #: azok a tételek tartoznak, amik erre a napra szólnak, akkor is, ha a
+    #: papír máshonnan indult (lásd models/performance_certificate.py).
+    tig_tetelek: Mapped[list["PerformanceCertificateTetel"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
     #: Kinek a nevére megy a szerződés/TIG az egyes stábtagok munkájáért, ha
     #: nem a sajátjukéra (lásd models/project_szamlazo.py).
     szamlazok: Mapped[list["ProjectSzamlazo"]] = relationship(
