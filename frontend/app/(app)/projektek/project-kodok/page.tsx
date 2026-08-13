@@ -57,13 +57,21 @@ export default async function ProjectKodokPage() {
             filterable
             columns={[
               {
+                // A kód alatt ott a projekt NEVE is: a puszta kódról ránézésre
+                // senki nem tudja, melyik munkáról van szó.
                 header: "Projektkód",
-                render: (pc) =>
-                  canEdit ? (
-                    <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="projektkod" value={pc.projektkod} />
-                  ) : (
-                    pc.projektkod
-                  ),
+                render: (pc) => (
+                  <span>
+                    {canEdit ? (
+                      <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="projektkod" value={pc.projektkod} />
+                    ) : (
+                      pc.projektkod
+                    )}
+                    {pc.project_nev && (
+                      <span className="mt-0.5 block text-[11.5px] text-text-muted">{pc.project_nev}</span>
+                    )}
+                  </span>
+                ),
                 sortAccessor: (pc) => pc.projektkod,
               },
               {
@@ -72,25 +80,56 @@ export default async function ProjectKodokPage() {
                 sortAccessor: (pc) => clientNameById.get(pc.client_id),
               },
               {
-                header: "Dátum",
+                header: "Helyszín",
                 render: (pc) =>
                   canEdit ? (
-                    <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="datum" value={pc.datum} type="date" />
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="helyszin" value={pc.helyszin} />
                   ) : (
-                    formatDate(pc.datum)
+                    (pc.helyszin ?? "–")
                   ),
+                sortAccessor: (pc) => pc.helyszin,
+              },
+              {
+                // A dátum alatt a hozzá tartozó megjegyzés ("2 nap", "csúszik")
+                // - ez a mező eddig sehol nem látszott a listán.
+                header: "Dátum",
+                render: (pc) => (
+                  <span>
+                    {canEdit ? (
+                      <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="datum" value={pc.datum} type="date" />
+                    ) : (
+                      formatDate(pc.datum)
+                    )}
+                    {pc.datum_megjegyzes && (
+                      <span className="mt-0.5 block text-[11.5px] text-text-muted">{pc.datum_megjegyzes}</span>
+                    )}
+                  </span>
+                ),
                 sortAccessor: (pc) => pc.datum,
               },
               {
-                header: "Összes költség",
+                header: "Bevétel",
+                align: "right",
+                render: (pc) => formatHuf(pc.bevetel),
+                sortAccessor: (pc) => pc.bevetel,
+              },
+              {
+                // Kiadás = minden projektkiadás + az utómunka költsége, ugyanaz,
+                // amit az adatlap "Összes költség (kiadások + utómunka)" néven
+                // mutat (lásd models/project_code.osszes_koltseg).
+                header: "Kiadás",
                 align: "right",
                 render: (pc) => formatHuf(pc.osszes_koltseg),
                 sortAccessor: (pc) => pc.osszes_koltseg,
               },
               {
-                header: "Becsült profit",
+                header: "Profit",
                 align: "right",
-                render: (pc) => formatHuf(pc.becsult_profit),
+                render: (pc) => (
+                  <span className={pc.becsult_profit < 0 ? "text-text-danger" : undefined}>
+                    {formatHuf(pc.becsult_profit)}
+                  </span>
+                ),
                 sortAccessor: (pc) => pc.becsult_profit,
               },
               {

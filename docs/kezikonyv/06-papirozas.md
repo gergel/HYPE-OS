@@ -120,6 +120,17 @@ A sor **kiírja, hány projektre szól** (`projektek`), és a törlés megerős�
 is figyelmeztet rá: a törlés a PAPÍRT viszi, tehát mind a négy napról eltűnik,
 nem csak arról, ahol épp állunk.
 
+### Az elkezdett papír eldobható
+
+A projektkód adatlapján a megrendelői szerződés és a TIG **törölhető**
+(`DELETE /megrendeloi-papirok/{fajta}/{id}`). Egy rossz adattal elindított
+papírt nem elég átírni: ha már generálódott belőle dokumentum, tiszta lappal
+kell tudni újrakezdeni.
+
+A KIKÜLDÖTT papírnál is engedjük, de a megerősítés kimondja, hogy a dokumentum
+már a megrendelőnél van - a törlés csak a nyilvántartásból veszi ki, a kiküldött
+példányt nem vonja vissza.
+
 ### A TIG a szerződésből indul
 
 A két papír UGYANARRÓL A MUNKÁRÓL szól, tehát a megbízás tárgya, az összeg és

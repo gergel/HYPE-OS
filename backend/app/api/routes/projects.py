@@ -19,7 +19,7 @@ from app.schemas.project import ProjectCreate, ProjectListItem, ProjectRead, Pro
 from app.services import deliverable_actions
 from app.services.contract_actions import apply_szerzodes_keszites, send_szerzodes
 from app.services.dispo import send_diszpo, send_elozetes_diszpo
-from app.services.project_actions import create_feldarabolas, create_utomunka
+from app.services.project_actions import DarabolasHiba, create_feldarabolas, create_utomunka
 from app.services.technika import check_technika
 
 def _block_delete_if_portal_content(project: Project, _db: Session) -> None:
@@ -114,7 +114,10 @@ def run_feldarabolas(project_id: int, db: Session = Depends(get_db), _user: Empl
     """A 'Feldarabolás' gomb - új Project sort hoz létre ugyanahhoz a Project
     Code-hoz, átmásolva a nevet/leírást/projektkódot/stábot (lásd
     app/services/project_actions.py)."""
-    return create_feldarabolas(db, _get_project_or_404(project_id, db))
+    try:
+        return create_feldarabolas(db, _get_project_or_404(project_id, db))
+    except DarabolasHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/{project_id}/create-utomunka", response_model=DeliverableRead, tags=["projects"])

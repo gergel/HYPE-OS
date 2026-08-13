@@ -182,14 +182,17 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    // Ami magától visszatér vagy lejár: előfizetések, biztosítások, az autók
-    // papírjai. Mindhárom ugyanazon a motoron fut (lásd backend
+    // Ami magától visszatér vagy lejár: előfizetések és az autók papírjai.
+    // Mindkettő ugyanazon a motoron fut (lásd backend
     // services/kotelezettseg.py) - a felület azért külön, hogy a havi
     // szolgáltatások ne folyjanak össze az évente lejáró papírokkal.
+    //
+    // Külön "Biztosítások" oldal NINCS: a biztosítás mindig egy autóhoz
+    // tartozik, és ott is kell kezelni - lásd /autok. A jogosultság-kulcs
+    // (/kotelezettsegek) megmarad, mert az E-Rezsi is azon fut.
     label: "Kötelezettségek",
     items: [
       { label: "E-Rezsi", href: "/e-rezsi", icon: "Repeat", permissionPage: "/kotelezettsegek" },
-      { label: "Biztosítások", href: "/kotelezettsegek", icon: "ShieldCheck" },
       { label: "Autók", href: "/autok", icon: "Car" },
     ],
   },

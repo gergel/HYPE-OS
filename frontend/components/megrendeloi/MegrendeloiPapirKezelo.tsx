@@ -7,6 +7,7 @@ import { KeresosSelect } from "@/components/KeresosSelect";
 import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 import { authFetch } from "@/lib/authFetch";
 import { formatFt } from "@/lib/ido";
@@ -138,6 +139,7 @@ export function MegrendeloiPapirKezelo({
   keretek,
   kontaktok,
   canEdit,
+  canDelete = false,
   kellPapir,
 }: {
   projectCodeId: number;
@@ -146,6 +148,9 @@ export function MegrendeloiPapirKezelo({
   keretek: MegrendeloiKeret[];
   kontaktok: MegrendeloiKontakt[];
   canEdit: boolean;
+  /** Az ELKEZDETT papír eldobható - amíg csak készül, egy rossz adattal
+   * elindított szerződést/TIG-et tiszta lappal kell tudni újrakezdeni. */
+  canDelete?: boolean;
   /** Ha a projektkód kapcsolói szerint nem kell papír, csak jelezzük - a
    * meglévő papírokat attól még mutatjuk (egy régebbi bejegyzés nem tűnhet el
    * attól, hogy a kapcsolót átbillentették). */
@@ -153,6 +158,7 @@ export function MegrendeloiPapirKezelo({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [nyitva, setNyitva] = useState(false);
   const [szerkesztett, setSzerkesztett] = useState<MegrendeloiPapir | null>(null);
   const [urlap, setUrlap] = useState<Urlap>(URES);
@@ -372,6 +378,29 @@ export function MegrendeloiPapirKezelo({
     }
   }
 
+  /** A papír teljes törlése. A KIKÜLDÖTTNÉL is engedjük, de akkor kimondjuk,
+   * hogy a dokumentum már a megrendelőnél van - a törlés csak a nyilvántartást
+   * viszi, a kiküldött papírt nem hozza vissza. */
+  async function torles(p: MegrendeloiPapir) {
+    const kikuldve = p.allapot === "Kiküldve";
+    const figyelmeztetes = kikuldve
+      ? ` Ez a ${cimke} MÁR KIMENT – a törlés csak a nyilvántartásból veszi ki, a megrendelőnél lévő példányt nem vonja vissza.`
+      : "";
+    if (!(await confirm(`Biztosan törlöd ezt a(z) ${cimke}-t?${figyelmeztetes}`))) return;
+    try {
+      const res = await authFetch(`/api/v1/megrendeloi-papirok/${fajta}/${p.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const reszlet = await res.json().catch(() => null);
+        toast(`Sikertelen törlés: ${reszlet?.detail ?? res.status}`);
+        return;
+      }
+      toast(`A(z) ${cimke} törölve – tiszta lappal újrakezdhető.`);
+      router.refresh();
+    } catch (err) {
+      toast(`Sikertelen törlés (hálózati hiba): ${err}`);
+    }
+  }
+
   return (
     <div className="space-y-3 text-[13px]">
       {!kellPapir && (
@@ -435,6 +464,15 @@ export function MegrendeloiPapirKezelo({
                     className="text-text-secondary hover:underline"
                   >
                     Szerkesztés
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => torles(p)}
+                    className="text-text-danger hover:underline"
+                  >
+                    Törlés
                   </button>
                 )}
               </div>

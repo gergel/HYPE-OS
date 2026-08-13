@@ -192,6 +192,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               keretek={megrendeloiKeretek}
               kontaktok={megrendeloiKontaktok}
               canEdit={canEditFiles}
+              canDelete={canDeleteFiles}
               kellPapir={kellPapir}
             />
           </Card>
@@ -203,6 +204,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               keretek={megrendeloiKeretek}
               kontaktok={megrendeloiKontaktok}
               canEdit={canEditFiles}
+              canDelete={canDeleteFiles}
               kellPapir={kellPapir}
             />
           </Card>

@@ -111,19 +111,26 @@ Lásd [06-papirozas.md](06-papirozas.md).
 `/api/v1/kotelezettsegek`, modell: `models/kotelezettseg.py`, logika:
 `services/kotelezettseg.py`.
 
-Egy router szolgálja ki mindhárom felületet, mert a viselkedésük azonos - van egy
+Egy router szolgálja ki mindkét felületet, mert a viselkedésük azonos - van egy
 forduló, arra készül egy időszak, abba be kell írni a ténylegesen levont összeget,
 és fel kell tölteni a számlát:
 
 | Menüpont | Mi | Jogosultság |
 |---|---|---|
 | E-Rezsi (`/e-rezsi`) | Előfizetések | `/kotelezettsegek` |
-| Biztosítások (`/kotelezettsegek`) | Biztosítások | `/kotelezettsegek` |
-| Autók (`/autok`) | Járműpapírok lejárata | `/autok` |
+| Autók (`/autok`) | Járműpapírok lejárata (forgalmi, biztosítás) | `/autok` |
 
 Csak a szűrés (`tipus`, `auto_id`) és a jogosultság tér el. A felület azért van
 szétválasztva, hogy a havi szolgáltatások ne folyjanak össze az évente lejáró
 papírokkal.
+
+**Külön "Biztosítások" oldal nincs.** Volt, de fölöslegesnek bizonyult: a
+biztosítás a gyakorlatban mindig egy autóhoz tartozik, és ott is kell kezelni -
+két helyen ugyanaz a lista csak azt a kérdést szülte, melyikbe kell felvinni. A
+`biztositas`/`berlet`/`egyeb` típus a modellben és az API-ban MEGMARADT (a régi
+sorok is), csak nincs hozzá saját menüpont; az autóhoz kötött határidők a
+jármű lapján élnek. A `/kotelezettsegek` jogosultság-kulcs is megmarad, mert az
+E-Rezsi azon fut.
 
 **A lejárat-figyelmeztetés nem külön kapcsoló**: a lista lekérésekor fut le az
 időszakok és feladatok "utolérése" - idempotensen, minden hívásnál. Nem ütemező

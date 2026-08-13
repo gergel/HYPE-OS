@@ -95,7 +95,7 @@ Több nav-elem oszthat egy kulcsot - ilyenkor a nav-elemen ott a `permissionPage
 - Eszközök / Leltározás → `/felszereles`
 - Ügyfelek / Megrendelői kontaktok → `/ugyfelek`
 - Keretszerződések / Eseti szerződések / Számlázó cégek → `/penzugyek`
-- E-Rezsi / Biztosítások → `/kotelezettsegek`
+- E-Rezsi → `/kotelezettsegek`
 
 Ha itt eltér a frontend és a backend érték, az vagy **túl szigorú** (feleslegesen
 kér külön jogot), vagy **túl megengedő** (egy másik oldal joga is beengedi). Új

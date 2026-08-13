@@ -37,6 +37,9 @@ class ProjectCodeUpdate(BaseModel):
 
 class ProjectCodeRead(ProjectCodeBase):
     id: int
+    #: Számított értékek (lásd models/project_code.py) - a lista ezekből
+    #: mutatja, hogy jött-e ki a projekt.
+    bevetel: float
     osszes_koltseg: float
     becsult_profit: float
 

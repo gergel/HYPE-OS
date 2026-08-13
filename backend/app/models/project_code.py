@@ -166,6 +166,13 @@ class ProjectCode(TimestampMixin, Base):
         return expense_total + utomunka_total
 
     @property
+    def bevetel(self) -> float:
+        """A projektkódhoz tartozó bevételek BRUTTÓ összege.
+
+        Külön property, mert a listán is látszania kell: a profit önmagában
+        nem mondja meg, nagy bevételből maradt-e kevés, vagy kicsiből sok."""
+        return sum(r.brutto or 0 for r in self.revenues)
+
+    @property
     def becsult_profit(self) -> float:
-        bevetel = sum(r.brutto or 0 for r in self.revenues)
-        return bevetel - self.osszes_koltseg
+        return self.bevetel - self.osszes_koltseg

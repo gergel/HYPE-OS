@@ -41,9 +41,16 @@ export type ProjectCode = {
   projektkod: string;
   client_id: number;
   esemeny_allapota: string | null;
+  /** Bevétel, összes költség (kiadások + utómunka) és a kettő különbsége -
+   * a backend számolja (lásd models/project_code.py). */
+  bevetel: number;
   becsult_profit: number;
   osszes_koltseg: number;
   datum: string | null;
+  /** Mire szólt a projekt, hol volt, és mit jegyeztek fel a dátumához. */
+  project_nev: string | null;
+  helyszin: string | null;
+  datum_megjegyzes: string | null;
 };
 
 export type Project = {

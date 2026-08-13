@@ -18,10 +18,15 @@ def create_feldarabolas(db: Session, project: Project) -> Project:
     dátuma' mező, ha ki van töltve, egyébként a forgatás záró napja utáni nap.
 
     A leválasztott nap MEGJEGYZI, melyik projektből származik
-    (feldarabolas_szulo_id), és az eredeti projekt záró napját visszavágjuk a
-    leválasztott nap ELŐTTI napra. Enélkül az "egész" (több napos) projekt is
-    ugyanúgy diszponálandóként jelent meg, mint a leválasztott nap - pedig
-    darabolás után már a napokat kell diszponálni, nem az egészet."""
+    (feldarabolas_szulo_id), és az eredeti projektből KIVESSZÜK a leválasztott
+    napot. Enélkül az "egész" (több napos) projekt is ugyanúgy diszponálandóként
+    jelent meg, mint a leválasztott nap - pedig darabolás után már a napokat
+    kell diszponálni, nem az egészet.
+
+    Egynapos forgatásból nincs mit leválasztani a SAJÁT napjára: abból nem két
+    forgatás lenne, hanem ugyanaz kétszer. (A záró nap UTÁNI napra darabolás
+    viszont továbbra is megengedett - az a "vegyünk fel még egy napot" eset.)"""
+    _ellenorizd_a_darabolast(project)
     if project.darabolas_datuma:
         new_date = project.darabolas_datuma
     elif project.forgatas_datuma:
@@ -62,18 +67,48 @@ def create_feldarabolas(db: Session, project: Project) -> Project:
     return new_project
 
 
-def _vagd_le_a_leszakitott_napot(project: Project, new_date: date | None) -> None:
-    """Az eredeti projekt már csak a leválasztott nap ELŐTTI napokat fedi le.
+class DarabolasHiba(ValueError):
+    """A darabolás nem végezhető el - a felület ezt az üzenetet mutatja."""
 
-    Ha ezzel egyetlen naposra zsugorodik, a záró dátumot töröljük (a
-    forgatas_datuma_vege csak több napos forgatásnál értelmes). Ha a
-    leválasztott nap nem a projekt tartományán belülre esik (pl. a záró nap
-    UTÁNI napra daraboltak, ami a régi, Notionből hozott alapértelmezés), az
-    eredetihez nem nyúlunk - ott nincs mit levágni."""
+
+def _ellenorizd_a_darabolast(project: Project) -> None:
+    if not project.darabolas_datuma or not project.forgatas_datuma:
+        return
+    utolso_nap = project.forgatas_datuma_vege or project.forgatas_datuma
+    if project.darabolas_datuma == project.forgatas_datuma == utolso_nap:
+        raise DarabolasHiba(
+            "Ez a forgatás egynapos, ezért nincs mit leválasztani róla: a darabolással "
+            "ugyanaz a nap jelenne meg kétszer. Több napos forgatásnál válaszd ki, MELYIK "
+            "napot emeljük ki, vagy a záró nap utáni dátummal vegyél fel egy új napot."
+        )
+
+
+def _vagd_le_a_leszakitott_napot(project: Project, new_date: date | None) -> None:
+    """Az eredeti projektből KIVESSZÜK a leválasztott napot.
+
+    Három eset van:
+
+    - a leválasztott nap az ELSŐ nap: az eredeti a következő naptól él tovább.
+      Ez hiányzott: az eredeti érintetlen maradt, tehát ugyanarra a napra az
+      "egész" forgatás is ott állt a diszponálandók közt a leválasztott nap
+      mellett - pont az, amit a darabolásnak meg kellene szüntetnie;
+    - a leválasztott nap a tartományon BELÜL van: az eredeti a nap előtti napig
+      tart;
+    - a leválasztott nap a tartományon KÍVÜL esik (pl. a záró nap UTÁNI napra
+      daraboltak, ami a régi, Notionből hozott alapértelmezés): az eredetihez
+      nem nyúlunk, ott nincs mit levágni.
+
+    Ha az eredeti egyetlen naposra zsugorodik, a záró dátumot töröljük - a
+    `forgatas_datuma_vege` csak több napos forgatásnál értelmes."""
     if new_date is None or project.forgatas_datuma is None:
         return
     utolso_nap = project.forgatas_datuma_vege or project.forgatas_datuma
-    if new_date > utolso_nap or new_date <= project.forgatas_datuma:
+    if new_date > utolso_nap or new_date < project.forgatas_datuma:
+        return
+    if new_date == project.forgatas_datuma:
+        uj_kezdet = new_date + timedelta(days=1)
+        project.forgatas_datuma = uj_kezdet
+        project.forgatas_datuma_vege = None if uj_kezdet >= utolso_nap else utolso_nap
         return
     uj_veg = new_date - timedelta(days=1)
     project.forgatas_datuma_vege = None if uj_veg == project.forgatas_datuma else uj_veg
