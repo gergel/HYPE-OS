@@ -28,15 +28,13 @@ from app.models.feedback import Feedback
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.notion_import import NotionImportMap
 from app.models.project import Project
-from app.models.project_code import ProjectCode
 from app.models.timesheet import Timesheet
 from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
-from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_relation_ids, safe_upsert, upsert
-from app.notion_import.importers import _text, get_or_create_unknown_client
+from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_relation_ids, safe_upsert
+from app.notion_import.importers import _text
 from app.services import project_matching
 
-UNKNOWN_PROJECT_CODE_KEY = "project_code:unknown-notion-import"
 
 
 def _split_date_range(value: str | None) -> tuple:
@@ -91,27 +89,6 @@ def _link_attendees_crew(db: Session, project: Project, props: dict) -> None:
     new_employees = db.scalars(select(Employee).where(Employee.id.in_(new_ids))).all()
     project.crew = list(project.crew) + list(new_employees)
     db.flush()
-
-
-def get_or_create_unknown_project_code(db: Session) -> ProjectCode:
-    """Ha egy Main Database sor 'HYPE ADMIN projektkódok' relation-je nem oldható fel,
-    ide kötjük a Project-et, hogy ne vesszen el az adat (Project.project_code_id NOT NULL)."""
-    from sqlalchemy import select
-
-    from app.models.notion_import import NotionImportMap
-
-    mapping = db.scalar(select(NotionImportMap).where(NotionImportMap.notion_page_id == UNKNOWN_PROJECT_CODE_KEY))
-    if mapping:
-        return db.get(ProjectCode, mapping.entity_id)
-    unknown_client = get_or_create_unknown_client(db)
-    project_code, _, _ = upsert(
-        db,
-        ProjectCode,
-        "ProjectCode",
-        UNKNOWN_PROJECT_CODE_KEY,
-        {"projektkod": "ISMERETLEN-NOTION-IMPORT", "client_id": unknown_client.id},
-    )
-    return project_code
 
 
 def _naptari_parjahoz_kotes(
@@ -201,7 +178,6 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
     az Employee-forrás táblára - a nyers people-értéket az `operator_notion` oszlop
     őrzi."""
     result = ImportResult(entity_type="Project")
-    unknown_project_code = get_or_create_unknown_project_code(db)
 
     for page in client.query_database(db_ids.MAIN_DATABASE):
         props = extract_properties(page, client)
@@ -210,10 +186,13 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
             result.skipped += 1
             continue
 
-        project_code_id = (
-            resolve_relation_id(db, "ProjectCode", props.get("HYPE ADMIN projektkódok") or [])
-            or unknown_project_code.id
-        )
+        # Projektkód nélkül a projekt KÖTETLEN marad. Korábban egy gyűjtő
+        # ("ISMERETLEN-NOTION-IMPORT") Project Code-ba került, mert a mező
+        # kötelező volt - csakhogy a gyűjtő nem válasz, csak egy halom: ami oda
+        # kerül, úgy néz ki, mintha el lenne intézve. Ma a mező üres is lehet
+        # (lásd services/projektkod_kotes.py), és a projekt akkor kerül a
+        # helyére, amikor tényleg megkapja a kódját.
+        project_code_id = resolve_relation_id(db, "ProjectCode", props.get("HYPE ADMIN projektkódok") or [])
         campaign_id = resolve_relation_id(db, "Campaign", props.get("Kampányok") or [])
         forgatas_datuma, forgatas_datuma_vege = _split_date_range(props.get("Date"))
 

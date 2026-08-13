@@ -25,7 +25,6 @@ from app.api.routes.subcontractor_contracts import (
     csoport_szerzodes_kesz,
     eseti_szerzodesek_a_projekten,
     load_szerzodes_kornyezet,
-    szerzodest_igenylo_emberek,
 )
 from app.core.config import settings
 from app.core.database import get_db

@@ -32,9 +32,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.employee import Employee
 from app.models.project import Project
-from app.services import attachments, document_storage
+from app.services import attachments, document_storage, projektkod_kotes
 from app.services.gdoc_template import gdoc_fill_and_export_pdf, pdf_feltoltes
-from app.services.google_calendar import PLACEHOLDER_PROJEKTKOD
 from app.services.google_email import send_message
 
 logger = logging.getLogger("hype_os")
@@ -172,17 +171,22 @@ def _require_projektkod(project: Project) -> None:
 
     A projektkód a levél tárgyának és a csatolt PDF nevének a fele (lásd
     _subject), és ez alapján azonosítja a stáb a forgatást a levelezésben -
-    enélkül "07.06._diszpo_" alakú, azonosíthatatlan tárgy menne ki. A
-    naptárból érkező projektek gyűjtő ("NAPTAR-IMPORT") kódját sem fogadjuk
-    el: az csak egy technikai kezdőérték, amíg admin be nem sorolja a
-    projektet (lásd services/google_calendar.py)."""
+    enélkül "07.06._diszpo_" alakú, azonosíthatatlan tárgy menne ki. Az importok
+    gyűjtő kódját ("NAPTAR-IMPORT", "ISMERETLEN-NOTION-IMPORT") sem fogadjuk el:
+    azok csak technikai kezdőértékek, amíg valaki be nem sorolja a projektet
+    (lásd services/projektkod_kotes.py).
+
+    A FORMÁTUM viszont szabad: nem minden munka a megszokott kód-alakot viseli
+    (más ügyfél rendszere, régi sorozat), és egy szigorú minta itt csak abban
+    akadályozna meg, hogy kimenjen a diszpó."""
     kod = (project.projektkod_szoveg or "").strip()
-    if kod and kod != PLACEHOLDER_PROJEKTKOD:
+    if projektkod_kotes.valodi(kod):
         return
     raise ValueError(
         "Nem küldhető ki a diszpó, mert a projektnek nincs projektkódja.\n\n"
         "A projektkód a levél tárgyába és a csatolt PDF nevébe is bekerül, ezért enélkül "
-        "azonosíthatatlan lenne a forgatás. Add meg a projektkódot a projekt adatlapján."
+        "azonosíthatatlan lenne a forgatás. Add meg a projektkódot a projekt adatlapján - "
+        "bármilyen formátum megadható, nem kell a megszokott alakot követnie."
     )
 
 

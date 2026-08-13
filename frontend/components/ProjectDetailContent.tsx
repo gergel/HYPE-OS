@@ -411,7 +411,14 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
               <QuickCreateForm
                 postPath={ENTITY_PATHS.deliverable}
                 addLabel="+ Egyéni utómunka hozzáadása"
-                presetFields={{ project_id: project.id, project_code_id: project.project_code_id }}
+                // A projekt kódját ÖRÖKLI - projekthez felvezetett vágásnál nem
+                // kell újra begépelni (a backend is ezt teszi, lásd
+                // routes/postproduction._vagas_projektkodja).
+                presetFields={{
+                  project_id: project.id,
+                  project_code_id: project.project_code_id,
+                  projektkod_szoveg: project.projektkod_szoveg,
+                }}
                 fields={[
                   { name: "projekt_neve", label: "Anyag neve", required: true },
                   { name: "allapot", label: "Állapot" },

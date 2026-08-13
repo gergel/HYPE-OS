@@ -27,7 +27,6 @@ export default async function ProjectKodokPage() {
     getCurrentUser(),
     getMyPagePermissions(),
   ]);
-  const clientNameById = new Map(clients.map((c) => [c.id, c.nev]));
   const statusOptions = fieldTypes.esemeny_allapota?.options ?? [];
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
@@ -57,27 +56,28 @@ export default async function ProjectKodokPage() {
             filterable
             columns={[
               {
-                // A kód alatt ott a projekt NEVE is: a puszta kódról ránézésre
-                // senki nem tudja, melyik munkáról van szó.
                 header: "Projektkód",
-                render: (pc) => (
-                  <span>
-                    {canEdit ? (
-                      <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="projektkod" value={pc.projektkod} />
-                    ) : (
-                      pc.projektkod
-                    )}
-                    {pc.project_nev && (
-                      <span className="mt-0.5 block text-[11.5px] text-text-muted">{pc.project_nev}</span>
-                    )}
-                  </span>
-                ),
+                render: (pc) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="projektkod" value={pc.projektkod} />
+                  ) : (
+                    pc.projektkod
+                  ),
                 sortAccessor: (pc) => pc.projektkod,
               },
               {
-                header: "Ügyfél",
-                render: (pc) => clientNameById.get(pc.client_id) ?? "–",
-                sortAccessor: (pc) => clientNameById.get(pc.client_id),
+                // Az ügyfél helyén a projekt NEVE áll: a listán a legtöbb sor
+                // ugyanazt az "Ismeretlen ügyfél (Notion import)" nevet vitte,
+                // tehát az oszlop egy fél képernyőt foglalt anélkül, hogy bármit
+                // megkülönböztetett volna. Az ügyfél az adatlapon ott van.
+                header: "Projekt neve",
+                render: (pc) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="project_nev" value={pc.project_nev} />
+                  ) : (
+                    (pc.project_nev ?? "–")
+                  ),
+                sortAccessor: (pc) => pc.project_nev,
               },
               {
                 header: "Helyszín",

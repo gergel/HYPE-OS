@@ -22,6 +22,15 @@ státuszlista.
 
 Amit érdemes tudni:
 
+- **Projektkód nélkül nem jön létre vágás.** Az utómunka a legkönnyebben
+  elszakadó láncszem: ha nincs kódja, sehol nem látszik, melyik munkához
+  tartozik, és a projektkód adatlapján sem jelenik meg a költsége. Az űrlapon
+  ezért kötelező mező. **Projekthez felvezetve nem kell beírni**: a vágás a
+  projekt kódját örökli (`routes/postproduction._vagas_projektkodja`), és a
+  szöveg alapján rögtön a Project Code-hoz is kötődik. A kódot utólag sem lehet
+  kiüríteni, csak másikra cserélni. A szabály:
+  `services/projektkod_kotes.py`, lásd
+  [03-projektek-ugyfelek.md](03-projektek-ugyfelek.md#a-projektkód-kötése-mi-tartozik-egy-kód-alá).
 - **Kiosztás értesítést vált ki**: ha egy PATCH beállítja az "Assigned To"-t,
   a rendszer értesítést küld az érintettnek (`services/notifications.py`).
 - **Anyag-szintű hozzáférés**: egy vágó korlátozható arra, hogy csak bizonyos

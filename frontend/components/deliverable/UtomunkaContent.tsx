@@ -277,8 +277,12 @@ export function UtomunkaContent({
             <QuickCreateForm
               postPath={DELIVERABLE_BASE_PATH}
               addLabel="+ Új anyag hozzáadása"
+              // A PROJEKTKÓD kötelező: ebből derül ki, melyik munka utómunkája,
+              // és ez alapján kerül a helyére a projektkód adatlapján. A
+              // formátum szabad (lásd backend services/projektkod_kotes.py).
               fields={[
                 { name: "projekt_neve", label: "Anyag neve", required: true },
+                { name: "projektkod_szoveg", label: "Projektkód", required: true },
                 { name: "hatarido", label: "Határidő", type: "date" },
               ]}
             />

@@ -8,6 +8,11 @@ JsonScalar = dict | list | float | str | bool | None
 class DeliverableBase(BaseModel):
     projekt_neve: str
     project_code_id: int | None = None
+    #: A projektkód SZÖVEGE - létrehozáskor kötelező (lásd
+    #: routes/postproduction._vagas_projektkodja). Azért itt is szerepel, hogy a
+    #: létrehozó séma átengedje: enélkül a kód némán elveszne, és minden vágás
+    #: "kód nélkülinek" látszana.
+    projektkod_szoveg: str | None = None
     project_id: int | None = None
     vago_employee_id: int | None = None
     campaign_id: int | None = None

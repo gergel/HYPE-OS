@@ -11,7 +11,8 @@ class SzerzodesKeszitesPayload(BaseModel):
 
 class ProjectBase(BaseModel):
     nev: str
-    project_code_id: int
+    #: Üres is lehet - lásd models/project.py.
+    project_code_id: int | None = None
     campaign_id: int | None = None
     forgatas_datuma: date | None = None
     forgatas_datuma_vege: date | None = None
@@ -21,6 +22,10 @@ class ProjectBase(BaseModel):
     forgatas_veg_ido: time | None = None
     helyszin: str | None = None
     allapot: str | None = None
+    #: A projektkód SZÖVEGE. Létrehozáskor is megadható: ebből keressük meg a
+    #: Project Code-ot, hogy a projekt rögtön a helyére kerüljön (lásd
+    #: routes/projects._kosd_a_projektkodhoz).
+    projektkod_szoveg: str | None = None
 
 
 class ProjectCreate(ProjectBase):
@@ -175,7 +180,6 @@ class ProjectRead(ProjectBase):
     automation_name: str | None = None
     external_id: str | None = None
     operator_notion: JsonScalar = None
-    projektkod_szoveg: str | None = None
     brief: str | None = None
     brief_tipus: str | None = None
     description: str | None = None

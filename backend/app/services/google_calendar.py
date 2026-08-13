@@ -51,9 +51,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.calendar_sync import CalendarSyncState
-from app.models.client import Client
 from app.models.project import Project
-from app.models.project_code import ProjectCode
 from app.services import project_matching
 from app.services.google_oauth import OAuthError, load_credentials as load_db_credentials
 
@@ -66,8 +64,9 @@ CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 FULL_SYNC_LOOKBACK_DAYS = 14
 FULL_SYNC_LOOKAHEAD_DAYS = 548  # kb. 18 hónap
 
-PLACEHOLDER_PROJEKTKOD = "NAPTAR-IMPORT"
-PLACEHOLDER_CLIENT_NEV = "Naptárból importált (rendezetlen)"
+# A naptárból érkező projektek RÉGI gyűjtő kódja ("NAPTAR-IMPORT") itt már nem
+# szerepel: ma nem hozunk létre ilyet (a projekt kód nélkül is létezhet), a régi
+# adatok felismerése pedig egy helyen él - services/projektkod_kotes.py.
 
 # A Google Calendar esemény-színek (colorId) magyar nevei. A Google csak
 # számot ad vissza; szín NÉLKÜLI eseménynél nincs colorId (olyankor az esemény
@@ -295,26 +294,6 @@ def _fetch_events(service, calendar_id: str, sync_token: str | None) -> tuple[li
     return events, next_sync_token, did_full_resync
 
 
-def _get_or_create_placeholder_project_code(db: Session) -> ProjectCode:
-    """A naptárból érkező eseménynek nincs eleve Project Code-ja (az Ügyfél/
-    pénzügyi besorolás emberi döntés) - egy közös "rendezetlen" gyűjtő Project
-    Code-ba kerülnek, amit admin utólag, a Projekt szerkesztésekor átsorolhat
-    a valódi Project Code-ra (a projects.project_code_id NOT NULL, szükség
-    van valamilyen kezdőértékre)."""
-    code = db.query(ProjectCode).filter(ProjectCode.projektkod == PLACEHOLDER_PROJEKTKOD).first()
-    if code is not None:
-        return code
-    client = db.query(Client).filter(Client.nev == PLACEHOLDER_CLIENT_NEV).first()
-    if client is None:
-        client = Client(nev=PLACEHOLDER_CLIENT_NEV)
-        db.add(client)
-        db.flush()
-    code = ProjectCode(projektkod=PLACEHOLDER_PROJEKTKOD, client_id=client.id)
-    db.add(code)
-    db.flush()
-    return code
-
-
 def _find_unlinked_match(db: Session, nev: str, forgatas_datuma: date | None) -> Project | None:
     """Lásd modul-fejléc "FONTOS" bekezdése - egyszeri, név+dátum alapú
     egyeztetés a már Notionból behozott (és emiatt még google_calendar_event_id
@@ -355,7 +334,6 @@ def sync_hype_calendar(db: Session) -> dict:
         "full_resync": did_full_resync,
         "total_events": len(events),
     }
-    placeholder_code_id: int | None = None
 
     for event in events:
         event_id = event.get("id")
@@ -386,9 +364,15 @@ def sync_hype_calendar(db: Session) -> dict:
                         project.google_calendar_event_id = event_id
                         stats["linked_existing"] += 1
                     else:
-                        if placeholder_code_id is None:
-                            placeholder_code_id = _get_or_create_placeholder_project_code(db).id
-                        project = Project(google_calendar_event_id=event_id, project_code_id=placeholder_code_id, nev=nev)
+                        # Projektkód NÉLKÜL jön létre: a naptáresemény nem tudja,
+                        # melyik munkához tartozik, azt ember dönti el. Korábban
+                        # egy gyűjtő ("NAPTAR-IMPORT") Project Code-ba került,
+                        # mert a projects.project_code_id kötelező volt - de a
+                        # gyűjtő nem válasz, csak egy halom: ami oda kerül, úgy
+                        # néz ki, mintha el lenne intézve. A mező ma már üres is
+                        # lehet (lásd services/projektkod_kotes.py), és a diszpó
+                        # úgyis kéri a kódot a kiküldés előtt.
+                        project = Project(google_calendar_event_id=event_id, nev=nev)
                         db.add(project)
                         stats["created"] += 1
                 else:

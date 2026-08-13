@@ -10,13 +10,48 @@ azonosítóval ellátott munkacsomag. Több projekt tartozhat alá.
 API: `/api/v1/project-codes`, oldal: `/projektek/project-kodok`,
 modell: `models/project_code.py`.
 
-A listája nem csak azonosítókat sorol: a kód alatt ott a projekt NEVE, mellette
+A listája nem csak azonosítókat sorol: a kód mellett ott a projekt NEVE (ez
+váltotta le az ügyfél oszlopát - a kódról az ügyfél amúgy is kiderül az
+adatlapon, a munkát viszont a neve azonosítja), mellette
 a helyszín, a dátum alatt a dátum-megjegyzés, a jobb oldalon pedig **bevétel,
 kiadás, profit** - a puszta kódról ránézésre senki nem tudja, melyik munkáról
 van szó, és hogy kijött-e. A `bevetel` és az `osszes_koltseg` a backend
 számítása (`models/project_code.py`); a "kiadás" itt a TELJES költség, tehát a
 projektkiadások és az utómunka együtt - ugyanaz, amit az adatlap "Összes
 költség (kiadások + utómunka)" néven mutat.
+
+### A projektkód KÖTÉSE: mi tartozik egy kód alá
+
+A projektkód két helyen élt: **szövegként** a projekten és a vágáson
+(`projektkod_szoveg` - a Notionból és a naptárból így érkezett), és önálló
+rekordként a Project Code táblában. Amíg a kettő nem volt összekötve, a
+projektkód adatlapja nem tudta megmondani, hány forgatás és hány vágás tartozik
+alá - pedig épp ez a nyomon követhetőség a lényege.
+
+A szabály egy helyen él: `services/projektkod_kotes.py`. Ugyanaz fut a
+mindennapi mentéseknél és a visszamenőleges összekötésnél (migráció:
+`b5e1a94c7d20`), ezért a kettő nem csúszhat el egymástól.
+
+- **Összehasonlítás** (`kulcs`): kis/nagybetűtől és szóköztől független. Ennél
+  szigorúbb szándékosan nem: a megszokottól eltérő alak is lehet valódi kód.
+- **Valódi kód** (`valodi`): bármi, ami nem üres és nem import-**gyűjtő**. Két
+  gyűjtő volt (`NAPTAR-IMPORT`, `ISMERETLEN-NOTION-IMPORT`) - kényszerből, mert
+  a projekt kódja NOT NULL volt, és a kód nélkül érkező naptár/Notion soroknak
+  kellett valami. A kód mostantól **üres is lehet**, így a gyűjtőkre nincs
+  szükség: amihez nincs valódi kód, az maradjon kötetlen, és akkor kerüljön a
+  helyére, amikor tényleg megkapja a kódját. Egy gyűjtőbe söpört projekt
+  ugyanis úgy néz ki, mintha elintéztük volna - pedig épp ellenkezőleg.
+- A migráció be is köt mindent, leold mindent a gyűjtőkről, és az így üressé
+  vált gyűjtő kódot ki is veszi a projektkódok közül (amelyikre még mutat
+  bármi - kiadás, bevétel, papír -, az marad: azt előbb rendezni kell).
+
+Hol kötelező a kód, és hol nem:
+
+| Hol | Kötelező? |
+|---|---|
+| **Vágás** (utómunka) létrehozása | IGEN. Projekthez felvezetve nem kell beírni: a projekt kódját örökli (`routes/postproduction.py`). |
+| **Diszpó kiküldése** | IGEN, de szabad formátumban - nem kell a megszokott alakot követnie (`services/dispo._require_projektkod`). |
+| **Projekt** felvétele | Nem: a naptárból kód nélkül érkezik. Ha megadják (akár utólag), rögtön a helyére kerül. |
 
 **Projekt** - egy konkrét forgatás/munka. Ehhez tartozik a stáb, a technika, a
 diszpó, a papírok, a költségek és a leszállított anyag.

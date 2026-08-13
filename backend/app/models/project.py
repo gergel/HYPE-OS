@@ -38,7 +38,11 @@ class Project(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     nev: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    project_code_id: Mapped[int] = mapped_column(ForeignKey("project_codes.id"), nullable=False)
+    #: Melyik Project Code alá tartozik. ÜRES is lehet: a naptárból érkező
+    #: forgatásnak még nincs kódja, és amíg nincs, nem söpörjük gyűjtő kód alá
+    #: sem - egy gyűjtőbe rakott projekt ugyanis úgy néz ki, mintha el lenne
+    #: intézve (lásd services/projektkod_kotes.py).
+    project_code_id: Mapped[int | None] = mapped_column(ForeignKey("project_codes.id"))
     campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"))
 
     forgatas_datuma: Mapped[date | None] = mapped_column(Date)
@@ -287,7 +291,7 @@ class Project(TimestampMixin, Base):
         back_populates="feldarabolt_napok", remote_side="Project.id", foreign_keys=[feldarabolas_szulo_id]
     )
 
-    project_code: Mapped["ProjectCode"] = relationship(back_populates="projects")
+    project_code: Mapped["ProjectCode | None"] = relationship(back_populates="projects")
     campaign: Mapped["Campaign"] = relationship(back_populates="projects")
     crew: Mapped[list["Employee"]] = relationship(secondary=project_crew, back_populates="projects")
 

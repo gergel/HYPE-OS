@@ -18,6 +18,7 @@ from app.models.deliverable import Deliverable
 from app.models.deliverable_status import DeliverableBoardConfig, DeliverableStatusConfig
 from app.models.employee import Employee
 from app.models.feedback import Feedback
+from app.models.project import Project
 from app.models.timesheet import Timesheet
 from app.schemas.deliverable import DeliverableCreate, DeliverableListItem, DeliverableRead, DeliverableUpdate
 from app.schemas.deliverable_actions import (
@@ -31,7 +32,7 @@ from app.schemas.deliverable_actions import (
 )
 from app.schemas.feedback import FeedbackCreate, FeedbackRead, FeedbackUpdate
 from app.schemas.timesheet import TimesheetCreate, TimesheetRead, TimesheetUpdate
-from app.services import deliverable_actions, notifications, vagoi_jatek
+from app.services import deliverable_actions, notifications, projektkod_kotes, vagoi_jatek
 
 
 def _after_deliverable_update(
@@ -73,6 +74,63 @@ def _csak_a_sajat_anyagai(stmt, db: Session, user: Employee):
     return stmt.where(Deliverable.id.in_(engedett or {0}))
 
 
+def _vagas_projektkodja(data: dict, db: Session) -> dict:
+    """Új vágásnál KÖTELEZŐ a projektkód - és ha projekthez vesszük fel, akkor
+    a projektét örökli.
+
+    Miért kötelező: a vágás a projektkód alá tartozik (abból derül ki, melyik
+    munka utómunkája, és ott számol a költsége). Kód nélkül felvéve viszont
+    csak egy cím marad a listán, amit később senki nem tud besorolni - és
+    pontosan ezek gyűltek fel eddig.
+
+    A formátum SZABAD: nem minden munka a megszokott kód-alakot viseli (más
+    ügyfél rendszere, régi sorozat). Csak azt kérjük, hogy legyen kód, és ne
+    az import gyűjtője legyen (lásd services/projektkod_kotes.py)."""
+    projekt = db.get(Project, data["project_id"]) if data.get("project_id") else None
+    if projekt is not None and not (data.get("projektkod_szoveg") or "").strip():
+        # Projekthez felvezetett vágás: a projekt kódját örökli.
+        data["projektkod_szoveg"] = projekt.projektkod_szoveg
+        if not data.get("project_code_id"):
+            data["project_code_id"] = projekt.project_code_id
+
+    kod = (data.get("projektkod_szoveg") or "").strip()
+    if not projektkod_kotes.valodi(kod):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A vágáshoz meg kell adni a projektkódot. Ebből derül ki, melyik munka "
+                "utómunkája, és ez alapján kerül a helyére a projektkód adatlapján. A "
+                "formátum szabad - bármilyen kód megadható, csak ne maradjon üresen."
+                if not kod
+                else "Az import gyűjtő kódja nem valódi projektkód - add meg a munka saját kódját."
+            ),
+        )
+    data["projektkod_szoveg"] = kod
+    # A szöveghez tartozó Project Code-ot magunk keressük meg: így a vágás
+    # rögtön a helyére kerül, nem kell utólag összekötni.
+    if not data.get("project_code_id"):
+        talalat = projektkod_kotes.keresd(db, kod)
+        if talalat is not None:
+            data["project_code_id"] = talalat.id
+    return data
+
+
+def _kovesd_a_vagas_projektkodjat(obj: Deliverable, data: dict, db: Session) -> None:
+    """Ha átírják a vágás projektkódját, kövesse a kötés is - és ne lehessen
+    kiüríteni: a vágásnak MINDIG van kódja (lásd _vagas_projektkodja)."""
+    if "projektkod_szoveg" not in data:
+        return
+    kod = (data.get("projektkod_szoveg") or "").strip()
+    if not projektkod_kotes.valodi(kod):
+        raise HTTPException(
+            status_code=400,
+            detail="A vágás projektkódja nem törölhető - a vágás a projektkód alá tartozik.",
+        )
+    talalat = projektkod_kotes.keresd(db, kod)
+    if talalat is not None:
+        obj.project_code_id = talalat.id
+
+
 deliverables_router = build_crud_router(
     model=Deliverable,
     create_schema=DeliverableCreate,
@@ -82,6 +140,8 @@ deliverables_router = build_crud_router(
     prefix="/deliverables",
     tags=["postproduction"],
     page="/utomunka",
+    before_create=_vagas_projektkodja,
+    before_update=_kovesd_a_vagas_projektkodjat,
     after_update=_after_deliverable_update,
     entity_type="deliverable",
     sor_szuro=_csak_a_sajat_anyagai,

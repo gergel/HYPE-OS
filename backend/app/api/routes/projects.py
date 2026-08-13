@@ -16,7 +16,7 @@ from app.models.timesheet import Timesheet
 from app.schemas.deliverable import DeliverableRead
 from app.schemas.deliverable_actions import TimerEmployeeSummary
 from app.schemas.project import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate, SzerzodesKeszitesPayload
-from app.services import deliverable_actions
+from app.services import deliverable_actions, projektkod_kotes
 from app.services.contract_actions import apply_szerzodes_keszites, send_szerzodes
 from app.services.dispo import send_diszpo, send_elozetes_diszpo
 from app.services.project_actions import DarabolasHiba, create_feldarabolas, create_utomunka
@@ -74,6 +74,35 @@ def _takaritsd_a_szamlazokat(
     db.commit()
 
 
+def _kosd_a_projektkodhoz(data: dict, db: Session) -> dict:
+    """Új projektnél: ha van projektkód-szöveg, keressük meg hozzá a Project
+    Code-ot. Így a projekt rögtön a helyére kerül, nem kell utólag összekötni
+    (lásd services/projektkod_kotes.py).
+
+    A projektkód itt NEM kötelező: a naptárból érkező eseménynek még nincs, és
+    a felvitel pillanatában sem mindig ismert. A kapunál (diszpó kiküldés) kell
+    meglennie - addig a projekt kód nélkül is létezhet, csak nem lehet
+    kiküldeni róla semmit."""
+    kod = (data.get("projektkod_szoveg") or "").strip()
+    if kod and not data.get("project_code_id"):
+        talalat = projektkod_kotes.keresd(db, kod)
+        if talalat is not None:
+            data["project_code_id"] = talalat.id
+    return data
+
+
+def _kovesd_a_projektkod_valtozast(obj: Project, data: dict, db: Session) -> None:
+    """Ha valaki átírja a projektkód SZÖVEGÉT, kövesse a kötés is.
+
+    Enélkül a projekt a régi Project Code alatt maradna - és a projektkód
+    adatlapja rossz forgatásokat sorolna fel."""
+    if "projektkod_szoveg" not in data:
+        return
+    talalat = projektkod_kotes.keresd(db, data.get("projektkod_szoveg"))
+    if talalat is not None:
+        obj.project_code_id = talalat.id
+
+
 router = build_crud_router(
     model=Project,
     create_schema=ProjectCreate,
@@ -84,6 +113,8 @@ router = build_crud_router(
     tags=["projects"],
     page="/projektek",
     m2m_fields={"crew_employee_ids": ("crew", Employee)},
+    before_create=_kosd_a_projektkodhoz,
+    before_update=_kovesd_a_projektkod_valtozast,
     after_update=_takaritsd_a_szamlazokat,
     before_delete=_block_delete_if_portal_content,
     entity_type="project",

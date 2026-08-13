@@ -36,6 +36,17 @@ Amit tudni kell:
 pollozás volt; itt **explicit gombok** vannak: az "Előzetes diszpó" és a "Diszpó
 küldése" gomb megnyomása maga a trigger, nincs állapotgép és nincs pollozás.
 
+**Projektkód nélkül nem megy ki diszpó** (`_require_projektkod`). Ez az a pont,
+ahol a forgatás "élessé" válik: innentől stáb, technika és papír kapcsolódik rá,
+és mindegyik a kódra hivatkozik vissza. A naptárból a projekt kód nélkül érkezik,
+ezért a kiküldés az a hely, ahol számon kérjük.
+
+A formátum viszont **szabad**: bármi elfogadható, ami nem üres és nem a régi
+import-gyűjtő (`NAPTAR-IMPORT`, `ISMERETLEN-NOTION-IMPORT`) - más ügyfél
+kódrendszere vagy egy régi sorozat is jó. A szabály egy helyen él:
+`services/projektkod_kotes.py`, lásd
+[03-projektek-ugyfelek.md](03-projektek-ugyfelek.md#a-projektkód-kötése-mi-tartozik-egy-kód-alá).
+
 Egyetlen állapotfüggő viselkedés maradt: ha a projektnek már van
 `gmail_thread_id`-je, a további levelek **ugyanabba a Gmail-szálba válaszolnak**.
 

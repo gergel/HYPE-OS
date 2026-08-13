@@ -27,7 +27,6 @@ from app.api.routes import kotelezettsegek
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense
-from app.models.kotelezettseg import Kotelezettseg
 from app.services import kotelezettseg as szolg
 
 router = APIRouter(prefix="/autok", tags=["autok"])
