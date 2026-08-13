@@ -168,7 +168,21 @@ export default async function PenzugyekPage() {
                   ),
                 sortAccessor: (e) => e.netto,
               },
-              { header: "Bruttó", align: "right", render: (e) => formatHuf(e.brutto), sortAccessor: (e) => e.brutto },
+              {
+                // Szerkeszthető, mert a felvitelkor csak a nettót kérjük be:
+                // ha valaki utólag tudja a bruttót (áfás számla), itt írhatja
+                // be. A projekt költsége a bruttót veszi, ha van - különben a
+                // nettót (lásd backend models/project_code._osszeg).
+                header: "Bruttó",
+                align: "right",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="brutto" value={e.brutto} type="number" />
+                  ) : (
+                    formatHuf(e.brutto)
+                  ),
+                sortAccessor: (e) => e.brutto,
+              },
               {
                 header: "Fizetési mód",
                 render: (e) => (
@@ -277,7 +291,17 @@ export default async function PenzugyekPage() {
                   ),
                 sortAccessor: (r) => r.netto,
               },
-              { header: "Bruttó", align: "right", render: (r) => formatHuf(r.brutto), sortAccessor: (r) => r.brutto },
+              {
+                header: "Bruttó",
+                align: "right",
+                render: (r) =>
+                  canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.revenue}/${r.id}`} field="brutto" value={r.brutto} type="number" />
+                  ) : (
+                    formatHuf(r.brutto)
+                  ),
+                sortAccessor: (r) => r.brutto,
+              },
               { header: "Pénznem", align: "right", render: (r) => r.penznem, sortAccessor: (r) => r.penznem },
               {
                 header: "Számla",

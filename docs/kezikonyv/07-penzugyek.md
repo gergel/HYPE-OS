@@ -67,6 +67,13 @@ hozott soroknál a "Kiadás formája" szabad szöveg volt (bármi lehet benne), 
 hozzájuk kötött EMBER típusa viszont megbízható: `Expense.tipus == "kulsos"`
 vagy külsős a kiadáshoz kötött ember.
 
+**Bruttó, ha van - különben nettó** (`ProjectCode._osszeg`). A Kiadások és a
+Bevételek felvitelekor csak a NETTÓ mezőt kérjük be, a bruttó jellemzően csak a
+Notionból hozott soroknál van kitöltve. Amíg csak a bruttót néztük, a kézzel
+felvezetett tételek nullának számítottak, és a projekt költsége úgy nézett ki,
+mintha fel se vitték volna őket. ÁFÁ-t nem tippelünk rá: a nettó legalább igaz,
+egy kitalált 27% nem feltétlenül. A bruttó a listán utólag beírható.
+
 A belsős napidíjnak nincs és nem is lesz Kiadás sora: a belsős alapbér a hónap
 végén, egy tételben megy be (Belsős TIG). Ezért a projektkód költsége és a
 Pénzügyek kiadás-listája nem ugyanaz a szám - és ez nem hiba: a projektnél azt

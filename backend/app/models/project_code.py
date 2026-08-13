@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 
 from sqlalchemy import JSON, Boolean, Date, ForeignKey, Numeric, String, Text, false, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -151,6 +152,23 @@ class ProjectCode(TimestampMixin, Base):
     revenues: Mapped[list["Revenue"]] = relationship(back_populates="project_code")
     deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project_code")
 
+    @staticmethod
+    def _osszeg(sor: Any) -> float:
+        """Egy kiadás/bevétel összege: a BRUTTÓ, ha meg van adva, különben a
+        nettó.
+
+        A Pénzügyek felületén (és a projektkód adatlapján) a kézzel felvitt
+        tételnél csak a NETTÓ mezőt kérjük be - a bruttó jellemzően csak a
+        Notionból hozott soroknál van kitöltve. Amíg csak a bruttót néztük, a
+        kézzel felvezetett kiadások NULLÁNAK számítottak: a projekt költsége
+        úgy nézett ki, mintha nem is lettek volna.
+
+        ÁFÁ-t nem tippelünk rá: a nettó legalább IGAZ, egy kitalált 27% nem
+        feltétlenül (nem minden szállító áfás, és nem mindegyik 27%)."""
+        if sor.brutto is not None:
+            return float(sor.brutto)
+        return float(sor.netto or 0)
+
     def _kulsos_bontas(self) -> tuple[float, float]:
         """(külsős, egyéb) - egy menetben, mert a kettő ugyanazon a szűrésen
         osztozik, és külön-külön kiszámolva kétszer járnánk be mindent."""
@@ -168,7 +186,7 @@ class ProjectCode(TimestampMixin, Base):
         for e in self.expenses:
             if e.id in tig_kiadas_idk:
                 continue
-            osszeg = float(e.brutto or 0)
+            osszeg = self._osszeg(e)
             # A TIG-en kívüli külsős kifizetéseket két jelről ismerjük fel: a
             # sor `tipus="kulsos"` jelöléséről, vagy a hozzá kötött EMBER
             # típusáról - a Notionból hozott soroknál a "Kiadás formája"
@@ -242,8 +260,11 @@ class ProjectCode(TimestampMixin, Base):
         """A projektkódhoz tartozó bevételek BRUTTÓ összege.
 
         Külön property, mert a listán is látszania kell: a profit önmagában
-        nem mondja meg, nagy bevételből maradt-e kevés, vagy kicsiből sok."""
-        return float(sum(r.brutto or 0 for r in self.revenues))
+        nem mondja meg, nagy bevételből maradt-e kevés, vagy kicsiből sok.
+
+        Ha a bruttó nincs kitöltve, a nettó számít - lásd `_osszeg`: a kézzel
+        felvitt bevételnél is csak a nettót kérjük be."""
+        return float(sum(self._osszeg(r) for r in self.revenues))
 
     @property
     def becsult_profit(self) -> float:
