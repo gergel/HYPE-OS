@@ -42,6 +42,10 @@ class ProjectCodeRead(ProjectCodeBase):
     bevetel: float
     osszes_koltseg: float
     becsult_profit: float
+    #: Ebből mennyi a saját (belsős) munka napidíja - lásd
+    #: services/belsos_koltseg.py. Külön is látszik, mert ez az egyetlen
+    #: költség-rész, aminek nincs Kiadás sora a Pénzügyekben.
+    belsos_munka_koltseg: float
 
     # A papírozás kapcsolói (lásd models/project_code.py): van-e szerződés a
     # projekt mögött, illetve papír nélkül számoljuk-e el.

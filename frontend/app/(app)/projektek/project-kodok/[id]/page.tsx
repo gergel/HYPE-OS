@@ -152,7 +152,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard
-            label="Összes költség (kiadások + utómunka)"
+            label="Összes költség (kiadások + utómunka + belsős napidíj)"
             value={formatHuf(typeof projectCode.osszes_koltseg === "number" ? projectCode.osszes_koltseg : 0)}
             icon={TrendingDown}
             tone="orange"
@@ -170,6 +170,17 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             tone={typeof projectCode.becsult_profit === "number" && projectCode.becsult_profit >= 0 ? "accent" : "danger"}
           />
         </div>
+
+        {/* A belsős napidíj a költségek közt van, de a Pénzügyek kiadás-listáján
+            NINCS sora: a havi alapbér a hónap végén, egyben megy be (Belsős
+            TIG). Ezt itt ki kell írni, különben a két szám különbsége hibának
+            látszik. */}
+        {typeof projectCode.belsos_munka_koltseg === "number" && projectCode.belsos_munka_koltseg > 0 && (
+          <p className="-mt-4 text-[12.5px] text-text-muted">
+            Ebből belsős munkanapok díja: {formatHuf(projectCode.belsos_munka_koltseg)} - ennek nincs külön kiadás-sora,
+            a belsős alapbér a hónap végén, egy tételben kerül a kiadások közé.
+          </p>
+        )}
 
         {/* A papírozás onnan indul, hogy KELL-E egyáltalán papír - ezért van
             ez a kártya a két papír FÖLÖTT, nem valahol a mezők között. */}

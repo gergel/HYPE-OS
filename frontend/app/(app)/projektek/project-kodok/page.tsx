@@ -2,6 +2,12 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
+import {
+  evheztartozik,
+  PROJEKTKOD_EVEK,
+  ProjektkodEvValto,
+  type ProjektkodEv,
+} from "@/components/ProjektkodEvValto";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -18,7 +24,12 @@ import { canDoAction } from "@/lib/permissions";
 
 const PAGE = "/projektek/project-kodok";
 
-export default async function ProjectKodokPage() {
+export default async function ProjectKodokPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ev?: string }>;
+}) {
+  const params = await searchParams;
   const [projectCodes, clients, fieldTypes, currentUser, pagePermissions] = await Promise.all([
     getProjectCodes(),
     getClients(),
@@ -31,11 +42,30 @@ export default async function ProjectKodokPage() {
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
 
+  // Alapból a FOLYÓ év nézete nyílik meg (azon dolgozunk); ha arra az évre
+  // nincs kódrendszerünk, az Összes marad.
+  const idei = String(new Date().getFullYear()) as ProjektkodEv;
+  const kertEv = params.ev as ProjektkodEv | undefined;
+  const ev: ProjektkodEv =
+    kertEv && (kertEv === "osszes" || PROJEKTKOD_EVEK.some((e) => e.ev === kertEv))
+      ? kertEv
+      : PROJEKTKOD_EVEK.some((e) => e.ev === idei)
+        ? idei
+        : "osszes";
+  const sorok = projectCodes.filter((pc) => evheztartozik(pc.projektkod, ev));
+  const darabszamok = {
+    ...Object.fromEntries(
+      PROJEKTKOD_EVEK.map((e) => [e.ev, projectCodes.filter((pc) => evheztartozik(pc.projektkod, e.ev)).length]),
+    ),
+    osszes: projectCodes.length,
+  } as Record<ProjektkodEv, number>;
+
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 p-8">
-        <Card title={`Project Code-ok (${projectCodes.length})`}>
+        <Card title={`Project Code-ok (${sorok.length})`}>
+          <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} />
           {canCreate && (
             <QuickCreateForm
               postPath={ENTITY_PATHS.projectCode}
@@ -48,8 +78,12 @@ export default async function ProjectKodokPage() {
             />
           )}
           <DataTable<ProjectCode>
-            rows={projectCodes}
-            emptyText="Még nincs felvett Project Code - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
+            rows={sorok}
+            emptyText={
+              ev === "osszes"
+                ? "Még nincs felvett Project Code - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
+                : `Ebben az évben (${ev}) még nincs projektkód - nézd meg az Összes nézetet.`
+            }
             getHref={(pc) => `/projektek/project-kodok/${pc.id}`}
             deleteHref={canDelete ? (pc) => `${ENTITY_PATHS.projectCode}/${pc.id}` : undefined}
             filterable
@@ -118,14 +152,25 @@ export default async function ProjectKodokPage() {
                 sortAccessor: (pc) => pc.bevetel,
               },
               {
-                // Kiadás = minden projektkiadás + az utómunka költsége, ugyanaz,
-                // amit az adatlap "Összes költség (kiadások + utómunka)" néven
-                // mutat (lásd models/project_code.osszes_koltseg).
+                // Kiadás = minden projektkiadás + az utómunka költsége + a
+                // projekten dolgozó belsősök napidíja (lásd
+                // models/project_code.osszes_koltseg). A belsős rész külön is
+                // látszik, mert annak nincs kiadás-sora a Pénzügyekben.
                 header: "Kiadás",
                 align: "right",
                 render: (pc) => (
-                  <span title="A projektkiadások és az utómunka költsége - a tételeknél módosítható">
+                  <span
+                    title={
+                      "A projektkiadások, az utómunka és a belsősök napidíja - a tételeknél módosítható" +
+                      (pc.belsos_munka_koltseg ? `. Ebből belsős munka: ${formatHuf(pc.belsos_munka_koltseg)}` : "")
+                    }
+                  >
                     {formatHuf(pc.osszes_koltseg)}
+                    {pc.belsos_munka_koltseg > 0 && (
+                      <span className="mt-0.5 block text-[11.5px] text-text-muted">
+                        ebből belsős: {formatHuf(pc.belsos_munka_koltseg)}
+                      </span>
+                    )}
                   </span>
                 ),
                 sortAccessor: (pc) => pc.osszes_koltseg,

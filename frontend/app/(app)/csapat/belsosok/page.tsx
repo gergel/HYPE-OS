@@ -6,7 +6,7 @@ import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { TopBar } from "@/components/TopBar";
 import { BelsosAddWidget } from "@/components/BelsosAddWidget";
 import { EmployeeActiveToggle } from "@/components/VagoInlineFields";
-import { ENTITY_PATHS, getCurrentUser, getEmployees, getMyPagePermissions } from "@/lib/api";
+import { ENTITY_PATHS, formatHuf, getCurrentUser, getEmployees, getMyPagePermissions } from "@/lib/api";
 import { canDoAction } from "@/lib/permissions";
 
 const PAGE = "/csapat";
@@ -67,6 +67,27 @@ export default async function BelsosokPage() {
                     e.email ?? "–"
                   ),
                 sortAccessor: (e) => e.email,
+              },
+              {
+                // Mennyibe kerül egy munkanapja: ebből számoljuk, mennyi saját
+                // munka van egy projektben (lásd backend
+                // services/belsos_koltseg.py). Kiadás-sor NEM lesz belőle - a
+                // havi bér a hónap végén megy be egyben.
+                header: "Napidíj",
+                align: "right",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.employee}/${e.id}`}
+                      field="napi_dij"
+                      value={e.napi_dij}
+                      type="number"
+                      placeholder="Nincs megadva"
+                    />
+                  ) : (
+                    (e.napi_dij != null ? formatHuf(e.napi_dij) : "–")
+                  ),
+                sortAccessor: (e) => e.napi_dij,
               },
               {
                 header: "Aktív",

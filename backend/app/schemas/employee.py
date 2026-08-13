@@ -15,6 +15,9 @@ class EmployeeBase(BaseModel):
     jogositvany: str | None = None
     elso_munkanap: date | None = None
     utolso_munkanap: date | None = None
+    #: Belsős napidíj - a projekt önköltségéhez, NEM kiadás-sor (lásd
+    #: models/employee.py és services/belsos_koltseg.py).
+    napi_dij: float | None = None
 
 
 class EmployeeCreate(EmployeeBase):
@@ -36,6 +39,7 @@ class EmployeeUpdate(BaseModel):
     telefon: str | None = None
     jogositvany: str | None = None
     is_active: bool | None = None
+    napi_dij: float | None = None
 
 
 class EmployeeRead(EmployeeBase):

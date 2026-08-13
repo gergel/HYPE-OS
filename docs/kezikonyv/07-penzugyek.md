@@ -31,6 +31,18 @@ Kiadás sor csak megkétszerezné az összeget a pénzügyi összesítőkben. Ez
 tehát a régi hívások viselkedése változatlan). A papír állapota így is
 "kifizetve" lesz, tehát nem marad teendőként a havi listán.
 
+### A projekt önköltsége ≠ a kiadás-lista
+
+A projektkód "Összes költség" száma **három** részből áll: a kiadás-sorok, az
+utómunka költsége és a projekten dolgozó **belsősök napidíja**
+(`models/project_code.osszes_koltseg`, `services/belsos_koltseg.py`). A
+harmadiknak nincs és nem is lesz Kiadás sora: a belsős alapbér a hónap végén,
+egy tételben megy be (Belsős TIG). Ezért a projektkód költsége és a Pénzügyek
+kiadás-listája nem ugyanaz a szám - és ez nem hiba: a projektnél azt akarjuk
+látni, mibe került VALÓJÁBAN a munka, a kiadásoknál azt, mennyi pénz ment ki.
+A projektkód adatlapja és listája ezért külön is kiírja, ebből mennyi a belsős
+rész.
+
 **Visszafelé is jár az út:** egy Kiadás sor akkor is törölhető, ha TIG (vagy
 havi tétel, KP-forgalom) hivatkozik rá. A törlés leoldja a hivatkozásokat, és az
 érintett TIG-et visszadobja "nincs kifizetve" állapotba - a kapcsolódó rekordok

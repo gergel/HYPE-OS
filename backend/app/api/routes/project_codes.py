@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
+from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.schemas.project_code import ProjectCodeCreate, ProjectCodeRead, ProjectCodeUpdate
 
@@ -52,5 +53,9 @@ router = build_crud_router(
         selectinload(ProjectCode.expenses),
         selectinload(ProjectCode.deliverables),
         selectinload(ProjectCode.revenues),
+        # A belsős napidíj a forgatások STÁBJÁBÓL jön (lásd
+        # services/belsos_koltseg.py) - a stáb betöltése nélkül ez soronként
+        # két további lekérdezés lenne.
+        selectinload(ProjectCode.projects).selectinload(Project.crew),
     ),
 )

@@ -17,6 +17,15 @@ megjegyzés** ("2 nap", "csúszik") és a jobb oldalon **bevétel, kiadás, prof
 a puszta kódról ránézésre senki nem tudja, melyik munkáról van szó, és hogy
 kijött-e.
 
+A lista **évekre bontva** nyílik: 2025 / 2026 / Összes
+(`components/ProjektkodEvValto.tsx`). Az évet a kód ELŐTAGJA adja
+(`HYPE25-…`, `HYPE26-…`), nem a `datum` mező - az sokszor üres vagy a
+szerződés keltezése, a kód viszont mindig az adott év sorozatából jön. A nézet
+a címben van (`?ev=2025`), tehát megosztható és könyvjelzőzhető, a fejlécben
+látszó darabszám pedig a ténylegesen mutatott sorokat számolja. Az "Összes"
+azért kell, mert a régebbi (HYPE24-es) és a más kódrendszerű munkák egyik
+évhez sem tartoznak - nélküle láthatatlanok lennének.
+
 A dátum oszlopában szándékosan nem a naptári dátum áll: egy projektkód alatt
 több forgatás fut, egyetlen dátum úgysem mondaná meg, mikor volt a munka - a
 megjegyzés viszont igen. A pontos dátum az adatlapon van.
@@ -25,11 +34,11 @@ Az összes SAJÁT mező helyben szerkeszthető a listán (projektkód, projekt n
 helyszín, dátum megjegyzés, státusz) - `EditableTableCell` /
 `EditableStatusBadge`, ami a rekord PATCH végpontját hívja. A három pénz-oszlop
 nem: az `bevetel` és az `osszes_koltseg` a backend SZÁMÍTÁSA
-(`models/project_code.py`), a "kiadás" itt a TELJES költség, tehát a
-projektkiadások és az utómunka együtt - ugyanaz, amit az adatlap "Összes
-költség (kiadások + utómunka)" néven mutat. Ezeket a listán átírni annyit
-tenne, hogy a szám mást mond, mint a mögötte álló tételek; javítani a
-bevétel-/kiadás-soroknál kell.
+(`models/project_code.py`), a "kiadás" itt a TELJES költség - a
+projektkiadások, az utómunka ÉS a projekten dolgozó belsősök napidíja együtt
+(lásd [07-penzugyek.md](07-penzugyek.md#a-projekt-önköltsége--a-kiadás-lista)).
+Ezeket a listán átírni annyit tenne, hogy a szám mást mond, mint a mögötte álló
+tételek; javítani a bevétel-/kiadás-soroknál kell.
 
 ### A projektkód KÖTÉSE: mi tartozik egy kód alá
 

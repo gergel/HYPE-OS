@@ -152,18 +152,36 @@ class ProjectCode(TimestampMixin, Base):
     deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project_code")
 
     @property
+    def belsos_munka_koltseg(self) -> float:
+        """A projektkód alatti forgatásokon dolgozó BELSŐSÖK napidíja.
+
+        Nem kiadás-sor, csak számítás: a belsős alapbére a hónap végén EGYBEN
+        kerül a kiadások közé, itt csak azt látjuk, mennyi saját munka van
+        ebben a projektben (lásd services/belsos_koltseg.py)."""
+        from app.services import belsos_koltseg
+
+        return belsos_koltseg.projektkod_koltsege(self)
+
+    @property
     def osszes_koltseg(self) -> float:
         """Számított: az összes projektkiadás (alvállalkozói/belsős TIG-ekből
         keletkezett Expense-ek is ide tartoznak, hiszen azok is Expense-ként
         jönnek létre - lásd performance_certificates.py /szamla-kifizetve) +
-        az utómunka/vágási költség (Deliverable.koltseg). Ez a projekt VALÓS
-        teljes költsége - szándékosan nem szűri a Pénzügy-gate
-        (hozzaadas_a_kiadasokhoz), mert az csak a globális Pénzügy nézet
-        összesítőit korlátozza (lásd api/routes/finance.py), nem azt, hogy mi
-        számít az adott projekt költségének."""
-        expense_total = sum(e.brutto or 0 for e in self.expenses)
-        utomunka_total = sum(d.koltseg or 0 for d in self.deliverables)
-        return expense_total + utomunka_total
+        az utómunka/vágási költség (Deliverable.koltseg) + a projekten dolgozó
+        BELSŐSÖK napidíja. Ez a projekt VALÓS teljes költsége - szándékosan nem
+        szűri a Pénzügy-gate (hozzaadas_a_kiadasokhoz), mert az csak a globális
+        Pénzügy nézet összesítőit korlátozza (lásd api/routes/finance.py), nem
+        azt, hogy mi számít az adott projekt költségének.
+
+        A belsős napidíj azért van benne, mert nélküle a saját emberünk munkája
+        ingyennek látszana, és minden projekt profitja szebb lenne a
+        valóságnál. A Pénzügyek kiadás-listáját ez NEM érinti: oda a belsős bér
+        a hónap végén, egy tételben kerül be."""
+        # float-ra váltva: a pénzoszlopok Numeric-ek (Decimal), a belsős napidíj
+        # viszont számított float - a kettő közvetlen összeadása TypeError.
+        expense_total = float(sum(e.brutto or 0 for e in self.expenses))
+        utomunka_total = float(sum(d.koltseg or 0 for d in self.deliverables))
+        return expense_total + utomunka_total + self.belsos_munka_koltseg
 
     @property
     def bevetel(self) -> float:
@@ -171,7 +189,7 @@ class ProjectCode(TimestampMixin, Base):
 
         Külön property, mert a listán is látszania kell: a profit önmagában
         nem mondja meg, nagy bevételből maradt-e kevés, vagy kicsiből sok."""
-        return sum(r.brutto or 0 for r in self.revenues)
+        return float(sum(r.brutto or 0 for r in self.revenues))
 
     @property
     def becsult_profit(self) -> float:

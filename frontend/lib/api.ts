@@ -46,6 +46,10 @@ export type ProjectCode = {
   bevetel: number;
   becsult_profit: number;
   osszes_koltseg: number;
+  /** Az összes költségből ennyi a saját (belsős) emberek napidíja - ennek
+   * egyedül nincs kiadás-sora a Pénzügyekben (a havi bér a hónap végén megy
+   * be egyben). */
+  belsos_munka_koltseg: number;
   datum: string | null;
   /** Mire szólt a projekt, hol volt, és mit jegyeztek fel a dátumához. */
   project_nev: string | null;
@@ -94,6 +98,11 @@ export type Employee = {
   has_password: boolean;
   elso_munkanap: string | null;
   utolso_munkanap: string | null;
+  /** Belsős napidíj: mennyibe kerül a cégnek egy munkanapja. A projekt
+   * önköltségébe számít bele (lásd backend services/belsos_koltseg.py), de
+   * NEM lesz belőle kiadás-sor. Vágóknál nincs jelentése: ők órabérben
+   * dolgoznak. */
+  napi_dij: number | null;
   vallakozas_neve: string | null;
   vallakozas_szekhely: string | null;
   vallalkozas_adoszama: string | null;

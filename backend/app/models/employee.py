@@ -79,6 +79,22 @@ class Employee(TimestampMixin, Base):
     elso_munkanap: Mapped[date | None] = mapped_column(Date)
     utolso_munkanap: Mapped[date | None] = mapped_column(Date)
 
+    #: BELSŐS napidíj: mennyibe kerül egy munkanapja a cégnek. Ebből számoljuk,
+    #: mennyi belsős munka van egy projektben (lásd
+    #: services/belsos_koltseg.py) - enélkül a projekt profitja túl szépnek
+    #: látszik, mert a saját emberünk munkája ingyennek tűnik.
+    #:
+    #: A VÁGÓKNÁL nincs jelentése: ők órabérben dolgoznak, az utómunka
+    #: költsége a mért időből jön (Deliverable.koltseg, lásd
+    #: services/deliverable_actions.py).
+    #:
+    #: FONTOS: ez a szám SOSEM lesz Kiadás sor. A havi alapbér egyben, a hónap
+    #: végén kerül a kiadások közé (Belsős TIG) - ha a napidíj is bekerülne,
+    #: ugyanaz a pénz kétszer szerepelne.
+    napi_dij: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), comment="Belsős napidíj - projekt-önköltséghez, NEM kiadás-sor"
+    )
+
     #: Belsősnél: bejelentett alkalmazott vagy megbízási szerződéses. A
     #: bejelentett alkalmazottól nem várunk havi TIG-et (lásd
     #: BelsosJogviszony). Külsősnél nincs jelentése.

@@ -33,6 +33,23 @@ Mivel valaki nem örökre belsős, külön tartjuk nyilván, **mettől meddig** 
 `routes/belsos_idoszakok.py`, frontend `components/BelsosIdoszakok.tsx`). A havi
 belsős TIG-lista ez alapján tudja, kit kell egyáltalán kérdezni egy adott hónapban.
 
+### Belsős napidíj: mennyibe kerül egy munkanapja
+
+`Employee.napi_dij` - a belsősök listáján helyben szerkeszthető. Ebből számoljuk,
+mennyi SAJÁT munka van egy projektben: minden forgatás költségébe beleszámít,
+amin az illető stábtag ott volt (`services/belsos_koltseg.py`, több napos
+forgatásnál napok × napidíj). Enélkül a projekt profitja szebb a valóságnál,
+mert a saját emberünk munkája ingyennek látszik.
+
+**A vágóknál nincs jelentése**: ők órabérben dolgoznak, a munkájuk ára a mért
+időből jön (`Deliverable.koltseg`, lásd
+[08-utomunka-utokovetes.md](08-utomunka-utokovetes.md)).
+
+**Kiadás sor SOSEM lesz belőle.** A belsős alapbér a hónap végén, egy tételben
+kerül a kiadások közé (Belsős TIG) - ha a napidíj is bekerülne, ugyanaz a pénz
+kétszer szerepelne a Pénzügyekben. A napidíj tehát csak a projekt
+önköltségét/profitját színezi, a kiadás-listát nem érinti.
+
 ### Munkatárs-dokumentumok
 
 `models/employee_document.py`, `components/MunkaszerzodesUpload.tsx`,
