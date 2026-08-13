@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
+from app.models.finance import Expense
 from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.schemas.project_code import ProjectCodeCreate, ProjectCodeRead, ProjectCodeUpdate
@@ -50,7 +51,9 @@ router = build_crud_router(
     # nélkül ez SORONKÉNT 3 külön lekérdezést jelentene: 200 projektkódnál
     # 600+ kör, ami a Pénzügyek oldalt másodpercekkel lassította.
     list_options=(
-        selectinload(ProjectCode.expenses),
+        # A kiadás mellé az EMBERE is kell: a külsős/egyéb bontás részben az ő
+        # típusából derül ki (lásd models/project_code.kulsos_koltseg).
+        selectinload(ProjectCode.expenses).selectinload(Expense.employee),
         selectinload(ProjectCode.deliverables),
         selectinload(ProjectCode.revenues),
         # A belsős napidíj a forgatások STÁBJÁBÓL jön (lásd

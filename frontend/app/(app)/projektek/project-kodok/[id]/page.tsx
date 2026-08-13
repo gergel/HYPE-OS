@@ -3,6 +3,7 @@ import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
+import { KoltsegBontas } from "@/components/KoltsegBontas";
 import { MegrendeloiPapirKezelo } from "@/components/megrendeloi/MegrendeloiPapirKezelo";
 import { PapirKapcsolok } from "@/components/megrendeloi/PapirKapcsolok";
 import { RelatedTable } from "@/components/RelatedTable";
@@ -32,6 +33,13 @@ import { canDoAction } from "@/lib/permissions";
 import { FileCheck2, FileSignature, FileText, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const PAGE = "/projektek/project-kodok";
+
+/** A rekord mezői nyers JSON-ból jönnek (JsonRecord), ezért a számokat
+ * ellenőrizni kell - hiányzó mező vagy régi, még nem frissült válasz esetén
+ * nullát adunk vissza, nem NaN-t. */
+function szam(ertek: unknown): number {
+  return typeof ertek === "number" ? ertek : 0;
+}
 
 /** MELYIK NAP ment ki a pénz.
  *
@@ -171,16 +179,19 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           />
         </div>
 
-        {/* A belsős napidíj a költségek közt van, de a Pénzügyek kiadás-listáján
-            NINCS sora: a havi alapbér a hónap végén, egyben megy be (Belsős
-            TIG). Ezt itt ki kell írni, különben a két szám különbsége hibának
-            látszik. */}
-        {typeof projectCode.belsos_munka_koltseg === "number" && projectCode.belsos_munka_koltseg > 0 && (
-          <p className="-mt-4 text-[12.5px] text-text-muted">
-            Ebből belsős munkanapok díja: {formatHuf(projectCode.belsos_munka_koltseg)} - ennek nincs külön kiadás-sora,
-            a belsős alapbér a hónap végén, egy tételben kerül a kiadások közé.
-          </p>
-        )}
+        {/* MIBŐL áll a költség. Egy összeg önmagában nem mond semmit arról,
+            hogy a pénz a külsős stábra, a vágásra vagy a saját munkánkra ment
+            el - a négy rész összege pontosan a fenti "Összes költség". A
+            belsős napidíjnak nincs Kiadás sora (a havi alapbér a hónap végén,
+            egyben megy be), ezért azt külön meg is jegyezzük: enélkül a
+            Pénzügyekkel való eltérés hibának látszik. */}
+        <KoltsegBontas
+          kulsos={szam(projectCode.kulsos_koltseg)}
+          egyeb={szam(projectCode.egyeb_kiadas)}
+          vagas={szam(projectCode.vagas_koltseg)}
+          belsos={szam(projectCode.belsos_munka_koltseg)}
+          osszesen={szam(projectCode.osszes_koltseg)}
+        />
 
         {/* A papírozás onnan indul, hogy KELL-E egyáltalán papír - ezért van
             ez a kártya a két papír FÖLÖTT, nem valahol a mezők között. */}

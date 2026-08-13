@@ -46,9 +46,13 @@ export type ProjectCode = {
   bevetel: number;
   becsult_profit: number;
   osszes_koltseg: number;
-  /** Az összes költségből ennyi a saját (belsős) emberek napidíja - ennek
-   * egyedül nincs kiadás-sora a Pénzügyekben (a havi bér a hónap végén megy
-   * be egyben). */
+  /** Az összes költség négy része (az összegük pontosan az osszes_koltseg):
+   * a külsős közreműködők kifizetései, minden más kiadás-sor, a vágás
+   * (utómunka) és a belsősök napidíja. Az utóbbinak egyedül nincs
+   * kiadás-sora a Pénzügyekben (a havi bér a hónap végén megy be egyben). */
+  kulsos_koltseg: number;
+  egyeb_kiadas: number;
+  vagas_koltseg: number;
   belsos_munka_koltseg: number;
   datum: string | null;
   /** Mire szólt a projekt, hol volt, és mit jegyeztek fel a dátumához. */

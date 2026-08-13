@@ -152,6 +152,43 @@ class ProjectCode(TimestampMixin, Base):
     deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project_code")
 
     @property
+    def kulsos_koltseg(self) -> float:
+        """A KÜLSŐS közreműködők kifizetései (bruttó).
+
+        Két jelből ismerjük fel: a TIG kifizetéséből keletkező Kiadás sor
+        `tipus="kulsos"` jelölést kap (lásd
+        routes/performance_certificates.py), a régi, Notionból hozott soroknál
+        pedig a hozzájuk kötött EMBER típusa dönt - ott a "Kiadás formája"
+        szabad szöveg volt, arra nem lehet szabályt építeni.
+
+        Aki még nem kapott kifizetést (nincs Kiadás sora), az itt nem
+        szerepel: ez a valóban KIFIZETETT külsős munka ára."""
+        from app.models.employee import EmployeeType
+
+        return float(
+            sum(
+                e.brutto or 0
+                for e in self.expenses
+                if (e.tipus or "").strip().lower() == "kulsos"
+                or (e.employee is not None and e.employee.tipus == EmployeeType.KULSOS)
+            )
+        )
+
+    @property
+    def egyeb_kiadas(self) -> float:
+        """Minden más Kiadás sor: bérlés, utazás, kellék, belsős extra…
+
+        Nem felsorolás, hanem MARADÉK - így a négy költség-rész összege pontosan
+        az `osszes_koltseg`, nem marad ki semmi egy hiányzó kategória miatt."""
+        return float(sum(e.brutto or 0 for e in self.expenses)) - self.kulsos_koltseg
+
+    @property
+    def vagas_koltseg(self) -> float:
+        """Az utómunka ára: a vágások mért idejéből számolt költség
+        (Deliverable.koltseg, lásd services/deliverable_actions.py)."""
+        return float(sum(d.koltseg or 0 for d in self.deliverables))
+
+    @property
     def belsos_munka_koltseg(self) -> float:
         """A projektkód alatti forgatásokon dolgozó BELSŐSÖK napidíja.
 
@@ -177,11 +214,11 @@ class ProjectCode(TimestampMixin, Base):
         ingyennek látszana, és minden projekt profitja szebb lenne a
         valóságnál. A Pénzügyek kiadás-listáját ez NEM érinti: oda a belsős bér
         a hónap végén, egy tételben kerül be."""
-        # float-ra váltva: a pénzoszlopok Numeric-ek (Decimal), a belsős napidíj
-        # viszont számított float - a kettő közvetlen összeadása TypeError.
-        expense_total = float(sum(e.brutto or 0 for e in self.expenses))
-        utomunka_total = float(sum(d.koltseg or 0 for d in self.deliverables))
-        return expense_total + utomunka_total + self.belsos_munka_koltseg
+        # Négy rész, amit az adatlap külön-külön is kiír: külsős stáb, egyéb
+        # kiadás, vágás, belsős munkanapok. Mindegyik float (a pénzoszlopok
+        # Numeric-ek, a napidíj viszont számított float - a kettő közvetlen
+        # összeadása TypeError-t dobna).
+        return self.kulsos_koltseg + self.egyeb_kiadas + self.vagas_koltseg + self.belsos_munka_koltseg
 
     @property
     def bevetel(self) -> float:

@@ -42,9 +42,13 @@ class ProjectCodeRead(ProjectCodeBase):
     bevetel: float
     osszes_koltseg: float
     becsult_profit: float
-    #: Ebből mennyi a saját (belsős) munka napidíja - lásd
-    #: services/belsos_koltseg.py. Külön is látszik, mert ez az egyetlen
-    #: költség-rész, aminek nincs Kiadás sora a Pénzügyekben.
+    #: Az összes költség NÉGY része (az összegük pontosan az osszes_koltseg):
+    #: a külsős közreműködők kifizetései, minden más kiadás-sor, a vágás
+    #: (utómunka), és a belsősök napidíja. Az utóbbi az egyetlen, aminek nincs
+    #: Kiadás sora a Pénzügyekben - lásd services/belsos_koltseg.py.
+    kulsos_koltseg: float
+    egyeb_kiadas: float
+    vagas_koltseg: float
     belsos_munka_koltseg: float
 
     # A papírozás kapcsolói (lásd models/project_code.py): van-e szerződés a

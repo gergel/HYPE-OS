@@ -33,15 +33,29 @@ tehát a régi hívások viselkedése változatlan). A papír állapota így is
 
 ### A projekt önköltsége ≠ a kiadás-lista
 
-A projektkód "Összes költség" száma **három** részből áll: a kiadás-sorok, az
-utómunka költsége és a projekten dolgozó **belsősök napidíja**
-(`models/project_code.osszes_koltseg`, `services/belsos_koltseg.py`). A
-harmadiknak nincs és nem is lesz Kiadás sora: a belsős alapbér a hónap végén,
-egy tételben megy be (Belsős TIG). Ezért a projektkód költsége és a Pénzügyek
-kiadás-listája nem ugyanaz a szám - és ez nem hiba: a projektnél azt akarjuk
-látni, mibe került VALÓJÁBAN a munka, a kiadásoknál azt, mennyi pénz ment ki.
-A projektkód adatlapja és listája ezért külön is kiírja, ebből mennyi a belsős
-rész.
+A projektkód "Összes költség" száma **négy** részből áll
+(`models/project_code.py`) - az adatlap ki is írja mindegyiket ("Mibe került",
+`components/KoltsegBontas.tsx`), mert egy összeg önmagában nem mondja meg, mire
+ment el a pénz:
+
+| Rész | Mi ez | Honnan |
+|---|---|---|
+| Külsős stáb | a külsős közreműködők kifizetései | `Expense.tipus == "kulsos"` (TIG-ből így keletkezik), vagy a kiadáshoz kötött ember külsős |
+| Vágás (utómunka) | a vágások mért idejéből számolt ár | `Deliverable.koltseg` |
+| Belsős munkanapok | a saját stáb napidíja | `services/belsos_koltseg.py` |
+| Egyéb kiadás | minden más kiadás-sor (bérlés, utazás, kellék) | MARADÉK - így a négy rész összege pontosan az összes költség |
+
+A külsős/egyéb szétválasztás azért néz két jelet, mert a Notionból hozott
+soroknál a "Kiadás formája" szabad szöveg volt (bármi lehet benne), a hozzájuk
+kötött EMBER típusa viszont megbízható. Aki még nem kapott kifizetést (nincs
+Kiadás sora), az nem szerepel a külsős részben: ez a ténylegesen KIFIZETETT
+külsős munka ára.
+
+A belsős napidíjnak nincs és nem is lesz Kiadás sora: a belsős alapbér a hónap
+végén, egy tételben megy be (Belsős TIG). Ezért a projektkód költsége és a
+Pénzügyek kiadás-listája nem ugyanaz a szám - és ez nem hiba: a projektnél azt
+akarjuk látni, mibe került VALÓJÁBAN a munka, a kiadásoknál azt, mennyi pénz
+ment ki.
 
 **Visszafelé is jár az út:** egy Kiadás sor akkor is törölhető, ha TIG (vagy
 havi tétel, KP-forgalom) hivatkozik rá. A törlés leoldja a hivatkozásokat, és az

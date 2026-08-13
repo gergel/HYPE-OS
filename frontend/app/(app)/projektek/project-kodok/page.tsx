@@ -160,10 +160,12 @@ export default async function ProjectKodokPage({
                 align: "right",
                 render: (pc) => (
                   <span
-                    title={
-                      "A projektkiadások, az utómunka és a belsősök napidíja - a tételeknél módosítható" +
-                      (pc.belsos_munka_koltseg ? `. Ebből belsős munka: ${formatHuf(pc.belsos_munka_koltseg)}` : "")
-                    }
+                    title={[
+                      `Külsős stáb: ${formatHuf(pc.kulsos_koltseg)}`,
+                      `Vágás (utómunka): ${formatHuf(pc.vagas_koltseg)}`,
+                      `Belsős munkanapok: ${formatHuf(pc.belsos_munka_koltseg)}`,
+                      `Egyéb kiadás: ${formatHuf(pc.egyeb_kiadas)}`,
+                    ].join(" · ")}
                   >
                     {formatHuf(pc.osszes_koltseg)}
                     {pc.belsos_munka_koltseg > 0 && (

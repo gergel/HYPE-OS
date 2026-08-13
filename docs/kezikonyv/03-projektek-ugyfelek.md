@@ -34,9 +34,10 @@ Az összes SAJÁT mező helyben szerkeszthető a listán (projektkód, projekt n
 helyszín, dátum megjegyzés, státusz) - `EditableTableCell` /
 `EditableStatusBadge`, ami a rekord PATCH végpontját hívja. A három pénz-oszlop
 nem: az `bevetel` és az `osszes_koltseg` a backend SZÁMÍTÁSA
-(`models/project_code.py`), a "kiadás" itt a TELJES költség - a
-projektkiadások, az utómunka ÉS a projekten dolgozó belsősök napidíja együtt
-(lásd [07-penzugyek.md](07-penzugyek.md#a-projekt-önköltsége--a-kiadás-lista)).
+(`models/project_code.py`), a "kiadás" itt a TELJES költség - külsős stáb,
+vágás, belsős munkanapok és egyéb kiadás együtt. A négy rész az adatlapon
+külön-külön is látszik ("Mibe került"), a listán az egérrel rámutatva (lásd
+[07-penzugyek.md](07-penzugyek.md#a-projekt-önköltsége--a-kiadás-lista)).
 Ezeket a listán átírni annyit tenne, hogy a szám mást mond, mint a mögötte álló
 tételek; javítani a bevétel-/kiadás-soroknál kell.
 
