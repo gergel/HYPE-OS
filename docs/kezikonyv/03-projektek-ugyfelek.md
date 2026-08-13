@@ -12,13 +12,24 @@ modell: `models/project_code.py`.
 
 A listája nem csak azonosítókat sorol: a kód mellett ott a projekt NEVE (ez
 váltotta le az ügyfél oszlopát - a kódról az ügyfél amúgy is kiderül az
-adatlapon, a munkát viszont a neve azonosítja), mellette
-a helyszín, a dátum alatt a dátum-megjegyzés, a jobb oldalon pedig **bevétel,
-kiadás, profit** - a puszta kódról ránézésre senki nem tudja, melyik munkáról
-van szó, és hogy kijött-e. A `bevetel` és az `osszes_koltseg` a backend
-számítása (`models/project_code.py`); a "kiadás" itt a TELJES költség, tehát a
+adatlapon, a munkát viszont a neve azonosítja), a helyszín, a **dátum
+megjegyzés** ("2 nap", "csúszik") és a jobb oldalon **bevétel, kiadás, profit** -
+a puszta kódról ránézésre senki nem tudja, melyik munkáról van szó, és hogy
+kijött-e.
+
+A dátum oszlopában szándékosan nem a naptári dátum áll: egy projektkód alatt
+több forgatás fut, egyetlen dátum úgysem mondaná meg, mikor volt a munka - a
+megjegyzés viszont igen. A pontos dátum az adatlapon van.
+
+Az összes SAJÁT mező helyben szerkeszthető a listán (projektkód, projekt neve,
+helyszín, dátum megjegyzés, státusz) - `EditableTableCell` /
+`EditableStatusBadge`, ami a rekord PATCH végpontját hívja. A három pénz-oszlop
+nem: az `bevetel` és az `osszes_koltseg` a backend SZÁMÍTÁSA
+(`models/project_code.py`), a "kiadás" itt a TELJES költség, tehát a
 projektkiadások és az utómunka együtt - ugyanaz, amit az adatlap "Összes
-költség (kiadások + utómunka)" néven mutat.
+költség (kiadások + utómunka)" néven mutat. Ezeket a listán átírni annyit
+tenne, hogy a szám mást mond, mint a mögötte álló tételek; javítani a
+bevétel-/kiadás-soroknál kell.
 
 ### A projektkód KÖTÉSE: mi tartozik egy kód alá
 

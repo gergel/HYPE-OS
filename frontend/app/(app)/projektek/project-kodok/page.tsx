@@ -6,7 +6,6 @@ import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
-  formatDate,
   formatHuf,
   getClients,
   getCurrentUser,
@@ -90,27 +89,32 @@ export default async function ProjectKodokPage() {
                 sortAccessor: (pc) => pc.helyszin,
               },
               {
-                // A dátum alatt a hozzá tartozó megjegyzés ("2 nap", "csúszik")
-                // - ez a mező eddig sehol nem látszott a listán.
-                header: "Dátum",
-                render: (pc) => (
-                  <span>
-                    {canEdit ? (
-                      <EditableTableCell patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`} field="datum" value={pc.datum} type="date" />
-                    ) : (
-                      formatDate(pc.datum)
-                    )}
-                    {pc.datum_megjegyzes && (
-                      <span className="mt-0.5 block text-[11.5px] text-text-muted">{pc.datum_megjegyzes}</span>
-                    )}
-                  </span>
-                ),
-                sortAccessor: (pc) => pc.datum,
+                // Nem a naptári dátum, hanem a hozzá tartozó MEGJEGYZÉS
+                // ("2 nap", "csúszik", "több hétvégén") - a projektkód alatt
+                // amúgy is több forgatás fut, egyetlen dátum úgysem mondaná meg,
+                // mikor volt a munka. A pontos dátum az adatlapon van.
+                header: "Dátum megjegyzés",
+                render: (pc) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.projectCode}/${pc.id}`}
+                      field="datum_megjegyzes"
+                      value={pc.datum_megjegyzes}
+                    />
+                  ) : (
+                    (pc.datum_megjegyzes ?? "–")
+                  ),
+                sortAccessor: (pc) => pc.datum_megjegyzes,
               },
+              // A három pénz-oszlop SZÁMÍTOTT, ezért nem szerkeszthető: a
+              // bevétel a bevétel-sorok, a kiadás a projektkiadások és az
+              // utómunka összege (lásd models/project_code.py). Itt átírni őket
+              // annyit tenne, hogy a lista mást mond, mint a mögötte álló
+              // tételek - a számot a tételeknél kell javítani.
               {
                 header: "Bevétel",
                 align: "right",
-                render: (pc) => formatHuf(pc.bevetel),
+                render: (pc) => <span title="A bevétel-sorok összege - a Pénzügyeknél módosítható">{formatHuf(pc.bevetel)}</span>,
                 sortAccessor: (pc) => pc.bevetel,
               },
               {
@@ -119,14 +123,21 @@ export default async function ProjectKodokPage() {
                 // mutat (lásd models/project_code.osszes_koltseg).
                 header: "Kiadás",
                 align: "right",
-                render: (pc) => formatHuf(pc.osszes_koltseg),
+                render: (pc) => (
+                  <span title="A projektkiadások és az utómunka költsége - a tételeknél módosítható">
+                    {formatHuf(pc.osszes_koltseg)}
+                  </span>
+                ),
                 sortAccessor: (pc) => pc.osszes_koltseg,
               },
               {
                 header: "Profit",
                 align: "right",
                 render: (pc) => (
-                  <span className={pc.becsult_profit < 0 ? "text-text-danger" : undefined}>
+                  <span
+                    title="Bevétel mínusz kiadás - számított érték"
+                    className={pc.becsult_profit < 0 ? "text-text-danger" : undefined}
+                  >
                     {formatHuf(pc.becsult_profit)}
                   </span>
                 ),
