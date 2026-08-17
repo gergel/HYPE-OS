@@ -69,6 +69,44 @@ félbevágott futás (a folyamatot kívülről lövi le a platform). Ezért:
 Élesítés előtt érdemes a migrációt éles MÉRETŰ adaton lefuttatni (egy üres
 adatbázisba felvitt pár ezer soron): az üres adatbázison minden gyors.
 
+### Séma-módosítás: ne állj be egy táblazárolás mögé
+
+A másik módja annak, hogy a deploy "csak fusson" percekig hibaüzenet nélkül -
+és ez a gyorsan lefutó módosításokat is érinti, nem csak a lassúakat.
+
+A migráció a konténer INDULÁSAKOR fut (`Dockerfile` CMD: `alembic upgrade head
+&& … uvicorn`), amikor a régi példány még kiszolgálja a forgalmat. Minden
+séma-módosítás (`ADD COLUMN`, `ALTER COLUMN`, index) ACCESS EXCLUSIVE zárolást
+kér a táblára, amit a PostgreSQL csak akkor ad meg, ha épp senki nem olvassa.
+Ha van futó lekérdezés, a DDL beáll a sorba - alapból **korlátlan ideig**. És
+mivel a zárolási sor FIFO, mögé beáll minden további olvasó is: onnantól nemcsak
+a deploy áll, hanem a régi alkalmazás is hibázni kezd azon a táblán.
+
+Ezért:
+
+- Az új séma-módosításokat futtasd a **`app/core/migracio.zarasbiztos_ddl()`**
+  segéddel. Rövid `lock_timeout` mellett próbálkozik, és ha nem kapja meg a
+  zárolást, elengedi (nem tartja fenn a sort), vár, majd újrapróbálja - egy
+  pillanatnyi forgalom így nem akasztja meg a deployt:
+
+  ```python
+  zarasbiztos_ddl(
+      op,
+      lambda: op.add_column("projects", sa.Column("uj", sa.Text())),
+      leiras="projects.uj",
+  )
+  ```
+
+- Valódi hibát (rossz oszlopnév, hiányzó tábla) NEM nyel el: azonnal
+  továbbdobja. Mentőponton belül fut, tehát egy sikertelen próbálkozás nem
+  fekteti meg az egész migrációs tranzakciót.
+- Végső korlátként az `alembic/env.py` a migrációs kapcsolatra beállít egy
+  30 másodperces `lock_timeout`-ot: enélkül ott is korlátlan a várakozás,
+  ahol valaki elfelejtette a segédet használni.
+- Ha a segéd is feladja, a hibaüzenet megmondja a következő lépést: keresd meg
+  a `pg_stat_activity`-ben a tartósan nyitva felejtett ("idle in transaction")
+  kapcsolatot, zárd le, és indítsd újra a deployt.
+
 ## Környezeti változók
 
 A teljes, hiteles lista: `backend/app/core/config.py` (a `Settings` osztály mezői,

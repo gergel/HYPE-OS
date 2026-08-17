@@ -71,6 +71,19 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Biztonsági háló: séma-módosítás SOHA ne várjon korlátlanul egy
+        # táblazárolásra. A migráció a konténer indulásakor fut, amikor a RÉGI
+        # példány még kiszolgál - egy futó lekérdezés mögé beállva a DDL
+        # némán várna, és mögé beállna minden további olvasó is, tehát nemcsak
+        # a deploy állna meg, hanem a régi alkalmazás is hibázni kezdene azon a
+        # táblán. Enélkül ez a deployt percekig "csak fut" állapotban tartotta,
+        # hibaüzenet nélkül.
+        #
+        # Ez csak a végső korlát: az egyes DDL-eket ezen felül újrapróbálkozó
+        # segéddel érdemes futtatni (lásd app/core/migracio.zarasbiztos_ddl),
+        # ami egy pillanatnyi forgalom miatt nem bukik el.
+        if connection.dialect.name == "postgresql":
+            connection.exec_driver_sql("SET lock_timeout = '30s'")
         context.configure(
             connection=connection, target_metadata=target_metadata
         )
