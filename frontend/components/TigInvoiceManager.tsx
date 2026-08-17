@@ -62,21 +62,21 @@ export function TigInvoiceManager({
   } | null>(null);
   // A feltöltés ELŐTT beírt fizetési határidő, számlázó felenként. A számlán
   // ott áll a határidő, tehát abban a pillanatban a kezünkben van, amikor a
-  // fájlt kiválasztjuk - így nem kell külön lépésben visszajönni érte.
+  // fájlt kiválasztjuk - így nem kell külön lépésben visszajönni érte. Enélkül
+  // nem is indul a feltöltés (a backend is elutasítja).
   const [hataridoInput, setHataridoInput] = useState<Record<string, string>>({});
 
   const ready = certificates.filter((c) => c.allapot === readyStatus || c.allapot === "Kihagyva");
 
   /** Egyszerre több kiválasztott fájl is feltölthető - egymás után megy fel,
    * mert minden hívás egy külön számla-sort hoz létre a backenden. */
-  async function uploadInvoices(szamlazo: string, input: HTMLInputElement, files: File[]) {
+  async function uploadInvoices(szamlazo: string, hatarido: string, input: HTMLInputElement, files: File[]) {
     setBusyId(szamlazo);
-    const hatarido = hataridoInput[szamlazo];
     try {
       for (const file of files) {
         const fd = new FormData();
         fd.append("file", file);
-        if (hatarido) fd.append("fizetesi_hatarido", hatarido);
+        fd.append("fizetesi_hatarido", hatarido);
         const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/szamla`, { method: "POST", body: fd });
         if (!res.ok) {
           const detail = await res.json().catch(() => null);
@@ -145,11 +145,15 @@ export function TigInvoiceManager({
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        // A helyi értéket eldobjuk, hogy a mező visszaálljon arra, ami a
+        // szerveren van - különben az elutasított dátum ottmaradna a képernyőn.
+        setHataridoInput(({ [szamlazo]: _eldobott, ...tobbi }) => tobbi);
         return;
       }
       router.refresh();
     } catch (err) {
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+      setHataridoInput(({ [szamlazo]: _eldobott, ...tobbi }) => tobbi);
     }
   }
 
@@ -207,6 +211,9 @@ export function TigInvoiceManager({
               const tovabbiak = (c.tetelek ?? [])
                 .filter((t) => t.employee_id !== c.employee_id)
                 .map((t) => employeeNameById.get(t.employee_id) ?? `#${t.employee_id}`);
+              // Számla csak határidővel tölthető fel: a számlán ott áll, és
+              // utólag már senki nem nyitja ki újra a fájlt érte.
+              const hatarido = hataridoInput[szamlazo] ?? c.fizetesi_hatarido ?? "";
               return (
                 <tr key={c.id} className="border-b border-border align-top last:border-0">
                   <td className="py-3 pr-6">
@@ -270,19 +277,28 @@ export function TigInvoiceManager({
                           </button>
                         </div>
                       ))}
-                      <label className="w-fit cursor-pointer text-[12px] text-text-accent hover:underline">
-                        {busy ? "Feltöltés…" : "+ Számla feltöltése"}
-                        <input
-                          type="file"
-                          multiple
-                          disabled={busy}
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files ?? []);
-                            if (files.length > 0) uploadInvoices(szamlazo, e.target, files);
-                          }}
-                          className="hidden"
-                        />
-                      </label>
+                      {/* Határidő nélkül nincs feltöltés: a fájlválasztó helyén
+                          ilyenkor az áll, mi hiányzik - így nem egy hibaüzenet
+                          után derül ki, hogy a fájl nem ment fel. */}
+                      {hatarido ? (
+                        <label className="w-fit cursor-pointer text-[12px] text-text-accent hover:underline">
+                          {busy ? "Feltöltés…" : "+ Számla feltöltése"}
+                          <input
+                            type="file"
+                            multiple
+                            disabled={busy}
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files ?? []);
+                              if (files.length > 0) uploadInvoices(szamlazo, hatarido, e.target, files);
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      ) : (
+                        <span className="w-fit text-[12px] text-text-muted">
+                          Számla feltöltése: előbb add meg a fizetési határidőt →
+                        </span>
+                      )}
                     </div>
                   </td>
                   {/* A számlán szereplő határidő: a feltöltés előtt beírva
@@ -292,13 +308,20 @@ export function TigInvoiceManager({
                     {c.szamla_kifizetve ? (
                       <span className="whitespace-nowrap text-text-secondary">{c.fizetesi_hatarido ?? "–"}</span>
                     ) : (
-                      <input
-                        type="date"
-                        disabled={busy || !canEdit}
-                        value={hataridoInput[szamlazo] ?? c.fizetesi_hatarido ?? ""}
-                        onChange={(e) => saveHatarido(szamlazo, e.target.value)}
-                        className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[12px] text-text-primary disabled:opacity-50"
-                      />
+                      <>
+                        <input
+                          type="date"
+                          disabled={busy || !canEdit}
+                          value={hatarido}
+                          onChange={(e) => saveHatarido(szamlazo, e.target.value)}
+                          className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[12px] text-text-primary disabled:opacity-50"
+                        />
+                        {!hatarido && (
+                          <span className="mt-0.5 block text-[11px] text-text-muted">
+                            A számla feltöltéséhez kötelező
+                          </span>
+                        )}
+                      </>
                     )}
                     {c.szamla_kifizetve && c.utalas_datuma && (
                       <span className="mt-0.5 block whitespace-nowrap text-[11px] text-text-muted">

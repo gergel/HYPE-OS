@@ -39,9 +39,15 @@ belsősön.
 
 - **Határidő**: a számlán szerepel, tehát akkor van a kezünkben, amikor
   feltöltjük - a külsős TIG számla-feltöltő végpontja ezért egy `Form` mezőben
-  átveszi (`POST …/szamla`), és utólag is állítható (`POST …/hatarido`), mert a
-  fájl gyakran előbb kerül fel, mint ahogy valaki megnézné, mi áll rajta. A
-  belsős TIG-en ez már eddig is a papír űrlapjának a mezője volt.
+  átveszi (`POST …/szamla`), és **kötelező**: enélkül a feltöltés 400-zal
+  elszáll, a felületen pedig elő sem jön a fájlválasztó, amíg a sor
+  dátum-mezője üres. Azért kötelező, mert utólag már senki nem nyitja ki újra a
+  fájlt érte, a tétel pedig határidő nélkül csak "valamikor utalandó"-ként lóg
+  a Pénzügyben. Átírni bármikor lehet (`POST …/hatarido`), **kiüríteni** viszont
+  csak addig, amíg nincs feltöltött számla - különben a kötelező megadást egy
+  lépéssel meg lehetne kerülni. A második, harmadik (rész)számlánál nem kell
+  újra megadni: a TIG-en már ott van. A belsős TIG-en ez a mező eddig is a papír
+  űrlapján volt, alapértéke a következő hónap 20-a.
 - **Utalás napja**: a "Kifizetve jelölés" ablakában adható meg
   (`KifizetesIn.kifizetes_datuma`), alapból a mai nap. Azért kell tudni
   visszadátumozni, mert a jelölés rendszerint napokkal a tényleges utalás után

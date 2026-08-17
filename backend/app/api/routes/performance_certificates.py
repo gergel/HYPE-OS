@@ -1095,15 +1095,23 @@ async def upload_szamla(
     számla feltöltése - ez még nem jelenti a kifizetést, csak a dokumentum
     rögzítését (lásd /szamla-kifizetve a tényleges Pénzügy-be kerüléshez).
 
-    A FIZETÉSI HATÁRIDŐ itt adható meg: az a számlán szerepel, tehát abban a
-    pillanatban van a kezünkben, amikor feltöltjük. Utólag is módosítható
-    (lásd /hatarido).
+    A FIZETÉSI HATÁRIDŐ megadása KÖTELEZŐ: a számlán ott áll, tehát abban a
+    pillanatban a kezünkben van, amikor feltöltjük - utólag viszont senki nem
+    nyitja ki újra a fájlt, és a tétel határidő nélkül csak "valamikor
+    utalandó"-ként lóg a Pénzügyben. Utólag módosítható (lásd /hatarido), és a
+    második, harmadik számlánál már nem kell újra megadni: ha a TIG-en már van
+    határidő, az érvényes marad.
 
     Egy TIG-hez tetszőleges számú számla tölthető fel: minden hívás egy ÚJ
     számla-sort hoz létre (nem írja felül az előzőt) - a storage-kulcs ezért
     tartalmazza a számla id-jét is, különben a második feltöltés felülírná az
     első fájlját (lásd PerformanceCertificateInvoice modell-kommentje)."""
     cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
+    if fizetesi_hatarido is None and cert.fizetesi_hatarido is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Add meg a számla fizetési határidejét - enélkül nem tudjuk, mikorra kell utalni.",
+        )
     filename = file.filename or "szamla"
     content_type = file.content_type or "application/octet-stream"
     invoice = PerformanceCertificateInvoice(
@@ -1125,7 +1133,8 @@ async def upload_szamla(
 
 
 class HataridoIn(BaseModel):
-    """A számla fizetési határideje - üres értékkel törölhető is."""
+    """A számla fizetési határideje. Üres értékkel törölhető, de csak addig,
+    amíg nincs feltöltött számla: onnantól kötelező (lásd upload_szamla)."""
 
     fizetesi_hatarido: date | None = None
 
@@ -1140,10 +1149,18 @@ def set_fizetesi_hatarido(
 ):
     """A fizetési határidő utólagos állítása.
 
-    A feltöltéskor is megadható, de a valóságban gyakran előbb kerül fel a
-    fájl, és csak utána nézi meg valaki, mi áll rajta - ilyenkor ne kelljen a
-    számlát újra feltölteni azért, hogy a dátum bekerüljön."""
+    A feltöltéskor is megadható (ott kötelező is), de elírható - ilyenkor ne
+    kelljen a számlát újra feltölteni azért, hogy a jó dátum kerüljön be.
+
+    KIÜRÍTENI viszont csak addig lehet, amíg nincs feltöltött számla:
+    különben a feltöltéskori kötelező megadást lehetne egy lépéssel
+    megkerülni."""
     cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
+    if payload.fizetesi_hatarido is None and cert.invoices:
+        raise HTTPException(
+            status_code=400,
+            detail="A feltöltött számlához kell fizetési határidő - átírni lehet, kiüríteni nem.",
+        )
     cert.fizetesi_hatarido = payload.fizetesi_hatarido
     db.commit()
     db.refresh(cert)

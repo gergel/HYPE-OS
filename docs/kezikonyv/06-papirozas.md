@@ -257,9 +257,10 @@ oldalról (és a projekt adatlapjáról) mindkettőnél két út van:
 ### A kiküldött TIG után: számla, határidő, kifizetés
 
 A kiküldött TIG-hez tetszőleges számú **számla** tölthető fel
-(`components/TigInvoiceManager.tsx`), és a feltöltés mellett rögtön megadható a
-számlán szereplő **fizetési határidő** is - utólag ugyanott, a sor dátum-mezőjét
-átírva. A "Kifizetve jelölés" ablakában pedig az adható meg, **mikor ment el a
+(`components/TigInvoiceManager.tsx`), de csak úgy, hogy közben megadják a
+számlán szereplő **fizetési határidőt**: amíg a sor dátum-mezője üres, elő sem
+jön a fájlválasztó (és a backend is elutasítja a feltöltést). Utólag ugyanott
+átírható. A "Kifizetve jelölés" ablakában pedig az adható meg, **mikor ment el a
 pénz** (alapból a mai nap, de visszadátumozható). A két dátum a papíron és a
 belőle keletkező Kiadás soron is ott lesz - részletesen lásd
 [07-penzugyek.md](07-penzugyek.md#a-számla-két-dátuma-határidő-és-utalás-napja).
