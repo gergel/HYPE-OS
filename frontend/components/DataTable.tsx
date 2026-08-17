@@ -1,4 +1,4 @@
-import { isValidElement, type ReactNode } from "react";
+import { Fragment, isValidElement, type ReactNode } from "react";
 import { InteractiveTableClient } from "@/components/InteractiveTableClient";
 import type { ColumnKind } from "@/lib/tableFilters";
 
@@ -137,7 +137,14 @@ export function DataTable<T extends { id: number }>({
    * alapértelmezés, lásd RelatedTable. */
   openInModal?: boolean;
 }) {
-  const renderedCells = rows.map((row) => columns.map((col) => col.render(row)));
+  // A cellák TÖMBBEN utaznak a kliens-komponensig, ezért kulcsot kapnak: egy
+  // tömbben álló React-elem kulcs nélkül "Each child in a list should have a
+  // unique key" figyelmeztetést ad a konzolon. Sima szövegnél ez nem látszik,
+  // ezért csak akkor bukkant elő, amikor egy oszlop komponenst renderelt
+  // (állapot-badge, jelzők) - a Fragment mindegyiket lefedi.
+  const renderedCells = rows.map((row) =>
+    columns.map((col, colIndex) => <Fragment key={colIndex}>{col.render(row)}</Fragment>),
+  );
   // A szűrés ARRA fut, AMI A CELLÁBAN LÁTSZIK - ez a szűrő egész működésének
   // alapelve (lásd lib/tableFilters fejléc-kommentje).
   //

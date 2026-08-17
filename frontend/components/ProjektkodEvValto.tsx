@@ -9,10 +9,10 @@ export const PROJEKTKOD_EVEK = [
   { ev: "2026", elotag: "HYPE26" },
 ] as const;
 
-export type ProjektkodEv = (typeof PROJEKTKOD_EVEK)[number]["ev"] | "osszes";
+export type ProjektkodEv = (typeof PROJEKTKOD_EVEK)[number]["ev"] | "osszes" | "teendok";
 
 export function evheztartozik(projektkod: string, ev: ProjektkodEv): boolean {
-  if (ev === "osszes") return true;
+  if (ev === "osszes" || ev === "teendok") return true;
   const elotag = PROJEKTKOD_EVEK.find((e) => e.ev === ev)?.elotag;
   return !!elotag && projektkod.trim().toUpperCase().startsWith(elotag);
 }
@@ -34,6 +34,10 @@ export function ProjektkodEvValto({
   const nezetek: { ev: ProjektkodEv; cimke: string }[] = [
     ...PROJEKTKOD_EVEK.map((e) => ({ ev: e.ev as ProjektkodEv, cimke: e.ev })),
     { ev: "osszes", cimke: "Összes" },
+    // A negyedik nézet nem évre szűr, hanem TEENDŐRE bont: hol nincs még
+    // szerződés, hol hiányzik már csak a TIG, és mit nem fizettek ki. A
+    // többi nézetben ezek elvegyülnek a kész munkák közt.
+    { ev: "teendok", cimke: "Teendők" },
   ];
 
   return (

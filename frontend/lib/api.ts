@@ -55,6 +55,13 @@ export type ProjectCode = {
   vagas_koltseg: number;
   belsos_munka_koltseg: number;
   datum: string | null;
+  /** Hol tart a papírozás és a pénz: kell-e egyáltalán papír, van-e lezárt
+   * eseti szerződés és TIG, megérkezett-e a bevétel (lásd backend
+   * models/project_code.py). */
+  papir_kell: boolean;
+  szerzodes_kesz: boolean;
+  tig_kesz: boolean;
+  bevetel_kifizetve: boolean;
   /** Mire szólt a projekt, hol volt, és mit jegyeztek fel a dátumához. */
   project_nev: string | null;
   helyszin: string | null;

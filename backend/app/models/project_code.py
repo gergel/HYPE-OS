@@ -151,6 +151,53 @@ class ProjectCode(TimestampMixin, Base):
     expenses: Mapped[list["Expense"]] = relationship(back_populates="project_code")
     revenues: Mapped[list["Revenue"]] = relationship(back_populates="project_code")
     deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project_code")
+    #: A megrendelői papírok - CSAK OLVASÁSRA (viewonly): a papírok életét a
+    #: saját végpontjuk intézi (lásd routes/megrendeloi_papirok.py), ide azért
+    #: kellenek, hogy a lista egy lekérdezésből tudja, hol tart a papírozás.
+    megrendeloi_szerzodesek: Mapped[list["MegrendeloiSzerzodes"]] = relationship(viewonly=True)
+    megrendeloi_tigek: Mapped[list["MegrendeloiTig"]] = relationship(viewonly=True)
+
+    # ── Hol tart a papírozás és a pénz? ──────────────────────────────────────
+    #
+    # Ezek a jelzők a listán mutatják meg, MELYIK projekten van már szerződés,
+    # hol van kész TIG, és mi az, amit még nem fizettek ki. A szabály nem itt
+    # dől el: a "kell-e papír" a services/megrendeloi_papir.papirt_igenyel-é,
+    # a "kész-e egy papír" a LEZART_ALLAPOTOK-é - ugyanaz, amit a papír-oldalak
+    # használnak, hogy a lista ne mondhasson mást, mint az adatlap.
+
+    @property
+    def papir_kell(self) -> bool:
+        from app.services.megrendeloi_papir import papirt_igenyel
+
+        return papirt_igenyel(self)
+
+    @staticmethod
+    def _van_kesz_papir(papirok: list) -> bool:
+        from app.models.megrendeloi_papir import LEZART_ALLAPOTOK
+
+        return any(p.allapot in LEZART_ALLAPOTOK for p in papirok)
+
+    @property
+    def szerzodes_kesz(self) -> bool:
+        """Van-e a megrendelővel LEZÁRT eseti szerződés ezen a projektkódon.
+
+        Egy projektkódhoz több papír is tartozhat (társfinanszírozás, elrontott
+        és újrakezdett példány), ezért elég, ha az egyik lezárt."""
+        return self._van_kesz_papir(self.megrendeloi_szerzodesek)
+
+    @property
+    def tig_kesz(self) -> bool:
+        return self._van_kesz_papir(self.megrendeloi_tigek)
+
+    @property
+    def bevetel_kifizetve(self) -> bool:
+        """Megérkezett-e a pénz: van bevétel-sor, és MINDEGYIK ki van fizetve.
+
+        Bevétel-sor nélkül hamis: olyankor nem tudunk pénzről, tehát nem
+        mondhatjuk, hogy megjött. A lista így hozza előre azt is, ahol csak
+        elfelejtették felvezetni."""
+        bevetelek = list(self.revenues)
+        return bool(bevetelek) and all(r.fizetes_datuma is not None for r in bevetelek)
 
     @staticmethod
     def _osszeg(sor: Any) -> float:

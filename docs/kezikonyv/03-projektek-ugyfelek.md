@@ -26,6 +26,24 @@ látszó darabszám pedig a ténylegesen mutatott sorokat számolja. Az "Összes
 azért kell, mert a régebbi (HYPE24-es) és a más kódrendszerű munkák egyik
 évhez sem tartoznak - nélküle láthatatlanok lennének.
 
+A **Papírozás** oszlop három jelzőt mutat, mindig ugyanabban a sorrendben:
+szerződés → TIG → kifizetés (`papir_kell`, `szerzodes_kesz`, `tig_kesz`,
+`bevetel_kifizetve` a `models/project_code.py`-ban). A sorrend maga az
+információ, ezért a jelzők akkor is kint vannak, ha az adott lépés még nem
+aktuális - így egy pillantásból látszik, hol áll a munka. Ahol nincs mit
+papírozni (nem szerződéses munka, vagy papír nélkül elszámolt), ott egyetlen
+jelző áll: a hiányzó papír nem elmaradás. A "kész-e egy papír" szabálya közös
+a papír-oldalakéval (`LEZART_ALLAPOTOK`), hogy a lista ne mondhasson mást,
+mint az adatlap.
+
+A negyedik nézet, a **Teendők**, nem évre szűr, hanem a folyamat szerint
+bontja három blokkra: *nincs még szerződés*, *már csak a TIG hiányzik*, *nincs
+kifizetve*. A blokkok sorrendje a folyamat sorrendje - egy hiányzó szerződést
+nem lehet TIG-gel pótolni. Ugyanaz a projektkód két blokkban is szerepelhet
+(nincs TIG ÉS nincs kifizetve): mindkét teendő él, és mindkét listáról el kell
+tűnnie. A "nincs kifizetve" ott is igaz, ahol egyáltalán nincs bevétel
+felvezetve - bevétel-sor nélkül nem mondhatjuk, hogy megjött a pénz.
+
 A dátum oszlopában szándékosan nem a naptári dátum áll: egy projektkód alatt
 több forgatás fut, egyetlen dátum úgysem mondaná meg, mikor volt a munka - a
 megjegyzés viszont igen. A pontos dátum az adatlapon van.

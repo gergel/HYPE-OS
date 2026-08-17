@@ -69,5 +69,9 @@ router = build_crud_router(
         .selectinload(Project.tig_tetelek)
         .selectinload(PerformanceCertificateTetel.certificate)
         .selectinload(PerformanceCertificate.tetelek),
+        # A papír-állás jelzői (szerzodes_kesz / tig_kesz) a megrendelői
+        # papírokból jönnek - lásd models/project_code.py.
+        selectinload(ProjectCode.megrendeloi_szerzodesek),
+        selectinload(ProjectCode.megrendeloi_tigek),
     ),
 )

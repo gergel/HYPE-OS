@@ -51,6 +51,14 @@ class ProjectCodeRead(ProjectCodeBase):
     vagas_koltseg: float
     belsos_munka_koltseg: float
 
+    #: Hol tart a papírozás és a pénz (lásd models/project_code.py) - a lista
+    #: ebből mutatja, melyik projekten van már szerződés, hol van kész TIG, és
+    #: mit nem fizettek még ki.
+    papir_kell: bool
+    szerzodes_kesz: bool
+    tig_kesz: bool
+    bevetel_kifizetve: bool
+
     # A papírozás kapcsolói (lásd models/project_code.py): van-e szerződés a
     # projekt mögött, illetve papír nélkül számoljuk-e el.
     van_szerzodes: bool = True
