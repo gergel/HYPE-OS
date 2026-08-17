@@ -29,7 +29,12 @@ class ProjectCode(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     projektkod: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
 
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    #: A megrendelő. SZÁNDÉKOSAN opcionális: egy projektkód gyakran korábban
+    #: születik meg (a következő szabad sorszámot lefoglaljuk), mint ahogy
+    #: eldőlne, kinek dolgozunk rajta - a felvételkor ezért nem kérjük.
+    #: Ami rá épül, kezeli a hiányát (lásd services/megrendeloi_papir.py:
+    #: ügyfél nélkül nincs keretszerződés-fedés, tehát eseti szerződés kell).
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"))
     contract_id: Mapped[int | None] = mapped_column(ForeignKey("contracts.id"))
 
     datum: Mapped[date | None] = mapped_column(Date)

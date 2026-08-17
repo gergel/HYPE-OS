@@ -5,8 +5,9 @@ projekthez vagy egy ügyfélhez kapcsolódik.
 
 ## Fogalmak
 
-**Project Code** - a keret, amiben a munkák futnak: egy ügyfélhez tartozó,
-azonosítóval ellátott munkacsomag. Több projekt tartozhat alá.
+**Project Code** - a keret, amiben a munkák futnak: azonosítóval ellátott
+munkacsomag, jellemzően egy ügyfélhez kötve (de ügyfél nélkül is felvehető -
+lásd lentebb). Több projekt tartozhat alá.
 API: `/api/v1/project-codes`, oldal: `/projektek/project-kodok`,
 modell: `models/project_code.py`.
 
@@ -16,6 +17,28 @@ adatlapon, a munkát viszont a neve azonosítja), a helyszín, a **dátum
 megjegyzés** ("2 nap", "csúszik") és a jobb oldalon **bevétel, kiadás, profit** -
 a puszta kódról ránézésre senki nem tudja, melyik munkáról van szó, és hogy
 kijött-e.
+
+A sorrend alapból a **legnagyobb kódtól a legkisebb felé** megy: a friss munkák
+kapják a nagyobb sorszámot, és azokon dolgozik mindenki. A sorszámokat számként
+hasonlítjuk (`localeCompare … {numeric: true}`), tehát a `HYPE26-9` a
+`HYPE26-10` alatt van, nem fölötte. A fejlécre kattintva bármelyik oszlop
+szerint átrendezhető.
+
+### Új projektkód felvétele
+
+A felvevő űrlap három mezőt kér, és mindössze egy kötelező:
+
+- **Projektkód** - előre kitöltve az évszámos előtaggal (`HYPE26-`, 2027-től
+  magától `HYPE27-`), hogy csak a négyjegyű sorszámot kelljen begépelni. Az
+  előtag SEGÍTSÉG, nem kényszer: a mező szabadon átírható (régebbi évre szóló
+  vagy más rendszerű kód is felvehető).
+- **Ügyfél** - nem kötelező. A kódot sokszor előbb foglalják le, mint ahogy
+  eldőlne, kinek a munkája; ilyenkor korábban valaki beírt egy tetszőleges
+  ügyfelet, amit utána senki nem javított ki. Ami az ügyfélre épül, kezeli a
+  hiányát: ügyfél nélkül nincs keretszerződés-fedés, tehát eseti szerződés kell.
+- **Dátum megjegyzés** - SZÖVEG, nem naptári dátum ("2026. május", "két
+  hétvégén"). Egy projektkód alatt több forgatás fut, a pontos napokat úgyis a
+  projektek hordozzák.
 
 A lista **évekre bontva** nyílik: 2025 / 2026 / Összes
 (`components/ProjektkodEvValto.tsx`). Az évet a kód ELŐTAGJA adja

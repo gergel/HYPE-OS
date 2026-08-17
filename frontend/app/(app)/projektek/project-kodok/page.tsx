@@ -95,7 +95,14 @@ export default async function ProjectKodokPage({
     : PROJEKTKOD_EVEK.some((e) => e.ev === idei)
       ? idei
       : "osszes";
-  const sorok = projectCodes.filter((pc) => evheztartozik(pc.projektkod, ev));
+  // A LEGNAGYOBB projektkód áll elöl: a friss munkák nagyobb sorszámot kapnak,
+  // és mindenki ezeken dolgozik - a legrégebbivel kezdeni annyit jelentene,
+  // hogy minden megnyitáskor a lista aljára kell görgetni. A `numeric` a
+  // sorszámokat számként hasonlítja (HYPE26-9 < HYPE26-10), a fejlécre
+  // kattintva természetesen bármelyik oszlop szerint átrendezhető.
+  const kodSzerint = (a: ProjectCode, b: ProjectCode) =>
+    (b.projektkod ?? "").localeCompare(a.projektkod ?? "", "hu", { numeric: true });
+  const sorok = projectCodes.filter((pc) => evheztartozik(pc.projektkod, ev)).sort(kodSzerint);
   // A "Teendők" fülön az számít, HÁNY munkával van dolgunk: minden projektkód,
   // ami még nem jutott el a "kész" fázisig.
   const teendos = projectCodes.filter((pc) => projektkodFazisa(pc) !== "kesz").length;
@@ -239,20 +246,36 @@ export default async function ProjectKodokPage({
     },
   ];
 
+  // A kód eleje mindig ugyanaz az évszámos előtag ("HYPE26-"), csak a négyjegyű
+  // sorszám változik - ezt írjuk be előre, hogy ne kelljen minden felvételnél
+  // nulláról begépelni. Az évszám a mai napból jön (2027-től magától HYPE27-),
+  // és a mező szabadon átírható: egy régebbi évre szóló kód is felvehető.
+  const kodElotag = `HYPE${String(new Date().getFullYear()).slice(2)}-`;
+
   const ujProjektkodUrlap = canCreate ? (
     <QuickCreateForm
       postPath={ENTITY_PATHS.projectCode}
       addLabel="+ Új Project Code hozzáadása"
       fields={[
-        { name: "projektkod", label: "Projektkód", required: true },
+        {
+          name: "projektkod",
+          label: "Projektkód",
+          required: true,
+          defaultValue: kodElotag,
+          placeholder: `${kodElotag}0001`,
+        },
+        // Az ügyfél NEM kötelező: a kódot sokszor előbb foglaljuk le, mint
+        // ahogy eldőlne, kinek a munkája - utólag az adatlapon megadható.
         {
           name: "client_id",
-          label: "Ügyfél",
+          label: "Ügyfél (később is megadható)",
           type: "select",
-          required: true,
           options: clients.map((c) => ({ value: c.id, label: c.nev })),
         },
-        { name: "datum", label: "Dátum", type: "date" },
+        // Nem naptári dátum, hanem SZÖVEG: egy projektkód alatt több forgatás
+        // fut, és a valóságban "2026. május" vagy "két hétvégén" a pontos
+        // válasz - a napokat úgyis a projektek hordozzák.
+        { name: "datum_megjegyzes", label: "Dátum megjegyzés", placeholder: "Pl. 2026. május" },
       ]}
     />
   ) : null;
@@ -269,7 +292,8 @@ export default async function ProjectKodokPage({
         <div className="flex-1 p-8">
           <Card title={`Teendők (${teendos} projektkód)`}>
             <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} />
-            <ProjektkodTeendoTabla rows={projectCodes} />
+            {/* Ugyanaz a sorrend, mint a listán: a legnagyobb kód elöl. */}
+            <ProjektkodTeendoTabla rows={[...projectCodes].sort(kodSzerint)} />
           </Card>
         </div>
       </div>

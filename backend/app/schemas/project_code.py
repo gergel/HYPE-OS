@@ -5,9 +5,15 @@ from pydantic import BaseModel
 
 class ProjectCodeBase(BaseModel):
     projektkod: str
-    client_id: int
+    #: Opcionális: a kód gyakran előbb kell, mint ahogy eldől, kinek a munkája
+    #: (lásd models/project_code.py).
+    client_id: int | None = None
     contract_id: int | None = None
     datum: date | None = None
+    #: A dátum MEGJEGYZÉSE ("2026. május", "két hétvégén") - a felvételkor ezt
+    #: kérjük a naptári dátum helyett, mert egy projektkód alatt több forgatás
+    #: is fut, és a pontos napokat úgyis a projektek hordozzák.
+    datum_megjegyzes: str | None = None
     esemeny_allapota: str | None = None
     penznem: str = "HUF"
     arfolyam: float | None = None
@@ -89,7 +95,6 @@ class ProjectCodeRead(ProjectCodeBase):
     megrendelo_adoszama: str | None = None
     netto_notion: dict | list | float | str | None = None
     helyszin: str | None = None
-    datum_megjegyzes: str | None = None
     szerzodes_plusz_afa: str | None = None
     tig_projektnev: str | None = None
     specialis_eset: str | None = None

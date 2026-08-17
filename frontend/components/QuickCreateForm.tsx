@@ -13,7 +13,18 @@ type FieldSpec = {
   /** "select" típusnál a legördülő opciói - pl. egy foreign key mezőhöz
    * (ügyfél/project code kiválasztása név szerint, ID begépelés helyett). */
   options?: { value: number | string; label: string }[];
+  /** Előre beírt kezdőérték (pl. a projektkód "HYPE26-" előtagja) - a mező
+   * ettől még szabadon átírható. Az űrlap minden megnyitásakor visszaáll rá. */
+  defaultValue?: string;
+  placeholder?: string;
 };
+
+/** A mezők kezdőértékei - az űrlap minden megnyitásakor ezzel indul. */
+function kezdoErtekek(fields: FieldSpec[]): Record<string, string> {
+  return Object.fromEntries(
+    fields.filter((f) => f.defaultValue !== undefined).map((f) => [f.name, f.defaultValue as string]),
+  );
+}
 
 /** Kis inline form egy új, kapcsolódó rekord létrehozásához (pl. egy projekthez új
  * utómunka), a szükséges foreign key-ket előre kitöltve (`presetFields`) küldi -
@@ -33,7 +44,7 @@ export function QuickCreateForm({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, string>>(() => kezdoErtekek(fields));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +75,7 @@ export function QuickCreateForm({
         setError(`Sikertelen: ${detail?.detail ?? res.status}`);
         return;
       }
-      setValues({});
+      setValues(kezdoErtekek(fields));
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -76,7 +87,17 @@ export function QuickCreateForm({
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="mb-2 text-[13px] text-text-accent hover:underline">
+      <button
+        type="button"
+        // Nyitáskor is visszaállunk a kezdőértékekre: egy félbehagyott,
+        // "Mégse"-vel bezárt űrlap után ne a régi gépelés fogadjon.
+        onClick={() => {
+          setValues(kezdoErtekek(fields));
+          setError(null);
+          setOpen(true);
+        }}
+        className="mb-2 text-[13px] text-text-accent hover:underline"
+      >
         {addLabel}
       </button>
     );
@@ -106,6 +127,7 @@ export function QuickCreateForm({
             <input
               type={f.type ?? "text"}
               required={f.required}
+              placeholder={f.placeholder}
               value={values[f.name] ?? ""}
               onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
               className="field"
