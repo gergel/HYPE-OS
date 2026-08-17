@@ -164,6 +164,20 @@ Ezért kell a `ProjectCode` **után** futnia - és ezért futtatható újra
 Ugyanaz a kód fut benne, mint a `c9e4a71b2f08` adatmigrációban, tehát a kettő
 nem csúszhat el (lásd [06-papirozas.md](06-papirozas.md)).
 
+### Egy lépés egyetlen mezőért: a projektkódok neve
+
+A *"Projektkódok: csak a projekt neve"* (`importers_projektnevek.py`) a Notion
+*HYPE ADMIN projektkódok* táblájából egyetlen mezőt hoz át: a **PROJECT NÉV**-et
+a projektkód *Projekt neve* mezőjébe. Fájlokat nem másol, más mezőhöz nem nyúl,
+ezért másodpercek alatt lefut - a teljes projektkód-import ezzel szemben 780
+lapot és a csatolmányaikat is végigjárja.
+
+A kódokat kis/nagybetűtől és szóköztől függetlenül párosítja (ugyanaz a szabály,
+mint a projektkód-kötésnél), a már kitöltött nevet pedig nem írja felül: amit itt
+gépeltek be, az erősebb. A napló kiírja, hányat töltött ki, hányat hagyott
+érintetlenül, és melyik kód nincs meg egyáltalán a rendszerben (azt előbb a
+*Projektkódok* lépés hozza be).
+
 ### Ami már megvan: a meglévő rekord örökbefogadása
 
 Az import a **Notion-lap azonosítója** alapján tudja, melyik rekordot frissítse

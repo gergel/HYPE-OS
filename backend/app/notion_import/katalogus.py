@@ -31,6 +31,7 @@ from app.notion_import import (
     importers_belsos,
     importers_kulsos,
     importers_megrendeloi,
+    importers_projektnevek,
     importers_wave2,
     importers_wave3,
 )
@@ -217,6 +218,19 @@ KATALOGUS: tuple[ImporterInfo, ...] = (
             "ezért a ProjectCode import UTÁN kell futnia."
         ),
         fn=importers_megrendeloi.import_megrendeloi_papirok,
+        fuggosegek=("ProjectCode",),
+    ),
+    ImporterInfo(
+        nev="Projektkód nevek",
+        cimke="Projektkódok: csak a projekt neve",
+        kor=2,
+        forrasok=("HYPE ADMIN projektkódok",),
+        leiras=(
+            "A projektkódok PROJEKT NEVE a Notionból - fájlok és a többi mező nélkül, "
+            "ezért másodpercek alatt lefut. Azt tölti ki, ami itt még üres; amit kézzel "
+            "beírtak, azt nem írja felül."
+        ),
+        fn=importers_projektnevek.import_projektkod_nevek,
         fuggosegek=("ProjectCode",),
     ),
     # ── 3. kör: egyedi logikájú maradék ──────────────────────────────────────
