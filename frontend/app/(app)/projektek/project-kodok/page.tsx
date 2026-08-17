@@ -8,6 +8,7 @@ import {
   ProjektkodEvValto,
   type ProjektkodEv,
 } from "@/components/ProjektkodEvValto";
+import { ProjektkodTeendoTabla } from "@/components/ProjektkodTeendoTabla";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
@@ -22,6 +23,7 @@ import {
   ProjectCode,
 } from "@/lib/api";
 import { canDoAction } from "@/lib/permissions";
+import { projektkodFazisa } from "@/lib/projektkodFazis";
 
 const PAGE = "/projektek/project-kodok";
 
@@ -58,33 +60,6 @@ function papirRang(pc: ProjectCode): number {
   return (pc.szerzodes_kesz ? 1 : 0) + (pc.tig_kesz ? 1 : 0) + (pc.bevetel_kifizetve ? 1 : 0);
 }
 
-/** A három teendő-blokk. A sorrend a folyamat sorrendje: előbb a szerződés,
- * aztán a TIG, végül a pénz - egy hiányzó szerződést nem lehet TIG-gel
- * pótolni, tehát felül az van, amivel kezdeni kell. */
-const TEENDO_BLOKKOK: {
-  cim: string;
-  leiras: string;
-  szures: (pc: ProjectCode) => boolean;
-}[] = [
-  {
-    cim: "Nincs még szerződés",
-    leiras: "Papírt igényel, de eseti szerződés még nincs lezárva rá.",
-    szures: (pc) => pc.papir_kell && !pc.szerzodes_kesz,
-  },
-  {
-    cim: "Már csak a TIG hiányzik",
-    leiras: "A szerződés megvan, a teljesítési igazolás még nem.",
-    szures: (pc) => pc.papir_kell && pc.szerzodes_kesz && !pc.tig_kesz,
-  },
-  {
-    cim: "Nincs kifizetve",
-    leiras:
-      "A papírozás rendben (vagy nem is kell), de a pénz még nem érkezett meg - " +
-      "ide kerül az is, ahol egyáltalán nincs bevétel felvezetve.",
-    szures: (pc) => (!pc.papir_kell || (pc.szerzodes_kesz && pc.tig_kesz)) && !pc.bevetel_kifizetve,
-  },
-];
-
 export default async function ProjectKodokPage({
   searchParams,
 }: {
@@ -115,10 +90,9 @@ export default async function ProjectKodokPage({
       ? idei
       : "osszes";
   const sorok = projectCodes.filter((pc) => evheztartozik(pc.projektkod, ev));
-  // A "Teendők" fülön az számít, HÁNY munkával van dolgunk - egy projektkód
-  // több blokkban is szerepelhet (pl. nincs TIG ÉS nincs kifizetve), ezért
-  // egyszer számoljuk.
-  const teendos = projectCodes.filter((pc) => TEENDO_BLOKKOK.some((b) => b.szures(pc))).length;
+  // A "Teendők" fülön az számít, HÁNY munkával van dolgunk: minden projektkód,
+  // ami még nem jutott el a "kész" fázisig.
+  const teendos = projectCodes.filter((pc) => projektkodFazisa(pc) !== "kesz").length;
   const darabszamok = {
     ...Object.fromEntries(
       PROJEKTKOD_EVEK.map((e) => [e.ev, projectCodes.filter((pc) => evheztartozik(pc.projektkod, e.ev)).length]),
@@ -277,38 +251,20 @@ export default async function ProjectKodokPage({
     />
   ) : null;
 
-  // A TEENDŐK nézet nem egy szűrt lista, hanem három blokk: az elakadás
-  // FAJTÁJA a kérdés, nem az, hogy melyik évben történt. Ugyanaz a projektkód
-  // két blokkban is szerepelhet (nincs TIG és nincs is kifizetve) - ez nem
-  // hiba: mindkét teendő él, és mindkét listáról el kell tűnnie.
+  // A TEENDŐK nézet nem szűrt lista, hanem FÁZIS-OSZLOPOK - ugyanaz a tábla,
+  // mint az Utókövetésen, csak a másik oldalról: ott a mi fizetéseink útját
+  // követi, itt a megrendelő felé menő papírokét és a beérkező pénzét. Egy
+  // projektkód pontosan egy oszlopban áll, a legkorábbi hiányzó lépésnél, így
+  // balról jobbra haladva az látszik, mi a következő teendő rajta.
   if (ev === "teendok") {
     return (
       <div className="flex flex-1 flex-col">
         <TopBar />
-        <div className="flex-1 space-y-6 p-8">
+        <div className="flex-1 p-8">
           <Card title={`Teendők (${teendos} projektkód)`}>
             <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} />
-            <p className="text-[12.5px] text-text-muted">
-              A projektkódok a folyamat szerint szétszedve. Egy sor több blokkban is állhat, ha több teendő van
-              rajta.
-            </p>
+            <ProjektkodTeendoTabla rows={projectCodes} />
           </Card>
-          {TEENDO_BLOKKOK.map((blokk) => {
-            const blokkSorok = projectCodes.filter(blokk.szures);
-            return (
-              <Card key={blokk.cim} title={`${blokk.cim} (${blokkSorok.length})`}>
-                <p className="mb-3 text-[12.5px] text-text-muted">{blokk.leiras}</p>
-                <DataTable<ProjectCode>
-                  rows={blokkSorok}
-                  emptyText="Ebben a fázisban nincs teendő - ez a jó hír."
-                  getHref={(pc) => `/projektek/project-kodok/${pc.id}`}
-                  deleteHref={canDelete ? (pc) => `${ENTITY_PATHS.projectCode}/${pc.id}` : undefined}
-                  filterable
-                  columns={oszlopok}
-                />
-              </Card>
-            );
-          })}
         </div>
       </div>
     );

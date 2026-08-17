@@ -36,13 +36,22 @@ jelző áll: a hiányzó papír nem elmaradás. A "kész-e egy papír" szabálya
 a papír-oldalakéval (`LEZART_ALLAPOTOK`), hogy a lista ne mondhasson mást,
 mint az adatlap.
 
-A negyedik nézet, a **Teendők**, nem évre szűr, hanem a folyamat szerint
-bontja három blokkra: *nincs még szerződés*, *már csak a TIG hiányzik*, *nincs
-kifizetve*. A blokkok sorrendje a folyamat sorrendje - egy hiányzó szerződést
-nem lehet TIG-gel pótolni. Ugyanaz a projektkód két blokkban is szerepelhet
-(nincs TIG ÉS nincs kifizetve): mindkét teendő él, és mindkét listáról el kell
-tűnnie. A "nincs kifizetve" ott is igaz, ahol egyáltalán nincs bevétel
-felvezetve - bevétel-sor nélkül nem mondhatjuk, hogy megjött a pénz.
+A negyedik nézet, a **Teendők**, nem évre szűr, hanem FÁZIS-OSZLOPOKRA bontja
+a projektkódokat - ugyanaz a tábla, mint az Utókövetésen
+([08-utomunka-utokovetes.md](08-utomunka-utokovetes.md)), csak a másik
+oldalról: ott a mi fizetéseink útját követi, itt a megrendelő felé menő
+papírokét és a beérkező pénzét. Négy oszlop: *nincs még szerződés* → *már csak
+a TIG kell* → *nincs kifizetve* → *kész*
+(`lib/projektkodFazis.ts`, `components/ProjektkodTeendoTabla.tsx`).
+
+Egy projektkód PONTOSAN EGY oszlopban áll, a legkorábbi hiányzó lépésnél: így
+balról jobbra haladva az látszik, mi a következő teendő rajta, és nem kell
+ugyanazt a sort több helyen átfutni. Ahol nincs mit papírozni, ott a
+papír-lépések kimaradnak - a pénz viszont ott is megérkezhet. A "nincs
+kifizetve" ott is igaz, ahol egyáltalán nincs bevétel felvezetve: bevétel-sor
+nélkül nem mondhatjuk, hogy megjött a pénz. A kártyán ott a bevétel és a
+profit is, mert a teendő súlyát ez adja: egy hárommilliós kintlévőség máshogy
+sürgős, mint egy harmincezres.
 
 A dátum oszlopában szándékosan nem a naptári dátum áll: egy projektkód alatt
 több forgatás fut, egyetlen dátum úgysem mondaná meg, mikor volt a munka - a
