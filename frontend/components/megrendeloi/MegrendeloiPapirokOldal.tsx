@@ -83,7 +83,19 @@ export async function MegrendeloiPapirokOldal({
                 ),
                 sortAccessor: (p) => p.projektkod,
               },
-              { header: "Megrendelő", render: (p) => p.ceg_neve ?? "–", sortAccessor: (p) => p.ceg_neve },
+              {
+                // A megrendelő NEVE helyett a projekté: a listán a legtöbb sor
+                // ugyanazt az "Ismeretlen ügyfél (Notion import)" nevet vitte,
+                // tehát az oszlop egy fél képernyőt foglalt anélkül, hogy
+                // bármit megkülönböztetett volna. A megrendelő a papíron és a
+                // projektkód adatlapján ott van.
+                //
+                // Először a PAPÍRRA írt projektnév (az kerül a dokumentumra),
+                // ha az üres, a projektkódé.
+                header: "Projekt neve",
+                render: (p) => p.projekt_nev ?? p.projektkod_projekt_nev ?? "–",
+                sortAccessor: (p) => p.projekt_nev ?? p.projektkod_projekt_nev,
+              },
               {
                 header: "Megbízás tárgya",
                 render: (p) => p.megbizas_targya ?? "–",

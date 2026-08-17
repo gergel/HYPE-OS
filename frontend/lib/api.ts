@@ -2284,6 +2284,9 @@ export type MegrendeloiPapir = {
   kihagyas_oka: string | null;
   /** Kiment, de az aláírt példány még nem jött vissza. */
   alairasra_var: boolean;
+  /** A projektkód projektneve - a gyűjtőlista ezt mutatja, ha magára a
+   * papírra nem írtak külön projektnevet. */
+  projektkod_projekt_nev: string | null;
   projektkod: string | null;
 };
 

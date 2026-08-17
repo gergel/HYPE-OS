@@ -106,6 +106,10 @@ class PapirRead(PapirIn):
     #: Kiment, de az aláírt példány még nem jött vissza.
     alairasra_var: bool = False
     projektkod: str | None = None
+    #: A PROJEKTKÓD projektneve - a gyűjtőlista ezt mutatja, ha magára a
+    #: papírra nem írtak külön projektnevet (lásd
+    #: components/megrendeloi/MegrendeloiPapirokOldal.tsx).
+    projektkod_projekt_nev: str | None = None
 
 
 class ElotoltesOut(BaseModel):
@@ -163,6 +167,7 @@ def _kimenet(papir, fajta: str) -> PapirRead:
         kihagyas_oka=papir.kihagyas_oka,
         alairasra_var=papir.allapot == "Kiküldve" and not papir.alairt_file_url,
         projektkod=papir.project_code.projektkod if papir.project_code else None,
+        projektkod_projekt_nev=papir.project_code.project_nev if papir.project_code else None,
     )
 
 
