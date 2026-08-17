@@ -32,6 +32,23 @@ Amit tudni kell:
 
 ## Diszpó kiküldés
 
+### A lista a TEENDŐ napja szerint tagolódik, nem a forgatáséi szerint
+
+A diszpó egy nappal a forgatás előtt készül: **ma a holnapi napot írjuk**. A
+Naptár/Diszpó oldal ezért nem a "mai forgatást" emeli ki, hanem azt, ami ma a
+feladat (`components/NaptarDiszpoContent.tsx`):
+
+| Csoport | Melyik nap forgatása | Miért |
+|---|---|---|
+| **Ma írandó** (kiemelt) | holnapi | ez a mai munka |
+| **Holnap írandó** | holnaputáni | ez jön ezután |
+| **Mai / Tegnapi forgatás** | mai, tegnapi | a diszpójuk már elment - csak akkor kiabálnak (narancs), ha tényleg maradt rajtuk hátra |
+| hétköznap neve | távolabbi | még nem sürgős |
+
+A fejléc első sora ugyanezt mondja számokban: hány diszpó írandó ma, és mennyi a
+lemaradás. A csoportok sorrendje marad időrendi (tegnap → ma → holnap → …),
+csak a kiemelés és a felirat mondja meg, mikor mi a teendő.
+
 `services/dispo.py`. A korábbi Notion-oldali megoldás checkbox + 60 másodperces
 pollozás volt; itt **explicit gombok** vannak: az "Előzetes diszpó" és a "Diszpó
 küldése" gomb megnyomása maga a trigger, nincs állapotgép és nincs pollozás.

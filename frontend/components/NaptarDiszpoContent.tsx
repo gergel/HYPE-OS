@@ -30,15 +30,22 @@ function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-/** Csoport-fejléc színezése: a tegnapi (lemaradásban) narancs, a mai lila
- * (kiemelt), a holnapi kék, a távolabbiak semlegesek - hogy ránézésre látszódjon,
- * melyik nap sürgős. A bal oldali sávot box-shadow rajzolja, nem border: a
- * globals.css réteg nélküli `* { border-color: ... }` szabálya felülírná a
- * Tailwind border-szín osztályait. */
+/** Csoport-fejléc színezése aszerint, hogy MIKOR KELL(ETT VOLNA) MEGÍRNI a
+ * diszpót - nem aszerint, mikor van a forgatás.
+ *
+ * A diszpó egy nappal a forgatás előtt készül: ma a HOLNAPI napot írjuk. A mai
+ * forgatás diszpója tehát tegnap ment ki, ma már nincs rajta teendő - ezért a
+ * kiemelés (lila) a holnapi napé, "Ma írandó" címmel. Ami elmaradt (tegnapi és
+ * mai forgatás diszpó nélkül), az narancs: az a lemaradás.
+ *
+ * A bal oldali sávot box-shadow rajzolja, nem border: a globals.css réteg
+ * nélküli `* { border-color: ... }` szabálya felülírná a Tailwind
+ * border-szín osztályait. */
 const GROUP_TONES = {
-  past: { bg: "bg-bg-orange", title: "text-text-orange", stripe: "shadow-[inset_4px_0_0_0_var(--text-orange)]" },
-  today: { bg: "bg-bg-accent", title: "text-text-accent", stripe: "shadow-[inset_4px_0_0_0_var(--accent-solid)]" },
-  tomorrow: { bg: "bg-bg-blue", title: "text-text-blue", stripe: "shadow-[inset_4px_0_0_0_var(--text-blue)]" },
+  lemaradas: { bg: "bg-bg-orange", title: "text-text-orange", stripe: "shadow-[inset_4px_0_0_0_var(--text-orange)]" },
+  mult: { bg: "bg-surface-3", title: "text-text-secondary", stripe: "shadow-[inset_4px_0_0_0_var(--border)]" },
+  mairando: { bg: "bg-bg-accent", title: "text-text-accent", stripe: "shadow-[inset_4px_0_0_0_var(--accent-solid)]" },
+  holnapirando: { bg: "bg-bg-blue", title: "text-text-blue", stripe: "shadow-[inset_4px_0_0_0_var(--text-blue)]" },
   future: { bg: "bg-surface-3", title: "text-text-primary", stripe: "shadow-[inset_4px_0_0_0_var(--border)]" },
 } as const;
 
@@ -101,13 +108,16 @@ export function NaptarDiszpoContent({
   // adja a helyes sorrendet: tegnap, ma, holnap, majd a további napok.
   const { upcoming, groups } = useMemo(() => {
     const now = new Date();
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-    const todayStr = localISODate(now);
-    const yesterdayStr = localISODate(yesterday);
-    const tomorrowStr = localISODate(tomorrow);
+    const nap = (eltolas: number) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() + eltolas);
+      return localISODate(d);
+    };
+    const yesterdayStr = nap(-1);
+    const todayStr = nap(0);
+    const tomorrowStr = nap(1);
+    // Amit ma írunk, az a HOLNAPI forgatás; a holnaputánit holnap.
+    const holnaputanStr = nap(2);
 
     const upcoming = filtered.filter((p) => (p.forgatas_datuma ?? "").slice(0, 10) >= yesterdayStr);
 
@@ -121,24 +131,43 @@ export function NaptarDiszpoContent({
     const groups = [...buckets.keys()]
       .sort()
       .map((iso) => {
-        const tone: GroupTone =
-          iso === yesterdayStr ? "past" : iso === todayStr ? "today" : iso === tomorrowStr ? "tomorrow" : "future";
-        const title =
-          tone === "past"
-            ? "Tegnapi"
-            : tone === "today"
-              ? "Mai"
-              : tone === "tomorrow"
-                ? "Holnapi"
-                : capitalize(parseISODate(iso).toLocaleDateString("hu-HU", { weekday: "long" }));
         const items = buckets.get(iso)!;
+        const hatra = items.filter((p) => !p.diszpo && !p.nem_diszponalando).length;
+        // A csoportot az alapján soroljuk be, hogy MIKOR KELL MEGÍRNI a
+        // diszpót - a forgatás előtti napon. A mai és a tegnapi forgatás
+        // diszpója tehát már elmúlt feladat: csak akkor kiabál (narancs), ha
+        // tényleg maradt rajta hátra, egyébként semleges.
+        const tone: GroupTone =
+          iso === tomorrowStr
+            ? "mairando"
+            : iso === holnaputanStr
+              ? "holnapirando"
+              : iso <= todayStr
+                ? hatra > 0
+                  ? "lemaradas"
+                  : "mult"
+                : "future";
+        const napNeve = capitalize(parseISODate(iso).toLocaleDateString("hu-HU", { weekday: "long" }));
+        const title =
+          iso === tomorrowStr
+            ? "Ma írandó"
+            : iso === holnaputanStr
+              ? "Holnap írandó"
+              : iso === todayStr
+                ? "Mai forgatás"
+                : iso === yesterdayStr
+                  ? "Tegnapi forgatás"
+                  : napNeve;
         return {
           key: iso,
           tone,
           title,
+          // A cím a TEENDŐ napját mondja meg ("Ma írandó"), a dátum viszont a
+          // forgatásé - ezért az "Ma írandó" mellé kiírjuk, melyik napról szól.
+          alcim: iso === tomorrowStr || iso === holnaputanStr ? `${napNeve}i forgatás` : null,
           dateLabel: parseISODate(iso).toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" }),
           projects: items,
-          pending: items.filter((p) => !p.diszpo && !p.nem_diszponalando).length,
+          pending: hatra,
           meetings: items.filter((p) => p.nem_diszponalando).length,
         };
       });
@@ -153,12 +182,26 @@ export function NaptarDiszpoContent({
   const meetingek = upcoming.length - diszponalando.length;
   const elozetesKuldve = diszponalando.filter((p) => p.elozetes_diszpo_kuldes).length;
   const teljesKuldve = diszponalando.filter((p) => p.diszpo).length;
+  // A MAI TEENDŐ: a holnapi forgatások diszpója (és ami korábbról elmaradt) -
+  // ez a szám az, amiért valaki ezt az oldalt megnyitja.
+  const maIrando = groups.find((g) => g.tone === "mairando")?.pending ?? 0;
+  const lemaradas = groups
+    .filter((g) => g.tone === "lemaradas")
+    .reduce((osszeg, g) => osszeg + g.pending, 0);
 
   return (
     <Card title={`Naptár / Diszpó (${diszponalando.length} forgatás)`}>
+      {/* A diszpó egy nappal a forgatás előtt készül: ma a HOLNAPI napot írjuk.
+          Ezért ez a szám áll elöl, nem az összes hátralévő. */}
+      <p className="mb-1 text-[13px] text-text-primary">
+        <strong>{maIrando} diszpó írandó ma</strong> (a holnapi forgatásokra)
+        {lemaradas > 0 && (
+          <span className="text-text-orange"> · {lemaradas} lemaradás (mai vagy tegnapi forgatás)</span>
+        )}
+      </p>
       <p className="mb-3 text-[13px] text-text-secondary">
         {elozetesKuldve} előzetes diszpó elküldve · {teljesKuldve} teljes diszpó kiküldve ·{" "}
-        {diszponalando.length - teljesKuldve} még hátra van
+        {diszponalando.length - teljesKuldve} még hátra van összesen
         {meetingek > 0 && ` · ${meetingek} meeting (nem diszponálandó)`}
       </p>
 
@@ -205,6 +248,7 @@ export function NaptarDiszpoContent({
                 <section key={group.key} className="overflow-hidden rounded-[var(--radius-lg)] border border-border">
                   <div className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 ${tone.bg} ${tone.stripe}`}>
                     <span className={`text-[15px] font-semibold ${tone.title}`}>{group.title}</span>
+                    {group.alcim && <span className="text-[12px] text-text-secondary">({group.alcim})</span>}
                     <span className="text-[12px] text-text-secondary">{group.dateLabel}</span>
                     <span className="ml-auto text-[12px] text-text-muted">
                       {group.projects.length - group.meetings} forgatás
