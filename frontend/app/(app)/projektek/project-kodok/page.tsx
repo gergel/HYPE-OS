@@ -40,9 +40,13 @@ function papirJelzo(pc: ProjectCode) {
   if (!pc.papir_kell) return <StatusBadge label="Nem kell papír" tone="neutral" />;
   return (
     <span className="flex flex-wrap justify-end gap-1">
+      {/* Keretszerződés alatt nincs eseti szerződés-teendő - de azt is ki kell
+          írni, MIÉRT nincs, különben az üres hely tűnik hiánynak. */}
       <StatusBadge
-        label={pc.szerzodes_kesz ? "Szerződés megvan" : "Nincs szerződés"}
-        tone={pc.szerzodes_kesz ? "success" : "warning"}
+        label={
+          !pc.szerzodes_kell ? "Keretszerződés alatt" : pc.szerzodes_kesz ? "Szerződés megvan" : "Nincs szerződés"
+        }
+        tone={!pc.szerzodes_kell || pc.szerzodes_kesz ? "success" : "warning"}
       />
       <StatusBadge label={pc.tig_kesz ? "TIG kész" : "Nincs TIG"} tone={pc.tig_kesz ? "success" : "warning"} />
       <StatusBadge
@@ -57,7 +61,9 @@ function papirJelzo(pc: ProjectCode) {
  * kerüljenek egymás mellé. */
 function papirRang(pc: ProjectCode): number {
   if (!pc.papir_kell) return 4;
-  return (pc.szerzodes_kesz ? 1 : 0) + (pc.tig_kesz ? 1 : 0) + (pc.bevetel_kifizetve ? 1 : 0);
+  return (
+    (!pc.szerzodes_kell || pc.szerzodes_kesz ? 1 : 0) + (pc.tig_kesz ? 1 : 0) + (pc.bevetel_kifizetve ? 1 : 0)
+  );
 }
 
 export default async function ProjectKodokPage({

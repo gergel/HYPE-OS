@@ -2,6 +2,8 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
+from app.models.client import Client
+from app.models.contract import Contract
 from app.models.finance import Expense
 from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
 from app.models.project import Project
@@ -70,8 +72,10 @@ router = build_crud_router(
         .selectinload(PerformanceCertificateTetel.certificate)
         .selectinload(PerformanceCertificate.tetelek),
         # A papír-állás jelzői (szerzodes_kesz / tig_kesz) a megrendelői
-        # papírokból jönnek - lásd models/project_code.py.
+        # papírokból jönnek, a keret-fedés pedig az ügyfél keretszerződéseinek
+        # érvényességi időszakaiból - lásd models/project_code.py.
         selectinload(ProjectCode.megrendeloi_szerzodesek),
         selectinload(ProjectCode.megrendeloi_tigek),
+        selectinload(ProjectCode.client).selectinload(Client.contracts).selectinload(Contract.idoszakok),
     ),
 )

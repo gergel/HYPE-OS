@@ -178,12 +178,31 @@ class ProjectCode(TimestampMixin, Base):
         return any(p.allapot in LEZART_ALLAPOTOK for p in papirok)
 
     @property
+    def keret_fedi(self) -> bool:
+        """Fedi-e a munkát ÉLŐ megrendelői keretszerződés.
+
+        Ha igen, eseti szerződés nem kell - a keret pont azért van, hogy ne
+        kelljen munkánként újraszerződni. A TIG-et viszont nem váltja ki: az
+        arról szól, hogy egy konkrét munka elkészült. Ugyanez a szabály az
+        alvállalkozói oldalon is."""
+        from app.services.megrendeloi_papir import megrendeloi_keret_ervenyes
+
+        if self.client is None:
+            return False
+        return any(megrendeloi_keret_ervenyes(c, self.datum) for c in self.client.contracts)
+
+    @property
     def szerzodes_kesz(self) -> bool:
         """Van-e a megrendelővel LEZÁRT eseti szerződés ezen a projektkódon.
 
         Egy projektkódhoz több papír is tartozhat (társfinanszírozás, elrontott
         és újrakezdett példány), ezért elég, ha az egyik lezárt."""
         return self._van_kesz_papir(self.megrendeloi_szerzodesek)
+
+    @property
+    def szerzodes_kell(self) -> bool:
+        """Kell-e egyedi (eseti) szerződés: keret alatt nem."""
+        return self.papir_kell and not self.keret_fedi
 
     @property
     def tig_kesz(self) -> bool:

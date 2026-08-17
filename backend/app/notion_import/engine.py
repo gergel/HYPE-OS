@@ -44,6 +44,12 @@ class ImportResult:
     # projektkódok). Ez sem hiba, de a naplóból látszania kell, mert egy
     # ismételt futásnál épp az a jó jel, ha már nulla.
     bekotott_kapcsolatok: int = 0
+    # ÖSSZEVETÉS a Notionnal: hány KÉSZ papírt látott a forrásban, és ebből
+    # hányat nem sikerült ideköti. A kettő különbsége az, ami miatt a rendszer
+    # még mindig hiányzónak mutat egy papírt, ami a Notionban megvan - ezért
+    # kell külön számolni, nem elveszni a "kihagyva" összegben.
+    notion_kesz_tig: int = 0
+    hianyzo_kesz_tig: int = 0
 
     def __str__(self) -> str:
         summary = f"{self.entity_type}: {self.created} új, {self.updated} frissítve, {self.skipped} kihagyva"
@@ -55,6 +61,11 @@ class ImportResult:
             summary += f", {self.files_copied} fájl átemelve"
         if self.bekotott_kapcsolatok:
             summary += f", {self.bekotott_kapcsolatok} kapcsolat bekötve"
+        if self.notion_kesz_tig or self.hianyzo_kesz_tig:
+            summary += (
+                f"; Notionban kész TIG: {self.notion_kesz_tig + self.hianyzo_kesz_tig}, "
+                f"ebből ide nem köthető: {self.hianyzo_kesz_tig}"
+            )
         if self.errors:
             summary += f", {len(self.errors)} hiba"
         if self.file_errors:

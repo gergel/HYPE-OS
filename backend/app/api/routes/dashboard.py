@@ -307,7 +307,9 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
         # a papír, hanem nincs is neki helye.
         if not allas.kell_papir:
             continue
-        if not allas.szerzodes_kesz:
+        # Élő keretszerződés alatt nincs eseti szerződés-teendő: a keret fedi a
+        # munkát (lásd services/megrendeloi_papir.PapirAllas.szerzodes_kell).
+        if allas.szerzodes_kell and not allas.szerzodes_kesz:
             items.append(
                 MyTaskItem(
                     id=pc.id,

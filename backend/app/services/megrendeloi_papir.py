@@ -215,10 +215,29 @@ class PapirAllas:
     kell_papir: bool
     szerzodes: MegrendeloiSzerzodes | None
     tig: MegrendeloiTig | None
+    #: Fedi-e a munkát ÉLŐ megrendelői keretszerződés. Ha igen, eseti szerződés
+    #: nem kell - a keret megmondja, milyen feltételekkel dolgozunk együtt.
+    keret_fedi: bool = False
 
     @property
     def szerzodes_kesz(self) -> bool:
         return self.szerzodes is not None and self.szerzodes.allapot in LEZART_ALLAPOTOK
+
+    @property
+    def szerzodes_kell(self) -> bool:
+        """Kell-e EGYEDI (eseti) szerződés erre a projektkódra.
+
+        Élő keretszerződés alatt nem: a keret pont azért van, hogy ne kelljen
+        munkánként újraszerződni. A TIG-et viszont NEM váltja ki - a keret
+        arról szól, milyen feltételekkel dolgozunk együtt, a TIG arról, hogy
+        egy konkrét munka elkészült. Ugyanez a szabály az alvállalkozói
+        oldalon is (lásd routes/subcontractor_contracts.py)."""
+        return self.kell_papir and not self.keret_fedi
+
+    @property
+    def szerzodes_rendben(self) -> bool:
+        """A szerződés-lépés le van zárva: vagy van papír, vagy keret fedi."""
+        return not self.szerzodes_kell or self.szerzodes_kesz
 
     @property
     def tig_kesz(self) -> bool:
@@ -227,7 +246,7 @@ class PapirAllas:
     @property
     def kesz(self) -> bool:
         """Nincs több teendő ezen a projektkódon."""
-        return not self.kell_papir or (self.szerzodes_kesz and self.tig_kesz)
+        return not self.kell_papir or (self.szerzodes_rendben and self.tig_kesz)
 
     @property
     def alairasra_var(self) -> bool:
@@ -252,7 +271,12 @@ def papir_allas(db: Session, project_code: ProjectCode) -> PapirAllas:
         .where(MegrendeloiTig.project_code_id == project_code.id)
         .order_by(MegrendeloiTig.id.desc())
     ).first()
-    return PapirAllas(kell_papir=papirt_igenyel(project_code), szerzodes=szerzodes, tig=tig)
+    return PapirAllas(
+        kell_papir=papirt_igenyel(project_code),
+        szerzodes=szerzodes,
+        tig=tig,
+        keret_fedi=keretszerzodes_fedi(db, project_code.client_id, project_code.datum) is not None,
+    )
 
 
 def papir_allasok(db: Session, project_codes: list[ProjectCode]) -> dict[int, PapirAllas]:
@@ -276,11 +300,30 @@ def papir_allasok(db: Session, project_codes: list[ProjectCode]) -> dict[int, Pa
 
     szerzodesek = legutobbi(MegrendeloiSzerzodes)
     tigek = legutobbi(MegrendeloiTig)
+
+    # A keretszerződések ügyfelenként, EGY lekérdezésből: enélkül a keret-fedés
+    # ellenőrzése projektkódonként külön kör lenne (a papir_allas() egyesével
+    # nézi, itt épp azt kerüljük el).
+    ugyfel_idk = {pk.client_id for pk in project_codes if pk.client_id is not None}
+    keretek: dict[int, list[Contract]] = {}
+    if ugyfel_idk:
+        for c in db.scalars(
+            select(Contract).where(
+                Contract.tipus == ContractType.KERETSZERZODES,
+                Contract.client_id.in_(ugyfel_idk),
+            )
+        ):
+            keretek.setdefault(c.client_id, []).append(c)
+
+    def fedi(pk: ProjectCode) -> bool:
+        return any(megrendeloi_keret_ervenyes(c, pk.datum) for c in keretek.get(pk.client_id, []))
+
     return {
         pk.id: PapirAllas(
             kell_papir=papirt_igenyel(pk),
             szerzodes=szerzodesek.get(pk.id),
             tig=tigek.get(pk.id),
+            keret_fedi=fedi(pk),
         )
         for pk in project_codes
     }

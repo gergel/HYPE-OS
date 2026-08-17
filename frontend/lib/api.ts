@@ -59,6 +59,10 @@ export type ProjectCode = {
    * eseti szerződés és TIG, megérkezett-e a bevétel (lásd backend
    * models/project_code.py). */
   papir_kell: boolean;
+  /** Fedi-e élő megrendelői keretszerződés: ilyenkor eseti szerződés nem
+   * kell, csak TIG. */
+  keret_fedi: boolean;
+  szerzodes_kell: boolean;
   szerzodes_kesz: boolean;
   tig_kesz: boolean;
   bevetel_kifizetve: boolean;

@@ -164,6 +164,33 @@ Ezért kell a `ProjectCode` **után** futnia - és ezért futtatható újra
 Ugyanaz a kód fut benne, mint a `c9e4a71b2f08` adatmigrációban, tehát a kettő
 nem csúszhat el (lásd [06-papirozas.md](06-papirozas.md)).
 
+### A külsős TIG-ek összevetése a Notionnal
+
+A Notion *"Külsős"* táblájában soronként egy (ember, forgatás) pár áll, rajta az
+eseti szerződés és a TIG állapota. Az import (`importers_kulsos.py`) csak azokat
+veszi át, ahol a papír a Notion szerint elkészült - de a rendszer csak akkor
+tudja "megvan"-nak látni, ha a sort ide is tudja kötni. Két dolog rontotta el
+ezt, és mindkettő ugyanúgy nézett ki a felületen: "hiányzik a TIG", pedig a
+Notionban ott van, feltöltve.
+
+1. **Nem volt meg a forgatás.** Ha a "Forgatás" relation üres (vagy a
+   hivatkozott sor nem jött át), a papír kimaradt. Mostantól a PROJEKTKÓD is
+   elvezet hozzá: a relation vagy a szöveges kód alapján megkeressük a
+   projektkódot, és ha alatta egyetlen forgatás van, az a papíré; ha több, a
+   "Forgatás dátuma" dönt. Ha az sem választja szét őket, inkább nem tippelünk
+   - a rossz projektre könyvelt papír rosszabb, mint a hiányzó.
+2. **Nem volt TÉTELE az importált TIG-nek.** A "hiányzik-e még TIG" kérdésre a
+   tételek válaszolnak, ha az illetőt MÁS számlázza (lásd
+   `_csoport_fedve`) - tétel nélkül a rendszer újra kérte a papírt. Az import
+   mostantól minden futásnál pótolja a hiányzó tételt, nem csak az újonnan
+   létrehozott TIG-eknél.
+
+Az import naplója külön kiírja, hány KÉSZ TIG-et látott a Notionban és ebből
+mennyit nem sikerült ide kötni (`ImportResult.notion_kesz_tig` /
+`hianyzo_kesz_tig`) - a kettő különbsége pontosan az, ami miatt a felület még
+mindig hiányt mutathat, a hozzá tartozó sorok pedig a hibalistában
+azonosíthatók.
+
 Külön ügy a portál Notion-szinkronja (`PORTAL_NOTION_*`,
 `services/portal_notion.py`) - az **másik** adatbázis, lásd
 [09-media-portal.md](09-media-portal.md).

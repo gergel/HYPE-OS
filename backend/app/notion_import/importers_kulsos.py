@@ -65,6 +65,51 @@ def _mezo_lista(props: dict, *nevek: str) -> list[str]:
     return []
 
 
+#: A PROJEKTKÓD relation és szöveges mezője - a forgatás másodlagos azonosítói.
+PROJEKTKOD_MEZOK = ("HYPE ADMIN projektkódok", "HYPE ADMIN projektkódok ")
+
+
+def _projekt_azonositasa(db: Session, props: dict) -> int | None:
+    """Melyik forgatásra szól ez a papír?
+
+    Elsősorban a "Forgatás" relation mondja meg. Ha az üres (vagy a
+    hivatkozott sor nem jött át), a PROJEKTKÓDBÓL is ki lehet találni: a
+    papíron ott a kód relationként és szövegként is, a kód alatt pedig ott
+    vannak a forgatások.
+
+    Ez azért kell, mert a sor kihagyása nem semleges: attól a rendszer úgy
+    mutatja, mintha a TIG még hátra lenne - pedig a Notionban ott van, kész.
+    Ha a kód alatt TÖBB forgatás fut, a "Forgatás dátuma" dönt; ha az sem
+    választja szét őket, inkább nem tippelünk (a rossz projektre könyvelt
+    papír rosszabb, mint a hiányzó)."""
+    from app.models.project import Project
+    from app.services import projektkod_kotes
+
+    project_id = resolve_relation_id(db, "Project", _mezo_lista(props, *FORGATAS_MEZOK))
+    if project_id is not None:
+        return project_id
+
+    kod_id = resolve_relation_id(db, "ProjectCode", _mezo_lista(props, *PROJEKTKOD_MEZOK))
+    if kod_id is None:
+        kod = projektkod_kotes.keresd(db, _szoveg_mezo(props, "Projektkód"))
+        kod_id = kod.id if kod else None
+    if kod_id is None:
+        return None
+
+    projektek = list(db.scalars(select(Project).where(Project.project_code_id == kod_id)))
+    if not projektek:
+        return None
+    if len(projektek) == 1:
+        return projektek[0].id
+
+    nap = as_date(_szoveg_mezo(props, "Forgatás dátuma"))
+    egyezo = [p for p in projektek if nap is not None and p.forgatas_datuma == nap]
+    if len(egyezo) == 1:
+        return egyezo[0].id
+    # Több forgatás, nincs eldöntő dátum: nem tippelünk.
+    return None
+
+
 def _plusz_afa(ertek) -> bool | None:
     """A Notionban select mező ("+ ÁFA" / "+ÁFA"), nálunk boolean."""
     if ertek in (None, "", []):
@@ -200,17 +245,21 @@ def _tig_importalasa(
             tig = PerformanceCertificate(project_id=project_id, employee_id=employee_id)
             db.add(tig)
         db.flush()
-        # A TIG a TÉTELEIN keresztül mondja meg, kinek a munkáját igazolja
-        # (lásd models/performance_certificate.py). A Notionből jövő sor
-        # egytételes: a saját projektjén a saját emberét fedi.
-        if not tig.tetelek:
-            tig.tetelek.append(PerformanceCertificateTetel(project_id=project_id, employee_id=employee_id))
-            db.flush()
         _jegyezd_fel(db, kulcs, "PerformanceCertificate", tig.id)
         result.created += 1 if uj else 0
         result.updated += 0 if uj else 1
     else:
         result.updated += 1
+
+    # A TIG a TÉTELEIN keresztül mondja meg, KINEK a munkáját igazolja (lásd
+    # models/performance_certificate.py), és a "hiányzik-e még TIG" kérdésre is
+    # ezek válaszolnak, ha az illetőt MÁS számlázza (lásd
+    # routes/performance_certificates._csoport_fedve). Tétel nélkül tehát a
+    # rendszer akkor is kérné a papírt, amikor az már megvan - ezért minden
+    # futásnál ellenőrizzük, nem csak a most létrehozott TIG-eknél.
+    if not any(t.project_id == project_id and t.employee_id == employee_id for t in tig.tetelek):
+        tig.tetelek.append(PerformanceCertificateTetel(project_id=project_id, employee_id=employee_id))
+        db.flush()
 
     _kiegeszit(
         tig,
@@ -246,15 +295,22 @@ def import_kulsos_papirok(client: NotionClient, db: Session) -> ImportResult:
     for page in client.query_database(db_ids.KULSOS):
         props = extract_properties(page, client)
         employee_id = resolve_relation_id(db, "Employee", _mezo_lista(props, *EMBER_MEZOK))
-        project_id = resolve_relation_id(db, "Project", _mezo_lista(props, *FORGATAS_MEZOK))
+        project_id = _projekt_azonositasa(db, props)
         if employee_id is None or project_id is None:
             result.skipped += 1
+            # A KÉSZ papírok kimaradása a fájdalmas: azoknál a rendszer úgy
+            # mutatja, mintha a teendő még hátra lenne. Ezért a napló külön
+            # kiírja, MI hiányzott - abból látszik, mit kell előbb importálni.
+            if _text(props.get("Állapot")) in TIG_KESZ:
+                result.hianyzo_kesz_tig += 1
             hiany = "munkatárs" if employee_id is None else "forgatás"
             result.errors.append(
                 f"Külsős papír '{_text(props.get('Név')) or page['id']}': nem azonosítható a {hiany} - "
                 "a sor kimarad, mert nincs mihez kötni."
             )
             continue
+        if _text(props.get("Állapot")) in TIG_KESZ:
+            result.notion_kesz_tig += 1
         try:
             with db.begin_nested():
                 _szerzodes_importalasa(db, result, page, props, project_id, employee_id)

@@ -366,6 +366,13 @@ Az **élő** megrendelői keretszerződés kiváltja az eseti szerződést, a TI
 **nem**: a keret arról szól, milyen feltételekkel dolgozunk együtt, a TIG arról,
 hogy egy konkrét munka elkészült.
 
+Ez a szabály egy helyen él (`PapirAllas.szerzodes_kell`), és MINDENHOL ez
+számít: a dashboard teendői, a projektkód-lista papírozás-jelzői és a Teendők
+oszlopai is innen tudják, hogy egy keretes megrendelőnél nem hiányzik az eseti
+szerződés - csak a TIG. Korábban a felület a papír puszta hiányát nézte, ezért
+a keret alatt futó munkákat is szerződés-teendőként hozta fel. Ugyanez a
+szabály az alvállalkozói oldalon már megvolt (lásd fent).
+
 Az érvényesség saját függvényt kapott (`megrendeloi_keret_ervenyes()`), mert a
 `models/contract.keretszerzodes_ervenyes()` az alvállalkozói oldalé: ott a
 `keretszerzodes` jelölő különbözteti meg a keretet az esetitől, ezért
