@@ -254,6 +254,16 @@ oldalról (és a projekt adatlapjáról) mindkettőnél két út van:
   és olyan szerződést sem, amihez a projekten már készült TIG - előbb a TIG-et
   kell törölni, hogy a fázisok ne csússzanak egymásba.
 
+### A kiküldött TIG után: számla, határidő, kifizetés
+
+A kiküldött TIG-hez tetszőleges számú **számla** tölthető fel
+(`components/TigInvoiceManager.tsx`), és a feltöltés mellett rögtön megadható a
+számlán szereplő **fizetési határidő** is - utólag ugyanott, a sor dátum-mezőjét
+átírva. A "Kifizetve jelölés" ablakában pedig az adható meg, **mikor ment el a
+pénz** (alapból a mai nap, de visszadátumozható). A két dátum a papíron és a
+belőle keletkező Kiadás soron is ott lesz - részletesen lásd
+[07-penzugyek.md](07-penzugyek.md#a-számla-két-dátuma-határidő-és-utalás-napja).
+
 ### Kiküldés előtti áttekintő
 
 Szerződésnél és TIG-nél (külsősnél és belsősnél egyaránt) a "Generálás és

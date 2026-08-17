@@ -833,6 +833,10 @@ export type PerformanceCertificate = {
   brutto_osszeg: number | null;
   /** Egy TIG-hez több számla is tartozhat, egyenként törölhetően. */
   invoices: PerformanceCertificateInvoice[];
+  /** A számla két dátuma: meddig kell fizetni (a feltöltéskor adjuk meg), és
+   * mikor utaltuk el ténylegesen (a kifizetve jelöléskor). */
+  fizetesi_hatarido: string | null;
+  utalas_datuma: string | null;
   szamla_kifizetve: boolean;
   expense_id: number | null;
 };

@@ -49,6 +49,10 @@ class PerformanceCertificateRead(BaseModel):
     keltezes: date | None = None
     email: str | None = None
     invoices: list[PerformanceCertificateInvoiceRead] = []
+    #: A pénz útja: meddig kell fizetni, és mikor utaltuk el (lásd
+    #: models/performance_certificate.py).
+    fizetesi_hatarido: date | None = None
+    utalas_datuma: date | None = None
     szamla_kifizetve: bool = False
     expense_id: int | None = None
     created_at: datetime

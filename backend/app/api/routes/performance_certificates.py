@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import tuple_
 from sqlalchemy.orm import Session, selectinload
@@ -1087,12 +1087,17 @@ async def upload_szamla(
     project_id: int,
     szamlazo_kulcs: str,
     file: UploadFile = File(...),
+    fizetesi_hatarido: date | None = Form(default=None),
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
     """A kiküldött TIG-hez tartozó (külső számlázási rendszerben kiállított)
     számla feltöltése - ez még nem jelenti a kifizetést, csak a dokumentum
     rögzítését (lásd /szamla-kifizetve a tényleges Pénzügy-be kerüléshez).
+
+    A FIZETÉSI HATÁRIDŐ itt adható meg: az a számlán szerepel, tehát abban a
+    pillanatban van a kezünkben, amikor feltöltjük. Utólag is módosítható
+    (lásd /hatarido).
 
     Egy TIG-hez tetszőleges számú számla tölthető fel: minden hívás egy ÚJ
     számla-sort hoz létre (nem írja felül az előzőt) - a storage-kulcs ezért
@@ -1112,6 +1117,34 @@ async def upload_szamla(
     url = document_storage.upload_bytes(data, key, content_type)
     invoice.storage_key = key
     invoice.url = url
+    if fizetesi_hatarido is not None:
+        cert.fizetesi_hatarido = fizetesi_hatarido
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
+class HataridoIn(BaseModel):
+    """A számla fizetési határideje - üres értékkel törölhető is."""
+
+    fizetesi_hatarido: date | None = None
+
+
+@router.post("/{project_id}/{szamlazo_kulcs}/hatarido", response_model=PerformanceCertificateRead)
+def set_fizetesi_hatarido(
+    project_id: int,
+    szamlazo_kulcs: str,
+    payload: HataridoIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A fizetési határidő utólagos állítása.
+
+    A feltöltéskor is megadható, de a valóságban gyakran előbb kerül fel a
+    fájl, és csak utána nézi meg valaki, mi áll rajta - ilyenkor ne kelljen a
+    számlát újra feltölteni azért, hogy a dátum bekerüljön."""
+    cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
+    cert.fizetesi_hatarido = payload.fizetesi_hatarido
     db.commit()
     db.refresh(cert)
     return PerformanceCertificateRead.model_validate(cert)
@@ -1153,10 +1186,17 @@ def mark_szamla_kifizetve(
     költség a helyes projekthez kapcsolódjon (lásd spec 2.1).
 
     `kiadasba_kerul=false` esetén CSAK a papír állapotát jelöljük: a kifizetés
-    megtörtént, de máshol van elszámolva (lásd KifizetesIn)."""
+    megtörtént, de máshol van elszámolva (lásd KifizetesIn).
+
+    Az UTALÁS DÁTUMA a `kifizetes_datuma` mezőből jön - üresen a mai nap. A
+    jelölés ugyanis gyakran csak napokkal a tényleges utalás után történik meg,
+    és akkor a pénzügyi kimutatásban rossz napra kerülne a tétel."""
     cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
     if not cert.invoices:
         raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
+
+    utalas = (payload.kifizetes_datuma if payload is not None else None) or date.today()
+    cert.utalas_datuma = utalas
 
     if payload is not None and not payload.kiadasba_kerul:
         cert.szamla_kifizetve = True
@@ -1206,7 +1246,12 @@ def mark_szamla_kifizetve(
         expense.brutto = brutto
 
     expense.kesz = True
-    expense.fizetes_datuma = date.today()
+    expense.fizetes_datuma = utalas
+    # A számláról ismert határidő a Kiadás sorra is átmegy, ha ott még nincs -
+    # a Pénzügy "Utalandók" nézete ebből tudja, mi jár le hamarosan. Egy már
+    # ott kézzel beírt határidőt nem írunk felül.
+    if expense.fizetes_hatarideje is None and cert.fizetesi_hatarido is not None:
+        expense.fizetes_hatarideje = cert.fizetesi_hatarido
     cert.szamla_kifizetve = True
     db.commit()
     db.refresh(cert)

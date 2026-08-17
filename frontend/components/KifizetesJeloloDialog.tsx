@@ -3,10 +3,23 @@
 import { useState } from "react";
 import { ModalReteg } from "@/components/ModalReteg";
 
-/** "Kifizetve jelölés" - és a hozzá tartozó egyetlen döntés: keletkezzen-e
- * Kiadás sor a Pénzügyben.
+/** A mai nap ISO alakban, HELYI idő szerint - a `toISOString()` UTC-re vált, és
+ * este 10 után már a következő napot adná vissza. */
+function maiNap(): string {
+  const most = new Date();
+  return `${most.getFullYear()}-${String(most.getMonth() + 1).padStart(2, "0")}-${String(most.getDate()).padStart(2, "0")}`;
+}
+
+/** "Kifizetve jelölés" - a hozzá tartozó két adattal: MIKOR ment el a pénz, és
+ * keletkezzen-e Kiadás sor a Pénzügyben.
  *
- * Miért kérdés ez egyáltalán? Mert a kifizetés ténye és a kiadás nyilvántartása
+ * A DÁTUM azért kérdés, mert a jelölés ritkán esik egybe az utalással: a
+ * banki átutalás megtörténik, a rendszerben pedig csak napokkal később kattint
+ * rá valaki. Ha ilyenkor mindig a mai nap kerülne be, a pénzügyi kimutatásban
+ * rossz napon (rosszabb esetben rossz hónapban) állna a tétel. Alapból ezért a
+ * mai nap van kitöltve, de át lehet írni.
+ *
+ * A KIADÁS SOR azért kérdés, mert a kifizetés ténye és a kiadás nyilvántartása
  * két külön dolog. Alapból a kettő együtt jár: a jelölés létrehozza a Kiadás
  * sort, és onnantól a Pénzügy összesítőiben is ott a költség. Van viszont, ami
  * MÁSHOL van elszámolva (a bank- vagy a könyvelői oldalon már szerepel) - ott
@@ -18,6 +31,7 @@ import { ModalReteg } from "@/components/ModalReteg";
 export function KifizetesJeloloDialog({
   nev,
   osszeg,
+  hatarido,
   onMegse,
   onJelol,
 }: {
@@ -25,10 +39,14 @@ export function KifizetesJeloloDialog({
   nev: string;
   /** Mennyiről (már formázva). Üresen elhagyjuk a sort. */
   osszeg?: string | null;
+  /** A számla fizetési határideje (ISO), ha ismert - csak tájékoztatásul, hogy
+   * a dátum megadásakor látszódjon, mihez képest utaltunk. */
+  hatarido?: string | null;
   onMegse: () => void;
-  onJelol: (kiadasbaKerul: boolean) => void;
+  onJelol: (kiadasbaKerul: boolean, kifizetesDatuma: string) => void;
 }) {
   const [kiadasbaKerul, setKiadasbaKerul] = useState(true);
+  const [kifizetesDatuma, setKifizetesDatuma] = useState(maiNap());
 
   return (
     <ModalReteg onClose={onMegse}>
@@ -44,7 +62,21 @@ export function KifizetesJeloloDialog({
         </div>
 
         <div className="p-5">
-          <label className="flex cursor-pointer items-start gap-2.5">
+          <label className="block text-[13px] text-text-primary">
+            Mikor lett kifizetve
+            <input
+              type="date"
+              value={kifizetesDatuma}
+              onChange={(e) => setKifizetesDatuma(e.target.value)}
+              className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary"
+            />
+            <span className="mt-0.5 block text-[12px] text-text-muted">
+              A tényleges utalás napja – ez kerül a Kiadás sorra is.
+              {hatarido && ` Fizetési határidő: ${hatarido}.`}
+            </span>
+          </label>
+
+          <label className="mt-4 flex cursor-pointer items-start gap-2.5">
             <input
               type="checkbox"
               checked={kiadasbaKerul}
@@ -77,8 +109,9 @@ export function KifizetesJeloloDialog({
           </button>
           <button
             type="button"
-            onClick={() => onJelol(kiadasbaKerul)}
-            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90"
+            disabled={!kifizetesDatuma}
+            onClick={() => onJelol(kiadasbaKerul, kifizetesDatuma)}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
             Kifizetve jelölés
           </button>

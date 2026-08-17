@@ -54,7 +54,16 @@ export function TigInvoiceManager({
   const [busyId, setBusyId] = useState<string | null>(null);
   // Melyik TIG-et jelöljük épp kifizetettnek - a "kerüljön-e Kiadás sorba"
   // döntés miatt nem elég egy igen/nem megerősítés.
-  const [kifizetendo, setKifizetendo] = useState<{ szamlazo: string; nev: string; osszeg: string | null } | null>(null);
+  const [kifizetendo, setKifizetendo] = useState<{
+    szamlazo: string;
+    nev: string;
+    osszeg: string | null;
+    hatarido: string | null;
+  } | null>(null);
+  // A feltöltés ELŐTT beírt fizetési határidő, számlázó felenként. A számlán
+  // ott áll a határidő, tehát abban a pillanatban a kezünkben van, amikor a
+  // fájlt kiválasztjuk - így nem kell külön lépésben visszajönni érte.
+  const [hataridoInput, setHataridoInput] = useState<Record<string, string>>({});
 
   const ready = certificates.filter((c) => c.allapot === readyStatus || c.allapot === "Kihagyva");
 
@@ -62,10 +71,12 @@ export function TigInvoiceManager({
    * mert minden hívás egy külön számla-sort hoz létre a backenden. */
   async function uploadInvoices(szamlazo: string, input: HTMLInputElement, files: File[]) {
     setBusyId(szamlazo);
+    const hatarido = hataridoInput[szamlazo];
     try {
       for (const file of files) {
         const fd = new FormData();
         fd.append("file", file);
+        if (hatarido) fd.append("fizetesi_hatarido", hatarido);
         const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/szamla`, { method: "POST", body: fd });
         if (!res.ok) {
           const detail = await res.json().catch(() => null);
@@ -121,13 +132,34 @@ export function TigInvoiceManager({
     }
   }
 
-  async function markPaid(szamlazo: string, kiadasbaKerul: boolean) {
+  /** A fizetési határidő utólagos állítása: a fájl gyakran előbb kerül fel,
+   * mint ahogy valaki megnézné, mi áll rajta - ilyenkor ne kelljen a számlát
+   * újra feltölteni azért, hogy a dátum bekerüljön (lásd backend /hatarido). */
+  async function saveHatarido(szamlazo: string, ertek: string) {
+    setHataridoInput((elozo) => ({ ...elozo, [szamlazo]: ertek }));
+    try {
+      const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/hatarido`, {
+        method: "POST",
+        body: JSON.stringify({ fizetesi_hatarido: ertek || null }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+    }
+  }
+
+  async function markPaid(szamlazo: string, kiadasbaKerul: boolean, kifizetesDatuma: string) {
     setKifizetendo(null);
     setBusyId(szamlazo);
     try {
       const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/szamla-kifizetve`, {
         method: "POST",
-        body: JSON.stringify({ kiadasba_kerul: kiadasbaKerul }),
+        body: JSON.stringify({ kiadasba_kerul: kiadasbaKerul, kifizetes_datuma: kifizetesDatuma }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -156,6 +188,7 @@ export function TigInvoiceManager({
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">TIG dokumentum</th>
               <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Bruttó</th>
               <th className="min-w-[240px] py-1.5 pr-6 text-left font-medium text-text-secondary">Számlák</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Fizetési határidő</th>
               <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Státusz</th>
               <th className="py-1.5 text-right font-medium text-text-secondary" />
             </tr>
@@ -252,6 +285,27 @@ export function TigInvoiceManager({
                       </label>
                     </div>
                   </td>
+                  {/* A számlán szereplő határidő: a feltöltés előtt beírva
+                      rögtön a feltöltéssel megy, utólag pedig magában mentődik
+                      (lásd saveHatarido). Kifizetés után már csak látszik. */}
+                  <td className="py-3 pr-6">
+                    {c.szamla_kifizetve ? (
+                      <span className="whitespace-nowrap text-text-secondary">{c.fizetesi_hatarido ?? "–"}</span>
+                    ) : (
+                      <input
+                        type="date"
+                        disabled={busy || !canEdit}
+                        value={hataridoInput[szamlazo] ?? c.fizetesi_hatarido ?? ""}
+                        onChange={(e) => saveHatarido(szamlazo, e.target.value)}
+                        className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[12px] text-text-primary disabled:opacity-50"
+                      />
+                    )}
+                    {c.szamla_kifizetve && c.utalas_datuma && (
+                      <span className="mt-0.5 block whitespace-nowrap text-[11px] text-text-muted">
+                        Utalva: {c.utalas_datuma}
+                      </span>
+                    )}
+                  </td>
                   <td className="py-3 pr-6 text-right">
                     {c.szamla_kifizetve ? (
                       <StatusBadge label="Kifizetve" tone="success" />
@@ -265,6 +319,7 @@ export function TigInvoiceManager({
                             nev,
                             osszeg:
                               c.brutto_osszeg != null ? `${c.brutto_osszeg.toLocaleString("hu-HU")} Ft bruttó` : null,
+                            hatarido: hataridoInput[szamlazo] ?? c.fizetesi_hatarido ?? null,
                           })
                         }
                         className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
@@ -305,8 +360,11 @@ export function TigInvoiceManager({
         <KifizetesJeloloDialog
           nev={kifizetendo.nev}
           osszeg={kifizetendo.osszeg}
+          hatarido={kifizetendo.hatarido}
           onMegse={() => setKifizetendo(null)}
-          onJelol={(kiadasbaKerul) => markPaid(kifizetendo.szamlazo, kiadasbaKerul)}
+          onJelol={(kiadasbaKerul, kifizetesDatuma) =>
+            markPaid(kifizetendo.szamlazo, kiadasbaKerul, kifizetesDatuma)
+          }
         />
       )}
     </div>

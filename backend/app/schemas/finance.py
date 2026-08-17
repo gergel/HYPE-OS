@@ -150,3 +150,8 @@ class KifizetesIn(BaseModel):
     """
 
     kiadasba_kerul: bool = True
+    #: MIKOR utaltuk el ténylegesen. Üresen a mai nap - a jelölés viszont
+    #: gyakran csak napokkal a tényleges utalás után történik meg, és akkor a
+    #: pénzügyi kimutatásban rossz napon állna a tétel. Ide kerül a papír
+    #: `utalas_datuma` mezője és a Kiadás sor fizetési dátuma is.
+    kifizetes_datuma: date | None = None

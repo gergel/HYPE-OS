@@ -31,6 +31,27 @@ Kiadás sor csak megkétszerezné az összeget a pénzügyi összesítőkben. Ez
 tehát a régi hívások viselkedése változatlan). A papír állapota így is
 "kifizetve" lesz, tehát nem marad teendőként a havi listán.
 
+### A számla két dátuma: határidő és utalás napja
+
+Mindkét TIG-fajta papírján ott a **fizetési határidő** és a **tényleges utalás
+napja** (`fizetesi_hatarido`, `utalas_datuma`) - a külsős oldalon is, nem csak a
+belsősön.
+
+- **Határidő**: a számlán szerepel, tehát akkor van a kezünkben, amikor
+  feltöltjük - a külsős TIG számla-feltöltő végpontja ezért egy `Form` mezőben
+  átveszi (`POST …/szamla`), és utólag is állítható (`POST …/hatarido`), mert a
+  fájl gyakran előbb kerül fel, mint ahogy valaki megnézné, mi áll rajta. A
+  belsős TIG-en ez már eddig is a papír űrlapjának a mezője volt.
+- **Utalás napja**: a "Kifizetve jelölés" ablakában adható meg
+  (`KifizetesIn.kifizetes_datuma`), alapból a mai nap. Azért kell tudni
+  visszadátumozni, mert a jelölés rendszerint napokkal a tényleges utalás után
+  történik meg - a mai nappal a tétel rossz napon (rosszabb esetben rossz
+  hónapban) állna a kimutatásban.
+
+Mindkét dátum átmegy a keletkező Kiadás sorra is (a határidő csak akkor, ha ott
+még nincs kézzel beírva), így a Pénzügy "Utalandók" nézete és a papír ugyanazt
+mondja.
+
 ### A projekt önköltsége ≠ a kiadás-lista
 
 A projektkód "Összes költség" száma **négy** részből áll

@@ -963,10 +963,17 @@ def mark_szamla_kifizetve(
     `kiadasba_kerul=false` esetén CSAK a papír állapotát jelöljük: a pénz
     tényleg elment, de a költség máshol van elszámolva, és egy itteni Kiadás
     sor megkétszerezné a Pénzügy összesítőit (lásd
-    schemas/finance.KifizetesIn)."""
+    schemas/finance.KifizetesIn).
+
+    Az UTALÁS DÁTUMA a `kifizetes_datuma` mezőből jön - üresen a mai nap -, és
+    a papír `utalas_datuma` mezőjébe is bekerül (ugyanígy a külsős TIG-nél,
+    lásd routes/performance_certificates.py)."""
     record = _get_finalized_or_404(db, employee_id, ev, honap)
     if not record.invoices:
         raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
+
+    utalas = (payload.kifizetes_datuma if payload is not None else None) or date.today()
+    record.utalas_datuma = utalas
 
     if payload is not None and not payload.kiadasba_kerul:
         record.szamla_kifizetve = True
@@ -1005,7 +1012,9 @@ def mark_szamla_kifizetve(
         expense.brutto = brutto
 
     expense.kesz = True
-    expense.fizetes_datuma = date.today()
+    expense.fizetes_datuma = utalas
+    if expense.fizetes_hatarideje is None and record.fizetesi_hatarido is not None:
+        expense.fizetes_hatarideje = record.fizetesi_hatarido
     record.szamla_kifizetve = True
     db.commit()
     db.refresh(record)

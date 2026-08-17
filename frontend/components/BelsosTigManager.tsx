@@ -377,13 +377,13 @@ export function BelsosTigManager({
     }
   }
 
-  async function markKifizetve(employee: BelsosTigMonthEmployee, kiadasbaKerul: boolean) {
+  async function markKifizetve(employee: BelsosTigMonthEmployee, kiadasbaKerul: boolean, kifizetesDatuma: string) {
     setKifizetendoId(null);
     setBusyId(employee.id);
     try {
       const res = await authFetch(`/api/v1/belsos-tig/${employee.id}/${ev}/${honap}/szamla-kifizetve`, {
         method: "POST",
-        body: JSON.stringify({ kiadasba_kerul: kiadasbaKerul }),
+        body: JSON.stringify({ kiadasba_kerul: kiadasbaKerul, kifizetes_datuma: kifizetesDatuma }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -882,8 +882,11 @@ export function BelsosTigManager({
               ? `${kifizetendoEmployee.record.brutto_osszeg.toLocaleString("hu-HU")} Ft bruttó`
               : null
           }
+          hatarido={kifizetendoEmployee.record?.fizetesi_hatarido ?? null}
           onMegse={() => setKifizetendoId(null)}
-          onJelol={(kiadasbaKerul) => markKifizetve(kifizetendoEmployee, kiadasbaKerul)}
+          onJelol={(kiadasbaKerul, kifizetesDatuma) =>
+            markKifizetve(kifizetendoEmployee, kiadasbaKerul, kifizetesDatuma)
+          }
         />
       )}
 

@@ -69,6 +69,18 @@ class PerformanceCertificate(TimestampMixin, Base):
     # Kiadások összesítőben megjelenjen. Maguk a számlafájlok külön táblában
     # vannak (lásd PerformanceCertificateInvoice), mert egy TIG-hez több
     # számla is tartozhat.
+    # A számla két dátuma - ugyanaz a pár, mint a Belsős TIG-en (lásd
+    # models/internal_performance_certificate.py): meddig kell fizetni, és
+    # mikor utaltuk el ténylegesen. Külön a teljesítés/keltezés párostól: azok
+    # a TIG DOKUMENTUMÁRÓL szólnak, ez a kettő a pénz útjáról.
+    #
+    # A határidő a SZÁMLA feltöltésekor adható meg (az van a kezünkben), az
+    # utalás dátuma a kifizetve jelöléskor - alapból a mai nap, de vissza is
+    # lehet dátumozni, mert a jelölés gyakran csak napokkal a tényleges utalás
+    # után történik meg.
+    fizetesi_hatarido: Mapped[date | None] = mapped_column(Date, comment="A számla fizetési határideje")
+    utalas_datuma: Mapped[date | None] = mapped_column(Date, comment="Mikor utaltuk el ténylegesen")
+
     szamla_kifizetve: Mapped[bool] = mapped_column(Boolean, default=False)
     expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
 
