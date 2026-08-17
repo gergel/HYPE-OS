@@ -25,7 +25,7 @@ mentése (PATCH crew_employee_ids) a teljes listát cseréli - egy társított
 oszlopot minden egyes stáb-módosítás kitörölne. Külön táblában a beállítás
 túléli a stáblista szerkesztését."""
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -71,6 +71,30 @@ class ProjectSzamlazo(TimestampMixin, Base):
     #: Külön mező a `megjegyzes`-től: azt a számlázó fél beállítása írja, és egy
     #: számlázó-módosítás elfújná ezt a magyarázatot.
     kiadas_megjegyzes: Mapped[str | None] = mapped_column(Text)
+
+    #: MENNYIÉRT vállalja ez az ember EZT a napot - a diszpó írásakor, a
+    #: stábtag felvételekor lebeszélt nettó díj.
+    #:
+    #: Miért kell? Mert a szerződést és a TIG-et hetekkel később, más ember
+    #: adminisztrálja, mint aki a stábtaggal megbeszélte a díjat - és a
+    #: papírra pont ez az összeg kell. Enélkül vagy visszakeresi valaki egy
+    #: üzenetváltásból, vagy tippel. Ha itt meg van adva, a szerződés és a TIG
+    #: piszkozata automatikusan ezzel az összeggel nyílik meg (lásd
+    #: services/megbeszelt_dij.py).
+    #:
+    #: NEM kötelező: van, akivel nincs előre lebeszélve a díj (a felvételkor a
+    #: kérdés kihagyható), és ilyenkor sor sem keletkezik.
+    #:
+    #: A napidíj a projekt PÉNZÜGYI oldalán nem számít semminek - az továbbra
+    #: is a TIG-eken és a Kiadás sorokon áll, mert a megbeszélt díj csak
+    #: megállapodás, nem kifizetés.
+    megbeszelt_dij: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), comment="Ennyiért vállalja ezt a napot - nettó"
+    )
+    #: A díj magyarázata: mi van benne (pl. "saját kamerával", "két nap egyben",
+    #: "utazás nélkül"). Fél év múlva a puszta összeg nem mondja meg, miért
+    #: annyi - a szerződés készítője pedig pont ezt keresi.
+    dij_megjegyzes: Mapped[str | None] = mapped_column(Text)
 
     megjegyzes: Mapped[str | None] = mapped_column(String(255))
 

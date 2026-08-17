@@ -41,7 +41,14 @@ from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.finance import KifizetesIn
 from app.schemas.performance_certificate import PerformanceCertificateRead
-from app.services import document_storage, papir_fedettseg, papir_tetelek, papirozas_hatokor, szamlazo
+from app.services import (
+    document_storage,
+    megbeszelt_dij,
+    papir_fedettseg,
+    papir_tetelek,
+    papirozas_hatokor,
+    szamlazo,
+)
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import send_message
 from app.services.hu_number_words import szam_betukkel
@@ -662,6 +669,13 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
         ertek = getattr(szerzodes, mezo, None) if szerzodes is not None else None
         return tartalek if ertek in (None, "") else ertek
 
+    # Ha szerződés nincs (a felet keretszerződés fedi), az összeg a diszpó
+    # írásakor LEBESZÉLT díjból jön - különben pont a keretszerződéseseknél
+    # maradna üresen a mező, pedig ott is meg volt beszélve, mennyiért vállalja
+    # (lásd services/megbeszelt_dij.py).
+    dijak = megbeszelt_dij.dijak_a_projekten(db, project.id)
+    tag_idk = [t.id for t in csoport.tagok]
+
     draft = PerformanceCertificate(
         project_id=project.id,
         employee_id=fel.employee.id if fel.employee else None,
@@ -671,7 +685,7 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
         szekhely=_szerzodesbol("szekhely", fel.szekhely),
         adoszam=_szerzodesbol("adoszam", fel.adoszam),
         megbizas_targya=_szerzodesbol("megbizas_targya", fel.megbizas_targya),
-        netto_osszeg=_szerzodesbol("netto_osszeg", None),
+        netto_osszeg=_szerzodesbol("netto_osszeg", megbeszelt_dij.csoport_osszege(dijak, tag_idk)),
         plusz_afa=_szerzodesbol("plusz_afa", fel.plusz_afa),
         teljesites_szoveg=_szerzodesbol("teljesites_szoveg", _projekt_teljesites_szoveg(project)),
         email=fel.email,
@@ -690,7 +704,7 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
                 certificate_id=draft.id,
                 project_id=project.id,
                 employee_id=tag.id,
-                netto_osszeg=forras.netto_osszeg if forras is not None else None,
+                netto_osszeg=(forras.netto_osszeg if forras is not None else None) or dijak.get(tag.id),
                 megnevezes=forras.megnevezes if forras is not None else None,
             )
         )

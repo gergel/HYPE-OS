@@ -686,6 +686,11 @@ export type ProjektSzamlazoSor = {
   kiadaskent_elszamolva: boolean;
   /** Hova és miért került a kiadásba - a jelöléshez kötelező megadni. */
   kiadas_megjegyzes: string | null;
+  /** Mennyiért vállalja ezt a napot (nettó), és mi van benne - a diszpó
+   * írásakor, a stábtag felvételekor lebeszélt díj. Ebből nyílik meg a
+   * szerződés és a TIG piszkozata (lásd backend services/megbeszelt_dij.py). */
+  megbeszelt_dij: number | null;
+  dij_megjegyzes: string | null;
   megjegyzes: string | null;
   javaslatok: { szamlazo: string; nev: string; forras: string }[];
 };

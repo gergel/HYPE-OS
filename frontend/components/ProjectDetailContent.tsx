@@ -17,7 +17,7 @@ import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { ForgatasIdopontEditor } from "@/components/ForgatasIdopontEditor";
-import { M2mLinker } from "@/components/M2mLinker";
+import { StabLinker } from "@/components/StabLinker";
 import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
@@ -359,13 +359,17 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
         content: (
           <>
             <Card title={`Stáb (${crewIds.length})`} icon={Users}>
-              <M2mLinker
+              {/* Nem sima M2mLinker: egy nem belsős stábtag felvétele után
+                  rögtön megkérdezi, mennyiért vállalja azt a napot - a diszpó
+                  írásakor ez dől el, a papírokat viszont hetekkel később más
+                  készíti (lásd StabLinker). */}
+              <StabLinker
                 patchPath={patchPath}
-                fieldName="crew_employee_ids"
+                projectId={Number(project.id)}
                 currentIds={crewIds}
                 options={crewOptions}
-                emptyText="Nincs stábtag hozzárendelve ehhez a projekthez."
-                addLabel="Stábtag hozzáadása"
+                napSzoveg={asText(project.forgatas_datuma)}
+                canEdit={szerkeszthet}
               />
             </Card>
             <Card title={`Utómunka (${deliverables.length})`} icon={Clapperboard}>

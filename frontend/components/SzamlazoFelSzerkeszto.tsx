@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { KeresosSelect, type KeresosOpcio } from "@/components/KeresosSelect";
 import { IndoklasDialog } from "@/components/IndoklasDialog";
+import { MegbeszeltDijDialog } from "@/components/MegbeszeltDijDialog";
 import type { ProjektSzamlazoNezet } from "@/lib/api";
 
 /** Ki számláz kinek a munkájáért ezen a projekten?
@@ -36,6 +37,10 @@ export function SzamlazoFelSzerkeszto({
   const [hiba, setHiba] = useState<string | null>(null);
   // Melyik sornál kérjük épp a "hova és miért került a kiadásba" magyarázatot.
   const [kiadasIndokSor, setKiadasIndokSor] = useState<ProjektSzamlazoNezet["sorok"][number] | null>(null);
+  // Melyik sor megbeszélt díját szerkesztjük épp. A díjat a stábtag
+  // felvételekor kérdezzük meg (lásd StabLinker), de utólag is állítható:
+  // sokszor csak később egyeznek meg, vagy változik az összeg.
+  const [dijSor, setDijSor] = useState<ProjektSzamlazoNezet["sorok"][number] | null>(null);
 
   if (nezet.sorok.length === 0) {
     return (
@@ -55,6 +60,30 @@ export function SzamlazoFelSzerkeszto({
       const res = await authFetch(`/api/v1/projekt-szamlazok/${nezet.project_id}/${employeeId}/kiadaskent`, {
         method: "PUT",
         body: JSON.stringify({ kiadaskent_elszamolva: ertek, kiadas_megjegyzes: megjegyzes ?? null }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        setHiba(detail?.detail ?? `Sikertelen mentés (HTTP ${res.status})`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      setHiba(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /** A lebeszélt napidíj mentése - ebből nyílik meg a szerződés és a TIG
+   * piszkozata (lásd backend services/megbeszelt_dij.py). */
+  async function dijatAllit(employeeId: number, dij: number | null, megjegyzes: string) {
+    setDijSor(null);
+    setBusyId(employeeId);
+    setHiba(null);
+    try {
+      const res = await authFetch(`/api/v1/projekt-szamlazok/${nezet.project_id}/${employeeId}/dij`, {
+        method: "PUT",
+        body: JSON.stringify({ megbeszelt_dij: dij, dij_megjegyzes: megjegyzes || null }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -102,6 +131,11 @@ export function SzamlazoFelSzerkeszto({
         tételben (pl. a technika bérleti árában) már benne van: tőlük nem kérünk sem szerződést, sem TIG-et, mert nem
         a munkájukért fizetünk külön. Stábtagok maradnak, és utólag is átjelölhetők.
       </p>
+      <p className="mb-3 text-[12.5px] text-text-muted">
+        A <strong className="text-text-secondary">Megbeszélt díj</strong> az, amennyiért az illető ezt a napot
+        vállalta – ezt a stábtag felvételekor kérdezzük meg, de itt is megadható vagy javítható. Ha van, a szerződése
+        és a TIG-je automatikusan ezzel az összeggel nyílik meg.
+      </p>
       {hiba && <p className="mb-3 text-[12.5px] text-text-danger">{hiba}</p>}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[13px]">
@@ -109,6 +143,7 @@ export function SzamlazoFelSzerkeszto({
             <tr className="border-b border-border">
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Stábtag</th>
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Ki számláz a munkájáért</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Megbeszélt díj</th>
               <th className="py-1.5 text-left font-medium text-text-secondary">Projekt kiadásként</th>
             </tr>
           </thead>
@@ -178,6 +213,25 @@ export function SzamlazoFelSzerkeszto({
                       </span>
                     )}
                   </td>
+                  {/* Mennyiért vállalta ezt a napot: a stábtag felvételekor
+                      kérdezzük meg (lásd StabLinker), de itt utólag is
+                      megadható vagy javítható. Ebből nyílik meg a szerződés és
+                      a TIG piszkozata. */}
+                  <td className="py-2.5 pr-6">
+                    <button
+                      type="button"
+                      disabled={!canEdit || busyId === sor.employee_id}
+                      onClick={() => setDijSor(sor)}
+                      className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                    >
+                      {sor.megbeszelt_dij != null
+                        ? `${sor.megbeszelt_dij.toLocaleString("hu-HU")} Ft`
+                        : "Nincs megadva"}
+                    </button>
+                    {sor.dij_megjegyzes && (
+                      <p className="mt-1 max-w-[16rem] text-[11.5px] text-text-muted">{sor.dij_megjegyzes}</p>
+                    )}
+                  </td>
                   <td className="py-2.5">
                     {/* Aki kiadásként van elszámolva, stábtag marad (diszpót
                         kap, rajta van a projekten), csak papír nem kell tőle. */}
@@ -217,6 +271,15 @@ export function SzamlazoFelSzerkeszto({
           gombCimke="Jelölés"
           onMegse={() => setKiadasIndokSor(null)}
           onKesz={(indok) => kiadaskentAllit(kiadasIndokSor.employee_id, true, indok)}
+        />
+      )}
+      {dijSor && (
+        <MegbeszeltDijDialog
+          nev={dijSor.full_name}
+          kezdoDij={dijSor.megbeszelt_dij}
+          kezdoMegjegyzes={dijSor.dij_megjegyzes}
+          onMegse={() => setDijSor(null)}
+          onKesz={(dij, megjegyzes) => dijatAllit(dijSor.employee_id, dij, megjegyzes)}
         />
       )}
     </div>

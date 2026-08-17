@@ -18,7 +18,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
@@ -58,6 +58,10 @@ class SzamlazoSor(BaseModel):
     kiadaskent_elszamolva: bool = False
     #: Hova és miért került a kiadásba - a jelöléshez kötelező.
     kiadas_megjegyzes: str | None = None
+    #: Mennyiért vállalja ezt a napot (nettó) és mi van benne - a diszpó
+    #: írásakor lebeszélt díj (lásd models/project_szamlazo.py).
+    megbeszelt_dij: float | None = None
+    dij_megjegyzes: str | None = None
     megjegyzes: str | None = None
     javaslatok: list[JavaslatInfo] = []
 
@@ -90,6 +94,16 @@ class KiadaskentIn(BaseModel):
     kiadaskent_elszamolva: bool
     #: Hova és miért került a kiadásba. Bekapcsoláskor kötelező.
     kiadas_megjegyzes: str | None = None
+
+
+class MegbeszeltDijIn(BaseModel):
+    """Mennyiért vállalja ez az ember ezt a napot.
+
+    Üres összeg = nincs (vagy már nincs) lebeszélt díj: a felvételkor
+    kihagyható, később törölhető."""
+
+    megbeszelt_dij: float | None = None
+    dij_megjegyzes: str | None = None
 
 
 def _get_project_or_404(db: Session, project_id: int) -> Project:
@@ -178,6 +192,8 @@ def get_projekt_szamlazok(
                 felulirva=fel.kulcs != f"e{e.id}",
                 kiadaskent_elszamolva=bool(sor.kiadaskent_elszamolva) if sor else False,
                 kiadas_megjegyzes=sor.kiadas_megjegyzes if sor else None,
+                megbeszelt_dij=float(sor.megbeszelt_dij) if sor and sor.megbeszelt_dij is not None else None,
+                dij_megjegyzes=sor.dij_megjegyzes if sor else None,
                 megjegyzes=sor.megjegyzes if sor else None,
                 javaslatok=_javaslatok(db, project, e),
             )
@@ -187,6 +203,20 @@ def get_projekt_szamlazok(
         project_nev=project.nev,
         sorok=sorok,
         valaszthato_emberek=_valaszthato_emberek(db, project),
+    )
+
+
+def _ures_sor(sor: ProjectSzamlazo) -> bool:
+    """Hordoz-e még bármit ez a sor?
+
+    Egy soron több, egymástól független beállítás él (számlázó fél, kiadásként
+    elszámolva, megbeszélt díj) - az egyik visszavonása nem törölheti a
+    többit, üres nyomot viszont ne hagyjunk magunk után."""
+    return (
+        sor.szamlazo_employee_id is None
+        and sor.szamlazo_vallalkozas_id is None
+        and not sor.kiadaskent_elszamolva
+        and sor.megbeszelt_dij is None
     )
 
 
@@ -230,14 +260,14 @@ def set_szamlazo(
 
     # Üres érték vagy önmaga: nincs mit felülírni, a sor törölhető - DE csak
     # akkor, ha nem hordoz más beállítást is. A "kiadásként elszámolva" jelölő
-    # ugyanezen a soron él, azt egy számlázó-visszaállítás nem törölheti el.
+    # és a megbeszélt díj ugyanezen a soron él, azokat egy számlázó-visszaállítás
+    # nem törölheti el.
     if not kulcs or kulcs == f"e{employee.id}":
         if sor is not None:
-            if sor.kiadaskent_elszamolva:
-                sor.szamlazo_employee_id = None
-                sor.szamlazo_vallalkozas_id = None
-                sor.megjegyzes = payload.megjegyzes
-            else:
+            sor.szamlazo_employee_id = None
+            sor.szamlazo_vallalkozas_id = None
+            sor.megjegyzes = payload.megjegyzes
+            if _ures_sor(sor):
                 db.delete(sor)
             db.commit()
         return get_projekt_szamlazok(project.id, db, _user)
@@ -255,7 +285,21 @@ def set_szamlazo(
     # Láncot nem engedünk: ha A-t B számlázza, B-t nem számlázhatja C - a papír
     # ilyenkor nem tudná, kinek a nevére szóljon.
     if fel.employee is not None:
-        tovabbi = db.query(ProjectSzamlazo).filter_by(project_id=project.id, employee_id=fel.employee.id).first()
+        # Csak a VALÓDI felülírás számít láncnak: a soron más beállítás is
+        # élhet (megbeszélt díj, kiadásként elszámolva), attól még ő maga
+        # számláz.
+        tovabbi = (
+            db.query(ProjectSzamlazo)
+            .filter(
+                ProjectSzamlazo.project_id == project.id,
+                ProjectSzamlazo.employee_id == fel.employee.id,
+                or_(
+                    ProjectSzamlazo.szamlazo_employee_id.is_not(None),
+                    ProjectSzamlazo.szamlazo_vallalkozas_id.is_not(None),
+                ),
+            )
+            .first()
+        )
         if tovabbi is not None:
             raise HTTPException(
                 status_code=400,
@@ -331,11 +375,59 @@ def set_kiadaskent(
     # A magyarázat a jelöléssel együtt él: kikapcsoláskor nincs mit magyarázni.
     sor.kiadas_megjegyzes = indok if payload.kiadaskent_elszamolva else None
     # Ha a sor már semmit nem hordoz, ne maradjon üres nyoma.
-    if (
-        not sor.kiadaskent_elszamolva
-        and sor.szamlazo_employee_id is None
-        and sor.szamlazo_vallalkozas_id is None
-    ):
+    if _ures_sor(sor):
+        db.delete(sor)
+    db.commit()
+    return get_projekt_szamlazok(project.id, db, _user)
+
+
+@router.put("/{project_id}/{employee_id}/dij", response_model=ProjektSzamlazoNezet)
+def set_megbeszelt_dij(
+    project_id: int,
+    employee_id: int,
+    payload: MegbeszeltDijIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Mennyiért vállalja ez az ember EZT a napot - a diszpó írásakor lebeszélt
+    nettó díj.
+
+    A stábtag felvételekor kérdezzük meg, mert ott dől el: aki beosztja, az
+    beszéli meg vele. A szerződést és a TIG-et viszont hetekkel később, más
+    ember adminisztrálja, akinek pont ez az összeg kell a papírra - ha itt meg
+    van adva, a piszkozataik automatikusan ezzel nyílnak meg (lásd
+    services/megbeszelt_dij.py).
+
+    Kihagyható és utólag is megadható: nem minden stábtaggal beszélnek le előre
+    fix díjat. Üres összeggel törölhető.
+
+    Ez a díj MEGÁLLAPODÁS, nem kifizetés: a projekt költségébe semmi nem kerül
+    belőle - az továbbra is a TIG-eken és a Kiadás sorokon áll."""
+    project = _get_project_or_404(db, project_id)
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="A munkatárs nem található")
+    if employee not in project.crew:
+        raise HTTPException(status_code=400, detail="Ez a munkatárs nincs a projekt stábjában.")
+    if employee.tipus == EmployeeType.BELSOS:
+        raise HTTPException(
+            status_code=400,
+            detail="Belsős munkatárs havi bérezésű - nála nincs projektenkénti napidíj.",
+        )
+    if payload.megbeszelt_dij is not None and payload.megbeszelt_dij < 0:
+        raise HTTPException(status_code=400, detail="A díj nem lehet negatív.")
+
+    sor = db.query(ProjectSzamlazo).filter_by(project_id=project.id, employee_id=employee.id).first()
+    if sor is None:
+        if payload.megbeszelt_dij is None:
+            return get_projekt_szamlazok(project.id, db, _user)
+        sor = ProjectSzamlazo(project_id=project.id, employee_id=employee.id)
+        db.add(sor)
+    sor.megbeszelt_dij = payload.megbeszelt_dij
+    # A magyarázat a díjjal együtt él: összeg nélkül nincs mit magyarázni.
+    megjegyzes = (payload.dij_megjegyzes or "").strip()
+    sor.dij_megjegyzes = (megjegyzes or None) if payload.megbeszelt_dij is not None else None
+    if _ures_sor(sor):
         db.delete(sor)
     db.commit()
     return get_projekt_szamlazok(project.id, db, _user)

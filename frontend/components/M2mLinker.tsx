@@ -18,6 +18,7 @@ export function M2mLinker({
   options,
   addLabel = "Hozzáadás",
   emptyText = "Nincs hozzárendelve.",
+  onAdded,
 }: {
   patchPath: string;
   fieldName: string;
@@ -25,6 +26,10 @@ export function M2mLinker({
   options: Option[];
   addLabel?: string;
   emptyText?: string;
+  /** SIKERES hozzáadás után hívjuk, a hozzáadott elem id-jével. A stáblistánál
+   * ebből nyílik meg a "mennyiért vállalja ezt a napot" kérdés (lásd
+   * StabLinker) - a kapcsolat maga ettől függetlenül már létrejött. */
+  onAdded?: (id: number) => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -34,7 +39,7 @@ export function M2mLinker({
   const linked = currentIds.map((id) => optionById.get(id)).filter((o): o is Option => !!o);
   const available = options.filter((o) => !currentIds.includes(o.id));
 
-  async function patch(newIds: number[]) {
+  async function patch(newIds: number[], hozzaadott?: number) {
     setBusy(true);
     try {
       const res = await authFetch(patchPath, { method: "PATCH", body: JSON.stringify({ [fieldName]: newIds }) });
@@ -43,6 +48,7 @@ export function M2mLinker({
         alert(`Sikertelen: ${detail?.detail ?? res.status}`);
         return;
       }
+      if (hozzaadott !== undefined) onAdded?.(hozzaadott);
       router.refresh();
     } catch (err) {
       alert(`Sikertelen (hálózati hiba): ${err}`);
@@ -93,7 +99,7 @@ export function M2mLinker({
             type="button"
             disabled={!selected || busy}
             onClick={() => {
-              patch([...currentIds, Number(selected)]);
+              patch([...currentIds, Number(selected)], Number(selected));
               setSelected("");
             }}
             className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"

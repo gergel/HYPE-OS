@@ -74,6 +74,10 @@ Kettőzött szerkesztő-felületből előbb-utóbb két, egymástól elcsúszó 
 
 ## Az alvállalkozói folyamat sorrendje
 
+0. **Stáb összeáll** → a nem belsős stábtagoknál rögtön megkérdezzük, mennyiért
+   vállalják azt a napot. Ez az összeg tölti elő a lenti 2. és 3. lépés
+   piszkozatát - lásd
+   [03-projektek-ugyfelek.md](03-projektek-ugyfelek.md#megbeszélt-díj-mennyiért-vállalja-azt-a-napot).
 1. **Diszpó kimegy** → megvan, ki vett részt a projekten.
 2. **Eseti szerződés**: azokra kell, akik *sem nem belsősök*, *sem nincs érvényes
    keretszerződésük*. Aki keretszerződéses, az itt mentesül.

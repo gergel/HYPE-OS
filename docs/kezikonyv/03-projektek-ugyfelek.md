@@ -160,6 +160,42 @@ Ez határozza meg, milyen szerződés és milyen TIG kell - lásd
 `models/project_szamlazo.py`) - projektenként tartja nyilván, ki a számlázó fél.
 Frontend: `components/SzamlazoFelSzerkeszto.tsx`, `SearchableIdPicker.tsx`.
 
+Ugyanezen a (projekt, ember) soron él két másik, egymástól független beállítás
+is: a "projekt kiadásként elszámolva" jelölő (lásd
+[06-papirozas.md](06-papirozas.md)) és a **megbeszélt díj**. Egyik visszavonása
+sem törli a másikat; ha a sor már semmit nem hordoz, magától eltűnik.
+
+### Megbeszélt díj: mennyiért vállalja azt a napot
+
+A **stábtag felvételekor** (a diszpó írásakor) felugrik a kérdés, mennyiért
+vállalja az illető azt a forgatást - plusz egy magyarázat mező (mi van benne:
+saját kamerával? utazás nélkül?). Belsősnél nem jön elő a kérdés: ők havi
+bérezésűek, a backend is elutasítja náluk. A kérdés **kihagyható** - nem minden
+stábtaggal beszélnek le előre fix díjat -, és utólag is megadható vagy javítható
+a "Ki számláz kiért" táblázatban.
+
+Miért ott kérdezzük? Mert ott dől el: aki beosztja az embert, az beszéli meg
+vele a díjat. A szerződést és a TIG-et viszont hetekkel később, **más ember**
+adminisztrálja, akinek pont ez az összeg kell a papírra - enélkül vagy
+visszakeresi valaki egy üzenetváltásból, vagy tippel.
+
+Ezért a díj **előtölti mindkét papír piszkozatát**
+(`services/megbeszelt_dij.py`):
+
+| Papír | Fejösszeg | Tételek |
+|---|---|---|
+| Eseti szerződés | a rá tartozó emberek díjainak összege | fejenként a saját díja |
+| TIG | a szerződésről örökölt összeg, annak hiányában a díjakból | ugyanígy |
+
+A TIG-nél a "szerződés hiányában" eset nem ritka kivétel: a **keretszerződéses**
+feleknél nincs eseti szerződés, tehát ott csak ez az adat mondja meg, mennyiről
+szól a papír. Az előtöltés csak KIINDULÁS - a piszkozatban bármi átírható, és a
+mentett papír utána a saját összegével él tovább.
+
+A megbeszélt díj **megállapodás, nem kifizetés**: a projekt költségébe semmi nem
+kerül belőle (az továbbra is a TIG-eken és a Kiadás sorokon áll, lásd
+[07-penzugyek.md](07-penzugyek.md)).
+
 ## Projekt-párosítás
 
 `services/project_matching.py` - beérkező adatot (naptár-esemény, Notion-import,

@@ -42,7 +42,14 @@ from app.models.performance_certificate import PerformanceCertificate, Performan
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.contract import ContractRead
-from app.services import document_storage, papir_fedettseg, papir_tetelek, papirozas_hatokor, szamlazo
+from app.services import (
+    document_storage,
+    megbeszelt_dij,
+    papir_fedettseg,
+    papir_tetelek,
+    papirozas_hatokor,
+    szamlazo,
+)
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import send_message
 from app.services.hu_number_words import szam_betukkel
@@ -758,6 +765,10 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
                 detail="Ehhez a projekthez és félhez már véglegesített szerződés-bejegyzés tartozik (kiküldve vagy kihagyva).",
             )
         return existing
+    # A stábtaggal a diszpó írásakor LEBESZÉLT díj (lásd
+    # services/megbeszelt_dij.py): a szerződést hetekkel később, más ember
+    # készíti, akinek pont ez az összeg kell a papírra.
+    dijak = megbeszelt_dij.dijak_a_projekten(db, project.id)
     draft = Contract(
         tipus=ContractType.ALVALLALKOZOI,
         project_id=project.id,
@@ -770,14 +781,23 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
         vallalkozas_kepviseloje=fel.kepviselo,
         vallalkozas_nyilvantartasi_szam=fel.nyilvantartasi_szam,
         megbizas_targya=fel.megbizas_targya,
+        netto_osszeg=megbeszelt_dij.csoport_osszege(dijak, [t.id for t in csoport.tagok]),
         plusz_afa=fel.plusz_afa,
         email=fel.email,
     )
     db.add(draft)
     db.flush()
-    # Alapból pontosan azt fedi, amiért ezen a projekten ő számláz.
+    # Alapból pontosan azt fedi, amiért ezen a projekten ő számláz - tételenként
+    # a rá lebeszélt díjjal, ha van.
     for tag in csoport.tagok:
-        db.add(ContractTetel(contract_id=draft.id, project_id=project.id, employee_id=tag.id))
+        db.add(
+            ContractTetel(
+                contract_id=draft.id,
+                project_id=project.id,
+                employee_id=tag.id,
+                netto_osszeg=dijak.get(tag.id),
+            )
+        )
     db.flush()
     return draft
 
