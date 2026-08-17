@@ -64,26 +64,36 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # Biztonsági háló: séma-módosítás SOHA ne várjon korlátlanul egy
+    # táblazárolásra. A migráció a konténer indulásakor fut, amikor a RÉGI
+    # példány még kiszolgál - egy futó lekérdezés mögé beállva a DDL némán
+    # várna, és mögé beállna minden további olvasó is, tehát nemcsak a deploy
+    # állna meg, hanem a régi alkalmazás is hibázni kezdene azon a táblán.
+    # Enélkül ez a deployt percekig "csak fut" állapotban tartotta, hibaüzenet
+    # nélkül.
+    #
+    # A beállítás a KAPCSOLÓDÁSKOR megy át (libpq `options`), nem egy külön SET
+    # utasítással: egy utasítás ugyanis megnyitná a tranzakciót, az Alembic
+    # pedig a már nyitott tranzakciót KÍVÜLRŐL kezeltnek tekinti, és a végén
+    # nem commitol - a migrációk lefutnának, majd némán visszagördülnének.
+    #
+    # Ez csak a végső korlát: az egyes DDL-eket ezen felül újrapróbálkozó
+    # segéddel érdemes futtatni (lásd app/core/migracio.zarasbiztos_ddl), ami
+    # egy pillanatnyi forgalom miatt nem bukik el.
+    beallitasok = config.get_section(config.config_ini_section, {})
+    extra = (
+        {"connect_args": {"options": "-c lock_timeout=30s"}}
+        if str(beallitasok.get("sqlalchemy.url", "")).startswith("postgresql")
+        else {}
+    )
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        beallitasok,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        **extra,
     )
 
     with connectable.connect() as connection:
-        # Biztonsági háló: séma-módosítás SOHA ne várjon korlátlanul egy
-        # táblazárolásra. A migráció a konténer indulásakor fut, amikor a RÉGI
-        # példány még kiszolgál - egy futó lekérdezés mögé beállva a DDL
-        # némán várna, és mögé beállna minden további olvasó is, tehát nemcsak
-        # a deploy állna meg, hanem a régi alkalmazás is hibázni kezdene azon a
-        # táblán. Enélkül ez a deployt percekig "csak fut" állapotban tartotta,
-        # hibaüzenet nélkül.
-        #
-        # Ez csak a végső korlát: az egyes DDL-eket ezen felül újrapróbálkozó
-        # segéddel érdemes futtatni (lásd app/core/migracio.zarasbiztos_ddl),
-        # ami egy pillanatnyi forgalom miatt nem bukik el.
-        if connection.dialect.name == "postgresql":
-            connection.exec_driver_sql("SET lock_timeout = '30s'")
         context.configure(
             connection=connection, target_metadata=target_metadata
         )

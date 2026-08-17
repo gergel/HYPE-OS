@@ -68,6 +68,10 @@ class KulsosTig(BaseModel):
     #: A TIG után jövő lépés: számla és kifizetés.
     szamla_db: int = 0
     szamla_kifizetve: bool = False
+    #: A számla-lépés kihagyva: nem várunk se számlát, se kifizetést - és
+    #: hogy miért (lásd routes/performance_certificates.skip_szamla).
+    szamla_kihagyva: bool = False
+    szamla_kihagyas_oka: str | None = None
 
 
 def _teljesites(t: PerformanceCertificate) -> str | None:
@@ -156,6 +160,8 @@ def list_kulsos_tigek(
                 file_url=t.file_url,
                 szamla_db=len(t.invoices),
                 szamla_kifizetve=bool(t.szamla_kifizetve),
+                szamla_kihagyva=bool(t.szamla_kihagyva),
+                szamla_kihagyas_oka=t.szamla_kihagyas_oka,
             )
         )
 
@@ -270,6 +276,8 @@ def get_kulsos_tig(
         file_url=t.file_url,
         szamla_db=len(t.invoices),
         szamla_kifizetve=bool(t.szamla_kifizetve),
+        szamla_kihagyva=bool(t.szamla_kihagyva),
+        szamla_kihagyas_oka=t.szamla_kihagyas_oka,
         ceg_neve=t.ceg_neve,
         szekhely=t.szekhely,
         adoszam=t.adoszam,

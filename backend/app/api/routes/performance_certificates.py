@@ -1203,6 +1203,67 @@ def delete_szamla(
     return PerformanceCertificateRead.model_validate(cert)
 
 
+class SzamlaKihagyasIn(BaseModel):
+    """A számla-lépés kihagyása (vagy a kihagyás visszavonása).
+
+    `kihagyva=True` esetén az indok KÖTELEZŐ - ugyanaz a szabály, mint a
+    szerződés és a TIG kihagyásánál."""
+
+    kihagyva: bool = True
+    indok: str | None = None
+
+
+@router.post("/{project_id}/{szamlazo_kulcs}/szamla-kihagyas", response_model=PerformanceCertificateRead)
+def skip_szamla(
+    project_id: int,
+    szamlazo_kulcs: str,
+    payload: SzamlaKihagyasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A SZÁMLA-LÉPÉS kihagyása: ehhez a TIG-hez nem várunk se számlát, se
+    kifizetést.
+
+    Van, amikor a papír elkészült, de a pénz útja itt nem folytatódik: máshol
+    számolták el, elengedték, beszámították egy másik tételbe. Enélkül az ilyen
+    munkák örökre "nincs kifizetve" állapotban lógtak az utókövetésben, és a
+    projekt sosem lett kész - pedig nem volt rajta teendő.
+
+    Az INDOK kötelező, ugyanazért, amiért a szerződés és a TIG kihagyásánál:
+    fél év múlva a puszta "kihagyva" jelölésről nem derülne ki, szándékos
+    volt-e vagy elfelejtődött.
+
+    Amihez már tartozik KIADÁS SOR a Pénzügyben, azt nem lehet kihagyni: az
+    pénzügyi tény, amit előbb ott kell rendezni (a Kiadás törlése ezt a TIG-et
+    is visszadobja "nincs kifizetve" állapotba, lásd
+    services/kiadas_kapcsolatok.py) - onnantól ez a kihagyás is megy."""
+    cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
+
+    if not payload.kihagyva:
+        cert.szamla_kihagyva = False
+        cert.szamla_kihagyas_oka = None
+        db.commit()
+        db.refresh(cert)
+        return PerformanceCertificateRead.model_validate(cert)
+
+    indok = (payload.indok or "").strip()
+    if not indok:
+        raise HTTPException(
+            status_code=400,
+            detail="Írd le, miért marad el a számla és a kifizetés - enélkül később nem lehet mihez kötni.",
+        )
+    if cert.expense_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Ehhez a TIG-hez már tartozik Kiadás sor a Pénzügyben - előbb azt kell rendezni.",
+        )
+    cert.szamla_kihagyva = True
+    cert.szamla_kihagyas_oka = indok
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
 @router.post("/{project_id}/{szamlazo_kulcs}/szamla-kifizetve", response_model=PerformanceCertificateRead)
 def mark_szamla_kifizetve(
     project_id: int,

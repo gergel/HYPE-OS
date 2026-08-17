@@ -385,6 +385,9 @@ class KulsosProjektMunka(BaseModel):
     brutto: float | None = None
     tig_allapot: str | None = None
     szamla_kifizetve: bool = False
+    #: A számla-lépést kihagytuk: nem várunk se számlát, se kifizetést (lásd
+    #: routes/performance_certificates.skip_szamla).
+    szamla_kihagyva: bool = False
     #: A projekthez tartozó papírok: eseti szerződés (ha nem keretszerződéssel
     #: dolgozik), a TIG dokumentuma és a hozzá feltöltött számlák.
     dokumentumok: list[MunkaDokumentum] = []
@@ -485,6 +488,7 @@ def kulsos_munkak(
                 brutto=brutto,
                 tig_allapot=tig.allapot,
                 szamla_kifizetve=bool(tig.szamla_kifizetve),
+                szamla_kihagyva=bool(tig.szamla_kihagyva),
                 dokumentumok=dokumentumok,
                 # A keretszerződés csak akkor váltja ki az eseti szerződést, ha a
                 # FORGATÁS NAPJÁN élt (lásd models/contract.py idoszakok).

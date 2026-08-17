@@ -139,6 +139,12 @@ def _kifizetes_state(
         tig = fel_tig.get((project.id, csoport.kulcs))
         if tig is not None and tig.allapot == "Kihagyva":
             continue
+        # Akinél a SZÁMLA-lépést hagytuk ki (a papír megvan, de pénz nem megy
+        # ki rá - máshol számolták el, elengedték), annál sincs mit várni:
+        # különben örökre függőben tartaná a projektet, pedig nincs rajta
+        # teendő (lásd routes/performance_certificates.skip_szamla).
+        if tig is not None and tig.szamla_kihagyva:
+            continue
         total += 1
         if tig is None or not tig.szamla_kifizetve:
             pending += 1

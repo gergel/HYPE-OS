@@ -54,6 +54,9 @@ class PerformanceCertificateRead(BaseModel):
     fizetesi_hatarido: date | None = None
     utalas_datuma: date | None = None
     szamla_kifizetve: bool = False
+    #: A számla-lépés kihagyva (nem várunk se számlát, se kifizetést) és miért.
+    szamla_kihagyva: bool = False
+    szamla_kihagyas_oka: str | None = None
     expense_id: int | None = None
     created_at: datetime
 

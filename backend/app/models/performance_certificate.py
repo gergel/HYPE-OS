@@ -82,6 +82,18 @@ class PerformanceCertificate(TimestampMixin, Base):
     utalas_datuma: Mapped[date | None] = mapped_column(Date, comment="Mikor utaltuk el ténylegesen")
 
     szamla_kifizetve: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: A SZÁMLA-LÉPÉS KIHAGYVA: ehhez a TIG-hez nem várunk se számlát, se
+    #: kifizetést. Ugyanaz a gondolat, mint a szerződés és a TIG kihagyásánál
+    #: (lásd kihagyas_oka): van, amikor a papír elkészült, de a pénz útja itt
+    #: nem folytatódik - más elszámolásban rendezték, elengedték, beszámították.
+    #:
+    #: Enélkül az ilyen munkák örökre "nincs kifizetve" állapotban lógtak az
+    #: utókövetésben, és a projekt sosem lett kész.
+    #:
+    #: Az INDOK kötelező: egy kihagyott kifizetésről fél év múlva senki nem
+    #: tudná megmondani, szándékos volt-e vagy elfelejtődött.
+    szamla_kihagyva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    szamla_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
     expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
 
     project: Mapped["Project"] = relationship(back_populates="performance_certificates")
