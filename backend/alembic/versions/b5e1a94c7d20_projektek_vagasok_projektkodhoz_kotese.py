@@ -14,7 +14,12 @@ megkapja a kódját. Az így üressé vált gyűjtők a projektkódok listájáb
 kikerülnek (amelyikre még mutat bármi, az marad - azt előbb rendezni kell).
 
 A logika a services/projektkod_kotes.py-ban él (ugyanaz fut a mindennapi
-mentéseknél is), ezért a kettő nem csúszhat el egymástól.
+mentéseknél is), ezért a kettő nem csúszhat el egymástól. A tömeges menet
+szándékosan CSAK a döntéshez kellő három oszlopot olvassa, és kötegelt
+UPDATE-tel ír: így a lépés nem függ a modellek mai oszloplistájától (egy
+később hozzáadott oszlopot a régi séma még nem ismerne), és éles méretű
+adaton is másodpercek alatt lefut - a soronkénti feldolgozás percekig
+tartott, amibe a deploy bele is halt.
 
 Revision ID: b5e1a94c7d20
 Revises: a3c9d1f28b45

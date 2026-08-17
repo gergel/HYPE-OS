@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, inspect, select, update
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
@@ -61,20 +61,27 @@ def _kod_index(db: Session) -> dict[str, ProjectCode]:
     return index
 
 
-def keresd(db: Session, kod: str | None) -> ProjectCode | None:
-    """A szöveghez tartozó Project Code, vagy None, ha nincs (vagy gyűjtő)."""
+def keresd(db: Session, kod: str | None, index: dict[str, ProjectCode] | None = None) -> ProjectCode | None:
+    """A szöveghez tartozó Project Code, vagy None, ha nincs (vagy gyűjtő).
+
+    Az `index` egy már felépített kulcs->kód szótár. EGY sor mentésénél nem kell
+    (olyankor egy lekérdezés az egész), TÖMEGES futásnál viszont muszáj: enélkül
+    soronként újraolvasnánk az összes projektkódot - ezer sornál ez ezer teljes
+    tábla-beolvasás, ami éles adaton már percekben mérhető."""
     if not valodi(kod):
         return None
-    return _kod_index(db).get(kulcs(kod))
+    return (_kod_index(db) if index is None else index).get(kulcs(kod))
 
 
-def kosd_be(db: Session, sor: Project | Deliverable) -> bool:
+def kosd_be(
+    db: Session, sor: Project | Deliverable, index: dict[str, ProjectCode] | None = None
+) -> bool:
     """EGY projekt/vágás bekötése a projektkódja szövege alapján.
 
     Visszatér: változott-e. A meglévő, valódi kötést nem bántjuk - azt vagy egy
     ember állította be, vagy egy korábbi kötés hozta létre; felülírni csak
     akkor szabad, ha a szöveg MÁSIK kódra mutat."""
-    cel = keresd(db, sor.projektkod_szoveg)
+    cel = keresd(db, sor.projektkod_szoveg, index)
     if cel is None:
         return False
     if sor.project_code_id == cel.id:
@@ -83,11 +90,26 @@ def kosd_be(db: Session, sor: Project | Deliverable) -> bool:
     return True
 
 
+def _kod_id_index(db: Session) -> dict[str, int]:
+    """Kulcs -> Project Code AZONOSÍTÓ - a tömeges futáshoz.
+
+    Ugyanaz a szabály, mint a `_kod_index`-nél, csak két oszlopot olvas: a
+    migráció így nem függ a modell mai oszloplistájától (egy később hozzáadott
+    oszlopot a régi séma még nem ismer), és nagyságrenddel kevesebbet olvas."""
+    index: dict[str, int] = {}
+    for kod_id, kod in db.execute(
+        select(ProjectCode.id, ProjectCode.projektkod).order_by(ProjectCode.id)
+    ).all():
+        if valodi(kod):
+            index.setdefault(kulcs(kod), kod_id)
+    return index
+
+
 def _gyujto_idk(db: Session) -> set[int]:
     return {
-        pc.id
-        for pc in db.scalars(select(ProjectCode))
-        if (pc.projektkod or "").strip().upper() in GYUJTO_PROJEKTKODOK
+        kod_id
+        for kod_id, kod in db.execute(select(ProjectCode.id, ProjectCode.projektkod)).all()
+        if (kod or "").strip().upper() in GYUJTO_PROJEKTKODOK
     }
 
 
@@ -100,8 +122,13 @@ def _hivatkozik_ra_valami(db: Session, kod_id: int) -> bool:
     fogja - különben egy "üresnek hitt" kód törlése vinné magával."""
     # Nem sorted_tables: a sorrend itt lényegtelen (csak számolunk), a rendezés
     # viszont a projekt-szerződés körkörös hivatkozásain figyelmeztetést dobna.
+    #
+    # Csak a TÉNYLEG LÉTEZŐ táblákat kérdezzük: ez a függvény adatmigrációból is
+    # fut, ahol a séma még régebbi, mint a mai modellek - egy később bevezetett
+    # tábla lekérdezése ott hibával állítaná meg a deployt.
+    letezo = set(inspect(db.get_bind()).get_table_names())
     for tabla in Base.metadata.tables.values():
-        if tabla.name == "project_codes":
+        if tabla.name == "project_codes" or tabla.name not in letezo:
             continue
         for fk in tabla.foreign_keys:
             if fk.column.table.name != "project_codes":
@@ -118,10 +145,12 @@ def takaritsd_a_gyujtoket(db: Session) -> int:
     projektkódok közt - pont ott, ahol a valódi munkákat keressük. Amelyikre
     még mutat bármi, az marad: azt előbb kézzel kell rendezni."""
     torolt = 0
-    for pc in list(db.scalars(select(ProjectCode))):
-        if valodi(pc.projektkod) or _hivatkozik_ra_valami(db, pc.id):
+    # Csak a NEM valódi (gyűjtő) kódokat nézzük végig - a valódiakhoz hozzá sem
+    # nyúlunk, tehát fölösleges lenne végigkérdezni rájuk a hivatkozásokat.
+    for kod_id, kod in db.execute(select(ProjectCode.id, ProjectCode.projektkod)).all():
+        if valodi(kod) or _hivatkozik_ra_valami(db, kod_id):
             continue
-        db.delete(pc)
+        db.execute(delete(ProjectCode).where(ProjectCode.id == kod_id))
         torolt += 1
     return torolt
 
@@ -140,6 +169,15 @@ def kosd_ossze_mindent(db: Session) -> dict[str, int]:
 
     Idempotens: újrafuttatva csak azt mozgatja, ami tényleg változott."""
     gyujtok = _gyujto_idk(db)
+    # Az index EGYSZER épül fel az egész futásra: soronként újraépítve minden
+    # projekt/vágás egy teljes projektkód-beolvasást jelentene (pár ezer sornál
+    # ez percekben mérhető, és a migrációt futtató deploy elhasal rajta).
+    #
+    # Csak azt a HÁROM oszlopot olvassuk, ami a döntéshez kell, és kötegelt
+    # UPDATE-tel írunk. Nem csak gyors: egy adatmigráció így nem függ a mai
+    # modell teljes oszloplistájától - egy később hozzáadott oszlop különben
+    # visszamenőleg elrontaná ezt a lépést (a régi séma még nem ismeri).
+    index = _kod_id_index(db)
     eredmeny = {
         "projekt_bekotve": 0, "projekt_leoldva": 0,
         "vagas_bekotve": 0, "vagas_leoldva": 0, "gyujto_torolve": 0,
@@ -149,13 +187,28 @@ def kosd_ossze_mindent(db: Session) -> dict[str, int]:
         (Project, "projekt_bekotve", "projekt_leoldva"),
         (Deliverable, "vagas_bekotve", "vagas_leoldva"),
     ):
-        for sor in db.scalars(select(modell)):
-            if kosd_be(db, sor):
-                eredmeny[be] += 1
-            elif sor.project_code_id is not None and sor.project_code_id in gyujtok:
-                sor.project_code_id = None
-                eredmeny[le] += 1
+        bekotendo: dict[int, list[int]] = {}
+        leoldando: list[int] = []
+        sorok = db.execute(
+            select(modell.id, modell.projektkod_szoveg, modell.project_code_id)
+        ).all()
+        for sor_id, szoveg, kod_id in sorok:
+            cel = index.get(kulcs(szoveg)) if valodi(szoveg) else None
+            if cel is not None and cel != kod_id:
+                bekotendo.setdefault(cel, []).append(sor_id)
+            elif cel is None and kod_id is not None and kod_id in gyujtok:
+                leoldando.append(sor_id)
 
+        for cel, sor_idk in bekotendo.items():
+            db.execute(update(modell).where(modell.id.in_(sor_idk)).values(project_code_id=cel))
+            eredmeny[be] += len(sor_idk)
+        if leoldando:
+            db.execute(update(modell).where(modell.id.in_(leoldando)).values(project_code_id=None))
+            eredmeny[le] += len(leoldando)
+
+    # A tömeges UPDATE a session-ben lévő példányokat nem frissíti - a hívó
+    # (és a rá következő gyűjtő-takarítás) friss adatot lásson.
+    db.expire_all()
     db.flush()
     eredmeny["gyujto_torolve"] = takaritsd_a_gyujtoket(db)
     return eredmeny

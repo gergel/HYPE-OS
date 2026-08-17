@@ -46,6 +46,29 @@ docker compose exec backend alembic upgrade head
 Az autogenerate javaslatát mindig nézd át - a nem triviális átalakításokat
 (átnevezés, adatmigráció) kézzel kell megírni.
 
+### Adatmigráció: soronként ne, kötegelve igen
+
+Egy adatmigráció a DEPLOY része: amíg fut, a service nem áll fel. Ha percekig
+tart, a deploy megszakad - és a naplóban gyakran nincs is hibaüzenet, csak egy
+félbevágott futás (a folyamatot kívülről lövi le a platform). Ezért:
+
+- **Ne dolgozz soronként lekérdezéssel.** Építsd fel egyszer a keresési
+  indexet, és onnan dolgozz. Egy projektkód-index soronkénti újraolvasása
+  4000 projektnél 4000 teljes tábla-beolvasás: helyben mérve 94 másodperc,
+  hálózaton át ennek a többszöröse. Ugyanez indexszel és kötegelt UPDATE-tel
+  1,5 másodperc.
+- **Csak a szükséges oszlopokat olvasd** (`select(Modell.id, ...)`), ne a
+  teljes ORM-objektumot. Nem csak gyorsabb: az adatmigráció a RÉGI sémán fut,
+  a modell viszont a mait írja le - egy később hozzáadott oszlop különben
+  visszamenőleg elrontja a lépést, és egy friss adatbázison már fel sem áll a
+  rendszer.
+- **A tábla létezését is nézd meg**, ha a séma alapján jársz be táblákat
+  (`inspect(bind).get_table_names()`): a mai modellben lehet olyan tábla, amit
+  az adott migráció pillanatában még nem hozott létre semmi.
+
+Élesítés előtt érdemes a migrációt éles MÉRETŰ adaton lefuttatni (egy üres
+adatbázisba felvitt pár ezer soron): az üres adatbázison minden gyors.
+
 ## Környezeti változók
 
 A teljes, hiteles lista: `backend/app/core/config.py` (a `Settings` osztály mezői,
