@@ -269,6 +269,27 @@ pénz** (alapból a mai nap, de visszadátumozható). A két dátum a papíron �
 belőle keletkező Kiadás soron is ott lesz - részletesen lásd
 [07-penzugyek.md](07-penzugyek.md#a-számla-két-dátuma-határidő-és-utalás-napja).
 
+**A számla is EGYBEN megy, ha a papír több forgatásra szól.** Ugyanaz a
+szabály, mint fentebb a szerződésnél és a TIG-nél: a számla és a kifizetés a
+PAPÍRHOZ tartozik, nem a projekthez. Ezért bármelyik érintett forgatás oldalán
+ugyanaz az egy sor jelenik meg, egy feltöltés elég, és egy "kifizetve" jelölés
+zárja le mindet - egyetlen Kiadás sorral, nem naponta eggyel. A sor a név alatt
+ki is írja, mit fed ("3 forgatás egy számlán: …"), különben a másik nap oldalán
+úgy tűnne, hogy oda külön számlát kell kérni, és valaki feltöltene egy
+másodikat.
+
+**A számla-lépés kihagyható**, ugyanúgy indoklással, mint a szerződés és a TIG
+kihagyása. Van, amikor a papír elkészült, de a pénz útja itt nem folytatódik:
+máshol számolták el, elengedték, beszámították egy másik tételbe. Enélkül az
+ilyen munkák örökre "nincs kifizetve" állapotban lógtak az utókövetésben, és a
+projekt sosem lett kész - pedig nem volt rajta teendő. A kihagyott TIG kiesik az
+utókövetés kifizetés-fázisából (a nevezőből is), az indok pedig ott marad a
+soron, és bármikor visszavonható ("Mégis kérünk számlát").
+
+Amihez **már tartozik Kiadás sor** a Pénzügyben, azt nem lehet kihagyni: az
+pénzügyi tény, amit előbb ott kell rendezni - a Kiadás törlése ezt a TIG-et is
+visszadobja "nincs kifizetve" állapotba, és onnantól a kihagyás is megy.
+
 ### Kiküldés előtti áttekintő
 
 Szerződésnél és TIG-nél (külsősnél és belsősnél egyaránt) a "Generálás és

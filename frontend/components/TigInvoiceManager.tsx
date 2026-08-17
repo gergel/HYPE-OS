@@ -8,7 +8,27 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { KifizetesJeloloDialog } from "@/components/KifizetesJeloloDialog";
+import { IndoklasDialog } from "@/components/IndoklasDialog";
 import type { PerformanceCertificate } from "@/lib/api";
+
+/** Mely FORGATÁSOKAT fedi ez a papír - a tételeiből, ismétlés nélkül.
+ *
+ * Egy TIG több projekt munkáját is igazolhatja (több nap egy számlán), és
+ * ilyenkor a számla meg a kifizetés is EGYBEN megy az egészre. Ezt ki kell
+ * írni: a másik projekt oldalán különben úgy tűnne, mintha az ottani munkához
+ * külön számlát kellene kérni - és valaki fel is töltene egy másodikat. */
+function fedettProjektek(c: PerformanceCertificate): string[] {
+  // PROJEKTENKÉNT egy címke, nem kódonként: több forgatási nap tartozhat
+  // ugyanahhoz a projektkódhoz, és pont az a lényeg, hogy látszódjon, HÁNY
+  // napot fed a papír. A dátum különbözteti meg őket egymástól.
+  const projektenkent = new Map<number, string>();
+  for (const t of c.tetelek ?? []) {
+    if (projektenkent.has(t.project_id)) continue;
+    const nev = t.project_nev ?? t.projektkod ?? `#${t.project_id}`;
+    projektenkent.set(t.project_id, t.forgatas_datuma ? `${nev} (${t.forgatas_datuma})` : nev);
+  }
+  return Array.from(projektenkent.values());
+}
 
 /** A TIG SZÁMLÁZÓ FELÉNEK kulcsa ("e12" ember, "v3" cég) - ez megy az
  * útvonalba (lásd backend services/szamlazo.py). Egy TIG nem feltétlenül egy
@@ -65,6 +85,9 @@ export function TigInvoiceManager({
   // fájlt kiválasztjuk - így nem kell külön lépésben visszajönni érte. Enélkül
   // nem is indul a feltöltés (a backend is elutasítja).
   const [hataridoInput, setHataridoInput] = useState<Record<string, string>>({});
+  // Melyik TIG számla-lépését hagyjuk ki - az indoklás kötelező, ezért ez is
+  // ablakot nyit (ugyanaz a minta, mint a szerződés/TIG kihagyásánál).
+  const [kihagyando, setKihagyando] = useState<{ szamlazo: string; nev: string } | null>(null);
 
   const ready = certificates.filter((c) => c.allapot === readyStatus || c.allapot === "Kihagyva");
 
@@ -157,6 +180,31 @@ export function TigInvoiceManager({
     }
   }
 
+  /** A SZÁMLA-lépés kihagyása (vagy a kihagyás visszavonása): ehhez a
+   * papírhoz nem várunk se számlát, se kifizetést - mert máshol számolták el,
+   * elengedték, beszámították. Az indok kötelező, ahogy a szerződés és a TIG
+   * kihagyásánál is. */
+  async function szamlatKihagy(szamlazo: string, kihagyva: boolean, indok?: string) {
+    setKihagyando(null);
+    setBusyId(szamlazo);
+    try {
+      const res = await authFetch(`${basePath}/${projectId}/${szamlazo}/szamla-kihagyas`, {
+        method: "POST",
+        body: JSON.stringify({ kihagyva, indok: indok ?? null }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function markPaid(szamlazo: string, kiadasbaKerul: boolean, kifizetesDatuma: string) {
     setKifizetendo(null);
     setBusyId(szamlazo);
@@ -214,6 +262,9 @@ export function TigInvoiceManager({
               // Számla csak határidővel tölthető fel: a számlán ott áll, és
               // utólag már senki nem nyitja ki újra a fájlt érte.
               const hatarido = hataridoInput[szamlazo] ?? c.fizetesi_hatarido ?? "";
+              // Több forgatás egy papíron: a számla és a kifizetés is EGYBEN
+              // megy az egészre, ezért ki kell írni, mit fed.
+              const projektek = fedettProjektek(c);
               return (
                 <tr key={c.id} className="border-b border-border align-top last:border-0">
                   <td className="py-3 pr-6">
@@ -221,6 +272,11 @@ export function TigInvoiceManager({
                     {tovabbiak.length > 0 && (
                       <span className="block text-[11px] text-text-muted">
                         + {Array.from(new Set(tovabbiak)).join(", ")} munkája
+                      </span>
+                    )}
+                    {projektek.length > 1 && (
+                      <span className="mt-0.5 block text-[11px] text-text-muted">
+                        {projektek.length} forgatás egy számlán: {projektek.join(", ")}
                       </span>
                     )}
                   </td>
@@ -254,6 +310,28 @@ export function TigInvoiceManager({
                     {c.brutto_osszeg != null ? `${c.brutto_osszeg.toLocaleString("hu-HU")} Ft` : "–"}
                   </td>
                   <td className="py-3 pr-6">
+                    {/* Kihagyott számla-lépés: ide nem jön se számla, se
+                        kifizetés - csak az indok, és egy út visszafelé. */}
+                    {c.szamla_kihagyva ? (
+                      <div className="flex flex-col items-start gap-1">
+                        <StatusBadge label="Számla kihagyva" tone="neutral" />
+                        {c.szamla_kihagyas_oka && (
+                          <span className="max-w-[16rem] text-[11.5px] text-text-muted">
+                            {c.szamla_kihagyas_oka}
+                          </span>
+                        )}
+                        {canEdit && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => szamlatKihagy(szamlazo, false)}
+                            className="text-[12px] text-text-accent hover:underline disabled:opacity-50"
+                          >
+                            Mégis kérünk számlát
+                          </button>
+                        )}
+                      </div>
+                    ) : (
                     <div className="flex flex-col gap-1.5">
                       {invoices.map((inv) => (
                         <div key={inv.id} className="flex items-center gap-2">
@@ -299,13 +377,32 @@ export function TigInvoiceManager({
                           Számla feltöltése: előbb add meg a fizetési határidőt →
                         </span>
                       )}
+                      {/* A számla-lépés kihagyása: van, amikor a papír megvan,
+                          de pénz nem megy ki rá (máshol elszámolva,
+                          elengedve). Enélkül az ilyen munka örökre "nincs
+                          kifizetve" maradna az utókövetésben. Kifizetés után
+                          már nincs mit kihagyni. */}
+                      {canEdit && !c.szamla_kifizetve && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setKihagyando({ szamlazo, nev })}
+                          className="w-fit text-[12px] text-text-muted hover:text-text-primary disabled:opacity-50"
+                        >
+                          Számla kihagyása
+                        </button>
+                      )}
                     </div>
+                    )}
                   </td>
                   {/* A számlán szereplő határidő: a feltöltés előtt beírva
                       rögtön a feltöltéssel megy, utólag pedig magában mentődik
                       (lásd saveHatarido). Kifizetés után már csak látszik. */}
                   <td className="py-3 pr-6">
-                    {c.szamla_kifizetve ? (
+                    {c.szamla_kihagyva ? (
+                      // Kihagyott számlánál nincs mit határidőzni.
+                      <span className="text-text-muted">–</span>
+                    ) : c.szamla_kifizetve ? (
                       <span className="whitespace-nowrap text-text-secondary">{c.fizetesi_hatarido ?? "–"}</span>
                     ) : (
                       <>
@@ -330,7 +427,12 @@ export function TigInvoiceManager({
                     )}
                   </td>
                   <td className="py-3 pr-6 text-right">
-                    {c.szamla_kifizetve ? (
+                    {c.szamla_kihagyva ? (
+                      // Nem hiány: szándékosan nincs számla és kifizetés -
+                      // az utókövetésben sem marad függőben (lásd backend
+                      // utokovetes_admin._kifizetes_state).
+                      <StatusBadge label="Kihagyva" tone="neutral" />
+                    ) : c.szamla_kifizetve ? (
                       <StatusBadge label="Kifizetve" tone="success" />
                     ) : invoices.length > 0 ? (
                       <button
@@ -388,6 +490,17 @@ export function TigInvoiceManager({
           onJelol={(kiadasbaKerul, kifizetesDatuma) =>
             markPaid(kifizetendo.szamlazo, kiadasbaKerul, kifizetesDatuma)
           }
+        />
+      )}
+      {kihagyando && (
+        <IndoklasDialog
+          cim={`Számla kihagyása – ${kihagyando.nev}`}
+          leiras="Ehhez a papírhoz nem várunk se számlát, se kifizetést, és az utókövetésben sem marad függőben. Írd le, miért marad el - fél év múlva ebből fog kiderülni, hogy szándékos volt."
+          mezoCimke="Miért marad el"
+          placeholder="Pl. a technika bérleti díjában rendeztük"
+          gombCimke="Kihagyás"
+          onMegse={() => setKihagyando(null)}
+          onKesz={(indok) => szamlatKihagy(kihagyando.szamlazo, true, indok)}
         />
       )}
     </div>

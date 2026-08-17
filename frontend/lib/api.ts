@@ -829,7 +829,18 @@ export type PerformanceCertificate = {
   /** A számlázó fél: ember VAGY vállalkozás. */
   employee_id: number | null;
   vallalkozas_id: number | null;
-  tetelek: { id: number; project_id: number; employee_id: number; netto_osszeg: number | null; megnevezes: string | null }[];
+  /** Kinek a munkáját, MELYIK projekten igazolja. Egy papír több forgatást is
+   * fedhet (több nap egy számlán) - a projekt adatai ezért itt is kellenek. */
+  tetelek: {
+    id: number;
+    project_id: number;
+    employee_id: number;
+    netto_osszeg: number | null;
+    megnevezes: string | null;
+    project_nev: string | null;
+    projektkod: string | null;
+    forgatas_datuma: string | null;
+  }[];
   allapot: string | null;
   file_url: string | null;
   ceg_neve: string | null;
@@ -843,6 +854,10 @@ export type PerformanceCertificate = {
   fizetesi_hatarido: string | null;
   utalas_datuma: string | null;
   szamla_kifizetve: boolean;
+  /** A számla-lépés kihagyva: nem várunk se számlát, se kifizetést - és hogy
+   * miért (lásd backend routes/performance_certificates.skip_szamla). */
+  szamla_kihagyva: boolean;
+  szamla_kihagyas_oka: string | null;
   expense_id: number | null;
 };
 

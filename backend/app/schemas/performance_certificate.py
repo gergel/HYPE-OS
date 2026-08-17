@@ -22,6 +22,12 @@ class PerformanceCertificateTetelRead(BaseModel):
     employee_id: int
     netto_osszeg: float | None = None
     megnevezes: str | None = None
+    #: A tétel projektjének azonosítói - ebből írja ki a felület, hogy egy
+    #: összevont papír MELYIK forgatásokat fedi (lásd
+    #: models/performance_certificate.py).
+    project_nev: str | None = None
+    projektkod: str | None = None
+    forgatas_datuma: date | None = None
 
     model_config = {"from_attributes": True}
 

@@ -155,6 +155,26 @@ class PerformanceCertificateTetel(TimestampMixin, Base):
     project: Mapped["Project"] = relationship(back_populates="tig_tetelek")
     employee: Mapped["Employee"] = relationship()
 
+    # A tétel projektjének AZONOSÍTÓI a felület számára: a papír-oldalon ki kell
+    # írni, MELYIK forgatásokat fedi egy összevont TIG, különben a másik projekt
+    # oldalán úgy tűnik, mintha az ottani munkához külön számla és külön
+    # kifizetés tartozna - pedig egy számlán, egyben megy az egész.
+    @property
+    def project_nev(self) -> str | None:
+        return self.project.nev if self.project is not None else None
+
+    @property
+    def projektkod(self) -> str | None:
+        if self.project is None:
+            return None
+        if self.project.project_code is not None:
+            return self.project.project_code.projektkod
+        return self.project.projektkod_szoveg
+
+    @property
+    def forgatas_datuma(self) -> date | None:
+        return self.project.forgatas_datuma if self.project is not None else None
+
 
 class PerformanceCertificateInvoice(TimestampMixin, Base):
     """Egy Külsős TIG-hez feltöltött számla fájl - egy TIG-hez több számla is

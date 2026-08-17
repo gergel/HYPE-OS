@@ -522,6 +522,15 @@ def list_all_for_project(project_id: int, db: Session = Depends(get_db), _user: 
     services/papir_fedettseg.py)."""
     rows = (
         db.query(PerformanceCertificate)
+        .options(
+            selectinload(PerformanceCertificate.invoices),
+            # A tételek PROJEKTJE is kell: a felület ebből írja ki, hogy egy
+            # összevont papír melyik forgatásokat fedi. Eager load nélkül ez
+            # tételenként külön lekérdezés lenne.
+            selectinload(PerformanceCertificate.tetelek)
+            .selectinload(PerformanceCertificateTetel.project)
+            .selectinload(Project.project_code),
+        )
         .filter(
             papir_fedettseg.fedi_a_projektet(
                 PerformanceCertificate, PerformanceCertificateTetel, project_id
