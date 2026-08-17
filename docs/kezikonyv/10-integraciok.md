@@ -164,6 +164,29 @@ Ezért kell a `ProjectCode` **után** futnia - és ezért futtatható újra
 Ugyanaz a kód fut benne, mint a `c9e4a71b2f08` adatmigrációban, tehát a kettő
 nem csúszhat el (lásd [06-papirozas.md](06-papirozas.md)).
 
+### Ami már megvan: a meglévő rekord örökbefogadása
+
+Az import a **Notion-lap azonosítója** alapján tudja, melyik rekordot frissítse
+(`NotionImportMap`). Csakhogy egy rekord nem csak importból születhet: felvehetik
+kézzel, vagy létrehozhatja egy másik import mellékesen (pl. egy hivatkozott
+projektkód). Ilyenkor nincs leképezés, az import tehát LÉTREHOZNI próbálja - és
+egyedi mezőn (a projektkód az) ez UNIQUE ütközéssel elszáll. A savepoint miatt
+csak az az egy sor esik ki, de **minden futásnál újra**: kívülről ez úgy néz ki,
+hogy a Notionban kitöltött mező (pl. a *PROJECT NÉV*) "sosem jön át", hiába
+frissít az ember újra meg újra.
+
+Ezért az importer megadhat egy **természetes kulcsot** (`termeszetes_kulcs`,
+`upsert`/`safe_upsert`): ha nincs leképezés, de a kulcs alapján megvan a rekord,
+felvesszük hozzá a leképezést, és onnantól frissítésként fut rá. A baseline
+szándékosan üres marad, tehát a már kitöltött mezőket védettnek tekintjük (azokon
+lehet helyi munka), az üreseket viszont kitölti a Notion - pontosan azt hozza át,
+ami eddig hiányzott.
+
+A projektkódoknál ez a `projektkod` mező. Ott is helyes, mert a Notionban a kód
+egyedi - ha egyszer mégis két lap kapná ugyanazt, azok ugyanarra a rekordra
+írnának, ami legalább látszik (a régi viselkedés az volt, hogy mindkettő némán
+kiesett).
+
 ### A külsős TIG-ek összevetése a Notionnal
 
 A Notion *"Külsős"* táblájában soronként egy (ember, forgatás) pár áll, rajta az

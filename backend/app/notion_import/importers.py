@@ -1045,6 +1045,13 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
                 "tig_url": props.get("TIG url"),
             },
             label=f"ProjectCode '{projektkod}'",
+            # A projektkód EGYEDI: ha a rekord már létezik (kézzel vették fel,
+            # vagy egy másik import hozta létre hivatkozásból), akkor azt
+            # frissítjük, nem próbálunk másodikat nyitni. Enélkül a sor minden
+            # futásnál UNIQUE ütközéssel esett ki, és a Notionban kitöltött
+            # mezők (pl. a PROJECT NÉV) sosem jöttek át - hiába frissített az
+            # ember újra meg újra (lásd engine._orokbefogadas).
+            termeszetes_kulcs="projektkod",
         )
         if projektkod_rekord is not None:
             ujak = files.atemel_mindent(

@@ -174,8 +174,49 @@ def _helyben_modositott(obj: Any, key: str, baseline: dict[str, str] | None) -> 
     return jelenlegi != baseline[key]
 
 
+def _orokbefogadas(
+    db: Session, model: type, entity_type: str, notion_page_id: str, fields: dict[str, Any], kulcs: str
+) -> NotionImportMap | None:
+    """A MÁR MEGLÉVŐ rekord hozzákötése a Notion-laphoz - leképezés nélkül.
+
+    Egy rekord nem csak importból születhet: felvehették kézzel, vagy egy másik
+    import hozta létre mellékesen (pl. egy hivatkozott projektkód). Ilyenkor a
+    Notion-lapjához nem tartozik leképezés, az import mégis LÉTREHOZNI próbálja
+    - és egyedi mezőn (mint a projektkód) ez UNIQUE ütközéssel elszáll. A sor
+    ilyenkor minden futásnál kiesett: a felületen úgy látszott, hogy egy
+    kitöltött Notion-mező (pl. a projekt neve) "sosem jön át", hiába frissít az
+    ember újra meg újra.
+
+    Ha tehát a természetes kulcs (egyedi mező) alapján megtaláljuk a rekordot,
+    felvesszük hozzá a leképezést, és az import onnantól FRISSÍTÉSKÉNT fut rá.
+    A baseline szándékosan üres: így a már kitöltött mezőket védettnek
+    tekintjük (azokon lehet helyi munka), az üreseket viszont kitölti a Notion
+    - pontosan azt hozza át, ami eddig hiányzott."""
+    ertek = fields.get(kulcs)
+    if ertek in (None, ""):
+        return None
+    letezo = db.scalar(select(model).where(getattr(model, kulcs) == ertek))
+    if letezo is None:
+        return None
+    mapping = NotionImportMap(
+        notion_page_id=notion_page_id,
+        entity_type=entity_type,
+        entity_id=letezo.id,
+        imported_fields={},
+        last_imported_at=datetime.now(timezone.utc),
+    )
+    db.add(mapping)
+    db.flush()
+    return mapping
+
+
 def upsert(
-    db: Session, model: type, entity_type: str, notion_page_id: str, fields: dict[str, Any]
+    db: Session,
+    model: type,
+    entity_type: str,
+    notion_page_id: str,
+    fields: dict[str, Any],
+    termeszetes_kulcs: str | None = None,
 ) -> tuple[Any, bool, list[str]]:
     """Létrehoz vagy frissít egy rekordot a notion_page_id alapján - ez teszi idempotenssé
     az importot (újrafuttatásnál nem duplikál). (rekord, is_new, védett_mezők) hármast ad
@@ -205,6 +246,13 @@ def upsert(
         db.delete(mapping)
         db.flush()
         mapping = None
+
+    if mapping is None and termeszetes_kulcs:
+        # Létezhet már a rekord leképezés nélkül (kézzel vagy másik import
+        # hozta létre) - ilyenkor nem újat gyártunk, hanem azt kötjük ide.
+        mapping = _orokbefogadas(db, model, entity_type, notion_page_id, fields, termeszetes_kulcs)
+        if mapping is not None:
+            obj = db.get(model, mapping.entity_id)
 
     if mapping:
         baseline = mapping.imported_fields if isinstance(mapping.imported_fields, dict) else None
@@ -248,6 +296,7 @@ def safe_upsert(
     notion_page_id: str,
     fields: dict[str, Any],
     label: str,
+    termeszetes_kulcs: str | None = None,
 ) -> Any | None:
     """upsert() SAVEPOINT-tal védve: ha ez az egy sor hibázik (pl. UNIQUE ütközés egy
     duplikált e-mailen/sorozatszámon), csak ez a sor esik ki - a result.errors-ba kerül
@@ -256,7 +305,9 @@ def safe_upsert(
     az importer ilyenkor `continue`-zzon a ciklusban."""
     try:
         with db.begin_nested():
-            obj, created, vedett = upsert(db, model, entity_type, notion_page_id, fields)
+            obj, created, vedett = upsert(
+                db, model, entity_type, notion_page_id, fields, termeszetes_kulcs=termeszetes_kulcs
+            )
         if created:
             result.created += 1
         else:
