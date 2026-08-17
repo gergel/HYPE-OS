@@ -12,6 +12,7 @@ const KATEGORIA_NEVEK: Record<string, string> = {
   tig: "TIG",
   szamla: "Számla",
   diszpo: "Diszpóhoz",
+  gyartas: "Gyártáshoz",
   egyeb: "Egyéb",
 };
 

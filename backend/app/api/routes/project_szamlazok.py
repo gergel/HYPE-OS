@@ -178,7 +178,10 @@ def get_projekt_szamlazok(
     felulirasok = szamlazo.load_felulirasok(db, {project.id})
     sorok: list[SzamlazoSor] = []
     for e in project.crew:
-        if e.tipus == EmployeeType.BELSOS:
+        # "Belsős" A FORGATÁS NAPJÁRA értendő: aki ma belsős, de akkor még
+        # külsősként dolgozott, annál ugyanúgy kérdés a számlázás és a díj,
+        # mint bármely külsősnél (lásd services/belsos_idoszak.belsos_a_napon).
+        if belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma):
             continue
         fel = szamlazo.szamlazo_fele(project, e, felulirasok)
         sor = felulirasok.get((project.id, e.id))
@@ -244,7 +247,7 @@ def set_szamlazo(
         raise HTTPException(status_code=404, detail="A munkatárs nem található")
     if employee not in project.crew:
         raise HTTPException(status_code=400, detail="Ez a munkatárs nincs a projekt stábjában.")
-    if employee.tipus == EmployeeType.BELSOS:
+    if belsos_idoszak.belsos_a_napon(employee, project.forgatas_datuma):
         raise HTTPException(
             status_code=400,
             detail="Belsős munkatárs havi bérezésű - nála nincs projektenkénti számlázó fél.",
@@ -409,7 +412,7 @@ def set_megbeszelt_dij(
         raise HTTPException(status_code=404, detail="A munkatárs nem található")
     if employee not in project.crew:
         raise HTTPException(status_code=400, detail="Ez a munkatárs nincs a projekt stábjában.")
-    if employee.tipus == EmployeeType.BELSOS:
+    if belsos_idoszak.belsos_a_napon(employee, project.forgatas_datuma):
         raise HTTPException(
             status_code=400,
             detail="Belsős munkatárs havi bérezésű - nála nincs projektenkénti napidíj.",

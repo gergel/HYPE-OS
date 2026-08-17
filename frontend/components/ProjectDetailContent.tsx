@@ -13,6 +13,7 @@ import { DeleteButton } from "@/components/DeleteButton";
 import { DetailHeader } from "@/components/DetailHeader";
 import { DetailSections } from "@/components/DetailSections";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
+import { GyartasKomment } from "@/components/GyartasKomment";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
@@ -84,6 +85,10 @@ const ALWAYS_HIDDEN = [
   "crew_employee_ids",
   "szerzodes_keszites_employee_id",
   "alvallakozo_keretszerzodes_contract_id",
+  // A gyártás komment saját dobozt kapott (több sor, kattintható linkek,
+  // csatolt fájlok) - a mezőrácsban egysoros beviteli mező lenne belőle,
+  // ami épp azt veszi el, amiért ez a mező van.
+  "gyartas_komment",
 ];
 
 const PAGE = "/projektek";
@@ -148,12 +153,31 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
   }));
   // A típus csoportosít, az e-mail pedig segít megkülönböztetni az azonos nevű
   // embereket a stábtag-kereső listájában (lásd M2mLinker + SearchableIdPicker).
+  // KI SZÁMÍT BELSŐSNEK EZEN A FORGATÁSON? Nem a mai típusa dönt: a belsős
+  // státusz időszakos, és a projektek visszamenőlegesek. Aki ma belsős, de a
+  // forgatás idején még külsősként dolgozott, az ide KÜLSŐSKÉNT kerül - és a
+  // rendszer is úgy kezeli (kérdezi a napidíját, kér tőle szerződést és
+  // TIG-et). A választ a szerver adja, mert a belsős időszakok ott vannak:
+  // a `valaszthato_emberek` pontosan azokat sorolja, akik AZON A NAPON nem
+  // voltak belsősök (lásd backend project_szamlazok._lehet_szamlazo).
+  const nemBelsosAkkor = new Set(
+    (szamlazoNezet?.valaszthato_emberek ?? [])
+      .map((f) => Number(f.szamlazo.replace(/^e/, "")))
+      .filter((id) => Number.isFinite(id)),
+  );
+  const csoportja = (e: (typeof allEmployees)[number]) => {
+    // A számlázó-nézet nélkül (hiba esetén) marad a mai típus - az a régi,
+    // ismert viselkedés, nem egy rosszabb találgatás.
+    if (!szamlazoNezet) return e.tipus;
+    if (nemBelsosAkkor.has(e.id)) return e.tipus === "belsos" ? "kulsos" : e.tipus;
+    return "belsos";
+  };
   const crewOptions = allEmployees.map((e) => ({
     id: e.id,
     label: e.full_name,
     href: `/csapat/${e.id}`,
     sublabel: e.email,
-    group: e.tipus,
+    group: csoportja(e),
   }));
 
   // Az utómunka-idő és -költség összesítése a SZERVERRŐL jön (egy hívás,
@@ -294,6 +318,21 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 canEdit={szerkeszthet}
                 canDelete={torolhet}
                 emptyText="Nincs csatolni való fájl - a diszpó a szokásos PDF-fel megy ki."
+              />
+            </Card>
+
+            {/* A gyártásvezető jegyzettömbje a projekten: szabad szöveg
+                sortörésekkel és kattintható linkekkel, plusz a hozzá tartozó
+                fájlok. Nem a mezőrácsban van, mert ott egysoros mező lenne -
+                ide viszont bekezdések, felsorolások és Drive-linkek kerülnek. */}
+            <Card title="Gyártás komment" icon={FileText}>
+              <GyartasKomment
+                projectId={projectId}
+                patchPath={patchPath}
+                ertek={asText(project.gyartas_komment)}
+                attachments={attachments.filter((a) => a.kategoria === "gyartas")}
+                canEdit={szerkeszthet}
+                canDelete={torolhet}
               />
             </Card>
           </>

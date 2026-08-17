@@ -42,6 +42,7 @@ from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.finance import KifizetesIn
 from app.schemas.performance_certificate import PerformanceCertificateRead
 from app.services import (
+    belsos_idoszak,
     document_storage,
     megbeszelt_dij,
     papir_fedettseg,
@@ -168,8 +169,13 @@ def _tig_candidates(
     szerződés-populációval, ahol a keretszerződésesek ki vannak zárva).
 
     Kiesnek azok, akik PROJEKT KIADÁSKÉNT vannak elszámolva: az ő díjuk egy
-    másik tételben szerepel, tehát nincs mit igazolni."""
-    emberek = [e for e in project.crew if e.tipus != EmployeeType.BELSOS]
+    másik tételben szerepel, tehát nincs mit igazolni.
+
+    "Belsős" itt A FORGATÁS NAPJÁRA értendő, nem a mai típusra (lásd
+    services/belsos_idoszak.belsos_a_napon)."""
+    emberek = [
+        e for e in project.crew if not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)
+    ]
     if felulirasok is None:
         return emberek
     return szamlazo.papirt_igenylo_emberek(project, emberek, felulirasok)

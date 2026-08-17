@@ -33,6 +33,30 @@ Mivel valaki nem örökre belsős, külön tartjuk nyilván, **mettől meddig** 
 `routes/belsos_idoszakok.py`, frontend `components/BelsosIdoszakok.tsx`). A havi
 belsős TIG-lista ez alapján tudja, kit kell egyáltalán kérdezni egy adott hónapban.
 
+#### "Belsős" mindig A FORGATÁS NAPJÁRA értendő
+
+Egy projekten sosem a mai típus dönt, hanem az, hogy az illető **azon a napon**
+belsős volt-e (`belsos_idoszak.belsos_a_napon()`). A projektek ugyanis
+visszamenőlegesek: aki ma belsős, tavaly még külsősként forgathatott - és arra a
+munkájára ugyanúgy jár neki szerződés és TIG, mint bármely külsősnek.
+
+Ez a szabály egy helyen él, és minden érintett pont ezt használja:
+
+| Hol | Mit dönt el |
+|---|---|
+| Stábtag hozzáadása | a választóban a **Belsős** csoportba csak az kerül, aki akkor belsős volt; a többi Külsősként jön (és úgy is kezeljük: kérdezzük a megbeszélt díját) |
+| Eseti szerződés és TIG populációja | kitől kérünk papírt (`szerzodest_igenylo_emberek`, `tig_igenylo_emberek`) |
+| "Ki számláz kiért" tábla + megbeszélt díj | kinél kérdés egyáltalán a számlázás (`routes/project_szamlazok.py`) |
+| Belsős napidíj | kinek a napidíja terheli a projektet (`services/belsos_koltseg.py`) |
+
+Az utolsó sor a legfontosabb: ha a napidíj a mai típus alapján számítana, a
+tavalyi projektre RÁÍRNÁNK a napidíját, miközben a munkája a TIG-jén is ott van
+- ugyanaz a költség kétszer.
+
+**Adat híján a mai típus dönt.** Ha nincs se felvitt időszaka, se első/utolsó
+munkanapja, nem kezdünk találgatni (lásd `bizonyithatoan_nem_belsos`) - ilyenkor
+a belsős időszakot érdemes pótolni.
+
 ### Belsős napidíj: mennyibe kerül egy munkanapja
 
 `Employee.napi_dij` - a belsősök listáján helyben szerkeszthető. Ebből számoljuk,

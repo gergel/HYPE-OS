@@ -26,7 +26,11 @@ from app.services import document_storage
 # különben minden, a projekthez feltöltött fájl kiszaladna a stábnak.
 # Az "egyeb" a gyűjtő: ami nem szerződés/TIG/számla/diszpó-melléklet, csak a
 # pénzügyi gyűjtésekbe (havi számla-ZIP) nem számít bele.
-KATEGORIAK = ("szerzodes", "tig", "szamla", "diszpo", "egyeb")
+#: A "gyartas" a projekt Gyártás komment dobozához tartozó fájloké: a
+#: gyártásvezetői jegyzet mellé feltöltött forgatókönyv, helyszínrajz, brief.
+#: Külön kategória, hogy a doboz csak a sajátjait mutassa, és ne keveredjen a
+#: diszpó mellékleteivel.
+KATEGORIAK = ("szerzodes", "tig", "szamla", "diszpo", "gyartas", "egyeb")
 
 # Melyik entitáshoz melyik oldal jogosultsága kell a fel-/letöltéshez. Ami
 # nincs a listán, ahhoz nem lehet fájlt csatolni - így egy elgépelt vagy

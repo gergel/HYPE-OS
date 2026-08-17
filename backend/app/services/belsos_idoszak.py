@@ -31,7 +31,7 @@ from datetime import date
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.belsos_idoszak import BelsosIdoszak
-from app.models.employee import BelsosJogviszony, Employee
+from app.models.employee import BelsosJogviszony, Employee, EmployeeType
 
 
 def honap_hatarok(ev: int, honap: int) -> tuple[date, date]:
@@ -99,6 +99,22 @@ def bizonyithatoan_nem_belsos(employee: Employee, nap: date | None) -> bool:
     return False
 
 
+def belsos_a_napon(employee: Employee, nap: date | None) -> bool:
+    """Belsősként dolgozott-e ez az ember EZEN a napon?
+
+    Ez dönti el egy forgatáson, hogy kitől kell papír (szerződés + TIG) és
+    kinek a napidíját írjuk a projekt költségébe. A mai típusa önmagában nem
+    válasz: a belsős státusz IDŐSZAKOS, és a projektek visszamenőlegesek. Aki
+    ma belsős, tavaly még külsősként dolgozhatott - a tavalyi forgatásán tehát
+    ugyanúgy jár neki szerződés és TIG, mint bármely más külsősnek.
+
+    Adat híján a MAI típusa dönt (lásd bizonyithatoan_nem_belsos): ha nem
+    tudjuk, mikor volt belsős, nem kezdünk el találgatni."""
+    if employee.tipus != EmployeeType.BELSOS:
+        return False
+    return not bizonyithatoan_nem_belsos(employee, nap)
+
+
 def nyom_kezdetek(db: Session, employee_ids: list[int]) -> dict[int, date]:
     """Kiről mikortól van NYOMUNK, hogy belsősként dolgozott?
 
@@ -128,8 +144,6 @@ def belsosok(db: Session, ev: int | None = None, honap: int | None = None) -> li
 
     Az időszakokat egyben töltjük be: a havi összesítő tizenkét hónapra hívja
     ezt, és enélkül emberenként külön lekérdezés futna."""
-    from app.models.employee import EmployeeType
-
     emberek = (
         db.query(Employee)
         .options(selectinload(Employee.belsos_idoszakok))

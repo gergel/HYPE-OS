@@ -129,6 +129,22 @@ diszpó, a papírok, a költségek és a leszállított anyag.
 API: `/api/v1/projects`, oldal: `/projektek`, modell: `models/project.py`,
 route: `routes/projects.py`, üzleti logika: `services/project_actions.py`.
 
+### Gyártás komment: a gyártásvezető jegyzettömbje
+
+A projekt adatlapján saját dobozt kapott (`components/GyartasKomment.tsx`), nem
+a mezőrácsban él - ott egysoros beviteli mező lenne belőle, ami épp azt venné
+el, amiért ez a mező van. Amit tud:
+
+- **több sor**: a bekezdések és a felsorolások úgy maradnak, ahogy beírták;
+- **kattintható linkek**: a szövegbe illesztett címeket (a `www.`-vel kezdődőket
+  is) megnyithatóvá tesszük. A szöveget darabokra vágva rendereljük, nem
+  HTML-ként - így a beírt tartalom soha nem tud jelölésként viselkedni. A mondat
+  végi írásjel nem kerül a linkbe;
+- **fájlok**: a kommenthez tartozó forgatókönyv, helyszínrajz, brief ugyanide
+  tölthető fel. Külön (`gyartas`) kategóriával, hogy ne keveredjen a **diszpó
+  levél mellékleteivel** - azok külön dobozban vannak, és tényleg kimennek a
+  stábnak.
+
 **Ügyfél és kontakt** - a megrendelő cég és a nála dolgozó emberek. A kontaktok
 adata a `/contacts` CRUD-é, de kaptak önálló listát is
 (`/megrendeloi-kontaktok`), hogy rá lehessen keresni valakire anélkül, hogy

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.models.employee import EmployeeType
+from app.services import belsos_idoszak
 
 
 def projekt_napjai(project: Any) -> int:
@@ -40,12 +40,18 @@ def projekt_koltsege(project: Any) -> float:
 
     Akinek nincs beírt napidíja, az nullával szerepel - nem tippelünk helyette
     összeget, mert egy kitalált szám rosszabb, mint a hiánya: az utóbbi
-    legalább látszik a napidíj-oszlopban."""
+    legalább látszik a napidíj-oszlopban.
+
+    "Belsős" A FORGATÁS NAPJÁRA értendő: aki ma belsős, de akkor még
+    külsősként dolgozott, annak a munkája a TIG-jén szerepel költségként - a
+    napidíja itt ráadásként megduplázná (lásd
+    services/belsos_idoszak.belsos_a_napon)."""
     napok = projekt_napjai(project)
+    nap = getattr(project, "forgatas_datuma", None)
     return sum(
         float(tag.napi_dij) * napok
         for tag in getattr(project, "crew", []) or []
-        if tag.tipus == EmployeeType.BELSOS and tag.napi_dij
+        if tag.napi_dij and belsos_idoszak.belsos_a_napon(tag, nap)
     )
 
 

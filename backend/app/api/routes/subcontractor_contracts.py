@@ -43,6 +43,7 @@ from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.contract import ContractRead
 from app.services import (
+    belsos_idoszak,
     document_storage,
     megbeszelt_dij,
     papir_fedettseg,
@@ -213,8 +214,14 @@ def szerzodest_igenylo_emberek(
     szerződni, mert nem a munkájukért fizetünk külön.
 
     Hogy kinek a NEVÉRE megy a papír, azt ebből a listából a számlázó felek
-    csoportosítása dönti el (lásd _szamlazo_csoportok)."""
-    emberek = [e for e in project.crew if e.tipus != EmployeeType.BELSOS]
+    csoportosítása dönti el (lásd _szamlazo_csoportok).
+
+    "Belsős" itt A FORGATÁS NAPJÁRA értendő, nem a mai típusra: aki ma belsős,
+    de a forgatás idején még külsősként dolgozott, attól ugyanúgy jár a papír
+    (lásd services/belsos_idoszak.belsos_a_napon)."""
+    emberek = [
+        e for e in project.crew if not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)
+    ]
     if felulirasok is None:
         return emberek
     return szamlazo.papirt_igenylo_emberek(project, emberek, felulirasok)
