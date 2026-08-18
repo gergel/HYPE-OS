@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.security import require_page_action
 from app.models.client import Client
 from app.models.contract import Contract
+from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.finance import Expense
 from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
@@ -65,7 +66,11 @@ router = build_crud_router(
         # A kiadás mellé az EMBERE is kell: a külsős/egyéb bontás részben az ő
         # típusából derül ki (lásd models/project_code.kulsos_koltseg).
         selectinload(ProjectCode.expenses).selectinload(Expense.employee),
-        selectinload(ProjectCode.deliverables),
+        # A vágás ára a MÉRT munkaidőből jön (lásd
+        # models/project_code.vagas_koltseg), ezért a mérések is kellenek -
+        # enélkül soronként külön lekérdezés indulna értük.
+        selectinload(ProjectCode.deliverables).selectinload(Deliverable.timesheets),
+        selectinload(ProjectCode.projects).selectinload(Project.deliverables).selectinload(Deliverable.timesheets),
         selectinload(ProjectCode.revenues),
         # A belsős napidíj a forgatások STÁBJÁBÓL jön (lásd
         # services/belsos_koltseg.py), a külsős rész pedig a rájuk szóló
@@ -150,7 +155,7 @@ def get_bontas(
     if kod is None:
         raise HTTPException(status_code=404, detail="A projektkód nem található.")
     return ProjektkodBontas(
-        projektek=[BontasProjekt(**sor) for sor in projektkod_bontas.projekt_sorok(kod)],
+        projektek=[BontasProjekt(**sor) for sor in projektkod_bontas.projekt_sorok(db, kod)],
         utomunkak=[BontasUtomunka(**sor) for sor in projektkod_bontas.utomunka_sorok(db, kod)],
         kiadasok=[BontasKiadas(**sor) for sor in projektkod_bontas.kiadas_sorok(kod)],
     )

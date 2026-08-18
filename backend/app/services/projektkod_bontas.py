@@ -21,7 +21,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.employee import Employee, EmployeeType
-from app.models.timesheet import Timesheet
 from app.services import belsos_koltseg, deliverable_actions, kulsos_koltseg
 
 
@@ -65,16 +64,25 @@ def projekt_kulsos(projekt: Any) -> float:
     return osszeg
 
 
-def projekt_sorok(project_code: Any) -> list[dict]:
-    """Forgatásonként: mibe került. Külsős stáb + belsős napidíj + vágás."""
+def projekt_sorok(db: Session, project_code: Any) -> list[dict]:
+    """Forgatásonként: mibe került. Külsős stáb + belsős napidíj + vágás.
+
+    A VÁGÁS a mért munkaidőből jön (lásd
+    deliverable_actions.anyag_osszesitok), nem a `Deliverable.koltseg`
+    mezőből - az nem követi a méréseket."""
+    projektek = list(getattr(project_code, "projects", []) or [])
+    anyag_idk = [d.id for p in projektek for d in (getattr(p, "deliverables", []) or [])]
+    osszesitok = deliverable_actions.anyag_osszesitok(db, anyag_idk)
     sorok = []
-    for p in sorted(
-        getattr(project_code, "projects", []) or [],
-        key=lambda p: (p.forgatas_datuma or date.max, p.nev or ""),
-    ):
+    for p in sorted(projektek, key=lambda p: (p.forgatas_datuma or date.max, p.nev or "")):
         kulsos = projekt_kulsos(p)
         belsos = belsos_koltseg.projekt_koltsege(p)
-        vagas = float(sum(d.koltseg or 0 for d in getattr(p, "deliverables", []) or []))
+        vagas = float(
+            sum(
+                deliverable_actions.anyag_koltsege(osszesitok, d)
+                for d in getattr(p, "deliverables", []) or []
+            )
+        )
         sorok.append(
             {
                 "id": p.id,
@@ -92,9 +100,11 @@ def projekt_sorok(project_code: Any) -> list[dict]:
 def utomunka_sorok(db: Session, project_code: Any) -> list[dict]:
     """Anyagonként: mennyi ideig vágtuk és mennyibe került.
 
-    A PERCEK a munkaidő-sorokból jönnek (Timesheet), az ÁR viszont a
-    `Deliverable.koltseg`-ből: az összesítés is abból számol, tehát a két szám
-    így ugyanazt mondja, mint a fejléc "Vágás" tétele."""
+    MINDKÉT szám a munkaidő-sorokból jön (lásd
+    deliverable_actions.anyag_osszesitok) - ugyanaz, ami az anyag oldalán a
+    "Munkaidő-elszámolások" tábla alján áll, és amiből a fejléc "Vágás" tétele
+    is összeáll. A `Deliverable.koltseg` mezőt szándékosan nem használjuk: az
+    nem követi a méréseket."""
     anyagok = list(getattr(project_code, "deliverables", []) or [])
     # A projektkódhoz a saját anyagain FELÜL a forgatásain lógók is tartoznak.
     latott = {d.id for d in anyagok}
@@ -106,18 +116,9 @@ def utomunka_sorok(db: Session, project_code: Any) -> list[dict]:
     if not anyagok:
         return []
 
-    # Egy lekérdezés az összes anyag perceire - anyagonként külön kérdezve ez
-    # tucatnyi kör lenne egy nagyobb projektkódnál. A perceket ugyanaz a
-    # szabály adja, mint az anyag saját oldalán (deliverable_actions.sor_percei):
-    # elsődlegesen a rögzített perc, különben a két időpont különbsége - az
-    # importált méréseknél sokszor csak az egyik van meg.
-    percek: dict[int, float] = {}
-    for sor in db.scalars(
-        select(Timesheet).where(Timesheet.deliverable_id.in_([d.id for d in anyagok]))
-    ):
-        if sor.deliverable_id is None:
-            continue
-        percek[sor.deliverable_id] = percek.get(sor.deliverable_id, 0.0) + deliverable_actions.sor_percei(sor)
+    # Egy lekérdezés az összes anyagra - anyagonként külön kérdezve ez tucatnyi
+    # kör lenne egy nagyobb projektkódnál.
+    osszesitok = deliverable_actions.anyag_osszesitok(db, [d.id for d in anyagok])
 
     vago_idk = {d.vago_employee_id for d in anyagok if d.vago_employee_id is not None}
     nevek = (
@@ -132,8 +133,8 @@ def utomunka_sorok(db: Session, project_code: Any) -> list[dict]:
             "nev": d.projekt_neve,
             "project_id": d.project_id,
             "vago_nev": nevek.get(d.vago_employee_id) if d.vago_employee_id else None,
-            "percek": percek.get(d.id, 0.0),
-            "koltseg": float(d.koltseg or 0),
+            "percek": osszesitok.get(d.id, {}).get("percek", 0.0),
+            "koltseg": deliverable_actions.anyag_koltsege(osszesitok, d),
         }
         for d in sorted(anyagok, key=lambda d: (d.projekt_neve or "").lower())
     ]

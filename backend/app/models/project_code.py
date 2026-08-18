@@ -288,10 +288,50 @@ class ProjectCode(TimestampMixin, Base):
         return self._kulsos_bontas()[1]
 
     @property
+    def _anyagok(self) -> list[Any]:
+        """A projektkódhoz tartozó összes vágandó anyag: a rá közvetlenül
+        kötöttek ÉS a forgatásain lógók, ismétlés nélkül."""
+        anyagok = {d.id: d for d in self.deliverables}
+        for projekt in self.projects:
+            for d in getattr(projekt, "deliverables", []) or []:
+                anyagok.setdefault(d.id, d)
+        return list(anyagok.values())
+
+    @property
     def vagas_koltseg(self) -> float:
-        """Az utómunka ára: a vágások mért idejéből számolt költség
-        (Deliverable.koltseg, lásd services/deliverable_actions.py)."""
-        return float(sum(d.koltseg or 0 for d in self.deliverables))
+        """Az utómunka ára: a MÉRT munkaidőből (Timesheet) számolt költség -
+        ugyanaz a szám, ami az anyag oldalán a "Munkaidő-elszámolások" tábla
+        alján áll (lásd services/deliverable_actions.anyag_osszesitok).
+
+        SZÁNDÉKOSAN nem a `Deliverable.koltseg` mező: az egy régi, kézzel vagy
+        importból beírt összeg, ami nem követi a méréseket. Egy utólag
+        rögzített (vagy törölt) munkaidő-sor után ott elavult szám marad, és a
+        projekt költsége azzal hazudna.
+
+        Ha egy anyagon EGYÁLTALÁN nincs mérés (régi, Notionból hozott sorok),
+        marad a rögzített mező: nullát írni oda rosszabb hazugság lenne, mint
+        egy régi szám (lásd deliverable_actions.anyag_koltsege). Munkamenet
+        nélküli (leválasztott) példánynál ugyanez."""
+        from sqlalchemy import inspect as sa_inspect
+        from sqlalchemy.orm import object_session
+
+        from app.services import deliverable_actions
+
+        anyagok = self._anyagok
+        db = object_session(self)
+        if db is None:
+            return float(sum(d.koltseg or 0 for d in anyagok))
+
+        # Ha a mérések MÁR BE VANNAK TÖLTVE (a lista-lekérdezés eager loaddal
+        # hozza őket), a kapcsolatból dolgozunk - enélkül a lista soronként
+        # indítana egy-egy lekérdezést, ami több száz körré hízna.
+        betoltott = all("timesheets" not in sa_inspect(d).unloaded for d in anyagok)
+        if betoltott:
+            sorok = [t for d in anyagok for t in (d.timesheets or [])]
+            osszesitok = deliverable_actions.sorok_osszesitese(db, sorok)
+        else:
+            osszesitok = deliverable_actions.anyag_osszesitok(db, [d.id for d in anyagok])
+        return float(sum(deliverable_actions.anyag_koltsege(osszesitok, d) for d in anyagok))
 
     @property
     def belsos_munka_koltseg(self) -> float:

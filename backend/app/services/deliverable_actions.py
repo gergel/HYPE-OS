@@ -3,6 +3,7 @@ van kiosztva, vinyó-lista, Start/Stop időmérés, megrendelői kontaktok +
 levezetett email-lista, "Visszajelzés küldése" gomb (a felhasználó által
 küldött Notion automatizmus screenshot alapján) és a chat-szerű kommentek."""
 
+from collections.abc import Iterable
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
@@ -229,6 +230,62 @@ def sor_koltsege(db: Session, row: Timesheet, gyorsito: dict[int, float | None])
     if row.koltseg is not None:
         return float(row.koltseg)
     return szamolt_koltseg(sor_percei(row), sor_orabere(db, row, gyorsito))
+
+
+def anyag_osszesitok(db: Session, deliverable_ids: list[int]) -> dict[int, dict[str, float]]:
+    """Anyagonként a MÉRT idő és az abból adódó költség - egyetlen lekérdezésből.
+
+    Ez a VÁGÁS ÁRÁNAK egyetlen forrása: ugyanaz a szám, ami az anyag oldalán a
+    "Munkaidő-elszámolások" tábla alján áll. A `Deliverable.koltseg` mező NEM
+    használható erre: az egy régi, kézzel/importból beírt összeg, ami nem
+    követi a méréseket - egy utólag rögzített vagy törölt sor után ott elavult
+    szám maradna, és a projekt költsége hazudna.
+
+    A még FUTÓ mérések kimaradnak: azoknak nincs végleges idejük. A felület a
+    futó mérést másodpercenként külön mutatja (lásd TimerControls), a rögzített
+    költségbe viszont csak a leállított sorok kerülnek."""
+    if not deliverable_ids:
+        return {}
+    sorok = db.scalars(select(Timesheet).where(Timesheet.deliverable_id.in_(deliverable_ids))).all()
+    return sorok_osszesitese(db, sorok)
+
+
+def sorok_osszesitese(db: Session, sorok: Iterable[Timesheet]) -> dict[int, dict[str, float]]:
+    """Ugyanaz, de MÁR BETÖLTÖTT munkaidő-sorokból - így a hívó eldöntheti,
+    hogy kérdez-e külön (lásd anyag_osszesitok), vagy egy eager loaddal
+    behozott kapcsolatból dolgozik. A projektkód-lista az utóbbit teszi:
+    soronként külön lekérdezve ez több száz kör lenne."""
+    gyorsito: dict[int, float | None] = {}
+    eredmeny: dict[int, dict[str, float]] = {}
+    for row in sorok:
+        if row.deliverable_id is None:
+            continue
+        if row.end_date is None and row.start_date is not None:
+            continue
+        cel = eredmeny.setdefault(row.deliverable_id, {"percek": 0.0, "koltseg": 0.0})
+        cel["percek"] += sor_percei(row)
+        koltseg = sor_koltsege(db, row, gyorsito)
+        if koltseg is not None:
+            cel["koltseg"] += koltseg
+    return eredmeny
+
+
+def anyag_koltsege(osszesitok: dict[int, dict[str, float]], deliverable: Deliverable) -> float:
+    """Egy anyag vágási ára a projekt költségéhez.
+
+    Elsődlegesen a MÉRT munkaidőből (ez a valós szám, ez áll az anyag oldalán
+    a "Munkaidő-elszámolások" tábla alján is). A `Deliverable.koltseg` mező
+    csak akkor jön szóba, ha az anyagon EGYÁLTALÁN NINCS mérés: a régi,
+    Notionból hozott anyagoknál ez az egyetlen ismert összeg, és nullát írni
+    oda rosszabb hazugság lenne, mint egy régi számot.
+
+    Amíg van mérés, a mező NEM számít - épp ez volt a hiba: a mező nem követi a
+    méréseket, tehát egy utólag rögzített vagy törölt sor után elavult szám
+    maradt benne."""
+    sor = osszesitok.get(deliverable.id)
+    if sor is not None:
+        return float(sor["koltseg"])
+    return float(deliverable.koltseg or 0)
 
 
 def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employee) -> TimerState:

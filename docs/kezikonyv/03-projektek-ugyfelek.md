@@ -123,6 +123,26 @@ Felülről lefelé:
    forgatások "Külsős stáb" oszlopában vannak, ugyanaz a pénz lenne kétszer), és
    a **több napra szóló TIG** összege a napok közt fel van osztva.
 
+#### A vágás ára a MÉRT munkaidőből jön
+
+A projekt vágási költsége a munkaidő-sorokból (`Timesheet`) áll össze - pontosan
+az a szám, ami az anyag oldalán a "Munkaidő-elszámolások" tábla alján is
+látszik. A szabály egy helyen él:
+`services/deliverable_actions.anyag_osszesitok()`.
+
+A `Deliverable.koltseg` mező SZÁNDÉKOSAN nem forrás: azt semmi nem frissíti a
+mérésekből, tehát egy utólag rögzített (vagy törölt) munkaidő-sor után elavult
+szám marad benne - és a projekt költsége azzal hazudna.
+
+Egyetlen kivétel: ha egy anyagon **egyáltalán nincs mérés** (régi, Notionból
+hozott sorok), marad a rögzített mező. Ott az az egyetlen ismert összeg, és a
+nulla rosszabb hazugság lenne, mint egy régi szám
+(`deliverable_actions.anyag_koltsege`).
+
+A még FUTÓ mérés nem számít bele: annak nincs végleges ideje. A felület a futó
+mérést másodpercenként külön mutatja, a rögzített költségbe csak a leállított
+sorok kerülnek.
+
 A "nem kell ide papír" jelölés (nem szerződéses munka, vagy máshol elszámolt)
 összecsukva, a papírozás alatt maradt: a legtöbb munkánál nincs vele dolgunk,
 de valahonnan állíthatónak kell lennie - enélkül az ilyen kódok örökre a
