@@ -4,7 +4,6 @@ import {
   Paperclip,
   Send,
   Users,
-  Wallet,
   Wrench,
 } from "lucide-react";
 import { ActionButton } from "@/components/ActionButton";
@@ -19,22 +18,15 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { ForgatasIdopontEditor } from "@/components/ForgatasIdopontEditor";
 import { StabLinker } from "@/components/StabLinker";
-import { PerformanceCertificateManager } from "@/components/PerformanceCertificateManager";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
-import { SubcontractorContractManager } from "@/components/SubcontractorContractManager";
-import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
-import { SzamlazoFelSzerkeszto } from "@/components/SzamlazoFelSzerkeszto";
-import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { DISZPO_MAX_BAJT, DISZPO_MERET_TANACS } from "@/lib/csatolmany";
 import { szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
 import { VagasiKoltsegOsszesen, type FutoMeres } from "@/components/deliverable/VagasiKoltsegOsszesen";
 import {
   ENTITY_PATHS,
-  getAllContractsForProject,
-  getAllTigForProject,
   getAttachments,
   getCurrentUser,
   getDetailTabs,
@@ -42,10 +34,7 @@ import {
   getEquipment,
   getFieldTypes,
   getMyPagePermissions,
-  getPendingSubcontractorsForProject,
-  getPendingTigForProject,
   getProjektSzamlazok,
-  getVallalkozasok,
   getProjektUtomunkaOsszesites,
   getRecord,
   getRelated,
@@ -90,6 +79,12 @@ const ALWAYS_HIDDEN = [
   // csatolt fájlok) - a mezőrácsban egysoros beviteli mező lenne belőle,
   // ami épp azt veszi el, amiért ez a mező van.
   "gyartas_komment",
+  // "Nem diszponálandó (meeting)": ezt a NAPTÁR-SZINKRON állítja be magától a
+  // lila (meeting/helyszínbejárás) eseményekre - lásd services/google_calendar.py.
+  // Nem kézzel töltendő mező, viszont egyedüliként lakta a szintetikus "Egyéb"
+  // kártyát, tehát egy egész doboz állt az adatlapon egyetlen, magától
+  // beálló pipáért. A jelölés attól még él, csak nem foglal helyet.
+  "nem_diszponalando",
 ];
 
 const PAGE = "/projektek";
@@ -107,10 +102,6 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     allEquipment,
     allEmployees,
     bookings,
-    pendingContracts,
-    pendingTig,
-    allTig,
-    osszesSzerzodes,
     visibleFields,
     fieldTypes,
     dbTabs,
@@ -119,7 +110,6 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     currentUser,
     attachments,
     szamlazoNezet,
-    cegek,
   ] = await Promise.all([
     project.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(project.project_code_id)) : null,
     project.campaign_id ? getRecord(ENTITY_PATHS.campaign, Number(project.campaign_id)) : null,
@@ -127,10 +117,6 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     getEquipment(),
     getEmployees(),
     getRelated(ENTITY_PATHS.assignment, { project_id: projectId }),
-    getPendingSubcontractorsForProject(projectId),
-    getPendingTigForProject(projectId),
-    getAllTigForProject(projectId),
-    getAllContractsForProject(projectId),
     getVisibleFields("project"),
     getFieldTypes("project"),
     getDetailTabs("project"),
@@ -139,10 +125,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     getCurrentUser(),
     getAttachments("project", projectId),
     getProjektSzamlazok(projectId),
-    getVallalkozasok(),
   ]);
-
-  const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
 
   const equipmentById = new Map(allEquipment.map((e) => [e.id, e]));
   const equipmentOptions = allEquipment.map((e) => ({
@@ -353,60 +336,13 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
           </>
         ),
       },
-      {
-        key: "szerzodes-tig",
-        label: "Szerződés & TIG",
-        content: (
-          <>
-            {/* Ezt ELŐBB kell tisztázni, mint a szerződést: ettől függ, kinek a
-                nevére megy a papír (lásd SzamlazoFelSzerkeszto). */}
-            <Card title="Ki számláz kiért" icon={Wallet}>
-              {szamlazoNezet ? (
-                <SzamlazoFelSzerkeszto
-                  nezet={szamlazoNezet}
-                  cegek={cegek.filter((c) => c.aktiv).map((c) => ({ id: c.id, nev: c.nev }))}
-                      canEdit={szerkeszthet}
-                />
-              ) : (
-                <p className="text-[13px] text-text-secondary">A számlázási beállítás most nem érhető el.</p>
-              )}
-            </Card>
-            <Card title="Szerződés készítés" icon={Wallet}>
-              <SubcontractorContractManager
-                projectId={project.id}
-                pending={pendingContracts?.pending ?? []}
-                teljesitesAlap={pendingContracts?.teljesites_szoveg_alap ?? ""}
-              />
-              {/* A kiküldött szerződés eltűnik a fenti (teendő-)listáról -
-                  itt látszik, kinek van kész papírja, és hol van. */}
-              <ElkeszultSzerzodesek projectId={project.id} szerzodesek={osszesSzerzodes} />
-            </Card>
-            <Card title="Teljesítési igazolás (Külsős TIG)" icon={FileText}>
-              {pendingTig?.tig_ready ? (
-                <PerformanceCertificateManager
-                  projectId={project.id}
-                  pending={pendingTig.pending}
-                  teljesitesAlap={pendingTig.teljesites_szoveg_alap}
-                />
-              ) : (
-                <p className="text-[13px] text-text-secondary">
-                  Teljesítési igazolás félenként készíthető: amint valakinek megvan a szerződése (vagy
-                  keretszerződés fedi), róla azonnal mehet a TIG. Itt még senkinél nincs meg - lásd a fenti
-                  &quot;Szerződés készítés&quot; kártyát.
-                </p>
-              )}
-              <TigInvoiceManager
-                projectId={project.id}
-                basePath="/api/v1/teljesitesi-igazolasok"
-                certificates={allTig}
-                employeeNameById={employeeNameById}
-                readyStatus="Kiküldve"
-                canEdit={pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit")}
-              />
-            </Card>
-          </>
-        ),
-      },
+      // A "Szerződés & TIG" fül SZÁNDÉKOSAN nincs itt. Ez az oldal a
+      // diszponálásé: forgatás, stáb, technika, diszpó. A papírozás (ki számláz
+      // kiért, szerződés, TIG, kifizetés) hetekkel később, más kézben és
+      // EGYBEN történik - arra az Utókövetés oldal való, ahol ugyanezek a
+      // kezelők egy helyen, az összes projektre rálátva vannak (lásd
+      // app/(app)/utokovetes/[id]/page.tsx). Két helyen ugyanaz a papírozás
+      // csak azt eredményezte, hogy a diszpót író ember is beleakadt.
       {
         key: "csapat",
         label: "Csapat & Utómunka",
@@ -524,6 +460,19 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                   Kampány: {String(campaign.nev)}
                 </a>
               )}
+              {/* A papírozás (szerződés, TIG, kifizetés) nem ezen az oldalon
+                  történik, hanem az Utókövetésben - ez a link vezet oda, hogy
+                  ne kelljen keresgélni. */}
+              <a
+                href={`/utokovetes/${project.id}`}
+                // Felugró ablakban (naptár/lista nézet) új lapon nyílik: az
+                // iframe-en belül elnavigálva a modál keretében ragadna.
+                target={embedded ? "_blank" : undefined}
+                rel={embedded ? "noopener noreferrer" : undefined}
+                className="text-text-accent hover:underline"
+              >
+                Szerződés &amp; TIG: Utókövetés
+              </a>
             </>
           }
           actions={

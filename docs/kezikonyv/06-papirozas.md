@@ -72,6 +72,18 @@ hogy ennek az egy embernek erre az egy projektre mi van a papírján. Az ablak
 **olvasó** - a szerkesztés az utókövetés-oldalon marad, ahová egy gomb visz.
 Kettőzött szerkesztő-felületből előbb-utóbb két, egymástól elcsúszó igazság lenne.
 
+## Hol papírozunk: az Utókövetésben, nem a Projekt oldalon
+
+Az alvállalkozói papírozás (ki számláz kiért → szerződés → TIG → kifizetés)
+**egy helyen él: az Utókövetés projekt-oldalán** (`/utokovetes/{id}`). A Projekt
+adatlapja a diszponálásé - forgatás, stáb, technika, diszpó -, ott ezek a
+kártyák szándékosan nincsenek kint; helyettük egy link vezet az utókövetéshez.
+
+Miért: a két dolgot más ember csinálja, más időben. A diszpó a forgatás előtti
+napon készül, a papírozás hetekkel később, és akkor egyszerre több projektre.
+Amíg mindkét oldalon ott volt ugyanaz a felület, a diszpót író ember is
+beleakadt egy fél-kész papírozásba, ami nem az ő dolga volt.
+
 ## Az alvállalkozói folyamat sorrendje
 
 0. **Stáb összeáll** → a nem belsős stábtagoknál rögtön megkérdezzük, mennyiért

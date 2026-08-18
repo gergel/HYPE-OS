@@ -21,13 +21,18 @@ import {
   getVallalkozasok,
 } from "@/lib/api";
 
-/** Az Utókövetés részletnézete NEM csak egy állapot-áttekintés, hanem itt is
- * el lehet készíteni a szerződéseket és a TIG-eket - ugyanazok a
- * (SubcontractorContractManager/PerformanceCertificateManager/
- * TigInvoiceManager) komponensek, amik a Projekt oldal "Szerződés & TIG"
- * szekciójában is szerepelnek -, hogy ne kelljen admin a Projekt oldalra
- * átnavigálnia csak azért, hogy egy hátralévő tételt lezárjon. A Belsős TIG
- * itt nem jelenik meg - az havi, nem projektenkénti, lásd /belsos-tig. */
+/** Az Utókövetés részletnézete NEM csak egy állapot-áttekintés: EZ a papírozás
+ * helye. Itt készül a szerződés és a TIG, itt dől el, ki számláz kiért, és itt
+ * látszik a kifizetés.
+ *
+ * A Projekt oldalon szándékosan NINCS ilyen szekció: az a diszponálásé
+ * (forgatás, stáb, technika, diszpó). A papírozás hetekkel később, más kézben
+ * és egyszerre több projektre történik - két helyen ugyanaz csak azt érte el,
+ * hogy a diszpót író ember is beleakadt. A Projekt adatlapról ide egy link
+ * vezet (lásd components/ProjectDetailContent.tsx).
+ *
+ * A Belsős TIG itt nem jelenik meg - az havi, nem projektenkénti,
+ * lásd /belsos-tig. */
 export default async function UtokovetesDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectId = Number(id);
