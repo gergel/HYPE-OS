@@ -184,17 +184,29 @@ class ProjectCode(TimestampMixin, Base):
 
     @property
     def keret_fedi(self) -> bool:
-        """Fedi-e a munkát ÉLŐ megrendelői keretszerződés.
+        """Fedi-e EZT a munkát megrendelői keretszerződés.
 
-        Ha igen, eseti szerződés nem kell - a keret pont azért van, hogy ne
-        kelljen munkánként újraszerződni. A TIG-et viszont nem váltja ki: az
-        arról szól, hogy egy konkrét munka elkészült. Ugyanez a szabály az
-        alvállalkozói oldalon is."""
+        A kérdés a PROJEKTKÓDRA vonatkozik, nem az ügyfélre: az számít, hogy
+        ehhez a kódhoz oda van-e kötve egy élő keretszerződés (`contract_id`).
+
+        Korábban azt néztük, van-e az ÜGYFÉLNEK bármilyen élő kerete - ez
+        tömegesen hazudott: egyetlen keretszerződéstől a megrendelő ÖSSZES
+        munkája "keretszerződés alatt"-nak látszott, azok is, amikre a keret
+        nem terjed ki, és amikre a Notion sem így hivatkozik. Márpedig ez a
+        jelölés teendőt tüntet el (eseti szerződést nem kérünk) - tévesen
+        állítva pont a hiányzó papírokat rejti el.
+
+        A kötést a Notion-import hozza (a projektkód "Keretszerződés"
+        relationjéből, lásd notion_import/importers.py), illetve a szerződés
+        készítésekor lehet ráállítani (routes/megrendeloi_papirok.py).
+
+        A TIG-et ez NEM váltja ki: a keret arról szól, milyen feltételekkel
+        dolgozunk együtt, a TIG arról, hogy egy konkrét munka elkészült."""
         from app.services.megrendeloi_papir import megrendeloi_keret_ervenyes
 
-        if self.client is None:
+        if self.contract is None:
             return False
-        return any(megrendeloi_keret_ervenyes(c, self.datum) for c in self.client.contracts)
+        return megrendeloi_keret_ervenyes(self.contract, self.datum)
 
     @property
     def szerzodes_kesz(self) -> bool:

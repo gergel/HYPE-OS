@@ -3,6 +3,7 @@ import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { KoltsegBontas } from "@/components/KoltsegBontas";
+import { KeretKotes } from "@/components/megrendeloi/KeretKotes";
 import { MegrendeloiPapirKezelo } from "@/components/megrendeloi/MegrendeloiPapirKezelo";
 import { PapirKapcsolok } from "@/components/megrendeloi/PapirKapcsolok";
 import { ProjektkodBontasTablak } from "@/components/projektkod/ProjektkodBontasTablak";
@@ -137,6 +138,18 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             első kettő nincs meg - így ránézésre látszik, hol tart a munka. */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           <Card title="1. Megrendelői szerződés" icon={FileSignature}>
+            {/* Keret alatt nincs eseti szerződés-teendő - de ezt KI KELL
+                MONDANI a projektkódra, nem elég, hogy az ügyfélnek van
+                valahol kerete (lásd KeretKotes). */}
+            <div className="mb-3">
+              <KeretKotes
+                projectCodeId={projectCodeId}
+                keretFedi={projectCode.keret_fedi === true}
+                keretszerzodesId={typeof projectCode.contract_id === "number" ? projectCode.contract_id : null}
+                keretek={megrendeloiKeretek}
+                canEdit={canEdit}
+              />
+            </div>
             <MegrendeloiPapirKezelo
               projectCodeId={projectCodeId}
               fajta="szerzodes"

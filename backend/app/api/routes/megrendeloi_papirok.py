@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
+from app.models.contract import Contract
 from app.models.employee import Employee
 from app.models.megrendeloi_papir import ALLAPOTOK, LEZART_ALLAPOTOK, MegrendeloiSzerzodes, MegrendeloiTig
 from app.models.project_code import ProjectCode
@@ -437,6 +438,78 @@ def set_allapot(
 
 class KihagyasIn(BaseModel):
     kihagyas_oka: str | None = None
+
+
+class KeretKotesIn(BaseModel):
+    """A projektkód keretszerződés alá helyezése (vagy a kötés oldása).
+
+    Kétféleképp lehet megadni: konkrét keretszerződéssel, vagy csak az
+    ÜGYFÉLLEL - utóbbinál mi keressük meg az élő keretét. Üres `client_id` és
+    üres `keretszerzodes_id` = a kötés oldása."""
+
+    client_id: int | None = None
+    keretszerzodes_id: int | None = None
+
+
+class KeretKotesOut(BaseModel):
+    keret_fedi: bool
+    keretszerzodes_id: int | None = None
+    keretszerzodes_neve: str | None = None
+    client_id: int | None = None
+
+
+@router.post("/keret-kotes/{project_code_id}", response_model=KeretKotesOut)
+def set_keret_kotes(
+    project_code_id: int,
+    payload: KeretKotesIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """"Ez a munka keretszerződés alatt van" - a projektkód rákötése a
+    megrendelői keretszerződésre.
+
+    Ettől a kódtól nem kérünk eseti szerződést: a szerződés-lépés kész, és már
+    csak a TIG van hátra. A kötés a PROJEKTKÓDON él (`contract_id`), nem az
+    ügyfélen - egy megrendelővel köthetünk keretet úgy is, hogy nem minden
+    munkája tartozik alá (lásd models/project_code.keret_fedi).
+
+    Ügyfelet megadva magunk keressük meg az élő keretét: a felületen így elég
+    kiválasztani, kiről van szó."""
+    pk = _projektkod_vagy_404(db, project_code_id)
+
+    if payload.keretszerzodes_id is None and payload.client_id is None:
+        pk.contract_id = None
+        db.commit()
+        return KeretKotesOut(keret_fedi=False, client_id=pk.client_id)
+
+    keret: Contract | None = None
+    if payload.keretszerzodes_id is not None:
+        keret = db.get(Contract, payload.keretszerzodes_id)
+        if keret is None or not megrendeloi_papir.megrendeloi_keret_ervenyes(keret, pk.datum):
+            raise HTTPException(
+                status_code=400,
+                detail="Ez a keretszerződés nem érvényes erre a munkára (nem aktív, vagy nem fedi a dátumát).",
+            )
+    else:
+        keret = megrendeloi_papir.keretszerzodes_fedi(db, payload.client_id, pk.datum)
+        if keret is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Ennek az ügyfélnek nincs élő keretszerződése - eseti szerződést kell készíteni.",
+            )
+
+    pk.contract_id = keret.id
+    # Az ügyfél is a helyére kerül, ha eddig üres volt: a keret megmondja,
+    # kiről van szó, és így a többi előtöltés is jó irányba indul.
+    if pk.client_id is None and keret.client_id is not None:
+        pk.client_id = keret.client_id
+    db.commit()
+    return KeretKotesOut(
+        keret_fedi=True,
+        keretszerzodes_id=keret.id,
+        keretszerzodes_neve=keret.ceg_neve or (keret.client.nev if keret.client else None),
+        client_id=pk.client_id,
+    )
 
 
 @router.post("/{fajta}/{project_code_id}/kihagyas", response_model=PapirRead)

@@ -345,6 +345,33 @@ Amit tudni kell:
 
 ## Megrendelői papírozás
 
+### Keretszerződés alatt: a PROJEKTKÓD kötése számít, nem az ügyfélé
+
+Egy munka akkor van keretszerződés alatt, ha ahhoz a **projektkódhoz** oda van
+kötve egy élő megrendelői keret (`ProjectCode.contract_id`). Nem elég, hogy az
+ügyféllel van valahol keretszerződésünk.
+
+Korábban az utóbbi döntött, és ez tömegesen hazudott: egyetlen kerettől a
+megrendelő ÖSSZES munkája "keretszerződés alatt"-nak látszott. Ez a jelölés
+viszont TEENDŐT tüntet el (eseti szerződést nem kérünk tőle), tehát tévesen
+állítva pont a hiányzó papírokat rejti el.
+
+A kötés két helyről jöhet:
+
+- a **Notion-import** hozza a projektkód "Keretszerződés" relationjéből
+  (`notion_import/importers.py`) - a Notionban minden projektkód-sor magától
+  mutatja, tartozik-e kerethez;
+- a **projektkód adatlapján** mondja ki valaki: a szerződés-kártyán ki lehet
+  választani a keretszerződést (`components/megrendeloi/KeretKotes.tsx`,
+  `POST /megrendeloi-papirok/keret-kotes/{project_code_id}`). Ügyfelet megadva
+  a szerver keresi meg az élő keretét; ha nincs neki, azt meg is mondja, hogy
+  eseti szerződés kell.
+
+Ha megvan a kötés, a szerződés-lépés kész, és már csak a TIG van hátra - a
+keret ugyanis arról szól, milyen feltételekkel dolgozunk együtt, a TIG arról,
+hogy egy konkrét munka elkészült.
+
+
 Ugyanaz a folyamat, mint az alvállalkozói oldalon, csak a **másik irányba** - a
 megrendelő felé. Ezért ugyanazok a lépések is:
 

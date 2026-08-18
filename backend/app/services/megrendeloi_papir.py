@@ -275,7 +275,10 @@ def papir_allas(db: Session, project_code: ProjectCode) -> PapirAllas:
         kell_papir=papirt_igenyel(project_code),
         szerzodes=szerzodes,
         tig=tig,
-        keret_fedi=keretszerzodes_fedi(db, project_code.client_id, project_code.datum) is not None,
+        # A fedettség a projektkód SAJÁT keretszerződés-kötésén múlik, nem
+        # azon, hogy az ügyfélnek van-e valahol kerete (lásd
+        # models/project_code.keret_fedi).
+        keret_fedi=project_code.keret_fedi,
     )
 
 
@@ -301,22 +304,19 @@ def papir_allasok(db: Session, project_codes: list[ProjectCode]) -> dict[int, Pa
     szerzodesek = legutobbi(MegrendeloiSzerzodes)
     tigek = legutobbi(MegrendeloiTig)
 
-    # A keretszerződések ügyfelenként, EGY lekérdezésből: enélkül a keret-fedés
-    # ellenőrzése projektkódonként külön kör lenne (a papir_allas() egyesével
-    # nézi, itt épp azt kerüljük el).
-    ugyfel_idk = {pk.client_id for pk in project_codes if pk.client_id is not None}
-    keretek: dict[int, list[Contract]] = {}
-    if ugyfel_idk:
-        for c in db.scalars(
-            select(Contract).where(
-                Contract.tipus == ContractType.KERETSZERZODES,
-                Contract.client_id.in_(ugyfel_idk),
-            )
-        ):
-            keretek.setdefault(c.client_id, []).append(c)
+    # A ráKÖTÖTT keretszerződések, EGY lekérdezésből: enélkül projektkódonként
+    # külön kör lenne. Nem az ügyfél keretét nézzük, hanem azt, amit ehhez a
+    # kódhoz kötöttek (lásd models/project_code.keret_fedi).
+    keret_idk = {pk.contract_id for pk in project_codes if pk.contract_id is not None}
+    keretek: dict[int, Contract] = {}
+    if keret_idk:
+        keretek = {
+            c.id: c for c in db.scalars(select(Contract).where(Contract.id.in_(keret_idk)))
+        }
 
     def fedi(pk: ProjectCode) -> bool:
-        return any(megrendeloi_keret_ervenyes(c, pk.datum) for c in keretek.get(pk.client_id, []))
+        keret = keretek.get(pk.contract_id) if pk.contract_id is not None else None
+        return keret is not None and megrendeloi_keret_ervenyes(keret, pk.datum)
 
     return {
         pk.id: PapirAllas(
