@@ -145,6 +145,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               <KeretKotes
                 projectCodeId={projectCodeId}
                 keretFedi={projectCode.keret_fedi === true}
+                keretNeve={szoveg(projectCode.keretszerzodes_neve)}
                 keretszerzodesId={typeof projectCode.contract_id === "number" ? projectCode.contract_id : null}
                 keretek={megrendeloiKeretek}
                 canEdit={canEdit}

@@ -22,12 +22,18 @@ import type { MegrendeloiKeret } from "@/lib/api";
 export function KeretKotes({
   projectCodeId,
   keretFedi,
+  keretNeve,
   keretek,
   keretszerzodesId,
   canEdit,
 }: {
   projectCodeId: number;
   keretFedi: boolean;
+  /** KIVEL van a keret - a SZERVER mondja meg (a projektkódra kötött
+   * szerződésből), nem a lentebbi listából keressük ki. A választható keretek
+   * listája ugyanis szűrhet (pl. csak aktívak), és akkor a név némán eltűnne -
+   * pont az az információ, amiért ez a doboz van. */
+  keretNeve: string | null;
   /** A választható megrendelői keretszerződések (cégenként). */
   keretek: MegrendeloiKeret[];
   /** A projektkódhoz KÖTÖTT keret azonosítója, ha van. */
@@ -39,7 +45,8 @@ export function KeretKotes({
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
 
-  const kotott = keretek.find((k) => k.id === keretszerzodesId);
+  const listabol = keretek.find((k) => k.id === keretszerzodesId);
+  const cegNev = keretNeve ?? listabol?.ceg_neve ?? listabol?.client_nev ?? null;
 
   async function ment(keretszerzodes_id: number | null) {
     setBusy(true);
@@ -67,12 +74,12 @@ export function KeretKotes({
       <div className="space-y-1 rounded-[var(--radius)] border border-border p-3">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge label="Keretszerződés alatt" tone="success" />
-          <span className="text-[13px] text-text-secondary">
-            {kotott?.ceg_neve ?? kotott?.client_nev ?? "keretszerződés"}
-          </span>
+          {cegNev && <span className="text-[13px] text-text-primary">{cegNev}</span>}
         </div>
         <p className="text-[12.5px] text-text-muted">
-          Eseti szerződés nem kell – már csak a TIG van hátra.
+          {cegNev
+            ? `Eseti szerződés nem kell – a ${cegNev} keretszerződése fedi. Már csak a TIG van hátra.`
+            : "Eseti szerződés nem kell – már csak a TIG van hátra."}
         </p>
         {canEdit && (
           <button
