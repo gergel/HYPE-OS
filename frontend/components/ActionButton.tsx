@@ -16,11 +16,18 @@ export function ActionButton({
   path,
   label,
   confirmMessage,
+  figyelmeztetes,
+  megerositoCimke,
   redirectPrefix,
 }: {
   path: string;
   label: string;
   confirmMessage?: string;
+  /** Nagy, PIROS felirat a megerősítő kérdés fölött (pl. "MÁR KI VAN KÜLDVE").
+   * Ha meg van adva, a kérdés akkor is felugrik, ha confirmMessage nincs. */
+  figyelmeztetes?: string;
+  /** A megerősítő gomb felirata ("Rendben" helyett). */
+  megerositoCimke?: string;
   redirectPrefix?: string;
 }) {
   const router = useRouter();
@@ -32,7 +39,11 @@ export function ActionButton({
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
-    if (confirmMessage && !(await confirm(confirmMessage))) return;
+    if (
+      (confirmMessage || figyelmeztetes) &&
+      !(await confirm(confirmMessage ?? "", { figyelmeztetes, megerositoCimke }))
+    )
+      return;
     setBusy(true);
     try {
       const res = await authFetch(path, { method: "POST" });

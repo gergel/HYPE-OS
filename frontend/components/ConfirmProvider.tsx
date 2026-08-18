@@ -2,9 +2,27 @@
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 
-type PendingConfirm = { message: string; kind: "confirm" | "alert" };
+/** A megerősítő ablak extra díszei. Egyelőre egy dolgot tud: egy NAGY, PIROS
+ * figyelmeztetést a kérdés fölé. Olyan műveleteknél kell, amiket technikailag
+ * meg lehet ismételni, de valakinek fáj: pl. a már kiküldött diszpó újbóli
+ * kiküldése (a stáb újra megkapja ugyanazt a levelet). A sima szürke kérdést
+ * ilyenkor átfutja az ember - ezt nem. */
+export type ConfirmOpciok = {
+  /** Nagy, piros felirat a kérdés fölött (pl. "MÁR KI VAN KÜLDVE"). */
+  figyelmeztetes?: string;
+  /** A megerősítő gomb felirata ("Rendben" helyett, pl. "Igen, újraküldöm"). */
+  megerositoCimke?: string;
+};
 
-const ConfirmContext = createContext<((message: string) => Promise<boolean>) | null>(null);
+type PendingConfirm = {
+  message: string;
+  kind: "confirm" | "alert";
+  opciok?: ConfirmOpciok;
+};
+
+const ConfirmContext = createContext<
+  ((message: string, opciok?: ConfirmOpciok) => Promise<boolean>) | null
+>(null);
 /** Csak tudomásul vehető (egy gombos) felugró ablak - ugyanaz a keret, mint a
  * megerősítőnél. Olyan hibáknál kell, ahol a felhasználónak el kell olvasnia
  * egy listát (pl. kiknek hiányzik az email címe a diszpó küldése előtt), tehát
@@ -22,10 +40,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [pending, setPending] = useState<PendingConfirm | null>(null);
   const resolveRef = useRef<((value: boolean) => void) | null>(null);
 
-  const confirm = useCallback((message: string): Promise<boolean> => {
+  const confirm = useCallback((message: string, opciok?: ConfirmOpciok): Promise<boolean> => {
     return new Promise<boolean>((resolve) => {
       resolveRef.current = resolve;
-      setPending({ message, kind: "confirm" });
+      setPending({ message, kind: "confirm", opciok });
     });
   }, []);
 
@@ -58,10 +76,19 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           <div
             role="alertdialog"
             aria-modal="true"
-            className="w-full max-w-sm fade-in rounded-[var(--radius-lg)] border border-border-strong bg-surface-2 p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.95)] shadow-xl"
+            className={`w-full ${
+              pending.opciok?.figyelmeztetes ? "max-w-md border-[color:var(--text-danger)]" : "max-w-sm border-border-strong"
+            } fade-in rounded-[var(--radius-lg)] border bg-surface-2 p-6 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.95)] shadow-xl`}
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="mb-5 whitespace-pre-line text-[13px] text-text-primary">{pending.message}</p>
+            {pending.opciok?.figyelmeztetes && (
+              <p className="mb-3 whitespace-pre-line text-[22px] font-semibold uppercase leading-tight tracking-wide text-text-danger">
+                {pending.opciok.figyelmeztetes}
+              </p>
+            )}
+            {pending.message && (
+              <p className="mb-5 whitespace-pre-line text-[13px] text-text-primary">{pending.message}</p>
+            )}
             <div className="flex justify-end gap-2.5">
               {pending.kind === "confirm" && (
                 <button
@@ -79,7 +106,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 onClick={() => respond(true)}
                 className="btn btn-danger"
               >
-                Rendben
+                {pending.opciok?.megerositoCimke ?? "Rendben"}
               </button>
             </div>
           </div>
@@ -89,7 +116,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useConfirm(): (message: string) => Promise<boolean> {
+export function useConfirm(): (message: string, opciok?: ConfirmOpciok) => Promise<boolean> {
   const ctx = useContext(ConfirmContext);
   if (!ctx) throw new Error("useConfirm csak ConfirmProvider-en belül használható.");
   return ctx;

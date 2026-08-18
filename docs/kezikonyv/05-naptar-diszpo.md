@@ -53,6 +53,22 @@ csak a kiemelés és a felirat mondja meg, mikor mi a teendő.
 pollozás volt; itt **explicit gombok** vannak: az "Előzetes diszpó" és a "Diszpó
 küldése" gomb megnyomása maga a trigger, nincs állapotgép és nincs pollozás.
 
+### Újraküldés: nagy, piros figyelmeztetés
+
+A kiküldés megismételhető (javított diszpót muszáj újraküldeni), de nem
+véletlenül: ha az adott projekten már van kiküldés-állapot
+(`elozetes_diszpo_kuldes`, illetve `diszpo`), akkor a gomb felirata
+"Újraküldés"-re vált, és kattintásra egy **nagy, piros** "MÁR KI VAN KÜLDVE"
+figyelmeztetés ugrik fel; a megerősítő gomb felirata "Igen, újraküldöm". Enélkül
+a szürke, mindig ugyanúgy kinéző kérdést az ember átfutja - itt viszont a stáb
+MÉG EGYSZER megkapja ugyanazt a levelet.
+
+A figyelmeztetés a megerősítő párbeszéd egy opciója
+(`ConfirmProvider` → `ConfirmOpciok.figyelmeztetes` / `megerositoCimke`), az
+`ActionButton` csak továbbadja - így bármelyik másik "fáj, ha kétszer megy el"
+művelet is megkaphatja. Mindkét hívóhely ugyanúgy viselkedik: a projekt
+részletnézet "Diszpó küldése" füle és a Naptár/Diszpó lista.
+
 **Projektkód nélkül nem megy ki diszpó** (`_require_projektkod`). Ez az a pont,
 ahol a forgatás "élessé" válik: innentől stáb, technika és papír kapcsolódik rá,
 és mindegyik a kódra hivatkozik vissza. A naptárból a projekt kód nélkül érkezik,

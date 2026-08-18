@@ -289,16 +289,28 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 <div className="flex flex-wrap items-center gap-3">
                   <ActionButton
                     path={`/api/v1/projects/${project.id}/diszpo/elozetes`}
-                    label="Előzetes diszpó"
-                    confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+                    label={elozetesAllapot ? "Előzetes diszpó újraküldése" : "Előzetes diszpó"}
+                    figyelmeztetes={elozetesAllapot ? "AZ ELŐZETES DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
+                    megerositoCimke={elozetesAllapot ? "Igen, újraküldöm" : undefined}
+                    confirmMessage={
+                      elozetesAllapot
+                        ? `Állapot: ${elozetesAllapot}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja ugyanazt a levelet. Biztosan újraküldöd?`
+                        : "Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+                    }
                   />
                   {elozetesAllapot && <StatusBadge label={elozetesAllapot} tone="success" />}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <ActionButton
                     path={`/api/v1/projects/${project.id}/diszpo/kuldes`}
-                    label="Diszpó küldése"
-                    confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+                    label={diszpoAllapot ? "Diszpó újraküldése" : "Diszpó küldése"}
+                    figyelmeztetes={diszpoAllapot ? "A DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
+                    megerositoCimke={diszpoAllapot ? "Igen, újraküldöm" : undefined}
+                    confirmMessage={
+                      diszpoAllapot
+                        ? `Állapot: ${diszpoAllapot}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja a teljes diszpót (technika listával, PDF-fel). Biztosan újraküldöd?`
+                        : "Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+                    }
                   />
                   {diszpoAllapot && <StatusBadge label={diszpoAllapot} tone="success" />}
                 </div>

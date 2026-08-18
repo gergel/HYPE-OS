@@ -300,8 +300,16 @@ export function NaptarDiszpoContent({
                               {canSend && (
                                 <ActionButton
                                   path={`/api/v1/projects/${p.id}/diszpo/elozetes`}
-                                  label="Küldés"
-                                  confirmMessage="Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+                                  label={p.elozetes_diszpo_kuldes ? "Újraküldés" : "Küldés"}
+                                  figyelmeztetes={
+                                    p.elozetes_diszpo_kuldes ? "AZ ELŐZETES DISZPÓ MÁR KI VAN KÜLDVE" : undefined
+                                  }
+                                  megerositoCimke={p.elozetes_diszpo_kuldes ? "Igen, újraküldöm" : undefined}
+                                  confirmMessage={
+                                    p.elozetes_diszpo_kuldes
+                                      ? `${p.nev} – állapot: ${p.elozetes_diszpo_kuldes}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja ugyanazt a levelet. Biztosan újraküldöd?`
+                                      : "Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+                                  }
                                 />
                               )}
                             </div>
@@ -320,8 +328,14 @@ export function NaptarDiszpoContent({
                               {canSend && (
                                 <ActionButton
                                   path={`/api/v1/projects/${p.id}/diszpo/kuldes`}
-                                  label="Küldés"
-                                  confirmMessage="Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+                                  label={p.diszpo ? "Újraküldés" : "Küldés"}
+                                  figyelmeztetes={p.diszpo ? "A DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
+                                  megerositoCimke={p.diszpo ? "Igen, újraküldöm" : undefined}
+                                  confirmMessage={
+                                    p.diszpo
+                                      ? `${p.nev} – állapot: ${p.diszpo}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja a teljes diszpót (technika listával, PDF-fel). Biztosan újraküldöd?`
+                                      : "Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+                                  }
                                 />
                               )}
                             </div>
