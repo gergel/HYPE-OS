@@ -1,12 +1,13 @@
 from datetime import date
 
-from fastapi import Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import require_page_action
+from app.core.security import get_current_user, require_page_action
 from app.models.contract import Contract
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
@@ -46,6 +47,57 @@ def _papir_kapcsolok_ellenorzese(obj: ProjectCode, data: dict, _db: Session) -> 
             status_code=400,
             detail="A papír nélküli elszámoláshoz meg kell adni az okát.",
         )
+
+
+class ProjectCodeOption(BaseModel):
+    """Egy projektkód ANNYIRA, amennyi egy címkéhez/választóhoz kell."""
+
+    id: int
+    projektkod: str
+    project_nev: str | None = None
+    client_id: int | None = None
+    esemeny_allapota: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+#: Külön router, mert a "/valaszthato" útvonalat a CRUD-generátor
+#: "/{item_id}" mintája elnyelné - ezt a listát ELŐBB kell bejegyezni
+#: (lásd api/routes/__init__.py).
+valaszthato_router = APIRouter(prefix="/project-codes", tags=["project-codes"])
+
+
+@valaszthato_router.get("/valaszthato", response_model=list[ProjectCodeOption])
+def list_valaszthato(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """A projektkódok CSAK a nevükkel - választóhoz és címke-feloldáshoz.
+
+    Miért külön végpont? Mert a teljes lista minden kódra kiszámolja a
+    költségeket, a profitot és a papír-állást: végigjárja a forgatásokat, a
+    stábot, az utómunkákat, a méréseket, a kiadásokat és a TIG-eket. 800
+    kódnál ez több másodperc és fél megabájt - miközben a Projektek, a
+    Naptár, a Pénzügyek, a Dashboard és a munkatárs-adatlap mindebből
+    egyetlen dolgot használ: melyik id melyik kódot jelenti.
+
+    Ez a végpont sima oszlopokat olvas, egyetlen lekérdezéssel."""
+    sorok = db.execute(
+        select(
+            ProjectCode.id,
+            ProjectCode.projektkod,
+            ProjectCode.project_nev,
+            ProjectCode.client_id,
+            ProjectCode.esemeny_allapota,
+        ).order_by(ProjectCode.projektkod)
+    ).all()
+    return [
+        ProjectCodeOption(
+            id=sor.id,
+            projektkod=sor.projektkod,
+            project_nev=sor.project_nev,
+            client_id=sor.client_id,
+            esemeny_allapota=sor.esemeny_allapota,
+        )
+        for sor in sorok
+    ]
 
 
 router = build_crud_router(

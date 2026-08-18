@@ -32,6 +32,7 @@ from app.api.routes.portal_admin import router as portal_admin_router
 from app.api.routes.portal_public import downloads_router as portal_downloads_router, router as portal_public_router
 from app.api.routes.postproduction import deliverable_actions_router, deliverables_router, feedback_router, timesheets_router
 from app.api.routes.project_codes import router as project_codes_router
+from app.api.routes.project_codes import valaszthato_router as project_codes_valaszthato_router
 from app.api.routes.project_szamlazok import router as projekt_szamlazok_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.public_utokovetes import router as public_utokovetes_router
@@ -61,6 +62,9 @@ api_router.include_router(dashboard_router)
 api_router.include_router(clients_router)
 api_router.include_router(contacts_router)
 # 4-5. Project Codes / Projects
+# ELŐBB a "/valaszthato", különben a CRUD-generátor "/{item_id}" mintája
+# nyelné el az útvonalat (lásd routes/project_codes.py).
+api_router.include_router(project_codes_valaszthato_router)
 api_router.include_router(project_codes_router)
 api_router.include_router(projects_router)
 api_router.include_router(projekt_szamlazok_router)

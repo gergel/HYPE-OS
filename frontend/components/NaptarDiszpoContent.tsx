@@ -6,7 +6,7 @@ import { Card } from "@/components/Card";
 import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar";
 import { ProjectDetailModal } from "@/components/ProjectDetailModal";
 import { StatusBadge } from "@/components/StatusBadge";
-import type { Project, ProjectCode } from "@/lib/api";
+import type { Project, ProjectCodeOption } from "@/lib/api";
 
 function formatDate(value: string | null): string {
   return value ? value.slice(0, 10) : "–";
@@ -68,7 +68,9 @@ export function NaptarDiszpoContent({
   canSend,
 }: {
   projects: Project[];
-  projectCodes: ProjectCode[];
+  /** Csak a kód-címkékhez kell (id -> projektkód), ezért a KÖNNYŰ lista
+   * (lásd lib/api.getProjectCodeOptions). */
+  projectCodes: ProjectCodeOption[];
   canSend: boolean;
 }) {
   const [view, setView] = useState<"table" | "calendar">("table");

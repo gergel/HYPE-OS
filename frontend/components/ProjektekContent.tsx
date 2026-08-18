@@ -10,7 +10,7 @@ import { ProjectDetailModal } from "@/components/ProjectDetailModal";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { authFetch } from "@/lib/authFetch";
 import { useLiveTopic } from "@/lib/live";
-import type { Project, ProjectCode } from "@/lib/api";
+import type { Project, ProjectCodeOption } from "@/lib/api";
 
 // Nem importáljuk az ENTITY_PATHS-t a lib/api.ts-ből (bár csak egy sima
 // konstans) - az a modul a `next/headers`-t is importálja (szerver-oldali
@@ -45,7 +45,9 @@ export function ProjektekContent({
 }: {
   initialProjects: Project[];
   hasMore: boolean;
-  projectCodes: ProjectCode[];
+  /** Csak a kód-címkékhez és a "+ Új projekt" választójához kell, ezért a
+   * KÖNNYŰ lista (lásd lib/api.getProjectCodeOptions). */
+  projectCodes: ProjectCodeOption[];
   statusOptions: string[];
   canCreate: boolean;
   canDelete: boolean;

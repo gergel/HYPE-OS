@@ -18,7 +18,7 @@ import {
   getMyDashboardConfig,
   getMyPageAccess,
   getMyTasksSummary,
-  getProjectCodes,
+  getProjectCodeOptions,
 } from "@/lib/api";
 import { KorlatozottDashboard } from "@/components/dashboard/KorlatozottDashboard";
 import { MyTasksCard } from "@/components/dashboard/DashboardWidgets";
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
 
   const [summary, projectCodes, visibleWidgets, myTasks, allowedPages] = await Promise.all([
     getDashboardSummary(),
-    getProjectCodes(),
+    getProjectCodeOptions(),
     getMyDashboardConfig(),
     getMyTasksSummary(),
     getMyPageAccess(),

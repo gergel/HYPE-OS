@@ -1,6 +1,6 @@
 import { NaptarDiszpoContent } from "@/components/NaptarDiszpoContent";
 import { TopBar } from "@/components/TopBar";
-import { getCurrentUser, getMyPagePermissions, getProjectCodes, getProjects } from "@/lib/api";
+import { getCurrentUser, getMyPagePermissions, getProjectCodeOptions, getProjects } from "@/lib/api";
 import { canDoAction } from "@/lib/permissions";
 
 const PAGE = "/naptar";
@@ -19,7 +19,7 @@ const PAGE = "/naptar";
 export default async function NaptarPage() {
   const [projects, projectCodes, currentUser, pagePermissions] = await Promise.all([
     getProjects(),
-    getProjectCodes(),
+    getProjectCodeOptions(),
     getCurrentUser(),
     getMyPagePermissions(),
   ]);

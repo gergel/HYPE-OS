@@ -153,6 +153,30 @@ tartalom utána érkezzen - nem fordítva:
    A projektkód-lista például a Notionből örökölt ~80 extra mező nélkül megy ki:
    1,6 MB helyett 0,49 MB 800 kódnál. Az adatlap (GET `/{id}`) továbbra is a
    teljes sémát adja.
+4. **Külön "választó" végpont a puszta címkékhez**
+   (`GET /project-codes/valaszthato`). A teljes projektkód-lista minden kódra
+   kiszámolja a költséget, a profitot és a papír-állást; a Projektek, a Naptár,
+   a Pénzügyek, a Dashboard és a munkatárs-adatlap viszont egyetlen dolgot
+   használ belőle: melyik id melyik kódot jelenti. Mérve 800 kódnál:
+   **2000 ms / 52 lekérdezés / 522 kB** helyett **16 ms / 2 lekérdezés / 97 kB**.
+   (Az útvonalat a CRUD-generátor `/{item_id}` mintája elnyelné, ezért külön
+   routerként, ELŐBB kerül bejegyzésre - lásd `api/routes/__init__.py`.)
+
+### N+1: a leggyakoribb valódi ok
+
+Ha egy lista "érthetetlenül" lassú, elsőként a LEKÉRDEZÉSEK SZÁMÁT mérd, ne az
+időt: az adatmennyiségtől függetlenül árulkodik. Éles nagyságrendű adaton
+(800 kód, 2500 projekt, 12 000 munkaidő-sor) a projektkód-lista **7251**
+lekérdezést indított, amiből **7200 ugyanannak a pár vágónak az órabéréért**
+ment el - kódonként újra. A javítás nem eager load volt, hanem hogy az
+órabéreket kérésenként EGYSZER, egy lekérdezéssel szedjük össze
+(`deliverable_actions._orabérek`, a `Session.info`-ban tárolva): 7251 → 52
+lekérdezés, 6,9 s → 1,9 s. Hálózaton át (élesben az adatbázis nem a
+szolgáltatás mellett van) ugyanez a 7200 kör percekben mérhető - innen jött a
+"egy perc, mire megnyílik egy belsős adatlapja".
+
+Mérés mintája (a scratchpadben): SQLAlchemy `before_cursor_execute` eseményre
+számláló + `TestClient` hívás, végpontonként ms / lekérdezésszám / válaszméret.
 
 Ha egy lista lassú, ebben a sorrendben érdemes nézni: mennyi adat megy ki
 (séma), hány sor kerül a DOM-ba (ablak), és mennyi ideig tart a lekérdezés

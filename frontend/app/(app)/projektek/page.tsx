@@ -1,6 +1,6 @@
 import { ProjektekContent } from "@/components/ProjektekContent";
 import { TopBar } from "@/components/TopBar";
-import { getCurrentUser, getFieldTypes, getMyPagePermissions, getProjectCodes, getProjects } from "@/lib/api";
+import { getCurrentUser, getFieldTypes, getMyPagePermissions, getProjectCodeOptions, getProjects } from "@/lib/api";
 import { canDoAction } from "@/lib/permissions";
 
 // Csak ennyi legutóbb módosított/létrehozott projektet töltünk be azonnal
@@ -13,7 +13,7 @@ const PAGE = "/projektek";
 export default async function ProjektekPage() {
   const [projects, projectCodes, fieldTypes, currentUser, pagePermissions] = await Promise.all([
     getProjects(INITIAL_BATCH),
-    getProjectCodes(),
+    getProjectCodeOptions(),
     getFieldTypes("project"),
     getCurrentUser(),
     getMyPagePermissions(),

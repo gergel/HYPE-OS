@@ -113,11 +113,34 @@ def aktualis_orabere(db: Session, employee_id: int) -> float | None:
 
     Ha több Rate sora is van (mert az emelést új sorként vették fel, nem a
     régit írták át), a LEGUTÓBBI (legnagyobb id) számít - az a mostani
-    órabére."""
-    rate = db.scalar(
-        select(Rate).where(Rate.employee_id == employee_id, Rate.orabler.is_not(None)).order_by(Rate.id.desc())
-    )
-    return float(rate.orabler) if rate is not None else None
+    órabére.
+
+    Az órabéreket a KÉRÉS EGÉSZÉRE, EGYETLEN lekérdezéssel szedjük össze (a
+    Session.info-ban tárolva). Enélkül a projektkód-lista minden egyes kódnál
+    újra lekérdezte ugyanazoknak a vágóknak az órabérét: 800 kódnál ez 7200
+    külön kör volt - a lista lekérdezéseinek 99%-a. Emiatt tartott a betöltés
+    másodpercekig, hálózaton át (élesben az adatbázis nem a szolgáltatás
+    mellett van) pedig akár percekig. Egy órabér egy kérésen belül nem
+    változik meg; aki átírja, az a következő kérésben már az újat látja."""
+    return _orabérek(db).get(employee_id)
+
+
+def _orabérek(db: Session) -> dict[int, float]:
+    """{munkatárs id: mostani órabér} - kérésenként egyszer, egy lekérdezésből.
+
+    A rates tábla kicsi (munkatársanként pár sor), ezért olcsóbb egyben
+    behozni, mint emberenként külön kérdezni. Ha valakinek több sora van, a
+    LEGUTÓBBI (legnagyobb id) marad érvényben: id szerint növekvő sorrendben
+    olvassuk, így a későbbi felülírja a korábbit."""
+    gyorsito = db.info.get("orabér_gyorsito")
+    if gyorsito is None:
+        gyorsito = {}
+        for employee_id, orabler in db.execute(
+            select(Rate.employee_id, Rate.orabler).where(Rate.orabler.is_not(None)).order_by(Rate.id)
+        ).all():
+            gyorsito[employee_id] = float(orabler)
+        db.info["orabér_gyorsito"] = gyorsito
+    return gyorsito
 
 
 def szamolt_koltseg(percek: float, orabere: float | None) -> float | None:

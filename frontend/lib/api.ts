@@ -322,6 +322,23 @@ export async function getDashboardSummary(): Promise<DashboardSummary | null> {
   return apiGet<DashboardSummary>("/api/v1/dashboard/summary");
 }
 
+/** Egy projektkód annyira, amennyi egy címkéhez/választóhoz kell.
+ *
+ * A teljes ProjectCode lista minden kódra kiszámolja a költségeket, a
+ * profitot és a papír-állást (forgatások, stáb, utómunka, mérések, kiadások,
+ * TIG-ek) - 800 kódnál ez másodpercek és fél megabájt. A legtöbb oldalnak
+ * ebből egyetlen dolog kell: melyik id melyik kódot jelenti. */
+export type ProjectCodeOption = Pick<
+  ProjectCode,
+  "id" | "projektkod" | "project_nev" | "client_id" | "esemeny_allapota"
+>;
+
+/** A projektkódok CSAK a nevükkel (lásd backend /project-codes/valaszthato).
+ * Ezt használja minden oldal, ami nem a projektkód-listát mutatja. */
+export async function getProjectCodeOptions(): Promise<ProjectCodeOption[]> {
+  return (await apiGet<ProjectCodeOption[]>("/api/v1/project-codes/valaszthato")) ?? [];
+}
+
 export async function getProjectCodes(limit = 5000): Promise<ProjectCode[]> {
   return (await apiGet<ProjectCode[]>(`/api/v1/project-codes?limit=${limit}`)) ?? [];
 }
