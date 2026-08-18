@@ -85,15 +85,25 @@ export function NaptarDiszpoContent({
    * marad, de kiírjuk rá, hogy fel van darabolva, és nem kérünk rá diszpót -
    * a küldés gombjai helyett egy jelölés van rajta, és egyik számlálóba sem
    * számít bele. */
-  const { scheduled, darabolvaIdk } = useMemo(() => {
+  const { scheduled, darabolvaIdk, gyerekSzam } = useMemo(() => {
     const datumos = projects.filter((p) => p.forgatas_datuma !== null);
     const napraDarabolt = new Set(
       datumos
         .filter((p) => p.feldarabolas_szulo_id !== null)
         .map((p) => `${p.feldarabolas_szulo_id}|${(p.forgatas_datuma ?? "").slice(0, 10)}`),
     );
+    // HÁNY napot választottunk le róla - ezt a szülőn akkor is kiírjuk, ha még
+    // maradt saját napja (a darabolás kivágja a leválasztott napot az
+    // eredetiből, tehát a szülő gyakran egy MÁSIK napon áll a listán). Enélkül
+    // ott csak egy megrövidült forgatás látszik, magyarázat nélkül.
+    const gyerekSzam = new Map<number, number>();
+    for (const p of projects) {
+      if (p.feldarabolas_szulo_id === null) continue;
+      gyerekSzam.set(p.feldarabolas_szulo_id, (gyerekSzam.get(p.feldarabolas_szulo_id) ?? 0) + 1);
+    }
     return {
       scheduled: datumos,
+      gyerekSzam,
       darabolvaIdk: new Set(
         datumos
           .filter((p) => napraDarabolt.has(`${p.id}|${(p.forgatas_datuma ?? "").slice(0, 10)}`))
@@ -291,6 +301,14 @@ export function NaptarDiszpoContent({
                             {p.forgatas_datuma_vege && p.forgatas_datuma_vege !== p.forgatas_datuma
                               ? ` · ${formatDate(p.forgatas_datuma)} – ${formatDate(p.forgatas_datuma_vege)}`
                               : ""}
+                            {/* Ha leválasztottunk róla napokat, azt akkor is
+                                kiírjuk, ha erre a napra még kell rá diszpó:
+                                különben csak egy megrövidült forgatás látszik,
+                                magyarázat nélkül. */}
+                            {gyerekSzam.get(p.id)
+                              ? ` · feldarabolva (${gyerekSzam.get(p.id)} nap leválasztva)`
+                              : ""}
+                            {p.feldarabolas_szulo_id !== null ? " · leválasztott nap" : ""}
                           </p>
                         </div>
 

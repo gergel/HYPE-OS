@@ -127,6 +127,37 @@ a legtöbb oszlop szerkeszthető - a Kiadások listáján a megnevezés, a nett�
 fizetési mód és az állapot MIND ilyen, tehát az oszlop-szűrőnek se találata,
 se értékkészlete nem volt.
 
+A **szabadszavas kereső** ugyanerre a szövegre fut: arra, ami a táblázatban
+látszik. Korábban a rekord ÖSSZES mezőjéből épült egy külön keresőszöveg -
+ez egy 100 oszlopos táblánál (projektkódok) soronként kilobájtokat jelentett,
+amit a szerver legyártott és a böngésző letöltött, miközben egy nem látszó
+mezőben talált egyezés amúgy is értelmezhetetlen ("miért jött fel ez a sor?").
+
+## Betöltés: mit lát az ember, amíg vár
+
+Három szinten dolgozunk azon, hogy a felület AZONNAL válaszoljon, és a
+tartalom utána érkezzen - nem fordítva:
+
+1. **Oldal-váz minden oldalra** (`app/(app)/loading.tsx` → `components/OldalVaz.tsx`).
+   A Next.js szerver-komponensei az adatok megérkezéséig nem rajzolnak semmit:
+   egy menüpontra kattintva a RÉGI oldal állt a képernyőn mozdulatlanul, amíg a
+   szerver végzett - kívülről ez "lefagyott". Ez a fájl Suspense-határt tesz az
+   egész alkalmazásra, így a váz ~100 ms-on belül megjelenik, és a tartalom
+   akkor váltja fel, amikor kész.
+2. **Sor-ablak a táblázatokban** (`InteractiveTableClient`, `ABLAK_MERET`).
+   Egyszerre 80 sor kerül a képernyőre, a többi görgetve töltődik
+   (IntersectionObserver). A rendezés és a szűrés viszont a TELJES listán fut -
+   csak a megjelenítés lépeget. 800 sornál ez 7200 cella helyett 720-at jelent
+   az első képernyőn, és a cellák nagy része önálló, kattintható komponens.
+3. **Szűkebb lista-sémák a backenden** (`build_crud_router(list_read_schema=…)`).
+   A projektkód-lista például a Notionből örökölt ~80 extra mező nélkül megy ki:
+   1,6 MB helyett 0,49 MB 800 kódnál. Az adatlap (GET `/{id}`) továbbra is a
+   teljes sémát adja.
+
+Ha egy lista lassú, ebben a sorrendben érdemes nézni: mennyi adat megy ki
+(séma), hány sor kerül a DOM-ba (ablak), és mennyi ideig tart a lekérdezés
+(eager load, lásd `list_options`).
+
 ## Világos és sötét nézet
 
 A felület minden színe **token** (`frontend/app/globals.css`) - a komponensek

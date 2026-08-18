@@ -43,19 +43,6 @@ function nodeToText(node: ReactNode): string {
   return "";
 }
 
-/** A rekord ÉRTÉKEINEK összefűzött szövege a szabadszavas kereséshez.
- *
- * Szándékosan nem `JSON.stringify(row)`: az a MEZŐNEVEKET is beleveszi, így pl.
- * a "zoom" keresés minden eszközre illeszkedett, mert az Equipment táblának van
- * egy `zoom_atfogas` oszlopa - a felhasználó szemszögéből ez néma hibás
- * találat-áradat. Így csak az látszik keresésnek, ami tényleges adat. */
-function valuesText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (Array.isArray(value)) return value.map(valuesText).join(" ");
-  if (typeof value === "object") return Object.values(value).map(valuesText).join(" ");
-  return String(value);
-}
-
 const NUMBER_LIKE = /^-?[\d\s  .,]+(?:\s*(?:ft|huf|eur|usd|db|%))?$/i;
 
 /** Egy oszlop "szám" jellegű-e - ettől függ, milyen műveleteket kínálunk rá a
@@ -179,7 +166,14 @@ export function DataTable<T extends { id: number }>({
     deletePath: deleteHref?.(row),
     cells: renderedCells[rowIndex],
     sortKeys: columns.map((col) => col.sortAccessor?.(row) ?? null),
-    searchText: valuesText(row).toLowerCase(),
+    // A szabadszavas keresés arra fut, AMI A TÁBLÁZATBAN LÁTSZIK - ugyanarra a
+    // szövegre, mint a mezőnkénti szűrő. Korábban a rekord ÖSSZES mezőjéből
+    // épült egy külön keresőszöveg; egy 100 oszlopos táblánál (projektkódok)
+    // ez sok száz kilobájtnyi felesleges adat volt minden sorhoz, amit a
+    // szerver legyártott és a böngészőnek is le kellett töltenie - miközben a
+    // találat egy nem látszó mezőben amúgy is értelmezhetetlen ("miért jött
+    // fel ez a sor?").
+    searchText: filterValuesByRow[rowIndex].join(" ").toLowerCase(),
     filterValues: filterValuesByRow[rowIndex],
   }));
 

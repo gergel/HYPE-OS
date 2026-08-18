@@ -208,6 +208,12 @@ el, amiért ez a mező van. Amit tud:
   levél mellékleteivel** - azok külön dobozban vannak, és tényleg kimennek a
   stábnak.
 
+A szerkesztés UGYANÚGY működik, mint a brief mezőnél: rá kell kattintani a
+szövegre (üresen a szaggatott keretes felhívásra), és már lehet írni - az Enter
+új sort kezd, a mentés az elkattintás, az Esc elvet. Korábban itt egy külön
+"Szerkesztés", majd egy "Mentés" gomb kellett: két kattintás ugyanarra, két
+különböző szokással ugyanabban a nézetben.
+
 ### Hosszú szöveg mezők (brief, diszpó szövege, technika lista)
 
 Ezek a mezők a mezőrácsban élnek, de MINDIG több sorosan nyílnak meg

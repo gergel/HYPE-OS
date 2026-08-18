@@ -14,7 +14,12 @@ from app.models.finance import Expense
 from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
 from app.models.project import Project
 from app.models.project_code import ProjectCode
-from app.schemas.project_code import ProjectCodeCreate, ProjectCodeRead, ProjectCodeUpdate
+from app.schemas.project_code import (
+    ProjectCodeCreate,
+    ProjectCodeListRead,
+    ProjectCodeRead,
+    ProjectCodeUpdate,
+)
 from app.services import projektkod_bontas
 
 
@@ -48,6 +53,11 @@ router = build_crud_router(
     create_schema=ProjectCodeCreate,
     update_schema=ProjectCodeUpdate,
     read_schema=ProjectCodeRead,
+    # A lista csak a ténylegesen megjelenített mezőket viszi (lásd
+    # schemas/project_code.ProjectCodeListRead) - a Notionből örökölt ~80 extra
+    # mező 800 kódnál másfél megabájtnyi fölösleges adat volt minden
+    # oldalbetöltésnél.
+    list_read_schema=ProjectCodeListRead,
     prefix="/project-codes",
     tags=["project-codes"],
     # Külön jogosultsági hatókör, NEM ugyanaz, mint a Projekteké (lásd

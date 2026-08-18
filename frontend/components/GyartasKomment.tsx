@@ -49,7 +49,13 @@ export function linkesitve(szoveg: string): React.ReactNode[] {
  * hova kerültek az anyagok. Ezért nem egysoros mező: a sortörések megmaradnak,
  * a beillesztett linkek kattinthatók, a kapcsolódó fájlok (forgatókönyv,
  * helyszínrajz, brief) pedig ugyanitt élnek - `gyartas` kategóriával, hogy ne
- * keveredjenek a diszpó mellékleteivel. */
+ * keveredjenek a diszpó mellékleteivel.
+ *
+ * A szerkesztés UGYANÚGY működik, mint a brief mezőnél (lásd
+ * EditableDetailGrid): rá kell kattintani a szövegre, és már lehet írni - az
+ * Enter új sort kezd, a mentés az elkattintás, az Esc elvet. Korábban itt egy
+ * külön "Szerkesztés" gombot, majd egy "Mentés" gombot kellett megnyomni: két
+ * kattintás ugyanarra, két különböző szokással ugyanabban a nézetben. */
 export function GyartasKomment({
   projectId,
   patchPath,
@@ -72,6 +78,12 @@ export function GyartasKomment({
   const [hiba, setHiba] = useState<string | null>(null);
 
   async function ment() {
+    // Ha nem változott semmi, ne küldjünk kérést: az elkattintás önmagában
+    // nem szerkesztés.
+    if (szoveg === (ertek ?? "")) {
+      setSzerkeszt(false);
+      return;
+    }
     setBusy(true);
     setHiba(null);
     try {
@@ -99,58 +111,62 @@ export function GyartasKomment({
         <>
           <textarea
             autoFocus
-            rows={8}
+            rows={10}
+            disabled={busy}
             value={szoveg}
             onChange={(e) => setSzoveg(e.target.value)}
-            placeholder={"Bármi, amit a gyártásról tudni kell.\nLinkeket is beilleszthetsz - mentés után kattinthatók lesznek."}
-            className="w-full rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[13px] leading-relaxed text-text-primary outline-none focus:border-text-accent/40"
-          />
-          {hiba && <p className="text-[12px] text-text-danger">{hiba}</p>}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={ment}
-              className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
-            >
-              {busy ? "Mentés…" : "Mentés"}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
+            onBlur={ment}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
                 setSzoveg(ertek ?? "");
                 setHiba(null);
                 setSzerkeszt(false);
-              }}
-              className="text-[13px] text-text-muted hover:text-text-primary"
-            >
-              Mégse
-            </button>
-          </div>
+              }
+            }}
+            placeholder={"Bármi, amit a gyártásról tudni kell.\nLinkeket is beilleszthetsz - mentés után kattinthatók lesznek."}
+            className="field min-h-[180px] w-full leading-relaxed"
+          />
+          <p className="text-[11.5px] text-text-muted">
+            {busy ? "Mentés…" : "Az Enter új sort kezd. Mentés: kattints a mezőn kívülre (Esc: mégsem)."}
+          </p>
+          {hiba && <p className="text-[12px] text-text-danger">{hiba}</p>}
         </>
       ) : (
         <>
           {/* whitespace-pre-wrap: a bekezdések és a felsorolások úgy maradnak,
-              ahogy beírták - egy egysoros mezőben ez elveszne. */}
+              ahogy beírták - egy egysoros mezőben ez elveszne.
+              A szövegre kattintva rögtön lehet írni (mint a briefnél). */}
           {ertek?.trim() ? (
-            <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text-primary">
+            <p
+              role={canEdit ? "button" : undefined}
+              tabIndex={canEdit ? 0 : undefined}
+              onClick={
+                canEdit
+                  ? () => {
+                      setSzoveg(ertek ?? "");
+                      setSzerkeszt(true);
+                    }
+                  : undefined
+              }
+              className={`whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text-primary ${
+                canEdit ? "-mx-1.5 cursor-text rounded px-1.5 transition-colors duration-200 hover:bg-surface-3" : ""
+              }`}
+            >
               {linkesitve(ertek)}
             </p>
-          ) : (
-            <p className="text-[13px] text-text-muted">Még nincs gyártás komment.</p>
-          )}
-          {canEdit && (
+          ) : canEdit ? (
             <button
               type="button"
               onClick={() => {
-                setSzoveg(ertek ?? "");
+                setSzoveg("");
                 setSzerkeszt(true);
               }}
-              className="w-fit text-[13px] text-text-accent hover:underline"
+              className="w-full rounded-[var(--radius)] border border-dashed border-border px-3 py-3 text-left text-[13px] text-text-muted hover:bg-surface-3"
             >
-              {ertek?.trim() ? "Szerkesztés" : "+ Komment írása"}
+              Írj ide bármit, amit a gyártásról tudni kell…
             </button>
+          ) : (
+            <p className="text-[13px] text-text-muted">Még nincs gyártás komment.</p>
           )}
         </>
       )}

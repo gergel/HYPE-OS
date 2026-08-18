@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RowLink } from "@/components/RowLink";
 import { DeleteButton } from "@/components/DeleteButton";
 import { RecordDetailModal } from "@/components/RecordDetailModal";
@@ -28,6 +28,16 @@ export type RenderedRow = {
 };
 
 type SortDir = "asc" | "desc";
+
+/** Ennyi sort teszünk ki egyszerre a képernyőre, és ennyivel bővítünk, amikor
+ * a lista aljára ér a görgetés.
+ *
+ * Miért? Mert egy 800 soros táblázat 800 × 9 = 7200 cellát jelent, és a
+ * cellák nagy része önálló, kattintható komponens (helyben szerkeszthető mező,
+ * állapot-badge). Ezeket egyszerre a képernyőre tenni másodperceket vesz el a
+ * megnyitáskor, pedig az első képernyőn 15-20 sor látszik. A rendezés és a
+ * szűrés viszont TELJES listán fut - csak a megjelenítés lépeget. */
+const ABLAK_MERET = 80;
 
 /** A DataTable szerver-oldalon előre renderelt celláit fogadja (nem függvényeket -
  * azok nem küldhetők át a szerver/kliens határon), és csak a rendezést/szűrést/
@@ -85,6 +95,36 @@ export function InteractiveTableClient({
     });
     return copy;
   }, [filtered, sortIndex, sortDir]);
+
+  // A képernyőre ténylegesen kitett sorok száma (lásd ABLAK_MERET). Szűrésre/
+  // rendezésre visszaáll az elejére: az új sorrend eleje az, ami érdekes.
+  // (Renderelés közbeni állapot-igazítás, nem effect: így nincs egy fölösleges
+  // kör, amiben még a régi ablakmérettel rajzolnánk ki a listát.)
+  const [latszik, setLatszik] = useState(ABLAK_MERET);
+  const nezetKulcs = `${query}|${sortIndex}|${sortDir}|${JSON.stringify(rules)}`;
+  const [elozoKulcs, setElozoKulcs] = useState(nezetKulcs);
+  if (nezetKulcs !== elozoKulcs) {
+    setElozoKulcs(nezetKulcs);
+    setLatszik(ABLAK_MERET);
+  }
+
+  const megjelenitett = sorted.length > latszik ? sorted.slice(0, latszik) : sorted;
+  const vanMeg = sorted.length > megjelenitett.length;
+
+  // A lista aljára görgetve magától bővül - "Továbbiak" gombot nem kell nyomni.
+  const orszem = useRef<HTMLTableRowElement | null>(null);
+  useEffect(() => {
+    const elem = orszem.current;
+    if (!elem || !vanMeg) return;
+    const figyelo = new IntersectionObserver(
+      (bejegyzesek) => {
+        if (bejegyzesek.some((b) => b.isIntersecting)) setLatszik((n) => n + ABLAK_MERET);
+      },
+      { rootMargin: "300px" },
+    );
+    figyelo.observe(elem);
+    return () => figyelo.disconnect();
+  }, [vanMeg, megjelenitett.length]);
 
   function toggleSort(index: number) {
     if (!headerMeta[index].sortable) return;
@@ -148,7 +188,7 @@ export function InteractiveTableClient({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((row) => {
+              {megjelenitett.map((row) => {
                 const cells = row.cells.map((cell, i) => (
                   <td key={i} className={headerMeta[i]?.align === "right" ? "text-right" : "text-left"}>
                     {cell}
@@ -179,9 +219,27 @@ export function InteractiveTableClient({
                   </tr>
                 );
               })}
+              {vanMeg && (
+                <tr ref={orszem}>
+                  <td colSpan={headerMeta.length + (hasDelete ? 1 : 0)} className="py-3 text-center text-[12px] text-text-muted">
+                    További {sorted.length - megjelenitett.length} sor betöltése…
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+      )}
+      {/* Csak akkor írunk ki bármit, ha az információt hordoz: szűrés van, vagy
+          nem fér ki minden sor. Egy 5 soros táblázat alá nem kell odaírni,
+          hogy 5 sor. */}
+      {(vanMeg || sorted.length !== rows.length) && sorted.length > 0 && (
+        <p className="mt-2 text-[12px] text-text-muted">
+          {sorted.length !== rows.length
+            ? `${sorted.length} találat (összesen ${rows.length})`
+            : `${rows.length} sor`}
+          {vanMeg ? ` · ${megjelenitett.length} látszik, a többi görgetve töltődik` : ""}
+        </p>
       )}
       <RecordDetailModal href={modalHref} onClose={() => setModalHref(null)} />
     </div>

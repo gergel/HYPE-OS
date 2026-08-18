@@ -41,6 +41,55 @@ class ProjectCodeUpdate(BaseModel):
     papir_nelkul_indoka: str | None = None
 
 
+class ProjectCodeListRead(BaseModel):
+    """A LISTA végpont szűkebb sémája - csak az, amit a listák valóban mutatnak.
+
+    A teljes ProjectCodeRead a Notionből örökölt ~80 további mezőt is viszi
+    (szerződés helye, megrendelő adószáma, tucatnyi formula-eredmény). Egy
+    listánál ezek egyike sem látszik, viszont 800 kódnál másfél megabájtnyi
+    adatot jelentenek: a szerver legyártja, a hálózat átviszi, a böngésző
+    értelmezi - mindezt semmiért. Az adatlap (GET /{id}) továbbra is a teljes
+    sémát adja, ott minden mező kell.
+    """
+
+    id: int
+    projektkod: str
+    project_nev: str | None = None
+    client_id: int | None = None
+    contract_id: int | None = None
+    helyszin: str | None = None
+    datum: date | None = None
+    datum_megjegyzes: str | None = None
+    esemeny_allapota: str | None = None
+    tig_statusza: str | None = None
+    szamla_statusza: str | None = None
+    megjegyzes: str | None = None
+
+    #: Számított értékek (lásd models/project_code.py).
+    bevetel: float
+    osszes_koltseg: float
+    becsult_profit: float
+    kulsos_koltseg: float
+    egyeb_kiadas: float
+    vagas_koltseg: float
+    belsos_munka_koltseg: float
+
+    #: Hol tart a papírozás és a pénz.
+    papir_kell: bool
+    keret_fedi: bool
+    keretszerzodes_neve: str | None = None
+    szerzodes_kell: bool
+    szerzodes_kesz: bool
+    tig_kesz: bool
+    bevetel_kifizetve: bool
+
+    van_szerzodes: bool = True
+    papir_nelkul: bool = False
+    papir_nelkul_indoka: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class ProjectCodeRead(ProjectCodeBase):
     id: int
     #: Számított értékek (lásd models/project_code.py) - a lista ezekből
