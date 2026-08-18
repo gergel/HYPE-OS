@@ -1745,6 +1745,9 @@ export type StocktakeItem = {
   expected_qty: number | null;
   counted_qty: number | null;
   status: string | null;
+  /** Miért szerelendő / miért van szervizben - a lezárás megköveteli
+   * (lásd MAGYARAZATOT_IGENYLO_ALLAPOTOK). */
+  megjegyzes: string | null;
 };
 
 export type StocktakeSession = {
@@ -1764,9 +1767,17 @@ export type StocktakeSessionListItem = {
   item_count: number;
 };
 
+export type StocktakeStatusGroupItem = {
+  equipment_id: number;
+  nev: string;
+  megjegyzes: string | null;
+  /** Ehhez az állapothoz kötelező a magyarázat. */
+  magyarazat_kell: boolean;
+};
+
 export type StocktakeStatusGroup = {
   status: string;
-  items: { equipment_id: number; nev: string }[];
+  items: StocktakeStatusGroupItem[];
 };
 
 export type StocktakeMissingStock = {
@@ -1777,9 +1788,22 @@ export type StocktakeMissingStock = {
   hiany: number;
 };
 
+/** Amiből TÖBB van, mint az elvárt darabszám - ez is eltérés, nem öröm. */
+export type StocktakeSurplusStock = {
+  equipment_id: number;
+  nev: string;
+  expected_qty: number;
+  counted_qty: number;
+  tobblet: number;
+};
+
 export type StocktakeSummary = {
   problemas_statuszok: StocktakeStatusGroup[];
   hianyzo_keszletek: StocktakeMissingStock[];
+  tobblet_keszletek: StocktakeSurplusStock[];
+  /** Amihez még hiányzik a kötelező magyarázat - amíg van ilyen, a leltár nem
+   * zárható le (a backend elutasítja). */
+  magyarazatra_var: StocktakeStatusGroupItem[];
 };
 
 export async function getStocktakeSessions(): Promise<StocktakeSessionListItem[]> {

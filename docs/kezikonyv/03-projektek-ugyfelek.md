@@ -186,6 +186,12 @@ diszpó, a papírok, a költségek és a leszállított anyag.
 API: `/api/v1/projects`, oldal: `/projektek`, modell: `models/project.py`,
 route: `routes/projects.py`, üzleti logika: `services/project_actions.py`.
 
+A `/projektek` oldal alapértelmezett nézete a **naptár**
+(`components/ProjektekContent.tsx`): a projekt itt egy forgatási NAP, és a napi
+munka (mi van ma, mi jön holnap) naptárban olvasható, nem egy több száz soros
+táblázatban. A táblázat egy kattintással elérhető marad, a szűrőmező pedig
+mindkét nézetre érvényes (szülő szinten fut, nem a táblázatban).
+
 ### Gyártás komment: a gyártásvezető jegyzettömbje
 
 A projekt adatlapján saját dobozt kapott (`components/GyartasKomment.tsx`), nem
@@ -201,6 +207,31 @@ el, amiért ez a mező van. Amit tud:
   tölthető fel. Külön (`gyartas`) kategóriával, hogy ne keveredjen a **diszpó
   levél mellékleteivel** - azok külön dobozban vannak, és tényleg kimennek a
   stábnak.
+
+### Hosszú szöveg mezők (brief, diszpó szövege, technika lista)
+
+Ezek a mezők a mezőrácsban élnek, de MINDIG több sorosan nyílnak meg
+(textarea), akkor is, ha épp üresek: az Enter új sort kezd, a mentés az
+elkattintás. Korábban a felület az ÉRTÉKBŐL találgatta, mi hosszú szöveg
+(sortörés vagy 120 karakter fölött), így egy üres brief egysoros mező volt,
+amiben az Enter mentett - vagyis pont az első bekezdést nem lehetett megírni.
+Most a séma dönt: a `Text` oszlopok `multiline` típussal jönnek vissza
+(`services/entity_registry._szoveg_tipus` → `lib/detail.tsx`). Megjelenítéskor a
+sortörések megmaradnak, a beírt linkek kattinthatók.
+
+### Csatolni való a diszpó levélhez: mérethatár a feltöltésnél
+
+A "Csatolni való (a diszpó levélhez)" doboz fájljai a diszpó kiküldésekor a
+levél mellékletei lesznek, ezért **együtt** legfeljebb 15 MB-osak lehetnek
+(Gmail 25 MB + base64 ~33% + a diszpó PDF; `attachments.DISZPO_MAX_BAJT`, amit a
+küldés oldali ellenőrzés is használ). A határt a **feltöltésnél** kérjük számon,
+nem csak küldéskor: enélkül a fájl szépen felmegy, és csak napokkal később, a
+kiküldéskor derül ki, hogy nem fér a levélbe - amikor már nincs idő intézkedni.
+
+Ami nem fér bele, annak a helye a Drive, a linkjéé pedig a **brief**: a brief
+szövege a diszpóval generált PDF-be is bekerül (`services/dispo.py`), tehát a
+link így is eljut a stábhoz. A hibaüzenet is ezt mondja, mind a böngészőben
+(előre, feltöltés nélkül), mind a backenden.
 
 **Ügyfél és kontakt** - a megrendelő cég és a nála dolgozó emberek. A kontaktok
 adata a `/contacts` CRUD-é, de kaptak önálló listát is
@@ -233,9 +264,16 @@ Egynapos forgatást a SAJÁT napjára nem lehet darabolni: abból nem két forga
 lenne, hanem ugyanaz kétszer - a végpont ilyenkor érthető hibaüzenettel
 elutasít.
 
-A felületek emellett védekeznek is: a Diszpó lista és a dashboard teendői
-kihagyják a szülőt, ha ugyanarra a napra van leválasztott gyereke - a régi,
-darabolás előtti adatok miatt.
+A felületek emellett védekeznek is: a Diszpó lista és a dashboard teendői nem
+kérnek diszpót a szülőre, ha ugyanarra a napra van leválasztott gyereke - a
+régi, darabolás előtti adatok miatt.
+
+A Diszpó LISTÁN a szülő ilyenkor nem tűnik el, hanem **"Már feldarabolva"**
+jelölést kap ("a diszpó a leválasztott naphoz megy, ide nem kell"), és egyik
+számlálóba sem számít bele. A korábbi néma kihagyás félrevezető volt: aki
+kereste a forgatást, azt hitte, elveszett. A naptár nézetben viszont továbbra
+sem jelenik meg - ott a nap egy csempe, és az "egész" csak ugyanannak a
+forgatásnak a duplikátuma lenne.
 
 ## Stáb a projekten
 

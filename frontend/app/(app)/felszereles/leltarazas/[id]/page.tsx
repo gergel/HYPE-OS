@@ -2,17 +2,21 @@ import { notFound, redirect } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { CompleteStocktakeButton } from "@/components/stocktake/CompleteStocktakeButton";
+import { DeleteStocktakeButton } from "@/components/stocktake/DeleteStocktakeButton";
+import { LeltarOsszesites } from "@/components/stocktake/LeltarOsszesites";
 import { StocktakeItemRow } from "@/components/stocktake/StocktakeItemRow";
 import { TopBar } from "@/components/TopBar";
-import { formatDate, getFieldTypes, getStocktakeSession, getStocktakeSummary } from "@/lib/api";
+import { formatDate, getCurrentUser, getFieldTypes, getStocktakeSession, getStocktakeSummary } from "@/lib/api";
+import { szerepkorei } from "@/lib/permissions";
 
 export default async function LeltarazasDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const sessionId = Number(id);
-  const [session, summary, fieldTypes] = await Promise.all([
+  const [session, summary, fieldTypes, currentUser] = await Promise.all([
     getStocktakeSession(sessionId),
     getStocktakeSummary(sessionId),
     getFieldTypes("equipment"),
+    getCurrentUser(),
   ]);
   if (!session) notFound();
   // Lezárt leltározás már nem szerkeszthető - az eredményoldal a végleges nézet.
@@ -27,6 +31,8 @@ export default async function LeltarazasDetailPage({ params }: { params: Promise
     groups.get(key)!.push(item);
   }
 
+  const magyarazatraVar = summary?.magyarazatra_var ?? [];
+
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
@@ -38,8 +44,20 @@ export default async function LeltarazasDetailPage({ params }: { params: Promise
             <p>
               Indította: <span className="text-text-primary">{session.started_by_name}</span> · {formatDate(session.created_at)}
             </p>
-            <CompleteStocktakeButton sessionId={session.id} />
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Téves vagy duplán elindított leltár takarítása - csak admin. */}
+              {szerepkorei(currentUser).includes("admin") && <DeleteStocktakeButton sessionId={session.id} />}
+              <CompleteStocktakeButton sessionId={session.id} />
+            </div>
           </div>
+          {/* Amíg van magyarázat nélküli szerelendő/szervizes eszköz, a lezárás
+              elakad - jobb ezt előre látni, mint a lezárás gombnál. */}
+          {magyarazatraVar.length > 0 && (
+            <p className="text-[13px] text-text-danger">
+              {magyarazatraVar.length} eszköznél hiányzik a magyarázat (miért szerelendő / miért van szervizben):{" "}
+              {magyarazatraVar.map((i) => i.nev).join(", ")}. A leltározás addig nem zárható le.
+            </p>
+          )}
         </Card>
 
         {Array.from(groups.entries()).map(([kategoria, items]) => (
@@ -53,49 +71,10 @@ export default async function LeltarazasDetailPage({ params }: { params: Promise
         ))}
 
         <Card title="Összesítés">
-          {summary && (summary.problemas_statuszok.length > 0 || summary.hianyzo_keszletek.length > 0) ? (
-            <div className="space-y-4">
-              {summary.problemas_statuszok.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-[12px] font-medium uppercase tracking-wide text-text-muted">Ami nem "Jó" állapotú</p>
-                  <div className="space-y-2">
-                    {summary.problemas_statuszok.map((g) => (
-                      <div key={g.status}>
-                        <p className="text-[13px] font-medium text-text-primary">{g.status}</p>
-                        <ul className="ml-3 text-[13px] text-text-secondary">
-                          {g.items.map((i) => (
-                            <li key={i.equipment_id}>
-                              <a href={`/felszereles/${i.equipment_id}`} className="hover:underline">
-                                {i.nev}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {summary.hianyzo_keszletek.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-[12px] font-medium uppercase tracking-wide text-text-muted">Hiányzó készlet</p>
-                  <ul className="space-y-1 text-[13px] text-text-secondary">
-                    {summary.hianyzo_keszletek.map((m) => (
-                      <li key={m.equipment_id} className="flex items-center justify-between">
-                        <a href={`/felszereles/${m.equipment_id}`} className="hover:underline">
-                          {m.nev}
-                        </a>
-                        <span>
-                          {m.counted_qty} / {m.expected_qty} db <span className="text-text-danger">(hiány: {m.hiany})</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+          {summary ? (
+            <LeltarOsszesites summary={summary} ures="Egyelőre nincs eltérés vagy hiány rögzítve." />
           ) : (
-            <p className="text-[13px] text-text-muted">Egyelőre nincs eltérés vagy hiány rögzítve.</p>
+            <p className="text-[13px] text-text-muted">Az összesítés most nem érhető el.</p>
           )}
         </Card>
       </div>

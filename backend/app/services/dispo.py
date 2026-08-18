@@ -259,7 +259,11 @@ def _pdf_filename(project: Project) -> str:
 # nyers csatolmányokra ennél alacsonyabb határt szabunk. Enélkül a Gmail egy
 # nehezen értelmezhető hibával utasítaná vissza a küldést, a felhasználó pedig
 # nem tudná, mit rontott el.
-MAX_CSATOLMANY_BAJT = 15 * 1024 * 1024
+#
+# Ugyanez a határ él már a FELTÖLTÉSNÉL is (services/attachments.py) - egy
+# forrásból, hogy ne lehessen feltölteni olyat, ami itt aztán elakad. Ez a
+# vizsgálat így csak a régi, a korlát előtt feltöltött fájlok hálója.
+MAX_CSATOLMANY_BAJT = attachments.DISZPO_MAX_BAJT
 
 
 def _diszpo_csatolmanyok(db: Session, project: Project) -> list[tuple[str, str, bytes]]:
@@ -280,7 +284,7 @@ def _diszpo_csatolmanyok(db: Session, project: Project) -> list[tuple[str, str, 
         raise ValueError(
             f"A csatolni való fájlok együtt túl nagyok ({osszes / 1024 / 1024:.1f} MB) - "
             f"a levélhez legfeljebb {MAX_CSATOLMANY_BAJT // 1024 // 1024} MB csatolható. "
-            "Törölj néhányat, vagy oszd meg linkként a nagyobbakat."
+            "Törölj néhányat - " + attachments.DISZPO_TULLEPES_TANACS
         )
 
     csatolmanyok: list[tuple[str, str, bytes]] = []

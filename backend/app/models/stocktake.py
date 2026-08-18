@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -47,6 +47,11 @@ class StocktakeItem(TimestampMixin, Base):
     expected_qty: Mapped[int | None] = mapped_column(Integer, comment="Equipment.osszes_mennyiseg pillanatfelvétele a leltár indításakor")
     counted_qty: Mapped[int | None] = mapped_column(Integer, comment="A leltározás során ténylegesen megszámolt darabszám")
     status: Mapped[str | None] = mapped_column(String(50), comment="A leltározás során beállított állapot (lásd Equipment.allapot)")
+    #: MIÉRT szerelendő / miért van szervizben. A lezárás megköveteli
+    #: (lásd services/stocktake.MAGYARAZATOT_IGENYLO_STATUSZOK): egy hónappal
+    #: később a puszta "Szervíz" állapotból már senki nem tudja, mi volt a baja,
+    #: hol van a gép, és ki vitte el.
+    megjegyzes: Mapped[str | None] = mapped_column(Text, comment="Magyarázat a nem 'Jó' állapothoz")
 
     session: Mapped["StocktakeSession"] = relationship(back_populates="items")
     equipment: Mapped["Equipment"] = relationship()

@@ -20,6 +20,7 @@ from decimal import Decimal
 from typing import TypedDict
 
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy import Text as SAText
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -190,6 +191,18 @@ def _select_options(name: str, db: Session, column) -> list[str] | None:
     return values
 
 
+def _szoveg_tipus(column) -> str:
+    """"multiline" a HOSSZÚ szöveg oszlopokra (Text), "text" a rövidekre
+    (String(n)).
+
+    Miért kell ez? Mert a felület eddig az ÉRTÉKBŐL találgatta: ha a szövegben
+    volt sortörés vagy elég hosszú volt, textarea lett belőle, egyébként
+    egysoros input. Egy ÜRES brief tehát egysoros mezőként nyílt meg, amiben az
+    Enter mentett - vagyis pont az első bekezdést nem lehetett megírni benne.
+    A séma viszont előre tudja, hogy ez hosszú szövegnek készült."""
+    return "multiline" if isinstance(column.type, SAText) else "text"
+
+
 def _utomunka_allapotok(db: Session, column) -> list[str]:
     """Az utómunka választható állapotai: elöl a BEÁLLÍTOTT állapotok (a tábla
     oszlop-sorrendjében), utánuk minden olyan érték, ami az adatokban szerepel,
@@ -226,7 +239,7 @@ def _sajat_mezok_tipusai(entity_type: str, db: Session) -> dict[str, FieldTypeIn
 
 
 def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, FieldTypeInfo]:
-    """{mezőnév: {"type": "boolean"|"date"|"datetime"|"time"|"number"|"select"|"text", "options"?: [...]}}
+    """{mezőnév: {"type": "boolean"|"date"|"datetime"|"time"|"number"|"select"|"text"|"multiline", "options"?: [...]}}
     egy entitástípushoz. Az "options" csak "select" típusnál van jelen. db
     hiányában a szöveges mezők mindig sima "text"-ként jönnek vissza (nincs
     select-detektálás adat nélkül)."""
@@ -286,9 +299,9 @@ def get_field_types(entity_type: str, db: Session | None = None) -> dict[str, Fi
             result[name] = {"type": "number"}
         elif py_type is str and db is not None:
             options = _select_options(name, db, column)
-            result[name] = {"type": "select", "options": options} if options else {"type": "text"}
+            result[name] = {"type": "select", "options": options} if options else {"type": _szoveg_tipus(column)}
         else:
-            result[name] = {"type": "text"}
+            result[name] = {"type": _szoveg_tipus(column)}
     if db is not None:
         result.update(_sajat_mezok_tipusai(entity_type, db))
     return result

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_page_action
+from app.core.security import Role, get_current_user, require_page_action, require_roles
 from app.models.employee import Employee
 from app.schemas.stocktake import (
     StocktakeItemRead,
@@ -67,8 +67,25 @@ def complete_session(
     session_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action("/felszereles", "edit"))
 ):
     session = _get_session_or_404(session_id, db)
-    stocktake.complete_session(db, session)
+    try:
+        stocktake.complete_session(db, session)
+    except stocktake.LezarasHiba as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return stocktake.get_session(db, session_id)
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_session(
+    session_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_roles(Role.ADMIN))
+):
+    """Egy leltározás törlése - CSAK ADMIN.
+
+    Miért szűkebb jog, mint a leltározásé? Mert a leltár egy elvégzett munka
+    nyoma: aki végigment 300 eszközön, annak az eredményét ne lehessen egy
+    félrekattintással eltüntetni. A törlés a téves vagy duplán elindított
+    leltárak takarítására való."""
+    session = _get_session_or_404(session_id, db)
+    stocktake.delete_session(db, session)
 
 
 @router.get("/sessions/{session_id}/summary", response_model=StocktakeSummary)

@@ -77,19 +77,33 @@ export function NaptarDiszpoContent({
 
   const projectCodeById = new Map(projectCodes.map((pc) => [pc.id, pc.projektkod]));
 
-  const scheduled = useMemo(() => {
+  /** Ha egy forgatásból leválasztottunk egy napot (feldarabolás), akkor arra a
+   * napra MÁR A LEVÁLASZTOTT NAP a diszponálandó, nem az "egész".
+   *
+   * Az eredeti esemény korábban ilyenkor egyszerűen ELTŰNT a listáról. Ez
+   * félrevezető volt: aki kereste, azt hitte, elveszett a forgatás. Most itt
+   * marad, de kiírjuk rá, hogy fel van darabolva, és nem kérünk rá diszpót -
+   * a küldés gombjai helyett egy jelölés van rajta, és egyik számlálóba sem
+   * számít bele. */
+  const { scheduled, darabolvaIdk } = useMemo(() => {
     const datumos = projects.filter((p) => p.forgatas_datuma !== null);
-    // Ha egy forgatásból leválasztottunk egy napot (feldarabolás), akkor arra a
-    // napra MÁR A LEVÁLASZTOTT NAP a diszponálandó - az "egész" nem jön fel
-    // még egyszer. Enélkül ugyanaz a nap kétszer szerepelne: az eredeti
-    // projektként és a leválasztott napként is.
     const napraDarabolt = new Set(
       datumos
         .filter((p) => p.feldarabolas_szulo_id !== null)
         .map((p) => `${p.feldarabolas_szulo_id}|${(p.forgatas_datuma ?? "").slice(0, 10)}`),
     );
-    return datumos.filter((p) => !napraDarabolt.has(`${p.id}|${(p.forgatas_datuma ?? "").slice(0, 10)}`));
+    return {
+      scheduled: datumos,
+      darabolvaIdk: new Set(
+        datumos
+          .filter((p) => napraDarabolt.has(`${p.id}|${(p.forgatas_datuma ?? "").slice(0, 10)}`))
+          .map((p) => p.id),
+      ),
+    };
   }, [projects]);
+
+  /** Amin nincs diszpó-teendő: a meetingek és a felaprított eredeti események. */
+  const nincsRajtaTeendo = (p: Project) => p.nem_diszponalando || darabolvaIdk.has(p.id);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -132,7 +146,7 @@ export function NaptarDiszpoContent({
       .sort()
       .map((iso) => {
         const items = buckets.get(iso)!;
-        const hatra = items.filter((p) => !p.diszpo && !p.nem_diszponalando).length;
+        const hatra = items.filter((p) => !p.diszpo && !nincsRajtaTeendo(p)).length;
         // A csoportot az alapján soroljuk be, hogy MIKOR KELL MEGÍRNI a
         // diszpót - a forgatás előtti napon. A mai és a tegnapi forgatás
         // diszpója tehát már elmúlt feladat: csak akkor kiabál (narancs), ha
@@ -169,17 +183,20 @@ export function NaptarDiszpoContent({
           projects: items,
           pending: hatra,
           meetings: items.filter((p) => p.nem_diszponalando).length,
+          darabolt: items.filter((p) => darabolvaIdk.has(p.id) && !p.nem_diszponalando).length,
         };
       });
 
     return { upcoming, groups };
-  }, [filtered]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, darabolvaIdk]);
 
   // A meetingek/helyszínbejárások (a naptárban lila események) benne maradnak a
   // listában - a naptár úgy teljes, ahogy van -, de EGYIK diszpó-számlálóba sem
   // számítanak bele: nincs rajtuk elvégzendő teendő.
-  const diszponalando = upcoming.filter((p) => !p.nem_diszponalando);
-  const meetingek = upcoming.length - diszponalando.length;
+  const diszponalando = upcoming.filter((p) => !nincsRajtaTeendo(p));
+  const meetingek = upcoming.filter((p) => p.nem_diszponalando).length;
+  const daraboltak = upcoming.filter((p) => darabolvaIdk.has(p.id) && !p.nem_diszponalando).length;
   const elozetesKuldve = diszponalando.filter((p) => p.elozetes_diszpo_kuldes).length;
   const teljesKuldve = diszponalando.filter((p) => p.diszpo).length;
   // A MAI TEENDŐ: a holnapi forgatások diszpója (és ami korábbról elmaradt) -
@@ -203,6 +220,7 @@ export function NaptarDiszpoContent({
         {elozetesKuldve} előzetes diszpó elküldve · {teljesKuldve} teljes diszpó kiküldve ·{" "}
         {diszponalando.length - teljesKuldve} még hátra van összesen
         {meetingek > 0 && ` · ${meetingek} meeting (nem diszponálandó)`}
+        {daraboltak > 0 && ` · ${daraboltak} feldarabolva (a napjaihoz megy a diszpó)`}
       </p>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -251,8 +269,9 @@ export function NaptarDiszpoContent({
                     {group.alcim && <span className="text-[12px] text-text-secondary">({group.alcim})</span>}
                     <span className="text-[12px] text-text-secondary">{group.dateLabel}</span>
                     <span className="ml-auto text-[12px] text-text-muted">
-                      {group.projects.length - group.meetings} forgatás
+                      {group.projects.length - group.meetings - group.darabolt} forgatás
                       {group.meetings > 0 && ` · ${group.meetings} meeting`}
+                      {group.darabolt > 0 && ` · ${group.darabolt} feldarabolva`}
                       {group.pending > 0 && ` · ${group.pending} diszpó hátra`}
                     </span>
                   </div>
@@ -275,7 +294,17 @@ export function NaptarDiszpoContent({
                           </p>
                         </div>
 
-                        {p.nem_diszponalando ? (
+                        {darabolvaIdk.has(p.id) && !p.nem_diszponalando ? (
+                          // Ez az eredeti, több napos esemény, amiből erre a
+                          // napra leválasztottunk egy külön forgatást: a diszpó
+                          // ahhoz megy, ide nem kérünk semmit.
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusBadge label="Már feldarabolva" tone="neutral" />
+                            <span className="text-[12px] text-text-muted">
+                              a diszpó a leválasztott naphoz megy, ide nem kell
+                            </span>
+                          </div>
+                        ) : p.nem_diszponalando ? (
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusBadge label="Meeting – nem diszponálandó" tone="neutral" />
                             {p.naptar_szin && (
@@ -351,7 +380,14 @@ export function NaptarDiszpoContent({
           </div>
         )
       ) : (
-        <ForgatasokCalendar projects={upcoming} onProjectClick={(id) => setModalProjectId(id)} />
+        // A naptárban a felaprított eredeti esemény NEM jelenik meg: ott a nap
+        // egy csempe, és a leválasztott nap mellett az "egész" csak ugyanannak
+        // a forgatásnak a duplikátuma lenne. A listán viszont ott marad,
+        // jelöléssel - lásd darabolvaIdk.
+        <ForgatasokCalendar
+          projects={upcoming.filter((p) => !darabolvaIdk.has(p.id))}
+          onProjectClick={(id) => setModalProjectId(id)}
+        />
       )}
 
       <ProjectDetailModal projectId={modalProjectId} onClose={() => setModalProjectId(null)} />

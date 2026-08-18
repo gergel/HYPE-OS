@@ -121,7 +121,16 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
   return (
     <dd>
       {field.inputType === "textarea" ? (
-        <textarea rows={4} {...commonProps} />
+        // Több soros szöveg (brief, technika lista, diszpó szövege): itt az
+        // Enter ÚJ SORT kezd (lásd fent az onKeyDown-t), a mentés az
+        // elkattintás. Ezért nagyobb a doboz is - egy bekezdésnyi szöveget
+        // kényelmesen bele lehessen írni, ne egy sorba kelljen szuszakolni.
+        <>
+          <textarea rows={10} {...commonProps} className="field min-h-[180px] w-full leading-relaxed" />
+          <p className="mt-1 text-[11.5px] text-text-muted">
+            Az Enter új sort kezd. Mentés: kattints a mezőn kívülre (Esc: mégsem).
+          </p>
+        </>
       ) : (
         <input
           type={

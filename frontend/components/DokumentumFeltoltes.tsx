@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Paperclip, Trash2 } from "lucide-react";
-import { useConfirm } from "@/components/ConfirmProvider";
+import { useAlertDialog, useConfirm } from "@/components/ConfirmProvider";
 import { authFetch } from "@/lib/authFetch";
 import type { DocumentAttachment } from "@/lib/api";
 
@@ -36,6 +36,8 @@ export function DokumentumFeltoltes({
   canEdit,
   canDelete,
   emptyText = "Nincs feltöltött fájl.",
+  maxOsszMeretBajt,
+  meretTanacs,
 }: {
   entityType: string;
   entityId: number;
@@ -44,12 +46,24 @@ export function DokumentumFeltoltes({
   canEdit: boolean;
   canDelete: boolean;
   emptyText?: string;
+  /** Ha meg van adva, az ITT látszó fájlok EGYÜTTES mérete nem lépheti túl -
+   * a diszpó mellékleteinél ez a levélbe csatolható méret (lásd backend
+   * services/attachments.py DISZPO_MAX_BAJT). A böngésző előre szól, hogy ne
+   * kelljen megvárni egy hosszú, úgyis elutasított feltöltést; a valódi
+   * kikényszerítés a backenden van. */
+  maxOsszMeretBajt?: number;
+  /** Mit tegyen a felhasználó, ha nem fér bele (pl. Drive + brief-link). */
+  meretTanacs?: string;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
+  // A méret-hibát felugró ablakban mutatjuk: több soros, és el kell olvasni
+  // (mit tegyen a nagy fájllal) - egy magától eltűnő sáv kevés lenne.
+  const alertDialog = useAlertDialog();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const osszesMeret = attachments.reduce((osszeg, a) => osszeg + (a.meret_bajt ?? 0), 0);
 
   /** Egyszerre több fájl is kiválasztható. EGYENKÉNT, sorban töltjük fel:
    * így egy hibás fájl (pl. túl nagy) csak magát bukja, a többi felmegy - és
@@ -58,8 +72,17 @@ export function DokumentumFeltoltes({
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
     const hibak: string[] = [];
+    // A már fent lévők mérete a kiindulás: a korlát az EGYÜTTES méretre szól.
+    let eddigiMeret = osszesMeret;
     try {
       for (const file of files) {
+        if (maxOsszMeretBajt !== undefined && eddigiMeret + file.size > maxOsszMeretBajt) {
+          hibak.push(
+            `${file.name} (${meret(file.size)}): nem fér bele a ${meret(maxOsszMeretBajt)}-os keretbe` +
+              (meretTanacs ? `.\n${meretTanacs}` : "."),
+          );
+          continue;
+        }
         setUploading(file.name);
         try {
           const fd = new FormData();
@@ -71,12 +94,14 @@ export function DokumentumFeltoltes({
           if (!res.ok) {
             const detail = await res.json().catch(() => null);
             hibak.push(`${file.name}: ${detail?.detail ?? res.status}`);
+          } else {
+            eddigiMeret += file.size;
           }
         } catch (err) {
           hibak.push(`${file.name}: ${err}`);
         }
       }
-      if (hibak.length > 0) alert(`Sikertelen feltöltés:\n${hibak.join("\n")}`);
+      if (hibak.length > 0) await alertDialog(`Sikertelen feltöltés:\n${hibak.join("\n")}`);
       router.refresh();
     } finally {
       setUploading(null);
@@ -141,10 +166,18 @@ export function DokumentumFeltoltes({
         </ul>
       )}
       {canEdit && (
-        <label className="inline-block cursor-pointer rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3">
-          {uploading ? `Feltöltés… (${uploading})` : "+ Fájlok feltöltése"}
-          <input ref={inputRef} type="file" multiple className="hidden" disabled={!!uploading} onChange={feltolt} />
-        </label>
+        <>
+          <label className="inline-block cursor-pointer rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3">
+            {uploading ? `Feltöltés… (${uploading})` : "+ Fájlok feltöltése"}
+            <input ref={inputRef} type="file" multiple className="hidden" disabled={!!uploading} onChange={feltolt} />
+          </label>
+          {maxOsszMeretBajt !== undefined && (
+            <p className="text-[12px] text-text-muted">
+              Összesen {meret(maxOsszMeretBajt)} fér ide{osszesMeret > 0 ? ` (most ${meret(osszesMeret)} van fent)` : ""}.
+              {meretTanacs ? ` ${meretTanacs}` : ""}
+            </p>
+          )}
+        </>
       )}
     </div>
   );

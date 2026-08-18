@@ -52,7 +52,10 @@ export function ProjektekContent({
   canEdit: boolean;
 }) {
   const [projects, setProjects] = useState(initialProjects);
-  const [view, setView] = useState<"table" | "calendar">("table");
+  // NAPTÁR az alapértelmezett nézet: a projekt itt egy forgatási NAP, és a
+  // napi munka (mi van ma, mi jön holnap) naptárban olvasható, nem egy 800
+  // soros táblázatban. A táblázat egy kattintással elérhető marad.
+  const [view, setView] = useState<"table" | "calendar">("calendar");
   const [query, setQuery] = useState("");
   const [modalProjectId, setModalProjectId] = useState<number | null>(null);
 

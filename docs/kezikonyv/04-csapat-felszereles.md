@@ -99,6 +99,25 @@ backend segéd: `services/technika.py`.
 végigmész a tételeken, a végén összesítést kapsz. Jogosultsága a `/felszereles`
 oldalé.
 
+Az összesítés HÁROM dolgot mond meg, nem kettőt: mi nem "Jó" állapotú, miből
+hiányzik, és **miből van több az elvártnál**. A többlet ugyanúgy eltérés, mint a
+hiány - vagy a nyilvántartás volt rossz, vagy egy másik tétel alá könyvelt
+darabok kerültek elő -, és ha nem írjuk ki, a készlet csendben elcsúszik.
+
+**A lezárás magyarázatot követel** a "Szerelendő" és a "Szervíz" állapotú
+eszközökhöz (`MAGYARAZATOT_IGENYLO_STATUSZOK`). Egy hónappal később a puszta
+státuszból már senki nem tudja, mi a baja a gépnek, hol van, és ki vitte el - a
+leltározás viszont épp az a pillanat, amikor ezt valaki még fejből tudja. Amíg
+hiányzik, a `complete` végpont `400`-zal elutasít, és a szerkesztő oldal előre
+kiírja, kinél áll. A Selejt/Elhagyva szándékosan nem kér magyarázatot: ott maga
+a szó megmondja, mi történt.
+
+**Törölni csak admin tud** egy leltározást (`DELETE /sessions/{id}`) - a leltár
+egy elvégzett munka nyoma, aki végigment 300 eszközön, annak az eredményét ne
+tüntesse el egy félrekattintás. A törlés a tételeket viszi, az eszközök leltár
+közben beállított állapotát/darabszámát NEM állítja vissza: azok a valós
+állapotot tükrözik.
+
 ## Céges autók
 
 `/api/v1/autok`, oldal: `/autok`, modell: `models/auto.py`, route: `routes/autok.py`.

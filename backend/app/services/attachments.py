@@ -62,6 +62,24 @@ ENTITAS_OLDALAK: dict[str, str] = {
 
 MAX_MERET_BAJT = 100 * 1024 * 1024
 
+# A "diszpo" kategória KÜLÖN, szigorúbb határt kap, mert ezek a fájlok nem csak
+# tárolódnak: a diszpó levél mellékleteként ki is mennek a stábnak. A Gmail
+# üzenetkorlátja 25 MB, a base64 kódolás ~33%-kal növeli a méretet, és a levél
+# többi része (HTML, diszpó PDF) is elfér benne - innen a 15 MB.
+#
+# A határt a FELTÖLTÉSNÉL kérjük számon, nem csak küldéskor: enélkül a fájl
+# szépen felmegy, és csak napokkal később, a diszpó kiküldésekor derül ki, hogy
+# nem megy ki - amikor már nincs idő Drive-ra tölteni és linket cserélni.
+# A küldés oldali ellenőrzés ugyanezt a konstanst használja (services/dispo.py).
+DISZPO_MAX_BAJT = 15 * 1024 * 1024
+
+#: Amit ilyenkor mondunk: a nagy fájl helye a Drive, a linkjéé a brief - a
+#: brief szövege a diszpó levélbe is bekerül, tehát a link így is eljut a stábhoz.
+DISZPO_TULLEPES_TANACS = (
+    "Töltsd fel a fájlt Google Drive-ra, és a megosztási linket tedd be a projekt "
+    "briefjébe - a brief szövege a diszpóval együtt megy ki, így a stáb eléri."
+)
+
 
 class AttachmentError(Exception):
     """Feltöltési/tárolási hiba, amit a hívó HTTP-hibává fordít."""
@@ -96,6 +114,35 @@ def by_notion_source(db: Session, notion_forras: str) -> DocumentAttachment | No
     )
 
 
+def _meret(bajt: int) -> str:
+    """Olvasható méret - 1 MB alatt kB-ban, hogy egy pár kilobájtos fájl ne
+    "0.0 MB"-ként jelenjen meg a hibaüzenetben."""
+    if bajt < 1024 * 1024:
+        return f"{round(bajt / 1024)} kB"
+    return f"{bajt / 1024 / 1024:.1f} MB"
+
+
+def _ellenorizd_a_diszpo_meretet(db: Session, entity_type: str, entity_id: int, uj_meret: int) -> None:
+    """A diszpó-mellékletek EGYÜTT sem lehetnek nagyobbak a levélbe csatolható
+    méretnél - a most feltöltött fájllal együtt számolva.
+
+    Azért az együttes méret számít, nem csak az új fájlé: a levélbe mindegyik
+    bekerül, tehát három 6 MB-os fájl ugyanúgy megbuktatja a küldést, mint egy
+    18 MB-os."""
+    mar_fent = sum(a.meret_bajt or 0 for a in list_by_kategoria(db, entity_type, entity_id, "diszpo"))
+    if mar_fent + uj_meret <= DISZPO_MAX_BAJT:
+        return
+    if mar_fent:
+        raise AttachmentError(
+            f"Ez a fájl ({_meret(uj_meret)}) már nem fér a diszpó levélbe: a csatolni valók együtt "
+            f"{_meret(mar_fent + uj_meret)} lennének, a határ {_meret(DISZPO_MAX_BAJT)}. " + DISZPO_TULLEPES_TANACS
+        )
+    raise AttachmentError(
+        f"A fájl túl nagy ({_meret(uj_meret)}) ahhoz, hogy a diszpó levélhez csatolható legyen "
+        f"(a határ {_meret(DISZPO_MAX_BAJT)}). " + DISZPO_TULLEPES_TANACS
+    )
+
+
 def save(
     db: Session,
     *,
@@ -120,6 +167,8 @@ def save(
         )
     if not data:
         raise AttachmentError("A fájl üres.")
+    if kategoria == "diszpo":
+        _ellenorizd_a_diszpo_meretet(db, entity_type, entity_id, len(data))
 
     filename = filename or "dokumentum"
     rekord = DocumentAttachment(

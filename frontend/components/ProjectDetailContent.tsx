@@ -27,6 +27,7 @@ import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { SzamlazoFelSzerkeszto } from "@/components/SzamlazoFelSzerkeszto";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
+import { DISZPO_MAX_BAJT, DISZPO_MERET_TANACS } from "@/lib/csatolmany";
 import { szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
 import { VagasiKoltsegOsszesen, type FutoMeres } from "@/components/deliverable/VagasiKoltsegOsszesen";
@@ -330,6 +331,8 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 canEdit={szerkeszthet}
                 canDelete={torolhet}
                 emptyText="Nincs csatolni való fájl - a diszpó a szokásos PDF-fel megy ki."
+                maxOsszMeretBajt={DISZPO_MAX_BAJT}
+                meretTanacs={DISZPO_MERET_TANACS}
               />
             </Card>
 

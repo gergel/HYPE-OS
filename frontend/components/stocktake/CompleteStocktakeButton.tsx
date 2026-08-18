@@ -3,11 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
-import { useConfirm } from "@/components/ConfirmProvider";
+import { useAlertDialog, useConfirm } from "@/components/ConfirmProvider";
 
 export function CompleteStocktakeButton({ sessionId }: { sessionId: number }) {
   const router = useRouter();
   const confirm = useConfirm();
+  // A lezárás akkor is elbukhat, ha egy szerelendő/szervizes eszközhöz nincs
+  // magyarázat - ilyenkor egy eszköz-listát kap vissza a backend, amit el kell
+  // olvasni. Ezért felugró ablak, nem eltűnő értesítés-sáv.
+  const alertDialog = useAlertDialog();
   const [busy, setBusy] = useState(false);
 
   async function handleClick() {
@@ -17,7 +21,8 @@ export function CompleteStocktakeButton({ sessionId }: { sessionId: number }) {
       const res = await authFetch(`/api/v1/stocktake/sessions/${sessionId}/complete`, { method: "POST" });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
-        alert(`Sikertelen lezárás: ${detail?.detail ?? res.status}`);
+        await alertDialog(`Sikertelen lezárás: ${detail?.detail ?? res.status}`);
+        router.refresh();
         return;
       }
       router.push(`/felszereles/leltarazas/${sessionId}/eredmeny`);

@@ -37,7 +37,7 @@ function LinkValue({ href }: { href: string }) {
   return <Hivatkozas href={href} />;
 }
 
-function formatValue(key: string, value: unknown): { node: ReactNode; wide: boolean } {
+function formatValue(key: string, value: unknown, hint?: FieldTypeInfo): { node: ReactNode; wide: boolean } {
   if (value === null || value === undefined || value === "") return { node: "–", wide: false };
   if (typeof value === "boolean") return { node: value ? "Igen" : "Nem", wide: false };
   if (Array.isArray(value)) {
@@ -66,7 +66,7 @@ function formatValue(key: string, value: unknown): { node: ReactNode; wide: bool
   if (typeof value === "string" && TIME_VALUE_PATTERN.test(value)) return { node: value.slice(0, 5), wide: false };
   if (typeof value === "string" && DATE_VALUE_PATTERN.test(value)) return { node: formatDate(value), wide: false };
   if (typeof value === "string" && isUrl(value)) return { node: <LinkValue href={value} />, wide: false };
-  if (typeof value === "string" && isLongText(value)) {
+  if (typeof value === "string" && (hint?.type === "multiline" || isLongText(value))) {
     // a Notion rich_text mezők (pl. diszpó szövege, brief, technika lista) sortöréseit
     // meg kell tartani, különben az egész szöveg egy sorba tördelődik a böngészőben.
     // A szövegbe írt linkek (vágás leírása, gyártás komment) kattinthatók.
@@ -118,6 +118,10 @@ function classifyInput(
       allowNew: fieldTypeHint.allow_new,
     };
   }
+  // Hosszú szövegnek szánt oszlop (Text) - MINDIG textarea, akkor is, ha épp
+  // üres vagy rövid a tartalma. Enélkül az üres brief egysoros mezőként nyílt
+  // meg, amiben az Enter mentett: pont az első bekezdést nem lehetett megírni.
+  if (fieldTypeHint?.type === "multiline") return { editable: true, inputType: "textarea" };
   if (value === null || value === undefined) {
     if (fieldTypeHint?.type === "boolean") return { editable: true, inputType: "boolean" };
     if (fieldTypeHint?.type === "date" || fieldTypeHint?.type === "datetime") return { editable: true, inputType: "date" };
@@ -158,7 +162,7 @@ export function toEditableDetailFields(
     .filter(([key]) => !hideSet.has(key))
     .filter(([key]) => !onlyShowSet || onlyShowSet.has(key))
     .map(([key, value]) => {
-      const { node, wide } = formatValue(key, value);
+      const { node, wide } = formatValue(key, value, fieldTypes?.[key]);
       const classified = classifyInput(key, value, fieldTypes?.[key]);
       const { inputType, options, allowNew } = classified;
       const editable = FORCE_READONLY_KEYS.has(key) ? false : classified.editable;

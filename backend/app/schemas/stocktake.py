@@ -12,6 +12,7 @@ class StocktakeItemRead(BaseModel):
     expected_qty: int | None
     counted_qty: int | None
     status: str | None
+    megjegyzes: str | None
 
     model_config = {"from_attributes": True}
 
@@ -19,6 +20,8 @@ class StocktakeItemRead(BaseModel):
 class StocktakeItemUpdate(BaseModel):
     status: str | None = None
     counted_qty: int | None = None
+    #: Magyarázat a nem "Jó" állapothoz - üres szöveg törli.
+    megjegyzes: str | None = None
 
 
 class StocktakeSessionRead(BaseModel):
@@ -43,6 +46,12 @@ class StocktakeSessionListItem(BaseModel):
 class StocktakeStatusGroupItem(BaseModel):
     equipment_id: int
     nev: str
+    #: A leltározó magyarázata (miért szerelendő / miért van szervizben).
+    megjegyzes: str | None = None
+    #: Ehhez az állapothoz kötelező a magyarázat (lásd services/stocktake.py
+    #: MAGYARAZATOT_IGENYLO_STATUSZOK) - a felület ebből tudja, hol kell
+    #: hiányként kiabálnia.
+    magyarazat_kell: bool = False
 
 
 class StocktakeStatusGroup(BaseModel):
@@ -58,6 +67,20 @@ class StocktakeMissingStock(BaseModel):
     hiany: int
 
 
+class StocktakeSurplusStock(BaseModel):
+    """Amiből TÖBB van, mint az elvárt darabszám - ez is eltérés, nem öröm."""
+
+    equipment_id: int
+    nev: str
+    expected_qty: int
+    counted_qty: int
+    tobblet: int
+
+
 class StocktakeSummary(BaseModel):
     problemas_statuszok: list[StocktakeStatusGroup]
     hianyzo_keszletek: list[StocktakeMissingStock]
+    tobblet_keszletek: list[StocktakeSurplusStock] = []
+    #: Amihez még hiányzik a kötelező magyarázat - amíg van ilyen, a leltár
+    #: nem zárható le (lásd services/stocktake.complete_session).
+    magyarazatra_var: list[StocktakeStatusGroupItem] = []
