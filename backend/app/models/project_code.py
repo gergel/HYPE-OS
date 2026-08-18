@@ -209,6 +209,15 @@ class ProjectCode(TimestampMixin, Base):
         return megrendeloi_keret_ervenyes(self.contract, self.datum)
 
     @property
+    def keretszerzodes_neve(self) -> str | None:
+        """KIVEL van a keretszerződés - a felület ezt írja ki a "keretszerződés
+        alatt" jelzés mellé. Egy puszta "keretszerződés alatt" ugyanis nem
+        ellenőrizhető: pont az a kérdés, melyik céggel."""
+        if self.contract is None or not self.keret_fedi:
+            return None
+        return self.contract.ceg_neve or (self.contract.client.nev if self.contract.client else None)
+
+    @property
     def szerzodes_kesz(self) -> bool:
         """Van-e a megrendelővel LEZÁRT eseti szerződés ezen a projektkódon.
 

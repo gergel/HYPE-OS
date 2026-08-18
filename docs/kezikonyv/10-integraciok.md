@@ -279,3 +279,24 @@ A `docker-compose.yml` a `media-worker` szolgáltatásban indít Celery workert 
 portál-feladatokhoz. **Nem minden ismétlődő művelet ütemezett**: a visszatérő
 kötelezettségek "utolérése" például igény szerint, a lista lekérésekor fut le,
 idempotensen (lásd [07-penzugyek.md](07-penzugyek.md)).
+
+### A projektkód TIG- és SZÁMLA-részének átvétele
+
+A Notion "HYPE ADMIN projektkódok" táblájában a szerződés alatt ott a TIG-rész
+(állapot, aláírt papír), az alatt pedig a számla-rész (mikor kellett volna
+fizetni, mikor fizették ki, és maga a számla). Ezt lapos mezőkbe már az import
+áthozta; valódi rekorddá a `services/megrendeloi_papir_atvetel.py` alakítja -
+az import után és migrációból is futtatható, IDEMPOTENSEN.
+
+**TIG:** ha az aláírt példány fel van töltve, a papír kész ("Van már papír", az
+aláírt fájllal). Ha a Notion szerint kiment, de aláírt példány nincs, akkor
+"Kiküldve" - a felületen ez az **aláírásra vár** állapot, mert ott valódi teendő
+van: vissza kell kérni az aláírt papírt. Ugyanez a különbségtétel a
+szerződésnél is.
+
+**Számla:** a fizetési határidő, az utalás dátuma, a bevétel formája és a
+feltöltött számla a **bevétel-sorra** kerül. Óvatosan gyártunk sort: a bevételek
+a Notion "Bevételek" táblájából jönnek, ezért ha már van bevétel-sor, csak a
+HIÁNYZÓ mezőit töltjük ki - egy második sor megduplázná a bevételt. Új sort csak
+akkor nyitunk, ha egyáltalán nincs bevétel, és a projektkódon van összeg. A már
+kitöltött értékeket sosem írjuk felül.

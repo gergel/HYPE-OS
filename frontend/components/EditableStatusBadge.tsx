@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { authFetch } from "@/lib/authFetch";
@@ -26,28 +26,44 @@ export function EditableStatusBadge({
   placeholder?: string;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  // AZONNAL az új értéket mutatjuk, és csak utána mentünk ("optimista"
+  // frissítés). Enélkül a felület a szerver válaszára és a teljes oldal
+  // újrarenderelésére várt, tehát egy állapot átállítása másodpercekig úgy
+  // nézett ki, mintha nem történt volna semmi - egy nagyobb listán pláne.
+  // Hibánál visszaáll a régi érték, tehát hazudni nem tud.
+  const [ertek, setErtek] = useState(value);
+  const [propErtek, setPropErtek] = useState(value);
+  const [, indit] = useTransition();
+
+  // Ha a szerver adata megjön (vagy máshonnan változik), az az igazság.
+  if (value !== propErtek) {
+    setPropErtek(value);
+    setErtek(value);
+  }
 
   async function onChange(next: string | null) {
-    setBusy(true);
+    const elozo = ertek;
+    setErtek(next);
     try {
       const res = await authFetch(patchPath, { method: "PATCH", body: JSON.stringify({ [field]: next }) });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
+        setErtek(elozo);
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
         return;
       }
-      router.refresh();
+      // A frissítés átmenetben fut: a lista közben használható marad, nem
+      // fagy le arra az időre, amíg a szerver újraszámolja az oldalt.
+      indit(() => router.refresh());
     } catch (err) {
+      setErtek(elozo);
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
-    } finally {
-      setBusy(false);
     }
   }
 
   return (
     <span onClick={(e) => e.stopPropagation()}>
-      <SelectDropdown value={value} options={options} onChange={onChange} placeholder={placeholder} disabled={busy} />
+      <SelectDropdown value={ertek} options={options} onChange={onChange} placeholder={placeholder} />
     </span>
   );
 }

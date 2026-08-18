@@ -62,6 +62,9 @@ export type ProjectCode = {
   /** Fedi-e élő megrendelői keretszerződés: ilyenkor eseti szerződés nem
    * kell, csak TIG. */
   keret_fedi: boolean;
+  /** KIVEL van a keretszerződés - a puszta "keretszerződés alatt" nem
+   * ellenőrizhető (lásd backend models/project_code.keretszerzodes_neve). */
+  keretszerzodes_neve: string | null;
   szerzodes_kell: boolean;
   szerzodes_kesz: boolean;
   tig_kesz: boolean;

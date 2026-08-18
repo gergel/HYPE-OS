@@ -41,10 +41,18 @@ function papirJelzo(pc: ProjectCode) {
   return (
     <span className="flex flex-wrap justify-end gap-1">
       {/* Keretszerződés alatt nincs eseti szerződés-teendő - de azt is ki kell
-          írni, MIÉRT nincs, különben az üres hely tűnik hiánynak. */}
+          írni, MIÉRT nincs, különben az üres hely tűnik hiánynak. És azt is,
+          KIVEL: egy puszta "keretszerződés alatt" nem ellenőrizhető, pedig ez
+          a jelzés vesz le egy teendőt. */}
       <StatusBadge
         label={
-          !pc.szerzodes_kell ? "Keretszerződés alatt" : pc.szerzodes_kesz ? "Szerződés megvan" : "Nincs szerződés"
+          !pc.szerzodes_kell
+            ? pc.keretszerzodes_neve
+              ? `Keret: ${pc.keretszerzodes_neve}`
+              : "Keretszerződés alatt"
+            : pc.szerzodes_kesz
+              ? "Szerződés megvan"
+              : "Nincs szerződés"
         }
         tone={!pc.szerzodes_kell || pc.szerzodes_kesz ? "success" : "warning"}
       />

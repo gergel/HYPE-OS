@@ -61,8 +61,10 @@ class ProjectCodeRead(ProjectCodeBase):
     #: ebből mutatja, melyik projekten van már szerződés, hol van kész TIG, és
     #: mit nem fizettek még ki.
     papir_kell: bool
-    #: Fedi-e élő keretszerződés (ilyenkor eseti szerződés nem kell, csak TIG).
+    #: Fedi-e élő keretszerződés (ilyenkor eseti szerződés nem kell, csak TIG),
+    #: és KIVEL - egy puszta "keretszerződés alatt" nem ellenőrizhető.
     keret_fedi: bool
+    keretszerzodes_neve: str | None = None
     szerzodes_kell: bool
     szerzodes_kesz: bool
     tig_kesz: bool

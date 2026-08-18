@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from app.models.contract import Contract, ContractType
 from app.models.document_attachment import DocumentAttachment
+from app.models.finance import Revenue
 from app.models.megrendeloi_papir import MegrendeloiSzerzodes, MegrendeloiTig
 from app.models.project_code import ProjectCode
 
@@ -148,15 +149,22 @@ class Atvetel:
     tig_frissult: int = 0
     kihagyott_projektkod: int = 0
     keret_ugyfelhez_kotve: int = 0
+    #: A SZÁMLA-rész átvétele: hány bevétel-sor keletkezett/egészült ki, és
+    #: hányhoz került oda a Notionba feltöltött számla.
+    bevetel_letrejott: int = 0
+    bevetel_frissult: int = 0
+    szamla_fajl_atvéve: int = 0
 
     @property
     def osszes(self) -> int:
-        return self.szerzodes_letrejott + self.tig_letrejott
+        return self.szerzodes_letrejott + self.tig_letrejott + self.bevetel_letrejott
 
     def __str__(self) -> str:
         return (
             f"szerződés: {self.szerzodes_letrejott} új / {self.szerzodes_frissult} frissítve, "
             f"TIG: {self.tig_letrejott} új / {self.tig_frissult} frissítve, "
+            f"bevétel: {self.bevetel_letrejott} új / {self.bevetel_frissult} kiegészítve "
+            f"({self.szamla_fajl_atvéve} számla fájllal), "
             f"papír nélküli projektkód: {self.kihagyott_projektkod}, "
             f"ügyfélhez kötött keretszerződés: {self.keret_ugyfelhez_kotve}"
         )
@@ -321,15 +329,84 @@ def _alkalmaz(papir, mezok: dict, fajl_url: str | None) -> None:
     for mezo, ertek in mezok.items():
         if ertek is not None:
             setattr(papir, mezo, ertek)
-    papir.allapot = ATVETT_ALLAPOT
     papir.megjegyzes = ATVETT_MEGJEGYZES
     if fajl_url:
         # Az ALÁÍRT példány mezőjébe megy: a Notionba feltöltött papír a kész,
         # aláírt dokumentum, nem egy általunk generált piszkozat. Így a
         # felületen is "Kiküldve, aláírva"-ként, nem félkészként látszik.
+        papir.allapot = ATVETT_ALLAPOT
         papir.alairt_file_url = fajl_url[:500]
         if not papir.file_url:
             papir.file_url = fajl_url[:500]
+    else:
+        # NINCS aláírt példány, de a Notion szerint a papír kiment: ez az
+        # "aláírásra vár" állapot. Fontos megkülönböztetni a késztől, mert itt
+        # VAN teendő - vissza kell kérni az aláírt példányt. A "Kiküldve"
+        # állapot + hiányzó aláírt fájl pontosan ezt jelenti a felületen is
+        # (lásd routes/megrendeloi_papirok.py alairasra_var).
+        papir.allapot = "Kiküldve"
+
+
+#: A számla-átvételnél ugyanez a jelölés: az így KELETKEZETT bevétel-sort erről
+#: ismerjük fel újrafuttatáskor.
+def _szamla_fajl(db: Session, pk: ProjectCode) -> str | None:
+    """A projektkódhoz feltöltött SZÁMLA - a csatolmányokból vagy a Notionból
+    örökölt URL-ből."""
+    fajlok = _csatolmanyok(db, pk.id, "szamla")
+    if fajlok:
+        return fajlok[0].url
+    return pk.szamla_url if isinstance(pk.szamla_url, str) and pk.szamla_url else None
+
+
+def vedd_at_a_szamlat(db: Session, pk: ProjectCode, merleg: Atvetel) -> None:
+    """A projektkód SZÁMLA-részének átvétele a bevétel-sorra.
+
+    A Notionban a projektkód alatt ott van, mikor KELLETT volna fizetni
+    (fizetési határidő), mikor fizették ki (utalás dátuma), és oda van
+    feltöltve maga a számla is. Ez az adat eddig lapos mezőkben állt a
+    projektkódon, a Pénzügy pedig nem tudott róla.
+
+    ÓVATOSAN gyártunk sort: a bevételek a Notion "Bevételek" táblájából jönnek
+    (lásd notion_import/importers_wave2.py). Ha már van bevétel-sor, csak a
+    HIÁNYZÓ mezőit töltjük ki - egy második sor megduplázná a bevételt. Új sort
+    csak akkor nyitunk, ha egyáltalán nincs bevétel, és a projektkódon van
+    összeg vagy feltöltött számla."""
+    szamla_url = _szamla_fajl(db, pk)
+    netto = _szam(pk.netto_osszeg) or _szam(pk.szerzodes_netto_osszeg)
+    van_penzugyi_adat = bool(szamla_url or pk.fizetesi_hatarido or pk.utalas_datuma or netto)
+    if not van_penzugyi_adat:
+        return
+
+    sorok = list(pk.revenues or [])
+    if not sorok:
+        # Csak akkor nyitunk sort, ha tudjuk, MENNYIRŐL van szó: összeg nélkül
+        # a bevétel-lista csak zajt kapna.
+        if netto is None:
+            return
+        sor = Revenue(project_code_id=pk.id, netto=netto, megjegyzes=ATVETT_MEGJEGYZES)
+        db.add(sor)
+        sorok = [sor]
+        merleg.bevetel_letrejott += 1
+    else:
+        merleg.bevetel_frissult += 1
+
+    # A LEGUTÓBBI sort töltjük ki: több bevétel-sornál (részszámlák) nem lehet
+    # eldönteni, melyikre vonatkozik a projektkód egyetlen dátuma - a
+    # legfrissebb a legjobb tipp, és a meglévő adatot sosem írjuk felül.
+    sor = sorok[-1]
+    if sor.fizetes_hatarideje is None and pk.fizetesi_hatarido is not None:
+        sor.fizetes_hatarideje = pk.fizetesi_hatarido
+    if sor.fizetes_datuma is None and pk.utalas_datuma is not None:
+        sor.fizetes_datuma = pk.utalas_datuma
+    if not sor.bevetel_formaja and pk.bevetel_formaja:
+        sor.bevetel_formaja = pk.bevetel_formaja
+    if not sor.szamla_file_url and szamla_url:
+        sor.szamla_file_url = szamla_url[:500]
+        merleg.szamla_fajl_atvéve += 1
+    if sor.brutto is None and netto is not None:
+        # A Notion "Bruttó" mezője formula/rollup - ha nincs kézzelfogható
+        # érték, a plusz-ÁFA jelölőből számolunk, ahogy a papírokon is.
+        sor.brutto = round(netto * 1.27, 2) if _plusz_afa(pk.plusz_afa) else netto
 
 
 def vedd_at_a_projektkodot(db: Session, pk: ProjectCode, merleg: Atvetel) -> None:
@@ -388,4 +465,5 @@ def vedd_at_mindent(db: Session, project_code_ids: list[int] | None = None) -> A
         merleg.keret_ugyfelhez_kotve = kosd_ugyfelhez_a_kereteket(db)
     for pk in db.scalars(stmt.order_by(ProjectCode.id)):
         vedd_at_a_projektkodot(db, pk, merleg)
+        vedd_at_a_szamlat(db, pk, merleg)
     return merleg

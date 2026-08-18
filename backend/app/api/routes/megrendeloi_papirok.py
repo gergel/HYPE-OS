@@ -195,9 +195,42 @@ def get_elotoltes(
     szerkeszthető."""
     _modell(fajta)
     pk = _projektkod_vagy_404(db, project_code_id)
+
+    # A TIG UGYANARRÓL A MUNKÁRÓL szól, mint a szerződés: amit oda egyszer
+    # beírtak, azt itt ne kelljen újra begépelni (ugyanaz a minta, mint az
+    # alvállalkozói oldalon - lásd 06-papirozas.md "A TIG a szerződésből
+    # indul"). Két forrás jöhet szóba, ebben a sorrendben:
+    #
+    # 1. a projektkódra készült megrendelői SZERZŐDÉS - azon már pontosított
+    #    cégadatok és összeg állnak;
+    # 2. a projektkódra kötött KERETSZERZŐDÉS - keret alatt eseti szerződés
+    #    nincs, tehát a cégadat onnan a legjobb.
+    korabbi = None
+    if fajta == TIG:
+        korabbi = db.scalars(
+            select(MegrendeloiSzerzodes)
+            .where(MegrendeloiSzerzodes.project_code_id == pk.id)
+            .order_by(MegrendeloiSzerzodes.id.desc())
+        ).first()
+        if keretszerzodes_id is None and pk.contract_id is not None and pk.keret_fedi:
+            keretszerzodes_id = pk.contract_id
+
     fel = megrendeloi_papir.szerzodo_fel_adatai(
         db, pk, client_id=client_id, contact_id=contact_id, keretszerzodes_id=keretszerzodes_id
     )
+    if korabbi is not None:
+        # A szerződésen lévő adat az ELSŐDLEGES: azt egyszer már ellenőrizték
+        # és kiküldték. Csak a kitöltött mezők számítanak - egy üresen hagyott
+        # mező ne törölje a máshonnan tudott értéket.
+        fel.client_id = korabbi.client_id or fel.client_id
+        fel.contact_id = korabbi.contact_id or fel.contact_id
+        fel.keretszerzodes_id = korabbi.keretszerzodes_id or fel.keretszerzodes_id
+        fel.ceg_neve = korabbi.ceg_neve or fel.ceg_neve
+        fel.szekhely = korabbi.szekhely or fel.szekhely
+        fel.adoszam = korabbi.adoszam or fel.adoszam
+        fel.kepviselo = korabbi.kepviselo or fel.kepviselo
+        fel.nyilvantartasi_szam = korabbi.nyilvantartasi_szam or fel.nyilvantartasi_szam
+        fel.email = korabbi.email or fel.email
     keret = megrendeloi_papir.keretszerzodes_fedi(db, fel.client_id, pk.datum)
     return ElotoltesOut(
         client_id=fel.client_id,
@@ -209,9 +242,15 @@ def get_elotoltes(
         kepviselo=fel.kepviselo,
         nyilvantartasi_szam=fel.nyilvantartasi_szam,
         email=fel.email,
-        # A tárgy és az összeg a projektkódról jön: azt ott vezetik.
-        megbizas_targya=pk.megbizas_targya or pk.szerzodes_targya,
-        projekt_nev=pk.szerzodes_projekt_nev or pk.project_nev or pk.tig_projektnev,
+        # A tárgy és az összeg a SZERZŐDÉSRŐL jön, ha van - azt ott már
+        # megfogalmazták -, különben a projektkódról.
+        megbizas_targya=(korabbi.megbizas_targya if korabbi else None)
+        or pk.megbizas_targya
+        or pk.szerzodes_targya,
+        projekt_nev=(korabbi.projekt_nev if korabbi else None)
+        or pk.szerzodes_projekt_nev
+        or pk.project_nev
+        or pk.tig_projektnev,
         teljesites_szoveg=(pk.tig_teljesitesi_ido or pk.teljesites)
         if fajta == TIG
         else (pk.teljesites or pk.tig_teljesitesi_ido),
@@ -220,12 +259,14 @@ def get_elotoltes(
         # ugyanez a visszaesés van a tárgynál és a projekt nevénél is. A két
         # oszlop külön Notion-örökség, és a régi sorokon jellemzően csak az
         # egyik van kitöltve.
-        netto_osszeg=_f(
+        netto_osszeg=_f(korabbi.netto_osszeg if korabbi and korabbi.netto_osszeg is not None else None)
+        or _f(
             (pk.szerzodes_netto_osszeg or pk.netto_osszeg)
             if fajta == SZERZODES
             else (pk.netto_osszeg or pk.szerzodes_netto_osszeg)
         ),
-        plusz_afa=bool(pk.szerzodes_plusz_afa or pk.plusz_afa),
+        plusz_afa=bool(korabbi.plusz_afa) if korabbi and korabbi.plusz_afa is not None
+        else bool(pk.szerzodes_plusz_afa or pk.plusz_afa),
         forras=fel.forras,
         van_elo_keretszerzodes=keret is not None,
     )

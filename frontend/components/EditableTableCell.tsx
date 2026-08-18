@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 
@@ -39,6 +39,7 @@ export function EditableTableCell({
   const [displayValue, setDisplayValue] = useState(value);
   const [prevPropValue, setPrevPropValue] = useState(value);
   const [busy, setBusy] = useState(false);
+  const [, indit] = useTransition();
 
   if (value !== prevPropValue) {
     setPrevPropValue(value);
@@ -46,18 +47,27 @@ export function EditableTableCell({
   }
 
   async function save(next: string | number | null) {
+    // AZONNAL az új értéket mutatjuk, és csak utána mentünk: a szerver
+    // válaszára (és a teljes oldal újrarenderelésére) várva egy átírás
+    // másodpercekig úgy nézett ki, mintha nem történt volna semmi. Hibánál
+    // visszaáll a régi érték.
+    const elozo = displayValue;
+    setDisplayValue(next);
+    setEditing(false);
     setBusy(true);
     try {
       const res = await authFetch(patchPath, { method: "PATCH", body: JSON.stringify({ [field]: next }) });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
+        setDisplayValue(elozo);
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
         return;
       }
-      setDisplayValue(next);
-      setEditing(false);
-      router.refresh();
+      // Átmenetben: a lista közben használható marad, nem fagy le arra az
+      // időre, amíg a szerver újraszámolja az oldalt.
+      indit(() => router.refresh());
     } catch (err) {
+      setDisplayValue(elozo);
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
     } finally {
       setBusy(false);

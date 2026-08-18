@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
 from app.core.security import require_page_action
-from app.models.client import Client
 from app.models.contract import Contract
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
@@ -76,7 +75,12 @@ router = build_crud_router(
         # services/belsos_koltseg.py), a külsős rész pedig a rájuk szóló
         # TIG-ekből és TIG-tételekből (services/kulsos_koltseg.py) - eager load
         # nélkül ez soronként négy további lekérdezés lenne.
-        selectinload(ProjectCode.projects).selectinload(Project.crew),
+        # A stáb mellé a BELSŐS IDŐSZAKOK is kellenek: a napidíj azt nézi, ki
+        # volt AZON A NAPON belsős (lásd services/belsos_idoszak.belsos_a_napon).
+        # Enélkül stábtagonként külön lekérdezés indulna értük.
+        selectinload(ProjectCode.projects)
+        .selectinload(Project.crew)
+        .selectinload(Employee.belsos_idoszakok),
         selectinload(ProjectCode.projects)
         .selectinload(Project.performance_certificates)
         .selectinload(PerformanceCertificate.tetelek),
@@ -85,11 +89,13 @@ router = build_crud_router(
         .selectinload(PerformanceCertificateTetel.certificate)
         .selectinload(PerformanceCertificate.tetelek),
         # A papír-állás jelzői (szerzodes_kesz / tig_kesz) a megrendelői
-        # papírokból jönnek, a keret-fedés pedig az ügyfél keretszerződéseinek
-        # érvényességi időszakaiból - lásd models/project_code.py.
+        # papírokból jönnek, a keret-fedés pedig a projektkódra KÖTÖTT
+        # keretszerződés érvényességi időszakaiból - lásd
+        # models/project_code.keret_fedi. (Az ügyfél összes szerződését
+        # emiatt már nem kell behozni: a kötés a kódon van.)
         selectinload(ProjectCode.megrendeloi_szerzodesek),
         selectinload(ProjectCode.megrendeloi_tigek),
-        selectinload(ProjectCode.client).selectinload(Client.contracts).selectinload(Contract.idoszakok),
+        selectinload(ProjectCode.contract).selectinload(Contract.idoszakok),
     ),
 )
 
