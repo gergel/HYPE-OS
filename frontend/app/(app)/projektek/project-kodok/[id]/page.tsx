@@ -1,67 +1,40 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
-import { DetailSections } from "@/components/DetailSections";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { KoltsegBontas } from "@/components/KoltsegBontas";
 import { MegrendeloiPapirKezelo } from "@/components/megrendeloi/MegrendeloiPapirKezelo";
 import { PapirKapcsolok } from "@/components/megrendeloi/PapirKapcsolok";
-import { RelatedTable } from "@/components/RelatedTable";
+import { ProjektkodBontasTablak } from "@/components/projektkod/ProjektkodBontasTablak";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { DataTable } from "@/components/DataTable";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   formatHuf,
   getAttachments,
   getCurrentUser,
-  getDetailTabs,
-  getEmployees,
-  getFieldTypes,
   getMegrendeloiKeretek,
   getMegrendeloiKontaktok,
   getMegrendeloiPapirok,
   getMyPagePermissions,
+  getProjektkodBontas,
   getRecord,
   getRelated,
-  getVisibleFields,
-  type JsonRecord,
 } from "@/lib/api";
-import { buildFieldTabs } from "@/lib/detailTabs";
 import { canDoAction } from "@/lib/permissions";
-import { FileCheck2, FileSignature, FileText, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { FileCheck2, FileSignature, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const PAGE = "/projektek/project-kodok";
 
-/** A rekord mezői nyers JSON-ból jönnek (JsonRecord), ezért a számokat
- * ellenőrizni kell - hiányzó mező vagy régi, még nem frissült válasz esetén
- * nullát adunk vissza, nem NaN-t. */
+/** A rekord mezői nyers JSON-ból jönnek, ezért a számokat ellenőrizni kell -
+ * hiányzó mező vagy régi válasz esetén nullát adunk vissza, nem NaN-t. */
 function szam(ertek: unknown): number {
   return typeof ertek === "number" ? ertek : 0;
 }
 
-/** MELYIK NAP ment ki a pénz.
- *
- * A Kiadásnak három dátuma lehet, és nem mindegyik van kitöltve: a
- * `fizetes_datuma` a tényleges kifizetés napja (ez a kérdés), a
- * `kiadas_datuma` a költség felmerülése, a `fizetes_hatarideje` pedig csak
- * terv. Ebben a sorrendben esünk vissza, hogy a régi, importált soroknál se
- * maradjon üres az oszlop - ott gyakran csak az utóbbi kettő van meg. */
-function kiadasNapja(e: JsonRecord): string {
-  for (const kulcs of ["fizetes_datuma", "kiadas_datuma", "fizetes_hatarideje"]) {
-    const ertek = e[kulcs];
-    if (typeof ertek === "string" && ertek) return ertek.slice(0, 10);
-  }
-  return "–";
-}
-
-/** KINEK fizettünk. A kiadás vagy egy munkatárshoz kötődik (túlóra, napidíj),
- * vagy dologi költség (benzin, parkolás) - utóbbinál nincs címzett. */
-function kiadasCimzettje(e: JsonRecord, nevek: Map<number, string>): string {
-  const id = typeof e.employee_id === "number" ? e.employee_id : null;
-  if (id === null) return "–";
-  return nevek.get(id) ?? `#${id}`;
+function szoveg(ertek: unknown): string | null {
+  return typeof ertek === "string" && ertek.trim() ? ertek : null;
 }
 
 export default async function ProjectCodeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -71,30 +44,17 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   if (!projectCode) notFound();
 
   const [
-    client,
-    contract,
-    projects,
-    expenses,
     revenues,
-    deliverables,
     megrendeloiSzerzodesek,
     megrendeloiTigek,
     megrendeloiKeretek,
     megrendeloiKontaktok,
-    visibleFields,
-    fieldTypes,
-    dbTabs,
+    bontas,
     pagePermissions,
     currentUser,
     attachments,
-    allEmployees,
   ] = await Promise.all([
-    projectCode.client_id ? getRecord(ENTITY_PATHS.client, Number(projectCode.client_id)) : null,
-    projectCode.contract_id ? getRecord(ENTITY_PATHS.contract, Number(projectCode.contract_id)) : null,
-    getRelated(ENTITY_PATHS.project, { project_code_id: projectCodeId }),
-    getRelated(ENTITY_PATHS.expense, { project_code_id: projectCodeId }),
     getRelated(ENTITY_PATHS.revenue, { project_code_id: projectCodeId }),
-    getRelated(ENTITY_PATHS.deliverable, { project_code_id: projectCodeId }),
     // A megrendelői papírok (lásd backend routes/megrendeloi_papirok.py): a
     // szerződő fél a keretszerződésekből vagy a megrendelői kontaktokból
     // választható, ezért mindkét lista kell a szerkesztőhöz.
@@ -102,89 +62,67 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     getMegrendeloiPapirok("tig", projectCodeId),
     getMegrendeloiKeretek(),
     getMegrendeloiKontaktok(),
-    getVisibleFields("projectCode"),
-    getFieldTypes("projectCode"),
-    getDetailTabs("projectCode"),
+    // A tételes költségbontás EGY hívásban - a korábbi oldal négy külön
+    // kapcsolt-listát töltött be, és egyiken sem látszott, mi mennyibe került.
+    getProjektkodBontas(projectCodeId),
     getMyPagePermissions(),
     getCurrentUser(),
     getAttachments("projectCode", projectCodeId),
-    // A kiadásoknál csak employee_id van, a táblában viszont nevet kell mutatni.
-    getEmployees(),
   ]);
 
-  const employeeNameById = new Map(allEmployees.map((e) => [e.id, e.full_name]));
+  const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
 
-  const canEditFiles = canDoAction(currentUser, pagePermissions, PAGE, "edit");
-  const canDeleteFiles = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+  // A papírozás állását a SZERVER mondja meg (lásd backend
+  // models/project_code.py): mit számít lezártnak, és hogy kell-e egyáltalán
+  // eseti szerződés (élő keretszerződés alatt nem). Ha ezt itt újraszámolnám,
+  // a lista és az adatlap előbb-utóbb mást mondana.
+  const kellPapir = projectCode.papir_kell !== false;
+  const szerzodesKesz = projectCode.szerzodes_kell === false || projectCode.szerzodes_kesz === true;
+  const tigKesz = projectCode.tig_kesz === true;
+  // A SZÁMLA a papírozás harmadik lépése: akkor kerül sorra, ha a szerződés és
+  // a TIG is megvan - ugyanaz a sorrend, mint az alvállalkozói oldalon.
+  const szamlazhat = !kellPapir || (szerzodesKesz && tigKesz);
+  const szamlak = attachments.filter((a) => a.kategoria === "szamla");
 
-  // A papírozás kapcsolói (lásd backend models/project_code.py): a régi,
-  // migráció előtti sorokon még hiányozhatnak, ezért az alapértéket itt is
-  // ugyanúgy vesszük fel, ahogy a modell teszi.
-  const vanSzerzodes = projectCode.van_szerzodes !== false;
-  const papirNelkul = projectCode.papir_nelkul === true;
-  const kellPapir = vanSzerzodes && !papirNelkul;
-
-  const tabs = buildFieldTabs({
-    page: PAGE,
-    patchPath: `${ENTITY_PATHS.projectCode}/${projectCode.id}`,
-    record: projectCode,
-    dbTabs,
-    visibleFields,
-    fieldTypes,
-    pagePermissions,
-    // A papírozás kapcsolóinak SAJÁT kártyájuk van (lásd PapirKapcsolok): a
-    // generikus mezőrácsban megjelenve nemcsak kétszer látszanának, hanem a
-    // "papír nélkül" jelölés az indokot kérő ablakot is megkerülné - a
-    // backend ugyan így is visszadobná, de hibaüzenettel, nem kérdéssel.
-    alwaysHidden: ["client_id", "contract_id", "van_szerzodes", "papir_nelkul", "papir_nelkul_indoka"],
-  });
+  const bevetel = revenues.reduce((sum, r) => sum + (typeof r.brutto === "number" ? r.brutto : 0), 0);
+  const profit = szam(projectCode.becsult_profit);
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 space-y-8 p-8">
+        {/* FEJLÉC: a kód, a projekt neve és a dátuma - ennyi azonosítja a
+            munkát. Minden más (ügyfél, státusz-mezők, Notion-maradékok) a
+            listán és a Pénzügyekben ott van, ide csak zajt hozna. */}
         <div className="space-y-2">
           <BackLink href="/projektek/project-kodok" label="Project Code-ok" />
-          <h1 className="t-page">
-          {String(projectCode.projektkod ?? `Project Code #${projectCode.id}`)}
-          </h1>
-        </div>
-        <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
-          {client && (
-            <a href={`/ugyfelek/${client.id}`} className="text-text-accent hover:underline">
-              Ügyfél: {String(client.nev)}
-            </a>
+          <h1 className="t-page">{String(projectCode.projektkod ?? `Project Code #${projectCode.id}`)}</h1>
+          <p className="text-[15px] text-text-primary">{szoveg(projectCode.project_nev) ?? "Nincs megadva projekt név"}</p>
+          {szoveg(projectCode.datum_megjegyzes) && (
+            <p className="text-[13px] text-text-secondary">{szoveg(projectCode.datum_megjegyzes)}</p>
           )}
-          {contract && <span>Szerződés: #{contract.id}</span>}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard label="Bevétel" value={formatHuf(bevetel)} icon={TrendingUp} tone="teal" />
           <StatCard
-            label="Összes költség (kiadások + utómunka + belsős napidíj)"
-            value={formatHuf(typeof projectCode.osszes_koltseg === "number" ? projectCode.osszes_koltseg : 0)}
+            label="Összes költség"
+            value={formatHuf(szam(projectCode.osszes_koltseg))}
             icon={TrendingDown}
             tone="orange"
           />
           <StatCard
-            label="Bevétel"
-            value={formatHuf(revenues.reduce((sum, r) => sum + (typeof r.brutto === "number" ? r.brutto : 0), 0))}
-            icon={TrendingUp}
-            tone="teal"
-          />
-          <StatCard
             label="Becsült profit"
-            value={formatHuf(typeof projectCode.becsult_profit === "number" ? projectCode.becsult_profit : 0)}
+            value={formatHuf(profit)}
             icon={Wallet}
-            tone={typeof projectCode.becsult_profit === "number" && projectCode.becsult_profit >= 0 ? "accent" : "danger"}
+            tone={profit >= 0 ? "accent" : "danger"}
           />
         </div>
 
-        {/* MIBŐL áll a költség. Egy összeg önmagában nem mond semmit arról,
-            hogy a pénz a külsős stábra, a vágásra vagy a saját munkánkra ment
-            el - a négy rész összege pontosan a fenti "Összes költség". A
-            belsős napidíjnak nincs Kiadás sora (a havi alapbér a hónap végén,
-            egyben megy be), ezért azt külön meg is jegyezzük: enélkül a
-            Pénzügyekkel való eltérés hibának látszik. */}
+        {/* MIBŐL áll a költség: a négy rész összege pontosan a fenti "Összes
+            költség". A belsős napidíjnak nincs Kiadás sora (a havi alapbér a
+            hónap végén, egyben megy be), ezért azt külön meg is jegyezzük. */}
         <KoltsegBontas
           kulsos={szam(projectCode.kulsos_koltseg)}
           egyeb={szam(projectCode.egyeb_kiadas)}
@@ -193,151 +131,111 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           osszesen={szam(projectCode.osszes_koltseg)}
         />
 
-        {/* A papírozás onnan indul, hogy KELL-E egyáltalán papír - ezért van
-            ez a kártya a két papír FÖLÖTT, nem valahol a mezők között. */}
-        <Card title="Papírozás" icon={FileSignature}>
-          <PapirKapcsolok
-            patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
-            vanSzerzodes={vanSzerzodes}
-            papirNelkul={papirNelkul}
-            papirNelkulIndoka={typeof projectCode.papir_nelkul_indoka === "string" ? projectCode.papir_nelkul_indoka : null}
-            canEdit={canEditFiles}
-          />
-        </Card>
-
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <Card title="Megrendelői szerződés" icon={FileText}>
+        {/* MEGRENDELŐI PAPÍROZÁS, három lépésben: szerződés → TIG → számla.
+            Ugyanaz a sorrend, mint az alvállalkozói oldalon, és ugyanúgy a
+            sorrend maga az információ: a számla addig nem nyílik meg, amíg az
+            első kettő nincs meg - így ránézésre látszik, hol tart a munka. */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <Card title="1. Megrendelői szerződés" icon={FileSignature}>
             <MegrendeloiPapirKezelo
               projectCodeId={projectCodeId}
               fajta="szerzodes"
               papirok={megrendeloiSzerzodesek}
               keretek={megrendeloiKeretek}
               kontaktok={megrendeloiKontaktok}
-              canEdit={canEditFiles}
-              canDelete={canDeleteFiles}
+              canEdit={canEdit}
+              canDelete={canDelete}
               kellPapir={kellPapir}
             />
           </Card>
-          <Card title="Megrendelői TIG" icon={FileCheck2}>
+          <Card title="2. Megrendelői TIG" icon={FileCheck2}>
             <MegrendeloiPapirKezelo
               projectCodeId={projectCodeId}
               fajta="tig"
               papirok={megrendeloiTigek}
               keretek={megrendeloiKeretek}
               kontaktok={megrendeloiKontaktok}
-              canEdit={canEditFiles}
-              canDelete={canDeleteFiles}
+              canEdit={canEdit}
+              canDelete={canDelete}
               kellPapir={kellPapir}
             />
           </Card>
+          <Card title="3. Számla" icon={Receipt}>
+            {szamlazhat ? (
+              <DokumentumFeltoltes
+                entityType="projectCode"
+                entityId={projectCodeId}
+                attachments={szamlak}
+                kategoria="szamla"
+                canEdit={canEdit}
+                canDelete={canDelete}
+                emptyText="Nincs feltöltött számla."
+              />
+            ) : (
+              // Nem tiltás, hanem sorrend: a számla a papírok után jön. Ha
+              // valamiért mégis kell, a hiányzó papírt kell rendezni (vagy
+              // kihagyni) - így a lépés nem marad nyom nélkül.
+              <div className="space-y-2">
+                <p className="text-[13px] text-text-secondary">
+                  Előbb a szerződés és a TIG - a számla utánuk jön.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge
+                    label={szerzodesKesz ? "Szerződés megvan" : "Szerződés hiányzik"}
+                    tone={szerzodesKesz ? "success" : "warning"}
+                  />
+                  <StatusBadge label={tigKesz ? "TIG megvan" : "TIG hiányzik"} tone={tigKesz ? "success" : "warning"} />
+                </div>
+                {szamlak.length > 0 && (
+                  // Ha korábbról MÁR van feltöltött számla, azt nem rejtjük el:
+                  // a papír-sorrend nem teheti láthatatlanná a meglévő adatot.
+                  <div className="border-t border-border pt-2">
+                    <DokumentumFeltoltes
+                      entityType="projectCode"
+                      entityId={projectCodeId}
+                      attachments={szamlak}
+                      kategoria="szamla"
+                      canEdit={false}
+                      canDelete={canDelete}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <Card title="Megrendelői számlák" icon={FileText}>
-            <DokumentumFeltoltes
-              entityType="projectCode"
-              entityId={projectCodeId}
-              attachments={attachments.filter((a) => a.kategoria === "szamla")}
-              kategoria="szamla"
-              canEdit={canEditFiles}
-              canDelete={canDeleteFiles}
-              emptyText="Nincs feltöltött számla."
-            />
+        {/* Kell-e egyáltalán papír erre a kódra. Nem kapott saját kártyát: a
+            legtöbb munkánál nincs vele dolgunk, csak a kivételeknél (nem
+            szerződéses munka, vagy máshol elszámolt) - de valahonnan
+            állíthatónak kell lennie, különben az ilyen kódok örökre a
+            teendők közt maradnának. */}
+        {canEdit && (
+          <details className="rounded-[var(--radius-lg)] border border-border px-4 py-3">
+            <summary className="cursor-pointer text-[12.5px] text-text-muted hover:text-text-secondary">
+              Nem kell ide papír? (nem szerződéses munka, vagy máshol elszámolt)
+            </summary>
+            <div className="mt-3">
+              <PapirKapcsolok
+                patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
+                vanSzerzodes={projectCode.van_szerzodes !== false}
+                papirNelkul={projectCode.papir_nelkul === true}
+                papirNelkulIndoka={szoveg(projectCode.papir_nelkul_indoka)}
+                canEdit={canEdit}
+              />
+            </div>
+          </details>
+        )}
+
+        {/* A TÉTELES bontás: melyik forgatás mennyibe került, melyik anyagot
+            meddig vágtuk, és milyen kiadások terhelik a kódot. */}
+        {bontas ? (
+          <ProjektkodBontasTablak bontas={bontas} />
+        ) : (
+          <Card title="Költségek tételesen">
+            <p className="text-[13px] text-text-secondary">A bontás most nem érhető el.</p>
           </Card>
-          {/* A "tig"/"szerzodes" kategóriájú régi feltöltések is itt maradnak
-              elérhetők: a papírok saját fájljai már a fenti kezelőkben vannak,
-              de a rendszer előtti, kézzel feltöltött példányok nem tűnhetnek el. */}
-          <Card title="További dokumentumok" icon={FileText}>
-            <DokumentumFeltoltes
-              entityType="projectCode"
-              entityId={projectCodeId}
-              attachments={attachments.filter(
-                (a) => a.kategoria === "egyeb" || a.kategoria === "szerzodes" || a.kategoria === "tig",
-              )}
-              kategoria="egyeb"
-              canEdit={canEditFiles}
-              canDelete={canDeleteFiles}
-            />
-          </Card>
-        </div>
-
-        <DetailSections sections={tabs} />
-
-        <Card title={`Projektek (${projects.length})`}>
-          <RelatedTable
-            rows={projects}
-            emptyText="Nincs projekt ehhez a Project Code-hoz."
-            getHref={(p) => `/projektek/${p.id}`}
-            deleteBasePath={ENTITY_PATHS.project}
-          />
-        </Card>
-
-        {/* A kiadásoknál a generikus kapcsolt-tábla (RelatedTable) használhatatlan
-            volt: az "Állapot" és a "Dátum" oszlopa végig üres maradt, mert a
-            Kiadás nem `allapot`/`datum` néven tárolja ezeket. Itt az a kérdés,
-            hogy MELYIK NAP, KINEK és MENNYIT fizettünk ki - ezért saját tábla. */}
-        <Card title={`Kiadások (${expenses.length})`}>
-          <DataTable<JsonRecord>
-            rows={expenses}
-            emptyText="Nincs kiadás ehhez a Project Code-hoz."
-            getHref={(e) => `/penzugyek/kiadas/${e.id}`}
-            deleteHref={canDeleteFiles ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}
-            filterable
-            columns={[
-              {
-                header: "Dátum",
-                render: (e) => kiadasNapja(e),
-                sortAccessor: (e) => kiadasNapja(e),
-              },
-              {
-                header: "Kinek",
-                render: (e) => kiadasCimzettje(e, employeeNameById),
-                sortAccessor: (e) => kiadasCimzettje(e, employeeNameById),
-              },
-              {
-                header: "Megnevezés",
-                render: (e) => (typeof e.megnevezes === "string" ? e.megnevezes : "–"),
-                sortAccessor: (e) => (typeof e.megnevezes === "string" ? e.megnevezes : ""),
-              },
-              {
-                header: "Nettó",
-                align: "right",
-                render: (e) => formatHuf(typeof e.netto === "number" ? e.netto : null),
-                sortAccessor: (e) => (typeof e.netto === "number" ? e.netto : 0),
-              },
-              {
-                header: "Bruttó",
-                align: "right",
-                render: (e) => formatHuf(typeof e.brutto === "number" ? e.brutto : null),
-                sortAccessor: (e) => (typeof e.brutto === "number" ? e.brutto : 0),
-              },
-              {
-                header: "Állapot",
-                align: "right",
-                render: (e) => <StatusBadge label={e.kesz ? "Kifizetve" : "Nyitott"} tone={e.kesz ? "success" : "warning"} />,
-                sortAccessor: (e) => (e.kesz ? 1 : 0),
-              },
-            ]}
-          />
-        </Card>
-
-        <Card title={`Bevételek (${revenues.length})`}>
-          <RelatedTable
-            rows={revenues}
-            emptyText="Nincs bevétel ehhez a Project Code-hoz."
-            getHref={(r) => `/penzugyek/bevetel/${r.id}`}
-            deleteBasePath={ENTITY_PATHS.revenue}
-          />
-        </Card>
-
-        <Card title={`Utómunka (${deliverables.length})`}>
-          <RelatedTable
-            rows={deliverables}
-            emptyText="Nincs vágandó anyag ehhez a Project Code-hoz."
-            getHref={(d) => `/utomunka/${d.id}`}
-            deleteBasePath={ENTITY_PATHS.deliverable}
-          />
-        </Card>
+        )}
       </div>
     </div>
   );

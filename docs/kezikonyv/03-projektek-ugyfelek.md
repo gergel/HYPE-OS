@@ -91,6 +91,43 @@ külön-külön is látszik ("Mibe került"), a listán az egérrel rámutatva (
 Ezeket a listán átírni annyit tenne, hogy a szám mást mond, mint a mögötte álló
 tételek; javítani a bevétel-/kiadás-soroknál kell.
 
+### A projektkód ADATLAPJA: mibe került és hol tart a papír
+
+Az adatlap szándékosan KEVÉS dolgot mutat, mert két kérdésre kell válaszolnia:
+*mennyi maradt belőle* és *mi van még hátra*. A generikus mezőrács (a ~140
+Notion-mező) itt nem szerepel - az adat megvan, csak nem ezen az oldalon.
+
+Felülről lefelé:
+
+1. **Fejléc**: a kód, a projekt neve, a dátum megjegyzés.
+2. **Bevétel / Összes költség / Becsült profit**, alatta a költség négy része
+   (`components/KoltsegBontas.tsx`).
+3. **Megrendelői papírozás három lépésben**: szerződés → TIG → **számla**.
+   Ugyanaz a sorrend, mint az alvállalkozói oldalon, és a sorrend maga az
+   információ: a számla addig nem nyílik meg, amíg az első kettő nincs meg
+   (keretszerződés alatt a szerződés-lépés magától teljesül). Ha korábbról már
+   van feltöltött számla, azt sorrendtől függetlenül mutatjuk - a lépések nem
+   tehetnek láthatatlanná meglévő adatot.
+4. **Tételes bontás** (`GET /project-codes/{id}/bontas`,
+   `services/projektkod_bontas.py`, `components/projektkod/ProjektkodBontasTablak.tsx`):
+
+   | Tábla | Mit mutat |
+   |---|---|
+   | Forgatások | forgatásonként külsős stáb + belsős napidíj + vágás, és a soruk összege |
+   | Utómunka | anyagonként ki vágta, **mennyi ideig** (a munkaidő-sorokból) és mennyibe került |
+   | Egyéb projekt kiadások | minden kiadás-sor, besorolással (Külsős / Egyéb) |
+
+   A számok UGYANONNAN jönnek, mint a fejléc összegei, tehát a tételek összege
+   a fejléc-számot adja ki. Két dolog magyarázatra szorul, ezért ki is írjuk:
+   a **TIG-ekből keletkezett** kiadás-sorok nincsenek a kiadás-táblában (azok a
+   forgatások "Külsős stáb" oszlopában vannak, ugyanaz a pénz lenne kétszer), és
+   a **több napra szóló TIG** összege a napok közt fel van osztva.
+
+A "nem kell ide papír" jelölés (nem szerződéses munka, vagy máshol elszámolt)
+összecsukva, a papírozás alatt maradt: a legtöbb munkánál nincs vele dolgunk,
+de valahonnan állíthatónak kell lennie - enélkül az ilyen kódok örökre a
+teendők közt maradnának.
+
 ### A projektkód KÖTÉSE: mi tartozik egy kód alá
 
 A projektkód két helyen élt: **szövegként** a projekten és a vágáson

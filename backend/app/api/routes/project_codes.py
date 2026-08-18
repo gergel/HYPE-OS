@@ -1,14 +1,22 @@
-from fastapi import HTTPException
+from datetime import date
+
+from fastapi import Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
+from app.core.database import get_db
+from app.core.security import require_page_action
 from app.models.client import Client
 from app.models.contract import Contract
+from app.models.employee import Employee
 from app.models.finance import Expense
 from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
 from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.schemas.project_code import ProjectCodeCreate, ProjectCodeRead, ProjectCodeUpdate
+from app.services import projektkod_bontas
+
 
 
 def _papir_kapcsolok_ellenorzese(obj: ProjectCode, data: dict, _db: Session) -> None:
@@ -79,3 +87,70 @@ router = build_crud_router(
         selectinload(ProjectCode.client).selectinload(Client.contracts).selectinload(Contract.idoszakok),
     ),
 )
+
+
+class BontasProjekt(BaseModel):
+    """Egy forgatás a projektkód alatt, a rá eső költségekkel."""
+
+    id: int
+    nev: str | None = None
+    forgatas_datuma: date | None = None
+    kulsos_koltseg: float
+    belsos_koltseg: float
+    vagas_koltseg: float
+    osszesen: float
+
+
+class BontasUtomunka(BaseModel):
+    """Egy vágandó anyag: mennyi ideig vágtuk és mennyibe került."""
+
+    id: int
+    nev: str | None = None
+    project_id: int | None = None
+    vago_nev: str | None = None
+    percek: float
+    koltseg: float
+
+
+class BontasKiadas(BaseModel):
+    """Egy kiadás-sor (bérlés, utazás, kellék, TIG-en kívüli külsős díj…)."""
+
+    id: int
+    megnevezes: str | None = None
+    kinek: str | None = None
+    datum: date | None = None
+    netto: float | None = None
+    osszeg: float
+    kifizetve: bool
+    #: Melyik fejléc-részbe számít: "kulsos" (TIG-en kívüli külsős kifizetés)
+    #: vagy "egyeb" (minden más).
+    resz: str
+
+
+class ProjektkodBontas(BaseModel):
+    projektek: list[BontasProjekt]
+    utomunkak: list[BontasUtomunka]
+    kiadasok: list[BontasKiadas]
+
+
+@router.get("/{project_code_id}/bontas", response_model=ProjektkodBontas)
+def get_bontas(
+    project_code_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action("/projektek/project-kodok", "view")),
+):
+    """A projektkód költségeinek TÉTELES bontása: forgatásonként, anyagonként
+    és egyéb kiadásonként.
+
+    A fejlécben álló négy összeg (külsős, egyéb, vágás, belsős) megmondja,
+    mennyi ment el - ez a végpont azt, hogy MIRE. A számok ugyanabból a
+    forrásból jönnek, mint az összesítés (lásd services/projektkod_bontas.py),
+    tehát a tételek összege a fejléc-számot adja ki."""
+    kod = db.get(ProjectCode, project_code_id)
+    if kod is None:
+        raise HTTPException(status_code=404, detail="A projektkód nem található.")
+    return ProjektkodBontas(
+        projektek=[BontasProjekt(**sor) for sor in projektkod_bontas.projekt_sorok(kod)],
+        utomunkak=[BontasUtomunka(**sor) for sor in projektkod_bontas.utomunka_sorok(db, kod)],
+        kiadasok=[BontasKiadas(**sor) for sor in projektkod_bontas.kiadas_sorok(kod)],
+    )

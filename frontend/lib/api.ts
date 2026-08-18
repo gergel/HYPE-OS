@@ -709,6 +709,45 @@ export type ProjektSzamlazoNezet = {
   valaszthato_emberek: ValaszthatoSzamlazoFel[];
 };
 
+/** Egy projektkód TÉTELES költségbontása (lásd backend
+ * services/projektkod_bontas.py). A fejléc négy összege megmondja, mennyi ment
+ * el; ez azt, hogy mire. */
+export type ProjektkodBontas = {
+  projektek: {
+    id: number;
+    nev: string | null;
+    forgatas_datuma: string | null;
+    kulsos_koltseg: number;
+    belsos_koltseg: number;
+    vagas_koltseg: number;
+    osszesen: number;
+  }[];
+  utomunkak: {
+    id: number;
+    nev: string | null;
+    project_id: number | null;
+    vago_nev: string | null;
+    /** Mennyi ideig vágtuk - a munkaidő-sorokból. */
+    percek: number;
+    koltseg: number;
+  }[];
+  kiadasok: {
+    id: number;
+    megnevezes: string | null;
+    kinek: string | null;
+    datum: string | null;
+    netto: number | null;
+    osszeg: number;
+    kifizetve: boolean;
+    /** Melyik fejléc-részbe számít: "kulsos" vagy "egyeb". */
+    resz: string;
+  }[];
+};
+
+export async function getProjektkodBontas(projectCodeId: number): Promise<ProjektkodBontas | null> {
+  return apiGet<ProjektkodBontas>(`/api/v1/project-codes/${projectCodeId}/bontas`);
+}
+
 export async function getProjektSzamlazok(projectId: number): Promise<ProjektSzamlazoNezet | null> {
   return apiGet<ProjektSzamlazoNezet>(`/api/v1/projekt-szamlazok/${projectId}`);
 }
