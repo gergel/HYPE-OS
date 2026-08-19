@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 import { authFetch } from "@/lib/authFetch";
-import { formatFt } from "@/lib/ido";
+import { penzzel } from "@/lib/penz";
 import type {
   MegrendeloiElotoltes,
   MegrendeloiKontakt,
@@ -143,6 +143,7 @@ export function MegrendeloiPapirKezelo({
   canDelete = false,
   kellPapir,
   nincsPapirOka,
+  penznem = "HUF",
 }: {
   projectCodeId: number;
   fajta: MegrendeloiPapirFajta;
@@ -166,6 +167,11 @@ export function MegrendeloiPapirKezelo({
    * látszik, hogy honnan jön - és a felhasználó a kapcsolókat kezdi keresni,
    * amiken nincs is mit átállítani. */
   nincsPapirOka?: string;
+  /** Milyen pénznemben vállaltuk a munkát (a projektkód `penznem` mezője).
+   * A papíron AZ az összeg áll, amiben megállapodtunk - ha a megbízás euróban
+   * szól, a szerződésen és a TIG-en is euró a helyes, nem forint. A bevétel
+   * ettől még forintban keletkezik (lásd backend services/penznem.py). */
+  penznem?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -384,7 +390,7 @@ export function MegrendeloiPapirKezelo({
     sorok.push(
       {
         cimke: "Nettó összeg",
-        ertek: netto === null ? null : `${formatFt(netto)}${urlap.plusz_afa ? " + ÁFA" : ""}`,
+        ertek: netto === null ? null : `${penzzel(netto, penznem)}${urlap.plusz_afa ? " + ÁFA" : ""}`,
       },
       { cimke: "Teljesítés ideje", ertek: urlap.teljesites_szoveg },
       { cimke: "Keltezés", ertek: urlap.keltezes },
@@ -479,7 +485,7 @@ export function MegrendeloiPapirKezelo({
               </div>
               {p.netto_osszeg != null && (
                 <p className="mt-1 text-text-secondary">
-                  {formatFt(p.netto_osszeg)}
+                  {penzzel(p.netto_osszeg, penznem)}
                   {p.plusz_afa ? " + ÁFA" : ""}
                 </p>
               )}
@@ -688,7 +694,7 @@ export function MegrendeloiPapirKezelo({
                   className={mezoOsztaly}
                 />
               </Mezo>
-              <Mezo label="Nettó összeg (Ft) *">
+              <Mezo label={`Nettó összeg (${penznem}) *`}>
                 <input
                   type="number"
                   value={urlap.netto_osszeg}
@@ -708,8 +714,8 @@ export function MegrendeloiPapirKezelo({
                   {urlap.plusz_afa ? "Igen" : "Nem"}
                 </label>
               </Mezo>
-              <Mezo label="Bruttó összeg (Ft)">
-                <p className="py-1.5 text-text-secondary">{bruttoOsszeg != null ? formatFt(bruttoOsszeg) : "–"}</p>
+              <Mezo label={`Bruttó összeg (${penznem})`}>
+                <p className="py-1.5 text-text-secondary">{bruttoOsszeg != null ? penzzel(bruttoOsszeg, penznem) : "–"}</p>
               </Mezo>
               <Mezo label="Keltezés dátuma">
                 <input

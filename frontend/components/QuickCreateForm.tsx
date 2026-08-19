@@ -17,7 +17,26 @@ type FieldSpec = {
    * ettől még szabadon átírható. Az űrlap minden megnyitásakor visszaáll rá. */
   defaultValue?: string;
   placeholder?: string;
+  /** Csak akkor jelenjen meg, ha egy MÁSIK mező értéke ilyen - pl. az
+   * árfolyamot csak devizás pénznemnél kérdezzük. Egy mindig ott álló,
+   * legtöbbször üresen hagyott mező zajt visz az űrlapra, és azt sugallja,
+   * hogy kellene kitölteni.
+   *
+   * SZÁNDÉKOSAN adat, nem függvény: az űrlapot szerver-komponensek állítják
+   * össze (lásd penzugyek/page.tsx), egy függvényt pedig nem lehet átadni
+   * kliens-komponensnek ("Functions cannot be passed directly to Client
+   * Components"). */
+  showIf?: { field: string; oneOf?: string[]; noneOf?: string[] };
 };
+
+/** Látszik-e ez a mező a mostani beírások mellett (lásd FieldSpec.showIf)? */
+function lathato(f: FieldSpec, values: Record<string, string>): boolean {
+  if (!f.showIf) return true;
+  const ertek = values[f.showIf.field] ?? "";
+  if (f.showIf.oneOf && !f.showIf.oneOf.includes(ertek)) return false;
+  if (f.showIf.noneOf && f.showIf.noneOf.includes(ertek)) return false;
+  return true;
+}
 
 /** A mezők kezdőértékei - az űrlap minden megnyitásakor ezzel indul. */
 function kezdoErtekek(fields: FieldSpec[]): Record<string, string> {
@@ -48,6 +67,9 @@ export function QuickCreateForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // A rejtett mezők nem is léteznek: se validálni, se elküldeni nem kell őket.
+  const lathatoMezok = fields.filter((f) => lathato(f, values));
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -56,7 +78,7 @@ export function QuickCreateForm({
     // ilyenkor a kattintás úgy nézett ki, mintha semmi nem történt volna
     // (nem ment ki kérés a szerver felé). Explicit, jól látható hibaüzenetet
     // adunk ilyenkor is.
-    const missing = fields.filter((f) => f.required && !values[f.name]?.trim());
+    const missing = lathatoMezok.filter((f) => f.required && !values[f.name]?.trim());
     if (missing.length > 0) {
       setError(`Kötelező mező hiányzik: ${missing.map((f) => f.label).join(", ")}`);
       return;
@@ -64,7 +86,7 @@ export function QuickCreateForm({
     setBusy(true);
     try {
       const body: Record<string, unknown> = { ...presetFields };
-      for (const f of fields) {
+      for (const f of lathatoMezok) {
         if (!values[f.name]) continue;
         const isNumericSelect = f.type === "select" && typeof f.options?.[0]?.value === "number";
         body[f.name] = f.type === "number" || isNumericSelect ? Number(values[f.name]) : values[f.name];
@@ -109,7 +131,7 @@ export function QuickCreateForm({
       noValidate
       className="fade-in mb-4 flex flex-wrap items-end gap-4 rounded-[var(--radius-lg)] border border-border bg-surface-3 p-4"
     >
-      {fields.map((f) => (
+      {lathatoMezok.map((f) => (
         <div key={f.name} className="flex flex-col gap-1">
           <label className="t-label">
             {f.label}

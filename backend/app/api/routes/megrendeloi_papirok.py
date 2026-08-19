@@ -33,6 +33,7 @@ from app.models.project_code import ProjectCode
 from app.services import document_storage, megrendeloi_papir, megrendeloi_szamla
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
+from app.services import penznem as penznem_szolg
 from app.services.hu_number_words import szam_betukkel
 
 router = APIRouter(prefix="/megrendeloi-papirok", tags=["megrendeloi-papirok"])
@@ -111,6 +112,10 @@ class PapirRead(PapirIn):
     #: papírra nem írtak külön projektnevet (lásd
     #: components/megrendeloi/MegrendeloiPapirokOldal.tsx).
     projektkod_projekt_nev: str | None = None
+    #: MILYEN PÉNZNEMBEN vállaltuk (a projektkódról). A papíron az az összeg
+    #: áll, amiben megállapodtunk - a bevétel ettől még forintban keletkezik
+    #: (lásd services/penznem.py).
+    penznem: str = "HUF"
 
 
 class ElotoltesOut(BaseModel):
@@ -169,6 +174,7 @@ def _kimenet(papir, fajta: str) -> PapirRead:
         alairasra_var=papir.allapot == "Kiküldve" and not papir.alairt_file_url,
         projektkod=papir.project_code.projektkod if papir.project_code else None,
         projektkod_projekt_nev=papir.project_code.project_nev if papir.project_code else None,
+        penznem=penznem_szolg.normalizald(getattr(papir.project_code, "penznem", None)),
     )
 
 
@@ -360,6 +366,13 @@ def _sablon_mezok(papir, fajta: str) -> dict[str, str]:
     és TIG-megrendelo-email/gdocs.py) - egy az egyben, hogy a MEGLÉVŐ sablonok
     változtatás nélkül működjenek tovább."""
     netto = float(papir.netto_osszeg or 0)
+    # MILYEN PÉNZNEMBEN vállaltuk. A papíron az az összeg áll, amiben
+    # megállapodtunk: ha a megbízás euróban szól, a szerződésen és a TIG-en is
+    # euró a helyes (a bevétel ettől még forintban keletkezik - lásd
+    # services/penznem.py). A sablon a {{penznem}} és a {{penznem_szoveg}}
+    # helyőrzővel tudja kiírni; a régi, "Ft"-et fixen tartalmazó sablonokat
+    # ezekre kell átírni, hogy a devizás papír is helyes legyen.
+    kod = penznem_szolg.normalizald(getattr(papir.project_code, "penznem", None))
     mezok = {
         "nev": papir.ceg_neve or "",
         "hely": papir.szekhely or "",
@@ -369,6 +382,8 @@ def _sablon_mezok(papir, fajta: str) -> dict[str, str]:
         # Ezres elválasztó szóközzel, ahogy az eredeti programok írják.
         "netto": f"{netto:,.0f}".replace(",", " "),
         "nettoki": szam_betukkel(netto),
+        "penznem": "Ft" if kod == penznem_szolg.FORINT else kod,
+        "penznem_szoveg": penznem_szolg.szoveggel(kod),
         "kelt": papir.keltezes.strftime("%Y.%m.%d.") if papir.keltezes else "",
         "afa": "+ ÁFA" if papir.plusz_afa else "",
         "nyilvszam": papir.nyilvantartasi_szam or "",

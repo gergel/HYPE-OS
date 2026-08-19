@@ -2427,6 +2427,10 @@ export type MegrendeloiPapir = {
   projekt_nev: string | null;
   teljesites_szoveg: string | null;
   netto_osszeg: number | null;
+  /** MILYEN PÉNZNEMBEN vállaltuk (a projektkódról). A papíron az az összeg
+   * áll, amiben megállapodtunk - a bevétel ettől még forintban keletkezik
+   * (lásd backend services/penznem.py). */
+  penznem: string;
   plusz_afa: boolean | null;
   keltezes: string | null;
   megjegyzes: string | null;

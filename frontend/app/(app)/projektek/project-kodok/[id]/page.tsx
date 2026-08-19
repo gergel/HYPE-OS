@@ -100,6 +100,10 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   // se számlát. Ami nem történt meg, arról nincs mit igazolni (lásd backend
   // models/project_code.esemeny_elmaradt).
   const elmaradt = projectCode.elmaradt === true;
+  // Milyen pénznemben vállaltuk: a papírokon (szerződés, TIG) EZ az összeg áll,
+  // mert abban állapodtunk meg. A bevétel ettől még forintban keletkezik
+  // (lásd backend services/penznem.py).
+  const penznemKod = typeof projectCode.penznem === "string" && projectCode.penznem ? projectCode.penznem : "HUF";
   // A SZÁMLA a papírozás harmadik lépése: akkor kerül sorra, ha a szerződés és
   // a TIG is megvan - ugyanaz a sorrend, mint az alvállalkozói oldalon.
   const szamlazhat = !elmaradt && (!kellPapir || (szerzodesKesz && tigKesz));
@@ -169,7 +173,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             pluszAfa={szoveg(projectCode.plusz_afa)}
             canEdit={canEdit}
             papirbolNetto={szamlaAllas?.netto ?? null}
-            penznem={typeof projectCode.penznem === "string" ? projectCode.penznem : "HUF"}
+            penznem={penznemKod}
             arfolyam={typeof projectCode.arfolyam === "number" ? projectCode.arfolyam : null}
           />
         </Card>
@@ -203,6 +207,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               canDelete={canDelete}
               kellPapir={kellPapir}
               nincsPapirOka={elmaradt ? "Az esemény elmaradt - erre a kódra nem kérünk papírt." : undefined}
+              penznem={penznemKod}
             />
           </Card>
           <Card title="2. Megrendelői TIG" icon={FileCheck2}>
@@ -216,6 +221,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               canDelete={canDelete}
               kellPapir={kellPapir}
               nincsPapirOka={elmaradt ? "Az esemény elmaradt - erre a kódra nem kérünk papírt." : undefined}
+              penznem={penznemKod}
             />
           </Card>
           <Card title="3. Számla" icon={Receipt}>

@@ -113,3 +113,18 @@ def valtsd_at(adat: dict, *, mezok: tuple[str, ...] = ("netto", "brutto")) -> di
     # A SOR pénzneme forint marad: az összege innentől forint.
     adat["penznem"] = FORINT
     return adat
+
+
+#: A pénznem MAGYAR NEVE - a papírokra kiírt "összeg betűvel" után ez kerül
+#: ("ötezer euró"). Ismeretlen kódnál marad a kód maga: jobb egy szokatlan
+#: rövidítés, mint egy rossz szó.
+PENZNEM_SZOVEG: dict[str, str] = {
+    "HUF": "forint",
+    "EUR": "euró",
+    "USD": "dollár",
+}
+
+
+def szoveggel(penznem: Any) -> str:
+    kod = normalizald(penznem)
+    return PENZNEM_SZOVEG.get(kod, kod)

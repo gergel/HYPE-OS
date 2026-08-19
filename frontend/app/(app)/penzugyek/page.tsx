@@ -171,7 +171,11 @@ export default async function PenzugyekPage() {
                   name: "arfolyam",
                   label: "Árfolyam (Ft)",
                   type: "number",
-                  placeholder: "Csak EUR/USD esetén",
+                  required: true,
+                  // Csak devizánál kérdezzük: forintnál nincs mit átváltani, és
+                  // egy mindig ott álló, üresen hagyott mező azt sugallná,
+                  // hogy kellene kitölteni. (Üres pénznem is forintot jelent.)
+                  showIf: { field: "penznem", noneOf: ["", "HUF"] },
                 },
               ]}
             />
@@ -294,7 +298,11 @@ export default async function PenzugyekPage() {
                   name: "arfolyam",
                   label: "Árfolyam (Ft)",
                   type: "number",
-                  placeholder: "Csak EUR/USD esetén",
+                  required: true,
+                  // Csak devizánál kérdezzük: forintnál nincs mit átváltani, és
+                  // egy mindig ott álló, üresen hagyott mező azt sugallná,
+                  // hogy kellene kitölteni. (Üres pénznem is forintot jelent.)
+                  showIf: { field: "penznem", noneOf: ["", "HUF"] },
                 },
               ]}
             />

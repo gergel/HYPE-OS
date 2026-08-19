@@ -12,6 +12,7 @@ import {
   type MegrendeloiPapir,
   type MegrendeloiPapirFajta,
 } from "@/lib/api";
+import { devizas, penzzel } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 
 const PAGE = "/projektek/project-kodok";
@@ -51,7 +52,12 @@ export async function MegrendeloiPapirokOldal({
   const kihagyott = rows.filter((p) => p.allapot === "Kihagyva").length;
   const alairtak = rows.filter((p) => p.alairt_file_url).length;
   const varakozok = rows.filter((p) => p.alairasra_var).length;
-  const osszesNetto = rows.reduce((sum, p) => sum + (p.netto_osszeg ?? 0), 0);
+  // Az összesítés CSAK a forintos papírokból megy: különböző pénznemű
+  // összegeket összeadni nem szám, hanem hiba (5 000 EUR nem 5 000 Ft). Ha van
+  // devizás tétel, azt külön kiírjuk - lásd devizasok.
+  const forintosok = rows.filter((p) => !devizas(p.penznem));
+  const devizasok = rows.filter((p) => devizas(p.penznem));
+  const osszesNetto = forintosok.reduce((sum, p) => sum + (p.netto_osszeg ?? 0), 0);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -60,7 +66,9 @@ export async function MegrendeloiPapirokOldal({
         <Card title={`${cim} (${rows.length})`}>
           <p className="mb-3 text-[12.5px] text-text-muted">
             {leiras} {kikuldott} kiküldve, ebből {varakozok} aláírásra vár, {alairtak} aláírva megvan, {kihagyott}{" "}
-            kihagyva. Összesen {formatHuf(osszesNetto)} nettó. A kihagyottaknál az indok is itt látszik.
+            kihagyva. Összesen {formatHuf(osszesNetto)} nettó
+            {devizasok.length > 0 && ` (ezen felül ${devizasok.length} devizás papír, más pénznemben)`}. A
+            kihagyottaknál az indok is itt látszik.
           </p>
           <DataTable<MegrendeloiPapir>
             filterable
@@ -105,7 +113,9 @@ export async function MegrendeloiPapirokOldal({
                 header: "Nettó",
                 align: "right",
                 render: (p) =>
-                  p.netto_osszeg === null ? "–" : `${formatHuf(p.netto_osszeg)}${p.plusz_afa ? " + ÁFA" : ""}`,
+                  p.netto_osszeg === null
+                    ? "–"
+                    : `${penzzel(p.netto_osszeg, p.penznem)}${p.plusz_afa ? " + ÁFA" : ""}`,
                 sortAccessor: (p) => p.netto_osszeg,
               },
               {

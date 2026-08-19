@@ -258,7 +258,29 @@ forintban keletkezik belőle, a projektkód `penznem` + `arfolyam` mezője
 szerint (`projektkod_osszeg.forintban()`). A „Mennyiért vállaltuk" kártya és a
 „3. Számla" kártya is kiírja, mennyi kerül ebből a Pénzügyekbe.
 
-Frontend: `lib/penz.ts` (`PENZNEMEK`, `devizaNyom`, `penzzel`),
+Az **árfolyam mező csak devizánál jelenik meg** (`QuickCreateForm` →
+`FieldSpec.showIf`): forintnál nincs mit átváltani, és egy mindig ott álló,
+üresen hagyott mező azt sugallná, hogy kellene kitölteni. A feltétel
+SZÁNDÉKOSAN adat (`{ field, oneOf, noneOf }`), nem függvény: az űrlapot
+szerver-komponensek állítják össze, és függvényt nem lehet kliens-komponensnek
+átadni.
+
+**A papírokon a megállapodás pénzneme áll.** Ha a projektkód euró, akkor a
+szerződésen és a TIG-en is euró - nem forint. A papír a megbízásról szól, az
+összege az, amiben megállapodtunk; a **bevétel** ettől még forintban keletkezik
+belőle. A papír-listák (Megrendelői szerződések / TIG-ek) ezért soronként a
+saját pénznemükben mutatják az összeget, és az **összesítés csak a forintos
+tételekből** megy: különböző pénznemű összegeket összeadni nem szám, hanem hiba
+(5 000 EUR nem 5 000 Ft).
+
+A generált Google Docs papírra a `{{penznem}}` ("Ft" / "EUR" / "USD") és a
+`{{penznem_szoveg}}` ("forint" / "euró" / "dollár") helyőrző viszi ki a
+pénznemet. **A régi sablonokban az „Ft" fixen a szövegben áll** - ahhoz, hogy a
+devizás papír a nyomtatott példányon is helyes legyen, a sablonban kell
+kicserélni ezekre a helyőrzőkre (a sablon Google Docsban él, nem a
+rendszerben).
+
+Frontend: `lib/penz.ts` (`PENZNEMEK`, `devizaNyom`, `penzzel`, `devizas`),
 `components/projektkod/VallalasiAr.tsx`.
 
 ## Számlázó cégek (Vállalkozások)
