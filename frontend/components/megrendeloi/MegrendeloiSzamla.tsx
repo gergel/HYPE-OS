@@ -168,6 +168,17 @@ export function MegrendeloiSzamla({
               <span className="text-text-muted"> · {allas.bevetel_sorok} bevétel-sor a Pénzügyekben</span>
             )}
           </p>
+          {/* Attól, hogy a Pénzügyek nyilvántartásába nem való (máshogy van
+              rendezve), a pénz megjött - tehát a PROJEKT bevételébe és
+              profitjába beleszámít. Ki is írjuk, különben úgy nézne ki, mintha
+              ez a munka ingyen lett volna. */}
+          {allas.bevetelbe_ne_keruljon && allas.netto !== null && (
+            <p className="text-[13px] text-text-secondary">
+              A projekt bevételébe beleszámít:{" "}
+              <span className="text-text-primary">{formatHuf(allas.brutto ?? allas.netto)}</span>
+              <span className="text-text-muted"> – ez adja a fenti profitot, bevétel-sor nélkül.</span>
+            </p>
+          )}
           {allas.bevetel_kihagyas_oka && (
             <p className="whitespace-pre-line text-[12.5px] text-text-muted">{allas.bevetel_kihagyas_oka}</p>
           )}

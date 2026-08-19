@@ -430,8 +430,22 @@ class ProjectCode(TimestampMixin, Base):
         nem mondja meg, nagy bevételből maradt-e kevés, vagy kicsiből sok.
 
         Ha a bruttó nincs kitöltve, a nettó számít - lásd `_osszeg`: a kézzel
-        felvitt bevételnél is csak a nettót kérjük be."""
-        return float(sum(self._osszeg(r) for r in self.revenues))
+        felvitt bevételnél is csak a nettót kérjük be.
+
+        KIVÉTEL: ha a munka ki van fizetve, de szándékosan NEM került a
+        bevételek közé (beszámítás, másik cégen át rendezve - lásd
+        bevetelbe_ne_keruljon), akkor a papírokon/projektkódon szereplő összeg
+        számít. A pénz ugyanis megjött; csak a Pénzügyek nyilvántartásába nem
+        való, mert ott duplázna. Enélkül ezeknél a munkáknál nulla bevétel és
+        csupa veszteség látszana - vagyis pont a profit hazudna arról, amiért
+        ez a szám van."""
+        sorok = float(sum(self._osszeg(r) for r in self.revenues))
+        if sorok or not self.bevetelbe_ne_keruljon:
+            return sorok
+        from app.services import projektkod_osszeg
+
+        _, brutto = projektkod_osszeg.szamlazott_osszeg(self)
+        return float(brutto or 0)
 
     @property
     def becsult_profit(self) -> float:

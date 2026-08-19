@@ -8,6 +8,7 @@ import { MegrendeloiPapirKezelo } from "@/components/megrendeloi/MegrendeloiPapi
 import { MegrendeloiSzamla } from "@/components/megrendeloi/MegrendeloiSzamla";
 import { PapirKapcsolok } from "@/components/megrendeloi/PapirKapcsolok";
 import { ProjektkodBontasTablak } from "@/components/projektkod/ProjektkodBontasTablak";
+import { VallalasiAr } from "@/components/projektkod/VallalasiAr";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
@@ -23,7 +24,6 @@ import {
   getMyPagePermissions,
   getProjektkodBontas,
   getRecord,
-  getRelated,
 } from "@/lib/api";
 import { canDoAction } from "@/lib/permissions";
 import { FileCheck2, FileSignature, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
@@ -47,7 +47,6 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   if (!projectCode) notFound();
 
   const [
-    revenues,
     megrendeloiSzerzodesek,
     megrendeloiTigek,
     megrendeloiKeretek,
@@ -58,7 +57,6 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     attachments,
     szamlaAllas,
   ] = await Promise.all([
-    getRelated(ENTITY_PATHS.revenue, { project_code_id: projectCodeId }),
     // A megrendelői papírok (lásd backend routes/megrendeloi_papirok.py): a
     // szerződő fél a keretszerződésekből vagy a megrendelői kontaktokból
     // választható, ezért mindkét lista kell a szerkesztőhöz.
@@ -92,7 +90,12 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   const szamlazhat = !kellPapir || (szerzodesKesz && tigKesz);
   const szamlak = attachments.filter((a) => a.kategoria === "szamla");
 
-  const bevetel = revenues.reduce((sum, r) => sum + (typeof r.brutto === "number" ? r.brutto : 0), 0);
+  // A bevétel a SZERVER száma (nem a bevétel-sorok itteni összege): így
+  // ugyanaz áll itt, mint a listán, és beleszámít az is, ami ki van fizetve,
+  // de szándékosan nem került a Pénzügyek bevételei közé (lásd backend
+  // models/project_code.bevetel). Enélkül a bevétel nullát mutatott, miközben
+  // a profit alatta már a valós összeget - ugyanarról a munkáról.
+  const bevetel = szam(projectCode.bevetel);
   const profit = szam(projectCode.becsult_profit);
 
   return (
@@ -137,6 +140,19 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           belsos={szam(projectCode.belsos_munka_koltseg)}
           osszesen={szam(projectCode.osszes_koltseg)}
         />
+
+        {/* MENNYIÉRT csináltuk. Külön, jól látható helyen, mert az összeget
+            gyakran MÁS tudja, mint aki a papírokat készíti - eddig csak a
+            szerződés/TIG űrlapján (vagy a mezőrács mélyén) lehetett megadni. */}
+        <Card title="Mennyiért vállaltuk" icon={Wallet}>
+          <VallalasiAr
+            patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
+            netto={typeof projectCode.netto_osszeg === "number" ? projectCode.netto_osszeg : null}
+            pluszAfa={szoveg(projectCode.plusz_afa)}
+            canEdit={canEdit}
+            papirbolNetto={szamlaAllas?.netto ?? null}
+          />
+        </Card>
 
         {/* MEGRENDELŐI PAPÍROZÁS, három lépésben: szerződés → TIG → számla.
             Ugyanaz a sorrend, mint az alvállalkozói oldalon, és ugyanúgy a

@@ -398,6 +398,26 @@ a szabályok pedig `services/megrendeloi_papir.py`-ben.
 Frontend: `components/megrendeloi/` (`MegrendeloiPapirKezelo`, `PapirKapcsolok`,
 `KeretszerzodesKezelo`, `MegrendeloiPapirokOldal`).
 
+### Mennyiért vállaltuk - egy hely, egy szabály
+
+A projektkód adatlapján saját kártya kéri be, **mennyiért ment ez a munka**:
+nettó összeg + "+ÁFA" jelölő (`components/projektkod/VallalasiAr.tsx`, a
+projektkód `netto_osszeg` / `plusz_afa` mezői). Azért külön, jól látható
+helyen, mert az összeget gyakran **más tudja**, mint aki a szerződést és a
+TIG-et készíti - eddig viszont csak egy papír szerkesztő-űrlapján (vagy a
+mezőrács mélyén) lehetett megadni.
+
+Ugyanez a szám tölti elő a szerződést és a TIG-et, ebből számol a számla-lépés,
+és ebből lesz a projekt bevétele ott, ahol nincs bevétel-sor. A sorrend egy
+helyen él (`services/projektkod_osszeg.py`), hogy a három felület ne mondjon
+hármat:
+
+1. a **TIG** összege (azt igazoltuk, arról megy a számla),
+2. az **eseti szerződés** összege,
+3. a **projektkód** saját mezői.
+
+A bruttót sehol nem tároljuk: a "+ÁFA" jelölőből számoljuk (×1,27).
+
 ### A harmadik lépés: a SZÁMLA (határidő → kifizetve → bevétel)
 
 A szerződés és a TIG után jön a pénz. A projektkód adatlapján a "3. Számla"
@@ -426,6 +446,15 @@ máshol el van könyvelve) - ott egy itteni sor megkétszerezné az összeget.
 Ilyenkor a jelöléshez **indok kell** (`ProjectCode.bevetelbe_ne_keruljon` +
 `bevetel_kihagyas_oka`), és a projektkód így is lezártnak számít
 (`bevetel_kifizetve`), tehát nem áll örökre a teendők között.
+
+**Az összeg ilyenkor is beleszámít a PROJEKT bevételébe.** A pénz megjött; csak
+a Pénzügyek nyilvántartásába nem való, mert ott duplázna. Ha ezt nem
+számolnánk, ezeknél a munkáknál nulla bevétel és csupa veszteség látszana -
+vagyis pont a profit hazudna arról, amiért ez a szám van. Ezért a
+`ProjectCode.bevetel` bevétel-sor híján a vállalási árat veszi (lásd fent), a
+számla-kártya pedig ki is írja: *"A projekt bevételébe beleszámít: … – ez adja
+a fenti profitot, bevétel-sor nélkül."* A Pénzügyek összesítői viszont
+változatlanul csak a valódi bevétel-sorokból dolgoznak.
 
 A téves gombnyomás visszavonható: a kifizetés dátuma lekerül a projektkódról
 és a bevétel-sorról is, de magát a sort nem töröljük (lehet, hogy máshonnan

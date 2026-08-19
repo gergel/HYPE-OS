@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from app.models.document_attachment import DocumentAttachment
 from app.models.finance import Revenue
 from app.models.project_code import ProjectCode
+from app.services import projektkod_osszeg
 
 #: Az így keletkezett bevétel-sor megjegyzése - ebből látszik, hogy nem kézzel
 #: vezették fel, hanem a számla-lépés zárásakor jött létre.
@@ -87,22 +88,9 @@ def _szamla_fajl_url(db: Session, pk: ProjectCode) -> str | None:
 
 
 def _osszeg(pk: ProjectCode) -> tuple[float | None, float | None]:
-    """(nettó, bruttó) - a TIG a legerősebb forrás, mert az igazolja a
-    ténylegesen elvégzett munkát; utána a szerződés, végül a projektkód
-    örökölt mezői.
-
-    A bruttót a "+ÁFA" jelölőből számoljuk, ugyanúgy, ahogy a papírok teszik -
-    nem tárolunk külön bruttót, amit később senki nem tartana karban."""
-    for papir in (*(pk.megrendeloi_tigek or []), *(pk.megrendeloi_szerzodesek or [])):
-        if papir.netto_osszeg is not None:
-            netto = float(papir.netto_osszeg)
-            return netto, round(netto * 1.27, 2) if papir.plusz_afa else netto
-    for ertek in (pk.netto_osszeg, pk.szerzodes_netto_osszeg):
-        if ertek is not None:
-            netto = float(ertek)
-            plusz_afa = "afa" in (pk.plusz_afa or "").casefold().replace("á", "a")
-            return netto, round(netto * 1.27, 2) if plusz_afa else netto
-    return None, None
+    """(nettó, bruttó) - a közös szabály szerint (lásd
+    services/projektkod_osszeg.py): TIG → szerződés → a projektkód mezői."""
+    return projektkod_osszeg.szamlazott_osszeg(pk)
 
 
 def _hatarido_kell(pk: ProjectCode) -> bool:
