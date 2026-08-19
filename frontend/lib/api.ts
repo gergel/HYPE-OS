@@ -1161,10 +1161,14 @@ export type OutstandingProject = {
 
 export type PaymentMethodBreakdown = { kifizetes_modja: string | null; osszeg: number };
 
+/** Az összegek NETTÓBAN (lásd backend services/elszamolas.py) - a `_brutto`
+ * végű mezők a tájékoztató bruttó értékek. */
 export type FinanceSummary = {
   ytd_bevetel: number;
   ytd_kiadas: number;
   ytd_profit: number;
+  ytd_bevetel_brutto: number;
+  ytd_kiadas_brutto: number;
   osszes_kintlevoseg: number;
   kintlevo_projektek_szama: number;
   havi_trend: MonthlyFinance[];

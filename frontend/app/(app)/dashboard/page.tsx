@@ -30,7 +30,7 @@ const WIDGETS: WidgetOption[] = [
   { key: "ai_javaslat", label: "AI javaslat", requiredPages: ["/ai-assistant"] },
   { key: "kozelgo_esemenyek", label: "Közelgő események", requiredPages: ["/projektek"] },
   { key: "projektek_statusza", label: "Projektek státusza", requiredPages: ["/projektek/project-kodok"] },
-  { key: "bevetel", label: "Bevétel (havi)", requiredPages: ["/penzugyek"] },
+  { key: "bevetel", label: "Bevétel (havi, nettó)", requiredPages: ["/penzugyek"] },
 ];
 
 function hasPage(allowedPages: string[] | null, page: string): boolean {
@@ -182,7 +182,7 @@ export default async function DashboardPage() {
           )}
           {isVisible("bevetel") && (
             <Link href="/penzugyek" className="block">
-              <Card title="Bevétel (havi)" className="h-full transition-colors hover:border-text-accent/40">
+              <Card title="Bevétel (havi, nettó)" className="h-full transition-colors hover:border-text-accent/40">
                 {summary ? <RevenueTrendChart trend={summary.revenue_trend} /> : <p className="text-[13px] text-text-muted">–</p>}
               </Card>
             </Link>

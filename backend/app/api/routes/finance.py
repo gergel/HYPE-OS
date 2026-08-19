@@ -26,7 +26,7 @@ from app.models.performance_certificate import (
     PerformanceCertificateTetel,
 )
 from app.models.project_code import ProjectCode
-from app.services import document_storage, kiadas_kapcsolatok
+from app.services import document_storage, elszamolas, kiadas_kapcsolatok
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
 from app.services.portal_storage import R2NotConfiguredError
 from app.schemas.finance import (
@@ -111,9 +111,19 @@ class PaymentMethodBreakdown(BaseModel):
 
 
 class FinanceSummary(BaseModel):
+    """Az összesítő számai NETTÓBAN értendők (lásd services/elszamolas.py):
+    az ÁFA átfolyó tétel, két oldal bruttó összevetéséből nem profit jön ki,
+    hanem az ÁFA-tartalmak különbsége.
+
+    A bruttó ettől még látszik - de külön, `_brutto` végű mezőkben, mert arra
+    is szükség van: az megy ki (és jön be) a bankszámlán."""
+
     ytd_bevetel: float
     ytd_kiadas: float
     ytd_profit: float
+    #: Ugyanaz az időszak bruttóban - tájékoztatásul, a tényleges pénzmozgás.
+    ytd_bevetel_brutto: float
+    ytd_kiadas_brutto: float
     osszes_kintlevoseg: float
     kintlevo_projektek_szama: int
     havi_trend: list[MonthlyFinance]
@@ -129,9 +139,9 @@ class FinanceSummary(BaseModel):
 # kezeljük (nem "nincs bepipálva"-ként), hogy a checkbox bevezetése ne
 # tüntessen el némán történeti kiadásokat az összesítőkből - csak a
 # kifejezetten (a "Projekt kiadások" felvitelnél) kipipálatlanul hagyott
-# sorok esnek ki. A projektkód-szintű Expense.brutto összeg (ProjectCode.
-# osszes_koltseg) ettől függetlenül MINDIG az adott projekt teljes,
-# valós költségét mutatja - ez a gate csak a globális Pénzügy nézetet szűri.
+# sorok esnek ki. A projektkód-szintű költség (ProjectCode.osszes_koltseg)
+# ettől függetlenül MINDIG az adott projekt teljes, valós költségét mutatja -
+# ez a gate csak a globális Pénzügy nézetet szűri.
 _EXPENSE_COUNTS_TOWARD_TOTALS = Expense.hozzaadas_a_kiadasokhoz.is_not(False)
 
 
@@ -158,9 +168,20 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     today = date.today()
     year_start = date(today.year, 1, 1)
 
+    # Az összegzés NETTÓBAN megy - bevételnél és kiadásnál ugyanúgy, különben a
+    # profit a két oldal ÁFA-tartalmának különbségével csúszna el (lásd
+    # services/elszamolas.py). A bruttót külön kérdezzük le, tájékoztatásul.
     ytd_bevetel = (
         db.scalar(
-            select(func.coalesce(func.sum(Revenue.brutto), 0)).where(
+            select(func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0)).where(
+                Revenue.fizetes_datuma.is_not(None), Revenue.fizetes_datuma >= year_start
+            )
+        )
+        or 0
+    )
+    ytd_bevetel_brutto = (
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.brutto_sql(Revenue)), 0)).where(
                 Revenue.fizetes_datuma.is_not(None), Revenue.fizetes_datuma >= year_start
             )
         )
@@ -168,7 +189,17 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     )
     ytd_kiadas = (
         db.scalar(
-            select(func.coalesce(func.sum(Expense.brutto), 0)).where(
+            select(func.coalesce(func.sum(elszamolas.netto_sql(Expense)), 0)).where(
+                Expense.fizetes_datuma.is_not(None),
+                Expense.fizetes_datuma >= year_start,
+                _EXPENSE_COUNTS_TOWARD_TOTALS,
+            )
+        )
+        or 0
+    )
+    ytd_kiadas_brutto = (
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.brutto_sql(Expense)), 0)).where(
                 Expense.fizetes_datuma.is_not(None),
                 Expense.fizetes_datuma >= year_start,
                 _EXPENSE_COUNTS_TOWARD_TOTALS,
@@ -186,7 +217,7 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         select(
             extract("year", Revenue.fizetes_datuma).label("y"),
             extract("month", Revenue.fizetes_datuma).label("m"),
-            func.coalesce(func.sum(Revenue.brutto), 0).label("total"),
+            func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0).label("total"),
         )
         .where(Revenue.fizetes_datuma.is_not(None), Revenue.fizetes_datuma >= min_date)
         .group_by("y", "m")
@@ -198,7 +229,7 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         select(
             extract("year", Expense.fizetes_datuma).label("y"),
             extract("month", Expense.fizetes_datuma).label("m"),
-            func.coalesce(func.sum(Expense.brutto), 0).label("total"),
+            func.coalesce(func.sum(elszamolas.netto_sql(Expense)), 0).label("total"),
         )
         .where(Expense.fizetes_datuma.is_not(None), Expense.fizetes_datuma >= min_date, _EXPENSE_COUNTS_TOWARD_TOTALS)
         .group_by("y", "m")
@@ -208,10 +239,10 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     ytd_kiadas_fizetesi_mod_szerint = [
         PaymentMethodBreakdown(kifizetes_modja=row.kifizetes_modja, osszeg=float(row.total))
         for row in db.execute(
-            select(Expense.kifizetes_modja, func.coalesce(func.sum(Expense.brutto), 0).label("total"))
+            select(Expense.kifizetes_modja, func.coalesce(func.sum(elszamolas.netto_sql(Expense)), 0).label("total"))
             .where(Expense.fizetes_datuma.is_not(None), Expense.fizetes_datuma >= year_start, _EXPENSE_COUNTS_TOWARD_TOTALS)
             .group_by(Expense.kifizetes_modja)
-            .order_by(func.sum(Expense.brutto).desc())
+            .order_by(func.sum(elszamolas.netto_sql(Expense)).desc())
         ).all()
     ]
 
@@ -237,7 +268,9 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     kintlevo_projektek: list[OutstandingProject] = []
     for pc_id, rows in by_project.items():
         pc = rows[0].project_code
-        osszeg = sum(r.brutto or 0 for r in rows)
+        # A kintlévőség is nettóban - ugyanaz a szám, ami a projekt bevételében
+        # és a profitjában szerepel (lásd services/elszamolas.py).
+        osszeg = float(sum(elszamolas.osszeg(r) for r in rows))
         hataridok = [r.fizetes_hatarideje for r in rows if r.fizetes_hatarideje]
         legkorabbi = min(hataridok) if hataridok else None
         kintlevo_projektek.append(
@@ -257,6 +290,8 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         ytd_bevetel=float(ytd_bevetel),
         ytd_kiadas=float(ytd_kiadas),
         ytd_profit=float(ytd_bevetel) - float(ytd_kiadas),
+        ytd_bevetel_brutto=float(ytd_bevetel_brutto),
+        ytd_kiadas_brutto=float(ytd_kiadas_brutto),
         osszes_kintlevoseg=osszes_kintlevoseg,
         kintlevo_projektek_szama=len(kintlevo_projektek),
         havi_trend=havi_trend,

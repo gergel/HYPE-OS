@@ -21,18 +21,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.employee import Employee, EmployeeType
-from app.services import belsos_koltseg, deliverable_actions, kulsos_koltseg
+from app.services import belsos_koltseg, deliverable_actions, elszamolas, kulsos_koltseg
 
 
 def _osszeg(sor: Any) -> float:
-    """A kiadás összege: a bruttó az irányadó, mert annyi megy ki a házból.
-
-    Üres bruttónál a nettóra esünk vissza - a Kiadások űrlapja csak nettót
-    kér, tehát a kézzel felvitt soroknál gyakran csak az van meg (ugyanaz a
-    szabály, mint models/project_code._osszeg)."""
-    if getattr(sor, "brutto", None):
-        return float(sor.brutto)
-    return float(getattr(sor, "netto", None) or 0)
+    """A kiadás elszámolási összege: a NETTÓ - ugyanaz a szabály, mint a
+    fejléc számainál (lásd services/elszamolas.py)."""
+    return elszamolas.osszeg(sor)
 
 
 def _kulsos_kiadas(e: Any) -> bool:
@@ -44,7 +39,7 @@ def _kulsos_kiadas(e: Any) -> bool:
 
 
 def projekt_kulsos(projekt: Any) -> float:
-    """Egy FORGATÁSRA eső külsős TIG-összeg (bruttóban).
+    """Egy FORGATÁSRA eső külsős TIG-összeg (nettóban).
 
     Ugyanaz a felosztás, mint a projektkód szintjén: egy több napra szóló TIG
     összegéből csak az ide eső rész számít (lásd
@@ -56,12 +51,7 @@ def projekt_kulsos(projekt: Any) -> float:
         if tetel.certificate is not None:
             certek[tetel.certificate.id] = tetel.certificate
 
-    osszeg = 0.0
-    for cert in certek.values():
-        resz = kulsos_koltseg._tig_resze(cert, {projekt.id})
-        if resz:
-            osszeg += kulsos_koltseg._brutto(resz, cert.plusz_afa)
-    return osszeg
+    return float(sum(kulsos_koltseg._tig_resze(cert, {projekt.id}) for cert in certek.values()))
 
 
 def projekt_sorok(db: Session, project_code: Any) -> list[dict]:

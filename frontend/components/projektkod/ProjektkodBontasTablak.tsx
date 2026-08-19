@@ -147,7 +147,7 @@ export function ProjektkodBontasTablak({ bontas }: { bontas: ProjektkodBontas })
               sortAccessor: (k) => k.resz,
             },
             {
-              header: "Összeg",
+              header: "Összeg (nettó)",
               align: "right",
               render: (k) => formatHuf(k.osszeg),
               sortAccessor: (k) => k.osszeg,

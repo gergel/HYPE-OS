@@ -44,7 +44,7 @@ export default async function AutokPage() {
               ? "Vedd fel az autókat, majd mindegyikhez a forgalmi és a biztosítás lejáratát – a felelős a lejárat előtt feladatot és értesítést kap."
               : `${lejart > 0 ? `${lejart} autónál lejárt papír · ` : ""}${
                   hamarosan > 0 ? `${hamarosan} autónál hamarosan lejár · ` : ""
-                }eddigi költés összesen: ${formatHuf(osszKoltseg)}`}
+                }eddigi költés összesen: ${formatHuf(osszKoltseg)} nettó`}
           </p>
           <AutoKezelo
             autok={autok}

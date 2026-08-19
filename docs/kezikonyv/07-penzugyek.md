@@ -77,8 +77,8 @@ TIG-ből ugyan keletkezik Kiadás sor, de a költség már a kifizetés ELŐTT i
 valóságos: a számla be van adva, a pénz ki fog menni. Ha csak a kifizetett
 sorokat néznénk, minden még nem rendezett projekt profitja hazudna - épp az,
 amelyik friss. A TIG-ből származó Kiadás sort ezért kihagyjuk az összegzésből
-(ugyanaz a pénz lenne kétszer), a TIG összegét pedig bruttóban számoljuk, ha a
-megbízott ÁFÁ-s - annyi megy ki a házból.
+(ugyanaz a pénz lenne kétszer), a TIG **nettó** összege pedig ugyanannyi, mint a
+belőle keletkezett Kiadás soré - a két úton számolt költség így nem tér el.
 
 **Több projektre szóló TIG-nél csak a rá eső rész számít.** Egy ember egy
 számlán beküldheti az egész hetet (`PerformanceCertificateTetel`): ha a
@@ -94,12 +94,40 @@ hozott soroknál a "Kiadás formája" szabad szöveg volt (bármi lehet benne), 
 hozzájuk kötött EMBER típusa viszont megbízható: `Expense.tipus == "kulsos"`
 vagy külsős a kiadáshoz kötött ember.
 
-**Bruttó, ha van - különben nettó** (`ProjectCode._osszeg`). A Kiadások és a
-Bevételek felvitelekor csak a NETTÓ mezőt kérjük be, a bruttó jellemzően csak a
-Notionból hozott soroknál van kitöltve. Amíg csak a bruttót néztük, a kézzel
-felvezetett tételek nullának számítottak, és a projekt költsége úgy nézett ki,
-mintha fel se vitték volna őket. ÁFÁ-t nem tippelünk rá: a nettó legalább igaz,
-egy kitalált 27% nem feltétlenül. A bruttó a listán utólag beírható.
+### A NETTÓ a mérvadó - bevételnél és kiadásnál egyaránt
+
+Egyetlen szabály, egy helyen: `services/elszamolas.py`.
+
+```
+összeg = nettó, ha meg van adva; különben a bruttó (jobb híján)
+```
+
+**Miért nettó?** Az ÁFA átfolyó tétel: sem bevételként, sem költségként nem
+marad a cégnél. Ha az egyik oldalt bruttóban, a másikat nettóban néznénk, a
+kettő különbsége - amit "profitnak" hívunk - a két oldal ÁFA-tartalmának
+különbségével csúszna el, annál nagyobbal, minél jobban eltér a két oldal
+kulcsa (nem minden szállító áfás, és nem mindegyik 27%).
+
+**Miért van mégis visszaesés a bruttóra?** Adathiány miatt, nem szemlélet
+miatt. A Kiadások és a Bevételek felvitelekor csak a NETTÓ mezőt kérjük be, a
+bruttó jellemzően a Notionból hozott soroknál van kitöltve - és van néhány régi
+sor, amin CSAK bruttó van. Az még mindig közelebb van az igazsághoz, mint a
+nulla. ÁFÁ-t viszont nem "számolunk vissza" belőle: a 27%-os osztás ugyanolyan
+találgatás lenne, mint a felszorzás.
+
+**Hol számít ez:** `ProjectCode._osszeg` (költség, bevétel, profit), a tételes
+bontás (`services/projektkod_bontas.py`), a külsős TIG-ek
+(`services/kulsos_koltseg.py`), a Pénzügyek összesítője (YTD bevétel/kiadás,
+havi trend, fizetési mód szerinti bontás, kintlévőség), a Dashboard havi
+bevétele és az autók eddigi költése.
+
+**A bruttó nem tűnik el.** A Pénzügyek YTD-kártyái a nettó szám alatt halványan
+kiírják a bruttót is (`ytd_bevetel_brutto`, `ytd_kiadas_brutto`), a Kiadás- és
+Bevétel-táblákban külön oszlop a Nettó és a Bruttó, az autók listájában
+mindkettő ott van, a számla-kártya pedig "1 000 000 Ft nettó (1 270 000 Ft
+bruttó)" alakban mutatja. Ahol a kérdés a tényleges pénzmozgás - például az
+"Utalásra váró" lista, hiszen annyit kell utalni -, ott továbbra is a bruttó
+áll. Az ELSZÁMOLÁSBAN viszont mindenütt a nettó.
 
 A belsős napidíjnak nincs és nem is lesz Kiadás sora: a belsős alapbér a hónap
 végén, egy tételben megy be (Belsős TIG). Ezért a projektkód költsége és a

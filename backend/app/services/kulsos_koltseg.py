@@ -22,12 +22,6 @@ from __future__ import annotations
 from typing import Any
 
 
-def _brutto(netto: float, plusz_afa: bool | None) -> float:
-    """Ugyanaz a szabály, mint a kifizetésnél: ha a megbízott ÁFÁ-s, a bruttó
-    az irányadó, mert ennyi megy ki a házból."""
-    return round(netto * 1.27, 2) if plusz_afa else netto
-
-
 def _tig_resze(cert: Any, projekt_idk: set[int]) -> float:
     """Ebből a TIG-ből mennyi jut a megadott projektekre (nettó)?
 
@@ -54,8 +48,13 @@ def _tig_resze(cert: Any, projekt_idk: set[int]) -> float:
 
 
 def projektkod_kulsos(project_code: Any) -> tuple[float, set[int]]:
-    """(a projektkódra eső külsős TIG-összeg bruttóban, a TIG-ekhez tartozó
+    """(a projektkódra eső külsős TIG-összeg NETTÓBAN, a TIG-ekhez tartozó
     Kiadás sorok id-jei).
+
+    Nettó, mert az elszámolásban mindenütt az a mérvadó - a bevétel oldalán
+    is (lásd services/elszamolas.py). Így a projekt profitja nem az ÁFA-kulcsok
+    különbségén múlik, és a TIG-ből számolt költség ugyanannyi, mint a belőle
+    keletkezett Kiadás soré.
 
     A második érték azért kell, hogy a hívó ne számolja bele MÉG egyszer
     ugyanazt a pénzt a kiadás-sorokból (lásd models/project_code.py).
@@ -81,9 +80,7 @@ def projektkod_kulsos(project_code: Any) -> tuple[float, set[int]]:
     osszeg = 0.0
     kiadas_idk: set[int] = set()
     for cert in certek.values():
-        resz = _tig_resze(cert, projekt_idk)
-        if resz:
-            osszeg += _brutto(resz, cert.plusz_afa)
+        osszeg += _tig_resze(cert, projekt_idk)
         if cert.expense_id is not None:
             kiadas_idk.add(cert.expense_id)
     return osszeg, kiadas_idk

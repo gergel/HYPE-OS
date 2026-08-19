@@ -14,6 +14,7 @@ from app.models.deliverable import Deliverable
 from app.models.deliverable_status import DeliverableStatusConfig
 from app.models.dispo_responsible import DispoResponsible, DispoSide
 from app.models.employee import Employee, SystemRole, van_szerepkore
+from app.services import elszamolas
 from app.services import kotelezettseg as kotelezettseg_szolg
 from app.services import megrendeloi_papir
 from app.services import papirozas_feladatok
@@ -117,9 +118,11 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
         )
         or 0
     )
+    # Nettóban - ahogy a Pénzügyek összesítője és a projektek profitja is
+    # (lásd services/elszamolas.py).
     havi_bevetel = (
         db.scalar(
-            select(func.coalesce(func.sum(Revenue.brutto), 0)).where(
+            select(func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0)).where(
                 extract("year", Revenue.fizetes_datuma) == today.year,
                 extract("month", Revenue.fizetes_datuma) == today.month,
             )
@@ -144,7 +147,7 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
         select(
             extract("year", Revenue.fizetes_datuma).label("y"),
             extract("month", Revenue.fizetes_datuma).label("m"),
-            func.coalesce(func.sum(Revenue.brutto), 0).label("total"),
+            func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0).label("total"),
         )
         .where(Revenue.fizetes_datuma.is_not(None), Revenue.fizetes_datuma >= date(min_year, min_month, 1))
         .group_by("y", "m")

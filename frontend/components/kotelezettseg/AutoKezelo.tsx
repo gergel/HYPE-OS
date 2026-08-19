@@ -324,7 +324,7 @@ export function AutoKezelo({
                 </button>
                 <StatusBadge label={jelzo.label} tone={jelzo.tone} />
                 <span className="text-[12.5px] text-text-secondary">
-                  Eddigi költés: <span className="text-text-primary">{formatHuf(auto.koltseg_osszesen)}</span>
+                  Eddigi költés (nettó): <span className="text-text-primary">{formatHuf(auto.koltseg_osszesen)}</span>
                 </span>
                 {auto.felelos_nev && <span className="text-[12.5px] text-text-muted">{auto.felelos_nev}</span>}
                 {canDelete && (
@@ -392,11 +392,15 @@ export function AutoKezelo({
                                   <span className="block text-[11.5px] text-text-muted">{kiadas.megjegyzes}</span>
                                 )}
                               </td>
-                              <td className="py-1.5 pr-4 text-right tabular-nums text-text-secondary">
+                              {/* A NETTÓ a hangsúlyos: az összesítés (és
+                                  minden elszámolás) abból megy - lásd backend
+                                  services/elszamolas.py. A bruttó halványabb,
+                                  de ott van: annyi megy ki a számláról. */}
+                              <td className="py-1.5 pr-4 text-right tabular-nums text-text-primary">
                                 {kiadas.netto != null ? formatHuf(kiadas.netto) : "–"}
                                 {kiadas.plusz_afa && <span className="ml-1 text-[11px] text-text-muted">+ ÁFA</span>}
                               </td>
-                              <td className="py-1.5 pr-4 text-right tabular-nums text-text-primary">
+                              <td className="py-1.5 pr-4 text-right tabular-nums text-text-secondary">
                                 {kiadas.osszeg != null
                                   ? kiadas.penznem === "HUF"
                                     ? formatHuf(kiadas.osszeg)

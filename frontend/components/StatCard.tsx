@@ -19,12 +19,17 @@ export function StatCard({
   tone = "default",
   href,
   icon: Icon,
+  /** Halvány másodlagos sor a szám ALATT - arra való, hogy a fő szám mellé
+   * odakerüljön a másik nézőpont (pl. "bruttó: 1 270 000 Ft"), anélkül hogy
+   * versenyezne vele. */
+  megjegyzes,
 }: {
   label: string;
   value: string | number;
   tone?: Tone;
   href?: string;
   icon?: LucideIcon;
+  megjegyzes?: string;
 }) {
   const cls = TONE_CLASSES[tone];
   const content = (
@@ -40,6 +45,7 @@ export function StatCard({
       {/* A szám a kártya tárgya - tabuláris számjegyekkel, hogy egymás alatt
           a számok oszlopba rendeződjenek, ne ugráljanak. */}
       <p className={`text-[26px] font-semibold leading-none tracking-[-0.03em] tabular-nums ${cls.text}`}>{value}</p>
+      {megjegyzes && <p className="mt-2 text-[11.5px] leading-snug text-text-muted tabular-nums">{megjegyzes}</p>}
     </>
   );
   const className = `block rounded-[var(--radius-lg)] border border-border p-5 transition-colors duration-200 ${

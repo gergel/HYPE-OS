@@ -27,6 +27,7 @@ from app.api.routes import kotelezettsegek
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense
+from app.services import elszamolas
 from app.services import kotelezettseg as szolg
 
 router = APIRouter(prefix="/autok", tags=["autok"])
@@ -88,7 +89,7 @@ class AutoRead(BaseModel):
 
     hataridok: list[AutoHataridoRead] = []
     kiadasok: list[AutoKiadasRead] = []
-    #: A rá könyvelt kiadások összege forintban (a devizás sorokat nem
+    #: A rá könyvelt kiadások NETTÓ összege forintban (a devizás sorokat nem
     #: számoljuk át - nincs árfolyam-forrás a rendszerben, egy kitalált
     #: átváltás pedig hamis összeget adna).
     koltseg_osszesen: float = 0
@@ -97,8 +98,11 @@ class AutoRead(BaseModel):
 
 
 def _kiadas_kimenet(e: Expense, dokumentumok: dict[int, int] | None = None) -> AutoKiadasRead:
-    # A kiadásnál a bruttó a fizetett összeg; ha csak nettó van, azt adjuk.
-    osszeg = e.brutto if e.brutto is not None else e.netto
+    # Az `osszeg` a BRUTTÓ: a táblázat külön oszlopban mutatja a nettót és a
+    # bruttót, mert az autónál mindkettő érdekes (a nettó számol, a bruttó
+    # megy ki a számláról). Az összesítés viszont nettóban megy - lásd
+    # `_kimenet` és services/elszamolas.py.
+    osszeg = elszamolas.brutto_osszeg(e) if (e.brutto is not None or e.netto is not None) else None
     return AutoKiadasRead(
         id=e.id,
         megnevezes=e.megnevezes,
@@ -150,10 +154,10 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
         key=lambda e: (e.kiadas_datuma or e.fizetes_datuma or date.min),
         reverse=True,
     )
-    osszesen = sum(
-        float(e.brutto if e.brutto is not None else (e.netto or 0))
-        for e in auto.kiadasok
-        if (e.penznem or "HUF") == "HUF"
+    # NETTÓBAN, ahogy mindenütt máshol is az elszámolásban (lásd
+    # services/elszamolas.py) - az ÁFA átfolyó tétel, nem az autó költsége.
+    osszesen = float(
+        sum(elszamolas.osszeg(e) for e in auto.kiadasok if (e.penznem or "HUF") == "HUF")
     )
 
     if any(h.allapot == "lejart" for h in hataridok):

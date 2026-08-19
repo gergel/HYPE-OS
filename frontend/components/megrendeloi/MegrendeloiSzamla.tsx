@@ -81,10 +81,15 @@ export function MegrendeloiSzamla({
         ) : (
           <StatusBadge label="Nincs fizetési határidő" tone="neutral" />
         )}
+        {/* A NETTÓ áll elöl: az elszámolásban (bevétel, profit) mindenütt az
+            a mérvadó - lásd backend services/elszamolas.py. A bruttót
+            mellétesszük, ha eltér: annyi érkezik a bankszámlára. */}
         {allas.netto !== null && (
           <span className="text-[12.5px] text-text-secondary">
-            {formatHuf(allas.brutto ?? allas.netto)}
-            {allas.brutto !== null && allas.brutto !== allas.netto ? " bruttó" : ""}
+            {formatHuf(allas.netto)} nettó
+            {allas.brutto !== null && allas.brutto !== allas.netto && (
+              <span className="text-text-muted"> ({formatHuf(allas.brutto)} bruttó)</span>
+            )}
           </span>
         )}
       </div>
@@ -175,7 +180,7 @@ export function MegrendeloiSzamla({
           {allas.bevetelbe_ne_keruljon && allas.netto !== null && (
             <p className="text-[13px] text-text-secondary">
               A projekt bevételébe beleszámít:{" "}
-              <span className="text-text-primary">{formatHuf(allas.brutto ?? allas.netto)}</span>
+              <span className="text-text-primary">{formatHuf(allas.netto)} nettó</span>
               <span className="text-text-muted"> – ez adja a fenti profitot, bevétel-sor nélkül.</span>
             </p>
           )}
@@ -226,7 +231,12 @@ export function MegrendeloiSzamla({
       {dialogNyitva && (
         <KifizetesDialog
           hatarido={allas.fizetesi_hatarido}
-          osszeg={allas.netto === null ? null : formatHuf(allas.brutto ?? allas.netto)}
+          osszeg={
+            allas.netto === null
+              ? null
+              : `${formatHuf(allas.netto)} nettó` +
+                (allas.brutto !== null && allas.brutto !== allas.netto ? ` (${formatHuf(allas.brutto)} bruttó)` : "")
+          }
           onMegse={() => setDialogNyitva(false)}
           onJelol={async (adat) => {
             const sikeres = await hivas("kifizetve", adat);

@@ -416,7 +416,9 @@ hármat:
 2. az **eseti szerződés** összege,
 3. a **projektkód** saját mezői.
 
-A bruttót sehol nem tároljuk: a "+ÁFA" jelölőből számoljuk (×1,27).
+A bruttót sehol nem tároljuk: a "+ÁFA" jelölőből számoljuk (×1,27) - és csak
+kiírjuk. Az elszámolásban (bevétel, költség, profit) mindenütt a **nettó** a
+mérvadó, lásd [07-penzugyek.md](07-penzugyek.md) "A NETTÓ a mérvadó".
 
 ### A harmadik lépés: a SZÁMLA (határidő → kifizetve → bevétel)
 
@@ -451,10 +453,10 @@ Ilyenkor a jelöléshez **indok kell** (`ProjectCode.bevetelbe_ne_keruljon` +
 a Pénzügyek nyilvántartásába nem való, mert ott duplázna. Ha ezt nem
 számolnánk, ezeknél a munkáknál nulla bevétel és csupa veszteség látszana -
 vagyis pont a profit hazudna arról, amiért ez a szám van. Ezért a
-`ProjectCode.bevetel` bevétel-sor híján a vállalási árat veszi (lásd fent), a
-számla-kártya pedig ki is írja: *"A projekt bevételébe beleszámít: … – ez adja
-a fenti profitot, bevétel-sor nélkül."* A Pénzügyek összesítői viszont
-változatlanul csak a valódi bevétel-sorokból dolgoznak.
+`ProjectCode.bevetel` bevétel-sor híján a vállalási ár **nettóját** veszi (lásd
+fent), a számla-kártya pedig ki is írja: *"A projekt bevételébe beleszámít: …
+nettó – ez adja a fenti profitot, bevétel-sor nélkül."* A Pénzügyek összesítői
+viszont változatlanul csak a valódi bevétel-sorokból dolgoznak.
 
 A téves gombnyomás visszavonható: a kifizetés dátuma lekerül a projektkódról
 és a bevétel-sorról is, de magát a sort nem töröljük (lehet, hogy máshonnan

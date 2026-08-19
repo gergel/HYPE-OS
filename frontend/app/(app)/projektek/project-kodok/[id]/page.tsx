@@ -114,16 +114,19 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           )}
         </div>
 
+        {/* Mind a három szám NETTÓ - a bevétel és a költség ugyanabban a
+            szemléletben, különben a profit az ÁFA-tartalmak különbségével
+            csúszna el (lásd backend services/elszamolas.py). */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="Bevétel" value={formatHuf(bevetel)} icon={TrendingUp} tone="teal" />
+          <StatCard label="Bevétel (nettó)" value={formatHuf(bevetel)} icon={TrendingUp} tone="teal" />
           <StatCard
-            label="Összes költség"
+            label="Összes költség (nettó)"
             value={formatHuf(szam(projectCode.osszes_koltseg))}
             icon={TrendingDown}
             tone="orange"
           />
           <StatCard
-            label="Becsült profit"
+            label="Becsült profit (nettó)"
             value={formatHuf(profit)}
             icon={Wallet}
             tone={profit >= 0 ? "accent" : "danger"}

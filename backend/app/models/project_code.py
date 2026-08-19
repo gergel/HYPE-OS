@@ -6,6 +6,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
+# Az elszámolás közös szabálya (nettó a mérvadó). Behúzható modul szinten is:
+# csak az SQLAlchemy-től függ, tehát nem csinál körbe-importot a modellekkel -
+# a kulsos_koltseg / belsos_koltseg viszont igen, azok ezért maradnak lentebb,
+# a metódusokon belüli importban.
+from app.services import elszamolas
 
 
 class ProjectCode(TimestampMixin, Base):
@@ -281,20 +286,16 @@ class ProjectCode(TimestampMixin, Base):
 
     @staticmethod
     def _osszeg(sor: Any) -> float:
-        """Egy kiadás/bevétel összege: a BRUTTÓ, ha meg van adva, különben a
-        nettó.
+        """Egy kiadás/bevétel elszámolási összege: a NETTÓ (lásd
+        services/elszamolas.py).
 
-        A Pénzügyek felületén (és a projektkód adatlapján) a kézzel felvitt
-        tételnél csak a NETTÓ mezőt kérjük be - a bruttó jellemzően csak a
-        Notionból hozott soroknál van kitöltve. Amíg csak a bruttót néztük, a
-        kézzel felvezetett kiadások NULLÁNAK számítottak: a projekt költsége
-        úgy nézett ki, mintha nem is lettek volna.
-
-        ÁFÁ-t nem tippelünk rá: a nettó legalább IGAZ, egy kitalált 27% nem
-        feltétlenül (nem minden szállító áfás, és nem mindegyik 27%)."""
-        if sor.brutto is not None:
-            return float(sor.brutto)
-        return float(sor.netto or 0)
+        Bevételnél és kiadásnál ugyanaz a szabály - enélkül a kettő
+        különbsége, vagyis a projekt profitja, a két oldal ÁFA-tartalmának
+        különbségével csúszna el. Ha egy régi soron csak bruttó van, arra
+        esünk vissza: adathiányban az a legjobb közelítés (ÁFÁ-t viszont nem
+        számolunk vissza belőle - a 27%-os osztás ugyanolyan találgatás lenne,
+        mint a felszorzás)."""
+        return elszamolas.osszeg(sor)
 
     def _kulsos_bontas(self) -> tuple[float, float]:
         """(külsős, egyéb) - egy menetben, mert a kettő ugyanazon a szűrésen
@@ -329,7 +330,7 @@ class ProjectCode(TimestampMixin, Base):
     @property
     def kulsos_koltseg(self) -> float:
         """A KÜLSŐS közreműködők ára: az ide tartozó forgatásokra szóló TIG-ek
-        (a rájuk eső rész, bruttóban) + a TIG-en kívüli külsős kifizetések.
+        (a rájuk eső rész, nettóban) + a TIG-en kívüli külsős kifizetések.
 
         A be nem fizetett számla is ide tartozik: a pénz akkor is ki fog menni,
         és a projekt profitja addig sem hazudhat."""
@@ -424,13 +425,14 @@ class ProjectCode(TimestampMixin, Base):
 
     @property
     def bevetel(self) -> float:
-        """A projektkódhoz tartozó bevételek BRUTTÓ összege.
+        """A projektkódhoz tartozó bevételek NETTÓ összege.
 
         Külön property, mert a listán is látszania kell: a profit önmagában
         nem mondja meg, nagy bevételből maradt-e kevés, vagy kicsiből sok.
 
-        Ha a bruttó nincs kitöltve, a nettó számít - lásd `_osszeg`: a kézzel
-        felvitt bevételnél is csak a nettót kérjük be.
+        Nettó, mert a költség oldalán is az van (lásd `_osszeg` és
+        services/elszamolas.py) - két különböző szemlélet különbsége nem
+        profit, hanem ÁFA.
 
         KIVÉTEL: ha a munka ki van fizetve, de szándékosan NEM került a
         bevételek közé (beszámítás, másik cégen át rendezve - lásd
@@ -444,8 +446,8 @@ class ProjectCode(TimestampMixin, Base):
             return sorok
         from app.services import projektkod_osszeg
 
-        _, brutto = projektkod_osszeg.szamlazott_osszeg(self)
-        return float(brutto or 0)
+        netto, _ = projektkod_osszeg.szamlazott_osszeg(self)
+        return float(netto or 0)
 
     @property
     def becsult_profit(self) -> float:

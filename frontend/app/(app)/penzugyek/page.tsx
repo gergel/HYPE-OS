@@ -74,17 +74,36 @@ export default async function PenzugyekPage() {
       <div className="flex-1 space-y-8 p-8">
         {summary && (
           <>
+            {/* A nagy számok NETTÓBAN vannak - bevételnél és kiadásnál
+                egyaránt (lásd backend services/elszamolas.py). Az ÁFA átfolyó
+                tétel: ha az egyik oldalt bruttóban, a másikat nettóban
+                néznénk, a "profit" az ÁFA-tartalmak különbségével csúszna el.
+                A bruttó ettől még ott van, halványan a szám alatt: az megy ki
+                (és jön be) a bankszámlán. */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard label="Bevétel (idén)" value={formatHuf(summary.ytd_bevetel)} icon={TrendingUp} tone="teal" />
-              <StatCard label="Kiadás (idén)" value={formatHuf(summary.ytd_kiadas)} icon={TrendingDown} tone="orange" />
               <StatCard
-                label="Profit (idén)"
+                label="Bevétel (idén, nettó)"
+                value={formatHuf(summary.ytd_bevetel)}
+                megjegyzes={`Bruttó: ${formatHuf(summary.ytd_bevetel_brutto)}`}
+                icon={TrendingUp}
+                tone="teal"
+              />
+              <StatCard
+                label="Kiadás (idén, nettó)"
+                value={formatHuf(summary.ytd_kiadas)}
+                megjegyzes={`Bruttó: ${formatHuf(summary.ytd_kiadas_brutto)}`}
+                icon={TrendingDown}
+                tone="orange"
+              />
+              <StatCard
+                label="Profit (idén, nettó)"
                 value={formatHuf(summary.ytd_profit)}
+                megjegyzes="Nettó bevétel mínusz nettó kiadás"
                 icon={Wallet}
                 tone={summary.ytd_profit >= 0 ? "accent" : "danger"}
               />
               <StatCard
-                label={`Kintlévőség (${summary.kintlevo_projektek_szama} projekt)`}
+                label={`Kintlévőség (${summary.kintlevo_projektek_szama} projekt, nettó)`}
                 value={formatHuf(summary.osszes_kintlevoseg)}
                 icon={AlertCircle}
                 tone={summary.osszes_kintlevoseg > 0 ? "pink" : "blue"}
@@ -92,7 +111,7 @@ export default async function PenzugyekPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-              <Card title="Bevétel / kiadás - utolsó 12 hónap">
+              <Card title="Bevétel / kiadás - utolsó 12 hónap (nettó)">
                 <FinanceMonthlyChart trend={summary.havi_trend} />
               </Card>
               <Card title="Kintlévőségek projektenként">
@@ -101,7 +120,7 @@ export default async function PenzugyekPage() {
             </div>
 
             {summary.ytd_kiadas_fizetesi_mod_szerint.length > 0 && (
-              <Card title="Kiadás fizetési mód szerint (idén)">
+              <Card title="Kiadás fizetési mód szerint (idén, nettó)">
                 <ul className="divide-y divide-border">
                   {summary.ytd_kiadas_fizetesi_mod_szerint.map((row) => (
                     <li key={row.kifizetes_modja ?? "ismeretlen"} className="flex items-center justify-between py-2 text-[13px]">
@@ -171,8 +190,9 @@ export default async function PenzugyekPage() {
               {
                 // Szerkeszthető, mert a felvitelkor csak a nettót kérjük be:
                 // ha valaki utólag tudja a bruttót (áfás számla), itt írhatja
-                // be. A projekt költsége a bruttót veszi, ha van - különben a
-                // nettót (lásd backend models/project_code._osszeg).
+                // be. Az ELSZÁMOLÁSBA a nettó számít (a projekt költségébe és
+                // a Pénzügyek összesítőibe is) - a bruttó a tényleges
+                // pénzmozgás (lásd backend services/elszamolas.py).
                 header: "Bruttó",
                 align: "right",
                 render: (e) =>
