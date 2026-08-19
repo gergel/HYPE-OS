@@ -281,7 +281,13 @@ function KifizetesDialog({
     kihagyas_oka: string | null;
   }) => void;
 }) {
-  const [datum, setDatum] = useState(maiNap());
+  // ÜRESEN indul, NEM a mai nappal. A jelölés ritkán esik egybe a
+  // beérkezéssel: a pénz megjön, és csak napokkal később kattint rá valaki -
+  // egy előre kitöltött "ma" ilyenkor nem segítség, hanem egy csendben beírt
+  // rossz dátum, ami utólag fel sem tűnik (nem üres, csak nem igaz). Ebből
+  // lesz a bevétel-sor dátuma, tehát rossz hónapba is csúszhat a bevétel.
+  // A "Ma" gomb egy kattintás annak, akinél tényleg ma jött meg.
+  const [datum, setDatum] = useState("");
   const [bevetelbeKerul, setBevetelbeKerul] = useState(true);
   const [indok, setIndok] = useState("");
 
@@ -300,15 +306,24 @@ function KifizetesDialog({
 
         <div className="p-5">
           <label className="block text-[13px] text-text-primary">
-            Mikor érkezett meg a pénz
-            <input
-              type="date"
-              value={datum}
-              onChange={(e) => setDatum(e.target.value)}
-              className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary"
-            />
+            Mikor érkezett meg a pénz *
+            <span className="mt-1 flex items-center gap-2">
+              <input
+                type="date"
+                value={datum}
+                onChange={(e) => setDatum(e.target.value)}
+                className="w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary"
+              />
+              <button
+                type="button"
+                onClick={() => setDatum(maiNap())}
+                className="shrink-0 rounded-[var(--radius)] border border-border px-2 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3"
+              >
+                Ma
+              </button>
+            </span>
             <span className="mt-0.5 block text-[12px] text-text-muted">
-              Ez a nap kerül a bevétel-sorra is.{hatarido && ` Fizetési határidő: ${hatarido}.`}
+              Kötelező – ez a nap kerül a bevétel-sorra is.{hatarido && ` Fizetési határidő: ${hatarido}.`}
             </span>
           </label>
 

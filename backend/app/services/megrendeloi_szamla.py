@@ -152,10 +152,20 @@ def jelold_kifizetettnek(
 ) -> SzamlaAllas:
     """"Kifizetve" - a pénz megérkezett.
 
+    A KIFIZETÉS NAPJA kötelező. Korábban üresen hagyva a mai nap került be,
+    csakhogy a jelölés ritkán esik egybe a beérkezéssel: a pénz megjön, és csak
+    napokkal (néha hetekkel) később kattint rá valaki. A "mai nap" ilyenkor
+    nem hiányzó adat pótlása, hanem egy CSENDBEN BEÍRT rossz dátum - és mivel
+    ebből lesz a bevétel-sor dátuma, a bevétel rossz napra, rosszabb esetben
+    rossz hónapra kerül. A dátum utólag nem is tűnik fel senkinek: nem üres,
+    csak nem igaz.
+
     Alapesetben bevétel-sort is nyit (vagy kiegészíti a meglévőt), hogy a
     Pénzügyekben is ott legyen. Ha a hívó azt mondja, hogy ez a tétel nem való
-    a bevételek közé, akkor INDOK kell hozzá, és nem keletkezik sor - a
-    projektkód viszont így is lezárt lesz."""
+    a bevételek közé, akkor INDOK kell hozzá - a sor ilyenkor is létrejön, csak
+    az éves bevételbe nem számít (lásd services/elszamolas.py)."""
+    if kifizetes_datuma is None:
+        raise SzamlaHiba("Add meg, MIKOR érkezett meg a pénz - enélkül a bevétel rossz napra kerülne.")
     if pk.fizetesi_hatarido is None and _hatarido_kell(pk):
         raise SzamlaHiba(
             "Előbb add meg a számlán szereplő fizetési határidőt - enélkül nem látszik, ha egy számla késik. "
@@ -164,7 +174,7 @@ def jelold_kifizetettnek(
     if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
         raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")
 
-    nap = kifizetes_datuma or date.today()
+    nap = kifizetes_datuma
     pk.utalas_datuma = nap
     pk.bevetelbe_ne_keruljon = bevetelbe_ne_keruljon
     pk.bevetel_kihagyas_oka = (kihagyas_oka or "").strip() or None if bevetelbe_ne_keruljon else None

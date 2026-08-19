@@ -706,7 +706,10 @@ class HataridoIn(BaseModel):
 
 
 class KifizetesIn(BaseModel):
-    #: Mikor érkezett meg a pénz. Üresen a mai nap.
+    #: Mikor érkezett meg a pénz - KÖTELEZŐ. A jelölés ritkán esik egybe a
+    #: beérkezéssel (a pénz megjön, és napokkal később kattint rá valaki),
+    #: ezért nem tippelünk a mai nappal: ebből lesz a bevétel-sor dátuma.
+    #: Lásd services/megrendeloi_szamla.jelold_kifizetettnek.
     kifizetes_datuma: date | None = None
     #: "Kifizetve, de ne kerüljön a bevételek közé" - ilyenkor INDOK kell.
     bevetelbe_ne_keruljon: bool = False

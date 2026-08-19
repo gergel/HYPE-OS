@@ -432,9 +432,15 @@ kártya ezt viszi végig (`services/megrendeloi_szamla.py`,
    hogy egy még ki nem fizetett számla késik-e. Ha csak a kifizetés napját
    rögzítenénk, a lejárt számlák pont addig lennének láthatatlanok, amíg
    számít.
-3. **"Kifizetve"** - a párbeszéd bekéri, MIKOR érkezett meg a pénz (nem a mai
-   napot feltételezzük: a jelölés rendszerint napokkal a beérkezés után
-   történik, és egy rossz nap rossz hónapba viszi a bevételt).
+3. **"Kifizetve"** - a párbeszéd bekéri, MIKOR érkezett meg a pénz. A mező
+   **üresen indul és kötelező**, nem a mai nappal töltjük elő: a jelölés
+   rendszerint napokkal (néha hetekkel) a beérkezés után történik, és egy
+   előre beírt "ma" nem hiányzó adat pótlása, hanem egy csendben rögzített
+   rossz dátum - ami utólag fel sem tűnik, mert nem üres, csak nem igaz.
+   Ebből lesz a bevétel-sor dátuma, tehát rossz hónapba is csúszhat a bevétel.
+   Akinél tényleg aznap jött meg, annak ott a **"Ma"** gomb, egy kattintás.
+   A szabályt a backend is kikényszeríti (`jelold_kifizetettnek`), nem csak a
+   felület tiltja a gombot.
 4. **Bevétel-sor keletkezik** a Pénzügyekben - a dátumokkal, az összeggel (a
    TIG-ről, annak híján a szerződésről vagy a projektkódról) és a számla
    fájljával. Eddig ez két külön felület volt: a projektkódon ki volt pipálva
