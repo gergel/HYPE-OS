@@ -3,7 +3,7 @@ import zipfile
 from datetime import date
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import extract, func, select
@@ -28,6 +28,7 @@ from app.models.performance_certificate import (
 )
 from app.models.project_code import ProjectCode
 from app.services import document_storage, elszamolas, kiadas_kapcsolatok
+from app.services import penznem as penznem_szolg
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
 from app.services.portal_storage import R2NotConfiguredError
 from app.schemas.finance import (
@@ -55,6 +56,24 @@ def _kiadas_torles_elott(expense: Expense, db: Session) -> None:
     kiadas_kapcsolatok.bontsd_le_a_kapcsolatokat(expense, db)
 
 
+def _devizat_forintra(adat: dict, db: Session) -> dict:
+    """Devizás felvezetés átváltása - a tárolt összeg mindig forint.
+
+    A felhasználó a saját pénznemében írja be az összeget; ha az nem forint,
+    az árfolyam kötelező. A `netto`/`brutto` mezőbe már a forint kerül, az
+    eredeti adat pedig megmarad (lásd services/penznem.py)."""
+    try:
+        return penznem_szolg.valtsd_at(adat)
+    except penznem_szolg.PenznemHiba as hiba:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(hiba)) from hiba
+
+
+def _devizat_forintra_frissiteskor(obj, adat: dict, db: Session) -> None:
+    """Ugyanaz PATCH-nél. Csak akkor számol újra, ha a kérés hozza a pénznemet
+    - egy önmagában álló összeg-javítás forintos javítás marad."""
+    _devizat_forintra(adat, db)
+
+
 expenses_router = build_crud_router(
     model=Expense,
     create_schema=ExpenseCreate,
@@ -63,6 +82,8 @@ expenses_router = build_crud_router(
     prefix="/expenses",
     tags=["finance"],
     page="/penzugyek",
+    before_create=_devizat_forintra,
+    before_update=_devizat_forintra_frissiteskor,
     before_delete=_kiadas_torles_elott,
 )
 
@@ -74,6 +95,8 @@ revenues_router = build_crud_router(
     prefix="/revenues",
     tags=["finance"],
     page="/penzugyek",
+    before_create=_devizat_forintra,
+    before_update=_devizat_forintra_frissiteskor,
 )
 
 kp_forgalom_router = build_crud_router(

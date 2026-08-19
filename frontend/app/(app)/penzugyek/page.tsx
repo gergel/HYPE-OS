@@ -26,7 +26,7 @@ import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { bevetelKihagyasOka } from "@/lib/penz";
+import { bevetelKihagyasOka, devizaNyom, PENZNEMEK } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 
 const PAGE = "/penzugyek";
@@ -156,6 +156,23 @@ export default async function PenzugyekPage() {
               fields={[
                 { name: "megnevezes", label: "Megnevezés", required: true },
                 { name: "netto", label: "Nettó", type: "number" },
+                // Az összeget a választott PÉNZNEMBEN kell beírni; a szerver
+                // váltja át forintra az árfolyammal, és a kiadás közé már a
+                // forint kerül (lásd backend services/penznem.py). Devizánál az
+                // árfolyam kötelező - ha kimarad, beszédes hibát ad.
+                {
+                  name: "penznem",
+                  label: "Pénznem",
+                  type: "select",
+                  defaultValue: "HUF",
+                  options: PENZNEMEK.map((k) => ({ value: k, label: k })),
+                },
+                {
+                  name: "arfolyam",
+                  label: "Árfolyam (Ft)",
+                  type: "number",
+                  placeholder: "Csak EUR/USD esetén",
+                },
               ]}
             />
           )}
@@ -180,12 +197,17 @@ export default async function PenzugyekPage() {
               {
                 header: "Nettó",
                 align: "right",
-                render: (e) =>
-                  canEdit ? (
-                    <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="netto" value={e.netto} type="number" />
-                  ) : (
-                    formatHuf(e.netto)
-                  ),
+                render: (e) => (
+                  <>
+                    {canEdit ? (
+                      <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="netto" value={e.netto} type="number" />
+                    ) : (
+                      formatHuf(e.netto)
+                    )}
+                    {/* A tárolt összeg forint - itt írjuk ki, MIBŐL lett. */}
+                    {devizaNyom(e) && <span className="mt-0.5 block text-[11.5px] text-text-muted">{devizaNyom(e)}</span>}
+                  </>
+                ),
                 sortAccessor: (e) => e.netto,
               },
               {
@@ -259,6 +281,21 @@ export default async function PenzugyekPage() {
                   options: projectCodes.map((pc) => ({ value: pc.id, label: pc.projektkod })),
                 },
                 { name: "netto", label: "Nettó", type: "number" },
+                // Lásd a kiadásnál: az összeg a választott pénznemben értendő,
+                // a bevételek közé forintban kerül.
+                {
+                  name: "penznem",
+                  label: "Pénznem",
+                  type: "select",
+                  defaultValue: "HUF",
+                  options: PENZNEMEK.map((k) => ({ value: k, label: k })),
+                },
+                {
+                  name: "arfolyam",
+                  label: "Árfolyam (Ft)",
+                  type: "number",
+                  placeholder: "Csak EUR/USD esetén",
+                },
               ]}
             />
           )}
@@ -301,12 +338,16 @@ export default async function PenzugyekPage() {
               {
                 header: "Nettó",
                 align: "right",
-                render: (r) =>
-                  canEdit ? (
-                    <EditableTableCell patchPath={`${ENTITY_PATHS.revenue}/${r.id}`} field="netto" value={r.netto} type="number" />
-                  ) : (
-                    formatHuf(r.netto)
-                  ),
+                render: (r) => (
+                  <>
+                    {canEdit ? (
+                      <EditableTableCell patchPath={`${ENTITY_PATHS.revenue}/${r.id}`} field="netto" value={r.netto} type="number" />
+                    ) : (
+                      formatHuf(r.netto)
+                    )}
+                    {devizaNyom(r) && <span className="mt-0.5 block text-[11.5px] text-text-muted">{devizaNyom(r)}</span>}
+                  </>
+                ),
                 sortAccessor: (r) => r.netto,
               },
               {
@@ -320,7 +361,15 @@ export default async function PenzugyekPage() {
                   ),
                 sortAccessor: (r) => r.brutto,
               },
-              { header: "Pénznem", align: "right", render: (r) => r.penznem, sortAccessor: (r) => r.penznem },
+              {
+                // A tárolt összeg mindig forint; ha devizásan vezették fel, az
+                // "EUR → HUF" alak mondja meg, mi történt - egy puszta "HUF"
+                // elrejtené, hogy a számla euróban szólt.
+                header: "Pénznem",
+                align: "right",
+                render: (r) => (r.eredeti_penznem ? `${r.eredeti_penznem} → HUF` : r.penznem),
+                sortAccessor: (r) => r.eredeti_penznem ?? r.penznem,
+              },
               // Számla-állapot oszlop SZÁNDÉKOSAN nincs (ahogy a kiadásoknál
               // sem): ami a bevételek közé kerül, az azért kerül oda, mert a
               // pénz rendezve van. A kifizetés jelölése a projektkód "3.

@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services import penznem as penznem_szolg
+
 AFA_SZORZO = 1.27
 
 
@@ -53,3 +55,27 @@ def szamlazott_osszeg(pk) -> tuple[float | None, float | None]:
             netto = float(ertek)
             return netto, brutto(netto, pk.plusz_afa)
     return None, None
+
+
+def forintban(pk) -> tuple[float | None, float | None]:
+    """Ugyanaz, mint a szamlazott_osszeg(), csak FORINTBAN.
+
+    A vállalási ár lehet euróban vagy dollárban (a projektkód `penznem` +
+    `arfolyam` mezője) - a bevétel viszont forintban kerül a rendszerbe, mert a
+    könyvelésünk abban vezet, és az összesítők egy pénznemet ismernek (lásd
+    services/penznem.py). Ez a függvény adja azt a számot, ami ténylegesen a
+    Pénzügyekbe kerül.
+
+    Árfolyam nélküli devizás kód esetén None-t adunk vissza a szám helyett:
+    egy devizás összeget árfolyam nélkül forintként kezelni nagyságrendi
+    hiba lenne (1 500 EUR nem 1 500 Ft), és jobb, ha látszik a hiány."""
+    netto, brutto_ertek = szamlazott_osszeg(pk)
+    if not penznem_szolg.devizas(getattr(pk, "penznem", None)):
+        return netto, brutto_ertek
+    arfolyam = getattr(pk, "arfolyam", None)
+    if arfolyam is None or float(arfolyam) <= 0:
+        return None, None
+    return (
+        penznem_szolg.forintra(netto, arfolyam),
+        penznem_szolg.forintra(brutto_ertek, arfolyam),
+    )

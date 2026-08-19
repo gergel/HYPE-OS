@@ -156,9 +156,13 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
     )
     # NETTÓBAN, ahogy mindenütt máshol is az elszámolásban (lásd
     # services/elszamolas.py) - az ÁFA átfolyó tétel, nem az autó költsége.
-    osszesen = float(
-        sum(elszamolas.osszeg(e) for e in auto.kiadasok if (e.penznem or "HUF") == "HUF")
-    )
+    #
+    # MINDEN sor beleszámít: a tárolt összeg mindig forint, a devizás tételt a
+    # felvezetéskor váltjuk át (lásd services/penznem.py). Korábban itt egy
+    # `penznem == "HUF"` szűrő állt, ami a nem forintos sorokat NÉMÁN kihagyta -
+    # vagyis egy euróban fizetett szerviz úgy tűnt el az autó költségéből,
+    # mintha nem is lett volna.
+    osszesen = float(sum(elszamolas.osszeg(e) for e in auto.kiadasok))
 
     if any(h.allapot == "lejart" for h in hataridok):
         allapot = "lejart"

@@ -21,6 +21,7 @@ from app.schemas.project_code import (
     ProjectCodeRead,
     ProjectCodeUpdate,
 )
+from app.services import penznem as penznem_szolg
 from app.services import projektkod_bontas
 
 
@@ -47,6 +48,29 @@ def _papir_kapcsolok_ellenorzese(obj: ProjectCode, data: dict, _db: Session) -> 
             status_code=400,
             detail="A papír nélküli elszámoláshoz meg kell adni az okát.",
         )
+
+
+def _penznem_ellenorzese(obj: ProjectCode, data: dict, _db: Session) -> None:
+    """Devizás vállalási árhoz KÖTELEZŐ az árfolyam.
+
+    Enélkül a beírt szám nem értelmezhető: az "1500" lehet 1 500 Ft és 592 500
+    Ft is - és a bevétel abból a számból keletkezik. A PATCH tipikusan csak a
+    változó mezőt küldi, ezért a beküldött értéket és a rekord mostani
+    állapotát EGYÜTT nézzük (lásd _papir_kapcsolok_ellenorzese)."""
+    if "penznem" not in data and "arfolyam" not in data:
+        return
+    penznem = data.get("penznem", obj.penznem)
+    arfolyam = data.get("arfolyam", obj.arfolyam)
+    try:
+        penznem_szolg.ellenorizd(penznem, arfolyam)
+    except penznem_szolg.PenznemHiba as hiba:
+        raise HTTPException(status_code=400, detail=str(hiba)) from hiba
+
+
+def _projektkod_ellenorzese(obj: ProjectCode, data: dict, db: Session) -> None:
+    """A projektkód PATCH-ének összes együtt-értelmesség ellenőrzése."""
+    _papir_kapcsolok_ellenorzese(obj, data, db)
+    _penznem_ellenorzese(obj, data, db)
 
 
 class ProjectCodeOption(BaseModel):
@@ -118,7 +142,7 @@ router = build_crud_router(
     # hozzáférni, ne automatikusan a Projektek jogosultsággal együtt.
     page="/projektek/project-kodok",
     entity_type="projectCode",
-    before_update=_papir_kapcsolok_ellenorzese,
+    before_update=_projektkod_ellenorzese,
     # A ProjectCodeRead számított mezői (osszes_koltseg, becsult_profit)
     # végigjárják a kiadásokat, az utómunkákat és a bevételeket. Eager load
     # nélkül ez SORONKÉNT 3 külön lekérdezést jelentene: 200 projektkódnál

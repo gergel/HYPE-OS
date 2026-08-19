@@ -220,6 +220,47 @@ kifizetettsége.
 Frontend: `components/finance/`, `RevenueInvoiceStatus.tsx`,
 `TigInvoiceManager.tsx`, `TigAllapotSelect.tsx`.
 
+### Deviza: euróban/dollárban felvezetett tétel
+
+Egyetlen szabály, egy helyen: `services/penznem.py`.
+
+```
+a tárolt összeg MINDIG forint
+```
+
+Kiadásnál, bevételnél és a projektkód vállalási áránál is megadható **EUR** és
+**USD**. Ha nem forint, az **árfolyam kötelező** - enélkül a beírt szám nem is
+értelmezhető: az „1500" lehet 1 500 Ft és 592 500 Ft is. A szerver átváltja, és
+a `netto`/`brutto` mezőbe **már a forint kerül**, a sor `penznem`-e pedig
+"HUF".
+
+**Miért nem marad az "EUR" a `penznem` mezőben?** Mert az azt mondaná, hogy a
+sor összege euró - és minden összesítő (éves kiadás, projekt-profit,
+autó-költség) vagy hamisan adna hozzá 1500-at a forintokhoz, vagy némán
+kihagyná a nem forintos sorokat. (Az autók oldala pontosan ezt tette:
+`penznem == "HUF"` szűrővel számolt, tehát egy euróban fizetett szerviz úgy
+tűnt el a költségből, mintha nem is lett volna. Ez a szűrő ezzel együtt el is
+tűnt.)
+
+**Az eredeti adat megmarad**: `eredeti_penznem`, `eredeti_netto`,
+`eredeti_brutto`, `arfolyam`. Fél év múlva egy 592 500 Ft-os sor mögött
+enélkül senki nem tudná, hogy az 1 500 EUR volt 395-ös árfolyamon - pedig a
+számlán az áll. A lista ezért ki is írja a nettó alá: „1 500 EUR × 395".
+
+Az átváltás **akkor fut le, ha a kérés hozza a `penznem` mezőt** - vagyis
+amikor a felhasználó most mondja meg, milyen pénznemben érti a beírt összeget.
+Egy önmagában álló összeg-javítás (a listában a nettó cella átírása) tehát
+forintos javítás marad, és nem írja felül azt, HOGYAN vezették fel a tételt.
+
+**A projektkódon** a vállalási ár abban a pénznemben marad, amiben
+megállapodtunk (a szerződésen és a TIG-en is az áll) - a **bevétel** viszont
+forintban keletkezik belőle, a projektkód `penznem` + `arfolyam` mezője
+szerint (`projektkod_osszeg.forintban()`). A „Mennyiért vállaltuk" kártya és a
+„3. Számla" kártya is kiírja, mennyi kerül ebből a Pénzügyekbe.
+
+Frontend: `lib/penz.ts` (`PENZNEMEK`, `devizaNyom`, `penzzel`),
+`components/projektkod/VallalasiAr.tsx`.
+
 ## Számlázó cégek (Vállalkozások)
 
 `/api/v1/vallalkozasok`, oldal: `/penzugyek/vallalkozasok`,

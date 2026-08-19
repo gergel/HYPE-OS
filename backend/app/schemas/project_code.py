@@ -32,6 +32,13 @@ class ProjectCodeCreate(ProjectCodeBase):
 
 class ProjectCodeUpdate(BaseModel):
     esemeny_allapota: str | None = None
+    #: A vállalási ár és a pénzneme. Devizás pénznemhez KÖTELEZŐ az árfolyam
+    #: (lásd routes/project_codes._penznem_ellenorzese): a bevétel ezzel
+    #: átváltva, forintban kerül a Pénzügyekbe.
+    netto_osszeg: float | None = None
+    plusz_afa: str | None = None
+    penznem: str | None = None
+    arfolyam: float | None = None
     contract_id: int | None = None
     tig_statusza: str | None = None
     szamla_statusza: str | None = None

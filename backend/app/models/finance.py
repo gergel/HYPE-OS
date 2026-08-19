@@ -62,6 +62,18 @@ class Expense(TimestampMixin, Base):
     plusz_napok_ara: Mapped[float | None] = mapped_column(Numeric(12, 2))
     plusz_napok_szama: Mapped[float | None] = mapped_column(Numeric(6, 2))
 
+    # ── Devizás felvezetés (lásd services/penznem.py) ───────────────────────
+    #
+    # A `netto`/`brutto` MINDIG forint, a `penznem` ezért "HUF". Ha a tételt
+    # euróban vagy dollárban vezették fel, itt marad meg, HOGYAN: enélkül egy
+    # 592 500 Ft-os sor mögött fél év múlva senki nem tudná, hogy az 1 500 EUR
+    # volt 395-ös árfolyamon - pedig a számlán az áll.
+    eredeti_penznem: Mapped[str | None] = mapped_column(
+        String(10), comment="Milyen pénznemben vezették fel (NULL = forintban)"
+    )
+    eredeti_netto: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="A nettó az eredeti pénznemben")
+    eredeti_brutto: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="A bruttó az eredeti pénznemben")
+
     project_code: Mapped["ProjectCode"] = relationship(back_populates="expenses")
     employee: Mapped["Employee"] = relationship(back_populates="expenses")
     auto: Mapped["Auto | None"] = relationship(back_populates="kiadasok")
@@ -120,6 +132,15 @@ class Revenue(TimestampMixin, Base):
     mikor_fizetett: Mapped[str | None] = mapped_column(String(120))
     megjegyzes: Mapped[str | None] = mapped_column(Text)
     arfolyam: Mapped[float | None] = mapped_column(Numeric(10, 4))
+
+    # ── Devizás felvezetés ──────────────────────────────────────────────────
+    # Ugyanaz a szabály, mint a kiadásnál (lásd services/penznem.py): a
+    # `netto`/`brutto` mindig forint, itt marad meg, miből lett.
+    eredeti_penznem: Mapped[str | None] = mapped_column(
+        String(10), comment="Milyen pénznemben vezették fel (NULL = forintban)"
+    )
+    eredeti_netto: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="A nettó az eredeti pénznemben")
+    eredeti_brutto: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="A bruttó az eredeti pénznemben")
 
     project_code: Mapped["ProjectCode"] = relationship(back_populates="revenues")
     payments: Mapped[list["Payment"]] = relationship(back_populates="revenue")

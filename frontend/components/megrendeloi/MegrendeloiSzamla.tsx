@@ -8,7 +8,7 @@ import { authFetch } from "@/lib/authFetch";
 // A pénzformázó a FÜGGŐSÉG NÉLKÜLI modulból jön: a lib/api.ts a
 // "next/headers"-t is behúzza (szerver-oldali süti-olvasás), és egy kliens
 // komponensben már egyetlen nem type-only importja is build hibát okoz.
-import { formatHuf } from "@/lib/penz";
+import { devizas, formatHuf, penzzel } from "@/lib/penz";
 import type { MegrendeloiSzamlaAllas } from "@/lib/api";
 
 /** A mai nap ISO alakban, HELYI idő szerint - a `toISOString()` UTC-re vált, és
@@ -86,13 +86,26 @@ export function MegrendeloiSzamla({
             mellétesszük, ha eltér: annyi érkezik a bankszámlára. */}
         {allas.netto !== null && (
           <span className="text-[12.5px] text-text-secondary">
-            {formatHuf(allas.netto)} nettó
+            {penzzel(allas.netto, allas.penznem)} nettó
             {allas.brutto !== null && allas.brutto !== allas.netto && (
-              <span className="text-text-muted"> ({formatHuf(allas.brutto)} bruttó)</span>
+              <span className="text-text-muted"> ({penzzel(allas.brutto, allas.penznem)} bruttó)</span>
             )}
           </span>
         )}
       </div>
+
+      {/* Devizás munkánál a bevétel FORINTBAN kerül a Pénzügyekbe - ki is
+          írjuk, mennyi az, mert a szerződésen szereplő euró összeg önmagában
+          nem mondja meg (lásd backend services/penznem.py). */}
+      {devizas(allas.penznem) && (
+        <p className="text-[12.5px] text-text-secondary">
+          {allas.netto_forintban === null
+            ? "Add meg az árfolyamot a vállalási árnál - enélkül nem tudjuk, mennyi a bevétel forintban."
+            : `A bevételek közé ${formatHuf(allas.netto_forintban)} kerül${
+                allas.arfolyam === null ? "" : ` (${allas.arfolyam} Ft/${allas.penznem} árfolyamon)`
+              }.`}
+        </p>
+      )}
 
       {/* A Notionból örökölt számla akkor is elérhető legyen, ha nem
           csatolmányként jött át (a régi kódoknál csak egy cím van meg). */}

@@ -212,6 +212,13 @@ export type Expense = {
   kesz: boolean;
   kifizetes_modja: string | null;
   hozzaadas_a_kiadasokhoz: boolean | null;
+  /** MIBŐL lett a forint összeg. A `netto`/`brutto` MINDIG forint - ha a
+   * tételt euróban/dollárban vezették fel, itt marad meg, hogyan (lásd backend
+   * services/penznem.py). `null` = eredetileg is forint volt. */
+  eredeti_penznem: string | null;
+  eredeti_netto: number | null;
+  eredeti_brutto: number | null;
+  arfolyam: number | null;
 };
 
 export type Revenue = {
@@ -226,6 +233,14 @@ export type Revenue = {
   penznem: string;
   fizetes_datuma: string | null;
   szamla_kiallitva_datuma: string | null;
+  /** MIBŐL lett a forint összeg. A `netto`/`brutto` MINDIG forint - ha a
+   * tételt euróban/dollárban vezették fel, itt marad meg, hogyan (lásd backend
+   * services/penznem.py). `null` = eredetileg is forint volt. */
+  eredeti_penznem: string | null;
+  eredeti_netto: number | null;
+  eredeti_brutto: number | null;
+  arfolyam: number | null;
+
   /** A feltöltött KIMENŐ (megrendelői) számla - ebből áll össze a havi
    * számla-csomag kimenő oldala (lásd SzamlaCsomagLetoltes). */
   szamla_filename: string | null;
@@ -2575,6 +2590,13 @@ export type MegrendeloiSzamlaAllas = {
   szamla_kihagyas_oka: string | null;
   /** Kell-e fizetési határidő a kifizetés jelöléséhez. */
   hatarido_kell: boolean;
+  /** Milyen pénznemben vállaltuk a munkát, és milyen árfolyamon számolunk. A
+   * `netto`/`brutto` ebben a pénznemben van, a `*_forintban` pedig az, ami
+   * ténylegesen a Pénzügyekbe kerül (lásd backend services/penznem.py). */
+  penznem: string;
+  arfolyam: number | null;
+  netto_forintban: number | null;
+  brutto_forintban: number | null;
 };
 
 export async function getMegrendeloiSzamlaAllas(projectCodeId: number): Promise<MegrendeloiSzamlaAllas | null> {

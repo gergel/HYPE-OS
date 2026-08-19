@@ -16,6 +16,10 @@ class ExpenseBase(BaseModel):
     kifizetes_modja: str | None = None
     fizetes_hatarideje: date | None = None
     kesz: bool = False
+    #: Devizás felvezetés: a `penznem`-ben megadott összeget a szerver váltja át
+    #: forintra az `arfolyam`-mal, és a `netto`/`brutto` mezőbe már a forint
+    #: kerül (lásd services/penznem.py). Forintnál mindkettő elhagyható.
+    arfolyam: float | None = None
 
 
 class ExpenseCreate(ExpenseBase):
@@ -26,10 +30,22 @@ class ExpenseUpdate(BaseModel):
     kesz: bool | None = None
     kifizetes_modja: str | None = None
     fizetes_hatarideje: date | None = None
+    #: A pénznem újbóli megadása ÚJRASZÁMOLTATJA a forint összeget (lásd
+    #: services/penznem.valtsd_at) - ezért csak együtt van értelme az
+    #: árfolyammal és az összeggel.
+    penznem: str | None = None
+    arfolyam: float | None = None
+    netto: float | None = None
+    brutto: float | None = None
 
 
 class ExpenseRead(ExpenseBase):
     id: int
+
+    #: MIBŐL lett a forint összeg - devizás felvezetésnél (services/penznem.py).
+    eredeti_penznem: str | None = None
+    eredeti_netto: float | None = None
+    eredeti_brutto: float | None = None
 
     # a 'Kiadások' / 'Projekt kiadások' / 'Belsős extra kiadások' Notion táblák maradék mezői
     letrehozta_notion: JsonScalar = None
@@ -51,7 +67,6 @@ class ExpenseRead(ExpenseBase):
     osszes_kiadas_notion: float | None = None
     tulora_osszege: float | None = None
     plusz_afa_mezo: str | None = None
-    arfolyam: float | None = None
     datum_notion: JsonScalar = None
     projektkod_notion: JsonScalar = None
     egyeb_kiadas: JsonScalar = None
@@ -78,6 +93,10 @@ class RevenueBase(BaseModel):
     fizetes_hatarideje: date | None = None
     fizetes_datuma: date | None = None
     szamla_kiallitva_datuma: date | None = None
+    #: Devizás felvezetés: a `penznem`-ben megadott összeget a szerver váltja át
+    #: forintra az `arfolyam`-mal, és a `netto`/`brutto` mezőbe már a forint
+    #: kerül (lásd services/penznem.py). Forintnál mindkettő elhagyható.
+    arfolyam: float | None = None
 
 
 class RevenueCreate(RevenueBase):
@@ -87,10 +106,20 @@ class RevenueCreate(RevenueBase):
 class RevenueUpdate(BaseModel):
     fizetes_datuma: date | None = None
     szamla_kiallitva_datuma: date | None = None
+    #: Lásd ExpenseUpdate - a pénznem újbóli megadása újraszámoltat.
+    penznem: str | None = None
+    arfolyam: float | None = None
+    netto: float | None = None
+    brutto: float | None = None
 
 
 class RevenueRead(RevenueBase):
     id: int
+
+    #: MIBŐL lett a forint összeg - devizás felvezetésnél (services/penznem.py).
+    eredeti_penznem: str | None = None
+    eredeti_netto: float | None = None
+    eredeti_brutto: float | None = None
 
     # A feltöltött KIMENŐ (megrendelői) számla - a havi számla-csomagba is
     # ebből kerül be a kimenő oldal (lásd routes/finance.py szamlak_zip).
@@ -102,7 +131,6 @@ class RevenueRead(RevenueBase):
     plusz_afa: str | None = None
     mikor_fizetett: str | None = None
     megjegyzes: str | None = None
-    arfolyam: float | None = None
 
     model_config = {"from_attributes": True}
 

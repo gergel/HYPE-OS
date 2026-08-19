@@ -29,3 +29,35 @@ export function bevetelKihagyasOka(sor: {
   if (sor.beleszamit_a_bevetelekbe === false) return "Nem kerül a bevételek közé";
   return null;
 }
+
+/** Amiben számlát szoktunk kapni/kiállítani - a backend
+ * `services/penznem.PENZNEMEK` párja. */
+export const PENZNEMEK = ["HUF", "EUR", "USD"] as const;
+
+export function devizas(penznem: string | null | undefined): boolean {
+  return !!penznem && penznem.trim().toUpperCase() !== "HUF";
+}
+
+/** Összeg a saját pénznemében: forintnál a tömör "1,2M Ft" alak, devizánál a
+ * teljes szám a kóddal ("1 500 EUR") - egy devizás összeg nem elég nagy ahhoz,
+ * hogy rövidíteni kelljen, viszont a pontossága számít. */
+export function penzzel(osszeg: number | null, penznem: string | null | undefined): string {
+  if (osszeg === null) return "–";
+  if (!devizas(penznem)) return formatHuf(osszeg);
+  return `${osszeg.toLocaleString("hu-HU")} ${(penznem ?? "").toUpperCase()}`;
+}
+
+/** MIBŐL lett a forint összeg - egy soros magyarázat a devizás tételek alá.
+ *
+ * Múlt idejű, mert a felvezetés tényét írja le, nem a mindenkori összeget: a
+ * forint összeg utólag javítható anélkül, hogy ez változna (lásd backend
+ * services/penznem.valtsd_at). `null`, ha a tétel eleve forintos volt. */
+export function devizaNyom(sor: {
+  eredeti_penznem: string | null;
+  eredeti_netto: number | null;
+  arfolyam: number | null;
+}): string | null {
+  if (!sor.eredeti_penznem || sor.eredeti_netto === null) return null;
+  const arfolyam = sor.arfolyam === null ? "?" : sor.arfolyam.toLocaleString("hu-HU");
+  return `${sor.eredeti_netto.toLocaleString("hu-HU")} ${sor.eredeti_penznem} × ${arfolyam}`;
+}

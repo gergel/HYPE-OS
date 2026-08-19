@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from app.models.document_attachment import DocumentAttachment
 from app.models.finance import Revenue
 from app.models.project_code import ProjectCode
+from app.services import penznem as penznem_szolg
 from app.services import projektkod_osszeg
 
 #: Az így keletkezett bevétel-sor megjegyzése - ebből látszik, hogy nem kézzel
@@ -50,7 +51,8 @@ class SzamlaAllas:
     kifizetve: bool
     bevetelbe_ne_keruljon: bool
     bevetel_kihagyas_oka: str | None
-    #: A számlából adódó összeg (a papírokról vagy a projektkódról).
+    #: A számlából adódó összeg (a papírokról vagy a projektkódról), a
+    #: projektkód pénznemében.
     netto: float | None
     brutto: float | None
     #: Van-e feltöltött számla-fájl, és hol.
@@ -68,6 +70,14 @@ class SzamlaAllas:
     #: Kell-e fizetési határidő a kifizetés jelöléséhez. A felület ebből tudja,
     #: mikor tiltsa a gombot, és mikor rejtse el a határidő-mezőt.
     hatarido_kell: bool = True
+    #: Milyen pénznemben vállaltuk, és milyen árfolyamon számolunk - devizás
+    #: munkánál a bevétel ezzel átváltva, FORINTBAN kerül a Pénzügyekbe (lásd
+    #: services/penznem.py). Forintos munkánál a *_forintban ugyanaz, mint a
+    #: netto/brutto.
+    penznem: str = "HUF"
+    arfolyam: float | None = None
+    netto_forintban: float | None = None
+    brutto_forintban: float | None = None
 
 
 def _szamla_fajl_url(db: Session, pk: ProjectCode) -> str | None:
@@ -110,6 +120,7 @@ def _hatarido_kell(pk: ProjectCode) -> bool:
 
 def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
     netto, brutto = _osszeg(pk)
+    netto_ft, brutto_ft = projektkod_osszeg.forintban(pk)
     szamla_url = _szamla_fajl_url(db, pk)
     return SzamlaAllas(
         fizetesi_hatarido=pk.fizetesi_hatarido,
@@ -119,6 +130,10 @@ def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
         bevetel_kihagyas_oka=pk.bevetel_kihagyas_oka,
         netto=netto,
         brutto=brutto,
+        penznem=penznem_szolg.normalizald(pk.penznem),
+        arfolyam=float(pk.arfolyam) if pk.arfolyam is not None else None,
+        netto_forintban=netto_ft,
+        brutto_forintban=brutto_ft,
         van_szamla_fajl=szamla_url is not None,
         szamla_url=szamla_url,
         bevetel_sorok=len(list(pk.revenues or [])),
@@ -220,7 +235,13 @@ def _vezesd_fel_a_bevetelt(db: Session, pk: ProjectCode, nap: date, *, beleszami
     (beszámítás, csere, másik cégen át) - a sor látszik, a projekt profitjában
     is benne van, csak az ÉVES bevételbe nem számít
     (lásd services/elszamolas.py)."""
-    netto, brutto = _osszeg(pk)
+    # A bevétel FORINTBAN kerül a rendszerbe, akkor is, ha a munkát euróban
+    # vagy dollárban vállaltuk - az összesítők egy pénznemet ismernek (lásd
+    # services/penznem.py). Az eredeti adat a soron marad, hogy fél év múlva is
+    # látszódjon, miből lett.
+    netto, brutto = projektkod_osszeg.forintban(pk)
+    eredeti_netto, eredeti_brutto = _osszeg(pk)
+    devizas = penznem_szolg.devizas(pk.penznem)
     szamla_url = _szamla_fajl_url(db, pk)
     sorok = list(pk.revenues or [])
     if not sorok:
@@ -228,7 +249,11 @@ def _vezesd_fel_a_bevetelt(db: Session, pk: ProjectCode, nap: date, *, beleszami
             project_code_id=pk.id,
             netto=netto,
             brutto=brutto,
-            penznem=pk.penznem or "HUF",
+            penznem=penznem_szolg.FORINT,
+            eredeti_penznem=penznem_szolg.normalizald(pk.penznem) if devizas else None,
+            eredeti_netto=eredeti_netto if devizas else None,
+            eredeti_brutto=eredeti_brutto if devizas else None,
+            arfolyam=pk.arfolyam if devizas else None,
             megjegyzes=BEVETEL_MEGJEGYZES,
         )
         db.add(sor)

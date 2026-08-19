@@ -169,6 +169,8 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             pluszAfa={szoveg(projectCode.plusz_afa)}
             canEdit={canEdit}
             papirbolNetto={szamlaAllas?.netto ?? null}
+            penznem={typeof projectCode.penznem === "string" ? projectCode.penznem : "HUF"}
+            arfolyam={typeof projectCode.arfolyam === "number" ? projectCode.arfolyam : null}
           />
         </Card>
 
