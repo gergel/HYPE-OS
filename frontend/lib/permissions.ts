@@ -45,17 +45,34 @@ export function szerepkorei(forras: SzerepkorForras): string[] {
   return [forras.role, ...(forras.tovabbi_szerepkorok ?? [])];
 }
 
+/** A PROJEKTHEZ RENDELT ESZKÖZÖK (foglalás) saját jogosultsági kulcsa - nem
+ * valódi oldal, csak aliaszon át kapható meg. Lásd
+ * `core/security.FOGLALAS_OLDAL`. */
+export const FOGLALAS_OLDAL = "/felszereles/foglalas";
+
 /** OLDAL-ALIASZOK - a backend `core/security.OLDAL_ALIASZOK` párja.
+ * Felépítés: cél oldal -> forrás oldal -> {forrás művelet: átadott műveletek}.
+ * Az aliaszok nem láncolódnak.
  *
- * A DISZPÓ (naptár) joga a PROJEKT oldalt is megnyitja, nézésre és
- * szerkesztésre: aki a diszpókat viszi, annak a projekten van dolga (gyártás,
- * technika, gyártás komment, a levél mellékletei, a két diszpó kiküldése).
- * Létrehozni és törölni viszont nem tud projektet.
+ * 1) A DISZPÓ (naptár) joga a PROJEKT oldalt is megnyitja, nézésre és
+ *    szerkesztésre: aki a diszpókat viszi, annak a projekten van dolga (gyártás,
+ *    technika, gyártás komment, a levél mellékletei, a két diszpó kiküldése).
+ *    Létrehozni és törölni viszont nem tud projektet.
+ * 2) A projekt szerkesztése a technika felvezetését is jelenti: az eszköz
+ *    hozzáadása/levétele MAGA a szerkesztés. Ezért ad az "edit" itt
+ *    create/delete jogot - de csak a foglalásra, magára a leltárra nem.
  *
  * Ha ez a két lista elcsúszik egymástól, a felület mást mutat, mint amit a
  * szerver enged - ezért a két helyet EGYÜTT kell módosítani. */
-export const OLDAL_ALIASZOK: Record<string, Record<string, readonly string[]>> = {
-  "/projektek": { "/naptar": ["view", "edit"] },
+export const OLDAL_ALIASZOK: Record<string, Record<string, Record<string, readonly string[]>>> = {
+  "/projektek": {
+    "/naptar": { view: ["view"], edit: ["edit"] },
+  },
+  [FOGLALAS_OLDAL]: {
+    "/felszereles": { view: ["view"], create: ["create"], delete: ["delete"] },
+    "/projektek": { view: ["view"], edit: ["view", "create", "delete"] },
+    "/naptar": { view: ["view"], edit: ["view", "create", "delete"] },
+  },
 };
 
 /** Mit tehet ezen az oldalon - az aliaszokkal együtt. `null`, ha az oldal
@@ -66,11 +83,13 @@ export function oldalMuveletei(
 ): Set<string> | null {
   const sajat = pagePermissions[page];
   const engedve = new Set<string>(sajat ? [...sajat, "view"] : []);
-  for (const [alias, atadhato] of Object.entries(OLDAL_ALIASZOK[page] ?? {})) {
+  for (const [alias, atkotes] of Object.entries(OLDAL_ALIASZOK[page] ?? {})) {
     const aliasMuveletek = pagePermissions[alias];
     if (!aliasMuveletek) continue;
-    for (const muvelet of atadhato) {
-      if (muvelet === "view" || aliasMuveletek.includes(muvelet)) engedve.add(muvelet);
+    // Ha az oldal kulcsa ott van, a "view" jár rá - ugyanaz, mint a sajátnál.
+    const van = new Set([...aliasMuveletek, "view"]);
+    for (const [forras, atadott] of Object.entries(atkotes)) {
+      if (van.has(forras)) for (const muvelet of atadott) engedve.add(muvelet);
     }
   }
   return engedve.size > 0 ? engedve : null;

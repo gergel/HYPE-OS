@@ -107,21 +107,44 @@ def require_roles(*roles: Role):
     return dependency
 
 
+#: A PROJEKTHEZ RENDELT ESZKÖZÖK (Assignment) saját jogosultsági kulcsa.
+#:
+#: Nem valódi oldal (nincs ilyen menüpont, admin sem tudja beállítani):
+#: kizárólag az alábbi aliaszokon át kapható meg. Azért kell külön kulcs, mert
+#: a technika felvezetése a PROJEKTEN történik, a /felszereles oldal
+#: create/delete joga viszont magukat az ESZKÖZÖKET (leltári tételeket) is
+#: engedné létrehozni/törölni - a kettőt nem szabad összekötni.
+FOGLALAS_OLDAL = "/felszereles/foglalas"
+
 #: OLDAL-ALIASZOK: melyik MÁSIK oldal joga ér fel ezzel, és mely műveletekre.
 #:
-#: A DISZPÓ (naptár) joga a PROJEKT oldalt is megnyitja - nézésre és
-#: szerkesztésre. Aki a diszpókat viszi, annak a projekten van dolga: látnia
-#: kell a gyártás és a technika adatait, írnia a gyártás kommentet, feltöltenie
-#: a diszpó levél mellékleteit, és kiküldenie az előzetes és a teljes diszpót.
-#: Enélkül a "csak diszpó" hozzáférés használhatatlan volt: a felület
-#: beengedte a naptárba, de a projekt megnyitásakor 403 jött.
+#: Felépítés: cél oldal -> forrás oldal -> {forrás művelet: átadott műveletek}.
+#: Az aliaszok NEM láncolódnak: mindig a nyersen beállított jogokat nézzük,
+#: tehát ha egy jog két lépésen át járna, azt külön sorként kell felvenni.
 #:
-#: LÉTREHOZNI és TÖRÖLNI viszont nem tud projektet: az nem a diszpós dolga, és
-#: az alias sosem ad többet, mint amennyi a saját oldalán is megvan (a "view"
-#: kivételével, ami az oldal jelenlétéből következik - lásd
-#: models/user_access.py).
-OLDAL_ALIASZOK: dict[str, dict[str, tuple[str, ...]]] = {
-    "/projektek": {"/naptar": ("view", "edit")},
+#: 1) A DISZPÓ (naptár) joga a PROJEKT oldalt is megnyitja - nézésre és
+#:    szerkesztésre. Aki a diszpókat viszi, annak a projekten van dolga: látnia
+#:    kell a gyártás és a technika adatait, írnia a gyártás kommentet,
+#:    feltöltenie a diszpó levél mellékleteit, és kiküldenie az előzetes és a
+#:    teljes diszpót. Enélkül a "csak diszpó" hozzáférés használhatatlan volt: a
+#:    felület beengedte a naptárba, de a projekt megnyitásakor 403 jött.
+#:    LÉTREHOZNI és TÖRÖLNI viszont nem tud projektet: az nem a diszpós dolga.
+#:
+#: 2) A projekt SZERKESZTÉSE magában foglalja a technika felvezetését is: a
+#:    projekt technika blokkjában az eszköz hozzáadása/levétele MAGA a
+#:    szerkesztés, nincs mit "edit"-elni rajta. Ezért itt az "edit" tudatosan
+#:    create/delete jogot ad - de csak a FOGLALÁSRA, magára a leltárra nem.
+#:    A /felszereles oldal joga változatlanul viszi tovább a sajátját, hogy a
+#:    korábbi beállítások ugyanúgy működjenek.
+OLDAL_ALIASZOK: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
+    "/projektek": {
+        "/naptar": {"view": ("view",), "edit": ("edit",)},
+    },
+    FOGLALAS_OLDAL: {
+        "/felszereles": {"view": ("view",), "create": ("create",), "delete": ("delete",)},
+        "/projektek": {"view": ("view",), "edit": ("view", "create", "delete")},
+        "/naptar": {"view": ("view",), "edit": ("view", "create", "delete")},
+    },
 }
 
 
@@ -133,11 +156,16 @@ def _oldal_muveletei(page_permissions: dict[str, list[str]], page: str) -> set[s
     sajat = page_permissions.get(page)
     engedve: set[str] = set(sajat) | {"view"} if sajat is not None else set()
 
-    for alias, atadhato in OLDAL_ALIASZOK.get(page, {}).items():
+    for alias, atkotes in OLDAL_ALIASZOK.get(page, {}).items():
         alias_muveletek = page_permissions.get(alias)
         if alias_muveletek is None:
             continue
-        engedve |= {m for m in atadhato if m == "view" or m in alias_muveletek}
+        # Ha az oldal kulcsa ott van, a "view" jár rá - ugyanaz a szabály,
+        # mint fent a sajátnál (lásd models/user_access.py).
+        van = set(alias_muveletek) | {"view"}
+        for forras, atadott in atkotes.items():
+            if forras in van:
+                engedve |= set(atadott)
 
     return engedve or None
 

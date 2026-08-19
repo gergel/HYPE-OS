@@ -117,8 +117,35 @@ viszont visszadobta a Dashboardra.
 
 Ezért a `/naptar` joga **átszáll** a `/projektek` oldalra - `view` és `edit`
 műveletre, **create/delete NÉLKÜL**: projektet létrehozni és törölni nem a
-diszpós dolga. Az alias sosem ad többet, mint amennyi a saját oldalán is
-megvan: aki a diszpót csak nézheti, az a projektet is csak nézheti.
+diszpós dolga. Aki a diszpót csak nézheti, az a projektet is csak nézheti.
+
+Az alias-tábla felépítése: **cél oldal → forrás oldal → {forrás művelet: átadott
+műveletek}**. Az aliaszok **nem láncolódnak** (mindig a nyersen beállított jogokat
+nézzük), tehát ha egy jog két lépésen át járna, azt külön sorként kell felvenni.
+
+### A technika felvezetése a projekt szerkesztése
+
+A projekt technika blokkjában az eszköz **hozzáadása/levétele MAGA a
+szerkesztés** - nincs rajta mit "edit"-elni. A foglalás (`Assignment`) végpontjai
+korábban a `/felszereles` oldal `create`/`delete` jogát kérték, így a diszpós -
+és minden más, csak a projektre jogosult munkatárs - nem tudott technikát kérni.
+
+A `/felszereles` jogát viszont **nem** szabad ráadni: az magukat a **leltári
+tételeket** (Equipment) is engedné létrehozni/törölni. Ezért a foglalás saját,
+virtuális jogosultsági kulcsot kapott:
+
+| Kulcs | Ki kapja meg | Mit enged |
+|---|---|---|
+| `/felszereles/foglalas` | `/felszereles` `create`/`delete` | változatlanul, mint eddig |
+| | `/projektek` vagy `/naptar` `edit` | eszköz **foglalása/levétele** a projekten |
+
+A kulcs **nem valódi oldal**: nincs hozzá menüpont, admin sem tudja beállítani,
+csak ezeken az aliaszokon át kapható meg. A leltár bővítése/törlése így továbbra
+is szigorúan a `/felszereles` joga marad.
+
+A "Technika ready" gomb (`POST /projects/{id}/technika-check`) a projektre ír
+vissza, ezért az a `/projektek` `edit` joghoz került (korábban puszta szerepkör
+volt).
 
 A szabály **két helyen, egyformán** van kimondva, és együtt kell módosítani
 őket - különben a felület mást mutatna, mint amit a szerver enged:

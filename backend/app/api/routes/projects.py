@@ -131,7 +131,10 @@ def _get_project_or_404(project_id: int, db: Session) -> Project:
 @router.post(
     "/{project_id}/technika-check",
     tags=["projects"],
-    dependencies=[Depends(require_roles(Role.ADMIN, Role.OPERATOR))],
+    # A gomb a projektre ír vissza (technika_lista, backend_statusz), tehát a
+    # projekt szerkesztési joga kell hozzá - a diszpós ezt aliaszon át megkapja
+    # (lásd core/security.OLDAL_ALIASZOK), egy máshova korlátozott operátor nem.
+    dependencies=[Depends(require_page_action("/projektek", "edit", Role.ADMIN, Role.OPERATOR))],
 )
 def run_technika_check(project_id: int, db: Session = Depends(get_db)):
     """A 'Technika ready' gomb - lefuttatja az eszköz-ütközés ellenőrzést a

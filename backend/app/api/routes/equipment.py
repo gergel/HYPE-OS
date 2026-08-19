@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import get_current_user, require_page_action
+from app.core.security import FOGLALAS_OLDAL, get_current_user, require_page_action
 from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.project import Project
@@ -63,7 +63,11 @@ def list_assignments(
     "",
     response_model=AssignmentRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_page_action("/felszereles", "create"))],
+    # NEM a /felszereles oldal joga kell hozzá, hanem a FOGLALÁSÉ: a technikát a
+    # PROJEKTEN vezetik fel, tehát akinek a projektre (vagy a diszpón át a
+    # projektre) szerkesztési joga van, az tud eszközt kérni - magát a leltárat
+    # viszont ettől még nem bővítheti. Lásd core/security.OLDAL_ALIASZOK.
+    dependencies=[Depends(require_page_action(FOGLALAS_OLDAL, "create"))],
 )
 def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
     """Eszköz (Leltár, egyedi vagy darabszámos) hozzárendelése egy projekthez -
@@ -100,7 +104,7 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
 @assignments_router.delete(
     "/{assignment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_page_action("/felszereles", "delete"))],
+    dependencies=[Depends(require_page_action(FOGLALAS_OLDAL, "delete"))],
 )
 def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
     obj = db.get(Assignment, assignment_id)
