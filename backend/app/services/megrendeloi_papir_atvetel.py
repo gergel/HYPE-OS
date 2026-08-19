@@ -245,6 +245,11 @@ class Atvetel:
     tig_frissult: int = 0
     kihagyott_projektkod: int = 0
     keret_ugyfelhez_kotve: int = 0
+    #: Nem hoztunk létre papírt, mert nem lett volna rajta semmi (lásd
+    #: _van_mit_atvenni), illetve hány ilyen üres sort takarítottunk el egy
+    #: korábbi futás után.
+    ures_papir_kihagyva: int = 0
+    ures_papir_torolve: int = 0
     #: A SZÁMLA-rész átvétele: hány bevétel-sor keletkezett/egészült ki, és
     #: hányhoz került oda a Notionba feltöltött számla.
     bevetel_letrejott: int = 0
@@ -262,6 +267,8 @@ class Atvetel:
             f"bevétel: {self.bevetel_letrejott} új / {self.bevetel_frissult} kiegészítve "
             f"({self.szamla_fajl_atvéve} számla fájllal), "
             f"papír nélküli projektkód: {self.kihagyott_projektkod}, "
+            f"üres papír kihagyva: {self.ures_papir_kihagyva} "
+            f"(törölve: {self.ures_papir_torolve}), "
             f"ügyfélhez kötött keretszerződés: {self.keret_ugyfelhez_kotve}"
         )
 
@@ -407,19 +414,62 @@ def _netto(pk: ProjectCode, *elsok) -> float | None:
     return None
 
 
-def _kell_e(statusz: str | None, van_fajl: bool, egyeb_jel: bool) -> bool:
+def _kell_e(statusz: str | None, van_fajl: bool) -> bool:
     """Készült-e ez a papír a Notion szerint?
 
     A FÁJL a legerősebb bizonyíték: ha fel van töltve a papír, akkor megvan,
     bármit is mond az állapot-szöveg (a régi sorokon az állapot sokszor
-    elmaradt a valóságtól). Utána jön az állapot-szöveg, végül az olyan egyéb
-    jelzők, mint a "TIG kiküldve" jelölő."""
+    elmaradt a valóságtól). Utána jön az állapot-szöveg.
+
+    A puszta "TIG kiküldve" / "szerződés küldés" JELÖLŐ korábban szintén elég
+    volt - de az nem papír, csak egy pipa. A Notion-örökségben ez a pipa több
+    száz projektkódon áll ott mindenféle más adat nélkül, és mindegyikre
+    keletkezett egy üres TIG: cég nélkül, összeg nélkül, fájl nélkül, örökre
+    "aláírásra vár" állapotban. Ahol nincs semmi, ott maradjon üresen."""
     if van_fajl:
         return True
-    szoveg_szerint = allapot_kesz(statusz)
-    if szoveg_szerint is not None:
-        return szoveg_szerint
-    return egyeb_jel
+    return allapot_kesz(statusz) or False
+
+
+#: Az importáló ezt a nevet adja a gazdátlan projektkódok ügyfelének. Nem
+#: valódi cégnév, tehát önmagában nem bizonyítja, hogy a papír létezik - lásd
+#: notion_import/importers.py.
+UGYFEL_HELYETTESITO = "Ismeretlen ügyfél (Notion import)"
+
+
+def _van_mit_atvenni(pk: ProjectCode, mezok: dict, fajl_url: str | None) -> bool:
+    """Lenne-e EGYÁLTALÁN valami ezen a papíron?
+
+    Második szűrő a `_kell_e` után: ott az a kérdés, LÉTEZIK-e a papír, itt az,
+    hogy tudunk-e róla bármit. Egy adat nélküli sor a listán teendőnek látszik
+    ("Nincs megadva cég", "Kiküldve, aláírásra vár"), pedig semmi nincs
+    mögötte. Ahol nincs semmi, ott maradjon üresen.
+
+    Ami SZÁMÍT: a fájl (a legerősebb), a megrendelő a PROJEKTKÓD saját
+    Notion-mezőjéből, vagy az összeg.
+
+    Ami NEM: az ügyfél mai neve, a projekt neve, a megbízás tárgya és a
+    dátumok. Azok minden projektkódon ott vannak (az ügyfél nevét a `_cegadat`
+    is csak lyuktöltésként húzza be), tehát mindent "tartalmasnak"
+    mutatnának."""
+    if fajl_url:
+        return True
+    ceg = (pk.megrendelo_neve or "").strip()
+    if ceg and ceg != UGYFEL_HELYETTESITO:
+        return True
+    return mezok.get("netto_osszeg") is not None
+
+
+def _ures_a_papir(papir) -> bool:
+    """A MEGLÉVŐ sor is üres-e - vagyis eltakarítható-e?
+
+    Csak akkor igaz, ha tényleg semmi nincs rajta: se fájl, se aláírt példány,
+    se összeg, se valódi cégnév. Így egy korábbi futás üres sorát el tudjuk
+    dobni anélkül, hogy bármi adatot elveszítenénk."""
+    if papir.file_url or papir.alairt_file_url or papir.netto_osszeg is not None:
+        return False
+    ceg = (papir.ceg_neve or "").strip()
+    return not ceg or ceg == UGYFEL_HELYETTESITO
 
 
 def _atvett_papir(db: Session, modell, project_code_id: int):
@@ -547,48 +597,65 @@ def vedd_at_a_projektkodot(db: Session, pk: ProjectCode, merleg: Atvetel) -> Non
     szerzodes_fajlok = _csatolmanyok(db, pk.id, "szerzodes")
     tig_fajlok = _csatolmanyok(db, pk.id, "tig")
 
-    kell_szerzodes = _kell_e(
-        pk.szerzodes_statusza, bool(szerzodes_fajlok), bool(pk.szerzodes_kuldes)
-    )
+    kell_szerzodes = _kell_e(pk.szerzodes_statusza, bool(szerzodes_fajlok))
     # A TIG-nél a projektkódon külön URL-oszlop is őrzi az aláírt papírt (a
     # Notion "TIG aláírva" / "TIG url" mezőiből) - az is fájl-bizonyíték.
     # A TIG PDF-je HÁROM helyen lehet: a projektkódhoz importált fájlok közt,
     # a "TIG aláírva" oszlopban, vagy a "TIG url" mezőben - és az utóbbi kettő
     # a régi importokból lista/objektum alakban is állhat (lásd _url).
     tig_url = _url(pk.tig_alairva_url) or _url(pk.tig_url)
-    kell_tig = _kell_e(pk.tig_statusza, bool(tig_fajlok) or bool(tig_url), bool(pk.tig_kikuldve))
+    kell_tig = _kell_e(pk.tig_statusza, bool(tig_fajlok) or bool(tig_url))
 
     if not kell_szerzodes and not kell_tig:
         merleg.kihagyott_projektkod += 1
         return
 
     if kell_szerzodes and not _van_sajat_papir(db, MegrendeloiSzerzodes, pk.id):
-        papir = _atvett_papir(db, MegrendeloiSzerzodes, pk.id)
-        uj = papir is None
-        if uj:
-            papir = MegrendeloiSzerzodes(project_code_id=pk.id)
-            db.add(papir)
-        _alkalmaz(
-            papir,
+        _vedd_at_a_papirt(
+            db,
+            merleg,
+            MegrendeloiSzerzodes,
+            pk,
             szerzodes_mezoi(pk),
             szerzodes_fajlok[0].url if szerzodes_fajlok else None,
-            _kiegeszito_megjegyzes(pk),
+            "szerzodes",
         )
-        merleg.szerzodes_letrejott += 1 if uj else 0
-        merleg.szerzodes_frissult += 0 if uj else 1
 
     if kell_tig and not _van_sajat_papir(db, MegrendeloiTig, pk.id):
-        papir = _atvett_papir(db, MegrendeloiTig, pk.id)
-        uj = papir is None
-        if uj:
-            papir = MegrendeloiTig(project_code_id=pk.id)
-            db.add(papir)
-        _alkalmaz(
-            papir,
+        _vedd_at_a_papirt(
+            db,
+            merleg,
+            MegrendeloiTig,
+            pk,
             tig_mezoi(pk),
             tig_fajlok[0].url if tig_fajlok else tig_url,
-            _kiegeszito_megjegyzes(pk),
+            "tig",
         )
+
+
+def _vedd_at_a_papirt(db, merleg: Atvetel, modell, pk: ProjectCode, mezok: dict, fajl_url, fajta: str) -> None:
+    """Egy papír (szerződés vagy TIG) átvétele - közös menet mindkettőnek."""
+    papir = _atvett_papir(db, modell, pk.id)
+
+    # ÜRES papírt nem tartunk (lásd _van_mit_atvenni). Ha egy korábbi futás
+    # létrehozott egyet, most eltakarítjuk - de csak ha tényleg nincs rajta
+    # semmi: a kézzel kiegészített sorhoz nem nyúlunk.
+    if not _van_mit_atvenni(pk, mezok, fajl_url):
+        if papir is not None and _ures_a_papir(papir):
+            db.delete(papir)
+            merleg.ures_papir_torolve += 1
+        merleg.ures_papir_kihagyva += 1
+        return
+
+    uj = papir is None
+    if uj:
+        papir = modell(project_code_id=pk.id)
+        db.add(papir)
+    _alkalmaz(papir, mezok, fajl_url, _kiegeszito_megjegyzes(pk))
+    if fajta == "szerzodes":
+        merleg.szerzodes_letrejott += 1 if uj else 0
+        merleg.szerzodes_frissult += 0 if uj else 1
+    else:
         merleg.tig_letrejott += 1 if uj else 0
         merleg.tig_frissult += 0 if uj else 1
 

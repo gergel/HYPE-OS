@@ -589,10 +589,15 @@ async def upload_sajat_papir(
     """SAJÁT papír feltöltése a generálás helyett.
 
     Nem minden papír itt készül: van, amit a megrendelő ad (a saját
-    sablonjával), és van, ami régebbi, még a rendszer előtti. Ilyenkor nincs
-    mit generálni és nincs kinek kiküldeni, csak rögzíteni - a feltöltés a
-    papírt egyben KIKÜLDÖTT állapotba is teszi, mert a folyamat innentől
-    ugyanott tart."""
+    sablonjával), és van, ami régebbi, még a rendszer előtti.
+
+    Az így feltöltött papír KÉSZ, ALÁÍRT papírnak számít. Ez nem kényelmi
+    egyszerűsítés: amit ide feltöltenek, az a megvan-és-kész dokumentum, nem
+    egy általunk generált piszkozat - nincs kinek kiküldeni, és nincs kitől
+    visszavárni az aláírást. Korábban "Kiküldve, aláírásra vár"-ként állt itt,
+    vagyis a felület örökre teendőt mutatott olyasmire, ami már le volt zárva.
+    Ugyanez a szabály, mint a Notionból átvett papíroknál (lásd
+    services/megrendeloi_papir_atvetel.ATVETT_ALLAPOT)."""
     _projektkod_vagy_404(db, project_code_id)
     papir = _uj_vagy_meglevo(db, fajta, project_code_id, papir_id)
     db.flush()
@@ -603,8 +608,13 @@ async def upload_sajat_papir(
         data, kulcs, file.content_type or "application/octet-stream"
     )
     papir.file_storage_key = kulcs
+    # Ugyanaz a fájl az aláírt példány is. A tárhely-kulcsot SZÁNDÉKOSAN nem
+    # másoljuk át: egy fájl van, egy kulccsal - különben a törlés kétszer
+    # próbálná eldobni ugyanazt az objektumot.
+    if not papir.alairt_file_url:
+        papir.alairt_file_url = papir.file_url
     if papir.allapot not in LEZART_ALLAPOTOK:
-        papir.allapot = "Kiküldve"
+        papir.allapot = "Van már papír"
     db.commit()
     if regi_kulcs and regi_kulcs != kulcs:
         document_storage.delete_object(regi_kulcs)
@@ -621,7 +631,12 @@ async def upload_alairt(
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
     """Az ALÁÍRVA visszakapott példány. Amíg ez nincs meg, a papír
-    "aláírásra vár" - a kiküldés önmagában még nem lezárt ügy."""
+    "aláírásra vár" - a kiküldés önmagában még nem lezárt ügy.
+
+    Az aláírt példány a LEGERŐSEBB bizonyíték: ha megvan, a papír kész, akkor
+    is, ha a nyilvántartásban még piszkozatként állt. Enélkül egy piszkozatba
+    feltöltött aláírt szerződés "Készítés alatt" maradt - a felület teendőt
+    mutatott arra, ami már alá volt írva."""
     papir = db.get(_modell(fajta), papir_id)
     if papir is None:
         raise HTTPException(status_code=404, detail="Ez a papír nem található.")
@@ -632,6 +647,10 @@ async def upload_alairt(
         data, kulcs, file.content_type or "application/octet-stream"
     )
     papir.alairt_file_storage_key = kulcs
+    if papir.allapot not in LEZART_ALLAPOTOK:
+        # Nem "Kiküldve": innen nem ment ki semmi. A papír megvan és alá van
+        # írva - a fázis-nézetek ezt látják lezártnak (LEZART_ALLAPOTOK).
+        papir.allapot = "Van már papír"
     db.commit()
     if regi_kulcs and regi_kulcs != kulcs:
         document_storage.delete_object(regi_kulcs)

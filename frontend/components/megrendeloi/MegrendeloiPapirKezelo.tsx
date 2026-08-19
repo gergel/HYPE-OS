@@ -109,13 +109,13 @@ function brutto(netto: string, pluszAfa: boolean): number | null {
 
 function allapotJelzo(p: MegrendeloiPapir) {
   if (p.allapot === "Kihagyva") return <StatusBadge label="Kihagyva" tone="neutral" />;
+  // Az ALÁÍRT példány a legerősebb bizonyíték: ha megvan, a papír kész -
+  // bármit is mond az állapot-mező. (A backend is így zárja le a feltöltéskor,
+  // lásd routes/megrendeloi_papirok.py; ez a sor arra való, hogy a RÉGI,
+  // feltöltés előtti sorokon se lássunk teendőt ott, ahol nincs.)
+  if (p.alairt_file_url) return <StatusBadge label="Aláírva" tone="success" />;
   if (p.allapot === "Van már papír") return <StatusBadge label="Van már papír" tone="success" />;
-  if (p.allapot === "Kiküldve")
-    return p.alairt_file_url ? (
-      <StatusBadge label="Kiküldve, aláírva" tone="success" />
-    ) : (
-      <StatusBadge label="Kiküldve, aláírásra vár" tone="warning" />
-    );
+  if (p.allapot === "Kiküldve") return <StatusBadge label="Kiküldve, aláírásra vár" tone="warning" />;
   return <StatusBadge label={p.allapot ?? "Készítés alatt"} tone="warning" />;
 }
 

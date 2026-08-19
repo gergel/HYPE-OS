@@ -717,8 +717,23 @@ Mikor számít késznek egy papír? A sorrend a bizonyíték erőssége:
    elmaradt a valóságtól;
 2. **az állapot-szöveg** - a tagadó jelzőket (`Nincs elkezdve`, `Készíthető a
    TIG`, `Keretszerződése van`) **előbb** vizsgáljuk, mint a "kész" jelzőket,
-   mert részstringként azok is késznek látszanának;
-3. **egyéb jelölő** (`TIG kiküldve`, `Szerződés küldés`).
+   mert részstringként azok is késznek látszanának.
+
+**Egy pipa nem papír.** A `TIG kiküldve` / `Szerződés küldés` jelölő korábban
+harmadik bizonyítékként szintén elég volt az átvételhez. A Notion-örökségben ez
+a pipa viszont több száz projektkódon áll ott mindenféle más adat nélkül, és
+mindegyikre keletkezett egy üres TIG: cég nélkül, összeg nélkül, fájl nélkül,
+örökre "Kiküldve, aláírásra vár" állapotban. Ahol nincs semmi, ott maradjon
+üresen.
+
+**Üres papírt akkor sem hozunk létre, ha az állapot-szöveg késznek mondja**
+(`_van_mit_atvenni`): kell hozzá fájl, a projektkód saját `megrendelo_neve`
+mezője, vagy összeg. Az ügyfél mai neve, a projekt neve és a dátumok nem
+számítanak - azok minden projektkódon ott vannak, tehát mindent tartalmasnak
+mutatnának. Egy korábbi futás üres sorát az átvétel **el is takarítja**, de
+csak ha tényleg semmi nincs rajta (se fájl, se aláírt példány, se összeg, se
+valódi cégnév) - a kézzel kiegészített sorhoz nem nyúl. A takarítás úgy indul,
+hogy az admin import-panelen újra lefuttatod a *"Megrendelői papírok"* lépést.
 
 Az átvett papír állapota **"Van már papír"**, nem "Kiküldve": megvan, csak nem
 innen ment ki. A fájl az **aláírt példány** mezőbe kerül, mert a Notionba a kész,
@@ -765,12 +780,28 @@ veszi át - de csak ha mind ugyanaz, mert egy rossz kapcsolat rosszabb, mint a
 hiányzó (némán elhagyná az eseti szerződést egy olyan cégnél, amelyikkel
 valójában nincs keretünk).
 
+### Amit feltöltesz, az kész papír
+
 **Mindhárom helyen saját papír is feltölthető** a generálás helyett: van, amit a
 megrendelő ad a saját sablonjával, és van, ami még a rendszer előtti. Ilyenkor
-nincs mit generálni és nincs kinek kiküldeni, csak rögzíteni - a feltöltés a
-papírt egyben kiküldött állapotba is teszi, mert a folyamat innentől ugyanott
-tart. Az aláírva visszakapott példány külön mezőbe megy: amíg az nincs meg, a
-papír "aláírásra vár".
+nincs mit generálni és nincs kinek kiküldeni, csak rögzíteni.
+
+Az így feltöltött papír **kész, aláírt papírnak számít** (`Van már papír`
+állapot, és a fájl az aláírt példány mezőbe is bekerül). Ez nem kényelmi
+egyszerűsítés: amit ide feltöltenek, az a megvan-és-kész dokumentum, nem egy
+általunk generált piszkozat - nincs kinek kiküldeni, és nincs kitől visszavárni
+az aláírást. Korábban "Kiküldve, aláírásra vár"-ként állt itt, vagyis a felület
+örökre teendőt mutatott olyasmire, ami már le volt zárva.
+
+**Az aláírt példány feltöltése ugyanígy lezár**: ha egy piszkozatba töltik fel
+az aláírva visszakapott papírt, a sor `Van már papír` lesz, nem marad "Készítés
+alatt". A már KIKÜLDÖTT papír állapotához nem nyúlunk (az innen ment ki, marad
+`Kiküldve`), csak az "aláírásra vár" jelzés szűnik meg. A felületen az aláírt
+példány megléte mindig felülírja az állapot-címkét: ilyenkor egyszerűen
+**"Aláírva"** áll ott.
+
+A generált-és-kiküldött papírnál marad a régi menet: amíg az aláírt példány
+nincs meg, a papír "Kiküldve, aláírásra vár".
 
 ## Utókövetés - az összefoglaló nézet
 
