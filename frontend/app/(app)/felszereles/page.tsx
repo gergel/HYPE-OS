@@ -27,14 +27,19 @@ export default async function FelszerelesPage() {
       <TopBar />
       <div className="flex-1 p-8">
         <Card title={`Felszerelés (${equipment.length})`}>
-          <div className="mb-3 flex justify-end">
-            <a
-              href="/felszereles/leltarazas"
-              className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
-            >
-              Leltározás
-            </a>
-          </div>
+          {/* A leltározás a leltár SZERKESZTÉSE (tételek megjelölése, session
+              indítása) - aki csak nézheti az eszközöket (pl. a diszpós, aki a
+              projekten technikát vezet fel), annak a gomb csak 403-at adna. */}
+          {canEdit && (
+            <div className="mb-3 flex justify-end">
+              <a
+                href="/felszereles/leltarazas"
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+              >
+                Leltározás
+              </a>
+            </div>
+          )}
           {canCreate && (
             <QuickCreateForm
               postPath={ENTITY_PATHS.equipment}
@@ -61,14 +66,17 @@ export default async function FelszerelesPage() {
               { header: "Kategória", render: (e) => e.kategoria ?? "–", sortAccessor: (e) => e.kategoria },
               {
                 header: "Állapot",
-                render: (e) => (
-                  <EditableStatusBadge
-                    patchPath={`${ENTITY_PATHS.equipment}/${e.id}`}
-                    field="allapot"
-                    value={e.allapot}
-                    options={statusOptions}
-                  />
-                ),
+                render: (e) =>
+                  canEdit ? (
+                    <EditableStatusBadge
+                      patchPath={`${ENTITY_PATHS.equipment}/${e.id}`}
+                      field="allapot"
+                      value={e.allapot}
+                      options={statusOptions}
+                    />
+                  ) : (
+                    <StatusBadge label={e.allapot ?? "–"} tone="neutral" />
+                  ),
                 sortAccessor: (e) => e.allapot,
               },
               {

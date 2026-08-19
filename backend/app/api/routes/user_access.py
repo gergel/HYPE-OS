@@ -3,7 +3,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import Role, get_current_user, require_roles, vedett_rendszergazda
+from app.core.security import (
+    Role,
+    elerheto_oldalak,
+    get_current_user,
+    require_roles,
+    vedett_rendszergazda,
+)
 from app.models.employee import Employee
 from app.models.field_visibility import FieldVisibilityConfig
 from app.models.user_access import PageAccessConfig
@@ -43,7 +49,10 @@ def get_my_access(current_user: Employee = Depends(get_current_user), db: Sessio
         return MyAccess()
     config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == current_user.id))
     permissions = config.page_permissions if config else None
-    allowed_pages = list(permissions.keys()) if permissions is not None else None
+    # Az aliaszon át kapott oldalak is beleszámítanak (lásd
+    # core/security.elerheto_oldalak): a diszpósnak a projekt és a
+    # felszerelés a menüből is elérhető kell legyen, nem csak végponton.
+    allowed_pages = elerheto_oldalak(permissions)
     return MyAccess(
         allowed_pages=allowed_pages,
         page_permissions=permissions,

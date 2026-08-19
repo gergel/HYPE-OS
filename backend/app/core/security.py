@@ -136,9 +136,19 @@ FOGLALAS_OLDAL = "/felszereles/foglalas"
 #:    create/delete jogot ad - de csak a FOGLALÁSRA, magára a leltárra nem.
 #:    A /felszereles oldal joga változatlanul viszi tovább a sajátját, hogy a
 #:    korábbi beállítások ugyanúgy működjenek.
+#:
+#: 3) Aki a projekten technikát vezet fel, annak a FELSZERELÉS oldalt is látnia
+#:    kell: onnan tudja megnézni, mi van a leltárban, mit is jelent egy tétel, és
+#:    a projekten felvett eszközök nevei is oda hivatkoznak. Ez NÉZÉS: a leltárat
+#:    bővíteni, javítani, törölni és leltározni továbbra is csak a /felszereles
+#:    saját jogával lehet.
 OLDAL_ALIASZOK: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
     "/projektek": {
         "/naptar": {"view": ("view",), "edit": ("edit",)},
+    },
+    "/felszereles": {
+        "/projektek": {"view": ("view",)},
+        "/naptar": {"view": ("view",)},
     },
     FOGLALAS_OLDAL: {
         "/felszereles": {"view": ("view",), "create": ("create",), "delete": ("delete",)},
@@ -146,6 +156,9 @@ OLDAL_ALIASZOK: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
         "/naptar": {"view": ("view",), "edit": ("view", "create", "delete")},
     },
 }
+
+#: Amik nem valódi oldalak: sosem kerülnek a menübe és a navigáció-zárba.
+VIRTUALIS_OLDALAK: frozenset[str] = frozenset({FOGLALAS_OLDAL})
 
 
 def _oldal_muveletei(page_permissions: dict[str, list[str]], page: str) -> set[str] | None:
@@ -168,6 +181,27 @@ def _oldal_muveletei(page_permissions: dict[str, list[str]], page: str) -> set[s
                 engedve |= set(atadott)
 
     return engedve or None
+
+
+def elerheto_oldalak(page_permissions: dict[str, list[str]] | None) -> list[str] | None:
+    """Mely oldalak érhetők el - a beállítottak ÉS az aliaszon át kapottak.
+
+    Ebből épül az oldalsáv és ezt nézi a navigáció-zár (lásd
+    routes/user_access.get_my_access "allowed_pages"). Az aliaszolt oldalaknak
+    is meg KELL jelenniük: a diszpós a projekt technika blokkjából a
+    Felszerelés oldalra hivatkozik, és értelmetlen lenne olyan oldalra
+    beengedni, ahova a menü el sem viszi.
+
+    None: nincs korlátozás (mindent lát)."""
+    if page_permissions is None:
+        return None
+    oldalak = list(page_permissions.keys())
+    for oldal in OLDAL_ALIASZOK:
+        if oldal in VIRTUALIS_OLDALAK or oldal in page_permissions:
+            continue
+        if _oldal_muveletei(page_permissions, oldal) is not None:
+            oldalak.append(oldal)
+    return oldalak
 
 
 def check_page_action(db: Session, employee: Employee, page: str, action: str) -> None:

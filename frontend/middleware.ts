@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolvePermissionPage } from "@/lib/nav";
-import { OLDAL_ALIASZOK } from "@/lib/permissions";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_COOKIE = "hype_os_token";
@@ -175,13 +174,11 @@ export async function middleware(request: NextRequest) {
     allowedPages &&
     allowedPages.length > 0 &&
     topSegment !== "/dashboard" &&
-    !allowedPages.includes(topSegment) &&
-    // ALIASZ: a Diszpó (naptár) joga a projekt oldalát is megnyitja - onnan
-    // kell a gyártás/technika adat, a gyártás komment, a mellékletek és a két
-    // diszpó kiküldése (lásd lib/permissions.OLDAL_ALIASZOK és a backend
-    // core/security.OLDAL_ALIASZOK). Az oldalsávban ettől NEM jelenik meg új
-    // menüpont: az az allowed_pages-ből épül, ide a naptárból jut el.
-    !Object.keys(OLDAL_ALIASZOK[topSegment] ?? {}).some((alias) => allowedPages.includes(alias))
+    // Az aliaszolt oldalak (pl. a Diszpó jogából nyíló Projektek és
+    // Felszerelés) is BENNE VANNAK az allowed_pages-ben - a szerver számolja
+    // bele, lásd backend core/security.elerheto_oldalak. Így a menü és ez a
+    // zár ugyanabból az egy listából dolgozik, nem tud elcsúszni.
+    !allowedPages.includes(topSegment)
   ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

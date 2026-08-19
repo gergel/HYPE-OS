@@ -147,6 +147,26 @@ A "Technika ready" gomb (`POST /projects/{id}/technika-check`) a projektre ír
 vissza, ezért az a `/projektek` `edit` joghoz került (korábban puszta szerepkör
 volt).
 
+Ehhez tartozik még, hogy aki a projekten technikát vezet fel, a **Felszerelés
+oldalt is látja** (`/projektek` vagy `/naptar` `view` → `/felszereles` `view`):
+onnan tudja megnézni, mi van a leltárban, és a projekten felvett eszközök nevei
+is oda hivatkoznak. Ez **nézés**: bővíteni, javítani, törölni és **leltározni**
+továbbra is csak a `/felszereles` saját jogával lehet - a Leltározás gomb és a
+szerkeszthető cellák el is tűnnek annak, akinek csak nézési joga van.
+
+### Az aliaszolt oldalak a MENÜBEN is megjelennek
+
+Az `allowed_pages` (amiből az oldalsáv és a navigáció-zár dolgozik) már nem
+pusztán a beállított kulcsok listája: a szerver beleszámolja az aliaszon át
+kapott oldalakat is (`core/security.elerheto_oldalak`, a
+`GET /user-access/me` válaszában). Enélkül a diszpós olyan oldalakra kapott
+volna jogot, ahova a menü el sem viszi.
+
+A **virtuális** kulcsok (`VIRTUALIS_OLDALAK`, jelenleg a
+`/felszereles/foglalas`) kimaradnak: azok nem oldalak, nincs hozzájuk
+menüpont. A middleware ezért egyetlen listát néz - nem kell külön alias-logikát
+futtatnia, így a menü és a zár nem tud elcsúszni egymástól.
+
 A szabály **két helyen, egyformán** van kimondva, és együtt kell módosítani
 őket - különben a felület mást mutatna, mint amit a szerver enged:
 
@@ -155,9 +175,8 @@ A szabály **két helyen, egyformán** van kimondva, és együtt kell módosíta
 | `backend/app/core/security.py` → `OLDAL_ALIASZOK` | a `check_page_action` és a `check_tab_action` ezt nézi (a fül-szintű beállítás továbbra is csak SZŰKÍT) |
 | `frontend/lib/permissions.ts` → `OLDAL_ALIASZOK` | a `canDoAction` és a `middleware.ts` navigáció-zára |
 
-Két dolog **nem** változik ettől: az oldalsávban nem jelenik meg új menüpont (az
-az `allowed_pages`-ből épül, a projekthez a naptárból jut el), és a **költségek**
-továbbra is `/penzugyek`-jogosultsághoz kötöttek. A projekt oldalán az Utómunka
+Ami **nem** változik ettől: a **költségek** továbbra is
+`/penzugyek`-jogosultsághoz kötöttek. A projekt oldalán az Utómunka
 kártya el is tűnik a csak-diszpós felhasználónak: ott a létrehozás úgyis 403-at
 adna (az `/utomunka` külön jogosultság), és egy működésképtelen gomb rosszabb,
 mint a hiánya.
