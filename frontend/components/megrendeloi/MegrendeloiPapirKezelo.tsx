@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IndoklasDialog } from "@/components/IndoklasDialog";
 import { KeresosSelect } from "@/components/KeresosSelect";
@@ -213,6 +213,7 @@ export function MegrendeloiPapirKezelo({
 
   async function ujPapir() {
     setSzerkesztett(null);
+    mentettId.current = null;
     setUrlap(URES);
     setNyitva(true);
     await elotoltesBetoltese(new URLSearchParams());
@@ -220,6 +221,7 @@ export function MegrendeloiPapirKezelo({
 
   function meglevoSzerkesztese(p: MegrendeloiPapir) {
     setSzerkesztett(p);
+    mentettId.current = null;
     setUrlap(urlapPapirbol(p));
     setNyitva(true);
   }
@@ -227,6 +229,7 @@ export function MegrendeloiPapirKezelo({
   function bezar() {
     setNyitva(false);
     setSzerkesztett(null);
+    mentettId.current = null;
     setUrlap(URES);
   }
 
@@ -298,31 +301,52 @@ export function MegrendeloiPapirKezelo({
   }
 
   /** A meglévő papírt módosítjuk, ha van - így a "mentés, majd küldés"
-   * kétlépéses menetből nem lesz két külön bejegyzés. */
+   * kétlépéses menetből nem lesz két külön bejegyzés.
+   *
+   * A `szerkesztett` mellett a MOST MENTETT papírt is nézzük: a "saját papír
+   * feltöltése" két HTTP-hívás (előbb az űrlap mentése, utána a fájl), és a
+   * második a React állapotból még nem látná az elsőben keletkezett papírt (a
+   * setState nem azonnali). Enélkül a feltöltés EGY MÁSIK, üres papírt hozott
+   * létre a mentett mellé: a felhasználó egy kitöltött piszkozatot és egy
+   * "Nincs megadva cég"-et kapott, ahelyett hogy az aláírt fájl rögtön a
+   * kitöltött papírra került volna. Ezért ref, nem state. */
+  const mentettId = useRef<number | null>(null);
+
   function utvonal(muvelet: string) {
-    const qs = szerkesztett ? `?papir_id=${szerkesztett.id}` : "";
+    const papirId = szerkesztett?.id ?? mentettId.current;
+    const qs = papirId != null ? `?papir_id=${papirId}` : "";
     return `/api/v1/megrendeloi-papirok/${fajta}/${projectCodeId}/${muvelet}${qs}`;
   }
 
-  async function hivas(url: string, torzsAdat: unknown, hibaCimke: string): Promise<boolean> {
+  /** A válasz JSON-ja, vagy null, ha nem sikerült - a hívó ebből tudja meg,
+   * melyik papír keletkezett/frissült. */
+  async function hivas(
+    url: string,
+    torzsAdat: unknown,
+    hibaCimke: string,
+  ): Promise<Record<string, unknown> | null> {
     try {
       const res = await authFetch(url, { method: "POST", body: JSON.stringify(torzsAdat) });
       if (!res.ok) {
         const reszlet = await res.json().catch(() => null);
         toast(`${hibaCimke}: ${reszlet?.detail ?? res.status}`);
-        return false;
+        return null;
       }
-      return true;
+      return ((await res.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
     } catch (err) {
       toast(`${hibaCimke} (hálózati hiba): ${err}`);
-      return false;
+      return null;
     }
   }
 
   /** A saját papír feltöltése előtt is ez fut le: a fájl mellé a beírt adatok
    * (összeg, keltezés) is odakerülnek. */
   async function mentes(): Promise<boolean> {
-    return hivas(utvonal("mentes"), torzs(), "Sikertelen mentés");
+    const valasz = await hivas(utvonal("mentes"), torzs(), "Sikertelen mentés");
+    if (valasz === null) return false;
+    // A további műveletek EZT a papírt folytassák, ne csináljanak újat.
+    if (typeof valasz.id === "number") mentettId.current = valasz.id;
+    return true;
   }
 
   async function mentesGomb() {
@@ -372,7 +396,7 @@ export function MegrendeloiPapirKezelo({
     setKuldesNyitva(false);
     setMunka("kuldes");
     try {
-      if (!(await hivas(utvonal("generalas-es-kuldes"), torzs(), "Sikertelen küldés"))) return;
+      if ((await hivas(utvonal("generalas-es-kuldes"), torzs(), "Sikertelen küldés")) === null) return;
       bezar();
       router.refresh();
     } finally {
@@ -384,7 +408,7 @@ export function MegrendeloiPapirKezelo({
     setKihagyasNyitva(false);
     setMunka("kihagyas");
     try {
-      if (!(await hivas(utvonal("kihagyas"), { kihagyas_oka: indok }, "Sikertelen kihagyás"))) return;
+      if ((await hivas(utvonal("kihagyas"), { kihagyas_oka: indok }, "Sikertelen kihagyás")) === null) return;
       bezar();
       router.refresh();
     } finally {
@@ -735,7 +759,9 @@ export function MegrendeloiPapirKezelo({
                   megrendelő ad a saját sablonjával. */}
               <SajatPapirFeltoltes
                 cimke="Saját papír feltöltése"
-                feltoltesPath={utvonal("sajat-papir")}
+                // Függvény, nem kész szöveg: az útvonalnak a MENTÉS UTÁN kell
+                // eldőlnie, mert csak akkor derül ki az új papír azonosítója.
+                feltoltesPath={() => utvonal("sajat-papir")}
                 elokeszit={mentes}
                 disabled={dolgozik}
                 onKesz={() => {

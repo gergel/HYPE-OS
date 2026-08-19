@@ -23,7 +23,12 @@ export function SajatPapirFeltoltes({
   onKesz,
 }: {
   cimke: string;
-  feltoltesPath: string;
+  /** Az útvonal, vagy egy függvény, ami MEGADJA azt. A függvény alak akkor
+   * kell, ha az útvonal csak az `elokeszit` lefutása után dől el - pl. mert
+   * a mentés hozza létre a papírt, amire a fájl kerül. Egy előre kiszámolt
+   * szöveg ilyenkor még nem ismerné az azonosítót, és a feltöltés egy MÁSIK,
+   * üres papírt hozna létre a mentett mellé. */
+  feltoltesPath: string | (() => string);
   elokeszit?: () => Promise<boolean>;
   disabled?: boolean;
   onKesz: () => void;
@@ -37,7 +42,10 @@ export function SajatPapirFeltoltes({
       if (elokeszit && !(await elokeszit())) return;
       const fd = new FormData();
       fd.append("file", file);
-      const res = await authFetch(feltoltesPath, { method: "POST", body: fd });
+      // Az útvonalat CSAK MOST kérjük el: az előkészítés (mentés) közben
+      // keletkezhetett meg az a papír, amire a fájl kerül.
+      const url = typeof feltoltesPath === "function" ? feltoltesPath() : feltoltesPath;
+      const res = await authFetch(url, { method: "POST", body: fd });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen feltöltés: ${detail?.detail ?? res.status}`);
