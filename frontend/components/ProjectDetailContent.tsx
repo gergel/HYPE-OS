@@ -253,6 +253,8 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     // felhasználó ("hogy kinél látszódjon és melyik csoportosításba
     // legyen").
     widgets: {
+      // A forgatás időpontja ugyanahhoz a joghoz kötött, mint a többi szekció -
+      // az aliaszokkal együtt (a diszpósnak a forgatás időpontja is kell).
       [FORGATAS_IDOPONT_WIDGET_FIELD_KEY]: (
         <ForgatasIdopontEditor
           patchPath={patchPath}
@@ -262,7 +264,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
             end: asText(project.forgatas_datuma_vege),
             endTime: asText(project.forgatas_veg_ido).slice(0, 5),
           }}
-          readOnly={pagePermissions !== null && !(pagePermissions[PAGE] ?? []).includes("edit")}
+          readOnly={!szerkeszthet}
         />
       ),
       [EQUIPMENT_WIDGET_FIELD_KEY]: (

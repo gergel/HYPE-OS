@@ -154,6 +154,27 @@ is oda hivatkoznak. Ez **nézés**: bővíteni, javítani, törölni és **lelt�
 továbbra is csak a `/felszereles` saját jogával lehet - a Leltározás gomb és a
 szerkeszthető cellák el is tűnnek annak, akinek csak nézési joga van.
 
+### A szekciók szerkeszthetősége is aliasz-tudatos
+
+A részletnézet-szekciók (`lib/detailTabs.canEdit`) korábban **nyersen** olvasták
+a `page_permissions`-t, az aliaszokat kihagyva. Emiatt az aliaszon át érkező
+munkatárs - a diszpós - **mindent csak olvashatónak látott**: a gyártás és a
+technika adatait is, amiket épp neki kell kitöltenie. A döntést mostantól a
+`canDoTabAction()` hozza (`lib/permissions.ts`), ami a backend
+`check_tab_action` párja: a `"{page}:{tab_key}"` kulcs csak **szűkít**, ha nincs
+ilyen, a szekció az oldal (aliaszokkal együtt számolt) jogát örökli.
+
+Ugyanez vonatkozik a forgatás időpontja widgetre is - az is `szerkeszthet`-et
+néz, nem a nyers jogot.
+
+### Menüpont, amihez a MŰVELET joga is kell
+
+A nav-elemek kaptak egy `permissionAction` mezőt (`lib/nav.ts`): ha meg van
+adva, a menüpont csak akkor látszik, ha a felhasználónak az a művelete is megvan
+az oldalon. Egyelőre egy helyen kell - a **Leltározás** menüpont `edit`-et
+igényel, hiszen az a leltár szerkesztése; enélkül a csak nézési joggal érkező
+diszpós egy zsákutcát látna a menüben.
+
 ### Az aliaszolt oldalak a MENÜBEN is megjelennek
 
 Az `allowed_pages` (amiből az oldalsáv és a navigáció-zár dolgozik) már nem

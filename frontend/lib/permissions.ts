@@ -109,6 +109,26 @@ export function lathatjaAzOldalt(pagePermissions: Record<string, string[]> | nul
   return oldalMuveletei(pagePermissions, page) !== null;
 }
 
+/** Mit tehet egy RÉSZLETNÉZET-SZEKCIÓN belül - a backend
+ * `core/security.check_tab_action` párja.
+ *
+ * A "{page}:{tab_key}" összetett kulcs csak SZŰKÍT: ha admin nem állított be
+ * ilyet, a szekció az oldal (aliaszokkal együtt számolt) jogát örökli. Enélkül
+ * az aliaszon át érkező munkatárs (pl. a diszpós, akinek a /naptar joga nyitja
+ * meg a projektet) mindent CSAK OLVASHATÓNAK látott volna - a gyártás és a
+ * technika adatait is, amiket épp neki kell kitöltenie. */
+export function canDoTabAction(
+  pagePermissions: Record<string, string[]> | null,
+  page: string,
+  tabKey: string,
+  action: string,
+): boolean {
+  if (pagePermissions === null) return true;
+  const fulreSzabott = pagePermissions[`${page}:${tabKey}`];
+  const engedve = fulreSzabott !== undefined ? new Set(fulreSzabott) : oldalMuveletei(pagePermissions, page);
+  return engedve?.has(action) === true;
+}
+
 export function canDoAction(
   forras: SzerepkorForras,
   pagePermissions: Record<string, string[]> | null,

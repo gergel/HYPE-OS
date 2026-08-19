@@ -17,6 +17,13 @@ export type NavItem = {
    * is beengedi) lesz, ezért mindig a backend `page=`/`PAGE` konstanssal kell
    * egyeznie. */
   permissionPage?: string;
+  /** Ha meg van adva, a menüpont csak akkor látszik, ha a felhasználónak ez a
+   * MŰVELETE is megvan az oldalon (nem elég a puszta nézési jog). Olyan
+   * elemekhez kell, amik nem nézegetni valók, hanem egy munkafolyamatot
+   * indítanak - pl. a Leltározás, ami a leltár szerkesztése. Enélkül az, aki
+   * csak nézheti az eszközöket (pl. a diszpós, aki a projekten technikát vezet
+   * fel - lásd core/security.OLDAL_ALIASZOK), egy zsákutcát látna a menüben. */
+  permissionAction?: "edit" | "create" | "delete";
 };
 
 export type NavGroup = {
@@ -145,7 +152,13 @@ export const navGroups: NavGroup[] = [
     label: "Felszerelés",
     items: [
       { label: "Eszközök", href: "/felszereles", icon: "Package" },
-      { label: "Leltározás", href: "/felszereles/leltarazas", icon: "ClipboardList", permissionPage: "/felszereles" },
+      {
+        label: "Leltározás",
+        href: "/felszereles/leltarazas",
+        icon: "ClipboardList",
+        permissionPage: "/felszereles",
+        permissionAction: "edit",
+      },
     ],
   },
   {

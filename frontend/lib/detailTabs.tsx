@@ -6,6 +6,7 @@ import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { ICON_MAP } from "@/components/icon-map";
 import type { DetailTab as DbDetailTab, FieldTypeInfo, JsonRecord } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
+import { canDoTabAction } from "@/lib/permissions";
 
 /** Ugyanaz a szintetikus kulcs, mint a backend OTHER_TAB_KEY-je (lásd
  * backend/app/services/detail_tabs.py). */
@@ -36,11 +37,15 @@ export const FORGATAS_IDOPONT_WIDGET_FIELD_KEY = "__forgatas_idopont_widget";
  * beleértve a bespoke widgeteket (pl. eszközfoglalás, szerződés készítés)
  * is, amik nem is mező-szerkesztést jelentenek, hanem önálló akció-gombok.
  * Ez a felhasználó számára "eltűnt mezőkként" jelentkezett - ezért a
- * láthatóság mostantól sosem korlátozott, csak a szerkeszthetőség. */
+ * láthatóság mostantól sosem korlátozott, csak a szerkeszthetőség.
+ *
+ * A döntést a canDoTabAction hozza (lásd lib/permissions.ts), NEM a nyers
+ * page_permissions: így az OLDAL-ALIASZOK is számítanak. Enélkül az aliaszon át
+ * érkező munkatárs - pl. a diszpós, akinek a /naptar joga nyitja meg a
+ * projektet - minden szekciót csak olvashatónak látott, a gyártás és a technika
+ * adatait is, amiket épp neki kell kitöltenie. */
 function canEdit(pagePermissions: Record<string, string[]> | null, page: string, tabKey: string): boolean {
-  if (pagePermissions === null) return true;
-  const perms = pagePermissions[`${page}:${tabKey}`] ?? pagePermissions[page];
-  return !!perms?.includes("edit");
+  return canDoTabAction(pagePermissions, page, tabKey, "edit");
 }
 
 function intersectVisible(fields: string[], visibleFields: string[] | null): string[] {

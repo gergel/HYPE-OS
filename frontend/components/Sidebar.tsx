@@ -35,6 +35,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NavItem, navGroups } from "@/lib/nav";
+import { oldalMuveletei } from "@/lib/permissions";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -81,9 +82,11 @@ const ICONS: Record<string, LucideIcon> = {
  * ablakban nyílik (lásd KorlatozottDashboard). */
 export function Sidebar({
   allowedPages,
+  pagePermissions = null,
   anyagKorlat = null,
 }: {
   allowedPages: string[] | null;
+  pagePermissions?: Record<string, string[]> | null;
   anyagKorlat?: number[] | null;
 }) {
   const pathname = usePathname();
@@ -92,7 +95,14 @@ export function Sidebar({
     const page = item.permissionPage ?? item.href;
     if (anyagKorlat !== null) return page === "/dashboard";
     if (!allowedPages) return true;
-    return page === "/dashboard" || allowedPages.includes(page);
+    if (page === "/dashboard") return true;
+    if (!allowedPages.includes(page)) return false;
+    // Ami nem nézegetni való, hanem munkafolyamatot indít (pl. Leltározás),
+    // ahhoz a MŰVELET joga is kell - lásd NavItem.permissionAction.
+    if (item.permissionAction && pagePermissions !== null) {
+      return oldalMuveletei(pagePermissions, page)?.has(item.permissionAction) === true;
+    }
+    return true;
   }
 
   const visibleGroups = navGroups
