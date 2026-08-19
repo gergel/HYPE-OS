@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models.client import Client, Contact
 from app.models.contract import Contract, ContractType, idoszak_tartalmazza
-from app.models.megrendeloi_papir import LEZART_ALLAPOTOK, MegrendeloiSzerzodes, MegrendeloiTig
+from app.models.megrendeloi_papir import MegrendeloiSzerzodes, MegrendeloiTig, papir_kesz
 from app.models.project_code import ProjectCode
 
 
@@ -221,7 +221,7 @@ class PapirAllas:
 
     @property
     def szerzodes_kesz(self) -> bool:
-        return self.szerzodes is not None and self.szerzodes.allapot in LEZART_ALLAPOTOK
+        return papir_kesz(self.szerzodes)
 
     @property
     def szerzodes_kell(self) -> bool:
@@ -241,7 +241,7 @@ class PapirAllas:
 
     @property
     def tig_kesz(self) -> bool:
-        return self.tig is not None and self.tig.allapot in LEZART_ALLAPOTOK
+        return papir_kesz(self.tig)
 
     @property
     def kesz(self) -> bool:

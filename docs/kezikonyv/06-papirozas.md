@@ -800,6 +800,17 @@ alatt". A már KIKÜLDÖTT papír állapotához nem nyúlunk (az innen ment ki, 
 példány megléte mindig felülírja az állapot-címkét: ilyenkor egyszerűen
 **"Aláírva"** áll ott.
 
+**A "kész-e ez a papír" kérdésre egy szabály felel**
+(`models/megrendeloi_papir.papir_kesz`): lezárja az ÁLLAPOTA
+(`LEZART_ALLAPOTOK`) **vagy** az aláírt példány megléte. A második azért kell,
+mert a régi sorokon az állapot elmaradt a valóságtól: aki a feltöltés-javítás
+előtt tett aláírt szerződést egy piszkozatba, annál a kártyán ott volt
+megnyithatóan az aláírt papír, a Számla-lépés viszont *"Szerződés hiányzik"*-ot
+írt ki, és nem engedett tovább. Ez a szabály **adatjavítás nélkül** rendezi a
+korábban keletkezett sorokat is - és mivel egy helyen áll, a projektkód
+lista-jelzői (`ProjectCode.szerzodes_kesz` / `tig_kesz`) és a fázis-nézet
+(`services/megrendeloi_papir.PapirAllas`) nem mondhatnak mást, mint a kártya.
+
 A generált-és-kiküldött papírnál marad a régi menet: amíg az aláírt példány
 nincs meg, a papír "Kiküldve, aláírásra vár".
 

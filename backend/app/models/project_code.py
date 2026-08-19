@@ -199,8 +199,9 @@ class ProjectCode(TimestampMixin, Base):
     # Ezek a jelzők a listán mutatják meg, MELYIK projekten van már szerződés,
     # hol van kész TIG, és mi az, amit még nem fizettek ki. A szabály nem itt
     # dől el: a "kell-e papír" a services/megrendeloi_papir.papirt_igenyel-é,
-    # a "kész-e egy papír" a LEZART_ALLAPOTOK-é - ugyanaz, amit a papír-oldalak
-    # használnak, hogy a lista ne mondhasson mást, mint az adatlap.
+    # a "kész-e egy papír" a models/megrendeloi_papir.papir_kesz-é - ugyanaz,
+    # amit a papír-oldalak használnak, hogy a lista ne mondhasson mást, mint
+    # az adatlap.
 
     @property
     def papir_kell(self) -> bool:
@@ -210,9 +211,9 @@ class ProjectCode(TimestampMixin, Base):
 
     @staticmethod
     def _van_kesz_papir(papirok: list) -> bool:
-        from app.models.megrendeloi_papir import LEZART_ALLAPOTOK
+        from app.models.megrendeloi_papir import papir_kesz
 
-        return any(p.allapot in LEZART_ALLAPOTOK for p in papirok)
+        return any(papir_kesz(p) for p in papirok)
 
     @property
     def keret_fedi(self) -> bool:

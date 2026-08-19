@@ -39,6 +39,28 @@ ALLAPOTOK: tuple[str, ...] = ("Készítés alatt", "Kiküldve", "Kihagyva", "Van
 LEZART_ALLAPOTOK: frozenset[str] = frozenset({"Kiküldve", "Kihagyva", "Van már papír"})
 
 
+def papir_kesz(papir) -> bool:
+    """Le van-e zárva ez a papír? EGY szabály, mindenhol ugyanaz.
+
+    Két dolog zárja le:
+
+    1. az ÁLLAPOTA (lásd LEZART_ALLAPOTOK) - innen ment ki, kihagytuk, vagy
+       kimondtuk, hogy van már papír;
+    2. az ALÁÍRT PÉLDÁNY megléte - az a legerősebb bizonyíték, bármit is mond
+       az állapot-mező.
+
+    A második azért kell, mert a régi sorokon az állapot elmaradt a
+    valóságtól: aki feltöltötte az aláírt szerződést egy piszkozatba, annak a
+    papírja "Készítés alatt" maradt, a projektkód pedig "Szerződés hiányzik"-ot
+    írt ki - miközben az aláírt papír ott volt megnyithatóan a kártyán. A
+    feltöltés MA már át is állítja az állapotot (lásd
+    routes/megrendeloi_papirok.py), ez a szabály a KORÁBBAN keletkezett
+    sorokra is érvényes, adatjavítás nélkül."""
+    if papir is None:
+        return False
+    return bool(papir.alairt_file_url) or papir.allapot in LEZART_ALLAPOTOK
+
+
 class MegrendeloiSzerzodes(TimestampMixin, Base):
     """Eseti szerződés a megrendelővel, egy projektkódra.
 
