@@ -37,6 +37,10 @@ const PAGE = "/projektek/project-kodok";
  * Ahol nincs mit papírozni (nem szerződéses munka, vagy papír nélkül
  * elszámolt), ott egyetlen jelző áll: a hiányzó papír nem elmaradás. */
 function papirJelzo(pc: ProjectCode) {
+  // Ami elmaradt, arról nincs mit igazolni - ott nem "nem kell papír" a
+  // helyzet, hanem az, hogy meg sem történt. Ezt ki is írjuk, különben a
+  // semleges jelzés mögött nem látszik az ok.
+  if (pc.elmaradt) return <StatusBadge label="Elmaradt" tone="danger" />;
   if (!pc.papir_kell) return <StatusBadge label="Nem kell papír" tone="neutral" />;
   return (
     <span className="flex flex-wrap justify-end gap-1">

@@ -496,12 +496,37 @@ ha soha nem keletkezett hozzá papír vagy bevétel-sor.
 
 ### Kell-e egyáltalán papír?
 
-A projektkódon **két külön kapcsoló** dönti el, szándékosan nem egy:
+Három dolog dönti el, szándékosan nem egy:
 
-| Kapcsoló | Mit jelent | Papír |
+| Mi dönti el | Mit jelent | Papír |
 |---|---|---|
 | `van_szerzodes` (alap: igen) | Van-e szerződés a projekt mögött | Ha igen: eseti szerződés **és** TIG jár hozzá |
 | `papir_nelkul` + **kötelező indok** | Van ügylet, de nem pénzmozgással rendeződik | Nincs, mert értelmezhetetlen |
+| **az esemény állapota: „Elmaradt"** | A munka meg sem történt | Nincs: se szerződés, se TIG, se számla |
+
+#### Az elmaradt esemény
+
+Ehhez **nem kell külön kapcsoló**: ott áll amúgy is a projektkód állapotában,
+hogy elmaradt. A szabály egy helyen van kimondva
+(`models/project_code.esemeny_elmaradt`), és ékezet-/kisbetű-tűrően, előtag
+szerint néz: „Elmaradt", „elmarad", „Elmaradt (ügyfél lemondta)" mind ugyanaz.
+
+Amit felold:
+
+- **1. Megrendelői szerződés** és **2. Megrendelői TIG**: nem kérjük
+  (`papirt_igenyel`), a dashboard teendői közé sem kerül;
+- **3. Számla**: nincs miről számlázni - fizetési határidőt sem kérünk
+  (`megrendeloi_szamla._hatarido_kell`);
+- a **stáb felé menő** papírok sem: az alvállalkozói szerződés és a külsős TIG
+  is kimarad, mert a forgatás meg sem történt
+  (`papirozas_hatokor.projekt_kivett`);
+- a projektkód a **Teendők** listán „kész" fázisba kerül, nem ragad be a
+  „Nincs kifizetve" állapotban (`lib/projektkodFazis.ts`).
+
+A listán a Papírozás oszlop egyetlen piros **„Elmaradt"** jelzőt mutat a három
+hiány-jelző helyett, és a Státusz is piros: a szín itt maga az információ (lásd
+`lib/selectColor.ts` - az „Elmaradt" mindig piros, a „Van" mindig zöld, nem a
+hash-kiosztás dönti el).
 
 A `papir_nelkul` esete: a cégvezető be van jelentve a megrendelőhöz
 vállalkozóként, és annyival kevesebb fizetést vesz fel onnan - a bevétel ilyenkor

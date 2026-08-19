@@ -96,9 +96,13 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   const kellPapir = projectCode.papir_kell !== false;
   const szerzodesKesz = projectCode.szerzodes_kell === false || projectCode.szerzodes_kesz === true;
   const tigKesz = projectCode.tig_kesz === true;
+  // ELMARADT az esemény: ehhez semmit nem kérünk - se szerződést, se TIG-et,
+  // se számlát. Ami nem történt meg, arról nincs mit igazolni (lásd backend
+  // models/project_code.esemeny_elmaradt).
+  const elmaradt = projectCode.elmaradt === true;
   // A SZÁMLA a papírozás harmadik lépése: akkor kerül sorra, ha a szerződés és
   // a TIG is megvan - ugyanaz a sorrend, mint az alvállalkozói oldalon.
-  const szamlazhat = !kellPapir || (szerzodesKesz && tigKesz);
+  const szamlazhat = !elmaradt && (!kellPapir || (szerzodesKesz && tigKesz));
   const szamlak = attachments.filter((a) => a.kategoria === "szamla");
 
   // A bevétel a SZERVER száma (nem a bevétel-sorok itteni összege): így
@@ -196,6 +200,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               canEdit={canEdit}
               canDelete={canDelete}
               kellPapir={kellPapir}
+              nincsPapirOka={elmaradt ? "Az esemény elmaradt - erre a kódra nem kérünk papírt." : undefined}
             />
           </Card>
           <Card title="2. Megrendelői TIG" icon={FileCheck2}>
@@ -208,6 +213,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               canEdit={canEdit}
               canDelete={canDelete}
               kellPapir={kellPapir}
+              nincsPapirOka={elmaradt ? "Az esemény elmaradt - erre a kódra nem kérünk papírt." : undefined}
             />
           </Card>
           <Card title="3. Számla" icon={Receipt}>
@@ -233,18 +239,23 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             ) : (
               // Nem tiltás, hanem sorrend: a számla a papírok után jön. Ha
               // valamiért mégis kell, a hiányzó papírt kell rendezni (vagy
-              // kihagyni) - így a lépés nem marad nyom nélkül.
+              // kihagyni) - így a lépés nem marad nyom nélkül. Elmaradt
+              // eseménynél viszont nincs mire várni: ott nincs miről számlázni.
               <div className="space-y-2">
                 <p className="text-[13px] text-text-secondary">
-                  Előbb a szerződés és a TIG - a számla utánuk jön.
+                  {elmaradt
+                    ? "Az esemény elmaradt - nincs miről számlázni."
+                    : "Előbb a szerződés és a TIG - a számla utánuk jön."}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  <StatusBadge
-                    label={szerzodesKesz ? "Szerződés megvan" : "Szerződés hiányzik"}
-                    tone={szerzodesKesz ? "success" : "warning"}
-                  />
-                  <StatusBadge label={tigKesz ? "TIG megvan" : "TIG hiányzik"} tone={tigKesz ? "success" : "warning"} />
-                </div>
+                {!elmaradt && (
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge
+                      label={szerzodesKesz ? "Szerződés megvan" : "Szerződés hiányzik"}
+                      tone={szerzodesKesz ? "success" : "warning"}
+                    />
+                    <StatusBadge label={tigKesz ? "TIG megvan" : "TIG hiányzik"} tone={tigKesz ? "success" : "warning"} />
+                  </div>
+                )}
                 {szamlak.length > 0 && (
                   // Ha korábbról MÁR van feltöltött számla, azt nem rejtjük el:
                   // a papír-sorrend nem teheti láthatatlanná a meglévő adatot.

@@ -71,7 +71,10 @@ def ensure_papirozas_feladatok(db: Session, ma: date | None = None) -> list[Task
     hatar = ma - timedelta(days=VISSZATEKINTES_NAPOK)
     projektek = db.scalars(
         select(Project)
-        .options(selectinload(Project.crew))
+        # A projektkód is kell: a hatókör-szűrés abból nézi, hogy kivett
+        # sorozat-e, illetve hogy elmaradt-e az esemény (lásd
+        # services/papirozas_hatokor.py) - enélkül soronként töltődne be.
+        .options(selectinload(Project.crew), selectinload(Project.project_code))
         .where(
             Project.forgatas_datuma.is_not(None),
             Project.forgatas_datuma < ma,

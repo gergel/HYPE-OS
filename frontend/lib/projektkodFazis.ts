@@ -33,6 +33,11 @@ export const PROJEKTKOD_FAZISOK: { kulcs: ProjektkodFazis; cim: string; leiras: 
  * elszámolt), ott a papír-lépések kimaradnak: a hiányzó papír nem elmaradás,
  * a pénz viszont ott is megérkezhet. */
 export function projektkodFazisa(pc: ProjectCode): ProjektkodFazis {
+  // ELMARADT az esemény: nincs rajta teendő. Se papír, se pénz - ami meg sem
+  // történt, arról nincs mit igazolni, és nem is fizet érte senki. Enélkül a
+  // "Nincs kifizetve" fázisba esne, és örökre ott állna a teendők között
+  // (lásd backend models/project_code.esemeny_elmaradt).
+  if (pc.elmaradt) return "kesz";
   // Élő keretszerződés alatt eseti szerződés nem kell (`szerzodes_kell`
   // hamis), a TIG viszont ugyanúgy jár - ugyanez a szabály az alvállalkozói
   // oldalon is.
@@ -54,6 +59,7 @@ export function projektkodHianyzik(pc: ProjectCode): string {
     case "fizetes":
       return pc.bevetel === 0 ? "Nincs bevétel felvezetve" : "A bevétel még nem érkezett meg";
     default:
+      if (pc.elmaradt) return "Az esemény elmaradt - nincs rajta teendő";
       return pc.papir_kell ? "Papír és pénz is megvan" : "Papír nem kell, a pénz megérkezett";
   }
 }

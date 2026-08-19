@@ -12,7 +12,11 @@ fogja utólag felvinni a máshol elintézett papírokat, viszont a teendőlista 
 utókövetés folyamatosan hiányosnak mutatná őket - és a valódi hiányok is
 elvesznének a zajban.
 
-A szabály ELŐTAG-alapú, mert egy sorozat minden tagját érinti (HYPE24-001,
+Ugyanide tartozik az ELMARADT esemény is: ami meg sem történt, arról nincs
+mit igazolni - se a megrendelő, se a stáb felé (lásd
+models/project_code.esemeny_elmaradt).
+
+A kivett SOROZATOK szabálya ELŐTAG-alapú, mert egy sorozat minden tagját érinti (HYPE24-001,
 HYPE24-002, ...), és környezeti változóval bővíthető anélkül, hogy a kódhoz
 hozzá kellene nyúlni:
 
@@ -63,8 +67,15 @@ def projekt_kivett(project: Any) -> bool:
     vissza lehet hozni, a téves BENNTARTÁS viszont örökre "hiányzó papírt"
     mutatna egy olyan projekten, amivel nincs teendő."""
     project_code = getattr(project, "project_code", None)
-    if project_code is not None and projektkod_kivett(getattr(project_code, "projektkod", None)):
-        return True
+    if project_code is not None:
+        if projektkod_kivett(getattr(project_code, "projektkod", None)):
+            return True
+        # ELMARADT esemény: a forgatás meg sem történt, tehát a stábbal sincs
+        # mit szerződni és mit igazolni (lásd
+        # models/project_code.esemeny_elmaradt). Enélkül egy lemondott, de
+        # diszpózott forgatás örökre hiányzó papírokat mutatna.
+        if getattr(project_code, "elmaradt", False):
+            return True
     return projektkod_kivett(getattr(project, "projektkod_szoveg", None))
 
 

@@ -142,6 +142,7 @@ export function MegrendeloiPapirKezelo({
   canEdit,
   canDelete = false,
   kellPapir,
+  nincsPapirOka,
 }: {
   projectCodeId: number;
   fajta: MegrendeloiPapirFajta;
@@ -160,6 +161,11 @@ export function MegrendeloiPapirKezelo({
    * meglévő papírokat attól még mutatjuk (egy régebbi bejegyzés nem tűnhet el
    * attól, hogy a kapcsolót átbillentették). */
   kellPapir: boolean;
+  /** MIÉRT nem kell papír, ha nem a kapcsolók miatt (pl. elmaradt esemény).
+   * Az ok kiírása nem díszítés: enélkül a "nem kell papír" mondat mögött nem
+   * látszik, hogy honnan jön - és a felhasználó a kapcsolókat kezdi keresni,
+   * amiken nincs is mit átállítani. */
+  nincsPapirOka?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -432,7 +438,8 @@ export function MegrendeloiPapirKezelo({
     <div className="space-y-3 text-[13px]">
       {!kellPapir && (
         <p className="text-text-muted">
-          Ehhez a projektkódhoz a kapcsolói szerint nem kell papír – itt csak akkor van teendő, ha ez mégis változik.
+          {nincsPapirOka ??
+            "Ehhez a projektkódhoz a kapcsolói szerint nem kell papír – itt csak akkor van teendő, ha ez mégis változik."}
         </p>
       )}
 

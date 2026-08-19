@@ -51,18 +51,26 @@ def megrendeloi_keret_ervenyes(szerzodes: Contract, nap: date | None = None) -> 
 def papirt_igenyel(project_code: ProjectCode) -> bool:
     """Kell-e ehhez a projektkódhoz megrendelői szerződés és TIG?
 
-    Két külön okból lehet nem:
+    Három külön okból lehet nem:
 
     - **nincs szerződés** (`van_szerzodes = False`): a projekt nem szerződéses
       munka, tehát nincs mit papírozni;
     - **papír nélkül elszámolt** (`papir_nelkul`): a teljesítés ellenértéke nem
       pénzmozgással rendeződik (lásd models/project_code.py) - ott a papír nem
-      elmaradt, hanem értelmezhetetlen.
+      elmaradt, hanem értelmezhetetlen;
+    - **elmaradt az esemény** (`elmaradt`): a munka meg sem történt, tehát
+      nincs mit igazolni. Ezt nem külön kapcsolóval kell jelölni, hanem az
+      esemény állapotával - ott áll amúgy is, hogy elmaradt.
 
-    A kettőt szándékosan nem vonjuk össze egy mezőbe: az egyik azt mondja,
-    hogy NINCS ügylet, a másik azt, hogy VAN, csak másképp számolódik el. A
-    pénzügyi képük is más, és egy közös kapcsoló ezt elfedné."""
-    return bool(project_code.van_szerzodes) and not project_code.papir_nelkul
+    A hármat szándékosan nem vonjuk össze egy mezőbe: az első azt mondja, hogy
+    NINCS ügylet, a második azt, hogy VAN, csak másképp számolódik el, a
+    harmadik azt, hogy MEG SEM TÖRTÉNT. A pénzügyi képük is más, és egy közös
+    kapcsoló ezt elfedné."""
+    return (
+        bool(project_code.van_szerzodes)
+        and not project_code.papir_nelkul
+        and not project_code.elmaradt
+    )
 
 
 def keretszerzodes_fedi(db: Session, client_id: int | None, nap: date | None = None) -> Contract | None:

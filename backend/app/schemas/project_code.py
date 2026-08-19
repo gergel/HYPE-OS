@@ -75,6 +75,9 @@ class ProjectCodeListRead(BaseModel):
     belsos_munka_koltseg: float
 
     #: Hol tart a papírozás és a pénz.
+    #: Elmaradt esemény: ehhez semmilyen papírt nem kérünk (lásd
+    #: models/project_code.esemeny_elmaradt).
+    elmaradt: bool = False
     papir_kell: bool
     keret_fedi: bool
     keretszerzodes_neve: str | None = None
@@ -109,6 +112,9 @@ class ProjectCodeRead(ProjectCodeBase):
     #: Hol tart a papírozás és a pénz (lásd models/project_code.py) - a lista
     #: ebből mutatja, melyik projekten van már szerződés, hol van kész TIG, és
     #: mit nem fizettek még ki.
+    #: Elmaradt esemény: ehhez semmilyen papírt nem kérünk (lásd
+    #: models/project_code.esemeny_elmaradt).
+    elmaradt: bool = False
     papir_kell: bool
     #: Fedi-e élő keretszerződés (ilyenkor eseti szerződés nem kell, csak TIG),
     #: és KIVEL - egy puszta "keretszerződés alatt" nem ellenőrizhető.

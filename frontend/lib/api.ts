@@ -55,6 +55,11 @@ export type ProjectCode = {
   vagas_koltseg: number;
   belsos_munka_koltseg: number;
   datum: string | null;
+  /** ELMARADT az esemény (az állapota szerint) - ilyenkor semmilyen papírt
+   * nem kérünk rá: se szerződést, se TIG-et, se számlát. Ami nem történt meg,
+   * arról nincs mit igazolni (lásd backend
+   * models/project_code.esemeny_elmaradt). */
+  elmaradt: boolean;
   /** Hol tart a papírozás és a pénz: kell-e egyáltalán papír, van-e lezárt
    * eseti szerződés és TIG, megérkezett-e a bevétel (lásd backend
    * models/project_code.py). */

@@ -99,12 +99,13 @@ def _hatarido_kell(pk: ProjectCode) -> bool:
     Alapból IGEN: a határidő az egyetlen dolog, amiből látszik, hogy egy még
     ki nem fizetett számla késik-e.
 
-    NEM kell viszont ott, ahol nincs is számla: vagy azért, mert kimondtuk
-    (szamla_kihagyva), vagy azért, mert az egész munka papír nélkül van
-    elszámolva (papir_nelkul - nincs szerződés, nincs TIG, nincs számla).
+    NEM kell viszont ott, ahol nincs is számla: mert kimondtuk
+    (szamla_kihagyva), mert az egész munka papír nélkül van elszámolva
+    (papir_nelkul - nincs szerződés, nincs TIG, nincs számla), vagy mert az
+    esemény ELMARADT (nem történt meg, tehát nincs miről számlázni).
     Egy nem létező számlának nincs határideje, és egy kitalált dátum
     rosszabb, mint a hiánya."""
-    return not (pk.szamla_kihagyva or pk.papir_nelkul)
+    return not (pk.szamla_kihagyva or pk.papir_nelkul or pk.elmaradt)
 
 
 def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:

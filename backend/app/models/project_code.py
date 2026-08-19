@@ -11,6 +11,26 @@ from app.models.base import TimestampMixin
 # a kulsos_koltseg / belsos_koltseg viszont igen, azok ezért maradnak lentebb,
 # a metódusokon belüli importban.
 from app.services import elszamolas
+from app.services.hu_szoveg import ekezet_nelkul
+
+#: Az esemény állapota, ami azt jelenti: EZ NEM TÖRTÉNT MEG.
+#:
+#: A szöveg a Notionből jön (szabad select-érték), ezért ékezet- és
+#: kisbetű-tűrően, előtag szerint nézzük: "Elmaradt", "elmarad",
+#: "Elmaradt (ügyfél lemondta)" mind ugyanaz.
+ELMARADT_ELOTAG = "elmarad"
+
+
+def esemeny_elmaradt(esemeny_allapota: str | None) -> bool:
+    """Elmaradt-e az esemény? Ha igen, semmilyen papírt nem kérünk hozzá.
+
+    Ez nem ugyanaz, mint a `papir_nelkul`: ott MEGTÖRTÉNT a teljesítés, csak
+    máshogy számolódik el. Itt nem történt meg - se szerződést, se TIG-et, se
+    számlát nincs mire alapozni, és egy elmaradt forgatás nem maradhat örökre a
+    teendők között."""
+    if not esemeny_allapota:
+        return False
+    return ekezet_nelkul(esemeny_allapota).startswith(ELMARADT_ELOTAG)
 
 
 class ProjectCode(TimestampMixin, Base):
@@ -202,6 +222,14 @@ class ProjectCode(TimestampMixin, Base):
     # a "kész-e egy papír" a models/megrendeloi_papir.papir_kesz-é - ugyanaz,
     # amit a papír-oldalak használnak, hogy a lista ne mondhasson mást, mint
     # az adatlap.
+
+    @property
+    def elmaradt(self) -> bool:
+        """ELMARADT-e az esemény (lásd esemeny_elmaradt).
+
+        Ha igen, ehhez a kódhoz nem kérünk semmit: se szerződést, se TIG-et,
+        se számlát. Ami nem történt meg, arról nincs mit igazolni."""
+        return esemeny_elmaradt(self.esemeny_allapota)
 
     @property
     def papir_kell(self) -> bool:
