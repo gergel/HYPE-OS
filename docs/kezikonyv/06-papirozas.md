@@ -427,6 +427,12 @@ kártya ezt viszi végig (`services/megrendeloi_szamla.py`,
 `components/megrendeloi/MegrendeloiSzamla.tsx`):
 
 1. **A számla PDF-je** feltölthető (vagy a Notionból örökölt címen nyitható).
+   Ez **sosem vár a papírokra**: a valóságban a számla gyakran hamarabb megvan,
+   mint az aláírva visszaküldött szerződés vagy TIG - ha ilyenkor nem lehetne
+   feltölteni, a fájl addig valaki postafiókjában állna, és később senki nem
+   keresné elő. A **sorrend attól még sorrend**: amíg a papírok nincsenek meg,
+   a kártya kiírja, mi hiányzik, és a *kifizetés jelölése* (a 2-4. pont) nem
+   nyílik meg - az már a munka lezárása, nem egy fájl.
 2. **Fizetési határidő** - a számlán szereplő nap. A "Kifizetve" gomb addig
    nem aktív, amíg ez nincs meg: a határidő az EGYETLEN dolog, amiből látszik,
    hogy egy még ki nem fizetett számla késik-e. Ha csak a kifizetés napját

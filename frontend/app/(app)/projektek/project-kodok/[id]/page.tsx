@@ -217,61 +217,51 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             />
           </Card>
           <Card title="3. Számla" icon={Receipt}>
-            {szamlazhat ? (
-              <div className="space-y-3">
-                <DokumentumFeltoltes
-                  entityType="projectCode"
-                  entityId={projectCodeId}
-                  attachments={szamlak}
-                  kategoria="szamla"
-                  canEdit={canEdit}
-                  canDelete={canDelete}
-                  emptyText="Nincs feltöltött számla."
-                />
-                {/* A pénz útja: mikorra szól a számla, mikor jött meg, és
-                    bekerül-e a Pénzügyek bevételei közé. */}
-                {szamlaAllas && (
+            <div className="space-y-3">
+              {/* A SZÁMLA FELTÖLTÉSE SOSEM VÁR a papírokra. A valóságban a
+                  számla gyakran hamarabb megvan, mint az aláírva visszaküldött
+                  szerződés vagy TIG - ha ilyenkor nem lehetne feltölteni, a
+                  papír addig valaki postafiókjában állna. A sorrend attól még
+                  sorrend: alatta ott a jelzés, mi hiányzik még. */}
+              <DokumentumFeltoltes
+                entityType="projectCode"
+                entityId={projectCodeId}
+                attachments={szamlak}
+                kategoria="szamla"
+                canEdit={canEdit}
+                canDelete={canDelete}
+                emptyText="Nincs feltöltött számla."
+              />
+              {szamlazhat ? (
+                // A pénz útja: mikorra szól a számla, mikor jött meg, és
+                // bekerül-e a Pénzügyek bevételei közé.
+                szamlaAllas && (
                   <div className="border-t border-border pt-3">
                     <MegrendeloiSzamla projectCodeId={projectCodeId} allas={szamlaAllas} canEdit={canEdit} />
                   </div>
-                )}
-              </div>
-            ) : (
-              // Nem tiltás, hanem sorrend: a számla a papírok után jön. Ha
-              // valamiért mégis kell, a hiányzó papírt kell rendezni (vagy
-              // kihagyni) - így a lépés nem marad nyom nélkül. Elmaradt
-              // eseménynél viszont nincs mire várni: ott nincs miről számlázni.
-              <div className="space-y-2">
-                <p className="text-[13px] text-text-secondary">
-                  {elmaradt
-                    ? "Az esemény elmaradt - nincs miről számlázni."
-                    : "Előbb a szerződés és a TIG - a számla utánuk jön."}
-                </p>
-                {!elmaradt && (
-                  <div className="flex flex-wrap gap-2">
-                    <StatusBadge
-                      label={szerzodesKesz ? "Szerződés megvan" : "Szerződés hiányzik"}
-                      tone={szerzodesKesz ? "success" : "warning"}
-                    />
-                    <StatusBadge label={tigKesz ? "TIG megvan" : "TIG hiányzik"} tone={tigKesz ? "success" : "warning"} />
-                  </div>
-                )}
-                {szamlak.length > 0 && (
-                  // Ha korábbról MÁR van feltöltött számla, azt nem rejtjük el:
-                  // a papír-sorrend nem teheti láthatatlanná a meglévő adatot.
-                  <div className="border-t border-border pt-2">
-                    <DokumentumFeltoltes
-                      entityType="projectCode"
-                      entityId={projectCodeId}
-                      attachments={szamlak}
-                      kategoria="szamla"
-                      canEdit={false}
-                      canDelete={canDelete}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+                )
+              ) : (
+                // A KIFIZETÉS jelölése továbbra is a papírok után jön: az már a
+                // munka lezárása, nem egy fájl. Elmaradt eseménynél pedig
+                // nincs is mire várni - ott nincs miről számlázni.
+                <div className="space-y-2 border-t border-border pt-3">
+                  <p className="text-[13px] text-text-secondary">
+                    {elmaradt
+                      ? "Az esemény elmaradt - nincs miről számlázni."
+                      : "A számla feltölthető, de a kifizetés jelölése a szerződés és a TIG után jön."}
+                  </p>
+                  {!elmaradt && (
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge
+                        label={szerzodesKesz ? "Szerződés megvan" : "Szerződés hiányzik"}
+                        tone={szerzodesKesz ? "success" : "warning"}
+                      />
+                      <StatusBadge label={tigKesz ? "TIG megvan" : "TIG hiányzik"} tone={tigKesz ? "success" : "warning"} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </Card>
         </div>
 
