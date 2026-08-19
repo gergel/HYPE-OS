@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { normalizal } from "@/lib/szoveg";
 import { RowLink } from "@/components/RowLink";
 import { DeleteButton } from "@/components/DeleteButton";
 import { RecordDetailModal } from "@/components/RecordDetailModal";
@@ -74,7 +75,9 @@ export function InteractiveTableClient({
   // A szabadszavas kereső és a mezőnkénti szabályok EGYÜTT szűkítenek (a
   // felhasználó kérése: a szűrő-rendszer mellett a keresés is maradjon meg).
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    // Ugyanaz a normalizálás, amivel a sorok kereső-szövege készült
+    // (lásd DataTable) - különben az ékezetes beírás sosem találna.
+    const needle = normalizal(query.trim());
     if (!needle && rules.length === 0) return rows;
     return rows.filter(
       (row) => (!needle || row.searchText.includes(needle)) && matchesAllRules(row.filterValues, rules),

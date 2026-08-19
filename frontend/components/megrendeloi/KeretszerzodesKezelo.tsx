@@ -12,6 +12,7 @@ import {
 import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ListaKereso, illeszkedik } from "@/components/ListaKereso";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 import { authFetch } from "@/lib/authFetch";
@@ -89,6 +90,22 @@ export function KeretszerzodesKezelo({
   // ki, más sablonból és más címről (lásd backend services/keret_modositas.py).
   const [modositando, setModositando] = useState<MegrendeloiKeret | null>(null);
   const [nyitottKeret, setNyitottKeret] = useState<number | null>(null);
+  const [kereses, setKereses] = useState("");
+
+  // Cégnév ÉS ügyfélnév is: a keret a cég nevére szól, de a listán sokszor az
+  // ügyfél neve az, amit fejből tudunk - a kettő nem mindig ugyanaz.
+  const szurt = keretek.filter((k) =>
+    illeszkedik(kereses, [
+      k.ceg_neve,
+      k.client_nev,
+      k.adoszam,
+      k.kepviselo,
+      k.szekhely,
+      k.nyilvantartasi_szam,
+      k.email,
+      k.megbizas_targya,
+    ]),
+  );
 
   function frissit<K extends keyof Urlap>(kulcs: K, ertek: Urlap[K]) {
     setUrlap((elozo) => ({ ...elozo, [kulcs]: ertek }));
@@ -264,8 +281,17 @@ export function KeretszerzodesKezelo({
       {keretek.length === 0 ? (
         <p className="text-text-muted">Még nincs megrendelői keretszerződés.</p>
       ) : (
-        <ul className="space-y-2">
-          {keretek.map((k) => (
+        <>
+          <ListaKereso
+            ertek={kereses}
+            onValtozas={setKereses}
+            placeholder="Keresés (cég, ügyfél, adószám)"
+            talalat={szurt.length}
+            osszes={keretek.length}
+          />
+          {szurt.length === 0 && <p className="text-text-muted">Erre a keresésre nincs találat.</p>}
+          <ul className="space-y-2">
+          {szurt.map((k) => (
             // A KÁRTYA maga nyitja az adatlapot - nem egy külön "Megnyitás"
             // gomb. A gombokat és linkeket tartalmazó sáv megállítja az
             // eseményt, hogy a törlés vagy egy fájl-link ne nyissa meg
@@ -386,7 +412,8 @@ export function KeretszerzodesKezelo({
               </StopClickPropagation>
             </li>
           ))}
-        </ul>
+          </ul>
+        </>
       )}
 
       {nyitva && (

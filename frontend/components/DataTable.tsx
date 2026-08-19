@@ -1,4 +1,5 @@
 import { Fragment, isValidElement, type ReactNode } from "react";
+import { normalizal } from "@/lib/szoveg";
 import { InteractiveTableClient } from "@/components/InteractiveTableClient";
 import type { ColumnKind } from "@/lib/tableFilters";
 
@@ -173,7 +174,10 @@ export function DataTable<T extends { id: number }>({
     // szerver legyártott és a böngészőnek is le kellett töltenie - miközben a
     // találat egy nem látszó mezőben amúgy is értelmezhetetlen ("miért jött
     // fel ez a sor?").
-    searchText: filterValuesByRow[rowIndex].join(" ").toLowerCase(),
+    // ÉKEZET NÉLKÜL tároljuk (lásd lib/szoveg.normalizal): magyar adaton a
+    // "feny" különben nem találta meg a "Fény Bt."-t, és ezt a felhasználó
+    // joggal olvasta úgy, hogy nem működik a keresés.
+    searchText: normalizal(filterValuesByRow[rowIndex].join(" ")),
     filterValues: filterValuesByRow[rowIndex],
   }));
 

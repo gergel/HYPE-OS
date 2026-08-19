@@ -133,6 +133,22 @@ ez egy 100 oszlopos táblánál (projektkódok) soronként kilobájtokat jelente
 amit a szerver legyártott és a böngésző letöltött, miközben egy nem látszó
 mezőben talált egyezés amúgy is értelmezhetetlen ("miért jött fel ez a sor?").
 
+**A keresés ékezet-független** (`lib/szoveg.normalizal`): a sorok kereső-
+szövege ékezetek nélkül készül, és a beírt szó ugyanígy normalizálódik. Magyar
+adaton ez nem finomság - a "feny" korábban nem találta meg a "Fény Bt."-t, és
+ezt a felhasználó joggal olvasta úgy, hogy *nem működik a keresés*. Ugyanez a
+szabály fut a `KeresosSelect` legördülőiben és a `ListaKereso`-ban.
+
+### Kereső a nem-táblázatos listákon
+
+Van néhány lista, ami kártyákból vagy lenyitható panelekből áll, nem
+DataTable-ből (Számlázó cégek, Megrendelői keretszerződések) - ezeknél a
+`components/ListaKereso.tsx` adja a mezőt, a szűrés pedig a hívónál marad,
+mert listánként más, MIBEN érdemes keresni. A `lib/szoveg.illeszkedik`
+szavanként, ÉS-kapcsolattal illeszt: a "media kft budapest" arra is talál,
+ahol a három szó három külön mezőben áll - így nem kell tudni, melyik mezőben
+mi van.
+
 ## Betöltés: mit lát az ember, amíg vár
 
 Három szinten dolgozunk azon, hogy a felület AZONNAL válaszoljon, és a

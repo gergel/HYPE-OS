@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { Vallalkozas } from "@/lib/api";
 import { KeresosSelect } from "@/components/KeresosSelect";
+import { ListaKereso, illeszkedik } from "@/components/ListaKereso";
 
 /** Számlázó cégek: kik azok, akiket egy cég küld a forgatásra.
  *
@@ -80,6 +81,23 @@ export function VallalkozasKezelo({
   const [szerkesztettAdat, setSzerkesztettAdat] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
+  const [kereses, setKereses] = useState("");
+
+  // A cég ADATAI és a TAGJAI nevei közt is keresünk. A tagok azért fontosak,
+  // mert a leggyakoribb kérdés fordítva merül fel: megvan az ember, és azt
+  // keressük, melyik cég küldi - a cég nevét nem feltétlenül tudjuk.
+  const szurt = vallalkozasok.filter((v) =>
+    illeszkedik(kereses, [
+      v.nev,
+      v.adoszam,
+      v.kepviselo,
+      v.szekhely,
+      v.nyilvantartasi_szam,
+      v.email,
+      v.megbizas_targya,
+      ...v.tagok.map((t) => t.full_name),
+    ]),
+  );
 
   async function hivas(path: string, init: RequestInit): Promise<boolean> {
     setBusy(true);
@@ -218,7 +236,17 @@ export function VallalkozasKezelo({
         <p className="text-[13px] text-text-secondary">Még nincs felvéve számlázó cég.</p>
       ) : (
         <div className="space-y-2">
-          {vallalkozasok.map((v) => {
+          <ListaKereso
+            ertek={kereses}
+            onValtozas={setKereses}
+            placeholder="Keresés (cég, adószám, képviselő, ember)"
+            talalat={szurt.length}
+            osszes={vallalkozasok.length}
+          />
+          {szurt.length === 0 && (
+            <p className="text-[13px] text-text-secondary">Erre a keresésre nincs találat.</p>
+          )}
+          {szurt.map((v) => {
             const nyitva = nyitottId === v.id;
             const tagIdk = new Set(v.tagok.map((t) => t.employee_id));
             const felvehetok = emberek.filter((e) => !tagIdk.has(e.id));
