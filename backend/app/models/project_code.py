@@ -92,6 +92,18 @@ class ProjectCode(TimestampMixin, Base):
     #: MIÉRT nem kerül a bevételek közé - a jelöléshez kötelező.
     bevetel_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
 
+    #: "Erről a munkáról nincs számla."
+    #:
+    #: Van, amit nem a megszokott módon fizetnek: nincs kiállított számla,
+    #: tehát fizetési határidő sincs - a pénz viszont megjött (vagy másképp
+    #: rendeződött). A számla-lépés ilyenkor is lezárható, csak a határidőt
+    #: nem kérjük számon (lásd services/megrendeloi_szamla.py).
+    szamla_kihagyva: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    #: MIÉRT nincs számla - a jelöléshez kötelező.
+    szamla_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
+
     teljesites_datuma: Mapped[date | None] = mapped_column(Date)
     utalas_datuma: Mapped[date | None] = mapped_column(Date)
     szamla_url: Mapped[str | None] = mapped_column(String(500))

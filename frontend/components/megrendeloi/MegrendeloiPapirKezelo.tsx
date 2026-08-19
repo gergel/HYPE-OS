@@ -482,13 +482,28 @@ export function MegrendeloiPapirKezelo({
       )}
 
       {canEdit && (
-        <button
-          type="button"
-          onClick={ujPapir}
-          className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-text-accent hover:opacity-90"
-        >
-          + Új {cimke}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={ujPapir}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-text-accent hover:opacity-90"
+          >
+            + Új {cimke}
+          </button>
+          {/* KIHAGYÁS EGY KATTINTÁSSAL. Eddig ez csak a szerkesztő-űrlapon
+              belül volt elérhető: aki tudta, hogy erre a munkára nem lesz
+              papír, annak előbb meg kellett nyitnia egy teljes űrlapot
+              (cégadatokkal, összeggel), hogy aztán ne töltse ki. A "nem lesz
+              papír" nem szerkesztés, hanem döntés - ide való. */}
+          <button
+            type="button"
+            onClick={() => setKihagyasNyitva(true)}
+            disabled={dolgozik}
+            className="text-[12.5px] text-text-muted hover:text-text-primary disabled:opacity-50"
+          >
+            {munka === "kihagyas" ? "Kihagyás…" : "Nem lesz ilyen papír (kihagyás)"}
+          </button>
+        </div>
       )}
 
       {nyitva && (

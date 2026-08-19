@@ -242,9 +242,15 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
         {canEdit && (
           <details className="rounded-[var(--radius-lg)] border border-border px-4 py-3">
             <summary className="cursor-pointer text-[12.5px] text-text-muted hover:text-text-secondary">
-              Nem kell ide papír? (nem szerződéses munka, vagy máshol elszámolt)
+              Nem a megszokott módon van elszámolva? (nincs szerződés / TIG / számla)
             </summary>
             <div className="mt-3">
+              <p className="mb-3 text-[12.5px] text-text-secondary">
+                Itt mondhatod ki, hogy erre a munkára nem kell papír – ilyenkor sem szerződést, sem TIG-et nem kérünk
+                rá, és a számlához fizetési határidőt sem. A pénz oldalát a „3. Számla” kártya intézi: ott jelölhető,
+                hogy nincs számla, és hogy kifizetve van-e (akár úgy is, hogy ne kerüljön a bevételek közé). Egy-egy
+                papír külön is kihagyható, indokkal, a saját kártyáján.
+              </p>
               <PapirKapcsolok
                 patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
                 vanSzerzodes={projectCode.van_szerzodes !== false}

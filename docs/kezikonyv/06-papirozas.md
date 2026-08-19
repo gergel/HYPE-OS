@@ -431,6 +431,27 @@ A téves gombnyomás visszavonható: a kifizetés dátuma lekerül a projektkód
 és a bevétel-sorról is, de magát a sort nem töröljük (lehet, hogy máshonnan
 való, és a törlés visszahozhatatlan).
 
+### Ami nem a megszokott módon van elszámolva
+
+Van munka, amiről **nem lesz papír**: nincs szerződés, nincs TIG, és számla
+sem - a pénz mégis rendeződik (beszámítás, csere, egy másik cégen át). Erre
+három, egymástól független jelölés van, mert három külön kérdésről van szó:
+
+| Jelölés | Hol | Mit old fel |
+|---|---|---|
+| **"Nem lesz ilyen papír (kihagyás)"** | a szerződés és a TIG kártyáján, egy kattintás + indok | az adott papírt nem várjuk |
+| **"Nincs számla erről a munkáról"** | a "3. Számla" kártyán, indokkal (`ProjectCode.szamla_kihagyva`) | nem kell fizetési határidő a kifizetés jelöléséhez |
+| **"Papír nélkül elszámolt"** | a projektkód alján, indokkal (`papir_nelkul`) | az egészet: szerződés, TIG és a határidő sem kell |
+
+A kihagyás **egy kattintás**: korábban a "nem lesz papír" döntéshez előbb meg
+kellett nyitni a teljes szerkesztő-űrlapot (cégadatokkal, összeggel), hogy
+aztán ne töltsük ki - pedig ez nem szerkesztés, hanem döntés.
+
+Mindegyikhez **indok kell**, és mindegyik ott marad a kártyán: fél év múlva ez
+az egyetlen dolog, amiből kiderül, mi történt. Ezekkel a jelölésekkel a
+projektkód **lezártnak számít** (nem áll örökre a teendők között), akkor is,
+ha soha nem keletkezett hozzá papír vagy bevétel-sor.
+
 ### Kell-e egyáltalán papír?
 
 A projektkódon **két külön kapcsoló** dönti el, szándékosan nem egy:

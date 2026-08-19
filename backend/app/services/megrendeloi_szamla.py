@@ -60,6 +60,13 @@ class SzamlaAllas:
     szamla_url: str | None
     #: Keletkezett-e bevétel-sor (és mennyi).
     bevetel_sorok: int
+    #: "Erről a munkáról nincs számla" - ilyenkor határidő sincs, de kifizetve
+    #: lehet (lásd _hatarido_kell).
+    szamla_kihagyva: bool = False
+    szamla_kihagyas_oka: str | None = None
+    #: Kell-e fizetési határidő a kifizetés jelöléséhez. A felület ebből tudja,
+    #: mikor tiltsa a gombot, és mikor rejtse el a határidő-mezőt.
+    hatarido_kell: bool = True
 
 
 def _szamla_fajl_url(db: Session, pk: ProjectCode) -> str | None:
@@ -98,6 +105,20 @@ def _osszeg(pk: ProjectCode) -> tuple[float | None, float | None]:
     return None, None
 
 
+def _hatarido_kell(pk: ProjectCode) -> bool:
+    """Kell-e fizetési határidő a kifizetés jelöléséhez?
+
+    Alapból IGEN: a határidő az egyetlen dolog, amiből látszik, hogy egy még
+    ki nem fizetett számla késik-e.
+
+    NEM kell viszont ott, ahol nincs is számla: vagy azért, mert kimondtuk
+    (szamla_kihagyva), vagy azért, mert az egész munka papír nélkül van
+    elszámolva (papir_nelkul - nincs szerződés, nincs TIG, nincs számla).
+    Egy nem létező számlának nincs határideje, és egy kitalált dátum
+    rosszabb, mint a hiánya."""
+    return not (pk.szamla_kihagyva or pk.papir_nelkul)
+
+
 def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
     netto, brutto = _osszeg(pk)
     szamla_url = _szamla_fajl_url(db, pk)
@@ -112,6 +133,9 @@ def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
         van_szamla_fajl=szamla_url is not None,
         szamla_url=szamla_url,
         bevetel_sorok=len(list(pk.revenues or [])),
+        szamla_kihagyva=pk.szamla_kihagyva,
+        szamla_kihagyas_oka=pk.szamla_kihagyas_oka,
+        hatarido_kell=_hatarido_kell(pk),
     )
 
 
@@ -144,9 +168,10 @@ def jelold_kifizetettnek(
     Pénzügyekben is ott legyen. Ha a hívó azt mondja, hogy ez a tétel nem való
     a bevételek közé, akkor INDOK kell hozzá, és nem keletkezik sor - a
     projektkód viszont így is lezárt lesz."""
-    if pk.fizetesi_hatarido is None:
+    if pk.fizetesi_hatarido is None and _hatarido_kell(pk):
         raise SzamlaHiba(
-            "Előbb add meg a számlán szereplő fizetési határidőt - enélkül nem látszik, ha egy számla késik."
+            "Előbb add meg a számlán szereplő fizetési határidőt - enélkül nem látszik, ha egy számla késik. "
+            "Ha erről a munkáról nincs számla, jelöld be a \"Nincs számla\" lehetőséget."
         )
     if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
         raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")
@@ -158,6 +183,25 @@ def jelold_kifizetettnek(
 
     if not bevetelbe_ne_keruljon:
         _vezesd_fel_a_bevetelt(db, pk, nap)
+    db.flush()
+    return allas(db, pk)
+
+
+def allitsd_a_szamla_kihagyast(
+    db: Session, pk: ProjectCode, *, kihagyva: bool, oka: str | None = None
+) -> SzamlaAllas:
+    """"Erről a munkáról nincs számla" - be- és kikapcsolható, indokkal.
+
+    Van, amit nem a megszokott módon fizetnek: beszámítás, csere, egy másik
+    cégen át rendezett tétel. Ilyenkor nincs számla, tehát fizetési határidő
+    sincs - a pénz viszont megjött (vagy másképp rendeződött), és a
+    projektkódot le kell tudni zárni. Az INDOK azért kötelező, mert fél év
+    múlva ez az egyetlen dolog, amiből kiderül, mi történt: enélkül csak
+    annyi látszana, hogy erről az egy munkáról nincs papír."""
+    if kihagyva and not (oka or "").strip():
+        raise SzamlaHiba("Ha nincs számla, írd meg, miért (beszámítva, cserébe, másik cégen át…).")
+    pk.szamla_kihagyva = kihagyva
+    pk.szamla_kihagyas_oka = (oka or "").strip() or None if kihagyva else None
     db.flush()
     return allas(db, pk)
 

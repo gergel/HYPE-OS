@@ -677,6 +677,9 @@ class SzamlaAllasOut(BaseModel):
     van_szamla_fajl: bool
     szamla_url: str | None = None
     bevetel_sorok: int
+    szamla_kihagyva: bool = False
+    szamla_kihagyas_oka: str | None = None
+    hatarido_kell: bool = True
 
 
 class HataridoIn(BaseModel):
@@ -719,6 +722,34 @@ def set_szamla_hatarido(
     pk = _projektkod_vagy_404(db, project_code_id)
     try:
         allas = megrendeloi_szamla.allitsd_a_hataridot(db, pk, payload.fizetesi_hatarido)
+    except megrendeloi_szamla.SzamlaHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return allas
+
+
+class SzamlaKihagyasIn(BaseModel):
+    """"Erről a munkáról nincs számla" - be/ki, indokkal."""
+
+    kihagyva: bool
+    oka: str | None = None
+
+
+# FIGYELEM: az útvonal NEM lehet ".../kihagyas" - azt a fentebb bejegyzett
+# általános "/{fajta}/{project_code_id}/kihagyas" (papír kihagyása) nyelné el,
+# és a hívás egy másik végponton kötne ki, érthetetlen hibaüzenettel.
+@router.post("/szamla/{project_code_id}/nincs-szamla", response_model=SzamlaAllasOut)
+def set_szamla_kihagyas(
+    project_code_id: int,
+    payload: SzamlaKihagyasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Nincs számla erről a munkáról - ilyenkor fizetési határidő sem kell a
+    kifizetés jelöléséhez."""
+    pk = _projektkod_vagy_404(db, project_code_id)
+    try:
+        allas = megrendeloi_szamla.allitsd_a_szamla_kihagyast(db, pk, kihagyva=payload.kihagyva, oka=payload.oka)
     except megrendeloi_szamla.SzamlaHiba as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()

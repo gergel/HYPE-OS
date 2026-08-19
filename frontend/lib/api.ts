@@ -2553,6 +2553,11 @@ export type MegrendeloiSzamlaAllas = {
   /** A számla PDF-je (csatolmány vagy a Notionból örökölt cím). */
   szamla_url: string | null;
   bevetel_sorok: number;
+  /** "Erről a munkáról nincs számla" - ilyenkor határidő sem kell. */
+  szamla_kihagyva: boolean;
+  szamla_kihagyas_oka: string | null;
+  /** Kell-e fizetési határidő a kifizetés jelöléséhez. */
+  hatarido_kell: boolean;
 };
 
 export async function getMegrendeloiSzamlaAllas(projectCodeId: number): Promise<MegrendeloiSzamlaAllas | null> {

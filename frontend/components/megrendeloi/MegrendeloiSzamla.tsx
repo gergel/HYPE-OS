@@ -44,6 +44,7 @@ export function MegrendeloiSzamla({
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
   const [dialogNyitva, setDialogNyitva] = useState(false);
+  const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
 
   async function hivas(ut: string, torzs?: unknown) {
     setBusy(true);
@@ -73,6 +74,8 @@ export function MegrendeloiSzamla({
       <div className="flex flex-wrap items-center gap-2">
         {allas.kifizetve ? (
           <StatusBadge label="Kifizetve" tone="success" />
+        ) : allas.szamla_kihagyva ? (
+          <StatusBadge label="Nincs számla" tone="neutral" />
         ) : allas.fizetesi_hatarido ? (
           <StatusBadge label="Fizetésre vár" tone="warning" />
         ) : (
@@ -100,7 +103,9 @@ export function MegrendeloiSzamla({
       )}
 
       {/* A számlán szereplő fizetési határidő. A kifizetés jelöléséhez kell -
-          enélkül nem tudjuk, mikortól késik. */}
+          enélkül nem tudjuk, mikortól késik. Ahol nincs is számla, ott
+          értelmetlen, ezért el is tűnik. */}
+      {allas.hatarido_kell && (
       <label className="block text-[13px] text-text-secondary">
         Fizetési határidő (a számlán)
         <input
@@ -117,6 +122,41 @@ export function MegrendeloiSzamla({
           className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary disabled:opacity-60"
         />
       </label>
+      )}
+
+      {/* "Erről a munkáról nincs számla" - van, amit nem a megszokott módon
+          fizetnek (beszámítás, csere, másik cégen át rendezve). Ilyenkor nincs
+          határidő sem, a projektkódot viszont le kell tudni zárni. */}
+      {!allas.kifizetve && canEdit && !allas.szamla_kihagyva && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setKihagyasNyitva(true)}
+          className="text-[12.5px] text-text-muted hover:text-text-primary disabled:opacity-50"
+        >
+          Nincs számla erről a munkáról
+        </button>
+      )}
+      {allas.szamla_kihagyva && (
+        <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-2.5">
+          <p className="text-[12.5px] text-text-secondary">
+            Nincs számla erről a munkáról – fizetési határidő sem kell.
+          </p>
+          {allas.szamla_kihagyas_oka && (
+            <p className="mt-0.5 whitespace-pre-line text-[12.5px] text-text-muted">{allas.szamla_kihagyas_oka}</p>
+          )}
+          {canEdit && !allas.kifizetve && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => hivas("nincs-szamla", { kihagyva: false })}
+              className="mt-1 text-[12px] text-text-muted hover:text-text-primary disabled:opacity-50"
+            >
+              Mégis van számla
+            </button>
+          )}
+        </div>
+      )}
 
       {allas.kifizetve ? (
         <div className="space-y-1.5">
@@ -146,9 +186,13 @@ export function MegrendeloiSzamla({
         canEdit && (
           <button
             type="button"
-            disabled={busy || !allas.fizetesi_hatarido}
+            disabled={busy || (allas.hatarido_kell && !allas.fizetesi_hatarido)}
             onClick={() => setDialogNyitva(true)}
-            title={allas.fizetesi_hatarido ? undefined : "Előbb add meg a fizetési határidőt."}
+            title={
+              !allas.hatarido_kell || allas.fizetesi_hatarido
+                ? undefined
+                : "Előbb add meg a fizetési határidőt, vagy jelöld, hogy nincs számla."
+            }
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
             Kifizetve
@@ -157,6 +201,16 @@ export function MegrendeloiSzamla({
       )}
 
       {hiba && <p className="text-[12.5px] text-text-danger">{hiba}</p>}
+
+      {kihagyasNyitva && (
+        <NincsSzamlaDialog
+          onMegse={() => setKihagyasNyitva(false)}
+          onJelol={async (oka) => {
+            const sikeres = await hivas("nincs-szamla", { kihagyva: true, oka });
+            if (sikeres) setKihagyasNyitva(false);
+          }}
+        />
+      )}
 
       {dialogNyitva && (
         <KifizetesDialog
@@ -288,6 +342,69 @@ function KifizetesDialog({
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
             Kifizetve jelölés
+          </button>
+        </div>
+      </div>
+    </ModalReteg>
+  );
+}
+
+/** "Erről a munkáról nincs számla" - indokkal.
+ *
+ * Van, amit nem a megszokott módon fizetnek: beszámítás, csere, egy másik
+ * cégen át rendezett tétel. Ilyenkor nincs kiállított számla, tehát fizetési
+ * határidő sincs - a projektkódot viszont le kell tudni zárni, különben
+ * örökre ott áll a teendők között.
+ *
+ * Az INDOK azért kötelező, mert fél év múlva ez az egyetlen dolog, amiből
+ * kiderül, mi történt: enélkül csak annyi látszana, hogy erről az egy munkáról
+ * nincs papír. */
+function NincsSzamlaDialog({ onMegse, onJelol }: { onMegse: () => void; onJelol: (oka: string) => void }) {
+  const [indok, setIndok] = useState("");
+
+  return (
+    <ModalReteg onClose={onMegse}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md rounded-[var(--radius-lg)] border border-border bg-surface-1 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-border px-5 py-3">
+          <h3 className="text-[14px] font-medium text-text-primary">Nincs számla erről a munkáról</h3>
+        </div>
+        <div className="space-y-3 p-5">
+          <p className="text-[12.5px] text-text-secondary">
+            Nem lesz kiállított számla, tehát fizetési határidő sem. A munka ettől még lehet kifizetve – a
+            „Kifizetve” gomb utána is használható.
+          </p>
+          <label className="block text-[13px] text-text-primary">
+            Miért nincs számla?
+            <textarea
+              autoFocus
+              rows={2}
+              value={indok}
+              onChange={(e) => setIndok(e.target.value)}
+              placeholder="Pl. beszámítva, cserébe csináltuk, a másik cégen át rendeztük…"
+              className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] leading-relaxed text-text-primary"
+            />
+          </label>
+        </div>
+        <div className="flex justify-end gap-3 border-t border-border px-5 py-3">
+          <button
+            type="button"
+            onClick={onMegse}
+            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+          >
+            Mégse
+          </button>
+          <button
+            type="button"
+            disabled={!indok.trim()}
+            onClick={() => onJelol(indok.trim())}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+          >
+            Mentés
           </button>
         </div>
       </div>
