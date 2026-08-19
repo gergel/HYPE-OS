@@ -32,6 +32,32 @@ def _first_url(ertekek: list | None) -> str | None:
     return ertekek[0] if ertekek else None
 
 
+def _url(ertek) -> str | None:
+    """Egy URL kinyerése BÁRMILYEN Notion-alakból.
+
+    Ugyanaz a mező a Notionban lehet `url` (string), `files` (URL-ek listája)
+    vagy `rich_text` - és ez táblánként/koronként el is tér. Ha a nyers értéket
+    adjuk tovább egy szöveges oszlopnak, a lista alak vagy hibát dob, vagy
+    használhatatlan `['https://…']` szövegként landol. Ez a helper mindegyikből
+    az első valódi címet adja."""
+    if ertek is None:
+        return None
+    if isinstance(ertek, str):
+        return ertek.strip() or None
+    if isinstance(ertek, dict):
+        for kulcs in ("url", "external", "file"):
+            talalat = _url(ertek.get(kulcs))
+            if talalat:
+                return talalat
+        return None
+    if isinstance(ertek, (list, tuple)):
+        for elem in ertek:
+            talalat = _url(elem)
+            if talalat:
+                return talalat
+    return None
+
+
 def _text(value) -> str | None:
     """Üres string helyett None-t ad vissza, hogy ne írjunk felül értelmes mezőket üressel."""
     if value is None:
@@ -985,8 +1011,8 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
                 "megjegyzes": _text(props.get("MEGJEGYZÉS")),
                 "teljesites_datuma": as_date(props.get("Teljesítés dátuma")),
                 "utalas_datuma": as_date(props.get("Utalás dátuma")),
-                "szamla_url": _first_url(props.get("Számla")),
-                "tig_alairva_url": _first_url(props.get("TIG aláírva")),
+                "szamla_url": _url(props.get("Számla")),
+                "tig_alairva_url": _url(props.get("TIG aláírva")),
                 "teljesites_datum_formazva": _text(props.get("Teljesítés dátum formáz")),
                 "netto_osszeg": props.get("Nettó összeg"),
                 "megrendelo_szekhelye": _text(props.get("Megrendelő  székhelye")),
@@ -1042,7 +1068,7 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
                 "szerzodes_keltezes_datuma": as_date(props.get("Szerződés keltezés dátuma")),
                 "belsos_koltseg_notion": props.get("Belsős költség"),
                 "belso_plusz_koltseg_notion": props.get("Belső plusz költség"),
-                "tig_url": props.get("TIG url"),
+                "tig_url": _url(props.get("TIG url")),
             },
             label=f"ProjectCode '{projektkod}'",
             # A projektkód EGYEDI: ha a rekord már létezik (kézzel vették fel,
@@ -1064,6 +1090,12 @@ def import_project_codes(client: NotionClient, db: Session) -> ImportResult:
             projektkod_rekord.tig_alairva_url = (
                 files.elso(ujak, "TIG aláírva") or projektkod_rekord.tig_alairva_url
             )
+            # A "TIG url" mező is lehet FELTÖLTÖTT fájl (nem csak külső link) -
+            # ilyenkor az is a mi tárhelyünkre kerül, és a mostantól állandó
+            # címre írjuk át. Enélkül a Notion egy óra múlva lejáró aláírt
+            # linkje maradt a mezőben: a TIG PDF-je "megvolt", csak épp
+            # megnyithatatlanul.
+            projektkod_rekord.tig_url = files.elso(ujak, "TIG url") or projektkod_rekord.tig_url
             if "További dokumentumok" in ujak:
                 projektkod_rekord.tovabbi_dokumentumok = ujak["További dokumentumok"]
 

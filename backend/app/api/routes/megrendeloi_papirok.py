@@ -30,7 +30,7 @@ from app.models.contract import Contract
 from app.models.employee import Employee
 from app.models.megrendeloi_papir import ALLAPOTOK, LEZART_ALLAPOTOK, MegrendeloiSzerzodes, MegrendeloiTig
 from app.models.project_code import ProjectCode
-from app.services import document_storage, megrendeloi_papir
+from app.services import document_storage, megrendeloi_papir, megrendeloi_szamla
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
 from app.services.hu_number_words import szam_betukkel
@@ -658,3 +658,104 @@ def delete_papir(
     db.commit()
     for k in kulcsok:
         document_storage.delete_object(k)
+
+
+# ── A SZÁMLA lépése (a papírozás harmadik, utolsó szakasza) ──────────────────
+# A szerződés és a TIG után jön a pénz: mikorra szól a számla, mikor fizették
+# ki, és bekerül-e a Pénzügyek bevételei közé. A logika a szolgáltatásban van
+# (lásd services/megrendeloi_szamla.py), itt csak a HTTP-felület.
+
+
+class SzamlaAllasOut(BaseModel):
+    fizetesi_hatarido: date | None = None
+    kifizetes_datuma: date | None = None
+    kifizetve: bool
+    bevetelbe_ne_keruljon: bool
+    bevetel_kihagyas_oka: str | None = None
+    netto: float | None = None
+    brutto: float | None = None
+    van_szamla_fajl: bool
+    szamla_url: str | None = None
+    bevetel_sorok: int
+
+
+class HataridoIn(BaseModel):
+    fizetesi_hatarido: date | None = None
+
+
+class KifizetesIn(BaseModel):
+    #: Mikor érkezett meg a pénz. Üresen a mai nap.
+    kifizetes_datuma: date | None = None
+    #: "Kifizetve, de ne kerüljön a bevételek közé" - ilyenkor INDOK kell.
+    bevetelbe_ne_keruljon: bool = False
+    kihagyas_oka: str | None = None
+
+
+def _projektkod_vagy_404(db: Session, project_code_id: int) -> ProjectCode:
+    pk = db.get(ProjectCode, project_code_id)
+    if pk is None:
+        raise HTTPException(status_code=404, detail="Ez a projektkód nem található.")
+    return pk
+
+
+@router.get("/szamla/{project_code_id}", response_model=SzamlaAllasOut)
+def get_szamla_allas(
+    project_code_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Hol tart a számla-lépés ezen a projektkódon."""
+    return megrendeloi_szamla.allas(db, _projektkod_vagy_404(db, project_code_id))
+
+
+@router.post("/szamla/{project_code_id}/hatarido", response_model=SzamlaAllasOut)
+def set_szamla_hatarido(
+    project_code_id: int,
+    payload: HataridoIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A számlán szereplő fizetési határidő - a kifizetés jelöléséhez kötelező."""
+    pk = _projektkod_vagy_404(db, project_code_id)
+    try:
+        allas = megrendeloi_szamla.allitsd_a_hataridot(db, pk, payload.fizetesi_hatarido)
+    except megrendeloi_szamla.SzamlaHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return allas
+
+
+@router.post("/szamla/{project_code_id}/kifizetve", response_model=SzamlaAllasOut)
+def set_szamla_kifizetve(
+    project_code_id: int,
+    payload: KifizetesIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """"Kifizetve" - a pénz megérkezett. Alapból bevétel-sort is nyit."""
+    pk = _projektkod_vagy_404(db, project_code_id)
+    try:
+        allas = megrendeloi_szamla.jelold_kifizetettnek(
+            db,
+            pk,
+            kifizetes_datuma=payload.kifizetes_datuma,
+            bevetelbe_ne_keruljon=payload.bevetelbe_ne_keruljon,
+            kihagyas_oka=payload.kihagyas_oka,
+        )
+    except megrendeloi_szamla.SzamlaHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return allas
+
+
+@router.post("/szamla/{project_code_id}/visszavonas", response_model=SzamlaAllasOut)
+def szamla_kifizetes_visszavonasa(
+    project_code_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Mégsincs kifizetve - téves gombnyomás javítása."""
+    pk = _projektkod_vagy_404(db, project_code_id)
+    allas = megrendeloi_szamla.vond_vissza(db, pk)
+    db.commit()
+    return allas

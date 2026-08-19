@@ -1,0 +1,209 @@
+"""A megrendelői SZÁMLA lépése egy projektkódon: határidő → kifizetve → bevétel.
+
+Ez a papírozás harmadik (utolsó) lépése, a szerződés és a TIG után. Ugyanaz a
+menet, mint az alvállalkozói oldalon (lásd routes/performance_certificates.py),
+csak a másik irányba: ott mi fizetünk, itt minket fizetnek.
+
+    számla feltöltése -> FIZETÉSI HATÁRIDŐ -> "Kifizetve" (a kifizetés napjával)
+                                                 \\-> bevétel-sor a Pénzügyekben
+                                                 \\-> vagy: indokolt kihagyás
+
+MIÉRT KÖTELEZŐ A HATÁRIDŐ a kifizetés előtt? Mert a határidő az egyetlen dolog,
+amiből látszik, hogy egy még ki nem fizetett számla KÉSIK-e. Ha csak a kifizetés
+napját rögzítenénk, a lejárt számlák pont addig lennének láthatatlanok, amíg
+számít.
+
+A BEVÉTEL-SOR azért keletkezik automatikusan, mert a pénz megérkezése és a
+Pénzügyek két külön felület volt: a projektkódon ki lett pipálva a kifizetés, a
+bevételek közé viszont valakinek kézzel kellett felvezetnie - és ha elmaradt, a
+projekt profitja hazudott.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.document_attachment import DocumentAttachment
+from app.models.finance import Revenue
+from app.models.project_code import ProjectCode
+
+#: Az így keletkezett bevétel-sor megjegyzése - ebből látszik, hogy nem kézzel
+#: vezették fel, hanem a számla-lépés zárásakor jött létre.
+BEVETEL_MEGJEGYZES = "A megrendelői számla kifizetésekor keletkezett."
+
+
+class SzamlaHiba(ValueError):
+    """A művelet nem végezhető el - a felület ezt az üzenetet mutatja."""
+
+
+@dataclass
+class SzamlaAllas:
+    """Hol tart a számla-lépés - ezt mutatja a projektkód "3. Számla" kártyája."""
+
+    fizetesi_hatarido: date | None
+    kifizetes_datuma: date | None
+    kifizetve: bool
+    bevetelbe_ne_keruljon: bool
+    bevetel_kihagyas_oka: str | None
+    #: A számlából adódó összeg (a papírokról vagy a projektkódról).
+    netto: float | None
+    brutto: float | None
+    #: Van-e feltöltött számla-fájl, és hol.
+    van_szamla_fajl: bool
+    #: A számla PDF-je - a csatolmányból, vagy a Notionból örökölt címről. A
+    #: régi projektkódoknál gyakran csak ez utóbbi van meg, és ha nem írnánk
+    #: ki, a "megvan a számla" állítás mögött nem lenne megnyitható papír.
+    szamla_url: str | None
+    #: Keletkezett-e bevétel-sor (és mennyi).
+    bevetel_sorok: int
+
+
+def _szamla_fajl_url(db: Session, pk: ProjectCode) -> str | None:
+    """A projektkódhoz feltöltött számla - a csatolmányokból, különben a
+    Notionból örökölt URL-ből."""
+    fajl = db.scalars(
+        select(DocumentAttachment)
+        .where(
+            DocumentAttachment.entity_type == "projectCode",
+            DocumentAttachment.entity_id == pk.id,
+            DocumentAttachment.kategoria == "szamla",
+        )
+        .order_by(DocumentAttachment.id.desc())
+    ).first()
+    if fajl is not None:
+        return fajl.url
+    return pk.szamla_url if isinstance(pk.szamla_url, str) and pk.szamla_url else None
+
+
+def _osszeg(pk: ProjectCode) -> tuple[float | None, float | None]:
+    """(nettó, bruttó) - a TIG a legerősebb forrás, mert az igazolja a
+    ténylegesen elvégzett munkát; utána a szerződés, végül a projektkód
+    örökölt mezői.
+
+    A bruttót a "+ÁFA" jelölőből számoljuk, ugyanúgy, ahogy a papírok teszik -
+    nem tárolunk külön bruttót, amit később senki nem tartana karban."""
+    for papir in (*(pk.megrendeloi_tigek or []), *(pk.megrendeloi_szerzodesek or [])):
+        if papir.netto_osszeg is not None:
+            netto = float(papir.netto_osszeg)
+            return netto, round(netto * 1.27, 2) if papir.plusz_afa else netto
+    for ertek in (pk.netto_osszeg, pk.szerzodes_netto_osszeg):
+        if ertek is not None:
+            netto = float(ertek)
+            plusz_afa = "afa" in (pk.plusz_afa or "").casefold().replace("á", "a")
+            return netto, round(netto * 1.27, 2) if plusz_afa else netto
+    return None, None
+
+
+def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
+    netto, brutto = _osszeg(pk)
+    szamla_url = _szamla_fajl_url(db, pk)
+    return SzamlaAllas(
+        fizetesi_hatarido=pk.fizetesi_hatarido,
+        kifizetes_datuma=pk.utalas_datuma,
+        kifizetve=pk.bevetel_kifizetve,
+        bevetelbe_ne_keruljon=pk.bevetelbe_ne_keruljon,
+        bevetel_kihagyas_oka=pk.bevetel_kihagyas_oka,
+        netto=netto,
+        brutto=brutto,
+        van_szamla_fajl=szamla_url is not None,
+        szamla_url=szamla_url,
+        bevetel_sorok=len(list(pk.revenues or [])),
+    )
+
+
+def allitsd_a_hataridot(db: Session, pk: ProjectCode, hatarido: date | None) -> SzamlaAllas:
+    """A számlán szereplő fizetési határidő. Törölni csak addig lehet, amíg a
+    számla nincs kifizetve - utána az adat a bevétel-sorra is átment."""
+    if hatarido is None and pk.utalas_datuma is not None:
+        raise SzamlaHiba("A számla már ki van fizetve, a határidő nem törölhető.")
+    pk.fizetesi_hatarido = hatarido
+    # A már meglévő bevétel-soron is javítjuk, ha ott még nem volt megadva:
+    # ugyanannak a számlának nem lehet két különböző határideje.
+    for sor in pk.revenues or []:
+        if sor.fizetes_hatarideje is None:
+            sor.fizetes_hatarideje = hatarido
+    db.flush()
+    return allas(db, pk)
+
+
+def jelold_kifizetettnek(
+    db: Session,
+    pk: ProjectCode,
+    *,
+    kifizetes_datuma: date | None = None,
+    bevetelbe_ne_keruljon: bool = False,
+    kihagyas_oka: str | None = None,
+) -> SzamlaAllas:
+    """"Kifizetve" - a pénz megérkezett.
+
+    Alapesetben bevétel-sort is nyit (vagy kiegészíti a meglévőt), hogy a
+    Pénzügyekben is ott legyen. Ha a hívó azt mondja, hogy ez a tétel nem való
+    a bevételek közé, akkor INDOK kell hozzá, és nem keletkezik sor - a
+    projektkód viszont így is lezárt lesz."""
+    if pk.fizetesi_hatarido is None:
+        raise SzamlaHiba(
+            "Előbb add meg a számlán szereplő fizetési határidőt - enélkül nem látszik, ha egy számla késik."
+        )
+    if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
+        raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")
+
+    nap = kifizetes_datuma or date.today()
+    pk.utalas_datuma = nap
+    pk.bevetelbe_ne_keruljon = bevetelbe_ne_keruljon
+    pk.bevetel_kihagyas_oka = (kihagyas_oka or "").strip() or None if bevetelbe_ne_keruljon else None
+
+    if not bevetelbe_ne_keruljon:
+        _vezesd_fel_a_bevetelt(db, pk, nap)
+    db.flush()
+    return allas(db, pk)
+
+
+def _vezesd_fel_a_bevetelt(db: Session, pk: ProjectCode, nap: date) -> None:
+    """A bevétel-sor létrehozása/kiegészítése.
+
+    Meglévő sort nem duplázunk (a Notionból importált bevételek már ott
+    vannak): olyankor csak a hiányzó mezőket töltjük ki, és a kifizetés napját
+    írjuk be. Új sort csak akkor nyitunk, ha egyáltalán nincs bevétel."""
+    netto, brutto = _osszeg(pk)
+    szamla_url = _szamla_fajl_url(db, pk)
+    sorok = list(pk.revenues or [])
+    if not sorok:
+        sor = Revenue(
+            project_code_id=pk.id,
+            netto=netto,
+            brutto=brutto,
+            penznem=pk.penznem or "HUF",
+            megjegyzes=BEVETEL_MEGJEGYZES,
+        )
+        db.add(sor)
+        sorok = [sor]
+
+    for sor in sorok:
+        if sor.fizetes_datuma is None:
+            sor.fizetes_datuma = nap
+        if sor.fizetes_hatarideje is None:
+            sor.fizetes_hatarideje = pk.fizetesi_hatarido
+        if not sor.bevetel_formaja and pk.bevetel_formaja:
+            sor.bevetel_formaja = pk.bevetel_formaja
+        if not sor.szamla_file_url and szamla_url:
+            sor.szamla_file_url = szamla_url[:500]
+
+
+def vond_vissza(db: Session, pk: ProjectCode) -> SzamlaAllas:
+    """Mégsincs kifizetve - téves gombnyomás javítása.
+
+    A bevétel-sort NEM töröljük (lehet, hogy máshonnan való, és a törlés
+    visszahozhatatlan), csak a kifizetés dátumát vesszük ki róla - így a
+    Pénzügyekben újra "kiállítva, még nem fizetve" lesz."""
+    pk.utalas_datuma = None
+    pk.bevetelbe_ne_keruljon = False
+    pk.bevetel_kihagyas_oka = None
+    for sor in pk.revenues or []:
+        if sor.megjegyzes == BEVETEL_MEGJEGYZES or sor.fizetes_datuma is not None:
+            sor.fizetes_datuma = None
+    db.flush()
+    return allas(db, pk)

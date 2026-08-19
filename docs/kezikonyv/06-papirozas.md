@@ -398,6 +398,39 @@ a szabályok pedig `services/megrendeloi_papir.py`-ben.
 Frontend: `components/megrendeloi/` (`MegrendeloiPapirKezelo`, `PapirKapcsolok`,
 `KeretszerzodesKezelo`, `MegrendeloiPapirokOldal`).
 
+### A harmadik lépés: a SZÁMLA (határidő → kifizetve → bevétel)
+
+A szerződés és a TIG után jön a pénz. A projektkód adatlapján a "3. Számla"
+kártya ezt viszi végig (`services/megrendeloi_szamla.py`,
+`components/megrendeloi/MegrendeloiSzamla.tsx`):
+
+1. **A számla PDF-je** feltölthető (vagy a Notionból örökölt címen nyitható).
+2. **Fizetési határidő** - a számlán szereplő nap. A "Kifizetve" gomb addig
+   nem aktív, amíg ez nincs meg: a határidő az EGYETLEN dolog, amiből látszik,
+   hogy egy még ki nem fizetett számla késik-e. Ha csak a kifizetés napját
+   rögzítenénk, a lejárt számlák pont addig lennének láthatatlanok, amíg
+   számít.
+3. **"Kifizetve"** - a párbeszéd bekéri, MIKOR érkezett meg a pénz (nem a mai
+   napot feltételezzük: a jelölés rendszerint napokkal a beérkezés után
+   történik, és egy rossz nap rossz hónapba viszi a bevételt).
+4. **Bevétel-sor keletkezik** a Pénzügyekben - a dátumokkal, az összeggel (a
+   TIG-ről, annak híján a szerződésről vagy a projektkódról) és a számla
+   fájljával. Eddig ez két külön felület volt: a projektkódon ki volt pipálva
+   a kifizetés, a bevételt viszont valakinek kézzel kellett felvezetnie - és
+   ha elmaradt, a projekt profitja hazudott. Meglévő bevétel-sort nem
+   duplázunk, csak kiegészítünk.
+
+**"Kifizetve, de ne kerüljön a bevételek közé"**: van munka, ami ki van
+fizetve, de a Pénzügyekbe nem való (beszámították, másik cégen át folyt be,
+máshol el van könyvelve) - ott egy itteni sor megkétszerezné az összeget.
+Ilyenkor a jelöléshez **indok kell** (`ProjectCode.bevetelbe_ne_keruljon` +
+`bevetel_kihagyas_oka`), és a projektkód így is lezártnak számít
+(`bevetel_kifizetve`), tehát nem áll örökre a teendők között.
+
+A téves gombnyomás visszavonható: a kifizetés dátuma lekerül a projektkódról
+és a bevétel-sorról is, de magát a sort nem töröljük (lehet, hogy máshonnan
+való, és a törlés visszahozhatatlan).
+
 ### Kell-e egyáltalán papír?
 
 A projektkódon **két külön kapcsoló** dönti el, szándékosan nem egy:
@@ -640,8 +673,34 @@ kell hogy őrizze, ami rajta van: ha a cég azóta székhelyet váltott, a mai a
 visszamenőleg átírná a történelmet.
 
 Idempotens, és a **kézzel készített papírhoz nem nyúl**: az átvett sorokat a
-megjegyzésük különbözteti meg, ahol pedig a felületen már csináltak papírt, ott
-az import nem készít mellé másodpéldányt.
+megjegyzésük KEZDETE különbözteti meg (`Notionból átvéve…`), ahol pedig a
+felületen már csináltak papírt, ott az import nem készít mellé másodpéldányt.
+
+#### Amit a Notion nem egyféleképp ad
+
+A régi sorok azért látszottak hiányosnak, mert ugyanaz az adat többféle alakban
+áll a Notionban. Az átvétel ezért mindegyiket megpróbálja:
+
+- **A PDF címe** lehet sima `url`, `files` lista, vagy beágyazott objektum
+  (`{"file": {"url": …}}`). Korábban csak a stringet fogadtuk el, így a TIG
+  PDF-je "megvolt", de sehol nem lehetett megnyitni - ez volt a leggyakoribb
+  panasz. Most az `_url()` mindhárom alakból kiszedi a címet, és a
+  projektkód-import a "TIG url" mezőhöz feltöltött fájlt is a saját tárhelyünkre
+  menti (a Notion linkje egy óra múlva lejár).
+- **Az összeg** fele FORMULA vagy ROLLUP (`Nettó`, `Összesen nettó`,
+  `Vállalási ár`, `Forintban`) - ezek beágyazott szerkezetként jönnek, nem
+  számként. Az `_szam()` ezekből (és a "1 200 000 Ft" alakú szövegből) is
+  kihozza az értéket; a papír-specifikus mezők után ezek a tartalékok.
+- **A teljesítés ideje és a keltezés** a szöveges mező → formázott dátum →
+  valódi dátum sorrendben áll össze.
+- **Ami nem fér a papír mezőibe** (szerződés helye, speciális eset, TIG
+  speciális), az a papír **megjegyzésébe** kerül - ott marad annál a papírnál,
+  amelyikről szól, nem vész el a projektkód nyers mezői közt.
+
+Ha egy régi papírról hiányzik a PDF vagy az adat, a sorrend: előbb a
+**Projektkódok** import (ez tölti le a fájlokat a Notionból), utána a
+**Megrendelői papírok** lépés (ez nem hív Notiont, a saját adatunkból dolgozik).
+Mindkettő az admin import-panelről indítható külön is.
 
 Ugyanez a lépés **köti be a keretszerződéseket az ügyfelükhöz**, ahol a Notionban
 üresen maradt az "Akivel szerződünk" reláció: a hivatkozó projektkódok ügyfelét

@@ -5,6 +5,7 @@ import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { KoltsegBontas } from "@/components/KoltsegBontas";
 import { KeretKotes } from "@/components/megrendeloi/KeretKotes";
 import { MegrendeloiPapirKezelo } from "@/components/megrendeloi/MegrendeloiPapirKezelo";
+import { MegrendeloiSzamla } from "@/components/megrendeloi/MegrendeloiSzamla";
 import { PapirKapcsolok } from "@/components/megrendeloi/PapirKapcsolok";
 import { ProjektkodBontasTablak } from "@/components/projektkod/ProjektkodBontasTablak";
 import { StatCard } from "@/components/StatCard";
@@ -18,6 +19,7 @@ import {
   getMegrendeloiKeretek,
   getMegrendeloiKontaktok,
   getMegrendeloiPapirok,
+  getMegrendeloiSzamlaAllas,
   getMyPagePermissions,
   getProjektkodBontas,
   getRecord,
@@ -54,6 +56,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     pagePermissions,
     currentUser,
     attachments,
+    szamlaAllas,
   ] = await Promise.all([
     getRelated(ENTITY_PATHS.revenue, { project_code_id: projectCodeId }),
     // A megrendelői papírok (lásd backend routes/megrendeloi_papirok.py): a
@@ -69,6 +72,9 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     getMyPagePermissions(),
     getCurrentUser(),
     getAttachments("projectCode", projectCodeId),
+    // A számla-lépés állása: határidő, kifizetés napja, és hogy keletkezett-e
+    // bevétel-sor (lásd backend services/megrendeloi_szamla.py).
+    getMegrendeloiSzamlaAllas(projectCodeId),
   ]);
 
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
@@ -176,15 +182,24 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           </Card>
           <Card title="3. Számla" icon={Receipt}>
             {szamlazhat ? (
-              <DokumentumFeltoltes
-                entityType="projectCode"
-                entityId={projectCodeId}
-                attachments={szamlak}
-                kategoria="szamla"
-                canEdit={canEdit}
-                canDelete={canDelete}
-                emptyText="Nincs feltöltött számla."
-              />
+              <div className="space-y-3">
+                <DokumentumFeltoltes
+                  entityType="projectCode"
+                  entityId={projectCodeId}
+                  attachments={szamlak}
+                  kategoria="szamla"
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  emptyText="Nincs feltöltött számla."
+                />
+                {/* A pénz útja: mikorra szól a számla, mikor jött meg, és
+                    bekerül-e a Pénzügyek bevételei közé. */}
+                {szamlaAllas && (
+                  <div className="border-t border-border pt-3">
+                    <MegrendeloiSzamla projectCodeId={projectCodeId} allas={szamlaAllas} canEdit={canEdit} />
+                  </div>
+                )}
+              </div>
             ) : (
               // Nem tiltás, hanem sorrend: a számla a papírok után jön. Ha
               // valamiért mégis kell, a hiányzó papírt kell rendezni (vagy

@@ -2538,6 +2538,27 @@ export async function getMegrendeloiElotoltes(
   return apiGet<MegrendeloiElotoltes>(`/api/v1/megrendeloi-papirok/${fajta}/elotoltes/${projectCodeId}`);
 }
 
+/** A megrendelői SZÁMLA lépésének állása egy projektkódon (a papírozás
+ * harmadik szakasza: határidő → kifizetve → bevétel). */
+export type MegrendeloiSzamlaAllas = {
+  fizetesi_hatarido: string | null;
+  kifizetes_datuma: string | null;
+  kifizetve: boolean;
+  /** "Kifizetve, de ne kerüljön a bevételek közé" - indokkal. */
+  bevetelbe_ne_keruljon: boolean;
+  bevetel_kihagyas_oka: string | null;
+  netto: number | null;
+  brutto: number | null;
+  van_szamla_fajl: boolean;
+  /** A számla PDF-je (csatolmány vagy a Notionból örökölt cím). */
+  szamla_url: string | null;
+  bevetel_sorok: number;
+};
+
+export async function getMegrendeloiSzamlaAllas(projectCodeId: number): Promise<MegrendeloiSzamlaAllas | null> {
+  return apiGet<MegrendeloiSzamlaAllas>(`/api/v1/megrendeloi-papirok/szamla/${projectCodeId}`);
+}
+
 export async function getMegrendeloiKeretek(): Promise<MegrendeloiKeret[]> {
   return (await apiGet<MegrendeloiKeret[]>("/api/v1/megrendeloi-keretszerzodesek")) ?? [];
 }

@@ -77,6 +77,21 @@ class ProjectCode(TimestampMixin, Base):
     #: MIÉRT nincs papír. A jelöléshez kötelező (lásd routes/project_codes.py):
     #: fél év múlva ez az egyetlen dolog, amiből kiderül, mi történt.
     papir_nelkul_indoka: Mapped[str | None] = mapped_column(Text)
+
+    #: "Kifizetve, de NE kerüljön a bevételek közé."
+    #:
+    #: A számla-lépés lezárásakor alapból bevétel-sor keletkezik (az a pénz
+    #: tényleg megjött). Van viszont olyan eset, amikor a munka ki van
+    #: fizetve, de a Pénzügyekbe nem való: beszámították valamibe, egy másik
+    #: cégen át folyt be, vagy már máshol el van könyvelve. Ilyenkor a
+    #: projektkód mégis LEZÁRT (nem áll örökre a teendők között), csak nincs
+    #: mögötte bevétel-sor - és ide van írva, miért.
+    bevetelbe_ne_keruljon: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    #: MIÉRT nem kerül a bevételek közé - a jelöléshez kötelező.
+    bevetel_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
+
     teljesites_datuma: Mapped[date | None] = mapped_column(Date)
     utalas_datuma: Mapped[date | None] = mapped_column(Date)
     szamla_url: Mapped[str | None] = mapped_column(String(500))
@@ -240,7 +255,15 @@ class ProjectCode(TimestampMixin, Base):
 
         Bevétel-sor nélkül hamis: olyankor nem tudunk pénzről, tehát nem
         mondhatjuk, hogy megjött. A lista így hozza előre azt is, ahol csak
-        elfelejtették felvezetni."""
+        elfelejtették felvezetni.
+
+        KIVÉTEL: ha valaki kimondta, hogy a pénz megjött, de ez a tétel nem
+        való a bevételek közé (beszámították, máshol könyvelték - lásd
+        bevetelbe_ne_keruljon), akkor a kifizetés dátuma önmagában lezárja. Ez
+        nem "szemet hunyás": a jelöléshez indok is kell, és az ott marad a
+        projektkódon."""
+        if self.bevetelbe_ne_keruljon and self.utalas_datuma is not None:
+            return True
         bevetelek = list(self.revenues)
         return bool(bevetelek) and all(r.fizetes_datuma is not None for r in bevetelek)
 

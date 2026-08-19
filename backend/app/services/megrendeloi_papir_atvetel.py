@@ -28,6 +28,7 @@ készítettek, ahhoz NEM nyúl - ott már élő folyamat van, azt egy import nem
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Number
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -131,12 +132,107 @@ def _plusz_afa(ertek) -> bool | None:
 
 
 def _szam(ertek) -> float | None:
+    """Szám kinyerése a Notionból örökölt értékből.
+
+    A HYPE ADMIN táblában az összegek fele FORMULA vagy ROLLUP: ezek nem sima
+    számként jönnek át, hanem beágyazott szerkezetként ({"number": 500000},
+    {"formula": {"number": …}}, listában a rollup elemei). Ha csak a
+    `float(ertek)`-re hagyatkozunk, ezek mind None-ok lesznek - és pont az
+    összeg hiányzik a papírról, amit a legkevésbé lehet kitalálni."""
     if ertek is None:
         return None
-    try:
-        return float(ertek)
-    except (TypeError, ValueError):
+    if isinstance(ertek, bool):
         return None
+    # Az adatbázisból Decimal jön (Numeric oszlop), a Notionból int/float -
+    # mindkettő közvetlenül számmá alakítható.
+    if isinstance(ertek, Number):
+        return float(ertek)
+    if isinstance(ertek, str):
+        # "1 200 000 Ft" / "1.200.000" - a szóköz és a nem-szám karakterek
+        # zajok, a tizedes vessző viszont számít.
+        tisztitott = "".join(jel for jel in ertek if jel.isdigit() or jel in ",.-").replace(",", ".")
+        # Ha ezer-elválasztó pontok is vannak, az utolsó pont a tizedesé.
+        if tisztitott.count(".") > 1:
+            elso, _, utolso = tisztitott.rpartition(".")
+            tisztitott = elso.replace(".", "") + "." + utolso
+        try:
+            return float(tisztitott)
+        except ValueError:
+            return None
+    if isinstance(ertek, dict):
+        for kulcs in ("number", "formula", "rollup", "value", "array"):
+            talalat = _szam(ertek.get(kulcs))
+            if talalat is not None:
+                return talalat
+        return None
+    if isinstance(ertek, (list, tuple)):
+        for elem in ertek:
+            talalat = _szam(elem)
+            if talalat is not None:
+                return talalat
+    return None
+
+
+def _url(ertek) -> str | None:
+    """URL kinyerése bármilyen Notion-alakból (string, lista, objektum).
+
+    Ugyanaz a mező lehet `url`, `files` vagy rich_text a Notionban, és a
+    régebbi importok a nyers alakot írták az oszlopba. Egy lista alakú érték
+    így "megvolt", de megnyithatatlan maradt - pont ez tüntette el a TIG
+    PDF-jét a papírról."""
+    if ertek is None:
+        return None
+    if isinstance(ertek, str):
+        szoveg = ertek.strip()
+        return szoveg if szoveg.startswith("http") else None
+    if isinstance(ertek, dict):
+        for kulcs in ("url", "external", "file"):
+            talalat = _url(ertek.get(kulcs))
+            if talalat:
+                return talalat
+        return None
+    if isinstance(ertek, (list, tuple)):
+        for elem in ertek:
+            talalat = _url(elem)
+            if talalat:
+                return talalat
+    return None
+
+
+def _elso_kitoltott(*ertekek) -> str | None:
+    """Az első nem üres szöveg - a papírok mezőinek tartalékláncához."""
+    for ertek in ertekek:
+        if ertek is None:
+            continue
+        szoveg = str(ertek).strip()
+        if szoveg:
+            return szoveg
+    return None
+
+
+#: Amit a papír mezői nem tudnak elnyelni, de kár lenne elveszíteni: a
+#: Notionban ezek a "hogyan is volt ez pontosan" jegyzetek.
+KIEGESZITO_MEZOK: tuple[tuple[str, str], ...] = (
+    ("szerzodes_specialis_eset", "Szerződés speciális eset"),
+    ("specialis_eset", "Speciális eset"),
+    ("tig_specialis", "TIG speciális"),
+    ("szerzodes_helye", "Szerződés helye"),
+    ("adminisztracios_tablaban", "Adminisztrációs táblában"),
+)
+
+
+def _kiegeszito_megjegyzes(pk: ProjectCode) -> str:
+    """Az átvétel-jelölés + a Notionból örökölt magyarázó szövegek.
+
+    A papíron nincs külön oszlopuk, de a megjegyzésbe beírva ott maradnak
+    annál a papírnál, amelyikről szólnak - és nem kell a projektkód nyers
+    mezői közt keresgélni."""
+    reszek = [ATVETT_MEGJEGYZES]
+    for mezo, cimke in KIEGESZITO_MEZOK:
+        ertek = _elso_kitoltott(getattr(pk, mezo, None))
+        if ertek:
+            reszek.append(f"{cimke}: {ertek}")
+    return "\n".join(reszek)
 
 
 @dataclass
@@ -260,12 +356,12 @@ def szerzodes_mezoi(pk: ProjectCode) -> dict:
     tartalék - a régi sorokon jellemzően csak az egyik van kitöltve."""
     return {
         **_cegadat(pk),
-        "megbizas_targya": pk.szerzodes_targya or pk.megbizas_targya,
-        "projekt_nev": pk.szerzodes_projekt_nev or pk.project_nev,
-        "teljesites_szoveg": pk.teljesites or pk.tig_teljesitesi_ido,
-        "netto_osszeg": _szam(pk.szerzodes_netto_osszeg) or _szam(pk.netto_osszeg),
+        "megbizas_targya": _elso_kitoltott(pk.szerzodes_targya, pk.megbizas_targya, pk.project_nev),
+        "projekt_nev": _elso_kitoltott(pk.szerzodes_projekt_nev, pk.project_nev, pk.tig_projektnev),
+        "teljesites_szoveg": _teljesites_szoveg(pk, pk.teljesites, pk.tig_teljesitesi_ido),
+        "netto_osszeg": _netto(pk, pk.szerzodes_netto_osszeg, pk.netto_osszeg),
         "plusz_afa": _plusz_afa(pk.szerzodes_plusz_afa) or _plusz_afa(pk.plusz_afa),
-        "keltezes": pk.szerzodes_keltezes_datuma or pk.keltezes_datuma,
+        "keltezes": pk.szerzodes_keltezes_datuma or pk.keltezes_datuma or pk.teljesites_datuma,
     }
 
 
@@ -273,13 +369,42 @@ def tig_mezoi(pk: ProjectCode) -> dict:
     """A teljesítési igazolás adatai - a TIG-specifikus mezőkkel elöl."""
     return {
         **_cegadat(pk),
-        "megbizas_targya": pk.megbizas_targya or pk.szerzodes_targya,
-        "projekt_nev": pk.tig_projektnev or pk.project_nev,
-        "teljesites_szoveg": pk.tig_teljesitesi_ido or pk.teljesites,
-        "netto_osszeg": _szam(pk.netto_osszeg) or _szam(pk.szerzodes_netto_osszeg),
+        "megbizas_targya": _elso_kitoltott(pk.megbizas_targya, pk.szerzodes_targya, pk.project_nev),
+        "projekt_nev": _elso_kitoltott(pk.tig_projektnev, pk.project_nev, pk.szerzodes_projekt_nev),
+        "teljesites_szoveg": _teljesites_szoveg(pk, pk.tig_teljesitesi_ido, pk.teljesites),
+        "netto_osszeg": _netto(pk, pk.netto_osszeg, pk.szerzodes_netto_osszeg),
         "plusz_afa": _plusz_afa(pk.plusz_afa) or _plusz_afa(pk.szerzodes_plusz_afa),
-        "keltezes": pk.keltezes_datuma,
+        "keltezes": pk.keltezes_datuma or pk.teljesites_datuma or pk.szerzodes_keltezes_datuma,
     }
+
+
+def _teljesites_szoveg(pk: ProjectCode, *elsok) -> str | None:
+    """MIKOR teljesítettünk - szabad szöveg a papírra.
+
+    A Notionban ez háromféleképp van meg: külön szöveges mezőként, formázott
+    dátumként, vagy csak a valódi teljesítés-dátumként. A papíron egy sor van
+    rá, tehát az elsőt vesszük, ami ki van töltve - és ha semmi, legalább a
+    dátumot írjuk oda."""
+    return _elso_kitoltott(
+        *elsok,
+        pk.teljesites_datum_formazva,
+        pk.teljesites_datuma.strftime("%Y. %m. %d.") if pk.teljesites_datuma else None,
+        pk.datum_megjegyzes,
+    )
+
+
+def _netto(pk: ProjectCode, *elsok) -> float | None:
+    """A papírra kerülő nettó összeg.
+
+    A projektkód-specifikus mezők után a Notion FORMULA/ROLLUP mezői jönnek
+    (Nettó, Összesen nettó, Vállalási ár, Forintban): a régi soroknál sokszor
+    csak ezekben van meg a szám. Egy összeg nélküli papír használhatatlan -
+    inkább egy számított értékből induljunk ki, mint semmiből."""
+    for ertek in (*elsok, pk.netto_notion, pk.osszesen_netto_notion, pk.vallalasi_ar_notion, pk.forintban_notion):
+        szam = _szam(ertek)
+        if szam:
+            return szam
+    return None
 
 
 def _kell_e(statusz: str | None, van_fajl: bool, egyeb_jel: bool) -> bool:
@@ -300,12 +425,19 @@ def _kell_e(statusz: str | None, van_fajl: bool, egyeb_jel: bool) -> bool:
 def _atvett_papir(db: Session, modell, project_code_id: int):
     """A KORÁBBAN ÁTVETT sor, ha van - ezt frissítjük újrafuttatáskor.
 
-    Az átvett sorokat a megjegyzésük különbözteti meg a kézzel készítettektől:
-    így egy újrafuttatás nem nyúl ahhoz, amit a felületen csináltak, és nem is
-    készít mellé másodpéldányt."""
+    Az átvett sorokat a megjegyzésük KEZDETE különbözteti meg a kézzel
+    készítettektől: így egy újrafuttatás nem nyúl ahhoz, amit a felületen
+    csináltak, és nem is készít mellé másodpéldányt. Azért a kezdete és nem a
+    teljes egyezés, mert a megjegyzésbe a Notionból örökölt magyarázó szövegek
+    is bekerülnek (lásd _kiegeszito_megjegyzes) - egy pontos egyezés ezeket
+    "kézzel készített" papírnak nézné, és minden futáskor új másodpéldányt
+    nyitna."""
     return db.scalars(
         select(modell)
-        .where(modell.project_code_id == project_code_id, modell.megjegyzes == ATVETT_MEGJEGYZES)
+        .where(
+            modell.project_code_id == project_code_id,
+            modell.megjegyzes.like(f"{ATVETT_MEGJEGYZES}%"),
+        )
         .order_by(modell.id)
     ).first()
 
@@ -318,18 +450,19 @@ def _van_sajat_papir(db: Session, modell, project_code_id: int) -> bool:
     return (
         db.scalars(
             select(modell).where(
-                modell.project_code_id == project_code_id, modell.megjegyzes.is_distinct_from(ATVETT_MEGJEGYZES)
+                modell.project_code_id == project_code_id,
+                modell.megjegyzes.is_(None) | modell.megjegyzes.not_like(f"{ATVETT_MEGJEGYZES}%"),
             )
         ).first()
         is not None
     )
 
 
-def _alkalmaz(papir, mezok: dict, fajl_url: str | None) -> None:
+def _alkalmaz(papir, mezok: dict, fajl_url: str | None, megjegyzes: str = ATVETT_MEGJEGYZES) -> None:
     for mezo, ertek in mezok.items():
         if ertek is not None:
             setattr(papir, mezo, ertek)
-    papir.megjegyzes = ATVETT_MEGJEGYZES
+    papir.megjegyzes = megjegyzes
     if fajl_url:
         # Az ALÁÍRT példány mezőjébe megy: a Notionba feltöltött papír a kész,
         # aláírt dokumentum, nem egy általunk generált piszkozat. Így a
@@ -355,7 +488,7 @@ def _szamla_fajl(db: Session, pk: ProjectCode) -> str | None:
     fajlok = _csatolmanyok(db, pk.id, "szamla")
     if fajlok:
         return fajlok[0].url
-    return pk.szamla_url if isinstance(pk.szamla_url, str) and pk.szamla_url else None
+    return _url(pk.szamla_url)
 
 
 def vedd_at_a_szamlat(db: Session, pk: ProjectCode, merleg: Atvetel) -> None:
@@ -419,7 +552,10 @@ def vedd_at_a_projektkodot(db: Session, pk: ProjectCode, merleg: Atvetel) -> Non
     )
     # A TIG-nél a projektkódon külön URL-oszlop is őrzi az aláírt papírt (a
     # Notion "TIG aláírva" / "TIG url" mezőiből) - az is fájl-bizonyíték.
-    tig_url = pk.tig_alairva_url or (pk.tig_url if isinstance(pk.tig_url, str) else None)
+    # A TIG PDF-je HÁROM helyen lehet: a projektkódhoz importált fájlok közt,
+    # a "TIG aláírva" oszlopban, vagy a "TIG url" mezőben - és az utóbbi kettő
+    # a régi importokból lista/objektum alakban is állhat (lásd _url).
+    tig_url = _url(pk.tig_alairva_url) or _url(pk.tig_url)
     kell_tig = _kell_e(pk.tig_statusza, bool(tig_fajlok) or bool(tig_url), bool(pk.tig_kikuldve))
 
     if not kell_szerzodes and not kell_tig:
@@ -432,7 +568,12 @@ def vedd_at_a_projektkodot(db: Session, pk: ProjectCode, merleg: Atvetel) -> Non
         if uj:
             papir = MegrendeloiSzerzodes(project_code_id=pk.id)
             db.add(papir)
-        _alkalmaz(papir, szerzodes_mezoi(pk), szerzodes_fajlok[0].url if szerzodes_fajlok else None)
+        _alkalmaz(
+            papir,
+            szerzodes_mezoi(pk),
+            szerzodes_fajlok[0].url if szerzodes_fajlok else None,
+            _kiegeszito_megjegyzes(pk),
+        )
         merleg.szerzodes_letrejott += 1 if uj else 0
         merleg.szerzodes_frissult += 0 if uj else 1
 
@@ -442,7 +583,12 @@ def vedd_at_a_projektkodot(db: Session, pk: ProjectCode, merleg: Atvetel) -> Non
         if uj:
             papir = MegrendeloiTig(project_code_id=pk.id)
             db.add(papir)
-        _alkalmaz(papir, tig_mezoi(pk), tig_fajlok[0].url if tig_fajlok else tig_url)
+        _alkalmaz(
+            papir,
+            tig_mezoi(pk),
+            tig_fajlok[0].url if tig_fajlok else tig_url,
+            _kiegeszito_megjegyzes(pk),
+        )
         merleg.tig_letrejott += 1 if uj else 0
         merleg.tig_frissult += 0 if uj else 1
 
