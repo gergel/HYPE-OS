@@ -99,7 +99,10 @@ class MonthlyFinance(BaseModel):
 class OutstandingProject(BaseModel):
     project_code_id: int
     projektkod: str
-    ugyfel_nev: str | None
+    #: A munka NEVE (nem az ügyfélé). A régi, Notionból importált kódok
+    #: többségénél az ügyfél "Ismeretlen ügyfél (Notion import)" - abból a
+    #: listából nem derült ki, MI az a tétel; a projekt nevéből igen.
+    projekt_nev: str | None
     kintlevo_osszeg: float
     legkorabbi_hatarido: date | None
     lejart: bool
@@ -258,7 +261,7 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     unpaid = db.scalars(
         select(Revenue)
         .where(Revenue.fizetes_datuma.is_(None))
-        .options(selectinload(Revenue.project_code).selectinload(ProjectCode.client))
+        .options(selectinload(Revenue.project_code))
     ).all()
 
     by_project: dict[int, list[Revenue]] = {}
@@ -277,7 +280,7 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
             OutstandingProject(
                 project_code_id=pc_id,
                 projektkod=pc.projektkod if pc else f"#{pc_id}",
-                ugyfel_nev=pc.client.nev if pc and pc.client else None,
+                projekt_nev=(pc.project_nev if pc else None) or None,
                 kintlevo_osszeg=osszeg,
                 legkorabbi_hatarido=legkorabbi,
                 lejart=bool(legkorabbi and legkorabbi < today),

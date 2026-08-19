@@ -1153,7 +1153,8 @@ export type MonthlyFinance = { month: string; bevetel: number; kiadas: number };
 export type OutstandingProject = {
   project_code_id: number;
   projektkod: string;
-  ugyfel_nev: string | null;
+  /** A MUNKA neve (nem az ügyfélé) - lásd backend routes/finance.py. */
+  projekt_nev: string | null;
   kintlevo_osszeg: number;
   legkorabbi_hatarido: string | null;
   lejart: boolean;

@@ -62,8 +62,12 @@ export function OutstandingProjectsTable({ projects }: { projects: FinanceSummar
     <table className="w-full border-collapse text-[13px]">
       <thead>
         <tr className="border-b border-border">
+          <th className="py-1.5 text-left font-medium text-text-secondary">Projektkód</th>
+          {/* A munka NEVE, nem az ügyfélé: a régi, Notionból importált
+              kódoknál az ügyfél többnyire "Ismeretlen ügyfél (Notion
+              import)" volt, tehát ez az oszlop nem mondott semmit arról,
+              MI ez a tétel. */}
           <th className="py-1.5 text-left font-medium text-text-secondary">Projekt</th>
-          <th className="py-1.5 text-left font-medium text-text-secondary">Ügyfél</th>
           <th className="py-1.5 text-right font-medium text-text-secondary">Kintlévő</th>
           <th className="py-1.5 text-right font-medium text-text-secondary">Határidő</th>
         </tr>
@@ -76,7 +80,7 @@ export function OutstandingProjectsTable({ projects }: { projects: FinanceSummar
                 {p.projektkod}
               </a>
             </td>
-            <td className="py-2 pr-4 text-text-secondary">{p.ugyfel_nev ?? "–"}</td>
+            <td className="py-2 pr-4 text-text-secondary">{p.projekt_nev ?? "–"}</td>
             <td className="py-2 text-right font-medium text-text-primary">{formatHuf(p.kintlevo_osszeg)}</td>
             <td className="py-2 text-right">
               {p.legkorabbi_hatarido ? (
