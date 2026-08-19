@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 import { authFetch } from "@/lib/authFetch";
-import { penzzel } from "@/lib/penz";
+import { penznemKod, penzzel } from "@/lib/penz";
 import type {
   MegrendeloiElotoltes,
   MegrendeloiKontakt,
@@ -189,6 +189,9 @@ export function MegrendeloiPapirKezelo({
   const [eloKeret, setEloKeret] = useState(false);
 
   const cimke = fajta === "szerzodes" ? "megrendelői szerződés" : "teljesítési igazolás";
+  // A címkékben a KÓD álljon ("EUR"), ne a Notionből örökölt szabad szöveg
+  // ("Forint") - lásd lib/penz.penznemKod.
+  const valutaKod = penznemKod(penznem);
   const dolgozik = munka !== null;
   const bruttoOsszeg = brutto(urlap.netto_osszeg, urlap.plusz_afa);
 
@@ -694,7 +697,7 @@ export function MegrendeloiPapirKezelo({
                   className={mezoOsztaly}
                 />
               </Mezo>
-              <Mezo label={`Nettó összeg (${penznem}) *`}>
+              <Mezo label={`Nettó összeg (${valutaKod}) *`}>
                 <input
                   type="number"
                   value={urlap.netto_osszeg}
@@ -714,7 +717,7 @@ export function MegrendeloiPapirKezelo({
                   {urlap.plusz_afa ? "Igen" : "Nem"}
                 </label>
               </Mezo>
-              <Mezo label={`Bruttó összeg (${penznem})`}>
+              <Mezo label={`Bruttó összeg (${valutaKod})`}>
                 <p className="py-1.5 text-text-secondary">{bruttoOsszeg != null ? penzzel(bruttoOsszeg, penznem) : "–"}</p>
               </Mezo>
               <Mezo label="Keltezés dátuma">

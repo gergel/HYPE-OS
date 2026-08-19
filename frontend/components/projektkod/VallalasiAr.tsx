@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 // A pénzformázó a FÜGGŐSÉG NÉLKÜLI modulból jön: a lib/api.ts a
 // "next/headers"-t is behúzza, amit kliens komponensbe nem lehet bevinni.
-import { devizas, formatHuf, penzzel, PENZNEMEK } from "@/lib/penz";
+import { devizas, formatHuf, penznemKod, penzzel, PENZNEMEK } from "@/lib/penz";
 
 /** MENNYIÉRT csináltuk ezt a munkát: nettó összeg + "+ÁFA".
  *
@@ -48,7 +48,11 @@ export function VallalasiAr({
   const router = useRouter();
   const [ertek, setErtek] = useState(netto === null ? "" : String(netto));
   const [afa, setAfa] = useState(!!pluszAfa && pluszAfa.toLowerCase().includes("fa"));
-  const [valuta, setValuta] = useState(penznem || "HUF");
+  // A NORMALIZÁLT kóddal dolgozunk: a régi projektkódokon "Forint" áll (a
+  // Notion szabad select-je), a választó viszont HUF/EUR/USD értékekkel megy -
+  // enélkül a mező üresnek látszott, és a szerver ismeretlen pénznemet
+  // kiabált egy teljesen szokásos forintos munkára.
+  const [valuta, setValuta] = useState(penznemKod(penznem));
   const [arfolyamErtek, setArfolyamErtek] = useState(arfolyam === null ? "" : String(arfolyam));
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);

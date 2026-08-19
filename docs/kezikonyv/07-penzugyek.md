@@ -220,6 +220,26 @@ kifizetettsége.
 Frontend: `components/finance/`, `RevenueInvoiceStatus.tsx`,
 `TigInvoiceManager.tsx`, `TigAllapotSelect.tsx`.
 
+### A projekt bevétele: a vállalási ár, amíg nincs kifizetés
+
+`models/project_code.bevetel` - két forrásból, ebben a sorrendben:
+
+1. a **tényleges bevétel-sorok**, ha vannak: az a rögzített valóság, azt nem
+   írja felül egy papíron szereplő szám;
+2. különben a **vállalási ár**: a TIG-ről, annak híján a szerződésről, annak
+   híján a projektkód saját mezőjéből (`projektkod_osszeg.forintban()`).
+
+Miért kell a második? Mert a bevétel-sor csak a **kifizetéskor** keletkezik
+(lásd a számla-lépést). Addig a projekt nulla bevétellel és csupa veszteséggel
+állt a listán, pedig az összeg rég ismert volt - ott áll a szerződésen és a
+TIG-en. A profit épp arra való, hogy megmondja, megéri-e a munka; ehhez nem a
+pénz beérkezésére kell várni, hanem tudni kell, mennyiért vállaltuk.
+
+Ez a szám a **PROJEKT képe**, nem a cég éves bevétele: az utóbbi továbbra is
+kizárólag a tényleges bevétel-sorokból számol (lásd fentebb, "Mi számít bele az
+ÉVES bevételbe"), tehát egy még ki nem fizetett munka nem duzzasztja fel az
+éves bevételt. A `becsult_profit` neve is ezért „becsült".
+
 ### Deviza: euróban/dollárban felvezetett tétel
 
 Egyetlen szabály, egy helyen: `services/penznem.py`.
@@ -241,6 +261,15 @@ kihagyná a nem forintos sorokat. (Az autók oldala pontosan ezt tette:
 `penznem == "HUF"` szűrővel számolt, tehát egy euróban fizetett szerviz úgy
 tűnt el a költségből, mintha nem is lett volna. Ez a szűrő ezzel együtt el is
 tűnt.)
+
+**„Forint" is forint.** A pénznem a Notionben szabad select volt, magyarul
+kitöltve: a régi projektkódokon „Forint" áll, nem „HUF". A
+`penznem.normalizald()` ezért aliasz-táblából dolgozik („Forint", „Ft", „Euró",
+„€", „Dollár", …), ékezet- és kisbetű-tűrően. Enélkül a felület *ismeretlen
+pénznemet* kiabált egy teljesen szokásos forintos munkára, és árfolyamot kért
+hozzá. Amit nem ismer fel, azt nem nyeli le: nagybetűsítve továbbadja, és a
+szerver beszédesen elutasítja. A táblát a `lib/penz.penznemKod()` tükrözi -
+a kettőt együtt kell módosítani.
 
 **Az eredeti adat megmarad**: `eredeti_penznem`, `eredeti_netto`,
 `eredeti_brutto`, `arfolyam`. Fél év múlva egy 592 500 Ft-os sor mögött

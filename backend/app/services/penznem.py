@@ -27,11 +27,34 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.hu_szoveg import ekezet_nelkul
+
 #: Amiben számlát szoktunk kapni/kiállítani. Bővíthető - a szabály nem függ
 #: attól, hány pénznem van benne.
 PENZNEMEK: tuple[str, ...] = ("HUF", "EUR", "USD")
 
 FORINT = "HUF"
+
+#: AHOGY LE VAN ÍRVA -> a kód, amivel dolgozunk.
+#:
+#: A Notionben ez egy szabad select volt, magyarul kitöltve: a régi
+#: projektkódokon "Forint" áll, nem "HUF". Enélkül a felület ismeretlen
+#: pénznemet kiabált egy teljesen szokásos forintos munkára, és a
+#: pénznem-választó sem tudta, mit mutasson.
+PENZNEM_ALIASZOK: dict[str, str] = {
+    "HUF": "HUF",
+    "FT": "HUF",
+    "FORINT": "HUF",
+    "MAGYAR FORINT": "HUF",
+    "EUR": "EUR",
+    "EURO": "EUR",
+    "€": "EUR",
+    "USD": "USD",
+    "DOLLAR": "USD",
+    "US DOLLAR": "USD",
+    "AMERIKAI DOLLAR": "USD",
+    "$": "USD",
+}
 
 
 class PenznemHiba(ValueError):
@@ -39,11 +62,19 @@ class PenznemHiba(ValueError):
 
 
 def normalizald(penznem: Any) -> str:
-    """Üres/ismeretlen -> forint, egyébként nagybetűs kód."""
+    """A leírt pénznemből a kód, amivel dolgozunk.
+
+    Üres -> forint. A magyar és a rövidített alakokat is felismeri ("Forint",
+    "Ft", "Euró", "€") - lásd PENZNEM_ALIASZOK. Amit nem ismer, azt
+    nagybetűsítve visszaadja: így az `ellenorizd` beszédesen elutasítja, nem
+    pedig csendben forintnak veszi valami mást."""
     if penznem is None:
         return FORINT
-    szoveg = str(penznem).strip().upper()
-    return szoveg or FORINT
+    szoveg = str(penznem).strip()
+    if not szoveg:
+        return FORINT
+    kulcs = ekezet_nelkul(szoveg).upper()
+    return PENZNEM_ALIASZOK.get(kulcs, szoveg.upper())
 
 
 def devizas(penznem: Any) -> bool:

@@ -454,28 +454,36 @@ class ProjectCode(TimestampMixin, Base):
 
     @property
     def bevetel(self) -> float:
-        """A projektkódhoz tartozó bevételek NETTÓ összege.
+        """MENNYI JÖN BE ezen a munkán - nettóban.
 
-        Külön property, mert a listán is látszania kell: a profit önmagában
-        nem mondja meg, nagy bevételből maradt-e kevés, vagy kicsiből sok.
+        Két forrásból, ebben a sorrendben:
+
+        1. a **tényleges bevétel-sorok** (Pénzügyek), ha vannak: az a rögzített
+           valóság, azt nem írja felül egy papíron szereplő szám;
+        2. különben a **vállalási ár**: a TIG-ről, annak híján a szerződésről,
+           annak híján a projektkód saját mezőjéből (lásd
+           services/projektkod_osszeg.py) - forintra váltva, ha devizás munka.
+
+        Miért kell a második? Mert a bevétel-sor csak a KIFIZETÉSKOR keletkezik
+        (lásd services/megrendeloi_szamla.py). Addig a projekt nulla bevétellel
+        és csupa veszteséggel állt a listán, pedig az összeg rég ismert volt -
+        ott áll a szerződésen és a TIG-en. A profit épp arra való, hogy megmondja,
+        megéri-e a munka; ehhez nem a pénz beérkezésére kell várni, hanem tudni
+        kell, mennyiért vállaltuk.
 
         Nettó, mert a költség oldalán is az van (lásd `_osszeg` és
         services/elszamolas.py) - két különböző szemlélet különbsége nem
         profit, hanem ÁFA.
 
-        KIVÉTEL: ha a munka ki van fizetve, de szándékosan NEM került a
-        bevételek közé (beszámítás, másik cégen át rendezve - lásd
-        bevetelbe_ne_keruljon), akkor a papírokon/projektkódon szereplő összeg
-        számít. A pénz ugyanis megjött; csak a Pénzügyek nyilvántartásába nem
-        való, mert ott duplázna. Enélkül ezeknél a munkáknál nulla bevétel és
-        csupa veszteség látszana - vagyis pont a profit hazudna arról, amiért
-        ez a szám van."""
+        Ez a szám a PROJEKT képe, nem a cég éves bevétele: az utóbbi továbbra is
+        kizárólag a tényleges bevétel-sorokból számol (lásd routes/finance.py),
+        tehát egy még ki nem fizetett munka nem duzzasztja fel az éves bevételt."""
         sorok = float(sum(self._osszeg(r) for r in self.revenues))
-        if sorok or not self.bevetelbe_ne_keruljon:
+        if sorok:
             return sorok
         from app.services import projektkod_osszeg
 
-        netto, _ = projektkod_osszeg.szamlazott_osszeg(self)
+        netto, _ = projektkod_osszeg.forintban(self)
         return float(netto or 0)
 
     @property
