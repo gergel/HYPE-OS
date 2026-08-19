@@ -52,6 +52,20 @@ alátámasztja. A feltöltés attól még kell: a másik két forrásnál által
 blokk vagy számla, és eddig nem volt hova tenni - a fájl a könyvelő mappájában
 kötött ki, a tételtől külön.
 
+**A felvitel pillanatában is feltölthető**, nem csak utólag a listában: az
+"Új kiadás" és az "Új nap rögzítése" ablakban ott a fájlválasztó. Ez nem
+kényelmi apróság - a blokk akkor van kéznél, amikor a tételt felvezetik, és
+egy külön "majd megkeresem a sort és feltöltöm" lépés az, ami rendszeresen
+elmarad.
+
+Műszakilag a fájl előbb van meg, mint a rekord (a csatolmány végpontnak kell
+az entity_id), ezért az ablak csak ÖSSZEGYŰJTI a fájlokat
+(`components/UjFajlValaszto.tsx`), és a mentés UTÁN tölti fel őket a kapott
+id-vel (`lib/csatolmany.toltsdFelAFajlokat`). Ha a mentés sikerül, de a
+feltöltés nem, az ablak nyitva marad az üzenettel - a tételt viszont NEM
+vonjuk vissza: az megvan, a fájl pedig a sor mellől bármikor újra
+feltölthető.
+
 A lista **egyetlen lekérdezéssel** hozza a fájlokat az összes sorhoz
 (`_csatolmanyok`), nem soronként: egy hónapnyi kassza megnyitása különben
 több tucat kérést indítana olyan sorokhoz is, ahol nincs is fájl. A

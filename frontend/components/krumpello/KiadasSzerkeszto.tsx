@@ -6,6 +6,8 @@ import { authFetch } from "@/lib/authFetch";
 import { ModalReteg } from "@/components/ModalReteg";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { KeresosSelect } from "@/components/KeresosSelect";
+import { UjFajlValaszto } from "@/components/UjFajlValaszto";
+import { toltsdFelAFajlokat } from "@/lib/csatolmany";
 import type { KrumpelloForras, KrumpelloKiadas } from "@/lib/api";
 
 const FORRAS_CIMKEK: { value: KrumpelloForras; label: string; sublabel: string }[] = [
@@ -42,6 +44,10 @@ function KiadasUrlap({ kiadas, onBezar }: { kiadas?: KrumpelloKiadas; onBezar: (
   const [afa, setAfa] = useState(kiadas?.afa != null ? String(kiadas.afa) : "");
   const [brutto, setBrutto] = useState(kiadas?.brutto != null ? String(kiadas.brutto) : "");
   const [megjegyzes, setMegjegyzes] = useState(kiadas?.megjegyzes ?? "");
+  // A számla akkor van kéznél, amikor a tételt felvezetik - ezért itt is
+  // kiválasztható. Feltölteni viszont csak mentés UTÁN lehet: a csatolmány
+  // végpontnak kell a tétel id-je (lásd lib/csatolmany.ts).
+  const [ujFajlok, setUjFajlok] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
 
@@ -79,6 +85,20 @@ function KiadasUrlap({ kiadas, onBezar }: { kiadas?: KrumpelloKiadas; onBezar: (
         const detail = await res.json().catch(() => null);
         setHiba(detail?.detail ?? `Sikertelen mentés (HTTP ${res.status})`);
         return;
+      }
+      if (ujFajlok.length > 0) {
+        const mentett = (await res.json().catch(() => null)) as { id?: number } | null;
+        const id = mentett?.id ?? kiadas?.id;
+        // A tétel MÁR elmentve: ha a fájl nem megy fel, az ablak nyitva marad
+        // az üzenettel, de a mentést nem vonjuk vissza - a sor mellől
+        // bármikor újra megpróbálható.
+        const fajlHiba = id ? await toltsdFelAFajlokat("krumpelloKiadas", id, ujFajlok) : null;
+        if (fajlHiba) {
+          setHiba(fajlHiba);
+          setUjFajlok([]);
+          router.refresh();
+          return;
+        }
       }
       onBezar();
       router.refresh();
@@ -180,6 +200,9 @@ function KiadasUrlap({ kiadas, onBezar }: { kiadas?: KrumpelloKiadas; onBezar: (
             <div className="flex flex-col gap-1 sm:col-span-2">
               <label className="text-[11px] text-text-muted">Megjegyzés</label>
               <input value={megjegyzes} onChange={(e) => setMegjegyzes(e.target.value)} disabled={busy} className={mezoClass} />
+            </div>
+            <div className="sm:col-span-2">
+              <UjFajlValaszto fajlok={ujFajlok} onValtozas={setUjFajlok} disabled={busy} />
             </div>
           </div>
         </div>

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { ModalReteg } from "@/components/ModalReteg";
+import { UjFajlValaszto } from "@/components/UjFajlValaszto";
+import { toltsdFelAFajlokat } from "@/lib/csatolmany";
 import type { KrumpelloNap } from "@/lib/api";
 
 const MEZOK: { kulcs: keyof Ertekek; cimke: string; sugo?: string }[] = [
@@ -67,6 +69,10 @@ function NapUrlap({ nap, onBezar }: { nap?: KrumpelloNap; onBezar: () => void })
   const [datum, setDatum] = useState(nap?.datum ?? new Date().toISOString().slice(0, 10));
   const [ertekek, setErtekek] = useState<Ertekek>(() => ertekekbol(nap));
   const [megjegyzes, setMegjegyzes] = useState(nap?.megjegyzes ?? "");
+  // A napi jelentés a zárás pillanatában van kéznél - ezért itt is
+  // kiválasztható. Feltölteni csak mentés UTÁN lehet: a csatolmány végpontnak
+  // kell a nap id-je (lásd lib/csatolmany.ts).
+  const [ujFajlok, setUjFajlok] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
 
@@ -99,6 +105,20 @@ function NapUrlap({ nap, onBezar }: { nap?: KrumpelloNap; onBezar: () => void })
         const detail = await res.json().catch(() => null);
         setHiba(detail?.detail ?? `Sikertelen mentés (HTTP ${res.status})`);
         return;
+      }
+      if (ujFajlok.length > 0) {
+        const mentett = (await res.json().catch(() => null)) as { id?: number } | null;
+        const id = mentett?.id ?? nap?.id;
+        // A nap MÁR elmentve: ha a fájl nem megy fel, az ablak nyitva marad az
+        // üzenettel, de a mentést nem vonjuk vissza - a sor mellől bármikor
+        // újra megpróbálható.
+        const fajlHiba = id ? await toltsdFelAFajlokat("krumpelloNap", id, ujFajlok) : null;
+        if (fajlHiba) {
+          setHiba(fajlHiba);
+          setUjFajlok([]);
+          router.refresh();
+          return;
+        }
       }
       onBezar();
       router.refresh();
@@ -164,6 +184,9 @@ function NapUrlap({ nap, onBezar }: { nap?: KrumpelloNap; onBezar: () => void })
                 disabled={busy}
                 className={mezoClass}
               />
+            </div>
+            <div className="sm:col-span-2">
+              <UjFajlValaszto fajlok={ujFajlok} onValtozas={setUjFajlok} cimke="Számla / bizonylat" disabled={busy} />
             </div>
           </div>
         </div>
