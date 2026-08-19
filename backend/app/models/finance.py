@@ -77,6 +77,19 @@ class Revenue(TimestampMixin, Base):
     project_code_id: Mapped[int] = mapped_column(ForeignKey("project_codes.id"), nullable=False)
 
     bevetel_formaja: Mapped[str | None] = mapped_column(String(50))
+    #: Beleszámít-e az ÉVES bevételbe? A kiadás-oldali
+    #: `hozzaadas_a_kiadasokhoz` párja, ugyanazzal a szabállyal: NULL =
+    #: beleszámít. Így a régi (Notionból importált) sorok nem tűnnek el némán
+    #: az összesítőkből egy új mező bevezetése miatt.
+    #:
+    #: Hamisra akkor áll, ha a munka ki van fizetve, de a pénz NEM ezen az
+    #: úton jött (beszámítás, csere, másik cégen át rendezve) - ilyenkor a sor
+    #: attól még LÁTSZIK a bevétel-listán és a projekt profitjában, csak az
+    #: éves bevételbe nem számít, mert ott duplázna vagy hazudna.
+    #: Lásd services/elszamolas.bevetel_beleszamit.
+    beleszamit_a_bevetelekbe: Mapped[bool | None] = mapped_column(
+        Boolean, comment="Beleszámít-e az éves bevételbe (NULL = igen)"
+    )
     netto: Mapped[float | None] = mapped_column(Numeric(12, 2))
     brutto: Mapped[float | None] = mapped_column(Numeric(12, 2))
     penznem: Mapped[str] = mapped_column(String(10), default="HUF")

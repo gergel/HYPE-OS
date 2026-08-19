@@ -11,3 +11,21 @@ export function formatHuf(value: number | null): string {
   if (Math.abs(value) >= 1_000) return `${Math.round(value / 1_000)}k Ft`;
   return `${value} Ft`;
 }
+
+/** Miért NEM számít bele ez a bevétel-sor az ÉVES bevételbe? `null`, ha
+ * beleszámít.
+ *
+ * Ugyanaz a szabály, mint a backend `services/elszamolas.bevetel_beleszamit`
+ * függvényében - két helyen kell, mert a szerver szűri az összesítőket, a
+ * lista pedig kiírja soronként, hogy melyik marad ki. Ha az egyik változik,
+ * a másikat is állítani kell. */
+export function bevetelKihagyasOka(sor: {
+  bevetel_formaja: string | null;
+  beleszamit_a_bevetelekbe: boolean | null;
+}): string | null {
+  if ((sor.bevetel_formaja ?? "").toLowerCase().includes("nem volt tranzakc")) {
+    return "Nem volt tranzakció";
+  }
+  if (sor.beleszamit_a_bevetelekbe === false) return "Nem kerül a bevételek közé";
+  return null;
+}

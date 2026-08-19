@@ -148,6 +148,12 @@ class FinanceSummary(BaseModel):
 # ez a gate csak a globális Pénzügy nézetet szűri.
 _EXPENSE_COUNTS_TOWARD_TOTALS = Expense.hozzaadas_a_kiadasokhoz.is_not(False)
 
+# A bevétel-oldali párja: nem minden bevétel-sor pénz, ami ezen az úton folyt
+# be. A "nem volt tranzakció" formájú és a számla-lépésnél kifejezetten
+# kihagyott sorok LÁTSZANAK a listán (és a projekt profitjában is számítanak),
+# de az éves bevételbe nem valók - lásd services/elszamolas.py.
+_REVENUE_COUNTS_TOWARD_TOTALS = elszamolas.bevetel_beleszamit_sql(Revenue)
+
 
 def _last_n_months(today: date, n: int) -> list[tuple[int, int]]:
     """[(év, hónap), ...] a mai hónapig bezárólag, régitől az újig rendezve -
@@ -178,7 +184,9 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     ytd_bevetel = (
         db.scalar(
             select(func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0)).where(
-                Revenue.fizetes_datuma.is_not(None), Revenue.fizetes_datuma >= year_start
+                Revenue.fizetes_datuma.is_not(None),
+                Revenue.fizetes_datuma >= year_start,
+                _REVENUE_COUNTS_TOWARD_TOTALS,
             )
         )
         or 0
@@ -186,7 +194,9 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     ytd_bevetel_brutto = (
         db.scalar(
             select(func.coalesce(func.sum(elszamolas.brutto_sql(Revenue)), 0)).where(
-                Revenue.fizetes_datuma.is_not(None), Revenue.fizetes_datuma >= year_start
+                Revenue.fizetes_datuma.is_not(None),
+                Revenue.fizetes_datuma >= year_start,
+                _REVENUE_COUNTS_TOWARD_TOTALS,
             )
         )
         or 0
@@ -223,7 +233,11 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
             extract("month", Revenue.fizetes_datuma).label("m"),
             func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0).label("total"),
         )
-        .where(Revenue.fizetes_datuma.is_not(None), Revenue.fizetes_datuma >= min_date)
+        .where(
+            Revenue.fizetes_datuma.is_not(None),
+            Revenue.fizetes_datuma >= min_date,
+            _REVENUE_COUNTS_TOWARD_TOTALS,
+        )
         .group_by("y", "m")
     ).all():
         revenue_by_month[(int(row.y), int(row.m))] = float(row.total)
@@ -261,7 +275,9 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
 
     unpaid = db.scalars(
         select(Revenue)
-        .where(Revenue.fizetes_datuma.is_(None))
+        # A be nem számító sorok (nem volt tranzakció, máshogy rendezve) itt
+        # sem kintlévőségek: nem várunk rájuk pénzt.
+        .where(Revenue.fizetes_datuma.is_(None), _REVENUE_COUNTS_TOWARD_TOTALS)
         .options(selectinload(Revenue.project_code))
     ).all()
 

@@ -20,18 +20,50 @@ tételek nem külön világ - amit a papírozás oldalon rögzítenek, az itt l�
 Csatolmányok és számlaképek: `services/document_storage.py`; a kiadások mellé
 feltöltött fájlok tömegesen letölthetők (ZIP-be csomagolva, `routes/finance.py`).
 
-Két dolog a listákon szándékosan van így:
+Néhány dolog a listákon szándékosan van így:
 
-- **A Kiadások táblán nincs "Állapot" oszlop.** A kiadások közé az kerül, ami
-  már ki van fizetve, tehát egy "Kifizetve / Nyitott" jelző minden soron
-  ugyanazt mondaná. Ami tényleg utalásra vár, azt az "Utalásra váró számlák"
-  kártya hozza elő. Az `Expense.kesz` mező megvan, a kiadás saját lapján
-  látszik.
+- **Egyik táblán sincs állapot-oszlop.** Sem a Kiadásokon ("Kifizetve /
+  Nyitott"), sem a Bevételeken (a régi "Számla kiállítása → Kifizetve"
+  léptető): ami ezekbe a listákba kerül, az azért kerül oda, mert a pénz
+  rendezve van, tehát a jelző minden soron ugyanazt mondaná. Ami tényleg
+  utalásra vár, azt az "Utalásra váró számlák" kártya hozza elő; a bevétel
+  kifizetése a projektkód "3. Számla" kártyáján zárul le (határidő →
+  kifizetve), ott jön létre és kap dátumot a bevétel-sor. Az `Expense.kesz`,
+  a `Revenue.fizetes_datuma` és a `szamla_kiallitva_datuma` mezők megvannak,
+  a tétel saját lapján szerkeszthetők.
 - **A Bevételek "Honnan" oszlopa a MUNKA nevét írja ki**, alatta a
   projektkóddal - nem az ügyfelet. A régi, Notionból importált kódok
   többségénél az ügyfél "Ismeretlen ügyfél (Notion import)", vagyis az egész
   oszlop ugyanazt a semmit ismételte minden soron. Ugyanezért mutat a
   kintlévőség-táblázat is projektnevet.
+
+### Mi számít bele az ÉVES bevételbe
+
+Nem minden bevétel-sor pénz, ami ezen az úton folyt be hozzánk. Kétféle van,
+aminek **látszania kell**, de az éves bevételbe nem való
+(`services/elszamolas.bevetel_beleszamit`):
+
+1. **"Nem volt tranzakció"** - a Notionból örökölt `bevetel_formaja` érték: a
+   munka megvolt, pénzmozgás nem történt.
+2. **Amit a számla-lépésnél kifejezetten kihagytunk** a bevételekből
+   (beszámítás, csere, másik cégen át rendezve) - a `Revenue.
+   beleszamit_a_bevetelekbe` mező `false` értéke.
+
+A jelölő mező a kiadás-oldali `hozzaadas_a_kiadasokhoz` párja, ugyanazzal a
+szabállyal: **NULL = beleszámít**, hogy a mező bevezetése ne tüntessen el némán
+történeti sorokat az összesítőkből.
+
+**A projekt saját bevétele (`ProjectCode.bevetel`) ettől független: ott MINDEN
+sor számít**, mert a profithoz kell - ha nem így lenne, ezeknél a munkáknál
+nulla bevétel és csupa veszteség látszana. Ez a szűrés csak az éves
+összesítőket érinti: a Pénzügyek YTD-kártyáit, a 12 havi trendet, a
+kintlévőséget és a Dashboard havi bevételét.
+
+**A kihagyott tételről is keletkezik bevétel-sor.** Korábban nem: a Pénzügyek
+listáján nyoma sem maradt annak, hogy az a munka rendezve van, csak a
+projektkód adatlapján. Most ott a sor, a "Beleszámít" oszlopban látható
+indokkal ("Nem volt tranzakció" / "Nem kerül a bevételek közé"). A kifizetés
+visszavonásakor a jelölés is visszaáll.
 
 ### Mi kerül az "Utalásra váró számlák" listára
 

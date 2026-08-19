@@ -125,6 +125,7 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
             select(func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0)).where(
                 extract("year", Revenue.fizetes_datuma) == today.year,
                 extract("month", Revenue.fizetes_datuma) == today.month,
+                elszamolas.bevetel_beleszamit_sql(Revenue),
             )
         )
         or 0
@@ -149,7 +150,11 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
             extract("month", Revenue.fizetes_datuma).label("m"),
             func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0).label("total"),
         )
-        .where(Revenue.fizetes_datuma.is_not(None), Revenue.fizetes_datuma >= date(min_year, min_month, 1))
+        .where(
+            Revenue.fizetes_datuma.is_not(None),
+            Revenue.fizetes_datuma >= date(min_year, min_month, 1),
+            elszamolas.bevetel_beleszamit_sql(Revenue),
+        )
         .group_by("y", "m")
     ).all()
     for row in rows:

@@ -68,6 +68,10 @@ class ExpenseRead(ExpenseBase):
 class RevenueBase(BaseModel):
     project_code_id: int
     bevetel_formaja: str | None = None
+    #: Beleszámít-e az ÉVES bevételbe (None = igen). Lásd
+    #: services/elszamolas.bevetel_beleszamit - a "nem volt tranzakció"
+    #: formájú sorok e mező nélkül is kimaradnak.
+    beleszamit_a_bevetelekbe: bool | None = None
     netto: float | None = None
     brutto: float | None = None
     penznem: str = "HUF"

@@ -213,6 +213,9 @@ export type Revenue = {
   id: number;
   project_code_id: number;
   bevetel_formaja: string | null;
+  /** Beleszámít-e az ÉVES bevételbe (null = igen). A "nem volt tranzakció"
+   * formájú sorok e mező nélkül is kimaradnak - lásd bevetelBeleszamit(). */
+  beleszamit_a_bevetelekbe: boolean | null;
   netto: number | null;
   brutto: number | null;
   penznem: string;

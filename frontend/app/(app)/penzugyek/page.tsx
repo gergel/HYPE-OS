@@ -23,10 +23,10 @@ import { SzamlaCsomagLetoltes } from "@/components/finance/SzamlaCsomagLetoltes"
 import { UtalasraVaroSzamlak } from "@/components/finance/UtalasraVaroSzamlak";
 import { KimenoSzamlaCella } from "@/components/finance/KimenoSzamlaCella";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
-import { RevenueInvoiceStatus } from "@/components/RevenueInvoiceStatus";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
+import { bevetelKihagyasOka } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 
 const PAGE = "/penzugyek";
@@ -231,6 +231,7 @@ export default async function PenzugyekPage() {
                       patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
                       field="hozzaadas_a_kiadasokhoz"
                       value={e.hozzaadas_a_kiadasokhoz}
+                      ureskent
                     />
                   ) : (
                     <StatusBadge
@@ -320,17 +321,35 @@ export default async function PenzugyekPage() {
                 sortAccessor: (r) => r.brutto,
               },
               { header: "Pénznem", align: "right", render: (r) => r.penznem, sortAccessor: (r) => r.penznem },
+              // Számla-állapot oszlop SZÁNDÉKOSAN nincs (ahogy a kiadásoknál
+              // sem): ami a bevételek közé kerül, az azért kerül oda, mert a
+              // pénz rendezve van. A kifizetés jelölése a projektkód "3.
+              // Számla" kártyáján történik (határidő → kifizetve), ott jön
+              // létre és zárul le ez a sor; a bevétel saját lapján a dátumok
+              // továbbra is szerkeszthetők.
               {
-                header: "Számla",
+                // Ami NEM számít bele az éves bevételbe: a "nem volt
+                // tranzakció" formájú sorok, és amit a számla-lépésnél
+                // kifejezetten kihagytunk. Látszani kell (a projekt profitja
+                // tőle függ), csak az éves összesítőbe nem való - lásd
+                // backend services/elszamolas.py.
+                header: "Beleszámít",
                 align: "right",
-                render: (r) => (
-                  <RevenueInvoiceStatus
-                    patchPath={`${ENTITY_PATHS.revenue}/${r.id}`}
-                    szamlaKiallitva={r.szamla_kiallitva_datuma}
-                    fizetve={r.fizetes_datuma}
-                  />
-                ),
-                sortAccessor: (r) => (r.fizetes_datuma ? 2 : r.szamla_kiallitva_datuma ? 1 : 0),
+                render: (r) => {
+                  const oka = bevetelKihagyasOka(r);
+                  if (oka) return <StatusBadge label={oka} tone="neutral" />;
+                  return canEdit ? (
+                    <EditableBooleanCell
+                      patchPath={`${ENTITY_PATHS.revenue}/${r.id}`}
+                      field="beleszamit_a_bevetelekbe"
+                      value={r.beleszamit_a_bevetelekbe}
+                      ureskent
+                    />
+                  ) : (
+                    <StatusBadge label="Igen" tone="success" />
+                  );
+                },
+                sortAccessor: (r) => (bevetelKihagyasOka(r) ? 0 : 1),
               },
               {
                 // A kimenő számla PDF-je: maga a számla külső rendszerben

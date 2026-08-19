@@ -443,20 +443,25 @@ kártya ezt viszi végig (`services/megrendeloi_szamla.py`,
    duplázunk, csak kiegészítünk.
 
 **"Kifizetve, de ne kerüljön a bevételek közé"**: van munka, ami ki van
-fizetve, de a Pénzügyekbe nem való (beszámították, másik cégen át folyt be,
-máshol el van könyvelve) - ott egy itteni sor megkétszerezné az összeget.
-Ilyenkor a jelöléshez **indok kell** (`ProjectCode.bevetelbe_ne_keruljon` +
-`bevetel_kihagyas_oka`), és a projektkód így is lezártnak számít
-(`bevetel_kifizetve`), tehát nem áll örökre a teendők között.
+fizetve, de az ÉVES bevételbe nem való (beszámították, másik cégen át folyt be,
+máshol el van könyvelve) - ott az összeg duplázna. Ilyenkor a jelöléshez
+**indok kell** (`ProjectCode.bevetelbe_ne_keruljon` + `bevetel_kihagyas_oka`),
+és a projektkód így is lezártnak számít (`bevetel_kifizetve`), tehát nem áll
+örökre a teendők között.
 
-**Az összeg ilyenkor is beleszámít a PROJEKT bevételébe.** A pénz megjött; csak
-a Pénzügyek nyilvántartásába nem való, mert ott duplázna. Ha ezt nem
-számolnánk, ezeknél a munkáknál nulla bevétel és csupa veszteség látszana -
-vagyis pont a profit hazudna arról, amiért ez a szám van. Ezért a
-`ProjectCode.bevetel` bevétel-sor híján a vállalási ár **nettóját** veszi (lásd
-fent), a számla-kártya pedig ki is írja: *"A projekt bevételébe beleszámít: …
-nettó – ez adja a fenti profitot, bevétel-sor nélkül."* A Pénzügyek összesítői
-viszont változatlanul csak a valódi bevétel-sorokból dolgoznak.
+**A bevétel-sor ilyenkor is létrejön** - csak `beleszamit_a_bevetelekbe =
+false` jelöléssel (lásd [07-penzugyek.md](07-penzugyek.md) "Mi számít bele az
+éves bevételbe"). Korábban egyáltalán nem keletkezett sor: a Pénzügyek listáján
+nyoma sem maradt annak, hogy az a munka rendezve van, csak a projektkód
+adatlapján. Most ott a sor, láthatóan kihagyva; visszavonáskor a jelölés is
+visszaáll.
+
+**Az összeg beleszámít a PROJEKT bevételébe.** A pénz megjött; csak az éves
+összesítőbe nem való, mert ott duplázna. Ha ezt nem számolnánk, ezeknél a
+munkáknál nulla bevétel és csupa veszteség látszana - vagyis pont a profit
+hazudna arról, amiért ez a szám van. A `ProjectCode.bevetel` minden bevétel-sort
+összead (a kihagyottakat is), és sor híján a vállalási ár **nettóját** veszi
+(lásd fent).
 
 A téves gombnyomás visszavonható: a kifizetés dátuma lekerül a projektkódról
 és a bevétel-sorról is, de magát a sort nem töröljük (lehet, hogy máshonnan

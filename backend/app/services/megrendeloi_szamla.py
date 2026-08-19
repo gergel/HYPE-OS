@@ -169,8 +169,12 @@ def jelold_kifizetettnek(
     pk.bevetelbe_ne_keruljon = bevetelbe_ne_keruljon
     pk.bevetel_kihagyas_oka = (kihagyas_oka or "").strip() or None if bevetelbe_ne_keruljon else None
 
-    if not bevetelbe_ne_keruljon:
-        _vezesd_fel_a_bevetelt(db, pk, nap)
+    # Sor MINDKÉT esetben keletkezik - a különbség az, beleszámít-e az ÉVES
+    # bevételbe. Korábban a kihagyott tételekről egyáltalán nem volt sor: a
+    # pénzügyek listáján nyoma sem maradt annak, hogy az a munka rendezve van,
+    # csak a projektkód adatlapján. Most ott a sor, láthatóan kihagyva
+    # (lásd services/elszamolas.bevetel_beleszamit).
+    _vezesd_fel_a_bevetelt(db, pk, nap, beleszamit=not bevetelbe_ne_keruljon)
     db.flush()
     return allas(db, pk)
 
@@ -194,12 +198,17 @@ def allitsd_a_szamla_kihagyast(
     return allas(db, pk)
 
 
-def _vezesd_fel_a_bevetelt(db: Session, pk: ProjectCode, nap: date) -> None:
+def _vezesd_fel_a_bevetelt(db: Session, pk: ProjectCode, nap: date, *, beleszamit: bool = True) -> None:
     """A bevétel-sor létrehozása/kiegészítése.
 
     Meglévő sort nem duplázunk (a Notionból importált bevételek már ott
     vannak): olyankor csak a hiányzó mezőket töltjük ki, és a kifizetés napját
-    írjuk be. Új sort csak akkor nyitunk, ha egyáltalán nincs bevétel."""
+    írjuk be. Új sort csak akkor nyitunk, ha egyáltalán nincs bevétel.
+
+    A `beleszamit=False` azt jelenti: a pénz megjött, de nem ezen az úton
+    (beszámítás, csere, másik cégen át) - a sor látszik, a projekt profitjában
+    is benne van, csak az ÉVES bevételbe nem számít
+    (lásd services/elszamolas.py)."""
     netto, brutto = _osszeg(pk)
     szamla_url = _szamla_fajl_url(db, pk)
     sorok = list(pk.revenues or [])
@@ -223,6 +232,9 @@ def _vezesd_fel_a_bevetelt(db: Session, pk: ProjectCode, nap: date) -> None:
             sor.bevetel_formaja = pk.bevetel_formaja
         if not sor.szamla_file_url and szamla_url:
             sor.szamla_file_url = szamla_url[:500]
+        # A jelölést MINDIG felülírjuk (nem csak üresen): ez az adott
+        # gombnyomás döntése, és visszavonáskor is vissza kell állnia.
+        sor.beleszamit_a_bevetelekbe = None if beleszamit else False
 
 
 def vond_vissza(db: Session, pk: ProjectCode) -> SzamlaAllas:
@@ -237,5 +249,9 @@ def vond_vissza(db: Session, pk: ProjectCode) -> SzamlaAllas:
     for sor in pk.revenues or []:
         if sor.megjegyzes == BEVETEL_MEGJEGYZES or sor.fizetes_datuma is not None:
             sor.fizetes_datuma = None
+        # A kihagyás jelölése is visszaáll: ha mégsincs kifizetve, nincs mit
+        # kihagyni az éves bevételből (lásd services/elszamolas.py).
+        if sor.beleszamit_a_bevetelekbe is False:
+            sor.beleszamit_a_bevetelekbe = None
     db.flush()
     return allas(db, pk)

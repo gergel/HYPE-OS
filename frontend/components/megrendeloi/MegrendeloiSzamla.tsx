@@ -168,20 +168,25 @@ export function MegrendeloiSzamla({
           <p className="text-[13px] text-text-secondary">
             Kifizetve: <span className="text-text-primary">{allas.kifizetes_datuma ?? "–"}</span>
             {allas.bevetelbe_ne_keruljon ? (
-              <span className="text-text-muted"> · nem került a bevételek közé</span>
+              <span className="text-text-muted"> · a bevétel-sor nem számít az éves bevételbe</span>
             ) : (
               <span className="text-text-muted"> · {allas.bevetel_sorok} bevétel-sor a Pénzügyekben</span>
             )}
           </p>
-          {/* Attól, hogy a Pénzügyek nyilvántartásába nem való (máshogy van
-              rendezve), a pénz megjött - tehát a PROJEKT bevételébe és
-              profitjába beleszámít. Ki is írjuk, különben úgy nézne ki, mintha
-              ez a munka ingyen lett volna. */}
+          {/* Attól, hogy az ÉVES bevételbe nem való (máshogy van rendezve), a
+              pénz megjött - tehát a PROJEKT bevételébe és profitjába
+              beleszámít. Ki is írjuk, különben úgy nézne ki, mintha ez a munka
+              ingyen lett volna. A bevétel-sor a Pénzügyekben is ott van,
+              "Beleszámít: nem" jelöléssel (lásd backend
+              services/elszamolas.py). */}
           {allas.bevetelbe_ne_keruljon && allas.netto !== null && (
             <p className="text-[13px] text-text-secondary">
               A projekt bevételébe beleszámít:{" "}
               <span className="text-text-primary">{formatHuf(allas.netto)} nettó</span>
-              <span className="text-text-muted"> – ez adja a fenti profitot, bevétel-sor nélkül.</span>
+              <span className="text-text-muted">
+                {" "}
+                – ez adja a fenti profitot. A Pénzügyekben a sor látszik, de az éves bevételbe nem számít.
+              </span>
             </p>
           )}
           {allas.bevetel_kihagyas_oka && (

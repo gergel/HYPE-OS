@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import sqlalchemy as sa
 from sqlalchemy import func
 
 #: A magyar általános ÁFA-kulcs szorzója. Csak ott használjuk, ahol a bruttót
@@ -73,3 +74,63 @@ def netto_sql(model: Any):
 def brutto_sql(model: Any):
     """A tájékoztató bruttó összeg SQL-ben (lásd `brutto_osszeg`)."""
     return func.coalesce(model.brutto, model.netto, 0)
+
+
+# --- Mi számít bele az ÉVES bevételbe? --------------------------------------
+#
+# Nem minden bevétel-sor pénz, ami befolyt hozzánk ezen az úton. Kétféle van,
+# aminek látszania kell (különben a projekt profitja hazudik), de az éves
+# bevételbe nem való:
+#
+#   1. "Nem volt tranzakció" (a Notionból örökölt `bevetel_formaja` érték):
+#      a munka meg lett csinálva, de pénzmozgás nem történt.
+#   2. Amit a számla-lépésnél kifejezetten kihagytunk a bevételekből
+#      (beszámítás, csere, másik cégen át rendezve) - lásd
+#      services/megrendeloi_szamla.py.
+#
+# A projekt SAJÁT bevétele (ProjectCode.bevetel) ettől független: ott MINDEN
+# sor számít, mert a profithoz kell. Ez a szabály csak a globális Pénzügyek
+# nézetet és a Dashboardot szűri - pontosan úgy, ahogy a kiadás oldalán a
+# `hozzaadas_a_kiadasokhoz`.
+
+#: A "nem volt tranzakció" forma felismeréséhez. Kisbetűsítve keressük, mert a
+#: mező szabad szöveg (Notion select), és a nagybetűzés soronként változhat.
+NEM_VOLT_TRANZAKCIO = "nem volt tranzakc"
+
+
+def _nem_volt_tranzakcio(forma: Any) -> bool:
+    return isinstance(forma, str) and NEM_VOLT_TRANZAKCIO in forma.lower()
+
+
+def bevetel_beleszamit(sor: Any) -> bool:
+    """Beleszámít-e ez a bevétel-sor az ÉVES bevételbe?
+
+    A hiányzó (NULL) jelölés IGENT jelent: a mező bevezetése előtti sorok nem
+    tűnhetnek el némán az összesítőkből."""
+    if getattr(sor, "beleszamit_a_bevetelekbe", None) is False:
+        return False
+    return not _nem_volt_tranzakcio(getattr(sor, "bevetel_formaja", None))
+
+
+def bevetel_kihagyas_oka(sor: Any) -> str | None:
+    """Miért NEM számít bele - a felület ezt írja ki a sor mellé. None, ha
+    beleszámít."""
+    if _nem_volt_tranzakcio(getattr(sor, "bevetel_formaja", None)):
+        return "Nem volt tranzakció"
+    if getattr(sor, "beleszamit_a_bevetelekbe", None) is False:
+        return "Nem kerül a bevételek közé"
+    return None
+
+
+def bevetel_beleszamit_sql(model: Any):
+    """Ugyanez SQL-ben, WHERE-hez: ``.where(elszamolas.bevetel_beleszamit_sql(Revenue))``.
+
+    A két ág sorrendje és jelentése azonos a Python-változatéval - két helyen
+    ugyanaz a szűrés kell, különben az összesítő és a lista vitatkozna."""
+    return sa.and_(
+        model.beleszamit_a_bevetelekbe.is_not(False),
+        sa.or_(
+            model.bevetel_formaja.is_(None),
+            sa.not_(func.lower(model.bevetel_formaja).like(f"%{NEM_VOLT_TRANZAKCIO}%")),
+        ),
+    )
