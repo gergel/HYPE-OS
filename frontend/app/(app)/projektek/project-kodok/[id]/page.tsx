@@ -16,6 +16,7 @@ import {
   ENTITY_PATHS,
   formatHuf,
   getAttachments,
+  getClients,
   getCurrentUser,
   getMegrendeloiKeretek,
   getMegrendeloiKontaktok,
@@ -51,6 +52,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     megrendeloiTigek,
     megrendeloiKeretek,
     megrendeloiKontaktok,
+    clients,
     bontas,
     pagePermissions,
     currentUser,
@@ -58,12 +60,17 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     szamlaAllas,
   ] = await Promise.all([
     // A megrendelői papírok (lásd backend routes/megrendeloi_papirok.py): a
-    // szerződő fél a keretszerződésekből vagy a megrendelői kontaktokból
-    // választható, ezért mindkét lista kell a szerkesztőhöz.
+    // szerződő fél a MEGRENDELŐK közül választható, a kapcsolattartó pedig a
+    // megrendelői kontaktokból - ezért kell mindkét lista a szerkesztőhöz.
+    // A keretszerződések listája a keret-kötéshez kell (KeretKotes).
     getMegrendeloiPapirok("szerzodes", projectCodeId),
     getMegrendeloiPapirok("tig", projectCodeId),
     getMegrendeloiKeretek(),
     getMegrendeloiKontaktok(),
+    // A MEGRENDELŐK: a papír szerződő fele közülük kerül ki (a
+    // keretszerződés-lista erre rossz kérdés volt - lásd
+    // MegrendeloiPapirKezelo).
+    getClients(),
     // A tételes költségbontás EGY hívásban - a korábbi oldal négy külön
     // kapcsolt-listát töltött be, és egyiken sem látszott, mi mennyibe került.
     getProjektkodBontas(projectCodeId),
@@ -74,6 +81,10 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     // bevétel-sor (lásd backend services/megrendeloi_szamla.py).
     getMegrendeloiSzamlaAllas(projectCodeId),
   ]);
+
+  const ugyfelek = clients
+    .map((c) => ({ id: c.id, nev: c.nev }))
+    .sort((a, b) => a.nev.localeCompare(b.nev, "hu"));
 
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
@@ -180,7 +191,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               projectCodeId={projectCodeId}
               fajta="szerzodes"
               papirok={megrendeloiSzerzodesek}
-              keretek={megrendeloiKeretek}
+              ugyfelek={ugyfelek}
               kontaktok={megrendeloiKontaktok}
               canEdit={canEdit}
               canDelete={canDelete}
@@ -192,7 +203,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               projectCodeId={projectCodeId}
               fajta="tig"
               papirok={megrendeloiTigek}
-              keretek={megrendeloiKeretek}
+              ugyfelek={ugyfelek}
               kontaktok={megrendeloiKontaktok}
               canEdit={canEdit}
               canDelete={canDelete}

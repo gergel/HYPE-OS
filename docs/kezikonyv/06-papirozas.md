@@ -786,6 +786,29 @@ veszi át - de csak ha mind ugyanaz, mert egy rossz kapcsolat rosszabb, mint a
 hiányzó (némán elhagyná az eseti szerződést egy olyan cégnél, amelyikkel
 valójában nincs keretünk).
 
+### Kivel szól a papír: a MEGRENDELŐK közül választunk
+
+Az "Új megrendelői szerződés" (és a TIG) ablakában a szerződő fél az
+**ügyfelek** listájából jön, mellette a kapcsolattartó (neki megy a levél).
+
+Korábban a **keretszerződések** listája állt ezen a helyen, ami két okból is
+rossz kérdés volt: az esetek nagy részében nincs is keret, tehát nem volt
+miből választani; a keret pedig épp azt jelenti, hogy eseti szerződés **nem
+kell** - vagyis ott, ahol a mező végre kínált volna valamit, a papír maga volt
+fölösleges.
+
+A cégadatokat ettől függetlenül a szerver tölti elő a legjobb ismert forrásból
+(`services/megrendeloi_papir.szerzodo_fel_adatai`): ha a választott ügyféllel
+van keretszerződés, onnan, mert azok az adatok már egyszer kimentek egy aláírt
+papíron. Ha él a keret, az ablak ki is írja - nem tiltásként, hanem hogy a
+papír megírása ELŐTT kiderüljön. Minden mező szerkeszthető marad: a papírra az
+kerül, ami ott látszik.
+
+A **kapcsolattartó** a választott megrendelő kontaktjaira szűkül - egy másik
+cég emberének kiküldeni ezt a papírt hiba lenne -, és az ügyfél cseréjekor
+törlődik, hogy ne maradjon ott a régi cég embere. A projektkód keret-kötése
+(`KeretKotes`) külön kártya, azt ez nem érinti.
+
 ### Amit feltöltesz, az kész papír
 
 **Mindhárom helyen saját papír is feltölthető** a generálás helyett: van, amit a

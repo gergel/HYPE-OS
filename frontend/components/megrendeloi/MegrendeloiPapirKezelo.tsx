@@ -13,7 +13,6 @@ import { authFetch } from "@/lib/authFetch";
 import { formatFt } from "@/lib/ido";
 import type {
   MegrendeloiElotoltes,
-  MegrendeloiKeret,
   MegrendeloiKontakt,
   MegrendeloiPapir,
   MegrendeloiPapirFajta,
@@ -127,16 +126,18 @@ function allapotJelzo(p: MegrendeloiPapir) {
  * irányba - és ezért ugyanazok a lépések is: piszkozat, generálás és kiküldés,
  * kihagyás indokkal, saját papír, végül az aláírt példány.
  *
- * A SZERZŐDŐ FÉL kétféleképp választható: a megrendelői keretszerződésekből
- * (ott a cégadatok már egyszer kimentek egy aláírt papíron, tehát azok a
- * bizonyítottan jók) vagy a megrendelői kontaktokból. A választás után minden
+ * A SZERZŐDŐ FELET a MEGRENDELŐK közül választjuk, és mellé a
+ * kapcsolattartót (neki megy a levél). A cégadatokat a szerver tölti elő a
+ * legjobb ismert forrásból - ha van élő keretszerződés az ügyféllel, onnan,
+ * mert ott a cégadatok már egyszer kimentek egy aláírt papíron (lásd backend
+ * services/megrendeloi_papir.szerzodo_fel_adatai). A választás után minden
  * mező szerkeszthető marad: a papírra az kerül, ami itt látszik, nem az, ami
  * az ügyfél adatlapján áll. */
 export function MegrendeloiPapirKezelo({
   projectCodeId,
   fajta,
   papirok,
-  keretek,
+  ugyfelek,
   kontaktok,
   canEdit,
   canDelete = false,
@@ -145,7 +146,11 @@ export function MegrendeloiPapirKezelo({
   projectCodeId: number;
   fajta: MegrendeloiPapirFajta;
   papirok: MegrendeloiPapir[];
-  keretek: MegrendeloiKeret[];
+  /** A MEGRENDELŐK (ügyfelek), akikkel a papír szólhat. Innen választunk
+   * szerződő felet - nem a keretszerződésekből: az egy másik kérdés (van-e
+   * álló megállapodás), és arra a lista amúgy is szűk. Ha a választott
+   * ügyféllel van élő keret, azt a szerver az előtöltéssel adja vissza. */
+  ugyfelek: { id: number; nev: string }[];
   kontaktok: MegrendeloiKontakt[];
   canEdit: boolean;
   /** Az ELKEZDETT papír eldobható - amíg csak készül, egy rossz adattal
@@ -166,6 +171,10 @@ export function MegrendeloiPapirKezelo({
   const [munka, setMunka] = useState<"mentes" | "kuldes" | "kihagyas" | null>(null);
   const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
   const [kuldesNyitva, setKuldesNyitva] = useState(false);
+  // Van-e a választott megrendelővel ÉLŐ keretszerződés. Nem tiltás, csak
+  // figyelmeztetés: a keret alatt eseti szerződés nem kell (a TIG viszont
+  // igen), és jobb ezt a papír megírása ELŐTT tudni.
+  const [eloKeret, setEloKeret] = useState(false);
 
   const cimke = fajta === "szerzodes" ? "megrendelői szerződés" : "teljesítési igazolás";
   const dolgozik = munka !== null;
@@ -189,6 +198,7 @@ export function MegrendeloiPapirKezelo({
       }
       const adat: MegrendeloiElotoltes = await res.json();
       setUrlap(urlapElotoltesbol(adat));
+      setEloKeret(adat.van_elo_keretszerzodes);
       return adat;
     } finally {
       setToltodik(false);
@@ -217,15 +227,29 @@ export function MegrendeloiPapirKezelo({
   /** A szerződő fél cseréje: az előtöltést ÚJRA lekérjük, hogy a cégadatok is
    * a most választott forrásból jöjjenek - különben a régi fél adószáma
    * maradna az új fél nevén. */
-  async function felValtas(mezo: "keretszerzodes_id" | "contact_id", ertek: number | null) {
+  async function felValtas(mezo: "client_id" | "contact_id", ertek: number | null) {
+    // ÜRESRE állításnál nem kérünk új előtöltést: az a projektkód ügyfelére
+    // esne vissza, tehát a most kivett felet azonnal visszatenné. Csak a
+    // választást töröljük - a már beírt cégadatokhoz nem nyúlunk, azok
+    // lehetnek kézzel javítva.
+    if (ertek === null) {
+      setUrlap((elozo) =>
+        mezo === "client_id"
+          ? { ...elozo, client_id: null, contact_id: null }
+          : { ...elozo, contact_id: null },
+      );
+      return;
+    }
     const params = new URLSearchParams();
-    const keret = mezo === "keretszerzodes_id" ? ertek : urlap.keretszerzodes_id;
-    const kontakt = mezo === "contact_id" ? ertek : urlap.contact_id;
-    if (keret != null) params.set("keretszerzodes_id", String(keret));
+    // Az ÜGYFÉL cseréjekor a kapcsolattartó nem maradhat: az egy másik cég
+    // embere lenne, és neki menne ki a papír.
+    const ugyfel = mezo === "client_id" ? ertek : urlap.client_id;
+    const kontakt = mezo === "client_id" ? null : ertek;
+    if (ugyfel != null) params.set("client_id", String(ugyfel));
     if (kontakt != null) params.set("contact_id", String(kontakt));
-    // A kontakt cége adja a cégadatot, ha nincs keretszerződés.
+    // A kontakt cége adja a cégadatot, ha ügyfelet külön nem választottak.
     const kontaktSor = kontakt != null ? kontaktok.find((k) => k.id === kontakt) : null;
-    if (keret == null && kontaktSor) params.set("client_id", String(kontaktSor.client_id));
+    if (ugyfel == null && kontaktSor) params.set("client_id", String(kontaktSor.client_id));
 
     // A megbízás tárgyát / összeget a felhasználó már átírhatta - azt NEM
     // dobjuk el a fél cseréjekor, csak a cégadatokat cseréljük.
@@ -239,7 +263,10 @@ export function MegrendeloiPapirKezelo({
       megjegyzes: urlap.megjegyzes,
     };
     const adat = await elotoltesBetoltese(params);
-    if (adat) setUrlap((elozo) => ({ ...elozo, ...megtartott }));
+    if (adat) {
+      setUrlap((elozo) => ({ ...elozo, ...megtartott }));
+      setEloKeret(adat.van_elo_keretszerzodes);
+    }
   }
 
   function torzs() {
@@ -525,35 +552,43 @@ export function MegrendeloiPapirKezelo({
             </p>
 
             <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Mezo label="Szerződő fél keretszerződésből">
+              {/* A szerződő felet a MEGRENDELŐK közül választjuk. Korábban a
+                  keretszerződések listája volt itt, ami két okból is rossz
+                  kérdés: az esetek nagy részében nincs is keret (akkor a mező
+                  üres, és nincs miből választani), a keret pedig épp azt
+                  jelenti, hogy eseti szerződés NEM kell. Ha a választott
+                  ügyféllel mégis van élő keret, azt a szerver az előtöltéssel
+                  adja vissza, és lentebb ki is írjuk. */}
+              <Mezo label="Megrendelő (szerződő fél)">
                 <KeresosSelect
-                  value={urlap.keretszerzodes_id != null ? String(urlap.keretszerzodes_id) : null}
+                  value={urlap.client_id != null ? String(urlap.client_id) : null}
                   // Az üres opció azért kell, mert a KeresosSelect
                   // értékkészlete zárt: nélküle egy tévesen választott felet
                   // már nem lehetne levenni a papírról.
                   options={[
-                    { value: "", label: "— nincs keretszerződésből —" },
-                    ...keretek.map((k) => ({
-                      value: String(k.id),
-                      label: k.ceg_neve ?? k.client_nev ?? `#${k.id}`,
-                      sublabel: k.ervenyes ? "élő keretszerződés" : "lejárt / nincs dátum",
-                    })),
+                    { value: "", label: "— nincs megrendelő —" },
+                    ...ugyfelek.map((u) => ({ value: String(u.id), label: u.nev })),
                   ]}
-                  onChange={(v) => felValtas("keretszerzodes_id", v ? Number(v) : null)}
-                  placeholder="Nincs keretszerződésből"
+                  onChange={(v) => felValtas("client_id", v ? Number(v) : null)}
+                  placeholder="Válassz megrendelőt"
                   disabled={dolgozik || toltodik}
                 />
               </Mezo>
               <Mezo label="Kapcsolattartó (neki megy az e-mail)">
                 <KeresosSelect
                   value={urlap.contact_id != null ? String(urlap.contact_id) : null}
+                  // A választott megrendelő kontaktjaira szűkítünk: egy másik
+                  // cég emberének kiküldeni ezt a papírt hiba lenne. Amíg
+                  // nincs megrendelő választva, mindenki látszik.
                   options={[
                     { value: "", label: "— nincs kapcsolattartó —" },
-                    ...kontaktok.map((k) => ({
-                      value: String(k.id),
-                      label: k.full_name,
-                      sublabel: [k.client_nev, k.email].filter(Boolean).join(" · "),
-                    })),
+                    ...kontaktok
+                      .filter((k) => urlap.client_id == null || k.client_id === urlap.client_id)
+                      .map((k) => ({
+                        value: String(k.id),
+                        label: k.full_name,
+                        sublabel: [k.client_nev, k.email].filter(Boolean).join(" · "),
+                      })),
                   ]}
                   onChange={(v) => felValtas("contact_id", v ? Number(v) : null)}
                   placeholder="Nincs kiválasztva"
@@ -561,6 +596,13 @@ export function MegrendeloiPapirKezelo({
                 />
               </Mezo>
             </div>
+
+            {eloKeret && fajta === "szerzodes" && (
+              <p className="mb-4 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[12.5px] text-text-secondary">
+                Ezzel a megrendelővel <b>él keretszerződés</b> – eseti szerződés emiatt nem kötelező. A teljesítési
+                igazolás viszont ettől függetlenül kell.
+              </p>
+            )}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Mezo label="Cég neve">
