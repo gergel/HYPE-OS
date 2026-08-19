@@ -35,12 +35,48 @@ from app.models.krumpello import (
     KrumpelloMunkaora,
     KrumpelloNap,
 )
+from app.models.document_attachment import DocumentAttachment
 from app.models.user_access import PageAccessConfig
-from app.services import krumpello_munkaber, krumpello_osszesito
+from app.schemas.document_attachment import DocumentAttachmentRead
+from app.services import attachments, krumpello_munkaber, krumpello_osszesito
 
 router = APIRouter(prefix="/krumpello", tags=["krumpello"])
 
 PAGE = "/krumpello"
+
+#: A csatolmányok entitás-kulcsai (lásd services/entity_registry.py). Minden
+#: tételhez tölthető fel számla/blokk, de EGYIKHEZ SEM kötelező: az "extra"
+#: forrásnak épp az a definíciója, hogy nincs mögötte papír.
+KIADAS_ENTITAS = "krumpelloKiadas"
+NAP_ENTITAS = "krumpelloNap"
+
+
+def _csatolmanyok(db: Session, entitas: str, idk: list[int]) -> dict[int, list[DocumentAttachmentRead]]:
+    """A tételekhez tartozó fájlok, EGY lekérdezéssel.
+
+    Szándékosan itt, a listával együtt: soronként lekérdezve egy hónapnyi
+    kassza megnyitása több tucat kérést indítana olyan sorokhoz is, ahol nincs
+    is fájl."""
+    if not idk:
+        return {}
+    sorok = db.scalars(
+        select(DocumentAttachment)
+        .where(DocumentAttachment.entity_type == entitas, DocumentAttachment.entity_id.in_(idk))
+        .order_by(DocumentAttachment.id)
+    ).all()
+    eredmeny: dict[int, list[DocumentAttachmentRead]] = {}
+    for sor in sorok:
+        eredmeny.setdefault(sor.entity_id, []).append(DocumentAttachmentRead.model_validate(sor))
+    return eredmeny
+
+
+def _dobd_el_a_fajlokat(db: Session, entitas: str, entity_id: int) -> None:
+    """A törölt tétel fájljai is menjenek - a tárhelyről is.
+
+    Enélkül a feltöltött blokk örökre ott maradna az R2-n, egy olyan tételre
+    hivatkozva, ami már nincs: senki nem látná, és senki nem tudná törölni."""
+    for sor in attachments.list_for(db, entitas, entity_id):
+        attachments.delete(db, sor)
 
 
 def lathatja(db: Session, employee: Employee) -> bool:
@@ -107,9 +143,11 @@ class NapRead(BaseModel):
     brutto_osszesen: float = 0
     netto_osszesen: float = 0
     borravalo_osszesen: float = 0
+    #: A naphoz feltöltött számlák/blokkok. Nem kötelező - lehet üres.
+    csatolmanyok: list[DocumentAttachmentRead] = []
 
 
-def _nap_kimenet(nap: KrumpelloNap) -> NapRead:
+def _nap_kimenet(nap: KrumpelloNap, csatolmanyok: list[DocumentAttachmentRead] | None = None) -> NapRead:
     adat = NapRead(
         id=nap.id,
         datum=nap.datum,
@@ -121,6 +159,7 @@ def _nap_kimenet(nap: KrumpelloNap) -> NapRead:
         borravalo_kartya=_f(nap.borravalo_kartya),
         extra=_f(nap.extra),
         megjegyzes=nap.megjegyzes,
+        csatolmanyok=csatolmanyok or [],
     )
     adat.brutto_osszesen = (adat.brutto_kp or 0) + (adat.brutto_kartya or 0)
     adat.netto_osszesen = (adat.netto_kp or 0) + (adat.netto_kartya or 0)
@@ -141,7 +180,9 @@ def list_napok(
         stmt = stmt.where(KrumpelloNap.datum >= tol)
     if ig is not None:
         stmt = stmt.where(KrumpelloNap.datum <= ig)
-    return [_nap_kimenet(n) for n in db.scalars(stmt.order_by(KrumpelloNap.datum.desc())).all()]
+    napok = db.scalars(stmt.order_by(KrumpelloNap.datum.desc())).all()
+    fajlok = _csatolmanyok(db, NAP_ENTITAS, [n.id for n in napok])
+    return [_nap_kimenet(n, fajlok.get(n.id)) for n in napok]
 
 
 @router.put("/napok", response_model=NapRead)
@@ -176,6 +217,7 @@ def delete_nap(
     nap = db.get(KrumpelloNap, nap_id)
     if nap is None:
         raise HTTPException(status_code=404, detail="Ez a nap nem található.")
+    _dobd_el_a_fajlokat(db, NAP_ENTITAS, nap.id)
     db.delete(nap)
     db.commit()
 
@@ -216,6 +258,8 @@ class KiadasPatch(BaseModel):
 
 class KiadasRead(KiadasIn):
     id: int
+    #: A tételhez feltöltött számlák/blokkok. Nem kötelező - lehet üres.
+    csatolmanyok: list[DocumentAttachmentRead] = []
 
 
 def _ellenorzott_forras(forras: str) -> str:
@@ -227,7 +271,7 @@ def _ellenorzott_forras(forras: str) -> str:
     return forras
 
 
-def _kiadas_kimenet(k: KrumpelloKiadas) -> KiadasRead:
+def _kiadas_kimenet(k: KrumpelloKiadas, csatolmanyok: list[DocumentAttachmentRead] | None = None) -> KiadasRead:
     return KiadasRead(
         id=k.id,
         forras=k.forras,
@@ -238,6 +282,7 @@ def _kiadas_kimenet(k: KrumpelloKiadas) -> KiadasRead:
         afa=_f(k.afa),
         brutto=_f(k.brutto),
         megjegyzes=k.megjegyzes,
+        csatolmanyok=csatolmanyok or [],
     )
 
 
@@ -260,7 +305,8 @@ def list_kiadasok(
     # nem az elejére: ott láthatók, de nem tolják el a friss tételeket.
     sorok = db.scalars(stmt).all()
     sorok = sorted(sorok, key=lambda k: (k.datum is None, -(k.datum.toordinal() if k.datum else 0), k.id))
-    return [_kiadas_kimenet(k) for k in sorok]
+    fajlok = _csatolmanyok(db, KIADAS_ENTITAS, [k.id for k in sorok])
+    return [_kiadas_kimenet(k, fajlok.get(k.id)) for k in sorok]
 
 
 @router.post("/kiadasok", response_model=KiadasRead, status_code=201)
@@ -308,6 +354,7 @@ def delete_kiadas(
     k = db.get(KrumpelloKiadas, kiadas_id)
     if k is None:
         raise HTTPException(status_code=404, detail="Ez a kiadás nem található.")
+    _dobd_el_a_fajlokat(db, KIADAS_ENTITAS, k.id)
     db.delete(k)
     db.commit()
 

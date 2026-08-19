@@ -20,6 +20,13 @@ export function PapirFeltoltes({
   canEdit,
   canDelete,
   uresSzoveg = "Nincs feltöltött dokumentum.",
+  /** A már ismert fájllista. Ha a szülő oldal EGY lekérdezéssel úgyis lehozza
+   * mindet (lásd Krumpello kiadás/bevétel lista), add meg itt - különben egy
+   * hónapnyi tábla soronként külön kérést indítana. Feltöltés/törlés után a
+   * komponens innentől magától frissít. */
+  kezdeti,
+  /** Rövidebb gombfelirat szűk helyre (táblázat-cellába). */
+  gombCimke = "Fájl feltöltése a gépről (PDF, fotó)",
 }: {
   entityType: string;
   entityId: number;
@@ -27,9 +34,11 @@ export function PapirFeltoltes({
   canEdit: boolean;
   canDelete: boolean;
   uresSzoveg?: string;
+  kezdeti?: DocumentAttachment[];
+  gombCimke?: string;
 }) {
   const confirm = useConfirm();
-  const [fajlok, setFajlok] = useState<DocumentAttachment[] | null>(null);
+  const [fajlok, setFajlok] = useState<DocumentAttachment[] | null>(kezdeti ?? null);
   const [busy, setBusy] = useState(false);
 
   const betolt = useCallback(async () => {
@@ -42,8 +51,10 @@ export function PapirFeltoltes({
   }, [entityType, entityId]);
 
   useEffect(() => {
-    betolt();
-  }, [betolt]);
+    // Ha a szülő már átadta a listát, nem kérjük le újra: az első
+    // megjelenítéskor pont az a lényeg, hogy ne induljon soronként egy kérés.
+    if (kezdeti === undefined) betolt();
+  }, [betolt, kezdeti]);
 
   async function feltolt(input: HTMLInputElement, files: File[]) {
     setBusy(true);
@@ -89,7 +100,9 @@ export function PapirFeltoltes({
       {fajlok === null ? (
         <p className="text-[12px] text-text-muted">Betöltés…</p>
       ) : fajlok.length === 0 ? (
-        <p className="text-[12px] text-text-muted">{uresSzoveg}</p>
+        // Üres szöveggel semmit nem írunk ki: a táblázat-celláknál a feltöltő
+        // gomb önmagában elmondja, hogy még nincs fájl - egy "–" csak zaj.
+        uresSzoveg ? <p className="text-[12px] text-text-muted">{uresSzoveg}</p> : null
       ) : (
         <ul className="space-y-1">
           {fajlok.map((f) => (
@@ -129,7 +142,7 @@ export function PapirFeltoltes({
           }`}
         >
           <Upload size={12} />
-          {busy ? "Feltöltés…" : "Fájl feltöltése a gépről (PDF, fotó)"}
+          {busy ? "Feltöltés…" : gombCimke}
           <input
             type="file"
             multiple

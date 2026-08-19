@@ -37,6 +37,31 @@ lényeget:
 Ezért kapja az Áttekintés oldalon a legfelső, egész széles kártyát: a többi
 szám könyvelésből is kijön, ez csak itt látszik.
 
+### Számla feltöltése - lehetőség, nem kötelezettség
+
+Minden kiadás-tételhez és minden napi kassza-záráshoz **feltölthető számla,
+blokk vagy napi jelentés** (Kiadás és Bevétel oldal, "Számla / blokk" és
+"Számla / bizonylat" oszlop). A generikus csatolmány-rendszert használja
+(`services/attachments.py`, entitás-kulcsok: `krumpelloKiadas` és
+`krumpelloNap`), a `/krumpello` oldal jogosultságával - a bolt bizonylataihoz
+ne kelljen hozzáférés a cég teljes pénzügyéhez.
+
+**Sehol nem kötelező.** Az "extra" tételnek épp az a definíciója, hogy nincs
+mögötte papír; a napi zárás pedig a számoktól kerek, a bizonylat csak
+alátámasztja. A feltöltés attól még kell: a másik két forrásnál általában VAN
+blokk vagy számla, és eddig nem volt hova tenni - a fájl a könyvelő mappájában
+kötött ki, a tételtől külön.
+
+A lista **egyetlen lekérdezéssel** hozza a fájlokat az összes sorhoz
+(`_csatolmanyok`), nem soronként: egy hónapnyi kassza megnyitása különben
+több tucat kérést indítana olyan sorokhoz is, ahol nincs is fájl. A
+`PapirFeltoltes` komponens ezért kap `kezdeti` listát - feltöltés vagy törlés
+után onnantól magától frissít.
+
+A tétel törlése a **fájljait is elviszi** (a tárhelyről is): különben a
+feltöltött blokk örökre ott maradna egy már nem létező tételre hivatkozva -
+senki nem látná, és senki nem tudná törölni.
+
 ## A három egyenleg mást mér
 
 `services/krumpello_osszesito.py`. Nem adhatók össze:
@@ -250,8 +275,8 @@ lehet őket a felület arculatába hozni.
 | Oldal | Mi van rajta |
 |---|---|
 | `/krumpello` | Összesítő: extra egyenleg elöl, majd bevétel/kiadás/egyenlegek/munkabér |
-| `/krumpello/bevetel` | Napi kassza-zárások, felvitel és javítás |
-| `/krumpello/kiadas` | Kiadások a három forrás szerint bontva |
+| `/krumpello/bevetel` | Napi kassza-zárások, felvitel és javítás, bizonylat-feltöltés |
+| `/krumpello/kiadas` | Kiadások a három forrás szerint bontva, számla-feltöltés |
 | `/krumpello/munkaber` | Foglalkoztatási időszakok elszámolása + emberenkénti összesítés + naponkénti napló |
 
 Az időszak-szűrő **URL-ben** él (`?tol=&ig=`): így egy nézet linkelhető, a

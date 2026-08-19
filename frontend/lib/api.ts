@@ -2138,6 +2138,8 @@ export type KrumpelloNap = {
   brutto_osszesen: number;
   netto_osszesen: number;
   borravalo_osszesen: number;
+  /** A naphoz feltöltött számlák/blokkok - nem kötelező, lehet üres. */
+  csatolmanyok: DocumentAttachment[];
 };
 
 /** "utalas" | "keszpenz" | "extra" - melyik kasszából ment ki a pénz. */
@@ -2153,6 +2155,8 @@ export type KrumpelloKiadas = {
   afa: number | null;
   brutto: number | null;
   megjegyzes: string | null;
+  /** A tételhez feltöltött számlák/blokkok - nem kötelező, lehet üres. */
+  csatolmanyok: DocumentAttachment[];
 };
 
 export type KrumpelloDolgozo = {

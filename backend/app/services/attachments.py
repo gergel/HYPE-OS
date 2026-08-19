@@ -58,6 +58,13 @@ ENTITAS_OLDALAK: dict[str, str] = {
     # AUTÓK oldalának jogosultságával - egy tankolási blokkhoz ne kelljen
     # hozzáférés a cég teljes pénzügyéhez (lásd routes/autok.py).
     "autoKiadas": "/autok",
+    # A Krumpello kiadás-tétele és napi kassza-zárása. A számla feltöltése
+    # SEHOL NEM KÖTELEZŐ: az "extra" tételnek épp az a lényege, hogy nincs
+    # hozzá papír (lásd models/krumpello.py EXTRA_FORRAS) - a lehetőség attól
+    # még kell, mert a többinél van blokk vagy számla, és eddig nem volt hova
+    # tenni.
+    "krumpelloKiadas": "/krumpello",
+    "krumpelloNap": "/krumpello",
 }
 
 MAX_MERET_BAJT = 100 * 1024 * 1024

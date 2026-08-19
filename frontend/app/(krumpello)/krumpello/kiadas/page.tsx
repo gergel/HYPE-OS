@@ -1,6 +1,7 @@
 import { getKrumpelloKiadasok, type KrumpelloForras } from "@/lib/api";
 import { KrumpelloFejlec } from "@/components/krumpello/KrumpelloFejlec";
 import { KiadasSzerkeszto } from "@/components/krumpello/KiadasSzerkeszto";
+import { PapirFeltoltes } from "@/components/kotelezettseg/PapirFeltoltes";
 import { formatFt } from "@/lib/ido";
 
 export const metadata = { title: "Krumpello – Kiadás" };
@@ -70,6 +71,11 @@ export default async function KrumpelloKiadasPage({
                         <th className="px-4 py-2 text-right font-medium text-text-muted">
                           {kulcs === "extra" ? "Összeg" : "Bruttó"}
                         </th>
+                        {/* A számla feltöltése SEHOL nem kötelező - az
+                            "extra" tételnek épp az a definíciója, hogy nincs
+                            hozzá papír. A lehetőség viszont ott is kell:
+                            néha utólag előkerül a blokk. */}
+                        <th className="px-4 py-2 text-left font-medium text-text-muted">Számla / blokk</th>
                         <th className="px-4 py-2" />
                       </tr>
                     </thead>
@@ -96,7 +102,19 @@ export default async function KrumpelloKiadasPage({
                           <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium tabular-nums text-text-primary">
                             {k.brutto != null ? formatFt(k.brutto) : "–"}
                           </td>
-                          <td className="px-4 py-2.5 text-right">
+                          <td className="px-4 py-2.5">
+                            <PapirFeltoltes
+                              entityType="krumpelloKiadas"
+                              entityId={k.id}
+                              kategoria="szamla"
+                              canEdit
+                              canDelete
+                              kezdeti={k.csatolmanyok}
+                              uresSzoveg=""
+                              gombCimke="+ Számla"
+                            />
+                          </td>
+                          <td className="px-4 py-2.5 text-right align-top">
                             <KiadasSzerkeszto kiadas={k} />
                           </td>
                         </tr>

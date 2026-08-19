@@ -33,6 +33,7 @@ from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
 from app.models.finance import Expense, Revenue
 from app.models.kotelezettseg import Kotelezettseg, KotelezettsegIdoszak
+from app.models.krumpello import KrumpelloKiadas, KrumpelloNap
 from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.rate import Rate
@@ -65,6 +66,10 @@ ENTITY_MODELS: dict[str, type] = {
     # Az autós költés bizonylata: a rekord maga egy kiadás, csak a
     # jogosultsága az Autók oldaláé (lásd services/attachments.py).
     "autoKiadas": Expense,
+    # Krumpello: kiadás-tétel és napi kassza-zárás - mindkettőhöz tölthető fel
+    # számla/blokk, de egyikhez sem kötelező.
+    "krumpelloKiadas": KrumpelloKiadas,
+    "krumpelloNap": KrumpelloNap,
 }
 
 SELECT_LIKE_MAX_DISTINCT = 20

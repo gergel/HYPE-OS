@@ -1,6 +1,7 @@
 import { getKrumpelloNapok } from "@/lib/api";
 import { KrumpelloFejlec } from "@/components/krumpello/KrumpelloFejlec";
 import { NapSzerkeszto } from "@/components/krumpello/NapSzerkeszto";
+import { PapirFeltoltes } from "@/components/kotelezettseg/PapirFeltoltes";
 import { formatFt } from "@/lib/ido";
 
 export const metadata = { title: "Krumpello – Bevétel" };
@@ -58,6 +59,10 @@ export default async function KrumpelloBevetelPage({
                   <Fej jobbra>Borravaló</Fej>
                   <Fej jobbra>Extra</Fej>
                   <Fej>Megjegyzés</Fej>
+                  {/* A napi zárás bizonylata (pénztárgép-napi jelentés,
+                      terminál-összesítő). Nem kötelező: a kassza a számoktól
+                      kerek, a papír csak alátámasztja. */}
+                  <Fej>Számla / bizonylat</Fej>
                   <Fej />
                 </tr>
               </thead>
@@ -72,7 +77,19 @@ export default async function KrumpelloBevetelPage({
                     <Szam ertek={n.borravalo_osszesen} />
                     <Szam ertek={n.extra} kiemelt />
                     <td className="px-4 py-2.5 text-text-muted">{n.megjegyzes ?? "–"}</td>
-                    <td className="px-4 py-2.5 text-right">
+                    <td className="px-4 py-2.5">
+                      <PapirFeltoltes
+                        entityType="krumpelloNap"
+                        entityId={n.id}
+                        kategoria="szamla"
+                        canEdit
+                        canDelete
+                        kezdeti={n.csatolmanyok}
+                        uresSzoveg=""
+                        gombCimke="+ Bizonylat"
+                      />
+                    </td>
+                    <td className="px-4 py-2.5 text-right align-top">
                       <NapSzerkeszto nap={n} />
                     </td>
                   </tr>
