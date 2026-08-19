@@ -20,6 +20,46 @@ tételek nem külön világ - amit a papírozás oldalon rögzítenek, az itt l�
 Csatolmányok és számlaképek: `services/document_storage.py`; a kiadások mellé
 feltöltött fájlok tömegesen letölthetők (ZIP-be csomagolva, `routes/finance.py`).
 
+Két dolog a listákon szándékosan van így:
+
+- **A Kiadások táblán nincs "Állapot" oszlop.** A kiadások közé az kerül, ami
+  már ki van fizetve, tehát egy "Kifizetve / Nyitott" jelző minden soron
+  ugyanazt mondaná. Ami tényleg utalásra vár, azt az "Utalásra váró számlák"
+  kártya hozza elő. Az `Expense.kesz` mező megvan, a kiadás saját lapján
+  látszik.
+- **A Bevételek "Honnan" oszlopa a MUNKA nevét írja ki**, alatta a
+  projektkóddal - nem az ügyfelet. A régi, Notionból importált kódok
+  többségénél az ügyfél "Ismeretlen ügyfél (Notion import)", vagyis az egész
+  oszlop ugyanazt a semmit ismételte minden soron. Ugyanezért mutat a
+  kintlévőség-táblázat is projektnevet.
+
+### Mi kerül az "Utalásra váró számlák" listára
+
+Három forrásból áll össze (`routes/finance._utalasra_varo_tetelek`):
+
+| Forrás | Feltétel |
+|---|---|
+| Kiadás | nincs késznek jelölve, nincs fizetési dátuma, és **van feltöltött számlája** (enélkül utalni sem tudnánk mi alapján) |
+| Külsős TIG | van számlája, de nincs kifizetettként jelölve |
+| Belsős TIG | **le van zárva** (a TIG legenerálva és kiküldve a munkatársnak), van összege, és nem kihagyott hónap |
+
+**A belsős TIG-nél nem elég, hogy nincs kifizetve.** Amíg a hónap TIG-je nincs
+legenerálva és kiküldve, az elszámolás még alakulhat - az összeg is -, és egy
+ilyet nem szabad utalásra kínálni. A "Kifizetve" gomb amúgy is csak lezárt
+(kiküldött) TIG-et enged jelölni
+(`routes/internal_performance_certificates._get_finalized_or_404`), tehát a
+lista különben olyat ajánlana, amit a rendszer maga sem engedne lezárni. Lezárt
+= `Kiküldve` vagy a régi `Kész` állapot (`LEZART_ALLAPOTOK`); az állapot nélküli
+(importált) sor ide **nem** tartozik.
+
+A belsős TIG ettől függetlenül **sosem vár fedezetre**: a bér nem a megrendelő
+pénzéből megy, tehát nem nézzük, hogy a hónap tételeinek projektkódjaira
+megérkezett-e a pénz. Számla sem kell hozzá - a belsős munkatárs nem számlázik,
+a TIG maga a papír.
+
+Az "Utalásra váró" lista összegei **bruttók**: ott a kérdés az, mennyit kell
+ténylegesen elutalni (lásd lentebb, "A NETTÓ a mérvadó").
+
 ### A kifizetés és a Kiadás sor két külön dolog
 
 Egy TIG-et kifizetettként jelölni alapból **Kiadás sort is létrehoz** - a kettő

@@ -3,7 +3,6 @@ import {
   ENTITY_PATHS,
   Expense,
   formatHuf,
-  getClients,
   getCurrentUser,
   getExpenses,
   getFieldTypes,
@@ -38,7 +37,6 @@ export default async function PenzugyekPage() {
     revenues,
     summary,
     projectCodes,
-    clients,
     expenseFieldTypes,
     currentUser,
     pagePermissions,
@@ -48,7 +46,6 @@ export default async function PenzugyekPage() {
     getRevenues(),
     getFinanceSummary(),
     getProjectCodeOptions(),
-    getClients(),
     getFieldTypes("expense"),
     getCurrentUser(),
     getMyPagePermissions(),
@@ -58,13 +55,17 @@ export default async function PenzugyekPage() {
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const fizetesiModOptions = expenseFieldTypes.kifizetes_modja?.options ?? ["Készpénz", "Átutalás", "Bankkártya"];
-  // Honnan jött a bevétel: a projektkód mögötti ügyfél neve. A Revenue maga
-  // csak a project_code_id-t hordozza, ezért itt oldjuk fel.
-  const ugyfelNevById = new Map(clients.map((c) => [c.id, c.nev]));
+  // Honnan jött a bevétel: a projektkód és a MUNKA neve. A Revenue maga csak
+  // a project_code_id-t hordozza, ezért itt oldjuk fel.
+  //
+  // Szándékosan nem az ügyfél neve: a régi, Notionból importált kódok
+  // többségénél az ügyfél "Ismeretlen ügyfél (Notion import)", vagyis az
+  // egész oszlop ugyanazt a semmit írta ki minden soron. A munka nevéből
+  // viszont látszik, miről van szó.
   const bevetelForrasa = new Map(
     projectCodes.map((pc) => [
       pc.id,
-      { projektkod: pc.projektkod, ugyfel: ugyfelNevById.get(pc.client_id) ?? null },
+      { projektkod: pc.projektkod, projektNev: pc.project_nev || null },
     ]),
   );
 
@@ -216,15 +217,11 @@ export default async function PenzugyekPage() {
                 ),
                 sortAccessor: (e) => e.kifizetes_modja,
               },
-              {
-                // A cella tartalma egy ÁLLAPOT ("Kifizetve"/"Nyitott"), ezért a
-                // fejléc is "Állapot" - a korábbi "Kész" cím alapján a szűrőben
-                // nem lehetett kitalálni, mire kell szűrni.
-                header: "Állapot",
-                align: "right",
-                render: (e) => <StatusBadge label={e.kesz ? "Kifizetve" : "Nyitott"} tone={e.kesz ? "success" : "warning"} />,
-                sortAccessor: (e) => (e.kesz ? 1 : 0),
-              },
+              // Állapot-oszlop SZÁNDÉKOSAN nincs: a kiadások közé az kerül, ami
+              // már ki van fizetve - egy "Kifizetve / Nyitott" jelző itt minden
+              // soron ugyanazt mondaná. Ami tényleg utalásra vár, azt a fenti
+              // "Utalásra váró számlák" kártya hozza elő (az Expense.kesz mező
+              // ettől még megvan, a kiadás saját lapján látszik).
               {
                 header: "Beleszámít",
                 align: "right",
@@ -272,22 +269,22 @@ export default async function PenzugyekPage() {
             filterable
             columns={[
               {
-                // Melyik projektkódhoz (és így melyik ügyfélhez) tartozik -
-                // enélkül a soron nem látszik, honnan jött a pénz.
+                // Melyik MUNKÁÉRT jött a pénz - a projekt neve, alatta a
+                // projektkód. Enélkül a soron nem látszik, honnan jött.
                 header: "Honnan",
                 render: (r) => {
                   const forras = bevetelForrasa.get(Number(r.project_code_id));
                   if (!forras) return "–";
                   return (
                     <span className="flex flex-col">
-                      <span>{forras.ugyfel ?? forras.projektkod}</span>
-                      {forras.ugyfel && <span className="text-[12px] text-text-muted">{forras.projektkod}</span>}
+                      <span>{forras.projektNev ?? forras.projektkod}</span>
+                      {forras.projektNev && <span className="text-[12px] text-text-muted">{forras.projektkod}</span>}
                     </span>
                   );
                 },
                 sortAccessor: (r) => {
                   const forras = bevetelForrasa.get(Number(r.project_code_id));
-                  return forras ? `${forras.ugyfel ?? ""} ${forras.projektkod}` : "";
+                  return forras ? `${forras.projektNev ?? ""} ${forras.projektkod}` : "";
                 },
               },
               {

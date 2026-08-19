@@ -20,6 +20,7 @@ from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
 )
+from app.models.internal_performance_certificate import LEZART_ALLAPOTOK as BELSOS_TIG_LEZART
 from app.models.performance_certificate import (
     PerformanceCertificate,
     PerformanceCertificateInvoice,
@@ -652,9 +653,9 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
       - kiadás, ami nincs késznek jelölve, nincs fizetési dátuma, és VAN
         feltöltött számlája (enélkül utalni sem tudnánk mi alapján),
       - külsős TIG, aminek van számlája, de nincs kifizetettként jelölve,
-      - MINDEN belsős TIG, aminek van összege és nem kihagyott hónap - ehhez
-        se számla, se elkészült állapot nem kell: a bért mindig rögtön
-        utaljuk.
+      - belsős TIG, ami LE VAN ZÁRVA (a TIG legenerálva és kiküldve a
+        munkatársnak), van összege és nem kihagyott hónap - számla viszont
+        nem kell hozzá: a belsős munkatárs nem számlázik, a TIG maga a papír.
 
     A kiadásokhoz és a külsős TIG-ekhez kiszámoljuk a FEDEZETTSÉGET is: megjött-e
     már a pénz arra a projektkódra, amihez tartozik (lásd _fedezettseg) - ebből
@@ -760,15 +761,23 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
     # A belsős TIG a havi BÉR elszámolása, nem egy megrendelő munkájáé: a
     # fizetés akkor is jár, ha az ügyfél még nem fizetett, tehát belsős TIG
     # SOSEM vár fedezetre - ezeket mindig rögtön utaljuk. Ezért nem nézzük a
-    # hónap tételeinek projektkódjait, számlát sem várunk hozzá (a belsős
-    # munkatárs nem számlázik, a TIG maga a papír), és az állapotát sem
-    # szűrjük: ami nincs kifizetve, az utalandó.
+    # hónap tételeinek projektkódjait, és számlát sem várunk hozzá (a belsős
+    # munkatárs nem számlázik, a TIG maga a papír).
     #
-    # Két dolog marad ki: a KIHAGYOTT hónap (akkor nem dolgozott, nincs mit
-    # utalni) és az, aminek még nincs összege - azt nem tudnánk mennyivel
-    # elutalni, csak üres sorként állna a listán.
+    # De csak a LEZÁRT hónap kerül ide: amíg a TIG nincs legenerálva és
+    # kiküldve a munkatársnak, az elszámolás még alakulhat (az összeg is), és
+    # ilyet nem utalunk el. A "Kifizetve" gomb ugyanezt követeli meg
+    # (routes/internal_performance_certificates._get_finalized_or_404) - ha a
+    # lista előbb dobná fel, olyat kínálna utalásra, amit a rendszer maga sem
+    # engedne kifizetettnek jelölni.
+    #
+    # Két dolog azon felül is kimarad: a KIHAGYOTT hónap (akkor nem dolgozott,
+    # nincs mit utalni) és az, aminek még nincs összege - azt nem tudnánk
+    # mennyivel elutalni, csak üres sorként állna a listán.
     for tig in belsos:
         if tig.allapot == KIHAGYVA or tig.netto_osszeg is None:
+            continue
+        if tig.allapot not in BELSOS_TIG_LEZART:
             continue
         eredmeny.append(
             (
