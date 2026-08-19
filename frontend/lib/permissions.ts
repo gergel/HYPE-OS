@@ -45,6 +45,44 @@ export function szerepkorei(forras: SzerepkorForras): string[] {
   return [forras.role, ...(forras.tovabbi_szerepkorok ?? [])];
 }
 
+/** OLDAL-ALIASZOK - a backend `core/security.OLDAL_ALIASZOK` párja.
+ *
+ * A DISZPÓ (naptár) joga a PROJEKT oldalt is megnyitja, nézésre és
+ * szerkesztésre: aki a diszpókat viszi, annak a projekten van dolga (gyártás,
+ * technika, gyártás komment, a levél mellékletei, a két diszpó kiküldése).
+ * Létrehozni és törölni viszont nem tud projektet.
+ *
+ * Ha ez a két lista elcsúszik egymástól, a felület mást mutat, mint amit a
+ * szerver enged - ezért a két helyet EGYÜTT kell módosítani. */
+export const OLDAL_ALIASZOK: Record<string, Record<string, readonly string[]>> = {
+  "/projektek": { "/naptar": ["view", "edit"] },
+};
+
+/** Mit tehet ezen az oldalon - az aliaszokkal együtt. `null`, ha az oldal
+ * egyáltalán nem engedélyezett. */
+export function oldalMuveletei(
+  pagePermissions: Record<string, string[]>,
+  page: string,
+): Set<string> | null {
+  const sajat = pagePermissions[page];
+  const engedve = new Set<string>(sajat ? [...sajat, "view"] : []);
+  for (const [alias, atadhato] of Object.entries(OLDAL_ALIASZOK[page] ?? {})) {
+    const aliasMuveletek = pagePermissions[alias];
+    if (!aliasMuveletek) continue;
+    for (const muvelet of atadhato) {
+      if (muvelet === "view" || aliasMuveletek.includes(muvelet)) engedve.add(muvelet);
+    }
+  }
+  return engedve.size > 0 ? engedve : null;
+}
+
+/** Látja-e egyáltalán ezt az oldalt (az aliaszokkal együtt)? A `null`
+ * page_permissions korlátozás nélküli hozzáférést jelent. */
+export function lathatjaAzOldalt(pagePermissions: Record<string, string[]> | null, page: string): boolean {
+  if (pagePermissions === null) return true;
+  return oldalMuveletei(pagePermissions, page) !== null;
+}
+
 export function canDoAction(
   forras: SzerepkorForras,
   pagePermissions: Record<string, string[]> | null,
@@ -54,5 +92,5 @@ export function canDoAction(
   if (vedettAdmin(forras)) return true;
   if (!szerepkorei(forras).some((r) => WRITE_ROLES.has(r))) return false;
   if (pagePermissions === null) return true;
-  return !!pagePermissions[page]?.includes(action);
+  return oldalMuveletei(pagePermissions, page)?.has(action) === true;
 }

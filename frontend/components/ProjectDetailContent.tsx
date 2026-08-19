@@ -22,7 +22,7 @@ import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { DISZPO_MAX_BAJT, DISZPO_MERET_TANACS } from "@/lib/csatolmany";
-import { szerepkorei } from "@/lib/permissions";
+import { canDoAction, szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
 import { VagasiKoltsegOsszesen, type FutoMeres } from "@/components/deliverable/VagasiKoltsegOsszesen";
 import {
@@ -88,6 +88,8 @@ const ALWAYS_HIDDEN = [
 ];
 
 const PAGE = "/projektek";
+//: A Diszpó menüpont jogosultsági kulcsa (lásd lib/nav.ts).
+const DISZPO_PAGE = "/naptar";
 
 export async function ProjectDetailContent({ projectId, embedded = false }: { projectId: number; embedded?: boolean }) {
   const project = await getRecord(ENTITY_PATHS.project, projectId);
@@ -182,8 +184,22 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
   const lathatKoltseget = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
   // A diszpó-mellékleteket az szerkesztheti, aki a Projekteket is - ugyanaz a
   // jog, amit a backend is ellenőriz (services/attachments.py ENTITAS_OLDALAK).
-  const szerkeszthet = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
-  const torolhet = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
+  //
+  // A canDoAction az OLDAL-ALIASZOKAT is nézi: akinek csak DISZPÓ (naptár)
+  // hozzáférése van, az itt is szerkeszthet, mert a diszpó munkája ezen az
+  // oldalon van (lásd lib/permissions.OLDAL_ALIASZOK és a backend
+  // core/security.OLDAL_ALIASZOK).
+  const szerkeszthet = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  const torolhet = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+
+  // CSAK DISZPÓ hozzáférés: a naptáron át jutott ide, a Projektek oldalhoz
+  // magához nincs joga. Neki a diszpó munkája kell - a forgatás és a technika
+  // adatai, a gyártás komment, a levél mellékletei, a stáb (nekik megy a
+  // diszpó) és a két küldés-gomb. Az Utómunka kártya viszont nem az ő dolga:
+  // ott a létrehozás úgyis 403-at adna (az /utomunka külön jogosultság), és
+  // egy működésképtelen gomb rosszabb, mint a hiánya.
+  const csakDiszpo =
+    pagePermissions !== null && !pagePermissions[PAGE] && !!pagePermissions[DISZPO_PAGE];
 
   const bookingRows = bookings
     .map((b) => {
@@ -362,6 +378,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 canEdit={szerkeszthet}
               />
             </Card>
+            {!csakDiszpo && (
             <Card title={`Utómunka (${deliverables.length})`} icon={Clapperboard}>
               {deliverables.length > 0 && (
                 <>
@@ -426,6 +443,7 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
                 deleteBasePath={ENTITY_PATHS.deliverable}
               />
             </Card>
+            )}
           </>
         ),
       },

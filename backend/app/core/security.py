@@ -107,6 +107,41 @@ def require_roles(*roles: Role):
     return dependency
 
 
+#: OLDAL-ALIASZOK: melyik MÁSIK oldal joga ér fel ezzel, és mely műveletekre.
+#:
+#: A DISZPÓ (naptár) joga a PROJEKT oldalt is megnyitja - nézésre és
+#: szerkesztésre. Aki a diszpókat viszi, annak a projekten van dolga: látnia
+#: kell a gyártás és a technika adatait, írnia a gyártás kommentet, feltöltenie
+#: a diszpó levél mellékleteit, és kiküldenie az előzetes és a teljes diszpót.
+#: Enélkül a "csak diszpó" hozzáférés használhatatlan volt: a felület
+#: beengedte a naptárba, de a projekt megnyitásakor 403 jött.
+#:
+#: LÉTREHOZNI és TÖRÖLNI viszont nem tud projektet: az nem a diszpós dolga, és
+#: az alias sosem ad többet, mint amennyi a saját oldalán is megvan (a "view"
+#: kivételével, ami az oldal jelenlétéből következik - lásd
+#: models/user_access.py).
+OLDAL_ALIASZOK: dict[str, dict[str, tuple[str, ...]]] = {
+    "/projektek": {"/naptar": ("view", "edit")},
+}
+
+
+def _oldal_muveletei(page_permissions: dict[str, list[str]], page: str) -> set[str] | None:
+    """Mit tehet ezen az oldalon - az aliaszokkal együtt.
+
+    None: az oldal egyáltalán nem engedélyezett (se magában, se aliaszon át).
+    Üres halmaz nem fordul elő: ha az oldal kulcsa ott van, a "view" jár."""
+    sajat = page_permissions.get(page)
+    engedve: set[str] = set(sajat) | {"view"} if sajat is not None else set()
+
+    for alias, atadhato in OLDAL_ALIASZOK.get(page, {}).items():
+        alias_muveletek = page_permissions.get(alias)
+        if alias_muveletek is None:
+            continue
+        engedve |= {m for m in atadhato if m == "view" or m in alias_muveletek}
+
+    return engedve or None
+
+
 def check_page_action(db: Session, employee: Employee, page: str, action: str) -> None:
     """A durvább admin/operator szerepkör-ellenőrzés (lásd require_roles) UTÁN
     hívva a finomabb, oldal+művelet-szintű írási jogosultságot ellenőrzi - ha
@@ -123,7 +158,7 @@ def check_page_action(db: Session, employee: Employee, page: str, action: str) -
     config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
     if config is None or config.page_permissions is None:
         return
-    allowed = config.page_permissions.get(page)
+    allowed = _oldal_muveletei(config.page_permissions, page)
     if allowed is None or action not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -152,9 +187,10 @@ def check_tab_action(db: Session, employee: Employee, page: str, tab_key: str, a
     config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
     if config is None or config.page_permissions is None:
         return
-    allowed = config.page_permissions.get(f"{page}:{tab_key}")
-    if allowed is None:
-        allowed = config.page_permissions.get(page)
+    fulre_szabott = config.page_permissions.get(f"{page}:{tab_key}")
+    # A fül-szintű beállítás csak SZŰKÍT: ha nincs ilyen kulcs, az oldal
+    # (aliaszokkal együtt számolt) joga öröklődik - lásd _oldal_muveletei.
+    allowed = set(fulre_szabott) if fulre_szabott is not None else _oldal_muveletei(config.page_permissions, page)
     if allowed is None or action not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

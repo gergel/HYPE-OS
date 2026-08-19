@@ -106,6 +106,41 @@ A `resolvePermissionPage()` a leghosszabb egyező href alapján dönt, ezért ke
 pl. a `/projektek/project-kodok/123` helyesen a "Project Code-ok" jogához, nem a
 "Projektek"-éhez.
 
+### Oldal-aliaszok: a DISZPÓ joga a projekthez is beenged
+
+Van egy eset, ahol két oldal joga összefügg: aki a **diszpókat** viszi, annak a
+munkája a **projekten** van. Neki kell a gyártás és a technika adata, ő írja a
+gyártás kommentet, ő tölti fel a diszpó levél mellékleteit, és ő nyomja meg az
+előzetes és a teljes diszpó gombját. Egy "csak diszpó" hozzáférés emiatt
+használhatatlan volt: a felület beengedte a naptárba, a projekt megnyitásakor
+viszont visszadobta a Dashboardra.
+
+Ezért a `/naptar` joga **átszáll** a `/projektek` oldalra - `view` és `edit`
+műveletre, **create/delete NÉLKÜL**: projektet létrehozni és törölni nem a
+diszpós dolga. Az alias sosem ad többet, mint amennyi a saját oldalán is
+megvan: aki a diszpót csak nézheti, az a projektet is csak nézheti.
+
+A szabály **két helyen, egyformán** van kimondva, és együtt kell módosítani
+őket - különben a felület mást mutatna, mint amit a szerver enged:
+
+| Hol | Mit csinál |
+|---|---|
+| `backend/app/core/security.py` → `OLDAL_ALIASZOK` | a `check_page_action` és a `check_tab_action` ezt nézi (a fül-szintű beállítás továbbra is csak SZŰKÍT) |
+| `frontend/lib/permissions.ts` → `OLDAL_ALIASZOK` | a `canDoAction` és a `middleware.ts` navigáció-zára |
+
+Két dolog **nem** változik ettől: az oldalsávban nem jelenik meg új menüpont (az
+az `allowed_pages`-ből épül, a projekthez a naptárból jut el), és a **költségek**
+továbbra is `/penzugyek`-jogosultsághoz kötöttek. A projekt oldalán az Utómunka
+kártya el is tűnik a csak-diszpós felhasználónak: ott a létrehozás úgyis 403-at
+adna (az `/utomunka` külön jogosultság), és egy működésképtelen gomb rosszabb,
+mint a hiánya.
+
+Ugyanez a szabály tette **szigorúbbá** a két diszpó-küldő végpontot: korábban
+puszta szerepkört néztek (`require_roles(ADMIN, OPERATOR)`), tehát bármelyik
+operátor kiküldhetett bármilyen diszpót akkor is, ha a Projektek oldalhoz nem is
+volt joga. Most oldal+művelet alapúak (`require_page_action("/projektek",
+"edit", ...)`).
+
 ## Mit hol állíts
 
 | Amit akarsz | Hol |

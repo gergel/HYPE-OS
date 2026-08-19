@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import Role, get_current_user, require_roles
+from app.core.security import Role, get_current_user, require_page_action, require_roles
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.project import Project
@@ -173,9 +173,18 @@ def _run_dispatch_action(action, *args):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
 
+#: A két diszpó-küldő gomb jogosultsága. SZÁNDÉKOSAN oldal+művelet alapú, nem
+#: puszta szerepkör: így egyrészt a "csak diszpó" hozzáférésű munkatárs is ki
+#: tudja küldeni (a /naptar joga a /projektek "edit"-jét is megadja, lásd
+#: core/security.OLDAL_ALIASZOK), másrészt egy máshova korlátozott operátor
+#: NEM - korábban bármelyik operátor kiküldhetett bármilyen diszpót, akkor is,
+#: ha a Projektek oldalhoz nem is volt joga.
+_diszpo_kuldheti = require_page_action("/projektek", "edit", Role.ADMIN, Role.OPERATOR)
+
+
 @router.post("/{project_id}/diszpo/elozetes", tags=["projects"])
 def run_elozetes_diszpo(
-    project_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(require_roles(Role.ADMIN, Role.OPERATOR))
+    project_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(_diszpo_kuldheti)
 ):
     """'Előzetes diszpó' gomb (lásd app/services/dispo.py)."""
     return _run_dispatch_action(send_elozetes_diszpo, db, _get_project_or_404(project_id, db), current_user)
@@ -183,7 +192,7 @@ def run_elozetes_diszpo(
 
 @router.post("/{project_id}/diszpo/kuldes", tags=["projects"])
 def run_diszpo_kuldes(
-    project_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(require_roles(Role.ADMIN, Role.OPERATOR))
+    project_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(_diszpo_kuldheti)
 ):
     """'Diszpó küldése' gomb (lásd app/services/dispo.py)."""
     return _run_dispatch_action(send_diszpo, db, _get_project_or_404(project_id, db), current_user)
