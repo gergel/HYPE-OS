@@ -379,6 +379,17 @@ A kötés két helyről jöhet:
   a szerver keresi meg az élő keretét; ha nincs neki, azt meg is mondja, hogy
   eseti szerződés kell.
 
+**Harmadik forrás nincs, és szándékosan nincs**: egy megrendelői papír mentése
+korábban ráírta a papíron szereplő keretszerződést a projektkódra is. Ez
+csendben átbillentette "keretszerződés alatt"-ba, és onnantól a felület azt
+mondta, hogy eseti szerződés NEM KELL - pont abban a pillanatban, amikor a
+felhasználó éppen egy eseti szerződést készített (feltöltött). A papír
+`keretszerzodes_id` mezője csak azt mondja meg, HONNAN vettük a cégadatokat (az
+előtöltés akkor is felkínálja az ügyfél élő keretét, ha hozzá sem nyúltak); a
+projektkód `contract_id` mezője viszont egy ÁLLÍTÁS a munkáról. Javaslatból nem
+lehet némán állítás - épp az a hiba jött volna vissza egy másik ajtón, ami
+ellen ez a szakasz szól.
+
 Ha megvan a kötés, a szerződés-lépés kész, és már csak a TIG van hátra - a
 keret ugyanis arról szól, milyen feltételekkel dolgozunk együtt, a TIG arról,
 hogy egy konkrét munka elkészült.
@@ -583,10 +594,10 @@ KERETSZERZODES`) azon a szűrőn sosem menne át, és a "fedi-e a keret ezt a
 projektet" kérdésre mindig némán nem lenne a válasz.
 
 Az adat maga már megvolt: a Notion "Keretszerződés" adatbázisa a `Contract`
-táblába importálódik - ez a modul a felületet és a kiküldést adja hozzá. Ha egy
-papír keretszerződésre hivatkozik, a projektkód `contract_id`-ja is odaköt (ha
-még üres) - ebből számol a keret-oldal "hány projektkódnál használjuk"
-számlálója.
+táblába importálódik - ez a modul a felületet és a kiküldést adja hozzá. A
+keret-oldal "hány projektkódnál használjuk" számlálója a projektkódok
+`contract_id`-jából számol, tehát a KIMONDOTT kötéseket számolja - egy papíron
+szereplő keret-hivatkozás nem köti oda a projektkódot (lásd fentebb).
 
 Ugyanez a kapcsolat a Notionban a **keretszerződés felől** is meg van adva
 (`HYPE ADMIN projektkódok`), és az importnak azt is olvasnia kell: a projektkód

@@ -302,23 +302,25 @@ def _alkalmaz(papir, payload: PapirIn) -> None:
         setattr(papir, mezo, ertek)
 
 
-def _keret_visszakotese(db: Session, papir, project_code_id: int) -> None:
-    """Ha a papír keretszerződésre hivatkozik, a PROJEKTKÓD is kösse oda.
-
-    A projektkód `contract_id` mezője eddig is azt jelentette, hogy melyik
-    szerződés fedi ezt a munkát - erre épül a keretszerződések oldalán a
-    "hány projektkódnál használjuk" számláló és a törlés védelme is. A
-    papírhoz választott keret ugyanaz az információ, csak egy szinttel
-    lejjebb: ha nem vezetnénk vissza, a két hely némán elcsúszna egymástól.
-
-    Meglévő kapcsolatot NEM írunk felül: azt valaki szándékosan állította be
-    (vagy a Notion-import hozta), és nem egy papír mentése a hely, ahol ez
-    csendben megváltozik."""
-    if papir.keretszerzodes_id is None:
-        return
-    pk = db.get(ProjectCode, project_code_id)
-    if pk is not None and pk.contract_id is None:
-        pk.contract_id = papir.keretszerzodes_id
+# MIÉRT NINCS "keret visszakötése"?
+#
+# Egy eseti papír mentése korábban ráírta a papír keretszerződését a
+# PROJEKTKÓDRA is (`contract_id`). Ez csendben átbillentette a projektkódot
+# "keretszerződés alatt" állapotba - és onnantól a felület azt mondta, hogy
+# eseti szerződés NEM KELL, pont abban a pillanatban, amikor a felhasználó
+# éppen egy eseti szerződést készített.
+#
+# A papír `keretszerzodes_id` mezője csak azt mondja meg, HONNAN vettük a
+# cégadatokat (az előtöltés akkor is felkínálja az ügyfél élő keretét, ha a
+# felhasználó hozzá sem nyúlt). A projektkód `contract_id` mezője viszont egy
+# ÁLLÍTÁS: ezt a munkát a keret fedi, tehát nem kérünk rá papírt. A kettő nem
+# ugyanaz, és egy javaslatból nem lehet némán állítás - ez az a hiba, ami ellen
+# a models/project_code.keret_fedi kommentje is szól: ez a jelölés TEENDŐT
+# TÜNTET EL, tévesen állítva pont a hiányzó papírokat rejti el.
+#
+# A keret-kötés ezért kimondott döntés maradt, a projektkód saját
+# "Keretszerződés alatt" kapcsolóján (lásd set_keret_kotes és a
+# components/megrendeloi/KeretKotes.tsx).
 
 
 def _uj_vagy_meglevo(db: Session, fajta: str, project_code_id: int, papir_id: int | None):
@@ -346,7 +348,6 @@ def save_papir(
     _projektkod_vagy_404(db, project_code_id)
     papir = _uj_vagy_meglevo(db, fajta, project_code_id, papir_id)
     _alkalmaz(papir, payload)
-    _keret_visszakotese(db, papir, project_code_id)
     db.commit()
     db.refresh(papir)
     return _kimenet(papir, fajta)
@@ -406,7 +407,6 @@ def generate_and_send(
     pk = _projektkod_vagy_404(db, project_code_id)
     papir = _uj_vagy_meglevo(db, fajta, project_code_id, papir_id)
     _alkalmaz(papir, payload)
-    _keret_visszakotese(db, papir, project_code_id)
     db.flush()
 
     if not papir.email:
