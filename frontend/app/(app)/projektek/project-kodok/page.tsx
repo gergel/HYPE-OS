@@ -189,7 +189,19 @@ export default async function ProjectKodokPage({
               {
                 header: "Bevétel",
                 align: "right",
-                render: (pc) => <span title="A bevétel-sorok összege - a Pénzügyeknél módosítható">{formatHuf(pc.bevetel)}</span>,
+                render: (pc) => (
+                  <>
+                    <span title="A bevétel-sorok összege; amíg nincs kifizetés, a vállalási ár (szerződés / TIG)">
+                      {formatHuf(pc.bevetel)}
+                    </span>
+                    {/* MIÉRT ennyi - egy magyarázat nélküli 0 Ft itt a
+                        legfélrevezetőbb: nem látszik, elfelejtették-e beírni
+                        vagy tényleg beszámították valamibe. */}
+                    {pc.vallalasi_ar_magyarazat && (
+                      <span className="mt-0.5 block text-[11.5px] text-text-muted">{pc.vallalasi_ar_magyarazat}</span>
+                    )}
+                  </>
+                ),
                 sortAccessor: (pc) => pc.bevetel,
               },
               {

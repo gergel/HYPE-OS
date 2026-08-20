@@ -129,6 +129,21 @@ class ProjectCode(TimestampMixin, Base):
     #: MIÉRT nincs számla - a jelöléshez kötelező.
     szamla_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
 
+    #: MIÉRT ennyi a vállalási ár - szabad szöveg a "Mennyiért vállaltuk"
+    #: kártyához.
+    #:
+    #: Nem minden összeg magyarázza magát, és a 0 Ft a legkevésbé: lehet, hogy
+    #: nem ingyen dolgoztunk, hanem beszámítottuk valakinek a fizetésébe, egy
+    #: korábbi munkát kompenzáltunk vele, vagy csere volt. Enélkül fél év múlva
+    #: csak egy nulla áll ott, és senki nem tudja, elfelejtették-e beírni vagy
+    #: tényleg így volt - a profit pedig ugyanezt a nullát viszi tovább.
+    #:
+    #: Külön mező, nem a `megjegyzes`: az a projektkód általános jegyzete, ez
+    #: pedig konkrétan az ÁRRÓL szól, és ott is jelenik meg, ahol az ár.
+    vallalasi_ar_magyarazat: Mapped[str | None] = mapped_column(
+        Text, comment="Miért ennyi a vállalási ár (pl. beszámítva egy fizetésbe)"
+    )
+
     teljesites_datuma: Mapped[date | None] = mapped_column(Date)
     utalas_datuma: Mapped[date | None] = mapped_column(Date)
     szamla_url: Mapped[str | None] = mapped_column(String(500))

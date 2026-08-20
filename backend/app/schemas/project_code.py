@@ -20,6 +20,9 @@ class ProjectCodeBase(BaseModel):
     tig_statusza: str | None = None
     szamla_statusza: str | None = None
     megjegyzes: str | None = None
+    #: MIÉRT ennyi a vállalási ár (pl. "beszámítva X fizetésébe") - lásd
+    #: models/project_code.vallalasi_ar_magyarazat.
+    vallalasi_ar_magyarazat: str | None = None
     teljesites_datuma: date | None = None
     utalas_datuma: date | None = None
     szamla_url: str | None = None
@@ -39,6 +42,8 @@ class ProjectCodeUpdate(BaseModel):
     plusz_afa: str | None = None
     penznem: str | None = None
     arfolyam: float | None = None
+    #: MIÉRT ennyi az ár - szabad szöveg (pl. "beszámítva X fizetésébe").
+    vallalasi_ar_magyarazat: str | None = None
     contract_id: int | None = None
     tig_statusza: str | None = None
     szamla_statusza: str | None = None
@@ -96,6 +101,9 @@ class ProjectCodeListRead(BaseModel):
     van_szerzodes: bool = True
     papir_nelkul: bool = False
     papir_nelkul_indoka: str | None = None
+    #: MIÉRT ennyi az ár - a listán is kell: egy magyarázat nélküli 0 Ft ott a
+    #: legfélrevezetőbb (lásd models/project_code.vallalasi_ar_magyarazat).
+    vallalasi_ar_magyarazat: str | None = None
 
     model_config = {"from_attributes": True}
 

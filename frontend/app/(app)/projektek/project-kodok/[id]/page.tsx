@@ -175,6 +175,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             papirbolNetto={szamlaAllas?.netto ?? null}
             penznem={penznemKod}
             arfolyam={typeof projectCode.arfolyam === "number" ? projectCode.arfolyam : null}
+            magyarazat={szoveg(projectCode.vallalasi_ar_magyarazat)}
           />
         </Card>
 

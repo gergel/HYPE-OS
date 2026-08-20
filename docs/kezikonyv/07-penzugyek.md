@@ -240,6 +240,23 @@ kizárólag a tényleges bevétel-sorokból számol (lásd fentebb, "Mi számít
 ÉVES bevételbe"), tehát egy még ki nem fizetett munka nem duzzasztja fel az
 éves bevételt. A `becsult_profit` neve is ezért „becsült".
 
+### Magyarázat az összeghez
+
+A „Mennyiért vállaltuk" kártyán a szám mellett van egy szabad szöveges mező is
+(`ProjectCode.vallalasi_ar_magyarazat`). Nem minden összeg magyarázza magát, és
+a **0 Ft a legkevésbé**: lehet, hogy nem ingyen dolgoztunk, hanem beszámítottuk
+valakinek a fizetésébe, egy korábbi munkát kompenzáltunk vele, vagy csere volt.
+
+Ha az összeg 0 és nincs magyarázat, a kártya **figyelmeztet** - de nem tilt: a
+nulla lehet valós, csak akkor is tartozik hozzá egy mondat. Enélkül fél év
+múlva csak egy nulla áll ott, és nem lehet megkülönböztetni a „tényleg ennyi"
+és az „elfelejtették beírni" esetet - a profit pedig ugyanezt a nullát viszi
+tovább.
+
+Külön mező, nem a `megjegyzes`: az a projektkód általános jegyzete, ez pedig
+konkrétan az ÁRRÓL szól, és ott is jelenik meg, ahol az ár - a projektkód-lista
+Bevétel oszlopa alatt is.
+
 ### Deviza: euróban/dollárban felvezetett tétel
 
 Egyetlen szabály, egy helyen: `services/penznem.py`.

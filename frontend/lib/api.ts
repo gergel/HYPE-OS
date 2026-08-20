@@ -60,6 +60,10 @@ export type ProjectCode = {
    * arról nincs mit igazolni (lásd backend
    * models/project_code.esemeny_elmaradt). */
   elmaradt: boolean;
+  /** MIÉRT ennyi a vállalási ár (pl. "beszámítva X fizetésébe"). Egy
+   * magyarázat nélküli 0 Ft a legfélrevezetőbb: nem látszik, elfelejtették-e
+   * beírni vagy tényleg így volt. */
+  vallalasi_ar_magyarazat: string | null;
   /** Hol tart a papírozás és a pénz: kell-e egyáltalán papír, van-e lezárt
    * eseti szerződés és TIG, megérkezett-e a bevétel (lásd backend
    * models/project_code.py). */

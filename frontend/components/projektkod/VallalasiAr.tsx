@@ -36,6 +36,11 @@ export function VallalasiAr({
    * amiben megállapodtunk, mert a szerződésen és a TIG-en az áll. */
   penznem = "HUF",
   arfolyam = null,
+  /** MIÉRT ennyi az ár - szabad szöveg. Egy 0 Ft-os munka nem feltétlenül
+   * ingyen készült: lehet, hogy beszámítottuk valakinek a fizetésébe. Enélkül
+   * fél év múlva csak egy nulla áll itt, és senki nem tudja, elfelejtették-e
+   * beírni vagy tényleg így volt. */
+  magyarazat = null,
 }: {
   patchPath: string;
   netto: number | null;
@@ -44,6 +49,7 @@ export function VallalasiAr({
   papirbolNetto: number | null;
   penznem?: string;
   arfolyam?: number | null;
+  magyarazat?: string | null;
 }) {
   const router = useRouter();
   const [ertek, setErtek] = useState(netto === null ? "" : String(netto));
@@ -54,6 +60,7 @@ export function VallalasiAr({
   // kiabált egy teljesen szokásos forintos munkára.
   const [valuta, setValuta] = useState(penznemKod(penznem));
   const [arfolyamErtek, setArfolyamErtek] = useState(arfolyam === null ? "" : String(arfolyam));
+  const [indok, setIndok] = useState(magyarazat ?? "");
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
 
@@ -186,6 +193,33 @@ export function VallalasiAr({
           ezzel számol.
         </p>
       )}
+      <label className="block text-[13px] text-text-secondary">
+        Magyarázat az összeghez
+        <textarea
+          value={indok}
+          disabled={!canEdit || busy}
+          rows={2}
+          placeholder="Pl. beszámítva Kovács Péter fizetésébe / csere egy korábbi munkáért"
+          onChange={(e) => setIndok(e.target.value)}
+          onBlur={() => {
+            const tisztitott = indok.trim();
+            if (tisztitott === (magyarazat ?? "")) return;
+            ment({ vallalasi_ar_magyarazat: tisztitott || null });
+          }}
+          className="mt-1 block w-full max-w-2xl rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary disabled:opacity-60"
+        />
+      </label>
+
+      {/* Nem tiltás, csak figyelmeztetés: a nulla lehet valós, de akkor is
+          tartozik hozzá egy mondat - különben nem lehet megkülönböztetni a
+          "tényleg ennyi" és az "elfelejtették beírni" esetet. */}
+      {szam === 0 && !indok.trim() && (
+        <p className="text-[12px] text-text-warning">
+          0 az összeg – írd ide, miért (beszámítva egy fizetésbe, csere, ingyenmunka…), különben fél év múlva
+          nem lesz miből kiderülnie.
+        </p>
+      )}
+
       <p className="text-[12px] text-text-muted">
         Ebből tölti elő magát a szerződés és a TIG, és ez adja a számla összegét is.
       </p>
