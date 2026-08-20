@@ -105,6 +105,12 @@ class Revenue(TimestampMixin, Base):
     netto: Mapped[float | None] = mapped_column(Numeric(12, 2))
     brutto: Mapped[float | None] = mapped_column(Numeric(12, 2))
     penznem: Mapped[str] = mapped_column(String(10), default="HUF")
+    #: HOGYAN jött be a pénz: készpénz vagy átutalás. A készpénzes tételekből
+    #: áll össze a kassza egyenlege (lásd services/fizetesi_mod.py) - a kiadás
+    #: oldali `kifizetes_modja` párja.
+    fizetes_modja: Mapped[str | None] = mapped_column(
+        String(50), comment="Készpénz / Átutalás - ebből számol a kassza"
+    )
     fizetes_hatarideje: Mapped[date | None] = mapped_column(Date)
     fizetes_datuma: Mapped[date | None] = mapped_column(Date)
     # A megrendelői számla köztes állapota - a számla NEM ebben a rendszerben

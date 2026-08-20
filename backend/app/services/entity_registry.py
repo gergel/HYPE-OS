@@ -32,6 +32,7 @@ from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
 from app.models.finance import Expense, Revenue
+from app.services import fizetesi_mod
 from app.models.kotelezettseg import Kotelezettseg, KotelezettsegIdoszak
 from app.models.krumpello import KrumpelloKiadas, KrumpelloNap
 from app.models.project import Project
@@ -81,8 +82,15 @@ SELECT_LIKE_MAX_VALUE_LENGTH = 60
 # választottak) - ezek MINDIG felülírják a lenti heurisztikát/valódi
 # enum-detektálást, mert a felhasználó explicit megadta a pontos listát.
 SELECT_FIELD_OVERRIDES: dict[str, dict[str, list[str]]] = {
+    # A fizetési módok EGY helyről jönnek (services/fizetesi_mod.py): ebből
+    # számol a kassza egyenlege, tehát nem lehet mindenki által szabadon beírt
+    # szöveg - egy "kp" és egy "Készpénz" külön kategória lenne, és pont
+    # annyival lenne hamis az egyenleg.
     "expense": {
-        "kifizetes_modja": ["Készpénz", "Átutalás", "Bankkártya"],
+        "kifizetes_modja": list(fizetesi_mod.KIADAS_MODOK),
+    },
+    "revenue": {
+        "fizetes_modja": list(fizetesi_mod.BEVETEL_MODOK),
     },
     "equipment": {
         "allapot": ["Jó", "Szerelendő", "Selejt", "Elhagyva", "Szervíz", "Szerelve"],

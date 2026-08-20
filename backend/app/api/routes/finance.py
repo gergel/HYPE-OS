@@ -27,7 +27,7 @@ from app.models.performance_certificate import (
     PerformanceCertificateTetel,
 )
 from app.models.project_code import ProjectCode
-from app.services import document_storage, elszamolas, kiadas_kapcsolatok
+from app.services import document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
 from app.services import penznem as penznem_szolg
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
 from app.services.portal_storage import R2NotConfiguredError
@@ -137,6 +137,37 @@ class PaymentMethodBreakdown(BaseModel):
     osszeg: float
 
 
+class KasszaHavi(BaseModel):
+    """Egy hónap készpénz-mozgása és a hónap végi egyenleg."""
+
+    month: str
+    be: float
+    ki: float
+    #: A hónap VÉGÉN mennyi volt a kasszában (a nyitó egyenleggel együtt).
+    egyenleg: float
+
+
+class Kassza(BaseModel):
+    """Mennyi készpénz van a kasszában - a készpénzes tételekből számolva.
+
+    BRUTTÓBAN, nem nettóban: a kasszában fizikailag annyi pénz van, amennyit
+    kifizettünk/megkaptunk, ÁFÁ-stól. (Az elszámolás máshol nettó - lásd
+    services/elszamolas.py -, de egy doboz pénz nem tud nettó lenni.)"""
+
+    egyenleg: float
+    #: Az EGÉSZ idő alatt bejött/kiment készpénz - ebből áll össze az egyenleg.
+    osszes_be: float
+    osszes_ki: float
+    #: Az idei év mozgása külön - ennyit forgattunk készpénzben.
+    idei_be: float
+    idei_ki: float
+    havi: list[KasszaHavi]
+    #: Hány olyan KIFIZETETT tétel van, amin nincs megjelölve a fizetési mód.
+    #: Amíg ez nem nulla, az egyenleg csak közelítés - ezért írjuk ki.
+    jeloletlen_kiadas: int
+    jeloletlen_bevetel: int
+
+
 class FinanceSummary(BaseModel):
     """Az összesítő számai NETTÓBAN értendők (lásd services/elszamolas.py):
     az ÁFA átfolyó tétel, két oldal bruttó összevetéséből nem profit jön ki,
@@ -156,6 +187,8 @@ class FinanceSummary(BaseModel):
     havi_trend: list[MonthlyFinance]
     kintlevo_projektek: list[OutstandingProject]
     ytd_kiadas_fizetesi_mod_szerint: list[PaymentMethodBreakdown]
+    #: Mennyi készpénz van a kasszában (lásd services/fizetesi_mod.py).
+    kassza: Kassza
 
 
 # Egy kiadás csak akkor számít bele a Pénzügy összesítőkbe (YTD kiadás, havi
@@ -176,6 +209,84 @@ _EXPENSE_COUNTS_TOWARD_TOTALS = Expense.hozzaadas_a_kiadasokhoz.is_not(False)
 # kihagyott sorok LÁTSZANAK a listán (és a projekt profitjában is számítanak),
 # de az éves bevételbe nem valók - lásd services/elszamolas.py.
 _REVENUE_COUNTS_TOWARD_TOTALS = elszamolas.bevetel_beleszamit_sql(Revenue)
+
+
+def _kassza(db: Session, today: date, months: list[tuple[int, int]]) -> Kassza:
+    """A kassza egyenlege és havi mozgása.
+
+    BRUTTÓBAN: a dobozban annyi pénz van, amennyit ténylegesen kifizettünk vagy
+    megkaptunk - ÁFÁ-stól. Ahol nincs bruttó, a nettóra esünk vissza (régi,
+    Notionből importált sorokon gyakran csak az egyik van meg).
+
+    Csak a MEGTÖRTÉNT mozgás számít (van fizetés dátuma): egy jövő heti
+    készpénzes kiadás még nem hiányzik a kasszából.
+
+    A "nem számít bele" jelölésű sorok (lásd _EXPENSE_COUNTS_TOWARD_TOTALS és
+    _REVENUE_COUNTS_TOWARD_TOTALS) itt is kimaradnak: ha egy tétel a Pénzügyek
+    szerint nem történt meg, akkor a kasszát sem mozgatta."""
+    penz = lambda modell: func.coalesce(modell.brutto, modell.netto, 0)  # noqa: E731
+
+    def havi(modell, mod_oszlop, feltetel):
+        sorok = db.execute(
+            select(
+                extract("year", modell.fizetes_datuma).label("y"),
+                extract("month", modell.fizetes_datuma).label("m"),
+                func.coalesce(func.sum(penz(modell)), 0).label("total"),
+            )
+            .where(
+                modell.fizetes_datuma.is_not(None),
+                fizetesi_mod.keszpenz_sql(mod_oszlop),
+                feltetel,
+            )
+            .group_by("y", "m")
+        ).all()
+        return {(int(r.y), int(r.m)): float(r.total) for r in sorok}
+
+    be_havi = havi(Revenue, Revenue.fizetes_modja, _REVENUE_COUNTS_TOWARD_TOTALS)
+    ki_havi = havi(Expense, Expense.kifizetes_modja, _EXPENSE_COUNTS_TOWARD_TOTALS)
+
+    osszes_be = sum(be_havi.values())
+    osszes_ki = sum(ki_havi.values())
+
+    # A megjelenített hónapok ELŐTTI egyenleg - onnan indul a görbe, különben a
+    # legutóbbi 12 hónap úgy nézne ki, mintha nulláról kezdenénk.
+    elso = min(months) if months else (today.year, today.month)
+    nyito = sum(o for kulcs, o in be_havi.items() if kulcs < elso) - sum(
+        o for kulcs, o in ki_havi.items() if kulcs < elso
+    )
+
+    havi_sorok: list[KasszaHavi] = []
+    fut = nyito
+    for y, m in months:
+        be = be_havi.get((y, m), 0.0)
+        ki = ki_havi.get((y, m), 0.0)
+        fut += be - ki
+        havi_sorok.append(KasszaHavi(month=f"{y:04d}-{m:02d}", be=be, ki=ki, egyenleg=fut))
+
+    def jeloletlen(modell, mod_oszlop, feltetel) -> int:
+        return int(
+            db.scalar(
+                select(func.count())
+                .select_from(modell)
+                .where(
+                    modell.fizetes_datuma.is_not(None),
+                    func.coalesce(func.trim(mod_oszlop), "") == "",
+                    feltetel,
+                )
+            )
+            or 0
+        )
+
+    return Kassza(
+        egyenleg=osszes_be - osszes_ki,
+        osszes_be=osszes_be,
+        osszes_ki=osszes_ki,
+        idei_be=sum(o for (y, _), o in be_havi.items() if y == today.year),
+        idei_ki=sum(o for (y, _), o in ki_havi.items() if y == today.year),
+        havi=havi_sorok,
+        jeloletlen_kiadas=jeloletlen(Expense, Expense.kifizetes_modja, _EXPENSE_COUNTS_TOWARD_TOTALS),
+        jeloletlen_bevetel=jeloletlen(Revenue, Revenue.fizetes_modja, _REVENUE_COUNTS_TOWARD_TOTALS),
+    )
 
 
 def _last_n_months(today: date, n: int) -> list[tuple[int, int]]:
@@ -340,6 +451,7 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         havi_trend=havi_trend,
         kintlevo_projektek=kintlevo_projektek[:15],
         ytd_kiadas_fizetesi_mod_szerint=ytd_kiadas_fizetesi_mod_szerint,
+        kassza=_kassza(db, today, months),
     )
 
 

@@ -235,6 +235,9 @@ export type Revenue = {
   netto: number | null;
   brutto: number | null;
   penznem: string;
+  /** HOGYAN jött be a pénz (Készpénz / Átutalás) - ebből számol a kassza
+   * egyenlege (lásd backend services/fizetesi_mod.py). */
+  fizetes_modja: string | null;
   fizetes_datuma: string | null;
   szamla_kiallitva_datuma: string | null;
   /** MIBŐL lett a forint összeg. A `netto`/`brutto` MINDIG forint - ha a
@@ -1202,6 +1205,25 @@ export type FinanceSummary = {
   havi_trend: MonthlyFinance[];
   kintlevo_projektek: OutstandingProject[];
   ytd_kiadas_fizetesi_mod_szerint: PaymentMethodBreakdown[];
+  kassza: Kassza;
+};
+
+/** Egy hónap készpénz-mozgása és a hónap végi egyenleg. */
+export type KasszaHavi = { month: string; be: number; ki: number; egyenleg: number };
+
+/** Mennyi készpénz van a kasszában - BRUTTÓBAN, mert egy doboz pénz nem tud
+ * nettó lenni (lásd backend services/fizetesi_mod.py). */
+export type Kassza = {
+  egyenleg: number;
+  osszes_be: number;
+  osszes_ki: number;
+  idei_be: number;
+  idei_ki: number;
+  havi: KasszaHavi[];
+  /** Hány KIFIZETETT tételen nincs megjelölve a fizetési mód - amíg ez nem
+   * nulla, az egyenleg csak közelítés. */
+  jeloletlen_kiadas: number;
+  jeloletlen_bevetel: number;
 };
 
 export async function getFinanceSummary(): Promise<FinanceSummary | null> {

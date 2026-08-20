@@ -90,6 +90,9 @@ class RevenueBase(BaseModel):
     netto: float | None = None
     brutto: float | None = None
     penznem: str = "HUF"
+    #: HOGYAN jött be a pénz (Készpénz / Átutalás) - ebből számol a kassza,
+    #: lásd services/fizetesi_mod.py.
+    fizetes_modja: str | None = None
     fizetes_hatarideje: date | None = None
     fizetes_datuma: date | None = None
     szamla_kiallitva_datuma: date | None = None
@@ -105,6 +108,7 @@ class RevenueCreate(RevenueBase):
 
 class RevenueUpdate(BaseModel):
     fizetes_datuma: date | None = None
+    fizetes_modja: str | None = None
     szamla_kiallitva_datuma: date | None = None
     #: Lásd ExpenseUpdate - a pénznem újbóli megadása újraszámoltat.
     penznem: str | None = None

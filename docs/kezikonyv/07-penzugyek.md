@@ -220,6 +220,48 @@ kifizetettsége.
 Frontend: `components/finance/`, `RevenueInvoiceStatus.tsx`,
 `TigInvoiceManager.tsx`, `TigAllapotSelect.tsx`.
 
+### Kassza: mennyi készpénz van épp
+
+Minden kiadásnál és bevételnél megadható, **hogyan mozgott a pénz**:
+
+| | Választható |
+|---|---|
+| Kiadás (`kifizetes_modja`) | Készpénz · Átutalás · Bankkártya |
+| Bevétel (`fizetes_modja`) | Készpénz · Átutalás |
+
+Bevételnél azért csak kettő, mert kártyát nem fogadunk - a terminálos bevétel a
+Krumpellóé, annak saját napi kassza-zárása van (lásd
+[14-krumpello.md](14-krumpello.md)).
+
+Ez nem könyvelési finomság: a **készpénz egy fizikai doboz**, aminek van
+egyenlege, és azt csak akkor tudjuk, ha minden készpénzes tétel meg van jelölve.
+
+```
+kassza egyenleg = a készpénzes BEVÉTELEK - a készpénzes KIADÁSOK
+```
+
+A Pénzügyek oldalon a **„Készpénz a kasszában"** kártya mutatja: az egyenleget,
+az idei be/ki forgalmat, és havi bontásban a mozgást + a hónap VÉGI egyenleget.
+
+Néhány szabály, ami a számot használhatóvá teszi:
+
+- **Bruttóban**, nem nettóban: a dobozban annyi pénz van, amennyit ténylegesen
+  kifizettünk/megkaptunk, ÁFÁ-stól. (Az elszámolás máshol nettó - de egy doboz
+  pénz nem tud nettó lenni.)
+- Csak a **megtörtént** mozgás számít (van fizetés dátuma): egy jövő heti
+  készpénzes kiadás még nem hiányzik a kasszából.
+- A „nem számít bele" jelölésű sorok itt is kimaradnak: ami a Pénzügyek szerint
+  nem történt meg, az a kasszát sem mozgatta.
+- Az **üres fizetési mód nem „talán"**: nem számítjuk bele. A kártya viszont
+  kiírja, hány kifizetett tételen hiányzik a jelölés - amíg ez nem nulla, az
+  egyenleg csak közelítés. Egy találgatott egyenleg rosszabb, mint egy hiányos:
+  az utóbbin legalább látszik, mennyi hiányzik.
+
+A módok listája **zárt és egy helyen áll** (`services/fizetesi_mod.py`): ha
+mindenki maga írja be („kp", „Készpénz", „KP"), az összesítés annyifelé
+szakad, ahányféleképp leírták - és a kassza egyenlege pont annyival lesz hamis.
+A felismerés ettől még türelmes a régi adatokkal („KP", „Kp.", ékezet nélkül is).
+
 ### A projekt bevétele: a vállalási ár, amíg nincs kifizetés
 
 `models/project_code.bevetel` - két forrásból, ebben a sorrendben:

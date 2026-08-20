@@ -18,7 +18,7 @@ import { DataTable } from "@/components/DataTable";
 import { EditableBooleanCell } from "@/components/EditableBooleanCell";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
-import { FinanceMonthlyChart, OutstandingProjectsTable } from "@/components/finance/FinanceSummaryWidgets";
+import { FinanceMonthlyChart, KasszaWidget, OutstandingProjectsTable } from "@/components/finance/FinanceSummaryWidgets";
 import { SzamlaCsomagLetoltes } from "@/components/finance/SzamlaCsomagLetoltes";
 import { UtalasraVaroSzamlak } from "@/components/finance/UtalasraVaroSzamlak";
 import { KimenoSzamlaCella } from "@/components/finance/KimenoSzamlaCella";
@@ -38,6 +38,7 @@ export default async function PenzugyekPage() {
     summary,
     projectCodes,
     expenseFieldTypes,
+    revenueFieldTypes,
     currentUser,
     pagePermissions,
     utalasraVaro,
@@ -47,6 +48,7 @@ export default async function PenzugyekPage() {
     getFinanceSummary(),
     getProjectCodeOptions(),
     getFieldTypes("expense"),
+    getFieldTypes("revenue"),
     getCurrentUser(),
     getMyPagePermissions(),
     getUtalasraVaro(),
@@ -55,6 +57,9 @@ export default async function PenzugyekPage() {
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const fizetesiModOptions = expenseFieldTypes.kifizetes_modja?.options ?? ["Készpénz", "Átutalás", "Bankkártya"];
+  // A BEVÉTELNÉL kettő van: vagy kézbe kapjuk (kassza), vagy a számlára
+  // érkezik - bankkártyát nem fogadunk (lásd backend services/fizetesi_mod.py).
+  const bevetelFizetesiModOptions = revenueFieldTypes.fizetes_modja?.options ?? ["Készpénz", "Átutalás"];
   // Honnan jött a bevétel: a projektkód és a MUNKA neve. A Revenue maga csak
   // a project_code_id-t hordozza, ezért itt oldjuk fel.
   //
@@ -115,10 +120,15 @@ export default async function PenzugyekPage() {
               <Card title="Bevétel / kiadás - utolsó 12 hónap (nettó)">
                 <FinanceMonthlyChart trend={summary.havi_trend} />
               </Card>
+              {/* MENNYI KÉSZPÉNZ VAN A KASSZÁBAN - a készpénzesnek jelölt
+                  bevételek és kiadások különbsége (lásd backend
+                  services/fizetesi_mod.py). */}
+              <Card title="Készpénz a kasszában">
+                <KasszaWidget kassza={summary.kassza} />
+              </Card>
               <Card title="Kintlévőségek projektenként">
                 <OutstandingProjectsTable projects={summary.kintlevo_projektek} />
               </Card>
-            </div>
 
             {summary.ytd_kiadas_fizetesi_mod_szerint.length > 0 && (
               <Card title="Kiadás fizetési mód szerint (idén, nettó)">
@@ -132,6 +142,7 @@ export default async function PenzugyekPage() {
                 </ul>
               </Card>
             )}
+            </div>
           </>
         )}
 
@@ -156,6 +167,12 @@ export default async function PenzugyekPage() {
               fields={[
                 { name: "megnevezes", label: "Megnevezés", required: true },
                 { name: "netto", label: "Nettó", type: "number" },
+                {
+                  name: "kifizetes_modja",
+                  label: "Fizetési mód",
+                  type: "select",
+                  options: fizetesiModOptions.map((m) => ({ value: m, label: m })),
+                },
                 // Az összeget a választott PÉNZNEMBEN kell beírni; a szerver
                 // váltja át forintra az árfolyammal, és a kiadás közé már a
                 // forint kerül (lásd backend services/penznem.py). Devizánál az
@@ -285,6 +302,12 @@ export default async function PenzugyekPage() {
                   options: projectCodes.map((pc) => ({ value: pc.id, label: pc.projektkod })),
                 },
                 { name: "netto", label: "Nettó", type: "number" },
+                {
+                  name: "fizetes_modja",
+                  label: "Fizetési mód",
+                  type: "select",
+                  options: bevetelFizetesiModOptions.map((m) => ({ value: m, label: m })),
+                },
                 // Lásd a kiadásnál: az összeg a választott pénznemben értendő,
                 // a bevételek közé forintban kerül.
                 {
@@ -368,6 +391,23 @@ export default async function PenzugyekPage() {
                     formatHuf(r.brutto)
                   ),
                 sortAccessor: (r) => r.brutto,
+              },
+              {
+                // HOGYAN jött be a pénz. Ebből számol a kassza egyenlege (lásd
+                // backend services/fizetesi_mod.py) - ezért fix a lista, nem
+                // szabad szöveg: egy "kp" és egy "Készpénz" külön kategória
+                // lenne, és pont annyival lenne hamis az egyenleg.
+                header: "Fizetési mód",
+                render: (r) => (
+                  <EditableStatusBadge
+                    patchPath={`${ENTITY_PATHS.revenue}/${r.id}`}
+                    field="fizetes_modja"
+                    value={r.fizetes_modja}
+                    options={bevetelFizetesiModOptions}
+                    placeholder="Nincs megadva"
+                  />
+                ),
+                sortAccessor: (r) => r.fizetes_modja,
               },
               {
                 // A tárolt összeg mindig forint; ha devizásan vezették fel, az
