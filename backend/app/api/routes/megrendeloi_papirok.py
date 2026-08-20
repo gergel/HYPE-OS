@@ -713,6 +713,13 @@ class SzamlaAllasOut(BaseModel):
     bevetel_sorok: int
     szamla_kihagyva: bool = False
     szamla_kihagyas_oka: str | None = None
+    #: Kötelező-e a kifizetés dátuma. Ahol számlát sem várunk, ott nem: a
+    #: legtöbbször nincs is tranzakció (lásd
+    #: services/megrendeloi_szamla._kifizetes_datum_kell).
+    kifizetes_datum_kell: bool = True
+    #: Tranzakció NÉLKÜL lett lezárva - nincs kifizetési dátuma, és ez nem
+    #: hiány, hanem maga a válasz.
+    tranzakcio_nelkul_lezarva: bool = False
     hatarido_kell: bool = True
 
 
@@ -721,7 +728,10 @@ class HataridoIn(BaseModel):
 
 
 class KifizetesIn(BaseModel):
-    #: Mikor érkezett meg a pénz - KÖTELEZŐ. A jelölés ritkán esik egybe a
+    #: Mikor érkezett meg a pénz. Ahol SZÁMLA van, ott kötelező (lásd
+    #: services/megrendeloi_szamla._kifizetes_datum_kell); ahol nincs számla,
+    #: ott üresen hagyva "tranzakció nélküli lezárás" lesz belőle.
+    #: A jelölés ritkán esik egybe a
     #: beérkezéssel (a pénz megjön, és napokkal később kattint rá valaki),
     #: ezért nem tippelünk a mai nappal: ebből lesz a bevétel-sor dátuma.
     #: Lásd services/megrendeloi_szamla.jelold_kifizetettnek.

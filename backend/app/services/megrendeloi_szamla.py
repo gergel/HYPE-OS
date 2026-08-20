@@ -70,6 +70,12 @@ class SzamlaAllas:
     #: Kell-e fizetési határidő a kifizetés jelöléséhez. A felület ebből tudja,
     #: mikor tiltsa a gombot, és mikor rejtse el a határidő-mezőt.
     hatarido_kell: bool = True
+    #: Kötelező-e a kifizetés dátuma. Ahol számlát sem várunk, ott nem: a
+    #: legtöbbször nincs is tranzakció (lásd _kifizetes_datum_kell).
+    kifizetes_datum_kell: bool = True
+    #: Tranzakció NÉLKÜL lett lezárva - ilyenkor nincs kifizetési dátum, és ez
+    #: nem hiány, hanem maga a válasz.
+    tranzakcio_nelkul_lezarva: bool = False
     #: Milyen pénznemben vállaltuk, és milyen árfolyamon számolunk - devizás
     #: munkánál a bevétel ezzel átváltva, FORINTBAN kerül a Pénzügyekbe (lásd
     #: services/penznem.py). Forintos munkánál a *_forintban ugyanaz, mint a
@@ -118,6 +124,20 @@ def _hatarido_kell(pk: ProjectCode) -> bool:
     return not (pk.szamla_kihagyva or pk.papir_nelkul or pk.elmaradt)
 
 
+def _kifizetes_datum_kell(pk: ProjectCode) -> bool:
+    """Kötelező-e megadni, MIKOR érkezett meg a pénz?
+
+    Ugyanaz a szabály, mint a fizetési határidőnél (lásd _hatarido_kell): ahol
+    számlát sem várunk, ott a legtöbbször pénzmozgás sincs. A munka
+    beszámítódik valamibe, kompenzálódik, vagy elmaradt - ilyenkor a "mikor
+    érkezett meg a pénz" kérdésre NINCS igaz válasz, és egy beírt dátum nem
+    hiányzó adat pótlása lenne, hanem egy kitalált tranzakció.
+
+    Ahol viszont számla van, ott a dátum továbbra is kötelező: abból lesz a
+    bevétel-sor napja, tehát rossz hónapba is csúszhat a bevétel."""
+    return _hatarido_kell(pk)
+
+
 def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
     netto, brutto = _osszeg(pk)
     netto_ft, brutto_ft = projektkod_osszeg.forintban(pk)
@@ -140,6 +160,8 @@ def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
         szamla_kihagyva=pk.szamla_kihagyva,
         szamla_kihagyas_oka=pk.szamla_kihagyas_oka,
         hatarido_kell=_hatarido_kell(pk),
+        kifizetes_datum_kell=_kifizetes_datum_kell(pk),
+        tranzakcio_nelkul_lezarva=pk.tranzakcio_nelkul_lezarva,
     )
 
 
@@ -180,8 +202,12 @@ def jelold_kifizetettnek(
     Pénzügyekben is ott legyen. Ha a hívó azt mondja, hogy ez a tétel nem való
     a bevételek közé, akkor INDOK kell hozzá - a sor ilyenkor is létrejön, csak
     az éves bevételbe nem számít (lásd services/elszamolas.py)."""
-    if kifizetes_datuma is None:
-        raise SzamlaHiba("Add meg, MIKOR érkezett meg a pénz - enélkül a bevétel rossz napra kerülne.")
+    if kifizetes_datuma is None and _kifizetes_datum_kell(pk):
+        raise SzamlaHiba(
+            "Add meg, MIKOR érkezett meg a pénz - enélkül a bevétel rossz napra kerülne. "
+            "Ha erről a munkáról nincs számla, jelöld be a \"Nincs számla\" lehetőséget - "
+            "ott a dátum már nem kötelező."
+        )
     if pk.fizetesi_hatarido is None and _hatarido_kell(pk):
         raise SzamlaHiba(
             "Előbb add meg a számlán szereplő fizetési határidőt - enélkül nem látszik, ha egy számla késik. "
@@ -190,10 +216,23 @@ def jelold_kifizetettnek(
     if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
         raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")
 
-    nap = kifizetes_datuma
-    pk.utalas_datuma = nap
     pk.bevetelbe_ne_keruljon = bevetelbe_ne_keruljon
     pk.bevetel_kihagyas_oka = (kihagyas_oka or "").strip() or None if bevetelbe_ne_keruljon else None
+
+    if kifizetes_datuma is None:
+        # TRANZAKCIÓ NÉLKÜLI LEZÁRÁS: nem volt pénzmozgás, tehát nincs dátum és
+        # nincs bevétel-sor sem. A projektkód ettől még lezárt - a rendezés
+        # ténye a jelölés (lásd models/project_code.tranzakcio_nelkul_lezarva).
+        # Hogy miért nem volt tranzakció, az a "nincs számla" / "papír nélkül"
+        # indokában áll, amit a jelöléshez amúgy is kötelező kitölteni.
+        pk.utalas_datuma = None
+        pk.tranzakcio_nelkul_lezarva = True
+        db.flush()
+        return allas(db, pk)
+
+    nap = kifizetes_datuma
+    pk.utalas_datuma = nap
+    pk.tranzakcio_nelkul_lezarva = False
 
     # Sor MINDKÉT esetben keletkezik - a különbség az, beleszámít-e az ÉVES
     # bevételbe. Korábban a kihagyott tételekről egyáltalán nem volt sor: a
@@ -280,6 +319,7 @@ def vond_vissza(db: Session, pk: ProjectCode) -> SzamlaAllas:
     visszahozhatatlan), csak a kifizetés dátumát vesszük ki róla - így a
     Pénzügyekben újra "kiállítva, még nem fizetve" lesz."""
     pk.utalas_datuma = None
+    pk.tranzakcio_nelkul_lezarva = False
     pk.bevetelbe_ne_keruljon = False
     pk.bevetel_kihagyas_oka = None
     for sor in pk.revenues or []:

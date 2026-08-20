@@ -129,6 +129,23 @@ class ProjectCode(TimestampMixin, Base):
     #: MIÉRT nincs számla - a jelöléshez kötelező.
     szamla_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
 
+    #: LEZÁRVA, de nem volt tranzakció - ezért nincs kifizetési dátuma.
+    #:
+    #: Ahol nincs számla (`szamla_kihagyva`), nincs papír (`papir_nelkul`) vagy
+    #: elmaradt az esemény, ott a legtöbbször pénzmozgás sem történik: a munka
+    #: beszámítódik valamibe, kompenzálódik, vagy egyszerűen nincs miért
+    #: fizetni. Ilyenkor a "mikor érkezett meg a pénz" kérdésre nincs igaz
+    #: válasz - egy beírt dátum nem hiányzó adat pótlása lenne, hanem egy
+    #: kitalált tranzakció.
+    #:
+    #: A projektkód ettől még LEZÁRT: a rendezés ténye a jelölés, nem egy
+    #: dátum (lásd bevetel_kifizetve). Hogy MIÉRT nem volt tranzakció, az a
+    #: `szamla_kihagyas_oka` / `papir_nelkul_indoka` mezőben áll - azokat a
+    #: jelöléshez amúgy is kötelező kitölteni.
+    tranzakcio_nelkul_lezarva: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
     #: MIÉRT ennyi a vállalási ár - szabad szöveg a "Mennyiért vállaltuk"
     #: kártyához.
     #:
@@ -323,6 +340,10 @@ class ProjectCode(TimestampMixin, Base):
         bevetelbe_ne_keruljon), akkor a kifizetés dátuma önmagában lezárja. Ez
         nem "szemet hunyás": a jelöléshez indok is kell, és az ott marad a
         projektkódon."""
+        # Ahol nem is várunk tranzakciót, ott a LEZÁRÁS ténye számít, nem egy
+        # dátum - lásd tranzakcio_nelkul_lezarva.
+        if self.tranzakcio_nelkul_lezarva:
+            return True
         if self.bevetelbe_ne_keruljon and self.utalas_datuma is not None:
             return True
         bevetelek = list(self.revenues)

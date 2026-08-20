@@ -2620,6 +2620,13 @@ export type MegrendeloiSzamlaAllas = {
   szamla_kihagyas_oka: string | null;
   /** Kell-e fizetési határidő a kifizetés jelöléséhez. */
   hatarido_kell: boolean;
+  /** Kötelező-e a kifizetés dátuma. Ahol számlát sem várunk, ott nem: a
+   * legtöbbször nincs is tranzakció (lásd backend
+   * services/megrendeloi_szamla._kifizetes_datum_kell). */
+  kifizetes_datum_kell: boolean;
+  /** Tranzakció NÉLKÜL lett lezárva - nincs kifizetési dátuma, és ez nem
+   * hiány, hanem maga a válasz. */
+  tranzakcio_nelkul_lezarva: boolean;
   /** Milyen pénznemben vállaltuk a munkát, és milyen árfolyamon számolunk. A
    * `netto`/`brutto` ebben a pénznemben van, a `*_forintban` pedig az, ami
    * ténylegesen a Pénzügyekbe kerül (lásd backend services/penznem.py). */

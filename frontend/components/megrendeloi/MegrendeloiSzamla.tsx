@@ -73,7 +73,10 @@ export function MegrendeloiSzamla({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         {allas.kifizetve ? (
-          <StatusBadge label="Kifizetve" tone="success" />
+          <StatusBadge
+            label={allas.tranzakcio_nelkul_lezarva ? "Rendezve – nem volt tranzakció" : "Kifizetve"}
+            tone="success"
+          />
         ) : allas.szamla_kihagyva ? (
           <StatusBadge label="Nincs számla" tone="neutral" />
         ) : allas.fizetesi_hatarido ? (
@@ -178,14 +181,24 @@ export function MegrendeloiSzamla({
 
       {allas.kifizetve ? (
         <div className="space-y-1.5">
-          <p className="text-[13px] text-text-secondary">
-            Kifizetve: <span className="text-text-primary">{allas.kifizetes_datuma ?? "–"}</span>
-            {allas.bevetelbe_ne_keruljon ? (
-              <span className="text-text-muted"> · a bevétel-sor nem számít az éves bevételbe</span>
-            ) : (
-              <span className="text-text-muted"> · {allas.bevetel_sorok} bevétel-sor a Pénzügyekben</span>
-            )}
-          </p>
+          {/* Tranzakció nélküli lezárásnál nincs dátum - és ez nem hiány,
+              hanem maga a válasz: nem volt pénzmozgás. Egy "Kifizetve: –" sor
+              itt hiányzó adatnak látszana. */}
+          {allas.tranzakcio_nelkul_lezarva ? (
+            <p className="text-[13px] text-text-secondary">
+              Rendezve, <span className="text-text-primary">tranzakció nélkül</span>
+              <span className="text-text-muted"> · nem keletkezett bevétel-sor</span>
+            </p>
+          ) : (
+            <p className="text-[13px] text-text-secondary">
+              Kifizetve: <span className="text-text-primary">{allas.kifizetes_datuma ?? "–"}</span>
+              {allas.bevetelbe_ne_keruljon ? (
+                <span className="text-text-muted"> · a bevétel-sor nem számít az éves bevételbe</span>
+              ) : (
+                <span className="text-text-muted"> · {allas.bevetel_sorok} bevétel-sor a Pénzügyekben</span>
+              )}
+            </p>
+          )}
           {/* Attól, hogy az ÉVES bevételbe nem való (máshogy van rendezve), a
               pénz megjött - tehát a PROJEKT bevételébe és profitjába
               beleszámít. Ki is írjuk, különben úgy nézne ki, mintha ez a munka
@@ -229,7 +242,7 @@ export function MegrendeloiSzamla({
             }
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
-            Kifizetve
+            {allas.kifizetes_datum_kell ? "Kifizetve" : "Rendezve"}
           </button>
         )
       )}
@@ -249,6 +262,7 @@ export function MegrendeloiSzamla({
       {dialogNyitva && (
         <KifizetesDialog
           hatarido={allas.fizetesi_hatarido}
+          datumKell={allas.kifizetes_datum_kell}
           osszeg={
             allas.netto === null
               ? null
@@ -281,15 +295,25 @@ export function MegrendeloiSzamla({
  * örökre a teendők között. Ezért kérünk hozzá indokot. */
 function KifizetesDialog({
   hatarido,
+  datumKell,
   osszeg,
   onMegse,
   onJelol,
 }: {
   hatarido: string | null;
+  /** Kötelező-e a dátum. Ahol számlát sem várunk (nincs számla / papír nélkül
+   * elszámolt / elmaradt), ott a legtöbbször nincs is tranzakció - ilyenkor a
+   * "mikor érkezett meg a pénz" kérdésre nincs igaz válasz, és üresen hagyva
+   * TRANZAKCIÓ NÉLKÜLI lezárás lesz belőle (lásd backend
+   * services/megrendeloi_szamla._kifizetes_datum_kell). */
+  datumKell: boolean;
   osszeg: string | null;
   onMegse: () => void;
   onJelol: (adat: {
-    kifizetes_datuma: string;
+    /** `null`, ha üresen hagyták: a szerver ebből tudja, hogy tranzakció
+     * nélküli lezárás. Üres SZÖVEGET nem küldünk - egy dátum-mezőre az nem
+     * érvényes érték, a szerver 422-vel utasítaná el. */
+    kifizetes_datuma: string | null;
     bevetelbe_ne_keruljon: boolean;
     kihagyas_oka: string | null;
   }) => void;
@@ -313,13 +337,15 @@ function KifizetesDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-border px-5 py-3">
-          <h3 className="text-[14px] font-medium text-text-primary">Megrendelői számla kifizetve</h3>
+          <h3 className="text-[14px] font-medium text-text-primary">
+            {datumKell ? "Megrendelői számla kifizetve" : "A munka rendezve"}
+          </h3>
           {osszeg && <p className="mt-0.5 text-[12.5px] text-text-secondary">{osszeg}</p>}
         </div>
 
         <div className="p-5">
           <label className="block text-[13px] text-text-primary">
-            Mikor érkezett meg a pénz *
+            Mikor érkezett meg a pénz{datumKell ? " *" : ""}
             <span className="mt-1 flex items-center gap-2">
               <input
                 type="date"
@@ -336,42 +362,52 @@ function KifizetesDialog({
               </button>
             </span>
             <span className="mt-0.5 block text-[12px] text-text-muted">
-              Kötelező – ez a nap kerül a bevétel-sorra is.{hatarido && ` Fizetési határidő: ${hatarido}.`}
+              {datumKell
+                ? "Kötelező – ez a nap kerül a bevétel-sorra is."
+                : "Nem kötelező: erről a munkáról nincs számla, és ilyenkor a legtöbbször pénzmozgás sincs. Üresen hagyva tranzakció nélkül zárjuk le – nem keletkezik bevétel-sor."}
+              {hatarido && ` Fizetési határidő: ${hatarido}.`}
             </span>
           </label>
 
-          <label className="mt-4 flex cursor-pointer items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={bevetelbeKerul}
-              onChange={(e) => setBevetelbeKerul(e.target.checked)}
-              className="mt-0.5"
-            />
-            <span className="text-[13px] text-text-primary">
-              Kerüljön be a Pénzügy → Bevételek közé
-              <span className="mt-0.5 block text-[12px] text-text-muted">
-                Ez hozza létre (vagy egészíti ki) a bevétel-sort, és így számít bele a pénzügyi összesítőkbe.
-              </span>
-            </span>
-          </label>
-
-          {!bevetelbeKerul && (
-            <div className="mt-3 space-y-2 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
-              <p className="text-[12.5px] text-text-secondary">
-                A projektkód „kifizetve” lesz, de <b>nem keletkezik bevétel-sor</b> – akkor válaszd ezt, ha a pénz
-                máshol van elszámolva, és itt csak duplázná az összeget.
-              </p>
-              <label className="block text-[13px] text-text-primary">
-                Miért nem kerül a bevételek közé?
-                <textarea
-                  rows={2}
-                  value={indok}
-                  onChange={(e) => setIndok(e.target.value)}
-                  placeholder="Pl. beszámítva a bérleti díjba, a másik cégen át számláztuk…"
-                  className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] leading-relaxed text-text-primary"
+          {/* A bevétel-sor kérdése csak akkor merül fel, ha VAN dátum: egy
+              tranzakció nélküli lezárásnál nincs mit dátumozni a soron, tehát
+              sor sem keletkezik. */}
+          {datum && (
+            <>
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={bevetelbeKerul}
+                  onChange={(e) => setBevetelbeKerul(e.target.checked)}
+                  className="mt-0.5"
                 />
+                <span className="text-[13px] text-text-primary">
+                  Kerüljön be a Pénzügy → Bevételek közé
+                  <span className="mt-0.5 block text-[12px] text-text-muted">
+                    Ez hozza létre (vagy egészíti ki) a bevétel-sort, és így számít bele a pénzügyi összesítőkbe.
+                  </span>
+                </span>
               </label>
-            </div>
+
+              {!bevetelbeKerul && (
+                <div className="mt-3 space-y-2 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+                  <p className="text-[12.5px] text-text-secondary">
+                    A projektkód „kifizetve” lesz, de <b>nem keletkezik bevétel-sor</b> – akkor válaszd ezt, ha a
+                    pénz máshol van elszámolva, és itt csak duplázná az összeget.
+                  </p>
+                  <label className="block text-[13px] text-text-primary">
+                    Miért nem kerül a bevételek közé?
+                    <textarea
+                      rows={2}
+                      value={indok}
+                      onChange={(e) => setIndok(e.target.value)}
+                      placeholder="Pl. beszámítva a bérleti díjba, a másik cégen át számláztuk…"
+                      className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] leading-relaxed text-text-primary"
+                    />
+                  </label>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -385,17 +421,17 @@ function KifizetesDialog({
           </button>
           <button
             type="button"
-            disabled={!datum || (!bevetelbeKerul && !indok.trim())}
+            disabled={(datumKell && !datum) || (!!datum && !bevetelbeKerul && !indok.trim())}
             onClick={() =>
               onJelol({
-                kifizetes_datuma: datum,
+                kifizetes_datuma: datum || null,
                 bevetelbe_ne_keruljon: !bevetelbeKerul,
                 kihagyas_oka: bevetelbeKerul ? null : indok.trim(),
               })
             }
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
-            Kifizetve jelölés
+            {datum ? "Kifizetve jelölés" : "Rendezve, tranzakció nélkül"}
           </button>
         </div>
       </div>

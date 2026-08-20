@@ -450,7 +450,8 @@ kártya ezt viszi végig (`services/megrendeloi_szamla.py`,
    rögzítenénk, a lejárt számlák pont addig lennének láthatatlanok, amíg
    számít.
 3. **"Kifizetve"** - a párbeszéd bekéri, MIKOR érkezett meg a pénz. A mező
-   **üresen indul és kötelező**, nem a mai nappal töltjük elő: a jelölés
+   **üresen indul**, nem a mai nappal töltjük elő. Ahol számla van, ott
+   **kötelező**: a jelölés
    rendszerint napokkal (néha hetekkel) a beérkezés után történik, és egy
    előre beírt "ma" nem hiányzó adat pótlása, hanem egy csendben rögzített
    rossz dátum - ami utólag fel sem tűnik, mert nem üres, csak nem igaz.
@@ -458,6 +459,17 @@ kártya ezt viszi végig (`services/megrendeloi_szamla.py`,
    Akinél tényleg aznap jött meg, annak ott a **"Ma"** gomb, egy kattintás.
    A szabályt a backend is kikényszeríti (`jelold_kifizetettnek`), nem csak a
    felület tiltja a gombot.
+   **Ahol viszont nincs számla, ott nem kötelező** (`_kifizetes_datum_kell`,
+   ugyanaz a szabály, mint a határidőnél): ilyenkor a legtöbbször pénzmozgás
+   sincs - a munka beszámítódik valamibe, kompenzálódik, vagy elmaradt. A
+   "mikor érkezett meg a pénz" kérdésre nincs igaz válasz, és egy beírt dátum
+   nem hiányzó adat pótlása lenne, hanem egy **kitalált tranzakció**. Üresen
+   hagyva **tranzakció nélküli lezárás** lesz belőle: a gomb felirata
+   „Rendezve", a projektkód lezárt (`tranzakcio_nelkul_lezarva`), de nincs
+   kifizetési dátum és **nem keletkezik bevétel-sor**. Hogy miért nem volt
+   tranzakció, azt a „nincs számla" / „papír nélkül" indoka mondja meg - azt a
+   jelöléshez amúgy is kötelező kitölteni.
+
 4. **Bevétel-sor keletkezik** a Pénzügyekben - a dátumokkal, az összeggel (a
    TIG-ről, annak híján a szerződésről vagy a projektkódról) és a számla
    fájljával. Eddig ez két külön felület volt: a projektkódon ki volt pipálva
