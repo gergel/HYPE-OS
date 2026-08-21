@@ -26,7 +26,6 @@ import {
   getProjektkodBontas,
   getRecord,
 } from "@/lib/api";
-import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import { bevetelDevizaNyom } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 import { FileCheck2, FileSignature, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
@@ -122,9 +121,6 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   // mert abban állapodtunk meg. A bevétel ettől még forintban keletkezik
   // (lásd backend services/penznem.py).
   const penznemKod = typeof projectCode.penznem === "string" && projectCode.penznem ? projectCode.penznem : "HUF";
-  // A SZÁMLA a papírozás harmadik lépése: akkor kerül sorra, ha a szerződés és
-  // a TIG is megvan - ugyanaz a sorrend, mint az alvállalkozói oldalon.
-  const szamlazhat = !elmaradt && (!kellPapir || (szerzodesKesz && tigKesz));
   const szamlak = attachments.filter((a) => a.kategoria === "szamla");
 
   // A bevétel a SZERVER száma (nem a bevétel-sorok itteni összege): így
@@ -271,25 +267,31 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
                 canDelete={canDelete}
                 emptyText="Nincs feltöltött számla."
               />
-              {szamlazhat ? (
-                // A pénz útja: mikorra szól a számla, mikor jött meg, és
-                // bekerül-e a Pénzügyek bevételei közé.
-                szamlaAllas && (
-                  <div className="border-t border-border pt-3">
-                    <MegrendeloiSzamla projectCodeId={projectCodeId} allas={szamlaAllas} canEdit={canEdit} />
-                  </div>
-                )
-              ) : (
-                // A KIFIZETÉS jelölése továbbra is a papírok után jön: az már a
-                // munka lezárása, nem egy fájl. Elmaradt eseménynél pedig
-                // nincs is mire várni - ott nincs miről számlázni.
+              {/* A SZÁMLA-LÉPÉS SEM VÁR A PAPÍROKRA. Korábban a fizetési
+                  határidő és a "Kifizetve" jelölés csak a szerződés és a TIG
+                  után nyílt meg - de a pénz nem tartja magát ehhez a
+                  sorrendhez: a számla kimehet és be is jöhet a pénz úgy, hogy
+                  a papírok még senkinél nincsenek aláírva. Amíg ezt nem
+                  lehetett rögzíteni, épp a legelakadtabb munkákról nem
+                  látszott, hogy a határidejük lejárt.
+
+                  A SORREND attól még sorrend: alatta ott a jelzés, mi hiányzik
+                  még - csak nem tiltás, hanem emlékeztető. */}
+              {szamlaAllas && (
+                <div className="border-t border-border pt-3">
+                  <MegrendeloiSzamla projectCodeId={projectCodeId} allas={szamlaAllas} canEdit={canEdit} />
+                </div>
+              )}
+              {/* Elmaradt eseménynél nincs miről számlázni - ezt kimondjuk, de
+                  a mezőket akkor sem zárjuk el: ha mégis volt lemondási díj,
+                  azt is rögzíteni kell tudni. */}
+              {(elmaradt || !szerzodesKesz || !tigKesz) && (
                 <div className="space-y-2 border-t border-border pt-3">
-                  <p className="text-[13px] text-text-secondary">
-                    {elmaradt
-                      ? "Az esemény elmaradt - nincs miről számlázni."
-                      : "A számla feltölthető, de a kifizetés jelölése a szerződés és a TIG után jön."}
-                  </p>
-                  {!elmaradt && (
+                  {elmaradt ? (
+                    <p className="text-[13px] text-text-secondary">
+                      Az esemény elmaradt – erre a kódra nem kérünk papírt.
+                    </p>
+                  ) : (
                     <div className="flex flex-wrap gap-2">
                       <StatusBadge
                         label={szerzodesKesz ? "Szerződés megvan" : "Szerződés hiányzik"}
@@ -297,16 +299,6 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
                       />
                       <StatusBadge label={tigKesz ? "TIG megvan" : "TIG hiányzik"} tone={tigKesz ? "success" : "warning"} />
                     </div>
-                  )}
-                  {/* A HATÁRIDŐ akkor is telik, ha a papírok még hiányoznak -
-                      egy Notionből örökölt kódon ott a dátum, csak a kifizetés
-                      jelölése nem nyílt még meg. Ha itt elhallgatnánk, épp a
-                      legelakadtabb munkákról nem látszana, hogy lejártak. */}
-                  {hataridoSzoveg(szamlaAllas?.hatarido_allas) && (
-                    <StatusBadge
-                      label={hataridoSzoveg(szamlaAllas?.hatarido_allas) as string}
-                      tone={hataridoHangsuly(szamlaAllas?.hatarido_allas) ?? "neutral"}
-                    />
                   )}
                 </div>
               )}

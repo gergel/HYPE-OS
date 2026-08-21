@@ -490,17 +490,20 @@ sorra nézve is látszania kell. Csak nem *találat*.
 
 ### A harmadik lépés: a SZÁMLA (határidő → kifizetve → bevétel)
 
-A szerződés és a TIG után jön a pénz. A projektkód adatlapján a "3. Számla"
-kártya ezt viszi végig (`services/megrendeloi_szamla.py`,
-`components/megrendeloi/MegrendeloiSzamla.tsx`):
+A projektkód adatlapján a "3. Számla" kártya viszi végig a pénz útját
+(`services/megrendeloi_szamla.py`, `components/megrendeloi/MegrendeloiSzamla.tsx`):
+
+**A SZÁMLA-LÉPÉS EGYIK RÉSZE SEM VÁR A PAPÍROKRA.** Sem a fájl feltöltése, sem
+a fizetési határidő, sem a "Kifizetve" jelölés. A valóságban a számla gyakran
+hamarabb megvan, mint az aláírva visszaküldött szerződés vagy TIG - sőt, a pénz
+is beérkezhet előbb. Korábban a 2-4. lépés csak a papírok után nyílt meg,
+és ez pont a legelakadtabb munkákat rejtette el: azoknál nem lehetett rögzíteni
+a határidőt, tehát nem is látszott, hogy lejárt.
+
+A **sorrend attól még sorrend**: amíg a papírok nincsenek meg, a kártya alján
+ott a jelzés, mi hiányzik - de emlékeztetőként, nem tiltásként.
 
 1. **A számla PDF-je** feltölthető (vagy a Notionból örökölt címen nyitható).
-   Ez **sosem vár a papírokra**: a valóságban a számla gyakran hamarabb megvan,
-   mint az aláírva visszaküldött szerződés vagy TIG - ha ilyenkor nem lehetne
-   feltölteni, a fájl addig valaki postafiókjában állna, és később senki nem
-   keresné elő. A **sorrend attól még sorrend**: amíg a papírok nincsenek meg,
-   a kártya kiírja, mi hiányzik, és a *kifizetés jelölése* (a 2-4. pont) nem
-   nyílik meg - az már a munka lezárása, nem egy fájl.
 2. **Fizetési határidő** - a számlán szereplő nap. A "Kifizetve" gomb addig
    nem aktív, amíg ez nincs meg: a határidő az EGYETLEN dolog, amiből látszik,
    hogy egy még ki nem fizetett számla késik-e. Ha csak a kifizetés napját

@@ -314,7 +314,12 @@ def _vezesd_fel_a_bevetelt(db: Session, pk: ProjectCode, nap: date, *, beleszami
             arfolyam=pk.arfolyam if devizas else None,
             megjegyzes=BEVETEL_MEGJEGYZES,
         )
-        db.add(sor)
+        # A KAPCSOLATON át adjuk hozzá, nem `db.add()`-del: így a projektkód
+        # `revenues` gyűjteménye rögtön tud róla. Egy sima add() után a
+        # visszaadott állapot (lásd allas) még a régi, ÜRES gyűjteményt látná -
+        # vagyis a "Kifizetve" gombra kattintva a kártya azt válaszolná, hogy
+        # "Fizetésre vár", és csak a következő betöltéskor javulna meg.
+        pk.revenues.append(sor)
         sorok = [sor]
 
     for sor in sorok:
