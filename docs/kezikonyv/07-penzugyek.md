@@ -321,6 +321,33 @@ KÖZÖS számítása - két külön implementáció előbb-utóbb két külön e
 adna), `routes/finance.kp_naplo`. Frontend:
 `app/(app)/penzugyek/kp-forgalom/page.tsx`.
 
+#### Ha nem stimmel egy összeg: egyeztetés a Notionnel
+
+```
+# csak a mi oldalunk: darabszám, végösszeg, mezőértékek
+python scripts/kp_forgalom_egyeztetes.py
+
+# tételes összevetés a Notion "KP forgalom" adatbázisával
+NOTION_API_KEY=... python scripts/kp_forgalom_egyeztetes.py --notion
+```
+
+Három különböző dolog állhat egy eltérés mögött, és mindhárom máshogy
+javítandó: **hiányzik nálunk egy sor** (nem jött át az importtal, vagy azóta
+született), **más az összeg** ugyanazon a soron (a Notionben javították
+utólag), vagy **máshogy értelmezzük** (irány, pénznem, kiadáshoz kötés) -
+ilyenkor a darabszám és a végösszeg is stimmelhet külön-külön, mégis mást mutat
+a felület. A script mind a hármat kiírja, és megmutatja a `forgalom` /
+`legalis` / `penznem` mezők tényleges értékeit is - abból derül ki, mit
+jelentenek a Notion szabad szöveges mezői.
+
+**Egy ismert hibaforrás, ami már javítva van:** a `KpForgalom.forintban`
+korábban `penznem == "HUF"` szigorú egyenlőséggel nézte a pénznemet. A
+Notionben ez szabad szöveg volt, magyarul kitöltve, tehát a sorok nagy részén
+**„Forint"** áll - azokat mind devizásnak látta, és `None`-t adott rájuk.
+Vagyis a kassza összesítéséből annyi forint hiányzott, ahány ilyen sor van.
+Mostantól a közös pénznem-szabály dönt (`services/penznem.py`), a valódi
+devizás sornál pedig a Notion „Forintban" mezője.
+
 **Mi számít számlának** (`services/bizonylat.py`)? Egy tényleges bizonylat, nem
 egy szándék: a rendszerbe **feltöltött** számla-fájl (`DocumentAttachment`,
 `kategoria="szamla"`), vagy a Notionből örökölt **„Számla pdf"** mező

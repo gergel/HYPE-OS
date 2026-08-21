@@ -174,5 +174,18 @@ class KpForgalom(TimestampMixin, Base):
 
     @property
     def forintban(self) -> float | None:
-        """Az összeg forintra váltva - az árfolyam-logikát a FinanceService számolja."""
-        return self.osszeg if self.penznem == "HUF" else None
+        """Az összeg FORINTBAN, vagy None, ha nem tudjuk.
+
+        A pénznemet a közös szabály szerint ismerjük fel (lásd
+        services/penznem.py), nem `== "HUF"` egyenlőséggel: a Notionben ez
+        szabad szöveg volt, magyarul kitöltve, tehát a sorok nagy részén
+        "Forint" áll. A szigorú egyenlőség ezeket mind DEVIZÁSNAK látta, és
+        None-t adott rájuk - vagyis a kassza összesítéséből annyi forint
+        hiányzott, ahány ilyen sor van."""
+        from app.services import penznem as penznem_szolg
+
+        if penznem_szolg.devizas(self.penznem):
+            # Valódi devizás sor: az árfolyamot nem itt tároljuk, a Notion
+            # "Forintban" mezője adja meg (lásd forintban_notion).
+            return float(self.forintban_notion) if self.forintban_notion is not None else None
+        return float(self.osszeg) if self.osszeg is not None else None
