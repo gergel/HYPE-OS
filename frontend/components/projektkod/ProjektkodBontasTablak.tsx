@@ -1,7 +1,7 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatHuf, type ProjektkodBontas } from "@/lib/api";
+import { ENTITY_PATHS, formatHuf, type ProjektkodBontas } from "@/lib/api";
 import { Clapperboard, Receipt, Scissors } from "lucide-react";
 
 /** Mért idő emberi alakban: 95 perc -> "1 ó 35 p".
@@ -21,8 +21,25 @@ function idoSzoveg(percek: number): string {
  * A fejléc négy összege megmondja, mennyi ment el - ezek a táblák azt, hogy
  * MIRE. A számok ugyanabból a forrásból jönnek, mint az összesítés (lásd
  * backend services/projektkod_bontas.py), tehát a tételek összege a
- * fejléc-számot adja ki, nem egy másik igazságot. */
-export function ProjektkodBontasTablak({ bontas }: { bontas: ProjektkodBontas }) {
+ * fejléc-számot adja ki, nem egy másik igazságot.
+ *
+ * A sorok TÖRÖLHETŐK is: itt látszik, mi terheli a kódot, tehát itt derül ki,
+ * ha valami tévedésből került rá - és a javításhoz eddig három másik oldalra
+ * kellett elnavigálni. A törlés a rekord SAJÁT végpontjára megy, tehát
+ * ugyanazt a jogosultságot kéri, mint a saját oldalán (a forgatás a
+ * Projektekét, az anyag az Utómunkáét, a kiadás a Pénzügyekét) - ezért kap
+ * mindhárom tábla külön kapcsolót, nem egy közöset. */
+export function ProjektkodBontasTablak({
+  bontas,
+  torolhetForgatast = false,
+  torolhetUtomunkat = false,
+  torolhetKiadast = false,
+}: {
+  bontas: ProjektkodBontas;
+  torolhetForgatast?: boolean;
+  torolhetUtomunkat?: boolean;
+  torolhetKiadast?: boolean;
+}) {
   const kulsosKiadas = bontas.kiadasok.filter((k) => k.resz === "kulsos");
   const egyebKiadas = bontas.kiadasok.filter((k) => k.resz === "egyeb");
 
@@ -36,6 +53,7 @@ export function ProjektkodBontasTablak({ bontas }: { bontas: ProjektkodBontas })
           rows={bontas.projektek}
           emptyText="Nincs forgatás ehhez a projektkódhoz."
           getHref={(p) => `/projektek/${p.id}`}
+          deleteHref={torolhetForgatast ? (p) => `${ENTITY_PATHS.project}/${p.id}` : undefined}
           columns={[
             {
               header: "Forgatás",
@@ -81,6 +99,7 @@ export function ProjektkodBontasTablak({ bontas }: { bontas: ProjektkodBontas })
           rows={bontas.utomunkak}
           emptyText="Nincs vágandó anyag ehhez a projektkódhoz."
           getHref={(u) => `/utomunka/${u.id}`}
+          deleteHref={torolhetUtomunkat ? (u) => `${ENTITY_PATHS.deliverable}/${u.id}` : undefined}
           columns={[
             {
               header: "Anyag",
@@ -125,6 +144,7 @@ export function ProjektkodBontasTablak({ bontas }: { bontas: ProjektkodBontas })
           rows={bontas.kiadasok}
           emptyText="Nincs kiadás ehhez a projektkódhoz."
           getHref={(k) => `/penzugyek/kiadas/${k.id}`}
+          deleteHref={torolhetKiadast ? (k) => `${ENTITY_PATHS.expense}/${k.id}` : undefined}
           columns={[
             {
               header: "Dátum",

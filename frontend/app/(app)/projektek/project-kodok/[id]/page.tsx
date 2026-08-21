@@ -88,6 +88,12 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
 
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+  // A tételes bontás sorai a SAJÁT végpontjukon törlődnek, tehát a saját
+  // oldaluk jogosultsága kell hozzájuk - nem a projektkódé. Így a gomb csak
+  // ott jelenik meg, ahol a szerver is engedné (lásd ProjektkodBontasTablak).
+  const torolhetForgatast = canDoAction(currentUser, pagePermissions, "/projektek", "delete");
+  const torolhetUtomunkat = canDoAction(currentUser, pagePermissions, "/utomunka", "delete");
+  const torolhetKiadast = canDoAction(currentUser, pagePermissions, "/penzugyek", "delete");
 
   // A papírozás állását a SZERVER mondja meg (lásd backend
   // models/project_code.py): mit számít lezártnak, és hogy kell-e egyáltalán
@@ -305,7 +311,12 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
         {/* A TÉTELES bontás: melyik forgatás mennyibe került, melyik anyagot
             meddig vágtuk, és milyen kiadások terhelik a kódot. */}
         {bontas ? (
-          <ProjektkodBontasTablak bontas={bontas} />
+          <ProjektkodBontasTablak
+            bontas={bontas}
+            torolhetForgatast={torolhetForgatast}
+            torolhetUtomunkat={torolhetUtomunkat}
+            torolhetKiadast={torolhetKiadast}
+          />
         ) : (
           <Card title="Költségek tételesen">
             <p className="text-[13px] text-text-secondary">A bontás most nem érhető el.</p>

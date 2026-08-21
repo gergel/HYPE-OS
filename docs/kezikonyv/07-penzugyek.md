@@ -282,6 +282,19 @@ kizárólag a tényleges bevétel-sorokból számol (lásd fentebb, "Mi számít
 ÉVES bevételbe"), tehát egy még ki nem fizetett munka nem duzzasztja fel az
 éves bevételt. A `becsult_profit` neve is ezért „becsült".
 
+### A tételes bontás sorai törölhetők
+
+A projektkód alján a három tábla (Forgatások · Utómunka · Egyéb projekt
+kiadások) minden sora törölhető. Itt látszik, mi terheli a kódot, tehát itt
+derül ki, ha valami tévedésből került rá - a javításhoz eddig három másik
+oldalra kellett elnavigálni.
+
+A törlés a rekord **saját végpontjára** megy, tehát ugyanazt a jogosultságot
+kéri, mint a saját oldalán: a forgatás a Projektekét, az anyag az Utómunkáét, a
+kiadás a Pénzügyekét. Ezért kap mindhárom tábla külön kapcsolót - a gomb csak
+ott jelenik meg, ahol a szerver is engedné. A megerősítő párbeszéd ugyanaz,
+mint máshol.
+
 ### Magyarázat az összeghez
 
 A „Mennyiért vállaltuk" kártyán a szám mellett van egy szabad szöveges mező is
