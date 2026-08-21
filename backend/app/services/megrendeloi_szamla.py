@@ -84,6 +84,10 @@ class SzamlaAllas:
     arfolyam: float | None = None
     netto_forintban: float | None = None
     brutto_forintban: float | None = None
+    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott - a fizetési
+    #: határidőhöz mérve (lásd models/project_code.hatarido_allas). Egy dátum
+    #: önmagában néma: hogy sürgős-e, csak a mai naphoz képest derül ki.
+    hatarido_allas: dict | None = None
 
 
 def _szamla_fajl_url(db: Session, pk: ProjectCode) -> str | None:
@@ -162,6 +166,7 @@ def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
         hatarido_kell=_hatarido_kell(pk),
         kifizetes_datum_kell=_kifizetes_datum_kell(pk),
         tranzakcio_nelkul_lezarva=pk.tranzakcio_nelkul_lezarva,
+        hatarido_allas=pk.hatarido_allas,
     )
 
 

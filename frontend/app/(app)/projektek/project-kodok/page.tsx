@@ -29,6 +29,7 @@ import {
   getProjectCodes,
   ProjectCode,
 } from "@/lib/api";
+import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import { bevetelDevizaNyom } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 import { projektkodFazisa } from "@/lib/projektkodFazis";
@@ -81,6 +82,15 @@ function papirJelzo(pc: ProjectCode) {
         label={pc.bevetel_kifizetve ? "Kifizetve" : "Nincs kifizetve"}
         tone={pc.bevetel_kifizetve ? "success" : "warning"}
       />
+      {/* MENNYI IDŐ van hátra a kifizetésig, vagy mennyivel csúszott. A
+          "Nincs kifizetve" önmagában nem mondja meg, sürgős-e: egy jövő heti
+          határidő és egy két hónapja lejárt ugyanúgy néz ki nélküle. */}
+      {hataridoSzoveg(pc.hatarido_allas) && (
+        <StatusBadge
+          label={hataridoSzoveg(pc.hatarido_allas) as string}
+          tone={hataridoHangsuly(pc.hatarido_allas) ?? "neutral"}
+        />
+      )}
     </span>
   );
 }

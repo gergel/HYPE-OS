@@ -44,6 +44,22 @@ class BevetelDeviza(BaseModel):
     arfolyam: float | None = None
 
 
+class HataridoAllas(BaseModel):
+    """MENNYI IDŐ van a kifizetésig - vagy mennyivel csúszott.
+
+    A `napok` előjele mindkét irányban ugyanazt jelenti: POZITÍV = jó irány
+    (van még idő / hamarabb fizettek), NEGATÍV = csúszás. Lásd
+    models/project_code.hatarido_allas."""
+
+    #: var | ma_jar_le | lejart | elore_fizetve | hatarido_napjan |
+    #: keson_fizetve | kifizetve
+    allapot: str
+    #: Hány nap. `None` a "kifizetve, de dátum nélkül" esetben: ott nincs mit
+    #: a határidőhöz mérni.
+    napok: int | None = None
+    hatarido: date
+
+
 class ProjectCodeCreate(ProjectCodeBase):
     pass
 
@@ -120,6 +136,9 @@ class ProjectCodeListRead(BaseModel):
     szerzodes_kihagyva: bool = False
     tig_kihagyva: bool = False
     bevetel_kifizetve: bool
+    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott (lásd
+    #: HataridoAllas). Fizetési határidő nélkül None.
+    hatarido_allas: HataridoAllas | None = None
 
     van_szerzodes: bool = True
     papir_nelkul: bool = False
@@ -168,6 +187,9 @@ class ProjectCodeRead(ProjectCodeBase):
     szerzodes_kihagyva: bool = False
     tig_kihagyva: bool = False
     bevetel_kifizetve: bool
+    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott (lásd
+    #: HataridoAllas). Fizetési határidő nélkül None.
+    hatarido_allas: HataridoAllas | None = None
 
     # A papírozás kapcsolói (lásd models/project_code.py): van-e szerződés a
     # projekt mögött, illetve papír nélkül számoljuk-e el.

@@ -285,6 +285,12 @@ A felismerés szabályai (`services/fizetesi_mod.kikovetkeztetett_mod`):
   előfizetés, ezért ez a szó a szöveg BÁRMELY részén elfogadott.
 - **Alap bér / Munkabér → Átutalás**, a munkabér a bankszámlára megy.
 - A **„Bankkártya" / „Készpénz" / „Átutalás" típus** önmagát mondja meg.
+- A **valódi adatból visszajelzett típusok**, mind átutalás: `belsos`, `extra`
+  (a Kiadások tábla saját típusa), `Forgatás`, `elszámolásból levonva`,
+  `Általános túlóra`, `Plusz napok`, `Starlink`, illetve az elgépelt
+  `Előfizetls` (épp az elgépelés miatt nem illeszkedett az „előfizetés"
+  kulcsszóra). Ezek egyikét sem lehetne a szóból kitalálni - azért állnak
+  felsorolva, mert megmondták őket.
 - **Ami nem egyértelmű, üresen marad**: a „Parkolás" vagy a „Bérlés" bármelyik
   úton fizethető, egy tippelt mód pedig a kassza egyenlegét hazudná meg -
   márpedig épp azért van ez a mező. A script a végén kilistázza, mi maradt

@@ -26,6 +26,7 @@ import {
   getProjektkodBontas,
   getRecord,
 } from "@/lib/api";
+import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import { bevetelDevizaNyom } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 import { FileCheck2, FileSignature, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
@@ -296,6 +297,16 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
                       />
                       <StatusBadge label={tigKesz ? "TIG megvan" : "TIG hiányzik"} tone={tigKesz ? "success" : "warning"} />
                     </div>
+                  )}
+                  {/* A HATÁRIDŐ akkor is telik, ha a papírok még hiányoznak -
+                      egy Notionből örökölt kódon ott a dátum, csak a kifizetés
+                      jelölése nem nyílt még meg. Ha itt elhallgatnánk, épp a
+                      legelakadtabb munkákról nem látszana, hogy lejártak. */}
+                  {hataridoSzoveg(szamlaAllas?.hatarido_allas) && (
+                    <StatusBadge
+                      label={hataridoSzoveg(szamlaAllas?.hatarido_allas) as string}
+                      tone={hataridoHangsuly(szamlaAllas?.hatarido_allas) ?? "neutral"}
+                    />
                   )}
                 </div>
               )}

@@ -495,6 +495,30 @@ kártya ezt viszi végig (`services/megrendeloi_szamla.py`,
    hogy egy még ki nem fizetett számla késik-e. Ha csak a kifizetés napját
    rögzítenénk, a lejárt számlák pont addig lennének láthatatlanok, amíg
    számít.
+
+   **Mennyi idő van hátra** - ezt a dátum mellé mindenhol ki is írjuk
+   (`models/project_code.hatarido_allas` → `lib/hatarido.ts`), mert egy
+   határidő önmagában néma: hogy sürgős-e, csak a mai naphoz képest derül ki,
+   és ezt eddig soronként fejben kellett kiszámolni. Két külön kérdés, két
+   külön válasz:
+
+   | Ha még nincs kifizetve | Ha már ki van fizetve |
+   |---|---|
+   | „Még 12 nap a kifizetésig" | „3 nappal a határidő előtt fizetve" |
+   | „Ma jár le a fizetési határidő" | „Pont a határidőn fizetve" |
+   | „8 napja lejárt a határidő" | „5 nappal a határidő után fizetve" |
+
+   Az első oszlop **teendő** (a lejárt piros, az egy héten belüli sárga), a
+   második már **tapasztalat**: utólag nincs mit tenni vele, de elmondja,
+   melyik megrendelő fizet időben és melyik csúszik rendre. A szöveg a
+   projektkód-listán, a Teendők nézet kártyáin és a számla-kártyán is ott van -
+   egy helyről, hogy ne mondhassanak mást.
+
+   Hogy „ki van-e fizetve", azt ugyanaz dönti el, mint a lista jelzőjét
+   (`bevetel_kifizetve`): egy utalási dátum **önmagában nem elég**. A
+   Notionből örökölt kódokon áll dátum bevétel-sor nélkül is - ott a pénz útja
+   nincs végigvezetve, és a felület nem mondhat egyszerre „Nincs kifizetve"-t
+   és „3 nappal korábban fizetve"-t ugyanarról a munkáról.
 3. **"Kifizetve"** - a párbeszéd bekéri, MIKOR érkezett meg a pénz. A mező
    **üresen indul**, nem a mai nappal töltjük elő. Ahol számla van, ott
    **kötelező**: a jelölés

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import type { HataridoAllas } from "@/lib/hatarido";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -91,6 +92,9 @@ export type ProjectCode = {
   szerzodes_kihagyva: boolean;
   tig_kihagyva: boolean;
   bevetel_kifizetve: boolean;
+  /** MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott - a fizetési
+   * határidőhöz mérve (lásd lib/hatarido.ts). Határidő nélkül null. */
+  hatarido_allas: HataridoAllas | null;
   /** Mire szólt a projekt, hol volt, és mit jegyeztek fel a dátumához. */
   project_nev: string | null;
   helyszin: string | null;
@@ -2640,6 +2644,9 @@ export type MegrendeloiSzamlaAllas = {
   /** Tranzakció NÉLKÜL lett lezárva - nincs kifizetési dátuma, és ez nem
    * hiány, hanem maga a válasz. */
   tranzakcio_nelkul_lezarva: boolean;
+  /** MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott (lásd
+   * lib/hatarido.ts). Fizetési határidő nélkül null. */
+  hatarido_allas: HataridoAllas | null;
   /** Milyen pénznemben vállaltuk a munkát, és milyen árfolyamon számolunk. A
    * `netto`/`brutto` ebben a pénznemben van, a `*_forintban` pedig az, ami
    * ténylegesen a Pénzügyekbe kerül (lásd backend services/penznem.py). */

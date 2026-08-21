@@ -379,6 +379,46 @@ class ProjectCode(TimestampMixin, Base):
         bevetelek = list(self.revenues)
         return bool(bevetelek) and all(r.fizetes_datuma is not None for r in bevetelek)
 
+    @property
+    def hatarido_allas(self) -> dict | None:
+        """MENNYI IDŐ van még a kifizetésig - vagy mennyivel csúszott.
+
+        Egy fizetési határidő önmagában néma dátum: hogy sürgős-e, azt csak a
+        mai naphoz képest lehet megmondani, és ezt eddig fejben kellett
+        kiszámolni minden soron. Két külön kérdés van, és a válasz is más:
+
+        - **Még nincs kifizetve**: hány nap van hátra (vagy hány napja járt le).
+          Ez TEENDŐ - a lejárt tételekért fel kell hívni a megrendelőt.
+        - **Már ki van fizetve**: hány nappal a határidő ELŐTT vagy UTÁN
+          érkezett a pénz. Ez már nem teendő, hanem tapasztalat: melyik
+          megrendelő fizet időben, és melyik csúszik rendre.
+
+        A napok előjele mindkét esetben ugyanazt jelenti: POZITÍV = jó irány
+        (van még idő / hamarabb fizettek), NEGATÍV = csúszás. Így a felület egy
+        szabályból tudja, mit kell pirosra váltania.
+
+        Határidő nélkül None: nincs mihez viszonyítani, és egy kitalált
+        határidő rosszabb, mint a semmi."""
+        hatarido = self.fizetesi_hatarido
+        if hatarido is None:
+            return None
+        # Hogy KI VAN-E FIZETVE, azt ugyanaz mondja meg, mint a lista jelzőjén
+        # (`bevetel_kifizetve`) - nem elég egy utalási dátum. Egy Notionből
+        # örökölt kódon állhat dátum bevétel-sor nélkül is: ott a pénz útja
+        # nincs végigvezetve, és a felület sem mondhat egyszerre "Nincs
+        # kifizetve"-t és "3 nappal korábban fizetve"-t ugyanarról a munkáról.
+        if not self.bevetel_kifizetve:
+            napok = (hatarido - date.today()).days
+            allapot = "var" if napok > 0 else "lejart" if napok < 0 else "ma_jar_le"
+            return {"napok": napok, "allapot": allapot, "hatarido": hatarido.isoformat()}
+        if self.utalas_datuma is None:
+            # Kifizetve, de dátum nélkül (tranzakció nélküli lezárás): nincs
+            # mit a határidőhöz mérni.
+            return {"napok": None, "allapot": "kifizetve", "hatarido": hatarido.isoformat()}
+        napok = (hatarido - self.utalas_datuma).days
+        allapot = "elore_fizetve" if napok > 0 else "keson_fizetve" if napok < 0 else "hatarido_napjan"
+        return {"napok": napok, "allapot": allapot, "hatarido": hatarido.isoformat()}
+
     @staticmethod
     def _osszeg(sor: Any) -> float:
         """Egy kiadás/bevétel elszámolási összege: a NETTÓ (lásd

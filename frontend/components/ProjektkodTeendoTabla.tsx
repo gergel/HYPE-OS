@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import type { ProjectCode } from "@/lib/api";
+import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import { formatHuf } from "@/lib/penz";
 import {
   PROJEKTKOD_FAZISOK,
@@ -150,6 +151,22 @@ export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
                         <span>Bevétel {formatHuf(pc.bevetel)}</span>
                         <span>Profit {formatHuf(pc.becsult_profit)}</span>
                       </p>
+                      {/* MENNYI IDŐ van a kifizetésig - a teendő sürgősségét
+                          ez adja meg az összeg mellett: egy két hónapja lejárt
+                          határidő máshogy szólít, mint egy jövő heti. */}
+                      {hataridoSzoveg(pc.hatarido_allas) && (
+                        <p
+                          className={`mt-0.5 text-[11.5px] ${
+                            hataridoHangsuly(pc.hatarido_allas) === "danger"
+                              ? "text-text-danger"
+                              : hataridoHangsuly(pc.hatarido_allas) === "warning"
+                                ? "text-text-warning"
+                                : "text-text-muted"
+                          }`}
+                        >
+                          {hataridoSzoveg(pc.hatarido_allas)}
+                        </p>
+                      )}
                     </Link>
                   ))
                 )}

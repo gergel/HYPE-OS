@@ -9,7 +9,17 @@ import { authFetch } from "@/lib/authFetch";
 // "next/headers"-t is behúzza (szerver-oldali süti-olvasás), és egy kliens
 // komponensben már egyetlen nem type-only importja is build hibát okoz.
 import { devizas, formatHuf, penzzel } from "@/lib/penz";
+import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import type { MegrendeloiSzamlaAllas } from "@/lib/api";
+
+/** A határidő-üzenet színe. Ugyanaz a hangsúly, mint a listán (lásd
+ * lib/hatarido.hataridoHangsuly), csak itt szöveg, nem jelvény. */
+const HATARIDO_SZIN: Record<string, string> = {
+  danger: "text-text-danger",
+  warning: "text-text-warning",
+  success: "text-text-secondary",
+  neutral: "text-text-muted",
+};
 
 /** A mai nap ISO alakban, HELYI idő szerint - a `toISOString()` UTC-re vált, és
  * este 10 után már a következő napot adná vissza. */
@@ -143,6 +153,15 @@ export function MegrendeloiSzamla({
           className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary disabled:opacity-60"
         />
       </label>
+      )}
+
+      {/* MENNYI IDŐ van hátra - vagy mennyivel csúszott a fizetés. A dátum
+          önmagában néma: hogy sürgős-e, csak a mai naphoz képest derül ki, és
+          ezt eddig fejben kellett kiszámolni (lásd lib/hatarido.ts). */}
+      {hataridoSzoveg(allas.hatarido_allas) && (
+        <p className={`text-[12.5px] ${HATARIDO_SZIN[hataridoHangsuly(allas.hatarido_allas) ?? "neutral"]}`}>
+          {hataridoSzoveg(allas.hatarido_allas)}
+        </p>
       )}
 
       {/* "Erről a munkáról nincs számla" - van, amit nem a megszokott módon

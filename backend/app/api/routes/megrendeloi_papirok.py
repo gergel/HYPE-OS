@@ -721,6 +721,18 @@ class SzamlaAllasOut(BaseModel):
     #: hiány, hanem maga a válasz.
     tranzakcio_nelkul_lezarva: bool = False
     hatarido_kell: bool = True
+    #: Milyen pénznemben vállaltuk a munkát. A `netto`/`brutto` EBBEN a
+    #: pénznemben van (a szerződésen és a TIG-en is ez áll), a `*_forintban`
+    #: pedig az, ami ténylegesen a Pénzügyekbe kerül - lásd
+    #: services/penznem.py. Enélkül a kártya egy euró összeget írt ki
+    #: forintként, mert a mezők nem jutottak ki a válaszból.
+    penznem: str = "HUF"
+    arfolyam: float | None = None
+    netto_forintban: float | None = None
+    brutto_forintban: float | None = None
+    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott - a fizetési
+    #: határidőhöz mérve (lásd models/project_code.hatarido_allas).
+    hatarido_allas: dict | None = None
 
 
 class HataridoIn(BaseModel):

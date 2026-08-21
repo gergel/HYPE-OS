@@ -107,6 +107,23 @@ TELJES_EGYEZES_MODOK: dict[str, str] = {
     "keszpenz": KESZPENZ,
     "kp": KESZPENZ,
     "kp.": KESZPENZ,
+    # A VALÓDI adatból: ezek a "Kiadás formája" értékek maradtak felismeretlenül
+    # az első futás után, a hozzájuk tartozó módot pedig megmondták. Egyik sem
+    # tippelhető ki a szóból - azért állnak itt, felsorolva.
+    #
+    # A "belsos"/"extra" a Kiadások tábla saját típusa (nem a Notion "Kiadás
+    # formája"), lásd notion_import/importers_wave2.import_expenses: a belsősök
+    # bére és a céges extra kiadás egyaránt utalással megy.
+    "belsos": ATUTALAS,
+    "extra": ATUTALAS,
+    "forgatas": ATUTALAS,
+    "elszamolasbol levonva": ATUTALAS,
+    "altalanos tulora": ATUTALAS,
+    "plusz napok": ATUTALAS,
+    "starlink": ATUTALAS,
+    # ELGÉPELT Notion-érték ("Előfizetls"), és épp ezért nem illeszkedett az
+    # "elofizetes" kulcsszóra. Utalás - ezek a sorok nem kártyáról mennek.
+    "elofizetls": ATUTALAS,
 }
 
 
