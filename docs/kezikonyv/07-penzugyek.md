@@ -368,6 +368,31 @@ a felület. A script mind a hármat kiírja, és megmutatja a `forgalom` /
 `legalis` / `penznem` mezők tényleges értékeit is - abból derül ki, mit
 jelentenek a Notion szabad szöveges mezői.
 
+#### Ha a darabszám sem stimmel: tiszta újraimport
+
+Az import **idempotens, de nem töröl**: ha egy Notion-sort azóta töröltek, vagy
+egy elveszett leképezés miatt egy sor kétszer jött át, a mi táblánk több sorból
+áll, mint a Notioné. Ilyenkor a legtisztább nulláról újraépíteni:
+
+```
+python scripts/kp_forgalom_ujraimport.py                    # csak megmutatja
+NOTION_API_KEY=... python scripts/kp_forgalom_ujraimport.py --vegrehajt
+```
+
+Törli az összes `kp_forgalmak` sort **és a hozzájuk tartozó
+Notion-leképezést** (`notion_import_map`) - az utóbbi nélkül az újraimport a már
+nem létező rekordokra mutató leképezéseket próbálná újrahasznosítani -, majd
+lefuttatja a KP forgalom importert, és kiírja az előtte/utána képet.
+
+Alapból **próba**: a törlés visszavonhatatlan, ezért külön kapcsoló kell hozzá.
+És mielőtt bármit törölne, kilistázza azt, ami **kézi eredetű vagy kézzel lett
+javítva** (nincs Notion-leképezése, vagy be van állítva az iránya, de nincs
+importált formula-értéke) - ezek is elvesznek, és utána nincs hova visszanyúlni.
+
+> A próba-futás kiírja, HÁNY sorunk van - érdemes ezzel kezdeni. A KP forgalom
+> oldal „fekete kiadás" darabszáma ugyanis NEM ezt számolja: abban a készpénzes
+> KIADÁS-sorok vannak (a Kiadások táblából), nem a KP forgalom tétele.
+
 **Egy ismert hibaforrás, ami már javítva van:** a `KpForgalom.forintban`
 korábban `penznem == "HUF"` szigorú egyenlőséggel nézte a pénznemet. A
 Notionben ez szabad szöveg volt, magyarul kitöltve, tehát a sorok nagy részén
