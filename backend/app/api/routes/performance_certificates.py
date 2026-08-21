@@ -408,6 +408,10 @@ class PendingProjectDetail(BaseModel):
     teljesites_szoveg_alap: str
     pending: list[PendingEmployeeInfo]
     tig_ready: bool
+    #: Akikről még NEM készíthető TIG, mert nincs meg az eseti szerződésük -
+    #: de KIHAGYNI már most is lehet őket (lásd skip_tig). Külön listában, hogy
+    #: a teendő-számokat ne mozdítsa el: ők a szerződés-lépésnél várnak.
+    szerzodesre_varo: list[PendingEmployeeInfo] = []
 
 
 def _tetel_info(t: PerformanceCertificateTetel) -> TetelInfo:
@@ -493,9 +497,16 @@ def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _use
     # addig a szerződés-fázisban vár (lásd tig_keszitheto_csoportok).
     keszitheto = tig_keszitheto_csoportok(project, felulirasok, keretszerzodesek, project_contracts)
     tig_ready = bool(keszitheto)
+    lookup = _load_tig_lookup(db, {project.id})
     pending: list[tuple[SzamlazoCsoport, PerformanceCertificate | None]] = []
     if tig_ready:
-        pending = _tig_pending_csoportok(project, keszitheto, _load_tig_lookup(db, {project.id}))
+        pending = _tig_pending_csoportok(project, keszitheto, lookup)
+    # Akiknek a szerződése még hiányzik: TIG-et készíteni róluk nem lehet, de
+    # KIHAGYNI igen - a három lépés kihagyása független egymástól.
+    keszitheto_kulcsok = {cs.kulcs for cs in keszitheto}
+    varakozok = _tig_pending_csoportok(
+        project, [cs for cs in tig_csoportok(project, felulirasok) if cs.kulcs not in keszitheto_kulcsok], lookup
+    )
     # A felek eseti szerződései EGY lekérdezésből - ebből tölt elő az űrlap.
     szerzodesek = eseti_szerzodesek_a_projekten(db, project.id) if pending else {}
     return PendingProjectDetail(
@@ -510,6 +521,7 @@ def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _use
             _pending_info(project, csoport, existing, szerzodesek.get(csoport.kulcs))
             for csoport, existing in pending
         ],
+        szerzodesre_varo=[_pending_info(project, csoport, existing) for csoport, existing in varakozok],
     )
 
 
@@ -547,7 +559,17 @@ def list_all_for_project(project_id: int, db: Session = Depends(get_db), _user: 
     return [PerformanceCertificateRead.model_validate(r) for r in rows]
 
 
-def _validate_szamlazo(db: Session, project: Project, szamlazo_kulcs: str) -> SzamlazoCsoport:
+def _validate_szamlazo(
+    db: Session, project: Project, szamlazo_kulcs: str, *, szerzodes_kell: bool = True
+) -> SzamlazoCsoport:
+    """A fél TIG-csoportja ezen a projekten.
+
+    A `szerzodes_kell=False` a KIHAGYÁSHOZ való. TIG-et KÉSZÍTENI csak úgy van
+    értelme, ha van mögötte szerződés - a papír éppen egy szerződés teljesítését
+    igazolja. Azt viszont KIMONDANI, hogy innen nem lesz TIG, a szerződéstől
+    függetlenül lehet: az a lépés nem a papírról szól, hanem arról, hogy nem
+    lesz papír. Enélkül egy sosem elkészült szerződés örökre nyitva tartotta a
+    TIG-lépést is - pedig épp azt akartuk lezárni."""
     fel = szamlazo.feloldas(db, szamlazo_kulcs)
     if fel is None:
         raise HTTPException(status_code=404, detail="A számlázó fél nem található")
@@ -559,7 +581,7 @@ def _validate_szamlazo(db: Session, project: Project, szamlazo_kulcs: str) -> Sz
         raise HTTPException(status_code=400, detail="Ezen a projekten senkinek a munkáját nem ez a fél számlázza.")
     # A feltétel csak ERRE a félre vonatkozik: a projekt többi szereplőjének
     # hiányzó szerződése nem akadálya annak, hogy erről a félről TIG készüljön.
-    if not _tig_keszitheto(db, project, csoport):
+    if szerzodes_kell and not _tig_keszitheto(db, project, csoport):
         raise HTTPException(
             status_code=400,
             detail=f"{csoport.cimke()} szerződése még nincs meg ezen a projekten - TIG csak azután készíthető róla.",
@@ -990,12 +1012,17 @@ def skip_tig(
 
     Egy hiányzó teljesítési igazolás önmagában gyanús: a puszta "Kihagyva"
     jelölésről fél év múlva senki nem tudja megmondani, hogy szándékos volt-e,
-    vagy elfelejtődött. Az indok a bejegyzésen marad, és a listán is látszik."""
+    vagy elfelejtődött. Az indok a bejegyzésen marad, és a listán is látszik.
+
+    A SZERZŐDÉSTŐL FÜGGETLEN: kihagyni akkor is lehet, ha a fél eseti
+    szerződése soha nem készült el (lásd _validate_szamlazo). A három lépés
+    kihagyása egymástól független - egy elmaradt szerződés nem tarthatja nyitva
+    a TIG-et is."""
     indok = (payload.kihagyas_oka or "").strip()
     if not indok:
         raise HTTPException(status_code=400, detail="A kihagyás okát meg kell adni.")
     project = _get_project_or_404(db, project_id)
-    csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
+    csoport = _validate_szamlazo(db, project, szamlazo_kulcs, szerzodes_kell=False)
     draft = _get_or_create_draft(db, project, csoport)
     _apply_tetelek(db, draft, csoport.fel, payload.tetelek)
     draft.allapot = "Kihagyva"
@@ -1251,15 +1278,30 @@ def skip_szamla(
     Amihez már tartozik KIADÁS SOR a Pénzügyben, azt nem lehet kihagyni: az
     pénzügyi tény, amit előbb ott kell rendezni (a Kiadás törlése ezt a TIG-et
     is visszadobja "nincs kifizetve" állapotba, lásd
-    services/kiadas_kapcsolatok.py) - onnantól ez a kihagyás is megy."""
-    cert = _get_sent_certificate_or_404(db, project_id, szamlazo_kulcs)
+    services/kiadas_kapcsolatok.py) - onnantól ez a kihagyás is megy.
 
+    A TIG-TŐL FÜGGETLEN: kihagyni akkor is lehet, ha a félnek még nincs (vagy
+    nem is lesz) TIG-je. Feltölteni számlát továbbra is csak kiküldött TIG-hez
+    lehet - ott van mihez kötni -, de KIMONDANI, hogy ide nem jön számla, a
+    TIG-től függetlenül szabad. Ha nincs még bejegyzés, itt jön létre: valahol
+    tárolni kell a kihagyást és az indokát."""
     if not payload.kihagyva:
+        # A visszavonáshoz kell egy bejegyzés - nincs mit visszavonni azon,
+        # ami nincs.
+        cert = _certificate_or_none(db, project_id, szamlazo_kulcs)
+        if cert is None:
+            raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nem tartozik TIG-bejegyzés.")
         cert.szamla_kihagyva = False
         cert.szamla_kihagyas_oka = None
         db.commit()
         db.refresh(cert)
         return PerformanceCertificateRead.model_validate(cert)
+
+    cert = _certificate_or_none(db, project_id, szamlazo_kulcs)
+    if cert is None:
+        project = _get_project_or_404(db, project_id)
+        csoport = _validate_szamlazo(db, project, szamlazo_kulcs, szerzodes_kell=False)
+        cert = _get_or_create_draft(db, project, csoport)
 
     indok = (payload.indok or "").strip()
     if not indok:

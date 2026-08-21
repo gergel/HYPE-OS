@@ -51,7 +51,13 @@ function szamlazoKulcs(c: PerformanceCertificate): string {
  * Maga a TIG is törölhető innen (amíg nincs kifizetve): ha rossz adattal ment
  * ki, vagy tévesen lett kihagyva, a törlés után az illető visszakerül a
  * teendők közé, és készíthető neki új TIG. Ezért jelennek meg itt a KIHAGYOTT
- * bejegyzések is - különben egy téves kihagyás sehol nem lenne javítható. */
+ * bejegyzések is - különben egy téves kihagyás sehol nem lenne javítható.
+ *
+ * A SZÁMLA-LÉPÉS KIHAGYÁSA nem várja meg a TIG-et: akinek még nincs papírja,
+ * az is megjelenik itt egy sorral, amin ez az egy művelet érhető el. Számlát
+ * FELTÖLTENI továbbra is csak kiküldött TIG-hez lehet (van mihez kötni), de
+ * kimondani, hogy ide nem jön számla, a TIG-től függetlenül szabad - lásd
+ * backend skip_szamla. */
 export function TigInvoiceManager({
   projectId,
   basePath,
@@ -59,6 +65,7 @@ export function TigInvoiceManager({
   employeeNameById,
   readyStatus,
   canEdit = true,
+  szamlaraVarok = [],
 }: {
   projectId: number;
   basePath: string;
@@ -68,6 +75,10 @@ export function TigInvoiceManager({
   /** Az állapot legördülője csak szerkesztési joggal aktív - enélkül sima
    * címkeként jelenik meg (lásd TigAllapotSelect). */
   canEdit?: boolean;
+  /** A projekt ÖSSZES számlázó fele. Akinek nincs a táblában sora (mert még
+   * nincs kész TIG-je), az külön sorként jelenik meg, csak a számla-lépés
+   * kihagyásával. */
+  szamlaraVarok?: { szamlazo: string; nev: string }[];
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -89,7 +100,15 @@ export function TigInvoiceManager({
   // ablakot nyit (ugyanaz a minta, mint a szerződés/TIG kihagyásánál).
   const [kihagyando, setKihagyando] = useState<{ szamlazo: string; nev: string } | null>(null);
 
-  const ready = certificates.filter((c) => c.allapot === readyStatus || c.allapot === "Kihagyva");
+  // A kész (kiküldött/kihagyott) TIG-ek - és azok is, amiknél a SZÁMLA-lépést
+  // hagytuk ki: az a jelölés a TIG állapotától függetlenül él, tehát látszania
+  // is kell, különben nem lenne hol visszavonni.
+  const ready = certificates.filter(
+    (c) => c.allapot === readyStatus || c.allapot === "Kihagyva" || c.szamla_kihagyva,
+  );
+  // Akinek nincs sora a táblában: nála csak a számla-lépés kihagyása érhető el.
+  const megvanKulcsok = new Set(ready.map(szamlazoKulcs));
+  const tigNelkul = szamlaraVarok.filter((f) => !megvanKulcsok.has(f.szamlazo));
 
   /** Egyszerre több kiválasztott fájl is feltölthető - egymás után megy fel,
    * mert minden hívás egy külön számla-sort hoz létre a backenden. */
@@ -226,11 +245,11 @@ export function TigInvoiceManager({
     }
   }
 
-  if (ready.length === 0) return null;
+  if (ready.length === 0 && tigNelkul.length === 0) return null;
 
   return (
     <div className="mt-4 border-t border-border pt-4">
-      <p className="mb-2 text-[13px] font-medium text-text-primary">Elkészült TIG-ek és számlák</p>
+      <p className="mb-2 text-[13px] font-medium text-text-primary">TIG-ek, számlák és kifizetések</p>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[13px]">
           <thead>
@@ -476,6 +495,38 @@ export function TigInvoiceManager({
                 </tr>
               );
             })}
+            {/* Akinek még nincs kész TIG-je: a számla-lépés KIHAGYÁSA rajta is
+                elvégezhető. A többi művelethez (feltöltés, határidő, kifizetés)
+                kell a papír, azok itt nem is jelennek meg. */}
+            {tigNelkul.map((fel) => (
+              <tr key={`nincs-${fel.szamlazo}`} className="border-b border-border align-top last:border-0">
+                <td className="py-3 pr-6">{fel.nev}</td>
+                <td className="py-3 pr-6">
+                  <StatusBadge label="Nincs még TIG" tone="neutral" />
+                </td>
+                <td className="py-3 pr-6 text-text-muted">–</td>
+                <td className="py-3 pr-6 text-right text-text-muted">–</td>
+                <td className="py-3 pr-6">
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      disabled={busyId === fel.szamlazo}
+                      onClick={() => setKihagyando({ szamlazo: fel.szamlazo, nev: fel.nev })}
+                      className="w-fit text-[12px] text-text-muted hover:text-text-primary disabled:opacity-50"
+                    >
+                      Számla kihagyása
+                    </button>
+                  ) : (
+                    <span className="text-text-muted">–</span>
+                  )}
+                </td>
+                <td className="py-3 pr-6 text-text-muted">–</td>
+                <td className="py-3 pr-6 text-right">
+                  <StatusBadge label="Nincs számla" tone="neutral" />
+                </td>
+                <td className="py-3" />
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

@@ -108,10 +108,14 @@ def _tig_state(
     de még nincs; akinél a szerződés is hiányzik, az a szerződés-oszlopban vár."""
     if not _tig_candidates(project, felulirasok):
         return False, 0, 0
-    total = len(tig_csoportok(project, felulirasok))
+    csoportok = tig_csoportok(project, felulirasok)
+    total = len(csoportok)
     keszitheto = tig_keszitheto_csoportok(project, felulirasok, keretszerzodesek, project_contracts)
     if not keszitheto:
-        return False, total, total
+        # Mindenki szerződésre vár - de akinek a TIG-jét KIHAGYTUK, az nem
+        # függő: a kihagyás önálló lépés, nem kell hozzá szerződés (lásd
+        # routes/performance_certificates.skip_tig).
+        return False, total, len(_tig_pending_csoportok(project, csoportok, tig_lookup))
     return True, total, len(_tig_pending_csoportok(project, keszitheto, tig_lookup))
 
 
@@ -259,6 +263,13 @@ class TigStatusInfo(BaseModel):
     # (lásd models/performance_certificate.py) - enélkül a projekt nincs kész.
     szamla_kifizetve: bool = False
     van_szamla: bool = False
+    #: A SZÁMLA-lépés kihagyva: ide nem jön se számla, se kifizetés. Független
+    #: a TIG-től - kihagyni akkor is lehet, ha TIG még nincs (lásd
+    #: routes/performance_certificates.skip_szamla).
+    szamla_kihagyva: bool = False
+    #: Készíthető-e már TIG erről a félről (megvan a szerződése, vagy keret
+    #: fedi). Ahol nem, ott a felületen csak a KIHAGYÁS érhető el.
+    tig_keszitheto: bool = True
 
 
 class ProjectOverviewDetail(BaseModel):
@@ -312,8 +323,13 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
     # stábtag nem tartja fel a többiek papírozását.
     keszitheto = tig_keszitheto_csoportok(project, felulirasok, keretszerzodesek, project_contracts)
     tig_ready = bool(keszitheto)
+    keszitheto_kulcsok = {cs.kulcs for cs in keszitheto}
+    # MINDEN számlázó fél, nem csak akiről már készíthető TIG: a kifizetés
+    # populációja is a teljes lista (lásd _kifizetes_state), tehát ha itt csak
+    # a szerződés-készeket mutatnánk, a kártya többet mondana, mint a lista
+    # alatta. A szerződésre várókon a felület csak a KIHAGYÁST kínálja.
     teljesitesi_igazolasok: list[TigStatusInfo] = []
-    for csoport in keszitheto:
+    for csoport in tig_csoportok(project, felulirasok):
         tig = fel_tig.get((project.id, csoport.kulcs))
         teljesitesi_igazolasok.append(
             TigStatusInfo(
@@ -326,6 +342,8 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
                 draft=_tig_draft_info(tig),
                 szamla_kifizetve=bool(tig and tig.szamla_kifizetve),
                 van_szamla=bool(tig and tig.invoices),
+                szamla_kihagyva=bool(tig and tig.szamla_kihagyva),
+                tig_keszitheto=csoport.kulcs in keszitheto_kulcsok,
             )
         )
     kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(project, felulirasok, tig_lookup)

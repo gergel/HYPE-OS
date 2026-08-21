@@ -229,6 +229,30 @@ A **kihagyás indoklása kötelező** (szerződésnél és TIG-nél is): a puszt
 vagy elfelejtődött. Az indok külön mezőbe kerül (`kihagyas_oka`), nem a
 Notionból örökölt általános megjegyzésbe, és a listán a jelölés mellett látszik.
 
+#### A három kihagyás FÜGGETLEN egymástól
+
+A papír KÉSZÍTÉSE sorrendbe van kötve - TIG-et szerződés mögé van értelme
+csinálni, számlát kiküldött TIG-hez lehet feltölteni -, a **kihagyás viszont
+nem**: az nem a papírról szól, hanem arról, hogy nem lesz papír. Ezért az
+utókövetésen mindhárom lépés magában lezárható:
+
+| Lépés | Kihagyható akkor is, ha… | Hol |
+|---|---|---|
+| Szerződés | – (ez az első lépés) | „Szerződés készítés" → *Kihagyás (szerződés nélkül)* |
+| TIG | a szerződés soha nem készült el | „Szerződésre vár" lista → *TIG kihagyása* |
+| Számla | a félnek nincs (és nem is lesz) TIG-je | a számla-táblában, *Nincs még TIG* sorral |
+
+Enélkül egy elmaradt szerződés a TIG-lépést is örökre nyitva tartotta: a
+szerződésre várók meg sem jelentek a TIG-fázisban, tehát nem volt mit kihagyni
+rajtuk. A TIG kihagyása a `szerzodes_kell=False` ágon megy
+(`routes/performance_certificates._validate_szamlazo`), a számláé pedig
+létrehozza a bejegyzést, ha még nincs - a kihagyást és az indokot valahol
+tárolni kell.
+
+A függetlenség a másik irányban is igaz: a **számla kihagyása nem zárja le a
+TIG-lépést**. Aki azt mondta ki, hogy pénz nem megy ki erre a munkára, azzal
+még nem mondta azt, hogy papír sem kell róla.
+
 ### A kiküldött szerződést aláírva visszavárjuk
 
 A kiküldés nem zárja le az ügyet: a papírnak vissza is kell érkeznie aláírva.
@@ -297,6 +321,11 @@ ilyen munkák örökre "nincs kifizetve" állapotban lógtak az utókövetésben
 projekt sosem lett kész - pedig nem volt rajta teendő. A kihagyott TIG kiesik az
 utókövetés kifizetés-fázisából (a nevezőből is), az indok pedig ott marad a
 soron, és bármikor visszavonható ("Mégis kérünk számlát").
+
+**TIG nélkül is kihagyható** (lásd „A három kihagyás független egymástól"):
+akinek még nincs papírja, az is megjelenik a táblában egy „Nincs még TIG"
+sorral, amin ez az egy művelet érhető el. Számlát FELTÖLTENI továbbra is csak
+kiküldött TIG-hez lehet - ott van mihez kötni.
 
 Amihez **már tartozik Kiadás sor** a Pénzügyben, azt nem lehet kihagyni: az
 pénzügyi tény, amit előbb ott kell rendezni - a Kiadás törlése ezt a TIG-et is

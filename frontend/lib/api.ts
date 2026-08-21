@@ -909,6 +909,10 @@ export type PendingTigProjectDetail = {
   teljesites_szoveg_alap: string;
   pending: PendingTigEmployee[];
   tig_ready: boolean;
+  /** Akikről még NEM készíthető TIG (nincs meg az eseti szerződésük) - de
+   * KIHAGYNI már most is lehet őket: a három lépés kihagyása független
+   * egymástól (lásd backend skip_tig). */
+  szerzodesre_varo: PendingTigEmployee[];
 };
 
 export async function getPendingTigProjects(): Promise<PendingTigProject[]> {
@@ -1181,6 +1185,11 @@ export type UtokovetesDetail = {
     draft: TigDraft | null;
     szamla_kifizetve: boolean;
     van_szamla: boolean;
+    /** A SZÁMLA-lépés kihagyva: ide nem jön se számla, se kifizetés. */
+    szamla_kihagyva: boolean;
+    /** Készíthető-e már TIG erről a félről (megvan a szerződése, vagy keret
+     * fedi). Ahol nem, ott csak a KIHAGYÁS érhető el. */
+    tig_keszitheto: boolean;
   }[];
   kifizetes_osszes: number;
   kifizetes_fuggo: number;

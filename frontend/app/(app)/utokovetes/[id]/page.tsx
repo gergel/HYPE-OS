@@ -7,6 +7,7 @@ import { SubcontractorContractManager } from "@/components/SubcontractorContract
 import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
 import { SzamlazoFelSzerkeszto } from "@/components/SzamlazoFelSzerkeszto";
 import { TigInvoiceManager } from "@/components/TigInvoiceManager";
+import { TigSzerzodesreVarok } from "@/components/TigSzerzodesreVarok";
 import { TopBar } from "@/components/TopBar";
 import {
   formatDate,
@@ -147,6 +148,14 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
               készítés&quot; kártyát.
             </p>
           )}
+          {/* A KIHAGYÁS nem várja meg a szerződést: kimondani, hogy innen nem
+              lesz TIG, a szerződéstől függetlenül lehet (lásd
+              TigSzerzodesreVarok és a backend skip_tig). */}
+          <TigSzerzodesreVarok
+            projectId={projectId}
+            felek={pendingTig?.szerzodesre_varo ?? []}
+            canEdit={canEdit}
+          />
           {detail.teljesitesi_igazolasok.length > 0 && (
             <div className="mt-4 border-t border-border pt-3">
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">
@@ -158,7 +167,11 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
                     {/* A címke a lefedett embereket is megnevezi, ha a fél
                         más(ok) munkáját is számlázza. */}
                     <span className="truncate text-text-primary">{t.cimke}</span>
-                    {t.szamla_kifizetve ? (
+                    {t.szamla_kihagyva ? (
+                      // Szándékosan nincs számla és kifizetés - nem hiány, és
+                      // az utókövetésben sem marad függőben.
+                      <StatusBadge label="Számla kihagyva" tone="neutral" />
+                    ) : t.szamla_kifizetve ? (
                       <StatusBadge label="Kifizetve" tone="success" />
                     ) : t.van_szamla ? (
                       <StatusBadge label="Számla feltöltve, nincs kifizetve" tone="warning" />
@@ -178,6 +191,10 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
             employeeNameById={employeeNameById}
             readyStatus="Kiküldve"
             canEdit={canEdit}
+            // A projekt ÖSSZES számlázó fele: akinek nincs kész TIG-je, annál
+            // is elvégezhető a számla-lépés kihagyása - a három lépés kihagyása
+            // független egymástól.
+            szamlaraVarok={detail.teljesitesi_igazolasok.map((t) => ({ szamlazo: t.szamlazo, nev: t.cimke }))}
           />
         </Card>
 
