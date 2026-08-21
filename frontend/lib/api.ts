@@ -44,6 +44,12 @@ export type ProjectCode = {
   /** Bevétel, összes költség (kiadások + utómunka) és a kettő különbsége -
    * a backend számolja (lásd models/project_code.py). */
   bevetel: number;
+  /** Devizás munkánál: MIBŐL lett a fenti forint. A bevétel mindenhol forint,
+   * de egy át NEM váltott összeg ugyanúgy néz ki, mint egy szokásos forintos -
+   * ezért írjuk ki mellé az eredetit (lásd backend
+   * models/project_code.bevetel_deviza). Az árfolyam hiányozhat: olyankor
+   * nincs forintos bevétel, és épp ezt kell látni. */
+  bevetel_deviza: { penznem: string; netto: number; arfolyam: number | null } | null;
   becsult_profit: number;
   osszes_koltseg: number;
   /** Az összes költség négy része (az összegük pontosan az osszes_koltseg):
@@ -77,6 +83,13 @@ export type ProjectCode = {
   szerzodes_kell: boolean;
   szerzodes_kesz: boolean;
   tig_kesz: boolean;
+  /** KÉSZ, de NINCS papírja: tudatosan kihagytuk. A `szerzodes_kesz` ilyenkor
+   * is igaz (a "Kihagyva" lezárt állapot) - de a listának külön kell mondania,
+   * mert a "Szerződés megvan" egy kihagyott szerződésre olyan állítás, amit
+   * később senki nem tud igazolni (lásd backend
+   * models/project_code.szerzodes_kihagyva). */
+  szerzodes_kihagyva: boolean;
+  tig_kihagyva: boolean;
   bevetel_kifizetve: boolean;
   /** Mire szólt a projekt, hol volt, és mit jegyeztek fel a dátumához. */
   project_nev: string | null;

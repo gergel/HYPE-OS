@@ -327,6 +327,36 @@ class ProjectCode(TimestampMixin, Base):
     def tig_kesz(self) -> bool:
         return self._van_kesz_papir(self.megrendeloi_tigek)
 
+    @staticmethod
+    def _kihagyott_papir(papirok: list) -> bool:
+        from app.models.megrendeloi_papir import papir_kesz, papir_kihagyva
+
+        # Ha BÁRMELYIK példány tényleges papír, akkor a papírozás nem kihagyott
+        # - egy elrontott, kihagyottnak jelölt piszkozat mellett ott állhat az
+        # aláírt szerződés is (egy projektkódhoz több papír tartozhat).
+        if any(papir_kesz(p) and not papir_kihagyva(p) for p in papirok):
+            return False
+        return any(papir_kihagyva(p) for p in papirok)
+
+    @property
+    def szerzodes_kihagyva(self) -> bool:
+        """KÉSZ, de nincs papírja: a szerződést tudatosan kihagytuk.
+
+        Ez nem ugyanaz, mint a `szerzodes_kesz` - noha abból is igaz lesz (a
+        "Kihagyva" lezárt állapot). A kettőt a felületnek külön kell mondania:
+        a "Szerződés megvan" egy kihagyott szerződésre olyan állítás, amit
+        később senki nem tud igazolni, és pont azt a néhány munkát rejtené el,
+        amit utólag át kell nézni ("tényleg nem kellett papír?").
+
+        Külön a szerződésre és külön a TIG-re, mert a kettőt külön is szokás
+        kihagyni: keret alatt az eseti szerződés marad el, egy hosszú
+        együttműködésnél inkább a TIG."""
+        return self._kihagyott_papir(self.megrendeloi_szerzodesek)
+
+    @property
+    def tig_kihagyva(self) -> bool:
+        return self._kihagyott_papir(self.megrendeloi_tigek)
+
     @property
     def bevetel_kifizetve(self) -> bool:
         """Megérkezett-e a pénz: van bevétel-sor, és MINDEGYIK ki van fizetve.
@@ -521,6 +551,38 @@ class ProjectCode(TimestampMixin, Base):
 
         netto, _ = projektkod_osszeg.forintban(self)
         return float(netto or 0)
+
+    @property
+    def bevetel_deviza(self) -> dict | None:
+        """MIBŐL lett a forintos bevétel, ha devizás munka. Különben None.
+
+        A `bevetel` mindig FORINT - a fenti kártyák, a lista, a profit mind
+        abban számol, mert a könyvelésünk abban vezet. Devizás munkánál viszont
+        a szám önmagában nem ellenőrizhető: a "121 288 Ft" mögött ott van egy
+        318 EUR és egy árfolyam, és a kettő nélkül nem látszik, hogy az összeg
+        át van-e egyáltalán váltva. (Az átváltatlan 318 "Ft" pont ugyanúgy néz
+        ki, mint egy szokásos forintos összeg.)
+
+        Csak a VÁLLALÁSI ÁR-ból számolt bevételnél van értelme: a tényleges
+        bevétel-sorok már forintban keletkeznek (lásd services/penznem.py),
+        azoknál nincs mit átváltani."""
+        if float(sum(self._osszeg(r) for r in self.revenues)):
+            return None
+        from app.services import penznem as penznem_szolg
+        from app.services import projektkod_osszeg
+
+        if not penznem_szolg.devizas(self.penznem):
+            return None
+        netto, _ = projektkod_osszeg.szamlazott_osszeg(self)
+        if netto is None:
+            return None
+        # Árfolyam nélkül is visszaadjuk: épp az a legfontosabb eset, amikor
+        # HIÁNYZIK - olyankor a bevétel nulla, és ennek látszania kell.
+        return {
+            "penznem": penznem_szolg.normalizald(self.penznem),
+            "netto": netto,
+            "arfolyam": float(self.arfolyam) if self.arfolyam else None,
+        }
 
     @property
     def becsult_profit(self) -> float:

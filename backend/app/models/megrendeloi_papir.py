@@ -38,6 +38,24 @@ ALLAPOTOK: tuple[str, ...] = ("Készítés alatt", "Kiküldve", "Kihagyva", "Van
 #: Amiből már nincs teendő - a fázis-nézet ezeket tekinti lezártnak.
 LEZART_ALLAPOTOK: frozenset[str] = frozenset({"Kiküldve", "Kihagyva", "Van már papír"})
 
+#: "Ehhez a munkához tudatosan NEM készítünk papírt." Lezárt állapot, de a
+#: többitől eltérően nem azért, mert a papír megvan, hanem mert nem lesz.
+#: A kettőt a felületnek külön kell mondania: a "Szerződés megvan" egy kihagyott
+#: szerződésre olyan állítás, amit később senki nem tud igazolni - lásd
+#: models/project_code.szerzodes_kihagyva.
+KIHAGYVA = "Kihagyva"
+
+
+def papir_kihagyva(papir) -> bool:
+    """Kihagyott-e ez a papír: kész, de NINCS mögötte papír.
+
+    Az aláírt példány itt is erősebb az állapot-mezőnél, csak fordítva, mint a
+    `papir_kesz`-nél: ha valaki mégis feltöltötte az aláírt szerződést egy
+    kihagyottnak jelölt sorra, akkor a papír VAN - bármit is mond az állapot."""
+    if papir is None:
+        return False
+    return papir.allapot == KIHAGYVA and not papir.alairt_file_url
+
 
 def papir_kesz(papir) -> bool:
     """Le van-e zárva ez a papír? EGY szabály, mindenhol ugyanaz.

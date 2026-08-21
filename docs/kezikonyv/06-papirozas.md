@@ -431,6 +431,52 @@ A bruttót sehol nem tároljuk: a "+ÁFA" jelölőből számoljuk (×1,27) - és
 kiírjuk. Az elszámolásban (bevétel, költség, profit) mindenütt a **nettó** a
 mérvadó, lásd [07-penzugyek.md](07-penzugyek.md) "A NETTÓ a mérvadó".
 
+#### Devizás munka: a papír EUR-ban, a bevétel forintban
+
+A vállalási árnak lehet más a pénzneme (`penznem` + `arfolyam`). A szabály
+kétirányú, és pont ez a lényege:
+
+- a **papírokra** (szerződés, TIG) az EREDETI pénznem kerül - azon az összeg
+  szerepel, amiben megállapodtunk;
+- a **bevétel, a profit és minden összesítő FORINT** - a könyvelésünk abban
+  vezet, és egy összesítő nem tud kétféle pénznemet összeadni
+  (`services/projektkod_osszeg.forintban`).
+
+A projektkód adatlapján és a listán ezért a forint áll nagyban, alatta pedig
+halványan, hogy **miből lett**: „318 EUR × 381,41 Ft/EUR"
+(`models/project_code.bevetel_deviza` → `lib/penz.bevetelDevizaNyom`). Enélkül
+az átváltás nem ellenőrizhető: egy át NEM váltott 318 pontosan ugyanúgy néz ki,
+mint egy szokásos forintos összeg.
+
+Devizás pénznemet **árfolyam nélkül nem lehet elmenteni** (a beírt szám
+enélkül értelmezhetetlen). A választó tehát átáll, a rekord viszont még
+forintos marad - ezt a felület ki is mondja („a EUR még nincs elmentve"), és
+rögtön az árfolyam-mezőre ugrik. Enélkül úgy tűnt, mintha a rendszer nem
+váltaná át az összeget: a kártyán a régi, forintos szám maradt.
+
+### Kihagyott papír: kész, de nincs papírja
+
+A „Kihagyva" **lezárt** állapot (`LEZART_ALLAPOTOK`), tehát a projektkód kiesik
+a teendők közül - ez így helyes, nincs rajta tennivaló. A listán viszont
+kevés annál félrevezetőbb, mint egy „Szerződés megvan" jelzés olyan munkán,
+amiről nincs papír: ezt később senki nem tudja igazolni.
+
+Ezért a papírozás-jelző külön mondja ki: **„Szerződés kihagyva (nincs papír)"**
+és **„TIG kihagyva (nincs papír)"**, semleges (nem zöld) jelzéssel
+(`models/project_code.szerzodes_kihagyva` / `tig_kihagyva`).
+
+Egy kód akkor számít kihagyottnak, ha van kihagyott papírja, és **nincs
+mellette valódi** - egy projektkódhoz több papír is tartozhat, és egy elrontott,
+kihagyottnak jelölt piszkozat nem törli el az aláírt szerződés tényét. Aláírt
+példány esetén az állapot nem számít: ha a papír megvan, akkor megvan.
+
+A projektkódok listáján erre **külön szűrő** van (Papírozás: Mind / Szerződés
+kihagyva / TIG kihagyva - `components/ProjektkodPapirSzuro.tsx`). A napi
+munkához nem kell, évzárásnál és könyvelői egyeztetésnél viszont pont ez a
+néhány munka a kérdés: „melyikről nincs papírunk, és tényleg nem is kellett?"
+A szerződés és a TIG külön szűrő, mert külön is szokás kihagyni őket - keret
+alatt az eseti szerződés marad el, egy hosszú együttműködésnél inkább a TIG.
+
 ### A harmadik lépés: a SZÁMLA (határidő → kifizetve → bevétel)
 
 A szerződés és a TIG után jön a pénz. A projektkód adatlapján a "3. Számla"

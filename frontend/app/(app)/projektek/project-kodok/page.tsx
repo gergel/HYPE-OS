@@ -8,6 +8,13 @@ import {
   ProjektkodEvValto,
   type ProjektkodEv,
 } from "@/components/ProjektkodEvValto";
+import {
+  PAPIR_SZUROK,
+  papirSzuroErteke,
+  papirSzurore,
+  ProjektkodPapirSzuro,
+  type PapirSzuro,
+} from "@/components/ProjektkodPapirSzuro";
 import { ProjektkodTeendoTabla } from "@/components/ProjektkodTeendoTabla";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -22,6 +29,7 @@ import {
   getProjectCodes,
   ProjectCode,
 } from "@/lib/api";
+import { bevetelDevizaNyom } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 import { projektkodFazisa } from "@/lib/projektkodFazis";
 
@@ -48,19 +56,27 @@ function papirJelzo(pc: ProjectCode) {
           írni, MIÉRT nincs, különben az üres hely tűnik hiánynak. És azt is,
           KIVEL: egy puszta "keretszerződés alatt" nem ellenőrizhető, pedig ez
           a jelzés vesz le egy teendőt. */}
+      {/* KIHAGYOTT papír: kész, de nincs mögötte papír. A "Szerződés megvan"
+          erre olyan állítás lenne, amit később senki nem tud igazolni - és
+          pont azt a néhány munkát rejtené el, amit utólag át kell nézni. */}
       <StatusBadge
         label={
           !pc.szerzodes_kell
             ? pc.keretszerzodes_neve
               ? `Keret: ${pc.keretszerzodes_neve}`
               : "Keretszerződés alatt"
-            : pc.szerzodes_kesz
-              ? "Szerződés megvan"
-              : "Nincs szerződés"
+            : pc.szerzodes_kihagyva
+              ? "Szerződés kihagyva (nincs papír)"
+              : pc.szerzodes_kesz
+                ? "Szerződés megvan"
+                : "Nincs szerződés"
         }
-        tone={!pc.szerzodes_kell || pc.szerzodes_kesz ? "success" : "warning"}
+        tone={pc.szerzodes_kihagyva ? "neutral" : !pc.szerzodes_kell || pc.szerzodes_kesz ? "success" : "warning"}
       />
-      <StatusBadge label={pc.tig_kesz ? "TIG kész" : "Nincs TIG"} tone={pc.tig_kesz ? "success" : "warning"} />
+      <StatusBadge
+        label={pc.tig_kihagyva ? "TIG kihagyva (nincs papír)" : pc.tig_kesz ? "TIG kész" : "Nincs TIG"}
+        tone={pc.tig_kihagyva ? "neutral" : pc.tig_kesz ? "success" : "warning"}
+      />
       <StatusBadge
         label={pc.bevetel_kifizetve ? "Kifizetve" : "Nincs kifizetve"}
         tone={pc.bevetel_kifizetve ? "success" : "warning"}
@@ -81,7 +97,7 @@ function papirRang(pc: ProjectCode): number {
 export default async function ProjectKodokPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ev?: string }>;
+  searchParams: Promise<{ ev?: string; papir?: string }>;
 }) {
   const params = await searchParams;
   const [projectCodes, clients, fieldTypes, currentUser, pagePermissions] = await Promise.all([
@@ -114,7 +130,17 @@ export default async function ProjectKodokPage({
   // kattintva természetesen bármelyik oszlop szerint átrendezhető.
   const kodSzerint = (a: ProjectCode, b: ProjectCode) =>
     (b.projektkod ?? "").localeCompare(a.projektkod ?? "", "hu", { numeric: true });
-  const sorok = projectCodes.filter((pc) => evheztartozik(pc.projektkod, ev)).sort(kodSzerint);
+  const eviSorok = projectCodes.filter((pc) => evheztartozik(pc.projektkod, ev)).sort(kodSzerint);
+  // A KIHAGYOTT papírok szűrője az éven BELÜL szűkít tovább (lásd
+  // ProjektkodPapirSzuro): a két szűrő egymást szűkíti, nem váltja ki egymást.
+  const papirSzuro = papirSzuroErteke(params.papir);
+  const sorok = eviSorok.filter((pc) => papirSzurore(pc, papirSzuro));
+  const papirDarabszamok = {
+    mind: eviSorok.length,
+    ...Object.fromEntries(
+      PAPIR_SZUROK.map((s) => [s.kulcs, eviSorok.filter((pc) => papirSzurore(pc, s.kulcs)).length]),
+    ),
+  } as Record<PapirSzuro, number>;
   // A "Teendők" fülön az számít, HÁNY munkával van dolgunk: minden projektkód,
   // ami még nem jutott el a "kész" fázisig.
   const teendos = projectCodes.filter((pc) => projektkodFazisa(pc) !== "kesz").length;
@@ -194,6 +220,13 @@ export default async function ProjectKodokPage({
                     <span title="A bevétel-sorok összege; amíg nincs kifizetés, a vállalási ár (szerződés / TIG)">
                       {formatHuf(pc.bevetel)}
                     </span>
+                    {/* Devizás munkán MIBŐL lett ez a forint: egy át nem
+                        váltott összeg ugyanúgy néz ki, mint egy forintos. */}
+                    {bevetelDevizaNyom(pc.bevetel_deviza) && (
+                      <span className="mt-0.5 block text-[11.5px] text-text-muted">
+                        {bevetelDevizaNyom(pc.bevetel_deviza)}
+                      </span>
+                    )}
                     {/* MIÉRT ennyi - egy magyarázat nélküli 0 Ft itt a
                         legfélrevezetőbb: nem látszik, elfelejtették-e beírni
                         vagy tényleg beszámították valamibe. */}
@@ -330,13 +363,16 @@ export default async function ProjectKodokPage({
       <div className="flex-1 p-8">
         <Card title={`Project Code-ok (${sorok.length})`}>
           <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} />
+          <ProjektkodPapirSzuro ev={ev} aktiv={papirSzuro} darabszamok={papirDarabszamok} />
           {ujProjektkodUrlap}
           <DataTable<ProjectCode>
             rows={sorok}
             emptyText={
-              ev === "osszes"
-                ? "Még nincs felvett Project Code - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
-                : `Ebben az évben (${ev}) még nincs projektkód - nézd meg az Összes nézetet.`
+              papirSzuro !== "mind"
+                ? "Ebben a nézetben nincs ilyen projektkód - itt azok állnak, ahol a papírt tudatosan kihagytuk."
+                : ev === "osszes"
+                  ? "Még nincs felvett Project Code - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
+                  : `Ebben az évben (${ev}) még nincs projektkód - nézd meg az Összes nézetet.`
             }
             getHref={(pc) => `/projektek/project-kodok/${pc.id}`}
             deleteHref={canDelete ? (pc) => `${ENTITY_PATHS.projectCode}/${pc.id}` : undefined}

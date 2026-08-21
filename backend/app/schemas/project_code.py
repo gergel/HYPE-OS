@@ -29,6 +29,21 @@ class ProjectCodeBase(BaseModel):
     tig_alairva_url: str | None = None
 
 
+class BevetelDeviza(BaseModel):
+    """MIBŐL lett a forintos bevétel egy devizás munkán.
+
+    A bevétel mindenhol FORINT (kártyák, lista, profit) - ez a néhány mező
+    mondja meg, hogy az a forint miből jött, mert egy át NEM váltott összeg
+    ugyanúgy néz ki, mint egy szokásos forintos (lásd
+    models/project_code.bevetel_deviza)."""
+
+    penznem: str
+    netto: float
+    #: Hiányozhat: devizás munkánál árfolyam nélkül nincs forintos bevétel -
+    #: épp ezt az esetet kell kiírni, nem elrejteni.
+    arfolyam: float | None = None
+
+
 class ProjectCodeCreate(ProjectCodeBase):
     pass
 
@@ -79,6 +94,9 @@ class ProjectCodeListRead(BaseModel):
 
     #: Számított értékek (lásd models/project_code.py).
     bevetel: float
+    #: Devizás munkánál: miből lett a fenti forint (összeg + pénznem +
+    #: árfolyam). Forintos munkán None.
+    bevetel_deviza: BevetelDeviza | None = None
     osszes_koltseg: float
     becsult_profit: float
     kulsos_koltseg: float
@@ -96,6 +114,11 @@ class ProjectCodeListRead(BaseModel):
     szerzodes_kell: bool
     szerzodes_kesz: bool
     tig_kesz: bool
+    #: KÉSZ, de nincs papírja: tudatosan kihagytuk. Külön a szerződésre és a
+    #: TIG-re, mert külön is szokás kihagyni őket (lásd
+    #: models/project_code.szerzodes_kihagyva).
+    szerzodes_kihagyva: bool = False
+    tig_kihagyva: bool = False
     bevetel_kifizetve: bool
 
     van_szerzodes: bool = True
@@ -113,6 +136,8 @@ class ProjectCodeRead(ProjectCodeBase):
     #: Számított értékek (lásd models/project_code.py) - a lista ezekből
     #: mutatja, hogy jött-e ki a projekt.
     bevetel: float
+    #: Devizás munkánál: miből lett a fenti forint (lásd BevetelDeviza).
+    bevetel_deviza: BevetelDeviza | None = None
     osszes_koltseg: float
     becsult_profit: float
     #: Az összes költség NÉGY része (az összegük pontosan az osszes_koltseg):
@@ -138,6 +163,10 @@ class ProjectCodeRead(ProjectCodeBase):
     szerzodes_kell: bool
     szerzodes_kesz: bool
     tig_kesz: bool
+    #: KÉSZ, de nincs papírja: tudatosan kihagytuk (lásd
+    #: models/project_code.szerzodes_kihagyva).
+    szerzodes_kihagyva: bool = False
+    tig_kihagyva: bool = False
     bevetel_kifizetve: bool
 
     # A papírozás kapcsolói (lásd models/project_code.py): van-e szerződés a

@@ -92,3 +92,23 @@ export function devizaNyom(sor: {
   const arfolyam = sor.arfolyam === null ? "?" : sor.arfolyam.toLocaleString("hu-HU");
   return `${sor.eredeti_netto.toLocaleString("hu-HU")} ${sor.eredeti_penznem} × ${arfolyam}`;
 }
+
+/** MIBŐL lett a projektkód forintos BEVÉTELE, ha devizás munka.
+ *
+ * A bevétel és a profit mindenhol forint - a könyvelésünk abban vezet, és az
+ * összesítők egy pénznemet ismernek. Devizás munkánál viszont a puszta szám
+ * nem ellenőrizhető: egy át NEM váltott 318 ugyanúgy néz ki, mint egy szokásos
+ * forintos összeg. Ez a sor teszi láthatóvá az átváltást.
+ *
+ * Árfolyam nélkül nincs forintos bevétel (a backend ilyenkor nullát ad, lásd
+ * services/projektkod_osszeg.forintban) - ezt ki is mondjuk, mert enélkül egy
+ * megmagyarázhatatlan 0 Ft állna a kártyán. */
+export function bevetelDevizaNyom(
+  deviza: { penznem: string; netto: number; arfolyam: number | null } | null | undefined,
+): string | null {
+  if (!deviza) return null;
+  const kod = penznemKod(deviza.penznem);
+  const osszeg = `${deviza.netto.toLocaleString("hu-HU")} ${kod}`;
+  if (deviza.arfolyam === null) return `${osszeg} – hiányzik az árfolyam`;
+  return `${osszeg} × ${deviza.arfolyam.toLocaleString("hu-HU")} Ft/${kod}`;
+}

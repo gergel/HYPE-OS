@@ -26,6 +26,7 @@ import {
   getProjektkodBontas,
   getRecord,
 } from "@/lib/api";
+import { bevetelDevizaNyom } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 import { FileCheck2, FileSignature, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
@@ -39,6 +40,16 @@ function szam(ertek: unknown): number {
 
 function szoveg(ertek: unknown): string | null {
   return typeof ertek === "string" && ertek.trim() ? ertek : null;
+}
+
+/** A devizás bevétel eredete a nyers rekordból (lásd backend
+ * models/project_code.bevetel_deviza). A mező hiányozhat - régi válaszban, és
+ * minden forintos munkán -, ezért itt ellenőrizzük, nem a megjelenítésnél. */
+function bevetelDeviza(ertek: unknown): { penznem: string; netto: number; arfolyam: number | null } | null {
+  if (!ertek || typeof ertek !== "object") return null;
+  const d = ertek as { penznem?: unknown; netto?: unknown; arfolyam?: unknown };
+  if (typeof d.penznem !== "string" || typeof d.netto !== "number") return null;
+  return { penznem: d.penznem, netto: d.netto, arfolyam: typeof d.arfolyam === "number" ? d.arfolyam : null };
 }
 
 export default async function ProjectCodeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -122,6 +133,12 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   // a profit alatta már a valós összeget - ugyanarról a munkáról.
   const bevetel = szam(projectCode.bevetel);
   const profit = szam(projectCode.becsult_profit);
+  // A három szám FORINTBAN áll, devizás munkán is - a könyvelésünk abban vezet.
+  // Devizánál viszont oda kell írni, miből lett, mert egy át NEM váltott összeg
+  // ugyanúgy néz ki, mint egy szokásos forintos (lásd lib/penz.bevetelDevizaNyom).
+  // A papírokra (szerződés, TIG) továbbra is az EREDETI pénznem kerül: azon az
+  // szerepel, amiben megállapodtunk.
+  const devizaNyoma = bevetelDevizaNyom(bevetelDeviza(projectCode.bevetel_deviza));
 
   return (
     <div className="flex flex-1 flex-col">
@@ -143,7 +160,13 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             szemléletben, különben a profit az ÁFA-tartalmak különbségével
             csúszna el (lásd backend services/elszamolas.py). */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="Bevétel (nettó)" value={formatHuf(bevetel)} icon={TrendingUp} tone="teal" />
+          <StatCard
+            label="Bevétel (nettó)"
+            value={formatHuf(bevetel)}
+            icon={TrendingUp}
+            tone="teal"
+            megjegyzes={devizaNyoma ?? undefined}
+          />
           <StatCard
             label="Összes költség (nettó)"
             value={formatHuf(szam(projectCode.osszes_koltseg))}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 // A pénzformázó a FÜGGŐSÉG NÉLKÜLI modulból jön: a lib/api.ts a
@@ -63,6 +63,21 @@ export function VallalasiAr({
   const [indok, setIndok] = useState(magyarazat ?? "");
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
+  // Az árfolyam-mező csak devizás pénznemnél létezik, tehát a pénznem
+  // átállításakor még nincs mire ugrani - egy renderrel később van.
+  const arfolyamMezo = useRef<HTMLInputElement>(null);
+  const [ugorjArfolyamra, setUgorjArfolyamra] = useState(false);
+  useEffect(() => {
+    if (!ugorjArfolyamra) return;
+    arfolyamMezo.current?.focus();
+    setUgorjArfolyamra(false);
+  }, [ugorjArfolyamra]);
+
+  /** A pénznem át van állítva devizára, de a rekordon még nincs árfolyam -
+   * tehát a szerver felé MÉG NEM MENT EL semmi, és a fenti bevétel a régi,
+   * forintos számot mutatja. Ezt ki kell mondani: enélkül úgy néz ki, mintha
+   * a rendszer nem váltaná át az összeget. */
+  const penznemMentetlen = devizas(valuta) && arfolyam === null;
 
   const szam = ertek.trim() === "" ? null : Number(ertek.replace(/\s/g, "").replace(",", "."));
   const ervenyes = szam === null || Number.isFinite(szam);
@@ -137,6 +152,14 @@ export function VallalasiAr({
                 ment({ penznem: e.target.value, arfolyam: null });
               } else if (arfolyamSzam !== null) {
                 ment({ penznem: e.target.value, arfolyam: arfolyamSzam });
+              } else {
+                // Devizás pénznemet árfolyam NÉLKÜL nem lehet elmenteni (lásd
+                // backend routes/project_codes._penznem_ellenorzese) - a
+                // választó tehát átáll, a rekord viszont még forintos marad.
+                // Ez pontosan az az állapot, amiben a fenti bevétel a régi,
+                // át nem váltott számot mutatja: ezért ugrunk rögtön az
+                // árfolyamra, és ezért írjuk ki alatta, hogy nincs mentve.
+                setUgorjArfolyamra(true);
               }
             }}
             className="mt-1 w-24 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary disabled:opacity-60"
@@ -152,6 +175,7 @@ export function VallalasiAr({
           <label className="block text-[13px] text-text-secondary">
             Árfolyam (Ft/{valuta})
             <input
+              ref={arfolyamMezo}
               type="text"
               inputMode="decimal"
               value={arfolyamErtek}
@@ -175,10 +199,13 @@ export function VallalasiAr({
       {/* Devizás munkánál a bevétel ETTŐL a számtól függ - ki is írjuk, hogy
           ne csak a szerződésbeli összeg látszódjon. */}
       {devizas(valuta) && (
-        <p className="text-[12.5px] text-text-secondary">
-          {forintban === null
-            ? "Add meg az árfolyamot - enélkül nem tudjuk, mennyi a bevétel forintban."
-            : `A bevételek közé ${formatHuf(forintban)} kerül (nettó, ${valuta === "HUF" ? "" : `${arfolyamErtek} Ft/${valuta} árfolyamon`}).`}
+        <p className={`text-[12.5px] ${penznemMentetlen ? "text-text-danger" : "text-text-secondary"}`}>
+          {penznemMentetlen
+            ? `A ${valuta} MÉG NINCS ELMENTVE: add meg az árfolyamot (hány forint egy ${valuta}). ` +
+              "Addig a projekt bevétele és profitja a korábbi, forintos összeggel számol."
+            : forintban === null
+              ? "Add meg az árfolyamot - enélkül nem tudjuk, mennyi a bevétel forintban."
+              : `A bevételek közé ${formatHuf(forintban)} kerül (nettó, ${arfolyamErtek} Ft/${valuta} árfolyamon) - a fenti bevétel és profit is ez.`}
         </p>
       )}
 
