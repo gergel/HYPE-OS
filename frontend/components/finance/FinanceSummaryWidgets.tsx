@@ -112,14 +112,49 @@ export function KasszaWidget({ kassza }: { kassza: FinanceSummary["kassza"] }) {
   const jeloletlen = kassza.jeloletlen_kiadas + kassza.jeloletlen_bevetel;
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-        <p className="text-[26px] font-semibold tracking-[-0.02em] text-text-primary">
-          {formatHuf(kassza.egyenleg)}
-        </p>
-        <p className="text-[12.5px] text-text-secondary">
-          idén <span className="text-text-teal">+{formatHuf(kassza.idei_be)}</span> be ·{" "}
-          <span style={{ color: EXPENSE_COLOR }}>−{formatHuf(kassza.idei_ki)}</span> ki
-        </p>
+      {/* HÁROM külön kérdés, három szám - ahogy a Notionben is külön
+          widgetekben álltak:
+            1. mennyi készpénznek KELL nálunk lennie most,
+            2. mennyi idei készpénzes kiadás mögött VAN számla,
+            3. és mennyi mögött NINCS.
+          A harmadik a lényeg: számla nélkül a készpénzes kiadás a
+          könyvelésben nem elszámolható költség, tehát az a szám egy teendő,
+          nem statisztika (lásd backend services/bizonylat.py). */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+          <p className="text-[12px] text-text-secondary">KP a kasszában</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
+            {formatHuf(kassza.egyenleg)}
+          </p>
+          <p className="mt-1 text-[11.5px] text-text-muted">
+            idén <span className="text-text-teal">+{formatHuf(kassza.idei_be)}</span> be ·{" "}
+            <span style={{ color: EXPENSE_COLOR }}>−{formatHuf(kassza.idei_ki)}</span> ki
+          </p>
+        </div>
+        <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+          <p className="text-[12px] text-text-secondary">Idei KP kiadás – van számla</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
+            {formatHuf(kassza.idei_ki_szamlaval)}
+          </p>
+          <p className="mt-1 text-[11.5px] text-text-muted">{kassza.idei_ki_szamlaval_db} tétel</p>
+        </div>
+        <div
+          className={`rounded-[var(--radius)] border p-3 ${
+            kassza.idei_ki_szamla_nelkul_db > 0 ? "border-border-strong bg-bg-warning" : "border-border bg-surface-3"
+          }`}
+        >
+          <p className="text-[12px] text-text-secondary">Idei KP kiadás – nincs számla</p>
+          <p
+            className={`mt-1 text-[22px] font-semibold tracking-[-0.02em] tabular-nums ${
+              kassza.idei_ki_szamla_nelkul_db > 0 ? "text-text-warning" : "text-text-primary"
+            }`}
+          >
+            {formatHuf(kassza.idei_ki_szamla_nelkul)}
+          </p>
+          <p className="mt-1 text-[11.5px] text-text-muted">
+            {kassza.idei_ki_szamla_nelkul_db} tétel – ezekhez hiányzik a bizonylat
+          </p>
+        </div>
       </div>
 
       {/* Amíg van megjelöletlen tétel, az egyenleg csak közelítés - ezt ki kell

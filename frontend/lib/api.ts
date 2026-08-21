@@ -1241,6 +1241,13 @@ export type Kassza = {
   osszes_ki: number;
   idei_be: number;
   idei_ki: number;
+  /** Az idei készpénzes kiadás kettéosztva: van-e mögötte SZÁMLA (lásd backend
+   * services/bizonylat.py). A számla nélküli készpénzes kiadás a könyvelésben
+   * nem elszámolható költség - az a szám teendő, nem statisztika. */
+  idei_ki_szamlaval: number;
+  idei_ki_szamla_nelkul: number;
+  idei_ki_szamlaval_db: number;
+  idei_ki_szamla_nelkul_db: number;
   havi: KasszaHavi[];
   /** Hány KIFIZETETT tételen nincs megjelölve a fizetési mód - amíg ez nem
    * nulla, az egyenleg csak közelítés. */

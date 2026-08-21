@@ -27,7 +27,7 @@ from app.models.performance_certificate import (
     PerformanceCertificateTetel,
 )
 from app.models.project_code import ProjectCode
-from app.services import document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
+from app.services import bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
 from app.services import penznem as penznem_szolg
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
 from app.services.portal_storage import R2NotConfiguredError
@@ -161,6 +161,16 @@ class Kassza(BaseModel):
     #: Az idei év mozgása külön - ennyit forgattunk készpénzben.
     idei_be: float
     idei_ki: float
+    #: Az IDEI készpénzes kiadás kettéosztva: van-e mögötte számla (lásd
+    #: services/bizonylat.py). Ez nem ugyanaz a kérdés, mint hogy kifizettük-e:
+    #: egy számla nélküli készpénzes kiadás a könyvelésben nem elszámolható
+    #: költség, tehát külön kell látni, mennyi ilyen van.
+    idei_ki_szamlaval: float
+    idei_ki_szamla_nelkul: float
+    #: És hány tételről van szó - az összeg mellett ez mondja meg, mennyi
+    #: munka összeszedni a hiányzó bizonylatokat.
+    idei_ki_szamlaval_db: int
+    idei_ki_szamla_nelkul_db: int
     havi: list[KasszaHavi]
     #: Hány olyan KIFIZETETT tétel van, amin nincs megjelölve a fizetési mód.
     #: Amíg ez nem nulla, az egyenleg csak közelítés - ezért írjuk ki.
@@ -263,6 +273,35 @@ def _kassza(db: Session, today: date, months: list[tuple[int, int]]) -> Kassza:
         fut += be - ki
         havi_sorok.append(KasszaHavi(month=f"{y:04d}-{m:02d}", be=be, ki=ki, egyenleg=fut))
 
+    # AZ IDEI KÉSZPÉNZES KIADÁSOK kettéosztva: van-e mögöttük számla.
+    #
+    # Ez itt Pythonban fut, nem SQL-ben: a "van számla" kérdés két forrásból
+    # áll össze (feltöltött csatolmány + a Notionből örökölt JSON mező), és a
+    # JSON-ban az ÜRES lista is fájlnak látszana egy `IS NOT NULL` szűrőben -
+    # lásd services/bizonylat.py. Egy év készpénzes kiadása néhány száz sor,
+    # ezt végigvenni olcsóbb, mint egy megbízhatatlan SQL-feltételt írni rá.
+    szamlas_ids = bizonylat.szamlas_kiadas_ids(db)
+    idei_keszpenzes = db.scalars(
+        select(Expense).where(
+            Expense.fizetes_datuma.is_not(None),
+            extract("year", Expense.fizetes_datuma) == today.year,
+            fizetesi_mod.keszpenz_sql(Expense.kifizetes_modja),
+            _EXPENSE_COUNTS_TOWARD_TOTALS,
+        )
+    ).all()
+    ki_szamlaval = ki_szamla_nelkul = 0.0
+    db_szamlaval = db_szamla_nelkul = 0
+    for kiadas in idei_keszpenzes:
+        # Ugyanaz az összeg, amivel a kassza is számol: BRUTTÓ, nettóra
+        # visszaesve (lásd a `penz` lambdát fentebb).
+        osszeg = float(kiadas.brutto if kiadas.brutto is not None else (kiadas.netto or 0))
+        if bizonylat.van_szamla(kiadas, szamlas_ids):
+            ki_szamlaval += osszeg
+            db_szamlaval += 1
+        else:
+            ki_szamla_nelkul += osszeg
+            db_szamla_nelkul += 1
+
     def jeloletlen(modell, mod_oszlop, feltetel) -> int:
         return int(
             db.scalar(
@@ -283,6 +322,10 @@ def _kassza(db: Session, today: date, months: list[tuple[int, int]]) -> Kassza:
         osszes_ki=osszes_ki,
         idei_be=sum(o for (y, _), o in be_havi.items() if y == today.year),
         idei_ki=sum(o for (y, _), o in ki_havi.items() if y == today.year),
+        idei_ki_szamlaval=ki_szamlaval,
+        idei_ki_szamla_nelkul=ki_szamla_nelkul,
+        idei_ki_szamlaval_db=db_szamlaval,
+        idei_ki_szamla_nelkul_db=db_szamla_nelkul,
         havi=havi_sorok,
         jeloletlen_kiadas=jeloletlen(Expense, Expense.kifizetes_modja, _EXPENSE_COUNTS_TOWARD_TOTALS),
         jeloletlen_bevetel=jeloletlen(Revenue, Revenue.fizetes_modja, _REVENUE_COUNTS_TOWARD_TOTALS),

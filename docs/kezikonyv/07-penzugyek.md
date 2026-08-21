@@ -250,6 +250,31 @@ kassza egyenleg = a készpénzes BEVÉTELEK - a készpénzes KIADÁSOK
 A Pénzügyek oldalon a **„Készpénz a kasszában"** kártya mutatja: az egyenleget,
 az idei be/ki forgalmat, és havi bontásban a mozgást + a hónap VÉGI egyenleget.
 
+#### Három szám, három kérdés
+
+A kártya tetején három külön doboz áll - ugyanaz a hármas, ami a Notionben
+külön widgetekben volt:
+
+| | Mit mond meg |
+|---|---|
+| **KP a kasszában** | mennyi készpénznek KELL most nálunk lennie |
+| **Idei KP kiadás – van számla** | ennyit fizettünk ki készpénzben úgy, hogy a bizonylat megvan |
+| **Idei KP kiadás – nincs számla** | és ennyit úgy, hogy nincs meg - darabszámmal |
+
+A harmadik nem statisztika, hanem **teendő**: számla nélkül a készpénzes kiadás
+a könyvelésben nem elszámolható költség. Ezért van rajta darabszám is (az
+mondja meg, mennyi munka összeszedni a hiányzó bizonylatokat), és ezért van
+kiemelve, amíg nem nulla.
+
+**Mi számít számlának** (`services/bizonylat.py`)? Egy tényleges bizonylat, nem
+egy szándék: a rendszerbe **feltöltött** számla-fájl (`DocumentAttachment`,
+`kategoria="szamla"`), vagy a Notionből örökölt **„Számla pdf"** mező
+(`Expense.szamla_pdf_urls`) - a régi sorokon ott van a fájl, csak nem
+csatolmányként. A szöveges `szamla` mező szándékosan **nem** számít: abban
+számlaszám, „igen", „nincs" és üres string egyaránt előfordul, tehát a
+jelenléte nem bizonyít semmit. Az üres JSON-lista (`[]`) sem fájl - egy
+`IS NOT NULL` szűrő ezt még „van"-nak látná, ezért fut a bontás Pythonban.
+
 Néhány szabály, ami a számot használhatóvá teszi:
 
 - **Bruttóban**, nem nettóban: a dobozban annyi pénz van, amennyit ténylegesen
