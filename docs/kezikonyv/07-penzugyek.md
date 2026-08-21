@@ -262,13 +262,18 @@ mindenki maga írja be („kp", „Készpénz", „KP"), az összesítés annyif
 szakad, ahányféleképp leírták - és a kassza egyenlege pont annyival lesz hamis.
 A felismerés ettől még türelmes a régi adatokkal („KP", „Kp.", ékezet nélkül is).
 
-#### A régi kiadások visszamenőleges megjelölése
+#### A régi sorok visszamenőleges megjelölése
 
-A fizetési mód mezőt később vezettük be, ezért a Notionből örökölt kiadásokon
-üres - a kassza egyenlege viszont épp ebből számol. Szerencsére a Notionben a
-**„Kiadás formája"** mező (nálunk `Expense.tipus`) keveri a kiadás fajtáját és a
-fizetés útját: van benne „Bérlés" és „Alap bér", de van „Bankkártya" és
-„Előfizetés" is - az utóbbiak maguk mondják meg, hogyan mozgott a pénz.
+A fizetési mód mezőt később vezettük be, ezért a Notionből örökölt sorokon üres
+- a kassza egyenlege viszont épp ebből számol. Szerencsére a Notionben ott van
+ugyanez, csak **más mezőben**:
+
+| | Notion mező | nálunk | mit tartalmaz |
+|---|---|---|---|
+| Kiadás | „Kiadás formája" | `Expense.tipus` | keveri a kiadás fajtáját és a fizetés útját: van benne „Bérlés" és „Alap bér", de „Bankkártya" és „Előfizetés" is |
+| Bevétel | „Bevétel formája" | `Revenue.bevetel_formaja` | ebben áll, hogy utalással vagy készpénzben jött-e a pénz (és az is, hogy „Nem volt tranzakció") |
+
+Egy script viszi át mindkettőt a saját fizetési mód mezőjébe.
 
 ```
 python scripts/fizetesi_mod_kitoltese.py              # csak megmutatja, mit tenne
@@ -302,6 +307,12 @@ A rövid, kategória-szerű nevek (`alap ber`, `kartya`, `ber`) csak **teljes
 egyezésre** illeszkednek, nem részletként: a „bér" benne van a
 „Kamerabérlés"-ben is, ami épp nem munkabér, a „kártya" pedig az „SD kártya"
 eszközben.
+
+**A bevételnél egy megkötéssel:** ott csak készpénz és átutalás lehet
+(`BEVETEL_MODOK` - kártyát nem fogadunk), ezért a kikövetkeztetés `engedett`
+listát kap. Ami nem fér bele, azon nem áll meg, hanem **továbblép** - hátha egy
+másik mező mond valami használhatót. A „Nem volt tranzakció" pedig üresen
+marad: az nem fizetési mód, hanem épp annak a hiánya.
 
 ### A projekt bevétele: a vállalási ár, amíg nincs kifizetés
 

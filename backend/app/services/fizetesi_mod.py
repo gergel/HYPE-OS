@@ -93,6 +93,10 @@ KULCSSZO_MODOK: tuple[tuple[str, str], ...] = (
     ("keszpenzes", KESZPENZ),
     ("atutalas", ATUTALAS),
     ("atutalva", ATUTALAS),
+    # "utalással", "banki utalással" - az "atutalas" ezeket nem fedi (nincs
+    # benne az á), a puszta "utalas" viszont túl tág lenne ("nem volt utalás").
+    ("utalassal", ATUTALAS),
+    ("keszpenzzel", KESZPENZ),
 )
 
 TELJES_EGYEZES_MODOK: dict[str, str] = {
@@ -107,6 +111,7 @@ TELJES_EGYEZES_MODOK: dict[str, str] = {
     "keszpenz": KESZPENZ,
     "kp": KESZPENZ,
     "kp.": KESZPENZ,
+    "banki utalas": ATUTALAS,
     # A VALÓDI adatból: ezek a "Kiadás formája" értékek maradtak felismeretlenül
     # az első futás után, a hozzájuk tartozó módot pedig megmondták. Egyik sem
     # tippelhető ki a szóból - azért állnak itt, felsorolva.
@@ -127,26 +132,37 @@ TELJES_EGYEZES_MODOK: dict[str, str] = {
 }
 
 
-def kikovetkeztetett_mod(*szovegek: Any) -> str | None:
-    """Mi lehet a fizetési mód a kiadás nevéből/típusából? None, ha nem tudjuk.
+def kikovetkeztetett_mod(*szovegek: Any, engedett: tuple[str, ...] | None = None) -> str | None:
+    """Mi lehet a fizetési mód a tétel nevéből/típusából? None, ha nem tudjuk.
 
-    A Notionből örökölt kiadásoknál a NÉV maga a válasz: "Alap bér",
-    "Bankkártya", "Előfizetés". Ez a függvény ezt olvassa ki - a
-    visszamenőleges kitöltéshez (lásd scripts/fizetesi_mod_kitoltese.py).
+    A Notionből örökölt soroknál a szöveges mező maga a válasz: a kiadásnál a
+    "Kiadás formája" ("Alap bér", "Bankkártya", "Előfizetés"), a bevételnél a
+    "Bevétel formája" ("Átutalás", "Készpénz"). Ez a függvény ezt olvassa ki -
+    a visszamenőleges kitöltéshez (lásd scripts/fizetesi_mod_kitoltese.py).
 
-    Ami nem ismerhető fel egyértelműen, arra NONE-t ad: egy tippelt fizetési
+    Az `engedett` szűkíti, mi jöhet ki: a BEVÉTELNÉL csak készpénz és utalás
+    értelmes (lásd BEVETEL_MODOK), kártyát nem fogadunk. Ami nem fér bele, azt
+    nem elfogadjuk félig, hanem TOVÁBBLÉPÜNK rajta - hátha egy másik mező
+    mond valami használhatót.
+
+    Ami nem ismerhető fel egyértelműen, arra None-t ad: egy tippelt fizetési
     mód a kassza egyenlegét hazudná meg, márpedig épp azért van ez a mező."""
+
+    def elfogadhato(mod: str) -> bool:
+        return engedett is None or mod in engedett
+
     for szoveg in szovegek:
         if not szoveg:
             continue
         tiszta = ekezet_nelkul(str(szoveg))
-        if tiszta in TELJES_EGYEZES_MODOK:
-            return TELJES_EGYEZES_MODOK[tiszta]
+        mod = TELJES_EGYEZES_MODOK.get(tiszta)
+        if mod is not None and elfogadhato(mod):
+            return mod
     for szoveg in szovegek:
         if not szoveg:
             continue
         tiszta = ekezet_nelkul(str(szoveg))
         for kulcsszo, mod in KULCSSZO_MODOK:
-            if kulcsszo in tiszta:
+            if kulcsszo in tiszta and elfogadhato(mod):
                 return mod
     return None
