@@ -34,19 +34,27 @@ from sqlalchemy.orm import Session
 from app.models.document_attachment import DocumentAttachment
 
 
-def szamlas_kiadas_ids(db: Session) -> set[int]:
-    """Azoknak a KIADÁSOKNAK az azonosítói, amikhez fel van töltve számla.
-
-    Egy lekérdezés, halmazba gyűjtve: soronként kérdezni ugyanezt N+1
+def _szamlas_ids(db: Session, entity_type: str) -> set[int]:
+    """Egy lekérdezés, halmazba gyűjtve: soronként kérdezni ugyanezt N+1
     lekérdezést jelentene egy olyan nézetben, ami amúgy is több száz soron fut
     végig."""
     sorok = db.scalars(
         select(DocumentAttachment.entity_id).where(
-            DocumentAttachment.entity_type == "expense",
+            DocumentAttachment.entity_type == entity_type,
             DocumentAttachment.kategoria == "szamla",
         )
     ).all()
     return {int(x) for x in sorok}
+
+
+def szamlas_kiadas_ids(db: Session) -> set[int]:
+    """Azoknak a KIADÁSOKNAK az azonosítói, amikhez fel van töltve számla."""
+    return _szamlas_ids(db, "expense")
+
+
+def szamlas_bevetel_ids(db: Session) -> set[int]:
+    """Azoknak a BEVÉTELEKNEK az azonosítói, amikhez fel van töltve számla."""
+    return _szamlas_ids(db, "revenue")
 
 
 def _van_fajl(ertek: Any) -> bool:
@@ -66,3 +74,24 @@ def van_szamla(kiadas, szamlas_ids: set[int] | None = None) -> bool:
     if szamlas_ids is not None and kiadas.id in szamlas_ids:
         return True
     return _van_fajl(getattr(kiadas, "szamla_pdf_urls", None))
+
+
+def van_szamla_bevetel(bevetel, szamlas_ids: set[int] | None = None) -> bool:
+    """Van-e SZÁMLA e mögött a bevétel mögött.
+
+    A bevétel oldalán MÁS a bizonyíték, mint a kiadásén, és ez nem
+    következetlenség, hanem a két helyzet különbsége:
+
+    - a kiadásnál a számlát MI KAPJUK, tehát a bizonyíték a fájl, amit
+      feltöltöttek;
+    - a bevételnél a számlát MI ÁLLÍTJUK KI - igaz, egy külső számlázó
+      rendszerben (lásd models/finance.Revenue). Nálunk ennek két nyoma lehet:
+      a kiállítás dátuma, vagy a feltöltött PDF. Bármelyik elég: a számla
+      attól még létezik, hogy a PDF-jét nem töltötte fel senki."""
+    if szamlas_ids is not None and bevetel.id in szamlas_ids:
+        return True
+    if getattr(bevetel, "szamla_kiallitva_datuma", None) is not None:
+        return True
+    return _van_fajl(getattr(bevetel, "szamla_filename", None)) or _van_fajl(
+        getattr(bevetel, "szamla_file_url", None)
+    )

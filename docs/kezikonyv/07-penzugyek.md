@@ -274,21 +274,51 @@ egyenleggel. Ez az a nézet, ahol egy eltérés megkereshető - ha a dobozban ne
 annyi pénz van, mint amennyit a rendszer mond, itt kell végigmenni.
 
 Ugyanaz a szerepe, mint a Notion **„KP forgalom"** adatbázisának, csak nem
-külön kézzel vezetve: a sorok a KIADÁSOKBÓL és a BEVÉTELEKBŐL állnak össze,
-tehát nem tud elcsúszni attól, amit a Pénzügyeken felvezettek. Oszlopok: dátum,
-megnevezés, típus, projektkód, be, ki, **egyenleg a sor után**, és kiadásnál a
+külön kézzel vezetve: a sorok magukból a kiadásokból és a bevételekből állnak
+össze, tehát nem tud elcsúszni attól, amit a Pénzügyeken felvezettek. Oszlopok:
+dátum, megnevezés, típus, projektkód, be, ki, **egyenleg a sor után**, és a
 számla megléte.
 
-A Notionből örökölt `KpForgalom` tábla sorai is **látszanak** a listában, a
-saját dátumuknál - de **nem mozgatják az egyenleget**, és ez ki is van írva a
-lista fölött. Miért nem? Mert nagy részük egy kiadáshoz kötődik (`expense_id`),
-tehát ugyanaz a pénzmozgás már szerepel a kiadás soraként: beszámítva kétszer
-vonódna le. A kötetlen sorokról pedig nem tudjuk, hogy egy kiadás párja-e,
-aminél csak a Notion-kapcsolat hiányzik. **Egy hamis egyenleg rosszabb, mint
-egy hiányos**, ezért inkább kiírjuk, hány ilyen sor van és mennyi - hogy
-látható legyen, mit nem számoltunk bele.
+A Notionből örökölt `KpForgalom` tábla sorai **számla nélküli BEVÉTELEK**: az a
+készpénz, ami nem számlán jött be. Egy kivétellel: ami egy kiadáshoz kötődik
+(`expense_id`), az kimarad - ugyanaz a pénzmozgás már szerepel a kiadás
+soraként, beszámítva kétszer vonódna le. Hány ilyen van, azt a lista fölött
+kiírjuk.
 
-Backend: `routes/finance.kp_naplo`. Frontend:
+#### Legális és fekete készpénz
+
+A készpénznél nem csak az számít, mennyi mozdult, hanem az is, **van-e mögötte
+számla**:
+
+- a **számlás kiadás** elszámolható költség - ez a legális oldal;
+- a **számla nélküli kiadás** nem számolható el: ez az, amit a cég
+  szempontjából „feketének" hívunk;
+- a **számla nélküli BEVÉTEL** viszont épp ezt fedezi: ami számla nélkül jött
+  be készpénzben, az számla nélkül is elkölthető.
+
+```
+fekete egyenleg = számla nélküli KIADÁS - számla nélküli BEVÉTEL
+kassza          = MINDEN készpénzes bevétel - MINDEN készpénzes kiadás
+```
+
+A két szám két külön kérdésre válaszol, és nem keverendő: a kassza az, aminek
+egyeznie kell azzal, ami fizikailag a dobozban van; a fekete egyenleg az, ami
+nincs lefedve bizonylattal. Negatív fekete egyenleg nem hiány, hanem tartalék -
+több a számla nélküli bevétel, mint a költés.
+
+Az oldal ezt négy kártyában (idei bevétel számlával / számla nélkül, idei
+kiadás összesen / ebből fekete) és egy táblázatban mutatja, ahol minden sor
+látszik **idei** és **összes** bontásban is.
+
+**A bevételnél MÁS a bizonyíték, mint a kiadásnál**, és ez nem
+következetlenség: a kiadásnál a számlát mi KAPJUK, tehát a bizonyíték a
+feltöltött fájl; a bevételnél mi ÁLLÍTJUK KI (egy külső számlázó rendszerben),
+ott a **kiállítás dátuma** vagy a feltöltött PDF is elég. A számla attól még
+létezik, hogy a PDF-jét nem töltötte fel senki.
+
+Backend: `services/kassza.py` (a teljes kép egy helyen, a kártya és a napló
+KÖZÖS számítása - két külön implementáció előbb-utóbb két külön egyenleget
+adna), `routes/finance.kp_naplo`. Frontend:
 `app/(app)/penzugyek/kp-forgalom/page.tsx`.
 
 **Mi számít számlának** (`services/bizonylat.py`)? Egy tényleges bizonylat, nem

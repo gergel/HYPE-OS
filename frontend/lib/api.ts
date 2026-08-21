@@ -1260,7 +1260,7 @@ export async function getFinanceSummary(): Promise<FinanceSummary | null> {
 }
 
 /** Egy készpénz-mozgás a KP forgalom naplóban (lásd backend
- * routes/finance.kp_naplo). */
+ * services/kassza.py). */
 export type KpNaploSor = {
   /** A FORRÁS rekord azonosítója - a `forras` mezővel együtt azonosít. */
   id: number;
@@ -1271,25 +1271,39 @@ export type KpNaploSor = {
   projektkod: string | null;
   be: number;
   ki: number;
-  /** A kassza egyenlege EZ UTÁN a sor után - csak a beleszámító soroknál. */
-  egyenleg: number | null;
-  beleszamit: boolean;
-  /** Kiadásnál: van-e mögötte számla. */
-  van_szamla: boolean | null;
+  /** A kassza egyenlege EZ UTÁN a sor után, időrendben számolva. */
+  egyenleg: number;
+  /** Van-e mögötte SZÁMLA - ez dönti el, a legális vagy a fekete oldalra
+   * kerül-e. */
+  van_szamla: boolean;
   href: string | null;
+};
+
+/** Egy időszak készpénz-képe: a négy sarok, amiből minden más kijön. */
+export type KpOsszesites = {
+  be_szamlaval: number;
+  be_szamla_nelkul: number;
+  ki_szamlaval: number;
+  ki_szamla_nelkul: number;
+  be_szamlaval_db: number;
+  be_szamla_nelkul_db: number;
+  ki_szamlaval_db: number;
+  ki_szamla_nelkul_db: number;
+  be: number;
+  ki: number;
+  egyenleg: number;
+  /** Amennyi számla nélküli költés NINCS lefedve számla nélküli bevétellel. */
+  fekete_egyenleg: number;
 };
 
 export type KpNaplo = {
   sorok: KpNaploSor[];
-  egyenleg: number;
-  osszes_be: number;
-  osszes_ki: number;
-  /** A Notionből örökölt "KP forgalom" tábla külön - NEM mozgatja az
-   * egyenleget (lásd a végpont leírását). */
-  kp_forgalom_be: number;
-  kp_forgalom_ki: number;
+  osszes: KpOsszesites;
+  idei: KpOsszesites;
+  /** Hány KP forgalom sor maradt ki, mert egy kiadáshoz kötődik. */
   kp_forgalom_kiadashoz_kotve: number;
-  kp_forgalom_kotetlen: number;
+  jeloletlen_kiadas: number;
+  jeloletlen_bevetel: number;
 };
 
 export async function getKpNaplo(): Promise<KpNaplo | null> {

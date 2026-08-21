@@ -28,6 +28,7 @@ from app.models.performance_certificate import (
 )
 from app.models.project_code import ProjectCode
 from app.services import bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
+from app.services import kassza as kassza_szolg
 from app.services import penznem as penznem_szolg
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
 from app.services.portal_storage import R2NotConfiguredError
@@ -222,113 +223,30 @@ _REVENUE_COUNTS_TOWARD_TOTALS = elszamolas.bevetel_beleszamit_sql(Revenue)
 
 
 def _kassza(db: Session, today: date, months: list[tuple[int, int]]) -> Kassza:
-    """A kassza egyenlege és havi mozgása.
+    """A kassza egyenlege és havi mozgása - a KP forgalom naplóval KÖZÖS
+    számításból (lásd services/kassza.py).
 
-    BRUTTÓBAN: a dobozban annyi pénz van, amennyit ténylegesen kifizettünk vagy
-    megkaptunk - ÁFÁ-stól. Ahol nincs bruttó, a nettóra esünk vissza (régi,
-    Notionből importált sorokon gyakran csak az egyik van meg).
-
-    Csak a MEGTÖRTÉNT mozgás számít (van fizetés dátuma): egy jövő heti
-    készpénzes kiadás még nem hiányzik a kasszából.
-
-    A "nem számít bele" jelölésű sorok (lásd _EXPENSE_COUNTS_TOWARD_TOTALS és
-    _REVENUE_COUNTS_TOWARD_TOTALS) itt is kimaradnak: ha egy tétel a Pénzügyek
-    szerint nem történt meg, akkor a kasszát sem mozgatta."""
-    penz = lambda modell: func.coalesce(modell.brutto, modell.netto, 0)  # noqa: E731
-
-    def havi(modell, mod_oszlop, feltetel):
-        sorok = db.execute(
-            select(
-                extract("year", modell.fizetes_datuma).label("y"),
-                extract("month", modell.fizetes_datuma).label("m"),
-                func.coalesce(func.sum(penz(modell)), 0).label("total"),
-            )
-            .where(
-                modell.fizetes_datuma.is_not(None),
-                fizetesi_mod.keszpenz_sql(mod_oszlop),
-                feltetel,
-            )
-            .group_by("y", "m")
-        ).all()
-        return {(int(r.y), int(r.m)): float(r.total) for r in sorok}
-
-    be_havi = havi(Revenue, Revenue.fizetes_modja, _REVENUE_COUNTS_TOWARD_TOTALS)
-    ki_havi = havi(Expense, Expense.kifizetes_modja, _EXPENSE_COUNTS_TOWARD_TOTALS)
-
-    osszes_be = sum(be_havi.values())
-    osszes_ki = sum(ki_havi.values())
-
-    # A megjelenített hónapok ELŐTTI egyenleg - onnan indul a görbe, különben a
-    # legutóbbi 12 hónap úgy nézne ki, mintha nulláról kezdenénk.
-    elso = min(months) if months else (today.year, today.month)
-    nyito = sum(o for kulcs, o in be_havi.items() if kulcs < elso) - sum(
-        o for kulcs, o in ki_havi.items() if kulcs < elso
-    )
-
-    havi_sorok: list[KasszaHavi] = []
-    fut = nyito
-    for y, m in months:
-        be = be_havi.get((y, m), 0.0)
-        ki = ki_havi.get((y, m), 0.0)
-        fut += be - ki
-        havi_sorok.append(KasszaHavi(month=f"{y:04d}-{m:02d}", be=be, ki=ki, egyenleg=fut))
-
-    # AZ IDEI KÉSZPÉNZES KIADÁSOK kettéosztva: van-e mögöttük számla.
-    #
-    # Ez itt Pythonban fut, nem SQL-ben: a "van számla" kérdés két forrásból
-    # áll össze (feltöltött csatolmány + a Notionből örökölt JSON mező), és a
-    # JSON-ban az ÜRES lista is fájlnak látszana egy `IS NOT NULL` szűrőben -
-    # lásd services/bizonylat.py. Egy év készpénzes kiadása néhány száz sor,
-    # ezt végigvenni olcsóbb, mint egy megbízhatatlan SQL-feltételt írni rá.
-    szamlas_ids = bizonylat.szamlas_kiadas_ids(db)
-    idei_keszpenzes = db.scalars(
-        select(Expense).where(
-            Expense.fizetes_datuma.is_not(None),
-            extract("year", Expense.fizetes_datuma) == today.year,
-            fizetesi_mod.keszpenz_sql(Expense.kifizetes_modja),
-            _EXPENSE_COUNTS_TOWARD_TOTALS,
-        )
-    ).all()
-    ki_szamlaval = ki_szamla_nelkul = 0.0
-    db_szamlaval = db_szamla_nelkul = 0
-    for kiadas in idei_keszpenzes:
-        # Ugyanaz az összeg, amivel a kassza is számol: BRUTTÓ, nettóra
-        # visszaesve (lásd a `penz` lambdát fentebb).
-        osszeg = float(kiadas.brutto if kiadas.brutto is not None else (kiadas.netto or 0))
-        if bizonylat.van_szamla(kiadas, szamlas_ids):
-            ki_szamlaval += osszeg
-            db_szamlaval += 1
-        else:
-            ki_szamla_nelkul += osszeg
-            db_szamla_nelkul += 1
-
-    def jeloletlen(modell, mod_oszlop, feltetel) -> int:
-        return int(
-            db.scalar(
-                select(func.count())
-                .select_from(modell)
-                .where(
-                    modell.fizetes_datuma.is_not(None),
-                    func.coalesce(func.trim(mod_oszlop), "") == "",
-                    feltetel,
-                )
-            )
-            or 0
-        )
-
+    Azért közös, mert a kettő ugyanarról a dobozról beszél: ha külön
+    számolnának, előbb-utóbb két különböző egyenleget mondanának, és a
+    kasszánál pont az a kérdés, hogy egyezik-e a szám a valósággal."""
+    kep = kassza_szolg.kep(db, today)
+    havi_sorok = [
+        KasszaHavi(month=honap, be=be, ki=ki, egyenleg=egyenleg)
+        for honap, be, ki, egyenleg in kassza_szolg.havi_bontas(kep, months)
+    ]
     return Kassza(
-        egyenleg=osszes_be - osszes_ki,
-        osszes_be=osszes_be,
-        osszes_ki=osszes_ki,
-        idei_be=sum(o for (y, _), o in be_havi.items() if y == today.year),
-        idei_ki=sum(o for (y, _), o in ki_havi.items() if y == today.year),
-        idei_ki_szamlaval=ki_szamlaval,
-        idei_ki_szamla_nelkul=ki_szamla_nelkul,
-        idei_ki_szamlaval_db=db_szamlaval,
-        idei_ki_szamla_nelkul_db=db_szamla_nelkul,
+        egyenleg=kep.egyenleg,
+        osszes_be=kep.osszes.be,
+        osszes_ki=kep.osszes.ki,
+        idei_be=kep.idei.be,
+        idei_ki=kep.idei.ki,
+        idei_ki_szamlaval=kep.idei.ki_szamlaval,
+        idei_ki_szamla_nelkul=kep.idei.ki_szamla_nelkul,
+        idei_ki_szamlaval_db=kep.idei.ki_szamlaval_db,
+        idei_ki_szamla_nelkul_db=kep.idei.ki_szamla_nelkul_db,
         havi=havi_sorok,
-        jeloletlen_kiadas=jeloletlen(Expense, Expense.kifizetes_modja, _EXPENSE_COUNTS_TOWARD_TOTALS),
-        jeloletlen_bevetel=jeloletlen(Revenue, Revenue.fizetes_modja, _REVENUE_COUNTS_TOWARD_TOTALS),
+        jeloletlen_kiadas=kep.jeloletlen_kiadas,
+        jeloletlen_bevetel=kep.jeloletlen_bevetel,
     )
 
 
@@ -361,171 +279,97 @@ class KpNaploSor(BaseModel):
     #: lehet, és ránézésre látszik, merre mozdult a pénz.
     be: float = 0
     ki: float = 0
-    #: A kassza egyenlege EZ UTÁN a sor után. Csak a beleszámító soroknál van
-    #: értelme (lásd `beleszamit`), a többinél None.
-    egyenleg: float | None = None
-    #: Beleszámít-e a kassza egyenlegébe. A Notionből örökölt "KP forgalom"
-    #: sorok NEM (lásd a végpont leírását).
-    beleszamit: bool = True
-    #: Kiadásnál: van-e mögötte számla (lásd services/bizonylat.py).
-    van_szamla: bool | None = None
+    #: A kassza egyenlege EZ UTÁN a sor után, időrendben számolva.
+    egyenleg: float = 0
+    #: Van-e mögötte SZÁMLA. Ez dönti el, melyik oldalra kerül a legális/fekete
+    #: bontásban (lásd services/kassza.py).
+    van_szamla: bool = False
     #: Hova visz a sor a felületen.
     href: str | None = None
 
 
+class KpOsszesites(BaseModel):
+    """Egy időszak készpénz-képe - a négy sarok, amiből minden más kijön."""
+
+    be_szamlaval: float = 0
+    be_szamla_nelkul: float = 0
+    ki_szamlaval: float = 0
+    ki_szamla_nelkul: float = 0
+    be_szamlaval_db: int = 0
+    be_szamla_nelkul_db: int = 0
+    ki_szamlaval_db: int = 0
+    ki_szamla_nelkul_db: int = 0
+    be: float = 0
+    ki: float = 0
+    egyenleg: float = 0
+    #: Amennyi számla nélküli költés NINCS lefedve számla nélküli bevétellel.
+    fekete_egyenleg: float = 0
+
+
 class KpNaplo(BaseModel):
-    """A teljes készpénz-forgalom egy listában (lásd a végpont leírását)."""
+    """A teljes készpénz-forgalom (lásd a végpont leírását)."""
 
     sorok: list[KpNaploSor]
-    egyenleg: float
-    osszes_be: float
-    osszes_ki: float
-    #: A Notionből örökölt "KP forgalom" tábla külön összegezve - ezek NEM
-    #: mozgatják a fenti egyenleget.
-    kp_forgalom_be: float = 0
-    kp_forgalom_ki: float = 0
-    #: Hány KP forgalom sor kötődik egy konkrét kiadáshoz. Ezek a kiadás
-    #: soraként már szerepelnek a naplóban, tehát külön beszámítva duplán
-    #: számítanának.
+    osszes: KpOsszesites
+    idei: KpOsszesites
+    #: Hány KP forgalom sor maradt ki, mert egy kiadáshoz kötődik.
     kp_forgalom_kiadashoz_kotve: int = 0
-    kp_forgalom_kotetlen: int = 0
+    #: Hány kifizetett tételen nincs megjelölve a fizetési mód - amíg ez nem
+    #: nulla, az egyenleg csak közelítés.
+    jeloletlen_kiadas: int = 0
+    jeloletlen_bevetel: int = 0
+
+
+def _osszesites(o) -> KpOsszesites:
+    return KpOsszesites(
+        be_szamlaval=o.be_szamlaval,
+        be_szamla_nelkul=o.be_szamla_nelkul,
+        ki_szamlaval=o.ki_szamlaval,
+        ki_szamla_nelkul=o.ki_szamla_nelkul,
+        be_szamlaval_db=o.be_szamlaval_db,
+        be_szamla_nelkul_db=o.be_szamla_nelkul_db,
+        ki_szamlaval_db=o.ki_szamlaval_db,
+        ki_szamla_nelkul_db=o.ki_szamla_nelkul_db,
+        be=o.be,
+        ki=o.ki,
+        egyenleg=o.egyenleg,
+        fekete_egyenleg=o.fekete_egyenleg,
+    )
 
 
 @summary_router.get("/kp-naplo", response_model=KpNaplo)
 def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
-    """MINDEN készpénz-mozgás egy listában, időrendben, futó egyenleggel.
+    """MINDEN készpénz-mozgás egy listában, időrendben, futó egyenleggel - és a
+    LEGÁLIS/FEKETE bontás.
 
     Ez a kassza "főkönyve": a Pénzügyek kártyáján csak az EGYENLEG látszik, itt
     viszont soronként az is, MIBŐL jött össze - és ez az a nézet, ahol egy
     eltérés megkereshető.
 
-    Három forrásból áll össze:
-
-    1. a **készpénzes bevételek** (Revenue, `fizetes_modja` készpénz),
-    2. a **készpénzes kiadások** (Expense, `kifizetes_modja` készpénz),
-    3. a Notionből örökölt **"KP forgalom"** tábla (`KpForgalom`).
-
-    Az első kettő adja az egyenleget - ugyanaz a szabály, mint a kassza
-    kártyán (lásd `_kassza`): csak a MEGTÖRTÉNT mozgás (van fizetési dátum),
-    BRUTTÓBAN, és a "nem számít bele" jelölésű sorok nélkül.
-
-    A HARMADIK CSAK LÁTSZIK, de nem számít bele - szándékosan. A KP forgalom
-    sorok nagy része egy kiadáshoz kötődik (`expense_id`), tehát ugyanaz a
-    pénzmozgás már szerepel a kiadás soraként: beszámítva kétszer vonódna le.
-    A kötetlen sorokról pedig nem tudjuk, hogy egy kiadás párja-e, aminél
-    csak a Notion-relation hiányzik. Egy hamis egyenleg rosszabb, mint egy
-    hiányos: a lista alján ezért kiírjuk, hány ilyen sor van és mennyi, hogy
-    látható legyen, mit nem számoltunk bele."""
-    szamlas_ids = bizonylat.szamlas_kiadas_ids(db)
-    penz = lambda sor: float(sor.brutto if sor.brutto is not None else (sor.netto or 0))  # noqa: E731
-
-    sorok: list[KpNaploSor] = []
-
-    bevetelek = db.scalars(
-        select(Revenue)
-        .options(selectinload(Revenue.project_code))
-        .where(
-            Revenue.fizetes_datuma.is_not(None),
-            fizetesi_mod.keszpenz_sql(Revenue.fizetes_modja),
-            _REVENUE_COUNTS_TOWARD_TOTALS,
-        )
-    ).all()
-    for b in bevetelek:
-        pk = b.project_code
-        sorok.append(
-            KpNaploSor(
-                id=b.id,
-                forras="bevetel",
-                datum=b.fizetes_datuma,
-                megnevezes=b.nev or (pk.project_nev if pk else None) or "Bevétel",
-                projektkod=pk.projektkod if pk else None,
-                be=penz(b),
-                href=f"/projektek/project-kodok/{b.project_code_id}" if b.project_code_id else None,
-            )
-        )
-
-    kiadasok = db.scalars(
-        select(Expense)
-        .options(selectinload(Expense.project_code))
-        .where(
-            Expense.fizetes_datuma.is_not(None),
-            fizetesi_mod.keszpenz_sql(Expense.kifizetes_modja),
-            _EXPENSE_COUNTS_TOWARD_TOTALS,
-        )
-    ).all()
-    for k in kiadasok:
-        pk = k.project_code
-        sorok.append(
-            KpNaploSor(
-                id=k.id,
-                forras="kiadas",
-                datum=k.fizetes_datuma,
-                megnevezes=k.megnevezes,
-                projektkod=pk.projektkod if pk else None,
-                ki=penz(k),
-                van_szamla=bizonylat.van_szamla(k, szamlas_ids),
-                href="/penzugyek",
-            )
-        )
-
-    # Időrendben (a dátum nélküli sor a végére) - a futó egyenleg csak így
-    # értelmes. A felület fordítva, a legfrissebbel elöl mutatja, de a számot
-    # innen viszi: a "sor utáni egyenleg" a sorhoz tartozik, nem a sorrendhez.
-    def idorendben(s: KpNaploSor) -> tuple:
-        return (s.datum is None, s.datum or date.min, s.forras, s.id)
-
-    sorok.sort(key=idorendben)
-    fut = 0.0
-    for s in sorok:
-        fut += s.be - s.ki
-        s.egyenleg = fut
-
-    osszes_be = sum(s.be for s in sorok)
-    osszes_ki = sum(s.ki for s in sorok)
-
-    # A KP forgalom sorok egyenleg nélkül, de a SAJÁT dátumuk szerinti helyükön:
-    # egy napló, aminek a dátum-oszlopa ugrál, hibásnak látszik.
-    forgalmak = db.scalars(select(KpForgalom)).all()
-    kp_be = kp_ki = 0.0
-    kotve = kotetlen = 0
-    for f in forgalmak:
-        # A devizás sort a Notion "Forintban" mezője adja; ha az sincs, az
-        # összeget nem tesszük forintnak (nagyságrendi hiba lenne).
-        forintban = f.forintban if f.forintban is not None else f.forintban_notion
-        osszeg = float(forintban or 0)
-        ki_e = (f.forgalom or "").strip().lower().startswith("kiad")
-        if ki_e:
-            kp_ki += osszeg
-        else:
-            kp_be += osszeg
-        if f.expense_id is not None:
-            kotve += 1
-        else:
-            kotetlen += 1
-        sorok.append(
-            KpNaploSor(
-                id=f.id,
-                forras="kp_forgalom",
-                datum=f.kiadas_datuma,
-                megnevezes=f.megnevezes or "KP forgalom",
-                be=0 if ki_e else osszeg,
-                ki=osszeg if ki_e else 0,
-                beleszamit=False,
-                href="/penzugyek" if f.expense_id else None,
-            )
-        )
-
-    sorok.sort(key=idorendben)
-
+    A számítás a kassza-kártyáéval KÖZÖS (lásd services/kassza.py), hogy a két
+    felület ne mondhasson mást ugyanarról a dobozról."""
+    kep = kassza_szolg.kep(db)
     return KpNaplo(
-        sorok=sorok,
-        egyenleg=osszes_be - osszes_ki,
-        osszes_be=osszes_be,
-        osszes_ki=osszes_ki,
-        kp_forgalom_be=kp_be,
-        kp_forgalom_ki=kp_ki,
-        kp_forgalom_kiadashoz_kotve=kotve,
-        kp_forgalom_kotetlen=kotetlen,
+        sorok=[
+            KpNaploSor(
+                id=s.id,
+                forras=s.forras,
+                datum=s.datum,
+                megnevezes=s.megnevezes,
+                projektkod=s.projektkod,
+                be=s.be,
+                ki=s.ki,
+                egyenleg=s.egyenleg,
+                van_szamla=s.van_szamla,
+                href=s.href,
+            )
+            for s in kep.sorok
+        ],
+        osszes=_osszesites(kep.osszes),
+        idei=_osszesites(kep.idei),
+        kp_forgalom_kiadashoz_kotve=kep.kp_forgalom_kiadashoz_kotve,
+        jeloletlen_kiadas=kep.jeloletlen_kiadas,
+        jeloletlen_bevetel=kep.jeloletlen_bevetel,
     )
 
 
