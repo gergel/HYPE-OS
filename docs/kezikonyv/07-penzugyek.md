@@ -375,9 +375,22 @@ egy elveszett leképezés miatt egy sor kétszer jött át, a mi táblánk több
 áll, mint a Notioné. Ilyenkor a legtisztább nulláról újraépíteni:
 
 ```
-python scripts/kp_forgalom_ujraimport.py                    # csak megmutatja
+python scripts/kp_forgalom_ujraimport.py                            # csak megmutatja
 NOTION_API_KEY=... python scripts/kp_forgalom_ujraimport.py --vegrehajt
+python scripts/kp_forgalom_ujraimport.py --vegrehajt --csak-torles  # csak üríti
 ```
+
+A `--csak-torles` nem importál újra (Notion-kulcs sem kell hozzá): akkor jó, ha
+a tábla tartalma használhatatlan, és előbb tiszta lappal akarunk indulni. Az
+importot bármikor le lehet futtatni utána
+(`notion_import.py --only KpForgalom`).
+
+**AMI ETTŐL MÉG LÁTSZIK a KP forgalom oldalon:** a készpénzesnek jelölt
+KIADÁSOK és BEVÉTELEK. Azok nem ebben a táblában vannak, hanem a
+Kiadások/Bevételek közt - a script nem nyúl hozzájuk, mert azok a rendszer élő
+pénzügyi tételei. Ha az oldalt teljesen nullán akarod látni, a kiadásokról és
+bevételekről a KÉSZPÉNZ fizetési módot kell levenni (vagy törölni a
+tételeket) - az viszont már a Pénzügyek valódi adatait érinti.
 
 Törli az összes `kp_forgalmak` sort **és a hozzájuk tartozó
 Notion-leképezést** (`notion_import_map`) - az utóbbi nélkül az újraimport a már

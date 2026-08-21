@@ -21,9 +21,20 @@ Használat a backend/ könyvtárból:
 
     python scripts/kp_forgalom_ujraimport.py                    # csak megmutatja
     NOTION_API_KEY=... python scripts/kp_forgalom_ujraimport.py --vegrehajt
+    python scripts/kp_forgalom_ujraimport.py --vegrehajt --csak-torles
+
+A harmadik alak CSAK ÜRÍT: törli a táblát, és nem importál újra. Ilyenkor
+Notion-kulcs sem kell. Erre akkor van szükség, amikor a tábla tartalma
+használhatatlan, és előbb tiszta lappal akarunk indulni - az import bármikor
+lefuttatható utána (`notion_import.py --only KpForgalom`).
 
 Alapból PRÓBA: kiírja, mit törölne, és nem nyúl semmihez. A törlés
 VISSZAVONHATATLAN, ezért külön kapcsoló kell hozzá.
+
+AMI ETTŐL MÉG LÁTSZIK a KP forgalom oldalon: a készpénzesnek jelölt KIADÁSOK
+és BEVÉTELEK. Azok nem ebben a táblában vannak, hanem a Kiadások/Bevételek
+közt - ez a script nem nyúl hozzájuk, mert azok a rendszer élő pénzügyi
+tételei (lásd services/kassza.py).
 
 FIGYELEM: ami nálunk KÉZZEL készült vagy kézzel lett javítva, azt is elviszi -
 a script ezért külön megszámolja és kilistázza ezeket, mielőtt bármit törölne.
@@ -96,6 +107,7 @@ def kezi_sorok(db, sorok: list[KpForgalom]) -> list[KpForgalom]:
 
 def main() -> int:
     vegrehajt = "--vegrehajt" in sys.argv
+    csak_torles = "--csak-torles" in sys.argv
     db = SessionLocal()
     try:
         sorok = allapot(db, "MOST")
@@ -114,9 +126,11 @@ def main() -> int:
         )
         if not vegrehajt:
             print(
-                f"PRÓBA: {len(sorok)} sor és a hozzájuk tartozó Notion-leképezések törlődnének, "
-                "majd újraindulna a KP forgalom import.\n"
-                "A tényleges futtatás: NOTION_API_KEY=... python scripts/kp_forgalom_ujraimport.py --vegrehajt"
+                f"PRÓBA: {len(sorok)} sor és a hozzájuk tartozó Notion-leképezések törlődnének"
+                + (".\n" if csak_torles else ", majd újraindulna a KP forgalom import.\n")
+                + "A tényleges futtatás:\n"
+                "  csak ürítés:  python scripts/kp_forgalom_ujraimport.py --vegrehajt --csak-torles\n"
+                "  újraimporttal: NOTION_API_KEY=... python scripts/kp_forgalom_ujraimport.py --vegrehajt"
             )
             return 0
 
@@ -128,6 +142,17 @@ def main() -> int:
         ).rowcount
         db.commit()
         print(f"TÖRÖLVE: {torolt} sor, {torolt_lekepezes} Notion-leképezés (volt leképezés: {bool(lekepezes_db)}).\n")
+
+        if csak_torles:
+            allapot(db, "ÜRÍTÉS UTÁN")
+            print(
+                "A KP forgalom tábla üres. A KP forgalom oldalon ettől még látszanak a\n"
+                "készpénzesnek jelölt KIADÁSOK és BEVÉTELEK - azok a Kiadások/Bevételek közt\n"
+                "vannak, nem ebben a táblában.\n\n"
+                "Az import bármikor lefuttatható:\n"
+                "  NOTION_API_KEY=... python scripts/notion_import.py --only KpForgalom"
+            )
+            return 0
 
         # 2. ÚJRAIMPORT - ugyanaz, mint notion_import.py --only KpForgalom.
         run_import(db, [ENTITAS])
