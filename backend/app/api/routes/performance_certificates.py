@@ -448,23 +448,21 @@ def _draft_info(c: PerformanceCertificate | None) -> DraftInfo | None:
     )
 
 
-def _lefedettek_info(project: Project, csoport: SzamlazoCsoport) -> list[TetelInfo]:
-    """A fél által lefedett stábtagok ezen a projekten, TIG-tétel alakban - ez
-    a piszkozat alapértelmezett tétellistája."""
-    return [
-        TetelInfo(
-            project_id=project.id,
-            project_nev=project.nev,
-            projektkod=project.projektkod_szoveg,
-            forgatas_datuma=project.forgatas_datuma,
-            employee_id=tag.id,
-            employee_nev=tag.full_name,
-        )
-        for tag in csoport.tagok
-    ]
+def _lefedettek_info(
+    db: Session, project: Project, csoport: SzamlazoCsoport, szerzodes: Contract | None = None
+) -> list[TetelInfo]:
+    """A piszkozat alapértelmezett tétellistája: a fél által lefedett stábtagok
+    ezen a projekten - és ha az eseti szerződése több forgatásra szól, azok is
+    (lásd _szerzodes_szerinti_parok).
+
+    A felület EBBŐL indul: ami itt benne van, az alapból ki van pipálva. Ezért
+    kell ugyanannak lennie, mint amit a szerver a piszkozatra tesz - különben
+    az első mentés levenné a többi napot a papírról."""
+    return [_tetel_info_parbol(p, tag) for p, tag in _szerzodes_szerinti_parok(db, project, csoport, szerzodes)]
 
 
 def _pending_info(
+    db: Session,
     project: Project,
     csoport: SzamlazoCsoport,
     existing: PerformanceCertificate | None,
@@ -476,7 +474,7 @@ def _pending_info(
         szamlazo=fel.kulcs,
         full_name=fel.nev,
         cimke=csoport.cimke(),
-        lefedettek=_lefedettek_info(project, csoport),
+        lefedettek=_lefedettek_info(db, project, csoport, szerzodes),
         vallalkozas_id=fel.vallalkozas.id if fel.vallalkozas else None,
         email=fel.email,
         ceg_neve=fel.ceg_neve,
@@ -518,10 +516,10 @@ def get_pending_for_project(project_id: int, db: Session = Depends(get_db), _use
         teljesites_szoveg_alap=_projekt_teljesites_szoveg(project),
         tig_ready=tig_ready,
         pending=[
-            _pending_info(project, csoport, existing, szerzodesek.get(csoport.kulcs))
+            _pending_info(db, project, csoport, existing, szerzodesek.get(csoport.kulcs))
             for csoport, existing in pending
         ],
-        szerzodesre_varo=[_pending_info(project, csoport, existing) for csoport, existing in varakozok],
+        szerzodesre_varo=[_pending_info(db, project, csoport, existing) for csoport, existing in varakozok],
     )
 
 
@@ -595,6 +593,57 @@ def _szamlazo_szuro(fel: SzamlazoFel):
     return (PerformanceCertificate.employee_id == fel.employee.id) & PerformanceCertificate.vallalkozas_id.is_(None)
 
 
+def nyitott_munkak(db: Session, fel: SzamlazoFel, project_ids: set[int] | None = None) -> list[tuple[Project, Employee]]:
+    """(projekt, ember) munkák, amiket EZ a fél számláz, és amikről még nincs
+    TIG - vagyis amik ráTEHETŐK egy papírra.
+
+    Három szűrő van rajta, és mindhárom kell:
+
+    - csak DISZPÓZOTT projekt (a papírozás onnantól van napirenden);
+    - a félnek a projekten már megvan a szerződéses háttere - és csak az ÖVÉ
+      számít: a többi stábtag hiányzó szerződése nem tartja vissza az ő
+      tételeit;
+    - amiről már szól egy TIG, az kimarad: egy munkát csak egy papír igazolhat.
+
+    A `project_ids` szűkítéssel ugyanez kérdezhető egy adott projekthalmazra -
+    ezt használja a szerződés szerinti előtöltés (lásd
+    _szerzodes_szerinti_parok)."""
+    q = db.query(Project).filter(Project.diszpo == "Kiküldve")
+    if project_ids is not None:
+        if not project_ids:
+            return []
+        q = q.filter(Project.id.in_(project_ids))
+    projects = papirozas_hatokor.papirozando_projektek(
+        q.options(selectinload(Project.crew), selectinload(Project.project_code)).all()
+    )
+    if not projects:
+        return []
+    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, projects)
+    ember_fedettseg, _ = _load_tig_lookup(db, {p.id for p in projects})
+
+    parok: list[tuple[Project, Employee]] = []
+    for p in projects:
+        for csoport in tig_keszitheto_csoportok(p, felulirasok, keretszerzodesek, project_contracts):
+            if csoport.kulcs != fel.kulcs:
+                continue
+            for tag in csoport.tagok:
+                if (p.id, tag.id) in ember_fedettseg:
+                    continue
+                parok.append((p, tag))
+    return parok
+
+
+def _tetel_info_parbol(p: Project, tag: Employee) -> TetelInfo:
+    return TetelInfo(
+        project_id=p.id,
+        project_nev=p.nev,
+        projektkod=p.projektkod_szoveg,
+        forgatas_datuma=p.forgatas_datuma,
+        employee_id=tag.id,
+        employee_nev=tag.full_name,
+    )
+
+
 @router.get("/{project_id}/{szamlazo_kulcs}/nyitott-tetelek", response_model=list[TetelInfo])
 def list_nyitott_tetelek(
     project_id: int,
@@ -616,38 +665,33 @@ def list_nyitott_tetelek(
     fel = szamlazo.feloldas(db, szamlazo_kulcs)
     if fel is None:
         raise HTTPException(status_code=404, detail="A számlázó fél nem található")
-
-    projects = papirozas_hatokor.papirozando_projektek(
-        db.query(Project)
-        .filter(Project.diszpo == "Kiküldve")
-        .options(selectinload(Project.crew), selectinload(Project.project_code))
-        .all()
-    )
-    keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, projects)
-    ember_fedettseg, _ = _load_tig_lookup(db, {p.id for p in projects})
-
-    eredmeny: list[TetelInfo] = []
-    for p in projects:
-        # Csak az a kérdés, hogy EZ a fél rendben van-e a projekten - a többiek
-        # hiányzó szerződése nem tartja vissza az ő tételeit.
-        for csoport in tig_keszitheto_csoportok(p, felulirasok, keretszerzodesek, project_contracts):
-            if csoport.kulcs != fel.kulcs:
-                continue
-            for tag in csoport.tagok:
-                if (p.id, tag.id) in ember_fedettseg:
-                    continue
-                eredmeny.append(
-                    TetelInfo(
-                        project_id=p.id,
-                        project_nev=p.nev,
-                        projektkod=p.projektkod_szoveg,
-                        forgatas_datuma=p.forgatas_datuma,
-                        employee_id=tag.id,
-                        employee_nev=tag.full_name,
-                    )
-                )
+    eredmeny = [_tetel_info_parbol(p, tag) for p, tag in nyitott_munkak(db, fel)]
     eredmeny.sort(key=lambda t: (t.forgatas_datuma or date.min, t.project_id, t.employee_id), reverse=True)
     return eredmeny
+
+
+def _szerzodes_szerinti_parok(
+    db: Session, project: Project, csoport: SzamlazoCsoport, szerzodes: Contract | None
+) -> list[tuple[Project, Employee]]:
+    """MIT fedjen ALAPBÓL a TIG: a projekt saját stábtagjait - és ha a fél
+    ESETI SZERZŐDÉSE több forgatásra szól, akkor azokat is.
+
+    Ha egyszer kimondtuk, hogy ez a néhány forgatás EGY szerződés, akkor a TIG
+    is egy, és utána a SZÁMLA is egy: egy feltöltés, egy határidő, egy
+    "kifizetve" - mindegyik érintett forgatás oldalán ugyanaz az egy sor (lásd
+    services/papir_fedettseg.py). Enélkül a szerződés összevont volt, a TIG
+    viszont projektenként külön indult, és a végén annyi számlát kellett
+    feltölteni, ahány nap - pedig a megbízott egyet állított ki az egészről.
+
+    Ami a szerződésen rajta van, de közben MÁS papírra került (vagy már nem ez
+    a fél számlázza), az kimarad: az előtöltés javaslat, nem felülírás (lásd
+    nyitott_munkak). A tételek a felületen ki-be pipálhatók."""
+    parok: list[tuple[Project, Employee]] = [(project, tag) for tag in csoport.tagok]
+    if szerzodes is None:
+        return parok
+    mas_projektek = {t.project_id for t in szerzodes.tetelek} - {project.id}
+    parok.extend(nyitott_munkak(db, csoport.fel, mas_projektek))
+    return parok
 
 
 def _teljesites_datumokbol(cert: PerformanceCertificate) -> str:
@@ -710,7 +754,15 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
     # írásakor LEBESZÉLT díjból jön - különben pont a keretszerződéseseknél
     # maradna üresen a mező, pedig ott is meg volt beszélve, mennyiért vállalja
     # (lásd services/megbeszelt_dij.py).
+    dijak_projektenkent: dict[int, dict[int, float]] = {}
+
+    def _dij(project_id: int, employee_id: int):
+        if project_id not in dijak_projektenkent:
+            dijak_projektenkent[project_id] = megbeszelt_dij.dijak_a_projekten(db, project_id)
+        return dijak_projektenkent[project_id].get(employee_id)
+
     dijak = megbeszelt_dij.dijak_a_projekten(db, project.id)
+    dijak_projektenkent[project.id] = dijak
     tag_idk = [t.id for t in csoport.tagok]
 
     draft = PerformanceCertificate(
@@ -729,19 +781,21 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
     )
     db.add(draft)
     db.flush()
-    # Alapból pontosan azt fedi, amiért ezen a projekten ő számláz - a
-    # tételösszegeket is a szerződésről hozva, ahol ott már megadták.
+    # Alapból azt fedi, amiért ezen a projekten ő számláz - ÉS a szerződése
+    # többi forgatását is, ha összevont papírról van szó (lásd
+    # _szerzodes_szerinti_parok). A tételösszegek a szerződésről jönnek, ahol
+    # ott már megadták őket.
     szerzodes_tetelei = (
         {(t.project_id, t.employee_id): t for t in szerzodes.tetelek} if szerzodes is not None else {}
     )
-    for tag in csoport.tagok:
-        forras = szerzodes_tetelei.get((project.id, tag.id))
+    for p, tag in _szerzodes_szerinti_parok(db, project, csoport, szerzodes):
+        forras = szerzodes_tetelei.get((p.id, tag.id))
         db.add(
             PerformanceCertificateTetel(
                 certificate_id=draft.id,
-                project_id=project.id,
+                project_id=p.id,
                 employee_id=tag.id,
-                netto_osszeg=(forras.netto_osszeg if forras is not None else None) or dijak.get(tag.id),
+                netto_osszeg=(forras.netto_osszeg if forras is not None else None) or _dij(p.id, tag.id),
                 megnevezes=forras.megnevezes if forras is not None else None,
             )
         )

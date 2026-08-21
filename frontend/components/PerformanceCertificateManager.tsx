@@ -103,6 +103,9 @@ export function PerformanceCertificateManager({
 
   const selectedEmployee = pending.find((p) => p.szamlazo === openId) ?? null;
   const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
+  // Hány FORGATÁSRA szól a fél eseti szerződése. Ha többre, a TIG is mindre
+  // szól alapból - és akkor a végén a számla is egy lesz az egészre.
+  const szerzodesNapok = new Set((selectedEmployee?.szerzodes?.tetelek ?? []).map((t) => t.project_id)).size;
 
   // A nyitott tételeket a fél kiválasztásakor kérjük le - más projektek
   // munkái csak a szerveren láthatók (lásd getNyitottTigTetelek).
@@ -472,7 +475,15 @@ export function PerformanceCertificateManager({
               onOsszeg={(kulcs, ertek) => setOsszegek((elozo) => ({ ...elozo, [kulcs]: ertek }))}
               fejOsszeg={form.netto_osszeg}
               cim="Mit igazol ez a TIG?"
-              leiras="Pipáld ki, kinek a munkája kerül erre az egy igazolásra. Más projekt munkája is rátehető, ha egy számlán érkezik. A tételenkénti összeg elhagyható – ha nem tudható, mi mennyibe került, elég a fenti nettó összeg."
+              // Ha a SZERZŐDÉS több forgatásra szól, a TIG alapból ugyanazokra
+              // van kipipálva (lásd backend _szerzodes_szerinti_parok) - ezt ki
+              // is mondjuk, mert különben úgy tűnne, hogy véletlenül került rá
+              // a többi nap. Innentől egy TIG-hez egy számla tartozik.
+              leiras={
+                szerzodesNapok > 1
+                  ? `A szerződés ${szerzodesNapok} forgatásra szól, ezért alapból mind ki van pipálva: egy igazolás készül róluk, és utána a számlát is elég egyszer feltölteni. Ha mégis külön kell, vedd ki a pipát. A tételenkénti összeg elhagyható – ha nem tudható, mi mennyibe került, elég a fenti nettó összeg.`
+                  : "Pipáld ki, kinek a munkája kerül erre az egy igazolásra. Más projekt munkája is rátehető, ha egy számlán érkezik. A tételenkénti összeg elhagyható – ha nem tudható, mi mennyibe került, elég a fenti nettó összeg."
+              }
             />
             <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-border pt-4">
               <button

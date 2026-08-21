@@ -170,6 +170,26 @@ készült papír, tehát nincs is mit átemelni. Ha egy félnek több szerződé
 a projektet (egy elrontott és egy javított), a legutóbbit vesszük
 (`subcontractor_contracts.eseti_szerzodesek_a_projekten`).
 
+#### A LEFEDETTSÉGET is örökli - és onnan a számla is egy
+
+Nem csak az adatok jönnek a szerződésből, hanem az is, **mire szól a papír**:
+ha az eseti szerződés három forgatásra köttetett, a TIG is alapból mindháromra
+van kipipálva (`_szerzodes_szerinti_parok`). Ez a láncszem hiányzott: a
+szerződés összevont volt, a TIG viszont projektenként külön indult, és a végén
+annyi számlát kellett feltölteni, ahány nap - pedig a megbízott egyet állított
+ki az egészről.
+
+Így egy döntés végigfut a láncon: **egy szerződés → egy TIG → egy számla**. A
+feltöltés, a fizetési határidő és a "kifizetve" jelölés mindegyik érintett
+forgatás oldalán ugyanaz az egy sor, és egy jelölés mindet lezárja (lásd
+`services/papir_fedettseg.py`).
+
+Az öröklés **javaslat, nem felülírás**: ami a szerződésen rajta van, de közben
+más papírra került - vagy már nem ez a fél számlázza -, az kimarad
+(`nyitott_munkak`), a tételek pedig a felületen ki-be pipálhatók. Az űrlap ki is
+írja, hogy a szerződés hány forgatásra szól, hogy ne tűnjön véletlennek a többi
+nap.
+
 ### A kétlépéses életciklus
 
 Szerződésnél és TIG-nél azonos, a régi Notion-os "Adatok átemelése" →
