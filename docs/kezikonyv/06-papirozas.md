@@ -477,6 +477,17 @@ néhány munka a kérdés: „melyikről nincs papírunk, és tényleg nem is ke
 A szerződés és a TIG külön szűrő, mert külön is szokás kihagyni őket - keret
 alatt az eseti szerződés marad el, egy hosszú együttműködésnél inkább a TIG.
 
+**Ami a szűrőbe NEM kerül bele: ahol számla sincs.** Ha a számlát is kihagytuk,
+ha az egész munka papír nélkül van elszámolva, vagy ha az esemény elmaradt
+(`services/megrendeloi_szamla.szamlat_varunk` → `ProjectCode.szamla_kell`),
+akkor a hiányzó szerződés és TIG nem elmaradás, hanem **következmény**: nincs
+is mihez elkészíteni őket, és az okuk indoklással ott áll a projektkódon. Ha
+ezek is felkerülnének a listára, a szűrő pont a lényegét veszítené el - a
+néhány valódi hiányt elfedné a sok, már megmagyarázott eset.
+
+A **jelző** ettől még kiírja rájuk is, hogy a papír kihagyott: az tény, és a
+sorra nézve is látszania kell. Csak nem *találat*.
+
 ### A harmadik lépés: a SZÁMLA (határidő → kifizetve → bevétel)
 
 A szerződés és a TIG után jön a pénz. A projektkód adatlapján a "3. Számla"

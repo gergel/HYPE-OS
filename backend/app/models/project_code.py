@@ -269,6 +269,18 @@ class ProjectCode(TimestampMixin, Base):
 
         return papirt_igenyel(self)
 
+    @property
+    def szamla_kell(self) -> bool:
+        """Lesz-e SZÁMLA erről a munkáról (lásd
+        services/megrendeloi_szamla.szamlat_varunk).
+
+        Nem csak a számla-lépés kérdése: ahol nincs számla, ott a kihagyott
+        szerződés és TIG sem hiányosság, hanem következmény - nincs is mihez
+        elkészíteni őket."""
+        from app.services.megrendeloi_szamla import szamlat_varunk
+
+        return szamlat_varunk(self)
+
     @staticmethod
     def _van_kesz_papir(papirok: list) -> bool:
         from app.models.megrendeloi_papir import papir_kesz

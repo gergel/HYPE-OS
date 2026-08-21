@@ -113,19 +113,33 @@ def _osszeg(pk: ProjectCode) -> tuple[float | None, float | None]:
     return projektkod_osszeg.szamlazott_osszeg(pk)
 
 
+def szamlat_varunk(pk: ProjectCode) -> bool:
+    """Lesz-e egyáltalán SZÁMLA erről a munkáról?
+
+    Három okból lehet nem: mert kimondtuk (`szamla_kihagyva`), mert az egész
+    munka papír nélkül van elszámolva (`papir_nelkul` - nincs szerződés, nincs
+    TIG, nincs számla), vagy mert az esemény ELMARADT (nem történt meg, tehát
+    nincs miről számlázni).
+
+    Ez a kérdés több helyen dönt, ezért áll egy helyen:
+
+    - nincs fizetési határidő és nincs kifizetési dátum (lásd lentebb) - egy
+      nem létező számlának nincs határideje, és egy kitalált dátum rosszabb,
+      mint a hiánya;
+    - a KIHAGYOTT papír itt nem hiányosság: ha nincs számla, nincs is mihez
+      szerződést és TIG-et készíteni, tehát azok kihagyása következmény, nem
+      elmaradás. A projektkód-lista "kihagyott papír" szűrője ezért ezeket
+      nem hozza fel (lásd frontend components/ProjektkodPapirSzuro.tsx)."""
+    return not (pk.szamla_kihagyva or pk.papir_nelkul or pk.elmaradt)
+
+
 def _hatarido_kell(pk: ProjectCode) -> bool:
     """Kell-e fizetési határidő a kifizetés jelöléséhez?
 
     Alapból IGEN: a határidő az egyetlen dolog, amiből látszik, hogy egy még
-    ki nem fizetett számla késik-e.
-
-    NEM kell viszont ott, ahol nincs is számla: mert kimondtuk
-    (szamla_kihagyva), mert az egész munka papír nélkül van elszámolva
-    (papir_nelkul - nincs szerződés, nincs TIG, nincs számla), vagy mert az
-    esemény ELMARADT (nem történt meg, tehát nincs miről számlázni).
-    Egy nem létező számlának nincs határideje, és egy kitalált dátum
-    rosszabb, mint a hiánya."""
-    return not (pk.szamla_kihagyva or pk.papir_nelkul or pk.elmaradt)
+    ki nem fizetett számla késik-e. Ahol viszont számlát sem várunk, ott nem
+    (lásd szamlat_varunk)."""
+    return szamlat_varunk(pk)
 
 
 def _kifizetes_datum_kell(pk: ProjectCode) -> bool:

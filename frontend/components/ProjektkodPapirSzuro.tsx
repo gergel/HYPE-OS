@@ -14,7 +14,14 @@ import type { ProjectCode } from "@/lib/api";
  * egyesével, az adatlapokat megnyitva lehetne végigjárni.
  *
  * A SZERZŐDÉS és a TIG külön szűrő, mert külön is szokás kihagyni őket - a
- * kettő nem ugyanaz a helyzet, és nem is ugyanaz a teendő. */
+ * kettő nem ugyanaz a helyzet, és nem is ugyanaz a teendő.
+ *
+ * Ami NEM kerül bele: ahol számla sincs (kihagytuk, papír nélkül van
+ * elszámolva, vagy elmaradt). Ott a hiányzó szerződés és TIG nem elmaradás,
+ * hanem következmény - nincs is mihez elkészíteni őket -, és az okuk amúgy is
+ * ott áll a projektkódon, indoklással. Ha ezek is felkerülnének a listára, a
+ * szűrő pont a lényegét veszítené el: a néhány valódi hiányt elfedné a sok
+ * megmagyarázott eset. */
 export const PAPIR_SZUROK = [
   { kulcs: "szerzodes-kihagyva", cimke: "Szerződés kihagyva" },
   { kulcs: "tig-kihagyva", cimke: "TIG kihagyva" },
@@ -23,9 +30,16 @@ export const PAPIR_SZUROK = [
 export type PapirSzuro = (typeof PAPIR_SZUROK)[number]["kulcs"] | "mind";
 
 export function papirSzurore(pc: ProjectCode, szuro: PapirSzuro): boolean {
+  if (szuro === "mind") return true;
+  // AHOL NINCS SZÁMLA, ott a kihagyott papír nem hiányosság, hanem
+  // következmény: nincs is mihez szerződést és TIG-et készíteni. Ez a szűrő
+  // azt keresi, ahol PAPÍRT hagytunk ki egy egyébként rendes, kiszámlázott
+  // munkán - ha a számlát is kihagytuk (vagy az egész munka papír nélkül
+  // van elszámolva, vagy elmaradt), akkor a papír hiánya maga a döntés, amit
+  // már megindokoltunk. Lásd backend services/megrendeloi_szamla.szamlat_varunk.
+  if (pc.szamla_kell === false) return false;
   if (szuro === "szerzodes-kihagyva") return pc.szerzodes_kihagyva === true;
-  if (szuro === "tig-kihagyva") return pc.tig_kihagyva === true;
-  return true;
+  return pc.tig_kihagyva === true;
 }
 
 /** Érvényes-e a címben kapott érték - ismeretlen esetén a szűretlen lista jön,

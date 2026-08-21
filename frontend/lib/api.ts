@@ -91,6 +91,11 @@ export type ProjectCode = {
    * models/project_code.szerzodes_kihagyva). */
   szerzodes_kihagyva: boolean;
   tig_kihagyva: boolean;
+  /** Lesz-e SZÁMLA erről a munkáról. Ahol nincs (kihagytuk, papír nélkül van
+   * elszámolva, vagy elmaradt), ott a kihagyott szerződés és TIG nem
+   * hiányosság, hanem következmény - nincs is mihez elkészíteni őket (lásd
+   * backend services/megrendeloi_szamla.szamlat_varunk). */
+  szamla_kell: boolean;
   bevetel_kifizetve: boolean;
   /** MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott - a fizetési
    * határidőhöz mérve (lásd lib/hatarido.ts). Határidő nélkül null. */
