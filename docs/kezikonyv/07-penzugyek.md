@@ -266,6 +266,31 @@ a könyvelésben nem elszámolható költség. Ezért van rajta darabszám is (a
 mondja meg, mennyi munka összeszedni a hiányzó bizonylatokat), és ezért van
 kiemelve, amíg nem nulla.
 
+#### A napló: `/penzugyek/kp-forgalom`
+
+A kártya az EGYENLEGET mondja meg, a **KP forgalom** oldal pedig azt, hogy
+miből jött össze: minden készpénz-mozgás egy listában, időrendben, futó
+egyenleggel. Ez az a nézet, ahol egy eltérés megkereshető - ha a dobozban nem
+annyi pénz van, mint amennyit a rendszer mond, itt kell végigmenni.
+
+Ugyanaz a szerepe, mint a Notion **„KP forgalom"** adatbázisának, csak nem
+külön kézzel vezetve: a sorok a KIADÁSOKBÓL és a BEVÉTELEKBŐL állnak össze,
+tehát nem tud elcsúszni attól, amit a Pénzügyeken felvezettek. Oszlopok: dátum,
+megnevezés, típus, projektkód, be, ki, **egyenleg a sor után**, és kiadásnál a
+számla megléte.
+
+A Notionből örökölt `KpForgalom` tábla sorai is **látszanak** a listában, a
+saját dátumuknál - de **nem mozgatják az egyenleget**, és ez ki is van írva a
+lista fölött. Miért nem? Mert nagy részük egy kiadáshoz kötődik (`expense_id`),
+tehát ugyanaz a pénzmozgás már szerepel a kiadás soraként: beszámítva kétszer
+vonódna le. A kötetlen sorokról pedig nem tudjuk, hogy egy kiadás párja-e,
+aminél csak a Notion-kapcsolat hiányzik. **Egy hamis egyenleg rosszabb, mint
+egy hiányos**, ezért inkább kiírjuk, hány ilyen sor van és mennyi - hogy
+látható legyen, mit nem számoltunk bele.
+
+Backend: `routes/finance.kp_naplo`. Frontend:
+`app/(app)/penzugyek/kp-forgalom/page.tsx`.
+
 **Mi számít számlának** (`services/bizonylat.py`)? Egy tényleges bizonylat, nem
 egy szándék: a rendszerbe **feltöltött** számla-fájl (`DocumentAttachment`,
 `kategoria="szamla"`), vagy a Notionből örökölt **„Számla pdf"** mező

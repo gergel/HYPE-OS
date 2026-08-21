@@ -1259,6 +1259,43 @@ export async function getFinanceSummary(): Promise<FinanceSummary | null> {
   return apiGet<FinanceSummary>("/api/v1/finance/summary");
 }
 
+/** Egy készpénz-mozgás a KP forgalom naplóban (lásd backend
+ * routes/finance.kp_naplo). */
+export type KpNaploSor = {
+  /** A FORRÁS rekord azonosítója - a `forras` mezővel együtt azonosít. */
+  id: number;
+  /** kiadas | bevetel | kp_forgalom */
+  forras: string;
+  datum: string | null;
+  megnevezes: string;
+  projektkod: string | null;
+  be: number;
+  ki: number;
+  /** A kassza egyenlege EZ UTÁN a sor után - csak a beleszámító soroknál. */
+  egyenleg: number | null;
+  beleszamit: boolean;
+  /** Kiadásnál: van-e mögötte számla. */
+  van_szamla: boolean | null;
+  href: string | null;
+};
+
+export type KpNaplo = {
+  sorok: KpNaploSor[];
+  egyenleg: number;
+  osszes_be: number;
+  osszes_ki: number;
+  /** A Notionből örökölt "KP forgalom" tábla külön - NEM mozgatja az
+   * egyenleget (lásd a végpont leírását). */
+  kp_forgalom_be: number;
+  kp_forgalom_ki: number;
+  kp_forgalom_kiadashoz_kotve: number;
+  kp_forgalom_kotetlen: number;
+};
+
+export async function getKpNaplo(): Promise<KpNaplo | null> {
+  return apiGet<KpNaplo>("/api/v1/finance/kp-naplo");
+}
+
 export type FieldVisibilityConfig = { employee_id: number; entity_type: string; visible_fields: string[] | null };
 
 /** A bejelentkezett felhasználó saját mező-láthatósága egy entitástípushoz -

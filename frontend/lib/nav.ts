@@ -187,6 +187,10 @@ export const navGroups: NavGroup[] = [
     label: "Pénzügyek",
     items: [
       { label: "Pénzügyek", href: "/penzugyek", icon: "Wallet" },
+      // A kassza "főkönyve": minden készpénz-mozgás időrendben, futó
+      // egyenleggel - ide kell jönni, ha a dobozban más van, mint amit a
+      // rendszer mond.
+      { label: "KP forgalom", href: "/penzugyek/kp-forgalom", icon: "Coins", permissionPage: "/penzugyek" },
       { label: "Keretszerződések", href: "/penzugyek/keretszerzodesek", icon: "FileSignature", permissionPage: "/penzugyek" },
       { label: "Eseti szerződések", href: "/penzugyek/eseti-szerzodesek", icon: "FileText", permissionPage: "/penzugyek" },
       // Számlázó cégek: akik EMBEREKET küldenek a forgatásra, és a munkájukról
