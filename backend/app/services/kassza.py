@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -41,6 +42,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.project_code import ProjectCode  # noqa: F401  (a selectinload-hoz)
 from app.services import bizonylat, elszamolas, fizetesi_mod
+from app.services.hu_szoveg import ekezet_nelkul
 
 #: A KP forgalom sor iránya. A Notionben szabad szöveg ("bevetel"/"kiadas"),
 #: ezért előtag szerint nézzük.
@@ -145,23 +147,45 @@ def _penz(sor) -> float:
     return float(brutto if brutto is not None else (getattr(sor, "netto", None) or 0))
 
 
+#: KÉSZPÉNZFELVÉTEL a bankszámláról (ATM). A megnevezésből ismerjük fel.
+KESZPENZFELVETEL_JELEK: tuple[str, ...] = ("kp felvetel", "keszpenzfelvetel", "keszpenz felvetel", "atm")
+
+
+def keszpenzfelvetel(megnevezes: Any) -> bool:
+    """ATM-ből felvett pénz-e ez a sor (a megnevezése szerint)."""
+    if not megnevezes:
+        return False
+    tiszta = ekezet_nelkul(str(megnevezes))
+    return any(jel in tiszta for jel in KESZPENZFELVETEL_JELEK)
+
+
 def kp_forgalom_iranya(f: KpForgalom) -> tuple[float, bool]:
     """(összeg forintban, kiadás-e) - egy KP forgalom sorból.
 
-    Az IRÁNYT az ELŐJEL mondja meg: a Notion "Forintban" formulája negatív a
-    kiadásokra (lásd models/finance.KpForgalom.forintban). Ez azért fontos,
-    mert az "Összeg" oszlop előjel nélküli - abból nem derül ki, hogy egy
-    600 000 Ft-os sor kivétel volt-e a kasszából vagy betétel.
+    A szabály ebben a sorrendben:
 
-    Ahol a formula-mező nem jött át (nincs előjel), ott a "Forgalom" szöveges
-    mező dönt; ha az sincs, BEVÉTEL - a tábla erre való, a kiadásoknak amúgy is
-    saját táblájuk van."""
+    1. **KÉSZPÉNZFELVÉTEL (ATM) → BEVÉTEL.** Ez erősebb az előjelnél, mert a
+       kettő két különböző dobozról beszél: az ATM-ből felvett pénz a
+       BANKSZÁMLÁRÓL megy ki (a Notion formulája ezért negatív), de a KASSZÁBA
+       ÉRKEZIK - itt pedig a kassza a téma. Ez a néhány sor a legnagyobb
+       tételek közt van (több százezres felvételek), tehát rossz irányban
+       kétszeres hibát okozna az egyenlegben.
+    2. **Az ELŐJEL**: a Notion "Forintban" formulája negatív a kiadásokra
+       (lásd models/finance.KpForgalom.forintban). Ez azért kell, mert az
+       "Összeg" oszlop előjel nélküli - abból nem derül ki, hogy egy 600 000
+       Ft-os sor kivétel volt-e a kasszából vagy betétel.
+    3. Ahol a formula-mező nem jött át, a **"Forgalom"** szöveges mező dönt -
+       ide esnek a kézzel javított sorok is (lásd
+       routes/finance._kp_forgalom_kezi_javitas).
+    4. Ha egyik sincs: BEVÉTEL - a tábla erre való, a kiadásoknak amúgy is
+       saját táblájuk van."""
     ertek = f.forintban
+    osszeg = abs(float(ertek or 0))
+    if keszpenzfelvetel(f.megnevezes):
+        return osszeg, False
     if ertek is not None and ertek < 0:
-        return abs(ertek), True
-    osszeg = float(ertek or 0)
-    kiadas_e = (f.forgalom or "").strip().casefold().startswith(_KIADAS_ELOTAG)
-    return osszeg, kiadas_e
+        return osszeg, True
+    return osszeg, (f.forgalom or "").strip().casefold().startswith(_KIADAS_ELOTAG)
 
 
 def kep(db: Session, ma: date | None = None) -> KasszaKep:

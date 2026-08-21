@@ -285,16 +285,23 @@ kiadáshoz kötődik (`expense_id`), az kimarad - ugyanaz a pénzmozgás már
 szerepel a kiadás soraként, beszámítva kétszer vonódna le. Hány ilyen van, azt
 a lista fölött kiírjuk.
 
-**AZ IRÁNYT AZ ELŐJEL MONDJA MEG.** A Notion „Forintban" formulája NEGATÍV a
-kiadásokra - az „Összeg" oszlop viszont előjel nélküli, tehát abból nem derül
-ki, hogy egy 600 000 Ft-os sor kivétel volt-e a kasszából vagy betétel. Ez a
-Notion-egyeztetésben **132 sornál** ütött ki: mindegyiknél stimmelt a szám,
-csak nálunk bevételként állt, ami valójában kiadás (ATM-felvételek, munkabérek,
-kellékek). A szabály sorrendje (`services/kassza.kp_forgalom_iranya`):
+**AZ IRÁNY** négy lépésben dől el (`services/kassza.kp_forgalom_iranya`):
 
-1. ha van előjeles forint-érték, **az előjel** dönt;
-2. különben a **„Forgalom"** szöveges mező (`bevetel` / `kiadas`);
-3. ha egyik sincs, **bevétel** - a tábla erre való, a kiadásoknak saját táblájuk
+1. **KÉSZPÉNZFELVÉTEL (ATM) → BEVÉTEL**, az előjel ellenére is. A kettő két
+   különböző dobozról beszél: az ATM-ből felvett pénz a BANKSZÁMLÁRÓL megy ki
+   (a Notion formulája ezért negatív), de a KASSZÁBA ÉRKEZIK - itt pedig a
+   kassza a téma. Ezek a legnagyobb tételek közt vannak (több százezres
+   felvételek), tehát rossz irányban KÉTSZERES hibát okoznának az egyenlegben.
+   A felismerés a megnevezésből megy: „KP felvétel", „ATM",
+   „készpénzfelvétel" (`KESZPENZFELVETEL_JELEK`).
+2. különben **az ELŐJEL**: a Notion „Forintban" formulája negatív a kiadásokra.
+   Ez azért kell, mert az „Összeg" oszlop előjel nélküli, tehát abból nem derül
+   ki, hogy egy 600 000 Ft-os sor kivétel volt-e a kasszából vagy betétel. Ez a
+   Notion-egyeztetésben **132 sornál** ütött ki: mindegyiknél stimmelt a szám,
+   csak nálunk bevételként állt, ami valójában kiadás (munkabérek, kellékek);
+3. ahol a formula-mező nem jött át, a **„Forgalom"** szöveges mező
+   (`bevetel` / `kiadas`) - ide esnek a kézzel javított sorok is;
+4. ha egyik sincs, **bevétel** - a tábla erre való, a kiadásoknak saját táblájuk
    van. A felület ilyenkor „(feltételezve)"-t ír a sorra, hogy látszódjon: ez
    nem adat, hanem alapértelmezés.
 
