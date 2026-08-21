@@ -262,6 +262,41 @@ mindenki maga írja be („kp", „Készpénz", „KP"), az összesítés annyif
 szakad, ahányféleképp leírták - és a kassza egyenlege pont annyival lesz hamis.
 A felismerés ettől még türelmes a régi adatokkal („KP", „Kp.", ékezet nélkül is).
 
+#### A régi kiadások visszamenőleges megjelölése
+
+A fizetési mód mezőt később vezettük be, ezért a Notionből örökölt kiadásokon
+üres - a kassza egyenlege viszont épp ebből számol. Szerencsére a Notionben a
+**„Kiadás formája"** mező (nálunk `Expense.tipus`) keveri a kiadás fajtáját és a
+fizetés útját: van benne „Bérlés" és „Alap bér", de van „Bankkártya" és
+„Előfizetés" is - az utóbbiak maguk mondják meg, hogyan mozgott a pénz.
+
+```
+python scripts/fizetesi_mod_kitoltese.py              # csak megmutatja, mit tenne
+python scripts/fizetesi_mod_kitoltese.py --vegrehajt  # ténylegesen ír
+```
+
+Alapból **próba**: kiírja, mit töltene ki és mi maradna üresen, de nem nyúl az
+adatokhoz. Így a szabály előbb ellenőrizhető a valódi adaton, mint ahogy ír.
+
+A felismerés szabályai (`services/fizetesi_mod.kikovetkeztetett_mod`):
+
+- **Előfizetés → Bankkártya**, mindig: az előfizetéseket kártyáról vonják,
+  nincs is hozzá utalás, amit indítani kellene. Az „Előfizetés – Adobe CC" is
+  előfizetés, ezért ez a szó a szöveg BÁRMELY részén elfogadott.
+- **Alap bér / Munkabér → Átutalás**, a munkabér a bankszámlára megy.
+- A **„Bankkártya" / „Készpénz" / „Átutalás" típus** önmagát mondja meg.
+- **Ami nem egyértelmű, üresen marad**: a „Parkolás" vagy a „Bérlés" bármelyik
+  úton fizethető, egy tippelt mód pedig a kassza egyenlegét hazudná meg -
+  márpedig épp azért van ez a mező. A script a végén kilistázza, mi maradt
+  üresen, hogy azok kézzel pótolhatók legyenek.
+- Ami már meg van jelölve, azt **nem írja felül**: a kézzel beállított mód
+  erősebb, mint egy név-alapú következtetés.
+
+A rövid, kategória-szerű nevek (`alap ber`, `kartya`, `ber`) csak **teljes
+egyezésre** illeszkednek, nem részletként: a „bér" benne van a
+„Kamerabérlés"-ben is, ami épp nem munkabér, a „kártya" pedig az „SD kártya"
+eszközben.
+
 ### A projekt bevétele: a vállalási ár, amíg nincs kifizetés
 
 `models/project_code.bevetel` - két forrásból, ebben a sorrendben:

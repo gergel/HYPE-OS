@@ -63,3 +63,73 @@ def keszpenz_sql(oszlop):
     # Az adatbázisban nincs ékezet-eltávolító függvény minden telepítésen,
     # ezért a néhány tényleges alakot soroljuk fel kisbetűsítve.
     return func.lower(func.coalesce(oszlop, "")).in_(sorted(KESZPENZ_ALAKOK))
+
+
+#: Amit a kiadás TÍPUSÁBÓL/nevéből egyértelműen fel lehet ismerni.
+#:
+#: Honnan van erre egyáltalán esély? A Notionben a projekt kiadásoknál a
+#: "Kiadás formája" mező (nálunk `Expense.tipus`) keveri a kiadás FAJTÁJÁT és a
+#: fizetés ÚTJÁT: van benne "Bérlés" és "Alap bér", de van "Bankkártya" és
+#: "Előfizetés" is. Az utóbbiak maguk mondják meg, hogyan mozgott a pénz.
+#:
+#: Két külön lista, mert a két kérdés más:
+#:
+#: - a KULCSSZAVAK bárhol állhatnak a szövegben, ezért csak olyan szó lehet
+#:   köztük, ami mást nem jelenthet: az "Előfizetés – Adobe" ugyanúgy
+#:   előfizetés, mint a puszta "Előfizetés";
+#: - a TELJES EGYEZÉSEK rövid, kategória-szerű nevek ("Alap bér"), amiket
+#:   viszont NEM szabad részletként keresni: a "bér" benne van a
+#:   "Kamerabérlés"-ben is, ami épp nem munkabér, a "kártya" pedig az "SD
+#:   kártya" eszközben.
+#:
+#: Az előfizetés azért mindig bankkártya, mert azokat kártyáról vonják - nincs
+#: is hozzá utalás, amit indítani kellene. Az alap bér pedig azért átutalás,
+#: mert a munkabér a bankszámlára megy.
+KULCSSZO_MODOK: tuple[tuple[str, str], ...] = (
+    ("elofizetes", BANKKARTYA),
+    ("bankkartya", BANKKARTYA),
+    ("kartyas", BANKKARTYA),
+    ("keszpenzben", KESZPENZ),
+    ("keszpenzes", KESZPENZ),
+    ("atutalas", ATUTALAS),
+    ("atutalva", ATUTALAS),
+)
+
+TELJES_EGYEZES_MODOK: dict[str, str] = {
+    "alap ber": ATUTALAS,
+    "alapber": ATUTALAS,
+    "ber": ATUTALAS,
+    "berek": ATUTALAS,
+    "munkaber": ATUTALAS,
+    "fizetes": ATUTALAS,
+    "utalas": ATUTALAS,
+    "kartya": BANKKARTYA,
+    "keszpenz": KESZPENZ,
+    "kp": KESZPENZ,
+    "kp.": KESZPENZ,
+}
+
+
+def kikovetkeztetett_mod(*szovegek: Any) -> str | None:
+    """Mi lehet a fizetési mód a kiadás nevéből/típusából? None, ha nem tudjuk.
+
+    A Notionből örökölt kiadásoknál a NÉV maga a válasz: "Alap bér",
+    "Bankkártya", "Előfizetés". Ez a függvény ezt olvassa ki - a
+    visszamenőleges kitöltéshez (lásd scripts/fizetesi_mod_kitoltese.py).
+
+    Ami nem ismerhető fel egyértelműen, arra NONE-t ad: egy tippelt fizetési
+    mód a kassza egyenlegét hazudná meg, márpedig épp azért van ez a mező."""
+    for szoveg in szovegek:
+        if not szoveg:
+            continue
+        tiszta = ekezet_nelkul(str(szoveg))
+        if tiszta in TELJES_EGYEZES_MODOK:
+            return TELJES_EGYEZES_MODOK[tiszta]
+    for szoveg in szovegek:
+        if not szoveg:
+            continue
+        tiszta = ekezet_nelkul(str(szoveg))
+        for kulcsszo, mod in KULCSSZO_MODOK:
+            if kulcsszo in tiszta:
+                return mod
+    return None
