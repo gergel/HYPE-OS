@@ -28,10 +28,18 @@ szerint átrendezhető.
 
 A felvevő űrlap három mezőt kér, és mindössze egy kötelező:
 
-- **Projektkód** - előre kitöltve az évszámos előtaggal (`HYPE26-`, 2027-től
-  magától `HYPE27-`), hogy csak a négyjegyű sorszámot kelljen begépelni. Az
-  előtag SEGÍTSÉG, nem kényszer: a mező szabadon átírható (régebbi évre szóló
-  vagy más rendszerű kód is felvehető).
+- **Projektkód** - előre kitöltve a **következő szabad kóddal**
+  (`HYPE26-0042`), nem csak az évszámos előtaggal: enélkül a felvevőnek végig
+  kellett görgetnie a listát, hogy megnézze, hol tartunk. Az évszám a mai
+  napból jön (2027-től magától `HYPE27-`), a sorszám pedig a meglévő kódok
+  közül a legnagyobb + 1 - csak a tisztán számos sorszámokat nézve, mert a
+  kézzel kitalált kódok (`HYPE26-KERET1`) nem a sorozat részei
+  (`lib/projektkod.ts`).
+
+  Az ajánlás JAVASLAT, nem kényszer: a mező szabadon átírható (régebbi évre
+  szóló vagy más rendszerű kód is felvehető), és a kód az adatbázisban úgyis
+  egyedi - az ütközést a mentés akkor is elkapja, ha közben más is felvett
+  egyet.
 - **Ügyfél** - nem kötelező. A kódot sokszor előbb foglalják le, mint ahogy
   eldőlne, kinek a munkája; ilyenkor korábban valaki beírt egy tetszőleges
   ügyfelet, amit utána senki nem javított ki. Ami az ügyfélre épül, kezeli a

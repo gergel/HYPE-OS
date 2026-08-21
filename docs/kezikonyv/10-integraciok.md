@@ -24,6 +24,38 @@ env változóba. Ha nincs külön naptár-OAuth-kliens megadva, a Gmail OAuth kl
 esik vissza (ugyanabban a Google Cloud projektben lévő kliens több scope-ra is
 használható).
 
+#### A naptáras fiók ne jelentkezzen ki
+
+A hozzáférés magától megújul, és ezt **nem a lejáratkor**, hanem 10 perccel
+előtte tesszük (`FRISSITESI_TARTALEK`): a szinkron percekig futhat, egy futás
+közben lejáró token pedig fél munkával, 401-gyel állna meg.
+
+Egy **sikertelen** megújítás nem dobja el a tárolt hozzáférést. A kettőt
+megkülönböztetjük (`_vegleges_hiba`):
+
+- `invalid_grant` / `invalid_client` → a refresh token maga halott, tényleg
+  újra be kell jelentkezni;
+- hálózati hiba, időtúllépés → magától elmúlik, a következő szinkron újra
+  próbálja. Erre "csatlakoztasd újra a fiókot" üzenetet adni fölösleges
+  riasztás, ami után valaki tényleg lecsatlakoztatja a működő kapcsolatot.
+
+Minden megújítás nyomot hagy (`last_refresh_at`, `last_error`,
+`last_error_at`), és ez a Beállítások oldalon is látszik. Enélkül a felület
+"Összekötve" állapotot mutatott olyankor is, amikor a szinkron napok óta állt:
+a tárolt token megléte nem bizonyítja, hogy él a kapcsolat.
+
+> **AMIT A KÓDBÓL NEM LEHET MEGOLDANI.** Ha a Google Cloud projekt **„Testing"**
+> állapotban van, a Google a refresh tokent **7 naponta** érvényteleníti -
+> bármit csinálunk. Ez a leggyakoribb oka annak, hogy a naptáras fiók
+> "kijelentkezik". A megoldás egyszeri beállítás: *Google Cloud Console → APIs
+> & Services → OAuth consent screen → **Publish app*** ("In production"). A
+> hibaüzenetünk ki is mondja, hogy ezt kell megnézni.
+>
+> A refresh token ezen kívül akkor szűnik meg, ha valaki visszavonja a
+> hozzáférést (myaccount.google.com/permissions), vagy ha a fiók 6 hónapig nem
+> használja - az utóbbi nálunk nem fordulhat elő, mert a szinkron percenként
+> fut.
+
 A levelek feladó CÍME alapból `GMAIL_SENDER`. Kivétel a megrendelői
 **keretszerződés** és a hozzá tartozó **szerződésmódosítás**: ezek az admin
 fiókból mennek (`MODOSITAS_SENDER`), és a levél aláírását is abból a fiókból

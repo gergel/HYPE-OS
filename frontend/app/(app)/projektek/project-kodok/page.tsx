@@ -32,6 +32,7 @@ import {
 import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import { bevetelDevizaNyom } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
+import { kovetkezoProjektkod, projektkodElotag } from "@/lib/projektkod";
 import { projektkodFazisa } from "@/lib/projektkodFazis";
 
 const PAGE = "/projektek/project-kodok";
@@ -313,11 +314,13 @@ export default async function ProjectKodokPage({
     },
   ];
 
-  // A kód eleje mindig ugyanaz az évszámos előtag ("HYPE26-"), csak a négyjegyű
-  // sorszám változik - ezt írjuk be előre, hogy ne kelljen minden felvételnél
-  // nulláról begépelni. Az évszám a mai napból jön (2027-től magától HYPE27-),
-  // és a mező szabadon átírható: egy régebbi évre szóló kód is felvehető.
-  const kodElotag = `HYPE${String(new Date().getFullYear()).slice(2)}-`;
+  // A KÖVETKEZŐ SZABAD KÓD előre kitöltve ("HYPE26-0042"), nem csak az
+  // évszámos előtag: enélkül a felvevőnek végig kellett görgetnie a listát,
+  // hogy megnézze, hol tartunk. Az évszám a mai napból jön (2027-től magától
+  // HYPE27-), a mező pedig szabadon átírható - régebbi évre szóló vagy más
+  // rendszerű kód is felvehető (lásd lib/projektkod.ts).
+  const kodElotag = projektkodElotag();
+  const kovetkezoKod = kovetkezoProjektkod(projectCodes.map((pc) => pc.projektkod));
 
   const ujProjektkodUrlap = canCreate ? (
     <QuickCreateForm
@@ -328,7 +331,7 @@ export default async function ProjectKodokPage({
           name: "projektkod",
           label: "Projektkód",
           required: true,
-          defaultValue: kodElotag,
+          defaultValue: kovetkezoKod,
           placeholder: `${kodElotag}0001`,
         },
         // Az ügyfél NEM kötelező: a kódot sokszor előbb foglaljuk le, mint

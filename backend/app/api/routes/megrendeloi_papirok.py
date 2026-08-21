@@ -757,6 +757,13 @@ class SzamlaAllasOut(BaseModel):
     #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott - a fizetési
     #: határidőhöz mérve (lásd models/project_code.hatarido_allas).
     hatarido_allas: dict | None = None
+    #: HOGYAN érkezett a pénz (Átutalás / Készpénz). Készpénznél a bevétel a
+    #: kasszába is bekerül - a KP forgalom oldalon ugyanez a sor látszik.
+    fizetes_modja: str | None = None
+    keszpenzes: bool = False
+    #: Készpénzes bevételnél ettől függ, hogy sima legális bevétel-e, vagy
+    #: FEDEZET a számla nélküli kiadásokhoz (lásd services/bizonylat.py).
+    van_szamla_a_bevetelen: bool = False
 
 
 class HataridoIn(BaseModel):
@@ -775,6 +782,10 @@ class KifizetesIn(BaseModel):
     #: "Kifizetve, de ne kerüljön a bevételek közé" - ilyenkor INDOK kell.
     bevetelbe_ne_keruljon: bool = False
     kihagyas_oka: str | None = None
+    #: HOGYAN érkezett a pénz: "Átutalás" vagy "Készpénz". Készpénznél a
+    #: bevétel-sor a KASSZÁBA is bekerül (lásd services/kassza.py) - ezért nem
+    #: tippelünk, hanem a jelöléskor megkérdezzük.
+    fizetes_modja: str | None = None
 
 
 def _projektkod_vagy_404(db: Session, project_code_id: int) -> ProjectCode:
@@ -855,6 +866,7 @@ def set_szamla_kifizetve(
             kifizetes_datuma=payload.kifizetes_datuma,
             bevetelbe_ne_keruljon=payload.bevetelbe_ne_keruljon,
             kihagyas_oka=payload.kihagyas_oka,
+            fizetes_modja=payload.fizetes_modja,
         )
     except megrendeloi_szamla.SzamlaHiba as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

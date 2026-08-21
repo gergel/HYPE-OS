@@ -2764,6 +2764,14 @@ export type MegrendeloiSzamlaAllas = {
   arfolyam: number | null;
   netto_forintban: number | null;
   brutto_forintban: number | null;
+  /** HOGYAN érkezett a pénz ("Átutalás" / "Készpénz"). Készpénznél a bevétel a
+   * KASSZÁBA is bekerül: a KP forgalom oldalon ugyanez a sor látszik, külön
+   * felvezetés nélkül. */
+  fizetes_modja: string | null;
+  keszpenzes: boolean;
+  /** Készpénzes bevételnél ettől függ, hogy sima legális bevétel-e, vagy
+   * FEDEZET a számla nélküli kiadásokhoz. */
+  van_szamla_a_bevetelen: boolean;
 };
 
 export async function getMegrendeloiSzamlaAllas(projectCodeId: number): Promise<MegrendeloiSzamlaAllas | null> {

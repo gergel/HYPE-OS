@@ -17,6 +17,22 @@ A BEVÉTEL-SOR azért keletkezik automatikusan, mert a pénz megérkezése és a
 Pénzügyek két külön felület volt: a projektkódon ki lett pipálva a kifizetés, a
 bevételek közé viszont valakinek kézzel kellett felvezetnie - és ha elmaradt, a
 projekt profitja hazudott.
+
+HOGYAN érkezett a pénz, azt a jelöléskor kérdezzük meg (`fizetes_modja`), és
+nem tippeljük:
+
+- **átutalás**: a bankszámlára jött, a bevételek közé kerül;
+- **készpénz**: a bevételek közé kerül, ÉS a KASSZÁBA is - a KP forgalom
+  oldalon ugyanaz a sor jelenik meg, külön felvezetés nélkül (lásd
+  services/kassza.py). Ezért NEM készül hozzá külön KpForgalom sor: az
+  kétszer számolná ugyanazt a pénzt.
+
+A készpénzes bevétel két félét jelenthet, és a különbséget a SZÁMLA dönti el
+(lásd services/bizonylat.py):
+
+- van mögötte számla -> sima LEGÁLIS bevétel;
+- nincs mögötte számla -> FEDEZET: ez az a készpénz, amiből a számla nélküli
+  kiadás fedezhető, tehát a fekete egyenleget csökkenti.
 """
 
 from __future__ import annotations
@@ -30,6 +46,8 @@ from sqlalchemy.orm import Session
 from app.models.document_attachment import DocumentAttachment
 from app.models.finance import Revenue
 from app.models.project_code import ProjectCode
+from app.services import bizonylat
+from app.services import fizetesi_mod as fizetesi_mod_szolg
 from app.services import penznem as penznem_szolg
 from app.services import projektkod_osszeg
 
@@ -84,6 +102,13 @@ class SzamlaAllas:
     arfolyam: float | None = None
     netto_forintban: float | None = None
     brutto_forintban: float | None = None
+    #: HOGYAN érkezett a pénz (Átutalás / Készpénz). A készpénzes bevétel a
+    #: kasszába is bekerül - lásd a modul leírását.
+    fizetes_modja: str | None = None
+    #: Készpénzes bevételnél: van-e mögötte számla. Ettől függ, hogy sima
+    #: legális bevétel-e, vagy FEDEZET a számla nélküli kiadásokhoz.
+    keszpenzes: bool = False
+    van_szamla_a_bevetelen: bool = False
     #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott - a fizetési
     #: határidőhöz mérve (lásd models/project_code.hatarido_allas). Egy dátum
     #: önmagában néma: hogy sürgős-e, csak a mai naphoz képest derül ki.
@@ -156,11 +181,29 @@ def _kifizetes_datum_kell(pk: ProjectCode) -> bool:
     return _hatarido_kell(pk)
 
 
+def _bevetel_fizetesi_modja(pk: ProjectCode) -> str | None:
+    """A bevétel-sorok fizetési módja - ha egyöntetű. Több sornál (osztott
+    számlázás) csak akkor mondunk módot, ha mind ugyanaz: két különböző mód
+    közül választani helyettük találgatás volna."""
+    modok = {(sor.fizetes_modja or "").strip() for sor in pk.revenues or []}
+    modok.discard("")
+    return next(iter(modok)) if len(modok) == 1 else None
+
+
 def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
     netto, brutto = _osszeg(pk)
     netto_ft, brutto_ft = projektkod_osszeg.forintban(pk)
     szamla_url = _szamla_fajl_url(db, pk)
+    mod = _bevetel_fizetesi_modja(pk)
+    # A "fedezet vagy legális bevétel" kérdés csak KÉSZPÉNZNÉL merül fel, és a
+    # SZÁMLA dönti el - ugyanaz a szabály, amiből a kassza is dolgozik.
+    szamlas_bevetelek = bizonylat.szamlas_bevetel_ids(db) if fizetesi_mod_szolg.keszpenzes(mod) else set()
     return SzamlaAllas(
+        fizetes_modja=mod,
+        keszpenzes=fizetesi_mod_szolg.keszpenzes(mod),
+        van_szamla_a_bevetelen=any(
+            bizonylat.van_szamla_bevetel(sor, szamlas_bevetelek) for sor in pk.revenues or []
+        ),
         fizetesi_hatarido=pk.fizetesi_hatarido,
         kifizetes_datuma=pk.utalas_datuma,
         kifizetve=pk.bevetel_kifizetve,
@@ -206,6 +249,7 @@ def jelold_kifizetettnek(
     kifizetes_datuma: date | None = None,
     bevetelbe_ne_keruljon: bool = False,
     kihagyas_oka: str | None = None,
+    fizetes_modja: str | None = None,
 ) -> SzamlaAllas:
     """"Kifizetve" - a pénz megérkezett.
 
@@ -234,6 +278,11 @@ def jelold_kifizetettnek(
         )
     if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
         raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")
+    mod = (fizetes_modja or "").strip() or None
+    if mod is not None and mod not in fizetesi_mod_szolg.BEVETEL_MODOK:
+        raise SzamlaHiba(
+            f"Ismeretlen fizetési mód: {mod}. Választható: {', '.join(fizetesi_mod_szolg.BEVETEL_MODOK)}."
+        )
 
     pk.bevetelbe_ne_keruljon = bevetelbe_ne_keruljon
     pk.bevetel_kihagyas_oka = (kihagyas_oka or "").strip() or None if bevetelbe_ne_keruljon else None
@@ -258,7 +307,7 @@ def jelold_kifizetettnek(
     # pénzügyek listáján nyoma sem maradt annak, hogy az a munka rendezve van,
     # csak a projektkód adatlapján. Most ott a sor, láthatóan kihagyva
     # (lásd services/elszamolas.bevetel_beleszamit).
-    _vezesd_fel_a_bevetelt(db, pk, nap, beleszamit=not bevetelbe_ne_keruljon)
+    _vezesd_fel_a_bevetelt(db, pk, nap, beleszamit=not bevetelbe_ne_keruljon, fizetes_modja=mod)
     db.flush()
     return allas(db, pk)
 
@@ -282,7 +331,9 @@ def allitsd_a_szamla_kihagyast(
     return allas(db, pk)
 
 
-def _vezesd_fel_a_bevetelt(db: Session, pk: ProjectCode, nap: date, *, beleszamit: bool = True) -> None:
+def _vezesd_fel_a_bevetelt(
+    db: Session, pk: ProjectCode, nap: date, *, beleszamit: bool = True, fizetes_modja: str | None = None
+) -> None:
     """A bevétel-sor létrehozása/kiegészítése.
 
     Meglévő sort nem duplázunk (a Notionból importált bevételek már ott
@@ -329,6 +380,15 @@ def _vezesd_fel_a_bevetelt(db: Session, pk: ProjectCode, nap: date, *, beleszami
             sor.fizetes_hatarideje = pk.fizetesi_hatarido
         if not sor.bevetel_formaja and pk.bevetel_formaja:
             sor.bevetel_formaja = pk.bevetel_formaja
+        # A FIZETÉSI MÓD a jelölés döntése, tehát felülírja a korábbit: aki
+        # most mondta meg, hogy készpénzben jött, az tudja a legjobban. Ha nem
+        # adták meg (régi hívás, script), a meglévő marad, üresen pedig az
+        # alapértelmezés - egy jelöletlen sor se a kasszába, se a bankba nem
+        # tartozna (lásd services/kassza._jeloletlen).
+        if fizetes_modja:
+            sor.fizetes_modja = fizetes_modja
+        elif not (sor.fizetes_modja or "").strip():
+            sor.fizetes_modja = fizetesi_mod_szolg.BEVETEL_ALAPERTELMEZES
         if not sor.szamla_file_url and szamla_url:
             sor.szamla_file_url = szamla_url[:500]
         # A jelölést MINDIG felülírjuk (nem csak üresen): ez az adott

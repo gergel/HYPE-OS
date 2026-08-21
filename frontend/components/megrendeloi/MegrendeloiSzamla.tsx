@@ -237,6 +237,25 @@ export function MegrendeloiSzamla({
           {allas.bevetel_kihagyas_oka && (
             <p className="whitespace-pre-line text-[12.5px] text-text-muted">{allas.bevetel_kihagyas_oka}</p>
           )}
+          {/* HOGYAN érkezett a pénz. Készpénznél ki is mondjuk, mi lesz belőle
+              a kasszában: számlával sima legális bevétel, számla nélkül
+              FEDEZET a számla nélküli kiadásokhoz (lásd backend
+              services/megrendeloi_szamla.py). */}
+          {allas.fizetes_modja && !allas.tranzakcio_nelkul_lezarva && (
+            <p className="text-[13px] text-text-secondary">
+              {allas.fizetes_modja}
+              {allas.keszpenzes && (
+                <span className="text-text-muted">
+                  {" "}
+                  · a <a href="/penzugyek/kp-forgalom" className="text-text-accent hover:underline">KP forgalomban</a> is
+                  szerepel,{" "}
+                  {allas.van_szamla_a_bevetelen
+                    ? "számlával – legális bevétel"
+                    : "számla nélkül – fedezet a számla nélküli kiadásokhoz"}
+                </span>
+              )}
+            </p>
+          )}
           {canEdit && (
             <button
               type="button"
@@ -288,6 +307,9 @@ export function MegrendeloiSzamla({
               : `${formatHuf(allas.netto)} nettó` +
                 (allas.brutto !== null && allas.brutto !== allas.netto ? ` (${formatHuf(allas.brutto)} bruttó)` : "")
           }
+          // Készpénznél ettől függ, hogy legális bevétel lesz-e belőle a
+          // kasszában, vagy fedezet - a felhasználó előre lássa, melyik.
+          vanSzamla={allas.van_szamla_fajl && !allas.szamla_kihagyva}
           onMegse={() => setDialogNyitva(false)}
           onJelol={async (adat) => {
             const sikeres = await hivas("kifizetve", adat);
@@ -318,6 +340,7 @@ function KifizetesDialog({
   osszeg,
   onMegse,
   onJelol,
+  vanSzamla,
 }: {
   hatarido: string | null;
   /** Kötelező-e a dátum. Ahol számlát sem várunk (nincs számla / papír nélkül
@@ -335,7 +358,13 @@ function KifizetesDialog({
     kifizetes_datuma: string | null;
     bevetelbe_ne_keruljon: boolean;
     kihagyas_oka: string | null;
+    /** "Átutalás" vagy "Készpénz" - tranzakció nélküli lezárásnál null. */
+    fizetes_modja: string | null;
   }) => void;
+  /** Van-e számla a bevétel mögött. Készpénznél ez dönti el, hogy a kasszában
+   * sima legális bevétel lesz-e belőle, vagy FEDEZET a számla nélküli
+   * kiadásokhoz. */
+  vanSzamla: boolean;
 }) {
   // ÜRESEN indul, NEM a mai nappal. A jelölés ritkán esik egybe a
   // beérkezéssel: a pénz megjön, és csak napokkal később kattint rá valaki -
@@ -346,6 +375,10 @@ function KifizetesDialog({
   const [datum, setDatum] = useState("");
   const [bevetelbeKerul, setBevetelbeKerul] = useState(true);
   const [indok, setIndok] = useState("");
+  // Átutalással indul, mert az a gyakori - de a KÉSZPÉNZ nem ugyanaz a
+  // pénzmozgás: az a kasszába kerül, tehát tudni kell róla (lásd backend
+  // services/kassza.py). Ezért választás, nem tippelés.
+  const [mod, setMod] = useState<"Átutalás" | "Készpénz">("Átutalás");
 
   return (
     <ModalReteg onClose={onMegse}>
@@ -391,6 +424,42 @@ function KifizetesDialog({
           {/* A bevétel-sor kérdése csak akkor merül fel, ha VAN dátum: egy
               tranzakció nélküli lezárásnál nincs mit dátumozni a soron, tehát
               sor sem keletkezik. */}
+          {/* HOGYAN érkezett: ez dönti el, hogy a pénz a bankszámlán van-e,
+              vagy a KASSZÁBAN. Csak akkor kérdés, ha volt tranzakció. */}
+          {datum && (
+            <div className="mt-4">
+              <p className="text-[13px] text-text-primary">Hogyan érkezett a pénz?</p>
+              <div className="mt-1.5 flex gap-2">
+                {(["Átutalás", "Készpénz"] as const).map((lehetoseg) => (
+                  <button
+                    key={lehetoseg}
+                    type="button"
+                    onClick={() => setMod(lehetoseg)}
+                    className={`rounded-[var(--radius)] border px-3 py-1.5 text-[13px] ${
+                      mod === lehetoseg
+                        ? "border-text-accent/40 bg-bg-accent text-text-accent"
+                        : "border-border text-text-secondary hover:bg-surface-3"
+                    }`}
+                  >
+                    {lehetoseg}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[12px] text-text-muted">
+                {mod === "Készpénz" ? (
+                  <>
+                    A bevételek közé is bekerül, <b>és a kasszába is</b> – a KP forgalomban ugyanez a sor jelenik meg.{" "}
+                    {vanSzamla
+                      ? "Van mögötte számla, tehát legális bevétel."
+                      : "Nincs mögötte számla, tehát fedezet: a számla nélküli kiadásokat csökkenti."}
+                  </>
+                ) : (
+                  "A bankszámlára érkezett – a bevételek közé kerül, a kasszát nem mozgatja."
+                )}
+              </p>
+            </div>
+          )}
+
           {datum && (
             <>
               <label className="mt-4 flex cursor-pointer items-start gap-2.5">
@@ -446,6 +515,9 @@ function KifizetesDialog({
                 kifizetes_datuma: datum || null,
                 bevetelbe_ne_keruljon: !bevetelbeKerul,
                 kihagyas_oka: bevetelbeKerul ? null : indok.trim(),
+                // Tranzakció nélküli lezárásnál nincs mit módozni: nem mozdult
+                // pénz sem a bankszámlán, sem a kasszában.
+                fizetes_modja: datum ? mod : null,
               })
             }
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"

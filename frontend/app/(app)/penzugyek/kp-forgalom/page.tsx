@@ -146,6 +146,12 @@ export default async function KpForgalomPage() {
           <span className="text-text-muted">–</span>
         ) : s.van_szamla ? (
           <StatusBadge label="Van" tone="success" />
+        ) : s.be > 0 ? (
+          // A számla nélküli BEVÉTEL nem hiányosság, hanem FEDEZET: ez az a
+          // készpénz, amiből a számla nélküli kiadás fedezhető - a fekete
+          // egyenleget csökkenti (lásd backend services/kassza.py). Egy
+          // "Nincs" figyelmeztetés itt félrevezető volna.
+          <StatusBadge label="Fedezet" tone="blue" />
         ) : (
           <StatusBadge label="Nincs" tone="warning" />
         ),
@@ -203,7 +209,7 @@ export default async function KpForgalomPage() {
             megjegyzes={`${idei.be_szamlaval_db} tétel`}
           />
           <StatCard
-            label="Idei bevétel – nincs számla"
+            label="Idei bevétel – fedezet (nincs számla)"
             value={formatHuf(idei.be_szamla_nelkul)}
             icon={ArrowDownLeft}
             tone="blue"
@@ -243,13 +249,13 @@ export default async function KpForgalomPage() {
               </thead>
               <tbody>
                 <Sorpar
-                  cimke="Bevétel – van számla"
+                  cimke="Bevétel – van számla (legális)"
                   ideiErtek={idei.be_szamlaval}
                   osszesErtek={osszes.be_szamlaval}
                   ideiDb={idei.be_szamlaval_db}
                 />
                 <Sorpar
-                  cimke="Bevétel – nincs számla"
+                  cimke="Bevétel – nincs számla (fedezet)"
                   ideiErtek={idei.be_szamla_nelkul}
                   osszesErtek={osszes.be_szamla_nelkul}
                   ideiDb={idei.be_szamla_nelkul_db}

@@ -36,3 +36,11 @@ class GoogleOAuthToken(TimestampMixin, Base):
     account_email: Mapped[str | None] = mapped_column(String(255))
     pending_state: Mapped[str | None] = mapped_column(String(128))
     pending_state_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # MIKOR újult meg utoljára a hozzáférés, és mi volt az utolsó hiba. Ez a
+    # kettő együtt mondja meg, ÉL-E még a kapcsolat: a token_json megléte
+    # önmagában nem elég, mert egy visszavont vagy lejárt refresh token
+    # ugyanúgy ott áll a sorban - csak épp nem működik. Enélkül a felület
+    # "Csatlakozva" állapotot mutatott, miközben a szinkron napok óta állt.
+    last_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

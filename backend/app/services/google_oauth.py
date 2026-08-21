@@ -60,6 +60,10 @@ CALENDAR_OAUTH_SCOPES = [
 
 STATE_TTL_MINUTES = 15
 
+#: Ennyivel a lejárat ELŐTT újítjuk meg a hozzáférést. A szinkron percekig
+#: futhat; egy futás közben lejáró token fél munkával, 401-gyel állna meg.
+FRISSITESI_TARTALEK = timedelta(minutes=10)
+
 
 class OAuthNotConfiguredError(RuntimeError):
     """Nincs OAuth kliens (client_id/secret) beállítva - enélkül a
@@ -242,12 +246,63 @@ def complete_auth(db: Session, code: str, state: str) -> str | None:
     return row.account_email
 
 
+def _frissiteni_kell(creds: UserCredentials) -> bool:
+    """Kell-e MOST megújítani a hozzáférést.
+
+    Nem a lejáratig várunk, hanem `FRISSITESI_TARTALEK`-kal előbb: a szinkron
+    percekig futhat, és egy futás közben lejáró token fél munkával, 401-gyel
+    állna meg. A google-auth `valid` mezője csak a lejárat PILLANATÁT nézi."""
+    if not creds.token:
+        return True
+    if creds.expiry is None:
+        # Lejárat nélkül nem tudjuk, mennyi van hátra - biztosra megyünk.
+        return True
+    return datetime.utcnow() + FRISSITESI_TARTALEK >= creds.expiry
+
+
+def _vegleges_hiba(exc: Exception) -> bool:
+    """Elveszett-e VÉGLEG a hozzáférés, vagy csak most nem sikerült?
+
+    A kettő különbsége az, hogy mit kell tenni: `invalid_grant` esetén a
+    refresh token maga halott (visszavonták, lejárt, vagy jelszót cseréltek) -
+    ilyenkor ÚJRA BE KELL JELENTKEZNI, és ezt ki is kell írni. Egy hálózati
+    hiba viszont magától elmúlik: erre "csatlakoztasd újra a fiókot" üzenetet
+    adni fölösleges riasztás, ami után valaki tényleg lecsatlakoztatja a
+    működő kapcsolatot."""
+    szoveg = str(exc).lower()
+    return "invalid_grant" in szoveg or "invalid_client" in szoveg or "unauthorized_client" in szoveg
+
+
+def _hiba_uzenet(exc: Exception) -> str:
+    if _vegleges_hiba(exc):
+        return (
+            f"A Google visszautasította a tárolt hozzáférést ({exc}). Ez akkor történik, ha a hozzáférést "
+            "visszavonták, vagy ha a Google Cloud projekt „Testing” állapotban van - ott a refresh token 7 nap "
+            "után MINDIG lejár. Állítsd a projektet „In production” állapotba (OAuth consent screen -> Publish "
+            "app), majd csatlakoztasd újra a fiókot a Beállítások oldalon."
+        )
+    return (
+        f"A Google hozzáférés megújítása most nem sikerült ({type(exc).__name__}: {exc}). "
+        "A tárolt hozzáférés megmarad, a következő szinkron újra próbálja."
+    )
+
+
 def load_credentials(db: Session) -> UserCredentials | None:
     """Az adatbázisban tárolt hitelesítés betöltése, szükség esetén
     frissítéssel. Fontos: SZÁNDÉKOSAN nem adunk meg scope-ot (lásd modul-
     fejléc 1. pont) - így a frissítés nem küld scope paramétert, és nem kaphatunk
     `invalid_scope` hibát akkor sem, ha a tokent más jogosultság-készlettel
-    állították ki."""
+    állították ki.
+
+    A HOZZÁFÉRÉS NEM JÁR LE MAGÁTÓL, amíg a refresh token él: az access token
+    egy órás élettartamát itt újítjuk meg, tartalékkal (lásd
+    _frissiteni_kell), és minden sikeres megújítást feljegyzünk. Egy sikertelen
+    megújítás NEM dobja el a tárolt hozzáférést - a hálózati hibák maguktól
+    elmúlnak, és egy fél percnyi kimaradás miatt nem kell újra bejelentkezni.
+
+    Amit viszont a kódból NEM lehet megoldani: ha a Google Cloud projekt
+    „Testing” állapotban van, a Google a refresh tokent 7 naponta érvényteleníti
+    - ez a beállítás dönti el, nem mi. Ezért a hibaüzenet ki is mondja."""
     row = _get_row(db)
     if row is None or not row.token_json:
         return None
@@ -262,19 +317,25 @@ def load_credentials(db: Session) -> UserCredentials | None:
         expiry=_parse_expiry(data.get("expiry")),
     )
 
-    if not creds.valid:
+    if _frissiteni_kell(creds):
         try:
             creds.refresh(Request())
         except Exception as exc:  # noqa: BLE001 - a valódi Google üzenet kell a felületre
-            raise OAuthError(
-                f"A tárolt Google hozzáférés megújítása nem sikerült ({type(exc).__name__}: {exc}). "
-                "Csatlakoztasd újra a Google fiókot a Beállítások oldalon."
-            ) from exc
+            # A tárolt hozzáférést MEGTARTJUK: egy sikertelen megújítás nem
+            # bizonyítja, hogy a refresh token halott. A hibát feljegyezzük,
+            # hogy a Beállítások oldalon látszódjon, mióta és miért áll.
+            row.last_error = _hiba_uzenet(exc)
+            row.last_error_at = datetime.now(timezone.utc)
+            db.commit()
+            raise OAuthError(row.last_error) from exc
         # A frissített access tokent visszaírjuk, hogy a következő futásnak (és
         # a párhuzamosan futó worker folyamatnak) ne kelljen újra frissítenie.
         data["token"] = creds.token
         data["expiry"] = creds.expiry.replace(tzinfo=timezone.utc).isoformat() if creds.expiry else None
         row.token_json = json.dumps(data)
+        row.last_refresh_at = datetime.now(timezone.utc)
+        row.last_error = None
+        row.last_error_at = None
         db.commit()
 
     return creds
@@ -292,6 +353,13 @@ def connection_status(db: Session) -> dict:
         "connected_at": row.updated_at if row and row.token_json else None,
         "client_configured": bool(settings.calendar_oauth_client_id and settings.calendar_oauth_client_secret),
         "redirect_uri": redirect_uri,
+        # ÉL-E a kapcsolat, vagy csak ott áll a sorban egy halott token. A
+        # tárolt hozzáférés megléte önmagában nem bizonyíték: a felület
+        # korábban "Csatlakozva" állapotot mutatott olyankor is, amikor a
+        # szinkron napok óta állt (lásd load_credentials).
+        "last_refresh_at": row.last_refresh_at if row else None,
+        "last_error": row.last_error if row else None,
+        "last_error_at": row.last_error_at if row else None,
     }
 
 

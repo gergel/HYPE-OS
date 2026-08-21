@@ -103,6 +103,36 @@ Kiadás sor csak megkétszerezné az összeget a pénzügyi összesítőkben. Ez
 tehát a régi hívások viselkedése változatlan). A papír állapota így is
 "kifizetve" lesz, tehát nem marad teendőként a havi listán.
 
+### A BEVÉTEL fizetési módja: utalás vagy készpénz
+
+A projektkód "Kifizetve" jelölésénél nem csak azt kérdezzük meg, MIKOR érkezett
+a pénz, hanem azt is, **hogyan** (`KifizetesIn.fizetes_modja`) - mert a kettő
+két különböző dobozról szól:
+
+- **Átutalás** → a bankszámlára jött: a bevételek közé kerül, a kasszát nem
+  mozgatja;
+- **Készpénz** → a bevételek közé kerül, **és a kasszába is**. A KP forgalom
+  oldalon ugyanez a sor jelenik meg, külön felvezetés nélkül - ezért NEM
+  keletkezik hozzá külön KpForgalom tétel: az kétszer számolná ugyanazt a
+  pénzt (lásd `services/kassza.py`).
+
+A készpénzes bevétel kétféle lehet, és a **számla** dönti el, melyik (lásd
+`services/bizonylat.py`):
+
+| Van mögötte számla | Mi lesz belőle |
+|---|---|
+| igen | sima **legális bevétel** |
+| nem | **FEDEZET**: ez az a készpénz, amiből a számla nélküli kiadás fedezhető, tehát a **fekete egyenleget csökkenti** |
+
+A KP forgalom oldalon a számla nélküli BEVÉTEL ezért nem "Nincs számla"
+figyelmeztetést kap, hanem **Fedezet** jelölést: ott a hiányzó számla nem
+hiányosság, hanem maga a szerep.
+
+Mód nélküli hívásnál (régi kliens, script) az **átutalás** az alapértelmezés -
+egy jelöletlen sor se a kasszába, se a bankba nem tartozna, és a kassza
+egyenlege addig csak közelítés, amíg van ilyen (lásd
+`services/kassza._jeloletlen`).
+
 ### A számla két dátuma: határidő és utalás napja
 
 Mindkét TIG-fajta papírján ott a **fizetési határidő** és a **tényleges utalás

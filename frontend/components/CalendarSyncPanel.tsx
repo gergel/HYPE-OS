@@ -10,6 +10,12 @@ type Connection = {
   connected: boolean;
   account_email: string | null;
   connected_at: string | null;
+  /** Mikor újult meg utoljára a hozzáférés, és mi volt az utolsó hiba. A
+   * tárolt token megléte önmagában nem bizonyítja, hogy ÉL a kapcsolat (lásd
+   * backend services/google_oauth.load_credentials). */
+  last_refresh_at?: string | null;
+  last_error?: string | null;
+  last_error_at?: string | null;
   client_configured: boolean;
   redirect_uri: string | null;
 };
@@ -153,6 +159,23 @@ export function CalendarSyncPanel() {
               {connecting ? "Átirányítás…" : "Csatlakozás Google fiókkal"}
             </button>
           </div>
+        )}
+
+        {/* ÉL-E a kapcsolat. A hozzáférés magától megújul, amíg a Google
+            engedi - ha mégsem, itt látszik, mióta és miért. A leggyakoribb ok
+            nem nálunk van: „Testing” állapotú Google Cloud projektnél a Google
+            7 naponta érvényteleníti a hozzáférést. */}
+        {conn?.connected && conn.last_error && (
+          <p className="mt-2 text-[12px] text-text-warning">
+            A hozzáférés megújítása nem sikerült
+            {conn.last_error_at ? ` (${new Date(conn.last_error_at).toLocaleString("hu-HU")})` : ""}:{" "}
+            {conn.last_error}
+          </p>
+        )}
+        {conn?.connected && !conn.last_error && conn.last_refresh_at && (
+          <p className="mt-2 text-[11px] text-text-muted">
+            A hozzáférés magától megújul – utoljára: {new Date(conn.last_refresh_at).toLocaleString("hu-HU")}.
+          </p>
         )}
 
         {conn && !conn.client_configured && (
