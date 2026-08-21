@@ -410,7 +410,10 @@ export function NaptarDiszpoContent({
         />
       )}
 
-      <ProjectDetailModal projectId={modalProjectId} onClose={() => setModalProjectId(null)} />
+      {/* A DISZPÓ felől szűkített nézet nyílik: a papírozás és a
+          költségek hetekkel később, más kézben történnek (lásd
+          ProjectDetailContent). */}
+      <ProjectDetailModal projectId={modalProjectId} nezet="diszpo" onClose={() => setModalProjectId(null)} />
     </Card>
   );
 }

@@ -17,9 +17,15 @@ import { useRouter } from "next/navigation";
 export function ProjectDetailModal({
   projectId,
   onClose,
+  nezet,
 }: {
   projectId: number | null;
   onClose: () => void;
+  /** HONNAN nyílt meg. A Diszpó oldalról a diszpós munkájához kell a projekt
+   * (gyártás, technika, stáb, a két küldés) - a papírozás és a költségek oda
+   * csak zajt vinnének. A Projektek listából ugyanez a projekt TELJESEN
+   * nyílik meg. Lásd ProjectDetailContent `csakDiszpoNezet`. */
+  nezet?: "diszpo";
 }) {
   const router = useRouter();
 
@@ -76,7 +82,7 @@ export function ProjectDetailModal({
         </div>
         <iframe
           key={projectId}
-          src={`/embed/projektek/${projectId}`}
+          src={`/embed/projektek/${projectId}${nezet ? `?nezet=${nezet}` : ""}`}
           title="Projekt részletei"
           className="min-h-0 flex-1 border-0 bg-background"
         />

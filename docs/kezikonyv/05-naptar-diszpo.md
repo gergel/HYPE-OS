@@ -53,6 +53,33 @@ csak a kiemelés és a felirat mondja meg, mikor mi a teendő.
 pollozás volt; itt **explicit gombok** vannak: az "Előzetes diszpó" és a "Diszpó
 küldése" gomb megnyomása maga a trigger, nincs állapotgép és nincs pollozás.
 
+### A diszpó felől megnyitott projekt SZŰKÍTETT
+
+A Naptár/Diszpó listán egy sorra kattintva a projekt teljes adatlapja nyílik meg
+felugró ablakban (`ProjectDetailModal` → `/embed/projektek/[id]`). Ugyanezt a
+felugró ablakot használja a **Projektek** lista is - és a kettő nem ugyanazt
+mutatja:
+
+| Honnan nyílt | Mi látszik |
+|---|---|
+| **Diszpó** (`?nezet=diszpo`) | forgatás, gyártás, stáb, technika, gyártás komment, a levél mellékletei, a két küldés |
+| **Projektek** (paraméter nélkül) | ugyanez **plusz** az utómunka, az alvállalkozói szerződések, a külsős TIG-ek és a költségek |
+
+A megkülönböztetés az **eredeté**, nem a jogosultságé: ugyanaz az ember a
+diszpóból szűkítve, a Projektek listából teljesen látja ugyanazt a projektet. A
+diszpós munkája a forgatás körül van; a papírozás hetekkel később, más kézben
+történik, és ott csak zajt vinne.
+
+A jogosultság ettől függetlenül is szűkít: akinek **csak** diszpó hozzáférése
+van, annak mindenhonnan a szűkített nézet nyílik - a papírozás neki úgyis 403
+lenne, és egy működésképtelen kártya rosszabb, mint a hiánya (lásd
+[02-auth-jogosultsag.md](02-auth-jogosultsag.md), `OLDAL_ALIASZOK`).
+
+A papírozás **műveletei** (generálás, kiküldés, aláírt példány, számla) a teljes
+nézetben sincsenek ott: azok az Utókövetésen maradnak, ahol egyszerre több
+projektre rálátva történnek. A projekt adatlapján az **állásuk** és a
+**költségek** látszanak, onnan egy link vezet tovább.
+
 ### Újraküldés: nagy, piros figyelmeztetés
 
 A kiküldés megismételhető (javított diszpót muszáj újraküldeni), de nem

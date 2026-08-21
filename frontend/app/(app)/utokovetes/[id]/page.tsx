@@ -25,11 +25,13 @@ import {
  * helye. Itt készül a szerződés és a TIG, itt dől el, ki számláz kiért, és itt
  * látszik a kifizetés.
  *
- * A Projekt oldalon szándékosan NINCS ilyen szekció: az a diszponálásé
- * (forgatás, stáb, technika, diszpó). A papírozás hetekkel később, más kézben
- * és egyszerre több projektre történik - két helyen ugyanaz csak azt érte el,
- * hogy a diszpót író ember is beleakadt. A Projekt adatlapról ide egy link
- * vezet (lásd components/ProjectDetailContent.tsx).
+ * A Projekt oldalon a papírozás MŰVELETEI szándékosan nincsenek meg: az az
+ * oldal a diszponálásé (forgatás, stáb, technika, diszpó), a papírozás pedig
+ * hetekkel később, más kézben és egyszerre több projektre történik - két
+ * helyen ugyanaz csak azt érte el, hogy a diszpót író ember is beleakadt. Az
+ * ÁLLÁSUK viszont ott is látszik, áttekintésként, innen ki nem vett adatból
+ * (lásd components/projekt/ProjektPapirokEsKoltsegek.tsx), és onnan ide vezet
+ * a link. A DISZPÓ felől megnyitott projekten az a blokk sem jelenik meg.
  *
  * A Belsős TIG itt nem jelenik meg - az havi, nem projektenkénti,
  * lásd /belsos-tig. */

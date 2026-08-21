@@ -18,6 +18,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { ForgatasIdopontEditor } from "@/components/ForgatasIdopontEditor";
 import { StabLinker } from "@/components/StabLinker";
+import { ProjektPapirokEsKoltsegek } from "@/components/projekt/ProjektPapirokEsKoltsegek";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
@@ -34,6 +35,9 @@ import {
   getEquipment,
   getFieldTypes,
   getMyPagePermissions,
+  getAllContractsForProject,
+  getAllTigForProject,
+  getProjektkodBontas,
   getProjektSzamlazok,
   getProjektUtomunkaOsszesites,
   getRecord,
@@ -91,7 +95,19 @@ const PAGE = "/projektek";
 //: A Diszpó menüpont jogosultsági kulcsa (lásd lib/nav.ts).
 const DISZPO_PAGE = "/naptar";
 
-export async function ProjectDetailContent({ projectId, embedded = false }: { projectId: number; embedded?: boolean }) {
+export async function ProjectDetailContent({
+  projectId,
+  embedded = false,
+  csakDiszpoNezet = false,
+}: {
+  projectId: number;
+  embedded?: boolean;
+  /** A DISZPÓ felől nyílt meg (lásd ProjectDetailModal `nezet`). Ilyenkor a
+   * papírozás és a költségek kimaradnak: a diszpós munkája a forgatás, a
+   * stáb, a technika és a két küldés - a papírok hetekkel később, más kézben
+   * készülnek. A Projektek listából ugyanez a projekt TELJESEN nyílik meg. */
+  csakDiszpoNezet?: boolean;
+}) {
   const project = await getRecord(ENTITY_PATHS.project, projectId);
   if (!project) return null;
 
@@ -128,6 +144,18 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
     getAttachments("project", projectId),
     getProjektSzamlazok(projectId),
   ]);
+
+  // A PAPÍROK és a KÖLTSÉG csak a teljes nézethez kellenek: a diszpó felől
+  // megnyitva ezek a kártyák meg sem jelennek, tehát a lekérésük is felesleges
+  // lenne (a diszpós leggyakrabban egy felugró ablakban nyitja meg a
+  // projektet, és ott minden fölös hívás látszik a betöltésen).
+  const [szerzodesek, tigek, bontas] = csakDiszpoNezet
+    ? [[], [], null]
+    : await Promise.all([
+        getAllContractsForProject(projectId),
+        getAllTigForProject(projectId),
+        project.project_code_id ? getProjektkodBontas(Number(project.project_code_id)) : null,
+      ]);
 
   const equipmentById = new Map(allEquipment.map((e) => [e.id, e]));
   const equipmentOptions = allEquipment.map((e) => ({
@@ -192,14 +220,17 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
   const szerkeszthet = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const torolhet = canDoAction(currentUser, pagePermissions, PAGE, "delete");
 
-  // CSAK DISZPÓ hozzáférés: a naptáron át jutott ide, a Projektek oldalhoz
-  // magához nincs joga. Neki a diszpó munkája kell - a forgatás és a technika
-  // adatai, a gyártás komment, a levél mellékletei, a stáb (nekik megy a
-  // diszpó) és a két küldés-gomb. Az Utómunka kártya viszont nem az ő dolga:
-  // ott a létrehozás úgyis 403-at adna (az /utomunka külön jogosultság), és
-  // egy működésképtelen gomb rosszabb, mint a hiánya.
+  // SZŰKÍTETT (diszpós) NÉZET - két okból lehet:
+  //
+  // 1. a DISZPÓ felől nyitották meg (csakDiszpoNezet): ott a projekt a
+  //    diszponáláshoz kell - forgatás, stáb, technika, gyártás komment, a két
+  //    küldés. A papírozás és a költségek hetekkel később, más kézben
+  //    történnek, ide csak zajt vinnének. A Projektek listából ugyanez a
+  //    projekt teljesen nyílik meg;
+  // 2. a felhasználónak CSAK diszpó hozzáférése van: neki a papírozás
+  //    úgyis 403 lenne, és egy működésképtelen kártya rosszabb, mint a hiánya.
   const csakDiszpo =
-    pagePermissions !== null && !pagePermissions[PAGE] && !!pagePermissions[DISZPO_PAGE];
+    csakDiszpoNezet || (pagePermissions !== null && !pagePermissions[PAGE] && !!pagePermissions[DISZPO_PAGE]);
 
   const bookingRows = bookings
     .map((b) => {
@@ -354,13 +385,17 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
           </>
         ),
       },
-      // A "Szerződés & TIG" fül SZÁNDÉKOSAN nincs itt. Ez az oldal a
-      // diszponálásé: forgatás, stáb, technika, diszpó. A papírozás (ki számláz
-      // kiért, szerződés, TIG, kifizetés) hetekkel később, más kézben és
-      // EGYBEN történik - arra az Utókövetés oldal való, ahol ugyanezek a
-      // kezelők egy helyen, az összes projektre rálátva vannak (lásd
-      // app/(app)/utokovetes/[id]/page.tsx). Két helyen ugyanaz a papírozás
-      // csak azt eredményezte, hogy a diszpót író ember is beleakadt.
+      // A papírozás MŰVELETEI (generálás, kiküldés, aláírt példány, számla)
+      // szándékosan nincsenek itt: azok hetekkel később, más kézben és EGYBEN
+      // történnek - arra az Utókövetés oldal való, ahol az összes projektre
+      // rálátva vannak (lásd app/(app)/utokovetes/[id]/page.tsx). Két helyen
+      // ugyanaz a művelet csak azt eredményezte, hogy a diszpót író ember is
+      // beleakadt.
+      //
+      // Az ÁLLÁSUK viszont az oldal alján látszik (lásd
+      // ProjektPapirokEsKoltsegek): az adatlapot megnyitva a leggyakoribb
+      // kérdés az, hogy megvan-e már minden ehhez a forgatáshoz, és mibe
+      // került. A diszpó felől megnyitva az a blokk is kimarad.
       {
         key: "csapat",
         label: "Csapat & Utómunka",
@@ -514,6 +549,20 @@ export async function ProjectDetailContent({ projectId, embedded = false }: { pr
         />
 
         <DetailSections sections={tabs} entityType="project" canReorder={szerepkorei(currentUser).includes("admin")} />
+
+        {/* PAPÍROK és KÖLTSÉG - áttekintésként, a mezők után. A diszpó felől
+            megnyitva kimarad: ott a projekt a diszponáláshoz kell (lásd
+            csakDiszpo). */}
+        {!csakDiszpo && (
+          <ProjektPapirokEsKoltsegek
+            projectId={projectId}
+            projectCodeId={project.project_code_id ? Number(project.project_code_id) : null}
+            szerzodesek={szerzodesek}
+            tigek={tigek}
+            bontas={bontas}
+            lathatKoltseget={lathatKoltseget}
+          />
+        )}
       </div>
     </div>
   );
