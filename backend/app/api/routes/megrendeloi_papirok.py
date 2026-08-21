@@ -406,6 +406,27 @@ Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszakülde
 """
 
 
+def _projekt_neve(papir, pk: ProjectCode) -> str:
+    """A PROJEKT NEVE a levélhez - nem a projektkód.
+
+    A levél a MEGRENDELŐNEK megy, ő pedig a projektet a nevén ismeri
+    ("Tavaszi kampányfilm"); a HYPE26-014 a mi belső azonosítónk, neki semmit
+    nem mond. A tárgysorban és a levél szövegében ezért a név áll.
+
+    A sorrend azért ez: elöl az, ami a PAPÍRON is szerepel - a megrendelő a
+    csatolmányon ugyanezt a nevet látja -, utána a projektkódon nyilvántartott
+    nevek (ugyanaz a visszaesés, mint az űrlap előtöltésénél), és csak legvégső
+    esetben maga a kód. Név nélküli tárgysor rosszabb volna, mint egy kód."""
+    jeloltek = (
+        getattr(papir, "projekt_nev", None),
+        pk.szerzodes_projekt_nev,
+        pk.project_nev,
+        pk.tig_projektnev,
+        pk.projektkod,
+    )
+    return next((str(j).strip() for j in jeloltek if j and str(j).strip()), "")
+
+
 @router.post("/{fajta}/{project_code_id}/generalas-es-kuldes", response_model=PapirRead)
 def generate_and_send(
     fajta: str,
@@ -447,10 +468,13 @@ def generate_and_send(
             fields=_sablon_mezok(papir, fajta),
             output_folder_id=settings.gdoc_output_folder_id or settings.drive_folder_id or None,
         )
+        # A LEVÉLBEN a projekt NEVE megy, nem a kódja - a fájlnévben viszont
+        # marad a kód: az iktatáshoz az a jó, mert egyedi.
+        projekt_neve = _projekt_neve(papir, pk)
         send_message(
             [papir.email],
-            f"{pk.projektkod} – {cimke}",
-            _EMAIL_HTML.format(projekt=pk.projektkod, papir=cimke),
+            f"{projekt_neve} – {cimke}" if projekt_neve else cimke.capitalize(),
+            _EMAIL_HTML.format(projekt=projekt_neve, papir=cimke),
             pdf_bytes=pdf_bytes,
             pdf_filename=f"{base_name}.pdf",
         )

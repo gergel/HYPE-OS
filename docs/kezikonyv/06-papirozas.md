@@ -698,6 +698,19 @@ az van, ami a küldés pillanatában igaz volt. Az előtöltés
 A **kontakt csak az e-mail címet adja**: a levél egy embernek megy, a cégadat a
 cégé. A felületen utána minden mező szerkeszthető.
 
+#### A levélben a projekt NEVE megy, nem a kódja
+
+A tárgysor és a levél szövege is a **projekt nevét** írja („Tavaszi kampányfilm
+– megrendelői szerződés"), nem a projektkódot: a levél a MEGRENDELŐNEK szól, ő
+pedig a projektet a nevén ismeri, a HYPE26-014 a mi belső azonosítónk. A
+**fájlnévben marad a kód** - az iktatáshoz az a jó, mert egyedi.
+
+A név keresése (`_projekt_neve`) elöl azzal kezdi, ami a PAPÍRON is szerepel: a
+megrendelő a csatolmányon ugyanezt a nevet látja. Utána jönnek a projektkódon
+nyilvántartott nevek (`szerzodes_projekt_nev` → `project_nev` →
+`tig_projektnev`, ugyanaz a visszaesés, mint az űrlap előtöltésénél), és csak
+ha egyik sincs, akkor maga a kód - egy név nélküli tárgysor rosszabb volna.
+
 ### Keretszerződés vs. TIG
 
 Az **élő** megrendelői keretszerződés kiváltja az eseti szerződést, a TIG-et
