@@ -387,6 +387,13 @@ export default async function ProjectKodokPage({
             getHref={(pc) => `/projektek/project-kodok/${pc.id}`}
             deleteHref={canDelete ? (pc) => `${ENTITY_PATHS.projectCode}/${pc.id}` : undefined}
             filterable
+            // FELUGRÓ ABLAKBAN nyílik, nem teljes oldalként: a listán ritkán
+            // egyetlen kódot keresünk - inkább végigmegyünk többön (mi hiányzik
+            // róla, mennyi a profitja), és minden megnyitás után vissza kellene
+            // navigálni a listára, elveszítve a szűrést és a görgetést. Ugyanaz
+            // a nézet jelenik meg, minden művelettel (lásd RecordDetailModal:
+            // a tartalom az /embed útvonalról jön, nem újraépítve).
+            openInModal
             columns={oszlopok}
           />
         </Card>

@@ -75,6 +75,10 @@ export async function MegrendeloiPapirokOldal({
             rows={rows}
             emptyText={`Még nincs ${cim.toLowerCase()}.`}
             getHref={(p) => `/projektek/project-kodok/${p.project_code_id}`}
+            // A projektkód FELUGRÓ ABLAKBAN nyílik: innen jellemzően több
+            // papírt nézünk végig egymás után, és mindegyik után vissza kellene
+            // navigálni ide (lásd RecordDetailModal).
+            openInModal
             deleteHref={canDelete ? (p) => `/api/v1/megrendeloi-papirok/${fajta}/${p.id}` : undefined}
             columns={[
               {

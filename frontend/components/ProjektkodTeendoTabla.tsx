@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Search } from "lucide-react";
+import { RecordDetailModal } from "@/components/RecordDetailModal";
 import type { ProjectCode } from "@/lib/api";
 import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import { formatHuf } from "@/lib/penz";
@@ -33,12 +33,16 @@ const ELSO_ADAG = 12;
  * így balról jobbra haladva az látszik, mi a következő teendő rajta, és nem
  * kell ugyanazt a sort több helyen is átfutni.
  *
- * A kártya a projektkód adatlapjára visz: a papírozás ott végezhető el. */
+ * A kártyára kattintva a projektkód TELJES adatlapja nyílik meg felugró
+ * ablakban (a papírozás ott végezhető el) - nem elnavigálva, mert itt
+ * jellemzően több kódot nézünk végig egymás után. */
 export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
   const [kereses, setKereses] = useState("");
   const [rendezes, setRendezes] = useState<Rendezes>("kod");
   const [csakTeendo, setCsakTeendo] = useState(true);
   const [nyitott, setNyitott] = useState<ProjektkodFazis[]>([]);
+  // Melyik projektkód van épp felugró ablakban megnyitva.
+  const [modalHref, setModalHref] = useState<string | null>(null);
 
   const szurt = useMemo(() => {
     const keresett = kereses.trim().toLocaleLowerCase("hu-HU");
@@ -127,10 +131,17 @@ export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
                   </p>
                 ) : (
                   lathato.map((pc) => (
-                    <Link
+                    // FELUGRÓ ABLAKBAN nyílik, nem teljes oldalként: a
+                    // teendő-nézetben egymás után több kódot nézünk végig, és
+                    // mindegyik után vissza kellene navigálni ide - elveszítve
+                    // a keresést és a nyitott oszlopokat (lásd
+                    // RecordDetailModal). Gomb, nem link: a href-es navigációt
+                    // épp hogy elkerüljük.
+                    <button
                       key={pc.id}
-                      href={`/projektek/project-kodok/${pc.id}`}
-                      className="block w-full rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 transition-colors hover:border-text-accent/40"
+                      type="button"
+                      onClick={() => setModalHref(`/projektek/project-kodok/${pc.id}`)}
+                      className="block w-full rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-left transition-colors hover:border-text-accent/40"
                     >
                       <p className="truncate text-[13px] text-text-primary">{pc.projektkod}</p>
                       <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[11.5px] text-text-muted">
@@ -167,7 +178,7 @@ export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
                           {hataridoSzoveg(pc.hatarido_allas)}
                         </p>
                       )}
-                    </Link>
+                    </button>
                   ))
                 )}
                 {rejtett > 0 && (
@@ -184,6 +195,10 @@ export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
           );
         })}
       </div>
+
+      {/* A megnyitott projektkód TELJES adatlapja, felugró ablakban - ugyanaz
+          a nézet, mint a rendes oldalon (lásd RecordDetailModal). */}
+      <RecordDetailModal href={modalHref} onClose={() => setModalHref(null)} />
     </div>
   );
 }

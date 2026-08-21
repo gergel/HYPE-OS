@@ -357,3 +357,19 @@ a sorrendjük adminból állítható - lásd
 [01-architektura.md](01-architektura.md#a-rekord-részletnézet-motorja).
 Frontend: `components/ProjectDetailContent.tsx`, `ProjectDetailModal.tsx`,
 `RecordDetailModal.tsx`, `RelatedTable.tsx`.
+
+### A PROJEKTKÓD is felugró ablakban nyílik
+
+A projektkódok listájáról, a Teendők nézet kártyáiról és a megrendelői
+papír-oldalakról a projektkód **felugró ablakban** nyílik meg, nem teljes
+oldalként (`DataTable openInModal` → `RecordDetailModal`). Ugyanaz a nézet
+jelenik meg, minden művelettel: a tartalom az `/embed/projektek/project-kodok/[id]`
+útvonalról jön, ami szó szerint ugyanazt a komponenst exportálja - nem egy
+kliens oldalon újraépített, előbb-utóbb elcsúszó változat.
+
+Miért? Mert ezeken a felületeken ritkán EGY kódot keresünk: végigmegyünk többön
+(mi hiányzik róla, mennyi a profitja, lejárt-e a határideje), és minden
+megnyitás után vissza kellene navigálni - elveszítve a szűrést, a keresést és a
+görgetést. Az ablak fejlécében ott a **"Megnyitás új oldalon"**, ha valaki
+mégis a teljes oldalt akarja, és bezáráskor a mögöttes lista frissül, hogy az
+ablakban végzett szerkesztés ott is látszódjon.
