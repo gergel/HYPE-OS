@@ -64,6 +64,10 @@ export default async function KpForgalomPage() {
     be_szamla_nelkul_db: 0,
     ki_szamlaval_db: 0,
     ki_szamla_nelkul_db: 0,
+    be_atvezetes: 0,
+    ki_atvezetes: 0,
+    be_atvezetes_db: 0,
+    ki_atvezetes_db: 0,
     be: 0,
     ki: 0,
     egyenleg: 0,
@@ -95,13 +99,19 @@ export default async function KpForgalomPage() {
     { header: "Megnevezés", render: (s) => s.megnevezes, sortAccessor: (s) => s.megnevezes },
     {
       header: "Típus",
-      render: (s) => (
-        <StatusBadge
-          label={FORRAS_CIMKE[s.forras] ?? s.forras}
-          tone={s.forras === "kiadas" ? "orange" : "teal"}
-        />
-      ),
-      sortAccessor: (s) => s.forras,
+      render: (s) =>
+        // Az ÁTVEZETÉS (ATM-felvétel) nem bevétel: a saját pénzünk került át a
+        // bankszámláról a kasszába. Ki is írjuk, mert a sor egyébként
+        // megtévesztően nagy "bevételnek" látszana.
+        s.atvezetes ? (
+          <StatusBadge label="Átvezetés (ATM)" tone="blue" />
+        ) : (
+          <StatusBadge
+            label={FORRAS_CIMKE[s.forras] ?? s.forras}
+            tone={s.forras === "kiadas" ? "orange" : "teal"}
+          />
+        ),
+      sortAccessor: (s) => (s.atvezetes ? "atvezetes" : s.forras),
     },
     { header: "Projektkód", render: (s) => s.projektkod ?? "–", sortAccessor: (s) => s.projektkod },
     {
@@ -131,8 +141,15 @@ export default async function KpForgalomPage() {
       header: "Számla",
       align: "right",
       render: (s) =>
-        s.van_szamla ? <StatusBadge label="Van" tone="success" /> : <StatusBadge label="Nincs" tone="warning" />,
-      sortAccessor: (s) => (s.van_szamla ? 1 : 0),
+        // Átvezetésnél a bizonylat a banki kivonat - se legális, se fekete.
+        s.atvezetes ? (
+          <span className="text-text-muted">–</span>
+        ) : s.van_szamla ? (
+          <StatusBadge label="Van" tone="success" />
+        ) : (
+          <StatusBadge label="Nincs" tone="warning" />
+        ),
+      sortAccessor: (s) => (s.atvezetes ? -1 : s.van_szamla ? 1 : 0),
     },
   ];
 
@@ -236,6 +253,12 @@ export default async function KpForgalomPage() {
                   ideiErtek={idei.be_szamla_nelkul}
                   osszesErtek={osszes.be_szamla_nelkul}
                   ideiDb={idei.be_szamla_nelkul_db}
+                />
+                <Sorpar
+                  cimke="Átvezetés – ATM-felvétel (se nem bevétel, se nem költés)"
+                  ideiErtek={idei.be_atvezetes}
+                  osszesErtek={osszes.be_atvezetes}
+                  ideiDb={idei.be_atvezetes_db}
                 />
                 <Sorpar cimke="Összes bevétel" ideiErtek={idei.be} osszesErtek={osszes.be} kiemelt hangsulyos />
                 <Sorpar
@@ -380,20 +403,27 @@ export default async function KpForgalomPage() {
                       options={[...IRANY_OPCIOK]}
                       placeholder={f.kiadas_e ? "kiadas" : "bevetel"}
                     />
-                    {/* HONNAN tudjuk az irányt, ha a mező üres: az importált
-                        előjelből, vagy - ha az sincs - alapértelmezésből. A
-                        kettő nem ugyanaz: az első a Notion adata, a második
-                        csak egy feltevés, amit érdemes megerősíteni. */}
+                    {/* HONNAN tudjuk az irányt, ha a mező üres: az ATM-szabály
+                        alapján, az importált előjelből, vagy - ha az sincs -
+                        alapértelmezésből. A három nem ugyanaz: az első kettő
+                        adat, a harmadik csak feltevés, amit érdemes
+                        megerősíteni. */}
                     {!f.forgalom && (
                       <span
                         className="text-[11px] text-text-muted"
                         title={
-                          f.forintban_notion
-                            ? "A Notion „Forintban” mezőjének előjeléből"
-                            : "Nincs megadva irány és előjel sem – bevételnek vesszük"
+                          f.atvezetes_e
+                            ? "Készpénzfelvétel a bankból: a kasszába ÉRKEZIK, ezért bevétel (átvezetés)"
+                            : f.forintban_notion
+                              ? "A Notion „Forintban” mezőjének előjeléből"
+                              : "Nincs megadva irány és előjel sem – bevételnek vesszük"
                         }
                       >
-                        {f.forintban_notion ? "(előjelből)" : "(feltételezve)"}
+                        {f.atvezetes_e
+                          ? "(ATM-felvétel)"
+                          : f.forintban_notion
+                            ? "(előjelből)"
+                            : "(feltételezve)"}
                       </span>
                     )}
                   </span>

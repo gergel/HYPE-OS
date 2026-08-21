@@ -308,6 +308,10 @@ class KpNaploSor(BaseModel):
     #: Van-e mögötte SZÁMLA. Ez dönti el, melyik oldalra kerül a legális/fekete
     #: bontásban (lásd services/kassza.py).
     van_szamla: bool = False
+    #: ÁTVEZETÉS: a saját pénzünk mozgatása bankszámla és kassza közt
+    #: (ATM-felvétel) - a kassza egyenlegébe beleszámít, a legális/fekete
+    #: bontásba nem.
+    atvezetes: bool = False
     #: Hova visz a sor a felületen.
     href: str | None = None
 
@@ -323,6 +327,12 @@ class KpOsszesites(BaseModel):
     be_szamla_nelkul_db: int = 0
     ki_szamlaval_db: int = 0
     ki_szamla_nelkul_db: int = 0
+    #: ÁTVEZETÉS (ATM-felvétel): a be/ki végösszegben benne van, a
+    #: legális/fekete bontásban külön áll.
+    be_atvezetes: float = 0
+    ki_atvezetes: float = 0
+    be_atvezetes_db: int = 0
+    ki_atvezetes_db: int = 0
     be: float = 0
     ki: float = 0
     egyenleg: float = 0
@@ -354,6 +364,10 @@ def _osszesites(o) -> KpOsszesites:
         be_szamla_nelkul_db=o.be_szamla_nelkul_db,
         ki_szamlaval_db=o.ki_szamlaval_db,
         ki_szamla_nelkul_db=o.ki_szamla_nelkul_db,
+        be_atvezetes=o.be_atvezetes,
+        ki_atvezetes=o.ki_atvezetes,
+        be_atvezetes_db=o.be_atvezetes_db,
+        ki_atvezetes_db=o.ki_atvezetes_db,
         be=o.be,
         ki=o.ki,
         egyenleg=o.egyenleg,
@@ -385,6 +399,7 @@ def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_curren
                 ki=s.ki,
                 egyenleg=s.egyenleg,
                 van_szamla=s.van_szamla,
+                atvezetes=s.atvezetes,
                 href=s.href,
             )
             for s in kep.sorok

@@ -293,7 +293,8 @@ a lista fölött kiírjuk.
    kassza a téma. Ezek a legnagyobb tételek közt vannak (több százezres
    felvételek), tehát rossz irányban KÉTSZERES hibát okoznának az egyenlegben.
    A felismerés a megnevezésből megy: „KP felvétel", „ATM",
-   „készpénzfelvétel" (`KESZPENZFELVETEL_JELEK`).
+   „készpénzfelvétel" (`KESZPENZFELVETEL_JELEK`). Ez a bevétel viszont
+   **átvezetés** - lásd lentebb -, tehát a fekete oldalt nem érinti.
 2. különben **az ELŐJEL**: a Notion „Forintban" formulája negatív a kiadásokra.
    Ez azért kell, mert az „Összeg" oszlop előjel nélküli, tehát abból nem derül
    ki, hogy egy 600 000 Ft-os sor kivétel volt-e a kasszából vagy betétel. Ez a
@@ -331,9 +332,19 @@ számla**:
 - a **számla nélküli BEVÉTEL** viszont épp ezt fedezi: ami számla nélkül jött
   be készpénzben, az számla nélkül is elkölthető.
 
+**ÁTVEZETÉS: a harmadik kategória.** Az ATM-ből felvett készpénz egyik oldalra
+sem tartozik: az a SAJÁT pénzünk, ami a bankszámláról került a kasszába. A
+kassza egyenlegét mozgatja - a dobozban tényleg ott van -, de nem „számla
+nélküli bevétel", mert van róla banki kivonat, és nem is költés. Ezért a fekete
+egyenleget **nem csökkenti**: attól, hogy felveszünk 600 000 Ft-ot a bankból,
+egyetlen bizonylat nélküli kiadás sem lesz elszámolható. A felületen külön
+sorban („Átvezetés - ATM-felvétel") és külön jelöléssel szerepel.
+
 ```
 fekete egyenleg = számla nélküli KIADÁS - számla nélküli BEVÉTEL
+                  (átvezetés nélkül - se ide, se oda)
 kassza          = MINDEN készpénzes bevétel - MINDEN készpénzes kiadás
+                  (az átvezetéssel EGYÜTT)
 ```
 
 A két szám két külön kérdésre válaszol, és nem keverendő: a kassza az, aminek

@@ -174,6 +174,9 @@ class KpForgalomRead(KpForgalomBase):
     #: ne kelljen újra levezetnie.
     forintban: float | None = None
     kiadas_e: bool = False
+    #: ATM-felvétel: a kasszába érkezik, de se a legális, se a fekete oldalra
+    #: nem kerül - és az irányát sem az előjel adja, hanem ez a szabály.
+    atvezetes_e: bool = False
 
     model_config = {"from_attributes": True}
 

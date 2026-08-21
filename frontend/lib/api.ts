@@ -1276,6 +1276,10 @@ export type KpNaploSor = {
   /** Van-e mögötte SZÁMLA - ez dönti el, a legális vagy a fekete oldalra
    * kerül-e. */
   van_szamla: boolean;
+  /** ÁTVEZETÉS: a saját pénzünk mozgatása bankszámla és kassza közt
+   * (ATM-felvétel). A kassza egyenlegébe beleszámít, a legális/fekete
+   * bontásba nem. */
+  atvezetes: boolean;
   href: string | null;
 };
 
@@ -1289,6 +1293,12 @@ export type KpOsszesites = {
   be_szamla_nelkul_db: number;
   ki_szamlaval_db: number;
   ki_szamla_nelkul_db: number;
+  /** ÁTVEZETÉS (ATM-felvétel): a be/ki végösszegben benne van, a
+   * legális/fekete bontásban külön áll. */
+  be_atvezetes: number;
+  ki_atvezetes: number;
+  be_atvezetes_db: number;
+  ki_atvezetes_db: number;
   be: number;
   ki: number;
   egyenleg: number;
@@ -1328,6 +1338,9 @@ export type KpForgalom = {
   /** A sor összege és iránya, ahogy a kassza számol vele. */
   forintban: number | null;
   kiadas_e: boolean;
+  /** ATM-felvétel: a kasszába érkezik, de se a legális, se a fekete oldalra
+   *  nem kerül - és az irányát sem az előjel adja, hanem ez a szabály. */
+  atvezetes_e: boolean;
 };
 
 export async function getKpForgalmak(limit = 5000): Promise<KpForgalom[]> {

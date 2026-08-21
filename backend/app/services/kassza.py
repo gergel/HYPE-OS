@@ -64,6 +64,12 @@ class KasszaSor:
     #: Van-e mögötte számla. Ez dönti el, melyik oldalra kerül a legális/fekete
     #: bontásban (lásd a modul leírását).
     van_szamla: bool = False
+    #: ÁTVEZETÉS: nem bevétel és nem költés, hanem a saját pénzünk mozgatása a
+    #: bankszámla és a kassza között (ATM-felvétel). A kassza egyenlegébe
+    #: beleszámít - a doboz tényleg ennyivel lett vastagabb -, de sem a legális,
+    #: sem a fekete oldalra nem kerül: van róla banki kivonat, tehát nem
+    #: "számla nélküli bevétel", és nem is költés.
+    atvezetes: bool = False
     #: A kassza egyenlege EZ UTÁN a sor után - időrendben számolva.
     egyenleg: float = 0.0
     #: Hova visz a sor a felületen.
@@ -82,14 +88,21 @@ class Osszesites:
     be_szamla_nelkul_db: int = 0
     ki_szamlaval_db: int = 0
     ki_szamla_nelkul_db: int = 0
+    #: ÁTVEZETÉS: a bankszámla és a kassza közti mozgás (ATM-felvétel). A
+    #: `be`/`ki` végösszegbe BELESZÁMÍT - a dobozban tényleg ott a pénz -, de a
+    #: legális/fekete bontásban külön áll: se nem bevétel, se nem költés.
+    be_atvezetes: float = 0.0
+    ki_atvezetes: float = 0.0
+    be_atvezetes_db: int = 0
+    ki_atvezetes_db: int = 0
 
     @property
     def be(self) -> float:
-        return self.be_szamlaval + self.be_szamla_nelkul
+        return self.be_szamlaval + self.be_szamla_nelkul + self.be_atvezetes
 
     @property
     def ki(self) -> float:
-        return self.ki_szamlaval + self.ki_szamla_nelkul
+        return self.ki_szamlaval + self.ki_szamla_nelkul + self.ki_atvezetes
 
     @property
     def egyenleg(self) -> float:
@@ -103,6 +116,16 @@ class Osszesites:
         return self.ki_szamla_nelkul - self.be_szamla_nelkul
 
     def vedd_hozza(self, sor: KasszaSor) -> None:
+        if sor.atvezetes:
+            # Se a legális, se a fekete oldalra nem kerül - de a kassza
+            # egyenlegét mozgatja, ezért a be/ki végösszegben benne van.
+            if sor.be:
+                self.be_atvezetes += sor.be
+                self.be_atvezetes_db += 1
+            if sor.ki:
+                self.ki_atvezetes += sor.ki
+                self.ki_atvezetes_db += 1
+            return
         if sor.be:
             if sor.van_szamla:
                 self.be_szamlaval += sor.be
@@ -265,6 +288,10 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
                 ki=osszeg if kiadas_e else 0.0,
                 # Ezekhez nincs bizonylat - ezért is vannak külön nyilvántartva.
                 van_szamla=False,
+                # …az ATM-felvétel viszont ÁTVEZETÉS: van róla banki kivonat,
+                # és nem is bevétel, csak a saját pénzünk került át a
+                # bankszámláról a kasszába.
+                atvezetes=keszpenzfelvetel(f.megnevezes),
             )
         )
 
