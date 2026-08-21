@@ -141,11 +141,17 @@ class RevenueRead(RevenueBase):
 
 class KpForgalomBase(BaseModel):
     expense_id: int | None = None
+    #: Az IRÁNY: "bevetel" vagy "kiadas". Importált sornál ez sokszor üres - ott
+    #: a Notion "Forintban" formulájának előjele döntött (lásd
+    #: models/finance.KpForgalom.forintban). Kézzel szerkesztve viszont EZ a
+    #: mérvadó: az összeg vagy az irány átírása félreteszi az importált
+    #: formula-értéket (lásd routes/finance._kp_forgalom_kezi_javitas).
     forgalom: str | None = None
     osszeg: float | None = None
     penznem: str = "HUF"
     legalis: str | None = None
     kiadas_datuma: date | None = None
+    megnevezes: str | None = None
 
 
 class KpForgalomCreate(KpForgalomBase):
@@ -160,8 +166,14 @@ class KpForgalomRead(KpForgalomBase):
     id: int
 
     kiadas_sum_notion: float | None = None
+    #: A Notion "Forintban" formulájának ELŐJELES értéke - a kiadásokon
+    #: negatív. Amíg megvan, EZ dönti el az irányt (lásd
+    #: models/finance.KpForgalom.forintban).
     forintban_notion: float | None = None
-    megnevezes: str | None = None
+    #: A sor összege és iránya, ahogy a kassza számol vele - hogy a felületnek
+    #: ne kelljen újra levezetnie.
+    forintban: float | None = None
+    kiadas_e: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -48,10 +48,10 @@ def sajat_oldal(db) -> dict[str, KpForgalom]:
     sorok = db.scalars(select(KpForgalom)).all()
     print(f"── A MI ADATAINK ──\n{len(sorok)} sor a kp_forgalmak táblában.\n")
 
-    osszeg = sum(kassza_szolg._kp_forgalom_osszege(f) for f in sorok)
+    osszeg = sum(kassza_szolg.kp_forgalom_iranya(f)[0] for f in sorok)
     kotott = sum(1 for f in sorok if f.expense_id is not None)
     datum_nelkul = sum(1 for f in sorok if f.kiadas_datuma is None)
-    ertek_nelkul = [f for f in sorok if kassza_szolg._kp_forgalom_osszege(f) == 0]
+    ertek_nelkul = [f for f in sorok if kassza_szolg.kp_forgalom_iranya(f)[0] == 0]
 
     print(f"  végösszeg (forintban):       {_ft(osszeg)}")
     print(f"  ebből kiadáshoz kötve:       {kotott:>5d} sor (ezek KIMARADNAK a naplóból)")
@@ -113,7 +113,10 @@ def notion_oldal(db, sajat: dict) -> None:
         if mienk is None:
             hianyzik.append(f"      {nev:42} {_ft(ertek)}")
             continue
-        miertek = kassza_szolg._kp_forgalom_osszege(mienk)
+        # ELŐJELESEN hasonlítunk: a Notion 'Forintban' negatív a kiadásokra,
+        # és épp ez az előjel volt az, ami nálunk elveszett.
+        mi_osszeg, mi_kiadas = kassza_szolg.kp_forgalom_iranya(mienk)
+        miertek = -mi_osszeg if mi_kiadas else mi_osszeg
         if round(miertek, 2) != round(ertek, 2):
             elter.append(f"      {nev:42} Notion: {_ft(ertek)}   nálunk: {_ft(miertek)}")
 

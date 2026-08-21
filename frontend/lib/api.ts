@@ -1310,6 +1310,30 @@ export async function getKpNaplo(): Promise<KpNaplo | null> {
   return apiGet<KpNaplo>("/api/v1/finance/kp-naplo");
 }
 
+/** A Notionből örökölt "KP forgalom" tábla egy sora - a készpénz-mozgások
+ * kézzel vezetett nyilvántartása (lásd backend models/finance.KpForgalom). */
+export type KpForgalom = {
+  id: number;
+  megnevezes: string | null;
+  /** Az IRÁNY: "bevetel" vagy "kiadas". Importált soron gyakran üres - ott a
+   * `forintban_notion` ELŐJELE döntött. Kézzel átírva viszont ez a mérvadó. */
+  forgalom: string | null;
+  osszeg: number | null;
+  penznem: string;
+  legalis: string | null;
+  kiadas_datuma: string | null;
+  expense_id: number | null;
+  /** A Notion "Forintban" formulájának előjeles értéke (kiadáson negatív). */
+  forintban_notion: number | null;
+  /** A sor összege és iránya, ahogy a kassza számol vele. */
+  forintban: number | null;
+  kiadas_e: boolean;
+};
+
+export async function getKpForgalmak(limit = 5000): Promise<KpForgalom[]> {
+  return (await apiGet<KpForgalom[]>(`/api/v1/kp-forgalom?limit=${limit}`)) ?? [];
+}
+
 export type FieldVisibilityConfig = { employee_id: number; entity_type: string; visible_fields: string[] | null };
 
 /** A bejelentkezett felhasználó saját mező-láthatósága egy entitástípushoz -
@@ -1490,6 +1514,7 @@ export const ENTITY_PATHS = {
   feedback: "/api/v1/feedback",
   contract: "/api/v1/contracts",
   assignment: "/api/v1/assignments",
+  kpForgalom: "/api/v1/kp-forgalom",
 } as const;
 
 /** Egy rekord összes mezőjének lekérése (a részletnézetekhez) - nem szűkítjük

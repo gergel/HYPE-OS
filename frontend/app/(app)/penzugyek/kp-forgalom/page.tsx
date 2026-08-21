@@ -1,11 +1,29 @@
 import { Card } from "@/components/Card";
 import { DataTable, type Column } from "@/components/DataTable";
+import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { EditableTableCell } from "@/components/EditableTableCell";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { getKpNaplo, type KpOsszesites } from "@/lib/api";
+import {
+  ENTITY_PATHS,
+  getCurrentUser,
+  getKpForgalmak,
+  getKpNaplo,
+  getMyPagePermissions,
+  type KpForgalom,
+  type KpOsszesites,
+} from "@/lib/api";
 import { formatHuf } from "@/lib/penz";
-import { ArrowDownLeft, ArrowUpRight, EyeOff, Receipt, Wallet } from "lucide-react";
+import { canDoAction } from "@/lib/permissions";
+import { ArrowDownLeft, ArrowUpRight, EyeOff, Receipt } from "lucide-react";
+
+const PAGE = "/penzugyek";
+
+/** A KP forgalom sor IRÁNYA. Ugyanaz a két szó, amit a Notion is használt -
+ * a backend előtag szerint nézi (lásd services/kassza.py). */
+const IRANY_OPCIOK = ["bevetel", "kiadas"] as const;
 
 /** KP FORGALOM: minden készpénz-mozgás egy listában, időrendben - és a
  * LEGÁLIS/FEKETE bontás.
@@ -27,7 +45,15 @@ import { ArrowDownLeft, ArrowUpRight, EyeOff, Receipt, Wallet } from "lucide-rea
  * számításból, mint a Pénzügyek kassza-kártyája - így a két felület nem
  * mondhat mást ugyanarról a dobozról. */
 export default async function KpForgalomPage() {
-  const naplo = await getKpNaplo();
+  const [naplo, forgalmak, currentUser, pagePermissions] = await Promise.all([
+    getKpNaplo(),
+    getKpForgalmak(),
+    getCurrentUser(),
+    getMyPagePermissions(),
+  ]);
+  const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
+  const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const sorok = naplo?.sorok ?? [];
   const ures: KpOsszesites = {
     be_szamlaval: 0,
@@ -270,6 +296,183 @@ export default async function KpForgalomPage() {
             )}
           </Card>
         </div>
+
+        {/* A KP FORGALOM TÁBLA maga - kézzel szerkeszthetően. A napló fenti
+            sorai három forrásból állnak össze (a kiadások és a bevételek a
+            Pénzügyeken szerkeszthetők); ez a tábla az, aminek eddig SEHOL nem
+            volt felülete, pedig a Notionből örökölt sorok javításra szorulnak.
+            Minden mező átírható, és a sorok törölhetők/felvehetők. */}
+        <Card title={`KP forgalom tételek (${forgalmak.length})`}>
+          <p className="mb-3 text-[12.5px] text-text-muted">
+            A Notionből örökölt „KP forgalom" tábla – itt szerkeszthető. Az <strong>irány</strong> mondja meg,
+            kivétel volt-e a kasszából vagy betétel; az importált sorokon ezt a Notion „Forintban" mezőjének
+            előjele hordozta, kézzel átírva viszont az irány-mező számít. A kiadás- és bevétel-sorok a{" "}
+            <a href="/penzugyek" className="text-text-accent hover:underline">
+              Pénzügyeken
+            </a>{" "}
+            szerkeszthetők.
+          </p>
+          {canCreate && (
+            <QuickCreateForm
+              postPath={ENTITY_PATHS.kpForgalom}
+              addLabel="+ Új KP forgalom tétel"
+              fields={[
+                { name: "megnevezes", label: "Megnevezés", required: true },
+                {
+                  name: "forgalom",
+                  label: "Irány",
+                  type: "select",
+                  defaultValue: "bevetel",
+                  options: IRANY_OPCIOK.map((o) => ({ value: o, label: o })),
+                },
+                { name: "osszeg", label: "Összeg", type: "number" },
+                { name: "kiadas_datuma", label: "Dátum", type: "date" },
+                { name: "legalis", label: "Legális" },
+              ]}
+            />
+          )}
+          <DataTable<KpForgalom>
+            rows={forgalmak}
+            emptyText="Nincs egyetlen KP forgalom tétel sem."
+            deleteHref={canDelete ? (f) => `${ENTITY_PATHS.kpForgalom}/${f.id}` : undefined}
+            filterable
+            columns={[
+              {
+                header: "Dátum",
+                render: (f) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
+                      field="kiadas_datuma"
+                      value={f.kiadas_datuma}
+                      type="date"
+                    />
+                  ) : (
+                    (f.kiadas_datuma ?? "–")
+                  ),
+                sortAccessor: (f) => f.kiadas_datuma,
+              },
+              {
+                header: "Megnevezés",
+                render: (f) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
+                      field="megnevezes"
+                      value={f.megnevezes}
+                    />
+                  ) : (
+                    (f.megnevezes ?? "–")
+                  ),
+                sortAccessor: (f) => f.megnevezes,
+              },
+              {
+                // Az IRÁNY a legfontosabb mező: ez dönti el, a kasszából
+                // kiment-e a pénz vagy bejött. Az importált sorokon üres, és
+                // ilyenkor a Notion előjele döntött - ezt ki is írjuk.
+                header: "Irány",
+                render: (f) => (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <EditableStatusBadge
+                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
+                      field="forgalom"
+                      value={f.forgalom}
+                      options={[...IRANY_OPCIOK]}
+                      placeholder={f.kiadas_e ? "kiadas" : "bevetel"}
+                    />
+                    {/* HONNAN tudjuk az irányt, ha a mező üres: az importált
+                        előjelből, vagy - ha az sincs - alapértelmezésből. A
+                        kettő nem ugyanaz: az első a Notion adata, a második
+                        csak egy feltevés, amit érdemes megerősíteni. */}
+                    {!f.forgalom && (
+                      <span
+                        className="text-[11px] text-text-muted"
+                        title={
+                          f.forintban_notion
+                            ? "A Notion „Forintban” mezőjének előjeléből"
+                            : "Nincs megadva irány és előjel sem – bevételnek vesszük"
+                        }
+                      >
+                        {f.forintban_notion ? "(előjelből)" : "(feltételezve)"}
+                      </span>
+                    )}
+                  </span>
+                ),
+                sortAccessor: (f) => f.forgalom ?? (f.kiadas_e ? "kiadas" : "bevetel"),
+              },
+              {
+                header: "Összeg",
+                align: "right",
+                render: (f) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
+                      field="osszeg"
+                      value={f.osszeg}
+                      type="number"
+                    />
+                  ) : (
+                    formatHuf(f.osszeg)
+                  ),
+                sortAccessor: (f) => f.osszeg,
+              },
+              {
+                // Ennyivel mozdítja a kasszát - előjelesen, ahogy a napló is
+                // számol vele. Így ránézésre látszik, ha egy sor iránya rossz.
+                header: "Kasszába",
+                align: "right",
+                render: (f) => (
+                  <span className={f.kiadas_e ? "text-text-orange" : "text-text-teal"}>
+                    {f.kiadas_e ? "−" : "+"}
+                    {formatHuf(Math.abs(f.forintban ?? 0))}
+                  </span>
+                ),
+                sortAccessor: (f) => (f.kiadas_e ? -1 : 1) * Math.abs(f.forintban ?? 0),
+              },
+              {
+                header: "Pénznem",
+                render: (f) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
+                      field="penznem"
+                      value={f.penznem}
+                    />
+                  ) : (
+                    f.penznem
+                  ),
+                sortAccessor: (f) => f.penznem,
+              },
+              {
+                header: "Legális",
+                render: (f) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
+                      field="legalis"
+                      value={f.legalis}
+                    />
+                  ) : (
+                    (f.legalis ?? "–")
+                  ),
+                sortAccessor: (f) => f.legalis,
+              },
+              {
+                // Ami egy konkrét kiadáshoz kötődik, az a naplóból kimarad:
+                // ugyanaz a pénzmozgás már szerepel a kiadás soraként.
+                header: "Kiadáshoz kötve",
+                align: "right",
+                render: (f) =>
+                  f.expense_id === null ? (
+                    "–"
+                  ) : (
+                    <StatusBadge label={`Kiadás #${f.expense_id}`} tone="neutral" />
+                  ),
+                sortAccessor: (f) => f.expense_id,
+              },
+            ]}
+          />
+        </Card>
 
         <Card title={`KP forgalom (${megjelenitett.length} mozgás)`}>
           <p className="mb-3 text-[12.5px] text-text-muted">

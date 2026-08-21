@@ -279,11 +279,39 @@ külön kézzel vezetve: a sorok magukból a kiadásokból és a bevételekből 
 dátum, megnevezés, típus, projektkód, be, ki, **egyenleg a sor után**, és a
 számla megléte.
 
-A Notionből örökölt `KpForgalom` tábla sorai **számla nélküli BEVÉTELEK**: az a
-készpénz, ami nem számlán jött be. Egy kivétellel: ami egy kiadáshoz kötődik
-(`expense_id`), az kimarad - ugyanaz a pénzmozgás már szerepel a kiadás
-soraként, beszámítva kétszer vonódna le. Hány ilyen van, azt a lista fölött
-kiírjuk.
+A Notionből örökölt `KpForgalom` tábla sorai **számla nélküli** mozgások: az a
+készpénz, ami nem számlán jött be vagy ment ki. Egy kivétellel: ami egy
+kiadáshoz kötődik (`expense_id`), az kimarad - ugyanaz a pénzmozgás már
+szerepel a kiadás soraként, beszámítva kétszer vonódna le. Hány ilyen van, azt
+a lista fölött kiírjuk.
+
+**AZ IRÁNYT AZ ELŐJEL MONDJA MEG.** A Notion „Forintban" formulája NEGATÍV a
+kiadásokra - az „Összeg" oszlop viszont előjel nélküli, tehát abból nem derül
+ki, hogy egy 600 000 Ft-os sor kivétel volt-e a kasszából vagy betétel. Ez a
+Notion-egyeztetésben **132 sornál** ütött ki: mindegyiknél stimmelt a szám,
+csak nálunk bevételként állt, ami valójában kiadás (ATM-felvételek, munkabérek,
+kellékek). A szabály sorrendje (`services/kassza.kp_forgalom_iranya`):
+
+1. ha van előjeles forint-érték, **az előjel** dönt;
+2. különben a **„Forgalom"** szöveges mező (`bevetel` / `kiadas`);
+3. ha egyik sincs, **bevétel** - a tábla erre való, a kiadásoknak saját táblájuk
+   van. A felület ilyenkor „(feltételezve)"-t ír a sorra, hogy látszódjon: ez
+   nem adat, hanem alapértelmezés.
+
+#### A KP forgalom tábla szerkesztése
+
+A napló alatt ott a **„KP forgalom tételek"** tábla, ahol minden mező átírható
+(dátum, megnevezés, irány, összeg, pénznem, legális), a sorok törölhetők és új
+is felvehető. Ez a tábla eddig sehol nem volt szerkeszthető, pedig a Notionből
+örökölt sorok javításra szorulnak.
+
+**A kézzel beírt érték erősebb az importált előjelnél**
+(`routes/finance._kp_forgalom_kezi_javitas`): ha az összeget vagy az irányt
+átírják, az importált formula-értéket félretesszük - különben valaki átírná a
+600 000-et 500 000-re, és a felületen nem történne semmi, mert a régi érték
+tovább számolna. Az eddigi irányt viszont **rögzítjük** az irány-mezőbe, mert
+az előjel a törléssel elveszne: egy puszta összeg-javítás nem fordíthat át egy
+kiadást bevétellé.
 
 #### Legális és fekete készpénz
 

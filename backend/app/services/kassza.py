@@ -145,13 +145,23 @@ def _penz(sor) -> float:
     return float(brutto if brutto is not None else (getattr(sor, "netto", None) or 0))
 
 
-def _kp_forgalom_osszege(f: KpForgalom) -> float:
-    """A KP forgalom sor összege FORINTBAN.
+def kp_forgalom_iranya(f: KpForgalom) -> tuple[float, bool]:
+    """(összeg forintban, kiadás-e) - egy KP forgalom sorból.
 
-    Devizás sornál a Notion "Forintban" mezője adja; ha az sincs, nullát
-    adunk - egy devizás összeget forintként kezelni nagyságrendi hiba lenne."""
-    forintban = f.forintban if f.forintban is not None else f.forintban_notion
-    return float(forintban or 0)
+    Az IRÁNYT az ELŐJEL mondja meg: a Notion "Forintban" formulája negatív a
+    kiadásokra (lásd models/finance.KpForgalom.forintban). Ez azért fontos,
+    mert az "Összeg" oszlop előjel nélküli - abból nem derül ki, hogy egy
+    600 000 Ft-os sor kivétel volt-e a kasszából vagy betétel.
+
+    Ahol a formula-mező nem jött át (nincs előjel), ott a "Forgalom" szöveges
+    mező dönt; ha az sincs, BEVÉTEL - a tábla erre való, a kiadásoknak amúgy is
+    saját táblájuk van."""
+    ertek = f.forintban
+    if ertek is not None and ertek < 0:
+        return abs(ertek), True
+    osszeg = float(ertek or 0)
+    kiadas_e = (f.forgalom or "").strip().casefold().startswith(_KIADAS_ELOTAG)
+    return osszeg, kiadas_e
 
 
 def kep(db: Session, ma: date | None = None) -> KasszaKep:
@@ -220,10 +230,7 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
         if f.expense_id is not None:
             kotve += 1
             continue
-        osszeg = _kp_forgalom_osszege(f)
-        # Az irány a Notion "Forgalom" mezőjéből; ha nem mondja, BEVÉTEL - a
-        # tábla erre való, és a kiadásoknak amúgy is saját táblájuk van.
-        kiadas_e = (f.forgalom or "").strip().casefold().startswith(_KIADAS_ELOTAG)
+        osszeg, kiadas_e = kp_forgalom_iranya(f)
         sorok.append(
             KasszaSor(
                 id=f.id,

@@ -100,6 +100,29 @@ revenues_router = build_crud_router(
     before_update=_devizat_forintra_frissiteskor,
 )
 
+def _kp_forgalom_kezi_javitas(obj: KpForgalom, adat: dict, db: Session) -> None:
+    """Kézzel átírt összeg/irány FÉLRETESZI a Notion formula-értékét.
+
+    A KP forgalom soroknál az irányt az importált "Forintban" mező ELŐJELE
+    hordozza (lásd models/finance.KpForgalom.forintban) - ez azért kell, mert
+    az "Összeg" oszlop előjel nélküli. Csakhogy amíg ez a mező megvan, ERŐSEBB
+    a kézzel beírt összegnél: valaki átírná a 600 000-et 500 000-re, és a
+    felületen nem történne semmi, mert a régi formula-érték tovább számolna.
+
+    Ezért ha a szerkesztés az ÖSSZEGET vagy az IRÁNYT érinti, az importált
+    értéket töröljük: innentől az számít, amit beírtak. Az irányt onnantól a
+    `forgalom` mező mondja meg.
+
+    És mielőtt töröljük, az EDDIGI IRÁNYT rögzítjük a `forgalom` mezőbe, ha az
+    üres volt - különben egy puszta összeg-javítás átfordítaná a sort kiadásból
+    bevételbe (az előjel a törléssel elveszne), és ezt senki nem kérte."""
+    if "osszeg" not in adat and "forgalom" not in adat:
+        return
+    if "forgalom" not in adat and not obj.forgalom:
+        adat["forgalom"] = "kiadas" if obj.kiadas_e else "bevetel"
+    adat["forintban_notion"] = None
+
+
 kp_forgalom_router = build_crud_router(
     model=KpForgalom,
     create_schema=KpForgalomCreate,
@@ -108,6 +131,7 @@ kp_forgalom_router = build_crud_router(
     prefix="/kp-forgalom",
     tags=["finance"],
     page="/penzugyek",
+    before_update=_kp_forgalom_kezi_javitas,
 )
 
 summary_router = APIRouter(prefix="/finance", tags=["finance"])

@@ -174,7 +174,19 @@ class KpForgalom(TimestampMixin, Base):
 
     @property
     def forintban(self) -> float | None:
-        """Az összeg FORINTBAN, vagy None, ha nem tudjuk.
+        """A sor ELŐJELES forint értéke: NEGATÍV = kiadás, pozitív = bevétel.
+
+        Az előjel a Notion **"Forintban"** formulájából jön - abban a táblában
+        ez hordozza az irányt, nem a "Forgalom" szöveges mező. Az "Összeg"
+        oszlop előjel nélküli, tehát önmagában nem lehet megmondani belőle, egy
+        600 000 Ft-os sor kivétel volt-e a kasszából vagy betétel.
+
+        (A Notionnel való egyeztetéskor ez 132 sornál ütött ki: mindegyiknél
+        stimmelt a szám, csak nálunk bevételként állt, ami valójában kiadás -
+        lásd scripts/kp_forgalom_egyeztetes.py.)
+
+        Ahol a formula-mező nem jött át, marad az "Összeg" - az előjel nélkül;
+        olyankor a `forgalom` szöveges mező dönt (lásd services/kassza.py).
 
         A pénznemet a közös szabály szerint ismerjük fel (lásd
         services/penznem.py), nem `== "HUF"` egyenlőséggel: a Notionben ez
@@ -184,8 +196,18 @@ class KpForgalom(TimestampMixin, Base):
         hiányzott, ahány ilyen sor van."""
         from app.services import penznem as penznem_szolg
 
+        if self.forintban_notion is not None:
+            return float(self.forintban_notion)
         if penznem_szolg.devizas(self.penznem):
-            # Valódi devizás sor: az árfolyamot nem itt tároljuk, a Notion
-            # "Forintban" mezője adja meg (lásd forintban_notion).
-            return float(self.forintban_notion) if self.forintban_notion is not None else None
+            # Valódi devizás sor forint-érték nélkül: egy devizás összeget
+            # forintként kezelni nagyságrendi hiba lenne.
+            return None
         return float(self.osszeg) if self.osszeg is not None else None
+
+    @property
+    def kiadas_e(self) -> bool:
+        """Kivétel-e a kasszából. Ugyanaz a szabály, amit a kassza használ -
+        hogy a felület ne vezethesse le máshogy (lásd services/kassza.py)."""
+        from app.services.kassza import kp_forgalom_iranya
+
+        return kp_forgalom_iranya(self)[1]
