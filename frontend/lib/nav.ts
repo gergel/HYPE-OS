@@ -163,7 +163,12 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Naptár / Diszpó",
-    items: [{ label: "Diszpó", href: "/naptar", icon: "Send" }],
+    items: [
+      { label: "Diszpó", href: "/naptar", icon: "Send" },
+      // A Google Sheetből átvett HYPE 2026 táblázat - a cellák SZÍNE itt adat
+      // (ki melyik nap dolgozott), lásd backend models/diszpo_tabla.py.
+      { label: "HYPE 2026 tábla", href: "/diszpo-tabla", icon: "Table" },
+    ],
   },
   {
     label: "Utómunka",

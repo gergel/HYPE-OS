@@ -15,6 +15,7 @@ from app.models.detail_section_order import DetailSectionOrder
 from app.models.detail_tab import DetailTabConfig
 from app.models.document_attachment import DocumentAttachment
 from app.models.dispo_responsible import DispoResponsible, DispoSide
+from app.models.diszpo_tabla import DiszpoCella, DiszpoMunkalap, DiszpoOszlop, DiszpoSor
 from app.models.employee import BelsosJogviszony, Employee, EmployeeType, SystemRole
 from app.models.employee_document import EmployeeDocument
 from app.models.employee_monthly_item import EmployeeMonthlyItem
@@ -91,6 +92,10 @@ __all__ = [
     "DocumentAttachment",
     "EmployeeMonthlyItem",
     "Deliverable",
+    "DiszpoCella",
+    "DiszpoMunkalap",
+    "DiszpoOszlop",
+    "DiszpoSor",
     "deliverable_contacts",
     "DeliverableBoardConfig",
     "DeliverableStatusConfig",

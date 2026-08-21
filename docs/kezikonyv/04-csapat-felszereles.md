@@ -74,6 +74,29 @@ kerül a kiadások közé (Belsős TIG) - ha a napidíj is bekerülne, ugyanaz a
 kétszer szerepelne a Pénzügyekben. A napidíj tehát csak a projekt
 önköltségét/profitját színezi, a kiadás-listát nem érinti.
 
+### Szerződött napok és a PLUSZ NAP díja
+
+A belsős szerződés nem "amennyit kell", hanem egy megbeszélt **havi napszám**:
+ennyi nap van benne a havi bérben. Két mező írja le, mindkettő a belsősök
+listáján szerkeszthető:
+
+| Mező | Mit jelent | Ha üres |
+|---|---|---|
+| `szerzodott_napok` | hány napra van szerződve egy hónapban | nincs korlát, minden nap a rendes napidíjon |
+| `plusz_nap_napi_dij` | a szerződött napokon FELÜLI nap ára | a plusz nap is a rendes napidíjon |
+
+**Hogy hol tart a hónapban, azt a diszpótábla mondja meg**: a HYPE 2026 tábla
+cellaszíneiből számoljuk, hány munkanapja gyűlt össze (lásd
+[05-naptar-diszpo.md](05-naptar-diszpo.md)). Amint a szerződött napszám
+elfogy, a hónap TOVÁBBI forgatásain a plusz nap díja megy a projekt
+önköltségébe - naponként, nem forgatásonként, tehát egy hónapfordulón vagy a
+határnapon átnyúló forgatás fele a rendes, fele a plusz áron számol
+(`services/munkanap_szamlalo.napi_dij_a_napra`).
+
+Egyik mező sincs kitalálva: ha bármelyik hiányzik, marad a rendes napidíj.
+Egy tippelt napszám csendben átárazná minden projekt profitját - a hiányzó
+adat legalább látszik.
+
 ### Munkatárs-dokumentumok
 
 `models/employee_document.py`, `components/MunkaszerzodesUpload.tsx`,

@@ -90,6 +90,48 @@ export default async function BelsosokPage() {
                 sortAccessor: (e) => e.napi_dij,
               },
               {
+                // HÁNY NAPRA VAN SZERZŐDVE egy hónapban: ennyi nap van benne a
+                // havi bérében. Ha a diszpótáblában ennél több munkanapja
+                // gyűlik össze, a hónap további napjai már a PLUSZ NAP díján
+                // számolnak a projektek önköltségébe (lásd backend
+                // services/munkanap_szamlalo.py).
+                header: "Szerződött nap / hó",
+                align: "right",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.employee}/${e.id}`}
+                      field="szerzodott_napok"
+                      value={e.szerzodott_napok}
+                      type="number"
+                      placeholder="Nincs korlát"
+                    />
+                  ) : (
+                    (e.szerzodott_napok ?? "–")
+                  ),
+                sortAccessor: (e) => e.szerzodott_napok,
+              },
+              {
+                // A szerződött napokon FELÜLI nap ára. Üresen hagyva a plusz
+                // nap is a rendes napidíjon számol - a hiányzó adat nem
+                // árazhat át semmit csendben.
+                header: "Plusz nap napidíja",
+                align: "right",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.employee}/${e.id}`}
+                      field="plusz_nap_napi_dij"
+                      value={e.plusz_nap_napi_dij}
+                      type="number"
+                      placeholder="Mint a rendes"
+                    />
+                  ) : (
+                    (e.plusz_nap_napi_dij != null ? formatHuf(e.plusz_nap_napi_dij) : "–")
+                  ),
+                sortAccessor: (e) => e.plusz_nap_napi_dij,
+              },
+              {
                 header: "Aktív",
                 render: (e) => (
                   <StopClickPropagation>

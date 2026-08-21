@@ -125,6 +125,71 @@ Egyéb:
   generikus kimeneti mappa, ha az sincs, a Drive gyökere.
 - Ki a felelős egy diszpóért: `/api/v1/dispo-responsibles`.
 
+## HYPE 2026 tábla (a Google Sheet diszpótáblája)
+
+`/diszpo-tabla` - a korábban Google Sheetben vezetett munkafüzet, minden
+munkalapjával, fülekként. `models/diszpo_tabla.py`,
+`routes/diszpo_tabla.py`, `components/DiszpoTablaRacs.tsx`.
+
+### A CELLA SZÍNE ADAT, nem formázás
+
+Ez a tábla nem csak beosztás volt: a szín hordozta a legfontosabb információt,
+azt, hogy ki melyik nap dolgozott. Ezért nálunk sem "kitöltőszín", hanem
+nevesített érték:
+
+| Szín | Jelentés | Munkanap? |
+|---|---|---|
+| **zöld** | aznap dolgozott (a vágóknál: terepen) | **igen** |
+| **kék** | a vágók munkanapja (irodában) | **igen** |
+| **fehér** | munkanap volt, de nem tudtunk neki munkát adni | **igen** |
+| piros | nem munkanap (szabadnap) | nem |
+| szürke | nem releváns (akkor még nem dolgozott nálunk) | nem |
+
+A **fehér** a lényeges eset: a napja le volt kötve, csak nem jött rá munka -
+a szerződött napokból ugyanúgy fogy (lásd
+[04-csapat-felszereles.md](04-csapat-felszereles.md)).
+
+**Egy nap egy munkanap**, akkor is, ha aznap két diszpó volt: a táblázatban
+olyankor két sor tartozik ugyanahhoz a naphoz (a második sor dátum-mezője
+üres, az import viszont továbbviszi a dátumot). A szerződés napokról szól, nem
+diszpókról.
+
+### Miért generikus rács
+
+A munkafüzet hat munkalapja mind más alakú: a belsős tábla 25 oszlop
+emberekkel, a külsős 146 oszlop kategóriákkal, az AUTÓK egy lista, a PROJECT
+KÓDOK egy másik. Egy "mindent tudó" séma vagy csak az egyiket szolgálná ki,
+vagy annyi kivétellel lenne tele, hogy senki nem érti. A rács mindet elbírja.
+
+A JELENTÉS ott van, ahol kell: az **oszlop** tudja, melyik munkatársé
+(`employee_id`), a **sor** tudja, melyik naphoz tartozik (`datum`) - ez a két
+kapcsolat teszi a rácsot számolhatóvá. **Kötés nélkül egy oszlop színei nem
+számítanak bele semmibe**: a "GERI" felirat nekünk nem azonosít senkit. Az
+import csak EGYÉRTELMŰ névegyezésre köt (két azonos keresztnév között egy
+szkript nem dönthet), a többit a felületen kell megadni - az oszlop egy
+cellájára kattintva.
+
+### Hónaponként jelenik meg
+
+A külsős munkalap 381 sor x 146 oszlop: egyben kirajzolva 55 ezer cella lenne
+a képernyőn, amitől a böngésző megáll. A táblázat amúgy is hónapokra van
+tagolva, tehát a hónap a természetes adag. Ahol nincs dátum (AUTÓK, PROJECT
+KÓDOK), ott az egész munkalap látszik.
+
+### Az átvétel
+
+```bash
+python scripts/diszpo_tabla_import.py              # próba: mit hozna át
+python scripts/diszpo_tabla_import.py --vegrehajt  # élesben
+```
+
+A megosztott linkről tölti le a munkafüzetet (`export?format=xlsx`) - nem kell
+hozzá Google-fiók, és a CSV-vel ellentétben ez viszi a SZÍNEKET is. A szkript
+**újrafuttatható**: munkalaponként cseréli a tartalmat, tehát a második
+átvételnél (amikor teljesen átálltok a rendszerre) ugyanígy futtatható. Ami
+viszont nálunk készült és a Sheetben nincs benne, azt a csere eldobja - ezért
+a próba-futás előbb kiírja, mi történne.
+
 ## Callsheet
 
 `/api/v1/callsheets` - a `/naptar` oldal jogosultságával, CRUD-generátorral.

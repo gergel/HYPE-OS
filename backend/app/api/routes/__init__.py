@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes.admin_calendar_sync import router as admin_calendar_sync_router
 from app.api.routes.dispo_responsibles import router as dispo_responsibles_router
+from app.api.routes.diszpo_tabla import router as diszpo_tabla_router
 from app.api.routes.admin_import import router as admin_import_router
 from app.api.routes.ai_assistant import router as ai_assistant_router
 from app.api.routes.attachments import router as attachments_router
@@ -58,6 +59,7 @@ api_router = APIRouter()
 api_router.include_router(auth_router)
 # 2. Dashboard
 api_router.include_router(dashboard_router)
+api_router.include_router(diszpo_tabla_router)
 # 3. Ügyfelek
 api_router.include_router(clients_router)
 api_router.include_router(contacts_router)

@@ -18,6 +18,11 @@ class EmployeeBase(BaseModel):
     #: Belsős napidíj - a projekt önköltségéhez, NEM kiadás-sor (lásd
     #: models/employee.py és services/belsos_koltseg.py).
     napi_dij: float | None = None
+    #: Hány napra van szerződve egy hónapban, és mennyi az azon FELÜLI nap
+    #: díja. A kettő együtt árazza át a hónap végi forgatásokat (lásd
+    #: services/munkanap_szamlalo.py).
+    szerzodott_napok: int | None = None
+    plusz_nap_napi_dij: float | None = None
 
 
 class EmployeeCreate(EmployeeBase):
@@ -40,6 +45,8 @@ class EmployeeUpdate(BaseModel):
     jogositvany: str | None = None
     is_active: bool | None = None
     napi_dij: float | None = None
+    szerzodott_napok: int | None = None
+    plusz_nap_napi_dij: float | None = None
 
 
 class EmployeeRead(EmployeeBase):

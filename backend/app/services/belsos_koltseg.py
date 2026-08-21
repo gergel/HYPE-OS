@@ -16,9 +16,12 @@ időből jön (Deliverable.koltseg, lásd services/deliverable_actions.py)."""
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any
 
-from app.services import belsos_idoszak
+from sqlalchemy.orm import Session, object_session
+
+from app.services import belsos_idoszak, munkanap_szamlalo
 
 
 def projekt_napjai(project: Any) -> int:
@@ -35,8 +38,27 @@ def projekt_napjai(project: Any) -> int:
     return (veg - kezdet).days + 1
 
 
-def projekt_koltsege(project: Any) -> float:
-    """A projekten dolgozó BELSŐSÖK napidíjának összege (napok × napidíj).
+def projekt_napjainak_datumai(project: Any) -> list[date]:
+    """A forgatás NAPJAI - konkrét dátumokként.
+
+    Azért kellenek a napok külön-külön, mert az áruk nem feltétlenül azonos: a
+    hónap közepén elfogyhat valakinek a szerződött napszáma, és onnantól a
+    plusz nap díja jár (lásd services/munkanap_szamlalo.py). Egy több napos,
+    hónapfordulón átnyúló forgatásnál ez a különbség napokon belül is
+    megjelenik."""
+    kezdet = getattr(project, "forgatas_datuma", None)
+    if kezdet is None:
+        return []
+    return [kezdet + timedelta(days=i) for i in range(projekt_napjai(project))]
+
+
+def projekt_koltsege(project: Any, db: Session | None = None) -> float:
+    """A projekten dolgozó BELSŐSÖK napidíjának összege.
+
+    Naponként számolunk, nem "napok × napidíj"-jal: akinek elfogyott a havi
+    SZERZŐDÖTT NAPSZÁMA, annál a további napok a PLUSZ NAPI DÍJON mennek (lásd
+    services/munkanap_szamlalo.napi_dij_a_napra). A kettő ugyanaz marad
+    mindenkinél, akinél nincs megadva se napszám, se plusz díj.
 
     Akinek nincs beírt napidíja, az nullával szerepel - nem tippelünk helyette
     összeget, mert egy kitalált szám rosszabb, mint a hiánya: az utóbbi
@@ -45,16 +67,26 @@ def projekt_koltsege(project: Any) -> float:
     "Belsős" A FORGATÁS NAPJÁRA értendő: aki ma belsős, de akkor még
     külsősként dolgozott, annak a munkája a TIG-jén szerepel költségként - a
     napidíja itt ráadásként megduplázná (lásd
-    services/belsos_idoszak.belsos_a_napon)."""
-    napok = projekt_napjai(project)
-    nap = getattr(project, "forgatas_datuma", None)
-    return sum(
-        float(tag.napi_dij) * napok
-        for tag in getattr(project, "crew", []) or []
-        if tag.napi_dij and belsos_idoszak.belsos_a_napon(tag, nap)
-    )
+    services/belsos_idoszak.belsos_a_napon).
+
+    A `db` a diszpótábla munkanapjaihoz kell. Ha nincs (a hívó egy sima
+    objektumon számol), a MUNKAMENETBŐL vesszük - és ha az sincs, mindenki a
+    rendes napidíján számol: adat híján nem árazunk át semmit."""
+    napok = projekt_napjainak_datumai(project)
+    elso_nap = getattr(project, "forgatas_datuma", None)
+    munkamenet = db if db is not None else object_session(project)
+    osszeg = 0.0
+    for tag in getattr(project, "crew", []) or []:
+        if not tag.napi_dij or not belsos_idoszak.belsos_a_napon(tag, elso_nap):
+            continue
+        if munkamenet is None or not tag.szerzodott_napok or tag.plusz_nap_napi_dij is None:
+            osszeg += float(tag.napi_dij) * len(napok or [elso_nap])
+            continue
+        osszeg += sum(munkanap_szamlalo.napi_dij_a_napra(munkamenet, tag, nap) for nap in napok)
+    return osszeg
 
 
-def projektkod_koltsege(project_code: Any) -> float:
+def projektkod_koltsege(project_code: Any, db: Session | None = None) -> float:
     """Ugyanez a projektkód ALATT futó összes forgatásra."""
-    return sum(projekt_koltsege(p) for p in getattr(project_code, "projects", []) or [])
+    munkamenet = db if db is not None else object_session(project_code)
+    return sum(projekt_koltsege(p, munkamenet) for p in getattr(project_code, "projects", []) or [])

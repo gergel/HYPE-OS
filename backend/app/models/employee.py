@@ -1,7 +1,7 @@
 from datetime import date
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, Date, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Date, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -93,6 +93,28 @@ class Employee(TimestampMixin, Base):
     #: ugyanaz a pénz kétszer szerepelne.
     napi_dij: Mapped[float | None] = mapped_column(
         Numeric(12, 2), comment="Belsős napidíj - projekt-önköltséghez, NEM kiadás-sor"
+    )
+
+    #: HÁNY NAPRA VAN SZERZŐDVE egy hónapban. A belsős szerződés nem "amennyit
+    #: kell", hanem egy megbeszélt napszám: ennyi nap benne van a havi bérben.
+    #:
+    #: Ami e FÖLÖTT van, az plusz munka, és külön díja van (`plusz_nap_napi_dij`)
+    #: - a projekt önköltségébe is azon az áron kell beszámítani, különben egy
+    #: hónap végi, túlórás forgatás olcsóbbnak látszana, mint amennyibe került
+    #: (lásd services/belsos_koltseg.py és services/munkanap_szamlalo.py).
+    #:
+    #: Üresen hagyva nincs korlát: minden nap a rendes napidíjon számol. Nem
+    #: tippelünk helyette számot - egy kitalált napszám csendben átárazná
+    #: minden projekt profitját.
+    szerzodott_napok: Mapped[int | None] = mapped_column(
+        Integer, comment="Havi szerződött munkanapok száma (belsős)"
+    )
+    #: A szerződött napokon FELÜLI nap ára. Ezt is csak akkor használjuk, ha
+    #: meg van adva: enélkül a plusz nap is a rendes napidíjon számol, és ezt
+    #: a felület ki is írja - egy hallgatólagos "ugyanannyi" rosszabb, mint egy
+    #: látható hiány.
+    plusz_nap_napi_dij: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), comment="A szerződött napokon felüli nap napidíja (belsős)"
     )
 
     #: Belsősnél: bejelentett alkalmazott vagy megbízási szerződéses. A

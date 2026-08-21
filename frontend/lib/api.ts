@@ -152,6 +152,14 @@ export type Employee = {
    * NEM lesz belőle kiadás-sor. Vágóknál nincs jelentése: ők órabérben
    * dolgoznak. */
   napi_dij: number | null;
+  /** Hány napra van szerződve egy HÓNAPBAN (belsős). Ennyi nap van benne a
+   * havi bérében; ami e fölött van, az a plusz nap díján számol a projektek
+   * önköltségébe (lásd backend services/munkanap_szamlalo.py). Üresen: nincs
+   * korlát. */
+  szerzodott_napok: number | null;
+  /** A szerződött napokon FELÜLI nap napidíja. Üresen a plusz nap is a rendes
+   * napidíjon számol. */
+  plusz_nap_napi_dij: number | null;
   vallakozas_neve: string | null;
   vallakozas_szekhely: string | null;
   vallalkozas_adoszama: string | null;
@@ -2780,4 +2788,80 @@ export async function getMegrendeloiSzamlaAllas(projectCodeId: number): Promise<
 
 export async function getMegrendeloiKeretek(): Promise<MegrendeloiKeret[]> {
   return (await apiGet<MegrendeloiKeret[]>("/api/v1/megrendeloi-keretszerzodesek")) ?? [];
+}
+
+// ── HYPE 2026 diszpótábla (a Google Sheetből átvett munkalapok) ────────────
+//
+// A cellák SZÍNE itt adat, nem formázás: az mondja meg, ki melyik nap
+// dolgozott (lásd backend models/diszpo_tabla.py).
+
+// A színek (és a jelentésük) a KLIENS-BIZTOS lib/diszpoSzin.ts-ben élnek: ezt
+// a modult egy klienskomponens nem importálhatja értékként (next/headers).
+export type { DiszpoSzin } from "@/lib/diszpoSzin";
+
+export type DiszpoMunkalapFej = {
+  id: number;
+  nev: string;
+  sorrend: number;
+  sor_szam: number;
+  oszlop_szam: number;
+  /** Hány felső sor a fejléc (a belsős táblán kettő: szekciók + nevek). */
+  fejlec_sorok: number;
+};
+
+export type DiszpoOszlop = {
+  idx: number;
+  cimke: string | null;
+  csoport: string | null;
+  /** Melyik munkatárs oszlopa. Enélkül a színei nem számítanak bele a
+   * munkanap-számlálásba. */
+  employee_id: number | null;
+  employee_nev: string | null;
+};
+
+export type DiszpoSor = {
+  idx: number;
+  datum: string | null;
+  nap: string | null;
+  diszposzam: number | null;
+  /** Hónap-elválasztó sor ("❄️ JANUÁR ❄️"). */
+  elvalaszto: boolean;
+};
+
+/** [sor_idx, oszlop_idx, érték, szín] - tömören, mert a külsős munkalap 34
+ *  ezer cellája objektumokként több megabájt lenne. */
+export type DiszpoCella = [number, number, string | null, string | null];
+
+export type DiszpoMunkalap = DiszpoMunkalapFej & {
+  oszlopok: DiszpoOszlop[];
+  sorok: DiszpoSor[];
+  cellak: DiszpoCella[];
+};
+
+export async function getDiszpoMunkalapok(): Promise<DiszpoMunkalapFej[]> {
+  return (await apiGet<DiszpoMunkalapFej[]>("/api/v1/diszpo-tabla")) ?? [];
+}
+
+export async function getDiszpoMunkalap(id: number): Promise<DiszpoMunkalap | null> {
+  return apiGet<DiszpoMunkalap>(`/api/v1/diszpo-tabla/${id}`);
+}
+
+/** Ki hány napot dolgozott egy hónapban, és kinél fogyott el a szerződött
+ *  napszám (lásd backend services/munkanap_szamlalo.py). */
+export type DiszpoHaviAllas = {
+  employee_id: number;
+  employee_nev: string | null;
+  ev: number;
+  honap: number;
+  munkanapok: number;
+  szerzodott_napok: number | null;
+  napi_dij: number | null;
+  plusz_nap_napi_dij: number | null;
+  /** Az a nap, amelyiken a szerződött napok elfogynak. */
+  hatarnap: string | null;
+  plusz_napok: string[];
+};
+
+export async function getDiszpoHaviAllas(ev: number, honap: number): Promise<DiszpoHaviAllas[]> {
+  return (await apiGet<DiszpoHaviAllas[]>(`/api/v1/diszpo-tabla/munkanapok/${ev}/${honap}`)) ?? [];
 }
