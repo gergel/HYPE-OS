@@ -22,15 +22,41 @@ KESZPENZ = "Készpénz"
 ATUTALAS = "Átutalás"
 BANKKARTYA = "Bankkártya"
 
+#: "Nem mozdult pénz." Nem hiányzó adat, hanem MAGA a válasz: a tétel
+#: beszámítódott valamibe, kompenzálódott, vagy egy másik cégen át rendeződött
+#: - számla és összeg van, tranzakció nincs.
+#:
+#: Miért kell külön érték, ha úgyis kimarad a kasszából? Mert az ÜRES mező azt
+#: jelenti, "nem tudjuk", és a Pénzügyek ki is írja, hány tétel nincs
+#: megjelölve. Enélkül ezek a sorok örökre ott állnának abban a számban,
+#: mintha valaki elfelejtette volna kitölteni őket.
+NINCS_PENZMOZGAS = "Nincs pénzmozgás"
+
 #: KIADÁSNÁL mind a három út járható: a céges kártyával fizetett tétel sem a
 #: kasszából, sem külön utalással nem megy.
-KIADAS_MODOK: tuple[str, ...] = (KESZPENZ, ATUTALAS, BANKKARTYA)
+KIADAS_MODOK: tuple[str, ...] = (KESZPENZ, ATUTALAS, BANKKARTYA, NINCS_PENZMOZGAS)
 
-#: BEVÉTELNÉL kettő: vagy kézbe kapjuk (kassza), vagy a számlára érkezik.
-#: Bankkártyás fizetés nálunk nincs - nem fogadunk kártyát, a terminálos
-#: bevétel a Krumpellóé, annak saját, napi kassza-zárása van (lásd
+#: BEVÉTELNÉL kettő út van: vagy kézbe kapjuk (kassza), vagy a számlára
+#: érkezik. Bankkártyás fizetés nálunk nincs - nem fogadunk kártyát, a
+#: terminálos bevétel a Krumpellóé, annak saját, napi kassza-zárása van (lásd
 #: models/krumpello.py).
-BEVETEL_MODOK: tuple[str, ...] = (KESZPENZ, ATUTALAS)
+BEVETEL_MODOK: tuple[str, ...] = (KESZPENZ, ATUTALAS, NINCS_PENZMOZGAS)
+
+#: A RÉGI bevételek visszamenőleges kitöltésénél: ami se készpénznek, se
+#: pénzmozgás nélkülinek nem ismerhető fel, az ÁTUTALÁS.
+#:
+#: Ez az egyetlen hely, ahol nem "nem tudjuk"-ot mondunk a felismerhetetlenre -
+#: és csak a bevétel oldalán, csak a visszamenőleges kitöltésben (lásd
+#: scripts/fizetesi_mod_kitoltese.py). Két okból vállalható:
+#:
+#: - a készpénzes bevételt a Notion "Bevétel formája" mezője megnevezi, tehát
+#:   ami marad, az a valóságban számlára érkezett - ezt mondták meg;
+#: - a KASSZA egyenlegét nem érinti: abba csak a készpénz számít bele, egy
+#:   tévesen átutalásnak jelölt sor tehát nem tud pénzt hazudni a dobozba.
+#:
+#: A kiadásoknál SZÁNDÉKOSAN nincs ilyen alapértelmezés: ott a bankkártya is
+#: játszik, és a "Parkolás"-ról tényleg nem tudjuk, hogyan fizették.
+BEVETEL_ALAPERTELMEZES = ATUTALAS
 
 #: Amit készpénznek ismerünk el. A Notionből örökölt sorokon "KP" és "Kp." is
 #: előfordul, és mind ugyanazt jelenti.
@@ -112,6 +138,12 @@ TELJES_EGYEZES_MODOK: dict[str, str] = {
     "kp": KESZPENZ,
     "kp.": KESZPENZ,
     "banki utalas": ATUTALAS,
+    # A "Bevétel formája" mező egyik értéke a Notionben - és ez nem hiányzó
+    # adat, hanem maga a válasz: nem mozdult pénz.
+    "nem volt tranzakcio": NINCS_PENZMOZGAS,
+    "nincs tranzakcio": NINCS_PENZMOZGAS,
+    "nem volt penzmozgas": NINCS_PENZMOZGAS,
+    "nincs penzmozgas": NINCS_PENZMOZGAS,
     # A VALÓDI adatból: ezek a "Kiadás formája" értékek maradtak felismeretlenül
     # az első futás után, a hozzájuk tartozó módot pedig megmondták. Egyik sem
     # tippelhető ki a szóból - azért állnak itt, felsorolva.

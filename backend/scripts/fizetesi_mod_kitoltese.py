@@ -16,10 +16,16 @@ MIT NEM CSINÁL:
 
 - nem ír felül semmit, aminél már van fizetési mód - amit valaki kézzel
   beállított, az erősebb, mint egy név-alapú következtetés;
-- nem tippel. Amit nem lehet egyértelműen felismerni ("Parkolás", "Nem volt
-  tranzakció"), az üresen marad, és a végén ki is listázzuk - egy tippelt
+- a KIADÁSOKNÁL nem tippel. Amit nem lehet egyértelműen felismerni
+  ("Parkolás"), az üresen marad, és a végén ki is listázzuk - egy tippelt
   fizetési mód a kassza egyenlegét hazudná meg, márpedig épp azért van ez a
   mező.
+
+A BEVÉTELEKNÉL viszont a maradék is kap választ: ami se készpénznek, se
+pénzmozgás nélkülinek nem ismerhető fel, az ÁTUTALÁS (lásd
+fizetesi_mod.BEVETEL_ALAPERTELMEZES) - a készpénzt a "Bevétel formája" megnevezi,
+tehát ami marad, az a számlára érkezett. A jelentésben külön soron látszik,
+hány sor jött innen és nem a saját mezőjéből.
 
 Használat:
 
@@ -122,9 +128,14 @@ def bevetelek(db, vegrehajt: bool) -> int:
         )
         cimke = (bevetel.bevetel_formaja or bevetel.nev or "(nincs forma)")[:60]
         if mod is None:
-            ismeretlen[cimke] += 1
-            continue
-        kitoltve[f"{cimke} → {mod}"] += 1
+            # A BEVÉTELNÉL a maradék is kap választ: ami se készpénznek, se
+            # pénzmozgás nélkülinek nem ismerhető fel, az átutalás (lásd
+            # fizetesi_mod.BEVETEL_ALAPERTELMEZES). Külön soron jelezzük,
+            # hogy látszódjon, hány sor jött ONNAN, és nem a saját mezőjéből.
+            mod = fizetesi_mod.BEVETEL_ALAPERTELMEZES
+            kitoltve[f"{cimke} → {mod} (alapértelmezés)"] += 1
+        else:
+            kitoltve[f"{cimke} → {mod}"] += 1
         if vegrehajt:
             bevetel.fizetes_modja = mod
 

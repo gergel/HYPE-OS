@@ -226,12 +226,19 @@ Minden kiadásnál és bevételnél megadható, **hogyan mozgott a pénz**:
 
 | | Választható |
 |---|---|
-| Kiadás (`kifizetes_modja`) | Készpénz · Átutalás · Bankkártya |
-| Bevétel (`fizetes_modja`) | Készpénz · Átutalás |
+| Kiadás (`kifizetes_modja`) | Készpénz · Átutalás · Bankkártya · Nincs pénzmozgás |
+| Bevétel (`fizetes_modja`) | Készpénz · Átutalás · Nincs pénzmozgás |
 
-Bevételnél azért csak kettő, mert kártyát nem fogadunk - a terminálos bevétel a
-Krumpellóé, annak saját napi kassza-zárása van (lásd
+Bevételnél azért nincs kártya, mert nem fogadunk kártyát - a terminálos bevétel
+a Krumpellóé, annak saját napi kassza-zárása van (lásd
 [14-krumpello.md](14-krumpello.md)).
+
+A **„Nincs pénzmozgás"** nem út, hanem annak a hiánya: van összeg és számla, de
+nem mozdult pénz (beszámítás, csere, másik cégen át rendezve - a Notionben ez a
+„Nem volt tranzakció"). Miért kell rá külön érték, ha a kasszába úgysem számít
+bele? Mert az **üres mező azt jelenti, „nem tudjuk"**, és a Pénzügyek ki is
+írja, hány tétel nincs megjelölve. Enélkül ezek a sorok örökre ott állnának
+abban a számban, mintha valaki elfelejtette volna kitölteni őket.
 
 Ez nem könyvelési finomság: a **készpénz egy fizikai doboz**, aminek van
 egyenlege, és azt csak akkor tudjuk, ha minden készpénzes tétel meg van jelölve.
@@ -308,11 +315,24 @@ egyezésre** illeszkednek, nem részletként: a „bér" benne van a
 „Kamerabérlés"-ben is, ami épp nem munkabér, a „kártya" pedig az „SD kártya"
 eszközben.
 
-**A bevételnél egy megkötéssel:** ott csak készpénz és átutalás lehet
-(`BEVETEL_MODOK` - kártyát nem fogadunk), ezért a kikövetkeztetés `engedett`
-listát kap. Ami nem fér bele, azon nem áll meg, hanem **továbblép** - hátha egy
-másik mező mond valami használhatót. A „Nem volt tranzakció" pedig üresen
-marad: az nem fizetési mód, hanem épp annak a hiánya.
+**A bevételnél két eltéréssel:**
+
+1. Ott **nincs kártya** (`BEVETEL_MODOK`), ezért a kikövetkeztetés `engedett`
+   listát kap. Ami nem fér bele, azon nem áll meg, hanem **továbblép** - hátha
+   egy másik mező mond valami használhatót.
+2. **A maradék is kap választ: átutalás** (`BEVETEL_ALAPERTELMEZES`). Ez az
+   egyetlen hely, ahol nem „nem tudjuk"-ot mondunk a felismerhetetlenre. Két
+   okból vállalható: a készpénzes bevételt a „Bevétel formája" mező megnevezi,
+   tehát ami marad, az a számlára érkezett; és a **kassza egyenlegét nem
+   érinti**, abba csak a készpénz számít bele. A jelentésben külön soron
+   látszik, hány sor jött innen és nem a saját mezőjéből
+   („→ Átutalás (alapértelmezés)").
+
+   A kiadásoknál szándékosan **nincs** ilyen alapértelmezés: ott a bankkártya
+   is játszik, és a „Parkolás"-ról tényleg nem tudjuk, hogyan fizették.
+
+A **„Nem volt tranzakció"** nem marad üresen: abból „Nincs pénzmozgás" lesz -
+az nem hiányzó adat, hanem maga a válasz.
 
 ### A projekt bevétele: a vállalási ár, amíg nincs kifizetés
 

@@ -56,10 +56,23 @@ export default async function PenzugyekPage() {
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
-  const fizetesiModOptions = expenseFieldTypes.kifizetes_modja?.options ?? ["Készpénz", "Átutalás", "Bankkártya"];
-  // A BEVÉTELNÉL kettő van: vagy kézbe kapjuk (kassza), vagy a számlára
+  // A listát a szerver adja (lásd backend services/entity_registry.py); az itteni
+  // érték csak akkor jut szóhoz, ha a mezőleírás nem érkezett meg.
+  const fizetesiModOptions = expenseFieldTypes.kifizetes_modja?.options ?? [
+    "Készpénz",
+    "Átutalás",
+    "Bankkártya",
+    "Nincs pénzmozgás",
+  ];
+  // A BEVÉTELNÉL két ÚT van: vagy kézbe kapjuk (kassza), vagy a számlára
   // érkezik - bankkártyát nem fogadunk (lásd backend services/fizetesi_mod.py).
-  const bevetelFizetesiModOptions = revenueFieldTypes.fizetes_modja?.options ?? ["Készpénz", "Átutalás"];
+  // A harmadik érték nem út, hanem annak a hiánya: van összeg, de nem mozdult
+  // pénz (beszámítás, csere, másik cégen át rendezve).
+  const bevetelFizetesiModOptions = revenueFieldTypes.fizetes_modja?.options ?? [
+    "Készpénz",
+    "Átutalás",
+    "Nincs pénzmozgás",
+  ];
   // Honnan jött a bevétel: a projektkód és a MUNKA neve. A Revenue maga csak
   // a project_code_id-t hordozza, ezért itt oldjuk fel.
   //
