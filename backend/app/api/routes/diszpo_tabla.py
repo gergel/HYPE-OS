@@ -136,6 +136,32 @@ class CellaIn(BaseModel):
     szin_valtozik: bool = False
 
 
+def _egy_cella(db: Session, m: DiszpoMunkalap, adat: CellaIn) -> None:
+    cella = db.scalar(
+        select(DiszpoCella).where(
+            DiszpoCella.munkalap_id == m.id,
+            DiszpoCella.sor_idx == adat.sor_idx,
+            DiszpoCella.oszlop_idx == adat.oszlop_idx,
+        )
+    )
+    if cella is None:
+        cella = DiszpoCella(munkalap_id=m.id, sor_idx=adat.sor_idx, oszlop_idx=adat.oszlop_idx)
+        db.add(cella)
+    if adat.ertek_valtozik:
+        cella.ertek = (adat.ertek or "").strip() or None
+    if adat.szin_valtozik:
+        cella.szin = adat.szin
+    if cella.ertek is None and cella.szin is None and cella.id is not None:
+        db.delete(cella)
+
+
+def _ellenoriz_cellat(m: DiszpoMunkalap, adat: CellaIn) -> None:
+    if adat.szin_valtozik and adat.szin is not None and adat.szin not in SZINEK:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen szín. Választható: {', '.join(SZINEK)}")
+    if not (0 <= adat.sor_idx < max(m.sor_szam, 1) + 500) or not (0 <= adat.oszlop_idx < m.oszlop_szam + 50):
+        raise HTTPException(status_code=400, detail="A cella a munkalapon kívülre esik.")
+
+
 @router.put("/{munkalap_id}/cella", response_model=MunkalapOut | None)
 def set_cella(
     munkalap_id: int,
@@ -146,37 +172,205 @@ def set_cella(
     """Egy cella szerkesztése. Üres cellához nem tartozik sor - ha mindkét
     mezője kiürül, a sort töröljük."""
     m = _munkalap_vagy_404(db, munkalap_id)
-    if payload.szin_valtozik and payload.szin is not None and payload.szin not in SZINEK:
-        raise HTTPException(status_code=400, detail=f"Ismeretlen szín. Választható: {', '.join(SZINEK)}")
-    if not (0 <= payload.sor_idx < max(m.sor_szam, 1) + 500) or not (0 <= payload.oszlop_idx < m.oszlop_szam + 50):
-        raise HTTPException(status_code=400, detail="A cella a munkalapon kívülre esik.")
-
-    cella = db.scalar(
-        select(DiszpoCella).where(
-            DiszpoCella.munkalap_id == m.id,
-            DiszpoCella.sor_idx == payload.sor_idx,
-            DiszpoCella.oszlop_idx == payload.oszlop_idx,
-        )
-    )
-    if cella is None:
-        cella = DiszpoCella(munkalap_id=m.id, sor_idx=payload.sor_idx, oszlop_idx=payload.oszlop_idx)
-        db.add(cella)
-    if payload.ertek_valtozik:
-        cella.ertek = (payload.ertek or "").strip() or None
-    if payload.szin_valtozik:
-        cella.szin = payload.szin
-    if cella.ertek is None and cella.szin is None and cella.id is not None:
-        db.delete(cella)
+    _ellenoriz_cellat(m, payload)
+    _egy_cella(db, m, payload)
     # A szín MUNKANAP-ADAT: a következő önköltség-számítás már ezt lássa.
     munkanap_szamlalo.urits_gyorsitotar(db)
     db.commit()
     return None
 
 
+class CellakIn(BaseModel):
+    """Több cella egyszerre - egy kijelölt TARTOMÁNY színezéséhez/törléséhez.
+
+    Egy hét napjait egyesével színezni öt kör-utat jelentene; így egy."""
+
+    cellak: list[CellaIn]
+
+
+@router.put("/{munkalap_id}/cellak", response_model=None)
+def set_cellak(
+    munkalap_id: int,
+    payload: CellakIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    m = _munkalap_vagy_404(db, munkalap_id)
+    if len(payload.cellak) > 5000:
+        raise HTTPException(status_code=400, detail="Egyszerre legfeljebb 5000 cella módosítható.")
+    for adat in payload.cellak:
+        _ellenoriz_cellat(m, adat)
+        _egy_cella(db, m, adat)
+    munkanap_szamlalo.urits_gyorsitotar(db)
+    db.commit()
+    return None
+
+
+# ── SOR- ÉS OSZLOPMŰVELETEK ─────────────────────────────────────────────────
+#
+# A beszúrás/törlés az INDEXEKET tolja el. Ezt nem lehet naivan egy
+# `idx = idx + 1` utasítással megtenni: az egyediségi megkötés (munkalap+idx)
+# menet közben sérülne, mert a mozgó sor beleütközne a még nem mozdult
+# szomszédjába. Ezért KÉT lépésben toljuk: előbb egy nagy eltolással
+# "félretesszük" az érintett tartományt, majd onnan visszahozzuk a helyére. Így
+# egyik lépésben sincs ütközés, és mindkettő EGY utasítás - egy 146 oszlopos
+# munkalapon a soronkénti mozgatás több tízezer UPDATE lenne.
+
+#: Ekkora eltolással tesszük félre az indexeket - jóval a valós tartomány
+#: fölött, hogy biztosan ne ütközzön semmivel.
+_FELRETESZ = 1_000_000
+
+
+def _tolas(db: Session, modell, munkalap_id: int, oszlop, hatar: int, mennyivel: int) -> None:
+    """A `hatar`-tól kezdődő indexek eltolása `mennyivel`-lel, ütközés nélkül."""
+    db.query(modell).filter(modell.munkalap_id == munkalap_id, oszlop >= hatar).update(
+        {oszlop: oszlop + _FELRETESZ}, synchronize_session=False
+    )
+    db.query(modell).filter(modell.munkalap_id == munkalap_id, oszlop >= _FELRETESZ).update(
+        {oszlop: oszlop - _FELRETESZ + mennyivel}, synchronize_session=False
+    )
+
+
+class BeszurasIn(BaseModel):
+    """Hova szúrjunk be. `ala=False` = a megadott index HELYÉRE (fölé)."""
+
+    idx: int
+    ala: bool = False
+
+
+@router.post("/{munkalap_id}/sor", response_model=None)
+def sor_beszurasa(
+    munkalap_id: int,
+    payload: BeszurasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Új, üres sor beszúrása - mint a táblázatban."""
+    m = _munkalap_vagy_404(db, munkalap_id)
+    hova = payload.idx + (1 if payload.ala else 0)
+    if not 0 <= hova <= m.sor_szam:
+        raise HTTPException(status_code=400, detail="A sor a munkalapon kívülre esne.")
+    _tolas(db, DiszpoCella, m.id, DiszpoCella.sor_idx, hova, 1)
+    _tolas(db, DiszpoSor, m.id, DiszpoSor.idx, hova, 1)
+    db.add(DiszpoSor(munkalap_id=m.id, idx=hova))
+    m.sor_szam += 1
+    munkanap_szamlalo.urits_gyorsitotar(db)
+    db.commit()
+    return None
+
+
+@router.delete("/{munkalap_id}/sor/{idx}", response_model=None)
+def sor_torlese(
+    munkalap_id: int,
+    idx: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    """Egy sor törlése a tartalmával együtt - a többi sor feljebb csúszik."""
+    m = _munkalap_vagy_404(db, munkalap_id)
+    if not 0 <= idx < m.sor_szam:
+        raise HTTPException(status_code=400, detail="Ez a sor nem létezik.")
+    db.query(DiszpoCella).filter(DiszpoCella.munkalap_id == m.id, DiszpoCella.sor_idx == idx).delete(
+        synchronize_session=False
+    )
+    db.query(DiszpoSor).filter(DiszpoSor.munkalap_id == m.id, DiszpoSor.idx == idx).delete(
+        synchronize_session=False
+    )
+    _tolas(db, DiszpoCella, m.id, DiszpoCella.sor_idx, idx + 1, -1)
+    _tolas(db, DiszpoSor, m.id, DiszpoSor.idx, idx + 1, -1)
+    m.sor_szam = max(m.sor_szam - 1, 0)
+    munkanap_szamlalo.urits_gyorsitotar(db)
+    db.commit()
+    return None
+
+
+@router.post("/{munkalap_id}/oszlop", response_model=None)
+def oszlop_beszurasa(
+    munkalap_id: int,
+    payload: BeszurasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Új, üres oszlop beszúrása. A csoportot (szekciót) a bal szomszédtól
+    örökli - a Sheetben is oda tartozik, ahova beszúrták."""
+    m = _munkalap_vagy_404(db, munkalap_id)
+    hova = payload.idx + (1 if payload.ala else 0)
+    if not 0 <= hova <= m.oszlop_szam:
+        raise HTTPException(status_code=400, detail="Az oszlop a munkalapon kívülre esne.")
+    bal = db.scalar(
+        select(DiszpoOszlop).where(DiszpoOszlop.munkalap_id == m.id, DiszpoOszlop.idx == max(hova - 1, 0))
+    )
+    _tolas(db, DiszpoCella, m.id, DiszpoCella.oszlop_idx, hova, 1)
+    _tolas(db, DiszpoOszlop, m.id, DiszpoOszlop.idx, hova, 1)
+    db.add(DiszpoOszlop(munkalap_id=m.id, idx=hova, csoport=bal.csoport if bal else None))
+    m.oszlop_szam += 1
+    munkanap_szamlalo.urits_gyorsitotar(db)
+    db.commit()
+    return None
+
+
+@router.delete("/{munkalap_id}/oszlop/{idx}", response_model=None)
+def oszlop_torlese(
+    munkalap_id: int,
+    idx: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    """Egy oszlop törlése a tartalmával együtt."""
+    m = _munkalap_vagy_404(db, munkalap_id)
+    if not 0 <= idx < m.oszlop_szam:
+        raise HTTPException(status_code=400, detail="Ez az oszlop nem létezik.")
+    db.query(DiszpoCella).filter(DiszpoCella.munkalap_id == m.id, DiszpoCella.oszlop_idx == idx).delete(
+        synchronize_session=False
+    )
+    db.query(DiszpoOszlop).filter(DiszpoOszlop.munkalap_id == m.id, DiszpoOszlop.idx == idx).delete(
+        synchronize_session=False
+    )
+    _tolas(db, DiszpoCella, m.id, DiszpoCella.oszlop_idx, idx + 1, -1)
+    _tolas(db, DiszpoOszlop, m.id, DiszpoOszlop.idx, idx + 1, -1)
+    m.oszlop_szam = max(m.oszlop_szam - 1, 0)
+    munkanap_szamlalo.urits_gyorsitotar(db)
+    db.commit()
+    return None
+
+
+class SorAdatIn(BaseModel):
+    """A sor SAJÁT adatai - amiket nem cellaként tárolunk.
+
+    A dátum azért fontos, mert ebből számoljuk a munkanapokat: egy új sor
+    addig nem tartozik egyetlen naphoz sem."""
+
+    datum: date | None = None
+    datum_valtozik: bool = False
+
+
+@router.put("/{munkalap_id}/sor/{idx}", response_model=SorOut)
+def sor_adat(
+    munkalap_id: int,
+    idx: int,
+    payload: SorAdatIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    m = _munkalap_vagy_404(db, munkalap_id)
+    sor = db.scalar(select(DiszpoSor).where(DiszpoSor.munkalap_id == m.id, DiszpoSor.idx == idx))
+    if sor is None:
+        raise HTTPException(status_code=404, detail="Ez a sor nem található.")
+    if payload.datum_valtozik:
+        sor.datum = payload.datum
+    munkanap_szamlalo.urits_gyorsitotar(db)
+    db.commit()
+    db.refresh(sor)
+    return SorOut(idx=sor.idx, datum=sor.datum, nap=sor.nap, diszposzam=sor.diszposzam, elvalaszto=sor.elvalaszto)
+
+
 class OszlopKotesIn(BaseModel):
     """Melyik munkatárs oszlopa ez. `employee_id=None` = a kötés törlése."""
 
     employee_id: int | None = None
+    #: Az oszlop felirata (a fejlécben). None + `cimke_valtozik` = törlés.
+    cimke: str | None = None
+    cimke_valtozik: bool = False
 
 
 @router.put("/{munkalap_id}/oszlop/{idx}", response_model=OszlopOut)
@@ -201,6 +395,8 @@ def set_oszlop_kotes(
     if payload.employee_id is not None and db.get(Employee, payload.employee_id) is None:
         raise HTTPException(status_code=404, detail="Ez a munkatárs nem található.")
     oszlop.employee_id = payload.employee_id
+    if payload.cimke_valtozik:
+        oszlop.cimke = (payload.cimke or "").strip() or None
     munkanap_szamlalo.urits_gyorsitotar(db)
     db.commit()
     db.refresh(oszlop)

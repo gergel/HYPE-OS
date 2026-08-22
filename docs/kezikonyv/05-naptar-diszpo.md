@@ -169,12 +169,47 @@ import csak EGYÉRTELMŰ névegyezésre köt (két azonos keresztnév között e
 szkript nem dönthet), a többit a felületen kell megadni - az oszlop egy
 cellájára kattintva.
 
-### Hónaponként jelenik meg
+### Úgy működik, mint egy táblázat
 
-A külsős munkalap 381 sor x 146 oszlop: egyben kirajzolva 55 ezer cella lenne
-a képernyőn, amitől a böngésző megáll. A táblázat amúgy is hónapokra van
-tagolva, tehát a hónap a természetes adag. Ahol nincs dátum (AUTÓK, PROJECT
-KÓDOK), ott az egész munkalap látszik.
+A felület szándékosan a Google Sheets viselkedését követi, mert a munka is
+ugyanaz:
+
+| Amit csinálsz | Ami történik |
+|---|---|
+| kattintás | kijelölés (a jobb felső sarok kiírja: `G14 · GERI · 2026-08-13`) |
+| gépelés | azonnal szerkesztés, a leütött karakterrel |
+| Enter / dupla kattintás | szerkesztés; Enter kilép és lelép egy sort |
+| nyilak, Tab | mozgás cellák között (a nézet utána görget) |
+| Shift+nyíl, húzás | TARTOMÁNY kijelölése |
+| színgomb | a teljes kijelölt tartomány színezése - egy kör-úttal |
+| Delete | a kijelölt tartomány tartalmának törlése |
+| jobb gomb | sor/oszlop beszúrása vagy törlése |
+
+Van **sorszám és oszlopbetű** (`A`, `B`, … `1`, `2`, …), a fejlécsorok fent
+ragadnak, és az első oszlopok (dátum, nap, diszpószám) balra fagyasztva
+maradnak - 146 oszlopnál e nélkül nem lehetne tudni, melyik sorban vagyunk.
+
+**Az egész év egyben látszik**, hónapválasztó nélkül. A külsős munkalap 381
+sor x 146 oszlop = 55 ezer cella, amitől a böngésző megállna, ezért a rács
+**virtualizált**: csak a látható ablakot rajzoljuk ki, a görgetősáv viszont a
+teljes méretet mutatja - a görgetés így ugyanaz, mintha minden ott volna.
+
+### Sor és oszlop beszúrása
+
+A beszúrás/törlés az INDEXEKET tolja el, és ezt nem lehet naivan egy
+`idx = idx + 1` utasítással megtenni: az egyediségi megkötés menet közben
+sérülne, mert a mozgó sor beleütközne a még nem mozdult szomszédjába. Ezért
+**két lépésben** toljuk (`_tolas`): előbb egy nagy eltolással félretesszük az
+érintett tartományt, majd onnan hozzuk vissza a helyére. Mindkét lépés egy
+utasítás - a soronkénti mozgatás egy 146 oszlopos munkalapon több tízezer
+UPDATE lenne.
+
+Az új sornak **nincs dátuma**, tehát addig egyetlen naphoz sem tartozik (a
+munkanap-számlálásba sem számít). Az új oszlop a bal szomszédja szekcióját
+örökli, és amíg nincs munkatárshoz kötve, a színei nem számítanak bele
+semmibe.
+
+A **törlés külön jogosultság** (`delete`): a tartalmat is viszi.
 
 ### Az átvétel
 

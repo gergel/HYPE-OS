@@ -64,6 +64,9 @@ export default async function DiszpoTablaPage({
   if (!munkalap) notFound();
 
   const canEdit = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
+  // A sor/oszlop TÖRLÉSE külön jog: az a tartalmát is viszi, és egy 146
+  // oszlopos munkalapon nem visszavonható egy kattintással.
+  const canDelete = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
   // Akinél a szerződött napszám elfogyott: innentől a plusz nap díján
   // számolunk a projektek önköltségébe.
   const elfogyott = haviAllas.filter((a) => a.plusz_napok.length > 0);
@@ -93,6 +96,7 @@ export default async function DiszpoTablaPage({
           <DiszpoTablaRacs
             munkalap={munkalap}
             canEdit={canEdit}
+            canDelete={canDelete}
             emberek={emberek.map((e) => ({ id: e.id, nev: e.full_name }))}
           />
         </Card>
