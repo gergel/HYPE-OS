@@ -184,7 +184,13 @@ python scripts/diszpo_tabla_import.py --vegrehajt  # élesben
 ```
 
 A megosztott linkről tölti le a munkafüzetet (`export?format=xlsx`) - nem kell
-hozzá Google-fiók, és a CSV-vel ellentétben ez viszi a SZÍNEKET is. A szkript
+hozzá Google-fiók, és a CSV-vel ellentétben ez viszi a SZÍNEKET is. Az
+xlsx-olvasáshoz **openpyxl** kell (`requirements.txt`); ha egy régebbi
+image-ben még nincs benne, a szkript ezt meg is mondja, és addig egy
+`pip install openpyxl` átsegít rajta.
+
+Ha a konténerből nem érhető el a Google, a munkafüzet letölthető kézzel és
+átadható: `--fajl hype2026.xlsx`. A szkript
 **újrafuttatható**: munkalaponként cseréli a tartalmat, tehát a második
 átvételnél (amikor teljesen átálltok a rendszerre) ugyanígy futtatható. Ami
 viszont nálunk készült és a Sheetben nincs benne, azt a csere eldobja - ezért

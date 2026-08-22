@@ -36,6 +36,13 @@ google-genai==2.17.0
 celery[redis]==5.6.3
 pillow==12.3.0
 python-slugify==8.0.4
+# A HYPE 2026 diszpótábla átvételéhez: a Google Sheet xlsx-exportját a
+# CELLASZÍNEKKEL együtt olvassa (lásd scripts/diszpo_tabla_import.py) - a
+# CSV-export ezt nem tudná, pedig ott a szín az adat.
+openpyxl==3.1.5
+# Eddig csak közvetett függőségként szerepelt, pedig a kódunk KÖZVETLENÜL
+# hívja (google_oauth.py, diszpo_tabla_import.py).
+requests==2.34.2
 
 # --- Közvetett függőségek (a fentiek húzzák be) ---
 # Ezeket is rögzítjük, mert a build szempontjából ugyanúgy kockázatot jelentenek:
@@ -58,6 +65,7 @@ cryptography==50.0.0
 distro==1.9.0
 docstring-parser==0.18.0
 ecdsa==0.19.2
+et-xmlfile==2.0.0
 google-api-core==2.33.0
 google-auth-httplib2==0.4.0
 googleapis-common-protos==1.75.0
@@ -85,7 +93,6 @@ pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 pyyaml==6.0.3
-requests==2.34.2
 requests-oauthlib==2.0.0
 rsa==4.9.1
 s3transfer==0.19.2

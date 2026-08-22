@@ -32,7 +32,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import openpyxl  # noqa: E402
+try:
+    import openpyxl  # noqa: E402
+except ModuleNotFoundError as exc:  # pragma: no cover - üzemeltetési segítség
+    # Az openpyxl csak ennek a szkriptnek kell, és a régi image-ekben még nincs
+    # benne. A puszta ModuleNotFoundError itt nem mond semmit arról, mit kell
+    # tenni - ezért kiírjuk.
+    raise SystemExit(
+        "Hiányzik az openpyxl csomag, enélkül nem tudjuk beolvasni a táblázatot.\n"
+        "  - ha most, egyszer futtatnád:  pip install openpyxl\n"
+        "  - tartósan: a requirements.txt-ben már benne van, tehát a következő\n"
+        "    deploy után magától meglesz."
+    ) from exc
+
 import requests  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 
