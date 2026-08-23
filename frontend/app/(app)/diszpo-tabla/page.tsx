@@ -4,6 +4,7 @@ import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { DiszpoTablaRacs } from "@/components/DiszpoTablaRacs";
 import { StatusBadge } from "@/components/StatusBadge";
+import { HONAP_NEVEK } from "@/lib/diszpoSzin";
 import {
   getDiszpoHaviAllas,
   getDiszpoMunkalap,
@@ -27,9 +28,9 @@ const PAGE = "/diszpo-tabla";
 export default async function DiszpoTablaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ lap?: string }>;
+  searchParams: Promise<{ lap?: string; ev?: string; honap?: string }>;
 }) {
-  const { lap } = await searchParams;
+  const { lap, ev, honap } = await searchParams;
   const [munkalapok, pagePermissions] = await Promise.all([getDiszpoMunkalapok(), getMyPagePermissions()]);
 
   if (munkalapok.length === 0) {
@@ -55,11 +56,15 @@ export default async function DiszpoTablaPage({
   const aktiv = munkalapok.find((m) => m.id === aktivId);
   if (!aktiv) notFound();
 
+  // MELYIK HÓNAP - a címben, tehát megosztható és könyvjelzőzhető. Alapból a
+  // mai; a nyilakkal bármelyik másikra lehet lépni.
   const ma = new Date();
+  const nezettEv = Number(ev) || ma.getFullYear();
+  const nezettHonap = Math.min(Math.max(Number(honap) || ma.getMonth() + 1, 1), 12);
   const [munkalap, emberek, haviAllas] = await Promise.all([
     getDiszpoMunkalap(aktiv.id),
     getEmployees(),
-    getDiszpoHaviAllas(ma.getFullYear(), ma.getMonth() + 1),
+    getDiszpoHaviAllas(nezettEv, nezettHonap),
   ]);
   if (!munkalap) notFound();
 
@@ -67,6 +72,11 @@ export default async function DiszpoTablaPage({
   // A sor/oszlop TÖRLÉSE külön jog: az a tartalmát is viszi, és egy 146
   // oszlopos munkalapon nem visszavonható egy kattintással.
   const canDelete = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
+  // A NAPIDÍJ ÉS A PLUSZ NAPOK a Pénzügyek jogosultságához kötöttek: az
+  // bér-adat, nem beosztás. A SZERVER dönti el, mit ad ki (lásd backend
+  // routes/diszpo_tabla._lathatja_a_penzugyet) - itt csak azt kérdezzük meg,
+  // megkaptuk-e, hogy ne rajzoljunk üres oszlopokat annak, aki úgysem látja.
+  const latszikPenz = haviAllas.some((a) => a.penzugyi_adat);
   // Akinél a szerződött napszám elfogyott: innentől a plusz nap díján
   // számolunk a projektek önköltségébe.
   const elfogyott = haviAllas.filter((a) => a.plusz_napok.length > 0);
@@ -103,9 +113,39 @@ export default async function DiszpoTablaPage({
 
         {/* A TÁBLÁZAT LÉNYEGE SZÁMOKBAN: ki hány napot dolgozott ebben a
             hónapban, és kinél fogyott el a szerződött napszám. */}
-        <Card
-          title={`Munkanapok – ${ma.getFullYear()}. ${String(ma.getMonth() + 1).padStart(2, "0")}. hónap`}
-        >
+        <Card title={`Munkanapok – ${nezettEv}. ${HONAP_NEVEK[nezettHonap - 1]}`}>
+          {/* HÓNAPLÉPTETŐ: bármelyik hónapra vissza lehet nézni, nem csak a
+              mostanira. A választás a címben van, tehát megosztható. */}
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            {[-1, 1].map((irany) => {
+              const d = new Date(nezettEv, nezettHonap - 1 + irany, 1);
+              return (
+                <Link
+                  key={irany}
+                  href={`/diszpo-tabla?lap=${aktiv.id}&ev=${d.getFullYear()}&honap=${d.getMonth() + 1}`}
+                  className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3"
+                >
+                  {irany < 0 ? "← Előző" : "Következő →"}
+                </Link>
+              );
+            })}
+            <span className="ml-2 flex flex-wrap gap-1">
+              {HONAP_NEVEK.map((nev, i) => (
+                <Link
+                  key={nev}
+                  href={`/diszpo-tabla?lap=${aktiv.id}&ev=${nezettEv}&honap=${i + 1}`}
+                  className={`rounded-[var(--radius)] px-2 py-1 text-[12px] ${
+                    i + 1 === nezettHonap
+                      ? "bg-bg-accent text-text-accent"
+                      : "text-text-muted hover:bg-surface-3"
+                  }`}
+                >
+                  {nev.slice(0, 3)}.
+                </Link>
+              ))}
+            </span>
+          </div>
+
           {haviAllas.length === 0 ? (
             <p className="text-[13px] text-text-secondary">
               Ebben a hónapban még nincs kiszínezett munkanap – vagy az oszlopok nincsenek munkatárshoz kötve. A
@@ -114,8 +154,8 @@ export default async function DiszpoTablaPage({
           ) : (
             <>
               <p className="mb-3 text-[12.5px] text-text-secondary">
-                Munkanapnak számít a <b>zöld</b>, a <b>kék</b> és a <b>fehér</b> nap is – az utóbbi azért, mert a
-                napja le volt kötve, csak nem tudtunk rá munkát adni.
+                Munkanapnak számít a <b>zöld</b>, a <b>kék</b> és az <b>üresen hagyott</b> nap is – az utóbbi azért,
+                mert a napja le volt kötve, csak nem tudtunk rá munkát adni.
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-[13px]">
@@ -123,10 +163,14 @@ export default async function DiszpoTablaPage({
                     <tr className="border-b border-border">
                       <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Munkatárs</th>
                       <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Munkanap</th>
-                      <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Szerződve</th>
-                      <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Mikor fogy el</th>
-                      <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Napidíj</th>
-                      <th className="py-1.5 text-right font-medium text-text-secondary">Plusz nap díja</th>
+                      {latszikPenz && (
+                        <>
+                          <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Szerződve</th>
+                          <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Mikor fogy el</th>
+                          <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Napidíj</th>
+                          <th className="py-1.5 text-right font-medium text-text-secondary">Plusz nap díja</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -134,6 +178,8 @@ export default async function DiszpoTablaPage({
                       <tr key={a.employee_id} className="border-b border-border last:border-0">
                         <td className="py-2 pr-6 text-text-primary">{a.employee_nev ?? `#${a.employee_id}`}</td>
                         <td className="py-2 pr-6 text-right tabular-nums text-text-primary">{a.munkanapok}</td>
+                        {latszikPenz && (
+                        <>
                         <td className="py-2 pr-6 text-right tabular-nums text-text-secondary">
                           {a.szerzodott_napok ?? "–"}
                         </td>
@@ -163,12 +209,14 @@ export default async function DiszpoTablaPage({
                             </span>
                           )}
                         </td>
+                        </>
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {elfogyott.length > 0 && (
+              {latszikPenz && elfogyott.length > 0 && (
                 <p className="mt-3 text-[12.5px] text-text-secondary">
                   {elfogyott.length} munkatársnál elfogyott a havi szerződött napszám. A határnap utáni forgatásaikon
                   a <b>plusz nap napidíját</b> számoljuk a projekt önköltségébe – akinél az nincs megadva, ott marad a

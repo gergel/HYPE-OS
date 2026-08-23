@@ -141,13 +141,22 @@ nevesített érték:
 |---|---|---|
 | **zöld** | aznap dolgozott (a vágóknál: terepen) | **igen** |
 | **kék** | a vágók munkanapja (irodában) | **igen** |
-| **fehér** | munkanap volt, de nem tudtunk neki munkát adni | **igen** |
+| **üresen hagyva** | munkanap volt, de nem tudtunk neki munkát adni | **igen** |
 | piros | nem munkanap (szabadnap) | nem |
 | szürke | nem releváns (akkor még nem dolgozott nálunk) | nem |
 
-A **fehér** a lényeges eset: a napja le volt kötve, csak nem jött rá munka -
-a szerződött napokból ugyanúgy fogy (lásd
+Az **üresen hagyott** a lényeges eset: a napja le volt kötve, csak nem jött rá
+munka - a szerződött napokból ugyanúgy fogy (lásd
 [04-csapat-felszereles.md](04-csapat-felszereles.md)).
+
+Ez a Sheetben a FEHÉR cella volt, és ott is úgy nézett ki, mint amire nem
+állítottak be semmit - a jelentése pont ez. Ezért nálunk sem festjük ki: egy
+világos folt a sötét felületen hangosabb volt, mint a tényleges munkanapok.
+Kap viszont egy **halvány sarok-jelet**, mert munkanapnak számít, és enélkül
+nem lehetne megkülönböztetni egy tényleg érintetlen cellától.
+
+A **hónap-elválasztó** sorok magasabbak és középre írt sávként jelennek meg:
+az egész évet egyben görgetve ez az egyetlen fogódzó, hol tart az ember.
 
 **Egy nap egy munkanap**, akkor is, ha aznap két diszpó volt: a táblázatban
 olyankor két sor tartozik ugyanahhoz a naphoz (a második sor dátum-mezője
@@ -210,6 +219,22 @@ munkanap-számlálásba sem számít). Az új oszlop a bal szomszédja szekciój
 semmibe.
 
 A **törlés külön jogosultság** (`delete`): a tartalmat is viszi.
+
+### A munkanap-kimutatás - és amit csak a pénzügyesek látnak
+
+A rács alatt hónapról hónapra látszik, ki hány napot dolgozott. A hónap a
+CÍMBEN van (`?ev=2026&honap=3`), tehát megosztható és könyvjelzőzhető; a
+léptetők és a hónapnevek bármelyikre visznek.
+
+A **napidíj, a plusz nap díja, a szerződött napszám és a plusz napok** csak
+annak látszanak, aki a **Pénzügyek** oldalt is látja - ez bér-adat, nem
+beosztás (a felhasználó kifejezett kérése). A puszta munkanap-szám mindenkinek
+látszik.
+
+Ezt a **SZERVER** dönti el (`_lathatja_a_penzugyet`), nem a felület: egy
+elrejtett oszlop attól még ott lenne a válaszban, és a böngésző hálózati fülén
+bárki elolvasná. A jogosultság ugyanaz a szabály, ami a Pénzügyek oldalt is
+védi - nem egy második, külön karbantartott lista.
 
 ### Az átvétel
 

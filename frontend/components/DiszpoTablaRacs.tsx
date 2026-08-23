@@ -13,6 +13,9 @@ import { DISZPO_SZINEK, SZIN_LEIRAS, type DiszpoSzin } from "@/lib/diszpoSzin";
 // A rács MÉRETEI. Fixek, mert a virtualizálás ebből számol: enélkül minden
 // görgetésnél meg kellene mérni a tényleges cellamagasságokat.
 const SOR_MAGASSAG = 26;
+//: A HÓNAP-ELVÁLASZTÓ sor magasabb és középre írt: az évet egyben görgetve
+//: ez az egyetlen fogódzó, hol tart az ember. A Sheetben is kiugrik.
+const ELVALASZTO_MAGASSAG = 46;
 const OSZLOP_SZELES = 116;
 const SORFEJ_SZELES = 46;
 const OSZLOPFEJ_MAGAS = 24;
@@ -83,6 +86,37 @@ export function DiszpoTablaRacs({
   const sorSzam = Math.max(munkalap.sor_szam, munkalap.sorok.length);
   const oszlopSzam = munkalap.oszlop_szam;
 
+  // A sorok TETEJE és MAGASSÁGA - halmozva. Azért kell tömb, mert az
+  // elválasztó sorok magasabbak: fix magassággal a pozíciók elcsúsznának.
+  const { sorTeteje, sorMagassaga, teljesMagassag } = useMemo(() => {
+    const elvalasztoSorok = new Set(munkalap.sorok.filter((s) => s.elvalaszto).map((s) => s.idx));
+    const teteje: number[] = new Array(sorSzam + 1);
+    const magassaga: number[] = new Array(sorSzam);
+    let fut = 0;
+    for (let r = 0; r < sorSzam; r++) {
+      teteje[r] = fut;
+      magassaga[r] = elvalasztoSorok.has(r) ? ELVALASZTO_MAGASSAG : SOR_MAGASSAG;
+      fut += magassaga[r];
+    }
+    teteje[sorSzam] = fut;
+    return { sorTeteje: teteje, sorMagassaga: magassaga, teljesMagassag: fut };
+  }, [munkalap.sorok, sorSzam]);
+
+  /** Melyik sor van ezen a képpontnál - a halmozott tömbön keresve. */
+  const sorAPontnal = useCallback(
+    (y: number) => {
+      let also = 0;
+      let felso = sorSzam;
+      while (also < felso) {
+        const kozep = (also + felso) >> 1;
+        if (sorTeteje[kozep] <= y) also = kozep + 1;
+        else felso = kozep;
+      }
+      return Math.max(also - 1, 0);
+    },
+    [sorTeteje, sorSzam],
+  );
+
   // Az első oszlopok BEFAGYASZTVA: 146 oszlopnál a dátum nélkül nem lehet
   // tudni, melyik sorban vagyunk. Ahol nincs dátum-oszlop, ott egy elég.
   const fagyasztott = munkalap.sorok.some((s) => s.datum) ? 3 : 1;
@@ -115,8 +149,8 @@ export function DiszpoTablaRacs({
   }, []);
 
   // A LÁTHATÓ ABLAK: csak ezt rajzoljuk ki.
-  const elsoSor = Math.max(munkalap.fejlec_sorok, Math.floor(gorgetes.top / SOR_MAGASSAG) - RATARTAS);
-  const utolsoSor = Math.min(sorSzam, Math.ceil((gorgetes.top + meret.magas) / SOR_MAGASSAG) + RATARTAS);
+  const elsoSor = Math.max(munkalap.fejlec_sorok, sorAPontnal(gorgetes.top) - RATARTAS);
+  const utolsoSor = Math.min(sorSzam, sorAPontnal(gorgetes.top + meret.magas) + RATARTAS + 1);
   const elsoOszlop = Math.max(
     fagyasztott,
     Math.floor((gorgetes.left - fagyasztottSzeles) / OSZLOP_SZELES) - RATARTAS,
@@ -205,11 +239,11 @@ export function DiszpoTablaRacs({
       // Görgessünk oda, ha kifutott a képből - különben a nyilazás "elveszik".
       const elem = gorgetoRef.current;
       if (!elem) return;
-      const y = uj.sor * SOR_MAGASSAG;
+      const y = sorTeteje[uj.sor];
       const x = fagyasztottSzeles + (uj.oszlop - fagyasztott) * OSZLOP_SZELES;
       if (y < elem.scrollTop) elem.scrollTop = y;
-      if (y + SOR_MAGASSAG > elem.scrollTop + elem.clientHeight)
-        elem.scrollTop = y + SOR_MAGASSAG - elem.clientHeight;
+      if (y + sorMagassaga[uj.sor] > elem.scrollTop + elem.clientHeight)
+        elem.scrollTop = y + sorMagassaga[uj.sor] - elem.clientHeight;
       if (uj.oszlop >= fagyasztott) {
         if (x < elem.scrollLeft + fagyasztottSzeles) elem.scrollLeft = x - fagyasztottSzeles;
         if (x + OSZLOP_SZELES > elem.scrollLeft + elem.clientWidth)
@@ -252,6 +286,9 @@ export function DiszpoTablaRacs({
   function cellaStilus(szin: string | null | undefined): React.CSSProperties {
     if (!szin || !(szin in SZIN_LEIRAS)) return {};
     const s = SZIN_LEIRAS[szin as DiszpoSzin];
+    // Az "üres" jelölés nem fest ki semmit: pont az a lényege, hogy úgy
+    // nézzen ki, mint egy érintetlen cella (lásd lib/diszpoSzin.ts).
+    if (s.jelolt) return {};
     return { backgroundColor: s.hatter, color: s.szoveg };
   }
 
@@ -267,18 +304,19 @@ export function DiszpoTablaRacs({
     const s = sorTerkep.get(sor);
     const szerkesztettE = szerkesztes?.pont.sor === sor && szerkesztes?.pont.oszlop === oszlop;
     const bal = fagyott ? oszlop * OSZLOP_SZELES : fagyasztottSzeles + (oszlop - fagyasztott) * OSZLOP_SZELES;
+    const uresJelolt = c?.szin === "feher";
     return (
       <div
         style={{
           position: "absolute",
-          top: sor * SOR_MAGASSAG,
+          top: sorTeteje[sor],
           left: fagyott ? bal + gorgetes.left : bal,
           width: OSZLOP_SZELES,
-          height: SOR_MAGASSAG,
+          height: sorMagassaga[sor],
           zIndex: fagyott ? 2 : undefined,
           ...cellaStilus(c?.szin),
         }}
-        className={`overflow-hidden border-b border-r border-border px-1.5 text-[12px] leading-[24px] ${
+        className={`relative overflow-hidden border-b border-r border-border px-1.5 text-[12px] leading-[24px] ${
           s?.elvalaszto ? "bg-surface-3 font-medium" : ""
         } ${kijeloltE(sor, oszlop) ? "outline outline-2 -outline-offset-2 outline-text-accent" : ""} ${
           fagyott && !c?.szin ? "bg-surface-2" : ""
@@ -322,7 +360,19 @@ export function DiszpoTablaRacs({
             className="h-full w-full bg-surface-1 text-[12px] text-text-primary outline-none"
           />
         ) : (
-          <span className="block truncate">{c?.ertek ?? ""}</span>
+          <>
+            <span className="block truncate">{c?.ertek ?? ""}</span>
+            {/* Az "üresen hagyva" jelölés halvány sarok-jele: enélkül nem
+                lehetne megkülönböztetni egy tényleg érintetlen cellától -
+                pedig ez MUNKANAPNAK számít. */}
+            {uresJelolt && (
+              <span
+                aria-hidden
+                title="Üresen hagyva – munkanap volt, de nem kapott munkát"
+                className="pointer-events-none absolute bottom-[3px] left-[3px] h-1 w-1 rounded-full bg-text-muted opacity-70"
+              />
+            )}
+          </>
         )}
       </div>
     );
@@ -468,7 +518,11 @@ export function DiszpoTablaRacs({
             {[...fejlecSorok, ...lathatoSorok].map((r) => (
               <div
                 key={r}
-                style={{ position: "absolute", top: r * SOR_MAGASSAG - (r < munkalap.fejlec_sorok ? 0 : gorgetes.top), height: SOR_MAGASSAG }}
+                style={{
+                  position: "absolute",
+                  top: sorTeteje[r] - (r < munkalap.fejlec_sorok ? 0 : gorgetes.top),
+                  height: sorMagassaga[r],
+                }}
                 onClick={() => setTartomany({ tol: { sor: r, oszlop: 0 }, ig: { sor: r, oszlop: oszlopSzam - 1 } })}
                 className={`w-full cursor-pointer border-b border-border text-center text-[10.5px] leading-[25px] ${
                   kijelolt.sor === r ? "text-text-accent" : "text-text-muted"
@@ -492,14 +546,14 @@ export function DiszpoTablaRacs({
             <div
               style={{
                 width: fagyasztottSzeles + Math.max(oszlopSzam - fagyasztott, 0) * OSZLOP_SZELES,
-                height: sorSzam * SOR_MAGASSAG,
+                height: teljesMagassag,
                 position: "relative",
               }}
             >
               {/* FEJLÉC-SOROK: fent ragadnak. */}
               {fejlecSorok.map((r) => (
                 <div key={`f${r}`} style={{ position: "sticky", top: 0, zIndex: 3, height: 0 }}>
-                  <div style={{ position: "absolute", top: r * SOR_MAGASSAG - 0, left: 0, right: 0 }}>
+                  <div style={{ position: "absolute", top: sorTeteje[r], left: 0, right: 0 }}>
                     {[...fagyasztottOszlopok, ...lathatoOszlopok].map((c) => {
                       const cl = cella(r, c);
                       const fagyott = c < fagyasztott;
@@ -513,7 +567,7 @@ export function DiszpoTablaRacs({
                             position: "absolute",
                             left: bal,
                             width: OSZLOP_SZELES,
-                            height: SOR_MAGASSAG,
+                            height: sorMagassaga[r],
                             zIndex: fagyott ? 2 : 1,
                           }}
                           onMouseDown={() => {
@@ -551,16 +605,53 @@ export function DiszpoTablaRacs({
                 </div>
               ))}
 
-              {lathatoSorok.map((r) => (
-                <div key={r}>
-                  {fagyasztottOszlopok.map((c) => (
-                    <Cella key={`fx${c}`} sor={r} oszlop={c} fagyott />
-                  ))}
-                  {lathatoOszlopok.map((c) => (
-                    <Cella key={c} sor={r} oszlop={c} fagyott={false} />
-                  ))}
-                </div>
-              ))}
+              {lathatoSorok.map((r) => {
+                const sorAdat = sorTerkep.get(r);
+                // HÓNAP-ELVÁLASZTÓ: nem cellák sora, hanem egy széles,
+                // középre írt sáv - az évet egyben görgetve ez mondja meg,
+                // hol tartunk.
+                if (sorAdat?.elvalaszto) {
+                  const felirat =
+                    munkalap.oszlopok
+                      .map((o) => cella(r, o.idx)?.ertek)
+                      .find((e) => e && e.trim()) ?? "";
+                  return (
+                    <div
+                      key={r}
+                      style={{
+                        position: "absolute",
+                        top: sorTeteje[r],
+                        left: gorgetes.left,
+                        width: meret.szeles,
+                        height: sorMagassaga[r],
+                        zIndex: 2,
+                      }}
+                      onMouseDown={() => {
+                        setKijelolt({ sor: r, oszlop: 0 });
+                        setTartomany(null);
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setKijelolt({ sor: r, oszlop: 0 });
+                        setMenu({ x: e.clientX, y: e.clientY, pont: { sor: r, oszlop: 0 } });
+                      }}
+                      className="flex cursor-pointer items-center justify-center border-y border-border bg-bg-accent text-[17px] font-semibold tracking-wide text-text-accent"
+                    >
+                      {felirat}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={r}>
+                    {fagyasztottOszlopok.map((c) => (
+                      <Cella key={`fx${c}`} sor={r} oszlop={c} fagyott />
+                    ))}
+                    {lathatoOszlopok.map((c) => (
+                      <Cella key={c} sor={r} oszlop={c} fagyott={false} />
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

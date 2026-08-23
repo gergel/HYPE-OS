@@ -17,6 +17,10 @@ export type SzinLeiras = {
   jelentes: string;
   hatter: string;
   szoveg: string;
+  /** Kifestés helyett halvány SAROK-JEL. Az "üresen hagyva" jelentésű cella
+   *  úgy néz ki, mint egy érintetlen mező - a jel az egyetlen, amiből látszik,
+   *  hogy tudatos jelölés, és hogy munkanapnak számít. */
+  jelolt?: boolean;
 };
 
 export const SZIN_LEIRAS: Record<DiszpoSzin, SzinLeiras> = {
@@ -32,11 +36,19 @@ export const SZIN_LEIRAS: Record<DiszpoSzin, SzinLeiras> = {
     hatter: "#2563eb",
     szoveg: "#eff6ff",
   },
+  // ÜRESEN HAGYVA. A Sheetben ez a fehér cella volt, és ott is úgy nézett ki,
+  // mint amire még nem állítottak be semmit - a jelentése pont ez: "a napja le
+  // volt kötve, csak nem tudtunk rá munkát adni". Ezért nálunk sem festjük ki:
+  // egy világos folt a sötét felületen hangosabb volt, mint a tényleges
+  // munka-napok. Munkanapnak viszont ugyanúgy SZÁMÍT (lásd MUNKANAP_SZINEK),
+  // ezért kap egy halvány sarok-jelet - enélkül nem lehetne megkülönböztetni
+  // egy tényleg érintetlen cellától.
   feher: {
-    cimke: "Fehér",
-    jelentes: "Munkanap volt, de nem kapott munkát – ez is munkanap",
-    hatter: "#e5e7eb",
-    szoveg: "#111827",
+    cimke: "Üres",
+    jelentes: "Üresen hagyva: munkanap volt, de nem kapott munkát – ez is munkanap",
+    hatter: "transparent",
+    szoveg: "inherit",
+    jelolt: true,
   },
   piros: {
     cimke: "Piros",

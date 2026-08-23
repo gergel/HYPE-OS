@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_page_action
+from app.core.security import check_page_action, get_current_user, require_page_action
 from app.models.diszpo_tabla import (
     SZINEK,
     DiszpoCella,
@@ -30,6 +30,9 @@ from app.services import munkanap_szamlalo
 router = APIRouter(prefix="/diszpo-tabla", tags=["diszpo-tabla"])
 
 PAGE = "/diszpo-tabla"
+#: A napidíj és a plusz napok ehhez az oldalhoz kötöttek: az bér-adat, nem
+#: beosztás (a felhasználó kifejezett kérése).
+PENZUGY_PAGE = "/penzugyek"
 
 
 class MunkalapFej(BaseModel):
@@ -410,7 +413,11 @@ def set_oszlop_kotes(
 
 
 class HaviAllasOut(BaseModel):
-    """Hol tart valaki a szerződött napjaival egy hónapban."""
+    """Hol tart valaki a szerződött napjaival egy hónapban.
+
+    A PÉNZ-részt (napidíj, plusz napok, szerződött napszám) csak az kapja meg,
+    aki a Pénzügyek oldalt is látja - lásd `_lathatja_a_penzugyet`. Aki nem, az
+    a puszta munkanap-számot látja: az beosztási adat, nem bér."""
 
     employee_id: int
     employee_nev: str | None = None
@@ -425,6 +432,19 @@ class HaviAllasOut(BaseModel):
     hatarnap: date | None = None
     #: A szerződött napokon FELÜLI munkanapok.
     plusz_napok: list[date] = []
+    #: Megkapta-e a hívó a pénzügyi részt. A felület ebből tudja, hogy egy üres
+    #: napidíj "nincs megadva" vagy "nem látod" - a kettő nem ugyanaz.
+    penzugyi_adat: bool = False
+
+
+def _lathatja_a_penzugyet(db: Session, employee: Employee) -> bool:
+    """Látja-e a Pénzügyek oldalt. UGYANAZ a szabály, ami ott is véd - nem egy
+    második, külön karbantartott lista (lásd core/security.check_page_action)."""
+    try:
+        check_page_action(db, employee, PENZUGY_PAGE, "view")
+        return True
+    except HTTPException:
+        return False
 
 
 @router.get("/munkanapok/{ev}/{honap}", response_model=list[HaviAllasOut])
@@ -432,15 +452,20 @@ def havi_allas(
     ev: int,
     honap: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(get_current_user),
+    user: Employee = Depends(get_current_user),
 ):
     """Ki hány napot dolgozott ebben a hónapban - és kinél fogyott el a
     szerződött napszám.
 
     Csak azok szerepelnek, akiknek van oszlopuk a diszpótáblában: akiről nincs
-    adat, arról nem is állítunk semmit."""
+    adat, arról nem is állítunk semmit.
+
+    A NAPIDÍJ ÉS A PLUSZ NAPOK a Pénzügyek jogosultságához kötöttek. Ezt a
+    SZERVER dönti el, nem a felület: egy elrejtett oszlop attól még ott lenne a
+    válaszban, és a böngésző hálózati fülén bárki elolvasná."""
     if not 1 <= honap <= 12:
         raise HTTPException(status_code=400, detail="A hónap 1 és 12 közötti szám.")
+    penz = _lathatja_a_penzugyet(db, user)
     employee_idk = set(munkanap_szamlalo.munkanap_terkep(db).keys())
     if not employee_idk:
         return []
@@ -457,11 +482,14 @@ def havi_allas(
                 ev=ev,
                 honap=honap,
                 munkanapok=kep.darab,
-                szerzodott_napok=kep.szerzodott_napok,
-                napi_dij=float(emb.napi_dij) if emb.napi_dij is not None else None,
-                plusz_nap_napi_dij=float(emb.plusz_nap_napi_dij) if emb.plusz_nap_napi_dij is not None else None,
-                hatarnap=kep.hatarnap,
-                plusz_napok=kep.plusz_napok,
+                penzugyi_adat=penz,
+                szerzodott_napok=kep.szerzodott_napok if penz else None,
+                napi_dij=float(emb.napi_dij) if penz and emb.napi_dij is not None else None,
+                plusz_nap_napi_dij=(
+                    float(emb.plusz_nap_napi_dij) if penz and emb.plusz_nap_napi_dij is not None else None
+                ),
+                hatarnap=kep.hatarnap if penz else None,
+                plusz_napok=kep.plusz_napok if penz else [],
             )
         )
     eredmeny.sort(key=lambda a: (-a.munkanapok, a.employee_nev or ""))

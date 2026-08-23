@@ -2860,6 +2860,10 @@ export type DiszpoHaviAllas = {
   /** Az a nap, amelyiken a szerződött napok elfogynak. */
   hatarnap: string | null;
   plusz_napok: string[];
+  /** Megkaptuk-e a PÉNZÜGYI részt (napidíj, plusz napok, szerződött napszám).
+   *  Csak az kapja, aki a Pénzügyek oldalt is látja - a felület ebből tudja,
+   *  hogy egy üres napidíj "nincs megadva" vagy "nem látod". */
+  penzugyi_adat: boolean;
 };
 
 export async function getDiszpoHaviAllas(ev: number, honap: number): Promise<DiszpoHaviAllas[]> {
