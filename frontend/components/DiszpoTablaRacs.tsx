@@ -298,7 +298,12 @@ export function DiszpoTablaRacs({
     return sor >= sor1 && sor <= sor2 && oszlop >= oszlop1 && oszlop <= oszlop2;
   }
 
-  /** Egy cella kirajzolása - abszolút pozícióval (a virtualizálás miatt). */
+  /** Egy cella kirajzolása - abszolút pozícióval (a virtualizálás miatt).
+   *
+   * A BEFAGYASZTOTT oszlopok cellái nem itt kapják a "balra tapadó" helyüket
+   * - azt a hívó (a `frz` csomópont, lásd lent) adja valódi CSS
+   * `position: sticky`-vel. Itt a `left` ezért a fagyasztott oszlopoknál is
+   * csak a saját, belső (a csomóponton belüli) vízszintes helyzet. */
   function Cella({ sor, oszlop, fagyott }: { sor: number; oszlop: number; fagyott: boolean }) {
     const c = cella(sor, oszlop);
     const s = sorTerkep.get(sor);
@@ -310,7 +315,7 @@ export function DiszpoTablaRacs({
         style={{
           position: "absolute",
           top: sorTeteje[sor],
-          left: fagyott ? bal + gorgetes.left : bal,
+          left: bal,
           width: OSZLOP_SZELES,
           height: sorMagassaga[sor],
           zIndex: fagyott ? 2 : undefined,
@@ -319,7 +324,11 @@ export function DiszpoTablaRacs({
         className={`relative overflow-hidden border-b border-r border-border px-1.5 text-[12px] leading-[24px] ${
           s?.elvalaszto ? "bg-surface-3 font-medium" : ""
         } ${kijeloltE(sor, oszlop) ? "outline outline-2 -outline-offset-2 outline-text-accent" : ""} ${
-          fagyott && !c?.szin ? "bg-surface-2" : ""
+          // A fagyasztott oszlopnak MINDIG kell átlátszatlan háttér, különben
+          // görgetéskor a mögötte (a rács tartalmában) elhaladó, színes sorok
+          // átütnének rajta. Az "üresen hagyva" jelölés (feher) szándékosan
+          // nem fest hátteret (lásd cellaStilus) - itt ezért külön kezeljük.
+          fagyott && (!c?.szin || uresJelolt) ? "bg-surface-2" : ""
         }`}
         onMouseDown={(e) => {
           if (e.button === 2) return;
@@ -605,6 +614,23 @@ export function DiszpoTablaRacs({
                 </div>
               ))}
 
+              {/* BEFAGYASZTOTT OSZLOPOK - valódi CSS `position: sticky`-vel,
+                  oszloponként egy-egy nulla méretű "horgony" csomópontban
+                  (ugyanaz a trükk, mint a fenti fejléc-soroké, csak
+                  vízszintesen). A böngésző natívan tartja a helyükön
+                  görgetéskor, ezért nincs a korábbi kézi
+                  `gorgetes.left`-újraszámolásból adódó egy-képkockás
+                  késés (ami a villogást/ugrálást okozta), és a cellák
+                  mindig átlátszatlan hátteret kapnak (lásd Cella), ezért a
+                  mögöttük elhaladó sorok színe sem üt át rajtuk. */}
+              {fagyasztottOszlopok.map((c) => (
+                <div key={`frz${c}`} style={{ position: "sticky", left: 0, zIndex: 2, width: 0, height: 0 }}>
+                  {lathatoSorok.map((r) =>
+                    sorTerkep.get(r)?.elvalaszto ? null : <Cella key={r} sor={r} oszlop={c} fagyott />,
+                  )}
+                </div>
+              ))}
+
               {lathatoSorok.map((r) => {
                 const sorAdat = sorTerkep.get(r);
                 // HÓNAP-ELVÁLASZTÓ: nem cellák sora, hanem egy széles,
@@ -624,7 +650,7 @@ export function DiszpoTablaRacs({
                         left: gorgetes.left,
                         width: meret.szeles,
                         height: sorMagassaga[r],
-                        zIndex: 2,
+                        zIndex: 3,
                       }}
                       onMouseDown={() => {
                         setKijelolt({ sor: r, oszlop: 0 });
@@ -643,9 +669,6 @@ export function DiszpoTablaRacs({
                 }
                 return (
                   <div key={r}>
-                    {fagyasztottOszlopok.map((c) => (
-                      <Cella key={`fx${c}`} sor={r} oszlop={c} fagyott />
-                    ))}
                     {lathatoOszlopok.map((c) => (
                       <Cella key={c} sor={r} oszlop={c} fagyott={false} />
                     ))}
