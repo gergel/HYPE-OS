@@ -26,7 +26,8 @@ export function BelsosTigEmployeeList({ records }: { records: InternalPerformanc
   const osszesen = records.reduce((sum, r) => sum + (r.brutto_osszeg ?? 0), 0);
 
   return (
-    <table className="w-full border-collapse text-[13px]">
+    <div className="overflow-x-auto">
+    <table className="os-table min-w-full border-collapse text-[13px]">
       <thead>
         <tr className="border-b border-border">
           <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Hónap</th>
@@ -89,5 +90,6 @@ export function BelsosTigEmployeeList({ records }: { records: InternalPerformanc
         </tr>
       </tbody>
     </table>
+    </div>
   );
 }

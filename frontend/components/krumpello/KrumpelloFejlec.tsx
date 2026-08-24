@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { KrumpelloMobileNav } from "@/components/krumpello/KrumpelloMobileNav";
 
 /** A Krumpello oldalak közös fejléce: cím + időszak-szűrő + kilépés.
  *
@@ -26,12 +27,15 @@ export function KrumpelloFejlec({
   return (
     <div
       data-app-chrome
-      className="sticky top-0 z-20 border-b border-border bg-surface-1/90 px-8 py-5 backdrop-blur-xl"
+      className="sticky top-0 z-20 border-b border-border bg-surface-1/90 px-4 py-4 backdrop-blur-xl md:px-8 md:py-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-text-primary">{cim}</h1>
-          {leiras && <p className="mt-1 text-[12.5px] text-text-muted">{leiras}</p>}
+        <div className="flex min-w-0 items-center gap-3">
+          <KrumpelloMobileNav />
+          <div className="min-w-0">
+            <h1 className="text-[19px] font-semibold tracking-[-0.02em] text-text-primary sm:text-[22px]">{cim}</h1>
+            {leiras && <p className="mt-1 text-[12.5px] text-text-muted">{leiras}</p>}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {jobbOldal}

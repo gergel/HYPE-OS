@@ -368,7 +368,8 @@ export function AutoKezelo({
                     {auto.kiadasok.length === 0 ? (
                       <p className="text-[12.5px] text-text-muted">Erre az autóra még nincs költés felvezetve.</p>
                     ) : (
-                      <table className="w-full border-collapse text-[12.5px]">
+                      <div className="overflow-x-auto">
+                      <table className="os-table min-w-full border-collapse text-[12.5px]">
                         <thead>
                           <tr className="border-b border-border">
                             <th className="py-1 pr-4 text-left font-medium text-text-muted">Mikor</th>
@@ -439,6 +440,7 @@ export function AutoKezelo({
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     )}
                     {canCreate &&
                       (koltsegUrlap === auto.id ? (

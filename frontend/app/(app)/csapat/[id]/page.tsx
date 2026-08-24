@@ -361,7 +361,7 @@ export default async function EmployeeDetailPage({
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-8">
+      <div className="flex-1 space-y-8 p-4 md:p-8">
         <div className="space-y-2">
           <BackLink href={backTarget.href} label={backTarget.label} />
           <h1 className="t-page">{String(employee.full_name ?? `Crew tag #${employee.id}`)}</h1>

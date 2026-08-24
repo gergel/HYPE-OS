@@ -40,7 +40,7 @@ export default async function UgyfelDetailPage({ params }: { params: Promise<{ i
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-8">
+      <div className="flex-1 space-y-8 p-4 md:p-8">
         <div className="space-y-2">
           <BackLink href="/ugyfelek" label="Ügyfelek" />
           <h1 className="t-page">{String(client.nev ?? `Ügyfél #${client.id}`)}</h1>

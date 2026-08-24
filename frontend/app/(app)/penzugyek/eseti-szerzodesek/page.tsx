@@ -37,7 +37,7 @@ export default async function EsetiSzerzodesekPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
         <Card title={`Eseti szerződések (${rows.length})`}>
           <p className="mb-3 text-[12.5px] text-text-muted">
             Minden alvállalkozói eseti megbízási szerződés, azzal együtt, hogy melyik emberhez és melyik projekthez

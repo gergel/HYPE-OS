@@ -1456,6 +1456,27 @@ export async function getMyPagePermissions(): Promise<Record<string, string[]> |
   return res?.page_permissions ?? null;
 }
 
+/** A fenti három lekérdezés EGYBEN - a TopBar-nak kell mindhárom a mobil
+ * navigációs fiókhoz (lásd components/MobileNav.tsx), és mivel a TopBar-t
+ * minden oldal maga hordozza (nem az (app)/layout.tsx adja át propként),
+ * egyetlen híváson keresztül olcsóbb, mint a fenti hármat külön hívni. */
+export async function getMyAccess(): Promise<{
+  allowedPages: string[] | null;
+  pagePermissions: Record<string, string[]> | null;
+  anyagKorlat: number[] | null;
+}> {
+  const res = await apiGet<{
+    allowed_pages: string[] | null;
+    page_permissions: Record<string, string[]> | null;
+    lathato_deliverable_idk: number[] | null;
+  }>("/api/v1/user-access/me");
+  return {
+    allowedPages: res?.allowed_pages ?? null,
+    pagePermissions: res?.page_permissions ?? null,
+    anyagKorlat: res?.lathato_deliverable_idk ?? null,
+  };
+}
+
 export type DetailTab = {
   tab_key: string;
   label: string;

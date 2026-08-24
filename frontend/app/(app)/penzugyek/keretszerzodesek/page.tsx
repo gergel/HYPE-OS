@@ -99,7 +99,7 @@ export default async function KeretszerzodesekPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
         <Card title={`Keretszerződések (${rows.length})`}>
           <KeretszerzodesAddWidget candidates={candidates} cegek={cegJeloltek} />
           <p className="mb-3 text-[12.5px] text-text-muted">

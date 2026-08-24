@@ -33,7 +33,7 @@ export default async function KrumpelloBevetelPage({
         utvonal="/krumpello/bevetel"
         jobbOldal={<NapSzerkeszto />}
       />
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="mb-5 flex flex-wrap gap-8 rounded-[var(--radius-lg)] border border-border bg-surface-2 px-6 py-4">
           <Osszesen cimke="Bruttó" ertek={osszeg((n) => n.brutto_osszesen)} />
           <Osszesen cimke="Nettó" ertek={osszeg((n) => n.netto_osszesen)} />
@@ -48,7 +48,7 @@ export default async function KrumpelloBevetelPage({
           </p>
         ) : (
           <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-border bg-surface-2">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="os-table min-w-full border-collapse text-[13px]">
               <thead>
                 <tr className="border-b border-border">
                   <Fej>Dátum</Fej>

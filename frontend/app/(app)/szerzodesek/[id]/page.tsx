@@ -62,7 +62,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-8">
+      <div className="flex-1 space-y-8 p-4 md:p-8">
         <div className="space-y-2">
           <BackLink href="/penzugyek/keretszerzodesek" label="Keretszerződések" />
           <h1 className="t-page">{title}</h1>

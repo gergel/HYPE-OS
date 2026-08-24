@@ -359,7 +359,7 @@ export default async function ProjectKodokPage({
     return (
       <div className="flex flex-1 flex-col">
         <TopBar />
-        <div className="flex-1 p-8">
+        <div className="flex-1 p-4 md:p-8">
           <Card title={`Teendők (${teendos} projektkód)`}>
             <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} />
             {/* Ugyanaz a sorrend, mint a listán: a legnagyobb kód elöl. */}
@@ -373,7 +373,7 @@ export default async function ProjectKodokPage({
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
         <Card title={`Project Code-ok (${sorok.length})`}>
           <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} />
           <ProjektkodPapirSzuro ev={ev} aktiv={papirSzuro} darabszamok={papirDarabszamok} />

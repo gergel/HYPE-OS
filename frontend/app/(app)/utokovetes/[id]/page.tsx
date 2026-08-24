@@ -73,7 +73,7 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-8">
+      <div className="flex-1 space-y-8 p-4 md:p-8">
         <BackLink href="/utokovetes" label="Utókövetés" />
 
         <Card title={detail.project_nev ?? `Projekt #${detail.project_id}`}>

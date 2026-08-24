@@ -59,7 +59,8 @@ export function OutstandingProjectsTable({ projects }: { projects: FinanceSummar
     return <p className="text-[13px] text-text-secondary">Nincs nyitott kintlévőség - minden bevétel kifizetve.</p>;
   }
   return (
-    <table className="w-full border-collapse text-[13px]">
+    <div className="overflow-x-auto">
+    <table className="os-table min-w-full border-collapse text-[13px]">
       <thead>
         <tr className="border-b border-border">
           <th className="py-1.5 text-left font-medium text-text-secondary">Projektkód</th>
@@ -93,6 +94,7 @@ export function OutstandingProjectsTable({ projects }: { projects: FinanceSummar
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 

@@ -425,7 +425,8 @@ export function BelsosTigManager({
         <p className="mb-3 text-[13px] text-text-muted">Nincs ilyen állapotú munkatárs ebben a hónapban.</p>
       )}
 
-      <table className="w-full border-collapse text-[13px]">
+      <div className="overflow-x-auto">
+      <table className="os-table min-w-full border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-border">
             <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Munkatárs</th>
@@ -588,6 +589,7 @@ export function BelsosTigManager({
           })}
         </tbody>
       </table>
+      </div>
 
       {/* Bejelentett alkalmazott havi fizetése: nála nincs TIG és nincs
           számla, ezért egyetlen összeg kell - a nettó bér. */}

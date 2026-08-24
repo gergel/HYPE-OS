@@ -224,7 +224,7 @@ export function IdoszakKezelo({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="os-table min-w-full border-collapse">
             <thead>
               <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
                 {canEdit && <th className="w-8 py-2" />}

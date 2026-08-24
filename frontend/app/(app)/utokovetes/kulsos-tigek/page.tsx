@@ -30,7 +30,7 @@ export default async function KulsosTigekPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
         <Card title={`Külsős teljesítési igazolások (${rows.length})`}>
           <p className="mb-3 text-[12.5px] text-text-muted">
             {kikuldott} kiküldve, {kihagyott} kihagyva, {keszul} készül. {kifizetve} számla ki van fizetve. Összesen{" "}

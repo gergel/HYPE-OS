@@ -140,7 +140,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-8">
+      <div className="flex-1 space-y-8 p-4 md:p-8">
         {/* FEJLÉC: a kód, a projekt neve és a dátuma - ennyi azonosítja a
             munkát. Minden más (ügyfél, státusz-mezők, Notion-maradékok) a
             listán és a Pénzügyekben ott van, ide csak zajt hozna. */}

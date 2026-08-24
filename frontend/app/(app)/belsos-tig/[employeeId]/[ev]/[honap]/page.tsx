@@ -60,7 +60,7 @@ export default async function BelsosTigHonapPage({
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-8">
+      <div className="flex-1 space-y-8 p-4 md:p-8">
         <div className="space-y-2">
           <BackLink href={`/csapat/${adat.employee_id}`} label={adat.full_name} />
           <h1 className="t-page">

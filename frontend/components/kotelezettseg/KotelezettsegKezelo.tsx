@@ -465,7 +465,8 @@ export function KotelezettsegKezelo({
       {kotelezettsegek.length === 0 ? (
         <p className="mb-3 text-[13px] text-text-muted">Még nincs felvéve egy sem.</p>
       ) : (
-        <table className="w-full border-collapse text-[13px]">
+        <div className="overflow-x-auto">
+        <table className="os-table min-w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Megnevezés</th>
@@ -613,7 +614,8 @@ export function KotelezettsegKezelo({
                             Még nincs esedékes forduló. Az első fordulónál magától megjelenik itt egy sor.
                           </p>
                         ) : (
-                          <table className="w-full border-collapse text-[12.5px]">
+                          <div className="overflow-x-auto">
+                          <table className="os-table min-w-full border-collapse text-[12.5px]">
                             <thead>
                               <tr className="border-b border-border">
                                 <th className="py-1 pr-4 text-left font-medium text-text-muted">Forduló</th>
@@ -630,6 +632,7 @@ export function KotelezettsegKezelo({
                               ))}
                             </tbody>
                           </table>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -639,6 +642,7 @@ export function KotelezettsegKezelo({
             })}
           </tbody>
         </table>
+        </div>
       )}
 
       {canCreate && !urlap && (

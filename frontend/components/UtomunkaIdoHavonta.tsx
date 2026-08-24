@@ -61,7 +61,8 @@ export function UtomunkaIdoHavonta({ honapok }: { honapok: UtomunkaHonapIdo[] })
               </button>
 
               {nyitva && (
-                <table className="w-full border-collapse border-t border-border text-[13px]">
+                <div className="overflow-x-auto">
+                <table className="os-table min-w-full border-collapse border-t border-border text-[13px]">
                   <thead>
                     <tr className="border-b border-border">
                       <th className="py-1.5 pl-3 pr-4 text-left font-medium text-text-secondary">Projekt</th>
@@ -94,6 +95,7 @@ export function UtomunkaIdoHavonta({ honapok }: { honapok: UtomunkaHonapIdo[] })
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           );

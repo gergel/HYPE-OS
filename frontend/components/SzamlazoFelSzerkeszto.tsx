@@ -138,7 +138,7 @@ export function SzamlazoFelSzerkeszto({
       </p>
       {hiba && <p className="mb-3 text-[12.5px] text-text-danger">{hiba}</p>}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px]">
+        <table className="os-table min-w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Stábtag</th>

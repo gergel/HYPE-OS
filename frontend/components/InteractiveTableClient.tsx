@@ -170,9 +170,15 @@ export function InteractiveTableClient({
       ) : (
         /* A táblázat saját, korlátozott magasságú görgető-kerete: így a
            fejléc megtapadhat, és hosszú listánál is látszik, melyik oszlopot
-           nézzük - enélkül a fejléc kigörgött a képernyő tetején. */
+           nézzük - enélkül a fejléc kigörgött a képernyő tetején.
+
+           `min-w-full` (NEM `w-full`): asztali nézetben ez ugyanúgy kitölti a
+           kártyát, de telefonon a `whitespace-nowrap` fejlécek miatt a
+           táblázat szélesebbre nő, mint a képernyő - így a szöveg nem törik
+           furcsán minden oszlopban, hanem a keret (overflow-auto) VÍZSZINTESEN
+           is görgethetővé válik, mint a Sheetsben. */
         <div className="-mx-1 max-h-[70vh] overflow-auto px-1">
-          <table className="os-table w-full border-collapse text-[13px]">
+          <table className="os-table min-w-full border-collapse text-[13px]">
             <thead>
               <tr>
                 {headerMeta.map((col, index) => (
@@ -193,7 +199,15 @@ export function InteractiveTableClient({
             <tbody>
               {megjelenitett.map((row) => {
                 const cells = row.cells.map((cell, i) => (
-                  <td key={i} className={headerMeta[i]?.align === "right" ? "text-right" : "text-left"}>
+                  // whitespace-nowrap: enélkül a sejtszöveg a saját oszlopán
+                  // belül törne, és a táblázat sosem nőne szélesebbre a
+                  // képernyőnél - pont az, ami a vízszintes görgetést
+                  // (fent, a keret overflow-auto-ja) feleslegessé, a
+                  // táblázatot pedig telefonon olvashatatlanná tenné.
+                  <td
+                    key={i}
+                    className={`whitespace-nowrap ${headerMeta[i]?.align === "right" ? "text-right" : "text-left"}`}
+                  >
                     {cell}
                   </td>
                 ));

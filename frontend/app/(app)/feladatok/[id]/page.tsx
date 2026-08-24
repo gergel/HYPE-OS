@@ -32,7 +32,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-8">
+      <div className="flex-1 space-y-8 p-4 md:p-8">
         <div className="space-y-2">
           <BackLink href="/feladatok" label="Feladatok" />
           <h1 className="t-page">{String(task.feladat ?? `Feladat #${task.id}`)}</h1>

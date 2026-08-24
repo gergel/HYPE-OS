@@ -22,7 +22,7 @@ export default async function ProjektekPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
         <ProjektekContent
           initialProjects={projects}
           hasMore={projects.length === INITIAL_BATCH}

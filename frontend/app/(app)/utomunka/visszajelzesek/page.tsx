@@ -30,7 +30,7 @@ export default async function VagoiVisszajelzesekPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
         <Card title={`Vágói visszajelzések (${visszajelzesek.length})`}>
           <p className="mb-4 text-[13px] text-text-secondary">
             Amit a vágók írnak a leforgatott anyagról.

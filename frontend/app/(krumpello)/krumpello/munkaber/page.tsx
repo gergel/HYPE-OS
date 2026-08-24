@@ -63,7 +63,7 @@ export default async function KrumpelloMunkaberPage({
         utvonal="/krumpello/munkaber"
         jobbOldal={<MunkaoraSzerkeszto dolgozok={dolgozok} />}
       />
-      <div className="space-y-8 p-8">
+      <div className="space-y-8 p-4 md:p-8">
         <div className="flex flex-wrap gap-8 rounded-[var(--radius-lg)] border border-border bg-surface-2 px-6 py-4">
           <Osszesen cimke="Ledolgozott óra" ertek={`${oraOsszesen.toLocaleString("hu-HU")} óra`} />
           <Osszesen cimke="Bér összesen" ertek={formatFt(berOsszesen)} />
@@ -98,7 +98,7 @@ export default async function KrumpelloMunkaberPage({
             <p className="text-[13px] text-text-muted">Erre az időszakra nincs rögzített munkaóra.</p>
           ) : (
             <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-border bg-surface-2">
-              <table className="w-full border-collapse text-[13px]">
+              <table className="os-table min-w-full border-collapse text-[13px]">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="px-4 py-2 text-left font-medium text-text-muted">Név</th>
@@ -166,7 +166,7 @@ export default async function KrumpelloMunkaberPage({
             <p className="text-[13px] text-text-muted">Nincs rögzített nap ebben az időszakban.</p>
           ) : (
             <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-border bg-surface-2">
-              <table className="w-full border-collapse text-[13px]">
+              <table className="os-table min-w-full border-collapse text-[13px]">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="px-4 py-2 text-left font-medium text-text-muted">Dátum</th>

@@ -33,7 +33,7 @@ export default async function VagoiJatekPage() {
   return (
     <>
       <TopBar />
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="t-page">Vágói játék</h1>
@@ -142,7 +142,7 @@ function Reszletek({
         szabadság, plusz vállalt nap.
       </p>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px]">
+        <table className="os-table min-w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-border">
               <th className="py-2 pr-4 text-left font-medium text-text-muted">Név</th>

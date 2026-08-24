@@ -33,7 +33,7 @@ export default async function MegrendeloiKontaktokPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
         <Card title={`Megrendelői kontaktok (${kontaktok.length})`}>
           <p className="mb-4 text-[13px] text-text-secondary">
             Kikkel tartjuk a kapcsolatot az ügyfeleknél. {emailesek} kontaktnak van email címe

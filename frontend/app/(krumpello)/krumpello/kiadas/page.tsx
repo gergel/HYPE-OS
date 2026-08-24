@@ -32,7 +32,7 @@ export default async function KrumpelloKiadasPage({
         utvonal="/krumpello/kiadas"
         jobbOldal={<KiadasSzerkeszto />}
       />
-      <div className="space-y-8 p-8">
+      <div className="space-y-8 p-4 md:p-8">
         {FORRASOK.map(({ kulcs, cimke, leiras }) => {
           const sajat = kiadasok.filter((k) => k.forras === kulcs);
           const brutto = sajat.reduce((s, k) => s + (k.brutto ?? 0), 0);
@@ -56,7 +56,7 @@ export default async function KrumpelloKiadasPage({
                 <p className="text-[13px] text-text-muted">Erre az időszakra nincs ilyen tétel.</p>
               ) : (
                 <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-border bg-surface-2">
-                  <table className="w-full border-collapse text-[13px]">
+                  <table className="os-table min-w-full border-collapse text-[13px]">
                     <thead>
                       <tr className="border-b border-border">
                         <th className="px-4 py-2 text-left font-medium text-text-muted">Kedvezményezett</th>

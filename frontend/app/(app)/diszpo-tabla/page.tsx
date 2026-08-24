@@ -34,7 +34,7 @@ export default async function DiszpoTablaPage({
     return (
       <div className="flex flex-1 flex-col">
         <TopBar />
-        <div className="flex-1 p-8">
+        <div className="flex-1 p-4 md:p-8">
           <Card title="HYPE 2026 tábla">
             <p className="text-[13px] text-text-secondary">
               A táblázat még nincs átvéve. A backend gépén futtatható:{" "}
@@ -69,7 +69,7 @@ export default async function DiszpoTablaPage({
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-6 p-8">
+      <div className="flex-1 space-y-6 p-4 md:p-8">
         <Card title="HYPE 2026 tábla">
           {/* A FÜLEK - ahogy a Sheetben, balról jobbra. */}
           <div className="mb-4 flex flex-wrap gap-1.5 border-b border-border pb-3">

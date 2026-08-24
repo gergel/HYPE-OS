@@ -75,7 +75,7 @@ export function IdoszakReszletekModal({ idoszakId, onClose }: { idoszakId: numbe
                 <p className="text-[12.5px] text-text-muted">Ebbe az időszakba még nem esik ledolgozott nap.</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-[13px]">
+                  <table className="os-table min-w-full border-collapse text-[13px]">
                     <thead>
                       <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
                         <th className="py-2 pr-3 font-medium">Nap</th>

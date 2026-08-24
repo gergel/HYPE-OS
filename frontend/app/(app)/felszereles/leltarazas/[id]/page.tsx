@@ -36,7 +36,7 @@ export default async function LeltarazasDetailPage({ params }: { params: Promise
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-8">
+      <div className="flex-1 space-y-8 p-4 md:p-8">
         <BackLink href="/felszereles/leltarazas" label="Leltározások" />
 
         <Card title={`Leltározás #${session.id}`}>

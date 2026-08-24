@@ -71,7 +71,10 @@ export function BelsosTigHaviAttekintes({ honapok }: { honapok: BelsosTigHonap[]
                   type="button"
                   onClick={() => toggle(kulcs)}
                   aria-expanded={nyitva}
-                  className="flex flex-1 items-center gap-2 text-left"
+                  // flex-wrap: sok elem fér ebbe a sorba (badge, arány, összeg,
+                  // határidő) - keskeny (telefonos) képernyőn ez nem fér ki
+                  // egy sorba, enélkül az utolsó elem (a határidő) levágódna.
+                  className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-left"
                 >
                   {nyitva ? (
                     <ChevronDown size={14} className="shrink-0 text-text-muted" />
@@ -124,7 +127,8 @@ export function BelsosTigHaviAttekintes({ honapok }: { honapok: BelsosTigHonap[]
                       kifizetve.
                     </p>
                   ) : (
-                    <table className="w-full border-collapse text-[12px]">
+                    <div className="overflow-x-auto">
+                    <table className="os-table min-w-full border-collapse text-[12px]">
                       <thead>
                         <tr className="border-b border-border">
                           <th className="py-1 pr-4 text-left font-medium text-text-secondary">Kinek</th>
@@ -148,6 +152,7 @@ export function BelsosTigHaviAttekintes({ honapok }: { honapok: BelsosTigHonap[]
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   )}
                 </div>
               )}

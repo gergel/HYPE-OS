@@ -253,7 +253,8 @@ export function EntityFieldManager({
 
       {!loading && (
         <>
-          <table className="w-full border-collapse text-[13px]">
+          <div className="overflow-x-auto">
+          <table className="os-table min-w-full border-collapse text-[13px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Mező</th>
@@ -313,6 +314,7 @@ export function EntityFieldManager({
               ))}
             </tbody>
           </table>
+          </div>
 
           {eltavolitottak.length > 0 && (
             <div className="mt-5">

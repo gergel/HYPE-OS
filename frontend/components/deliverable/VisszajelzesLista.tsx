@@ -151,7 +151,8 @@ export function VisszajelzesLista({
             : "Nincs találat."}
         </p>
       ) : (
-        <table className="w-full border-collapse text-[13px]">
+        <div className="overflow-x-auto">
+        <table className="os-table min-w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Mikor / ki</th>
@@ -337,6 +338,7 @@ export function VisszajelzesLista({
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

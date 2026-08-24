@@ -31,7 +31,7 @@ export default async function KrumpelloAttekintesPage({
         ig={ig}
         utvonal="/krumpello"
       />
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         {o === null ? (
           <p className="text-[13px] text-text-danger">
             Nem sikerült betölteni az összesítőt. Ellenőrizd, hogy van-e jogosultságod a Krumpellóhoz.

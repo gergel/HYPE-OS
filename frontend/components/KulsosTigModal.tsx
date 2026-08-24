@@ -151,34 +151,36 @@ export function KulsosTigModal({ tigId, onClose }: { tigId: number; onClose: () 
                     {adat.lefedettek.length > 0 && ` (${adat.lefedettek.join(", ")})`}
                   </p>
                 ) : (
-                  <table className="w-full border-collapse text-[12.5px]">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="py-1 pr-4 text-left font-medium text-text-muted">Ki</th>
-                        <th className="py-1 pr-4 text-left font-medium text-text-muted">Melyik projekten</th>
-                        <th className="py-1 text-right font-medium text-text-muted">Ebből az övé</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {adat.tetelek.map((t, i) => (
-                        <tr key={`${t.project_id}-${t.employee_id}-${i}`} className="border-b border-border last:border-0">
-                          <td className="py-1.5 pr-4 text-text-primary">{t.employee_nev ?? `#${t.employee_id}`}</td>
-                          <td className="py-1.5 pr-4 text-text-secondary">
-                            {t.projektkod ? `${t.projektkod} – ` : ""}
-                            {t.project_nev ?? `#${t.project_id}`}
-                            {t.forgatas_datuma && (
-                              <span className="ml-2 text-[11px] text-text-muted">{t.forgatas_datuma}</span>
-                            )}
-                          </td>
-                          <td className="py-1.5 text-right tabular-nums text-text-secondary">
-                            {/* Szándékosan üres is lehet: a bontás nem mindig
-                                ismert, és tippelt számot nem írunk a papírra. */}
-                            {t.netto_osszeg === null ? "–" : formatFt(t.netto_osszeg)}
-                          </td>
+                  <div className="overflow-x-auto">
+                    <table className="os-table min-w-full border-collapse text-[12.5px]">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="py-1 pr-4 text-left font-medium text-text-muted">Ki</th>
+                          <th className="py-1 pr-4 text-left font-medium text-text-muted">Melyik projekten</th>
+                          <th className="py-1 text-right font-medium text-text-muted">Ebből az övé</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {adat.tetelek.map((t, i) => (
+                          <tr key={`${t.project_id}-${t.employee_id}-${i}`} className="border-b border-border last:border-0">
+                            <td className="py-1.5 pr-4 text-text-primary">{t.employee_nev ?? `#${t.employee_id}`}</td>
+                            <td className="py-1.5 pr-4 text-text-secondary">
+                              {t.projektkod ? `${t.projektkod} – ` : ""}
+                              {t.project_nev ?? `#${t.project_id}`}
+                              {t.forgatas_datuma && (
+                                <span className="ml-2 text-[11px] text-text-muted">{t.forgatas_datuma}</span>
+                              )}
+                            </td>
+                            <td className="py-1.5 text-right tabular-nums text-text-secondary">
+                              {/* Szándékosan üres is lehet: a bontás nem mindig
+                                  ismert, és tippelt számot nem írunk a papírra. */}
+                              {t.netto_osszeg === null ? "–" : formatFt(t.netto_osszeg)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
 

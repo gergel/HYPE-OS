@@ -61,7 +61,7 @@ export default async function DashboardPage() {
     return (
       <div className="flex flex-1 flex-col">
         <TopBar />
-        <div className="flex-1 p-8">
+        <div className="flex-1 p-4 md:p-8">
           <Card title={`Rád bízott anyagok (${sajatAnyagok.length})`} icon={Clapperboard}>
             <KorlatozottDashboard anyagok={sajatAnyagok} />
           </Card>
@@ -110,7 +110,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-6 lg:p-8">
+      <div className="flex-1 space-y-8 p-4 sm:p-6 lg:p-8">
         {apiUnavailable && (
           <div className="rounded-[var(--radius)] border border-border bg-surface-1 px-4 py-3 text-[13px] text-text-secondary">
             A backend API ({process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}) jelenleg nem elérhető -

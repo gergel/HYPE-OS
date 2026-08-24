@@ -111,7 +111,8 @@ export function EmberCegek({
       {cegek.length === 0 ? (
         <p className="mb-3 text-[13px] text-text-secondary">Nincs cég felvezetve – a papírok a saját nevére szólnak.</p>
       ) : (
-        <table className="mb-3 w-full border-collapse text-[13px]">
+        <div className="overflow-x-auto">
+        <table className="os-table mb-3 min-w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Cég</th>
@@ -159,6 +160,7 @@ export function EmberCegek({
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {canEdit && (

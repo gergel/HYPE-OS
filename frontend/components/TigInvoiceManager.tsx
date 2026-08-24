@@ -251,7 +251,7 @@ export function TigInvoiceManager({
     <div className="mt-4 border-t border-border pt-4">
       <p className="mb-2 text-[13px] font-medium text-text-primary">TIG-ek, számlák és kifizetések</p>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px]">
+        <table className="os-table min-w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Számlázó fél</th>

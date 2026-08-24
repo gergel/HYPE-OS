@@ -25,7 +25,7 @@ export default async function FelszerelesPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
         <Card title={`Felszerelés (${equipment.length})`}>
           {/* A leltározás a leltár SZERKESZTÉSE (tételek megjelölése, session
               indítása) - aki csak nézheti az eszközöket (pl. a diszpós, aki a
