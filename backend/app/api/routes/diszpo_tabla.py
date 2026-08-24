@@ -248,14 +248,26 @@ def sor_beszurasa(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit")),
 ):
-    """Új, üres sor beszúrása - mint a táblázatban."""
+    """Új, üres sor beszúrása - mint a táblázatban.
+
+    A DÁTUM ÖRÖKLÉSE: a beszúrt sor gyakran egy PLUSZ SOR - ugyanahhoz a
+    naphoz tartozik, csak valaki aznap két munkát végzett, és egy sorba csak
+    egy projektkód fér el az oszlopában. A Sheetben ilyenkor a dátum-cella
+    üresen marad, a nap viszont ugyanaz (lásd models/diszpo_tabla.DiszpoSor
+    és services/munkanap_szamlalo). Az import már így viszi át a régi
+    sorokat - az újonnan beszúrtaknak is ugyanígy kell viselkedniük, különben
+    a benne felvett szín kiesne a munkanap-számolásból. Ezért a fölötte
+    maradó sortól örököljük a dátumot (elválasztó sortól nem - az nem egy
+    nap, attól kezdve nincs mit örökölni)."""
     m = _munkalap_vagy_404(db, munkalap_id)
     hova = payload.idx + (1 if payload.ala else 0)
     if not 0 <= hova <= m.sor_szam:
         raise HTTPException(status_code=400, detail="A sor a munkalapon kívülre esne.")
+    horgony = db.scalar(select(DiszpoSor).where(DiszpoSor.munkalap_id == m.id, DiszpoSor.idx == hova - 1))
+    orokolt_datum = horgony.datum if horgony and not horgony.elvalaszto else None
     _tolas(db, DiszpoCella, m.id, DiszpoCella.sor_idx, hova, 1)
     _tolas(db, DiszpoSor, m.id, DiszpoSor.idx, hova, 1)
-    db.add(DiszpoSor(munkalap_id=m.id, idx=hova))
+    db.add(DiszpoSor(munkalap_id=m.id, idx=hova, datum=orokolt_datum))
     m.sor_szam += 1
     munkanap_szamlalo.urits_gyorsitotar(db)
     db.commit()
