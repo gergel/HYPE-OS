@@ -1,6 +1,8 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { EditableTableCell } from "@/components/EditableTableCell";
 import { StatusBadge } from "@/components/StatusBadge";
+import { KattinthatoAllapot } from "@/components/projektkod/KattinthatoAllapot";
 import { ENTITY_PATHS, formatHuf, type ProjektkodBontas } from "@/lib/api";
 import { Clapperboard, Receipt, Scissors } from "lucide-react";
 
@@ -28,17 +30,29 @@ function idoSzoveg(percek: number): string {
  * kellett elnavigálni. A törlés a rekord SAJÁT végpontjára megy, tehát
  * ugyanazt a jogosultságot kéri, mint a saját oldalán (a forgatás a
  * Projektekét, az anyag az Utómunkáét, a kiadás a Pénzügyekét) - ezért kap
- * mindhárom tábla külön kapcsolót, nem egy közöset. */
+ * mindhárom tábla külön kapcsolót, nem egy közöset.
+ *
+ * A KIADÁS-SOROK MEZŐI helyben szerkeszthetők (Megnevezés, Besorolás, Összeg,
+ * Állapot) - eddig egy tévesen besorolt vagy hibás tétel javításához külön a
+ * Pénzügyek oldalra kellett menni. A "Dátum" és a "Kinek" mező szándékosan
+ * NEM szerkeszthető itt: a "Dátum" a szerveren három mező közül az elsőt
+ * mutatja (fizetés/kiadás/határidő dátuma, lásd
+ * services/projektkod_bontas.kiadas_sorok) - egy ide írt érték nem
+ * feltétlenül azt a mezőt módosítaná, amelyik ténylegesen megjelenik. A
+ * "Kinek" egy munkatárs-kapcsolat, aminek a listás szerkesztéséhez kereső-
+ * választó kellene, nem egy sima szövegmező. */
 export function ProjektkodBontasTablak({
   bontas,
   torolhetForgatast = false,
   torolhetUtomunkat = false,
   torolhetKiadast = false,
+  szerkesztheiKiadast = false,
 }: {
   bontas: ProjektkodBontas;
   torolhetForgatast?: boolean;
   torolhetUtomunkat?: boolean;
   torolhetKiadast?: boolean;
+  szerkesztheiKiadast?: boolean;
 }) {
   const kulsosKiadas = bontas.kiadasok.filter((k) => k.resz === "kulsos");
   const egyebKiadas = bontas.kiadasok.filter((k) => k.resz === "egyeb");
@@ -153,7 +167,16 @@ export function ProjektkodBontasTablak({
             },
             {
               header: "Megnevezés",
-              render: (k) => k.megnevezes ?? "–",
+              render: (k) =>
+                szerkesztheiKiadast ? (
+                  <EditableTableCell
+                    patchPath={`${ENTITY_PATHS.expense}/${k.id}`}
+                    field="megnevezes"
+                    value={k.megnevezes}
+                  />
+                ) : (
+                  (k.megnevezes ?? "–")
+                ),
               sortAccessor: (k) => k.megnevezes,
             },
             {
@@ -163,21 +186,59 @@ export function ProjektkodBontasTablak({
             },
             {
               header: "Besorolás",
-              render: (k) => (k.resz === "kulsos" ? "Külsős" : "Egyéb"),
+              render: (k) =>
+                szerkesztheiKiadast ? (
+                  <KattinthatoAllapot
+                    patchPath={`${ENTITY_PATHS.expense}/${k.id}`}
+                    field="tipus"
+                    value={k.resz}
+                    aktivErtek="kulsos"
+                    inaktivErtek="egyeb"
+                    aktivLabel="Külsős"
+                    inaktivLabel="Egyéb"
+                    aktivTone="accent"
+                    inaktivTone="neutral"
+                  />
+                ) : (
+                  (k.resz === "kulsos" ? "Külsős" : "Egyéb")
+                ),
               sortAccessor: (k) => k.resz,
             },
             {
               header: "Összeg (nettó)",
               align: "right",
-              render: (k) => formatHuf(k.osszeg),
+              render: (k) =>
+                szerkesztheiKiadast ? (
+                  <EditableTableCell
+                    patchPath={`${ENTITY_PATHS.expense}/${k.id}`}
+                    field="netto"
+                    value={k.netto}
+                    type="number"
+                  />
+                ) : (
+                  formatHuf(k.osszeg)
+                ),
               sortAccessor: (k) => k.osszeg,
             },
             {
               header: "Állapot",
               align: "right",
-              render: (k) => (
-                <StatusBadge label={k.kifizetve ? "Kifizetve" : "Nyitott"} tone={k.kifizetve ? "success" : "warning"} />
-              ),
+              render: (k) =>
+                szerkesztheiKiadast ? (
+                  <KattinthatoAllapot
+                    patchPath={`${ENTITY_PATHS.expense}/${k.id}`}
+                    field="kesz"
+                    value={k.kifizetve}
+                    aktivErtek={true}
+                    inaktivErtek={false}
+                    aktivLabel="Kifizetve"
+                    inaktivLabel="Nyitott"
+                    aktivTone="success"
+                    inaktivTone="warning"
+                  />
+                ) : (
+                  <StatusBadge label={k.kifizetve ? "Kifizetve" : "Nyitott"} tone={k.kifizetve ? "success" : "warning"} />
+                ),
               sortAccessor: (k) => (k.kifizetve ? 1 : 0),
             },
           ]}

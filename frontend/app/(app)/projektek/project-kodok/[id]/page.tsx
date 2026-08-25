@@ -116,6 +116,9 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   const torolhetForgatast = canDoAction(currentUser, pagePermissions, "/projektek", "delete");
   const torolhetUtomunkat = canDoAction(currentUser, pagePermissions, "/utomunka", "delete");
   const torolhetKiadast = canDoAction(currentUser, pagePermissions, "/penzugyek", "delete");
+  // A kiadás-sorok helyben szerkeszthetők a bontás-táblában - ugyanaz a jog
+  // kell hozzá, mint a saját oldalukon (Pénzügyek).
+  const szerkesztheiKiadast = canDoAction(currentUser, pagePermissions, "/penzugyek", "edit");
 
   // A papírozás állását a SZERVER mondja meg (lásd backend
   // models/project_code.py): mit számít lezártnak, és hogy kell-e egyáltalán
@@ -358,6 +361,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             torolhetForgatast={torolhetForgatast}
             torolhetUtomunkat={torolhetUtomunkat}
             torolhetKiadast={torolhetKiadast}
+            szerkesztheiKiadast={szerkesztheiKiadast}
           />
         ) : (
           <Card title="Költségek tételesen">
