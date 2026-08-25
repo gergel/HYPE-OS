@@ -3,23 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ModalReteg } from "@/components/ModalReteg";
-import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 // A pénzformázó a FÜGGŐSÉG NÉLKÜLI modulból jön: a lib/api.ts a
 // "next/headers"-t is behúzza (szerver-oldali süti-olvasás), és egy kliens
 // komponensben már egyetlen nem type-only importja is build hibát okoz.
 import { devizas, formatHuf, penzzel } from "@/lib/penz";
-import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import type { MegrendeloiSzamlaAllas } from "@/lib/api";
-
-/** A határidő-üzenet színe. Ugyanaz a hangsúly, mint a listán (lásd
- * lib/hatarido.hataridoHangsuly), csak itt szöveg, nem jelvény. */
-const HATARIDO_SZIN: Record<string, string> = {
-  danger: "text-text-danger",
-  warning: "text-text-warning",
-  success: "text-text-secondary",
-  neutral: "text-text-muted",
-};
 
 /** A mai nap ISO alakban, HELYI idő szerint - a `toISOString()` UTC-re vált, és
  * este 10 után már a következő napot adná vissza. */
@@ -33,13 +22,13 @@ function maiNap(): string {
  * Ugyanaz a menet, mint az alvállalkozói oldalon, csak fordítva: ott mi
  * fizetünk, itt minket fizetnek.
  *
- *   fizetési határidő -> "Kifizetve" (a kifizetés napjával) -> bevétel-sor
+ *   "Kifizetve" (a kifizetés napjával) -> bevétel-sor
  *
- * A HATÁRIDŐ azért kötelező a kifizetés előtt, mert az az egyetlen dolog,
- * amiből látszik, hogy egy még ki nem fizetett számla KÉSIK-e. A BEVÉTEL-SOR
- * pedig azért keletkezik magától, mert eddig a projektkódon ki volt pipálva a
- * kifizetés, a Pénzügyekbe viszont valakinek kézzel kellett felvezetnie - és
- * ha elmaradt, a projekt profitja hazudott. */
+ * A fizetési határidőt és a "kifizetve" jelzőt fájlonként, a feltöltött
+ * számláknál lehet megadni (lásd DokumentumFeltoltes) - ez a kártya csak a
+ * PROJEKTKÓD egészének lezárását intézi: a "Kifizetve" gombra kattintva
+ * nyílik (vagy egészül ki) a bevétel-sor a Pénzügyekben, hogy azt ne kelljen
+ * külön, kézzel felvezetni. */
 export function MegrendeloiSzamla({
   projectCodeId,
   allas,
@@ -50,7 +39,6 @@ export function MegrendeloiSzamla({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const [hatarido, setHatarido] = useState(allas.fizetesi_hatarido ?? "");
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
   const [dialogNyitva, setDialogNyitva] = useState(false);
@@ -81,31 +69,22 @@ export function MegrendeloiSzamla({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {allas.kifizetve ? (
-          <StatusBadge
-            label={allas.tranzakcio_nelkul_lezarva ? "Rendezve – nem volt tranzakció" : "Kifizetve"}
-            tone="success"
-          />
-        ) : allas.szamla_kihagyva ? (
-          <StatusBadge label="Nincs számla" tone="neutral" />
-        ) : allas.fizetesi_hatarido ? (
-          <StatusBadge label="Fizetésre vár" tone="warning" />
-        ) : (
-          <StatusBadge label="Nincs fizetési határidő" tone="neutral" />
-        )}
-        {/* A NETTÓ áll elöl: az elszámolásban (bevétel, profit) mindenütt az
-            a mérvadó - lásd backend services/elszamolas.py. A bruttót
-            mellétesszük, ha eltér: annyi érkezik a bankszámlára. */}
-        {allas.netto !== null && (
-          <span className="text-[12.5px] text-text-secondary">
-            {penzzel(allas.netto, allas.penznem)} nettó
-            {allas.brutto !== null && allas.brutto !== allas.netto && (
-              <span className="text-text-muted"> ({penzzel(allas.brutto, allas.penznem)} bruttó)</span>
-            )}
-          </span>
-        )}
-      </div>
+      {/* A NETTÓ áll elöl: az elszámolásban (bevétel, profit) mindenütt az
+          a mérvadó - lásd backend services/elszamolas.py. A bruttót
+          mellétesszük, ha eltér: annyi érkezik a bankszámlára.
+          A fizetési állapotot (határidő, kifizetve-e) itt szándékosan nem
+          jelezzük külön jelvénnyel - azt fájlonként, a feltöltött
+          számláknál mutatjuk (lásd DokumentumFeltoltes), a projektkód
+          egészének lezárását pedig a lenti "Kifizetve" gomb és az alatta
+          megjelenő összegzés mutatja. */}
+      {allas.netto !== null && (
+        <p className="text-[12.5px] text-text-secondary">
+          {penzzel(allas.netto, allas.penznem)} nettó
+          {allas.brutto !== null && allas.brutto !== allas.netto && (
+            <span className="text-text-muted"> ({penzzel(allas.brutto, allas.penznem)} bruttó)</span>
+          )}
+        </p>
+      )}
 
       {/* Devizás munkánál a bevétel FORINTBAN kerül a Pénzügyekbe - ki is
           írjuk, mennyi az, mert a szerződésen szereplő euró összeg önmagában
@@ -117,50 +96,6 @@ export function MegrendeloiSzamla({
             : `A bevételek közé ${formatHuf(allas.netto_forintban)} kerül${
                 allas.arfolyam === null ? "" : ` (${allas.arfolyam} Ft/${allas.penznem} árfolyamon)`
               }.`}
-        </p>
-      )}
-
-      {/* A Notionból örökölt számla akkor is elérhető legyen, ha nem
-          csatolmányként jött át (a régi kódoknál csak egy cím van meg). */}
-      {allas.szamla_url && (
-        <a
-          href={allas.szamla_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block text-[12.5px] text-text-accent hover:underline"
-        >
-          Számla megnyitása
-        </a>
-      )}
-
-      {/* A számlán szereplő fizetési határidő. A kifizetés jelöléséhez kell -
-          enélkül nem tudjuk, mikortól késik. Ahol nincs is számla, ott
-          értelmetlen, ezért el is tűnik. */}
-      {allas.hatarido_kell && (
-      <label className="block text-[13px] text-text-secondary">
-        Fizetési határidő (a számlán)
-        <input
-          type="date"
-          value={hatarido}
-          disabled={!canEdit || busy}
-          onChange={(e) => setHatarido(e.target.value)}
-          onBlur={async () => {
-            const ertek = hatarido || null;
-            if (ertek === (allas.fizetesi_hatarido ?? null)) return;
-            const sikeres = await hivas("hatarido", { fizetesi_hatarido: ertek });
-            if (!sikeres) setHatarido(allas.fizetesi_hatarido ?? "");
-          }}
-          className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary disabled:opacity-60"
-        />
-      </label>
-      )}
-
-      {/* MENNYI IDŐ van hátra - vagy mennyivel csúszott a fizetés. A dátum
-          önmagában néma: hogy sürgős-e, csak a mai naphoz képest derül ki, és
-          ezt eddig fejben kellett kiszámolni (lásd lib/hatarido.ts). */}
-      {hataridoSzoveg(allas.hatarido_allas) && (
-        <p className={`text-[12.5px] ${HATARIDO_SZIN[hataridoHangsuly(allas.hatarido_allas) ?? "neutral"]}`}>
-          {hataridoSzoveg(allas.hatarido_allas)}
         </p>
       )}
 
@@ -271,13 +206,8 @@ export function MegrendeloiSzamla({
         canEdit && (
           <button
             type="button"
-            disabled={busy || (allas.hatarido_kell && !allas.fizetesi_hatarido)}
+            disabled={busy}
             onClick={() => setDialogNyitva(true)}
-            title={
-              !allas.hatarido_kell || allas.fizetesi_hatarido
-                ? undefined
-                : "Előbb add meg a fizetési határidőt, vagy jelöld, hogy nincs számla."
-            }
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
             {allas.kifizetes_datum_kell ? "Kifizetve" : "Rendezve"}

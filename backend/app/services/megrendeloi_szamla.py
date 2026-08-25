@@ -227,21 +227,6 @@ def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
     )
 
 
-def allitsd_a_hataridot(db: Session, pk: ProjectCode, hatarido: date | None) -> SzamlaAllas:
-    """A számlán szereplő fizetési határidő. Törölni csak addig lehet, amíg a
-    számla nincs kifizetve - utána az adat a bevétel-sorra is átment."""
-    if hatarido is None and pk.utalas_datuma is not None:
-        raise SzamlaHiba("A számla már ki van fizetve, a határidő nem törölhető.")
-    pk.fizetesi_hatarido = hatarido
-    # A már meglévő bevétel-soron is javítjuk, ha ott még nem volt megadva:
-    # ugyanannak a számlának nem lehet két különböző határideje.
-    for sor in pk.revenues or []:
-        if sor.fizetes_hatarideje is None:
-            sor.fizetes_hatarideje = hatarido
-    db.flush()
-    return allas(db, pk)
-
-
 def jelold_kifizetettnek(
     db: Session,
     pk: ProjectCode,
@@ -270,11 +255,6 @@ def jelold_kifizetettnek(
             "Add meg, MIKOR érkezett meg a pénz - enélkül a bevétel rossz napra kerülne. "
             "Ha erről a munkáról nincs számla, jelöld be a \"Nincs számla\" lehetőséget - "
             "ott a dátum már nem kötelező."
-        )
-    if pk.fizetesi_hatarido is None and _hatarido_kell(pk):
-        raise SzamlaHiba(
-            "Előbb add meg a számlán szereplő fizetési határidőt - enélkül nem látszik, ha egy számla késik. "
-            "Ha erről a munkáról nincs számla, jelöld be a \"Nincs számla\" lehetőséget."
         )
     if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
         raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")

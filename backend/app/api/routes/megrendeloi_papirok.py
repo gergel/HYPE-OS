@@ -766,10 +766,6 @@ class SzamlaAllasOut(BaseModel):
     van_szamla_a_bevetelen: bool = False
 
 
-class HataridoIn(BaseModel):
-    fizetesi_hatarido: date | None = None
-
-
 class KifizetesIn(BaseModel):
     #: Mikor érkezett meg a pénz. Ahol SZÁMLA van, ott kötelező (lásd
     #: services/megrendeloi_szamla._kifizetes_datum_kell); ahol nincs számla,
@@ -803,23 +799,6 @@ def get_szamla_allas(
 ):
     """Hol tart a számla-lépés ezen a projektkódon."""
     return megrendeloi_szamla.allas(db, _projektkod_vagy_404(db, project_code_id))
-
-
-@router.post("/szamla/{project_code_id}/hatarido", response_model=SzamlaAllasOut)
-def set_szamla_hatarido(
-    project_code_id: int,
-    payload: HataridoIn,
-    db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
-):
-    """A számlán szereplő fizetési határidő - a kifizetés jelöléséhez kötelező."""
-    pk = _projektkod_vagy_404(db, project_code_id)
-    try:
-        allas = megrendeloi_szamla.allitsd_a_hataridot(db, pk, payload.fizetesi_hatarido)
-    except megrendeloi_szamla.SzamlaHiba as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    db.commit()
-    return allas
 
 
 class SzamlaKihagyasIn(BaseModel):

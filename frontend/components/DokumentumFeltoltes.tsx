@@ -17,6 +17,14 @@ const KATEGORIA_NEVEK: Record<string, string> = {
   egyeb: "Egyéb",
 };
 
+/** A mai nap ISO alakban, HELYI idő szerint - a `toISOString()` UTC-re vált, és
+ * este 10 után már a következő napot adná vissza (lásd ugyanez
+ * megrendeloi/MegrendeloiSzamla.tsx-ben). */
+function maiNap(): string {
+  const most = new Date();
+  return `${most.getFullYear()}-${String(most.getMonth() + 1).padStart(2, "0")}-${String(most.getDate()).padStart(2, "0")}`;
+}
+
 function meret(bajt: number | null): string {
   if (!bajt) return "";
   if (bajt < 1024 * 1024) return `${Math.round(bajt / 1024)} kB`;
@@ -295,6 +303,19 @@ export function DokumentumFeltoltes({
                         className="rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[12.5px] text-text-primary disabled:opacity-50"
                       />
                     </label>
+                    {/* Gyorsgomb: a legtöbbször ma jön meg a pénz, tehát nem
+                        kell mindig a natív dátumválasztóval bajlódni - ha
+                        mégsem ma volt, a fenti mezőben utólag átírható. */}
+                    {!doc.kifizetve_datuma && canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => irjaAFizetesiAllapotot(doc, { kifizetve_datuma: maiNap() })}
+                        disabled={savingId === doc.id}
+                        className="rounded-[var(--radius)] border border-[color:var(--text-accent)]/40 px-2 py-0.5 text-[12px] text-text-accent hover:bg-bg-accent disabled:opacity-50"
+                      >
+                        Fizetve
+                      </button>
+                    )}
                     {doc.kifizetve_datuma && canEdit && (
                       <button
                         type="button"
