@@ -193,6 +193,10 @@ export type DocumentAttachment = {
   content_type: string | null;
   meret_bajt: number | null;
   created_at: string;
+  /** Csak "szamla" kategóriánál értelmezett - lásd
+   * components/DokumentumFeltoltes.tsx fizetesiAllapot módja. */
+  fizetesi_hatarido: string | null;
+  kifizetve_datuma: string | null;
 };
 
 export type Rate = {

@@ -277,6 +277,11 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
                 canEdit={canEdit}
                 canDelete={canDelete}
                 emptyText="Nincs feltöltött számla."
+                // Osztott számlázásnál egy kódhoz több számla is tartozhat -
+                // ezért minden egyes feltöltött fájlnak KÜLÖN adható meg a
+                // fizetési határideje és a kifizetés dátuma (lásd
+                // components/DokumentumFeltoltes.tsx).
+                fizetesiAllapot
               />
               {/* A SZÁMLA-LÉPÉS SEM VÁR A PAPÍROKRA. Korábban a fizetési
                   határidő és a "Kifizetve" jelölés csak a szerződés és a TIG

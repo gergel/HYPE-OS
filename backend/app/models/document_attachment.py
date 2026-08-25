@@ -1,4 +1,6 @@
-from sqlalchemy import Index, String
+from datetime import date
+
+from sqlalchemy import Date, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -45,6 +47,15 @@ class DocumentAttachment(TimestampMixin, Base):
     # futás ugyanazt a fájlt nem tölti le és nem duplikálja (lásd
     # notion_import/files.py).
     notion_forras: Mapped[str | None] = mapped_column(String(700))
+
+    # CSAK "szamla" kategóriánál értelmezett: melyik feltöltött számlának
+    # mikor jár le a fizetési határideje, és mikor (ha egyáltalán) fizették
+    # ki - egyénileg PER FÁJL, mert egy projektkódhoz több számla is
+    # tartozhat (osztott számlázás), és azok külön-külön esedékesek/
+    # kifizetettek lehetnek (lásd routes/attachments.py PUT
+    # .../fizetesi-allapot). `kifizetve_datuma` hiánya = még nincs kifizetve.
+    fizetesi_hatarido: Mapped[date | None] = mapped_column(Date)
+    kifizetve_datuma: Mapped[date | None] = mapped_column(Date)
 
     __table_args__ = (
         Index("ix_document_attachments_entity", "entity_type", "entity_id"),

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Paperclip, Trash2 } from "lucide-react";
 import { useAlertDialog, useConfirm } from "@/components/ConfirmProvider";
+import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import type { DocumentAttachment } from "@/lib/api";
 
@@ -22,6 +23,21 @@ function meret(bajt: number | null): string {
   return `${(bajt / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** A számla fizetési állapota egyetlen jelzőben - a határidő és a
+ * kifizetés-dátum együtt mondja meg, hol tart. */
+function fizetesiJelzo(doc: DocumentAttachment): { label: string; tone: "success" | "warning" | "danger" } | null {
+  if (doc.kifizetve_datuma) return { label: `Kifizetve · ${doc.kifizetve_datuma}`, tone: "success" };
+  if (doc.fizetesi_hatarido) {
+    // Szöveges (nem Date-objektumos) összehasonlítás: az ISO "ÉÉÉÉ-HH-NN" alak
+    // ábécé szerint is helyesen rendeződik, és nem kell időzóna-eltolással
+    // bajlódni a "ma" meghatározásához.
+    const ma = new Date().toISOString().slice(0, 10);
+    if (doc.fizetesi_hatarido < ma) return { label: "Lejárt határidő", tone: "danger" };
+    return { label: `Határidő: ${doc.fizetesi_hatarido}`, tone: "warning" };
+  }
+  return null;
+}
+
 /** Egy rekordhoz (szerződéshez, projektkódhoz, kiadáshoz…) tartozó fájlok:
  * feltöltés, megnyitás, törlés. A fájl mindig az R2 tárhelyre kerül, nem a
  * szolgáltatás lemezére - lásd backend services/attachments.py.
@@ -38,6 +54,7 @@ export function DokumentumFeltoltes({
   emptyText = "Nincs feltöltött fájl.",
   maxOsszMeretBajt,
   meretTanacs,
+  fizetesiAllapot = false,
 }: {
   entityType: string;
   entityId: number;
@@ -54,6 +71,11 @@ export function DokumentumFeltoltes({
   maxOsszMeretBajt?: number;
   /** Mit tegyen a felhasználó, ha nem fér bele (pl. Drive + brief-link). */
   meretTanacs?: string;
+  /** SZÁMLA kategóriánál: minden feltöltött fájlhoz KÜLÖN adható meg fizetési
+   * határidő és kifizetés-dátuma - egy projektkódhoz több számla is
+   * tartozhat (osztott számlázás), és azok külön esedékesek/kifizetettek
+   * lehetnek (lásd backend models/document_attachment.py). */
+  fizetesiAllapot?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -63,7 +85,34 @@ export function DokumentumFeltoltes({
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [savingId, setSavingId] = useState<number | null>(null);
   const osszesMeret = attachments.reduce((osszeg, a) => osszeg + (a.meret_bajt ?? 0), 0);
+
+  async function mentsdAFizetesiAllapotot(
+    doc: DocumentAttachment,
+    valtozas: { fizetesi_hatarido?: string | null; kifizetve_datuma?: string | null },
+  ) {
+    setSavingId(doc.id);
+    try {
+      const res = await authFetch(`/api/v1/csatolmanyok/${doc.id}/fizetesi-allapot`, {
+        method: "PUT",
+        body: JSON.stringify({
+          fizetesi_hatarido: valtozas.fizetesi_hatarido !== undefined ? valtozas.fizetesi_hatarido : doc.fizetesi_hatarido,
+          kifizetve_datuma: valtozas.kifizetve_datuma !== undefined ? valtozas.kifizetve_datuma : doc.kifizetve_datuma,
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   /** Egyszerre több fájl is kiválasztható. EGYENKÉNT, sorban töltjük fel:
    * így egy hibás fájl (pl. túl nagy) csak magát bukja, a többi felmegy - és
@@ -133,36 +182,88 @@ export function DokumentumFeltoltes({
         <p className="text-[13px] text-text-muted">{emptyText}</p>
       ) : (
         <ul className="space-y-1.5">
-          {attachments.map((doc) => (
-            <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 text-[13px]">
-              <span className="flex min-w-0 items-center gap-1.5">
-                <Paperclip size={13} className="shrink-0 text-text-muted" />
-                <a
-                  href={doc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="truncate text-text-accent hover:underline"
-                >
-                  {doc.filename}
-                </a>
-                <span className="shrink-0 text-[12px] text-text-muted">
-                  {KATEGORIA_NEVEK[doc.kategoria] ?? doc.kategoria}
-                  {doc.meret_bajt ? ` · ${meret(doc.meret_bajt)}` : ""}
-                </span>
-              </span>
-              {canDelete && (
-                <button
-                  type="button"
-                  onClick={() => torol(doc)}
-                  disabled={deletingId === doc.id}
-                  title="Fájl törlése"
-                  className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
-                >
-                  <Trash2 size={13} />
-                </button>
-              )}
-            </li>
-          ))}
+          {attachments.map((doc) => {
+            const jelzo = fizetesiAllapot ? fizetesiJelzo(doc) : null;
+            return (
+              <li
+                key={doc.id}
+                className={`rounded-[var(--radius)] text-[13px] ${
+                  fizetesiAllapot ? "border border-border p-2" : ""
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <Paperclip size={13} className="shrink-0 text-text-muted" />
+                    <a
+                      href={doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="truncate text-text-accent hover:underline"
+                    >
+                      {doc.filename}
+                    </a>
+                    <span className="shrink-0 text-[12px] text-text-muted">
+                      {KATEGORIA_NEVEK[doc.kategoria] ?? doc.kategoria}
+                      {doc.meret_bajt ? ` · ${meret(doc.meret_bajt)}` : ""}
+                    </span>
+                    {jelzo && <StatusBadge label={jelzo.label} tone={jelzo.tone} />}
+                  </span>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => torol(doc)}
+                      disabled={deletingId === doc.id}
+                      title="Fájl törlése"
+                      className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+                {/* EGYÉNI fizetési állapot ehhez a fájlhoz - nem a projektkód
+                    egészéhez, mert egy kódhoz több számla is tartozhat, és
+                    azok külön esedékesek/kifizetettek lehetnek. */}
+                {fizetesiAllapot && (
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12.5px] text-text-secondary">
+                    <label className="flex items-center gap-1.5">
+                      Fizetési határidő:
+                      <input
+                        type="date"
+                        value={doc.fizetesi_hatarido ?? ""}
+                        disabled={!canEdit || savingId === doc.id}
+                        onChange={(e) =>
+                          mentsdAFizetesiAllapotot(doc, { fizetesi_hatarido: e.target.value || null })
+                        }
+                        className="rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[12.5px] text-text-primary disabled:opacity-50"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      Kifizetve:
+                      <input
+                        type="date"
+                        value={doc.kifizetve_datuma ?? ""}
+                        disabled={!canEdit || savingId === doc.id}
+                        onChange={(e) =>
+                          mentsdAFizetesiAllapotot(doc, { kifizetve_datuma: e.target.value || null })
+                        }
+                        className="rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[12.5px] text-text-primary disabled:opacity-50"
+                      />
+                    </label>
+                    {doc.kifizetve_datuma && canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => mentsdAFizetesiAllapotot(doc, { kifizetve_datuma: null })}
+                        disabled={savingId === doc.id}
+                        className="text-[12px] text-text-muted hover:text-text-secondary disabled:opacity-50"
+                      >
+                        Kifizetés visszavonása
+                      </button>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       {canEdit && (

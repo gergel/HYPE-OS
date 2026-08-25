@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.security import check_page_action, get_current_user
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee, van_szerepkore
-from app.schemas.document_attachment import DocumentAttachmentRead
+from app.schemas.document_attachment import DocumentAttachmentFizetesIn, DocumentAttachmentRead
 from app.services import attachments
 from app.services.entity_registry import ENTITY_MODELS
 from app.services.portal_storage import R2NotConfiguredError
@@ -77,6 +77,30 @@ async def upload_attachment(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except R2NotConfiguredError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    db.commit()
+    db.refresh(rekord)
+    return rekord
+
+
+@router.put("/{attachment_id}/fizetesi-allapot", response_model=DocumentAttachmentRead)
+def set_fizetesi_allapot(
+    attachment_id: int,
+    payload: DocumentAttachmentFizetesIn,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(get_current_user),
+):
+    """Egy feltöltött SZÁMLA fájl fizetési határideje és kifizetés-dátuma -
+    egyénileg, fájlonként (lásd models/document_attachment.py). Csak "szamla"
+    kategóriájú csatolmányon értelmezhető: egy szerződés- vagy TIG-fájlnak
+    nincs saját fizetési határideje."""
+    rekord = db.get(DocumentAttachment, attachment_id)
+    if rekord is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "A csatolmány nem található")
+    if rekord.kategoria != "szamla":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Csak számla kategóriájú fájlhoz állítható fizetési állapot.")
+    _jogosultsag(db, user, rekord.entity_type, "edit")
+    rekord.fizetesi_hatarido = payload.fizetesi_hatarido
+    rekord.kifizetve_datuma = payload.kifizetve_datuma
     db.commit()
     db.refresh(rekord)
     return rekord
