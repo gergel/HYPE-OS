@@ -197,6 +197,12 @@ export type DocumentAttachment = {
    * components/DokumentumFeltoltes.tsx fizetesiAllapot módja. */
   fizetesi_hatarido: string | null;
   kifizetve_datuma: string | null;
+  /** Ennek a KONKRÉT számlának a nettó összege (ha meg lett adva) - lásd
+   * backend services/megrendeloi_szamla.jelold_szamlat_kifizetettnek. */
+  netto: number | null;
+  plusz_afa: boolean | null;
+  bevetelbe_ne_keruljon: boolean;
+  bevetel_kihagyas_oka: string | null;
 };
 
 export type Rate = {

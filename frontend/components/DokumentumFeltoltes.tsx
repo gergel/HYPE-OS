@@ -4,8 +4,12 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Paperclip, Trash2 } from "lucide-react";
 import { useAlertDialog, useConfirm } from "@/components/ConfirmProvider";
+import { ModalReteg } from "@/components/ModalReteg";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
+// A pénzformázó a FÜGGŐSÉG NÉLKÜLI modulból jön: a lib/api.ts a
+// "next/headers"-t is behúzza, amit kliens komponensbe nem lehet bevinni.
+import { penzzel } from "@/lib/penz";
 import type { DocumentAttachment } from "@/lib/api";
 
 const KATEGORIA_NEVEK: Record<string, string> = {
@@ -63,6 +67,7 @@ export function DokumentumFeltoltes({
   maxOsszMeretBajt,
   meretTanacs,
   fizetesiAllapot = false,
+  penznem = "HUF",
 }: {
   entityType: string;
   entityId: number;
@@ -80,10 +85,13 @@ export function DokumentumFeltoltes({
   /** Mit tegyen a felhasználó, ha nem fér bele (pl. Drive + brief-link). */
   meretTanacs?: string;
   /** SZÁMLA kategóriánál: minden feltöltött fájlhoz KÜLÖN adható meg fizetési
-   * határidő és kifizetés-dátuma - egy projektkódhoz több számla is
-   * tartozhat (osztott számlázás), és azok külön esedékesek/kifizetettek
-   * lehetnek (lásd backend models/document_attachment.py). */
+   * határidő, és egy "Fizetés" gombbal - saját bevétel-sorral - jelölhető
+   * kifizetettnek (lásd backend models/document_attachment.py és
+   * services/megrendeloi_szamla.py). */
   fizetesiAllapot?: boolean;
+  /** Milyen pénznemben vállaltuk a munkát - csak a kifizetés-dialógus nettó
+   * mezőjének feliratához kell (lásd projektkod/VallalasiAr.tsx). */
+  penznem?: string;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -94,46 +102,37 @@ export function DokumentumFeltoltes({
   const [uploading, setUploading] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
-  // A dátummezők HELYI, még el nem mentett szerkesztése - fájlonként. A natív
-  // dátumválasztó (pl. hónapot visszalépve) egyetlen kattintás közben TÖBB
-  // change-eseményt is kiadhat (év/hónap/nap külön szegmens), és ha ez
-  // mindegyike azonnal menteni és router.refresh()-elni próbálna, a
-  // képernyő az oldal újratöltése miatt "megakadt" és a mezőbe egy régebbi
-  // (menet közbeni) érték íródott vissza - ezért csak a mezőből KILÉPÉSKOR
-  // (onBlur) mentünk, ugyanúgy, mint a MegrendeloiSzamla "Fizetési
-  // határidő" mezője.
-  const [helyiSzerkesztes, setHelyiSzerkesztes] = useState<
-    Record<number, { fizetesi_hatarido?: string; kifizetve_datuma?: string }>
-  >({});
+  // A fizetés-dialógus melyik fájlhoz nyílt - egyszerre csak egyhez.
+  const [fizetesDoc, setFizetesDoc] = useState<DocumentAttachment | null>(null);
+  // A "Fizetési határidő" mező HELYI, még el nem mentett szerkesztése -
+  // fájlonként. A natív dátumválasztó (pl. hónapot visszalépve) egyetlen
+  // kattintás közben TÖBB change-eseményt is kiadhat (év/hónap/nap külön
+  // szegmens), és ha ez mindegyike azonnal menteni és router.refresh()-elni
+  // próbálna, a képernyő az oldal újratöltése miatt "megakadt" és a mezőbe
+  // egy régebbi (menet közbeni) érték íródott vissza - ezért csak a mezőből
+  // KILÉPÉSKOR (onBlur) mentünk, ugyanúgy, mint a MegrendeloiSzamla
+  // "Fizetési határidő" mezője.
+  const [helyiHatarido, setHelyiHatarido] = useState<Record<number, string>>({});
   const osszesMeret = attachments.reduce((osszeg, a) => osszeg + (a.meret_bajt ?? 0), 0);
+  const sokSzamlaVan = attachments.length > 1;
 
-  function mezoErteke(doc: DocumentAttachment, mezo: "fizetesi_hatarido" | "kifizetve_datuma"): string {
-    const helyi = helyiSzerkesztes[doc.id]?.[mezo];
-    return helyi !== undefined ? helyi : (doc[mezo] ?? "");
+  function hataridoErteke(doc: DocumentAttachment): string {
+    const helyi = helyiHatarido[doc.id];
+    return helyi !== undefined ? helyi : (doc.fizetesi_hatarido ?? "");
   }
 
-  function irdAHelyiErteket(docId: number, mezo: "fizetesi_hatarido" | "kifizetve_datuma", ertek: string) {
-    setHelyiSzerkesztes((elozo) => ({ ...elozo, [docId]: { ...elozo[docId], [mezo]: ertek } }));
-  }
-
-  /** A tényleges mentés - MINDIG mindkét mezőt írja, a hívó adja meg,
-   * milyen értékkel (a másik mezőnél, ha nincs explicit érték, a jelenlegi -
-   * akár még el nem mentett HELYI - értéket küldi, hogy egy párhuzamosan
-   * folyó szerkesztés ne vesszen el). */
-  async function irjaAFizetesiAllapotot(
-    doc: DocumentAttachment,
-    ertekek: Partial<Record<"fizetesi_hatarido" | "kifizetve_datuma", string | null>>,
-  ) {
+  /** onBlur-ra hívva: csak akkor ír a szerverre, ha a mező ténylegesen
+   * változott a mentett értékhez képest - máskülönben egy puszta
+   * rákattintás/elkattintás is fölösleges kört (és router.refresh()-t)
+   * váltana ki. */
+  async function mentsHataridotHaValtozott(doc: DocumentAttachment) {
+    const ujErtek = hataridoErteke(doc) || null;
+    if (ujErtek === (doc.fizetesi_hatarido ?? null)) return;
     setSavingId(doc.id);
     try {
       const res = await authFetch(`/api/v1/csatolmanyok/${doc.id}/fizetesi-allapot`, {
         method: "PUT",
-        body: JSON.stringify({
-          fizetesi_hatarido:
-            "fizetesi_hatarido" in ertekek ? ertekek.fizetesi_hatarido : mezoErteke(doc, "fizetesi_hatarido") || null,
-          kifizetve_datuma:
-            "kifizetve_datuma" in ertekek ? ertekek.kifizetve_datuma : mezoErteke(doc, "kifizetve_datuma") || null,
-        }),
+        body: JSON.stringify({ fizetesi_hatarido: ujErtek }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -143,7 +142,7 @@ export function DokumentumFeltoltes({
       // A mentett érték innentől a szerverről (a props-ból) jön - a helyi
       // felülírás eltávolítása nélkül a router.refresh() előtti pillanatban
       // még a régi (immár elavult) helyi érték látszódna.
-      setHelyiSzerkesztes((elozo) => {
+      setHelyiHatarido((elozo) => {
         const { [doc.id]: _kivetel, ...tobbi } = elozo;
         return tobbi;
       });
@@ -155,19 +154,54 @@ export function DokumentumFeltoltes({
     }
   }
 
-  /** onBlur-ra hívva: csak akkor ír a szerverre, ha a mező ténylegesen
-   * változott a mentett értékhez képest - máskülönben egy puszta
-   * rákattintás/elkattintás is fölösleges kört (és router.refresh()-t)
-   * váltana ki. A natív dátumválasztó (pl. hónapot visszalépve) egyetlen
-   * kattintás közben TÖBB change-eseményt is kiadhat (év/hónap/nap külön
-   * szegmens) - ha ez mindegyike azonnal menteni próbálna, a mező a menet
-   * közbeni oldal-újratöltés miatt "megakadt" és egy korábbi értéket írt
-   * vissza. Ezért csak KILÉPÉSKOR mentünk, ugyanúgy, mint a
-   * MegrendeloiSzamla "Fizetési határidő" mezője. */
-  async function mentsHaValtozott(doc: DocumentAttachment, mezo: "fizetesi_hatarido" | "kifizetve_datuma") {
-    const ujErtek = mezoErteke(doc, mezo) || null;
-    if (ujErtek === (doc[mezo] ?? null)) return;
-    await irjaAFizetesiAllapotot(doc, { [mezo]: ujErtek });
+  /** "Fizetés" - a dialógusban megadott adatokkal SAJÁT bevétel-sort nyit
+   * ennek a fájlnak (lásd backend services/megrendeloi_szamla.
+   * jelold_szamlat_kifizetettnek). */
+  async function jelolKifizetettnek(
+    doc: DocumentAttachment,
+    adat: {
+      kifizetes_datuma: string;
+      netto: number | null;
+      plusz_afa: boolean;
+      fizetes_modja: string | null;
+      bevetelbe_ne_keruljon: boolean;
+      kihagyas_oka: string | null;
+    },
+  ): Promise<string | null> {
+    setSavingId(doc.id);
+    try {
+      const res = await authFetch(`/api/v1/csatolmanyok/${doc.id}/kifizetve`, {
+        method: "POST",
+        body: JSON.stringify(adat),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        return detail?.detail ?? `Sikertelen mentés (HTTP ${res.status})`;
+      }
+      router.refresh();
+      return null;
+    } catch (err) {
+      return `Sikertelen mentés (hálózati hiba): ${err}`;
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function vonjVisszaKifizetest(doc: DocumentAttachment) {
+    setSavingId(doc.id);
+    try {
+      const res = await authFetch(`/api/v1/csatolmanyok/${doc.id}/kifizetve/visszavonas`, { method: "POST" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setSavingId(null);
+    }
   }
 
   /** Egyszerre több fájl is kiválasztható. EGYENKÉNT, sorban töltjük fel:
@@ -280,46 +314,36 @@ export function DokumentumFeltoltes({
                     egészéhez, mert egy kódhoz több számla is tartozhat, és
                     azok külön esedékesek/kifizetettek lehetnek. */}
                 {fizetesiAllapot && (
-                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12.5px] text-text-secondary">
+                  <div className="mt-2 flex flex-col items-start gap-1.5 text-[12.5px] text-text-secondary">
                     <label className="flex items-center gap-1.5">
                       Fizetési határidő:
                       <input
                         type="date"
-                        value={mezoErteke(doc, "fizetesi_hatarido")}
+                        value={hataridoErteke(doc)}
                         disabled={!canEdit || savingId === doc.id}
-                        onChange={(e) => irdAHelyiErteket(doc.id, "fizetesi_hatarido", e.target.value)}
-                        onBlur={() => mentsHaValtozott(doc, "fizetesi_hatarido")}
+                        onChange={(e) => setHelyiHatarido((elozo) => ({ ...elozo, [doc.id]: e.target.value }))}
+                        onBlur={() => mentsHataridotHaValtozott(doc)}
                         className="rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[12.5px] text-text-primary disabled:opacity-50"
                       />
                     </label>
-                    <label className="flex items-center gap-1.5">
-                      Kifizetve:
-                      <input
-                        type="date"
-                        value={mezoErteke(doc, "kifizetve_datuma")}
-                        disabled={!canEdit || savingId === doc.id}
-                        onChange={(e) => irdAHelyiErteket(doc.id, "kifizetve_datuma", e.target.value)}
-                        onBlur={() => mentsHaValtozott(doc, "kifizetve_datuma")}
-                        className="rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[12.5px] text-text-primary disabled:opacity-50"
-                      />
-                    </label>
-                    {/* Gyorsgomb: a legtöbbször ma jön meg a pénz, tehát nem
-                        kell mindig a natív dátumválasztóval bajlódni - ha
-                        mégsem ma volt, a fenti mezőben utólag átírható. */}
+                    {/* A KIFIZETÉS jelölése egy dialógust nyit (nem sima
+                        dátummező), mert saját bevétel-sort is nyit ennek a
+                        számlának - a dátum mellett a bevétel-be-kerülés is
+                        eldönthető ott (lásd SzamlaFizetesDialog). */}
                     {!doc.kifizetve_datuma && canEdit && (
                       <button
                         type="button"
-                        onClick={() => irjaAFizetesiAllapotot(doc, { kifizetve_datuma: maiNap() })}
+                        onClick={() => setFizetesDoc(doc)}
                         disabled={savingId === doc.id}
-                        className="rounded-[var(--radius)] border border-[color:var(--text-accent)]/40 px-2 py-0.5 text-[12px] text-text-accent hover:bg-bg-accent disabled:opacity-50"
+                        className="rounded-[var(--radius)] border border-[color:var(--text-accent)]/40 px-2.5 py-1 text-[12.5px] text-text-accent hover:bg-bg-accent disabled:opacity-50"
                       >
-                        Fizetve
+                        Fizetés
                       </button>
                     )}
                     {doc.kifizetve_datuma && canEdit && (
                       <button
                         type="button"
-                        onClick={() => irjaAFizetesiAllapotot(doc, { kifizetve_datuma: null })}
+                        onClick={() => vonjVisszaKifizetest(doc)}
                         disabled={savingId === doc.id}
                         className="text-[12px] text-text-muted hover:text-text-secondary disabled:opacity-50"
                       >
@@ -347,6 +371,219 @@ export function DokumentumFeltoltes({
           )}
         </>
       )}
+
+      {fizetesDoc && (
+        <SzamlaFizetesDialog
+          doc={fizetesDoc}
+          sokSzamlaVan={sokSzamlaVan}
+          penznem={penznem}
+          onClose={() => setFizetesDoc(null)}
+          onSubmit={async (adat) => {
+            const hiba = await jelolKifizetettnek(fizetesDoc, adat);
+            if (!hiba) setFizetesDoc(null);
+            return hiba;
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** "Fizetés" - egy konkrét feltöltött számla kifizetettnek jelölése. SAJÁT
+ * bevétel-sort nyit (lásd backend services/megrendeloi_szamla.
+ * jelold_szamlat_kifizetettnek), ezért kér dátumot és fizetési módot, mint a
+ * projektkód-szintű megfelelője (lásd megrendeloi/MegrendeloiSzamla.tsx
+ * KifizetesDialog) - csak fájlonként, nem az egész projektkódra.
+ *
+ * A NETTÓ ÖSSZEG mező csak akkor jelenik meg (és kötelező), ha a
+ * projektkódhoz TÖBB számla is tartozik: egyetlen számlánál a projektkód
+ * vállalási ára adja az összeget, többnél viszont csak ebből lehet tudni,
+ * mennyi bevétel-sor nyíljon és mekkora összeggel. */
+function SzamlaFizetesDialog({
+  doc,
+  sokSzamlaVan,
+  penznem,
+  onClose,
+  onSubmit,
+}: {
+  doc: DocumentAttachment;
+  sokSzamlaVan: boolean;
+  penznem: string;
+  onClose: () => void;
+  onSubmit: (adat: {
+    kifizetes_datuma: string;
+    netto: number | null;
+    plusz_afa: boolean;
+    fizetes_modja: string | null;
+    bevetelbe_ne_keruljon: boolean;
+    kihagyas_oka: string | null;
+  }) => Promise<string | null>;
+}) {
+  const [datum, setDatum] = useState("");
+  const [nettoErtek, setNettoErtek] = useState(doc.netto !== null ? String(doc.netto) : "");
+  const [afa, setAfa] = useState(doc.plusz_afa ?? false);
+  const [mod, setMod] = useState<"Átutalás" | "Készpénz">("Átutalás");
+  const [bevetelbeKerul, setBevetelbeKerul] = useState(true);
+  const [indok, setIndok] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [hiba, setHiba] = useState<string | null>(null);
+
+  const netto = nettoErtek.trim() === "" ? null : Number(nettoErtek.replace(/\s/g, "").replace(",", "."));
+  const nettoErvenyes = nettoErtek.trim() === "" || Number.isFinite(netto);
+  const bruttoErtek = netto === null || !nettoErvenyes ? null : afa ? Math.round(netto * 1.27 * 100) / 100 : netto;
+  const nettoHianyzik = sokSzamlaVan && (netto === null || !nettoErvenyes);
+
+  async function jelol() {
+    setBusy(true);
+    setHiba(null);
+    const eredmeny = await onSubmit({
+      kifizetes_datuma: datum,
+      netto: sokSzamlaVan ? netto : null,
+      plusz_afa: afa,
+      fizetes_modja: mod,
+      bevetelbe_ne_keruljon: !bevetelbeKerul,
+      kihagyas_oka: bevetelbeKerul ? null : indok.trim(),
+    });
+    setBusy(false);
+    if (eredmeny) setHiba(eredmeny);
+  }
+
+  return (
+    <ModalReteg onClose={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md rounded-[var(--radius-lg)] border border-border bg-surface-1 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-border px-5 py-3">
+          <h3 className="text-[14px] font-medium text-text-primary">Számla kifizetve</h3>
+          <p className="mt-0.5 truncate text-[12.5px] text-text-secondary">{doc.filename}</p>
+        </div>
+
+        <div className="space-y-4 p-5">
+          {sokSzamlaVan && (
+            <div>
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="block text-[13px] text-text-secondary">
+                  Nettó összeg ({penznem})
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={nettoErtek}
+                    placeholder="Kötelező"
+                    onChange={(e) => setNettoErtek(e.target.value)}
+                    className="mt-1 w-32 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary"
+                  />
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 pb-1.5 text-[13px] text-text-primary">
+                  <input type="checkbox" checked={afa} onChange={(e) => setAfa(e.target.checked)} />+ ÁFA
+                </label>
+                <p className="pb-1.5 text-[13px] text-text-secondary">
+                  Bruttó: <span className="text-text-primary">{bruttoErtek === null ? "–" : penzzel(bruttoErtek, penznem)}</span>
+                </p>
+              </div>
+              <p className="mt-1 text-[12px] text-text-muted">
+                Ehhez a projektkódhoz több számla is tartozik - add meg, mekkora ennek a saját nettó összege.
+              </p>
+              {!nettoErvenyes && <p className="mt-1 text-[12px] text-text-danger">Ez nem szám.</p>}
+            </div>
+          )}
+
+          <label className="block text-[13px] text-text-primary">
+            Mikor érkezett meg a pénz *
+            <span className="mt-1 flex items-center gap-2">
+              <input
+                type="date"
+                value={datum}
+                onChange={(e) => setDatum(e.target.value)}
+                className="w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary"
+              />
+              <button
+                type="button"
+                onClick={() => setDatum(maiNap())}
+                className="shrink-0 rounded-[var(--radius)] border border-border px-2 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3"
+              >
+                Ma
+              </button>
+            </span>
+          </label>
+
+          <div>
+            <p className="text-[13px] text-text-primary">Hogyan érkezett a pénz?</p>
+            <div className="mt-1.5 flex gap-2">
+              {(["Átutalás", "Készpénz"] as const).map((lehetoseg) => (
+                <button
+                  key={lehetoseg}
+                  type="button"
+                  onClick={() => setMod(lehetoseg)}
+                  className={`rounded-[var(--radius)] border px-3 py-1.5 text-[13px] ${
+                    mod === lehetoseg
+                      ? "border-text-accent/40 bg-bg-accent text-text-accent"
+                      : "border-border text-text-secondary hover:bg-surface-3"
+                  }`}
+                >
+                  {lehetoseg}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={bevetelbeKerul}
+              onChange={(e) => setBevetelbeKerul(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span className="text-[13px] text-text-primary">
+              Kerüljön be a Pénzügy → Bevételek közé
+              <span className="mt-0.5 block text-[12px] text-text-muted">
+                Ez nyitja a bevétel-sort ennek a számlának az összegével.
+              </span>
+            </span>
+          </label>
+
+          {!bevetelbeKerul && (
+            <div className="space-y-2 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+              <p className="text-[12.5px] text-text-secondary">
+                A számla „kifizetve” lesz, de <b>nem kerül a bevételek közé</b> - akkor válaszd ezt, ha a pénz máshol
+                van elszámolva, és itt csak duplázná az összeget.
+              </p>
+              <label className="block text-[13px] text-text-primary">
+                Miért nem kerül a bevételek közé?
+                <textarea
+                  rows={2}
+                  value={indok}
+                  onChange={(e) => setIndok(e.target.value)}
+                  placeholder="Pl. beszámítva, a másik cégen át számláztuk…"
+                  className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] leading-relaxed text-text-primary"
+                />
+              </label>
+            </div>
+          )}
+
+          {hiba && <p className="text-[12.5px] text-text-danger">{hiba}</p>}
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-border px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+          >
+            Mégse
+          </button>
+          <button
+            type="button"
+            disabled={busy || !datum || nettoHianyzik || !nettoErvenyes || (!bevetelbeKerul && !indok.trim())}
+            onClick={jelol}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+          >
+            Kifizetve jelölés
+          </button>
+        </div>
+      </div>
+    </ModalReteg>
   );
 }

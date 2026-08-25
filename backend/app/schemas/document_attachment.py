@@ -16,13 +16,33 @@ class DocumentAttachmentRead(BaseModel):
     #: Csak "szamla" kategóriánál értelmezett - lásd models/document_attachment.py.
     fizetesi_hatarido: date | None = None
     kifizetve_datuma: date | None = None
+    netto: float | None = None
+    plusz_afa: bool | None = None
+    bevetelbe_ne_keruljon: bool = False
+    bevetel_kihagyas_oka: str | None = None
 
     model_config = {"from_attributes": True}
 
 
-class DocumentAttachmentFizetesIn(BaseModel):
-    """A számla-fájl fizetési állapota - mindkét mező mindig együtt megy, hogy
-    egy határidő törlése (null) is kifejezhető legyen, ne csak a beállítása."""
+class DocumentAttachmentHataridoIn(BaseModel):
+    """A számla-fájl fizetési határideje. Kizárólag ez - a kifizetés jelölése
+    a POST .../kifizetve végponton megy, mert az bevétel-sort is nyit."""
 
     fizetesi_hatarido: date | None = None
-    kifizetve_datuma: date | None = None
+
+
+class DocumentAttachmentKifizetesIn(BaseModel):
+    """Egy konkrét feltöltött számla kifizetettnek jelölése - lásd
+    services/megrendeloi_szamla.jelold_szamlat_kifizetettnek."""
+
+    #: MIKOR érkezett meg a pénz. Kötelező - ebből lesz a bevétel-sor napja.
+    kifizetes_datuma: date
+    #: Ennek a SZÁMLÁNAK a nettó összege. Osztott számlázásnál (több számla
+    #: egy projektkódon) kötelező - egyetlen számlánál elhagyható, ilyenkor a
+    #: projektkód vállalási ára adja az összeget.
+    netto: float | None = None
+    plusz_afa: bool = False
+    fizetes_modja: str | None = None
+    #: "Kifizetve, de ne kerüljön a bevételek közé" - indok kell hozzá.
+    bevetelbe_ne_keruljon: bool = False
+    kihagyas_oka: str | None = None

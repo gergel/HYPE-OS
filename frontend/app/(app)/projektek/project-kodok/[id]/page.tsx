@@ -285,6 +285,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
                 // fizetési határideje és a kifizetés dátuma (lásd
                 // components/DokumentumFeltoltes.tsx).
                 fizetesiAllapot
+                penznem={penznemKod}
               />
               {/* A SZÁMLA-LÉPÉS SEM VÁR A PAPÍROKRA. Korábban a fizetési
                   határidő és a "Kifizetve" jelölés csak a szerződés és a TIG

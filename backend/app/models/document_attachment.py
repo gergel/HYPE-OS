@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Date, Index, String
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -56,6 +56,24 @@ class DocumentAttachment(TimestampMixin, Base):
     # .../fizetesi-allapot). `kifizetve_datuma` hiánya = még nincs kifizetve.
     fizetesi_hatarido: Mapped[date | None] = mapped_column(Date)
     kifizetve_datuma: Mapped[date | None] = mapped_column(Date)
+
+    # KIFIZETÉSKOR kitöltve (lásd services/megrendeloi_szamla.
+    # jelold_szamlat_kifizetettnek): ennek a KONKRÉT számlának a nettó összege
+    # és hogy van-e rajta ÁFA - osztott számlázásnál (több számla egy
+    # projektkódon) csak ebből lehet tudni, mennyi bevétel-sor nyíljon és
+    # mekkora összeggel. Egyetlen számlánál üresen is maradhat: olyankor a
+    # projektkód vállalási ára adja az összeget.
+    netto: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    plusz_afa: Mapped[bool | None] = mapped_column(Boolean)
+    #: "Kifizetve, de ez a számla ne kerüljön a bevételek közé" - a
+    #: projektkód-szintű Revenue.beleszamit_a_bevetelekbe párja, csak
+    #: fájlonként (lásd services/megrendeloi_szamla.py).
+    bevetelbe_ne_keruljon: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    bevetel_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
+    #: A kifizetéskor NYITOTT bevétel-sor - enélkül a kifizetés visszavonása
+    #: nem tudná, melyik Revenue-t kell visszaállítania (lásd
+    #: services/megrendeloi_szamla.vond_vissza_szamla_kifizetes).
+    revenue_id: Mapped[int | None] = mapped_column(ForeignKey("revenues.id", ondelete="SET NULL"))
 
     __table_args__ = (
         Index("ix_document_attachments_entity", "entity_type", "entity_id"),

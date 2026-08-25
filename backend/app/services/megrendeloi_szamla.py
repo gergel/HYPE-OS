@@ -40,7 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.document_attachment import DocumentAttachment
@@ -395,3 +395,117 @@ def vond_vissza(db: Session, pk: ProjectCode) -> SzamlaAllas:
             sor.beleszamit_a_bevetelekbe = None
     db.flush()
     return allas(db, pk)
+
+
+def _tobb_szamla_van(db: Session, pk: ProjectCode) -> bool:
+    """Van-e ennél a projektkódnál egynél TÖBB feltöltött számla-fájl - ettől
+    függ, hogy a fájlonkénti kifizetéshez kötelező-e a számla saját nettó
+    összege (lásd jelold_szamlat_kifizetettnek)."""
+    darab = db.scalar(
+        select(func.count())
+        .select_from(DocumentAttachment)
+        .where(
+            DocumentAttachment.entity_type == "projectCode",
+            DocumentAttachment.entity_id == pk.id,
+            DocumentAttachment.kategoria == "szamla",
+        )
+    )
+    return (darab or 0) > 1
+
+
+def jelold_szamlat_kifizetettnek(
+    db: Session,
+    doc: DocumentAttachment,
+    pk: ProjectCode,
+    *,
+    kifizetes_datuma: date,
+    netto: float | None,
+    plusz_afa: bool,
+    fizetes_modja: str | None,
+    bevetelbe_ne_keruljon: bool,
+    kihagyas_oka: str | None,
+) -> DocumentAttachment:
+    """Egy KONKRÉT feltöltött számla kifizetettnek jelölése - SAJÁT bevétel-
+    sort nyit ennek a fájlnak (nem a projektkód egy közös sorát egészíti ki,
+    mint a `jelold_kifizetettnek`), mert osztott számlázásnál (több számla egy
+    projektkódon) mindegyiknek külön összege és külön kifizetési dátuma van.
+
+    Ha a számlának nincs saját nettója megadva, a projektkód vállalási ára
+    adja az összeget - ez csak akkor elég, ha ez az EGYETLEN számla; többnél a
+    saját összeg kötelező, különben a bevétel-sorok összege nem adná ki a
+    projektkód teljes bevételét."""
+    if netto is None and _tobb_szamla_van(db, pk):
+        raise SzamlaHiba(
+            "Ehhez a projektkódhoz több számla is tartozik - add meg, mekkora ennek a számlának a nettó összege."
+        )
+    if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
+        raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")
+    mod = (fizetes_modja or "").strip() or None
+    if mod is not None and mod not in fizetesi_mod_szolg.BEVETEL_MODOK:
+        raise SzamlaHiba(
+            f"Ismeretlen fizetési mód: {mod}. Választható: {', '.join(fizetesi_mod_szolg.BEVETEL_MODOK)}."
+        )
+
+    if netto is not None:
+        eredeti_netto, eredeti_brutto = netto, projektkod_osszeg.brutto(netto, plusz_afa)
+    else:
+        eredeti_netto, eredeti_brutto = _osszeg(pk)
+
+    devizas = penznem_szolg.devizas(pk.penznem)
+    if devizas:
+        if pk.arfolyam is None:
+            raise SzamlaHiba(
+                "Add meg az árfolyamot a vállalási árnál - enélkül nem tudjuk, mennyi a bevétel forintban."
+            )
+        ft_netto = penznem_szolg.forintra(eredeti_netto, pk.arfolyam)
+        ft_brutto = penznem_szolg.forintra(eredeti_brutto, pk.arfolyam)
+    else:
+        ft_netto, ft_brutto = eredeti_netto, eredeti_brutto
+
+    sor = Revenue(
+        project_code_id=pk.id,
+        netto=ft_netto,
+        brutto=ft_brutto,
+        penznem=penznem_szolg.FORINT,
+        eredeti_penznem=penznem_szolg.normalizald(pk.penznem) if devizas else None,
+        eredeti_netto=eredeti_netto if devizas else None,
+        eredeti_brutto=eredeti_brutto if devizas else None,
+        arfolyam=pk.arfolyam if devizas else None,
+        fizetes_datuma=kifizetes_datuma,
+        fizetes_hatarideje=doc.fizetesi_hatarido,
+        fizetes_modja=mod or fizetesi_mod_szolg.BEVETEL_ALAPERTELMEZES,
+        szamla_file_url=doc.url[:500] if doc.url else None,
+        beleszamit_a_bevetelekbe=False if bevetelbe_ne_keruljon else None,
+        megjegyzes=BEVETEL_MEGJEGYZES,
+    )
+    # A KAPCSOLATON át adjuk hozzá, nem `db.add()`-del - ugyanaz az ok, mint
+    # `_vezesd_fel_a_bevetelt`-nél: a projektkód `revenues` gyűjteménye rögtön
+    # tudjon róla, ne csak a következő betöltéskor.
+    pk.revenues.append(sor)
+    db.flush()  # kell a sor.id a visszavonáshoz
+
+    doc.kifizetve_datuma = kifizetes_datuma
+    doc.netto = netto
+    doc.plusz_afa = plusz_afa if netto is not None else None
+    doc.bevetelbe_ne_keruljon = bevetelbe_ne_keruljon
+    doc.bevetel_kihagyas_oka = (kihagyas_oka or "").strip() or None if bevetelbe_ne_keruljon else None
+    doc.revenue_id = sor.id
+    db.flush()
+    return doc
+
+
+def vond_vissza_szamla_kifizetes(db: Session, doc: DocumentAttachment) -> DocumentAttachment:
+    """Egy fájlonkénti kifizetés-jelölés visszavonása - ugyanaz a szabály, mint
+    a `vond_vissza`-nál: a hozzá nyitott bevétel-sort NEM töröljük, csak a
+    kifizetés dátumát vesszük ki róla."""
+    if doc.revenue_id is not None:
+        sor = db.get(Revenue, doc.revenue_id)
+        if sor is not None:
+            sor.fizetes_datuma = None
+            if sor.beleszamit_a_bevetelekbe is False:
+                sor.beleszamit_a_bevetelekbe = None
+    doc.kifizetve_datuma = None
+    doc.bevetelbe_ne_keruljon = False
+    doc.bevetel_kihagyas_oka = None
+    db.flush()
+    return doc
