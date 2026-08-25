@@ -86,19 +86,45 @@ export function DokumentumFeltoltes({
   const [uploading, setUploading] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
+  // A dátummezők HELYI, még el nem mentett szerkesztése - fájlonként. A natív
+  // dátumválasztó (pl. hónapot visszalépve) egyetlen kattintás közben TÖBB
+  // change-eseményt is kiadhat (év/hónap/nap külön szegmens), és ha ez
+  // mindegyike azonnal menteni és router.refresh()-elni próbálna, a
+  // képernyő az oldal újratöltése miatt "megakadt" és a mezőbe egy régebbi
+  // (menet közbeni) érték íródott vissza - ezért csak a mezőből KILÉPÉSKOR
+  // (onBlur) mentünk, ugyanúgy, mint a MegrendeloiSzamla "Fizetési
+  // határidő" mezője.
+  const [helyiSzerkesztes, setHelyiSzerkesztes] = useState<
+    Record<number, { fizetesi_hatarido?: string; kifizetve_datuma?: string }>
+  >({});
   const osszesMeret = attachments.reduce((osszeg, a) => osszeg + (a.meret_bajt ?? 0), 0);
 
-  async function mentsdAFizetesiAllapotot(
+  function mezoErteke(doc: DocumentAttachment, mezo: "fizetesi_hatarido" | "kifizetve_datuma"): string {
+    const helyi = helyiSzerkesztes[doc.id]?.[mezo];
+    return helyi !== undefined ? helyi : (doc[mezo] ?? "");
+  }
+
+  function irdAHelyiErteket(docId: number, mezo: "fizetesi_hatarido" | "kifizetve_datuma", ertek: string) {
+    setHelyiSzerkesztes((elozo) => ({ ...elozo, [docId]: { ...elozo[docId], [mezo]: ertek } }));
+  }
+
+  /** A tényleges mentés - MINDIG mindkét mezőt írja, a hívó adja meg,
+   * milyen értékkel (a másik mezőnél, ha nincs explicit érték, a jelenlegi -
+   * akár még el nem mentett HELYI - értéket küldi, hogy egy párhuzamosan
+   * folyó szerkesztés ne vesszen el). */
+  async function irjaAFizetesiAllapotot(
     doc: DocumentAttachment,
-    valtozas: { fizetesi_hatarido?: string | null; kifizetve_datuma?: string | null },
+    ertekek: Partial<Record<"fizetesi_hatarido" | "kifizetve_datuma", string | null>>,
   ) {
     setSavingId(doc.id);
     try {
       const res = await authFetch(`/api/v1/csatolmanyok/${doc.id}/fizetesi-allapot`, {
         method: "PUT",
         body: JSON.stringify({
-          fizetesi_hatarido: valtozas.fizetesi_hatarido !== undefined ? valtozas.fizetesi_hatarido : doc.fizetesi_hatarido,
-          kifizetve_datuma: valtozas.kifizetve_datuma !== undefined ? valtozas.kifizetve_datuma : doc.kifizetve_datuma,
+          fizetesi_hatarido:
+            "fizetesi_hatarido" in ertekek ? ertekek.fizetesi_hatarido : mezoErteke(doc, "fizetesi_hatarido") || null,
+          kifizetve_datuma:
+            "kifizetve_datuma" in ertekek ? ertekek.kifizetve_datuma : mezoErteke(doc, "kifizetve_datuma") || null,
         }),
       });
       if (!res.ok) {
@@ -106,12 +132,34 @@ export function DokumentumFeltoltes({
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
         return;
       }
+      // A mentett érték innentől a szerverről (a props-ból) jön - a helyi
+      // felülírás eltávolítása nélkül a router.refresh() előtti pillanatban
+      // még a régi (immár elavult) helyi érték látszódna.
+      setHelyiSzerkesztes((elozo) => {
+        const { [doc.id]: _kivetel, ...tobbi } = elozo;
+        return tobbi;
+      });
       router.refresh();
     } catch (err) {
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
     } finally {
       setSavingId(null);
     }
+  }
+
+  /** onBlur-ra hívva: csak akkor ír a szerverre, ha a mező ténylegesen
+   * változott a mentett értékhez képest - máskülönben egy puszta
+   * rákattintás/elkattintás is fölösleges kört (és router.refresh()-t)
+   * váltana ki. A natív dátumválasztó (pl. hónapot visszalépve) egyetlen
+   * kattintás közben TÖBB change-eseményt is kiadhat (év/hónap/nap külön
+   * szegmens) - ha ez mindegyike azonnal menteni próbálna, a mező a menet
+   * közbeni oldal-újratöltés miatt "megakadt" és egy korábbi értéket írt
+   * vissza. Ezért csak KILÉPÉSKOR mentünk, ugyanúgy, mint a
+   * MegrendeloiSzamla "Fizetési határidő" mezője. */
+  async function mentsHaValtozott(doc: DocumentAttachment, mezo: "fizetesi_hatarido" | "kifizetve_datuma") {
+    const ujErtek = mezoErteke(doc, mezo) || null;
+    if (ujErtek === (doc[mezo] ?? null)) return;
+    await irjaAFizetesiAllapotot(doc, { [mezo]: ujErtek });
   }
 
   /** Egyszerre több fájl is kiválasztható. EGYENKÉNT, sorban töltjük fel:
@@ -229,11 +277,10 @@ export function DokumentumFeltoltes({
                       Fizetési határidő:
                       <input
                         type="date"
-                        value={doc.fizetesi_hatarido ?? ""}
+                        value={mezoErteke(doc, "fizetesi_hatarido")}
                         disabled={!canEdit || savingId === doc.id}
-                        onChange={(e) =>
-                          mentsdAFizetesiAllapotot(doc, { fizetesi_hatarido: e.target.value || null })
-                        }
+                        onChange={(e) => irdAHelyiErteket(doc.id, "fizetesi_hatarido", e.target.value)}
+                        onBlur={() => mentsHaValtozott(doc, "fizetesi_hatarido")}
                         className="rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[12.5px] text-text-primary disabled:opacity-50"
                       />
                     </label>
@@ -241,18 +288,17 @@ export function DokumentumFeltoltes({
                       Kifizetve:
                       <input
                         type="date"
-                        value={doc.kifizetve_datuma ?? ""}
+                        value={mezoErteke(doc, "kifizetve_datuma")}
                         disabled={!canEdit || savingId === doc.id}
-                        onChange={(e) =>
-                          mentsdAFizetesiAllapotot(doc, { kifizetve_datuma: e.target.value || null })
-                        }
+                        onChange={(e) => irdAHelyiErteket(doc.id, "kifizetve_datuma", e.target.value)}
+                        onBlur={() => mentsHaValtozott(doc, "kifizetve_datuma")}
                         className="rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[12.5px] text-text-primary disabled:opacity-50"
                       />
                     </label>
                     {doc.kifizetve_datuma && canEdit && (
                       <button
                         type="button"
-                        onClick={() => mentsdAFizetesiAllapotot(doc, { kifizetve_datuma: null })}
+                        onClick={() => irjaAFizetesiAllapotot(doc, { kifizetve_datuma: null })}
                         disabled={savingId === doc.id}
                         className="text-[12px] text-text-muted hover:text-text-secondary disabled:opacity-50"
                       >
