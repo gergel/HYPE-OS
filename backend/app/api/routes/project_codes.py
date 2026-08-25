@@ -15,12 +15,16 @@ from app.models.finance import Expense
 from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
 from app.models.project import Project
 from app.models.project_code import ProjectCode
+from app.models.project_code_comment import ProjectCodeComment
 from app.schemas.project_code import (
+    ProjectCodeCommentCreate,
+    ProjectCodeCommentRead,
     ProjectCodeCreate,
     ProjectCodeListRead,
     ProjectCodeRead,
     ProjectCodeUpdate,
 )
+from app.services import notifications
 from app.services import penznem as penznem_szolg
 from app.services import projektkod_bontas
 
@@ -251,3 +255,70 @@ def get_bontas(
         utomunkak=[BontasUtomunka(**sor) for sor in projektkod_bontas.utomunka_sorok(db, kod)],
         kiadasok=[BontasKiadas(**sor) for sor in projektkod_bontas.kiadas_sorok(kod)],
     )
+
+
+def _comment_read(comment: ProjectCodeComment) -> ProjectCodeCommentRead:
+    return ProjectCodeCommentRead(
+        id=comment.id,
+        project_code_id=comment.project_code_id,
+        employee_id=comment.employee_id,
+        employee_name=comment.employee.full_name,
+        body=comment.body,
+        created_at=comment.created_at,
+    )
+
+
+@router.get("/{project_code_id}/comments", response_model=list[ProjectCodeCommentRead])
+def get_comments(
+    project_code_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action("/projektek/project-kodok", "view")),
+):
+    """Egy Project Code hozzászólásai - ugyanaz a chat-szerű minta, mint az
+    Utómunkánál (lásd routes/postproduction.py get_comments)."""
+    if db.get(ProjectCode, project_code_id) is None:
+        raise HTTPException(status_code=404, detail="A projektkód nem található.")
+    rows = db.scalars(
+        select(ProjectCodeComment)
+        .where(ProjectCodeComment.project_code_id == project_code_id)
+        .order_by(ProjectCodeComment.created_at)
+    ).all()
+    return [_comment_read(c) for c in rows]
+
+
+@router.post("/{project_code_id}/comments", response_model=ProjectCodeCommentRead, status_code=201)
+def post_comment(
+    project_code_id: int,
+    payload: ProjectCodeCommentCreate,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action("/projektek/project-kodok", "view")),
+):
+    kod = db.get(ProjectCode, project_code_id)
+    if kod is None:
+        raise HTTPException(status_code=404, detail="A projektkód nem található.")
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="A hozzászólás nem lehet üres.")
+
+    comment = ProjectCodeComment(project_code_id=project_code_id, employee_id=current_user.id, body=body)
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+
+    # @Név említésnél értesítést kap a megemlített - ugyanaz a minta, mint az
+    # Utómunka hozzászólásainál (lásd services/deliverable_actions.add_comment).
+    # A Project Code-nak nincs "felelőse" mezője, tehát nincs automatikus
+    # értesítettje - csak a kifejezett említés szól valakinek.
+    title = kod.projektkod or f"Project Code #{kod.id}"
+    for employee_id in notifications.extract_mentioned_employee_ids(body, db):
+        notifications.create_notification(
+            db,
+            employee_id=employee_id,
+            kind="mention",
+            message=f"{current_user.full_name} megemlített egy hozzászólásban: {title}",
+            link=f"/projektek/project-kodok/{kod.id}",
+            actor_id=current_user.id,
+        )
+    db.commit()
+
+    return _comment_read(comment)

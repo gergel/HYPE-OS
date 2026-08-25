@@ -1915,6 +1915,21 @@ export async function getDeliverableComments(deliverableId: number): Promise<Del
   return (await apiGet<DeliverableComment[]>(`/api/v1/deliverables/${deliverableId}/comments`)) ?? [];
 }
 
+/** Ugyanaz a hozzászólás-minta, mint az Utómunkánál - lásd
+ * components/projektkod/CommentsSection.tsx. */
+export type ProjectCodeComment = {
+  id: number;
+  project_code_id: number;
+  employee_id: number;
+  employee_name: string;
+  body: string;
+  created_at: string;
+};
+
+export async function getProjectCodeComments(projectCodeId: number): Promise<ProjectCodeComment[]> {
+  return (await apiGet<ProjectCodeComment[]>(`/api/v1/project-codes/${projectCodeId}/comments`)) ?? [];
+}
+
 export type NotificationItem = {
   id: number;
   kind: string;

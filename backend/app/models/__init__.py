@@ -59,6 +59,7 @@ from app.models.portal import (
 from app.models.project import Project, project_crew
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.models.project_code import ProjectCode
+from app.models.project_code_comment import ProjectCodeComment
 from app.models.rate import Rate
 from app.models.stocktake import StocktakeItem, StocktakeSession
 from app.models.task import Task, task_employees
@@ -154,6 +155,7 @@ __all__ = [
     "Vallalkozas",
     "VallalkozasTag",
     "ProjectCode",
+    "ProjectCodeComment",
     "Rate",
     "StocktakeItem",
     "StocktakeSession",

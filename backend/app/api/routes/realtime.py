@@ -42,6 +42,7 @@ from app.models.portal import Portal
 from app.models.post_shoot_feedback import PostShootFeedback
 from app.models.project import Project
 from app.models.project_code import ProjectCode
+from app.models.project_code_comment import ProjectCodeComment
 from app.models.rate import Rate
 from app.models.stocktake import StocktakeSession
 from app.models.task import Task
@@ -76,6 +77,7 @@ TOPICS: dict[str, Topic] = {
     "projectCodes": Topic(ProjectCode),
     "deliverables": Topic(Deliverable),
     "comments": Topic(DeliverableComment, scope_column="deliverable_id"),
+    "projectCodeComments": Topic(ProjectCodeComment, scope_column="project_code_id"),
     "notifications": Topic(Notification, user_column="employee_id"),
     "tasks": Topic(Task),
     "employees": Topic(Employee),

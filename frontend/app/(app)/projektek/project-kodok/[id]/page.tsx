@@ -7,6 +7,7 @@ import { KeretKotes } from "@/components/megrendeloi/KeretKotes";
 import { MegrendeloiPapirKezelo } from "@/components/megrendeloi/MegrendeloiPapirKezelo";
 import { MegrendeloiSzamla } from "@/components/megrendeloi/MegrendeloiSzamla";
 import { PapirKapcsolok } from "@/components/megrendeloi/PapirKapcsolok";
+import { CommentsSection } from "@/components/projektkod/CommentsSection";
 import { ProjektkodBontasTablak } from "@/components/projektkod/ProjektkodBontasTablak";
 import { VallalasiAr } from "@/components/projektkod/VallalasiAr";
 import { StatCard } from "@/components/StatCard";
@@ -18,11 +19,13 @@ import {
   getAttachments,
   getClients,
   getCurrentUser,
+  getEmployees,
   getMegrendeloiKeretek,
   getMegrendeloiKontaktok,
   getMegrendeloiPapirok,
   getMegrendeloiSzamlaAllas,
   getMyPagePermissions,
+  getProjectCodeComments,
   getProjektkodBontas,
   getRecord,
 } from "@/lib/api";
@@ -69,6 +72,8 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     currentUser,
     attachments,
     szamlaAllas,
+    comments,
+    employees,
   ] = await Promise.all([
     // A megrendelői papírok (lásd backend routes/megrendeloi_papirok.py): a
     // szerződő fél a MEGRENDELŐK közül választható, a kapcsolattartó pedig a
@@ -91,6 +96,12 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     // A számla-lépés állása: határidő, kifizetés napja, és hogy keletkezett-e
     // bevétel-sor (lásd backend services/megrendeloi_szamla.py).
     getMegrendeloiSzamlaAllas(projectCodeId),
+    // Hozzászólások - ugyanaz a chat-szerű minta, mint az Utómunkánál (lásd
+    // components/projektkod/CommentsSection.tsx).
+    getProjectCodeComments(projectCodeId),
+    // A "@" taggeléshez: a Project Code-nak nincs saját "kioszthatók" listája
+    // (mint az Utómunkának), ezért az egész munkatárs-listát ajánljuk fel.
+    getEmployees(),
   ]);
 
   const ugyfelek = clients
@@ -348,6 +359,15 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             <p className="text-[13px] text-text-secondary">A bontás most nem érhető el.</p>
           </Card>
         )}
+
+        {/* HOZZÁSZÓLÁSOK - ugyanaz a chat-szerű minta, mint az Utómunkánál. */}
+        <Card title="Hozzászólások">
+          <CommentsSection
+            projectCodeId={projectCodeId}
+            initialComments={comments}
+            mentionableEmployees={employees.map((e) => ({ id: e.id, full_name: e.full_name }))}
+          />
+        </Card>
       </div>
     </div>
   );

@@ -240,6 +240,11 @@ class ProjectCode(TimestampMixin, Base):
     expenses: Mapped[list["Expense"]] = relationship(back_populates="project_code")
     revenues: Mapped[list["Revenue"]] = relationship(back_populates="project_code")
     deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project_code")
+    #: Hozzászólások - ugyanaz a chat-szerű minta, mint az Utómunkánál (lásd
+    #: models/deliverable_comment.py). A projektkóddal együtt törlődnek.
+    comments: Mapped[list["ProjectCodeComment"]] = relationship(
+        back_populates="project_code", order_by="ProjectCodeComment.created_at", cascade="all, delete-orphan"
+    )
     #: A megrendelői papírok - CSAK OLVASÁSRA (viewonly): a papírok életét a
     #: saját végpontjuk intézi (lásd routes/megrendeloi_papirok.py), ide azért
     #: kellenek, hogy a lista egy lekérdezésből tudja, hol tart a papírozás.

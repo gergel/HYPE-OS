@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -264,3 +264,16 @@ class ProjectCodeRead(ProjectCodeBase):
     tig_url: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ProjectCodeCommentCreate(BaseModel):
+    body: str
+
+
+class ProjectCodeCommentRead(BaseModel):
+    id: int
+    project_code_id: int
+    employee_id: int
+    employee_name: str
+    body: str
+    created_at: datetime
