@@ -1,5 +1,6 @@
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
+import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { KattinthatoAllapot } from "@/components/projektkod/KattinthatoAllapot";
@@ -188,16 +189,12 @@ export function ProjektkodBontasTablak({
               header: "Besorolás",
               render: (k) =>
                 szerkesztheiKiadast ? (
-                  <KattinthatoAllapot
+                  <EditableStatusBadge
                     patchPath={`${ENTITY_PATHS.expense}/${k.id}`}
                     field="tipus"
                     value={k.resz}
-                    aktivErtek="kulsos"
-                    inaktivErtek="egyeb"
-                    aktivLabel="Külsős"
-                    inaktivLabel="Egyéb"
-                    aktivTone="accent"
-                    inaktivTone="neutral"
+                    options={["kulsos", "egyeb"]}
+                    labels={{ kulsos: "Külsős", egyeb: "Egyéb" }}
                   />
                 ) : (
                   (k.resz === "kulsos" ? "Külsős" : "Egyéb")

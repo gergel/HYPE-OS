@@ -20,6 +20,7 @@ export function SelectDropdown({
   disabled = false,
   className = "",
   allowNew = false,
+  labels,
 }: {
   value: string | null;
   options: string[];
@@ -32,11 +33,19 @@ export function SelectDropdown({
    * mezőkhöz, amiknek van kialakult értékkészlete, de az nem zárt - pl.
    * "megbízás tárgya" (lásd backend entity_registry.NYITOTT_SELECT_MEZOK). */
   allowNew?: boolean;
+  /** Ha egy opció nyers (géppel olvasott/mentett) értéke nem egyezik a
+   * felhasználónak mutatandó szöveggel - pl. "kulsos" -> "Külsős" -, itt
+   * adható meg a fordítás. A mentett/PATCH-elt érték MINDIG a nyers opció
+   * marad, csak a MEGJELENÍTÉS változik. Amire nincs bejegyzés, az
+   * változatlanul, nyersen jelenik meg. */
+  labels?: Record<string, string>;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const cimke = useCallback((nyers: string) => labels?.[nyers] ?? nyers, [labels]);
 
   // A panelen kívülre kattintás kezelését az AnchoredPanel végzi (a panel a
   // portál miatt már nincs a containerRef-en belül).
@@ -49,7 +58,11 @@ export function SelectDropdown({
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  const filtered = query.trim() ? options.filter((o) => o.toLowerCase().includes(query.trim().toLowerCase())) : options;
+  // A szűrés a MEGJELENÍTETT (fordított) szöveg szerint is találjon, ne csak
+  // a nyers értékre - különben "Külsős"-t beírva nem jönne fel a "kulsos" opció.
+  const filtered = query.trim()
+    ? options.filter((o) => cimke(o).toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
   const ujErtek = query.trim();
   // Új értéket csak akkor kínálunk, ha tényleg új: a már meglévő opciót
   // (kis/nagybetűtől függetlenül) a listából kell választani, hogy ne
@@ -74,7 +87,7 @@ export function SelectDropdown({
         style={{ background: color.bg, color: color.text }}
       >
         <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color.text }} />
-        <span className="truncate">{value ?? placeholder}</span>
+        <span className="truncate">{value ? cimke(value) : placeholder}</span>
       </button>
 
       {open && (
@@ -95,7 +108,7 @@ export function SelectDropdown({
                   else if (felvehetoUj) select(ujErtek);
                 }
               }}
-              placeholder={value ?? (allowNew ? "Válassz vagy írj újat" : placeholder)}
+              placeholder={value ? cimke(value) : allowNew ? "Válassz vagy írj újat" : placeholder}
               className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:opacity-70"
               style={{ color: color.text }}
             />
@@ -122,7 +135,7 @@ export function SelectDropdown({
                   style={{ background: c.bg, color: c.text }}
                 >
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: c.text }} />
-                  {opt}
+                  {cimke(opt)}
                 </button>
               );
             })}

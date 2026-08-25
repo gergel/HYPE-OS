@@ -18,12 +18,15 @@ export function EditableStatusBadge({
   value,
   options,
   placeholder = "Nincs állapot",
+  labels,
 }: {
   patchPath: string;
   field: string;
   value: string | null;
   options: string[];
   placeholder?: string;
+  /** Nyers érték -> megjelenítendő szöveg fordítás, lásd SelectDropdown. */
+  labels?: Record<string, string>;
 }) {
   const router = useRouter();
   // AZONNAL az új értéket mutatjuk, és csak utána mentünk ("optimista"
@@ -63,7 +66,7 @@ export function EditableStatusBadge({
 
   return (
     <span onClick={(e) => e.stopPropagation()}>
-      <SelectDropdown value={ertek} options={options} onChange={onChange} placeholder={placeholder} />
+      <SelectDropdown value={ertek} options={options} onChange={onChange} placeholder={placeholder} labels={labels} />
     </span>
   );
 }
