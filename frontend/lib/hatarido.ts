@@ -14,6 +14,9 @@ export type HataridoAllas = {
   allapot: string;
   napok: number | null;
   hatarido: string;
+  /** Melyik feltöltött számláról van szó - csak a `szamla_hataridok`
+   * listában van kitöltve (lásd backend models/project_code.py). */
+  cimke?: string | null;
 };
 
 /** Amin belül már figyelmeztetünk: egy héten belüli határidőnél érdemes

@@ -70,6 +70,15 @@ class DocumentAttachment(TimestampMixin, Base):
     #: fájlonként (lásd services/megrendeloi_szamla.py).
     bevetelbe_ne_keruljon: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     bevetel_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
+    #: TRANZAKCIÓ NÉLKÜLI lezárás - a projektkód-szintű
+    #: ProjectCode.tranzakcio_nelkul_lezarva párja, fájlonként. Ha ez a
+    #: számla nem kerül a bevételek közé (beszámítás, valakinek a
+    #: fizetéséből levonva…), a legtöbbször nincs is valódi kifizetés-
+    #: dátum - egy ilyenkor beírt dátum egy kitalált tranzakció lenne, nem
+    #: hiányzó adat pótlása. Ilyenkor `kifizetve_datuma` üres marad, és NEM
+    #: nyílik bevétel-sor (lásd services/megrendeloi_szamla.
+    #: jelold_szamlat_kifizetettnek).
+    tranzakcio_nelkul_lezarva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     #: A kifizetéskor NYITOTT bevétel-sor - enélkül a kifizetés visszavonása
     #: nem tudná, melyik Revenue-t kell visszaállítania (lásd
     #: services/megrendeloi_szamla.vond_vissza_szamla_kifizetes).

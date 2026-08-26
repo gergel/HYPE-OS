@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { RecordDetailModal } from "@/components/RecordDetailModal";
 import type { ProjectCode } from "@/lib/api";
-import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
+import { hataridoHangsuly, hataridoSzoveg, type HataridoAllas } from "@/lib/hatarido";
 import { formatHuf } from "@/lib/penz";
 import {
   PROJEKTKOD_FAZISOK,
@@ -23,6 +23,25 @@ const RENDEZESEK: { kulcs: Rendezes; cimke: string }[] = [
 
 /** Ennyi projektkód látszik oszloponként - a többi egy kattintással nyitható. */
 const ELSO_ADAG = 12;
+
+/** Egyetlen "mennyi idő" sor a kártyán - a fájlnév-CÍMKE csak akkor
+ * jelenik meg, ha meg van adva (osztott számlázásnál, hogy melyik
+ * számláról van szó). */
+function HataridoSor({ allas }: { allas: HataridoAllas }) {
+  const szoveg = hataridoSzoveg(allas);
+  if (!szoveg) return null;
+  const hangsuly = hataridoHangsuly(allas);
+  return (
+    <p
+      className={`mt-0.5 truncate text-[11.5px] ${
+        hangsuly === "danger" ? "text-text-danger" : hangsuly === "warning" ? "text-text-warning" : "text-text-muted"
+      }`}
+    >
+      {allas.cimke && <span className="text-text-muted">{allas.cimke}: </span>}
+      {szoveg}
+    </p>
+  );
+}
 
 /** A projektkódok FÁZISONKÉNT, egymás melletti oszlopokban - ugyanaz a nézet,
  * mint az Utókövetésen (lásd UtokovetesTabla), csak a másik oldalról: ott a mi
@@ -164,20 +183,13 @@ export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
                       </p>
                       {/* MENNYI IDŐ van a kifizetésig - a teendő sürgősségét
                           ez adja meg az összeg mellett: egy két hónapja lejárt
-                          határidő máshogy szólít, mint egy jövő heti. */}
-                      {hataridoSzoveg(pc.hatarido_allas) && (
-                        <p
-                          className={`mt-0.5 text-[11.5px] ${
-                            hataridoHangsuly(pc.hatarido_allas) === "danger"
-                              ? "text-text-danger"
-                              : hataridoHangsuly(pc.hatarido_allas) === "warning"
-                                ? "text-text-warning"
-                                : "text-text-muted"
-                          }`}
-                        >
-                          {hataridoSzoveg(pc.hatarido_allas)}
-                        </p>
-                      )}
+                          határidő máshogy szólít, mint egy jövő heti. Osztott
+                          számlázásnál (több feltöltött számla) mindegyikhez
+                          külön sor - egy összevont szám itt épp azt a
+                          különbséget mosná el, hogy melyik számla késik. */}
+                      {pc.szamla_hataridok.length > 1
+                        ? pc.szamla_hataridok.map((allas, i) => <HataridoSor key={i} allas={allas} />)
+                        : pc.hatarido_allas && <HataridoSor allas={pc.hatarido_allas} />}
                     </button>
                   ))
                 )}

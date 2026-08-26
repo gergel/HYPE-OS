@@ -396,13 +396,14 @@ class ProjectCode(TimestampMixin, Base):
         bevetelek = list(self.revenues)
         return bool(bevetelek) and all(r.fizetes_datuma is not None for r in bevetelek)
 
-    @property
-    def hatarido_allas(self) -> dict | None:
-        """MENNYI IDŐ van még a kifizetésig - vagy mennyivel csúszott.
+    @staticmethod
+    def _hatarido_dict(hatarido: date, *, kifizetve: bool, tranzakcio_nelkul: bool, kifizetes_datuma: date | None) -> dict:
+        """MENNYI IDŐ van még a kifizetésig - vagy mennyivel csúszott, EGY
+        határidőre. A `hatarido_allas` és a `szamla_hataridok` is ebből épül,
+        hogy a projektkód-szintű és a fájlonkénti számítás ne csúszhasson el
+        egymástól.
 
-        Egy fizetési határidő önmagában néma dátum: hogy sürgős-e, azt csak a
-        mai naphoz képest lehet megmondani, és ezt eddig fejben kellett
-        kiszámolni minden soron. Két külön kérdés van, és a válasz is más:
+        Két külön kérdés van, és a válasz is más:
 
         - **Még nincs kifizetve**: hány nap van hátra (vagy hány napja járt le).
           Ez TEENDŐ - a lejárt tételekért fel kell hívni a megrendelőt.
@@ -411,30 +412,113 @@ class ProjectCode(TimestampMixin, Base):
           megrendelő fizet időben, és melyik csúszik rendre.
 
         A napok előjele mindkét esetben ugyanazt jelenti: POZITÍV = jó irány
-        (van még idő / hamarabb fizettek), NEGATÍV = csúszás. Így a felület egy
-        szabályból tudja, mit kell pirosra váltania.
-
-        Határidő nélkül None: nincs mihez viszonyítani, és egy kitalált
-        határidő rosszabb, mint a semmi."""
-        hatarido = self.fizetesi_hatarido
-        if hatarido is None:
-            return None
-        # Hogy KI VAN-E FIZETVE, azt ugyanaz mondja meg, mint a lista jelzőjén
-        # (`bevetel_kifizetve`) - nem elég egy utalási dátum. Egy Notionből
-        # örökölt kódon állhat dátum bevétel-sor nélkül is: ott a pénz útja
-        # nincs végigvezetve, és a felület sem mondhat egyszerre "Nincs
-        # kifizetve"-t és "3 nappal korábban fizetve"-t ugyanarról a munkáról.
-        if not self.bevetel_kifizetve:
+        (van még idő / hamarabb fizettek), NEGATÍV = csúszás."""
+        if not kifizetve:
             napok = (hatarido - date.today()).days
             allapot = "var" if napok > 0 else "lejart" if napok < 0 else "ma_jar_le"
             return {"napok": napok, "allapot": allapot, "hatarido": hatarido.isoformat()}
-        if self.utalas_datuma is None:
+        if tranzakcio_nelkul or kifizetes_datuma is None:
             # Kifizetve, de dátum nélkül (tranzakció nélküli lezárás): nincs
             # mit a határidőhöz mérni.
             return {"napok": None, "allapot": "kifizetve", "hatarido": hatarido.isoformat()}
-        napok = (hatarido - self.utalas_datuma).days
+        napok = (hatarido - kifizetes_datuma).days
         allapot = "elore_fizetve" if napok > 0 else "keson_fizetve" if napok < 0 else "hatarido_napjan"
         return {"napok": napok, "allapot": allapot, "hatarido": hatarido.isoformat()}
+
+    def _szamlak(self) -> list[Any]:
+        """A projektkódhoz feltöltött SZÁMLA-fájlok - lásd
+        models/document_attachment.py. Nincs valódi ORM-kapcsolat (a
+        csatolmány entity_type + entity_id szerint generikus), ezért egy
+        lekérdezéssel kell előkeríteni - ugyanígy jár el a `_szamla_fajl_url`
+        is (lásd services/megrendeloi_szamla.py).
+
+        A `hatarido_allas` ÉS a `szamla_hataridok` is ezt hívja egy listás
+        válaszon belül - egy PÉLDÁNYON belül gyorsítótárazzuk (nem osztályon,
+        nem globálisan), hogy ne fusson le kétszer ugyanaz a lekérdezés."""
+        cimke = "_szamlak_cache"
+        letezo = self.__dict__.get(cimke)
+        if letezo is not None:
+            return letezo
+        from sqlalchemy import select
+        from sqlalchemy.orm import object_session
+
+        from app.models.document_attachment import DocumentAttachment
+
+        session = object_session(self)
+        if session is None or self.id is None:
+            return []
+        eredmeny = list(
+            session.scalars(
+                select(DocumentAttachment)
+                .where(
+                    DocumentAttachment.entity_type == "projectCode",
+                    DocumentAttachment.entity_id == self.id,
+                    DocumentAttachment.kategoria == "szamla",
+                )
+                .order_by(DocumentAttachment.fizetesi_hatarido.asc().nullslast(), DocumentAttachment.id.asc())
+            )
+        )
+        self.__dict__[cimke] = eredmeny
+        return eredmeny
+
+    @property
+    def hatarido_allas(self) -> dict | None:
+        """MENNYI IDŐ van még a kifizetésig - vagy mennyivel csúszott - a
+        LEGSÜRGŐSEBB feltöltött számla szerint (egy jelvényre ennyi fér).
+        Osztott számlázásnál a `szamla_hataridok` mutatja mindegyiket.
+
+        A fizetési határidő ma FÁJLONKÉNT él (lásd DokumentumFeltoltes,
+        services/megrendeloi_szamla.py) - a projektkód saját
+        `fizetesi_hatarido` mezője csak a régi, egy-számlás projektkódokon
+        (vagy a Notionból örökölt sorokon) hordoz még adatot, ezért csak
+        akkor esünk vissza rá, ha egyetlen feltöltött számlának sincs
+        határideje."""
+        legsurgosebb: dict | None = None
+        legsurgosebb_sorrend: tuple | None = None
+        for szamla in self._szamlak():
+            if szamla.fizetesi_hatarido is None:
+                continue
+            allas = self._hatarido_dict(
+                szamla.fizetesi_hatarido,
+                kifizetve=szamla.kifizetve_datuma is not None or szamla.tranzakcio_nelkul_lezarva,
+                tranzakcio_nelkul=szamla.tranzakcio_nelkul_lezarva,
+                kifizetes_datuma=szamla.kifizetve_datuma,
+            )
+            # A LEJÁRT, még ki nem fizetett a legsürgősebb - utána a
+            # legközelebbi határidő, végül bármi (kifizetett) sorrendben.
+            sorrend = (0 if allas["allapot"] == "lejart" else 1 if allas["napok"] is not None else 2, allas["napok"] or 0)
+            if legsurgosebb_sorrend is None or sorrend < legsurgosebb_sorrend:
+                legsurgosebb, legsurgosebb_sorrend = allas, sorrend
+        if legsurgosebb is not None:
+            return legsurgosebb
+        # RÉGI, egy-számlás adat: a projektkód saját mezője.
+        if self.fizetesi_hatarido is None:
+            return None
+        return self._hatarido_dict(
+            self.fizetesi_hatarido,
+            kifizetve=self.bevetel_kifizetve,
+            tranzakcio_nelkul=self.tranzakcio_nelkul_lezarva,
+            kifizetes_datuma=self.utalas_datuma,
+        )
+
+    @property
+    def szamla_hataridok(self) -> list[dict]:
+        """MENNYI IDŐ van a kifizetésig - vagy mennyivel csúszott -
+        MINDEGYIK feltöltött számlához külön, osztott számlázásnál (több
+        számla egy projektkódon) rendezetten megjeleníthető formában. Lásd
+        `hatarido_allas` az egyetlen, "legsürgősebb" változatért."""
+        eredmeny = []
+        for szamla in self._szamlak():
+            if szamla.fizetesi_hatarido is None:
+                continue
+            allas = self._hatarido_dict(
+                szamla.fizetesi_hatarido,
+                kifizetve=szamla.kifizetve_datuma is not None or szamla.tranzakcio_nelkul_lezarva,
+                tranzakcio_nelkul=szamla.tranzakcio_nelkul_lezarva,
+                kifizetes_datuma=szamla.kifizetve_datuma,
+            )
+            eredmeny.append({**allas, "cimke": szamla.filename})
+        return eredmeny
 
     @staticmethod
     def _osszeg(sor: Any) -> float:

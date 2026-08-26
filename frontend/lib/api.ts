@@ -97,9 +97,13 @@ export type ProjectCode = {
    * backend services/megrendeloi_szamla.szamlat_varunk). */
   szamla_kell: boolean;
   bevetel_kifizetve: boolean;
-  /** MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott - a fizetési
-   * határidőhöz mérve (lásd lib/hatarido.ts). Határidő nélkül null. */
+  /** MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott - a
+   * LEGSÜRGŐSEBB feltöltött számla szerint (lásd lib/hatarido.ts). Fizetési
+   * határidő nélkül null. */
   hatarido_allas: HataridoAllas | null;
+  /** UGYANEZ, MINDEGYIK feltöltött számlához külön - osztott számlázásnál
+   * (több számla egy projektkódon) ebből látszik mindegyik saját állapota. */
+  szamla_hataridok: HataridoAllas[];
   /** Mire szólt a projekt, hol volt, és mit jegyeztek fel a dátumához. */
   project_nev: string | null;
   helyszin: string | null;
@@ -203,6 +207,9 @@ export type DocumentAttachment = {
   plusz_afa: boolean | null;
   bevetelbe_ne_keruljon: boolean;
   bevetel_kihagyas_oka: string | null;
+  /** Kifizetve, de nem valódi tranzakcióval (beszámítás, valakinek a
+   * fizetéséből levonva…) - ilyenkor `kifizetve_datuma` üres marad. */
+  tranzakcio_nelkul_lezarva: boolean;
 };
 
 export type Rate = {

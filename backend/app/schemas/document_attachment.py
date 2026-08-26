@@ -20,6 +20,7 @@ class DocumentAttachmentRead(BaseModel):
     plusz_afa: bool | None = None
     bevetelbe_ne_keruljon: bool = False
     bevetel_kihagyas_oka: str | None = None
+    tranzakcio_nelkul_lezarva: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -35,8 +36,13 @@ class DocumentAttachmentKifizetesIn(BaseModel):
     """Egy konkrét feltöltött számla kifizetettnek jelölése - lásd
     services/megrendeloi_szamla.jelold_szamlat_kifizetettnek."""
 
-    #: MIKOR érkezett meg a pénz. Kötelező - ebből lesz a bevétel-sor napja.
-    kifizetes_datuma: date
+    #: MIKOR érkezett meg a pénz. Ha a számla a BEVÉTELEK közé kerül,
+    #: kötelező - ebből lesz a bevétel-sor napja. Ha kihagyjuk a
+    #: bevételekből (`bevetelbe_ne_keruljon`), elhagyható: a legtöbbször
+    #: pont azért marad ki, mert nincs is valódi tranzakció (beszámítás,
+    #: valakinek a fizetéséből levonva…) - üresen hagyva TRANZAKCIÓ
+    #: NÉLKÜLI lezárás lesz belőle, és nem nyílik bevétel-sor.
+    kifizetes_datuma: date | None = None
     #: Ennek a SZÁMLÁNAK a nettó összege. Osztott számlázásnál (több számla
     #: egy projektkódon) kötelező - egyetlen számlánál elhagyható, ilyenkor a
     #: projektkód vállalási ára adja az összeget.

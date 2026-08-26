@@ -10,6 +10,7 @@ import { authFetch } from "@/lib/authFetch";
 // A pénzformázó a FÜGGŐSÉG NÉLKÜLI modulból jön: a lib/api.ts a
 // "next/headers"-t is behúzza, amit kliens komponensbe nem lehet bevinni.
 import { penzzel } from "@/lib/penz";
+import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import type { DocumentAttachment } from "@/lib/api";
 
 const KATEGORIA_NEVEK: Record<string, string> = {
@@ -35,17 +36,34 @@ function meret(bajt: number | null): string {
   return `${(bajt / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** Hány nap telt el (pozitív) vagy van hátra (negatív) a mai naphoz képest -
+ * HELYI idő szerint, hogy este 10 után se csússzon el egy nappal (lásd
+ * `maiNap()`). */
+function napokEltelte(isoDatum: string): number {
+  const ma = new Date(`${maiNap()}T00:00:00`);
+  const masik = new Date(`${isoDatum}T00:00:00`);
+  return Math.round((ma.getTime() - masik.getTime()) / 86_400_000);
+}
+
 /** A számla fizetési állapota egyetlen jelzőben - a határidő és a
- * kifizetés-dátum együtt mondja meg, hol tart. */
-function fizetesiJelzo(doc: DocumentAttachment): { label: string; tone: "success" | "warning" | "danger" } | null {
+ * kifizetés-dátum együtt mondja meg, hol tart. A "mennyi ideje jár le" / "még
+ * mennyi nap van hátra" számítás ugyanaz a szabály, mint a projektkód-lista
+ * kártyáin (lásd lib/hatarido.ts), csak itt a fájl SAJÁT határidejéhez mérve. */
+function fizetesiJelzo(doc: DocumentAttachment): { label: string; tone: "success" | "warning" | "danger" | "neutral" } | null {
   if (doc.kifizetve_datuma) return { label: `Kifizetve · ${doc.kifizetve_datuma}`, tone: "success" };
+  // Tranzakció nélküli lezárás: a pénz nem ezen az úton jött (beszámítás,
+  // valakinek a fizetéséből levonva…) - nincs dátum, de ez nem hiány.
+  if (doc.tranzakcio_nelkul_lezarva) return { label: "Rendezve – nem volt tranzakció", tone: "success" };
   if (doc.fizetesi_hatarido) {
-    // Szöveges (nem Date-objektumos) összehasonlítás: az ISO "ÉÉÉÉ-HH-NN" alak
-    // ábécé szerint is helyesen rendeződik, és nem kell időzóna-eltolással
-    // bajlódni a "ma" meghatározásához.
-    const ma = new Date().toISOString().slice(0, 10);
-    if (doc.fizetesi_hatarido < ma) return { label: "Lejárt határidő", tone: "danger" };
-    return { label: `Határidő: ${doc.fizetesi_hatarido}`, tone: "warning" };
+    const eltelt = napokEltelte(doc.fizetesi_hatarido);
+    const allas = {
+      allapot: eltelt > 0 ? "lejart" : eltelt < 0 ? "var" : "ma_jar_le",
+      napok: -eltelt,
+      hatarido: doc.fizetesi_hatarido,
+    };
+    const szoveg = hataridoSzoveg(allas);
+    if (!szoveg) return null;
+    return { label: szoveg, tone: hataridoHangsuly(allas) ?? "neutral" };
   }
   return null;
 }
@@ -160,7 +178,7 @@ export function DokumentumFeltoltes({
   async function jelolKifizetettnek(
     doc: DocumentAttachment,
     adat: {
-      kifizetes_datuma: string;
+      kifizetes_datuma: string | null;
       netto: number | null;
       plusz_afa: boolean;
       fizetes_modja: string | null;
@@ -330,7 +348,7 @@ export function DokumentumFeltoltes({
                         dátummező), mert saját bevétel-sort is nyit ennek a
                         számlának - a dátum mellett a bevétel-be-kerülés is
                         eldönthető ott (lásd SzamlaFizetesDialog). */}
-                    {!doc.kifizetve_datuma && canEdit && (
+                    {!doc.kifizetve_datuma && !doc.tranzakcio_nelkul_lezarva && canEdit && (
                       <button
                         type="button"
                         onClick={() => setFizetesDoc(doc)}
@@ -340,7 +358,7 @@ export function DokumentumFeltoltes({
                         Fizetés
                       </button>
                     )}
-                    {doc.kifizetve_datuma && canEdit && (
+                    {(doc.kifizetve_datuma || doc.tranzakcio_nelkul_lezarva) && canEdit && (
                       <button
                         type="button"
                         onClick={() => vonjVisszaKifizetest(doc)}
@@ -411,7 +429,7 @@ function SzamlaFizetesDialog({
   penznem: string;
   onClose: () => void;
   onSubmit: (adat: {
-    kifizetes_datuma: string;
+    kifizetes_datuma: string | null;
     netto: number | null;
     plusz_afa: boolean;
     fizetes_modja: string | null;
@@ -437,10 +455,12 @@ function SzamlaFizetesDialog({
     setBusy(true);
     setHiba(null);
     const eredmeny = await onSubmit({
-      kifizetes_datuma: datum,
+      kifizetes_datuma: datum || null,
       netto: sokSzamlaVan ? netto : null,
       plusz_afa: afa,
-      fizetes_modja: mod,
+      // Fizetési mód csak akkor értelmes, ha tényleg volt dátum - tranzakció
+      // nélküli lezárásnál nem mozdult pénz, tehát nincs mit módozni sem.
+      fizetes_modja: datum ? mod : null,
       bevetelbe_ne_keruljon: !bevetelbeKerul,
       kihagyas_oka: bevetelbeKerul ? null : indok.trim(),
     });
@@ -491,7 +511,7 @@ function SzamlaFizetesDialog({
           )}
 
           <label className="block text-[13px] text-text-primary">
-            Mikor érkezett meg a pénz *
+            Mikor érkezett meg a pénz{bevetelbeKerul ? " *" : ""}
             <span className="mt-1 flex items-center gap-2">
               <input
                 type="date"
@@ -507,27 +527,39 @@ function SzamlaFizetesDialog({
                 Ma
               </button>
             </span>
+            {/* Ha a számla nem kerül a bevételek közé, a legtöbbször nincs is
+                valódi tranzakció (beszámítás, valakinek a fizetéséből
+                levonva…) - egy ilyenkor beírt dátum kitalált tranzakció
+                lenne, nem hiányzó adat pótlása. */}
+            {!bevetelbeKerul && (
+              <span className="mt-1 block text-[12px] text-text-muted">
+                Nem kötelező: ha nincs valódi tranzakció, üresen hagyva tranzakció nélkül zárjuk le a számlát - nem
+                nyílik bevétel-sor.
+              </span>
+            )}
           </label>
 
-          <div>
-            <p className="text-[13px] text-text-primary">Hogyan érkezett a pénz?</p>
-            <div className="mt-1.5 flex gap-2">
-              {(["Átutalás", "Készpénz"] as const).map((lehetoseg) => (
-                <button
-                  key={lehetoseg}
-                  type="button"
-                  onClick={() => setMod(lehetoseg)}
-                  className={`rounded-[var(--radius)] border px-3 py-1.5 text-[13px] ${
-                    mod === lehetoseg
-                      ? "border-text-accent/40 bg-bg-accent text-text-accent"
-                      : "border-border text-text-secondary hover:bg-surface-3"
-                  }`}
-                >
-                  {lehetoseg}
-                </button>
-              ))}
+          {datum && (
+            <div>
+              <p className="text-[13px] text-text-primary">Hogyan érkezett a pénz?</p>
+              <div className="mt-1.5 flex gap-2">
+                {(["Átutalás", "Készpénz"] as const).map((lehetoseg) => (
+                  <button
+                    key={lehetoseg}
+                    type="button"
+                    onClick={() => setMod(lehetoseg)}
+                    className={`rounded-[var(--radius)] border px-3 py-1.5 text-[13px] ${
+                      mod === lehetoseg
+                        ? "border-text-accent/40 bg-bg-accent text-text-accent"
+                        : "border-border text-text-secondary hover:bg-surface-3"
+                    }`}
+                  >
+                    {lehetoseg}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <label className="flex cursor-pointer items-start gap-2.5">
             <input
@@ -547,8 +579,8 @@ function SzamlaFizetesDialog({
           {!bevetelbeKerul && (
             <div className="space-y-2 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
               <p className="text-[12.5px] text-text-secondary">
-                A számla „kifizetve” lesz, de <b>nem kerül a bevételek közé</b> - akkor válaszd ezt, ha a pénz máshol
-                van elszámolva, és itt csak duplázná az összeget.
+                A számla rendezettnek számít, de <b>nem kerül a bevételek közé</b> - akkor válaszd ezt, ha a pénz
+                máshol van elszámolva (pl. valakinek a fizetéséből levonva), és itt csak duplázná az összeget.
               </p>
               <label className="block text-[13px] text-text-primary">
                 Miért nem kerül a bevételek közé?
@@ -576,11 +608,17 @@ function SzamlaFizetesDialog({
           </button>
           <button
             type="button"
-            disabled={busy || !datum || nettoHianyzik || !nettoErvenyes || (!bevetelbeKerul && !indok.trim())}
+            disabled={
+              busy ||
+              (bevetelbeKerul && !datum) ||
+              nettoHianyzik ||
+              !nettoErvenyes ||
+              (!bevetelbeKerul && !indok.trim())
+            }
             onClick={jelol}
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
-            Kifizetve jelölés
+            {datum ? "Kifizetve jelölés" : "Rendezve, tranzakció nélkül"}
           </button>
         </div>
       </div>

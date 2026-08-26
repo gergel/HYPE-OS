@@ -58,6 +58,10 @@ class HataridoAllas(BaseModel):
     #: a határidőhöz mérni.
     napok: int | None = None
     hatarido: date
+    #: Melyik feltöltött számláról van szó - csak a `szamla_hataridok`
+    #: listában van kitöltve (lásd models/project_code.szamla_hataridok);
+    #: az egyetlen, "legsürgősebb" `hatarido_allas`-nál nincs rá szükség.
+    cimke: str | None = None
 
 
 class ProjectCodeCreate(ProjectCodeBase):
@@ -140,9 +144,15 @@ class ProjectCodeListRead(BaseModel):
     #: őket (lásd services/megrendeloi_szamla.szamlat_varunk).
     szamla_kell: bool = True
     bevetel_kifizetve: bool
-    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott (lásd
-    #: HataridoAllas). Fizetési határidő nélkül None.
+    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott, a
+    #: LEGSÜRGŐSEBB feltöltött számla szerint (lásd HataridoAllas). Fizetési
+    #: határidő nélkül None.
     hatarido_allas: HataridoAllas | None = None
+    #: UGYANEZ, MINDEGYIK feltöltött számlához külön - osztott számlázásnál
+    #: (több számla egy projektkódon) ebből látszik mindegyik saját
+    #: állapota, nem csak a legsürgősebbé (lásd
+    #: models/project_code.szamla_hataridok).
+    szamla_hataridok: list[HataridoAllas] = []
 
     van_szerzodes: bool = True
     papir_nelkul: bool = False
@@ -195,9 +205,13 @@ class ProjectCodeRead(ProjectCodeBase):
     #: őket (lásd services/megrendeloi_szamla.szamlat_varunk).
     szamla_kell: bool = True
     bevetel_kifizetve: bool
-    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott (lásd
-    #: HataridoAllas). Fizetési határidő nélkül None.
+    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott, a
+    #: LEGSÜRGŐSEBB feltöltött számla szerint (lásd HataridoAllas). Fizetési
+    #: határidő nélkül None.
     hatarido_allas: HataridoAllas | None = None
+    #: UGYANEZ, MINDEGYIK feltöltött számlához külön (lásd
+    #: models/project_code.szamla_hataridok).
+    szamla_hataridok: list[HataridoAllas] = []
 
     # A papírozás kapcsolói (lásd models/project_code.py): van-e szerződés a
     # projekt mögött, illetve papír nélkül számoljuk-e el.

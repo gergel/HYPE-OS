@@ -418,7 +418,7 @@ def jelold_szamlat_kifizetettnek(
     doc: DocumentAttachment,
     pk: ProjectCode,
     *,
-    kifizetes_datuma: date,
+    kifizetes_datuma: date | None,
     netto: float | None,
     plusz_afa: bool,
     fizetes_modja: str | None,
@@ -433,13 +433,39 @@ def jelold_szamlat_kifizetettnek(
     Ha a számlának nincs saját nettója megadva, a projektkód vállalási ára
     adja az összeget - ez csak akkor elég, ha ez az EGYETLEN számla; többnél a
     saját összeg kötelező, különben a bevétel-sorok összege nem adná ki a
-    projektkód teljes bevételét."""
+    projektkód teljes bevételét.
+
+    A DÁTUM csak akkor kötelező, ha a számla a bevételek közé kerül: ha
+    kihagyjuk (`bevetelbe_ne_keruljon`), a legtöbbször pont azért marad ki,
+    mert nincs is valódi tranzakció (beszámítás, valakinek a fizetéséből
+    levonva…) - üresen hagyva TRANZAKCIÓ NÉLKÜLI lezárás lesz belőle, és nem
+    nyílik bevétel-sor (ugyanaz a szabály, mint a projektkód-szintű
+    `jelold_kifizetettnek`-nél)."""
+    if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
+        raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")
+    if kifizetes_datuma is None and not bevetelbe_ne_keruljon:
+        raise SzamlaHiba(
+            "Add meg, MIKOR érkezett meg a pénz - enélkül a bevétel rossz napra kerülne. "
+            "Ha nem kerül a bevételek közé, a dátum elhagyható."
+        )
     if netto is None and _tobb_szamla_van(db, pk):
         raise SzamlaHiba(
             "Ehhez a projektkódhoz több számla is tartozik - add meg, mekkora ennek a számlának a nettó összege."
         )
-    if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
-        raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")
+
+    if kifizetes_datuma is None:
+        # TRANZAKCIÓ NÉLKÜLI LEZÁRÁS: nem volt pénzmozgás, tehát nincs dátum és
+        # nincs bevétel-sor sem (lásd a projektkód-szintű megfelelőjét,
+        # jelold_kifizetettnek).
+        doc.kifizetve_datuma = None
+        doc.tranzakcio_nelkul_lezarva = True
+        doc.netto = netto
+        doc.plusz_afa = plusz_afa if netto is not None else None
+        doc.bevetelbe_ne_keruljon = True
+        doc.bevetel_kihagyas_oka = (kihagyas_oka or "").strip() or None
+        db.flush()
+        return doc
+
     mod = (fizetes_modja or "").strip() or None
     if mod is not None and mod not in fizetesi_mod_szolg.BEVETEL_MODOK:
         raise SzamlaHiba(
@@ -485,6 +511,7 @@ def jelold_szamlat_kifizetettnek(
     db.flush()  # kell a sor.id a visszavonáshoz
 
     doc.kifizetve_datuma = kifizetes_datuma
+    doc.tranzakcio_nelkul_lezarva = False
     doc.netto = netto
     doc.plusz_afa = plusz_afa if netto is not None else None
     doc.bevetelbe_ne_keruljon = bevetelbe_ne_keruljon
@@ -505,6 +532,7 @@ def vond_vissza_szamla_kifizetes(db: Session, doc: DocumentAttachment) -> Docume
             if sor.beleszamit_a_bevetelekbe is False:
                 sor.beleszamit_a_bevetelekbe = None
     doc.kifizetve_datuma = None
+    doc.tranzakcio_nelkul_lezarva = False
     doc.bevetelbe_ne_keruljon = False
     doc.bevetel_kihagyas_oka = None
     db.flush()
