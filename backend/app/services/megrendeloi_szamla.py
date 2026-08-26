@@ -238,25 +238,28 @@ def jelold_kifizetettnek(
 ) -> SzamlaAllas:
     """"Kifizetve" - a pénz megérkezett.
 
-    A KIFIZETÉS NAPJA kötelező. Korábban üresen hagyva a mai nap került be,
-    csakhogy a jelölés ritkán esik egybe a beérkezéssel: a pénz megjön, és csak
-    napokkal (néha hetekkel) később kattint rá valaki. A "mai nap" ilyenkor
-    nem hiányzó adat pótlása, hanem egy CSENDBEN BEÍRT rossz dátum - és mivel
-    ebből lesz a bevétel-sor dátuma, a bevétel rossz napra, rosszabb esetben
-    rossz hónapra kerül. A dátum utólag nem is tűnik fel senkinek: nem üres,
-    csak nem igaz.
+    Ha VAN kifizetés napja, azt sose tippeljük: korábban üresen hagyva a mai
+    nap került be, csakhogy a jelölés ritkán esik egybe a beérkezéssel - a
+    pénz megjön, és csak napokkal (néha hetekkel) később kattint rá valaki. A
+    "mai nap" ilyenkor nem hiányzó adat pótlása, hanem egy CSENDBEN BEÍRT
+    rossz dátum - és mivel ebből lesz a bevétel-sor dátuma, a bevétel rossz
+    napra, rosszabb esetben rossz hónapra kerül. A dátum utólag nem is tűnik
+    fel senkinek: nem üres, csak nem igaz.
 
     Alapesetben bevétel-sort is nyit (vagy kiegészíti a meglévőt), hogy a
     Pénzügyekben is ott legyen. Ha a hívó azt mondja, hogy ez a tétel nem való
     a bevételek közé, akkor INDOK kell hozzá - a sor ilyenkor is létrejön, csak
-    az éves bevételbe nem számít (lásd services/elszamolas.py)."""
-    if kifizetes_datuma is None and _kifizetes_datum_kell(pk):
-        raise SzamlaHiba(
-            "Add meg, MIKOR érkezett meg a pénz - enélkül a bevétel rossz napra kerülne. "
-            "Ha erről a munkáról nincs számla, jelöld be a \"Nincs számla\" lehetőséget - "
-            "ott a dátum már nem kötelező."
-        )
-    if bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
+    az éves bevételbe nem számít (lásd services/elszamolas.py).
+
+    A DÁTUM MINDIG elhagyható - nem csak ott, ahol számlát sem várunk. Üresen
+    hagyva TRANZAKCIÓ NÉLKÜLI lezárás lesz belőle: a pénz nem valódi
+    tranzakcióval jött (beszámítva, csere, másik cégen át rendezve), ezért
+    SOSEM kerül bevétel-sorba, és MINDIG kér hozzá indokot - ez az egyetlen
+    dolog, amiből fél év múlva kiderül, mi történt."""
+    if kifizetes_datuma is None:
+        if not (kihagyas_oka or "").strip():
+            raise SzamlaHiba("Írd meg, miért nem volt tranzakció (beszámítva, csere, másik cégen át rendezve…).")
+    elif bevetelbe_ne_keruljon and not (kihagyas_oka or "").strip():
         raise SzamlaHiba("Ha nem kerül a bevételek közé, írd meg, miért (beszámítva, máshol könyvelve…).")
     mod = (fizetes_modja or "").strip() or None
     if mod is not None and mod not in fizetesi_mod_szolg.BEVETEL_MODOK:
@@ -264,19 +267,22 @@ def jelold_kifizetettnek(
             f"Ismeretlen fizetési mód: {mod}. Választható: {', '.join(fizetesi_mod_szolg.BEVETEL_MODOK)}."
         )
 
-    pk.bevetelbe_ne_keruljon = bevetelbe_ne_keruljon
-    pk.bevetel_kihagyas_oka = (kihagyas_oka or "").strip() or None if bevetelbe_ne_keruljon else None
-
     if kifizetes_datuma is None:
         # TRANZAKCIÓ NÉLKÜLI LEZÁRÁS: nem volt pénzmozgás, tehát nincs dátum és
         # nincs bevétel-sor sem. A projektkód ettől még lezárt - a rendezés
         # ténye a jelölés (lásd models/project_code.tranzakcio_nelkul_lezarva).
-        # Hogy miért nem volt tranzakció, az a "nincs számla" / "papír nélkül"
-        # indokában áll, amit a jelöléshez amúgy is kötelező kitölteni.
+        # A bevételekből való kihagyás itt MINDIG igaz - nem a hívóra bízzuk
+        # (a felület úgyis mindig True-t küld ide, de a szerver a saját
+        # szabályát nem a kliens szavára alapozza).
+        pk.bevetelbe_ne_keruljon = True
+        pk.bevetel_kihagyas_oka = kihagyas_oka.strip()
         pk.utalas_datuma = None
         pk.tranzakcio_nelkul_lezarva = True
         db.flush()
         return allas(db, pk)
+
+    pk.bevetelbe_ne_keruljon = bevetelbe_ne_keruljon
+    pk.bevetel_kihagyas_oka = (kihagyas_oka or "").strip() or None if bevetelbe_ne_keruljon else None
 
     nap = kifizetes_datuma
     pk.utalas_datuma = nap

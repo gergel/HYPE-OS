@@ -230,7 +230,6 @@ export function MegrendeloiSzamla({
       {dialogNyitva && (
         <KifizetesDialog
           hatarido={allas.fizetesi_hatarido}
-          datumKell={allas.kifizetes_datum_kell}
           osszeg={
             allas.netto === null
               ? null
@@ -254,31 +253,26 @@ export function MegrendeloiSzamla({
 /** "Kifizetve" - a kifizetés napjával, és azzal a döntéssel, hogy bekerüljön-e
  * a Pénzügyek bevételei közé.
  *
- * A DÁTUM azért kérdés, mert a jelölés ritkán esik egybe a beérkezéssel: a
- * pénz megjön, és csak napokkal később kattint rá valaki - ha ilyenkor a mai
- * nap kerülne be, a bevétel rossz napon (rosszabb esetben rossz hónapban)
- * állna.
+ * A DÁTUM MINDIG elhagyható - nem csak ott, ahol számlát sem várunk. Van, hogy
+ * a pénz VAN, csak nem valódi tranzakcióval jött (beszámítva, csere, másik
+ * cégen át rendezve) - üresen hagyva ez TRANZAKCIÓ NÉLKÜLI lezárás lesz, ami
+ * SOSEM kerül bevétel-sorba, és mindig kér hozzá indokot (lásd backend
+ * services/megrendeloi_szamla.jelold_kifizetettnek).
  *
- * A BEVÉTEL azért kérdés, mert van munka, ami ki van fizetve, de a Pénzügyekbe
- * nem való: beszámították, más cégen át folyt be, vagy máshol már el van
- * könyvelve. Ilyenkor egy itteni bevétel-sor megkétszerezné az összeget -
- * viszont a projektkódnak ugyanúgy lezártnak kell lennie, hogy ne álljon
- * örökre a teendők között. Ezért kérünk hozzá indokot. */
+ * Ha VAN dátum, az kérdés is jár hozzá: HOGYAN érkezett a pénz, és bekerüljön-e
+ * a Pénzügyek bevételei közé. A BEVÉTEL azért kérdés, mert van munka, ami ki
+ * van fizetve, de a Pénzügyekbe nem való: beszámították, más cégen át folyt
+ * be, vagy máshol már el van könyvelve - ilyenkor egy itteni bevétel-sor
+ * megkétszerezné az összeget, viszont a projektkódnak ugyanúgy lezártnak kell
+ * lennie. Ezért kérünk hozzá indokot. */
 function KifizetesDialog({
   hatarido,
-  datumKell,
   osszeg,
   onMegse,
   onJelol,
   vanSzamla,
 }: {
   hatarido: string | null;
-  /** Kötelező-e a dátum. Ahol számlát sem várunk (nincs számla / papír nélkül
-   * elszámolt / elmaradt), ott a legtöbbször nincs is tranzakció - ilyenkor a
-   * "mikor érkezett meg a pénz" kérdésre nincs igaz válasz, és üresen hagyva
-   * TRANZAKCIÓ NÉLKÜLI lezárás lesz belőle (lásd backend
-   * services/megrendeloi_szamla._kifizetes_datum_kell). */
-  datumKell: boolean;
   osszeg: string | null;
   onMegse: () => void;
   onJelol: (adat: {
@@ -310,6 +304,12 @@ function KifizetesDialog({
   // services/kassza.py). Ezért választás, nem tippelés.
   const [mod, setMod] = useState<"Átutalás" | "Készpénz">("Átutalás");
 
+  // Tranzakció nélküli lezárásnál (nincs dátum) mindig kell indok - ez az
+  // egyetlen dolog, amiből fél év múlva kiderül, mi történt. Dátummal
+  // csak akkor, ha kifejezetten kihagyjuk a bevételek közül.
+  const indokKell = datum ? !bevetelbeKerul : true;
+  const kesz = datum ? !indokKell || indok.trim().length > 0 : indok.trim().length > 0;
+
   return (
     <ModalReteg onClose={onMegse}>
       <div
@@ -319,15 +319,13 @@ function KifizetesDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-border px-5 py-3">
-          <h3 className="text-[14px] font-medium text-text-primary">
-            {datumKell ? "Megrendelői számla kifizetve" : "A munka rendezve"}
-          </h3>
+          <h3 className="text-[14px] font-medium text-text-primary">Megrendelői számla kifizetve</h3>
           {osszeg && <p className="mt-0.5 text-[12.5px] text-text-secondary">{osszeg}</p>}
         </div>
 
         <div className="p-5">
           <label className="block text-[13px] text-text-primary">
-            Mikor érkezett meg a pénz{datumKell ? " *" : ""}
+            Mikor érkezett meg a pénz
             <span className="mt-1 flex items-center gap-2">
               <input
                 type="date"
@@ -344,16 +342,35 @@ function KifizetesDialog({
               </button>
             </span>
             <span className="mt-0.5 block text-[12px] text-text-muted">
-              {datumKell
-                ? "Kötelező – ez a nap kerül a bevétel-sorra is."
-                : "Nem kötelező: erről a munkáról nincs számla, és ilyenkor a legtöbbször pénzmozgás sincs. Üresen hagyva tranzakció nélkül zárjuk le – nem keletkezik bevétel-sor."}
+              Hagyd üresen, ha nem volt valódi tranzakció (beszámítva, csere, másik cégen át rendezve) - ilyenkor nem
+              keletkezik bevétel-sor.
               {hatarido && ` Fizetési határidő: ${hatarido}.`}
             </span>
           </label>
 
-          {/* A bevétel-sor kérdése csak akkor merül fel, ha VAN dátum: egy
-              tranzakció nélküli lezárásnál nincs mit dátumozni a soron, tehát
-              sor sem keletkezik. */}
+          {/* TRANZAKCIÓ NÉLKÜLI lezárás: mindig kér indokot, és sosem kerül
+              bevétel-sorba - ezt a szerver is kikényszeríti, itt csak
+              megjelenítjük. */}
+          {!datum && (
+            <div className="mt-4 space-y-2 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+              <p className="text-[12.5px] text-text-secondary">
+                Dátum nélkül a projektkód „rendezve” lesz, de <b>nem keletkezik bevétel-sor</b> - ez a beállítás
+                sosem kerül a Pénzügy → Bevételek közé.
+              </p>
+              <label className="block text-[13px] text-text-primary">
+                Miért nem volt tranzakció? *
+                <textarea
+                  autoFocus
+                  rows={2}
+                  value={indok}
+                  onChange={(e) => setIndok(e.target.value)}
+                  placeholder="Pl. beszámítva a bérleti díjba, a másik cégen át számláztuk…"
+                  className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] leading-relaxed text-text-primary"
+                />
+              </label>
+            </div>
+          )}
+
           {/* HOGYAN érkezett: ez dönti el, hogy a pénz a bankszámlán van-e,
               vagy a KASSZÁBAN. Csak akkor kérdés, ha volt tranzakció. */}
           {datum && (
@@ -414,7 +431,7 @@ function KifizetesDialog({
                     pénz máshol van elszámolva, és itt csak duplázná az összeget.
                   </p>
                   <label className="block text-[13px] text-text-primary">
-                    Miért nem kerül a bevételek közé?
+                    Miért nem kerül a bevételek közé? *
                     <textarea
                       rows={2}
                       value={indok}
@@ -439,12 +456,13 @@ function KifizetesDialog({
           </button>
           <button
             type="button"
-            disabled={(datumKell && !datum) || (!!datum && !bevetelbeKerul && !indok.trim())}
+            disabled={!kesz}
             onClick={() =>
               onJelol({
                 kifizetes_datuma: datum || null,
-                bevetelbe_ne_keruljon: !bevetelbeKerul,
-                kihagyas_oka: bevetelbeKerul ? null : indok.trim(),
+                // Dátum nélkül MINDIG kihagyva - lásd a komponens leírását.
+                bevetelbe_ne_keruljon: datum ? !bevetelbeKerul : true,
+                kihagyas_oka: indokKell ? indok.trim() : null,
                 // Tranzakció nélküli lezárásnál nincs mit módozni: nem mozdult
                 // pénz sem a bankszámlán, sem a kasszában.
                 fizetes_modja: datum ? mod : null,
