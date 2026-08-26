@@ -421,14 +421,21 @@ class ProjectCode(TimestampMixin, Base):
         nem "szemet hunyás": a jelöléshez indok is kell, és az ott marad a
         projektkódon.
 
-        VAN FELTÖLTÖTT SZÁMLA → onnan dől el, ugyanúgy, mint a
-        `hatarido_allas`-nál: a fájlonkénti kifizetés-jelölés (lásd
-        DokumentumFeltoltes, services/megrendeloi_szamla.jelold_szamlat_kifizetettnek)
-        az igazi forrás, nem a `revenues` gyűjtemény. Enélkül egy régi (pl.
-        Notionból importált, sosem kifizetettre jelölt) bevétel-sor örökre
-        \"még nem érkezett meg\" állapotban tartaná a projektkódot, holott
-        minden ténylegesen feltöltött számla ki van fizetve - a lista
-        pontosan ezt a fajta, örökre teendőben ragadt kártyát mutatná."""
+        KÉT ÚTON is bekerülhet a kifizetés: a projektkód-szintű "Kifizetve"
+        gombbal (services/megrendeloi_szamla.jelold_kifizetettnek - egy közös
+        bevétel-sort zár le), vagy FÁJLONKÉNT, egy feltöltött számlán
+        (jelold_szamlat_kifizetettnek - lásd DokumentumFeltoltes). A kettő
+        EGYMÁSTÓL FÜGGETLEN mező: a projekt-szintű gomb nem írja át a
+        feltöltött számla saját `kifizetve_datuma` mezőjét, és fordítva sem.
+        Ezért VAGY-kapcsolat kell, nem "ha van feltöltött számla, csak azt
+        nézzük": egy simán csatolt (referenciaként feltöltött, de sosem
+        fájlonként lezárt) számla mellett a projekt-szintű gombbal simán
+        kifizetett munka is "még nem érkezett meg"-nek látszana, ha csak a
+        fájlok állapotát vizsgálnánk. A régi (pl. Notionból importált, sosem
+        kifizetettre jelölt) bevétel-sor viszont pont fordítva okoz gondot:
+        VAN feltöltött, kifizetett számla, de egy hozzá nem tartozó, örökké
+        fizetetlen sor a `revenues`-ban örökre "még nem érkezett meg"
+        állapotban tartaná a projektkódot. A VAGY mindkettőt megoldja."""
         # Ahol nem is várunk tranzakciót, ott a LEZÁRÁS ténye számít, nem egy
         # dátum - lásd tranzakcio_nelkul_lezarva.
         if self.tranzakcio_nelkul_lezarva:
@@ -436,8 +443,8 @@ class ProjectCode(TimestampMixin, Base):
         if self.bevetelbe_ne_keruljon and self.utalas_datuma is not None:
             return True
         szamlak = self._szamlak()
-        if szamlak:
-            return all(szamla.kifizetve_datuma is not None or szamla.tranzakcio_nelkul_lezarva for szamla in szamlak)
+        if szamlak and all(szamla.kifizetve_datuma is not None or szamla.tranzakcio_nelkul_lezarva for szamla in szamlak):
+            return True
         bevetelek = list(self.revenues)
         return bool(bevetelek) and all(r.fizetes_datuma is not None for r in bevetelek)
 
