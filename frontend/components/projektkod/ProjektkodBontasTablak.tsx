@@ -2,6 +2,7 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { KattinthatoAllapot } from "@/components/projektkod/KattinthatoAllapot";
 import { ENTITY_PATHS, formatHuf, type ProjektkodBontas } from "@/lib/api";
@@ -44,12 +45,16 @@ function idoSzoveg(percek: number): string {
  * választó kellene, nem egy sima szövegmező. */
 export function ProjektkodBontasTablak({
   bontas,
+  projectCodeId,
   torolhetForgatast = false,
   torolhetUtomunkat = false,
   torolhetKiadast = false,
   szerkesztheiKiadast = false,
 }: {
   bontas: ProjektkodBontas;
+  /** Melyik projektkódra vezetjük fel az új kiadást (lásd a "+ Új kiadás"
+   * gyorsfelvitelt lentebb). */
+  projectCodeId: number;
   torolhetForgatast?: boolean;
   torolhetUtomunkat?: boolean;
   torolhetKiadast?: boolean;
@@ -155,6 +160,33 @@ export function ProjektkodBontasTablak({
           . A TIG-ekből keletkezett kiadás-sorok itt nem szerepelnek: azok a forgatások „Külsős stáb” oszlopában
           vannak, ugyanaz a pénz lenne kétszer.
         </p>
+        {/* A gyorsfelvitel a KIADÁS SAJÁT rekordját hozza létre
+            (project_code_id előre kitöltve) - nem egy másolatot -, tehát
+            ugyanaz a sor jelenik meg a Pénzügyek → Kiadások listáján is, és
+            bármelyik oldalon szerkesztve a másikon is azonnal (a
+            háttérfrissítés a "expenses" témát figyeli) a friss érték
+            látszik. */}
+        {szerkesztheiKiadast && (
+          <QuickCreateForm
+            postPath={ENTITY_PATHS.expense}
+            presetFields={{ project_code_id: projectCodeId }}
+            addLabel="+ Új kiadás"
+            fields={[
+              { name: "megnevezes", label: "Megnevezés", required: true },
+              { name: "netto", label: "Nettó összeg (Ft)", type: "number", required: true },
+              {
+                name: "tipus",
+                label: "Besorolás",
+                type: "select",
+                defaultValue: "egyeb",
+                options: [
+                  { value: "egyeb", label: "Egyéb" },
+                  { value: "kulsos", label: "Külsős" },
+                ],
+              },
+            ]}
+          />
+        )}
         <DataTable
           rows={bontas.kiadasok}
           emptyText="Nincs kiadás ehhez a projektkódhoz."

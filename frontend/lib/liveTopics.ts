@@ -21,7 +21,11 @@ const BY_PREFIX: Record<string, string[]> = {
   // teendő-tábla csak akkor frissült volna, ha VALAMI MÁS is megérintette
   // közben a projektkód sorát, tehát a kifizetett tétel percekig (vagy tovább)
   // benne maradt a teendők közt, amíg valaki manuálisan újra nem töltötte.
-  "/projektek/project-kodok": ["projectCodes", "projects", "revenues", "documentAttachments"],
+  // Az "expenses" ugyanezért kell: a projektkód adatlapján felvett/szerkesztett
+  // kiadás UGYANAZ a rekord, mint a Pénzügyek → Kiadások listáján (lásd
+  // ProjektkodBontasTablak "+ Új kiadás") - enélkül a Pénzügyeken végzett
+  // szerkesztés csak kézi újratöltéssel látszott volna itt.
+  "/projektek/project-kodok": ["projectCodes", "projects", "revenues", "documentAttachments", "expenses"],
   // A hozzászólásokat nem itt figyeljük: a chat komponens a saját anyagára
   // szűkítve iratkozik fel ("comments:12"), különben egy másik anyag alatti
   // hozzászólás is frissítené ezt az oldalt.

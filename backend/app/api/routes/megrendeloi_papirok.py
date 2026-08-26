@@ -291,12 +291,22 @@ def megbizas_targya_lista(
     tárgya" mást jelent, nem ugyanarra a munkára mutat): egy új szöveg
     beírásával és a papír mentésével a következő betöltéskor magától
     megjelenik itt is, külön karbantartás nélkül.
+
+    A projektkód Notionből örökölt "Szerződés tárgya" mezője (`szerzodes_targya`)
+    is beleszámít: ugyanarról a fajta munkáról szól, csak a projektkódon, nem a
+    papíron rögzítve - a felhasználó ezt a szókészletet ismeri a Notionből, és
+    ott is ebből választott.
+
     FONTOS: ez a route a `/{fajta}` elé regisztrálva - egy szó szerinti
     útvonal a `{fajta}` paraméteres útvonallal szemben csak akkor nyer, ha
     KORÁBBAN van bejegyezve (lásd routes/attachments.py hasonló esetét)."""
     ertekek: set[str] = set()
-    for model in (MegrendeloiSzerzodes, MegrendeloiTig):
-        for (ertek,) in db.execute(select(model.megbizas_targya).where(model.megbizas_targya.is_not(None)).distinct()):
+    for oszlop in (
+        MegrendeloiSzerzodes.megbizas_targya,
+        MegrendeloiTig.megbizas_targya,
+        ProjectCode.szerzodes_targya,
+    ):
+        for (ertek,) in db.execute(select(oszlop).where(oszlop.is_not(None)).distinct()):
             szoveg = (ertek or "").strip()
             if szoveg:
                 ertekek.add(szoveg)
