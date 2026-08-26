@@ -91,6 +91,11 @@ export type ProjectCode = {
    * models/project_code.szerzodes_kihagyva). */
   szerzodes_kihagyva: boolean;
   tig_kihagyva: boolean;
+  /** KÉSZNEK számít, de csak azért, mert ki van küldve - aláírva még nem
+   * jött vissza, és semmilyen más úton nincs lezárva (lásd backend
+   * models/project_code.szerzodes_kikuldve_varjuk). */
+  szerzodes_kikuldve_varjuk: boolean;
+  tig_kikuldve_varjuk: boolean;
   /** Lesz-e SZÁMLA erről a munkáról. Ahol nincs (kihagytuk, papír nélkül van
    * elszámolva, vagy elmaradt), ott a kihagyott szerződés és TIG nem
    * hiányosság, hanem következmény - nincs is mihez elkészíteni őket (lásd

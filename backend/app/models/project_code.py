@@ -374,6 +374,39 @@ class ProjectCode(TimestampMixin, Base):
     def tig_kihagyva(self) -> bool:
         return self._kihagyott_papir(self.megrendeloi_tigek)
 
+    @staticmethod
+    def _kikuldve_varjuk(papirok: list) -> bool:
+        """KÉSZNEK számít (lásd `papir_kesz`), de csak azért, mert VALAMELYIK
+        példány "Kiküldve" állapotban áll - aláírva visszaküldött vagy más
+        úton lezárt (kihagyva / "Van már papír") példány NINCS.
+
+        Ez a különbség eddig sehol nem látszott: a `szerzodes_kesz`/`tig_kesz`
+        szándékosan LEZÁRTNAK veszi a kiküldött papírt is (nincs rajtunk
+        teendő), ezért ezek a munkák eltűntek a teendők közül - miközben a
+        megrendelő oldalán még lóg egy alá nem írt szerződés/TIG, amit
+        érdemes időnként rákérdezni. Lásd models/megrendeloi_papir.py
+        LEZART_ALLAPOTOK, ProjektkodPapirSzuro (frontend) "kiküldve" szűrője."""
+        from app.models.megrendeloi_papir import KIHAGYVA
+
+        if any(p.alairt_file_url for p in papirok):
+            return False
+        if any(p.allapot == "Van már papír" for p in papirok):
+            return False
+        if any(p.allapot == KIHAGYVA for p in papirok):
+            return False
+        return any(p.allapot == "Kiküldve" for p in papirok)
+
+    @property
+    def szerzodes_kikuldve_varjuk(self) -> bool:
+        """A szerződés ki van küldve, de még nem jött vissza aláírva - és
+        semmilyen más úton nincs lezárva (lásd `_kikuldve_varjuk`)."""
+        return self._kikuldve_varjuk(self.megrendeloi_szerzodesek)
+
+    @property
+    def tig_kikuldve_varjuk(self) -> bool:
+        """Ugyanez a teljesítési igazolásra."""
+        return self._kikuldve_varjuk(self.megrendeloi_tigek)
+
     @property
     def bevetel_kifizetve(self) -> bool:
         """Megérkezett-e a pénz: van bevétel-sor, és MINDEGYIK ki van fizetve.

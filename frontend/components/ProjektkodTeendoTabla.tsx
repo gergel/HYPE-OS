@@ -125,7 +125,7 @@ export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
         )}
       </div>
 
-      <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${csakTeendo ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>
+      <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${csakTeendo ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
         {oszlopok.map((oszlop) => {
           const mind = nyitott.includes(oszlop.kulcs);
           const lathato = mind ? oszlop.kodok : oszlop.kodok.slice(0, ELSO_ADAG);

@@ -8,7 +8,7 @@ import type { ProjectCode } from "@/lib/api";
  * a lib/utokovetes.ts-nél - és a fázisok is ugyanazt a logikát követik, mert
  * a folyamat ugyanaz, csak a másik oldalon: ott mi fizetünk, itt minket
  * fizetnek. */
-export type ProjektkodFazis = "szerzodes" | "tig" | "fizetes" | "kesz";
+export type ProjektkodFazis = "szerzodes" | "tig" | "fizetes_van_szamla" | "fizetes_nincs_szamla" | "kesz";
 
 export const PROJEKTKOD_FAZISOK: { kulcs: ProjektkodFazis; cim: string; leiras: string }[] = [
   {
@@ -17,10 +17,19 @@ export const PROJEKTKOD_FAZISOK: { kulcs: ProjektkodFazis; cim: string; leiras: 
     leiras: "Papírt igényel, de eseti szerződés még nincs lezárva rá.",
   },
   { kulcs: "tig", cim: "Már csak a TIG kell", leiras: "A szerződés megvan, a teljesítési igazolás még nem." },
+  // A "Nincs kifizetve" KÉT külön teendő: az egyiknél már csak várni kell (a
+  // számla kiment, fut a fizetési határidő), a másiknál még a számlázás sincs
+  // elindítva - ez utóbbi a sürgetőbb, mert amíg nincs számla, a fizetési
+  // határidő sem tud elindulni.
   {
-    kulcs: "fizetes",
-    cim: "Nincs kifizetve",
-    leiras: "A papírozás rendben (vagy nem is kell), de a pénz még nem érkezett meg.",
+    kulcs: "fizetes_van_szamla",
+    cim: "Számla kint, várjuk a kifizetést",
+    leiras: "Van feltöltött számla és fizetési határidő, de a pénz még nem érkezett meg.",
+  },
+  {
+    kulcs: "fizetes_nincs_szamla",
+    cim: "Még nincs számla",
+    leiras: "A papírozás rendben (vagy nem is kell), de még nincs feltöltött számla vagy fizetési határidő.",
   },
   { kulcs: "kesz", cim: "Kész", leiras: "Szerződés, TIG és a bevétel is megvan." },
 ];
@@ -43,7 +52,10 @@ export function projektkodFazisa(pc: ProjectCode): ProjektkodFazis {
   // oldalon is.
   if (pc.szerzodes_kell && !pc.szerzodes_kesz) return "szerzodes";
   if (pc.papir_kell && !pc.tig_kesz) return "tig";
-  if (!pc.bevetel_kifizetve) return "fizetes";
+  // VAN-e feltöltött számla, aminek fizetési határideje is van - enélkül
+  // hiába várnánk a kifizetésre, még a számlázás sincs elindítva (lásd
+  // szamla_hataridok - backend models/project_code.szamla_hataridok).
+  if (!pc.bevetel_kifizetve) return pc.szamla_hataridok.length > 0 ? "fizetes_van_szamla" : "fizetes_nincs_szamla";
   return "kesz";
 }
 
@@ -56,8 +68,10 @@ export function projektkodHianyzik(pc: ProjectCode): string {
       return pc.keret_fedi
         ? "Teljesítési igazolás hiányzik (keretszerződés alatt)"
         : "Teljesítési igazolás hiányzik";
-    case "fizetes":
-      return pc.bevetel === 0 ? "Nincs bevétel felvezetve" : "A bevétel még nem érkezett meg";
+    case "fizetes_van_szamla":
+      return "A bevétel még nem érkezett meg";
+    case "fizetes_nincs_szamla":
+      return pc.bevetel === 0 ? "Nincs bevétel felvezetve" : "Még nincs feltöltött számla vagy fizetési határidő";
     default:
       if (pc.elmaradt) return "Az esemény elmaradt - nincs rajta teendő";
       return pc.papir_kell ? "Papír és pénz is megvan" : "Papír nem kell, a pénz megérkezett";

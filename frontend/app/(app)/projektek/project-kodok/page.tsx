@@ -60,7 +60,11 @@ function papirJelzo(pc: ProjectCode) {
           a jelzés vesz le egy teendőt. */}
       {/* KIHAGYOTT papír: kész, de nincs mögötte papír. A "Szerződés megvan"
           erre olyan állítás lenne, amit később senki nem tud igazolni - és
-          pont azt a néhány munkát rejtené el, amit utólag át kell nézni. */}
+          pont azt a néhány munkát rejtené el, amit utólag át kell nézni.
+          KIKÜLDVE, de aláírva még nem jött vissza: ez is "kész" (nincs rajtunk
+          teendő), de a "Szerződés megvan" itt épp azt a néhány munkát
+          rejtené el, amit időnként érdemes rákérdezni a megrendelőnél (lásd
+          ProjektkodPapirSzuro "kiküldve" szűrője). */}
       <StatusBadge
         label={
           !pc.szerzodes_kell
@@ -69,15 +73,33 @@ function papirJelzo(pc: ProjectCode) {
               : "Keretszerződés alatt"
             : pc.szerzodes_kihagyva
               ? "Szerződés kihagyva (nincs papír)"
-              : pc.szerzodes_kesz
-                ? "Szerződés megvan"
-                : "Nincs szerződés"
+              : pc.szerzodes_kikuldve_varjuk
+                ? "Szerződés kiküldve, várjuk vissza"
+                : pc.szerzodes_kesz
+                  ? "Szerződés megvan"
+                  : "Nincs szerződés"
         }
-        tone={pc.szerzodes_kihagyva ? "neutral" : !pc.szerzodes_kell || pc.szerzodes_kesz ? "success" : "warning"}
+        tone={
+          pc.szerzodes_kihagyva
+            ? "neutral"
+            : pc.szerzodes_kikuldve_varjuk
+              ? "warning"
+              : !pc.szerzodes_kell || pc.szerzodes_kesz
+                ? "success"
+                : "warning"
+        }
       />
       <StatusBadge
-        label={pc.tig_kihagyva ? "TIG kihagyva (nincs papír)" : pc.tig_kesz ? "TIG kész" : "Nincs TIG"}
-        tone={pc.tig_kihagyva ? "neutral" : pc.tig_kesz ? "success" : "warning"}
+        label={
+          pc.tig_kihagyva
+            ? "TIG kihagyva (nincs papír)"
+            : pc.tig_kikuldve_varjuk
+              ? "TIG kiküldve, várjuk vissza"
+              : pc.tig_kesz
+                ? "TIG kész"
+                : "Nincs TIG"
+        }
+        tone={pc.tig_kihagyva ? "neutral" : pc.tig_kikuldve_varjuk ? "warning" : pc.tig_kesz ? "success" : "warning"}
       />
       <StatusBadge
         label={pc.bevetel_kifizetve ? "Kifizetve" : "Nincs kifizetve"}

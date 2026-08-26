@@ -139,6 +139,10 @@ class ProjectCodeListRead(BaseModel):
     #: models/project_code.szerzodes_kihagyva).
     szerzodes_kihagyva: bool = False
     tig_kihagyva: bool = False
+    #: KÉSZNEK számít, de csak azért, mert ki van küldve - aláírva még nem
+    #: jött vissza (lásd models/project_code.szerzodes_kikuldve_varjuk).
+    szerzodes_kikuldve_varjuk: bool = False
+    tig_kikuldve_varjuk: bool = False
     #: Lesz-e SZÁMLA erről a munkáról. Ahol nincs, ott a kihagyott szerződés
     #: és TIG nem hiányosság, hanem következmény - nincs is mihez elkészíteni
     #: őket (lásd services/megrendeloi_szamla.szamlat_varunk).
@@ -200,6 +204,10 @@ class ProjectCodeRead(ProjectCodeBase):
     #: models/project_code.szerzodes_kihagyva).
     szerzodes_kihagyva: bool = False
     tig_kihagyva: bool = False
+    #: KÉSZNEK számít, de csak azért, mert ki van küldve - aláírva még nem
+    #: jött vissza (lásd models/project_code.szerzodes_kikuldve_varjuk).
+    szerzodes_kikuldve_varjuk: bool = False
+    tig_kikuldve_varjuk: bool = False
     #: Lesz-e SZÁMLA erről a munkáról. Ahol nincs, ott a kihagyott szerződés
     #: és TIG nem hiányosság, hanem következmény - nincs is mihez elkészíteni
     #: őket (lásd services/megrendeloi_szamla.szamlat_varunk).
