@@ -34,7 +34,13 @@ function HataridoSor({ allas }: { allas: HataridoAllas }) {
   return (
     <p
       className={`mt-0.5 truncate text-[11.5px] ${
-        hangsuly === "danger" ? "text-text-danger" : hangsuly === "warning" ? "text-text-warning" : "text-text-muted"
+        hangsuly === "danger"
+          ? "text-text-danger"
+          : hangsuly === "warning"
+            ? "text-text-warning"
+            : hangsuly === "success"
+              ? "text-text-success"
+              : "text-text-muted"
       }`}
     >
       {allas.cimke && <span className="text-text-muted">{allas.cimke}: </span>}

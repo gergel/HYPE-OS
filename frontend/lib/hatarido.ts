@@ -65,7 +65,7 @@ export function hataridoHangsuly(
     case "ma_jar_le":
       return "warning";
     case "var":
-      return (allas.napok ?? 0) <= SURGOS_NAP ? "warning" : "neutral";
+      return (allas.napok ?? 0) <= SURGOS_NAP ? "warning" : "success";
     case "keson_fizetve":
       return "neutral";
     case "elore_fizetve":
