@@ -73,6 +73,49 @@ def papirt_igenyel(project_code: ProjectCode) -> bool:
     )
 
 
+def _kihagy_ha_kell(db: Session, papirok: list, kesz: bool, project_code_id: int, modell, oka: str) -> None:
+    """Egy papír-fajta (szerződés VAGY TIG) kihagyása - csak ha még nincs
+    lezárva. Ha van már egy piszkozat (nem kész, de nem is kihagyott), AZT
+    állítjuk át, nem nyitunk mellé egy másikat - egy projektkódnak nem lehet
+    két, egymásnak ellentmondó folyamatban lévő ugyanolyan papírja."""
+    if kesz:
+        return
+    piszkozat = next((p for p in papirok if not papir_kesz(p)), None)
+    if piszkozat is not None:
+        piszkozat.allapot = "Kihagyva"
+        piszkozat.kihagyas_oka = oka
+    else:
+        db.add(modell(project_code_id=project_code_id, allapot="Kihagyva", kihagyas_oka=oka))
+
+
+def kihagyd_a_papirokat_automatikusan(db: Session, pk: ProjectCode, oka: str) -> None:
+    """A szerződést és a TIG-et is KIHAGYVA jelöli, automatikusan - csak
+    azokat, amik még nincsenek lezárva (nincs aláírt, kiküldött vagy "van már
+    papír" példányuk).
+
+    Onnan hívjuk, ahol már megválaszolt kérdés, miért nincs (lesz) papír erről
+    a munkáról: amikor kimondjuk, hogy erről a munkáról nincs számla (lásd
+    services/megrendeloi_szamla.allitsd_a_szamla_kihagyast), vagy hogy a
+    kifizetés tranzakció nélkül történt (lásd
+    services/megrendeloi_szamla.jelold_kifizetettnek). Enélkül a szerződés és
+    a TIG örökre "hiányzó papír"-ként állna a teendők között, holott a hiányuk
+    nem mulasztás, hanem ugyanannak a döntésnek a következménye.
+
+    SZÁNDÉKOSAN NEM fordítható vissza automatikusan: ha valaki utólag mégis
+    "van számla"-ra vagy "mégis volt tranzakció"-ra állítja a projektkódot, a
+    kihagyott papírokat kézzel kell visszaállítani - a felhasználó közben
+    dolgozhatott rajtuk, egy automatikus visszaállítás felülírná."""
+    if pk.szerzodes_kell:
+        _kihagy_ha_kell(db, pk.megrendeloi_szerzodesek, pk.szerzodes_kesz, pk.id, MegrendeloiSzerzodes, oka)
+    if pk.papir_kell:
+        _kihagy_ha_kell(db, pk.megrendeloi_tigek, pk.tig_kesz, pk.id, MegrendeloiTig, oka)
+    db.flush()
+    # A `viewonly=True` kapcsolat nem frissül magától az imént hozzáadott
+    # (vagy módosított) sorral - enélkül az `allas()` a hívó oldalon még a
+    # RÉGI listát látná, és a felület azt mondaná, hogy a papír még hiányzik.
+    db.expire(pk, ["megrendeloi_szerzodesek", "megrendeloi_tigek"])
+
+
 def keretszerzodes_fedi(db: Session, client_id: int | None, nap: date | None = None) -> Contract | None:
     """Van-e a megrendelővel ÉLŐ keretszerződésünk az adott napon?
 

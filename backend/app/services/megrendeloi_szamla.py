@@ -278,6 +278,12 @@ def jelold_kifizetettnek(
         pk.bevetel_kihagyas_oka = kihagyas_oka.strip()
         pk.utalas_datuma = None
         pk.tranzakcio_nelkul_lezarva = True
+        # Tranzakció nélkül nincs mihez papírt készíteni - a szerződés és a
+        # TIG is automatikusan KIHAGYVA lesz (ami még nincs lezárva), lásd
+        # services/megrendeloi_papir.kihagyd_a_papirokat_automatikusan.
+        from app.services import megrendeloi_papir
+
+        megrendeloi_papir.kihagyd_a_papirokat_automatikusan(db, pk, "Nem volt tranzakció")
         db.flush()
         return allas(db, pk)
 
@@ -308,11 +314,21 @@ def allitsd_a_szamla_kihagyast(
     sincs - a pénz viszont megjött (vagy másképp rendeződött), és a
     projektkódot le kell tudni zárni. Az INDOK azért kötelező, mert fél év
     múlva ez az egyetlen dolog, amiből kiderül, mi történt: enélkül csak
-    annyi látszana, hogy erről az egy munkáról nincs papír."""
+    annyi látszana, hogy erről az egy munkáról nincs papír.
+
+    Ha nincs számla, a szerződés és a TIG is automatikusan KIHAGYVA lesz
+    jelölve (ami közülük még nincs lezárva) - számla nélkül nincs is mihez
+    papírt készíteni, enélkül a szerződés/TIG örökre hiányzó papírként állna
+    a teendők között (lásd services/megrendeloi_papir.
+    kihagyd_a_papirokat_automatikusan)."""
     if kihagyva and not (oka or "").strip():
         raise SzamlaHiba("Ha nincs számla, írd meg, miért (beszámítva, cserébe, másik cégen át…).")
     pk.szamla_kihagyva = kihagyva
     pk.szamla_kihagyas_oka = (oka or "").strip() or None if kihagyva else None
+    if kihagyva:
+        from app.services import megrendeloi_papir
+
+        megrendeloi_papir.kihagyd_a_papirokat_automatikusan(db, pk, "Számla nélkül fizetve")
     db.flush()
     return allas(db, pk)
 
