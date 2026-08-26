@@ -419,13 +419,25 @@ class ProjectCode(TimestampMixin, Base):
         való a bevételek közé (beszámították, máshol könyvelték - lásd
         bevetelbe_ne_keruljon), akkor a kifizetés dátuma önmagában lezárja. Ez
         nem "szemet hunyás": a jelöléshez indok is kell, és az ott marad a
-        projektkódon."""
+        projektkódon.
+
+        VAN FELTÖLTÖTT SZÁMLA → onnan dől el, ugyanúgy, mint a
+        `hatarido_allas`-nál: a fájlonkénti kifizetés-jelölés (lásd
+        DokumentumFeltoltes, services/megrendeloi_szamla.jelold_szamlat_kifizetettnek)
+        az igazi forrás, nem a `revenues` gyűjtemény. Enélkül egy régi (pl.
+        Notionból importált, sosem kifizetettre jelölt) bevétel-sor örökre
+        \"még nem érkezett meg\" állapotban tartaná a projektkódot, holott
+        minden ténylegesen feltöltött számla ki van fizetve - a lista
+        pontosan ezt a fajta, örökre teendőben ragadt kártyát mutatná."""
         # Ahol nem is várunk tranzakciót, ott a LEZÁRÁS ténye számít, nem egy
         # dátum - lásd tranzakcio_nelkul_lezarva.
         if self.tranzakcio_nelkul_lezarva:
             return True
         if self.bevetelbe_ne_keruljon and self.utalas_datuma is not None:
             return True
+        szamlak = self._szamlak()
+        if szamlak:
+            return all(szamla.kifizetve_datuma is not None or szamla.tranzakcio_nelkul_lezarva for szamla in szamlak)
         bevetelek = list(self.revenues)
         return bool(bevetelek) and all(r.fizetes_datuma is not None for r in bevetelek)
 
