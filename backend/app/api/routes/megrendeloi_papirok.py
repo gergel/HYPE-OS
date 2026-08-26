@@ -278,6 +278,31 @@ def get_elotoltes(
     )
 
 
+@router.get("/megbizas-targya-lista", response_model=list[str])
+def megbizas_targya_lista(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+) -> list[str]:
+    """A megrendelői papírokon eddig előfordult "megbízás tárgya" szövegek,
+    ábécé szerint - az űrlapon ebből válogat a felhasználó, hogy ne kelljen
+    mindig ugyanazt begépelnie. A lista NEM zárt (lásd
+    services/entity_registry.NYITOTT_SELECT_MEZOK, ugyanaz a minta, csak a
+    megrendelői oldalra, külön vokabuláriummal - az alvállalkozói "megbízás
+    tárgya" mást jelent, nem ugyanarra a munkára mutat): egy új szöveg
+    beírásával és a papír mentésével a következő betöltéskor magától
+    megjelenik itt is, külön karbantartás nélkül.
+    FONTOS: ez a route a `/{fajta}` elé regisztrálva - egy szó szerinti
+    útvonal a `{fajta}` paraméteres útvonallal szemben csak akkor nyer, ha
+    KORÁBBAN van bejegyezve (lásd routes/attachments.py hasonló esetét)."""
+    ertekek: set[str] = set()
+    for model in (MegrendeloiSzerzodes, MegrendeloiTig):
+        for (ertek,) in db.execute(select(model.megbizas_targya).where(model.megbizas_targya.is_not(None)).distinct()):
+            szoveg = (ertek or "").strip()
+            if szoveg:
+                ertekek.add(szoveg)
+    return sorted(ertekek, key=lambda s: s.lower())
+
+
 @router.get("/{fajta}", response_model=list[PapirRead])
 def list_papirok(
     fajta: str,

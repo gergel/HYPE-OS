@@ -139,6 +139,7 @@ export function MegrendeloiPapirKezelo({
   papirok,
   ugyfelek,
   kontaktok,
+  megbizasTargyaLista,
   canEdit,
   canDelete = false,
   kellPapir,
@@ -154,6 +155,11 @@ export function MegrendeloiPapirKezelo({
    * ügyféllel van élő keret, azt a szerver az előtöltéssel adja vissza. */
   ugyfelek: { id: number; nev: string }[];
   kontaktok: MegrendeloiKontakt[];
+  /** A "Megbízás tárgya" mező javaslatlistája - eddig előfordult szövegek
+   * (lásd backend routes/megrendeloi_papirok.megbizas_targya_lista). Nem zárt
+   * lista: aki újat ír be és menti a papírt, azzal a szöveg a KÖVETKEZŐ
+   * betöltésnél magától bekerül ide, külön karbantartás nélkül. */
+  megbizasTargyaLista: string[];
   canEdit: boolean;
   /** Az ELKEZDETT papír eldobható - amíg csak készül, egy rossz adattal
    * elindított szerződést/TIG-et tiszta lappal kell tudni újrakezdeni. */
@@ -669,12 +675,24 @@ export function MegrendeloiPapirKezelo({
                 <input value={urlap.email} onChange={(e) => frissit("email", e.target.value)} disabled={dolgozik} className={mezoOsztaly} />
               </Mezo>
               <Mezo label="Megbízás tárgya">
+                {/* Natív datalist: legördül a korábban használt szövegekből,
+                    gépeléskor szűkül rá (a böngésző szűri) - de bármi más is
+                    beírható, ami mentéskor a KÖVETKEZŐ betöltésnél magától
+                    bekerül a listába (lásd a `megbizasTargyaLista` prop
+                    leírását). Ugyanaz a minta, mint az AutoKezelo "Mire ment"
+                    mezőjénél. */}
                 <input
+                  list={`megbizas-targya-lista-${fajta}`}
                   value={urlap.megbizas_targya}
                   onChange={(e) => frissit("megbizas_targya", e.target.value)}
                   disabled={dolgozik}
                   className={mezoOsztaly}
                 />
+                <datalist id={`megbizas-targya-lista-${fajta}`}>
+                  {megbizasTargyaLista.map((szoveg) => (
+                    <option key={szoveg} value={szoveg} />
+                  ))}
+                </datalist>
               </Mezo>
               {/* A TIG papíron magán nem szerepel (ott a projektkód a
                   helyőrző - lásd routes/megrendeloi_papirok._sablon_mezok),

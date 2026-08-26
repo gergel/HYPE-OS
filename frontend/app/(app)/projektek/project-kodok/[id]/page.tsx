@@ -20,6 +20,7 @@ import {
   getClients,
   getCurrentUser,
   getEmployees,
+  getMegbizasTargyaLista,
   getMegrendeloiKeretek,
   getMegrendeloiKontaktok,
   getMegrendeloiPapirok,
@@ -66,6 +67,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     megrendeloiTigek,
     megrendeloiKeretek,
     megrendeloiKontaktok,
+    megbizasTargyaLista,
     clients,
     bontas,
     pagePermissions,
@@ -83,6 +85,9 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     getMegrendeloiPapirok("tig", projectCodeId),
     getMegrendeloiKeretek(),
     getMegrendeloiKontaktok(),
+    // A "Megbízás tárgya" mező legördülő javaslatlistája - eddig előfordult
+    // szövegek, hogy ne kelljen mindig ugyanazt begépelni.
+    getMegbizasTargyaLista(),
     // A MEGRENDELŐK: a papír szerződő fele közülük kerül ki (a
     // keretszerződés-lista erre rossz kérdés volt - lásd
     // MegrendeloiPapirKezelo).
@@ -244,6 +249,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               papirok={megrendeloiSzerzodesek}
               ugyfelek={ugyfelek}
               kontaktok={megrendeloiKontaktok}
+              megbizasTargyaLista={megbizasTargyaLista}
               canEdit={canEdit}
               canDelete={canDelete}
               kellPapir={kellPapir}
@@ -258,6 +264,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               papirok={megrendeloiTigek}
               ugyfelek={ugyfelek}
               kontaktok={megrendeloiKontaktok}
+              megbizasTargyaLista={megbizasTargyaLista}
               canEdit={canEdit}
               canDelete={canDelete}
               kellPapir={kellPapir}

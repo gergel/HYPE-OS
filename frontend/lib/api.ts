@@ -2793,6 +2793,13 @@ export async function getMegrendeloiElotoltes(
   return apiGet<MegrendeloiElotoltes>(`/api/v1/megrendeloi-papirok/${fajta}/elotoltes/${projectCodeId}`);
 }
 
+/** A megrendelői papírokon eddig előfordult "megbízás tárgya" szövegek -
+ * legördülő listához, hogy ne kelljen mindig ugyanazt begépelni (lásd
+ * components/megrendeloi/MegrendeloiPapirKezelo.tsx). */
+export async function getMegbizasTargyaLista(): Promise<string[]> {
+  return (await apiGet<string[]>("/api/v1/megrendeloi-papirok/megbizas-targya-lista")) ?? [];
+}
+
 /** A megrendelői SZÁMLA lépésének állása egy projektkódon (a papírozás
  * harmadik szakasza: határidő → kifizetve → bevétel). */
 export type MegrendeloiSzamlaAllas = {
