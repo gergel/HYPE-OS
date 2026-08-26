@@ -389,7 +389,7 @@ export function MegrendeloiPapirKezelo({
       { cimke: "Nyilvántartási szám", ertek: urlap.nyilvantartasi_szam },
       { cimke: "Megbízás tárgya", ertek: urlap.megbizas_targya },
     ];
-    if (fajta === "szerzodes") sorok.push({ cimke: "Projekt neve", ertek: urlap.projekt_nev });
+    sorok.push({ cimke: "Projekt neve", ertek: urlap.projekt_nev });
     sorok.push(
       {
         cimke: "Nettó összeg",
@@ -676,16 +676,19 @@ export function MegrendeloiPapirKezelo({
                   className={mezoOsztaly}
                 />
               </Mezo>
-              {fajta === "szerzodes" && (
-                <Mezo label="Projekt neve">
-                  <input
-                    value={urlap.projekt_nev}
-                    onChange={(e) => frissit("projekt_nev", e.target.value)}
-                    disabled={dolgozik}
-                    className={mezoOsztaly}
-                  />
-                </Mezo>
-              )}
+              {/* A TIG papíron magán nem szerepel (ott a projektkód a
+                  helyőrző - lásd routes/megrendeloi_papirok._sablon_mezok),
+                  de a kiküldő E-MAIL tárgya és szövege ezt írja ki a
+                  megrendelőnek ("a(z) X projekthez tartozó TIG"), tehát TIG-nél
+                  is szerkeszthető kell legyen, nem csak szerződésnél. */}
+              <Mezo label="Projekt neve">
+                <input
+                  value={urlap.projekt_nev}
+                  onChange={(e) => frissit("projekt_nev", e.target.value)}
+                  disabled={dolgozik}
+                  className={mezoOsztaly}
+                />
+              </Mezo>
               {/* Szabad szöveg, nem dátum: a papírra nem mindig egy naptári
                   intervallum kerül ("2026. július", felsorolás, stb.). */}
               <Mezo label="Teljesítés ideje">
