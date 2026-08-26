@@ -15,7 +15,13 @@ const BY_PREFIX: Record<string, string[]> = {
   "/dashboard": ["tasks", "projects", "deliverables"],
   "/naptar": ["projects"],
   "/projektek": ["projects"],
-  "/projektek/project-kodok": ["projectCodes", "projects"],
+  // A "kifizetve" jelölés (fájlonként vagy projekt-szinten) a `revenues` és a
+  // `documentAttachments` táblát írja, NEM mindig magát a projektkódot (lásd
+  // services/megrendeloi_szamla.jelold_szamlat_kifizetettnek) - enélkül a
+  // teendő-tábla csak akkor frissült volna, ha VALAMI MÁS is megérintette
+  // közben a projektkód sorát, tehát a kifizetett tétel percekig (vagy tovább)
+  // benne maradt a teendők közt, amíg valaki manuálisan újra nem töltötte.
+  "/projektek/project-kodok": ["projectCodes", "projects", "revenues", "documentAttachments"],
   // A hozzászólásokat nem itt figyeljük: a chat komponens a saját anyagára
   // szűkítve iratkozik fel ("comments:12"), különben egy másik anyag alatti
   // hozzászólás is frissítené ezt az oldalt.

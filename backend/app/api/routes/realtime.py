@@ -31,6 +31,7 @@ from app.models.client import Client, Contact
 from app.models.contract import Contract
 from app.models.deliverable import Deliverable
 from app.models.deliverable_comment import DeliverableComment
+from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
@@ -77,6 +78,7 @@ TOPICS: dict[str, Topic] = {
     "projectCodes": Topic(ProjectCode),
     "deliverables": Topic(Deliverable),
     "comments": Topic(DeliverableComment, scope_column="deliverable_id"),
+    "documentAttachments": Topic(DocumentAttachment),
     "projectCodeComments": Topic(ProjectCodeComment, scope_column="project_code_id"),
     "notifications": Topic(Notification, user_column="employee_id"),
     "tasks": Topic(Task),
