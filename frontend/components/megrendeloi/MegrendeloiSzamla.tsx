@@ -102,12 +102,17 @@ export function MegrendeloiSzamla({
       {/* "Erről a munkáról nincs számla" - van, amit nem a megszokott módon
           fizetnek (beszámítás, csere, másik cégen át rendezve). Ilyenkor nincs
           határidő sem, a projektkódot viszont le kell tudni zárni. */}
+      {/* A "block" itt nem díszítés: e nélkül ez a gomb és az alatta jövő
+          "Kifizetve" gomb két külön <button>, tehát alapból inline-block -
+          amíg semmi blokkszintű elem nincs köztük (lásd `szamla_kihagyva`
+          ága, ami ilyenkor üres), a kettő egy sorba, egymáshoz tapadva
+          jelenne meg a `space-y-3` margója ellenére is. */}
       {!allas.kifizetve && canEdit && !allas.szamla_kihagyva && (
         <button
           type="button"
           disabled={busy}
           onClick={() => setKihagyasNyitva(true)}
-          className="text-[12.5px] text-text-muted hover:text-text-primary disabled:opacity-50"
+          className="block text-[12.5px] text-text-muted hover:text-text-primary disabled:opacity-50"
         >
           Nincs számla erről a munkáról
         </button>

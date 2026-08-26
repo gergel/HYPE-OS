@@ -26,7 +26,7 @@ import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { bevetelKihagyasOka, devizaNyom, PENZNEMEK } from "@/lib/penz";
+import { devizaNyom, PENZNEMEK } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 
 const PAGE = "/penzugyek";
@@ -437,30 +437,11 @@ export default async function PenzugyekPage() {
               // Számla" kártyáján történik (határidő → kifizetve), ott jön
               // létre és zárul le ez a sor; a bevétel saját lapján a dátumok
               // továbbra is szerkeszthetők.
-              {
-                // Ami NEM számít bele az éves bevételbe: a "nem volt
-                // tranzakció" formájú sorok, és amit a számla-lépésnél
-                // kifejezetten kihagytunk. Látszani kell (a projekt profitja
-                // tőle függ), csak az éves összesítőbe nem való - lásd
-                // backend services/elszamolas.py.
-                header: "Beleszámít",
-                align: "right",
-                render: (r) => {
-                  const oka = bevetelKihagyasOka(r);
-                  if (oka) return <StatusBadge label={oka} tone="neutral" />;
-                  return canEdit ? (
-                    <EditableBooleanCell
-                      patchPath={`${ENTITY_PATHS.revenue}/${r.id}`}
-                      field="beleszamit_a_bevetelekbe"
-                      value={r.beleszamit_a_bevetelekbe}
-                      ureskent
-                    />
-                  ) : (
-                    <StatusBadge label="Igen" tone="success" />
-                  );
-                },
-                sortAccessor: (r) => (bevetelKihagyasOka(r) ? 0 : 1),
-              },
+              //
+              // "Beleszámít" oszlop SZÁNDÉKOSAN nincs a listán: a mező
+              // (`beleszamit_a_bevetelekbe`) és a hozzá tartozó indok
+              // (`bevetelKihagyasOka`) továbbra is megvan és szerkeszthető a
+              // bevétel saját lapján - lásd backend services/elszamolas.py.
               {
                 // A kimenő számla PDF-je: maga a számla külső rendszerben
                 // készül, ide azért kerül fel, hogy a havi csomagban is benne
