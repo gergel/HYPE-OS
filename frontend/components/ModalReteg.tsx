@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
 
 /** Felugró ablak rétege: a tartalmat a `<body>` VÉGÉRE teszi ki, nem oda, ahol
  * a komponens áll.
@@ -20,6 +21,10 @@ export function ModalReteg({ onClose, children }: { onClose?: () => void; childr
   // Szerveren nincs `document`, ezért csak beillesztés után portálozunk.
   const [mount, setMount] = useState(false);
   useEffect(() => setMount(true), []);
+  // Amíg ez a réteg él, egy VISSZA lépés (touchpad suhintás is) csak ezt az
+  // ablakot csukja be, nem navigál el a mögötte lévő oldalról - lásd a hook
+  // leírását.
+  useModalVisszaVedelem(mount, onClose ?? (() => {}));
   if (!mount) return null;
 
   return createPortal(

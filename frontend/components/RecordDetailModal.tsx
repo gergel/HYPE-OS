@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
 
 /** Bármelyik rekord TELJES részletnézete felugró ablakban, teljes oldalra
  * navigálás helyett - a kapcsolódó rekordok tábláiból nyílik (lásd
@@ -35,14 +36,18 @@ export function RecordDetailModal({ href, onClose }: { href: string | null; onCl
     };
   }, [href, onClose]);
 
-  if (!href) return null;
-
   /** Bezáráskor frissítjük a mögöttes oldalt: a felugró ablakban végzett
    * szerkesztés egyébként csak az iframe-en belül látszódna. */
   function close() {
     router.refresh();
     onClose();
   }
+
+  // Egy VISSZA lépés (touchpad suhintás is) csak ezt az ablakot csukja be,
+  // nem navigál el a mögötte lévő oldalról.
+  useModalVisszaVedelem(href !== null, close);
+
+  if (!href) return null;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={close}>

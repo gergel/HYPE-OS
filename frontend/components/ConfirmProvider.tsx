@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
 
 /** A megerősítő ablak extra díszei. Egyelőre egy dolgot tud: egy NAGY, PIROS
  * figyelmeztetést a kérdés fölé. Olyan műveleteknél kell, amiket technikailag
@@ -59,6 +60,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     resolveRef.current = null;
     setPending(null);
   }
+
+  // Egy VISSZA lépés (touchpad suhintás is) itt is csak a kérdést csukja be,
+  // nem navigál el a mögötte lévő oldalról - "mégse"-ként válaszolva.
+  useModalVisszaVedelem(pending !== null, () => respond(false));
 
   return (
     <ConfirmContext.Provider value={confirm}>

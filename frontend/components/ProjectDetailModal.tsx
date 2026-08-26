@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
 
 /** Egy projekt TELJES részletnézete felugró ablakban, teljes oldalra navigálás
  * helyett - a listás/naptár nézetből nyílik (lásd ProjektekContent.tsx,
@@ -44,8 +45,6 @@ export function ProjectDetailModal({
     };
   }, [projectId, onClose]);
 
-  if (projectId === null) return null;
-
   /** Bezáráskor frissítjük a mögöttes listát: a felugró ablakban végzett
    * szerkesztés (állapot, dátum, törlés) egyébként csak az iframe-en belül
    * látszódna, a mögötte lévő táblázat/naptár a régi adatot mutatná. */
@@ -53,6 +52,12 @@ export function ProjectDetailModal({
     router.refresh();
     onClose();
   }
+
+  // Egy VISSZA lépés (touchpad suhintás is) csak ezt az ablakot csukja be,
+  // nem navigál el a mögötte lévő oldalról.
+  useModalVisszaVedelem(projectId !== null, close);
+
+  if (projectId === null) return null;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={close}>
