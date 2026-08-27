@@ -46,6 +46,8 @@ ENTITAS_OLDALAK: dict[str, str] = {
     "client": "/ugyfelek",
     "employee": "/csapat",
     "deliverable": "/utomunka",
+    # Egy hozzászólás az Utómunka oldal alján - lásd entity_registry.py.
+    "deliverableComment": "/utomunka",
     "task": "/feladatok",
     # Egy kötelezettség adott fordulójához (hónap/év) tartozó számla - az
     # E-Rezsi, a Biztosítások és az autók lapja is ide tölt (lásd
@@ -109,6 +111,22 @@ def list_for(db: Session, entity_type: str, entity_id: int) -> list[DocumentAtta
             .order_by(DocumentAttachment.id)
         ).all()
     )
+
+
+def list_for_many(db: Session, entity_type: str, entity_ids: list[int]) -> dict[int, list[DocumentAttachment]]:
+    """Ugyanaz, mint a `list_for`, csak EGY lekérdezéssel több rekordra egyszerre
+    - listás nézeteknél kell (pl. egy hozzászólás-lista minden sora a saját
+    csatolmányait mutatja), ahol a soronkénti `list_for` N+1 lekérdezést adna."""
+    if not entity_ids:
+        return {}
+    eredmeny: dict[int, list[DocumentAttachment]] = {i: [] for i in entity_ids}
+    for a in db.scalars(
+        select(DocumentAttachment)
+        .where(DocumentAttachment.entity_type == entity_type, DocumentAttachment.entity_id.in_(entity_ids))
+        .order_by(DocumentAttachment.id)
+    ).all():
+        eredmeny[a.entity_id].append(a)
+    return eredmeny
 
 
 def list_by_kategoria(db: Session, entity_type: str, entity_id: int, kategoria: str) -> list[DocumentAttachment]:

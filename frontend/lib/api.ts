@@ -1931,6 +1931,8 @@ export type DeliverableComment = {
   employee_name: string;
   body: string;
   created_at: string;
+  /** A hozzászóláshoz mellékelt fájlok (entity_type: "deliverableComment"). */
+  attachments: DocumentAttachment[];
 };
 
 export async function getDeliverableComments(deliverableId: number): Promise<DeliverableComment[]> {

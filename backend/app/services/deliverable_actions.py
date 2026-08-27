@@ -28,7 +28,7 @@ from app.schemas.deliverable_actions import (
     TimerState,
     VinyoOptions,
 )
-from app.services import notifications
+from app.services import attachments, notifications
 
 UTOMUNKA_PAGE = "/utomunka"
 
@@ -450,6 +450,7 @@ def list_comments(db: Session, deliverable_id: int) -> list[CommentRead]:
         .where(DeliverableComment.deliverable_id == deliverable_id)
         .order_by(DeliverableComment.created_at)
     ).all()
+    csatolmanyok = attachments.list_for_many(db, "deliverableComment", [c.id for c in rows])
     return [
         CommentRead(
             id=c.id,
@@ -458,6 +459,7 @@ def list_comments(db: Session, deliverable_id: int) -> list[CommentRead]:
             employee_name=c.employee.full_name,
             body=c.body,
             created_at=c.created_at,
+            attachments=csatolmanyok.get(c.id, []),
         )
         for c in rows
     ]
@@ -505,4 +507,5 @@ def add_comment(db: Session, deliverable_id: int, current_user: Employee, body: 
         employee_name=current_user.full_name,
         body=comment.body,
         created_at=comment.created_at,
+        attachments=[],
     )

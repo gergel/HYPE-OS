@@ -28,6 +28,7 @@ from app.models.campaign import Campaign
 from app.models.client import Client, Contact
 from app.models.contract import Contract
 from app.models.deliverable import Deliverable
+from app.models.deliverable_comment import DeliverableComment
 from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
@@ -52,6 +53,10 @@ ENTITY_MODELS: dict[str, type] = {
     "expense": Expense,
     "revenue": Revenue,
     "deliverable": Deliverable,
+    # Egy hozzászólás az Utómunka oldal alján - csatolmányt (fájlt) fogad,
+    # hogy egy hozzászóláshoz konkrét anyagot lehessen mellékelni (lásd
+    # frontend components/deliverable/CommentsSection.tsx).
+    "deliverableComment": DeliverableComment,
     # Ezeknek nincs saját részletnézet-oldaluk, a generikus /rekord/... adatlap
     # nyitja meg őket (lásd frontend lib/recordEntities.ts) - a mezőtípusok
     # (dátum/szám/select) ide is ugyanúgy kellenek a szerkesztéshez.

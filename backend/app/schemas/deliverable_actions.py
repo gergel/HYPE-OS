@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.document_attachment import DocumentAttachmentRead
+
 
 class AssignableEmployee(BaseModel):
     id: int
@@ -33,6 +35,9 @@ class CommentRead(BaseModel):
     employee_name: str
     body: str
     created_at: datetime
+    #: A hozzászóláshoz mellékelt fájlok - lásd
+    #: services/attachments.py ("deliverableComment" entity_type).
+    attachments: list[DocumentAttachmentRead] = []
 
 
 class TimerEmployeeSummary(BaseModel):

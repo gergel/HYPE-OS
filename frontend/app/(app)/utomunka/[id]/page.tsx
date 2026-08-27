@@ -333,7 +333,12 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
             egy beszélgetés viszont mindig ugyanott, teljes szélességben, a
             lap alján a legjobb, hogy könnyű legyen rátalálni és olvasni. */}
         <Card title="Hozzászólások">
-          <CommentsSection deliverableId={deliverableId} initialComments={comments} mentionableEmployees={assignableEmployees} />
+          <CommentsSection
+            deliverableId={deliverableId}
+            initialComments={comments}
+            mentionableEmployees={assignableEmployees}
+            canUpload={canEditPage}
+          />
         </Card>
       </div>
     </div>
