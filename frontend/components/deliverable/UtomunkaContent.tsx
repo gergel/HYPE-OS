@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
-import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
+import { SelectDropdown } from "@/components/SelectDropdown";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { formatIdopont } from "@/lib/ido";
@@ -24,6 +24,15 @@ import type { AllapotBeallitas, Deliverable, Employee } from "@/lib/api";
 // type-only importja is beviszi a teljes modult a kliens bundle-be, ami
 // build hibát okoz ("next/headers" csak Server Component-ekben érhető el).
 const DELIVERABLE_BASE_PATH = "/api/v1/deliverables";
+
+// A PONTOS szöveg, amivel a szerver elutasítja az ellenőrzésbe-tételt, ha még
+// nincs vágói visszajelzés (lásd backend routes/postproduction.py
+// VISSZAJELZES_HIANYZIK_UZENET) - ebből ismerjük fel EZT a konkrét hibát a
+// többi közül, hogy a sima hiba-alert helyett a felugró visszajelzés-űrlapot
+// nyissuk meg. SIMA SZÖVEG, nem strukturált objektum: kb. 80 helyen fut a
+// felületen ugyanaz a minta (`alert(\`...: ${detail?.detail}\`)`), ami
+// stringnek várja a hiba törzsét.
+const VISSZAJELZES_HIANYZIK_UZENET = "Mielőtt ellenőrzésbe teszed, írj visszajelzést ehhez az anyaghoz.";
 
 const NO_STATUS_KEY = "__nincs_allapot__";
 
@@ -70,11 +79,13 @@ export function UtomunkaContent({
 }) {
   const [deliverables, setDeliverables] = useState(initialDeliverables);
   const [projects, setProjects] = useState(initialProjects);
-  // Ha egy áthelyezést a szerver azért utasít el, mert az anyaghoz még nincs
-  // vágói visszajelzés (lásd kartyaAthelyezes), itt tartjuk számon, MELYIK
-  // anyagot és HOVÁ próbáltuk tenni - a felugró visszajelzés-űrlap sikeres
-  // mentése után ebből tudjuk újra megpróbálni ugyanazt az áthelyezést.
-  const [visszajelzesKerve, setVisszajelzesKerve] = useState<{ deliverableId: number; celOszlop: string } | null>(
+  // Ha egy állapotváltást a szerver azért utasít el, mert az anyaghoz még
+  // nincs vágói visszajelzés (lásd allapotAtallitasa), itt tartjuk számon,
+  // MELYIK anyagot és MILYEN állapotba próbáltuk tenni - a felugró
+  // visszajelzés-űrlap sikeres mentése után ebből tudjuk újra megpróbálni
+  // ugyanazt a váltást, akárhonnan is indult (Kanban-húzás vagy a lista
+  // "Állapot" legördülője).
+  const [visszajelzesKerve, setVisszajelzesKerve] = useState<{ deliverableId: number; allapot: string | null } | null>(
     null,
   );
 
@@ -206,18 +217,19 @@ export function UtomunkaContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliverables, vinyoOptions, kartyaMezok, employeeName]);
 
-  /** Kártya áthúzása másik oszlopba: ez az anyag ÁLLAPOTÁT írja át.
+  /** Az anyag ÁLLAPOTÁNAK tényleges átírása - ezt hívja mind a Kanban-húzás
+   * (kartyaAthelyezes, a celOszlop -> allapot fordítás után), mind a lista
+   * "Állapot" oszlopának legördülője, hogy ELLENŐRZÉS-be visszajelzés nélkül
+   * SEHONNAN ne lehessen tenni: bárhonnan is próbálják, ugyanaz a felugró
+   * visszajelzés-űrlap nyíljon meg a sima hiba-alert helyett.
    *
-   * A képernyőn azonnal átkerül a kártya (optimista frissítés) - a vágó ne
+   * A képernyőn azonnal átíródik az állapot (optimista frissítés) - a vágó ne
    * várjon a szerverre egy ilyen apró lépésnél -, hiba esetén viszont
    * visszaáll, hogy ne higgyük elmentettnek, ami nem ment el. */
-  async function kartyaAthelyezes(deliverableId: number, celOszlop: string) {
-    const ujAllapot = celOszlop === NO_STATUS_KEY ? null : celOszlop;
+  async function allapotAtallitasa(deliverableId: number, ujAllapot: string | null) {
     const eredeti = deliverables.find((d) => d.id === deliverableId);
     if (!eredeti || eredeti.allapot === ujAllapot) return;
-    setDeliverables((elozo) =>
-      elozo.map((d) => (d.id === deliverableId ? { ...d, allapot: ujAllapot } : d)),
-    );
+    setDeliverables((elozo) => elozo.map((d) => (d.id === deliverableId ? { ...d, allapot: ujAllapot } : d)));
     try {
       const res = await authFetch(`${DELIVERABLE_BASE_PATH}/${deliverableId}`, {
         method: "PATCH",
@@ -229,11 +241,10 @@ export function UtomunkaContent({
           elozo.map((d) => (d.id === deliverableId ? { ...d, allapot: eredeti.allapot } : d)),
         );
         // Ez a konkrét hiba (lásd routes/postproduction._ellenorzeshez_kell_visszajelzes)
-        // strukturált "code"-dal jön, nem sima szöveggel - ebből ismerjük fel,
-        // hogy nem egy general hiba, hanem hiányzó visszajelzés, és sima
-        // alert() helyett a felugró visszajelzés-űrlapot nyitjuk meg helyette.
-        if (detail?.detail?.code === "visszajelzes_hianyzik") {
-          setVisszajelzesKerve({ deliverableId, celOszlop });
+        // ebből a pontos szövegből ismerhető fel - sima alert() helyett a
+        // felugró visszajelzés-űrlapot nyitjuk meg helyette.
+        if (detail?.detail === VISSZAJELZES_HIANYZIK_UZENET) {
+          setVisszajelzesKerve({ deliverableId, allapot: ujAllapot });
           return;
         }
         alert(`Az állapot módosítása nem sikerült: ${detail?.detail ?? res.status}`);
@@ -246,15 +257,22 @@ export function UtomunkaContent({
     }
   }
 
+  /** Kártya áthúzása másik oszlopba: a Kanban oszlop-kulcsot (ami a "nincs
+   * állapot" oszlopnál a NO_STATUS_KEY sentinel) fordítja a tényleges
+   * allapot-értékre. */
+  async function kartyaAthelyezes(deliverableId: number, celOszlop: string) {
+    await allapotAtallitasa(deliverableId, celOszlop === NO_STATUS_KEY ? null : celOszlop);
+  }
+
   /** A visszajelzés-űrlap sikeres mentése után újra megpróbáljuk ugyanazt az
-   * áthelyezést, amit a szerver az imént elutasított - a felhasználónak nem
-   * kell külön még egyszer húznia a kártyát, a visszajelzés megírása MAGA a
-   * befejezése a lépésnek. */
+   * állapotváltást, amit a szerver az imént elutasított - a felhasználónak
+   * nem kell külön még egyszer elvégeznie a lépést, a visszajelzés megírása
+   * MAGA a befejezése. */
   function visszajelzesUtan() {
     if (!visszajelzesKerve) return;
-    const { deliverableId, celOszlop } = visszajelzesKerve;
+    const { deliverableId, allapot } = visszajelzesKerve;
     setVisszajelzesKerve(null);
-    void kartyaAthelyezes(deliverableId, celOszlop);
+    void allapotAtallitasa(deliverableId, allapot);
   }
 
   const calendarProjects = useMemo(() => projects.filter((p) => p.forgatas_datuma !== null), [projects]);
@@ -334,13 +352,20 @@ export function UtomunkaContent({
                 },
                 {
                   header: "Állapot",
+                  // Nem az általános EditableStatusBadge-t használjuk: az
+                  // "Ellenőrzés" (vagy hasonló) állapot itt is neki ütközhet a
+                  // visszajelzés-hiány szabálynak (lásd allapotAtallitasa
+                  // fentebb), és a lista legördülőjének is ugyanúgy fel kell
+                  // dobnia a visszajelzés-űrlapot, nem csak a Kanban-húzásnak.
                   render: (d) => (
-                    <EditableStatusBadge
-                      patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`}
-                      field="allapot"
-                      value={d.allapot}
-                      options={statusOptions}
-                    />
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <SelectDropdown
+                        value={d.allapot}
+                        options={statusOptions}
+                        onChange={(next) => void allapotAtallitasa(d.id, next)}
+                        placeholder="Nincs állapot"
+                      />
+                    </span>
                   ),
                   sortAccessor: (d) => d.allapot,
                 },

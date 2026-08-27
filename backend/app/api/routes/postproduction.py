@@ -116,6 +116,12 @@ def _vagas_projektkodja(data: dict, db: Session) -> dict:
     return data
 
 
+#: A frontend ebből a PONTOS szövegből ismeri fel ezt a konkrét hibát (lásd
+#: UtomunkaContent.allapotAtallitasa) - nem egyeznél, a sima hiba-alert
+#: futna a felugró visszajelzés-űrlap helyett.
+VISSZAJELZES_HIANYZIK_UZENET = "Mielőtt ellenőrzésbe teszed, írj visszajelzést ehhez az anyaghoz."
+
+
 def _ellenorzeshez_kell_visszajelzes(obj: Deliverable, data: dict, db: Session, current_user: Employee) -> None:
     """Csak az teheti ellenőrzésbe az anyagot, aki már ÍRT hozzá vágói
     visszajelzést (lásd models/feedback.py).
@@ -138,17 +144,17 @@ def _ellenorzeshez_kell_visszajelzes(obj: Deliverable, data: dict, db: Session, 
         is not None
     )
     if not van_visszajelzese:
-        # Strukturált detail (nem sima szöveg): a felület ebből a "code"
-        # mezőből ismeri fel EZT a konkrét hibát, és a sima hiba-alert helyett
-        # felugró visszajelzés-űrlapot nyit a hívóhelyen (lásd
-        # UtomunkaContent.kartyaAthelyezes) - a "message" a tartalék, ha
-        # valahol mégis a sima szöveges hibaüzenetet olvasnák ki.
+        # SIMA SZÖVEG a detail - nem strukturált objektum: kb. 80 helyen fut
+        # a felületen ugyanaz a minta (`alert(\`...: ${detail?.detail}\`)`),
+        # ami stringnek várja - egy objektum "[object Object]"-ként jelenne
+        # meg mindenhol máshol, ahol ezt a hibát esetleg elkapják (pl. a
+        # generikus EditableDetailGrid, amivel BÁRMELYIK entitás BÁRMELYik
+        # mezője szerkeszthető). A SZÖVEG maga a kapocs a felugró
+        # visszajelzés-űrlaphoz (lásd UtomunkaContent.allapotAtallitasa) -
+        # ha itt átírod, ott is át kell.
         raise HTTPException(
             status_code=400,
-            detail={
-                "code": "visszajelzes_hianyzik",
-                "message": "Mielőtt ellenőrzésbe teszed, írj visszajelzést ehhez az anyaghoz.",
-            },
+            detail=VISSZAJELZES_HIANYZIK_UZENET,
         )
 
 
