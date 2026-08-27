@@ -42,6 +42,9 @@ const HIDDEN_FIELDS = [
   "campaign_id",
   "aki_felvezette_employee_id",
   "assigned_to_employee_id",
+  // A "Kiküldve" jelzőt a lista Kiküldve oszlopa mutatja (StatusBadge) - itt,
+  // az "Egyéb" kártyán külön mezőként semmi hasznot nem adna, csak zajt.
+  "anyag_kikuldve",
   "vinyok",
   "megrendeloi_kontaktok_notion_ids",
   "megrendeloi_email_cimek",
@@ -254,15 +257,6 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
           </Card>
         ),
       },
-      {
-        key: "hozzaszolasok",
-        label: "Hozzászólások",
-        content: (
-          <Card title="Hozzászólások">
-            <CommentsSection deliverableId={deliverableId} initialComments={comments} mentionableEmployees={assignableEmployees} />
-          </Card>
-        ),
-      },
     ],
   });
 
@@ -302,7 +296,20 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
           )}
         </div>
 
-        <DetailSections sections={tabs} />
+        <DetailSections
+          sections={tabs}
+          entityType="deliverable"
+          canReorder={szerepkorei(currentUser).includes("admin")}
+        />
+
+        {/* A hozzászólások SZÁNDÉKOSAN nem a fenti, átrendezhető kártyák
+            közt élnek: azok a több-oszlopos "masonry" elrendezésben
+            keskenyebbek lennének, és a sorrend is a beállítástól függene -
+            egy beszélgetés viszont mindig ugyanott, teljes szélességben, a
+            lap alján a legjobb, hogy könnyű legyen rátalálni és olvasni. */}
+        <Card title="Hozzászólások">
+          <CommentsSection deliverableId={deliverableId} initialComments={comments} mentionableEmployees={assignableEmployees} />
+        </Card>
       </div>
     </div>
   );
