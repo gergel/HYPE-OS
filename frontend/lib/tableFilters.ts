@@ -67,15 +67,32 @@ export function needsValue(operator: FilterOperator): boolean {
   return operator !== "isEmpty" && operator !== "isNotEmpty";
 }
 
+/** Egy cella (vagy a szűrőbe beírt érték) szám-e - ide értve a rövidített
+ * forint-jelölést is (lásd lib/penz.formatHuf: "545k Ft", "1.5M Ft"). A
+ * DataTable ugyanezt használja az oszlop "szám" jellegének eldöntéséhez
+ * (kind), hogy a kettő szét ne csússzon: ami itt számnak számít, azon
+ * kínáljuk fel a nagyobb/kisebb szűrést is. */
+export const NUMBER_PATTERN = /^-?[\d\s .,]+\s*(k|m)?\s*(?:ft|huf|eur|usd|db|%)?$/i;
+
 function toNumber(text: string): number | null {
-  // A cellákban formázott számok is lehetnek ("127 000 Ft", "1 234,50") -
-  // ezekből a puszta számot próbáljuk kiolvasni, hogy a nagyobb/kisebb
-  // összehasonlítás azon is működjön, ami a képernyőn látszik.
-  const cleaned = text.replace(/\s| /g, "").replace(/[^0-9,.-]/g, "");
+  // A cellákban formázott számok is lehetnek ("127 000 Ft", "1 234,50",
+  // "545k Ft", "1.5M Ft") - ezekből a puszta számot próbáljuk kiolvasni, a
+  // "k"/"M" rövidítést a megfelelő szorzóval véve figyelembe, hogy a
+  // nagyobb/kisebb összehasonlítás azon is működjön, ami a képernyőn látszik
+  // (enélkül egy "545k Ft" cellából nyers "545" lenne, és egy "nagyobb mint
+  // 100000" szűrés tévesen kizárná, holott valójában 545 000).
+  const trimmed = text.trim();
+  const match = trimmed.match(NUMBER_PATTERN);
+  if (!match) return null;
+  const szorzoSzoveg = (match[1] ?? "").toLowerCase();
+  const szamresz = szorzoSzoveg ? trimmed.slice(0, trimmed.toLowerCase().lastIndexOf(szorzoSzoveg)) : trimmed;
+  const cleaned = szamresz.replace(/\s| /g, "").replace(/[^0-9,.-]/g, "");
   if (!cleaned) return null;
   const normalized = cleaned.includes(",") && !cleaned.includes(".") ? cleaned.replace(",", ".") : cleaned;
   const n = Number(normalized);
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n)) return null;
+  const szorzo = szorzoSzoveg === "k" ? 1_000 : szorzoSzoveg === "m" ? 1_000_000 : 1;
+  return n * szorzo;
 }
 
 function matchesRule(cellValue: string, rule: FilterRule): boolean {

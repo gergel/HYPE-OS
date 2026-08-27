@@ -1,7 +1,7 @@
 import { Fragment, isValidElement, type ReactNode } from "react";
 import { normalizal } from "@/lib/szoveg";
 import { InteractiveTableClient } from "@/components/InteractiveTableClient";
-import type { ColumnKind } from "@/lib/tableFilters";
+import { NUMBER_PATTERN, type ColumnKind } from "@/lib/tableFilters";
 
 /** A már leredenderelt cella szöveges tartalma - ebből lesz a mezőnkénti
  * szűrés alapja (lásd TableFilterBuilder), hogy pontosan arra lehessen
@@ -44,15 +44,18 @@ function nodeToText(node: ReactNode): string {
   return "";
 }
 
-const NUMBER_LIKE = /^-?[\d\s  .,]+(?:\s*(?:ft|huf|eur|usd|db|%))?$/i;
-
 /** Egy oszlop "szám" jellegű-e - ettől függ, milyen műveleteket kínálunk rá a
  * szűrőben (nagyobb/kisebb vs. tartalmazza). Az oszlop tényleges értékeiből
- * döntjük el, mert a Column típus nem hordoz mezőtípust. */
+ * döntjük el, mert a Column típus nem hordoz mezőtípust.
+ *
+ * Ugyanazt a mintát (NUMBER_PATTERN) használjuk, mint amivel a szűrő a
+ * nagyobb/kisebb összehasonlításhoz a cellát számmá alakítja (lásd
+ * lib/tableFilters.toNumber) - két külön szabály könnyen szétcsúszna: az
+ * egyik szerint "számoszlop", a másik szerint mégsem tudná értelmezni. */
 function columnKind(values: string[]): ColumnKind {
   const filled = values.map((v) => v.trim()).filter((v) => v && v !== "–" && v !== "-");
   if (filled.length === 0) return "text";
-  return filled.every((v) => NUMBER_LIKE.test(v)) ? "number" : "text";
+  return filled.every((v) => NUMBER_PATTERN.test(v)) ? "number" : "text";
 }
 
 /** Legfeljebb ennyi különböző értéknél kínálunk legördülő listát a szűrőben.
