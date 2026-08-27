@@ -173,7 +173,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "Utómunka",
     items: [
-      { label: "Deliverable-ök", href: "/utomunka", icon: "Clapperboard" },
+      { label: "Utómunka", href: "/utomunka", icon: "Clapperboard" },
       // A vágói visszajelzések ugyanannak az oldalnak a jogosultságával
       // olvashatók, csak külön nézetben gyűlnek.
       {

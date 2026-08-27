@@ -15,6 +15,7 @@ import { AllapotBeallitasok } from "@/components/deliverable/AllapotBeallitasok"
 import { DeliverableBoard, type BoardCard, type BoardColumn } from "@/components/deliverable/DeliverableBoard";
 import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar";
 import { UtomunkaViewTabs } from "@/components/deliverable/UtomunkaViewTabs";
+import { VisszajelzesModal } from "@/components/deliverable/FeedbackSendButton";
 import type { AllapotBeallitas, Deliverable, Employee } from "@/lib/api";
 
 // Nem importáljuk az ENTITY_PATHS-t a lib/api.ts-ből (bár csak egy sima
@@ -69,6 +70,13 @@ export function UtomunkaContent({
 }) {
   const [deliverables, setDeliverables] = useState(initialDeliverables);
   const [projects, setProjects] = useState(initialProjects);
+  // Ha egy áthelyezést a szerver azért utasít el, mert az anyaghoz még nincs
+  // vágói visszajelzés (lásd kartyaAthelyezes), itt tartjuk számon, MELYIK
+  // anyagot és HOVÁ próbáltuk tenni - a felugró visszajelzés-űrlap sikeres
+  // mentése után ebből tudjuk újra megpróbálni ugyanazt az áthelyezést.
+  const [visszajelzesKerve, setVisszajelzesKerve] = useState<{ deliverableId: number; celOszlop: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!deliverablesHasMore) return;
@@ -220,6 +228,14 @@ export function UtomunkaContent({
         setDeliverables((elozo) =>
           elozo.map((d) => (d.id === deliverableId ? { ...d, allapot: eredeti.allapot } : d)),
         );
+        // Ez a konkrét hiba (lásd routes/postproduction._ellenorzeshez_kell_visszajelzes)
+        // strukturált "code"-dal jön, nem sima szöveggel - ebből ismerjük fel,
+        // hogy nem egy general hiba, hanem hiányzó visszajelzés, és sima
+        // alert() helyett a felugró visszajelzés-űrlapot nyitjuk meg helyette.
+        if (detail?.detail?.code === "visszajelzes_hianyzik") {
+          setVisszajelzesKerve({ deliverableId, celOszlop });
+          return;
+        }
         alert(`Az állapot módosítása nem sikerült: ${detail?.detail ?? res.status}`);
       }
     } catch (err) {
@@ -228,6 +244,17 @@ export function UtomunkaContent({
       );
       alert(`Az állapot módosítása nem sikerült (hálózati hiba): ${err}`);
     }
+  }
+
+  /** A visszajelzés-űrlap sikeres mentése után újra megpróbáljuk ugyanazt az
+   * áthelyezést, amit a szerver az imént elutasított - a felhasználónak nem
+   * kell külön még egyszer húznia a kártyát, a visszajelzés megírása MAGA a
+   * befejezése a lépésnek. */
+  function visszajelzesUtan() {
+    if (!visszajelzesKerve) return;
+    const { deliverableId, celOszlop } = visszajelzesKerve;
+    setVisszajelzesKerve(null);
+    void kartyaAthelyezes(deliverableId, celOszlop);
   }
 
   const calendarProjects = useMemo(() => projects.filter((p) => p.forgatas_datuma !== null), [projects]);
@@ -243,109 +270,121 @@ export function UtomunkaContent({
   }, [deliverables]);
 
   return (
-    <UtomunkaViewTabs
-      board={
-        <div className="space-y-6">
-          <Card
-            title="Állapot szerint"
-            actions={
-              canEdit ? (
-                <AllapotBeallitasok
-                  allapotok={statusOptions}
-                  kezdeti={allapotBeallitasok}
-                  mezoValasztek={mezoValasztek}
-                  kezdetiKartyaMezok={kartyaMezok}
-                />
-              ) : undefined
-            }
-          >
-            {/* Szerkesztési joggal a kártyák áthúzhatók másik oszlopba - ez
-                írja át az anyag állapotát. */}
-            <DeliverableBoard columns={statusColumns} onAthelyezes={canEdit ? kartyaAthelyezes : undefined} />
-          </Card>
-          <Card title="Forgatások naptár">
-            <ForgatasokCalendar projects={calendarProjects} />
-          </Card>
-          <Card title="Vinyók szerint">
-            <DeliverableBoard columns={vinyoColumns} />
-          </Card>
-        </div>
-      }
-      list={
-        <Card title={`Utómunka (${deliverables.length})`}>
-          {canCreate && (
-            <QuickCreateForm
-              postPath={DELIVERABLE_BASE_PATH}
-              addLabel="+ Új anyag hozzáadása"
-              // A PROJEKTKÓD kötelező: ebből derül ki, melyik munka utómunkája,
-              // és ez alapján kerül a helyére a projektkód adatlapján. A
-              // formátum szabad (lásd backend services/projektkod_kotes.py).
-              fields={[
-                { name: "projekt_neve", label: "Anyag neve", required: true },
-                { name: "projektkod_szoveg", label: "Projektkód", required: true },
-                { name: "hatarido", label: "Határidő", type: "date" },
+    <>
+      <UtomunkaViewTabs
+        board={
+          <div className="space-y-6">
+            <Card
+              title="Állapot szerint"
+              actions={
+                canEdit ? (
+                  <AllapotBeallitasok
+                    allapotok={statusOptions}
+                    kezdeti={allapotBeallitasok}
+                    mezoValasztek={mezoValasztek}
+                    kezdetiKartyaMezok={kartyaMezok}
+                  />
+                ) : undefined
+              }
+            >
+              {/* Szerkesztési joggal a kártyák áthúzhatók másik oszlopba - ez
+                  írja át az anyag állapotát. */}
+              <DeliverableBoard columns={statusColumns} onAthelyezes={canEdit ? kartyaAthelyezes : undefined} />
+            </Card>
+            <Card title="Forgatások naptár">
+              <ForgatasokCalendar projects={calendarProjects} />
+            </Card>
+            <Card title="Vinyók szerint">
+              <DeliverableBoard columns={vinyoColumns} />
+            </Card>
+          </div>
+        }
+        list={
+          <Card title={`Utómunka (${deliverables.length})`}>
+            {canCreate && (
+              <QuickCreateForm
+                postPath={DELIVERABLE_BASE_PATH}
+                addLabel="+ Új anyag hozzáadása"
+                // A PROJEKTKÓD kötelező: ebből derül ki, melyik munka utómunkája,
+                // és ez alapján kerül a helyére a projektkód adatlapján. A
+                // formátum szabad (lásd backend services/projektkod_kotes.py).
+                fields={[
+                  { name: "projekt_neve", label: "Anyag neve", required: true },
+                  { name: "projektkod_szoveg", label: "Projektkód", required: true },
+                  { name: "hatarido", label: "Határidő", type: "date" },
+                ]}
+              />
+            )}
+            <DataTable<Deliverable>
+              rows={deliverables}
+              emptyText="Még nincs felvett vágandó anyag - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
+              getHref={(d) => `/utomunka/${d.id}`}
+              deleteHref={canDelete ? (d) => `${DELIVERABLE_BASE_PATH}/${d.id}` : undefined}
+              filterable
+              columns={[
+                {
+                  header: "Anyag",
+                  render: (d) =>
+                    canEdit ? (
+                      <EditableTableCell patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`} field="projekt_neve" value={d.projekt_neve} />
+                    ) : (
+                      d.projekt_neve
+                    ),
+                  sortAccessor: (d) => d.projekt_neve,
+                },
+                {
+                  header: "Állapot",
+                  render: (d) => (
+                    <EditableStatusBadge
+                      patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`}
+                      field="allapot"
+                      value={d.allapot}
+                      options={statusOptions}
+                    />
+                  ),
+                  sortAccessor: (d) => d.allapot,
+                },
+                {
+                  header: "Határidő",
+                  render: (d) =>
+                    canEdit ? (
+                      <EditableTableCell patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`} field="hatarido" value={d.hatarido} type="date" />
+                    ) : (
+                      formatDate(d.hatarido)
+                    ),
+                  sortAccessor: (d) => d.hatarido,
+                },
+                {
+                  header: "Vágás leállítva",
+                  render: (d) => formatIdopont(d.vagas_leallitva),
+                  sortAccessor: (d) => d.vagas_leallitva,
+                },
+                {
+                  header: "Kiküldve",
+                  align: "right",
+                  render: (d) => (
+                    <StatusBadge
+                      label={d.anyag_kikuldve ? "Kiküldve" : "Nincs kiküldve"}
+                      tone={d.anyag_kikuldve ? "success" : "warning"}
+                    />
+                  ),
+                  sortAccessor: (d) => (d.anyag_kikuldve ? 1 : 0),
+                },
               ]}
             />
-          )}
-          <DataTable<Deliverable>
-            rows={deliverables}
-            emptyText="Még nincs felvett vágandó anyag - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
-            getHref={(d) => `/utomunka/${d.id}`}
-            deleteHref={canDelete ? (d) => `${DELIVERABLE_BASE_PATH}/${d.id}` : undefined}
-            filterable
-            columns={[
-              {
-                header: "Anyag",
-                render: (d) =>
-                  canEdit ? (
-                    <EditableTableCell patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`} field="projekt_neve" value={d.projekt_neve} />
-                  ) : (
-                    d.projekt_neve
-                  ),
-                sortAccessor: (d) => d.projekt_neve,
-              },
-              {
-                header: "Állapot",
-                render: (d) => (
-                  <EditableStatusBadge
-                    patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`}
-                    field="allapot"
-                    value={d.allapot}
-                    options={statusOptions}
-                  />
-                ),
-                sortAccessor: (d) => d.allapot,
-              },
-              {
-                header: "Határidő",
-                render: (d) =>
-                  canEdit ? (
-                    <EditableTableCell patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`} field="hatarido" value={d.hatarido} type="date" />
-                  ) : (
-                    formatDate(d.hatarido)
-                  ),
-                sortAccessor: (d) => d.hatarido,
-              },
-              {
-                header: "Vágás leállítva",
-                render: (d) => formatIdopont(d.vagas_leallitva),
-                sortAccessor: (d) => d.vagas_leallitva,
-              },
-              {
-                header: "Kiküldve",
-                align: "right",
-                render: (d) => (
-                  <StatusBadge
-                    label={d.anyag_kikuldve ? "Kiküldve" : "Nincs kiküldve"}
-                    tone={d.anyag_kikuldve ? "success" : "warning"}
-                  />
-                ),
-                sortAccessor: (d) => (d.anyag_kikuldve ? 1 : 0),
-              },
-            ]}
-          />
-        </Card>
-      }
-    />
+          </Card>
+        }
+      />
+      {/* Ha egy áthelyezést a szerver visszajelzés hiánya miatt utasított el
+          (lásd kartyaAthelyezes), itt a helye megírni - mentés után a lépés
+          magától folytatódik (visszajelzesUtan). */}
+      {visszajelzesKerve && (
+        <VisszajelzesModal
+          deliverableId={visszajelzesKerve.deliverableId}
+          onClose={() => setVisszajelzesKerve(null)}
+          onSaved={visszajelzesUtan}
+        />
+      )}
+    </>
   );
 }

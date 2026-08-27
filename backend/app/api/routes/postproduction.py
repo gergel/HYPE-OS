@@ -138,9 +138,17 @@ def _ellenorzeshez_kell_visszajelzes(obj: Deliverable, data: dict, db: Session, 
         is not None
     )
     if not van_visszajelzese:
+        # Strukturált detail (nem sima szöveg): a felület ebből a "code"
+        # mezőből ismeri fel EZT a konkrét hibát, és a sima hiba-alert helyett
+        # felugró visszajelzés-űrlapot nyit a hívóhelyen (lásd
+        # UtomunkaContent.kartyaAthelyezes) - a "message" a tartalék, ha
+        # valahol mégis a sima szöveges hibaüzenetet olvasnák ki.
         raise HTTPException(
             status_code=400,
-            detail="Mielőtt ellenőrzésbe teszed, írj visszajelzést ehhez az anyaghoz.",
+            detail={
+                "code": "visszajelzes_hianyzik",
+                "message": "Mielőtt ellenőrzésbe teszed, írj visszajelzést ehhez az anyaghoz.",
+            },
         )
 
 
