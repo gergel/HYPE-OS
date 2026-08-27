@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
@@ -115,9 +116,43 @@ def _vagas_projektkodja(data: dict, db: Session) -> dict:
     return data
 
 
-def _kovesd_a_vagas_projektkodjat(obj: Deliverable, data: dict, db: Session) -> None:
-    """Ha átírják a vágás projektkódját, kövesse a kötés is - és ne lehessen
-    kiüríteni: a vágásnak MINDIG van kódja (lásd _vagas_projektkodja)."""
+def _ellenorzeshez_kell_visszajelzes(obj: Deliverable, data: dict, db: Session, current_user: Employee) -> None:
+    """Csak az teheti ellenőrzésbe az anyagot, aki már ÍRT hozzá vágói
+    visszajelzést (lásd models/feedback.py).
+
+    A visszajelzés a nyersanyagról szól a gyártásnak (mit kapott a vágó, min
+    lehetne javítani) - enélkül könnyen elmarad, mert semmi nem kényszeríti
+    ki: az anyag ugyanúgy "kész"/"ellenőrzésbe" tehető visszajelzés nélkül is,
+    és a vágó a következő munkára ugrik. Nem kell ÚJ visszajelzést írni ehhez
+    a konkrét pillanathoz - ha valamikor korábban már írt egyet erre az
+    anyagra, azzal a feltétel teljesül."""
+    if "allapot" not in data or not vagoi_jatek.ellenorzes_allapot(data.get("allapot")):
+        return
+    van_visszajelzese = (
+        db.scalar(
+            select(Feedback.id).where(
+                Feedback.deliverable_id == obj.id,
+                Feedback.visszajelzo_employee_id == current_user.id,
+            )
+        )
+        is not None
+    )
+    if not van_visszajelzese:
+        raise HTTPException(
+            status_code=400,
+            detail="Mielőtt ellenőrzésbe teszed, írj visszajelzést ehhez az anyaghoz.",
+        )
+
+
+def _kovesd_a_vagas_projektkodjat(obj: Deliverable, data: dict, db: Session, current_user: Employee) -> None:
+    """A Deliverable PATCH-ének before_update ellenőrzései - csak EGY hívás
+    kapcsolható a routerre, ezért ez fogja össze az önálló szabályokat.
+
+    Elsőként: aki ellenőrzésbe teszi az anyagot, annak van-e már visszajelzése
+    hozzá (lásd _ellenorzeshez_kell_visszajelzes). Utána: ha átírják a vágás
+    projektkódját, kövesse a kötés is - és ne lehessen kiüríteni: a vágásnak
+    MINDIG van kódja (lásd _vagas_projektkodja)."""
+    _ellenorzeshez_kell_visszajelzes(obj, data, db, current_user)
     if "projektkod_szoveg" not in data:
         return
     kod = (data.get("projektkod_szoveg") or "").strip()

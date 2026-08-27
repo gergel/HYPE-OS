@@ -69,7 +69,7 @@ def _devizat_forintra(adat: dict, db: Session) -> dict:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(hiba)) from hiba
 
 
-def _devizat_forintra_frissiteskor(obj, adat: dict, db: Session) -> None:
+def _devizat_forintra_frissiteskor(obj, adat: dict, db: Session, _current_user: Employee) -> None:
     """Ugyanaz PATCH-nél. Csak akkor számol újra, ha a kérés hozza a pénznemet
     - egy önmagában álló összeg-javítás forintos javítás marad."""
     _devizat_forintra(adat, db)
@@ -100,7 +100,7 @@ revenues_router = build_crud_router(
     before_update=_devizat_forintra_frissiteskor,
 )
 
-def _kp_forgalom_kezi_javitas(obj: KpForgalom, adat: dict, db: Session) -> None:
+def _kp_forgalom_kezi_javitas(obj: KpForgalom, adat: dict, db: Session, _current_user: Employee) -> None:
     """Kézzel átírt összeg/irány FÉLRETESZI a Notion formula-értékét.
 
     A KP forgalom soroknál az irányt az importált "Forintban" mező ELŐJELE

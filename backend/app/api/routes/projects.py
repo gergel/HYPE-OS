@@ -91,7 +91,7 @@ def _kosd_a_projektkodhoz(data: dict, db: Session) -> dict:
     return data
 
 
-def _kovesd_a_projektkod_valtozast(obj: Project, data: dict, db: Session) -> None:
+def _kovesd_a_projektkod_valtozast(obj: Project, data: dict, db: Session, _current_user: Employee) -> None:
     """Ha valaki átírja a projektkód SZÖVEGÉT, kövesse a kötés is.
 
     Enélkül a projekt a régi Project Code alatt maradna - és a projektkód

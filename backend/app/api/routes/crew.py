@@ -50,7 +50,7 @@ def _hash_employee_password(data: dict, db: Session) -> dict:
 _VEDETT_MEZOK = ("is_active", "role", "tovabbi_szerepkorok", "email", "hashed_password")
 
 
-def _vedett_fiok_vedelme(obj: Employee, data: dict, _db: Session) -> None:
+def _vedett_fiok_vedelme(obj: Employee, data: dict, _db: Session, _current_user: Employee) -> None:
     """A védett rendszergazda fiókját nem lehet kikapcsolni vagy lefokozni.
 
     A futásidejű ellenőrzések ugyan átengedik akkor is, ha a rekordban rossz

@@ -71,7 +71,7 @@ def _penznem_ellenorzese(obj: ProjectCode, data: dict, _db: Session) -> None:
         raise HTTPException(status_code=400, detail=str(hiba)) from hiba
 
 
-def _projektkod_ellenorzese(obj: ProjectCode, data: dict, db: Session) -> None:
+def _projektkod_ellenorzese(obj: ProjectCode, data: dict, db: Session, _current_user: Employee) -> None:
     """A projektkód PATCH-ének összes együtt-értelmesség ellenőrzése."""
     _papir_kapcsolok_ellenorzese(obj, data, db)
     _penznem_ellenorzese(obj, data, db)
