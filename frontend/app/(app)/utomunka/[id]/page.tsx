@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
+import { AllapotValaszto } from "@/components/deliverable/AllapotValaszto";
 import { AssignedToPicker } from "@/components/deliverable/AssignedToPicker";
 import { CommentsSection } from "@/components/deliverable/CommentsSection";
 import { ContactsManager } from "@/components/deliverable/ContactsManager";
@@ -11,6 +12,7 @@ import { TimerControls } from "@/components/deliverable/TimerControls";
 import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
 import { DetailSections } from "@/components/DetailSections";
 import { RelatedTable } from "@/components/RelatedTable";
+import { StatusBadge } from "@/components/StatusBadge";
 import { TimesheetMinutesTable } from "@/components/deliverable/TimesheetMinutesTable";
 import { szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
@@ -45,6 +47,13 @@ const HIDDEN_FIELDS = [
   // A "Kiküldve" jelzőt a lista Kiküldve oszlopa mutatja (StatusBadge) - itt,
   // az "Egyéb" kártyán külön mezőként semmi hasznot nem adna, csak zajt.
   "anyag_kikuldve",
+  // Az "allapot" a generikus EditableDetailGrid helyett a bespoke
+  // AllapotValaszto komponensen keresztül szerkeszthető (lásd fent a fejlécnél) -
+  // ANNAK muszáj felismernie az "Ellenőrzésbe" váltás visszajelzés-hiányát és
+  // felugró űrlapot nyitnia helyette, amit a generikus mező-rács nem tud
+  // (az BÁRMELYIK entitáshoz szól, nem ismerhet Deliverable-specifikus
+  // szabályt).
+  "allapot",
   "vinyok",
   "megrendeloi_kontaktok_notion_ids",
   "megrendeloi_email_cimek",
@@ -118,6 +127,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
   const vagoiVisszajelzesek = await getVagoiVisszajelzesek(deliverableId);
 
   const employeeNameById = Object.fromEntries(allEmployees.map((e) => [e.id, e.full_name]));
+  const statusOptions = fieldTypes.allapot?.options ?? [];
   // Aki az Utómunka oldalon szerkeszthet, az javíthatja a rögzített perceket is.
   const canEditPage = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
   // Forint összeg csak annak, akinek a Pénzügy oldalhoz van hozzáférése.
@@ -266,7 +276,22 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
       <div className="flex-1 space-y-8 p-4 md:p-8">
         <div className="space-y-2">
           <BackLink href="/utomunka" label="Utómunka" />
-          <h1 className="t-page">{String(deliverable.projekt_neve ?? `Anyag #${deliverable.id}`)}</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="t-page">{String(deliverable.projekt_neve ?? `Anyag #${deliverable.id}`)}</h1>
+            {/* Bespoke szerkesztő, nem a generikus mező-rács (lásd
+                HIDDEN_FIELDS "allapot" bejegyzését fent): ez ismeri fel, ha
+                a szerver visszajelzés hiánya miatt utasítja el az
+                Ellenőrzésbe tételt, és felugró űrlapot nyit helyette. */}
+            {canEditPage ? (
+              <AllapotValaszto
+                deliverableId={deliverableId}
+                allapot={deliverable.allapot ? String(deliverable.allapot) : null}
+                options={statusOptions}
+              />
+            ) : (
+              Boolean(deliverable.allapot) && <StatusBadge label={String(deliverable.allapot)} tone="neutral" />
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
           {projectCode && (
