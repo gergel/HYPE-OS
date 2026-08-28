@@ -375,6 +375,23 @@ def _osszesites(o) -> KpOsszesites:
     )
 
 
+@summary_router.delete("/kp-forgalom/mind")
+def torol_minden_kp_forgalmat(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    """MINDEN KP forgalom sor törlése egyszerre - a Notionből örökölt, nagyot
+    elcsúszott adat helyett a felhasználó nulláról tudja újraépíteni a
+    táblát (lásd frontend penzugyek/kp-forgalom "Összes tétel törlése" gombja).
+
+    Csak MAGÁT a kp_forgalmak táblát üríti - a hozzá kötött Kiadás-sorokat nem
+    érinti: az expense_id csak KpForgalom oldali hivatkozás, a kiadás önálló
+    rekord marad."""
+    torolt_db = db.query(KpForgalom).delete()
+    db.commit()
+    return {"torolt_db": torolt_db}
+
+
 @summary_router.get("/kp-naplo", response_model=KpNaplo)
 def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     """MINDEN készpénz-mozgás egy listában, időrendben, futó egyenleggel - és a

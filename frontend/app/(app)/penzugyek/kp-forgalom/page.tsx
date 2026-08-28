@@ -2,6 +2,7 @@ import { Card } from "@/components/Card";
 import { DataTable, type Column } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
+import { TorolMindenKpForgalmatButton } from "@/components/finance/TorolMindenKpForgalmatButton";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -331,7 +332,10 @@ export default async function KpForgalomPage() {
             Pénzügyeken szerkeszthetők); ez a tábla az, aminek eddig SEHOL nem
             volt felülete, pedig a Notionből örökölt sorok javításra szorulnak.
             Minden mező átírható, és a sorok törölhetők/felvehetők. */}
-        <Card title={`KP forgalom tételek (${forgalmak.length})`}>
+        <Card
+          title={`KP forgalom tételek (${forgalmak.length})`}
+          actions={canDelete ? <TorolMindenKpForgalmatButton darabszam={forgalmak.length} /> : undefined}
+        >
           <p className="mb-3 text-[12.5px] text-text-muted">
             A Notionből örökölt „KP forgalom" tábla – itt szerkeszthető. Az <strong>irány</strong> mondja meg,
             kivétel volt-e a kasszából vagy betétel; az importált sorokon ezt a Notion „Forintban" mezőjének
