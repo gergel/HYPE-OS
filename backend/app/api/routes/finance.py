@@ -79,53 +79,24 @@ def _devizat_forintra_frissiteskor(obj, adat: dict, db: Session, _current_user: 
     _devizat_forintra(adat, db)
 
 
-def _alvallalkozo_helyetto_forgatas(db: Session, project_code_id: int) -> int | None:
-    """Ha egy projektkódon NINCS forgatás (tisztán ügynökségi feladat - pl.
-    tanácsadás, kampánymenedzsment -, amit nem forgatással látunk el), akkor
-    is kell egy Project sor, amihez a szerződést/TIG-et kötni lehet: az egész
-    Utókövetés-gépezet (subcontractor_contracts.py, performance_certificates.py,
-    utokovetes_admin.py) Project-enként dolgozik, nem projektkódonként.
-
-    Ilyenkor létrehozunk egy "helyettesítő" Project sort `nem_diszponalando=True`
-    jelöléssel - ez ugyanaz a mező, amivel a naptár-szinkron a meetingeket
-    jelöli: "nincs mit diszponálni" itt is igaz, tehát a diszpó/stáb-behívó
-    rendszer (services/dispo.py, a Naptár/Diszpó oldal) érintetlen marad. Az
-    Utókövetés listája viszont NEM a diszpó állapotára szűr, ha van hozzá
-    alvállalkozói kiadás (lásd list_pending_projects, list_tig_ready_projects,
-    utokovetes_admin.list_projects: `Project.alvallalkozo_kiadasok.any()`),
-    tehát ez a sor onnantól látszik, hogy az első alvállalkozói kiadás
-    rákerül - további kiadásoknál pedig már ez a sor lesz a "legfrissebb
-    forgatás", tehát nem jön létre belőle még egy."""
-    projektkod = db.get(ProjectCode, project_code_id)
-    if projektkod is None:
-        return None
-    helyettesito = Project(
-        nev=projektkod.project_nev or projektkod.projektkod,
-        project_code_id=projektkod.id,
-        forgatas_datuma=date.today(),
-        nem_diszponalando=True,
-    )
-    db.add(helyettesito)
-    db.flush()
-    return helyettesito.id
-
-
 def _alvallalkozo_forgatas_kitoltese(adat: dict, db: Session) -> dict:
     """Alvállalkozói kiadásnál (employee_id kitöltve) NEM kötelező kiválasztani,
     melyik konkrét forgatáshoz (alvallalkozo_project_id) tartozik - elég a
     projektkódhoz hozzáadni: aki kap egy embert a kiadáson, AUTOMATIKUSAN
-    bekerül az Utókövetésbe, hogy hozzá szerződés és TIG is készüljön (a
-    szerződés/TIG Project-hez kötött, lásd models/project.py
-    Project.alvallalkozo_stab), amíg ember nélkül minden marad a régiben (sima
-    kiadás, nincs vele más teendő).
+    bekerül az Utókövetésbe, hogy hozzá szerződés és TIG is készüljön, amíg
+    ember nélkül minden marad a régiben (sima kiadás, nincs vele más teendő).
 
-    A hozzárendelés a projektkód forgatásai közül a LEGFRISSEBBET választja,
+    Ha a projektkódhoz VAN forgatás, a hozzárendelés a legfrissebbet választja,
     ha a felhasználó nem adott meg konkrétat - a pontos forgatás csak azt
-    dönti el, HOL jelenik meg az Utókövetésben, magát a szerződés/TIG-igényt
-    nem befolyásolja. Ha a projektkódhoz még EGYETLEN forgatás sem tartozik
-    (lásd _alvallalkozo_helyetto_forgatas), akkor is bekerül az Utókövetésbe -
-    ez a szabály attól függetlenül érvényes, hogy forgatunk-e egyáltalán ezen
-    a projektkódon."""
+    dönti el, HOL jelenik meg az Utókövetésben (lásd models/project.py
+    Project.alvallalkozo_stab), magát a szerződés/TIG-igényt nem befolyásolja.
+
+    Ha a projektkódhoz NINCS forgatás (tisztán ügynökségi feladat - pl.
+    tanácsadás, kampánymenedzsment -, amit nem forgatással látunk el), a mező
+    üresen marad: NEM hozunk létre hozzá egy "helyettesítő" Project sort. Az
+    Utókövetés ilyenkor közvetlenül a PROJEKTKÓDHOZ köti a szerződést/TIG-et
+    (lásd models/project_code.py ProjectCode.alvallalkozo_stab_forgatas_nelkul
+    és api/routes/subcontractor_contracts.py "projektkód-szintű ág")."""
     if adat.get("employee_id") and not adat.get("alvallalkozo_project_id") and adat.get("project_code_id"):
         legfrissebb = db.scalar(
             select(Project.id)
@@ -133,8 +104,6 @@ def _alvallalkozo_forgatas_kitoltese(adat: dict, db: Session) -> dict:
             .order_by(Project.forgatas_datuma.desc().nulls_last(), Project.id.desc())
             .limit(1)
         )
-        if legfrissebb is None:
-            legfrissebb = _alvallalkozo_helyetto_forgatas(db, adat["project_code_id"])
         if legfrissebb is not None:
             adat["alvallalkozo_project_id"] = legfrissebb
     return adat

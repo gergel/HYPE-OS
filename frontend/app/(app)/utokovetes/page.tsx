@@ -2,8 +2,9 @@ import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { UtokovetesLista } from "@/components/UtokovetesLista";
 import { UtokovetesNezetek } from "@/components/UtokovetesNezetek";
+import { UtokovetesProjektkodLista } from "@/components/UtokovetesProjektkodLista";
 import { fazisa } from "@/lib/utokovetes";
-import { getUtokovetesOverview } from "@/lib/api";
+import { getUtokovetesOverview, getUtokovetesOverviewProjectCodes } from "@/lib/api";
 
 /** Utókövetés - EGY oldalon mutatja minden diszpózott projekthez tartozó
  * eseti szerződés + teljesítési igazolás + kifizetés + forgatás utáni
@@ -25,13 +26,13 @@ export default async function UtokovetesPage({
   searchParams: Promise<{ nezet?: string }>;
 }) {
   const { nezet } = await searchParams;
-  const rows = await getUtokovetesOverview();
+  const [rows, projektkodSorok] = await Promise.all([getUtokovetesOverview(), getUtokovetesOverviewProjectCodes()]);
   const keszDarab = rows.filter((r) => fazisa(r) === "kesz").length;
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 p-4 md:p-8">
+      <div className="flex-1 space-y-8 p-4 md:p-8">
         <Card
           title={`Utókövetés – ${rows.length} projekt, ${keszDarab} kész, ${rows.length - keszDarab} folyamatban`}
         >
@@ -41,6 +42,16 @@ export default async function UtokovetesPage({
             lista={<UtokovetesLista rows={rows} />}
           />
         </Card>
+
+        {/* PROJEKTKÓDOK, forgatás nélkül: alvállalkozói kiadás, amihez nincs
+            konkrét forgatás - a szerződés/TIG közvetlenül a projektkódhoz
+            kötve készül (lásd backend utokovetes_admin.py "projektkód-szintű
+            ág"). Csak akkor jelenik meg, ha van is ilyen kód. */}
+        {projektkodSorok.length > 0 && (
+          <Card title={`Alvállalkozói papírozás forgatás nélkül – ${projektkodSorok.length} projektkód`}>
+            <UtokovetesProjektkodLista rows={projektkodSorok} />
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -24,20 +24,29 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.routes.performance_certificates import (
     _draft_info as _tig_draft_info,
     _load_tig_lookup,
+    _load_tig_lookup_projektkodon,
     _tig_candidates,
     _tig_pending_csoportok,
+    _tig_pending_csoportok_projektkodon,
+    projektkodok_alvallalkozoi_kiadassal,
     tig_csoportok,
     tig_keszitheto_csoportok,
+    tig_keszitheto_csoportok_projektkodon,
     DraftInfo as TigDraftInfo,
     TigLookup,
+    TigLookupProjektkod,
 )
 from app.api.routes.subcontractor_contracts import (
     _draft_info as _contract_draft_info,
     _mentesul_keretszerzodessel,
     _pending_csoportok,
+    _pending_csoportok_projektkodon,
     _szamlazo_csoportok,
     alairasra_varo_csoportok,
     load_szerzodes_kornyezet,
+    load_szerzodes_kornyezet_projektkodon,
+    szamlazo_csoportok_projektkodon,
+    szerzodest_igenylo_emberek_projektkodon,
     DraftInfo as ContractDraftInfo,
 )
 from app.core.database import get_db
@@ -47,6 +56,7 @@ from app.models.employee import Employee
 from app.models.finance import Expense
 from app.models.post_shoot_feedback import PostShootFeedback
 from app.models.project import Project
+from app.models.project_code import ProjectCode
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.post_shoot_feedback import PostShootFeedbackRead
 from app.services import papirozas_hatokor
@@ -301,6 +311,51 @@ def _lefedettek(csoport: SzamlazoCsoport) -> list[LefedettEmber]:
     return [LefedettEmber(id=t.id, full_name=t.full_name) for t in csoport.tagok]
 
 
+class ProjectCodeOverviewSummary(BaseModel):
+    project_code_id: int
+    projektkod: str
+    project_nev: str | None
+    szerzodes_osszes: int
+    szerzodes_fuggo: int
+    tig_ready: bool
+    tig_osszes: int
+    tig_fuggo: int
+    kesz: bool
+
+
+@router.get("/projektkodok", response_model=list[ProjectCodeOverviewSummary])
+def list_utokovetes_overview_projektkodok(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """Lásd list_utokovetes_overview (forgatás-alapú megfelelője) - azok a
+    projektkódok, amiken FORGATÁS NÉLKÜL van alvállalkozói kiadás."""
+    project_codes = [
+        pk for pk in projektkodok_alvallalkozoi_kiadassal(db) if szerzodest_igenylo_emberek_projektkodon(pk)
+    ]
+    result: list[ProjectCodeOverviewSummary] = []
+    for pk in project_codes:
+        keretszerzodesek, project_code_contracts = load_szerzodes_kornyezet_projektkodon(db, [pk])
+        tig_lookup = _load_tig_lookup_projektkodon(db, {pk.id})
+        szerzodes_osszes, szerzodes_fuggo = _szerzodes_candidates_projektkodon(
+            pk, keretszerzodesek, project_code_contracts
+        )
+        tig_ready, tig_osszes, tig_fuggo = _tig_state_projektkodon(
+            pk, keretszerzodesek, project_code_contracts, tig_lookup
+        )
+        result.append(
+            ProjectCodeOverviewSummary(
+                project_code_id=pk.id,
+                projektkod=pk.projektkod,
+                project_nev=pk.project_nev,
+                szerzodes_osszes=szerzodes_osszes,
+                szerzodes_fuggo=szerzodes_fuggo,
+                tig_ready=tig_ready,
+                tig_osszes=tig_osszes,
+                tig_fuggo=tig_fuggo,
+                kesz=szerzodes_fuggo == 0 and tig_fuggo == 0,
+            )
+        )
+    return result
+
+
 @router.get("/{project_id}", response_model=ProjectOverviewDetail)
 def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     project = _get_project_or_404(db, project_id)
@@ -380,3 +435,48 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
         kesz=szerzodes_done and tig_fuggo == 0 and kifizetes_fuggo == 0 and alairas_varo == 0,
         visszajelzesek=[PostShootFeedbackRead.model_validate(f) for f in feedbacks],
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROJEKTKÓD-SZINTŰ ÁG: forgatás nélküli alvállalkozói kiadások áttekintője
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Lásd subcontractor_contracts.py és performance_certificates.py azonos című
+# szakaszait. EGYSZERŰBB, mint a forgatás-alapú áttekintő: nincs "aláírásra
+# váró" és "kifizetés" számláló, mert ezen az ágon nincs számla-allépés (a
+# kifizetés állapotát maga az Expense sor hordozza, lásd a fájl-fejlécet a
+# performance_certificates.py-ban) - a "kész" itt annyit jelent, hogy a
+# szerződés és a TIG lépés is lezárult mindenkinél.
+
+
+def _szerzodes_candidates_projektkodon(
+    projektkod: ProjectCode,
+    keretszerzodesek: dict[str, list[Contract]],
+    project_code_contracts: dict[tuple[int, str], Contract],
+) -> tuple[int, int]:
+    """Lásd _szerzodes_candidates (forgatás-alapú megfelelője)."""
+    csoportok = szamlazo_csoportok_projektkodon(projektkod)
+    total = sum(
+        1
+        for cs in csoportok
+        if not _mentesul_keretszerzodessel(keretszerzodesek.get(cs.kulcs, []), projektkod.datum)
+    )
+    pending = _pending_csoportok_projektkodon(projektkod, keretszerzodesek, project_code_contracts)
+    return total, len(pending)
+
+
+def _tig_state_projektkodon(
+    projektkod: ProjectCode,
+    keretszerzodesek: dict[str, list[Contract]],
+    project_code_contracts: dict[tuple[int, str], Contract],
+    tig_lookup: TigLookupProjektkod,
+) -> tuple[bool, int, int]:
+    """Lásd _tig_state (forgatás-alapú megfelelője)."""
+    if not szerzodest_igenylo_emberek_projektkodon(projektkod):
+        return False, 0, 0
+    csoportok = szamlazo_csoportok_projektkodon(projektkod)
+    total = len(csoportok)
+    keszitheto = tig_keszitheto_csoportok_projektkodon(projektkod, keretszerzodesek, project_code_contracts)
+    if not keszitheto:
+        return False, total, len(_tig_pending_csoportok_projektkodon(projektkod, csoportok, tig_lookup))
+    return True, total, len(_tig_pending_csoportok_projektkodon(projektkod, keszitheto, tig_lookup))

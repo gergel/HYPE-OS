@@ -15,6 +15,10 @@ class ContractBase(BaseModel):
     #: (lásd models/vallalkozas.py); ilyenkor employee_id üres.
     vallalkozas_id: int | None = None
     project_id: int | None = None
+    #: Csak a forgatás nélküli, projektkódhoz kötött eseti szerződéseknél van
+    #: kitöltve (lásd models/contract.py Contract.project_code_id) - a
+    #: project_id és a project_code_id közül egyszerre csak az egyik.
+    project_code_id: int | None = None
     ceg_neve: str | None = None
     szekhely: str | None = None
     adoszam: str | None = None

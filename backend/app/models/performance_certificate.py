@@ -25,7 +25,17 @@ class PerformanceCertificate(TimestampMixin, Base):
     #: A TIG "otthona": az a projekt, ahonnan készült. Egy TIG TÖBB projekt
     #: munkáját is igazolhatja (egy ember egy számlán küld be több forgatást) -
     #: azt a tételek hordozzák, lásd PerformanceCertificateTetel.
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    #:
+    #: NULLABLE: ha a TIG forgatás nélküli, tisztán projektkódhoz kötött
+    #: alvállalkozói kiadásról szól (lásd project_code_id), nincs Project sor,
+    #: amihez kötni lehetne - a project_id és a project_code_id közül EGYSZERRE
+    #: csak az egyik van kitöltve (lásd
+    #: api/routes/performance_certificates.py "projektkód-szintű ág").
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
+    #: Csak a forgatás nélküli, projektkódhoz kötött TIG-eknél van kitöltve -
+    #: lásd project_id és models/contract.py Contract.project_code_id
+    #: (ugyanaz a minta, a szerződés-oldalon).
+    project_code_id: Mapped[int | None] = mapped_column(ForeignKey("project_codes.id"))
     #: A SZÁMLÁZÓ FÉL, akinek a nevére a TIG szól: vagy egy ember, vagy egy
     #: vállalkozás (pontosan az egyik). Nem feltétlenül az, akinek a munkájáról
     #: szól - egy ember más(ok) munkáját is számlázhatja, lásd
@@ -96,8 +106,9 @@ class PerformanceCertificate(TimestampMixin, Base):
     szamla_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
     expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
 
-    project: Mapped["Project"] = relationship(back_populates="performance_certificates")
-    employee: Mapped["Employee"] = relationship(back_populates="performance_certificates")
+    project: Mapped["Project | None"] = relationship(back_populates="performance_certificates")
+    project_code: Mapped["ProjectCode | None"] = relationship()
+    employee: Mapped["Employee | None"] = relationship(back_populates="performance_certificates")
     vallalkozas: Mapped["Vallalkozas | None"] = relationship()
     invoices: Mapped[list["PerformanceCertificateInvoice"]] = relationship(
         back_populates="certificate", cascade="all, delete-orphan", order_by="PerformanceCertificateInvoice.created_at"

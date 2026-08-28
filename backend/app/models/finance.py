@@ -30,10 +30,9 @@ class Expense(TimestampMixin, Base):
     #: api/routes/finance.py _alvallalkozo_forgatas_kitoltese) - elég az
     #: alvállalkozót magát kiválasztani, "csak a projektkódhoz" hozzáadva. Ha
     #: a projektkódhoz MÉG egy forgatás sem tartozik (tisztán ügynökségi
-    #: feladat, nincs forgatás), a szerver létrehoz egy "nem diszponálandó"
-    #: helyettesítő Project sort, hogy legyen mihez kötni a papírokat (lásd
-    #: _alvallalkozo_helyetto_forgatas) - a diszpó/stáb-behívó rendszert ez
-    #: nem érinti.
+    #: feladat, nincs forgatás), a mező üresen marad - ilyenkor az Utókövetés
+    #: közvetlenül a PROJEKTKÓDHOZ köti a szerződést/TIG-et (lásd
+    #: models/project_code.py ProjectCode.alvallalkozo_stab_forgatas_nelkul).
     alvallalkozo_project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
     #: Melyik céges autóra ment a költség (tankolás, szerviz, matrica). Az autó
     #: oldala ezeket a sorokat mutatja - de a kiadás ettől ugyanúgy szerepel a

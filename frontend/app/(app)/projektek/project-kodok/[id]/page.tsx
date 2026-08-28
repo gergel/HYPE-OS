@@ -2,20 +2,24 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
+import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
 import { KoltsegBontas } from "@/components/KoltsegBontas";
 import { KeretKotes } from "@/components/megrendeloi/KeretKotes";
 import { MegrendeloiPapirKezelo } from "@/components/megrendeloi/MegrendeloiPapirKezelo";
 import { MegrendeloiSzamla } from "@/components/megrendeloi/MegrendeloiSzamla";
 import { PapirKapcsolok } from "@/components/megrendeloi/PapirKapcsolok";
+import { PerformanceCertificateManagerProjektkod } from "@/components/PerformanceCertificateManagerProjektkod";
 import { CommentsSection } from "@/components/projektkod/CommentsSection";
 import { ProjektkodBontasTablak } from "@/components/projektkod/ProjektkodBontasTablak";
 import { VallalasiAr } from "@/components/projektkod/VallalasiAr";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { SubcontractorContractManagerProjektkod } from "@/components/SubcontractorContractManagerProjektkod";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   formatHuf,
+  getAllContractsForProjectCode,
   getAttachments,
   getClients,
   getCurrentUser,
@@ -26,6 +30,8 @@ import {
   getMegrendeloiPapirok,
   getMegrendeloiSzamlaAllas,
   getMyPagePermissions,
+  getPendingSubcontractorsForProjectCode,
+  getPendingTigForProjectCode,
   getProjectCodeComments,
   getProjektkodBontas,
   getRecord,
@@ -76,6 +82,9 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     szamlaAllas,
     comments,
     employees,
+    pendingSzerzodes,
+    pendingTig,
+    keszSzerzodesek,
   ] = await Promise.all([
     // A megrendelői papírok (lásd backend routes/megrendeloi_papirok.py): a
     // szerződő fél a MEGRENDELŐK közül választható, a kapcsolattartó pedig a
@@ -107,6 +116,13 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     // A "@" taggeléshez: a Project Code-nak nincs saját "kioszthatók" listája
     // (mint az Utómunkának), ezért az egész munkatárs-listát ajánljuk fel.
     getEmployees(),
+    // ALVÁLLALKOZÓI szerződés/TIG - PROJEKTKÓDHOZ kötve, forgatás nélkül
+    // (tisztán ügynökségi feladat, lásd backend "projektkód-szintű ág"). Ez
+    // MÁS, mint a fenti "Megrendelői" papírozás: ott mi vagyunk a
+    // megbízott, itt egy alvállalkozónak fizetünk.
+    getPendingSubcontractorsForProjectCode(projectCodeId),
+    getPendingTigForProjectCode(projectCodeId),
+    getAllContractsForProjectCode(projectCodeId),
   ]);
 
   const ugyfelek = clients
@@ -115,6 +131,11 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
 
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+  // Az alvállalkozói szerződés/TIG az Utókövetés jogára hallgat, nem a
+  // Project Code oldaléra - ugyanaz a jog, mint a forgatáshoz kötött ágon
+  // (lásd backend subcontractor_contracts.py PAGE = "/utokovetes").
+  const canEditUtokovetes = canDoAction(currentUser, pagePermissions, "/utokovetes", "edit");
+  const canDeleteUtokovetes = canDoAction(currentUser, pagePermissions, "/utokovetes", "delete");
   // A tételes bontás sorai a SAJÁT végpontjukon törlődnek, tehát a saját
   // oldaluk jogosultsága kell hozzájuk - nem a projektkódé. Így a gomb csak
   // ott jelenik meg, ahol a szerver is engedné (lásd ProjektkodBontasTablak).
@@ -332,6 +353,42 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             </div>
           </Card>
         </div>
+
+        {/* ALVÁLLALKOZÓI papírozás, FORGATÁS NÉLKÜL: ha egy projekt-kiadáson
+            valakit alvállalkozóként jelöltek meg, de a kiadáshoz nincs
+            konkrét forgatás (tisztán ügynökségi feladat), a szerződés és a
+            TIG közvetlenül ehhez a projektkódhoz kötve készül - NEM jön
+            létre hozzá "helyettesítő" forgatás (lásd backend
+            subcontractor_contracts.py / performance_certificates.py
+            "projektkód-szintű ág"). Csak akkor jelenik meg, ha van is mit
+            mutatni - a legtöbb projektkódnál nincs ilyen kiadás. */}
+        {((pendingSzerzodes?.pending.length ?? 0) > 0 ||
+          (pendingTig?.pending.length ?? 0) > 0 ||
+          (pendingTig?.szerzodesre_varo.length ?? 0) > 0 ||
+          keszSzerzodesek.length > 0) && (
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <Card title="Alvállalkozói szerződés (forgatás nélkül)" icon={FileSignature}>
+              <SubcontractorContractManagerProjektkod
+                projectCodeId={projectCodeId}
+                pending={pendingSzerzodes?.pending ?? []}
+              />
+              <ElkeszultSzerzodesek
+                projectId={projectCodeId}
+                szerzodesek={keszSzerzodesek}
+                canEdit={canEditUtokovetes}
+                canDelete={canDeleteUtokovetes}
+                basePath={`/api/v1/alvallalkozoi-szerzodesek/projektkodok/${projectCodeId}`}
+              />
+            </Card>
+            <Card title="Alvállalkozói TIG (forgatás nélkül)" icon={FileCheck2}>
+              <PerformanceCertificateManagerProjektkod
+                projectCodeId={projectCodeId}
+                pending={pendingTig?.pending ?? []}
+                szerzodesreVaro={pendingTig?.szerzodesre_varo ?? []}
+              />
+            </Card>
+          </div>
+        )}
 
         {/* Kell-e egyáltalán papír erre a kódra. Nem kapott saját kártyát: a
             legtöbb munkánál nincs vele dolgunk, csak a kivételeknél (nem

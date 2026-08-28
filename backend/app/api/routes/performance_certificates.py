@@ -18,13 +18,18 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import or_, tuple_
+from sqlalchemy import or_, select, tuple_
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.routes.subcontractor_contracts import (
     csoport_szerzodes_kesz,
+    csoport_szerzodes_kesz_projektkodon,
     eseti_szerzodesek_a_projekten,
+    eseti_szerzodesek_a_projektkodon,
     load_szerzodes_kornyezet,
+    load_szerzodes_kornyezet_projektkodon,
+    szamlazo_csoportok_projektkodon,
+    szerzodest_igenylo_emberek_projektkodon,
 )
 from app.core.config import settings
 from app.core.database import get_db
@@ -38,6 +43,7 @@ from app.models.performance_certificate import (
     PerformanceCertificateTetel,
 )
 from app.models.project import Project
+from app.models.project_code import ProjectCode
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.finance import KifizetesIn
 from app.schemas.performance_certificate import PerformanceCertificateRead
@@ -497,6 +503,38 @@ def _pending_info(
         draft=_draft_info(existing),
         szerzodes=_szerzodes_elotoltes(szerzodes),
     )
+
+
+class PendingProjectCodeSummary(BaseModel):
+    project_code_id: int
+    projektkod: str
+    project_nev: str | None
+    pending_count: int
+
+
+@router.get("/projektkodok", response_model=list[PendingProjectCodeSummary])
+def list_tig_ready_project_codes(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """Lásd list_tig_ready_projects (forgatás-alapú megfelelője) - a
+    projektkód-szintű (forgatás nélküli) alvállalkozói kiadásokra."""
+    project_codes = [pk for pk in projektkodok_alvallalkozoi_kiadassal(db) if szerzodest_igenylo_emberek_projektkodon(pk)]
+    if not project_codes:
+        return []
+
+    result: list[PendingProjectCodeSummary] = []
+    for pk in project_codes:
+        keretszerzodesek, project_code_contracts = load_szerzodes_kornyezet_projektkodon(db, [pk])
+        keszitheto = tig_keszitheto_csoportok_projektkodon(pk, keretszerzodesek, project_code_contracts)
+        if not keszitheto:
+            continue
+        tig_lookup = _load_tig_lookup_projektkodon(db, {pk.id})
+        pending = _tig_pending_csoportok_projektkodon(pk, keszitheto, tig_lookup)
+        if pending:
+            result.append(
+                PendingProjectCodeSummary(
+                    project_code_id=pk.id, projektkod=pk.projektkod, project_nev=pk.project_nev, pending_count=len(pending)
+                )
+            )
+    return result
 
 
 @router.get("/{project_id}", response_model=PendingProjectDetail)
@@ -1512,3 +1550,479 @@ def delete_certificate(
         document_storage.delete_object(invoice.storage_key)
     db.delete(cert)
     db.commit()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROJEKTKÓD-SZINTŰ ÁG: TIG forgatás nélküli alvállalkozói kiadáshoz
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Lásd subcontractor_contracts.py azonos című szakaszát - ugyanaz a döntés: ha
+# egy projektkódon nincs forgatás (tisztán ügynökségi feladat), a TIG a
+# PROJEKTKÓDHOZ kötődik (lásd models/performance_certificate.py
+# PerformanceCertificate.project_code_id), és a szerződés-oldali "csoport"
+# fogalmakat (szamlazo_csoportok_projektkodon stb.) újrahasználja - nincs
+# tétel-rendszer és nincs "ki számláz kiért" felülírás ezen az ágon sem.
+#
+# A számla-lépés (feltöltött számla, fizetési határidő, kifizetés-jelölés) ezen
+# az ágon NEM érhető el: egy forgatás nélküli alvállalkozói kiadásnál maga az
+# Expense (a kiadás sora) hordozza a kifizetés állapotát - ott jelölhető
+# kifizetettnek, nincs szükség egy második, TIG-hez kötött számla-lépésre.
+
+
+def _get_project_code_or_404(db: Session, project_code_id: int) -> ProjectCode:
+    projektkod = db.get(ProjectCode, project_code_id)
+    if projektkod is None:
+        raise HTTPException(status_code=404, detail="Projektkód nem található")
+    return projektkod
+
+
+#: (projektkód id, ember) -> az őt lefedő TIG, és (projektkód id, számlázó
+#: kulcs) -> a fél TIG-je azon a projektkódon - lásd TigLookup (forgatás-alapú
+#: megfelelője).
+TigLookupProjektkod = tuple[
+    dict[tuple[int, int], PerformanceCertificate], dict[tuple[int, str], PerformanceCertificate]
+]
+
+
+def _load_tig_lookup_projektkodon(db: Session, project_code_ids: set[int]) -> TigLookupProjektkod:
+    """Lásd _load_tig_lookup (forgatás-alapú megfelelője) - itt nincs
+    tétel-rendszer, ezért egyenesen a `project_code_id` oszlopra szűrünk."""
+    if not project_code_ids:
+        return {}, {}
+    ember_fedettseg: dict[tuple[int, int], PerformanceCertificate] = {}
+    fel_tig: dict[tuple[int, str], PerformanceCertificate] = {}
+    for cert in (
+        db.query(PerformanceCertificate).filter(PerformanceCertificate.project_code_id.in_(project_code_ids)).all()
+    ):
+        if cert.employee_id is not None:
+            ember_fedettseg[(cert.project_code_id, cert.employee_id)] = cert
+        kulcs = tig_kulcsa(cert)
+        if kulcs is not None:
+            fel_tig[(cert.project_code_id, kulcs)] = cert
+    return ember_fedettseg, fel_tig
+
+
+def tig_keszitheto_csoportok_projektkodon(
+    projektkod: ProjectCode,
+    keretszerzodesek: dict[str, list[Contract]],
+    project_code_contracts: dict[tuple[int, str], Contract],
+) -> list[SzamlazoCsoport]:
+    """Lásd tig_keszitheto_csoportok (forgatás-alapú megfelelője)."""
+    return [
+        cs
+        for cs in szamlazo_csoportok_projektkodon(projektkod)
+        if csoport_szerzodes_kesz_projektkodon(projektkod, cs, keretszerzodesek, project_code_contracts)
+    ]
+
+
+def _tig_keszitheto_projektkodon(db: Session, projektkod: ProjectCode, csoport: SzamlazoCsoport) -> bool:
+    keretszerzodesek, project_code_contracts = load_szerzodes_kornyezet_projektkodon(db, [projektkod])
+    return csoport_szerzodes_kesz_projektkodon(projektkod, csoport, keretszerzodesek, project_code_contracts)
+
+
+def _csoport_fedve_projektkodon(
+    projektkod: ProjectCode, csoport: SzamlazoCsoport, lookup: TigLookupProjektkod
+) -> bool:
+    """Lásd _csoport_fedve (forgatás-alapú megfelelője)."""
+    _, fel_tig = lookup
+    fel_cert = fel_tig.get((projektkod.id, csoport.kulcs))
+    if fel_cert is not None and fel_cert.allapot in TERMINAL_STATUSES:
+        return True
+    ember_fedettseg, _ = lookup
+    for tag in csoport.tagok:
+        cert = ember_fedettseg.get((projektkod.id, tag.id))
+        if cert is None or cert.allapot not in TERMINAL_STATUSES:
+            return False
+    return True
+
+
+def _tig_pending_csoportok_projektkodon(
+    projektkod: ProjectCode, csoportok: list[SzamlazoCsoport], lookup: TigLookupProjektkod
+) -> list[tuple[SzamlazoCsoport, PerformanceCertificate | None]]:
+    _, fel_tig = lookup
+    result: list[tuple[SzamlazoCsoport, PerformanceCertificate | None]] = []
+    for csoport in csoportok:
+        if _csoport_fedve_projektkodon(projektkod, csoport, lookup):
+            continue
+        result.append((csoport, fel_tig.get((projektkod.id, csoport.kulcs))))
+    return result
+
+
+def projektkodok_alvallalkozoi_kiadassal(db: Session) -> list[ProjectCode]:
+    """Azok a projektkódok, amiken FORGATÁS NÉLKÜL van legalább egy
+    alvállalkozói kiadás - lásd models/finance.py Expense.alvallalkozo_project_id
+    és models/project_code.py ProjectCode.alvallalkozo_stab_forgatas_nelkul."""
+    projekt_kod_idk = set(
+        db.scalars(
+            select(Expense.project_code_id).where(
+                Expense.employee_id.is_not(None),
+                Expense.alvallalkozo_project_id.is_(None),
+                Expense.project_code_id.is_not(None),
+            )
+        ).all()
+    )
+    if not projekt_kod_idk:
+        return []
+    return [
+        pk
+        for pk in db.query(ProjectCode).filter(ProjectCode.id.in_(projekt_kod_idk)).all()
+        if not pk.elmaradt and not papirozas_hatokor.projektkod_kivett(pk.projektkod)
+    ]
+
+
+class PendingProjectCodeEmployeeInfo(BaseModel):
+    """Lásd PendingEmployeeInfo (forgatás-alapú megfelelője) - egyszerűbb,
+    nincs "lefedettek" tétellista (lásd fájl fejléce)."""
+
+    id: int
+    szamlazo: str
+    full_name: str
+    email: str | None
+    ceg_neve: str | None
+    szekhely: str | None
+    adoszam: str | None
+    megbizas_targya: str | None
+    plusz_afa: bool | None
+    draft: DraftInfo | None
+    #: A fél eseti szerződése ezen a projektkódon - ebből tölti elő az űrlap
+    #: azt, amit ott már megadtak (lásd SzerzodesElotoltes).
+    szerzodes: SzerzodesElotoltes | None = None
+
+
+class PendingProjectCodeDetail(BaseModel):
+    project_code_id: int
+    projektkod: str
+    project_nev: str | None
+    pending: list[PendingProjectCodeEmployeeInfo]
+    tig_ready: bool
+    szerzodesre_varo: list[PendingProjectCodeEmployeeInfo] = []
+
+
+def _pending_info_projektkodon(
+    csoport: SzamlazoCsoport, existing: PerformanceCertificate | None, szerzodes: Contract | None = None
+) -> PendingProjectCodeEmployeeInfo:
+    fel = csoport.fel
+    return PendingProjectCodeEmployeeInfo(
+        id=fel.employee.id if fel.employee else 0,
+        szamlazo=fel.kulcs,
+        full_name=fel.nev,
+        email=fel.email,
+        ceg_neve=fel.ceg_neve,
+        szekhely=fel.szekhely,
+        adoszam=fel.adoszam,
+        megbizas_targya=fel.megbizas_targya,
+        plusz_afa=fel.plusz_afa,
+        draft=_draft_info(existing),
+        szerzodes=_szerzodes_elotoltes(szerzodes),
+    )
+
+
+@router.get("/projektkodok/{project_code_id}", response_model=PendingProjectCodeDetail)
+def get_pending_for_project_code(
+    project_code_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
+):
+    projektkod = _get_project_code_or_404(db, project_code_id)
+    keretszerzodesek, project_code_contracts = load_szerzodes_kornyezet_projektkodon(db, [projektkod])
+    osszes_csoport = szamlazo_csoportok_projektkodon(projektkod)
+    keszitheto = [
+        cs
+        for cs in osszes_csoport
+        if csoport_szerzodes_kesz_projektkodon(projektkod, cs, keretszerzodesek, project_code_contracts)
+    ]
+    szerzodesre_varo_csoportok = [cs for cs in osszes_csoport if cs not in keszitheto]
+    tig_lookup = _load_tig_lookup_projektkodon(db, {projektkod.id})
+    pending = _tig_pending_csoportok_projektkodon(projektkod, keszitheto, tig_lookup)
+    szerzodesek = eseti_szerzodesek_a_projektkodon(db, projektkod.id)
+
+    return PendingProjectCodeDetail(
+        project_code_id=projektkod.id,
+        projektkod=projektkod.projektkod,
+        project_nev=projektkod.project_nev,
+        pending=[
+            _pending_info_projektkodon(csoport, existing, szerzodesek.get(csoport.kulcs))
+            for csoport, existing in pending
+        ],
+        tig_ready=bool(pending),
+        szerzodesre_varo=[_pending_info_projektkodon(cs, None, szerzodesek.get(cs.kulcs)) for cs in szerzodesre_varo_csoportok],
+    )
+
+
+def _validate_szamlazo_projektkodon(
+    db: Session, projektkod: ProjectCode, szamlazo_kulcs: str, *, szerzodes_kell: bool = True
+) -> SzamlazoCsoport:
+    """Lásd _validate_szamlazo (forgatás-alapú megfelelője)."""
+    fel = szamlazo.feloldas(db, szamlazo_kulcs)
+    if fel is None:
+        raise HTTPException(status_code=404, detail="A számlázó fél nem található")
+    csoport = next((cs for cs in szamlazo_csoportok_projektkodon(projektkod) if cs.kulcs == fel.kulcs), None)
+    if csoport is None:
+        if fel.employee is not None and fel.employee.tipus == EmployeeType.BELSOS:
+            raise HTTPException(status_code=400, detail="Belsős munkatársnak nem kell teljesítési igazolás.")
+        raise HTTPException(
+            status_code=400, detail="Ezen a projektkódon senkinek a munkáját nem ez a fél számlázza."
+        )
+    if szerzodes_kell and not _tig_keszitheto_projektkodon(db, projektkod, csoport):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{csoport.cimke()} szerződése még nincs meg ezen a projektkódon - TIG csak azután készíthető róla.",
+        )
+    return csoport
+
+
+def _szamlazo_szuro_projektkodon(fel: SzamlazoFel):
+    if fel.vallalkozas is not None:
+        return PerformanceCertificate.vallalkozas_id == fel.vallalkozas.id
+    return (PerformanceCertificate.employee_id == fel.employee.id) & PerformanceCertificate.vallalkozas_id.is_(None)
+
+
+def _get_or_create_draft_projektkodon(
+    db: Session, projektkod: ProjectCode, csoport: SzamlazoCsoport
+) -> PerformanceCertificate:
+    """Lásd _get_or_create_draft (forgatás-alapú megfelelője)."""
+    _, fel_tig = _load_tig_lookup_projektkodon(db, {projektkod.id})
+    existing = fel_tig.get((projektkod.id, csoport.kulcs))
+    if existing is None:
+        existing = (
+            db.query(PerformanceCertificate)
+            .filter(
+                PerformanceCertificate.project_code_id == projektkod.id, _szamlazo_szuro_projektkodon(csoport.fel)
+            )
+            .first()
+        )
+    if existing is not None:
+        if existing.allapot in TERMINAL_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail="Ehhez a projektkódhoz és félhez már véglegesített TIG-bejegyzés tartozik (kiküldve vagy kihagyva).",
+            )
+        return existing
+    fel = csoport.fel
+    # A fél ESETI SZERZŐDÉSE ugyanerről a munkáról szól - amit oda már
+    # beírtak, azt innen vesszük át (lásd SzerzodesElotoltes).
+    szerzodes = eseti_szerzodesek_a_projektkodon(db, projektkod.id).get(csoport.kulcs)
+
+    def _szerzodesbol(mezo: str, tartalek):
+        ertek = getattr(szerzodes, mezo, None) if szerzodes is not None else None
+        return tartalek if ertek in (None, "") else ertek
+
+    draft = PerformanceCertificate(
+        project_code_id=projektkod.id,
+        employee_id=fel.employee.id if fel.employee else None,
+        vallalkozas_id=fel.vallalkozas.id if fel.vallalkozas else None,
+        allapot="Készítés alatt",
+        ceg_neve=_szerzodesbol("ceg_neve", fel.ceg_neve),
+        szekhely=_szerzodesbol("szekhely", fel.szekhely),
+        adoszam=_szerzodesbol("adoszam", fel.adoszam),
+        megbizas_targya=_szerzodesbol("megbizas_targya", fel.megbizas_targya),
+        netto_osszeg=_szerzodesbol("netto_osszeg", None),
+        plusz_afa=_szerzodesbol("plusz_afa", fel.plusz_afa),
+        teljesites_szoveg=_szerzodesbol("teljesites_szoveg", ""),
+        email=fel.email,
+    )
+    db.add(draft)
+    db.flush()
+    return draft
+
+
+class TigDraftInProjektkod(BaseModel):
+    ceg_neve: str | None = None
+    szekhely: str | None = None
+    adoszam: str | None = None
+    megbizas_targya: str | None = None
+    netto_osszeg: float | None = None
+    teljesites_szoveg: str | None = None
+    keltezes: date | None = None
+    plusz_afa: bool | None = None
+
+
+def _apply_draft_fields_projektkodon(draft: PerformanceCertificate, payload: TigDraftInProjektkod) -> None:
+    for field in (
+        "ceg_neve",
+        "szekhely",
+        "adoszam",
+        "megbizas_targya",
+        "netto_osszeg",
+        "teljesites_szoveg",
+        "keltezes",
+        "plusz_afa",
+    ):
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(draft, field, value)
+
+
+@router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/save", response_model=PerformanceCertificateRead)
+def save_draft_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: TigDraftInProjektkod,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    projektkod = _get_project_code_or_404(db, project_code_id)
+    csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs)
+    draft = _get_or_create_draft_projektkodon(db, projektkod, csoport)
+    _apply_draft_fields_projektkodon(draft, payload)
+    db.commit()
+    db.refresh(draft)
+    return PerformanceCertificateRead.model_validate(draft)
+
+
+@router.post(
+    "/projektkodok/{project_code_id}/{szamlazo_kulcs}/generate-and-send", response_model=PerformanceCertificateRead
+)
+def generate_and_send_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: TigDraftInProjektkod,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    projektkod = _get_project_code_or_404(db, project_code_id)
+    csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs)
+    fel = csoport.fel
+    draft = _get_or_create_draft_projektkodon(db, projektkod, csoport)
+    _apply_draft_fields_projektkodon(draft, payload)
+
+    if not draft.netto_osszeg or draft.netto_osszeg <= 0:
+        raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
+    cimzett = (draft.email or fel.email or "").strip()
+    if not cimzett:
+        raise HTTPException(status_code=400, detail="A számlázó félnek nincs email címe.")
+
+    keltezes = draft.keltezes or date.today()
+    draft.keltezes = keltezes
+    teljesites_str = papir_tetelek.teljesites_szovege(draft.teljesites_szoveg, [], "")
+
+    doc_link = None
+    pdf_bytes = None
+    base_name = f"{projektkod.projektkod}_{draft.ceg_neve or fel.nev}_TIG"
+    try:
+        if settings.gdoc_kulsos_tig_template_id:
+            fields = {
+                "nev": draft.ceg_neve or fel.nev,
+                "hely": draft.szekhely or "",
+                "adoszam": draft.adoszam or "",
+                "targy": papir_tetelek.targy_szovege(draft.megbizas_targya, []),
+                "tido": teljesites_str,
+                "projkod": projektkod.projektkod,
+                "netto": f"{draft.netto_osszeg:,.0f}".replace(",", " "),
+                "kelt": keltezes.strftime("%Y.%m.%d."),
+                "afa": "+ ÁFA" if draft.plusz_afa else "",
+                "nettoki": szam_betukkel(draft.netto_osszeg),
+            }
+            pdf_bytes, new_doc_id = gdoc_fill_and_export_pdf(
+                template_file_id=settings.gdoc_kulsos_tig_template_id,
+                base_name=base_name,
+                fields=fields,
+                output_folder_id=settings.drive_kulsos_tig or settings.gdoc_output_folder_id or settings.drive_folder_id or None,
+            )
+            doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
+
+        subject = f"{draft.ceg_neve or fel.nev}_{projektkod.projektkod} - Projekt_TIG"
+        html = _TIG_EMAIL_HTML.format(projektdatum="–")
+        send_message([cimzett], subject, html, pdf_bytes=pdf_bytes, pdf_filename="teljesitesi_igazolas.pdf")
+    except RuntimeError as exc:
+        db.commit()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    draft.allapot = "Kiküldve"
+    draft.file_url = doc_link
+    db.commit()
+    db.refresh(draft)
+    return PerformanceCertificateRead.model_validate(draft)
+
+
+class TigKihagyasInProjektkod(BaseModel):
+    kihagyas_oka: str | None = None
+
+
+@router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/skip", response_model=PerformanceCertificateRead)
+def skip_tig_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: TigKihagyasInProjektkod,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Lásd skip_tig (forgatás-alapú megfelelője) - a szerződéstől függetlenül
+    kihagyható."""
+    indok = (payload.kihagyas_oka or "").strip()
+    if not indok:
+        raise HTTPException(status_code=400, detail="A kihagyás okát meg kell adni.")
+    projektkod = _get_project_code_or_404(db, project_code_id)
+    csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs, szerzodes_kell=False)
+    draft = _get_or_create_draft_projektkodon(db, projektkod, csoport)
+    draft.allapot = "Kihagyva"
+    draft.kihagyas_oka = indok
+    db.commit()
+    db.refresh(draft)
+    return PerformanceCertificateRead.model_validate(draft)
+
+
+def _certificate_or_none_projektkodon(
+    db: Session, project_code_id: int, szamlazo_kulcs: str
+) -> PerformanceCertificate | None:
+    fel = szamlazo.feloldas(db, szamlazo_kulcs)
+    if fel is None:
+        return None
+    _, fel_tig = _load_tig_lookup_projektkodon(db, {project_code_id})
+    cert = fel_tig.get((project_code_id, fel.kulcs))
+    if cert is not None:
+        return cert
+    return (
+        db.query(PerformanceCertificate)
+        .filter(PerformanceCertificate.project_code_id == project_code_id, _szamlazo_szuro_projektkodon(fel))
+        .first()
+    )
+
+
+@router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/allapot", response_model=PerformanceCertificateRead)
+def set_allapot_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: AllapotIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Lásd set_allapot (forgatás-alapú megfelelője)."""
+    if payload.allapot not in ALLOWED_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen állapot. Választható: {', '.join(ALLOWED_STATUSES)}")
+    cert = _certificate_or_none_projektkodon(db, project_code_id, szamlazo_kulcs)
+    if cert is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projektkódhoz és félhez nincs TIG bejegyzés.")
+    cert.allapot = payload.allapot
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
+@router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/sajat-fajl", response_model=PerformanceCertificateRead)
+async def upload_sajat_tig_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """Lásd upload_sajat_tig (forgatás-alapú megfelelője)."""
+    projektkod = _get_project_code_or_404(db, project_code_id)
+    csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs)
+    draft = _get_or_create_draft_projektkodon(db, projektkod, csoport)
+    if not draft.netto_osszeg or draft.netto_osszeg <= 0:
+        raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
+
+    filename = file.filename or "tig"
+    content_type = file.content_type or "application/octet-stream"
+    data = await file.read()
+
+    regi_kulcs = draft.file_storage_key
+    kulcs = f"tig-dokumentum/projektkod-{project_code_id}/{szamlazo_kulcs}-{draft.id}{os.path.splitext(filename)[1]}"
+    draft.file_url = document_storage.upload_bytes(data, kulcs, content_type)
+    draft.file_storage_key = kulcs
+    draft.allapot = "Kiküldve"
+    db.commit()
+    if regi_kulcs and regi_kulcs != kulcs:
+        document_storage.delete_object(regi_kulcs)
+    db.refresh(draft)
+    return PerformanceCertificateRead.model_validate(draft)

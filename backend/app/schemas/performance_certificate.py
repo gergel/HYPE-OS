@@ -34,7 +34,13 @@ class PerformanceCertificateTetelRead(BaseModel):
 
 class PerformanceCertificateRead(BaseModel):
     id: int
-    project_id: int
+    #: NULLABLE: forgatás nélküli, projektkódhoz kötött TIG-nél üres - lásd
+    #: project_code_id (models/performance_certificate.py
+    #: PerformanceCertificate.project_code_id).
+    project_id: int | None = None
+    #: Csak a forgatás nélküli, projektkódhoz kötött TIG-eknél van kitöltve -
+    #: a project_id és a project_code_id közül egyszerre csak az egyik.
+    project_code_id: int | None = None
     #: A számlázó fél: ember VAGY vállalkozás (lásd services/szamlazo.py).
     employee_id: int | None = None
     vallalkozas_id: int | None = None

@@ -622,6 +622,62 @@ export async function getAllContractsForProject(projectId: number): Promise<Elke
   return (await apiGet<ElkeszultSzerzodes[]>(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/all`)) ?? [];
 }
 
+// ─── PROJEKTKÓD-SZINTŰ alvállalkozói szerződés (forgatás nélkül) ───────────
+//
+// Ugyanaz a papír-életciklus, mint a forgatáshoz kötött szerződésnél, csak a
+// projektkódhoz kötve (lásd backend subcontractor_contracts.py "projektkód-
+// szintű ág") - annak, aki egy projekt-kiadáson alvállalkozóként van
+// megjelölve, de nincs hozzá konkrét forgatás (tisztán ügynökségi feladat).
+
+export type PendingSubcontractorProjectCode = {
+  project_code_id: number;
+  projektkod: string;
+  project_nev: string | null;
+  pending_count: number;
+};
+
+/** Egyszerűbb, mint PendingSubcontractorEmployee: nincs "lefedettek" tétel-
+ * lista, mert egy projektkódon mindenki önmagáért számláz. */
+export type PendingSubcontractorProjectCodeEmployee = {
+  id: number;
+  szamlazo: string;
+  full_name: string;
+  email: string | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  kepviselo: string | null;
+  nyilvantartasi_szam: string | null;
+  megbizas_targya: string | null;
+  plusz_afa: boolean | null;
+  draft: SubcontractorContractDraft | null;
+};
+
+export type PendingSubcontractorProjectCodeDetail = {
+  project_code_id: number;
+  projektkod: string;
+  project_nev: string | null;
+  pending: PendingSubcontractorProjectCodeEmployee[];
+};
+
+export async function getPendingSubcontractorProjectCodes(): Promise<PendingSubcontractorProjectCode[]> {
+  return (await apiGet<PendingSubcontractorProjectCode[]>("/api/v1/alvallalkozoi-szerzodesek/projektkodok")) ?? [];
+}
+
+export async function getPendingSubcontractorsForProjectCode(
+  projectCodeId: number,
+): Promise<PendingSubcontractorProjectCodeDetail | null> {
+  return apiGet<PendingSubcontractorProjectCodeDetail>(
+    `/api/v1/alvallalkozoi-szerzodesek/projektkodok/${projectCodeId}`,
+  );
+}
+
+export async function getAllContractsForProjectCode(projectCodeId: number): Promise<ElkeszultSzerzodes[]> {
+  return (
+    (await apiGet<ElkeszultSzerzodes[]>(`/api/v1/alvallalkozoi-szerzodesek/projektkodok/${projectCodeId}/all`)) ?? []
+  );
+}
+
 /** Egy sor az "Eseti szerződések" listáján: a szerződés, mellette az EMBER és
  * a PROJEKT, amihez tartozik (lásd backend routes/eseti_szerzodesek.py). */
 export type EsetiSzerzodes = {
@@ -953,6 +1009,47 @@ export async function getPendingTigForProject(projectId: number): Promise<Pendin
   return apiGet<PendingTigProjectDetail>(`/api/v1/teljesitesi-igazolasok/${projectId}`);
 }
 
+// ─── PROJEKTKÓD-SZINTŰ TIG (forgatás nélkül) ────────────────────────────────
+// Lásd a szerződés-oldal azonos című szakaszát fentebb - ugyanaz a minta.
+
+export type PendingTigProjectCode = {
+  project_code_id: number;
+  projektkod: string;
+  project_nev: string | null;
+  pending_count: number;
+};
+
+export type PendingTigProjectCodeEmployee = {
+  id: number;
+  szamlazo: string;
+  full_name: string;
+  email: string | null;
+  ceg_neve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  megbizas_targya: string | null;
+  plusz_afa: boolean | null;
+  draft: TigDraft | null;
+  szerzodes: TigSzerzodesElotoltes | null;
+};
+
+export type PendingTigProjectCodeDetail = {
+  project_code_id: number;
+  projektkod: string;
+  project_nev: string | null;
+  pending: PendingTigProjectCodeEmployee[];
+  tig_ready: boolean;
+  szerzodesre_varo: PendingTigProjectCodeEmployee[];
+};
+
+export async function getPendingTigProjectCodes(): Promise<PendingTigProjectCode[]> {
+  return (await apiGet<PendingTigProjectCode[]>("/api/v1/teljesitesi-igazolasok/projektkodok")) ?? [];
+}
+
+export async function getPendingTigForProjectCode(projectCodeId: number): Promise<PendingTigProjectCodeDetail | null> {
+  return apiGet<PendingTigProjectCodeDetail>(`/api/v1/teljesitesi-igazolasok/projektkodok/${projectCodeId}`);
+}
+
 /** Mi mindent tehetünk MÉG rá erre a TIG-re: a fél összes olyan munkája, amiről
  * még nincs papír - más projektekről is. Ez az "egy ember egyben küld be több
  * projektet" eset felülete. */
@@ -1233,6 +1330,26 @@ export async function getUtokovetesOverview(): Promise<UtokovetesOverview[]> {
 
 export async function getUtokovetesDetail(projectId: number): Promise<UtokovetesDetail | null> {
   return apiGet<UtokovetesDetail>(`/api/v1/utokovetes/${projectId}`);
+}
+
+/** Egy projektkód, amin FORGATÁS NÉLKÜL van alvállalkozói kiadás - lásd
+ * backend utokovetes_admin.py "projektkód-szintű ág". Egyszerűbb, mint
+ * UtokovetesOverview: nincs aláírás-várás és kifizetés-számláló (a
+ * kifizetés állapotát magán a kiadáson lehet jelölni). */
+export type UtokovetesOverviewProjectCode = {
+  project_code_id: number;
+  projektkod: string;
+  project_nev: string | null;
+  szerzodes_osszes: number;
+  szerzodes_fuggo: number;
+  tig_ready: boolean;
+  tig_osszes: number;
+  tig_fuggo: number;
+  kesz: boolean;
+};
+
+export async function getUtokovetesOverviewProjectCodes(): Promise<UtokovetesOverviewProjectCode[]> {
+  return (await apiGet<UtokovetesOverviewProjectCode[]>("/api/v1/utokovetes/projektkodok")) ?? [];
 }
 
 export async function getRates(limit = 5000): Promise<Rate[]> {

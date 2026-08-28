@@ -244,7 +244,7 @@ class ProjectCode(TimestampMixin, Base):
     tig_url: Mapped[str | None] = mapped_column(String(500), comment="TIG url")
 
     client: Mapped["Client"] = relationship(back_populates="project_codes")
-    contract: Mapped["Contract"] = relationship(back_populates="project_codes")
+    contract: Mapped["Contract"] = relationship(back_populates="project_codes", foreign_keys=[contract_id])
     projects: Mapped[list["Project"]] = relationship(back_populates="project_code")
     expenses: Mapped[list["Expense"]] = relationship(back_populates="project_code")
     revenues: Mapped[list["Revenue"]] = relationship(back_populates="project_code")
@@ -259,6 +259,17 @@ class ProjectCode(TimestampMixin, Base):
     #: kellenek, hogy a lista egy lekérdezésből tudja, hol tart a papírozás.
     megrendeloi_szerzodesek: Mapped[list["MegrendeloiSzerzodes"]] = relationship(viewonly=True)
     megrendeloi_tigek: Mapped[list["MegrendeloiTig"]] = relationship(viewonly=True)
+    #: Az ALVÁLLALKOZÓI eseti szerződések és TIG-ek, amik - forgatás híján -
+    #: közvetlenül ehhez a projektkódhoz kötődnek (lásd models/contract.py
+    #: Contract.project_code_id, models/performance_certificate.py
+    #: PerformanceCertificate.project_code_id, és lentebb
+    #: alvallalkozo_stab_forgatas_nelkul). CSAK OLVASÁSRA: az életciklusukat a
+    #: saját végpontjuk intézi (lásd api/routes/subcontractor_contracts.py és
+    #: performance_certificates.py "projektkód-szintű ág").
+    alvallalkozoi_szerzodesek_forgatas_nelkul: Mapped[list["Contract"]] = relationship(
+        viewonly=True, foreign_keys="Contract.project_code_id"
+    )
+    alvallalkozoi_tigek_forgatas_nelkul: Mapped[list["PerformanceCertificate"]] = relationship(viewonly=True)
 
     # ── Hol tart a papírozás és a pénz? ──────────────────────────────────────
     #
@@ -268,6 +279,23 @@ class ProjectCode(TimestampMixin, Base):
     # a "kész-e egy papír" a models/megrendeloi_papir.papir_kesz-é - ugyanaz,
     # amit a papír-oldalak használnak, hogy a lista ne mondhasson mást, mint
     # az adatlap.
+
+    @property
+    def alvallalkozo_stab_forgatas_nelkul(self) -> list["Employee"]:
+        """Azok az emberek, akikről egy FORGATÁS NÉLKÜLI (tisztán ügynökségi)
+        alvállalkozói projekt kiadás miatt kell szerződés és TIG - lásd
+        models/finance.py Expense.alvallalkozo_project_id és
+        Project.alvallalkozo_stab (a forgatáshoz kötött megfelelője).
+
+        Egy Expense IDE tartozik, ha van hozzá alvállalkozó (employee_id), DE
+        nincs konkrét forgatáshoz kötve (alvallalkozo_project_id üres) - ha
+        volna, azt már a Project.alvallalkozo_stab viszi, ott van rá diszpó-
+        mentes, de forgatáshoz kötött szerződés/TIG-igény."""
+        return [
+            e.employee
+            for e in self.expenses
+            if e.employee is not None and e.alvallalkozo_project_id is None
+        ]
 
     @property
     def elmaradt(self) -> bool:

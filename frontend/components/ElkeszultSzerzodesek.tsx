@@ -33,14 +33,21 @@ export function ElkeszultSzerzodesek({
   szerzodesek,
   canEdit = true,
   canDelete = true,
+  // A projektkód-szintű (forgatás nélküli) ágon a végpontok NEM a
+  // `/{project_id}/...` alatt élnek, hanem a `/projektkodok/{project_code_id}/...`
+  // alatt (lásd backend subcontractor_contracts.py "projektkód-szintű ág") -
+  // ilyenkor a hívó ezt a bázisutat adja meg, a projectId csak a `key`-hez kell.
+  basePath,
 }: {
   projectId: number;
   szerzodesek: ElkeszultSzerzodes[];
   canEdit?: boolean;
   canDelete?: boolean;
+  basePath?: string;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
+  const base = basePath ?? `/api/v1/alvallalkozoi-szerzodesek/${projectId}`;
   // A számlázó fél kulcsa ("e12" / "v3"), nem ember-azonosító: a
   // szerződés cég nevére is szólhat (lásd backend services/szamlazo.py).
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -64,7 +71,7 @@ export function ElkeszultSzerzodesek({
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.szamlazo}/alairt-fajl`, {
+      const res = await authFetch(`${base}/${s.szamlazo}/alairt-fajl`, {
         method: "POST",
         body: fd,
       });
@@ -86,7 +93,7 @@ export function ElkeszultSzerzodesek({
     if (!ok) return;
     setBusyId(s.szamlazo);
     try {
-      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.szamlazo}/alairt-fajl`, {
+      const res = await authFetch(`${base}/${s.szamlazo}/alairt-fajl`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -115,7 +122,7 @@ export function ElkeszultSzerzodesek({
     if (!ok) return;
     setBusyId(s.szamlazo);
     try {
-      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.szamlazo}`, {
+      const res = await authFetch(`${base}/${s.szamlazo}`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -164,7 +171,7 @@ export function ElkeszultSzerzodesek({
                   {/* Legördíthető: "Készítés alatt"-ra visszavéve a fél újra a
                       teendők közé kerül, és a szerződése szerkeszthető. */}
                   <TigAllapotSelect
-                    postPath={`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${s.szamlazo}/allapot`}
+                    postPath={`${base}/${s.szamlazo}/allapot`}
                     value={s.szerzodes_allapota}
                     allapotok={SZERZODES_ALLAPOTOK}
                     canEdit={canEdit}

@@ -36,9 +36,18 @@ class Contract(TimestampMixin, Base):
     vallalkozas_id: Mapped[int | None] = mapped_column(ForeignKey("vallalkozasok.id"))
     # Csak az ALVALLALKOZOI tipusú, egy adott projekthez tartozó eseti
     # szerződéseknél van kitöltve (lásd services/subcontractor_contracts.py) -
-    # NULL esetén a Contract egy álló "keretszerződés" (a megbízottnak bármelyik
-    # jövőbeli projektjére érvényes, nincs egyetlen projekthez sem kötve).
+    # NULL esetén a Contract vagy egy álló "keretszerződés" (a megbízottnak
+    # bármelyik jövőbeli projektjére érvényes, nincs egyetlen projekthez sem
+    # kötve), vagy - ha a project_code_id ki van töltve - egy FORGATÁS NÉLKÜLI,
+    # tisztán projektkódhoz kötött eseti szerződés (lásd project_code_id).
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
+    # Csak akkor van kitöltve, ha ALVALLALKOZOI eseti szerződés úgy készül,
+    # hogy a projektkódhoz NINCS forgatás (tisztán ügynökségi feladat, pl.
+    # tanácsadás) - a projekt_id ilyenkor üres, mert nincs is Project sor,
+    # amihez kötni lehetne. A project_id és a project_code_id EGYSZERRE soha
+    # nem tölthető ki (lásd api/routes/subcontractor_contracts.py "projektkód-
+    # szintű ág" - _get_or_create_draft_projektkodon).
+    project_code_id: Mapped[int | None] = mapped_column(ForeignKey("project_codes.id"))
 
     ceg_neve: Mapped[str | None] = mapped_column(String(255))
     szekhely: Mapped[str | None] = mapped_column(String(255))
@@ -126,7 +135,10 @@ class Contract(TimestampMixin, Base):
     employee: Mapped["Employee"] = relationship(back_populates="contracts")
     vallalkozas: Mapped["Vallalkozas | None"] = relationship(back_populates="contracts")
     project: Mapped["Project | None"] = relationship(back_populates="contracts", foreign_keys=[project_id])
-    project_codes: Mapped[list["ProjectCode"]] = relationship(back_populates="contract")
+    project_code: Mapped["ProjectCode | None"] = relationship(foreign_keys=[project_code_id])
+    project_codes: Mapped[list["ProjectCode"]] = relationship(
+        back_populates="contract", foreign_keys="ProjectCode.contract_id"
+    )
 
 
 def megkotott_keretszerzodes(szerzodes: Contract) -> bool:
