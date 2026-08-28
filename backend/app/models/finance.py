@@ -163,8 +163,22 @@ class KpForgalom(TimestampMixin, Base):
     forgalom: Mapped[str | None] = mapped_column(String(50), comment="bevetel / kiadas")
     osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     penznem: Mapped[str] = mapped_column(String(10), default="HUF")
+    #: Devizás felvezetés: a `penznem`-ben megadott összeget a szerver váltja
+    #: át forintra ezzel (lásd services/penznem.py) - az `osszeg` mezőbe már a
+    #: forint kerül. Forintnál elhagyható.
+    arfolyam: Mapped[float | None] = mapped_column(Numeric(10, 4))
+    #: MIBŐL lett a forint összeg - devizás felvezetésnél (services/penznem.py).
+    eredeti_penznem: Mapped[str | None] = mapped_column(
+        String(10), comment="Milyen pénznemben vezették fel (NULL = forintban)"
+    )
+    eredeti_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Az összeg az eredeti pénznemben")
     legalis: Mapped[str | None] = mapped_column(String(50))
     kiadas_datuma: Mapped[date | None] = mapped_column(Date)
+    #: Van-e mögötte SZÁMLA - a felhasználó KÉZZEL állítja (legördülő: van /
+    #: nincs), nem a feltöltött fájlból derül ki: a bizonylat-feltöltés csak
+    #: akkor jelenik meg a felületen, ha ez igazra van állítva (lásd frontend
+    #: components/finance/KpForgalomSzamlaCella.tsx).
+    van_szamla: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     kiadas_sum_notion: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Kiadás sum")
     forintban_notion: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Forintban")

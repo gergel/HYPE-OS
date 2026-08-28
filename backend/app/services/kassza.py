@@ -301,7 +301,6 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
             kotve += 1
         else:
             kp_forgalom_sorok.append(f)
-    szamlas_kp_forgalom = bizonylat.szamlas_kp_forgalom_ids(db)
     kp_forgalom_csatolmanyok = attachments.list_for_many(db, "kpForgalom", [f.id for f in kp_forgalom_sorok])
     for f in kp_forgalom_sorok:
         osszeg, kiadas_e = kp_forgalom_iranya(f)
@@ -313,11 +312,10 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
                 megnevezes=f.megnevezes or "KP forgalom",
                 be=0.0 if kiadas_e else osszeg,
                 ki=osszeg if kiadas_e else 0.0,
-                # A "fedezet"-nek jelölt sorokon szándékosan NINCS bizonylat -
-                # épp azt jelenti a jelölés, hogy ez a bevétel számla nélkül
-                # fedezi a fekete kiadást. A többinél a feltöltött csatolmány
-                # dönt (lásd services/bizonylat.py).
-                van_szamla=(f.forgalom or "").strip().casefold() != "fedezet" and f.id in szamlas_kp_forgalom,
+                # Kézzel állított mező (legördülő a felületen) - NEM a
+                # feltöltött csatolmányból derül ki (lásd
+                # models/finance.KpForgalom.van_szamla).
+                van_szamla=f.van_szamla,
                 # …az ATM-felvétel viszont ÁTVEZETÉS: van róla banki kivonat,
                 # és nem is bevétel, csak a saját pénzünk került át a
                 # bankszámláról a kasszába.

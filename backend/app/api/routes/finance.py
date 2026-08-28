@@ -103,8 +103,38 @@ revenues_router = build_crud_router(
     before_update=_devizat_forintra_frissiteskor,
 )
 
-def _kp_forgalom_kezi_javitas(obj: KpForgalom, adat: dict, db: Session, _current_user: Employee) -> None:
-    """Kézzel átírt összeg/irány FÉLRETESZI a Notion formula-értékét.
+def _kp_forgalom_devizat_forintra(adat: dict, db: Session) -> dict:
+    """Devizás felvezetés a KP forgalom soron - ugyanaz a szabály, mint a
+    Kiadásnál/Bevételnél (lásd _devizat_forintra), csak a mezőneve `osszeg`,
+    nem `netto`/`brutto`."""
+    try:
+        return penznem_szolg.valtsd_at(adat, mezok=("osszeg",))
+    except penznem_szolg.PenznemHiba as hiba:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(hiba)) from hiba
+
+
+def _kp_forgalom_elojelbol_irany(adat: dict) -> None:
+    """Az Összeg mező ELŐJELÉBŐL az irány, ha az még nincs külön megadva - a
+    felület egyetlen, előjeles Összeg mezőt kínál (negatív = kiadás, minden
+    más bevétel), a tárolt `osszeg` viszont hagyományosan előjel nélküli
+    (lásd models/finance.KpForgalom.forintban) - itt alakul át a kettő."""
+    if adat.get("osszeg") is None:
+        return
+    ertek = float(adat["osszeg"])
+    if not adat.get("forgalom"):
+        adat["forgalom"] = "kiadas" if ertek < 0 else "bevetel"
+    adat["osszeg"] = abs(ertek)
+
+
+def _kp_forgalom_before_create(adat: dict, db: Session) -> dict:
+    _kp_forgalom_devizat_forintra(adat, db)
+    _kp_forgalom_elojelbol_irany(adat)
+    return adat
+
+
+def _kp_forgalom_kezi_javitas(obj: KpForgalom, adat: dict, db: Session, current_user: Employee) -> None:
+    """Kézzel átírt összeg/irány FÉLRETESZI a Notion formula-értékét, és
+    átváltja a devizás felvezetést forintra.
 
     A KP forgalom soroknál az irányt az importált "Forintban" mező ELŐJELE
     hordozza (lásd models/finance.KpForgalom.forintban) - ez azért kell, mert
@@ -119,10 +149,13 @@ def _kp_forgalom_kezi_javitas(obj: KpForgalom, adat: dict, db: Session, _current
     És mielőtt töröljük, az EDDIGI IRÁNYT rögzítjük a `forgalom` mezőbe, ha az
     üres volt - különben egy puszta összeg-javítás átfordítaná a sort kiadásból
     bevételbe (az előjel a törléssel elveszne), és ezt senki nem kérte."""
+    _kp_forgalom_devizat_forintra(adat, db)
     if "osszeg" not in adat and "forgalom" not in adat:
         return
     if "forgalom" not in adat and not obj.forgalom:
         adat["forgalom"] = "kiadas" if obj.kiadas_e else "bevetel"
+    if "osszeg" in adat and adat["osszeg"] is not None:
+        adat["osszeg"] = abs(float(adat["osszeg"]))
     adat["forintban_notion"] = None
 
 
@@ -134,6 +167,7 @@ kp_forgalom_router = build_crud_router(
     prefix="/kp-forgalom",
     tags=["finance"],
     page="/penzugyek",
+    before_create=_kp_forgalom_before_create,
     before_update=_kp_forgalom_kezi_javitas,
 )
 

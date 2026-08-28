@@ -149,6 +149,13 @@ class KpForgalomBase(BaseModel):
     forgalom: str | None = None
     osszeg: float | None = None
     penznem: str = "HUF"
+    #: Devizás felvezetés: a `penznem`-ben megadott összeget a szerver váltja
+    #: át forintra ezzel (lásd services/penznem.py) - az `osszeg` mezőbe már a
+    #: forint kerül. Forintnál elhagyható.
+    arfolyam: float | None = None
+    #: Van-e mögötte SZÁMLA - kézzel állítható (legördülő: van / nincs), nem a
+    #: feltöltött fájlból derül ki (lásd models/finance.KpForgalom.van_szamla).
+    van_szamla: bool = False
     legalis: str | None = None
     kiadas_datuma: date | None = None
     megnevezes: str | None = None
@@ -164,6 +171,10 @@ class KpForgalomUpdate(KpForgalomBase):
 
 class KpForgalomRead(KpForgalomBase):
     id: int
+
+    #: MIBŐL lett a forint összeg - devizás felvezetésnél (services/penznem.py).
+    eredeti_penznem: str | None = None
+    eredeti_osszeg: float | None = None
 
     kiadas_sum_notion: float | None = None
     #: A Notion "Forintban" formulájának ELŐJELES értéke - a kiadásokon

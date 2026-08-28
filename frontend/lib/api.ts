@@ -1374,6 +1374,15 @@ export type KpForgalom = {
   forgalom: string | null;
   osszeg: number | null;
   penznem: string;
+  /** Devizás felvezetés: forinttól eltérő pénznemnél kötelező (lásd backend
+   * services/penznem.py) - az `osszeg` mezőbe már a forint kerül. */
+  arfolyam: number | null;
+  /** MIBŐL lett a forint összeg - devizás felvezetésnél. */
+  eredeti_penznem: string | null;
+  eredeti_osszeg: number | null;
+  /** Van-e mögötte SZÁMLA - kézzel állítható (legördülő), nem a feltöltött
+   * fájlból derül ki. Csak ha igaz, jelenik meg a fájlfeltöltés lehetősége. */
+  van_szamla: boolean;
   legalis: string | null;
   kiadas_datuma: string | null;
   expense_id: number | null;

@@ -1,8 +1,8 @@
 import { Card } from "@/components/Card";
 import { DataTable, type Column } from "@/components/DataTable";
-import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { KpForgalomSzamlaCella } from "@/components/finance/KpForgalomSzamlaCella";
+import { OsszegEloejelesCella } from "@/components/finance/OsszegEloejelesCella";
 import { TorolMindenMozgastButton } from "@/components/finance/TorolMindenMozgastButton";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
@@ -15,17 +15,11 @@ import {
   getMyPagePermissions,
   type KpOsszesites,
 } from "@/lib/api";
-import { formatHuf } from "@/lib/penz";
+import { formatHuf, PENZNEMEK } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 import { ArrowDownLeft, ArrowUpRight, EyeOff, Receipt } from "lucide-react";
 
 const PAGE = "/penzugyek";
-
-/** A KP forgalom sor IRÁNYA. A "fedezet" egy BEVÉTEL-jellegű sor, aminél a
- * felhasználó kifejezetten jelzi, hogy ez számla nélküli bevétel, ami a
- * fekete kiadást fedezi (lásd backend services/kassza.py van_szamla - ilyen
- * sornál a bizonylat-feltöltés is ki van kapcsolva, épp ez a jelölés lényege). */
-const IRANY_OPCIOK = ["bevetel", "kiadas", "fedezet"] as const;
 
 /** KP FORGALOM: minden készpénz-mozgás egy listában, időrendben - és a
  * LEGÁLIS/FEKETE bontás.
@@ -91,12 +85,6 @@ export default async function KpForgalomPage() {
 
   type Sor = (typeof megjelenitett)[number];
 
-  const FORRAS_CIMKE: Record<string, string> = {
-    kiadas: "Kiadás",
-    bevetel: "Bevétel",
-    kp_forgalom: "KP forgalom",
-  };
-
   const oszlopok: Column<Sor>[] = [
     {
       header: "Dátum",
@@ -131,6 +119,9 @@ export default async function KpForgalomPage() {
       sortAccessor: (s) => s.megnevezes,
     },
     {
+      // Nem szerkeszthető itt: az irányt az Összeg cella előjele adja (lásd
+      // lent) - a Kiadás/Bevétel forrású soroknál pedig magától a forrástól
+      // jön, itt nincs mit választani.
       header: "Típus",
       render: (s) =>
         // Az ÁTVEZETÉS (ATM-felvétel) nem bevétel: a saját pénzünk került át a
@@ -138,57 +129,28 @@ export default async function KpForgalomPage() {
         // megtévesztően nagy "bevételnek" látszana.
         s.atvezetes ? (
           <StatusBadge label="Átvezetés (ATM)" tone="blue" />
-        ) : canEdit && s.forras === "kp_forgalom" ? (
-          <EditableStatusBadge
-            patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
-            field="forgalom"
-            value={s.forgalom ?? (s.ki > 0 ? "kiadas" : "bevetel")}
-            options={[...IRANY_OPCIOK]}
-          />
         ) : (
-          <StatusBadge
-            label={FORRAS_CIMKE[s.forras] ?? s.forras}
-            tone={s.forras === "kiadas" ? "orange" : "teal"}
-          />
+          <StatusBadge label={s.ki > 0 ? "Kiadás" : "Bevétel"} tone={s.ki > 0 ? "orange" : "teal"} />
         ),
-      sortAccessor: (s) => (s.atvezetes ? "atvezetes" : s.forras),
+      sortAccessor: (s) => (s.atvezetes ? "atvezetes" : s.ki > 0 ? "kiadas" : "bevetel"),
     },
     { header: "Projektkód", render: (s) => s.projektkod ?? "–", sortAccessor: (s) => s.projektkod },
     {
-      header: "Be",
+      // EGY mező a kettő (Be/Ki) helyett: ami kiadás, az mínusz előjellel, a
+      // többi (bevétel/átvezetés) pozitívan - így egyetlen cellában látszik,
+      // merre mozdult a pénz, és csak egyet kell szerkeszteni, nem kettőt.
+      header: "Összeg",
       align: "right",
       render: (s) =>
-        canEdit && s.forras === "kp_forgalom" && !s.atvezetes && s.be > 0 ? (
-          <EditableTableCell
-            patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
-            field="osszeg"
-            value={s.be}
-            type="number"
-          />
-        ) : s.be > 0 ? (
-          <span className="text-text-teal">{formatHuf(s.be)}</span>
+        canEdit && s.forras === "kp_forgalom" && !s.atvezetes ? (
+          <OsszegEloejelesCella patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`} ertek={s.ki > 0 ? -s.ki : s.be} />
         ) : (
-          "–"
+          <span className={s.ki > 0 ? "text-text-orange" : "text-text-teal"}>
+            {s.ki > 0 ? "−" : "+"}
+            {formatHuf(s.ki > 0 ? s.ki : s.be)}
+          </span>
         ),
-      sortAccessor: (s) => s.be,
-    },
-    {
-      header: "Ki",
-      align: "right",
-      render: (s) =>
-        canEdit && s.forras === "kp_forgalom" && !s.atvezetes && s.ki > 0 ? (
-          <EditableTableCell
-            patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
-            field="osszeg"
-            value={s.ki}
-            type="number"
-          />
-        ) : s.ki > 0 ? (
-          <span className="text-text-orange">{formatHuf(s.ki)}</span>
-        ) : (
-          "–"
-        ),
-      sortAccessor: (s) => s.ki,
+      sortAccessor: (s) => (s.ki > 0 ? -s.ki : s.be),
     },
     {
       // A sor UTÁNI egyenleg - így ránézésre látszik, mikor merült ki (vagy
@@ -214,8 +176,6 @@ export default async function KpForgalomPage() {
           <KpForgalomSzamlaCella
             forrasId={s.forrasId}
             vanSzamla={s.van_szamla}
-            bevetel={s.be > 0}
-            fedezetJelolt={(s.forgalom ?? "").trim().toLowerCase() === "fedezet"}
             csatolmanyok={s.csatolmanyok}
             canEdit={canEdit}
             canDelete={canDelete}
@@ -418,8 +378,9 @@ export default async function KpForgalomPage() {
             <a href="/penzugyek" className="text-text-accent hover:underline">
               Pénzügyeken
             </a>{" "}
-            szerkeszthetők; a Notionből örökölt „KP forgalom" sorok Dátuma, Megnevezése, Iránya és Összege itt,
-            helyben javítható - ezeknél volt a legtöbb elcsúszás az importált adatban.
+            szerkeszthetők; a Notionből örökölt „KP forgalom" sorok Dátuma, Megnevezése és Összege itt, helyben
+            javítható - az Összeg előjele adja az irányt (negatív = kiadás). Ezeknél volt a legtöbb elcsúszás az
+            importált adatban.
             {(naplo?.kp_forgalom_kiadashoz_kotve ?? 0) > 0 && (
               <>
                 {" "}
@@ -434,14 +395,22 @@ export default async function KpForgalomPage() {
               addLabel="+ Új KP forgalom tétel"
               fields={[
                 { name: "megnevezes", label: "Megnevezés", required: true },
+                { name: "osszeg", label: "Összeg (negatív = kiadás)", type: "number" },
                 {
-                  name: "forgalom",
-                  label: "Irány",
+                  name: "penznem",
+                  label: "Pénznem",
                   type: "select",
-                  defaultValue: "bevetel",
-                  options: IRANY_OPCIOK.map((o) => ({ value: o, label: o })),
+                  defaultValue: "HUF",
+                  options: PENZNEMEK.map((p) => ({ value: p, label: p })),
                 },
-                { name: "osszeg", label: "Összeg", type: "number" },
+                {
+                  name: "arfolyam",
+                  label: "Árfolyam (Ft)",
+                  type: "number",
+                  required: true,
+                  // Csak devizánál kérdezzük: forintnál nincs mit átváltani.
+                  showIf: { field: "penznem", noneOf: ["", "HUF"] },
+                },
                 { name: "kiadas_datuma", label: "Dátum", type: "date" },
               ]}
             />
