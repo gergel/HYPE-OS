@@ -1325,6 +1325,9 @@ export type KpNaploSor = {
   forgalom: string | null;
   /** Feltöltött bizonylat(ok) - csak "kp_forgalom" forrásnál lehet. */
   csatolmanyok: DocumentAttachment[];
+  /** A "Projekt kiadás" mező NYERS azonosítója - csak "kp_forgalom"
+   * forrásnál van értéke. */
+  project_code_id: number | null;
 };
 
 /** Egy időszak készpénz-képe: a négy sarok, amiből minden más kijön. */
@@ -1386,6 +1389,9 @@ export type KpForgalom = {
   legalis: string | null;
   kiadas_datuma: string | null;
   expense_id: number | null;
+  /** Melyik projekthez tartozik - önálló hivatkozás ("Projekt kiadás"), nem
+   * az expense_id-hoz kötött duplikátum-elkerülés. */
+  project_code_id: number | null;
   /** A Notion "Forintban" formulájának előjeles értéke (kiadáson negatív). */
   forintban_notion: number | null;
   /** A sor összege és iránya, ahogy a kassza számol vele. */

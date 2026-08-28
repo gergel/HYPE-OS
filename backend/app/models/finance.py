@@ -159,6 +159,12 @@ class KpForgalom(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
+    #: Melyik projekthez tartozik ez a KP kiadás/bevétel - önálló hivatkozás,
+    #: FÜGGETLEN az expense_id-tól: ez csak egy egyszerű címke ("innen
+    #: átvezetve"), nem egy már máshol elszámolt tétel duplikátuma, tehát a
+    #: kassza-összesítésből NEM esik ki miatta (ellentétben az expense_id-vel
+    #: kötött sorokkal - lásd services/kassza.py "kotve" szűrése).
+    project_code_id: Mapped[int | None] = mapped_column(ForeignKey("project_codes.id"))
 
     forgalom: Mapped[str | None] = mapped_column(String(50), comment="bevetel / kiadas")
     osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2))
@@ -185,6 +191,7 @@ class KpForgalom(TimestampMixin, Base):
     megnevezes: Mapped[str | None] = mapped_column(String(255))
 
     expense: Mapped["Expense"] = relationship(back_populates="kp_forgalmak")
+    project_code: Mapped["ProjectCode | None"] = relationship()
 
     @property
     def forintban(self) -> float | None:

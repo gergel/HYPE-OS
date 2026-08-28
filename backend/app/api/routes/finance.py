@@ -113,22 +113,17 @@ def _kp_forgalom_devizat_forintra(adat: dict, db: Session) -> dict:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(hiba)) from hiba
 
 
-def _kp_forgalom_elojelbol_irany(adat: dict) -> None:
-    """Az Összeg mező ELŐJELÉBŐL az irány, ha az még nincs külön megadva - a
-    felület egyetlen, előjeles Összeg mezőt kínál (negatív = kiadás, minden
-    más bevétel), a tárolt `osszeg` viszont hagyományosan előjel nélküli
-    (lásd models/finance.KpForgalom.forintban) - itt alakul át a kettő."""
-    if adat.get("osszeg") is None:
-        return
-    ertek = float(adat["osszeg"])
-    if not adat.get("forgalom"):
-        adat["forgalom"] = "kiadas" if ertek < 0 else "bevetel"
-    adat["osszeg"] = abs(ertek)
+def _kp_forgalom_osszeg_elojel_nelkul(adat: dict) -> None:
+    """A "Forintban" mező mindig ELŐJEL NÉLKÜLI (az irányt a Típus/`forgalom`
+    mező adja, lásd models/finance.KpForgalom.forintban) - védekezésből, ha
+    valaki mégis negatívot írna be."""
+    if adat.get("osszeg") is not None:
+        adat["osszeg"] = abs(float(adat["osszeg"]))
 
 
 def _kp_forgalom_before_create(adat: dict, db: Session) -> dict:
     _kp_forgalom_devizat_forintra(adat, db)
-    _kp_forgalom_elojelbol_irany(adat)
+    _kp_forgalom_osszeg_elojel_nelkul(adat)
     return adat
 
 
@@ -154,8 +149,7 @@ def _kp_forgalom_kezi_javitas(obj: KpForgalom, adat: dict, db: Session, current_
         return
     if "forgalom" not in adat and not obj.forgalom:
         adat["forgalom"] = "kiadas" if obj.kiadas_e else "bevetel"
-    if "osszeg" in adat and adat["osszeg"] is not None:
-        adat["osszeg"] = abs(float(adat["osszeg"]))
+    _kp_forgalom_osszeg_elojel_nelkul(adat)
     adat["forintban_notion"] = None
 
 
@@ -357,6 +351,9 @@ class KpNaploSor(BaseModel):
     #: Feltöltött bizonylat(ok) - csak "kp_forgalom" forrásnál lehet, a
     #: Kiadásnak/Bevételnek saját, régről örökölt bizonylat-felülete van.
     csatolmanyok: list[DocumentAttachmentRead] = []
+    #: A "Projekt kiadás" mező NYERS azonosítója - csak "kp_forgalom"
+    #: forrásnál van értéke (lásd models/finance.KpForgalom.project_code_id).
+    project_code_id: int | None = None
 
 
 class KpOsszesites(BaseModel):
@@ -543,6 +540,7 @@ def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_curren
                 href=s.href,
                 forgalom=s.forgalom,
                 csatolmanyok=s.csatolmanyok,
+                project_code_id=s.project_code_id,
             )
             for s in kep.sorok
         ],

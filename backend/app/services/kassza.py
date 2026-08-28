@@ -84,6 +84,10 @@ class KasszaSor:
     #: (lásd kep() lent): a Kiadásnak/Bevételnek saját, régről örökölt
     #: bizonylat-felülete van, ennek eddig nem volt.
     csatolmanyok: list[Any] = field(default_factory=list)
+    #: A "Projekt kiadás" mező NYERS azonosítója - csak "kp_forgalom"
+    #: forrásnál van értéke (lásd models/finance.KpForgalom.project_code_id).
+    #: A `projektkod` (fent) már a MEGJELENÍTETT kód, ez a szerkesztéshez kell.
+    project_code_id: int | None = None
 
 
 @dataclass
@@ -296,7 +300,7 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
     # pénzmozgás már szerepel a kiadás soraként, beszámítva kétszer vonódna le.
     kotve = 0
     kp_forgalom_sorok = []
-    for f in db.scalars(select(KpForgalom)).all():
+    for f in db.scalars(select(KpForgalom).options(selectinload(KpForgalom.project_code))).all():
         if f.expense_id is not None:
             kotve += 1
         else:
@@ -304,12 +308,14 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
     kp_forgalom_csatolmanyok = attachments.list_for_many(db, "kpForgalom", [f.id for f in kp_forgalom_sorok])
     for f in kp_forgalom_sorok:
         osszeg, kiadas_e = kp_forgalom_iranya(f)
+        pk = f.project_code
         sorok.append(
             KasszaSor(
                 id=f.id,
                 forras="kp_forgalom",
                 datum=f.kiadas_datuma,
                 megnevezes=f.megnevezes or "KP forgalom",
+                projektkod=pk.projektkod if pk else None,
                 be=0.0 if kiadas_e else osszeg,
                 ki=osszeg if kiadas_e else 0.0,
                 # Kézzel állított mező (legördülő a felületen) - NEM a
@@ -322,6 +328,8 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
                 atvezetes=keszpenzfelvetel(f.megnevezes),
                 forgalom=f.forgalom,
                 csatolmanyok=kp_forgalom_csatolmanyok.get(f.id, []),
+                href=f"/projektek/project-kodok/{f.project_code_id}" if f.project_code_id else None,
+                project_code_id=f.project_code_id,
             )
         )
 

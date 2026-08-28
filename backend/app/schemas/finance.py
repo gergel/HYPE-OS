@@ -141,6 +141,10 @@ class RevenueRead(RevenueBase):
 
 class KpForgalomBase(BaseModel):
     expense_id: int | None = None
+    #: Melyik projekthez tartozik - önálló, egyszerű hivatkozás ("Projekt
+    #: kiadás"), NEM az expense_id-hoz kötött duplikátum-elkerülés (lásd
+    #: models/finance.KpForgalom.project_code_id).
+    project_code_id: int | None = None
     #: Az IRÁNY: "bevetel" vagy "kiadas". Importált sornál ez sokszor üres - ott
     #: a Notion "Forintban" formulájának előjele döntött (lásd
     #: models/finance.KpForgalom.forintban). Kézzel szerkesztve viszont EZ a

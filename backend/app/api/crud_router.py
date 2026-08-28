@@ -42,6 +42,13 @@ def _coerce_value(column: Any, value: Any) -> Any:
         return date.fromisoformat(value[:10])
     if py_type is datetime:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    # Egy legördülős cella (pl. EditableStatusBadge) mindig szöveget küld,
+    # akkor is, ha a mögötte álló oszlop valójában szám (pl. egy FK-t
+    # reprezentáló választó, mint a KP forgalom "Projektkód" mezője).
+    if py_type is int:
+        return int(value)
+    if py_type is float:
+        return float(value)
     return value
 
 
