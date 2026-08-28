@@ -29,7 +29,7 @@ from app.models.performance_certificate import (
 )
 from app.models.portal import Payment
 from app.models.project import Project
-from app.models.project_code import ProjectCode
+from app.models.project_code import KIFIZETETT_STATUSZ_MINTA, ProjectCode
 from app.schemas.document_attachment import DocumentAttachmentRead
 from app.services import attachments, bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
 from app.services import kassza as kassza_szolg
@@ -1001,13 +1001,6 @@ def szamlak_zip(
 # három listát végigkattintani, és a kijelöltek számlái egyetlen ZIP-ben
 # letölthetők legyenek (azt viszi a könyvelő/ügyintéző a banki utaláshoz).
 
-
-#: A projektkód "Számla státusza" értékei, amik azt jelentik: A MEGRENDELŐ MÁR
-#: KIFIZETETT MINKET. A Notionból ez az érték jön át (lásd
-#: notion_import/importers.py import_project_codes) - a kis/nagybetűtől és a
-#: pontos megfogalmazástól függetlenül a "kifizet" szórészlet dönt, hogy egy
-#: átfogalmazott állapotnév ne csendben ejtse ki a sort a listából.
-KIFIZETETT_STATUSZ_MINTA = "kifizet"
 
 #: A fedezettség lehetséges állapotai (lásd _fedezettseg).
 FEDEZETT = "fedezett"

@@ -20,6 +20,15 @@ from app.services.hu_szoveg import ekezet_nelkul
 #: "Elmaradt (ügyfél lemondta)" mind ugyanaz.
 ELMARADT_ELOTAG = "elmarad"
 
+#: A Notionból örökölt "Számla státusza" értékei, amik azt jelentik: A
+#: MEGRENDELŐ MÁR KIFIZETETT MINKET. A kis/nagybetűtől és a pontos
+#: megfogalmazástól függetlenül a "kifizet" szórészlet dönt, hogy egy
+#: átfogalmazott állapotnév ("Kifizetve", "Kifizettük, számla feltöltve") ne
+#: csendben ejtse ki a sort a listából. Lásd `bevetel_kifizetve` - és
+#: routes/finance.py "Utalásra váró számlák" listája, ami ugyanezt a jelet
+#: használja (onnan lett ide átemelve, hogy egy helyen éljen).
+KIFIZETETT_STATUSZ_MINTA = "kifizet"
+
 
 def esemeny_elmaradt(esemeny_allapota: str | None) -> bool:
     """Elmaradt-e az esemény? Ha igen, semmilyen papírt nem kérünk hozzá.
@@ -421,11 +430,12 @@ class ProjectCode(TimestampMixin, Base):
         nem "szemet hunyás": a jelöléshez indok is kell, és az ott marad a
         projektkódon.
 
-        KÉT ÚTON is bekerülhet a kifizetés: a projektkód-szintű "Kifizetve"
+        TÖBB ÚTON is bekerülhet a kifizetés: a projektkód-szintű "Kifizetve"
         gombbal (services/megrendeloi_szamla.jelold_kifizetettnek - egy közös
-        bevétel-sort zár le), vagy FÁJLONKÉNT, egy feltöltött számlán
-        (jelold_szamlat_kifizetettnek - lásd DokumentumFeltoltes). A kettő
-        EGYMÁSTÓL FÜGGETLEN mező: a projekt-szintű gomb nem írja át a
+        bevétel-sort zár le), FÁJLONKÉNT egy feltöltött számlán
+        (jelold_szamlat_kifizetettnek - lásd DokumentumFeltoltes), vagy a
+        Notionból örökölt "Számla státusza" szövegén keresztül (lásd lentebb).
+        Ezek EGYMÁSTÓL FÜGGETLEN mezők: a projekt-szintű gomb nem írja át a
         feltöltött számla saját `kifizetve_datuma` mezőjét, és fordítva sem.
         Ezért VAGY-kapcsolat kell, nem "ha van feltöltött számla, csak azt
         nézzük": egy simán csatolt (referenciaként feltöltött, de sosem
@@ -435,12 +445,20 @@ class ProjectCode(TimestampMixin, Base):
         kifizetettre jelölt) bevétel-sor viszont pont fordítva okoz gondot:
         VAN feltöltött, kifizetett számla, de egy hozzá nem tartozó, örökké
         fizetetlen sor a `revenues`-ban örökre "még nem érkezett meg"
-        állapotban tartaná a projektkódot. A VAGY mindkettőt megoldja."""
+        állapotban tartaná a projektkódot. A VAGY mindezt megoldja."""
         # Ahol nem is várunk tranzakciót, ott a LEZÁRÁS ténye számít, nem egy
         # dátum - lásd tranzakcio_nelkul_lezarva.
         if self.tranzakcio_nelkul_lezarva:
             return True
         if self.bevetelbe_ne_keruljon and self.utalas_datuma is not None:
+            return True
+        # NEGYEDIK ÚT: a Notionból örökölt "Számla státusza" szövege szerint
+        # már megjött a pénz (lásd KIFIZETETT_STATUSZ_MINTA). Sok RÉGI
+        # projektkódnál ez az EGYETLEN nyom: a pontos utalási dátumot
+        # Notionban sosem vezették soronként, csak ezt az állapot-szöveget -
+        # e nélkül egy ilyen, valójában lezárt munka örökre "nincs kifizetve"
+        # (Teendők -> Nincs még számla) állapotban ragadna.
+        if self.szamla_statusza and KIFIZETETT_STATUSZ_MINTA in self.szamla_statusza.lower():
             return True
         szamlak = self._szamlak()
         if szamlak and all(szamla.kifizetve_datuma is not None or szamla.tranzakcio_nelkul_lezarva for szamla in szamlak):
