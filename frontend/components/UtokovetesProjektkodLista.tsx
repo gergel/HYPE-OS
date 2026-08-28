@@ -20,16 +20,18 @@ function tigBadge(ready: boolean, osszes: number, fuggo: number) {
 /** Azok a projektkódok, amiken FORGATÁS NÉLKÜL van alvállalkozói papírozás -
  * lásd backend utokovetes_admin.py "projektkód-szintű ág". Külön kis lista a
  * fő UtokovetesLista mellett, mert a sorok alakja más (nincs forgatási dátum,
- * aláírás-várás, kifizetés-számláló - lásd UtokovetesOverviewProjectCode), és
- * a projektkódnak nincs saját Utókövetés-adatlapja: a teendő magán a Project
- * Code oldalon (projektek/project-kodok/[id]) van, ezért oda navigál a sor. */
+ * aláírás-várás, kifizetés-számláló - lásd UtokovetesOverviewProjectCode). A
+ * sor a projektkód SAJÁT Utókövetés-adatlapjára navigál (lásd
+ * utokovetes/projektkodok/[id]), nem a Project Code oldalra - ugyanaz a
+ * szétválasztás, mint a forgatás-alapú ágon: a papírozás nem a projekt/kiadás
+ * adatlap dolga. */
 export function UtokovetesProjektkodLista({ rows }: { rows: UtokovetesOverviewProjectCode[] }) {
   return (
     <DataTable<UtokovetesOverviewProjectCode & { id: number }>
       filterable
       rows={rows.map((r) => ({ ...r, id: r.project_code_id }))}
       emptyText="Nincs ilyen projektkód."
-      getHref={(r) => `/projektek/project-kodok/${r.project_code_id}`}
+      getHref={(r) => `/utokovetes/projektkodok/${r.project_code_id}`}
       columns={[
         { header: "Projekt", render: (r) => r.project_nev ?? `#${r.project_code_id}`, sortAccessor: (r) => r.project_nev },
         { header: "Projektkód", render: (r) => r.projektkod ?? "–", sortAccessor: (r) => r.projektkod },

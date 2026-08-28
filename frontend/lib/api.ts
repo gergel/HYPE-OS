@@ -1050,6 +1050,12 @@ export async function getPendingTigForProjectCode(projectCodeId: number): Promis
   return apiGet<PendingTigProjectCodeDetail>(`/api/v1/teljesitesi-igazolasok/projektkodok/${projectCodeId}`);
 }
 
+export async function getAllTigForProjectCode(projectCodeId: number): Promise<PerformanceCertificate[]> {
+  return (
+    (await apiGet<PerformanceCertificate[]>(`/api/v1/teljesitesi-igazolasok/projektkodok/${projectCodeId}/all`)) ?? []
+  );
+}
+
 /** Mi mindent tehetünk MÉG rá erre a TIG-re: a fél összes olyan munkája, amiről
  * még nincs papír - más projektekről is. Ez az "egy ember egyben küld be több
  * projektet" eset felülete. */
@@ -1069,7 +1075,11 @@ export type PerformanceCertificateInvoice = {
 
 export type PerformanceCertificate = {
   id: number;
-  project_id: number;
+  /** A projektkód-szintű (forgatás nélküli) ágon `project_id` üres, helyette
+   * `project_code_id` mutatja, melyik projektkódhoz tartozik a TIG - lásd
+   * getAllTigForProjectCode. */
+  project_id: number | null;
+  project_code_id: number | null;
   /** A számlázó fél: ember VAGY vállalkozás. */
   employee_id: number | null;
   vallalkozas_id: number | null;
@@ -1086,6 +1096,8 @@ export type PerformanceCertificate = {
     forgatas_datuma: string | null;
   }[];
   allapot: string | null;
+  /** Miért hagytuk ki, ha a fenti `allapot` "Kihagyva". */
+  kihagyas_oka: string | null;
   file_url: string | null;
   ceg_neve: string | null;
   netto_osszeg: number | null;

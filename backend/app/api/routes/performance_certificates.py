@@ -2026,3 +2026,40 @@ async def upload_sajat_tig_projektkodon(
         document_storage.delete_object(regi_kulcs)
     db.refresh(draft)
     return PerformanceCertificateRead.model_validate(draft)
+
+
+@router.get("/projektkodok/{project_code_id}/all", response_model=list[PerformanceCertificateRead])
+def list_all_for_project_code(
+    project_code_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
+):
+    """Lásd list_all_for_project (forgatás-alapú megfelelője) - itt nincs
+    tétel-alapú lefedettség, a szűrés a TIG saját project_code_id-ja szerint
+    megy (lásd fájl fejléce: ezen az ágon egy TIG csak EGY projektkódhoz
+    tartozhat)."""
+    rows = db.query(PerformanceCertificate).filter(PerformanceCertificate.project_code_id == project_code_id).all()
+    return [PerformanceCertificateRead.model_validate(c) for c in rows]
+
+
+@router.delete("/projektkodok/{project_code_id}/{szamlazo_kulcs}", status_code=204)
+def delete_certificate_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+):
+    """Lásd delete_certificate (forgatás-alapú megfelelője)."""
+    cert = _certificate_or_none_projektkodon(db, project_code_id, szamlazo_kulcs)
+    if cert is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projektkódhoz és félhez nincs TIG bejegyzés.")
+    if cert.expense_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Ehhez a TIG-hez Kiadás sor tartozik a Pénzügyben - előbb azt töröld ott. "
+                "A Kiadás törlése ezt a TIG-et is visszaállítja „nincs kifizetve” állapotba."
+            ),
+        )
+    for invoice in cert.invoices:
+        document_storage.delete_object(invoice.storage_key)
+    db.delete(cert)
+    db.commit()
