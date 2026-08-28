@@ -41,7 +41,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.project_code import ProjectCode  # noqa: F401  (a selectinload-hoz)
-from app.services import bizonylat, elszamolas, fizetesi_mod
+from app.services import attachments, bizonylat, elszamolas, fizetesi_mod
 from app.services.hu_szoveg import ekezet_nelkul
 
 #: A KP forgalom sor iránya. A Notionben szabad szöveg ("bevetel"/"kiadas"),
@@ -74,6 +74,16 @@ class KasszaSor:
     egyenleg: float = 0.0
     #: Hova visz a sor a felületen.
     href: str | None = None
+    #: A NYERS irány-mező - csak "kp_forgalom" forrásnál van értéke
+    #: ("bevetel" / "kiadas" / "fedezet"), a Kiadás/Bevétel saját táblájának
+    #: nincs ilyen mezője. Azért kell IDE is (nem elég a be/ki-ből
+    #: visszafejteni), mert a "fedezet" jelölés a be/ki irányán NEM változtat -
+    #: enélkül a felület nem tudná megkülönböztetni egy sima bevételtől.
+    forgalom: str | None = None
+    #: Feltöltött bizonylat(ok) - csak "kp_forgalom" forrásnál töltjük ki
+    #: (lásd kep() lent): a Kiadásnak/Bevételnek saját, régről örökölt
+    #: bizonylat-felülete van, ennek eddig nem volt.
+    csatolmanyok: list[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -285,10 +295,15 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
     # Ami egy kiadáshoz kötődik (`expense_id`), az KIMARAD: ugyanaz a
     # pénzmozgás már szerepel a kiadás soraként, beszámítva kétszer vonódna le.
     kotve = 0
+    kp_forgalom_sorok = []
     for f in db.scalars(select(KpForgalom)).all():
         if f.expense_id is not None:
             kotve += 1
-            continue
+        else:
+            kp_forgalom_sorok.append(f)
+    szamlas_kp_forgalom = bizonylat.szamlas_kp_forgalom_ids(db)
+    kp_forgalom_csatolmanyok = attachments.list_for_many(db, "kpForgalom", [f.id for f in kp_forgalom_sorok])
+    for f in kp_forgalom_sorok:
         osszeg, kiadas_e = kp_forgalom_iranya(f)
         sorok.append(
             KasszaSor(
@@ -298,12 +313,17 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
                 megnevezes=f.megnevezes or "KP forgalom",
                 be=0.0 if kiadas_e else osszeg,
                 ki=osszeg if kiadas_e else 0.0,
-                # Ezekhez nincs bizonylat - ezért is vannak külön nyilvántartva.
-                van_szamla=False,
+                # A "fedezet"-nek jelölt sorokon szándékosan NINCS bizonylat -
+                # épp azt jelenti a jelölés, hogy ez a bevétel számla nélkül
+                # fedezi a fekete kiadást. A többinél a feltöltött csatolmány
+                # dönt (lásd services/bizonylat.py).
+                van_szamla=(f.forgalom or "").strip().casefold() != "fedezet" and f.id in szamlas_kp_forgalom,
                 # …az ATM-felvétel viszont ÁTVEZETÉS: van róla banki kivonat,
                 # és nem is bevétel, csak a saját pénzünk került át a
                 # bankszámláról a kasszába.
                 atvezetes=keszpenzfelvetel(f.megnevezes),
+                forgalom=f.forgalom,
+                csatolmanyok=kp_forgalom_csatolmanyok.get(f.id, []),
             )
         )
 

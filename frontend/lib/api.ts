@@ -1320,6 +1320,11 @@ export type KpNaploSor = {
    * bontásba nem. */
   atvezetes: boolean;
   href: string | null;
+  /** A NYERS irány-mező - csak "kp_forgalom" forrásnál van értéke (bevetel /
+   * kiadas / fedezet). */
+  forgalom: string | null;
+  /** Feltöltött bizonylat(ok) - csak "kp_forgalom" forrásnál lehet. */
+  csatolmanyok: DocumentAttachment[];
 };
 
 /** Egy időszak készpénz-képe: a négy sarok, amiből minden más kijön. */

@@ -32,7 +32,7 @@ from app.models.deliverable_comment import DeliverableComment
 from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
-from app.models.finance import Expense, Revenue
+from app.models.finance import Expense, KpForgalom, Revenue
 from app.services import fizetesi_mod
 from app.models.kotelezettseg import Kotelezettseg, KotelezettsegIdoszak
 from app.models.krumpello import KrumpelloKiadas, KrumpelloNap
@@ -52,6 +52,10 @@ ENTITY_MODELS: dict[str, type] = {
     "task": Task,
     "expense": Expense,
     "revenue": Revenue,
+    # A Notionből örökölt KP forgalom tábla sorai - a Kiadással/Bevétellel
+    # ellentétben ezeknek eddig nem volt saját bizonylat-csatolási lehetőségük
+    # (lásd frontend penzugyek/kp-forgalom).
+    "kpForgalom": KpForgalom,
     "deliverable": Deliverable,
     # Egy hozzászólás az Utómunka oldal alján - csatolmányt (fájlt) fogad,
     # hogy egy hozzászóláshoz konkrét anyagot lehessen mellékelni (lásd

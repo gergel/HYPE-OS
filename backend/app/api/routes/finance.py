@@ -29,6 +29,7 @@ from app.models.performance_certificate import (
 )
 from app.models.portal import Payment
 from app.models.project_code import ProjectCode
+from app.schemas.document_attachment import DocumentAttachmentRead
 from app.services import attachments, bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
 from app.services import kassza as kassza_szolg
 from app.services import penznem as penznem_szolg
@@ -316,6 +317,12 @@ class KpNaploSor(BaseModel):
     atvezetes: bool = False
     #: Hova visz a sor a felületen.
     href: str | None = None
+    #: A NYERS irány-mező - csak "kp_forgalom" forrásnál van értéke ("bevetel"
+    #: / "kiadas" / "fedezet") - lásd services/kassza.py KasszaSor.forgalom.
+    forgalom: str | None = None
+    #: Feltöltött bizonylat(ok) - csak "kp_forgalom" forrásnál lehet, a
+    #: Kiadásnak/Bevételnek saját, régről örökölt bizonylat-felülete van.
+    csatolmanyok: list[DocumentAttachmentRead] = []
 
 
 class KpOsszesites(BaseModel):
@@ -500,6 +507,8 @@ def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_curren
                 van_szamla=s.van_szamla,
                 atvezetes=s.atvezetes,
                 href=s.href,
+                forgalom=s.forgalom,
+                csatolmanyok=s.csatolmanyok,
             )
             for s in kep.sorok
         ],

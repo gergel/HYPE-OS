@@ -42,6 +42,7 @@ ENTITAS_OLDALAK: dict[str, str] = {
     "projectCode": "/projektek/project-kodok",
     "expense": "/penzugyek",
     "revenue": "/penzugyek",
+    "kpForgalom": "/penzugyek",
     "project": "/projektek",
     "client": "/ugyfelek",
     "employee": "/csapat",

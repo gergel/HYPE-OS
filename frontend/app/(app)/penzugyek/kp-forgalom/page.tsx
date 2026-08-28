@@ -2,6 +2,7 @@ import { Card } from "@/components/Card";
 import { DataTable, type Column } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
+import { KpForgalomSzamlaCella } from "@/components/finance/KpForgalomSzamlaCella";
 import { TorolMindenMozgastButton } from "@/components/finance/TorolMindenMozgastButton";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
@@ -20,9 +21,11 @@ import { ArrowDownLeft, ArrowUpRight, EyeOff, Receipt } from "lucide-react";
 
 const PAGE = "/penzugyek";
 
-/** A KP forgalom sor IRÁNYA. Ugyanaz a két szó, amit a Notion is használt -
- * a backend előtag szerint nézi (lásd services/kassza.py). */
-const IRANY_OPCIOK = ["bevetel", "kiadas"] as const;
+/** A KP forgalom sor IRÁNYA. A "fedezet" egy BEVÉTEL-jellegű sor, aminél a
+ * felhasználó kifejezetten jelzi, hogy ez számla nélküli bevétel, ami a
+ * fekete kiadást fedezi (lásd backend services/kassza.py van_szamla - ilyen
+ * sornál a bizonylat-feltöltés is ki van kapcsolva, épp ez a jelölés lényege). */
+const IRANY_OPCIOK = ["bevetel", "kiadas", "fedezet"] as const;
 
 /** KP FORGALOM: minden készpénz-mozgás egy listában, időrendben - és a
  * LEGÁLIS/FEKETE bontás.
@@ -139,7 +142,7 @@ export default async function KpForgalomPage() {
           <EditableStatusBadge
             patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
             field="forgalom"
-            value={s.ki > 0 ? "kiadas" : "bevetel"}
+            value={s.forgalom ?? (s.ki > 0 ? "kiadas" : "bevetel")}
             options={[...IRANY_OPCIOK]}
           />
         ) : (
@@ -205,6 +208,18 @@ export default async function KpForgalomPage() {
         // Átvezetésnél a bizonylat a banki kivonat - se legális, se fekete.
         s.atvezetes ? (
           <span className="text-text-muted">–</span>
+        ) : s.forras === "kp_forgalom" ? (
+          // A Notionből örökölt KP forgalom soroknak eddig nem volt saját
+          // bizonylat-feltöltési felületük - ez nyit egy kis ablakot rá.
+          <KpForgalomSzamlaCella
+            forrasId={s.forrasId}
+            vanSzamla={s.van_szamla}
+            bevetel={s.be > 0}
+            fedezetJelolt={(s.forgalom ?? "").trim().toLowerCase() === "fedezet"}
+            csatolmanyok={s.csatolmanyok}
+            canEdit={canEdit}
+            canDelete={canDelete}
+          />
         ) : s.van_szamla ? (
           <StatusBadge label="Van" tone="success" />
         ) : s.be > 0 ? (

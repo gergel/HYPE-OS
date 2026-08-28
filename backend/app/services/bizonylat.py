@@ -57,6 +57,14 @@ def szamlas_bevetel_ids(db: Session) -> set[int]:
     return _szamlas_ids(db, "revenue")
 
 
+def szamlas_kp_forgalom_ids(db: Session) -> set[int]:
+    """Azoknak a Notionből örökölt KP FORGALOM soroknak az azonosítói,
+    amikhez fel van töltve számla. Ezeknek (a Kiadással/Bevétellel
+    ellentétben) nincs Notionből örökölt PDF-mezőjük - a bizonyíték kizárólag
+    a feltöltött csatolmány lehet."""
+    return _szamlas_ids(db, "kpForgalom")
+
+
 def _van_fajl(ertek: Any) -> bool:
     """Van-e ténylegesen fájl a Notionből örökölt mezőben.
 
