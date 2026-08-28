@@ -455,6 +455,25 @@ def torol_minden_kiadast_es_bevetelt(
     return {"torolt_kiadas_db": torolt_kiadas_db, "torolt_bevetel_db": torolt_bevetel_db}
 
 
+@summary_router.delete("/kp-naplo/mind")
+def torol_minden_mozgast(
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    """Az EGÉSZ KP forgalom-napló (Kiadás + Bevétel + Notionből örökölt KP
+    forgalom, lásd kp_naplo) egyszerre ürítése - a frontend penzugyek/
+    kp-forgalom oldal "Összes mozgás törlése" gombja hívja, amikor valaki
+    egy Notion-újraszinkronizálás előtt teljesen nulláról akarja kezdeni.
+
+    A két önálló törlést hívja meg (lásd torol_minden_kp_forgalmat,
+    torol_minden_kiadast_es_bevetelt) - így minden mellékhatásuk (FK-k
+    eloldása, bizonylatok törlése, "kifizetve" állapot visszaállítása) itt is
+    érvényesül, nem csak külön-külön hívva."""
+    kp = torol_minden_kp_forgalmat(db=db, _user=user)
+    ke = torol_minden_kiadast_es_bevetelt(db=db, _user=user)
+    return {**kp, **ke}
+
+
 @summary_router.get("/kp-naplo", response_model=KpNaplo)
 def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     """MINDEN készpénz-mozgás egy listában, időrendben, futó egyenleggel - és a

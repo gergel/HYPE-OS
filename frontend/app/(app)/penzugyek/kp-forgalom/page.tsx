@@ -2,7 +2,7 @@ import { Card } from "@/components/Card";
 import { DataTable, type Column } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
-import { TorolMindenKpForgalmatButton } from "@/components/finance/TorolMindenKpForgalmatButton";
+import { TorolMindenMozgastButton } from "@/components/finance/TorolMindenMozgastButton";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -10,7 +10,6 @@ import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   getCurrentUser,
-  getKpForgalmak,
   getKpNaplo,
   getMyPagePermissions,
   type KpOsszesites,
@@ -45,9 +44,8 @@ const IRANY_OPCIOK = ["bevetel", "kiadas"] as const;
  * számításból, mint a Pénzügyek kassza-kártyája - így a két felület nem
  * mondhat mást ugyanarról a dobozról. */
 export default async function KpForgalomPage() {
-  const [naplo, forgalmak, currentUser, pagePermissions] = await Promise.all([
+  const [naplo, currentUser, pagePermissions] = await Promise.all([
     getKpNaplo(),
-    getKpForgalmak(),
     getCurrentUser(),
     getMyPagePermissions(),
   ]);
@@ -398,7 +396,7 @@ export default async function KpForgalomPage() {
             szerkeszthetők/törölhetők/felvehetők. */}
         <Card
           title={`KP forgalom (${megjelenitett.length} mozgás)`}
-          actions={canDelete ? <TorolMindenKpForgalmatButton darabszam={forgalmak.length} /> : undefined}
+          actions={canDelete ? <TorolMindenMozgastButton darabszam={megjelenitett.length} /> : undefined}
         >
           <p className="mb-3 text-[12.5px] text-text-muted">
             Minden készpénz-mozgás időrendben. A KIADÁS és BEVÉTEL forrású sorok a{" "}
