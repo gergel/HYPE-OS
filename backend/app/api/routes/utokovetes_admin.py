@@ -18,6 +18,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.routes.performance_certificates import (
@@ -182,10 +183,15 @@ class ProjectOverviewSummary(BaseModel):
 def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
     """Minden diszpózott projekt egy sorban, a szerződés/TIG/visszajelzés
     állapotával - nem csak a még függőket listázza (mint a két külön oldal),
-    hanem MINDENT, hogy áttekintés is legyen, nem csak teendő-lista."""
+    hanem MINDENT, hogy áttekintés is legyen, nem csak teendő-lista.
+
+    Azok a Projectek is bekerülnek, amikhez nem tartozik kiküldött diszpó, de
+    van hozzájuk kötött alvállalkozói kiadás (lásd
+    subcontractor_contracts.list_pending_projects) - egy tisztán ügynökségi
+    feladatnál (nincs forgatás) ez az egyetlen jel, hogy szerződés/TIG kell."""
     projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
-        .filter(Project.diszpo == "Kiküldve")
+        .filter(or_(Project.diszpo == "Kiküldve", Project.alvallalkozo_kiadasok.any()))
         .options(
             selectinload(Project.crew),
             selectinload(Project.alvallalkozo_kiadasok).selectinload(Expense.employee),

@@ -18,7 +18,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import tuple_
+from sqlalchemy import or_, tuple_
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.routes.subcontractor_contracts import (
@@ -276,9 +276,12 @@ class PendingProjectSummary(BaseModel):
 
 @router.get("", response_model=list[PendingProjectSummary])
 def list_tig_ready_projects(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    # Lásd subcontractor_contracts.list_pending_projects: alvállalkozói
+    # kiadásnál a diszpó állapotától függetlenül bekerül a projekt, mert maga
+    # a kiadás a commitment, nem a stáb-behívás.
     projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
-        .filter(Project.diszpo == "Kiküldve")
+        .filter(or_(Project.diszpo == "Kiküldve", Project.alvallalkozo_kiadasok.any()))
         .options(selectinload(Project.crew), selectinload(Project.project_code))
         .all()
     )

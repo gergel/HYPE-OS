@@ -28,8 +28,12 @@ class Expense(TimestampMixin, Base):
     #: NEM kötelező kézzel megadni: a szerver a kiadás projektkódjának
     #: legfrissebb forgatásához automatikusan hozzárendeli (lásd
     #: api/routes/finance.py _alvallalkozo_forgatas_kitoltese) - elég az
-    #: alvállalkozót magát kiválasztani, "csak a projektkódhoz" hozzáadva. Csak
-    #: akkor marad üres, ha a projektkódhoz MÉG egy forgatás sem tartozik.
+    #: alvállalkozót magát kiválasztani, "csak a projektkódhoz" hozzáadva. Ha
+    #: a projektkódhoz MÉG egy forgatás sem tartozik (tisztán ügynökségi
+    #: feladat, nincs forgatás), a szerver létrehoz egy "nem diszponálandó"
+    #: helyettesítő Project sort, hogy legyen mihez kötni a papírokat (lásd
+    #: _alvallalkozo_helyetto_forgatas) - a diszpó/stáb-behívó rendszert ez
+    #: nem érinti.
     alvallalkozo_project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
     #: Melyik céges autóra ment a költség (tankolás, szerviz, matrica). Az autó
     #: oldala ezeket a sorokat mutatja - de a kiadás ettől ugyanúgy szerepel a

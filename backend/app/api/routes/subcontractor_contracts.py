@@ -347,9 +347,15 @@ def load_szerzodes_kornyezet(
 
 @router.get("", response_model=list[PendingProjectSummary])
 def list_pending_projects(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    # Rendes stábtagnál a diszpó kiküldése a jel, hogy a papírozás napirendre
+    # került. Alvállalkozói kiadásnál viszont maga a kiadás a commitment - ott
+    # nincs mire várni, ezért az a Project is bekerül, amihez van
+    # alvallalkozo_kiadas, akkor is, ha (esetleg forgatás híján örökre)
+    # diszpó nélkül marad (lásd models/finance.py Expense.alvallalkozo_project_id
+    # és api/routes/finance._alvallalkozo_helyetto_forgatas).
     projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
-        .filter(Project.diszpo == "Kiküldve")
+        .filter(or_(Project.diszpo == "Kiküldve", Project.alvallalkozo_kiadasok.any()))
         .options(selectinload(Project.crew), selectinload(Project.project_code))
         .all()
     )
