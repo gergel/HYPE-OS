@@ -2,8 +2,9 @@ import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { UtokovetesLista } from "@/components/UtokovetesLista";
 import { UtokovetesNezetek } from "@/components/UtokovetesNezetek";
-import { UtokovetesProjektkodLista } from "@/components/UtokovetesProjektkodLista";
+import { UtokovetesProjektkodTabla } from "@/components/UtokovetesProjektkodTabla";
 import { fazisa } from "@/lib/utokovetes";
+import { fazisaProjektkod } from "@/lib/utokovetesProjektkod";
 import { getUtokovetesOverview, getUtokovetesOverviewProjectCodes } from "@/lib/api";
 
 /** Utókövetés - EGY oldalon mutatja minden diszpózott projekthez tartozó
@@ -28,6 +29,7 @@ export default async function UtokovetesPage({
   const { nezet } = await searchParams;
   const [rows, projektkodSorok] = await Promise.all([getUtokovetesOverview(), getUtokovetesOverviewProjectCodes()]);
   const keszDarab = rows.filter((r) => fazisa(r) === "kesz").length;
+  const projektkodKeszDarab = projektkodSorok.filter((r) => fazisaProjektkod(r) === "kesz").length;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -46,10 +48,15 @@ export default async function UtokovetesPage({
         {/* PROJEKTKÓDOK, forgatás nélkül: alvállalkozói kiadás, amihez nincs
             konkrét forgatás - a szerződés/TIG közvetlenül a projektkódhoz
             kötve készül (lásd backend utokovetes_admin.py "projektkód-szintű
-            ág"). Csak akkor jelenik meg, ha van is ilyen kód. */}
+            ág"). Ugyanaz a fázisonkénti oszlopos elrendezés, mint a fenti
+            áttekintésen (lásd UtokovetesProjektkodTabla) - egy sima
+            táblázatként ez a szakasz elveszett volna a lap alján. Csak akkor
+            jelenik meg, ha van is ilyen kód. */}
         {projektkodSorok.length > 0 && (
-          <Card title={`Alvállalkozói papírozás forgatás nélkül – ${projektkodSorok.length} projektkód`}>
-            <UtokovetesProjektkodLista rows={projektkodSorok} />
+          <Card
+            title={`Alvállalkozói papírozás forgatás nélkül – ${projektkodSorok.length} projektkód, ${projektkodKeszDarab} kész, ${projektkodSorok.length - projektkodKeszDarab} folyamatban`}
+          >
+            <UtokovetesProjektkodTabla rows={projektkodSorok} />
           </Card>
         )}
       </div>
