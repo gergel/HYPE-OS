@@ -13,7 +13,6 @@ import {
   getKpForgalmak,
   getKpNaplo,
   getMyPagePermissions,
-  type KpForgalom,
   type KpOsszesites,
 } from "@/lib/api";
 import { formatHuf } from "@/lib/penz";
@@ -84,8 +83,10 @@ export default async function KpForgalomPage() {
   const megjelenitett = [...sorok]
     .reverse()
     // A DataTable egyedi id-t vár; a forrás-azonosítók viszont ütközhetnek
-    // (egy kiadás és egy bevétel is lehet #12), ezért kapnak sorszámot.
-    .map((sor, index) => ({ ...sor, id: index }));
+    // (egy kiadás és egy bevétel is lehet #12), ezért kapnak sorszámot - az
+    // EREDETI forrás-id-t forrasId alatt megtartjuk, mert a KP forgalom
+    // sorok helyben szerkesztéséhez/törléséhez az kell (lásd oszlopok lent).
+    .map((sor, index) => ({ ...sor, forrasId: sor.id, id: index }));
 
   type Sor = (typeof megjelenitett)[number];
 
@@ -96,8 +97,38 @@ export default async function KpForgalomPage() {
   };
 
   const oszlopok: Column<Sor>[] = [
-    { header: "Dátum", render: (s) => s.datum ?? "–", sortAccessor: (s) => s.datum },
-    { header: "Megnevezés", render: (s) => s.megnevezes, sortAccessor: (s) => s.megnevezes },
+    {
+      header: "Dátum",
+      render: (s) =>
+        // Csak a Notionből örökölt KP forgalom sorok szerkeszthetők itt - a
+        // kiadás/bevétel forrású sorok a Pénzügyeken javíthatók (lásd fenti
+        // magyarázó szöveg).
+        canEdit && s.forras === "kp_forgalom" ? (
+          <EditableTableCell
+            patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
+            field="kiadas_datuma"
+            value={s.datum}
+            type="date"
+          />
+        ) : (
+          (s.datum ?? "–")
+        ),
+      sortAccessor: (s) => s.datum,
+    },
+    {
+      header: "Megnevezés",
+      render: (s) =>
+        canEdit && s.forras === "kp_forgalom" ? (
+          <EditableTableCell
+            patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
+            field="megnevezes"
+            value={s.megnevezes}
+          />
+        ) : (
+          s.megnevezes
+        ),
+      sortAccessor: (s) => s.megnevezes,
+    },
     {
       header: "Típus",
       render: (s) =>
@@ -106,6 +137,13 @@ export default async function KpForgalomPage() {
         // megtévesztően nagy "bevételnek" látszana.
         s.atvezetes ? (
           <StatusBadge label="Átvezetés (ATM)" tone="blue" />
+        ) : canEdit && s.forras === "kp_forgalom" ? (
+          <EditableStatusBadge
+            patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
+            field="forgalom"
+            value={s.ki > 0 ? "kiadas" : "bevetel"}
+            options={[...IRANY_OPCIOK]}
+          />
         ) : (
           <StatusBadge
             label={FORRAS_CIMKE[s.forras] ?? s.forras}
@@ -118,13 +156,37 @@ export default async function KpForgalomPage() {
     {
       header: "Be",
       align: "right",
-      render: (s) => (s.be > 0 ? <span className="text-text-teal">{formatHuf(s.be)}</span> : "–"),
+      render: (s) =>
+        canEdit && s.forras === "kp_forgalom" && !s.atvezetes && s.be > 0 ? (
+          <EditableTableCell
+            patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
+            field="osszeg"
+            value={s.be}
+            type="number"
+          />
+        ) : s.be > 0 ? (
+          <span className="text-text-teal">{formatHuf(s.be)}</span>
+        ) : (
+          "–"
+        ),
       sortAccessor: (s) => s.be,
     },
     {
       header: "Ki",
       align: "right",
-      render: (s) => (s.ki > 0 ? <span className="text-text-orange">{formatHuf(s.ki)}</span> : "–"),
+      render: (s) =>
+        canEdit && s.forras === "kp_forgalom" && !s.atvezetes && s.ki > 0 ? (
+          <EditableTableCell
+            patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
+            field="osszeg"
+            value={s.ki}
+            type="number"
+          />
+        ) : s.ki > 0 ? (
+          <span className="text-text-orange">{formatHuf(s.ki)}</span>
+        ) : (
+          "–"
+        ),
       sortAccessor: (s) => s.ki,
     },
     {
@@ -327,23 +389,31 @@ export default async function KpForgalomPage() {
           </Card>
         </div>
 
-        {/* A KP FORGALOM TÁBLA maga - kézzel szerkeszthetően. A napló fenti
-            sorai három forrásból állnak össze (a kiadások és a bevételek a
-            Pénzügyeken szerkeszthetők); ez a tábla az, aminek eddig SEHOL nem
-            volt felülete, pedig a Notionből örökölt sorok javításra szorulnak.
-            Minden mező átírható, és a sorok törölhetők/felvehetők. */}
+        {/* EGY tábla minden készpénz-mozgáshoz: a napló sorai a KIADÁSOKBÓL, a
+            BEVÉTELEKBŐL és a Notionből örökölt „KP forgalom" tábla soraiból
+            állnak össze. A kiadás/bevétel forrású sorok a Pénzügyeken
+            szerkeszthetők (ott saját felületük van); a Notionből örökölt KP
+            forgalom sorok viszont eddig SEHOL nem voltak javíthatók, pedig
+            ezeknél van a legtöbb elcsúszás - ezért ITT, helyben
+            szerkeszthetők/törölhetők/felvehetők. */}
         <Card
-          title={`KP forgalom tételek (${forgalmak.length})`}
+          title={`KP forgalom (${megjelenitett.length} mozgás)`}
           actions={canDelete ? <TorolMindenKpForgalmatButton darabszam={forgalmak.length} /> : undefined}
         >
           <p className="mb-3 text-[12.5px] text-text-muted">
-            A Notionből örökölt „KP forgalom" tábla – itt szerkeszthető. Az <strong>irány</strong> mondja meg,
-            kivétel volt-e a kasszából vagy betétel; az importált sorokon ezt a Notion „Forintban" mezőjének
-            előjele hordozta, kézzel átírva viszont az irány-mező számít. A kiadás- és bevétel-sorok a{" "}
+            Minden készpénz-mozgás időrendben. A KIADÁS és BEVÉTEL forrású sorok a{" "}
             <a href="/penzugyek" className="text-text-accent hover:underline">
               Pénzügyeken
             </a>{" "}
-            szerkeszthetők.
+            szerkeszthetők; a Notionből örökölt „KP forgalom" sorok Dátuma, Megnevezése, Iránya és Összege itt,
+            helyben javítható - ezeknél volt a legtöbb elcsúszás az importált adatban.
+            {(naplo?.kp_forgalom_kiadashoz_kotve ?? 0) > 0 && (
+              <>
+                {" "}
+                {naplo?.kp_forgalom_kiadashoz_kotve} KP forgalom sor kimarad, mert egy konkrét kiadáshoz kötődik:
+                ugyanaz a pénzmozgás már szerepel a kiadás soraként, beszámítva kétszer vonódna le.
+              </>
+            )}
           </p>
           {canCreate && (
             <QuickCreateForm
@@ -360,177 +430,15 @@ export default async function KpForgalomPage() {
                 },
                 { name: "osszeg", label: "Összeg", type: "number" },
                 { name: "kiadas_datuma", label: "Dátum", type: "date" },
-                { name: "legalis", label: "Legális" },
               ]}
             />
           )}
-          <DataTable<KpForgalom>
-            rows={forgalmak}
-            emptyText="Nincs egyetlen KP forgalom tétel sem."
-            deleteHref={canDelete ? (f) => `${ENTITY_PATHS.kpForgalom}/${f.id}` : undefined}
-            filterable
-            columns={[
-              {
-                header: "Dátum",
-                render: (f) =>
-                  canEdit ? (
-                    <EditableTableCell
-                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
-                      field="kiadas_datuma"
-                      value={f.kiadas_datuma}
-                      type="date"
-                    />
-                  ) : (
-                    (f.kiadas_datuma ?? "–")
-                  ),
-                sortAccessor: (f) => f.kiadas_datuma,
-              },
-              {
-                header: "Megnevezés",
-                render: (f) =>
-                  canEdit ? (
-                    <EditableTableCell
-                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
-                      field="megnevezes"
-                      value={f.megnevezes}
-                    />
-                  ) : (
-                    (f.megnevezes ?? "–")
-                  ),
-                sortAccessor: (f) => f.megnevezes,
-              },
-              {
-                // Az IRÁNY a legfontosabb mező: ez dönti el, a kasszából
-                // kiment-e a pénz vagy bejött. Az importált sorokon üres, és
-                // ilyenkor a Notion előjele döntött - ezt ki is írjuk.
-                header: "Irány",
-                render: (f) => (
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    <EditableStatusBadge
-                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
-                      field="forgalom"
-                      value={f.forgalom}
-                      options={[...IRANY_OPCIOK]}
-                      placeholder={f.kiadas_e ? "kiadas" : "bevetel"}
-                    />
-                    {/* HONNAN tudjuk az irányt, ha a mező üres: az ATM-szabály
-                        alapján, az importált előjelből, vagy - ha az sincs -
-                        alapértelmezésből. A három nem ugyanaz: az első kettő
-                        adat, a harmadik csak feltevés, amit érdemes
-                        megerősíteni. */}
-                    {!f.forgalom && (
-                      <span
-                        className="text-[11px] text-text-muted"
-                        title={
-                          f.atvezetes_e
-                            ? "Készpénzfelvétel a bankból: a kasszába ÉRKEZIK, ezért bevétel (átvezetés)"
-                            : f.forintban_notion
-                              ? "A Notion „Forintban” mezőjének előjeléből"
-                              : "Nincs megadva irány és előjel sem – bevételnek vesszük"
-                        }
-                      >
-                        {f.atvezetes_e
-                          ? "(ATM-felvétel)"
-                          : f.forintban_notion
-                            ? "(előjelből)"
-                            : "(feltételezve)"}
-                      </span>
-                    )}
-                  </span>
-                ),
-                sortAccessor: (f) => f.forgalom ?? (f.kiadas_e ? "kiadas" : "bevetel"),
-              },
-              {
-                header: "Összeg",
-                align: "right",
-                render: (f) =>
-                  canEdit ? (
-                    <EditableTableCell
-                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
-                      field="osszeg"
-                      value={f.osszeg}
-                      type="number"
-                    />
-                  ) : (
-                    formatHuf(f.osszeg)
-                  ),
-                sortAccessor: (f) => f.osszeg,
-              },
-              {
-                // Ennyivel mozdítja a kasszát - előjelesen, ahogy a napló is
-                // számol vele. Így ránézésre látszik, ha egy sor iránya rossz.
-                header: "Kasszába",
-                align: "right",
-                render: (f) => (
-                  <span className={f.kiadas_e ? "text-text-orange" : "text-text-teal"}>
-                    {f.kiadas_e ? "−" : "+"}
-                    {formatHuf(Math.abs(f.forintban ?? 0))}
-                  </span>
-                ),
-                sortAccessor: (f) => (f.kiadas_e ? -1 : 1) * Math.abs(f.forintban ?? 0),
-              },
-              {
-                header: "Pénznem",
-                render: (f) =>
-                  canEdit ? (
-                    <EditableTableCell
-                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
-                      field="penznem"
-                      value={f.penznem}
-                    />
-                  ) : (
-                    f.penznem
-                  ),
-                sortAccessor: (f) => f.penznem,
-              },
-              {
-                header: "Legális",
-                render: (f) =>
-                  canEdit ? (
-                    <EditableTableCell
-                      patchPath={`${ENTITY_PATHS.kpForgalom}/${f.id}`}
-                      field="legalis"
-                      value={f.legalis}
-                    />
-                  ) : (
-                    (f.legalis ?? "–")
-                  ),
-                sortAccessor: (f) => f.legalis,
-              },
-              {
-                // Ami egy konkrét kiadáshoz kötődik, az a naplóból kimarad:
-                // ugyanaz a pénzmozgás már szerepel a kiadás soraként.
-                header: "Kiadáshoz kötve",
-                align: "right",
-                render: (f) =>
-                  f.expense_id === null ? (
-                    "–"
-                  ) : (
-                    <StatusBadge label={`Kiadás #${f.expense_id}`} tone="neutral" />
-                  ),
-                sortAccessor: (f) => f.expense_id,
-              },
-            ]}
-          />
-        </Card>
-
-        <Card title={`KP forgalom (${megjelenitett.length} mozgás)`}>
-          <p className="mb-3 text-[12.5px] text-text-muted">
-            Minden készpénz-mozgás időrendben. A sorok a KIADÁSOKBÓL, a BEVÉTELEKBŐL és a Notionből örökölt „KP
-            forgalom" táblából állnak össze – az utóbbiak számla nélküli bevételként.
-            {(naplo?.kp_forgalom_kiadashoz_kotve ?? 0) > 0 && (
-              <>
-                {" "}
-                {naplo?.kp_forgalom_kiadashoz_kotve} KP forgalom sor kimarad, mert egy konkrét kiadáshoz kötődik:
-                ugyanaz a pénzmozgás már szerepel a kiadás soraként, beszámítva kétszer vonódna le.
-              </>
-            )}
-          </p>
           <DataTable<Sor>
             rows={megjelenitett}
             columns={oszlopok}
             emptyText="Még nincs egyetlen készpénzes mozgás sem – a Pénzügyeken a kiadás/bevétel fizetési módját kell Készpénzre állítani."
             getHref={(s) => s.href ?? ""}
+            deleteHref={canDelete ? (s) => (s.forras === "kp_forgalom" ? `${ENTITY_PATHS.kpForgalom}/${s.forrasId}` : "") : undefined}
             filterable
           />
         </Card>
