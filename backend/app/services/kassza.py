@@ -173,12 +173,23 @@ def _penz(sor) -> float:
 #: KÉSZPÉNZFELVÉTEL a bankszámláról (ATM). A megnevezésből ismerjük fel.
 KESZPENZFELVETEL_JELEK: tuple[str, ...] = ("kp felvetel", "keszpenzfelvetel", "keszpenz felvetel", "atm")
 
+#: "Ádám KP felvétel" (vagy ezt TARTALMAZÓ megnevezés) NEM a szokásos ATM-
+#: felvétel: ez Ádám SAJÁT kivétele a kasszából - tehát valódi KIADÁS, nem a
+#: bankszámla és a kassza közti önmagunknak-átvezetés, mint a sima "KP
+#: felvétel". Ezért ELŐBB ezt nézzük, és ha illik, a sor MÁR NEM esik bele az
+#: általános "kp felvetel" mintába (lásd keszpenzfelvetel lent).
+ADAM_SAJAT_FELVETEL_JEL = "adam kp felvetel"
+
 
 def keszpenzfelvetel(megnevezes: Any) -> bool:
-    """ATM-ből felvett pénz-e ez a sor (a megnevezése szerint)."""
+    """ATM-ből felvett pénz-e ez a sor (a megnevezése szerint) - az "Ádám KP
+    felvétel" (vagy ezt tartalmazó) sorok kivételek: azok Ádám saját, valódi
+    kiadása, nem bank->kassza átvezetés."""
     if not megnevezes:
         return False
     tiszta = ekezet_nelkul(str(megnevezes))
+    if ADAM_SAJAT_FELVETEL_JEL in tiszta:
+        return False
     return any(jel in tiszta for jel in KESZPENZFELVETEL_JELEK)
 
 
