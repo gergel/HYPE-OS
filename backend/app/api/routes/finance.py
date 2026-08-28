@@ -82,17 +82,28 @@ def _devizat_forintra_frissiteskor(obj, adat: dict, db: Session, _current_user: 
 def _alvallalkozo_forgatas_kitoltese(adat: dict, db: Session) -> dict:
     """Alvállalkozói kiadásnál (employee_id kitöltve) NEM kötelező kiválasztani,
     melyik konkrét forgatáshoz (alvallalkozo_project_id) tartozik - elég a
-    projektkódhoz hozzáadni. Ha erre a projektkódra pontosan egy forgatás
-    tartozik, azt automatikusan hozzárendeljük, hogy a szerződés/TIG-igény
-    (ami Project-hez kötött, lásd models/project.py Project.alvallalkozo_stab)
-    kézi lépés nélkül is megjelenjen az Utókövetésben. Nulla vagy több forgatás
-    esetén a mező üresen marad - a kiadás akkor is felvihető, csak
-    Utókövetésben nem jelenik meg, amíg valaki nem társítja egy konkrét
-    forgatáshoz (a rekord később szerkeszthető)."""
+    projektkódhoz hozzáadni: aki kap egy embert a kiadáson, AUTOMATIKUSAN
+    bekerül az Utókövetésbe, hogy hozzá szerződés és TIG is készüljön (a
+    szerződés/TIG Project-hez kötött, lásd models/project.py
+    Project.alvallalkozo_stab), amíg ember nélkül minden marad a régiben (sima
+    kiadás, nincs vele más teendő).
+
+    A hozzárendelés a projektkód forgatásai közül a LEGFRISSEBBET választja,
+    ha a felhasználó nem adott meg konkrétat - a pontos forgatás csak azt
+    dönti el, HOL jelenik meg az Utókövetésben, magát a szerződés/TIG-igényt
+    nem befolyásolja. Kizárólag akkor marad üresen (és marad ki egyelőre az
+    Utókövetésből), ha a projektkódhoz még EGYETLEN forgatás sem tartozik -
+    ilyenkor nincs mihez kötni, a mező a forgatás felvétele után utólag is
+    kitölthető."""
     if adat.get("employee_id") and not adat.get("alvallalkozo_project_id") and adat.get("project_code_id"):
-        forgatasok = db.scalars(select(Project.id).where(Project.project_code_id == adat["project_code_id"])).all()
-        if len(forgatasok) == 1:
-            adat["alvallalkozo_project_id"] = forgatasok[0]
+        legfrissebb = db.scalar(
+            select(Project.id)
+            .where(Project.project_code_id == adat["project_code_id"])
+            .order_by(Project.forgatas_datuma.desc().nulls_last(), Project.id.desc())
+            .limit(1)
+        )
+        if legfrissebb is not None:
+            adat["alvallalkozo_project_id"] = legfrissebb
     return adat
 
 
