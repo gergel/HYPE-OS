@@ -1328,6 +1328,11 @@ export type KpNaploSor = {
   /** A "Projekt kiadás" mező NYERS azonosítója - csak "kp_forgalom"
    * forrásnál van értéke. */
   project_code_id: number | null;
+  /** Devizás felvezetés nyoma - csak "kp_forgalom" forrásnál lehet. */
+  penznem: string | null;
+  arfolyam: number | null;
+  eredeti_penznem: string | null;
+  eredeti_osszeg: number | null;
 };
 
 /** Egy időszak készpénz-képe: a négy sarok, amiből minden más kijön. */

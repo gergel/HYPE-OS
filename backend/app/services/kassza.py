@@ -88,6 +88,12 @@ class KasszaSor:
     #: forrásnál van értéke (lásd models/finance.KpForgalom.project_code_id).
     #: A `projektkod` (fent) már a MEGJELENÍTETT kód, ez a szerkesztéshez kell.
     project_code_id: int | None = None
+    #: Devizás felvezetés nyoma - csak "kp_forgalom" forrásnál lehet, hogy a
+    #: felület megmutassa, MIBŐL lett a forint összeg (lásd services/penznem.py).
+    penznem: str | None = None
+    arfolyam: float | None = None
+    eredeti_penznem: str | None = None
+    eredeti_osszeg: float | None = None
 
 
 @dataclass
@@ -330,6 +336,10 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
                 csatolmanyok=kp_forgalom_csatolmanyok.get(f.id, []),
                 href=f"/projektek/project-kodok/{f.project_code_id}" if f.project_code_id else None,
                 project_code_id=f.project_code_id,
+                penznem=f.penznem,
+                arfolyam=f.arfolyam,
+                eredeti_penznem=f.eredeti_penznem,
+                eredeti_osszeg=f.eredeti_osszeg,
             )
         )
 

@@ -174,17 +174,35 @@ export default async function KpForgalomPage() {
       render: (s) => {
         const jel = s.ki > 0 ? "text-text-orange" : "text-text-teal";
         const ertek = s.ki > 0 ? s.ki : s.be;
-        return canEdit && s.forras === "kp_forgalom" && !s.atvezetes ? (
-          <span className={jel}>
-            <EditableTableCell
-              patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
-              field="osszeg"
-              value={ertek}
-              type="number"
-            />
-          </span>
-        ) : (
-          <span className={jel}>{formatHuf(ertek)}</span>
+        return (
+          <div>
+            <span className={jel}>
+              {canEdit && s.forras === "kp_forgalom" && !s.atvezetes ? (
+                <EditableTableCell
+                  patchPath={`${ENTITY_PATHS.kpForgalom}/${s.forrasId}`}
+                  field="osszeg"
+                  value={ertek}
+                  type="number"
+                />
+              ) : (
+                formatHuf(ertek)
+              )}
+            </span>
+            {/* MIBŐL lett a forint összeg - devizás felvezetésnél az eredeti
+                összeg és árfolyam, egyébként simán a pénznem (lásd backend
+                services/penznem.py). Csak a KP forgalom soroknál van ilyen
+                nyoma - a Kiadás/Bevétel forrásúaknak saját, más elrendezésű
+                jelzőjük van a Pénzügyeken. */}
+            {s.forras === "kp_forgalom" && !s.atvezetes && (
+              <div className="text-[11px] text-text-muted">
+                {s.eredeti_penznem
+                  ? `${(s.eredeti_osszeg ?? 0).toLocaleString("hu-HU")} ${s.eredeti_penznem} × ${
+                      s.arfolyam === null ? "?" : s.arfolyam.toLocaleString("hu-HU")
+                    }`
+                  : (s.penznem ?? "HUF")}
+              </div>
+            )}
+          </div>
         );
       },
       sortAccessor: (s) => (s.ki > 0 ? -s.ki : s.be),

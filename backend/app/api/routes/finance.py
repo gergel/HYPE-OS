@@ -354,6 +354,12 @@ class KpNaploSor(BaseModel):
     #: A "Projekt kiadás" mező NYERS azonosítója - csak "kp_forgalom"
     #: forrásnál van értéke (lásd models/finance.KpForgalom.project_code_id).
     project_code_id: int | None = None
+    #: Devizás felvezetés nyoma - csak "kp_forgalom" forrásnál lehet, hogy a
+    #: felület megmutassa, MIBŐL lett a forint összeg (lásd services/penznem.py).
+    penznem: str | None = None
+    arfolyam: float | None = None
+    eredeti_penznem: str | None = None
+    eredeti_osszeg: float | None = None
 
 
 class KpOsszesites(BaseModel):
@@ -541,6 +547,10 @@ def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_curren
                 forgalom=s.forgalom,
                 csatolmanyok=s.csatolmanyok,
                 project_code_id=s.project_code_id,
+                penznem=s.penznem,
+                arfolyam=s.arfolyam,
+                eredeti_penznem=s.eredeti_penznem,
+                eredeti_osszeg=s.eredeti_osszeg,
             )
             for s in kep.sorok
         ],
