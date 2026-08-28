@@ -5,8 +5,10 @@ import { ActionButton } from "@/components/ActionButton";
 import { Card } from "@/components/Card";
 import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar";
 import { ProjectDetailModal } from "@/components/ProjectDetailModal";
+import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Project, ProjectCodeOption } from "@/lib/api";
+import { AlertTriangle, CalendarClock, Send, SendHorizonal } from "lucide-react";
 
 function formatDate(value: string | null): string {
   return value ? value.slice(0, 10) : "–";
@@ -50,6 +52,162 @@ const GROUP_TONES = {
 } as const;
 
 type GroupTone = keyof typeof GROUP_TONES;
+
+/** Ez a két tónus jelent VALÓS, MOST esedékes teendőt (a diszpót ma kell
+ * megírni, vagy már el is maradt) - ezért ezek a csoportok a lista TETEJÉRE
+ * kerülnek, a naptári sorrendtől függetlenül, jól látható kiemeléssel. A
+ * többi (tegnapi/mai forgatás múltja, holnaputáni, távolabbi napok) csak
+ * tájékoztató, azok a megszokott naptári sorrendben, lejjebb maradnak. */
+const SURGOS_TONES: readonly GroupTone[] = ["lemaradas", "mairando"];
+
+type DiszpoGroup = {
+  key: string;
+  tone: GroupTone;
+  title: string;
+  alcim: string | null;
+  dateLabel: string;
+  projects: Project[];
+  pending: number;
+  meetings: number;
+  darabolt: number;
+};
+
+/** Egy nap doboza a listanézetben (pl. "Ma írandó", "Tegnapi forgatás") - a
+ * "sürgős" zóna és a naptári sorrendben lévő többi nap UGYANEZT a dobozt
+ * használja, csak a `emphasized` kapcsoló ad neki egy fokkal erősebb fejlécet
+ * a sürgős zónában, hogy a két hely ne különüljön el KÉTFÉLE megjelenésre. */
+function DiszpoGroupSection({
+  group,
+  emphasized = false,
+  projectCodeById,
+  darabolvaIdk,
+  gyerekSzam,
+  canSend,
+  onProjectClick,
+}: {
+  group: DiszpoGroup;
+  emphasized?: boolean;
+  projectCodeById: Map<number, string>;
+  darabolvaIdk: Set<number>;
+  gyerekSzam: Map<number, number>;
+  canSend: boolean;
+  onProjectClick: (id: number) => void;
+}) {
+  const tone = GROUP_TONES[group.tone];
+  return (
+    <section
+      className={`overflow-hidden rounded-[var(--radius-lg)] border ${emphasized ? "border-border-strong" : "border-border"}`}
+    >
+      <div className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 ${tone.bg} ${tone.stripe}`}>
+        <span className={`${emphasized ? "text-[16px] font-bold" : "text-[15px] font-semibold"} ${tone.title}`}>
+          {group.title}
+        </span>
+        {group.alcim && <span className="text-[12px] text-text-secondary">({group.alcim})</span>}
+        <span className="text-[12px] text-text-secondary">{group.dateLabel}</span>
+        <span className="ml-auto text-[12px] text-text-muted">
+          {group.projects.length - group.meetings - group.darabolt} forgatás
+          {group.meetings > 0 && ` · ${group.meetings} meeting`}
+          {group.darabolt > 0 && ` · ${group.darabolt} feldarabolva`}
+          {group.pending > 0 && ` · ${group.pending} diszpó hátra`}
+        </span>
+      </div>
+
+      <div className="divide-y divide-border">
+        {group.projects.map((p) => (
+          <div
+            key={p.id}
+            onClick={() => onProjectClick(p.id)}
+            className="flex cursor-pointer flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 transition-colors hover:bg-surface-3"
+          >
+            <div className="min-w-[200px] flex-1">
+              <p className="text-[14px] font-medium text-text-primary">{p.nev}</p>
+              <p className="mt-0.5 text-[12px] text-text-muted">
+                {projectCodeById.get(p.project_code_id) ?? "–"}
+                {p.helyszin ? ` · ${p.helyszin}` : ""}
+                {p.forgatas_datuma_vege && p.forgatas_datuma_vege !== p.forgatas_datuma
+                  ? ` · ${formatDate(p.forgatas_datuma)} – ${formatDate(p.forgatas_datuma_vege)}`
+                  : ""}
+                {/* Ha leválasztottunk róla napokat, azt akkor is
+                    kiírjuk, ha erre a napra még kell rá diszpó:
+                    különben csak egy megrövidült forgatás látszik,
+                    magyarázat nélkül. */}
+                {gyerekSzam.get(p.id) ? ` · feldarabolva (${gyerekSzam.get(p.id)} nap leválasztva)` : ""}
+                {p.feldarabolas_szulo_id !== null ? " · leválasztott nap" : ""}
+              </p>
+            </div>
+
+            {darabolvaIdk.has(p.id) && !p.nem_diszponalando ? (
+              // Ez az eredeti, több napos esemény, amiből erre a
+              // napra leválasztottunk egy külön forgatást: a diszpó
+              // ahhoz megy, ide nem kérünk semmit.
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge label="Már feldarabolva" tone="neutral" />
+                <span className="text-[12px] text-text-muted">a diszpó a leválasztott naphoz megy, ide nem kell</span>
+              </div>
+            ) : p.nem_diszponalando ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge label="Meeting – nem diszponálandó" tone="neutral" />
+                {p.naptar_szin && <span className="text-[12px] text-text-muted">naptár szín: {p.naptar_szin}</span>}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-end gap-x-6 gap-y-3" onClick={(e) => e.stopPropagation()}>
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                    Előzetes diszpó
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {p.elozetes_diszpo_kuldes ? (
+                      <StatusBadge label={p.elozetes_diszpo_kuldes} tone="teal" />
+                    ) : (
+                      <StatusBadge label="Nincs elküldve" tone="neutral" />
+                    )}
+                    {canSend && (
+                      <ActionButton
+                        path={`/api/v1/projects/${p.id}/diszpo/elozetes`}
+                        label={p.elozetes_diszpo_kuldes ? "Újraküldés" : "Küldés"}
+                        figyelmeztetes={p.elozetes_diszpo_kuldes ? "AZ ELŐZETES DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
+                        megerositoCimke={p.elozetes_diszpo_kuldes ? "Igen, újraküldöm" : undefined}
+                        confirmMessage={
+                          p.elozetes_diszpo_kuldes
+                            ? `${p.nev} – állapot: ${p.elozetes_diszpo_kuldes}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja ugyanazt a levelet. Biztosan újraküldöd?`
+                            : "Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">Diszpó</p>
+                  <div className="flex items-center gap-2">
+                    {p.diszpo ? (
+                      <StatusBadge label={p.diszpo} tone="success" />
+                    ) : (
+                      <StatusBadge label="Nincs kiküldve" tone="neutral" />
+                    )}
+                    {canSend && (
+                      <ActionButton
+                        path={`/api/v1/projects/${p.id}/diszpo/kuldes`}
+                        label={p.diszpo ? "Újraküldés" : "Küldés"}
+                        figyelmeztetes={p.diszpo ? "A DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
+                        megerositoCimke={p.diszpo ? "Igen, újraküldöm" : undefined}
+                        confirmMessage={
+                          p.diszpo
+                            ? `${p.nev} – állapot: ${p.diszpo}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja a teljes diszpót (technika listával, PDF-fel). Biztosan újraküldöd?`
+                            : "Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 /** A Naptár/Diszpó oldal tényleges tartalma - a Project rekordokon
  * ténylegesen tárolt diszpó-állapotot (diszpo/elozetes_diszpo_kuldes,
@@ -218,22 +376,59 @@ export function NaptarDiszpoContent({
     .filter((g) => g.tone === "lemaradas")
     .reduce((osszeg, g) => osszeg + g.pending, 0);
 
+  // A SÜRGŐS csoportok (lemaradás + a holnapi forgatásra ma írandó diszpó) a
+  // lista TETEJÉRE kerülnek, a naptári sorrendtől függetlenül - enélkül a
+  // legfontosabb teendő a tegnapi/mai forgatás (már lezárt) dobozai MÖGÖTT
+  // bújt meg. A csoportokon belüli sorrend marad dátum szerinti (a
+  // `groups` már úgy van rendezve), csak a két "kategória" cserél helyet.
+  const surgosCsoportok = groups.filter((g) => SURGOS_TONES.includes(g.tone));
+  const tobbiCsoport = groups.filter((g) => !SURGOS_TONES.includes(g.tone));
+
   return (
     <Card title={`Naptár / Diszpó (${diszponalando.length} forgatás)`}>
-      {/* A diszpó egy nappal a forgatás előtt készül: ma a HOLNAPI napot írjuk.
-          Ezért ez a szám áll elöl, nem az összes hátralévő. */}
-      <p className="mb-1 text-[13px] text-text-primary">
-        <strong>{maIrando} diszpó írandó ma</strong> (a holnapi forgatásokra)
-        {lemaradas > 0 && (
-          <span className="text-text-orange"> · {lemaradas} lemaradás (mai vagy tegnapi forgatás)</span>
-        )}
-      </p>
-      <p className="mb-3 text-[13px] text-text-secondary">
-        {elozetesKuldve} előzetes diszpó elküldve · {teljesKuldve} teljes diszpó kiküldve ·{" "}
-        {diszponalando.length - teljesKuldve} még hátra van összesen
-        {meetingek > 0 && ` · ${meetingek} meeting (nem diszponálandó)`}
-        {daraboltak > 0 && ` · ${daraboltak} feldarabolva (a napjaihoz megy a diszpó)`}
-      </p>
+      {/* A NÉGY legfontosabb szám elöl, jól látható stat-kártyákon - nem egy
+          futószövegben elrejtve. A "Ma írandó" és a "Lemaradás" azért kap
+          erős (accent/danger) színt akkor is, ha épp 0, hogy a négy kártya
+          egy sorban, egyforma súllyal álljon; a szín csak akkor vált
+          semlegesre, ha tényleg nincs mit tenni. */}
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard
+          label="Ma írandó diszpó"
+          value={maIrando}
+          icon={Send}
+          tone={maIrando > 0 ? "accent" : "default"}
+          megjegyzes="a holnapi forgatásokra"
+        />
+        <StatCard
+          label="Lemaradás"
+          value={lemaradas}
+          icon={AlertTriangle}
+          tone={lemaradas > 0 ? "danger" : "default"}
+          megjegyzes="mai vagy tegnapi forgatás"
+        />
+        <StatCard
+          label="Előzetes diszpó elküldve"
+          value={`${elozetesKuldve}/${diszponalando.length}`}
+          icon={SendHorizonal}
+          tone="default"
+        />
+        <StatCard
+          label="Teljes diszpó kiküldve"
+          value={`${teljesKuldve}/${diszponalando.length}`}
+          icon={CalendarClock}
+          tone="default"
+          megjegyzes={
+            meetingek > 0 || daraboltak > 0
+              ? [
+                  meetingek > 0 ? `${meetingek} meeting` : null,
+                  daraboltak > 0 ? `${daraboltak} feldarabolva` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : undefined
+          }
+        />
+      </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
@@ -271,132 +466,53 @@ export function NaptarDiszpoContent({
             {query ? "Nincs találat a szűrésre." : "Nincs tegnapi vagy jövőbeni forgatás."}
           </p>
         ) : (
-          <div className="space-y-5">
-            {groups.map((group) => {
-              const tone = GROUP_TONES[group.tone];
-              return (
-                <section key={group.key} className="overflow-hidden rounded-[var(--radius-lg)] border border-border">
-                  <div className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 ${tone.bg} ${tone.stripe}`}>
-                    <span className={`text-[15px] font-semibold ${tone.title}`}>{group.title}</span>
-                    {group.alcim && <span className="text-[12px] text-text-secondary">({group.alcim})</span>}
-                    <span className="text-[12px] text-text-secondary">{group.dateLabel}</span>
-                    <span className="ml-auto text-[12px] text-text-muted">
-                      {group.projects.length - group.meetings - group.darabolt} forgatás
-                      {group.meetings > 0 && ` · ${group.meetings} meeting`}
-                      {group.darabolt > 0 && ` · ${group.darabolt} feldarabolva`}
-                      {group.pending > 0 && ` · ${group.pending} diszpó hátra`}
-                    </span>
-                  </div>
+          <div className="space-y-6">
+            {/* SÜRGŐS ZÓNA: a lemaradt és a ma írandó diszpók, EGYETLEN
+                kiemelt dobozban, a lista legtetején - függetlenül attól, hogy
+                naptárilag a tegnapi/mai forgatás korábban jönne. Ez a válasz a
+                "mit kell most csinálnom" kérdésre, ezért ez az első, amit
+                valaki lát. */}
+            {surgosCsoportok.length > 0 && (
+              <div className="space-y-3 rounded-[var(--radius-lg)] border border-text-orange/40 bg-surface-1 p-4">
+                <p className="flex items-center gap-2 px-1 text-[13px] font-bold uppercase tracking-wide text-text-orange">
+                  <AlertTriangle className="h-4 w-4" aria-hidden />
+                  Most teendő
+                </p>
+                {surgosCsoportok.map((group) => (
+                  <DiszpoGroupSection
+                    key={group.key}
+                    group={group}
+                    emphasized
+                    projectCodeById={projectCodeById}
+                    darabolvaIdk={darabolvaIdk}
+                    gyerekSzam={gyerekSzam}
+                    canSend={canSend}
+                    onProjectClick={setModalProjectId}
+                  />
+                ))}
+              </div>
+            )}
 
-                  <div className="divide-y divide-border">
-                    {group.projects.map((p) => (
-                      <div
-                        key={p.id}
-                        onClick={() => setModalProjectId(p.id)}
-                        className="flex cursor-pointer flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 transition-colors hover:bg-surface-3"
-                      >
-                        <div className="min-w-[200px] flex-1">
-                          <p className="text-[14px] font-medium text-text-primary">{p.nev}</p>
-                          <p className="mt-0.5 text-[12px] text-text-muted">
-                            {projectCodeById.get(p.project_code_id) ?? "–"}
-                            {p.helyszin ? ` · ${p.helyszin}` : ""}
-                            {p.forgatas_datuma_vege && p.forgatas_datuma_vege !== p.forgatas_datuma
-                              ? ` · ${formatDate(p.forgatas_datuma)} – ${formatDate(p.forgatas_datuma_vege)}`
-                              : ""}
-                            {/* Ha leválasztottunk róla napokat, azt akkor is
-                                kiírjuk, ha erre a napra még kell rá diszpó:
-                                különben csak egy megrövidült forgatás látszik,
-                                magyarázat nélkül. */}
-                            {gyerekSzam.get(p.id)
-                              ? ` · feldarabolva (${gyerekSzam.get(p.id)} nap leválasztva)`
-                              : ""}
-                            {p.feldarabolas_szulo_id !== null ? " · leválasztott nap" : ""}
-                          </p>
-                        </div>
-
-                        {darabolvaIdk.has(p.id) && !p.nem_diszponalando ? (
-                          // Ez az eredeti, több napos esemény, amiből erre a
-                          // napra leválasztottunk egy külön forgatást: a diszpó
-                          // ahhoz megy, ide nem kérünk semmit.
-                          <div className="flex flex-wrap items-center gap-2">
-                            <StatusBadge label="Már feldarabolva" tone="neutral" />
-                            <span className="text-[12px] text-text-muted">
-                              a diszpó a leválasztott naphoz megy, ide nem kell
-                            </span>
-                          </div>
-                        ) : p.nem_diszponalando ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <StatusBadge label="Meeting – nem diszponálandó" tone="neutral" />
-                            {p.naptar_szin && (
-                              <span className="text-[12px] text-text-muted">naptár szín: {p.naptar_szin}</span>
-                            )}
-                          </div>
-                        ) : (
-                        <div
-                          className="flex flex-wrap items-end gap-x-6 gap-y-3"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div>
-                            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">
-                              Előzetes diszpó
-                            </p>
-                            <div className="flex items-center gap-2">
-                              {p.elozetes_diszpo_kuldes ? (
-                                <StatusBadge label={p.elozetes_diszpo_kuldes} tone="teal" />
-                              ) : (
-                                <StatusBadge label="Nincs elküldve" tone="neutral" />
-                              )}
-                              {canSend && (
-                                <ActionButton
-                                  path={`/api/v1/projects/${p.id}/diszpo/elozetes`}
-                                  label={p.elozetes_diszpo_kuldes ? "Újraküldés" : "Küldés"}
-                                  figyelmeztetes={
-                                    p.elozetes_diszpo_kuldes ? "AZ ELŐZETES DISZPÓ MÁR KI VAN KÜLDVE" : undefined
-                                  }
-                                  megerositoCimke={p.elozetes_diszpo_kuldes ? "Igen, újraküldöm" : undefined}
-                                  confirmMessage={
-                                    p.elozetes_diszpo_kuldes
-                                      ? `${p.nev} – állapot: ${p.elozetes_diszpo_kuldes}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja ugyanazt a levelet. Biztosan újraküldöd?`
-                                      : "Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
-                                  }
-                                />
-                              )}
-                            </div>
-                          </div>
-
-                          <div>
-                            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">
-                              Diszpó
-                            </p>
-                            <div className="flex items-center gap-2">
-                              {p.diszpo ? (
-                                <StatusBadge label={p.diszpo} tone="success" />
-                              ) : (
-                                <StatusBadge label="Nincs kiküldve" tone="neutral" />
-                              )}
-                              {canSend && (
-                                <ActionButton
-                                  path={`/api/v1/projects/${p.id}/diszpo/kuldes`}
-                                  label={p.diszpo ? "Újraküldés" : "Küldés"}
-                                  figyelmeztetes={p.diszpo ? "A DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
-                                  megerositoCimke={p.diszpo ? "Igen, újraküldöm" : undefined}
-                                  confirmMessage={
-                                    p.diszpo
-                                      ? `${p.nev} – állapot: ${p.diszpo}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja a teljes diszpót (technika listával, PDF-fel). Biztosan újraküldöd?`
-                                      : "Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
-                                  }
-                                />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
+            {/* A TÖBBI NAP a megszokott naptári sorrendben, halkabban - ez már
+                csak tájékoztató (lezárt tegnap/ma, vagy a távolabbi jövő). */}
+            {tobbiCsoport.length > 0 && (
+              <div className="space-y-3">
+                {surgosCsoportok.length > 0 && (
+                  <p className="px-1 text-[12px] font-medium uppercase tracking-wide text-text-muted">További napok</p>
+                )}
+                {tobbiCsoport.map((group) => (
+                  <DiszpoGroupSection
+                    key={group.key}
+                    group={group}
+                    projectCodeById={projectCodeById}
+                    darabolvaIdk={darabolvaIdk}
+                    gyerekSzam={gyerekSzam}
+                    canSend={canSend}
+                    onProjectClick={setModalProjectId}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )
       ) : (
