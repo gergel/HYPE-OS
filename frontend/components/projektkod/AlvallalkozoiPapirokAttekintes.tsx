@@ -63,9 +63,19 @@ export function AlvallalkozoiPapirokAttekintes({
                   {t.netto_osszeg != null && lathatKoltseget && (
                     <span className="text-text-secondary">{formatFt(t.netto_osszeg)}</span>
                   )}
+                  {/* A KIFIZETÉS a TIG utolsó lépése - amíg nincs meg, a papír
+                      önmagában nem zárja le az ügyet (lásd
+                      ProjektPapirokEsKoltsegek, a forgatás-alapú
+                      megfelelője). */}
                   <StatusBadge
-                    label={t.allapot ?? "Készítés alatt"}
-                    tone={t.allapot === "Kiküldve" ? "success" : t.allapot === "Kihagyva" ? "neutral" : "warning"}
+                    label={
+                      t.szamla_kifizetve
+                        ? "Kifizetve"
+                        : t.szamla_kihagyva
+                          ? "Nincs számla"
+                          : (t.allapot ?? "Készítés alatt")
+                    }
+                    tone={t.szamla_kifizetve ? "success" : t.allapot === "Kiküldve" ? "warning" : "neutral"}
                   />
                 </span>
               </li>

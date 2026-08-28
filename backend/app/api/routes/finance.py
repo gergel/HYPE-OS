@@ -1163,10 +1163,23 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
         # csak akkor utalható, ha MINDEGYIKRE megjött a pénz. Ez az összevont
         # számlák esete: részben fedezettként látszik, amíg az egyik ügyfél
         # még nem fizetett.
+        #
+        # A FORGATÁS NÉLKÜLI (projektkódhoz kötött) TIG-nél nincs tétel és
+        # nincs `project` sem - a saját `project_code_id`-ja adja a kódot
+        # (lásd models/performance_certificate.py, routes/performance_certificates.py
+        # "projektkód-szintű ág").
         tig_kodok = [t.project.project_code_id for t in tig.tetelek if t.project is not None]
         if not tig_kodok and tig.project is not None:
             tig_kodok = [tig.project.project_code_id]
+        if not tig_kodok and tig.project_code_id is not None:
+            tig_kodok = [tig.project_code_id]
         allapot, minden_kod, fedezetlen = _fedezettseg(tig_kodok, kodok, kifizetett)
+        if tig.project_id is not None:
+            link = f"/projektek/{tig.project_id}"
+        elif tig.project_code_id is not None:
+            link = f"/utokovetes/projektkodok/{tig.project_code_id}"
+        else:
+            link = None
         eredmeny.append(
             (
                 UtalasraVaroTetel(
@@ -1182,7 +1195,7 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
                     penznem="HUF",
                     hatarido=None,
                     szamla_db=len(tig.invoices),
-                    link=f"/projektek/{tig.project_id}" if tig.project_id else None,
+                    link=link,
                 ),
                 [(f"kulsos_tig_{tig.id}_{sz.id}_{sz.filename}", sz.storage_key) for sz in tig.invoices],
             )

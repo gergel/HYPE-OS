@@ -43,6 +43,7 @@ from app.api.routes.subcontractor_contracts import (
     _pending_csoportok_projektkodon,
     _szamlazo_csoportok,
     alairasra_varo_csoportok,
+    alairasra_varo_csoportok_projektkodon,
     load_szerzodes_kornyezet,
     load_szerzodes_kornyezet_projektkodon,
     szamlazo_csoportok_projektkodon,
@@ -320,6 +321,11 @@ class ProjectCodeOverviewSummary(BaseModel):
     tig_ready: bool
     tig_osszes: int
     tig_fuggo: int
+    #: Hány kiküldött szerződést várunk még vissza ALÁÍRVA (lásd
+    #: subcontractor_contracts.alairasra_varo_csoportok_projektkodon).
+    alairas_varo: int
+    kifizetes_osszes: int
+    kifizetes_fuggo: int
     kesz: bool
 
 
@@ -340,6 +346,8 @@ def list_utokovetes_overview_projektkodok(db: Session = Depends(get_db), _user: 
         tig_ready, tig_osszes, tig_fuggo = _tig_state_projektkodon(
             pk, keretszerzodesek, project_code_contracts, tig_lookup
         )
+        kifizetes_osszes, kifizetes_fuggo = _kifizetes_state_projektkodon(pk, tig_lookup)
+        alairas_varo = len(alairasra_varo_csoportok_projektkodon(pk, keretszerzodesek, project_code_contracts))
         result.append(
             ProjectCodeOverviewSummary(
                 project_code_id=pk.id,
@@ -350,7 +358,12 @@ def list_utokovetes_overview_projektkodok(db: Session = Depends(get_db), _user: 
                 tig_ready=tig_ready,
                 tig_osszes=tig_osszes,
                 tig_fuggo=tig_fuggo,
-                kesz=szerzodes_fuggo == 0 and tig_fuggo == 0,
+                alairas_varo=alairas_varo,
+                kifizetes_osszes=kifizetes_osszes,
+                kifizetes_fuggo=kifizetes_fuggo,
+                # A kiküldött szerződés még nem lezárt ügy: amíg aláírva vissza
+                # nem érkezett, a projektkód sem kész.
+                kesz=szerzodes_fuggo == 0 and tig_fuggo == 0 and kifizetes_fuggo == 0 and alairas_varo == 0,
             )
         )
     return result
@@ -442,11 +455,10 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
 # ═══════════════════════════════════════════════════════════════════════════
 #
 # Lásd subcontractor_contracts.py és performance_certificates.py azonos című
-# szakaszait. EGYSZERŰBB, mint a forgatás-alapú áttekintő: nincs "aláírásra
-# váró" és "kifizetés" számláló, mert ezen az ágon nincs számla-allépés (a
-# kifizetés állapotát maga az Expense sor hordozza, lásd a fájl-fejlécet a
-# performance_certificates.py-ban) - a "kész" itt annyit jelent, hogy a
-# szerződés és a TIG lépés is lezárult mindenkinél.
+# szakaszait. UGYANOLYAN négy fázisa van, mint a forgatás-alapú áttekintőnek
+# (szerződés, TIG, aláírás, kifizetés) - csak egyszerűbb bennük a populáció,
+# mert nincs tétel-rendszer és nincs "ki számláz kiért" felülírás ezen az
+# ágon: egy projektkódon mindenki önmagáért számláz.
 
 
 def _szerzodes_candidates_projektkodon(
@@ -480,3 +492,25 @@ def _tig_state_projektkodon(
     if not keszitheto:
         return False, total, len(_tig_pending_csoportok_projektkodon(projektkod, csoportok, tig_lookup))
     return True, total, len(_tig_pending_csoportok_projektkodon(projektkod, keszitheto, tig_lookup))
+
+def _kifizetes_state_projektkodon(
+    projektkod: ProjectCode,
+    tig_lookup: TigLookupProjektkod,
+) -> tuple[int, int]:
+    """Lásd _kifizetes_state (forgatás-alapú megfelelője)."""
+    _, fel_tig = tig_lookup
+    csoportok = szamlazo_csoportok_projektkodon(projektkod)
+    if not csoportok:
+        return 0, 0
+    total = 0
+    pending = 0
+    for csoport in csoportok:
+        tig = fel_tig.get((projektkod.id, csoport.kulcs))
+        if tig is not None and tig.allapot == "Kihagyva":
+            continue
+        if tig is not None and tig.szamla_kihagyva:
+            continue
+        total += 1
+        if tig is None or not tig.szamla_kifizetve:
+            pending += 1
+    return total, pending

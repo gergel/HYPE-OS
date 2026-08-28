@@ -290,12 +290,23 @@ class ProjectCode(TimestampMixin, Base):
         Egy Expense IDE tartozik, ha van hozzá alvállalkozó (employee_id), DE
         nincs konkrét forgatáshoz kötve (alvallalkozo_project_id üres) - ha
         volna, azt már a Project.alvallalkozo_stab viszi, ott van rá diszpó-
-        mentes, de forgatáshoz kötött szerződés/TIG-igény."""
-        return [
-            e.employee
-            for e in self.expenses
-            if e.employee is not None and e.alvallalkozo_project_id is None
-        ]
+        mentes, de forgatáshoz kötött szerződés/TIG-igény.
+
+        EMBERENKÉNT egyszer szerepel valaki, még akkor is, ha több ilyen
+        Expense-e van (pl. az eredeti kiadás mellett a kifizetett TIG-hez
+        automatikusan létrejövő "TIG - ..." kiadás-sor is idetartozik, lásd
+        performance_certificates.py mark_szamla_kifizetve_projektkodon) -
+        különben ugyanaz a fél kétszer kérne szerződést/TIG-et."""
+        latott: set[int] = set()
+        eredmeny: list["Employee"] = []
+        for e in self.expenses:
+            if e.employee is None or e.alvallalkozo_project_id is not None:
+                continue
+            if e.employee.id in latott:
+                continue
+            latott.add(e.employee.id)
+            eredmeny.append(e.employee)
+        return eredmeny
 
     @property
     def elmaradt(self) -> bool:

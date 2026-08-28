@@ -2,14 +2,15 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
-import { ElkeszultTigProjektkod } from "@/components/ElkeszultTigProjektkod";
 import { PerformanceCertificateManagerProjektkod } from "@/components/PerformanceCertificateManagerProjektkod";
 import { SubcontractorContractManagerProjektkod } from "@/components/SubcontractorContractManagerProjektkod";
+import { TigInvoiceManager } from "@/components/TigInvoiceManager";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   getAllContractsForProjectCode,
   getAllTigForProjectCode,
+  getEmployees,
   getMyPagePermissions,
   getPendingSubcontractorsForProjectCode,
   getPendingTigForProjectCode,
@@ -32,17 +33,21 @@ export default async function UtokovetesProjektkodDetailPage({ params }: { param
   const projectCode = await getRecord(ENTITY_PATHS.projectCode, projectCodeId);
   if (!projectCode) notFound();
 
-  const [pendingSzerzodes, pendingTig, keszSzerzodesek, keszTigek, pagePermissions] = await Promise.all([
+  const [pendingSzerzodes, pendingTig, keszSzerzodesek, keszTigek, pagePermissions, employees] = await Promise.all([
     getPendingSubcontractorsForProjectCode(projectCodeId),
     getPendingTigForProjectCode(projectCodeId),
     getAllContractsForProjectCode(projectCodeId),
     getAllTigForProjectCode(projectCodeId),
     getMyPagePermissions(),
+    // A TigInvoiceManager névvel jelöli a számlázó felet - lásd
+    // employeeNameById lent.
+    getEmployees(),
   ]);
 
   // Ugyanaz a jog, mint a forgatás-alapú Utókövetés oldalon.
   const canEdit = pagePermissions === null || !!pagePermissions["/utokovetes"]?.includes("edit");
   const canDelete = pagePermissions === null || !!pagePermissions["/utokovetes"]?.includes("delete");
+  const employeeNameById = new Map(employees.map((e) => [e.id, e.full_name]));
 
   const cim =
     typeof projectCode.projektkod === "string" && projectCode.projektkod
@@ -87,11 +92,17 @@ export default async function UtokovetesProjektkodDetailPage({ params }: { param
             pending={pendingTig?.pending ?? []}
             szerzodesreVaro={pendingTig?.szerzodesre_varo ?? []}
           />
-          <ElkeszultTigProjektkod
-            projectCodeId={projectCodeId}
-            tigek={keszTigek}
+          {/* Ugyanaz a komponens, mint a forgatás-alapú ágon: számla
+              feltöltése, fizetési határidő, kifizetettként jelölés - ez hozza
+              létre a Pénzügy → Kiadások-ban megjelenő Expense sort (lásd
+              backend performance_certificates.py mark_szamla_kifizetve_projektkodon). */}
+          <TigInvoiceManager
+            projectId={projectCodeId}
+            basePath="/api/v1/teljesitesi-igazolasok/projektkodok"
+            certificates={keszTigek}
+            employeeNameById={employeeNameById}
+            readyStatus="Kiküldve"
             canEdit={canEdit}
-            canDelete={canDelete}
           />
         </Card>
       </div>

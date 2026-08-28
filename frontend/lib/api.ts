@@ -1345,9 +1345,9 @@ export async function getUtokovetesDetail(projectId: number): Promise<Utokovetes
 }
 
 /** Egy projektkód, amin FORGATÁS NÉLKÜL van alvállalkozói kiadás - lásd
- * backend utokovetes_admin.py "projektkód-szintű ág". Egyszerűbb, mint
- * UtokovetesOverview: nincs aláírás-várás és kifizetés-számláló (a
- * kifizetés állapotát magán a kiadáson lehet jelölni). */
+ * backend utokovetes_admin.py "projektkód-szintű ág". Ugyanazok a mezők,
+ * mint UtokovetesOverview-én (szándékosan azonos nevekkel - lásd
+ * lib/utokovetesProjektkod.ts). */
 export type UtokovetesOverviewProjectCode = {
   project_code_id: number;
   projektkod: string;
@@ -1357,6 +1357,9 @@ export type UtokovetesOverviewProjectCode = {
   tig_ready: boolean;
   tig_osszes: number;
   tig_fuggo: number;
+  alairas_varo: number;
+  kifizetes_osszes: number;
+  kifizetes_fuggo: number;
   kesz: boolean;
 };
 

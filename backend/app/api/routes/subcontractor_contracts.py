@@ -1541,6 +1541,25 @@ def _pending_csoportok_projektkodon(
     ]
 
 
+def alairasra_varo_csoportok_projektkodon(
+    project_code: ProjectCode,
+    keretszerzodesek: dict[str, list[Contract]],
+    project_code_contracts: dict[tuple[int, str], Contract],
+) -> list[tuple[SzamlazoCsoport, Contract]]:
+    """Lásd alairasra_varo_csoportok (forgatás-alapú megfelelője)."""
+    result: list[tuple[SzamlazoCsoport, Contract]] = []
+    for csoport in szamlazo_csoportok_projektkodon(project_code):
+        if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project_code.datum):
+            continue
+        szerzodes = project_code_contracts.get((project_code.id, csoport.kulcs))
+        if szerzodes is None or szerzodes.szerzodes_allapota != "Kiküldve":
+            continue
+        if szerzodes.alairva:
+            continue
+        result.append((csoport, szerzodes))
+    return result
+
+
 def load_szerzodes_kornyezet_projektkodon(
     db: Session, project_codes: list[ProjectCode]
 ) -> tuple[dict[str, list[Contract]], dict[tuple[int, str], Contract]]:
@@ -1865,6 +1884,28 @@ async def upload_alairt_szerzodes_projektkodon(
     db.commit()
     if regi_kulcs and regi_kulcs != kulcs:
         document_storage.delete_object(regi_kulcs)
+    db.refresh(szerzodes)
+    return ContractRead.model_validate(szerzodes)
+
+
+@router.delete("/projektkodok/{project_code_id}/{szamlazo_kulcs}/alairt-fajl", response_model=ContractRead)
+def delete_alairt_szerzodes_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Lásd delete_alairt_szerzodes (forgatás-alapú megfelelője)."""
+    szerzodes = _szerzodes_vagy_none_projektkodon(db, project_code_id, szamlazo_kulcs)
+    if szerzodes is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projektkódhoz és félhez nincs szerződés-bejegyzés.")
+    kulcs = szerzodes.alairt_file_storage_key
+    szerzodes.alairt_file_url = None
+    szerzodes.alairt_file_storage_key = None
+    szerzodes.alairva = False
+    db.commit()
+    if kulcs:
+        document_storage.delete_object(kulcs)
     db.refresh(szerzodes)
     return ContractRead.model_validate(szerzodes)
 

@@ -2063,3 +2063,202 @@ def delete_certificate_projektkodon(
         document_storage.delete_object(invoice.storage_key)
     db.delete(cert)
     db.commit()
+
+
+def _get_sent_certificate_or_404_projektkodon(
+    db: Session, project_code_id: int, szamlazo_kulcs: str
+) -> PerformanceCertificate:
+    """Lásd _get_sent_certificate_or_404 (forgatás-alapú megfelelője)."""
+    cert = _certificate_or_none_projektkodon(db, project_code_id, szamlazo_kulcs)
+    if cert is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projektkódhoz és félhez nem tartozik TIG-bejegyzés.")
+    if cert.allapot != "Kiküldve":
+        raise HTTPException(status_code=400, detail="Számla csak kiküldött TIG-hez tölthető fel.")
+    return cert
+
+
+@router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/szamla", response_model=PerformanceCertificateRead)
+async def upload_szamla_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    file: UploadFile = File(...),
+    fizetesi_hatarido: date | None = Form(default=None),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Lásd upload_szamla (forgatás-alapú megfelelője)."""
+    cert = _get_sent_certificate_or_404_projektkodon(db, project_code_id, szamlazo_kulcs)
+    if fizetesi_hatarido is None and cert.fizetesi_hatarido is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Add meg a számla fizetési határidejét - enélkül nem tudjuk, mikorra kell utalni.",
+        )
+    filename = file.filename or "szamla"
+    content_type = file.content_type or "application/octet-stream"
+    invoice = PerformanceCertificateInvoice(
+        certificate_id=cert.id, filename=filename, content_type=content_type, storage_key="", url=""
+    )
+    db.add(invoice)
+    db.flush()
+    ext = os.path.splitext(filename)[1]
+    key = f"tig-szamla/projektkod-{project_code_id}/{szamlazo_kulcs}-{invoice.id}{ext}"
+    data = await file.read()
+    url = document_storage.upload_bytes(data, key, content_type)
+    invoice.storage_key = key
+    invoice.url = url
+    if fizetesi_hatarido is not None:
+        cert.fizetesi_hatarido = fizetesi_hatarido
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
+@router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/hatarido", response_model=PerformanceCertificateRead)
+def set_fizetesi_hatarido_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: HataridoIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Lásd set_fizetesi_hatarido (forgatás-alapú megfelelője)."""
+    cert = _get_sent_certificate_or_404_projektkodon(db, project_code_id, szamlazo_kulcs)
+    if payload.fizetesi_hatarido is None and cert.invoices:
+        raise HTTPException(
+            status_code=400,
+            detail="A feltöltött számlához kell fizetési határidő - átírni lehet, kiüríteni nem.",
+        )
+    cert.fizetesi_hatarido = payload.fizetesi_hatarido
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
+@router.delete(
+    "/projektkodok/{project_code_id}/{szamlazo_kulcs}/szamla/{invoice_id}", response_model=PerformanceCertificateRead
+)
+def delete_szamla_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Lásd delete_szamla (forgatás-alapú megfelelője)."""
+    cert = _get_sent_certificate_or_404_projektkodon(db, project_code_id, szamlazo_kulcs)
+    invoice = db.get(PerformanceCertificateInvoice, invoice_id)
+    if invoice is None or invoice.certificate_id != cert.id:
+        raise HTTPException(status_code=404, detail="A számla nem található.")
+    document_storage.delete_object(invoice.storage_key)
+    db.delete(invoice)
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
+@router.post(
+    "/projektkodok/{project_code_id}/{szamlazo_kulcs}/szamla-kihagyas", response_model=PerformanceCertificateRead
+)
+def skip_szamla_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: SzamlaKihagyasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Lásd skip_szamla (forgatás-alapú megfelelője)."""
+    if not payload.kihagyva:
+        cert = _certificate_or_none_projektkodon(db, project_code_id, szamlazo_kulcs)
+        if cert is None:
+            raise HTTPException(status_code=404, detail="Ehhez a projektkódhoz és félhez nem tartozik TIG-bejegyzés.")
+        cert.szamla_kihagyva = False
+        cert.szamla_kihagyas_oka = None
+        db.commit()
+        db.refresh(cert)
+        return PerformanceCertificateRead.model_validate(cert)
+
+    cert = _certificate_or_none_projektkodon(db, project_code_id, szamlazo_kulcs)
+    if cert is None:
+        projektkod = _get_project_code_or_404(db, project_code_id)
+        csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs, szerzodes_kell=False)
+        cert = _get_or_create_draft_projektkodon(db, projektkod, csoport)
+
+    indok = (payload.indok or "").strip()
+    if not indok:
+        raise HTTPException(
+            status_code=400,
+            detail="Írd le, miért marad el a számla és a kifizetés - enélkül később nem lehet mihez kötni.",
+        )
+    if cert.expense_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Ehhez a TIG-hez már tartozik Kiadás sor a Pénzügyben - előbb azt kell rendezni.",
+        )
+    cert.szamla_kihagyva = True
+    cert.szamla_kihagyas_oka = indok
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
+
+
+@router.post(
+    "/projektkodok/{project_code_id}/{szamlazo_kulcs}/szamla-kifizetve", response_model=PerformanceCertificateRead
+)
+def mark_szamla_kifizetve_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: KifizetesIn | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Lásd mark_szamla_kifizetve (forgatás-alapú megfelelője) - a Kiadás sor
+    itt egyenesen a TIG saját project_code_id-jára kerül, tétel-lista híján."""
+    cert = _get_sent_certificate_or_404_projektkodon(db, project_code_id, szamlazo_kulcs)
+    if not cert.invoices:
+        raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
+
+    utalas = (payload.kifizetes_datuma if payload is not None else None) or date.today()
+    cert.utalas_datuma = utalas
+
+    if payload is not None and not payload.kiadasba_kerul:
+        cert.szamla_kifizetve = True
+        db.commit()
+        db.refresh(cert)
+        return PerformanceCertificateRead.model_validate(cert)
+
+    projektkod = _get_project_code_or_404(db, project_code_id)
+
+    brutto = round(float(cert.netto_osszeg) * 1.27, 2) if (cert.plusz_afa and cert.netto_osszeg) else cert.netto_osszeg
+
+    if cert.expense_id is not None:
+        expense = db.get(Expense, cert.expense_id)
+    else:
+        expense = None
+
+    kodok_szoveg = projektkod.projektkod or projektkod.project_nev or ""
+
+    if expense is None:
+        expense = Expense(
+            megnevezes=f"TIG - {cert.ceg_neve or ''} - {kodok_szoveg}".strip(" -"),
+            project_code_id=projektkod.id,
+            employee_id=cert.employee_id,
+            tipus="kulsos",
+            netto=cert.netto_osszeg,
+            brutto=brutto,
+            hozzaadas_a_kiadasokhoz=True,
+        )
+        db.add(expense)
+        db.flush()
+        cert.expense_id = expense.id
+    else:
+        expense.netto = cert.netto_osszeg
+        expense.brutto = brutto
+
+    expense.kesz = True
+    expense.fizetes_datuma = utalas
+    if expense.fizetes_hatarideje is None and cert.fizetesi_hatarido is not None:
+        expense.fizetes_hatarideje = cert.fizetesi_hatarido
+    cert.szamla_kifizetve = True
+    db.commit()
+    db.refresh(cert)
+    return PerformanceCertificateRead.model_validate(cert)
