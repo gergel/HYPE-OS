@@ -295,26 +295,31 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           </Card>
           <Card title="3. Számla" icon={Receipt}>
             <div className="space-y-3">
-              {/* A SZÁMLA FELTÖLTÉSE SOSEM VÁR a papírokra. A valóságban a
-                  számla gyakran hamarabb megvan, mint az aláírva visszaküldött
-                  szerződés vagy TIG - ha ilyenkor nem lehetne feltölteni, a
-                  papír addig valaki postafiókjában állna. A sorrend attól még
-                  sorrend: alatta ott a jelzés, mi hiányzik még. */}
-              <DokumentumFeltoltes
-                entityType="projectCode"
-                entityId={projectCodeId}
-                attachments={szamlak}
-                kategoria="szamla"
-                canEdit={canEdit}
-                canDelete={canDelete}
-                emptyText="Nincs feltöltött számla."
-                // Osztott számlázásnál egy kódhoz több számla is tartozhat -
-                // ezért minden egyes feltöltött fájlnak KÜLÖN adható meg a
-                // fizetési határideje és a kifizetés dátuma (lásd
-                // components/DokumentumFeltoltes.tsx).
-                fizetesiAllapot
-                penznem={penznemKod}
-              />
+              {/* Ha már ki van mondva, hogy erről a munkáról NEM lesz számla
+                  (lásd MegrendeloiSzamla "Nincs számla erről a munkáról"
+                  gombja, indokkal), a feltöltő "Nincs feltöltött számla."
+                  nyugtalanító sora és a gombja fölösleges - épp az van alatta
+                  kiírva, hogy miért nem is lesz. Csak akkor marad némán
+                  eltüntetve, ha tényleg nincs is feltöltött fájl - ha
+                  valahogy mégis van (pl. a döntés előtt feltöltötték), az
+                  továbbra is látszik és szerkeszthető. */}
+              {!(szamlaAllas?.szamla_kihagyva && szamlak.length === 0) && (
+                <DokumentumFeltoltes
+                  entityType="projectCode"
+                  entityId={projectCodeId}
+                  attachments={szamlak}
+                  kategoria="szamla"
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  emptyText="Nincs feltöltött számla."
+                  // Osztott számlázásnál egy kódhoz több számla is tartozhat -
+                  // ezért minden egyes feltöltött fájlnak KÜLÖN adható meg a
+                  // fizetési határideje és a kifizetés dátuma (lásd
+                  // components/DokumentumFeltoltes.tsx).
+                  fizetesiAllapot
+                  penznem={penznemKod}
+                />
+              )}
               {/* A SZÁMLA-LÉPÉS SEM VÁR A PAPÍROKRA. Korábban a fizetési
                   határidő és a "Kifizetve" jelölés csak a szerződés és a TIG
                   után nyílt meg - de a pénz nem tartja magát ehhez a
@@ -326,7 +331,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
                   A SORREND attól még sorrend: alatta ott a jelzés, mi hiányzik
                   még - csak nem tiltás, hanem emlékeztető. */}
               {szamlaAllas && (
-                <div className="border-t border-border pt-3">
+                <div className={szamlaAllas.szamla_kihagyva && szamlak.length === 0 ? "" : "border-t border-border pt-3"}>
                   <MegrendeloiSzamla projectCodeId={projectCodeId} allas={szamlaAllas} canEdit={canEdit} />
                 </div>
               )}
