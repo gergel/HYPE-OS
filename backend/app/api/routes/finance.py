@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
+from app.models.employee_monthly_item import EmployeeMonthlyItem
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.internal_performance_certificate import (
     KIHAGYVA,
@@ -26,8 +27,9 @@ from app.models.performance_certificate import (
     PerformanceCertificateInvoice,
     PerformanceCertificateTetel,
 )
+from app.models.portal import Payment
 from app.models.project_code import ProjectCode
-from app.services import bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
+from app.services import attachments, bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
 from app.services import kassza as kassza_szolg
 from app.services import penznem as penznem_szolg
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
@@ -390,6 +392,67 @@ def torol_minden_kp_forgalmat(
     torolt_db = db.query(KpForgalom).delete()
     db.commit()
     return {"torolt_db": torolt_db}
+
+
+@summary_router.delete("/kiadasok-bevetelek/mind")
+def torol_minden_kiadast_es_bevetelt(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    """MINDEN Kiadás és Bevétel törlése egyszerre - a Notionből örökölt, nagyot
+    elcsúszott adat helyett a felhasználó nulláról tudja újraépíteni a két
+    táblát (lásd frontend penzugyek "Összes kiadás/bevétel törlése" gombja).
+
+    Törlés előtt eloldjuk a rájuk mutató hivatkozásokat: a havi belsős
+    tételek, a TIG-ek és a KP forgalom sorok MAGUK megmaradnak (valós,
+    elvégzett munkát/kifizetést jelentenek, nem a most törölt könyvelési
+    adat másolatai), csak a Kiadásra/Bevételre mutató kapcsolat törlődik -
+    különben a Postgres FK-kényszere miatt maga a törlés bukna el.
+
+    A feltöltött bizonylatokat (generikus csatolmány, entity_type=
+    expense/revenue) is töröljük, R2-ről is - egy törölt kiadáshoz/bevételhez
+    tartozó fájl árva maradna. A "kifizetve" jelölést hordozó csatolmányokon
+    (services/megrendeloi_szamla.py) a kifizetés-adatokat is visszaállítjuk:
+    a revenue_id-t a DB automatikusan null-ozza (ON DELETE SET NULL), de a
+    kifizetve_datuma nélküle tévesen kifizetettnek mutatna egy már nem
+    létező bevétel-sorra hivatkozva."""
+    db.query(EmployeeMonthlyItem).filter(EmployeeMonthlyItem.expense_id.isnot(None)).update({"expense_id": None})
+    db.query(InternalPerformanceCertificate).filter(InternalPerformanceCertificate.expense_id.isnot(None)).update(
+        {"expense_id": None}
+    )
+    db.query(PerformanceCertificate).filter(PerformanceCertificate.expense_id.isnot(None)).update(
+        {"expense_id": None}
+    )
+    db.query(KpForgalom).filter(KpForgalom.expense_id.isnot(None)).update({"expense_id": None})
+    db.query(Payment).filter(Payment.revenue_id.isnot(None)).update({"revenue_id": None})
+
+    db.query(DocumentAttachment).filter(DocumentAttachment.revenue_id.isnot(None)).update(
+        {
+            "kifizetve_datuma": None,
+            "tranzakcio_nelkul_lezarva": False,
+            "bevetelbe_ne_keruljon": False,
+            "bevetel_kihagyas_oka": None,
+        }
+    )
+
+    for csatolmany in db.scalars(
+        select(DocumentAttachment).where(DocumentAttachment.entity_type.in_(("expense", "revenue")))
+    ).all():
+        try:
+            attachments.delete(db, csatolmany)
+        except Exception:  # noqa: BLE001 - a tárhely-hiba ne akassza meg a törlést, a sor ekkorra már törölve
+            pass
+
+    for revenue in db.query(Revenue).filter(Revenue.szamla_storage_key.isnot(None)).all():
+        try:
+            document_storage.delete_object(revenue.szamla_storage_key)
+        except Exception:  # noqa: BLE001
+            pass
+
+    torolt_kiadas_db = db.query(Expense).delete()
+    torolt_bevetel_db = db.query(Revenue).delete()
+    db.commit()
+    return {"torolt_kiadas_db": torolt_kiadas_db, "torolt_bevetel_db": torolt_bevetel_db}
 
 
 @summary_router.get("/kp-naplo", response_model=KpNaplo)
