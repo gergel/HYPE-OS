@@ -367,6 +367,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           <ProjektkodBontasTablak
             bontas={bontas}
             projectCodeId={projectCodeId}
+            employees={employees}
             torolhetForgatast={torolhetForgatast}
             torolhetUtomunkat={torolhetUtomunkat}
             torolhetKiadast={torolhetKiadast}

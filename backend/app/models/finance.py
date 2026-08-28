@@ -17,6 +17,14 @@ class Expense(TimestampMixin, Base):
 
     project_code_id: Mapped[int | None] = mapped_column(ForeignKey("project_codes.id"))
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
+    #: ALVÁLLALKOZÓI kiadás: ha ki van töltve, ez a kiadás egy konkrét
+    #: forgatáshoz (Project) köti az `employee_id` embert úgy, hogy tőle
+    #: (mint alvállalkozótól) SZERZŐDÉS és TELJESÍTÉSI IGAZOLÁS is kell,
+    #: ugyanúgy, mint egy külsős stábtagtól - de ANÉLKÜL, hogy a projekt
+    #: stábjába (project.crew) kerülne, tehát a diszpó (stáblista, forgatási
+    #: behívó) sosem hívja be. Lásd models/project.py Project.alvallalkozo_stab
+    #: és api/routes/subcontractor_contracts.py szerzodest_igenylo_emberek.
+    alvallalkozo_project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
     #: Melyik céges autóra ment a költség (tankolás, szerviz, matrica). Az autó
     #: oldala ezeket a sorokat mutatja - de a kiadás ettől ugyanúgy szerepel a
     #: Pénzügy összesítő kiadásai közt, mert EZ az a rekord, nem egy másolata

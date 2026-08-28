@@ -207,11 +207,18 @@ def _mentesul_keretszerzodessel(keretszerzodesek: list[Contract], nap: date | No
 def szerzodest_igenylo_emberek(
     project: Project, felulirasok: dict[tuple[int, int], ProjectSzamlazo] | None = None
 ) -> list[Employee]:
-    """Akiknek a munkájáról egyáltalán szerződés kell: a nem belsős stáb.
+    """Akiknek a munkájáról egyáltalán szerződés kell: a nem belsős stáb, PLUSZ
+    az alvállalkozói projekt kiadásokban megjelölt emberek.
 
     Kiesnek belőle azok, akik PROJEKT KIADÁSKÉNT vannak elszámolva (pl. a
     technikát hozó ember, akinek a díja a bérleti árban van) - tőlük nincs mit
     szerződni, mert nem a munkájukért fizetünk külön.
+
+    Az ALVÁLLALKOZÓI KIADÁSBAN megjelölt ember (lásd
+    models/finance.py Expense.alvallalkozo_project_id) NEM stábtag - a
+    project.crew-tól függetlenül, KÜLÖN forrásból kerül ide -, tehát a diszpó
+    (ami project.crew-t nézi, lásd services/dispo.py) sosem hívja be. Attól
+    még pontosan úgy kell tőle szerződés és TIG, mint egy külsős stábtagtól.
 
     Hogy kinek a NEVÉRE megy a papír, azt ebből a listából a számlázó felek
     csoportosítása dönti el (lásd _szamlazo_csoportok).
@@ -219,9 +226,9 @@ def szerzodest_igenylo_emberek(
     "Belsős" itt A FORGATÁS NAPJÁRA értendő, nem a mai típusra: aki ma belsős,
     de a forgatás idején még külsősként dolgozott, attól ugyanúgy jár a papír
     (lásd services/belsos_idoszak.belsos_a_napon)."""
-    emberek = [
-        e for e in project.crew if not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)
-    ]
+    crew_ids = {e.id for e in project.crew}
+    alap_lista = list(project.crew) + [e for e in project.alvallalkozo_stab if e.id not in crew_ids]
+    emberek = [e for e in alap_lista if not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)]
     if felulirasok is None:
         return emberek
     return szamlazo.papirt_igenylo_emberek(project, emberek, felulirasok)

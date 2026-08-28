@@ -168,13 +168,22 @@ def _tig_candidates(
     FÜGGETLENÜL attól, hogy van-e keretszerződése (szemben az eseti
     szerződés-populációval, ahol a keretszerződésesek ki vannak zárva).
 
+    Ide tartoznak a project.crew tagjai ÉS az alvállalkozói kiadásként ehhez
+    a projekthez kötött emberek is (project.alvallalkozo_stab) - utóbbiak
+    kaphatnak TIG-et anélkül, hogy a stábba (és így a diszpóba) bekerülnének
+    (lásd models/project.py Project.alvallalkozo_stab).
+
     Kiesnek azok, akik PROJEKT KIADÁSKÉNT vannak elszámolva: az ő díjuk egy
     másik tételben szerepel, tehát nincs mit igazolni.
 
     "Belsős" itt A FORGATÁS NAPJÁRA értendő, nem a mai típusra (lásd
     services/belsos_idoszak.belsos_a_napon)."""
+    crew_ids = {e.id for e in project.crew}
+    alap_lista = list(project.crew) + [
+        e for e in project.alvallalkozo_stab if e.id not in crew_ids
+    ]
     emberek = [
-        e for e in project.crew if not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)
+        e for e in alap_lista if not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)
     ]
     if felulirasok is None:
         return emberek

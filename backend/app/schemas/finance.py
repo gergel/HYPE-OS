@@ -9,6 +9,10 @@ class ExpenseBase(BaseModel):
     megnevezes: str
     project_code_id: int | None = None
     employee_id: int | None = None
+    #: ALVÁLLALKOZÓI kiadás: ha ki van töltve, az `employee_id` embertől
+    #: szerződés és TIG is kell ezen a forgatáson, de a diszpó nem hívja be
+    #: (lásd models/finance.py Expense.alvallalkozo_project_id).
+    alvallalkozo_project_id: int | None = None
     tipus: str | None = None
     netto: float | None = None
     brutto: float | None = None

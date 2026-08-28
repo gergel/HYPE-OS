@@ -337,6 +337,22 @@ class Project(TimestampMixin, Base):
     folders: Mapped[list["Folder"]] = relationship(back_populates="project")
     portal: Mapped["Portal"] = relationship(back_populates="project", uselist=False)
 
+    #: Alvállalkozói projekt kiadások, amik EHHEZ a forgatáshoz kötik a
+    #: bennük megadott embert (lásd models/finance.py
+    #: Expense.alvallalkozo_project_id). VIEWONLY: az írás magán a Kiadáson
+    #: keresztül történik, nem itt.
+    alvallalkozo_kiadasok: Mapped[list["Expense"]] = relationship(
+        foreign_keys="Expense.alvallalkozo_project_id", viewonly=True
+    )
+
     @property
     def crew_employee_ids(self) -> list[int]:
         return [e.id for e in self.crew]
+
+    @property
+    def alvallalkozo_stab(self) -> list["Employee"]:
+        """Azok az emberek, akik NEM stábtagok (tehát a diszpó sosem hívja be
+        őket), de egy hozzájuk kötött alvállalkozói projekt kiadás miatt mégis
+        kell tőlük szerződés és TIG - lásd Expense.alvallalkozo_project_id és
+        api/routes/subcontractor_contracts.szerzodest_igenylo_emberek."""
+        return [e.employee for e in self.alvallalkozo_kiadasok if e.employee is not None]

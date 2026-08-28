@@ -43,6 +43,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.contract import Contract
 from app.models.employee import Employee
+from app.models.finance import Expense
 from app.models.post_shoot_feedback import PostShootFeedback
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
@@ -187,6 +188,7 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
         .filter(Project.diszpo == "Kiküldve")
         .options(
             selectinload(Project.crew),
+            selectinload(Project.alvallalkozo_kiadasok).selectinload(Expense.employee),
             selectinload(Project.project_code),
             selectinload(Project.post_shoot_feedbacks),
         )

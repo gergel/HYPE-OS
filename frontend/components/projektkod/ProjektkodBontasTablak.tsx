@@ -46,6 +46,7 @@ function idoSzoveg(percek: number): string {
 export function ProjektkodBontasTablak({
   bontas,
   projectCodeId,
+  employees = [],
   torolhetForgatast = false,
   torolhetUtomunkat = false,
   torolhetKiadast = false,
@@ -55,6 +56,9 @@ export function ProjektkodBontasTablak({
   /** Melyik projektkódra vezetjük fel az új kiadást (lásd a "+ Új kiadás"
    * gyorsfelvitelt lentebb). */
   projectCodeId: number;
+  /** Az "Alvállalkozó" mező legördülőjéhez - lásd lentebb, az "+ Új kiadás"
+   * gyorsfelvitel alvállalkozói mezőinél. */
+  employees?: { id: number; full_name: string }[];
   torolhetForgatast?: boolean;
   torolhetUtomunkat?: boolean;
   torolhetKiadast?: boolean;
@@ -183,6 +187,30 @@ export function ProjektkodBontasTablak({
                   { value: "egyeb", label: "Egyéb" },
                   { value: "kulsos", label: "Külsős" },
                 ],
+              },
+              // ALVÁLLALKOZÓI kiadás: a kiválasztott embertől szerződés és TIG
+              // is kell majd a megjelölt forgatáson (ugyanaz az Utókövetés-
+              // folyamat, mint a stábtagoknál), de NEM kerül be a forgatás
+              // stábjába - a diszpó nem fogja behívni (lásd backend
+              // models/finance.py Expense.alvallalkozo_project_id).
+              {
+                name: "employee_id",
+                label: "Alvállalkozó (ha van)",
+                type: "select",
+                options: [...employees]
+                  .sort((a, b) => a.full_name.localeCompare(b.full_name, "hu"))
+                  .map((e) => ({ value: e.id, label: e.full_name })),
+              },
+              {
+                name: "alvallalkozo_project_id",
+                label: "Melyik forgatáshoz",
+                type: "select",
+                required: true,
+                showIf: { field: "employee_id", noneOf: [""] },
+                options: bontas.projektek.map((p) => ({
+                  value: p.id,
+                  label: p.nev ?? p.forgatas_datuma ?? `#${p.id}`,
+                })),
               },
             ]}
           />
