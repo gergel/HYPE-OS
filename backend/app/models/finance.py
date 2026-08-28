@@ -24,6 +24,11 @@ class Expense(TimestampMixin, Base):
     #: stábjába (project.crew) kerülne, tehát a diszpó (stáblista, forgatási
     #: behívó) sosem hívja be. Lásd models/project.py Project.alvallalkozo_stab
     #: és api/routes/subcontractor_contracts.py szerzodest_igenylo_emberek.
+    #:
+    #: NEM kötelező kézzel megadni: ha a kiadás projektkódjához pontosan egy
+    #: forgatás tartozik, a szerver ezt automatikusan kitölti (lásd
+    #: api/routes/finance.py _alvallalkozo_forgatas_kitoltese) - elég az
+    #: alvállalkozót magát kiválasztani, "csak a projektkódhoz" hozzáadva.
     alvallalkozo_project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"))
     #: Melyik céges autóra ment a költség (tankolás, szerviz, matrica). Az autó
     #: oldala ezeket a sorokat mutatja - de a kiadás ettől ugyanúgy szerepel a

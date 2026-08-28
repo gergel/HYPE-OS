@@ -28,6 +28,7 @@ from app.models.performance_certificate import (
     PerformanceCertificateTetel,
 )
 from app.models.portal import Payment
+from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.schemas.document_attachment import DocumentAttachmentRead
 from app.services import attachments, bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
@@ -78,6 +79,28 @@ def _devizat_forintra_frissiteskor(obj, adat: dict, db: Session, _current_user: 
     _devizat_forintra(adat, db)
 
 
+def _alvallalkozo_forgatas_kitoltese(adat: dict, db: Session) -> dict:
+    """Alvállalkozói kiadásnál (employee_id kitöltve) NEM kötelező kiválasztani,
+    melyik konkrét forgatáshoz (alvallalkozo_project_id) tartozik - elég a
+    projektkódhoz hozzáadni. Ha erre a projektkódra pontosan egy forgatás
+    tartozik, azt automatikusan hozzárendeljük, hogy a szerződés/TIG-igény
+    (ami Project-hez kötött, lásd models/project.py Project.alvallalkozo_stab)
+    kézi lépés nélkül is megjelenjen az Utókövetésben. Nulla vagy több forgatás
+    esetén a mező üresen marad - a kiadás akkor is felvihető, csak
+    Utókövetésben nem jelenik meg, amíg valaki nem társítja egy konkrét
+    forgatáshoz (a rekord később szerkeszthető)."""
+    if adat.get("employee_id") and not adat.get("alvallalkozo_project_id") and adat.get("project_code_id"):
+        forgatasok = db.scalars(select(Project.id).where(Project.project_code_id == adat["project_code_id"])).all()
+        if len(forgatasok) == 1:
+            adat["alvallalkozo_project_id"] = forgatasok[0]
+    return adat
+
+
+def _expense_before_create(adat: dict, db: Session) -> dict:
+    adat = _devizat_forintra(adat, db)
+    return _alvallalkozo_forgatas_kitoltese(adat, db)
+
+
 expenses_router = build_crud_router(
     model=Expense,
     create_schema=ExpenseCreate,
@@ -86,7 +109,7 @@ expenses_router = build_crud_router(
     prefix="/expenses",
     tags=["finance"],
     page="/penzugyek",
-    before_create=_devizat_forintra,
+    before_create=_expense_before_create,
     before_update=_devizat_forintra_frissiteskor,
     before_delete=_kiadas_torles_elott,
 )

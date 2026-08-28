@@ -189,10 +189,10 @@ export function ProjektkodBontasTablak({
                 ],
               },
               // ALVÁLLALKOZÓI kiadás: a kiválasztott embertől szerződés és TIG
-              // is kell majd a megjelölt forgatáson (ugyanaz az Utókövetés-
-              // folyamat, mint a stábtagoknál), de NEM kerül be a forgatás
-              // stábjába - a diszpó nem fogja behívni (lásd backend
-              // models/finance.py Expense.alvallalkozo_project_id).
+              // is kell majd (ugyanaz az Utókövetés-folyamat, mint a
+              // stábtagoknál), de NEM kerül be egyik forgatás stábjába se - a
+              // diszpó nem fogja behívni (lásd backend models/finance.py
+              // Expense.alvallalkozo_project_id).
               {
                 name: "employee_id",
                 label: "Alvállalkozó (ha van)",
@@ -201,11 +201,14 @@ export function ProjektkodBontasTablak({
                   .sort((a, b) => a.full_name.localeCompare(b.full_name, "hu"))
                   .map((e) => ({ value: e.id, label: e.full_name })),
               },
+              // Melyik forgatáshoz kösse - NEM kötelező: ha ezen a
+              // projektkódon pontosan egy forgatás van, a szerver ezt magától
+              // hozzárendeli, tehát elég csak az alvállalkozót kiválasztani.
+              // Több forgatásnál itt lehet kézzel eldönteni, melyikhez tartozzon.
               {
                 name: "alvallalkozo_project_id",
-                label: "Melyik forgatáshoz",
+                label: "Melyik forgatáshoz (ha több van, és nem mindegy)",
                 type: "select",
-                required: true,
                 showIf: { field: "employee_id", noneOf: [""] },
                 options: bontas.projektek.map((p) => ({
                   value: p.id,
