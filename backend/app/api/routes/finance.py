@@ -57,8 +57,16 @@ def _kiadas_torles_elott(expense: Expense, db: Session) -> None:
     visszakerül "nincs kifizetve" állapotba, és újra teendő lesz. Enélkül a
     tévesen felvezetett kifizetés visszavonhatatlan volt: a kiadást a TIG
     hivatkozása, a TIG-et pedig a kifizetettsége védte
-    (lásd services/kiadas_kapcsolatok.py)."""
+    (lásd services/kiadas_kapcsolatok.py).
+
+    Az ELLENKEZŐ irányú kapcsolatot is itt rendezzük: ha ez a kiadás volt az,
+    ami egy embert FORGATÁS NÉLKÜLI projektkódon alvállalkozóként megjelölt
+    (lásd _alvallalkozo_forgatas_kitoltese), a törlésével a hozzá tartozó
+    eseti szerződés és TIG is törlődik - különben azok magukra maradnának egy
+    olyan projektkódon, ahonnan az illető már el is tűnt (lásd
+    kiadas_kapcsolatok.torold_alvallalkozoi_papirokat_ha_utolso)."""
     kiadas_kapcsolatok.bontsd_le_a_kapcsolatokat(expense, db)
+    kiadas_kapcsolatok.torold_alvallalkozoi_papirokat_ha_utolso(expense, db)
 
 
 def _devizat_forintra(adat: dict, db: Session) -> dict:
