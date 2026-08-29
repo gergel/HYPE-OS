@@ -2009,23 +2009,49 @@ def delete_contract_projektkodon(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "delete")),
 ):
-    """Lásd delete_contract (forgatás-alapú megfelelője)."""
+    """Lásd delete_contract (forgatás-alapú megfelelője) - itt viszont NEM
+    blokkol, ha már van TIG hozzá: helyette AZT IS törli, "minden, ami
+    idetartozik" (lásd frontend AlvallalkozoiPapirokAttekintes - erről a
+    Project Code oldalról is ez az egy végpont hívódik, ha valaki ott az
+    "egész" törlését kéri). A blokkolás korábban csak felesleges plusz
+    lépést jelentett (előbb a TIG-et kellett külön törölni), valódi védelmet
+    nem adott.
+
+    Ha a TIG-hez már Kiadás sor tartozik (ki van fizetve), a törlés viszont
+    MEGÁLL - ugyanaz a védelem, mint a TIG saját törlésénél (lásd
+    performance_certificates.delete_certificate_projektkodon): a kifizetés
+    tényét nem lehet csak úgy, mellékesen eldobni."""
     fel = szamlazo.feloldas(db, szamlazo_kulcs)
     if fel is None:
         raise HTTPException(status_code=404, detail="A számlázó fél nem található")
     contract = _szerzodes_vagy_none_projektkodon(db, project_code_id, szamlazo_kulcs)
-    if contract is None:
-        raise HTTPException(status_code=404, detail="Ehhez a projektkódhoz és félhez nincs szerződés-bejegyzés.")
-    van_tig = (
-        db.query(PerformanceCertificate.id)
-        .filter(PerformanceCertificate.project_code_id == project_code_id, _szamlazo_szuro(fel))
-        .first()
-        is not None
-    )
-    if van_tig:
-        raise HTTPException(
-            status_code=400,
-            detail="Ehhez a félhez már készült TIG ezen a projektkódon - előbb a TIG-et kell törölni.",
+    # A TIG saját szűrője kell, NEM a szerződésé (Contract.employee_id) - a két
+    # tábla mezői véletlenül egyformán néznek ki, de más-más modellre mutatnak.
+    if fel.vallalkozas is not None:
+        tig_szuro = PerformanceCertificate.vallalkozas_id == fel.vallalkozas.id
+    else:
+        tig_szuro = (PerformanceCertificate.employee_id == fel.employee.id) & PerformanceCertificate.vallalkozas_id.is_(
+            None
         )
-    db.delete(contract)
+    tig = (
+        db.query(PerformanceCertificate)
+        .filter(PerformanceCertificate.project_code_id == project_code_id, tig_szuro)
+        .first()
+    )
+    if contract is None and tig is None:
+        raise HTTPException(status_code=404, detail="Ehhez a projektkódhoz és félhez nincs szerződés-bejegyzés.")
+    if tig is not None:
+        if tig.expense_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Ehhez a félhez már kifizetett TIG tartozik - előbb a hozzá tartozó Kiadás sort kell "
+                    "rendezni a Pénzügyben."
+                ),
+            )
+        for invoice in tig.invoices:
+            document_storage.delete_object(invoice.storage_key)
+        db.delete(tig)
+    if contract is not None:
+        db.delete(contract)
     db.commit()

@@ -38,12 +38,18 @@ export function ElkeszultSzerzodesek({
   // alatt (lásd backend subcontractor_contracts.py "projektkód-szintű ág") -
   // ilyenkor a hívó ezt a bázisutat adja meg, a projectId csak a `key`-hez kell.
   basePath,
+  // A projektkódos ágon a szerződés törlése a hozzá tartozó TIG-et IS viszi
+  // (lásd backend delete_contract_projektkodon) - a forgatás-alapú ágon nem
+  // (ott a szerver blokkol, ha már van TIG, előbb azt kell külön törölni). A
+  // megerősítő szöveg ez alapján más - a hívó jelzi, melyik ágról van szó.
+  torliATigetIs = false,
 }: {
   projectId: number;
   szerzodesek: ElkeszultSzerzodes[];
   canEdit?: boolean;
   canDelete?: boolean;
   basePath?: string;
+  torliATigetIs?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -116,8 +122,11 @@ export function ElkeszultSzerzodesek({
       s.projektek.length > 1
         ? ` Ez a szerződés ${s.projektek.length} projektre szól (${s.projektek.join(", ")}), tehát mindegyikről eltűnik.`
         : "";
+    const tigFigyelmeztetes = torliATigetIs
+      ? " Ez a hozzá tartozó teljesítési igazolást is törli (ha van, és nincs kifizetve)."
+      : "";
     const ok = await confirm(
-      `Törlöd ${s.full_name} szerződését erről a projektről? Ezután újra a teendők közt jelenik meg, és készíthetsz neki újat.${tobbNapos}`,
+      `Törlöd ${s.full_name} szerződését erről a projektről? Ezután újra a teendők közt jelenik meg, és készíthetsz neki újat.${tigFigyelmeztetes}${tobbNapos}`,
     );
     if (!ok) return;
     setBusyId(s.szamlazo);

@@ -132,6 +132,10 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
 
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+  // Az alvállalkozói szerződés/TIG törlése az Utókövetés jogára hallgat, nem
+  // a Project Code oldaléra - ugyanaz a jog, mint magán az Utókövetésen
+  // (lásd backend subcontractor_contracts.py PAGE = "/utokovetes").
+  const torolhetAlvallalkozoiPapirt = canDoAction(currentUser, pagePermissions, "/utokovetes", "delete");
   // A forint összegek a Pénzügy-hozzáféréshez kötöttek - ugyanaz a szabály,
   // mint a forgatás adatlapján (lásd ProjektPapirokEsKoltsegek).
   const lathatKoltseget = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
@@ -382,6 +386,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             szerzodesek={keszSzerzodesek}
             tigek={keszTigek}
             lathatKoltseget={lathatKoltseget}
+            canDelete={torolhetAlvallalkozoiPapirt}
           />
         )}
 
