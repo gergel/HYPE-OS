@@ -438,6 +438,10 @@ class KpNaplo(BaseModel):
     idei: KpOsszesites
     #: Hány KP forgalom sor maradt ki, mert egy kiadáshoz kötődik.
     kp_forgalom_kiadashoz_kotve: int = 0
+    #: Hány készpénzes Bevétel/Kiadás maradt ki, mert Notionből importált -
+    #: azoknak már megvan a saját, kézzel felvitt párjuk a Notion "KP forgalom"
+    #: táblájában (lásd services/kassza.py).
+    notion_eredetu_kimaradt: int = 0
     #: Hány kifizetett tételen nincs megjelölve a fizetési mód - amíg ez nem
     #: nulla, az egyenleg csak közelítés.
     jeloletlen_kiadas: int = 0
@@ -601,6 +605,7 @@ def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_curren
         osszes=_osszesites(kep.osszes),
         idei=_osszesites(kep.idei),
         kp_forgalom_kiadashoz_kotve=kep.kp_forgalom_kiadashoz_kotve,
+        notion_eredetu_kimaradt=kep.notion_eredetu_kimaradt,
         jeloletlen_kiadas=kep.jeloletlen_kiadas,
         jeloletlen_bevetel=kep.jeloletlen_bevetel,
     )

@@ -336,10 +336,13 @@ def list_utokovetes_overview_projektkodok(db: Session = Depends(get_db), _user: 
     project_codes = [
         pk for pk in projektkodok_alvallalkozoi_kiadassal(db) if szerzodest_igenylo_emberek_projektkodon(pk)
     ]
+    # Egyszerre, az ÖSSZES projektkódra - lásd load_szerzodes_kornyezet
+    # (forgatás-alapú megfelelője): ciklusban hívva projektkódonként külön
+    # lekérdezés-köteg futna, ami sok projektkódnál érezhető lassulás.
+    keretszerzodesek, project_code_contracts = load_szerzodes_kornyezet_projektkodon(db, project_codes)
+    tig_lookup = _load_tig_lookup_projektkodon(db, {pk.id for pk in project_codes})
     result: list[ProjectCodeOverviewSummary] = []
     for pk in project_codes:
-        keretszerzodesek, project_code_contracts = load_szerzodes_kornyezet_projektkodon(db, [pk])
-        tig_lookup = _load_tig_lookup_projektkodon(db, {pk.id})
         szerzodes_osszes, szerzodes_fuggo = _szerzodes_candidates_projektkodon(
             pk, keretszerzodesek, project_code_contracts
         )

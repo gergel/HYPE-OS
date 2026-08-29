@@ -1496,6 +1496,9 @@ export type KpNaplo = {
   idei: KpOsszesites;
   /** Hány KP forgalom sor maradt ki, mert egy kiadáshoz kötődik. */
   kp_forgalom_kiadashoz_kotve: number;
+  /** Hány készpénzes Bevétel/Kiadás maradt ki, mert Notionből importált (már
+   * megvan a saját, kézzel felvitt KP forgalom párja). */
+  notion_eredetu_kimaradt: number;
   jeloletlen_kiadas: number;
   jeloletlen_bevetel: number;
 };

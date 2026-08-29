@@ -428,6 +428,14 @@ export default async function KpForgalomPage() {
                 ugyanaz a pénzmozgás már szerepel a kiadás soraként, beszámítva kétszer vonódna le.
               </>
             )}
+            {(naplo?.notion_eredetu_kimaradt ?? 0) > 0 && (
+              <>
+                {" "}
+                {naplo?.notion_eredetu_kimaradt} Notionből importált készpénzes Bevétel/Kiadás sor nem szerepel itt:
+                azoknak már megvan a saját, kézzel felvitt párjuk a Notion „KP forgalom" táblájában - csak az ÚJ
+                (Notion-import utáni) készpénzes Bevétel/Kiadás sorok kerülnek ide.
+              </>
+            )}
           </p>
           {canCreate && (
             <QuickCreateForm

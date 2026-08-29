@@ -28,6 +28,14 @@ MI SZÁMÍT BELE? Csak a MEGTÖRTÉNT mozgás (van fizetési dátum) - egy jöv�
 készpénzes kiadás még nem hiányzik a dobozból -, BRUTTÓBAN (egy doboz pénz nem
 tud nettó lenni), és a "nem számít bele" jelölésű sorok nélkül: ami a Pénzügyek
 szerint nem történt meg, az a kasszát sem mozgatta.
+
+NOTIONBŐL ÁTHOZOTT Bevétel/Kiadás nem számít bele, még ha készpénzes is: a
+régi (Notion-korabeli) gyakorlatban a kassza mozgását a "KP forgalom" táblába
+KÉZZEL vitték fel, FÜGGETLENÜL attól, hogy a tétel a Bevételek/Kiadások
+táblában is szerepelt-e - tehát egy ilyen sor a kasszakép szempontjából már
+be van számítva a saját KP forgalom során keresztül, a Bevétel/Kiadás oldali
+hozzáadása duplázna. Csak a HYPE OS-ben ÚJONNAN (Notion-import után) felvitt
+készpénzes Bevétel/Kiadás számít bele ezen az ágon - lásd kep() lent.
 """
 
 from __future__ import annotations
@@ -40,6 +48,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.notion_import import NotionImportMap
 from app.models.project_code import ProjectCode  # noqa: F401  (a selectinload-hoz)
 from app.services import attachments, bizonylat, elszamolas, fizetesi_mod
 from app.services.hu_szoveg import ekezet_nelkul
@@ -175,6 +184,10 @@ class KasszaKep:
     #: Hány KP forgalom sor maradt ki, mert egy kiadáshoz kötődik (azt már a
     #: kiadás soraként számoltuk).
     kp_forgalom_kiadashoz_kotve: int = 0
+    #: Hány készpénzes Bevétel/Kiadás maradt ki, mert Notionből importált (lásd
+    #: kep() lent): azoknak a valóságban már megvan a saját, kézzel felvitt
+    #: sora a Notion "KP forgalom" táblájában, tehát a hozzáadásuk duplázna.
+    notion_eredetu_kimaradt: int = 0
 
     @property
     def egyenleg(self) -> float:
@@ -243,12 +256,23 @@ def kp_forgalom_iranya(f: KpForgalom) -> tuple[float, bool]:
     return osszeg, (f.forgalom or "").strip().casefold().startswith(_KIADAS_ELOTAG)
 
 
+def _notion_eredetu_azonositok(db: Session, entity_type: str) -> set[int]:
+    """Mely rekordok jöttek a Notion-importból erre az entitástípusra (lásd
+    kep() lent: ezek a Bevétel/Kiadás oldalon nem számítanak bele a
+    kasszaképbe, mert a Notion-korabeli KP forgalom táblában már megvan a
+    saját, kézzel felvitt párjuk)."""
+    return set(db.scalars(select(NotionImportMap.entity_id).where(NotionImportMap.entity_type == entity_type)))
+
+
 def kep(db: Session, ma: date | None = None) -> KasszaKep:
     """A teljes készpénz-kép: minden mozgás időrendben + az összesítések."""
     ma = ma or date.today()
     szamlas_kiadasok = bizonylat.szamlas_kiadas_ids(db)
     szamlas_bevetelek = bizonylat.szamlas_bevetel_ids(db)
+    notion_bevetel_ids = _notion_eredetu_azonositok(db, "Revenue")
+    notion_kiadas_ids = _notion_eredetu_azonositok(db, "Expense")
     sorok: list[KasszaSor] = []
+    notion_eredetu_kimaradt = 0
 
     bevetelek = db.scalars(
         select(Revenue)
@@ -260,6 +284,9 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
         )
     ).all()
     for b in bevetelek:
+        if b.id in notion_bevetel_ids:
+            notion_eredetu_kimaradt += 1
+            continue
         pk = b.project_code
         sorok.append(
             KasszaSor(
@@ -284,6 +311,9 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
         )
     ).all()
     for k in kiadasok:
+        if k.id in notion_kiadas_ids:
+            notion_eredetu_kimaradt += 1
+            continue
         pk = k.project_code
         sorok.append(
             KasszaSor(
@@ -345,7 +375,7 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
 
     # Időrendben (a dátum nélküli a végére): a futó egyenleg csak így értelmes.
     sorok.sort(key=lambda s: (s.datum is None, s.datum or date.min, s.forras, s.id))
-    eredmeny = KasszaKep(sorok=sorok, kp_forgalom_kiadashoz_kotve=kotve)
+    eredmeny = KasszaKep(sorok=sorok, kp_forgalom_kiadashoz_kotve=kotve, notion_eredetu_kimaradt=notion_eredetu_kimaradt)
     fut = 0.0
     for s in sorok:
         fut += s.be - s.ki

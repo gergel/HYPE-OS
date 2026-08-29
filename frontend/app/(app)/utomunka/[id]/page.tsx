@@ -95,6 +95,8 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     pagePermissions,
     allEmployees,
     currentUser,
+    contactOptions,
+    vagoiVisszajelzesek,
   ] = await Promise.all([
     deliverable.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(deliverable.project_code_id)) : null,
     deliverable.project_id ? getRecord(ENTITY_PATHS.project, Number(deliverable.project_id)) : null,
@@ -114,17 +116,19 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     getMyPagePermissions(),
     getEmployees(),
     getCurrentUser(),
+    // MINDEN megrendelői kontakt a választék, nem csak az anyag ügyfeléé: egy
+    // kész anyagot gyakran olyanoknak is ki kell küldeni, akik máshol vannak
+    // (ügynökség, társproducer). A saját ügyfél kontaktjai a lista elejére
+    // kerülnek (lásd ContactsManager). Egyik lenti hívás sem függ a fenti
+    // többitől, ezért ide, a közös Promise.all-ba kerülnek, nem külön
+    // await-tel utána - két kevesebb egymás utáni kör az oldalbetöltésnél.
+    getMegrendeloiKontaktok(),
+    // A visszajelzések saját, részletes alakja (ki írta, mikor, pontszámok) -
+    // a nyers `feedbacks` sorokból ez nem állna elő.
+    getVagoiVisszajelzesek(deliverableId),
   ]);
 
   const clientId = projectCode ? Number(projectCode.client_id) : null;
-  // MINDEN megrendelői kontakt a választék, nem csak az anyag ügyfeléé: egy
-  // kész anyagot gyakran olyanoknak is ki kell küldeni, akik máshol vannak
-  // (ügynökség, társproducer). A saját ügyfél kontaktjai a lista elejére
-  // kerülnek (lásd ContactsManager).
-  const contactOptions = await getMegrendeloiKontaktok();
-  // A visszajelzések saját, részletes alakja (ki írta, mikor, pontszámok) -
-  // a nyers `feedbacks` sorokból ez nem állna elő.
-  const vagoiVisszajelzesek = await getVagoiVisszajelzesek(deliverableId);
 
   const employeeNameById = Object.fromEntries(allEmployees.map((e) => [e.id, e.full_name]));
   const statusOptions = fieldTypes.allapot?.options ?? [];
