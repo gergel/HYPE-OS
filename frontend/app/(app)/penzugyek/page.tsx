@@ -20,7 +20,6 @@ import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { FinanceMonthlyChart, KasszaWidget, OutstandingProjectsTable } from "@/components/finance/FinanceSummaryWidgets";
 import { SzamlaCsomagLetoltes } from "@/components/finance/SzamlaCsomagLetoltes";
-import { TorolMindenKiadastEsBevetetButton } from "@/components/finance/TorolMindenKiadastEsBevetetButton";
 import { UtalasraVaroSzamlak } from "@/components/finance/UtalasraVaroSzamlak";
 import { KimenoSzamlaCella } from "@/components/finance/KimenoSzamlaCella";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
@@ -173,14 +172,7 @@ export default async function PenzugyekPage() {
           <SzamlaCsomagLetoltes />
         </Card>
 
-        <Card
-          title={`Kiadások (${expenses.length})`}
-          actions={
-            canDelete ? (
-              <TorolMindenKiadastEsBevetetButton kiadasDarabszam={expenses.length} bevetelDarabszam={revenues.length} />
-            ) : undefined
-          }
-        >
+        <Card title={`Kiadások (${expenses.length})`}>
           {canCreate && (
             <QuickCreateForm
               postPath={ENTITY_PATHS.expense}

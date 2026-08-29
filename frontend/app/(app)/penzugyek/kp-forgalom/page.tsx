@@ -3,7 +3,6 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { KpForgalomSzamlaCella } from "@/components/finance/KpForgalomSzamlaCella";
-import { TorolMindenMozgastButton } from "@/components/finance/TorolMindenMozgastButton";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -414,10 +413,7 @@ export default async function KpForgalomPage() {
             forgalom sorok viszont eddig SEHOL nem voltak javíthatók, pedig
             ezeknél van a legtöbb elcsúszás - ezért ITT, helyben
             szerkeszthetők/törölhetők/felvehetők. */}
-        <Card
-          title={`KP forgalom (${megjelenitett.length} mozgás)`}
-          actions={canDelete ? <TorolMindenMozgastButton darabszam={megjelenitett.length} /> : undefined}
-        >
+        <Card title={`KP forgalom (${megjelenitett.length} mozgás)`}>
           <p className="mb-3 text-[12.5px] text-text-muted">
             Minden készpénz-mozgás időrendben. A KIADÁS és BEVÉTEL forrású sorok a{" "}
             <a href="/penzugyek" className="text-text-accent hover:underline">
