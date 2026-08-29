@@ -403,37 +403,38 @@ export default async function KpForgalomPage() {
                 csak közelítés.
               </p>
             )}
+            {(naplo?.notion_eredetu_kimaradt ?? 0) > 0 && (
+              <p className="mt-2 text-[12px] text-text-muted">
+                {naplo?.notion_eredetu_kimaradt} Notionből importált készpénzes Bevétel/Kiadás NEM számít bele ide:
+                azoknak már megvan a saját, kézzel felvitt párjuk a Notion „KP forgalom" táblájában – az egyenleget
+                duplázná, ha mindkettőt beszámítanánk.
+              </p>
+            )}
           </Card>
         </div>
 
-        {/* EGY tábla minden készpénz-mozgáshoz: a napló sorai a KIADÁSOKBÓL, a
-            BEVÉTELEKBŐL és a Notionből örökölt „KP forgalom" tábla soraiból
-            állnak össze. A kiadás/bevétel forrású sorok a Pénzügyeken
-            szerkeszthetők (ott saját felületük van); a Notionből örökölt KP
-            forgalom sorok viszont eddig SEHOL nem voltak javíthatók, pedig
-            ezeknél van a legtöbb elcsúszás - ezért ITT, helyben
-            szerkeszthetők/törölhetők/felvehetők. */}
-        <Card title={`KP forgalom (${megjelenitett.length} mozgás)`}>
+        {/* EGY az EGYBEN a Notion "KP forgalom" táblája: a lista csak a
+            Notionből örökölt kp_forgalmak sorokból áll - a Kiadás/Bevétel
+            forrású készpénzes sorok NEM jelennek meg itt (azoknak a
+            Pénzügyeken van a helyük), csak a fenti összesítő számokba
+            (Kassza-egyenleg, legális/fekete bontás) számítanak bele, hogy
+            azok a fizikai kasszával egyezzenek - lásd backend
+            services/kassza.py és routes/finance.kp_naplo. */}
+        <Card title={`KP forgalom (${megjelenitett.length} mozgás - a Notion "KP forgalom" táblájával egyezik)`}>
           <p className="mb-3 text-[12.5px] text-text-muted">
-            Minden készpénz-mozgás időrendben. A KIADÁS és BEVÉTEL forrású sorok a{" "}
+            Ez a lista egy az egyben a Notion „KP forgalom" táblája: helyben szerkeszthető/törölhető/felvehető,
+            mert eddig SEHOL nem volt javítható, pedig ezeknél van a legtöbb elcsúszás az importált adatban. A
+            készpénzes{" "}
             <a href="/penzugyek" className="text-text-accent hover:underline">
-              Pénzügyeken
+              Kiadás/Bevétel
             </a>{" "}
-            szerkeszthetők; a Notionből örökölt „KP forgalom" sorok itt, helyben szerkeszthetők/törölhetők/
-            felvehetők - ezeknél volt a legtöbb elcsúszás az importált adatban.
+            sorok NEM jelennek meg itt a listában - csak a fenti Kassza-egyenlegbe és a legális/fekete bontásba
+            számítanak bele, hogy azok a fizikai dobozzal egyezzenek.
             {(naplo?.kp_forgalom_kiadashoz_kotve ?? 0) > 0 && (
               <>
                 {" "}
-                {naplo?.kp_forgalom_kiadashoz_kotve} KP forgalom sor kimarad, mert egy konkrét kiadáshoz kötődik:
-                ugyanaz a pénzmozgás már szerepel a kiadás soraként, beszámítva kétszer vonódna le.
-              </>
-            )}
-            {(naplo?.notion_eredetu_kimaradt ?? 0) > 0 && (
-              <>
-                {" "}
-                {naplo?.notion_eredetu_kimaradt} Notionből importált készpénzes Bevétel/Kiadás sor nem szerepel itt:
-                azoknak már megvan a saját, kézzel felvitt párjuk a Notion „KP forgalom" táblájában - csak az ÚJ
-                (Notion-import utáni) készpénzes Bevétel/Kiadás sorok kerülnek ide.
+                {naplo?.kp_forgalom_kiadashoz_kotve} KP forgalom sor kimarad innen is, mert egy konkrét kiadáshoz
+                kötődik: ugyanaz a pénzmozgás már szerepel a kiadás soraként, beszámítva kétszer vonódna le.
               </>
             )}
           </p>

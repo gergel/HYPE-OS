@@ -576,7 +576,15 @@ def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_curren
     eltérés megkereshető.
 
     A számítás a kassza-kártyáéval KÖZÖS (lásd services/kassza.py), hogy a két
-    felület ne mondhasson mást ugyanarról a dobozról."""
+    felület ne mondhasson mást ugyanarról a dobozról.
+
+    A LISTA (a `sorok` mező) viszont csak a Notionből örökölt "KP forgalom"
+    tábla sorait mutatja - egy az egyben azt, ami a Notionben is látszik -,
+    a Bevétel/Kiadás forrású készpénzes sorok NEM jelennek meg itt (azok a
+    Pénzügyeken láthatók/szerkeszthetők, ott van a helyük). Az ÖSSZESÍTŐK
+    (osszes/idei/egyenleg) viszont MINDET tartalmazzák, mert azoknak a
+    fizikai kasszával kell egyezniük, nem csak a Notion egy tábláját kell
+    tükrözniük - lásd services/kassza.py modul-docstringje."""
     kep = kassza_szolg.kep(db)
     return KpNaplo(
         sorok=[
@@ -601,6 +609,7 @@ def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_curren
                 eredeti_osszeg=s.eredeti_osszeg,
             )
             for s in kep.sorok
+            if s.forras == "kp_forgalom"
         ],
         osszes=_osszesites(kep.osszes),
         idei=_osszesites(kep.idei),
