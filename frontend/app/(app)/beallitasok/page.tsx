@@ -5,6 +5,7 @@ import { DetailTabEditor } from "@/components/DetailTabEditor";
 import { DispoResponsiblesManager } from "@/components/DispoResponsiblesManager";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
 import { EntityFieldManager } from "@/components/EntityFieldManager";
+import { KpForgalomUjraszinkron } from "@/components/KpForgalomUjraszinkron";
 import { NotionImportPanel } from "@/components/NotionImportPanel";
 import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
 import { szerepkorei } from "@/lib/permissions";
@@ -182,6 +183,7 @@ export default async function BeallitasokPage() {
               félbe.
             </p>
             <NotionImportPanel />
+            <KpForgalomUjraszinkron />
           </Card>
         )}
 
