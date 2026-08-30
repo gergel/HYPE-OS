@@ -107,6 +107,15 @@ SELECT_FIELD_OVERRIDES: dict[str, dict[str, list[str]]] = {
     "revenue": {
         "fizetes_modja": list(fizetesi_mod.BEVETEL_MODOK),
     },
+    # A HYPE TO-DO LIST Állapot/Kategória mezői - FIX lista, hogy a
+    # legördülő akkor is a teljes, Notion szerinti értékkészletet mutassa, ha
+    # épp kevés/üres az adat (a heurisztika ilyenkor üres listát adna, mert
+    # egy értéknek legalább kétszer elő kell fordulnia ahhoz, hogy select-nek
+    # nézze - lásd _select_options).
+    "hypeTodo": {
+        "allapot": ["Not started", "In progress", "Done", "Ellenőrzés"],
+        "kategoria": ["Kamera osztály", "Utómunka", "Gyártás", "Egyéb"],
+    },
     # A FLÓRA Kanban-tábla oszlopai - FIX, a Notion board eredeti sorrendje
     # szerint, hogy a jelenleg üres CORRECTION oszlop is mindig megjelenjen
     # (a heurisztika 0 előfordulásnál kihagyná). Az "INPROGREDSS" elgépelés a

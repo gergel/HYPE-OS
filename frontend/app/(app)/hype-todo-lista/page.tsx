@@ -14,6 +14,7 @@ export default async function HypeTodoListaPage() {
     getMyPagePermissions(),
   ]);
   const statusOptions = fieldTypes.allapot?.options ?? [];
+  const kategoriaOptions = fieldTypes.kategoria?.options ?? [];
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
@@ -26,6 +27,7 @@ export default async function HypeTodoListaPage() {
           items={items}
           employees={employees}
           statusOptions={statusOptions}
+          kategoriaOptions={kategoriaOptions}
           canCreate={canCreate}
           canDelete={canDelete}
           canEdit={canEdit}

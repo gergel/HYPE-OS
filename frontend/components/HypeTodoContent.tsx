@@ -24,6 +24,7 @@ export function HypeTodoContent({
   items,
   employees,
   statusOptions,
+  kategoriaOptions,
   canCreate,
   canDelete,
   canEdit,
@@ -31,6 +32,7 @@ export function HypeTodoContent({
   items: HypeTodoItem[];
   employees: Employee[];
   statusOptions: string[];
+  kategoriaOptions: string[];
   canCreate: boolean;
   canDelete: boolean;
   canEdit: boolean;
@@ -100,7 +102,13 @@ export function HypeTodoContent({
             header: "Kategória",
             render: (t) =>
               canEdit ? (
-                <EditableTableCell patchPath={`${HYPE_TODO_BASE_PATH}/${t.id}`} field="kategoria" value={t.kategoria} />
+                <EditableStatusBadge
+                  patchPath={`${HYPE_TODO_BASE_PATH}/${t.id}`}
+                  field="kategoria"
+                  value={t.kategoria}
+                  options={kategoriaOptions}
+                  placeholder="Nincs kategória"
+                />
               ) : (
                 t.kategoria ?? "–"
               ),
