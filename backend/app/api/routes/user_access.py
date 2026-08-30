@@ -7,6 +7,7 @@ from app.core.security import (
     Role,
     elerheto_oldalak,
     get_current_user,
+    lathatjak_az_oldalt,
     require_roles,
     vedett_rendszergazda,
 )
@@ -58,6 +59,16 @@ def get_my_access(current_user: Employee = Depends(get_current_user), db: Sessio
         page_permissions=permissions,
         lathato_deliverable_idk=config.lathato_deliverable_idk if config else None,
     )
+
+
+@router.get("/lathatjak")
+def get_lathatjak_az_oldalt(oldal: str, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """Mely munkatársak id-je látja EGYÁLTALÁN a megadott oldalt - bárki
+    lekérdezheti (nem csak admin), mert egy munkatárs-választó szűréséhez kell
+    (lásd frontend HypeTodoContent.tsx, hype-todo-lista/[id]/page.tsx
+    "Felelős" mezője): csak olyat lehessen kiválasztani, aki ténylegesen
+    hozzáfér ahhoz az oldalhoz, ahol a rá kiosztott feladat megjelenik."""
+    return {"employee_ids": lathatjak_az_oldalt(db, oldal)}
 
 
 @router.get("", response_model=list[PageAccessRead], dependencies=[Depends(require_roles(Role.ADMIN))])

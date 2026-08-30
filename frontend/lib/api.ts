@@ -1689,6 +1689,15 @@ export async function getMyPagePermissions(): Promise<Record<string, string[]> |
   return res?.page_permissions ?? null;
 }
 
+/** Mely munkatárs-id-k látják EGYÁLTALÁN a megadott oldalt - egy munkatárs-
+ * választó (pl. "Felelős") szűréséhez, hogy csak olyat lehessen kiválasztani,
+ * aki ténylegesen hozzáfér ahhoz az oldalhoz, ahol a rá kiosztott sor
+ * megjelenik (lásd backend routes/user_access.py "lathatjak" végpontja). */
+export async function getLathatjakAzOldalt(oldal: string): Promise<number[]> {
+  const res = await apiGet<{ employee_ids: number[] }>(`/api/v1/user-access/lathatjak?oldal=${encodeURIComponent(oldal)}`);
+  return res?.employee_ids ?? [];
+}
+
 /** A fenti három lekérdezés EGYBEN - a TopBar-nak kell mindhárom a mobil
  * navigációs fiókhoz (lásd components/MobileNav.tsx), és mivel a TopBar-t
  * minden oldal maga hordozza (nem az (app)/layout.tsx adja át propként),

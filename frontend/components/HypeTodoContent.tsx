@@ -5,6 +5,7 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
+import { M2mLinker } from "@/components/M2mLinker";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import type { Employee, HypeTodoItem } from "@/lib/api";
 
@@ -23,6 +24,7 @@ const KESZ_ALLAPOT = "Done";
 export function HypeTodoContent({
   items,
   employees,
+  assignableEmployees,
   statusOptions,
   kategoriaOptions,
   canCreate,
@@ -31,6 +33,12 @@ export function HypeTodoContent({
 }: {
   items: HypeTodoItem[];
   employees: Employee[];
+  /** Csak azok, akik ténylegesen látják ezt az oldalt (lásd
+   * getLathatjakAzOldalt) - Felelősnek ÚJ hozzárendelésre csak ők
+   * választhatók. Egy már hozzárendelt, de időközben jogosultságot vesztett
+   * ember neve továbbra is látszik (lásd felelosOptions), csak eltávolítani
+   * lehet, újra hozzáadni nem. */
+  assignableEmployees: Employee[];
   statusOptions: string[];
   kategoriaOptions: string[];
   canCreate: boolean;
@@ -39,6 +47,7 @@ export function HypeTodoContent({
 }) {
   const [tab, setTab] = useState<"nyitott" | "kesz">("nyitott");
   const employeeName = useMemo(() => new Map(employees.map((e) => [e.id, e.full_name])), [employees]);
+  const assignableIds = useMemo(() => new Set(assignableEmployees.map((e) => e.id)), [assignableEmployees]);
 
   const nyitottak = items.filter((i) => i.allapot !== KESZ_ALLAPOT);
   const keszek = items.filter((i) => i.allapot === KESZ_ALLAPOT);
@@ -47,6 +56,17 @@ export function HypeTodoContent({
   function felelosNevek(item: HypeTodoItem): string {
     const nevek = item.felelos_employee_ids.map((id) => employeeName.get(id)).filter((n): n is string => !!n);
     return nevek.length > 0 ? nevek.join(", ") : "–";
+  }
+
+  /** Az adott sor Felelős-választójának kínálata: a láthatóság szerint
+   * választható munkatársak, KIEGÉSZÍTVE azzal, aki már hozzá van rendelve
+   * (akkor is, ha időközben elvesztette a jogosultságát) - különben a neve
+   * eltűnne a chip-listából, pedig az adatbázisban továbbra is felelős. */
+  function felelosOptions(item: HypeTodoItem) {
+    const marHozzarendelt = new Set(item.felelos_employee_ids);
+    return employees
+      .filter((e) => assignableIds.has(e.id) || marHozzarendelt.has(e.id))
+      .map((e) => ({ id: e.id, label: e.full_name }));
   }
 
   return (
@@ -116,7 +136,19 @@ export function HypeTodoContent({
           },
           {
             header: "Felelős",
-            render: felelosNevek,
+            render: (t) =>
+              canEdit ? (
+                <M2mLinker
+                  patchPath={`${HYPE_TODO_BASE_PATH}/${t.id}`}
+                  fieldName="felelos_employee_ids"
+                  currentIds={t.felelos_employee_ids}
+                  options={felelosOptions(t)}
+                  addLabel="Hozzáadás"
+                  emptyText="Nincs felelős."
+                />
+              ) : (
+                felelosNevek(t)
+              ),
             sortAccessor: felelosNevek,
           },
           {

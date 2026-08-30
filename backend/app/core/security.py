@@ -199,6 +199,31 @@ def elerheto_oldalak(page_permissions: dict[str, list[str]] | None) -> list[str]
     return oldalak
 
 
+def lathatja_az_oldalt(page_permissions: dict[str, list[str]] | None, page: str) -> bool:
+    """Igaz, ha ez a page_permissions (lásd elerheto_oldalak) beengedi az adott
+    oldalra - None (nincs korlátozás) esetén mindig igaz."""
+    elerheto = elerheto_oldalak(page_permissions)
+    return elerheto is None or page in elerheto
+
+
+def lathatjak_az_oldalt(db: Session, page: str) -> list[int]:
+    """Mely munkatársak látják EGYÁLTALÁN ezt az oldalt - erre épül pl. a
+    HYPE TO-DO LIST "Felelős" választója (lásd routes/user_access.py
+    "lathatjak" végpontja): csak azt lehessen felelősnek megjelölni, aki
+    ténylegesen hozzáfér ahhoz az oldalhoz, ahol a feladat megjelenik -
+    különben egy olyan emberre osztanánk ki, aki a HYPE OS-ben soha nem is
+    látná a rá kiosztott feladatot.
+
+    A védett rendszergazda mindig szerepel benne: neki semmilyen beállítás
+    nem korlátozza a láthatóságát (lásd vedett_rendszergazda)."""
+    configok = {c.employee_id: c.page_permissions for c in db.scalars(select(PageAccessConfig)).all()}
+    return [
+        e.id
+        for e in db.scalars(select(Employee)).all()
+        if vedett_rendszergazda(e) or lathatja_az_oldalt(configok.get(e.id), page)
+    ]
+
+
 def check_page_action(db: Session, employee: Employee, page: str, action: str) -> None:
     """A durvább admin/operator szerepkör-ellenőrzés (lásd require_roles) UTÁN
     hívva a finomabb, oldal+művelet-szintű írási jogosultságot ellenőrzi - ha

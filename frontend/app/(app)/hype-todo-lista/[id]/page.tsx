@@ -9,6 +9,7 @@ import {
   getDetailTabs,
   getEmployees,
   getFieldTypes,
+  getLathatjakAzOldalt,
   getMyPagePermissions,
   getRecord,
   getVisibleFields,
@@ -29,19 +30,27 @@ const SZEMELY_MEZOK: { key: "aki_felvezette_id" | "ellenorzes_felelos_id" | "aki
 export default async function HypeTodoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const itemId = Number(id);
-  const [item, visibleFields, fieldTypes, dbTabs, pagePermissions, employees] = await Promise.all([
+  const [item, visibleFields, fieldTypes, dbTabs, pagePermissions, employees, lathatjakIds] = await Promise.all([
     getRecord(ENTITY_PATHS.hypeTodo, itemId),
     getVisibleFields("hypeTodo"),
     getFieldTypes("hypeTodo"),
     getDetailTabs("hypeTodo"),
     getMyPagePermissions(),
     getEmployees(),
+    getLathatjakAzOldalt(PAGE),
   ]);
   if (!item) notFound();
 
   const patchPath = `${ENTITY_PATHS.hypeTodo}/${item.id}`;
   const currentIds = Array.isArray(item.felelos_employee_ids) ? (item.felelos_employee_ids as number[]) : [];
   const employeeName = new Map(employees.map((e) => [e.id, e.full_name]));
+  // Felelősnek csak az választható, aki ténylegesen látja ezt az oldalt - a
+  // már hozzárendelt, de időközben jogosultságot vesztett ember neve
+  // továbbra is megjelenik (lásd HypeTodoContent.tsx felelosOptions).
+  const lathatjakSet = new Set(lathatjakIds);
+  const felelosOptions = employees
+    .filter((e) => lathatjakSet.has(e.id) || currentIds.includes(e.id))
+    .map((e) => ({ id: e.id, label: e.full_name }));
 
   const tabs = buildFieldTabs({
     page: PAGE,
@@ -63,7 +72,7 @@ export default async function HypeTodoDetailPage({ params }: { params: Promise<{
           patchPath={patchPath}
           fieldName="felelos_employee_ids"
           currentIds={currentIds}
-          options={employees.map((e) => ({ id: e.id, label: e.full_name }))}
+          options={felelosOptions}
           addLabel="Felelős hozzáadása"
           emptyText="Nincs felelős hozzárendelve."
         />
