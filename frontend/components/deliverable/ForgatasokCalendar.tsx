@@ -87,8 +87,70 @@ function buildWeeks(monthCursor: Date): Date[][] {
   return weeks;
 }
 
-type MultiDayBar = { project: CalendarProject; start: Date; end: Date };
+type MultiDayBar = {
+  /** A reprezentáns elem (a legkorábban kezdődő) - erre mutat a kattintás/link. */
+  project: CalendarProject;
+  start: Date;
+  end: Date;
+  /** Csak akkor van értéke, ha az ÖSSZES összevont elem UGYANAZT a diszpó-
+   * állapotot hordozza - eltérő állapotoknál (pl. az egyik nap már kiküldve,
+   * a másik még nem) félrevezető lenne egyetlen pillt mutatni, ezért ilyenkor
+   * nincs pill, csak a cím. */
+  diszpo: string | null | undefined;
+};
 type PlacedBar = MultiDayBar & { startCol: number; endCol: number; lane: number };
+
+type NevesIdoszak = { project: CalendarProject; start: Date; end: Date };
+type OsszevontIdoszak = NevesIdoszak & { diszpo: string | null | undefined };
+
+function combinedDiszpo(items: CalendarProject[]): string | null | undefined {
+  const first = items[0];
+  if (first.diszpo === undefined) return undefined;
+  return items.every((p) => p.diszpo === first.diszpo) ? first.diszpo : undefined;
+}
+
+/** A HYPE OS-es projekt-adatok gyakran NEM egyetlen rekordban hordozzák a
+ * több napos forgatás teljes tartományát: a Notionből (vagy a diszpó saját
+ * "feldarabolás" funkciójából, lásd NaptarDiszpoContent) sokszor NAPONKÉNT
+ * külön Project sor jön át, azonos névvel. Emiatt a puszta forgatas_datuma/
+ * forgatas_datuma_vege alapján épített sáv-logika (lásd MultiDayBar fent)
+ * önmagában nem elég: itt ÖSSZEVONJUK az azonos nevű, EGYMÁST ÉRŐ vagy
+ * átfedő napú elemeket egyetlen időszakká, mielőtt sávvá alakítanánk őket -
+ * így egy 3 külön sorból álló, 3 napos forgatás is EGY, átívelő kártyaként
+ * jelenik meg, nem 3 külön napi pill-ként. Egy valódi, egy rekordban tárolt
+ * több napos forgatás (forgatas_datuma_vege kitöltve) ugyanezen az úton megy
+ * át, változatlan eredménnyel (nincs mivel összevonni). */
+function osszevonNaponkentiSorokat(items: NevesIdoszak[]): OsszevontIdoszak[] {
+  const byName = new Map<string, NevesIdoszak[]>();
+  for (const it of items) {
+    if (!byName.has(it.project.nev)) byName.set(it.project.nev, []);
+    byName.get(it.project.nev)!.push(it);
+  }
+
+  const result: OsszevontIdoszak[] = [];
+  for (const list of byName.values()) {
+    list.sort((a, b) => a.start.getTime() - b.start.getTime());
+    let group: NevesIdoszak[] = [];
+    let groupEnd: Date | null = null;
+    const flush = () => {
+      if (group.length === 0) return;
+      const start = group[0].start;
+      const end = group.reduce((max, it) => (it.end > max ? it.end : max), group[0].end);
+      result.push({ project: group[0].project, start, end, diszpo: combinedDiszpo(group.map((it) => it.project)) });
+      group = [];
+      groupEnd = null;
+    };
+    for (const it of list) {
+      if (group.length > 0 && groupEnd !== null && diffDays(it.start, groupEnd) > 1) {
+        flush();
+      }
+      group.push(it);
+      groupEnd = groupEnd === null || it.end.getTime() > groupEnd.getTime() ? it.end : groupEnd;
+    }
+    flush();
+  }
+  return result;
+}
 
 /** Egy héten belül a több napos forgatásokhoz "sáv" (lane) indexet rendel,
  * hogy az egymást átfedő sávok ne csússzanak egymásra - mohó algoritmus: a
@@ -160,12 +222,21 @@ function AddUtomunkaButton({ projectId }: { projectId: number }) {
 /** Havi nézetű naptár a forgatásokról (Project.forgatas_datuma /
  * forgatas_datuma_vege) - innen nyithatók meg az adott napi forgatások, és
  * innen adható hozzájuk új utómunka is, hogy a vágóknak ne kelljen a
- * Projektek listát böngészniük. A több napos forgatások (ahol van
- * forgatas_datuma_vege, és az később van, mint a kezdés) egy, a teljes
+ * Projektek listát böngészniük. A több napos forgatások egy, a teljes
  * időtartamukon átívelő sávként jelennek meg minden érintett hét tetején -
  * NEM ismétlődnek külön-külön minden napi cellában -, az egynapos forgatások
  * pedig változatlanul a saját napjuk cellájában, kis "pill"-ként. A sáv jól
- * látható KÁRTYA (cím + diszpó-állapot pill), nem csak egy vékony csík. */
+ * látható KÁRTYA (cím + diszpó-állapot pill, ha az összevont napok azonos
+ * állapotúak), nem csak egy vékony csík.
+ *
+ * A "több napos" nemcsak azt jelenti, hogy EGY Project rekordon van kitöltve
+ * a forgatas_datuma_vege - a valódi adatban egy több napos forgatás gyakran
+ * NAPONKÉNT külön Project sorként jön át (Notion-import vagy a diszpó saját
+ * "feldarabolás" funkciója miatt, lásd NaptarDiszpoContent), azonos névvel.
+ * Ezért az azonos nevű, egymást érő/átfedő napú sorokat ÖSSZEVONJUK, mielőtt
+ * sávvá alakítanánk (lásd osszevonNaponkentiSorokat) - a mögöttes rekordok
+ * külön maradnak (saját diszpó-állapot, saját szerkeszthetőség), csak a
+ * MEGJELENÍTÉS füzi össze őket egyetlen kártyává. */
 export function ForgatasokCalendar({
   projects,
   onProjectClick,
@@ -182,19 +253,24 @@ export function ForgatasokCalendar({
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
-  const multiDayBars: MultiDayBar[] = [];
-  const byDay = new Map<string, CalendarProject[]>();
+  const rawIdoszakok: NevesIdoszak[] = [];
   for (const p of projects) {
     if (!p.forgatas_datuma) continue;
     const start = parseDateOnly(p.forgatas_datuma);
     const end = p.forgatas_datuma_vege ? parseDateOnly(p.forgatas_datuma_vege) : start;
-    if (end.getTime() > start.getTime()) {
-      multiDayBars.push({ project: p, start, end });
+    rawIdoszakok.push({ project: p, start, end: end.getTime() > start.getTime() ? end : start });
+  }
+
+  const multiDayBars: MultiDayBar[] = [];
+  const byDay = new Map<string, CalendarProject[]>();
+  for (const it of osszevonNaponkentiSorokat(rawIdoszakok)) {
+    if (it.end.getTime() > it.start.getTime()) {
+      multiDayBars.push({ project: it.project, start: it.start, end: it.end, diszpo: it.diszpo });
       continue;
     }
-    const key = toDateKey(start);
+    const key = toDateKey(it.start);
     if (!byDay.has(key)) byDay.set(key, []);
-    byDay.get(key)!.push(p);
+    byDay.get(key)!.push(it.project);
   }
 
   const weeks = buildWeeks(monthCursor);
@@ -307,11 +383,12 @@ export function ForgatasokCalendar({
                     >
                       <span className="truncate text-[12px] font-medium text-text-primary">{b.project.nev}</span>
                       {/* A diszpó-állapot csak akkor van (lásd CalendarProject.diszpo),
-                          ha a hívó valódi Project-et adott át - eddig mind a négy oldal
-                          ezt teszi, tehát gyakorlatilag mindig kirajzolódik. */}
-                      {b.project.diszpo !== undefined && (
+                          ha a hívó valódi Project-et adott át (eddig mind a négy oldal ezt
+                          teszi), ÉS az összevont napok mindegyike UGYANAZT az állapotot
+                          hordozza (lásd combinedDiszpo) - eltérő állapotoknál nincs pill. */}
+                      {b.diszpo !== undefined && (
                         <span className="truncate leading-none">
-                          <StatusBadge label={b.project.diszpo ? b.project.diszpo : "Nincs kiküldve"} tone={b.project.diszpo ? "success" : "neutral"} />
+                          <StatusBadge label={b.diszpo ? b.diszpo : "Nincs kiküldve"} tone={b.diszpo ? "success" : "neutral"} />
                         </span>
                       )}
                     </a>
