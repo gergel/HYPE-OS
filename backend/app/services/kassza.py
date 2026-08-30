@@ -24,18 +24,14 @@ ettől független, az a teljes forgalom különbsége:
 
     kassza = MINDEN készpénzes bevétel - MINDEN készpénzes kiadás
 
-MI SZÁMÍT BELE? Csak a MEGTÖRTÉNT mozgás (van fizetési dátum) - egy jövő heti
-készpénzes kiadás még nem hiányzik a dobozból -, BRUTTÓBAN (egy doboz pénz nem
-tud nettó lenni), és a "nem számít bele" jelölésű sorok nélkül: ami a Pénzügyek
-szerint nem történt meg, az a kasszát sem mozgatta.
-
-NOTIONBŐL ÁTHOZOTT Bevétel/Kiadás nem számít bele, még ha készpénzes is: a
-régi (Notion-korabeli) gyakorlatban a kassza mozgását a "KP forgalom" táblába
-KÉZZEL vitték fel, FÜGGETLENÜL attól, hogy a tétel a Bevételek/Kiadások
-táblában is szerepelt-e - tehát egy ilyen sor a kasszakép szempontjából már
-be van számítva a saját KP forgalom során keresztül, a Bevétel/Kiadás oldali
-hozzáadása duplázna. Csak a HYPE OS-ben ÚJONNAN (Notion-import után) felvitt
-készpénzes Bevétel/Kiadás számít bele ezen az ágon - lásd kep() lent.
+MI SZÁMÍT BELE? KIZÁRÓLAG a KP forgalom tábla sorai (a felhasználó
+2026-08-30-i döntése): a KP rész pontosan azt mutatja, ami a Notion
+"KP forgalom" táblájában van (az import egy-az-egyben tükör, lásd
+notion_import/importers_wave2.import_kp_forgalom), plusz amit a felületen
+kézzel ide vesznek fel. A készpénzes Bevételek/Kiadások NEM számítanak bele
+külön ágon - korábban beleszámítottak, de ettől a napló sosem egyezett a
+Notionnal (a kiürített KP tábla mellett is "bent ragadt" 119 tétel). Egy
+készpénz-mozgás akkor és csak akkor látszik itt, ha KP forgalom sora van.
 """
 
 from __future__ import annotations
@@ -47,10 +43,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.finance import Expense, KpForgalom, Revenue
-from app.models.notion_import import NotionImportMap
+from app.models.finance import KpForgalom
 from app.models.project_code import ProjectCode  # noqa: F401  (a selectinload-hoz)
-from app.services import attachments, bizonylat, elszamolas, fizetesi_mod
+from app.services import attachments
 from app.services.hu_szoveg import ekezet_nelkul
 
 #: A KP forgalom sor iránya. A Notionben szabad szöveg ("bevetel"/"kiadas"),
@@ -194,15 +189,6 @@ class KasszaKep:
         return self.osszes.egyenleg
 
 
-def _penz(sor) -> float:
-    """A mozgatott összeg: BRUTTÓ, nettóra visszaesve.
-
-    A régi, Notionből importált sorokon gyakran csak az egyik van meg - a
-    dobozból viszont ÁFÁ-stól ment ki a pénz, tehát a bruttó az igaz szám."""
-    brutto = getattr(sor, "brutto", None)
-    return float(brutto if brutto is not None else (getattr(sor, "netto", None) or 0))
-
-
 #: KÉSZPÉNZFELVÉTEL a bankszámláról (ATM). A megnevezésből ismerjük fel.
 KESZPENZFELVETEL_JELEK: tuple[str, ...] = ("kp felvetel", "keszpenzfelvetel", "keszpenz felvetel", "atm")
 
@@ -256,91 +242,25 @@ def kp_forgalom_iranya(f: KpForgalom) -> tuple[float, bool]:
     return osszeg, (f.forgalom or "").strip().casefold().startswith(_KIADAS_ELOTAG)
 
 
-def _notion_eredetu_azonositok(db: Session, entity_type: str) -> set[int]:
-    """Mely rekordok jöttek a Notion-importból erre az entitástípusra (lásd
-    kep() lent: ezek a Bevétel/Kiadás oldalon nem számítanak bele a
-    kasszaképbe, mert a Notion-korabeli KP forgalom táblában már megvan a
-    saját, kézzel felvitt párjuk)."""
-    return set(db.scalars(select(NotionImportMap.entity_id).where(NotionImportMap.entity_type == entity_type)))
-
-
 def kep(db: Session, ma: date | None = None) -> KasszaKep:
-    """A teljes készpénz-kép: minden mozgás időrendben + az összesítések."""
+    """A teljes készpénz-kép: minden mozgás időrendben + az összesítések.
+
+    A napló és az egyenleg KIZÁRÓLAG a KP forgalom táblából számol (a
+    felhasználó 2026-08-30-i döntése): a KP rész pontosan azt mutassa, ami a
+    Notion "KP forgalom" táblájában van (lásd
+    notion_import/importers_wave2.import_kp_forgalom - egy-az-egyben tükör),
+    plusz amit a felületen kézzel ide vesznek fel. Korábban a készpénzes
+    Bevételek/Kiadások is beleszámítottak, de ettől a napló sosem egyezett a
+    Notionnal - a törölt KP tábla mellett is "bent ragadt" 119 tétel a másik
+    két forrásból. Egy készpénz-mozgás mostantól akkor és csak akkor látszik
+    itt, ha KP forgalom sora van."""
     ma = ma or date.today()
-    szamlas_kiadasok = bizonylat.szamlas_kiadas_ids(db)
-    szamlas_bevetelek = bizonylat.szamlas_bevetel_ids(db)
-    notion_bevetel_ids = _notion_eredetu_azonositok(db, "Revenue")
-    notion_kiadas_ids = _notion_eredetu_azonositok(db, "Expense")
     sorok: list[KasszaSor] = []
-    notion_eredetu_kimaradt = 0
 
-    bevetelek = db.scalars(
-        select(Revenue)
-        .options(selectinload(Revenue.project_code))
-        .where(
-            Revenue.fizetes_datuma.is_not(None),
-            fizetesi_mod.keszpenz_sql(Revenue.fizetes_modja),
-            elszamolas.bevetel_beleszamit_sql(Revenue),
-        )
-    ).all()
-    for b in bevetelek:
-        if b.id in notion_bevetel_ids:
-            notion_eredetu_kimaradt += 1
-            continue
-        pk = b.project_code
-        sorok.append(
-            KasszaSor(
-                id=b.id,
-                forras="bevetel",
-                datum=b.fizetes_datuma,
-                megnevezes=b.nev or (pk.project_nev if pk else None) or "Bevétel",
-                projektkod=pk.projektkod if pk else None,
-                be=_penz(b),
-                van_szamla=bizonylat.van_szamla_bevetel(b, szamlas_bevetelek),
-                href=f"/projektek/project-kodok/{b.project_code_id}" if b.project_code_id else None,
-            )
-        )
-
-    kiadasok = db.scalars(
-        select(Expense)
-        .options(selectinload(Expense.project_code))
-        .where(
-            Expense.fizetes_datuma.is_not(None),
-            fizetesi_mod.keszpenz_sql(Expense.kifizetes_modja),
-            Expense.hozzaadas_a_kiadasokhoz.is_not(False),
-        )
-    ).all()
-    for k in kiadasok:
-        if k.id in notion_kiadas_ids:
-            notion_eredetu_kimaradt += 1
-            continue
-        pk = k.project_code
-        sorok.append(
-            KasszaSor(
-                id=k.id,
-                forras="kiadas",
-                datum=k.fizetes_datuma,
-                megnevezes=k.megnevezes,
-                projektkod=pk.projektkod if pk else None,
-                ki=_penz(k),
-                van_szamla=bizonylat.van_szamla(k, szamlas_kiadasok),
-                href="/penzugyek",
-            )
-        )
-
-    # A Notionből örökölt "KP FORGALOM" tábla: ezek is valódi készpénz-mozgások,
-    # döntően SZÁMLA NÉLKÜLI BEVÉTELEK - épp az a pénz, amiből a számla nélküli
-    # költés fedezve van.
-    #
-    # Ami egy kiadáshoz kötődik (`expense_id`), az KIMARAD: ugyanaz a
-    # pénzmozgás már szerepel a kiadás soraként, beszámítva kétszer vonódna le.
-    kotve = 0
-    kp_forgalom_sorok = []
-    for f in db.scalars(select(KpForgalom).options(selectinload(KpForgalom.project_code))).all():
-        if f.expense_id is not None:
-            kotve += 1
-        else:
-            kp_forgalom_sorok.append(f)
+    # A kiadáshoz kötött (`expense_id`) sor is BELESZÁMÍT: a kötés csak címke
+    # ("melyik kiadás papírjához tartozik"), a pénzmozgás egyetlen helyen - itt
+    # - szerepel, tehát nincs mivel duplázódnia.
+    kp_forgalom_sorok = db.scalars(select(KpForgalom).options(selectinload(KpForgalom.project_code))).all()
     kp_forgalom_csatolmanyok = attachments.list_for_many(db, "kpForgalom", [f.id for f in kp_forgalom_sorok])
     for f in kp_forgalom_sorok:
         osszeg, kiadas_e = kp_forgalom_iranya(f)
@@ -375,7 +295,11 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
 
     # Időrendben (a dátum nélküli a végére): a futó egyenleg csak így értelmes.
     sorok.sort(key=lambda s: (s.datum is None, s.datum or date.min, s.forras, s.id))
-    eredmeny = KasszaKep(sorok=sorok, kp_forgalom_kiadashoz_kotve=kotve, notion_eredetu_kimaradt=notion_eredetu_kimaradt)
+    # A régi, több-forrásos számítás kísérő számlálói (kiadáshoz kötve /
+    # Notion-eredetű kimaradt / jelöletlen fizetési mód) az egy-forrásos
+    # modellben tárgytalanok - nullán maradnak, amitől a felület figyelmeztető
+    # sávjai maguktól eltűnnek (lásd frontend kp-forgalom/page.tsx).
+    eredmeny = KasszaKep(sorok=sorok)
     fut = 0.0
     for s in sorok:
         fut += s.be - s.ki
@@ -384,36 +308,7 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
         if s.datum is not None and s.datum.year == ma.year:
             eredmeny.idei.vedd_hozza(s)
 
-    eredmeny.jeloletlen_kiadas = _jeloletlen(db, Expense, Expense.kifizetes_modja)
-    eredmeny.jeloletlen_bevetel = _jeloletlen(db, Revenue, Revenue.fizetes_modja)
     return eredmeny
-
-
-def _jeloletlen(db: Session, modell, mod_oszlop) -> int:
-    """Hány KIFIZETETT tételen nincs megjelölve a fizetési mód.
-
-    Ezek se ide, se oda nem számítanak - a kassza egyenlege addig csak
-    közelítés, amíg van ilyen. Egy találgatott egyenleg rosszabb, mint egy
-    hiányos: az utóbbin legalább látszik, mennyi hiányzik."""
-    from sqlalchemy import func
-
-    feltetel = (
-        modell.hozzaadas_a_kiadasokhoz.is_not(False)
-        if modell is Expense
-        else elszamolas.bevetel_beleszamit_sql(modell)
-    )
-    return int(
-        db.scalar(
-            select(func.count())
-            .select_from(modell)
-            .where(
-                modell.fizetes_datuma.is_not(None),
-                func.coalesce(func.trim(mod_oszlop), "") == "",
-                feltetel,
-            )
-        )
-        or 0
-    )
 
 
 def havi_bontas(kep_: KasszaKep, honapok: list[tuple[int, int]]) -> list[tuple[str, float, float, float]]:
