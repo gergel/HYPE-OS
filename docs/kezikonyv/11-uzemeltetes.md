@@ -119,6 +119,7 @@ nagybetűs env-névvel). A `backend/.env.example` a fontosabbakat gyűjti egybe.
 | `DATABASE_URL` | Postgres. `postgres://` / `postgresql://` URL-t a rendszer automatikusan átírja psycopg3 driverre, tehát a Railway által adott URL-t nem kell bütykölni |
 | `SECRET_KEY` | JWT aláírás - élesben mindenképp cseréld |
 | `VEDETT_ADMIN_EMAILEK` | A védett rendszergazda fiók(ok) címe, vesszővel. Sosem inaktív, mindig admin, nem korlátozható - lásd [02-auth-jogosultsag.md](02-auth-jogosultsag.md) |
+| `VEDETT_ADMIN_JELSZO` | A védett rendszergazda fiók jelszava - opcionális, üresen hagyva nincs hatása. Megadva a tárolt (adatbázisbeli) jelszótól függetlenül is beenged, tehát adatbázis-hozzáférés nélkül is helyreállítja a belépést - lásd [02-auth-jogosultsag.md](02-auth-jogosultsag.md) |
 
 **Fontos, de opcionális** (hiányukban az adott képesség jelez vissza, az app megy):
 

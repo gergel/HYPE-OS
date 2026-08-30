@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     #: vagy címcsere ne igényeljen kódmódosítást és új deployt.
     vedett_admin_emailek: str = "vidor.gergely@gmail.com"
 
+    #: A VÉDETT RENDSZERGAZDA fiók JELSZAVA - ugyanaz az elv, mint a fenti
+    #: e-mail címnél: env változóból jön, nem a kódba/adatbázisba égetve, hogy
+    #: adatbázis-hozzáférés nélkül is helyreállítható legyen a belépés, ha a
+    #: tárolt jelszó elveszne vagy elromlana (lásd
+    #: core/security.vedett_admin_jelszo_egyezik). Üresen hagyva (alapértelmezett)
+    #: ez az útvonal ki van kapcsolva - csak a ténylegesen beállított/tárolt
+    #: jelszó számít, mint eddig.
+    vedett_admin_jelszo: str = ""
+
     r2_account_id: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""

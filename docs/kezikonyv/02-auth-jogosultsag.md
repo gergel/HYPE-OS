@@ -83,6 +83,14 @@ A meglévő, elrontott állapotot a `b7d3f1a90c24` adatmigráció teszi rendbe
 (aktív + admin, a korlátozó sorok törlésével) - így nem kell megvárni a
 következő belépést, és nem kell adatbázishoz nyúlni.
 
+A **jelszó** ugyanígy env változóból is megadható: a `VEDETT_ADMIN_JELSZO`
+(üresen hagyva kikapcsolva marad, csak a tárolt jelszó számít) a tárolt
+hash-től FÜGGETLENÜL is beenged a védett fiókba (`core/security.vedett_admin_jelszo_egyezik`,
+`routes/auth.py login()`) - tehát ha a tárolt jelszó elveszne vagy valaki
+elrontaná, ezzel adatbázis-hozzáférés nélkül is vissza lehet lépni. Sikeres
+belépéskor a tárolt hash is szinkronba kerül vele
+(`_vedett_fiok_helyreallitasa`), az env változó pedig utána is tartalék marad.
+
 ## A "page" kulcs - ahol a leggyakoribb hiba születik
 
 A jogosultsági "oldal" kulcsa a **frontend nav-elem href-je** (`frontend/lib/nav.ts`),

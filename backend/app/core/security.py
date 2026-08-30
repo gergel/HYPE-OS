@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
@@ -80,6 +81,20 @@ def vedett_rendszergazda(employee: Employee | None) -> bool:
     if employee is None or not employee.email:
         return False
     return employee.email.strip().casefold() in vedett_admin_emailek()
+
+
+def vedett_admin_jelszo_egyezik(employee: Employee | None, plain_password: str) -> bool:
+    """Igaz, ha ez a VÉDETT rendszergazda ÉS a beküldött jelszó megegyezik a
+    VEDETT_ADMIN_JELSZO beállítással (ha az egyáltalán meg van adva).
+
+    Ugyanaz az elv, mint magánál a védettségnél (lásd vedett_rendszergazda):
+    adatbázis-hozzáférés nélkül is helyreállítható a belépés, ha a tárolt
+    jelszó elveszne vagy elromlana - erre épül az auth.py login()-ja, ami ezt
+    a tárolt hash ELLENŐRZÉSE MELLETT (nem helyette) próbálja."""
+    if not vedett_rendszergazda(employee):
+        return False
+    env_jelszo = settings.vedett_admin_jelszo
+    return bool(env_jelszo) and secrets.compare_digest(plain_password, env_jelszo)
 
 
 #: Kik írhatnak alapértelmezetten (a page_permissions ezt tovább szűkítheti,

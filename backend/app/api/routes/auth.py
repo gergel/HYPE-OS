@@ -7,6 +7,8 @@ from app.core.database import get_db
 from app.core.security import (
     create_access_token,
     get_current_user,
+    hash_password,
+    vedett_admin_jelszo_egyezik,
     vedett_rendszergazda,
     verify_password,
 )
@@ -16,7 +18,7 @@ from app.schemas.auth import TEMAK, TemaIn, Token, UserOut
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _vedett_fiok_helyreallitasa(user: Employee, db: Session) -> None:
+def _vedett_fiok_helyreallitasa(user: Employee, db: Session, plain_password: str) -> None:
     """A védett rendszergazda fiókját belépéskor VISSZAÁLLÍTJUK.
 
     A futásidejű ellenőrzések amúgy is átengedik (lásd
@@ -26,13 +28,22 @@ def _vedett_fiok_helyreallitasa(user: Employee, db: Session) -> None:
     tehát nemcsak beengedjük, hanem rendbe is tesszük a rekordot.
 
     Ez egyben a javítás útja is: ha a fiókot valaki inaktívra állítja, elég
-    újra bejelentkezni - nem kell adatbázishoz nyúlni."""
+    újra bejelentkezni - nem kell adatbázishoz nyúlni.
+
+    A tárolt jelszó-hash-t is szinkronba hozzuk a beírt jelszóval, ha az még
+    nem egyezik (pl. mert a VEDETT_ADMIN_JELSZO env változóból sikerült
+    belépni, lásd core/security.vedett_admin_jelszo_egyezik) - így legközelebb
+    már a sima jelszó-ellenőrzés is átenged, az env változó pedig továbbra is
+    tartalék marad, ha a tárolt jelszó megint elveszne/elromlana."""
     valtozott = False
     if not user.is_active:
         user.is_active = True
         valtozott = True
     if user.role != SystemRole.ADMIN:
         user.role = SystemRole.ADMIN
+        valtozott = True
+    if not (user.hashed_password and verify_password(plain_password, user.hashed_password)):
+        user.hashed_password = hash_password(plain_password)
         valtozott = True
     if valtozott:
         db.commit()
@@ -50,7 +61,15 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         select(Employee).where(Employee.email == form_data.username).order_by(Employee.id)
     ).all()
     user = next(
-        (c for c in candidates if c.hashed_password and verify_password(form_data.password, c.hashed_password)),
+        (
+            c
+            for c in candidates
+            if (c.hashed_password and verify_password(form_data.password, c.hashed_password))
+            # A védett rendszergazdának a VEDETT_ADMIN_JELSZO env változóból
+            # megadott jelszó a tárolt hash-től FÜGGETLENÜL is beengedi - lásd
+            # core/security.vedett_admin_jelszo_egyezik.
+            or vedett_admin_jelszo_egyezik(c, form_data.password)
+        ),
         None,
     )
     if user is None:
@@ -62,7 +81,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     # A védett rendszergazdát az inaktív jelölés sem tartja kint - sőt, a
     # belépés vissza is állítja a fiókját (lásd _vedett_fiok_helyreallitasa).
     if vedett_rendszergazda(user):
-        _vedett_fiok_helyreallitasa(user, db)
+        _vedett_fiok_helyreallitasa(user, db, form_data.password)
     elif not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A felhasználó inaktív")
     token = create_access_token(subject=str(user.id), role=user.role.value)
