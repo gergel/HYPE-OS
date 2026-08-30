@@ -258,6 +258,34 @@ export type Task = {
   checked: boolean;
 };
 
+export type HypeTodoItem = {
+  id: number;
+  feladat: string;
+  allapot: string | null;
+  leiras: string | null;
+  kategoria: string | null;
+  hatarido: string | null;
+  csatolando_link: string | null;
+  letrehozas_idopontja: string | null;
+  aki_felvezette_id: number | null;
+  ellenorzes_felelos_id: number | null;
+  aki_ellenorizte_id: number | null;
+  felelos_employee_ids: number[];
+};
+
+export type FloraFeladat = {
+  id: number;
+  megnevezes: string;
+  allapot: string | null;
+  cimke: string | null;
+  hatarido: string | null;
+  kesz_anyag_linkje: string | null;
+  leiras: string | null;
+  letrehozas_idopontja: string | null;
+  felelos_id: number | null;
+  felvezette_id: number | null;
+};
+
 export type Expense = {
   id: number;
   megnevezes: string;
@@ -455,6 +483,14 @@ export async function getCampaigns(limit = 5000): Promise<Campaign[]> {
 
 export async function getTasks(limit = 5000): Promise<Task[]> {
   return (await apiGet<Task[]>(`/api/v1/tasks?limit=${limit}`)) ?? [];
+}
+
+export async function getHypeTodoItems(limit = 5000): Promise<HypeTodoItem[]> {
+  return (await apiGet<HypeTodoItem[]>(`/api/v1/hype-todo?limit=${limit}`)) ?? [];
+}
+
+export async function getFloraFeladatok(limit = 5000): Promise<FloraFeladat[]> {
+  return (await apiGet<FloraFeladat[]>(`/api/v1/flora?limit=${limit}`)) ?? [];
 }
 
 export async function getExpenses(limit = 5000): Promise<Expense[]> {
@@ -1740,6 +1776,8 @@ export const ENTITY_PATHS = {
   equipment: "/api/v1/equipment",
   campaign: "/api/v1/campaigns",
   task: "/api/v1/tasks",
+  hypeTodo: "/api/v1/hype-todo",
+  floraFeladat: "/api/v1/flora",
   expense: "/api/v1/expenses",
   revenue: "/api/v1/revenues",
   deliverable: "/api/v1/deliverables",

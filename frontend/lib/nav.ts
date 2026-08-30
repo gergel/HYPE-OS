@@ -244,6 +244,12 @@ export const navGroups: NavGroup[] = [
       { label: "Vágói játék", href: "/vagoi-jatek", icon: "Trophy" },
       { label: "Kampányok", href: "/kampanyok", icon: "Megaphone" },
       { label: "Feladatok", href: "/feladatok", icon: "CheckSquare" },
+      // A Notion "HYPE TO-DO LIST" és "FLÓRA" oldalainak átvétele - önálló
+      // táblák, NEM a fenti Feladatok (Task) oldal része (lásd backend
+      // models/hype_todo.py, models/flora_feladat.py megjegyzését arról,
+      // miért nem a régi, félbehagyott Task-egyesítést folytattuk).
+      { label: "HYPE TO-DO LIST", href: "/hype-todo-lista", icon: "ListChecks" },
+      { label: "FLÓRA", href: "/flora", icon: "Palette" },
       { label: "AI Assistant", href: "/ai-assistant", icon: "Sparkles" },
       { label: "Beállítások", href: "/beallitasok", icon: "Settings" },
     ],

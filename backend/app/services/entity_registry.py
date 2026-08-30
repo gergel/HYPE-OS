@@ -33,6 +33,8 @@ from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.flora_feladat import FloraFeladat
+from app.models.hype_todo import HypeTodoItem
 from app.services import fizetesi_mod
 from app.models.kotelezettseg import Kotelezettseg, KotelezettsegIdoszak
 from app.models.krumpello import KrumpelloKiadas, KrumpelloNap
@@ -50,6 +52,8 @@ ENTITY_MODELS: dict[str, type] = {
     "equipment": Equipment,
     "campaign": Campaign,
     "task": Task,
+    "hypeTodo": HypeTodoItem,
+    "floraFeladat": FloraFeladat,
     "expense": Expense,
     "revenue": Revenue,
     # A Notionből örökölt KP forgalom tábla sorai - a Kiadással/Bevétellel
@@ -100,6 +104,22 @@ SELECT_FIELD_OVERRIDES: dict[str, dict[str, list[str]]] = {
     },
     "revenue": {
         "fizetes_modja": list(fizetesi_mod.BEVETEL_MODOK),
+    },
+    # A FLÓRA Kanban-tábla oszlopai - FIX, a Notion board eredeti sorrendje
+    # szerint, hogy a jelenleg üres CORRECTION oszlop is mindig megjelenjen
+    # (a heurisztika 0 előfordulásnál kihagyná). Az "INPROGREDSS" elgépelés a
+    # Notion eredeti adata - szándékosan nem javítva, lásd models/flora_feladat.py.
+    "floraFeladat": {
+        "allapot": [
+            "ASSETS",
+            "BACKLOG",
+            "WEEKLY TO DO / PRIO",
+            "INPROGREDSS",
+            "REVIEW",
+            "CORRECTION",
+            "APPROVED",
+            "DONE",
+        ],
     },
     "equipment": {
         "allapot": ["Jó", "Szerelendő", "Selejt", "Elhagyva", "Szervíz", "Szerelve"],

@@ -43,6 +43,8 @@ from app.api.routes.stocktake import router as stocktake_router
 from app.api.routes.storage import folders_router, media_router
 from app.api.routes.subcontractor_contracts import router as subcontractor_contracts_router
 from app.api.routes.tasks import router as tasks_router
+from app.api.routes.hype_todo import router as hype_todo_router
+from app.api.routes.flora import router as flora_router
 from app.api.routes.timeline import router as timeline_router
 from app.api.routes.user_access import router as user_access_router
 from app.api.routes.vagoi_visszajelzesek import router as vagoi_visszajelzesek_router
@@ -127,6 +129,8 @@ api_router.include_router(utokovetes_admin_router)
 api_router.include_router(campaigns_router)
 # Feladatok
 api_router.include_router(tasks_router)
+api_router.include_router(hype_todo_router)
+api_router.include_router(flora_router)
 # Automation
 api_router.include_router(automation_router)
 # AI Assistant

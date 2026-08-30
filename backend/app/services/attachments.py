@@ -50,6 +50,8 @@ ENTITAS_OLDALAK: dict[str, str] = {
     # Egy hozzászólás az Utómunka oldal alján - lásd entity_registry.py.
     "deliverableComment": "/utomunka",
     "task": "/feladatok",
+    "hypeTodo": "/hype-todo-lista",
+    "floraFeladat": "/flora",
     # Egy kötelezettség adott fordulójához (hónap/év) tartozó számla - az
     # E-Rezsi, a Biztosítások és az autók lapja is ide tölt (lásd
     # routes/kotelezettsegek.py CSATOLMANY_ENTITAS).

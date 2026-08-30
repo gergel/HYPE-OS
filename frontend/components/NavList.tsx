@@ -18,10 +18,12 @@ import {
   Hash,
   History,
   LayoutDashboard,
+  ListChecks,
   LucideIcon,
   Megaphone,
   MessageSquare,
   Package,
+  Palette,
   Repeat,
   Scissors,
   Send,
@@ -71,6 +73,8 @@ const ICONS: Record<string, LucideIcon> = {
   ShieldCheck,
   Car,
   Trophy,
+  ListChecks,
+  Palette,
 };
 
 /** A nav-elemek listája - a Sidebar (asztali oldalsáv) ÉS a MobileNav
