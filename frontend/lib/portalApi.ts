@@ -114,6 +114,19 @@ export async function getImageDownloadUrl(imageId: number): Promise<string> {
   return data.url;
 }
 
+/** A fájl BACKENDEN átfolyatott letöltési URL-je - tartalék arra az esetre,
+ * amikor a presigned R2 URL-t a böngésző nem tudja fetch()-elni, mert a
+ * bucketen nincs CORS-szabály a portál originjére (lásd backend
+ * routes/portal_public.py /file végpontjai és portalUtils.ts
+ * fetchFileWithFallback). */
+export function getVideoFileProxyUrl(videoId: number): string {
+  return `${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/public/portal-videos/${videoId}/file`;
+}
+
+export function getImageFileProxyUrl(imageId: number): string {
+  return `${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/public/portal-images/${imageId}/file`;
+}
+
 /** A vevő számlázási adatai - ezekből állítja ki a rendszer a számlát a
  * sikeres fizetés után (lásd backend services/portal_szamlazz.py). */
 export type PortalBilling = {

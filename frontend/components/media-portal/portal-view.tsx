@@ -418,7 +418,7 @@ function FolderSection({
           <h3 className="min-w-0 flex-1 font-display text-xl text-bone sm:text-2xl" style={accent ? { color: accent } : undefined}>
             {name}
             {hasNewVideo && (
-              <span className="ml-2.5 inline-block translate-y-[-2px] rounded-full bg-ember px-2 py-0.5 align-middle font-mono text-[10px] font-semibold uppercase tracking-eyebrow text-white">
+              <span className="ml-2.5 inline-block translate-y-[-2px] rounded-full bg-flare px-2 py-0.5 align-middle font-mono text-[10px] font-semibold uppercase tracking-eyebrow text-white">
                 Új
               </span>
             )}

@@ -11,7 +11,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -350,3 +352,43 @@ def public_image_download(image_id: int, db: Session = Depends(get_db)):
     ext = image.key.split(".")[-1] if "." in image.key else "jpg"
     filename = f"{image.title or 'image'}.{ext}"
     return {"url": storage.presigned_download(image.key, filename)}
+
+
+def _stream_fajl(key: str, filename: str, fallback_tipus: str) -> StreamingResponse:
+    """A fájl átfolyatása a backenden (lásd portal_storage.stream_object) - a
+    tömeges ZIP letöltés TARTALÉK útvonala: a böngésző a presigned R2 URL-eket
+    csak akkor tudja fetch()-elni, ha a bucketen van CORS-szabály a portál
+    originjére; ha nincs, a frontend erre a végpontra esik vissza (lásd
+    lib/portalUtils.ts fetchFileWithFallback), ami a backend saját
+    CORSMiddleware-én át mindig működik."""
+    try:
+        chunkok, meret, tipus = storage.stream_object(key)
+    except storage.R2NotConfiguredError:
+        raise
+    except ClientError as exc:
+        if (exc.response.get("Error") or {}).get("Code") in ("NoSuchKey", "404"):
+            raise HTTPException(status_code=404, detail="A fájl nem található a tárhelyen") from exc
+        raise
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if meret:
+        headers["Content-Length"] = str(meret)
+    return StreamingResponse(chunkok, media_type=tipus or fallback_tipus, headers=headers)
+
+
+@downloads_router.get("/portal-videos/{video_id}/file")
+def public_video_file(video_id: int, db: Session = Depends(get_db)):
+    video = db.get(PortalVideo, video_id)
+    if not video or not video.source_key:
+        raise HTTPException(status_code=404, detail="Nem található")
+    safe = (video.title or "video").replace('"', "").replace("\n", " ")
+    return _stream_fajl(video.source_key, f"{safe}.mp4", "video/mp4")
+
+
+@downloads_router.get("/portal-images/{image_id}/file")
+def public_image_file(image_id: int, db: Session = Depends(get_db)):
+    image = db.get(PortalImage, image_id)
+    if not image or not image.key:
+        raise HTTPException(status_code=404, detail="Nem található")
+    ext = image.key.split(".")[-1] if "." in image.key else "jpg"
+    safe = (image.title or "image").replace('"', "").replace("\n", " ")
+    return _stream_fajl(image.key, f"{safe}.{ext}", "image/jpeg")

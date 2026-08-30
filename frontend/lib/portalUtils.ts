@@ -1,7 +1,39 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import JSZip from "jszip";
-import { getVideoDownloadUrl, getImageDownloadUrl } from "@/lib/portalApi";
+import {
+  getVideoDownloadUrl,
+  getImageDownloadUrl,
+  getVideoFileProxyUrl,
+  getImageFileProxyUrl,
+} from "@/lib/portalApi";
+
+/** Egy fájl letöltése blobként, KÉT lépcsőben: először a presigned R2 URL-ről
+ * közvetlenül (gyors, nem terheli a backendet), és ha az elbukik - tipikusan
+ * azért, mert a bucketen nincs CORS-szabály a portál originjére, ilyenkor a
+ * böngésző fetch()-e azonnal hibát dob -, akkor a backend /file
+ * proxy-végpontjáról (lásd portalApi.getVideoFileProxyUrl), ami a backend
+ * saját CORS-beállításán át mindig elérhető. Enélkül a tömeges/ZIP letöltés
+ * "a fájlok nem elérhetők" hibával halt el mindenkinél, amíg a bucket CORS be
+ * nem volt állítva. A felhasználói megszakítást (AbortError) továbbdobjuk,
+ * arra nem tartalék kell, hanem leállás. */
+async function fetchBlobWithFallback(
+  directUrl: Promise<string>,
+  proxyUrl: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  try {
+    const url = await directUrl;
+    const res = await fetch(url, { mode: "cors", signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.blob();
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    const res = await fetch(proxyUrl, { signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.blob();
+  }
+}
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -111,8 +143,7 @@ export async function downloadImage(imageId: number, title?: string) {
     return;
   }
 
-  const res = await fetch(url, { mode: "cors" });
-  const blob = await res.blob();
+  const blob = await fetchBlobWithFallback(Promise.resolve(url), getImageFileProxyUrl(imageId));
   const ext = (blob.type.split("/")[1] || "jpg").split("+")[0];
   const filename = `${title || "image"}.${ext}`;
   const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
@@ -167,9 +198,7 @@ export async function downloadImagesAll(
       const i = cursor++;
       const img = images[i];
       try {
-        const url = await getImageDownloadUrl(img.id);
-        const res = await fetch(url, { mode: "cors", signal });
-        const blob = await res.blob();
+        const blob = await fetchBlobWithFallback(getImageDownloadUrl(img.id), getImageFileProxyUrl(img.id), signal);
         const ext = (blob.type.split("/")[1] || "jpg").split("+")[0];
         const safeTitle = (img.title || `image-${i + 1}`).replace(/[^\w.-]+/g, "_");
         zip.file(`${safeTitle}.${ext}`, blob, { compression: "STORE" });
@@ -232,10 +261,7 @@ export async function downloadFolderZip(
       const i = imgCursor++;
       const img = images[i];
       try {
-        const url = await getImageDownloadUrl(img.id);
-        const res = await fetch(url, { mode: "cors", signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
+        const blob = await fetchBlobWithFallback(getImageDownloadUrl(img.id), getImageFileProxyUrl(img.id), signal);
         const ext = (blob.type.split("/")[1] || "jpg").split("+")[0];
         const safe = (img.title || `kep-${i + 1}`).replace(/[^\w.-]+/g, "_");
         zip.file(`${safe}.${ext}`, blob, { compression: "STORE" });
@@ -254,10 +280,7 @@ export async function downloadFolderZip(
     if (signal?.aborted) return;
     const v = videos[i];
     try {
-      const url = await getVideoDownloadUrl(v.id);
-      const res = await fetch(url, { mode: "cors", signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      const blob = await fetchBlobWithFallback(getVideoDownloadUrl(v.id), getVideoFileProxyUrl(v.id), signal);
       const safe = (v.title || `video-${i + 1}`).replace(/[^\w.-]+/g, "_");
       zip.file(`${safe}.mp4`, blob, { compression: "STORE" });
       added++;
@@ -311,10 +334,7 @@ export async function downloadEverythingZip(
       const i = imgCursor++;
       const img = images[i];
       try {
-        const url = await getImageDownloadUrl(img.id);
-        const res = await fetch(url, { mode: "cors", signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
+        const blob = await fetchBlobWithFallback(getImageDownloadUrl(img.id), getImageFileProxyUrl(img.id), signal);
         const ext = (blob.type.split("/")[1] || "jpg").split("+")[0];
         const base = (img.title || `kep-${i + 1}`).replace(/[^\w.-]+/g, "_");
         zip.file(uniquePath(img.folder, base, ext), blob, { compression: "STORE" });
@@ -332,10 +352,7 @@ export async function downloadEverythingZip(
     if (signal?.aborted) return;
     const v = videos[i];
     try {
-      const url = await getVideoDownloadUrl(v.id);
-      const res = await fetch(url, { mode: "cors", signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      const blob = await fetchBlobWithFallback(getVideoDownloadUrl(v.id), getVideoFileProxyUrl(v.id), signal);
       const base = (v.title || `video-${i + 1}`).replace(/[^\w.-]+/g, "_");
       zip.file(uniquePath(v.folder, base, "mp4"), blob, { compression: "STORE" });
       added++;

@@ -31,6 +31,13 @@
   --color-bone: #16181c;
   --color-mist: #55595f;
   --color-ember: #5c5646;
+  /* Rikító jelző-szín (pl. az "Új" videó címke) - SZÁNDÉKOSAN kilóg a
+     visszafogott palettából, és mindkét (világos/sötét) témában ugyanaz:
+     az a dolga, hogy odarántsa a szemet, ezért a .hype-portal.dark nem
+     is írja felül. Az ember token erre nem jó: az a portál halk
+     bézs-szürke akcentusa (gombok, keretek, fókusz-gyűrűk), abból az "Új"
+     címke beleolvadt a felületbe. */
+  --color-flare: #f4511e;
 
   --font-display: var(--font-portal-display), Georgia, serif;
 

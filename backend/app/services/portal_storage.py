@@ -129,6 +129,25 @@ def presigned_get(key: str, expires: int = 6 * 3600) -> str:
     )
 
 
+def stream_object(key: str):
+    """(chunk-iterátor, méret, content-type) - a fájl ÁTFOLYATÁSA a backenden.
+
+    A tömeges (ZIP) letöltésnek erre van szüksége tartalékként: a böngésző a
+    presigned R2 URL-eket fetch()-csel, CORS módban tölti le, ami CSAK akkor
+    működik, ha a bucketen be van állítva CORS-szabály a portál originjére -
+    enélkül minden fájl elbukik, és az ügyfél "a fájlok nem elérhetők" hibát
+    kap. Ezen a végponton át viszont a fájl a backenden folyik keresztül
+    (szerver-szerver R2 hívás, nincs CORS), amit a FastAPI CORSMiddleware-e
+    ugyanúgy enged, mint bármely más API hívást - lásd
+    routes/portal_public.py /file végpontjai és a frontend
+    lib/portalUtils.ts fetchFileWithFallback."""
+    client = _client()
+    obj = client.get_object(Bucket=settings.r2_bucket_name, Key=_key(key))
+    meret = int(obj.get("ContentLength") or 0)
+    tipus = obj.get("ContentType") or "application/octet-stream"
+    return obj["Body"].iter_chunks(1024 * 1024), meret, tipus
+
+
 def head_size(key: str) -> int:
     client = _client()
     head = client.head_object(Bucket=settings.r2_bucket_name, Key=_key(key))

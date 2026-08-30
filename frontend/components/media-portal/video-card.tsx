@@ -54,7 +54,7 @@ export function VideoCard({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-80 transition-opacity group-hover:opacity-95" />
         {isNew && (
-          <span className="absolute left-3 top-3 rounded-full bg-ember px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-eyebrow text-white shadow-lg">
+          <span className="absolute left-3 top-3 rounded-full bg-flare px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-eyebrow text-white shadow-lg">
             Új
           </span>
         )}
