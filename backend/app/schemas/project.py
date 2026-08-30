@@ -1,6 +1,6 @@
 from datetime import date, datetime, time
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 JsonScalar = dict | list | float | str | bool | None
 
@@ -16,10 +16,37 @@ class ProjectBase(BaseModel):
     campaign_id: int | None = None
     forgatas_datuma: date | None = None
     forgatas_datuma_vege: date | None = None
+    #: Forrásonkénti tükör-mezők + kézi zár - lásd models/project.py. A
+    #: felület a lenti veg_datum számított mezőt használja, ezek csak a
+    #: kiszámításához (és hibakereséshez) utaznak.
+    naptar_datum_vege: date | None = None
+    notion_datum_vege: date | None = None
+    forgatas_datum_kezzel_beallitva: bool = False
     # A forgatás napon belüli időpontja (hánytól hányig) - a naptárból is
     # átjön, lásd services/google_calendar.py.
     forgatas_kezdes_ido: time | None = None
     forgatas_veg_ido: time | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def veg_datum(self) -> date | None:
+        """A forgatás TÉNYLEGES (megjelenítendő) záró napja - a felület
+        mindenhol EZT használja (naptár-sáv, táblázat, dátum-szerkesztő).
+
+        Kézi dátum-zárnál (forgatas_datum_kezzel_beallitva) kizárólag a kézzel
+        beállított forgatas_datuma_vege számít - ha az üres, a forgatás
+        SZÁNDÉKOSAN egynapos. Zár nélkül az első ismert vég nyer:
+        forgatas_datuma_vege -> naptar_datum_vege -> notion_datum_vege
+        (a forrásonkénti tükör-oszlopokat kizárólag a saját folyamatuk írja,
+        lásd models/project.py - ezért ami egyszer megjött, nem veszhet el).
+        A kezdetnél nem későbbi vég nem vég."""
+        if self.forgatas_datum_kezzel_beallitva:
+            jelolt = self.forgatas_datuma_vege
+        else:
+            jelolt = self.forgatas_datuma_vege or self.naptar_datum_vege or self.notion_datum_vege
+        if jelolt is None or self.forgatas_datuma is None or jelolt <= self.forgatas_datuma:
+            return None
+        return jelolt
     helyszin: str | None = None
     allapot: str | None = None
     #: A projektkód SZÖVEGE. Létrehozáskor is megadható: ebből keressük meg a

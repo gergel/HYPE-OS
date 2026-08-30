@@ -183,10 +183,9 @@ export function ProjektekContent({
               // nap cellában szerkeszthető, a teljes tól-ig a részletnézet
               // Forgatás dátuma kártyáján állítható (DateRangePicker).
               render: (p) => {
+                const tenylegesVeg = p.veg_datum ?? p.forgatas_datuma_vege;
                 const veg =
-                  p.forgatas_datuma_vege && p.forgatas_datuma_vege !== p.forgatas_datuma
-                    ? ` – ${formatDate(p.forgatas_datuma_vege)}`
-                    : "";
+                  tenylegesVeg && tenylegesVeg !== p.forgatas_datuma ? ` – ${formatDate(tenylegesVeg)}` : "";
                 return canEdit ? (
                   <span className="flex items-center gap-0.5">
                     <EditableTableCell patchPath={`${PROJECT_BASE_PATH}/${p.id}`} field="forgatas_datuma" value={p.forgatas_datuma} type="date" />

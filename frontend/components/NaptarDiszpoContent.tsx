@@ -124,8 +124,8 @@ function DiszpoGroupSection({
               <p className="mt-0.5 text-[12px] text-text-muted">
                 {projectCodeById.get(p.project_code_id) ?? "–"}
                 {p.helyszin ? ` · ${p.helyszin}` : ""}
-                {p.forgatas_datuma_vege && p.forgatas_datuma_vege !== p.forgatas_datuma
-                  ? ` · ${formatDate(p.forgatas_datuma)} – ${formatDate(p.forgatas_datuma_vege)}`
+                {(p.veg_datum ?? p.forgatas_datuma_vege) && (p.veg_datum ?? p.forgatas_datuma_vege) !== p.forgatas_datuma
+                  ? ` · ${formatDate(p.forgatas_datuma)} – ${formatDate(p.veg_datum ?? p.forgatas_datuma_vege)}`
                   : ""}
                 {/* Ha leválasztottunk róla napokat, azt akkor is
                     kiírjuk, ha erre a napra még kell rá diszpó:

@@ -9,6 +9,10 @@ type CalendarProject = {
   nev: string;
   forgatas_datuma: string | null;
   forgatas_datuma_vege: string | null;
+  /** A backend által számított TÉNYLEGES záró nap (kézi érték + naptár/Notion
+   * tükör-mezők, lásd backend schemas/project.veg_datum) - ha a hívó átadja,
+   * ez nyer a nyers forgatas_datuma_vege felett. */
+  veg_datum?: string | null;
   /** "08:30:00" alakban, ha meg van adva - a naptárból is átjön. */
   forgatas_kezdes_ido?: string | null;
 };
@@ -186,7 +190,8 @@ export function ForgatasokCalendar({
   for (const p of projects) {
     if (!p.forgatas_datuma) continue;
     const start = parseDateOnly(p.forgatas_datuma);
-    const end = p.forgatas_datuma_vege ? parseDateOnly(p.forgatas_datuma_vege) : start;
+    const vegISO = p.veg_datum ?? p.forgatas_datuma_vege;
+    const end = vegISO ? parseDateOnly(vegISO) : start;
     if (end.getTime() > start.getTime()) {
       multiDayBars.push({ project: p, start, end });
       continue;

@@ -121,6 +121,11 @@ export type Project = {
   project_code_id: number;
   forgatas_datuma: string | null;
   forgatas_datuma_vege: string | null;
+  /** A forgatás TÉNYLEGES (megjelenítendő) záró napja - a backend számítja a
+   * kézi értékből és a forrásonkénti (naptár/Notion) tükör-mezőkből, lásd
+   * backend schemas/project.veg_datum. A felület mindenhol EZT használja a
+   * több naposság eldöntésére, ne a nyers forgatas_datuma_vege-t. */
+  veg_datum: string | null;
   /** A forgatás napon belüli időpontja ("08:30:00"), ha meg van adva - a
    * naptárból is átjön (lásd backend services/google_calendar.py). */
   forgatas_kezdes_ido: string | null;

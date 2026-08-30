@@ -68,6 +68,22 @@ class Project(TimestampMixin, Base):
     forgatas_datum_kezzel_beallitva: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false", comment="Forgatás dátumai kézzel beállítva (szinkron nem írhatja felül)"
     )
+    #: FORRÁSONKÉNTI SEGÉD-MEZŐK a forgatás végéhez. A forgatas_datuma_vege
+    #: körüli visszatérő adatvesztés gyökere az volt, hogy TÖBB folyamat
+    #: (naptár-szinkron, Notion-import, kézi szerkesztés) ugyanazt az egy
+    #: mezőt írta, és mindig az nyert, amelyik épp nem ismerte a véget. Ezért
+    #: mostantól minden forrás a SAJÁT, kizárólagos oszlopába tükrözi, amit ő
+    #: lát (a naptár-szinkron ide, a Notion-import a notion_datum_vege-be) -
+    #: ezekhez senki más nem nyúl, tehát ami egyszer megjött, az nem tud
+    #: elveszni. A megjelenített vég a schemas/project.veg_datum számított
+    #: mezőben áll össze: kézi zárnál a kézi érték, egyébként az első ismert
+    #: (forgatas_datuma_vege -> naptar_datum_vege -> notion_datum_vege).
+    naptar_datum_vege: Mapped[date | None] = mapped_column(
+        Date, comment="A Google Naptár-esemény vége (a szinkron saját tükre - más nem írja)"
+    )
+    notion_datum_vege: Mapped[date | None] = mapped_column(
+        Date, comment="A Notion szerinti forgatás-vég (az import saját tükre - más nem írja)"
+    )
     helyszin: Mapped[str | None] = mapped_column(String(255))
     allapot: Mapped[str | None] = mapped_column(String(50))
     google_calendar_event_id: Mapped[str | None] = mapped_column(

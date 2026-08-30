@@ -379,6 +379,12 @@ def sync_hype_calendar(db: Session) -> dict:
                     stats["updated"] += 1
 
                 project.nev = nev
+                # A SAJÁT tükör-oszlop (lásd models/project.naptar_datum_vege):
+                # mindig pontosan azt tükrözi, amit a naptár-esemény mond -
+                # ehhez az oszlophoz rajtunk kívül semmi nem nyúl, így ami
+                # egyszer megjött, azt más folyamat nem tudja kitörölni. A
+                # megjelenített vég ebből áll össze (schemas/project.veg_datum).
+                project.naptar_datum_vege = forgatas_datuma_vege
                 # KÉZI DÁTUM-ZÁR: ha a forgatás dátumait a HYPE OS felületén
                 # kézzel állították be (lásd models/project.py
                 # forgatas_datum_kezzel_beallitva), a szinkron a NÉGY

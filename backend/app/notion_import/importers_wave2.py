@@ -286,6 +286,12 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
                 "campaign_id": campaign_id,
                 "forgatas_datuma": forgatas_datuma,
                 "forgatas_datuma_vege": forgatas_datuma_vege,
+                # A SAJÁT tükör-oszlop (lásd models/project.notion_datum_vege):
+                # pontosan azt tükrözi, amit a Notion mond a forgatás végéről -
+                # ezt rajtunk kívül semmi nem írja, ezért ami egyszer megjött,
+                # azt más folyamat nem tudja kitörölni (a megjelenített vég a
+                # schemas/project.veg_datum számított mezőben áll össze).
+                "notion_datum_vege": forgatas_datuma_vege,
                 "helyszin": _text(props.get("Helyszín")) or _text(props.get("Location")),
                 "allapot": _text(props.get("Állapot")),
                 "teljesites_datuma": as_date(props.get("Teljesítés dátuma")),

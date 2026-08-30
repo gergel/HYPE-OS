@@ -74,6 +74,12 @@ const ALWAYS_HIDDEN = [
   "forgatas_datuma_vege",
   "forgatas_kezdes_ido",
   "forgatas_veg_ido",
+  // A forrásonkénti tükör-mezők és a kézi zár belső segédadatok (lásd backend
+  // models/project.py) - a generikus mezőrácsban semmi keresnivalójuk.
+  "naptar_datum_vege",
+  "notion_datum_vege",
+  "forgatas_datum_kezzel_beallitva",
+  "veg_datum",
   "project_code_id",
   "campaign_id",
   "crew_employee_ids",
@@ -296,7 +302,11 @@ export async function ProjectDetailContent({
           initial={{
             start: asText(project.forgatas_datuma),
             startTime: asText(project.forgatas_kezdes_ido).slice(0, 5),
-            end: asText(project.forgatas_datuma_vege),
+            // A TÉNYLEGES záró nap: a naptárból/Notionből tükrözött vég is
+            // automatikusan megjelenik itt (lásd backend
+            // schemas/project.veg_datum) - pontosan, ahogy a felhasználó
+            // kérte: ami több napos, annál a záró dátum magától ki van töltve.
+            end: asText((project.veg_datum as string | null) ?? project.forgatas_datuma_vege),
             endTime: asText(project.forgatas_veg_ido).slice(0, 5),
           }}
           readOnly={!szerkeszthet}

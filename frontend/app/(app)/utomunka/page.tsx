@@ -53,7 +53,9 @@ export default async function UtomunkaPage() {
     id: p.id,
     nev: p.nev,
     forgatas_datuma: p.forgatas_datuma,
-    forgatas_datuma_vege: p.forgatas_datuma_vege,
+    // A TÉNYLEGES záró nap (kézi + naptár/Notion tükör, lásd backend
+    // schemas/project.veg_datum) - ebből lesz a több napos sáv a naptárban.
+    forgatas_datuma_vege: p.veg_datum ?? p.forgatas_datuma_vege,
   }));
 
   return (
