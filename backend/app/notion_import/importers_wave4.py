@@ -21,6 +21,22 @@ from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_
 from app.notion_import.importers import _text, _url
 
 
+def _cim(page: dict) -> str | None:
+    """A page CÍM-property-jének (type == "title") szövege.
+
+    Nem egy konkrét mezőnévre (pl. "Feladat"/"Megnevezés") szűrünk, mert az
+    csak feltételezés - Notionban egy adatbázisnak MINDIG pontosan egy
+    title-típusú property-je van, de a MEGJELENÍTETT neve táblánként eltér.
+    Ha egy korábbi verzió a feltételezett névre (pl. "Feladat") szűrt, és az
+    a konkrét táblában valójában másképp hívják, minden sor "nincs cím" miatt
+    kimaradt az importból - pontosan ez történt élesben (0 sor jött át)."""
+    for prop in page.get("properties", {}).values():
+        if prop.get("type") == "title":
+            szoveg = "".join(t.get("plain_text", "") for t in prop.get("title") or []).strip()
+            return szoveg or None
+    return None
+
+
 def _valtozatlan_link(eredeti: list | None, ujak: list | None) -> str | None:
     """Az első URL, amit files.atemel_mindent NEM emelt át az R2-re (tehát
     külső link maradt, pl. Google Drive) - a ténylegesen feltöltött Notion-
@@ -39,7 +55,7 @@ def import_hype_todo(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="HypeTodoItem")
     for page in client.query_database(db_ids.HYPE_TODO_LIST):
         props = extract_properties(page, client)
-        feladat = _text(props.get("Feladat"))
+        feladat = _cim(page) or _text(props.get("Feladat"))
         if not feladat:
             result.skipped += 1
             continue
@@ -87,7 +103,7 @@ def import_agi_todo(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="AgiTodoItem")
     for page in client.query_database(db_ids.AGI_TODO_LIST):
         props = extract_properties(page, client)
-        feladat = _text(props.get("Feladat"))
+        feladat = _cim(page) or _text(props.get("Feladat"))
         if not feladat:
             result.skipped += 1
             continue
@@ -124,7 +140,7 @@ def import_flora_design(client: NotionClient, db: Session) -> ImportResult:
     result = ImportResult(entity_type="FloraFeladat")
     for page in client.query_database(db_ids.FLORA_DESIGN):
         props = extract_properties(page, client)
-        megnevezes = _text(props.get("Megnevezés"))
+        megnevezes = _cim(page) or _text(props.get("Megnevezés"))
         if not megnevezes:
             result.skipped += 1
             continue
