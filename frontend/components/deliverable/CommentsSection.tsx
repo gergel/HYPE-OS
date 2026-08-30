@@ -9,26 +9,50 @@ import type { DeliverableComment, DocumentAttachment } from "@/lib/api";
 
 const MENTION_PATTERN = /@[^\s@]*$/;
 
+// Ugyanabban a split-ben a @Név taggelés és a linkek is - a token TÍPUSÁT a
+// megjelenítés dönti el (@ előtag -> mention, http(s)/www előtag -> link),
+// hogy a kettő ne zavarja egymást a szövegben.
+const TOKEN_PATTERN = /(@[^\s@]+(?:\s[^\s@]+)?|https?:\/\/\S+|www\.\S+)/g;
+// Egy link végéről levágott írásjelek (pl. "...nézd meg: https://pelda.hu."
+// mondatvégi pontja) - ezek nem a link részei, csak úgy tűnnek, mert a
+// szövegben közvetlenül utána állnak.
+const TRAILING_PUNCT_PATTERN = /[.,;:!?)\]}'"]+$/;
+
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString("hu-HU", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-/** Egy hozzászólás szövegében a "@Név" részeket kiemeli - egyszerű, tag-szerű
- * megjelenítés (nem küld értesítést, csak vizuálisan jelöli a taggelést). */
+/** Egy hozzászólás szövegében a "@Név" részeket kiemeli (egyszerű, tag-szerű
+ * megjelenítés - nem küld értesítést, csak vizuálisan jelöli a taggelést),
+ * a http(s)/www-vel kezdődő linkeket pedig kattinthatóvá teszi. */
 function BodyWithMentions({ body }: { body: string }) {
-  const parts = body.split(/(@[^\s@]+(?:\s[^\s@]+)?)/g);
+  const parts = body.split(TOKEN_PATTERN);
   return (
-    <p className="whitespace-pre-line text-[13px] text-text-primary">
-      {parts.map((part, i) =>
-        part.startsWith("@") ? (
-          <span key={i} className="text-text-accent">
-            {part}
-          </span>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
+    <p className="whitespace-pre-line text-[13px] text-text-primary break-words">
+      {parts.map((part, i) => {
+        if (part.startsWith("@")) {
+          return (
+            <span key={i} className="text-text-accent">
+              {part}
+            </span>
+          );
+        }
+        if (/^(https?:\/\/|www\.)/.test(part)) {
+          const trailing = part.match(TRAILING_PUNCT_PATTERN)?.[0] ?? "";
+          const link = trailing ? part.slice(0, -trailing.length) : part;
+          const href = link.startsWith("http") ? link : `https://${link}`;
+          return (
+            <span key={i}>
+              <a href={href} target="_blank" rel="noopener noreferrer" className="text-text-accent underline hover:no-underline">
+                {link}
+              </a>
+              {trailing}
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
     </p>
   );
 }
