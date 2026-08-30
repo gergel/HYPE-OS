@@ -108,6 +108,32 @@ class NotionClient:
                 return [data]
         return results
 
+    def list_users(self) -> list[dict]:
+        """Az egész workspace felhasználói, egyszer lekérve - a kommentek
+        szerzőjének feloldásához kell (lásd importers_wave2.import_deliverables),
+        és sokkal olcsóbb, mint felhasználónként/kommentenként külön hívni."""
+        results: list[dict] = []
+        params: dict[str, Any] = {"page_size": 100}
+        while True:
+            data = self._get("/users", params=params)
+            results.extend(data.get("results", []))
+            if not data.get("has_more"):
+                break
+            params["start_cursor"] = data["next_cursor"]
+        return results
+
+    def list_comments(self, page_id: str) -> list[dict]:
+        """Egy Notion oldal (kártya) alján lévő kommentek időrendben, lapozva."""
+        results: list[dict] = []
+        params: dict[str, Any] = {"block_id": page_id, "page_size": 100}
+        while True:
+            data = self._get("/comments", params=params)
+            results.extend(data.get("results", []))
+            if not data.get("has_more"):
+                break
+            params["start_cursor"] = data["next_cursor"]
+        return results
+
     def search_databases(self) -> list[dict]:
         """Az integrációval megosztott összes adatbázis (csak azok látszanak, amiket
         a Notionban kézzel megosztottak az integrációval - lásd a discovery script kimenetét)."""

@@ -146,7 +146,7 @@ KATALOGUS: tuple[ImporterInfo, ...] = (
         cimke="Utómunkák",
         kor=2,
         forrasok=("Utómunka",),
-        leiras="A vágandó/kiadandó anyagok, vágóval és határidővel.",
+        leiras="A vágandó/kiadandó anyagok, vágóval és határidővel - a kártyák alatti Notion-kommentekkel együtt.",
         fn=importers_wave2.import_deliverables,
         fuggosegek=("Project",),
     ),
