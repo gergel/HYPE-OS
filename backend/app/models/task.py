@@ -15,7 +15,13 @@ task_employees = Table(
 
 
 class Task(TimestampMixin, Base):
-    """Feladat - TEENDŐK + Ági to do list + HYPE TO-DO LIST + Archive feladatok egyesítve."""
+    """Feladat - TEENDŐK + Archive feladatok egyesítve.
+
+    Az Ági to do list és a HYPE TO-DO LIST KORÁBBAN ide tartozott (nyers JSON
+    maradék-mezőkkel), de mostantól saját, típusos táblájuk van (lásd
+    models/agi_todo.py, models/hype_todo.py) - a felhasználó kifejezett
+    kérésére. A `*_notion` maradék mezők itt csak a TEENDŐK/Archive
+    feladatok két forrás miatt maradtak."""
 
     __tablename__ = "tasks"
 

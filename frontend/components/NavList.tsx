@@ -29,6 +29,7 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  Sparkle,
   Sparkles,
   Trophy,
   UserCheck,
@@ -75,6 +76,7 @@ const ICONS: Record<string, LucideIcon> = {
   Trophy,
   ListChecks,
   Palette,
+  Sparkle,
 };
 
 /** A nav-elemek listája - a Sidebar (asztali oldalsáv) ÉS a MobileNav

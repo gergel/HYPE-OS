@@ -52,6 +52,7 @@ ENTITAS_OLDALAK: dict[str, str] = {
     "task": "/feladatok",
     "hypeTodo": "/hype-todo-lista",
     "floraFeladat": "/flora",
+    "agiTodo": "/agi",
     # Egy kötelezettség adott fordulójához (hónap/év) tartozó számla - az
     # E-Rezsi, a Biztosítások és az autók lapja is ide tölt (lásd
     # routes/kotelezettsegek.py CSATOLMANY_ENTITAS).

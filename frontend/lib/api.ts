@@ -273,6 +273,17 @@ export type HypeTodoItem = {
   felelos_employee_ids: number[];
 };
 
+export type AgiTodoItem = {
+  id: number;
+  feladat: string;
+  allapot: string | null;
+  ugyfel: string | null;
+  hatarido: string | null;
+  leiras: string | null;
+  kovetkezo_lepes: string | null;
+  csatolt_link: string | null;
+};
+
 export type FloraFeladat = {
   id: number;
   megnevezes: string;
@@ -491,6 +502,10 @@ export async function getHypeTodoItems(limit = 5000): Promise<HypeTodoItem[]> {
 
 export async function getFloraFeladatok(limit = 5000): Promise<FloraFeladat[]> {
   return (await apiGet<FloraFeladat[]>(`/api/v1/flora?limit=${limit}`)) ?? [];
+}
+
+export async function getAgiTodoItems(limit = 5000): Promise<AgiTodoItem[]> {
+  return (await apiGet<AgiTodoItem[]>(`/api/v1/agi-todo?limit=${limit}`)) ?? [];
 }
 
 export async function getExpenses(limit = 5000): Promise<Expense[]> {
@@ -1778,6 +1793,7 @@ export const ENTITY_PATHS = {
   task: "/api/v1/tasks",
   hypeTodo: "/api/v1/hype-todo",
   floraFeladat: "/api/v1/flora",
+  agiTodo: "/api/v1/agi-todo",
   expense: "/api/v1/expenses",
   revenue: "/api/v1/revenues",
   deliverable: "/api/v1/deliverables",

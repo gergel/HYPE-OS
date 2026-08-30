@@ -34,6 +34,7 @@ from app.notion_import import (
     importers_projektnevek,
     importers_wave2,
     importers_wave3,
+    importers_wave4,
 )
 
 
@@ -104,9 +105,36 @@ KATALOGUS: tuple[ImporterInfo, ...] = (
         nev="Task",
         cimke="Feladatok",
         kor=1,
-        forrasok=("Teendők", "Agi todo list", "HYPE todo list", "Archive feladatok"),
-        leiras="A négy Notion-teendőlista egyben; az archív feladatok archivált állapottal.",
+        forrasok=("Teendők", "Archive feladatok"),
+        leiras="A két Notion-teendőlista egyben; az archív feladatok archivált állapottal.",
         fn=importers.import_tasks,
+        fuggosegek=("Employee",),
+    ),
+    ImporterInfo(
+        nev="HypeTodo",
+        cimke="HYPE TO-DO LIST",
+        kor=1,
+        forrasok=("HYPE todo list",),
+        leiras="A HYPE TO-DO LIST önálló táblája - felelősökkel, ellenőrzés-felelőssel, csatolmányokkal.",
+        fn=importers_wave4.import_hype_todo,
+        fuggosegek=("Employee",),
+    ),
+    ImporterInfo(
+        nev="AgiTodo",
+        cimke="Ági to-do lista",
+        kor=1,
+        forrasok=("Agi todo list",),
+        leiras="Az Ági oldal saját teendőlistája, önálló táblában.",
+        fn=importers_wave4.import_agi_todo,
+        fuggosegek=("Employee",),
+    ),
+    ImporterInfo(
+        nev="FloraDesign",
+        cimke="FLÓRA design adatbázis",
+        kor=1,
+        forrasok=("Design adatbázis",),
+        leiras="A FLÓRA oldal grafikai kérés-táblája (Kanban), önálló táblában.",
+        fn=importers_wave4.import_flora_design,
         fuggosegek=("Employee",),
     ),
     ImporterInfo(

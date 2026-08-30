@@ -29,6 +29,7 @@ from app.models.client import Client, Contact
 from app.models.contract import Contract
 from app.models.deliverable import Deliverable
 from app.models.deliverable_comment import DeliverableComment
+from app.models.agi_todo import AgiTodoItem
 from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
@@ -54,6 +55,7 @@ ENTITY_MODELS: dict[str, type] = {
     "task": Task,
     "hypeTodo": HypeTodoItem,
     "floraFeladat": FloraFeladat,
+    "agiTodo": AgiTodoItem,
     "expense": Expense,
     "revenue": Revenue,
     # A Notionből örökölt KP forgalom tábla sorai - a Kiadással/Bevétellel

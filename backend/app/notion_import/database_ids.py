@@ -18,6 +18,10 @@ KAMPANYOK = "1f9c9afd-d53b-809b-8185-f691d01aaf2e"
 TEENDOK = "2d7c9afd-d53b-80b6-82a8-de2f721240e0"
 AGI_TODO_LIST = "383c9afd-d53b-80ce-8a32-dcf2a298e7b9"
 HYPE_TODO_LIST = "356c9afd-d53b-80be-98a5-c041be870307"
+#: A FLÓRA oldal "Design adatbázis" táblája - a felhasználó küldte a linket
+#: 2026-08-30-án (a 2026-07-02-i felméréskor még nem volt megosztva az
+#: integrációval, ezért nem szerepelt itt).
+FLORA_DESIGN = "376c9afd-d53b-8080-942e-c7b2455b2d87"
 ARCHIVE_FELADATOK = "d1e517d5-d92a-471d-9804-6795d76f85b1"
 KERETSZERZODES = "20dc9afd-d53b-8023-a510-e1f70949e9b7"
 ALVALLALKOZO_KERETSZERZODES = "218c9afd-d53b-8080-a094-eff698c1fd89"

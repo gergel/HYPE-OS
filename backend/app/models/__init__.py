@@ -1,6 +1,7 @@
 """Minden SQLAlchemy modell importja - ez adja a Base.metadata-t az Alembic autogenerate-hez."""
 
 from app.core.database import Base
+from app.models.agi_todo import AgiTodoItem
 from app.models.belsos_idoszak import BelsosIdoszak
 from app.models.callsheet import Callsheet
 from app.models.calendar_sync import CalendarSyncState
@@ -84,6 +85,7 @@ from app.models.vallalkozas import Vallalkozas, VallalkozasTag
 
 __all__ = [
     "Base",
+    "AgiTodoItem",
     "Callsheet",
     "CalendarSyncState",
     "Campaign",

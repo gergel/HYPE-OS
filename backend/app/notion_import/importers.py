@@ -509,11 +509,15 @@ def _import_task_database(
 
 
 def import_tasks(client: NotionClient, db: Session) -> ImportResult:
-    """Task <- TEENDŐK + Ági to do list + HYPE TO-DO LIST + Archive feladatok (status=archived)."""
+    """Task <- TEENDŐK + Archive feladatok (status=archived).
+
+    Az Ági to do list és a HYPE TO-DO LIST KIVÉVE innen: azok mostantól saját,
+    típusos táblát kapnak (lásd notion_import/importers_wave4.py
+    import_agi_todo/import_hype_todo, katalogus.py "AgiTodo"/"HypeTodo"
+    bejegyzései) - a felhasználó kifejezett kérésére, hogy ne a régi, nyers
+    JSON-mezős egyesítésben éljenek tovább."""
     result = ImportResult(entity_type="Task")
     _import_task_database(client, db, db_ids.TEENDOK, result)
-    _import_task_database(client, db, db_ids.AGI_TODO_LIST, result)
-    _import_task_database(client, db, db_ids.HYPE_TODO_LIST, result)
     _import_task_database(client, db, db_ids.ARCHIVE_FELADATOK, result, forced_allapot="archived")
     return result
 
