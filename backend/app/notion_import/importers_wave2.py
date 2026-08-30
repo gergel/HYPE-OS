@@ -52,6 +52,42 @@ def _split_date_range(value: str | None) -> tuple:
     return as_date(value), None
 
 
+def _forgatas_tartomany(props: dict) -> tuple:
+    """A forgatás TÓL-IG tartománya - TÖBB jelölt Notion-mezőből összerakva.
+
+    A Main Database-ben több dátum-jellegű mező él egymás mellett: a "Date"
+    (a 2Sync naptár-tükre - a több napos eseményeknél is gyakran CSAK a kezdő
+    napot hordozza), a "Forgatás időpontja", a "Kezdő dátum"/"Záró dátum" pár
+    és a "forgatás kezdete"/"forgatás vége" formulák. Hogy melyikben van
+    ténylegesen kitöltve a tól-ig, munkaterületenként más - a felhasználó
+    Notion-naptár nézete sem feltétlenül a "Date"-re épül. Amíg az import
+    KIZÁRÓLAG a "Date"-et olvasta, a több napos forgatások vége el sem
+    juthatott hozzánk, ha az a valóságban egy másik mezőben élt (a felhasználó
+    2026-08-30-i hibajelzése: "a naptárban/Notionben tól-ig van, mégis csak a
+    kezdő dátum jön át").
+
+    A KEZDET az első kitöltött jelöltből jön (a "Date" az elsődleges), a VÉG
+    pedig az első olyanból, amelyik egyáltalán ismer véget - így az is
+    működik, amikor a kezdet a "Date"-ben, a vég viszont csak a "Záró dátum"
+    vagy a "forgatás vége" mezőben van meg. Értelmetlen (a kezdetnél nem
+    későbbi) vég nem számít."""
+
+    def egy_datum(value):
+        return _split_date_range(value)[0]
+
+    jeloltek = [
+        _split_date_range(props.get("Date")),
+        _split_date_range(props.get("Forgatás időpontja")),
+        (egy_datum(props.get("Kezdő dátum")), egy_datum(props.get("Záró dátum"))),
+        (egy_datum(props.get("forgatás kezdete")), egy_datum(props.get("forgatás vége"))),
+    ]
+    kezdet = next((s for s, _ in jeloltek if s is not None), None)
+    veg = next((e for _, e in jeloltek if e is not None), None)
+    if kezdet is not None and veg is not None and veg > kezdet:
+        return kezdet, veg
+    return kezdet, None
+
+
 def _link_leltar_equipment(db: Session, project: Project, props: dict) -> None:
     """A 'Leltár' relation (a Main oldalon kereséssel/kattintással hozzáadható
     eszközök) feloldása Assignment sorokká - qty=1, mert ez a relation nem hordoz
@@ -208,7 +244,7 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
         # helyére, amikor tényleg megkapja a kódját.
         project_code_id = resolve_relation_id(db, "ProjectCode", props.get("HYPE ADMIN projektkódok") or [])
         campaign_id = resolve_relation_id(db, "Campaign", props.get("Kampányok") or [])
-        forgatas_datuma, forgatas_datuma_vege = _split_date_range(props.get("Date"))
+        forgatas_datuma, forgatas_datuma_vege = _forgatas_tartomany(props)
 
         # Ugyanaz a forgatás lehet, hogy a NAPTÁRBÓL már bejött - akkor azt
         # frissítjük, nem csinálunk másodikat (lásd services/project_matching.py).
