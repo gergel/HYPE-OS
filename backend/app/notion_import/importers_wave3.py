@@ -72,7 +72,10 @@ def import_stock_igenyek(client: NotionClient, db: Session) -> ImportResult:
             {
                 "equipment_id": equipment_id,
                 "project_id": project_id,
-                "qty": int(qty) if qty else 1,
+                # Ugyanaz a hiba volt itt, mint az Equipment.osszes_mennyiseg
+                # importjánál: `if qty else 1` egy VALÓDI 0-t is 1-re
+                # váltott, mert a 0 Python-ban falsy.
+                "qty": int(qty) if isinstance(qty, (int, float)) else 1,
                 "kivitel_datuma": as_date(props.get("Custom date")),
                 "extra": remaining_properties(props, _STOCK_IGENYEK_CONSUMED),
             },

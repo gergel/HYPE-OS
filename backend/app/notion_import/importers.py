@@ -379,7 +379,13 @@ def import_equipment(client: NotionClient, db: Session) -> ImportResult:
                 "allapot": _text(props.get("Állapota")),
                 "archive_statusz": _text(props.get("Archive státusz")),
                 "track_mode": _normalize_track_mode(props.get("Track mode")),
-                "osszes_mennyiseg": int(osszes_mennyiseg) if osszes_mennyiseg else None,
+                # BUG volt: `if osszes_mennyiseg else None` - egy VALÓDI, 0 db
+                # készletet (kifogyott stock tétel, gyakori eset egy
+                # kölcsönző cégnél) hamisan None-ra váltott, mert a 0
+                # Python-ban falsy. A testvér-mezők (hany_napot_dolgozott,
+                # stock_qty lent) ezt már helyesen, isinstance-szel kezelik -
+                # ez most ugyanazt a mintát követi.
+                "osszes_mennyiseg": int(osszes_mennyiseg) if isinstance(osszes_mennyiseg, (int, float)) else None,
                 "leltar_20240415": props.get("2024.04.15. Leltár"),
                 "leltar_20250104": props.get("2025.01.04. Leltár"),
                 "hasznalhato": _text(props.get("Használható?")),
