@@ -380,7 +380,25 @@ def sync_hype_calendar(db: Session) -> dict:
 
                 project.nev = nev
                 project.forgatas_datuma = forgatas_datuma
-                project.forgatas_datuma_vege = forgatas_datuma_vege
+                # A tól-ig VÉGÉT csak akkor írjuk felül, ha a naptár-esemény
+                # tényleg több napos. Egynapos eseménynél NEM töröljük a már
+                # meglévő véget: a 2Sync a Notion több napos forgatásait
+                # gyakran egynapos naptár-tükörként hozza létre, és e védelem
+                # nélkül a percenkénti szinkron kitörölte a Notion-importból
+                # (vagy kézi szerkesztésből) származó forgatas_datuma_vege-t -
+                # így több napos forgatás sosem maradt több napos (a
+                # felhasználó 2026-08-30-i hibajelzése; a Notion-import felőli
+                # párja: notion_import/importers_wave2.NAPTAR_SAJAT_MEZOK).
+                # Kivétel: ha az esemény kezdete a régi vég UTÁN-ra került, a
+                # megőrzött vég értelmetlenné vált - azt töröljük. Több
+                # naposról EGYNAPOSRA rövidíteni ezért a HYPE OS felületén
+                # (vagy a kezdő dátum áthelyezésével) lehet.
+                if forgatas_datuma_vege is not None:
+                    project.forgatas_datuma_vege = forgatas_datuma_vege
+                elif project.forgatas_datuma_vege is not None and (
+                    forgatas_datuma is None or project.forgatas_datuma_vege <= forgatas_datuma
+                ):
+                    project.forgatas_datuma_vege = None
                 project.forgatas_kezdes_ido = kezdes_ido
                 project.forgatas_veg_ido = veg_ido
                 project.helyszin = helyszin

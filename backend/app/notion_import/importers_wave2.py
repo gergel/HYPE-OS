@@ -143,9 +143,21 @@ def _naptar_iker_takaritas(db: Session, result: ImportResult, projekt) -> None:
         )
 
 
-# Amit a NAPTÁR tud, a Notion pedig nem: ezeket egy import nem üresítheti ki
-# egy naptárhoz kötött projekten (lásd _naptar_mezok_vedelme).
+# Amit egy import nem üresíthet ki egy naptárhoz kötött projekten (lásd
+# _naptar_mezok_vedelme): részben amit csak a NAPTÁR tud (időpont, helyszín,
+# szín), részben a forgatás TÓL-IG dátumai. Utóbbi azért kell ide, mert a
+# 2Sync által a naptárból Notionbe tükrözött oldal "Date" mezője gyakran csak
+# a KEZDŐ napot hordozza - enélkül az import minden futáskor kitörölte a
+# naptárból már helyesen megjött forgatas_datuma_vege-t, és a több napos
+# forgatások soha nem látszottak több naposnak (a felhasználó 2026-08-30-i
+# hibajelzése). Ha a Notion Date-ben TÉNYLEG van tól-ig, az változatlanul
+# felülír - a védelem csak az ÜRESSEL írás ellen szól (lásd
+# _naptar_mezok_visszaallitasa). Több naposról EGYNAPOSRA rövidíteni ezért a
+# HYPE OS felületén (vagy a kezdő dátum áthelyezésével) lehet - lásd még
+# services/google_calendar.py azonos irányú védelme.
 NAPTAR_SAJAT_MEZOK = (
+    "forgatas_datuma",
+    "forgatas_datuma_vege",
     "forgatas_kezdes_ido",
     "forgatas_veg_ido",
     "helyszin",
@@ -360,6 +372,20 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
 
         if project_obj is not None:
             _naptar_mezok_visszaallitasa(project_obj, naptar_mezok)
+            # A forgatás TÓL-IG dátumait a naptárhoz kötött projekten a
+            # baseline-védelem (lásd engine._helyben_modositott) MEGKERÜLÉSÉVEL
+            # írjuk: ezeket a mezőket a percenkénti naptár-szinkron is írja,
+            # amitől az értékük szinte mindig eltér az utolsó import
+            # baseline-jától - az upsert ezt tévesen "helyi kézi módosításnak"
+            # nézte, és a Notionben megadott tól-ig SOHA nem jött át (a
+            # felhasználó 2026-08-30-i hibajelzése). Üressel viszont itt sem
+            # törlünk (a 2Sync-tükör Date-je gyakran csak a kezdő nap): amelyik
+            # forrás tud a tól-ig-ről, az nyer, üresítés csak kézzel történik.
+            if naptar_mezok:
+                if forgatas_datuma is not None:
+                    project_obj.forgatas_datuma = forgatas_datuma
+                if forgatas_datuma_vege is not None:
+                    project_obj.forgatas_datuma_vege = forgatas_datuma_vege
             # Régről itt maradt naptár-iker beolvasztása (a fenti kötés csak az
             # ELSŐ importnál segít; ami korábban duplán jött be, azt itt
             # takarítjuk el).
