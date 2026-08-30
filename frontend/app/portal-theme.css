@@ -1,6 +1,10 @@
 /* Média Portál (ügyfél-nézet, /p/[slug]) saját, prémium dizájn-rendszere - a
    Hype-repo-main (különálló client-portál projekt) globals.css/tailwind.config.js
-   1:1 portolt design tokenjei. Minden szín/animáció-token EGYEDI névvel (ink,
+   portolt LAYOUTJA (méretek, térközök, tipográfia-lépcső, animációk MIND
+   változatlanok), a SZÍNEI viszont a HYPE OS admin felület saját palettájára
+   vannak hangolva (lásd app/globals.css :root - "megmunkált alumínium és
+   fekete titán"), hogy a két felület (admin és ügyfél-portál) egy márkát
+   sugalljon, ne két különállót. Minden szín/animáció-token EGYEDI névvel (ink,
    bone, mist, ember, tracking-eyebrow, rounded-xl2, animate-drift/fade-up),
    ezért globálisan biztonságos hozzáadni őket a Tailwind @theme-hez anélkül,
    hogy a HYPE OS admin felület saját design tokenjeivel (background/surface-1/
@@ -18,13 +22,15 @@
    ha az ő saját --c-ink változóját közben átdefiniáltuk. */
 
 @theme {
-  --color-ink: #f3f0e9;
-  --color-ink-soft: #e9e5dc;
-  --color-ink-card: #fbf9f5;
-  --color-ink-line: #d9d4c8;
-  --color-bone: #1c1b18;
-  --color-mist: #6b6862;
-  --color-ember: #e8623a;
+  /* Világos alap - a .hype-portal (world/nem-dark) osztály ezt használja.
+     Az admin világos nézetének (:root[data-theme="light"]) megfelelő tónusok. */
+  --color-ink: #f4f4f2;
+  --color-ink-soft: #eaeae6;
+  --color-ink-card: #ffffff;
+  --color-ink-line: #d6d6d1;
+  --color-bone: #16181c;
+  --color-mist: #55595f;
+  --color-ember: #5c5646;
 
   --font-display: var(--font-portal-display), Georgia, serif;
 
@@ -58,15 +64,18 @@
 /* A .hype-portal wrapperen KÍVÜL a fenti @theme alapértékek (világos portál
    színek) élnek - ez ártalmatlan, mert "bg-ink"/"text-bone" stb. sehol nem
    használt osztálynevek a HYPE OS admin felületén. A .hype-portal.dark pedig
-   közvetlenül UGYANAZOKAT a --color-* tokeneket írja felül sötét értékekre. */
+   közvetlenül UGYANAZOKAT a --color-* tokeneket írja felül sötét értékekre -
+   az admin felület SAJÁT (alapértelmezett, "megmunkált alumínium és fekete
+   titán") palettájára, lásd app/globals.css :root. */
 .hype-portal.dark {
   color-scheme: dark;
-  --color-ink: #070707;
-  --color-ink-soft: #0d0d0f;
-  --color-ink-card: #121214;
-  --color-ink-line: #222226;
-  --color-bone: #f4f1ea;
-  --color-mist: #a8a8a6;
+  --color-ink: #08090b;
+  --color-ink-soft: #0c0d10;
+  --color-ink-card: #101215;
+  --color-ink-line: rgba(255, 255, 255, 0.11);
+  --color-bone: #f5f5f5;
+  --color-mist: #a3a8b3;
+  --color-ember: #d4d0c8;
 }
 
 .hype-portal {
@@ -75,8 +84,13 @@
 }
 
 .hype-portal ::selection {
-  background: #e8623a;
-  color: #f4f1ea;
+  background: #5c5646;
+  color: #f4f4f2;
+}
+
+.hype-portal.dark ::selection {
+  background: #d4d0c8;
+  color: #08090b;
 }
 
 .hype-portal.grain::after {

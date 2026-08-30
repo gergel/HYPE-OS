@@ -15,7 +15,7 @@ import { PublicPortal, PortalVideo as VideoT, PortalImage as ImageType, startPay
 import { Button } from "@/components/media-portal/ui/button";
 import { VideoCard } from "@/components/media-portal/video-card";
 import { VideoPlayer } from "@/components/media-portal/video-player";
-import { downloadVideo, downloadImage, downloadImagesAll } from "@/lib/portalUtils";
+import { downloadImage, downloadImagesAll, downloadFolderZip, downloadEverythingZip } from "@/lib/portalUtils";
 import { pixelContentView, pixelInitiateCheckout } from "@/lib/barionPixel";
 
 const CONTENTBEE_ACCENT = "rgb(243, 199, 68)";
@@ -36,11 +36,40 @@ export function PortalView({
   const hasCustomCover = !!project.cover_image_url;
   const isExpired = !!expiredContactEmail;
 
+  // Lusta kezdőérték (nem effektus): a project.slug a komponens élettartama
+  // alatt nem változik (a portál egy konkrét projektről szól), tehát nincs
+  // szükség rá, hogy egy effektus később "utólag" töltse be - ez elsőre a
+  // helyes állapotot adja, nincs egy köztes, üres "seenVideos" render.
+  const [seenVideos, setSeenVideos] = useState<Set<number>>(() => {
+    try {
+      const raw = localStorage.getItem(`hype_seen_videos_${project.slug}`);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      // localStorage nem elérhető (privát böngészés stb.) - a "Új" jelölés
+      // egyszerűen mindig látszik, ez nem hiba.
+      return new Set();
+    }
+  });
+
   // Barion Pixel: oldalmegtekintés a portál betöltésekor. A hozzájárulás
   // hiányában a Pixel magától nem küld marketing adatot (lásd CookieConsent).
   useEffect(() => {
     pixelContentView(project.title || "HYPE portál");
   }, [project.title]);
+
+  function markVideoSeen(v: VideoT) {
+    setActive(v);
+    if (!seenVideos.has(v.id)) {
+      const next = new Set(seenVideos);
+      next.add(v.id);
+      setSeenVideos(next);
+      try {
+        localStorage.setItem(`hype_seen_videos_${project.slug}`, JSON.stringify(Array.from(next)));
+      } catch {
+        // ua.
+      }
+    }
+  }
 
   const isContentBee = project.brand === "contentbee";
   const brandLabel = isContentBee ? "ContentBee" : "HYPE Productions";
@@ -49,16 +78,22 @@ export function PortalView({
   const defaultCoverDesktop = isContentBee ? "/contentbee-desktop.png" : "/default-cover-desktop.png";
 
   const folders = project.folders || [];
+  const folderNameById = new Map(folders.map((f) => [f.id, f.name]));
   const looseVideos = project.videos.filter((v) => !v.folder_id);
-  const foldersWithVideos = folders
-    .map((f) => ({ folder: f, videos: project.videos.filter((v) => v.folder_id === f.id) }))
-    .filter((g) => g.videos.length > 0);
-
   const allImages = project.images || [];
   const looseImages = allImages.filter((i) => !i.folder_id);
-  const foldersWithImages = folders
-    .map((f) => ({ folder: f, images: allImages.filter((i) => i.folder_id === f.id) }))
-    .filter((g) => g.images.length > 0);
+
+  // Egységes mappa-lista: minden mappa a saját videóival ÉS képeivel EGYBEN
+  // (nem külön videó- és fotó-mappalista) - csak azok a mappák, amikben van
+  // legalább egy elem. Legújabb (név szerint fordítva) elöl.
+  const foldersWithContent = folders
+    .map((f) => ({
+      folder: f,
+      videos: project.videos.filter((v) => v.folder_id === f.id),
+      images: allImages.filter((i) => i.folder_id === f.id),
+    }))
+    .filter((g) => g.videos.length > 0 || g.images.length > 0)
+    .sort((a, b) => b.folder.name.localeCompare(a.folder.name, "hu"));
 
   function daysUntilExpiry(): number | null {
     if (!project.expires_at) return null;
@@ -143,7 +178,19 @@ export function PortalView({
               transition={{ duration: 0.8, delay: 0.24, ease: [0.16, 1, 0.3, 1] }}
               className="mt-9 flex flex-wrap items-center gap-3"
             >
-              <DownloadAllButton videos={project.videos} images={allImages} />
+              <DownloadAllButton
+                projectName={project.title}
+                videos={project.videos.map((v) => ({
+                  id: v.id,
+                  title: v.title,
+                  folder: v.folder_id ? (folderNameById.get(v.folder_id) ?? null) : null,
+                }))}
+                images={allImages.map((i) => ({
+                  id: i.id,
+                  title: i.title,
+                  folder: i.folder_id ? (folderNameById.get(i.folder_id) ?? null) : null,
+                }))}
+              />
               {project.videos.length > 0 && (
                 <Button variant="ghost" size="lg" asChild>
                   <a href="#films">
@@ -216,49 +263,45 @@ export function PortalView({
         </section>
       )}
 
-      {/* ---------- Videók ---------- */}
-      {!isExpired && project.videos.length > 0 && (
+      {/* ---------- Mappa nélküli (laza) videók ---------- */}
+      {!isExpired && looseVideos.length > 0 && (
         <section id="films" className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
           <div className="mb-10 flex items-end justify-between border-b border-ink-line pb-6">
             <h2 className="font-display text-2xl text-bone sm:text-3xl">Videók</h2>
             <span className="font-mono text-xs uppercase tracking-eyebrow text-mist">Megtekintés · Letöltés</span>
           </div>
-
-          <div className="space-y-12">
-            {looseVideos.length > 0 && (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {looseVideos.map((v, i) => (
-                  <VideoCard key={v.id} video={v} index={i} onPlay={setActive} />
-                ))}
-              </div>
-            )}
-
-            {foldersWithVideos.map(({ folder, videos }) => (
-              <FolderSection key={folder.id} name={folder.name} videos={videos} onPlay={setActive} accent={accent} />
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {looseVideos.map((v, i) => (
+              <VideoCard key={v.id} video={v} index={i} onPlay={markVideoSeen} isNew={!seenVideos.has(v.id)} />
             ))}
           </div>
         </section>
       )}
 
-      {/* ---------- Fotók ---------- */}
-      {!isExpired && allImages.length > 0 && (
+      {/* ---------- Mappa nélküli (laza) fotók ---------- */}
+      {!isExpired && looseImages.length > 0 && (
         <section id="images" className="mx-auto max-w-6xl px-6 pb-20 sm:pb-28">
           <div className="mb-10 flex items-end justify-between border-b border-ink-line pb-6">
             <h2 className="font-display text-2xl text-bone sm:text-3xl">Fotók</h2>
-            <ImagesDownloadButton images={allImages} label={`Összes letöltése (${allImages.length})`} />
+            <ImagesDownloadButton images={looseImages} label={`Összes letöltése (${looseImages.length})`} />
           </div>
+          <ImageGrid images={looseImages} onOpen={(imgs, idx) => setLightbox({ images: imgs, index: idx })} />
+        </section>
+      )}
 
+      {/* ---------- Mappák (mindegyik: videók + fotók egy helyen) ---------- */}
+      {!isExpired && foldersWithContent.length > 0 && (
+        <section className="mx-auto max-w-6xl px-6 pb-20 sm:pb-28">
           <div className="space-y-12">
-            {looseImages.length > 0 && (
-              <ImageGrid images={looseImages} onOpen={(imgs, idx) => setLightbox({ images: imgs, index: idx })} />
-            )}
-
-            {foldersWithImages.map(({ folder, images }) => (
-              <ImageFolderSection
+            {foldersWithContent.map(({ folder, videos, images }) => (
+              <FolderSection
                 key={folder.id}
                 name={folder.name}
+                videos={videos}
                 images={images}
-                onOpen={(imgs, idx) => setLightbox({ images: imgs, index: idx })}
+                onPlay={markVideoSeen}
+                onOpenImage={(imgs, idx) => setLightbox({ images: imgs, index: idx })}
+                seenVideos={seenVideos}
                 accent={accent}
               />
             ))}
@@ -345,79 +388,48 @@ export function PortalView({
 function FolderSection({
   name,
   videos,
+  images,
   onPlay,
+  onOpenImage,
+  seenVideos,
   accent,
 }: {
   name: string;
   videos: VideoT[];
-  onPlay: (v: VideoT) => void;
-  accent?: string;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="mb-6 flex w-full items-center justify-between border-b border-ink-line pb-3 text-left transition hover:border-ember/40"
-      >
-        <h3 className="font-display text-xl text-bone sm:text-2xl" style={accent ? { color: accent } : undefined}>
-          {name}
-        </h3>
-        <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-eyebrow text-mist">
-          {videos.length} videó
-          <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
-        </span>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="overflow-hidden"
-          >
-            <div className="grid grid-cols-1 gap-6 pb-2 sm:grid-cols-2 lg:grid-cols-3">
-              {videos.map((v, i) => (
-                <VideoCard key={v.id} video={v} index={i} onPlay={onPlay} />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function ImageFolderSection({
-  name,
-  images,
-  onOpen,
-  accent,
-}: {
-  name: string;
   images: ImageType[];
-  onOpen: (images: ImageType[], index: number) => void;
+  onPlay: (v: VideoT) => void;
+  onOpenImage: (images: ImageType[], index: number) => void;
+  seenVideos: Set<number>;
   accent?: string;
 }) {
   const [open, setOpen] = useState(false);
 
+  const countLabel = [videos.length > 0 ? `${videos.length} videó` : "", images.length > 0 ? `${images.length} fotó` : ""]
+    .filter(Boolean)
+    .join(" · ");
+
+  // A mappa "új", ha van benne legalább egy még meg nem nyitott videó.
+  const hasNewVideo = videos.some((v) => !seenVideos.has(v.id));
+
   return (
     <div>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="mb-6 flex w-full items-center justify-between border-b border-ink-line pb-3 text-left transition hover:border-ember/40"
-      >
-        <h3 className="font-display text-xl text-bone sm:text-2xl" style={accent ? { color: accent } : undefined}>
-          {name}
-        </h3>
-        <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-eyebrow text-mist">
-          {images.length} fotó
-          <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
-        </span>
-      </button>
+      <div className="mb-6 border-b border-ink-line pb-3">
+        <button onClick={() => setOpen((o) => !o)} className="flex w-full items-start gap-3 text-left transition hover:opacity-80">
+          <h3 className="min-w-0 flex-1 font-display text-xl text-bone sm:text-2xl" style={accent ? { color: accent } : undefined}>
+            {name}
+            {hasNewVideo && (
+              <span className="ml-2.5 inline-block translate-y-[-2px] rounded-full bg-ember px-2 py-0.5 align-middle font-mono text-[10px] font-semibold uppercase tracking-eyebrow text-white">
+                Új
+              </span>
+            )}
+          </h3>
+          <ChevronDown className={`mt-1.5 h-5 w-5 shrink-0 text-mist transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+        </button>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <span className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">{countLabel}</span>
+          <FolderDownloadButton folderName={name} videos={videos} images={images} />
+        </div>
+      </div>
 
       <AnimatePresence initial={false}>
         {open && (
@@ -428,9 +440,21 @@ function ImageFolderSection({
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
-            <div className="pb-2">
-              <ImageGrid images={images} onOpen={onOpen} />
-            </div>
+            {/* Előbb a videók */}
+            {videos.length > 0 && (
+              <div className="grid grid-cols-1 gap-6 pb-2 sm:grid-cols-2 lg:grid-cols-3">
+                {videos.map((v, i) => (
+                  <VideoCard key={v.id} video={v} index={i} onPlay={onPlay} isNew={!seenVideos.has(v.id)} />
+                ))}
+              </div>
+            )}
+
+            {/* Utána a fotók */}
+            {images.length > 0 && (
+              <div className={videos.length > 0 ? "mt-8" : ""}>
+                <ImageGrid images={images} onOpen={onOpenImage} />
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -617,52 +641,117 @@ function ImageLightbox({
   );
 }
 
-function DownloadAllButton({ videos, images }: { videos: VideoT[]; images: ImageType[] }) {
+function DownloadAllButton({
+  projectName,
+  videos,
+  images,
+}: {
+  projectName: string;
+  videos: { id: number; title: string; folder: string | null }[];
+  images: { id: number; title: string; folder: string | null }[];
+}) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string>("");
   const startedAt = useRef<number>(0);
+  const abortRef = useRef<AbortController | null>(null);
 
-  async function downloadAll() {
-    if (busy) return;
+  async function handleClick() {
+    if (busy) {
+      abortRef.current?.abort();
+      return;
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
     setBusy(true);
+    startedAt.current = Date.now();
+    setStatus("Előkészítés…");
     try {
-      const playable = videos.filter((v) => v.mp4_url);
-      for (let i = 0; i < playable.length; i++) {
-        const v = playable[i];
-        setStatus(`Videó ${i + 1} / ${playable.length}`);
-        await downloadVideo(v.id, v.mp4_url, `${v.title}.mp4`, v.size_bytes);
-        await new Promise((r) => setTimeout(r, 800));
-      }
-
-      if (images.length > 0) {
-        startedAt.current = Date.now();
-        setStatus(`Fotók 0 / ${images.length}`);
-        await downloadImagesAll(
-          images.map((i) => ({ id: i.id, title: i.title })),
-          (done, total) => {
-            if (done === 0) {
-              setStatus(`Fotók 0 / ${total}`);
-              return;
-            }
-            const elapsed = (Date.now() - startedAt.current) / 1000;
-            const remaining = Math.round((elapsed / done) * (total - done));
-            const timeStr = remaining < 60 ? `~${remaining} mp` : `~${Math.ceil(remaining / 60)} perc`;
-            setStatus(`Fotók ${done} / ${total} · ${timeStr}`);
-          },
-        );
-      }
+      await downloadEverythingZip(
+        projectName,
+        videos,
+        images,
+        (done, total) => {
+          if (done === 0) {
+            setStatus(`0 / ${total}`);
+            return;
+          }
+          const elapsed = (Date.now() - startedAt.current) / 1000;
+          const remaining = Math.round((elapsed / done) * (total - done));
+          const timeStr = remaining < 60 ? `~${remaining} mp` : `~${Math.ceil(remaining / 60)} perc`;
+          setStatus(`${done} / ${total} · ${timeStr}`);
+        },
+        controller.signal,
+      );
     } finally {
       setBusy(false);
       setStatus("");
+      abortRef.current = null;
     }
   }
 
   const total = videos.length + images.length;
   return (
-    <Button variant="primary" size="lg" onClick={downloadAll} disabled={!total || busy}>
-      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-      {busy ? status || "Előkészítés…" : "Összes letöltése"}
+    <Button variant="primary" size="lg" onClick={handleClick} disabled={!total}>
+      {busy ? <X className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+      {busy ? `${status || "Előkészítés…"} · Mégse` : "Összes letöltése"}
     </Button>
+  );
+}
+
+function FolderDownloadButton({ folderName, videos, images }: { folderName: string; videos: VideoT[]; images: ImageType[] }) {
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const startedAt = useRef<number>(0);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const total = videos.length + images.length;
+
+  async function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (busy) {
+      abortRef.current?.abort();
+      return;
+    }
+    if (total === 0) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setBusy(true);
+    setProgress({ done: 0, total });
+    startedAt.current = Date.now();
+    try {
+      await downloadFolderZip(
+        folderName,
+        videos.map((v) => ({ id: v.id, title: v.title })),
+        images.map((i) => ({ id: i.id, title: i.title })),
+        (done, t) => setProgress({ done, total: t }),
+        controller.signal,
+      );
+    } finally {
+      setBusy(false);
+      setProgress(null);
+      abortRef.current = null;
+    }
+  }
+
+  function progressLabel() {
+    if (!progress) return "Előkészítés…";
+    const { done, total: t } = progress;
+    if (done === 0) return `0 / ${t}`;
+    const elapsed = (Date.now() - startedAt.current) / 1000;
+    const remaining = Math.round((elapsed / done) * (t - done));
+    const timeStr = remaining < 60 ? `~${remaining} mp` : `~${Math.ceil(remaining / 60)} perc`;
+    return `${done} / ${t} · ${timeStr}`;
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={total === 0}
+      className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-ink-line px-3.5 py-2 text-xs font-medium text-bone transition hover:border-ember/60 disabled:opacity-60 sm:px-4 sm:text-sm"
+    >
+      {busy ? <X className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+      {busy ? `${progressLabel()} · Mégse` : "Mappa letöltése"}
+    </button>
   );
 }
 
@@ -670,9 +759,15 @@ function ImagesDownloadButton({ images, label }: { images: ImageType[]; label: s
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const startedAt = useRef<number>(0);
+  const abortRef = useRef<AbortController | null>(null);
 
-  async function handleDownload() {
-    if (busy) return;
+  async function handleClick() {
+    if (busy) {
+      abortRef.current?.abort();
+      return;
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
     setBusy(true);
     setProgress({ done: 0, total: images.length });
     startedAt.current = Date.now();
@@ -680,10 +775,12 @@ function ImagesDownloadButton({ images, label }: { images: ImageType[]; label: s
       await downloadImagesAll(
         images.map((i) => ({ id: i.id, title: i.title })),
         (done, total) => setProgress({ done, total }),
+        controller.signal,
       );
     } finally {
       setBusy(false);
       setProgress(null);
+      abortRef.current = null;
     }
   }
 
@@ -699,12 +796,11 @@ function ImagesDownloadButton({ images, label }: { images: ImageType[]; label: s
 
   return (
     <button
-      onClick={handleDownload}
-      disabled={busy}
+      onClick={handleClick}
       className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-bone px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-white disabled:opacity-60"
     >
-      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-      {busy ? progressLabel() : label}
+      {busy ? <X className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+      {busy ? `${progressLabel()} · Mégse` : label}
     </button>
   );
 }

@@ -9,10 +9,14 @@ export function VideoCard({
   video,
   index,
   onPlay,
+  isNew = false,
 }: {
   video: PortalVideo;
   index: number;
   onPlay: (v: PortalVideo) => void;
+  /** Még meg nem nyitott videó (localStorage-ban követve, lásd portal-view.tsx
+   * seenVideos) - "Új" címkét kap, hogy az ügyfél lássa, mit nem nézett még meg. */
+  isNew?: boolean;
 }) {
   const [preparing, setPreparing] = useState(false);
   async function handleDownload(e: React.MouseEvent) {
@@ -49,6 +53,11 @@ export function VideoCard({
           <div className="h-full w-full bg-ink-soft" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-80 transition-opacity group-hover:opacity-95" />
+        {isNew && (
+          <span className="absolute left-3 top-3 rounded-full bg-ember px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-eyebrow text-white shadow-lg">
+            Új
+          </span>
+        )}
         <span className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/30 backdrop-blur-md transition-all duration-500 group-hover:scale-110 group-hover:border-white/60">
           <Play className="ml-0.5 h-6 w-6 fill-bone text-bone" />
         </span>
