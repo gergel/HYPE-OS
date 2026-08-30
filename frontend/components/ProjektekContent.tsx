@@ -70,6 +70,27 @@ export function ProjektekContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A modálban történt mentés (pl. a Forgatás dátuma szerkesztése) után a
+  // ForgatasIdopontEditor router.refresh()-t hív, amitől a szerver ÚJ
+  // initialProjects szeletet ad - de a lista itt kliens-állapotban él
+  // (useState), amit a friss prop magától NEM ír felül. Enélkül a Projektek
+  // táblázat/naptár a RÉGI adatot mutatta tovább (pl. a most beállított záró
+  // dátum nélkül), amíg a felhasználó kézzel újra nem töltötte az oldalt -
+  // úgy nézett ki, mintha a mentés "elveszett" volna, pedig az adatbázisban
+  // már jó volt. A friss szeletet ezért beolvasztjuk: a benne szereplő sorok
+  // felülírják a régit, a szeletben nem szereplő (háttérben betöltött) sorok
+  // maradnak, a vadonatúj sorok pedig bekerülnek. (A React ajánlott
+  // "prop-változásra állapot-igazítás render közben" mintája - effect
+  // helyett, lásd react.dev "Adjusting some state when a prop changes".)
+  const [beolvasztott, setBeolvasztott] = useState(initialProjects);
+  if (beolvasztott !== initialProjects) {
+    setBeolvasztott(initialProjects);
+    const frissek = new Map(initialProjects.map((p) => [p.id, p]));
+    const meglevoIdk = new Set(projects.map((p) => p.id));
+    const ujak = initialProjects.filter((p) => !meglevoIdk.has(p.id));
+    setProjects([...ujak, ...projects.map((p) => frissek.get(p.id) ?? p)]);
+  }
+
   // A lista a komponens saját állapotában él (a szerver csak az első szeletet
   // adja), ezért a háttérfrissítésnél itt kell újratölteni - pl. amikor a
   // naptár-szinkron új forgatást hoz be.
@@ -158,12 +179,23 @@ export function ProjektekContent({
             },
             {
               header: "Forgatás dátuma",
-              render: (p) =>
-                canEdit ? (
-                  <EditableTableCell patchPath={`${PROJECT_BASE_PATH}/${p.id}`} field="forgatas_datuma" value={p.forgatas_datuma} type="date" />
+              // Több napos forgatásnál a vég is látszik ("… – …") - a kezdő
+              // nap cellában szerkeszthető, a teljes tól-ig a részletnézet
+              // Forgatás dátuma kártyáján állítható (DateRangePicker).
+              render: (p) => {
+                const veg =
+                  p.forgatas_datuma_vege && p.forgatas_datuma_vege !== p.forgatas_datuma
+                    ? ` – ${formatDate(p.forgatas_datuma_vege)}`
+                    : "";
+                return canEdit ? (
+                  <span className="flex items-center gap-0.5">
+                    <EditableTableCell patchPath={`${PROJECT_BASE_PATH}/${p.id}`} field="forgatas_datuma" value={p.forgatas_datuma} type="date" />
+                    {veg && <span className="whitespace-nowrap text-text-muted">{veg}</span>}
+                  </span>
                 ) : (
-                  formatDate(p.forgatas_datuma)
-                ),
+                  `${formatDate(p.forgatas_datuma)}${veg}`
+                );
+              },
               sortAccessor: (p) => p.forgatas_datuma,
             },
             {
