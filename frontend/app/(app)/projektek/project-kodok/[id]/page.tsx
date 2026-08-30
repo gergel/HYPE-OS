@@ -144,6 +144,10 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   // A forint összegek a Pénzügy-hozzáféréshez kötöttek - ugyanaz a szabály,
   // mint a forgatás adatlapján (lásd ProjektPapirokEsKoltsegek).
   const lathatKoltseget = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
+  // Az AlvallalkozoiPapirokAttekintes kártyák az Utókövetés-hozzáféréshez
+  // kötöttek - ugyanaz a szabály, mint a forgatás adatlapján
+  // (lásd ProjectDetailContent lathatUtokovetest).
+  const lathatUtokovetest = pagePermissions === null || !!pagePermissions["/utokovetes"]?.includes("view");
   // A tételes bontás sorai a SAJÁT végpontjukon törlődnek, tehát a saját
   // oldaluk jogosultsága kell hozzájuk - nem a projektkódé. Így a gomb csak
   // ott jelenik meg, ahol a szerver is engedné (lásd ProjektkodBontasTablak).
@@ -381,7 +385,8 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             történik, más kézben és gyakran több projektkódra rálátva - nem
             itt, a projekt/kiadás adatlapján. Csak akkor jelenik meg, ha van
             is mit mutatni - a legtöbb projektkódnál nincs ilyen kiadás. */}
-        {((pendingSzerzodes?.pending.length ?? 0) > 0 ||
+        {lathatUtokovetest &&
+          ((pendingSzerzodes?.pending.length ?? 0) > 0 ||
           (pendingTig?.pending.length ?? 0) > 0 ||
           (pendingTig?.szerzodesre_varo.length ?? 0) > 0 ||
           keszSzerzodesek.length > 0 ||

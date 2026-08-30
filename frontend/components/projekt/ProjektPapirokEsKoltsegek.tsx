@@ -15,7 +15,16 @@ import type { ElkeszultSzerzodes, PerformanceCertificate, ProjektkodBontas } fro
  *
  * A DISZPÓ felől megnyitott projekten ez a blokk nem jelenik meg (lásd
  * ProjectDetailContent `csakDiszpo`): a diszpós munkája a forgatás, a stáb és
- * a technika - a papírozás hetekkel később, más kézben történik. */
+ * a technika - a papírozás hetekkel később, más kézben történik.
+ *
+ * A három kártya EGYENKÉNT a saját jogosultságához kötött, nem csak az
+ * összegek: akinek nincs Utókövetés-hozzáférése, annak a szerződés/TIG
+ * kártya sem jelenik meg (üres/"0"-ás kártyát mutatni valakinek, aki úgysem
+ * tud a linkjén továbblépni, csak zajt visz); akinek nincs Pénzügy-
+ * hozzáférése, annak a Költségek kártya sem - eddig ez utóbbi kártya
+ * MEGJELENT, csak a benne lévő összegek helyett egy "nincs hozzáférés"
+ * üzenetet mutatott, ami maga a kártya-cím miatt még mindig jelezte, hogy
+ * "itt van valami, amit nem láthatsz". */
 export function ProjektPapirokEsKoltsegek({
   projectId,
   projectCodeId,
@@ -23,6 +32,7 @@ export function ProjektPapirokEsKoltsegek({
   tigek,
   bontas,
   lathatKoltseget,
+  lathatUtokovetest,
 }: {
   projectId: number;
   projectCodeId: number | null;
@@ -32,13 +42,20 @@ export function ProjektPapirokEsKoltsegek({
   /** A forint összegek a Pénzügy-hozzáféréshez kötöttek - ugyanaz a szabály,
    * mint az utómunka költségénél (lásd ProjectDetailContent). */
   lathatKoltseget: boolean;
+  /** A szerződés/TIG kártyák az Utókövetés-hozzáféréshez kötöttek - oda
+   * mutat a kártyák alján lévő link is. */
+  lathatUtokovetest: boolean;
 }) {
+  if (!lathatUtokovetest && !lathatKoltseget) return null;
+
   // A projektkód bontásából EZ a forgatás sora: mibe került ez a nap.
   const sajatSor = bontas?.projektek.find((p) => p.id === projectId) ?? null;
   const utokovetes = `/utokovetes/${projectId}`;
 
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+      {lathatUtokovetest && (
+      <>
       <Card title={`Alvállalkozói szerződések (${szerzodesek.length})`}>
         {szerzodesek.length === 0 ? (
           <p className="text-[13px] text-text-secondary">
@@ -102,13 +119,12 @@ export function ProjektPapirokEsKoltsegek({
           TIG készítése, számla, kifizetés → Utókövetés
         </a>
       </Card>
+      </>
+      )}
 
+      {lathatKoltseget && (
       <Card title="Költségek (nettó)">
-        {!lathatKoltseget ? (
-          <p className="text-[13px] text-text-secondary">
-            A forint összegek a Pénzügy-hozzáféréshez kötöttek.
-          </p>
-        ) : sajatSor === null ? (
+        {sajatSor === null ? (
           <p className="text-[13px] text-text-secondary">
             {projectCodeId === null
               ? "Nincs projektkód ezen a forgatáson - a költségek a projektkódhoz kötődnek."
@@ -148,6 +164,7 @@ export function ProjektPapirokEsKoltsegek({
           </a>
         )}
       </Card>
+      )}
     </div>
   );
 }

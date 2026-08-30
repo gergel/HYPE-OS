@@ -210,6 +210,10 @@ export async function ProjectDetailContent({
   // A forint összeg itt is a Pénzügy-hozzáféréshez kötött (ugyanaz a szabály,
   // mint az Utómunka oldalon - lásd deliverable_actions._may_see_costs).
   const lathatKoltseget = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
+  // A szerződés/TIG kártyák (ProjektPapirokEsKoltsegek) az Utókövetés-
+  // hozzáféréshez kötöttek - akinek ez nincs meg, annak a kártyák sem
+  // jelennek meg, nem csak az összegek bennük.
+  const lathatUtokovetest = pagePermissions === null || !!pagePermissions["/utokovetes"]?.includes("view");
   // A diszpó-mellékleteket az szerkesztheti, aki a Projekteket is - ugyanaz a
   // jog, amit a backend is ellenőriz (services/attachments.py ENTITAS_OLDALAK).
   //
@@ -561,6 +565,7 @@ export async function ProjectDetailContent({
             tigek={tigek}
             bontas={bontas}
             lathatKoltseget={lathatKoltseget}
+            lathatUtokovetest={lathatUtokovetest}
           />
         )}
       </div>
