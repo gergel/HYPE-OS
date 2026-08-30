@@ -201,6 +201,11 @@ NAPTAR_SAJAT_MEZOK = (
     "naptar_szin",
 )
 
+#: A KÉZI DÁTUM-ZÁR alá eső mezők (lásd models/project.py
+#: forgatas_datum_kezzel_beallitva és routes/projects.py FORGATAS_DATUM_MEZOK):
+#: kézzel beállított dátumú projekten az import ezekhez hozzá sem nyúl.
+KEZI_ZAR_MEZOK = ("forgatas_datuma", "forgatas_datuma_vege", "forgatas_kezdes_ido", "forgatas_veg_ido")
+
 
 def _naptar_mezok_vedelme(projekt) -> dict:
     """A naptártól kapott mezők pillanatképe egy naptárhoz kötött projekten.
@@ -259,6 +264,15 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
             .where(NotionImportMap.entity_type == "Project", NotionImportMap.notion_page_id == page["id"])
         )
         naptar_mezok = _naptar_mezok_vedelme(meglevo)
+        # KÉZI DÁTUM-ZÁR (lásd models/project.forgatas_datum_kezzel_beallitva):
+        # ha a dátumokat a HYPE OS felületén kézzel állították be, az import a
+        # NÉGY dátum-mezőhöz hozzá sem nyúlhat - pillanatképet mentünk, és az
+        # upsert után visszaállítjuk (a többi mező változatlanul frissül).
+        kezi_zar_datumok = (
+            {mezo: getattr(meglevo, mezo) for mezo in KEZI_ZAR_MEZOK}
+            if meglevo is not None and meglevo.forgatas_datum_kezzel_beallitva
+            else None
+        )
 
         project_obj = safe_upsert(
             db,
@@ -408,16 +422,22 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
 
         if project_obj is not None:
             _naptar_mezok_visszaallitasa(project_obj, naptar_mezok)
-            # A forgatás TÓL-IG dátumait a naptárhoz kötött projekten a
-            # baseline-védelem (lásd engine._helyben_modositott) MEGKERÜLÉSÉVEL
-            # írjuk: ezeket a mezőket a percenkénti naptár-szinkron is írja,
-            # amitől az értékük szinte mindig eltér az utolsó import
-            # baseline-jától - az upsert ezt tévesen "helyi kézi módosításnak"
-            # nézte, és a Notionben megadott tól-ig SOHA nem jött át (a
-            # felhasználó 2026-08-30-i hibajelzése). Üressel viszont itt sem
-            # törlünk (a 2Sync-tükör Date-je gyakran csak a kezdő nap): amelyik
-            # forrás tud a tól-ig-ről, az nyer, üresítés csak kézzel történik.
-            if naptar_mezok:
+            if kezi_zar_datumok is not None:
+                # KÉZI DÁTUM-ZÁR: a kézzel beállított dátumokat az upsert
+                # bármit is írt volna, változatlanul visszaállítjuk.
+                for mezo, ertek in kezi_zar_datumok.items():
+                    setattr(project_obj, mezo, ertek)
+            elif naptar_mezok:
+                # A forgatás TÓL-IG dátumait a naptárhoz kötött projekten a
+                # baseline-védelem (lásd engine._helyben_modositott)
+                # MEGKERÜLÉSÉVEL írjuk: ezeket a mezőket a percenkénti
+                # naptár-szinkron is írja, amitől az értékük szinte mindig
+                # eltér az utolsó import baseline-jától - az upsert ezt tévesen
+                # "helyi kézi módosításnak" nézte, és a Notionben megadott
+                # tól-ig SOHA nem jött át (a felhasználó 2026-08-30-i
+                # hibajelzése). Üressel viszont itt sem törlünk (a 2Sync-tükör
+                # Date-je gyakran csak a kezdő nap): amelyik forrás tud a
+                # tól-ig-ről, az nyer, üresítés csak kézzel történik.
                 if forgatas_datuma is not None:
                     project_obj.forgatas_datuma = forgatas_datuma
                 if forgatas_datuma_vege is not None:

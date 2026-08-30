@@ -103,6 +103,31 @@ def _kovesd_a_projektkod_valtozast(obj: Project, data: dict, db: Session, _curre
         obj.project_code_id = talalat.id
 
 
+#: A forgatás idő-mezői, amikre a KÉZI DÁTUM-ZÁR vonatkozik (lásd
+#: models/project.forgatas_datum_kezzel_beallitva).
+FORGATAS_DATUM_MEZOK = ("forgatas_datuma", "forgatas_datuma_vege", "forgatas_kezdes_ido", "forgatas_veg_ido")
+
+
+def _datum_zar_kezelese(obj: Project, data: dict) -> None:
+    """Aki a felületen a forgatás dátumaihoz nyúl, az KÉZI beállítást végez -
+    bekapcsoljuk a dátum-zárat (lásd models/project.py), hogy a percenkénti
+    naptár-szinkron és a Notion-import többé ne írhassa felül: a felhasználó
+    kifejezett kérése, hogy egy kézzel beállított záró dátum ne "törlődjön ki
+    magától", amint kilép az eseményből.
+
+    A zárat a kezdő dátum kézi TÖRLÉSE oldja fel: aki üresre állítja a
+    dátumot, az azt mondja, "nem tudom / kezelje újra a szinkron"."""
+    if not any(mezo in data for mezo in FORGATAS_DATUM_MEZOK):
+        return
+    uj_kezdet = data.get("forgatas_datuma", obj.forgatas_datuma)
+    data["forgatas_datum_kezzel_beallitva"] = uj_kezdet not in (None, "")
+
+
+def _projekt_before_update(obj: Project, data: dict, db: Session, current_user: Employee) -> None:
+    _kovesd_a_projektkod_valtozast(obj, data, db, current_user)
+    _datum_zar_kezelese(obj, data)
+
+
 router = build_crud_router(
     model=Project,
     create_schema=ProjectCreate,
@@ -114,7 +139,7 @@ router = build_crud_router(
     page="/projektek",
     m2m_fields={"crew_employee_ids": ("crew", Employee)},
     before_create=_kosd_a_projektkodhoz,
-    before_update=_kovesd_a_projektkod_valtozast,
+    before_update=_projekt_before_update,
     after_update=_takaritsd_a_szamlazokat,
     before_delete=_block_delete_if_portal_content,
     entity_type="project",

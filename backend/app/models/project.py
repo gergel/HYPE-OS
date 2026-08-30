@@ -57,6 +57,17 @@ class Project(TimestampMixin, Base):
     # (lásd services/google_calendar.py _parse_event_dates).
     forgatas_kezdes_ido: Mapped[time | None] = mapped_column(Time, comment="Forgatás kezdete (óra:perc)")
     forgatas_veg_ido: Mapped[time | None] = mapped_column(Time, comment="Forgatás vége (óra:perc)")
+    #: KÉZI DÁTUM-ZÁR: igaz, ha a forgatás dátumait (a fenti négy mezőt) a HYPE
+    #: OS felületén, kézzel állították be (lásd routes/projects.py
+    #: _datum_zar_kezelese). Amíg igaz, SEM a percenkénti naptár-szinkron
+    #: (services/google_calendar.py), SEM a Notion-import
+    #: (notion_import/importers_wave2.py) nem nyúlhat a dátumokhoz - a
+    #: felhasználó explicit kérése: amit kézzel beállít (pl. egy záró dátumot),
+    #: azt semmilyen automatizmus ne törölhesse/írhassa át. A zárat a kezdő
+    #: dátum kézi TÖRLÉSE oldja fel (= "visszaadom a szinkronnak").
+    forgatas_datum_kezzel_beallitva: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false", comment="Forgatás dátumai kézzel beállítva (szinkron nem írhatja felül)"
+    )
     helyszin: Mapped[str | None] = mapped_column(String(255))
     allapot: Mapped[str | None] = mapped_column(String(50))
     google_calendar_event_id: Mapped[str | None] = mapped_column(

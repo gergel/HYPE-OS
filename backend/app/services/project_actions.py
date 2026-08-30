@@ -44,6 +44,10 @@ def create_feldarabolas(db: Session, project: Project) -> Project:
         projektkod_szoveg=project.projektkod_szoveg,
         helyszin=project.helyszin,
         feldarabolas_szulo_id=project.id,
+        # A darabolás szándékos, kézi dátum-művelet: a leválasztott nap
+        # dátumát a szinkronok nem írhatják felül (lásd models/project.py
+        # forgatas_datum_kezzel_beallitva).
+        forgatas_datum_kezzel_beallitva=True,
     )
     new_project.crew = list(project.crew)
     # A számlázási felállás (ki számláz kiért) a leválasztott napra is
@@ -109,9 +113,14 @@ def _vagd_le_a_leszakitott_napot(project: Project, new_date: date | None) -> Non
         uj_kezdet = new_date + timedelta(days=1)
         project.forgatas_datuma = uj_kezdet
         project.forgatas_datuma_vege = None if uj_kezdet >= utolso_nap else utolso_nap
+        # A megkurtított eredeti dátumait se írhassa vissza a szinkron a
+        # darabolás előtti (teljes) tartományra - lásd models/project.py
+        # forgatas_datum_kezzel_beallitva.
+        project.forgatas_datum_kezzel_beallitva = True
         return
     uj_veg = new_date - timedelta(days=1)
     project.forgatas_datuma_vege = None if uj_veg == project.forgatas_datuma else uj_veg
+    project.forgatas_datum_kezzel_beallitva = True
 
 
 def create_utomunka(db: Session, project: Project, current_user: Employee) -> Deliverable:
