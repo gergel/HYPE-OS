@@ -210,8 +210,9 @@ KATALOGUS: tuple[ImporterInfo, ...] = (
         cimke="KP forgalom",
         kor=2,
         forrasok=("KP forgalom",),
-        leiras="Készpénzes forgalom.",
+        leiras="Készpénzes forgalom - teljes, egy-az-egyben tükör (a Notionban törölt sor innen is törlődik).",
         fn=importers_wave2.import_kp_forgalom,
+        fuggosegek=("Expense", "ProjectCode"),
     ),
     ImporterInfo(
         nev="Feedback",

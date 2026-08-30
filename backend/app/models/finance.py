@@ -206,6 +206,12 @@ class KpForgalom(TimestampMixin, Base):
     kiadas_sum_notion: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Kiadás sum")
     forintban_notion: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Forintban")
     megnevezes: Mapped[str | None] = mapped_column(String(255))
+    #: A Notion-oldal ÖSSZES property-je nyersen, ahogy az import látta
+    #: ({mezőnév: érték}) - a felhasználó kérése, hogy a KP forgalom EGY AZ
+    #: EGYBEN jöjjön át: a tipizált oszlopokba a felismerhető mezők kerülnek,
+    #: ez a tükör pedig garantálja, hogy olyan Notion-mező sem veszik el,
+    #: amiről az import nem tud (lásd importers_wave2.import_kp_forgalom).
+    notion_adatok: Mapped[dict | None] = mapped_column(JSON, comment="A Notion-oldal összes property-je nyersen")
 
     expense: Mapped["Expense"] = relationship(back_populates="kp_forgalmak")
     project_code: Mapped["ProjectCode | None"] = relationship()

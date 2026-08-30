@@ -16,6 +16,7 @@ Assignment-alapú foglalási modellben egyesül."""
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -1139,14 +1140,31 @@ def import_revenues(client: NotionClient, db: Session) -> ImportResult:
 
 
 def import_kp_forgalom(client: NotionClient, db: Session) -> ImportResult:
-    """KpForgalom <- 'KP forgalom', a 'Projekt kiadások' relation alapján Expense-hez kötve."""
+    """KpForgalom <- 'KP forgalom' - TELJES, EGY-AZ-EGYBEN tükör.
+
+    A felhasználó kérése (2026-08-30): a KP forgalom pontosan azt mutassa, ami
+    a Notionban van. Ezért:
+    - a tipizált oszlopok mellé a Notion-oldal ÖSSZES property-je nyersen
+      bekerül a notion_adatok JSON tükörbe - olyan mező sem veszik el, amiről
+      az import nem tud;
+    - a Notion-oldalon lévő fájlok (bizonylatok) is átjönnek
+      (files.atemel_mindent, R2-re);
+    - a futás végén a TÜKÖR-TAKARÍTÁS törli azokat a korábban importált
+      sorokat, amiknek a Notion-oldala már nincs meg - így a Notionban törölt
+      tétel innen is eltűnik. A felületen kézzel felvett (leképezés nélküli)
+      sorokhoz nem nyúlunk."""
     result = ImportResult(entity_type="KpForgalom")
 
+    latott_page_idk: set[str] = set()
     for page in client.query_database(db_ids.KP_FORGALOM):
         props = extract_properties(page, client)
+        latott_page_idk.add(page["id"])
         expense_id = resolve_relation_id(db, "Expense", props.get("Projekt kiadások") or [])
+        project_code_id = resolve_relation_id(
+            db, "ProjectCode", props.get("HYPE ADMIN projektkódok") or props.get("Projektkód") or []
+        )
 
-        safe_upsert(
+        sor = safe_upsert(
             db,
             result,
             KpForgalom,
@@ -1154,6 +1172,7 @@ def import_kp_forgalom(client: NotionClient, db: Session) -> ImportResult:
             page["id"],
             {
                 "expense_id": expense_id,
+                "project_code_id": project_code_id,
                 "forgalom": _text(props.get("Forgalom")),
                 "osszeg": props.get("Összeg"),
                 "penznem": _text(props.get("Pénznem")) or "HUF",
@@ -1162,9 +1181,36 @@ def import_kp_forgalom(client: NotionClient, db: Session) -> ImportResult:
                 "kiadas_sum_notion": _numeric_or_none(props.get("Kiadás sum")),
                 "forintban_notion": _numeric_or_none(props.get("Forintban")),
                 "megnevezes": _text(props.get("Megnevezés")),
+                # A teljes nyers tükör - lásd a docstringet. A dátum-értékek itt
+                # ISO stringek, minden más natív JSON típus (extract_property).
+                "notion_adatok": props,
             },
-            label="KpForgalom",
+            label=f"KpForgalom '{_text(props.get('Megnevezés')) or page['id']}'",
         )
+        if sor is not None:
+            # A Notion-oldalhoz csatolt fájlok (pl. bizonylat-fotók) is
+            # átjönnek az R2-re - lásd services/attachments.ENTITAS_OLDALAK.
+            files.atemel_mindent(db, props, entity_type="kpForgalom", entity_id=sor.id, result=result)
+
+    # TÜKÖR-TAKARÍTÁS: ami korábban importból jött, de a Notionban már nincs
+    # meg, azt töröljük - a leképezésével együtt. A felületen kézzel felvett
+    # soroknak nincs leképezésük, azok maradnak.
+    torlendo = db.scalars(
+        select(NotionImportMap).where(
+            NotionImportMap.entity_type == "KpForgalom",
+            NotionImportMap.notion_page_id.not_in(latott_page_idk or {"-"}),
+        )
+    ).all()
+    for mapping in torlendo:
+        sor = db.get(KpForgalom, mapping.entity_id)
+        if sor is not None:
+            db.delete(sor)
+        db.delete(mapping)
+    if torlendo:
+        logging.getLogger("hype_os").info(
+            "KP forgalom tükör-takarítás: %d Notionból törölt sor eltávolítva.", len(torlendo)
+        )
+    db.flush()
 
     return result
 
