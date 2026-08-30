@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { StatusBadge } from "@/components/StatusBadge";
 
 type CalendarProject = {
   id: number;
@@ -11,6 +12,10 @@ type CalendarProject = {
   forgatas_datuma_vege: string | null;
   /** "08:30:00" alakban, ha meg van adva - a naptárból is átjön. */
   forgatas_kezdes_ido?: string | null;
+  /** Csak akkor van értéke, ha a hívó valódi Project-et ad át (mind a négy
+   * hívó oldal ezt teszi, lásd ForgatasokCalendar docstring) - a több napos
+   * sáv ezzel mutatja a diszpó-állapotot, mint egy kártyán. */
+  diszpo?: string | null;
 };
 
 /** A kezdés órája a naptár-bejegyzés elé ("08:30 Projekt neve") - csak ha a
@@ -25,7 +30,10 @@ const MONTH_LABELS = [
   "július", "augusztus", "szeptember", "október", "november", "december",
 ];
 
-const BAR_LANE_HEIGHT = 20;
+// Elég magas két sornak (cím + diszpó-állapot pill), hogy a több napos sáv
+// jól látható KÁRTYAKÉNT fusson át az érintett napokon - nem egy alig
+// észrevehető vékony csíkként, mint korábban.
+const BAR_LANE_HEIGHT = 40;
 // A napi cella tetején lévő "p-1" padding (4px) + a dátumszám sor magassága
 // (lásd lejjebb a dátumszám elem explicit height/lineHeight stílusa) - erre
 // van szükség, hogy a több napos sáv pontosan a dátumszám ALÁ kerüljön (ne
@@ -156,7 +164,8 @@ function AddUtomunkaButton({ projectId }: { projectId: number }) {
  * forgatas_datuma_vege, és az később van, mint a kezdés) egy, a teljes
  * időtartamukon átívelő sávként jelennek meg minden érintett hét tetején -
  * NEM ismétlődnek külön-külön minden napi cellában -, az egynapos forgatások
- * pedig változatlanul a saját napjuk cellájában, kis "pill"-ként. */
+ * pedig változatlanul a saját napjuk cellájában, kis "pill"-ként. A sáv jól
+ * látható KÁRTYA (cím + diszpó-állapot pill), nem csak egy vékony csík. */
 export function ForgatasokCalendar({
   projects,
   onProjectClick,
@@ -287,7 +296,7 @@ export function ForgatasokCalendar({
                             }
                           : undefined
                       }
-                      className="pointer-events-auto absolute flex items-center truncate rounded bg-surface-3 px-1.5 text-text-secondary hover:text-text-accent"
+                      className="pointer-events-auto absolute flex flex-col justify-center gap-0.5 overflow-hidden rounded-[6px] border border-border bg-surface-3 px-1.5 py-0.5 leading-tight hover:border-text-accent"
                       style={{
                         left: `${(b.startCol / 7) * 100}%`,
                         width: `${((b.endCol - b.startCol + 1) / 7) * 100}%`,
@@ -296,7 +305,15 @@ export function ForgatasokCalendar({
                       }}
                       title={b.project.nev}
                     >
-                      {b.project.nev}
+                      <span className="truncate text-[12px] font-medium text-text-primary">{b.project.nev}</span>
+                      {/* A diszpó-állapot csak akkor van (lásd CalendarProject.diszpo),
+                          ha a hívó valódi Project-et adott át - eddig mind a négy oldal
+                          ezt teszi, tehát gyakorlatilag mindig kirajzolódik. */}
+                      {b.project.diszpo !== undefined && (
+                        <span className="truncate leading-none">
+                          <StatusBadge label={b.project.diszpo ? b.project.diszpo : "Nincs kiküldve"} tone={b.project.diszpo ? "success" : "neutral"} />
+                        </span>
+                      )}
                     </a>
                   ))}
                 </div>
