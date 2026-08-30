@@ -24,15 +24,17 @@ export default async function GenericRecordPage({
   const config = recordEntity(entity);
   if (!config) notFound();
 
-  const record = await getRecord(config.path, Number(id));
-  if (!record) notFound();
-
-  const [visibleFields, fieldTypes, dbTabs, pagePermissions] = await Promise.all([
+  // Egyik lenti hívás sem függ a rekord mezőitől, csak a config.entityType-tól
+  // (ami már ismert) - a getRecord is ide kerül a saját külön await helyett,
+  // egy kevesebb kör az oldalbetöltésnél.
+  const [record, visibleFields, fieldTypes, dbTabs, pagePermissions] = await Promise.all([
+    getRecord(config.path, Number(id)),
     getVisibleFields(config.entityType),
     getFieldTypes(config.entityType),
     getDetailTabs(config.entityType),
     getMyPagePermissions(),
   ]);
+  if (!record) notFound();
 
   const sections = buildFieldTabs({
     page: config.page,

@@ -12,19 +12,23 @@ const PAGE = "/felszereles";
 export default async function EquipmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const equipmentId = Number(id);
-  const equipment = await getRecord(ENTITY_PATHS.equipment, equipmentId);
-  if (!equipment) notFound();
 
-  const projectIds = Array.isArray(equipment.project_ids) ? (equipment.project_ids as number[]) : [];
-
-  const [assignments, projects, visibleFields, fieldTypes, dbTabs, pagePermissions] = await Promise.all([
+  // A "projects" lista az EGYETLEN, ami az equipment rekordtól függ (a
+  // project_ids mezőjétől) - a többi csak equipmentId-t vagy semmit nem kér,
+  // ezért azok a getRecord-dal EGYSZERRE indulnak, nem utána: egy kevesebb
+  // kör az oldalbetöltésnél.
+  const [equipment, assignments, visibleFields, fieldTypes, dbTabs, pagePermissions] = await Promise.all([
+    getRecord(ENTITY_PATHS.equipment, equipmentId),
     getRelated("/api/v1/assignments", { equipment_id: equipmentId }),
-    getRecordsByIds(ENTITY_PATHS.project, projectIds),
     getVisibleFields("equipment"),
     getFieldTypes("equipment"),
     getDetailTabs("equipment"),
     getMyPagePermissions(),
   ]);
+  if (!equipment) notFound();
+
+  const projectIds = Array.isArray(equipment.project_ids) ? (equipment.project_ids as number[]) : [];
+  const projects = await getRecordsByIds(ENTITY_PATHS.project, projectIds);
 
   const tabs = buildFieldTabs({
     page: PAGE,

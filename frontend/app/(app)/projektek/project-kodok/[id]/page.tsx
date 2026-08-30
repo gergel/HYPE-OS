@@ -64,10 +64,9 @@ function bevetelDeviza(ertek: unknown): { penznem: string; netto: number; arfoly
 export default async function ProjectCodeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectCodeId = Number(id);
-  const projectCode = await getRecord(ENTITY_PATHS.projectCode, projectCodeId);
-  if (!projectCode) notFound();
 
   const [
+    projectCode,
     megrendeloiSzerzodesek,
     megrendeloiTigek,
     megrendeloiKeretek,
@@ -86,6 +85,11 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     keszSzerzodesek,
     keszTigek,
   ] = await Promise.all([
+    // Egyik lenti hívás sem függ a projektkód rekord mezőitől, csak a
+    // projectCodeId-tól (ami az URL-ből már megvan) - ezért ez is a közös
+    // Promise.all-ba kerül, nem külön await-tel előtte: egy kevesebb kör az
+    // oldalbetöltésnél.
+    getRecord(ENTITY_PATHS.projectCode, projectCodeId),
     // A megrendelői papírok (lásd backend routes/megrendeloi_papirok.py): a
     // szerződő fél a MEGRENDELŐK közül választható, a kapcsolattartó pedig a
     // megrendelői kontaktokból - ezért kell mindkét lista a szerkesztőhöz.
@@ -125,6 +129,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
     getAllContractsForProjectCode(projectCodeId),
     getAllTigForProjectCode(projectCodeId),
   ]);
+  if (!projectCode) notFound();
 
   const ugyfelek = clients
     .map((c) => ({ id: c.id, nev: c.nev }))

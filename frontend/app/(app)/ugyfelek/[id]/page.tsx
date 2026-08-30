@@ -13,19 +13,23 @@ const PAGE = "/ugyfelek";
 export default async function UgyfelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const clientId = Number(id);
-  const client = await getRecord(ENTITY_PATHS.client, clientId);
-  if (!client) notFound();
 
-  const [contacts, projectCodes, contracts, campaigns, visibleFields, fieldTypes, dbTabs, pagePermissions] = await Promise.all([
-    getRelated(ENTITY_PATHS.contact, { client_id: clientId }),
-    getRelated(ENTITY_PATHS.projectCode, { client_id: clientId }),
-    getRelated(ENTITY_PATHS.contract, { client_id: clientId }),
-    getRelated(ENTITY_PATHS.campaign, { client_id: clientId }),
-    getVisibleFields("client"),
-    getFieldTypes("client"),
-    getDetailTabs("client"),
-    getMyPagePermissions(),
-  ]);
+  // Egyik lenti hívás sem függ az ügyfél rekord mezőitől, csak a clientId-tól
+  // (ami az URL-ből már megvan) - a getRecord is ide kerül a saját külön
+  // await helyett, egy kevesebb kör az oldalbetöltésnél.
+  const [client, contacts, projectCodes, contracts, campaigns, visibleFields, fieldTypes, dbTabs, pagePermissions] =
+    await Promise.all([
+      getRecord(ENTITY_PATHS.client, clientId),
+      getRelated(ENTITY_PATHS.contact, { client_id: clientId }),
+      getRelated(ENTITY_PATHS.projectCode, { client_id: clientId }),
+      getRelated(ENTITY_PATHS.contract, { client_id: clientId }),
+      getRelated(ENTITY_PATHS.campaign, { client_id: clientId }),
+      getVisibleFields("client"),
+      getFieldTypes("client"),
+      getDetailTabs("client"),
+      getMyPagePermissions(),
+    ]);
+  if (!client) notFound();
 
   const tabs = buildFieldTabs({
     page: PAGE,

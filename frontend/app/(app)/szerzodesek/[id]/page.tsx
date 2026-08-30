@@ -29,20 +29,27 @@ const PAGE = "/penzugyek";
 export default async function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const contractId = Number(id);
-  const contract = await getRecord(ENTITY_PATHS.contract, contractId);
+
+  // Az employee/client/project a szerződés mezőitől függ (kikre mutat) - a
+  // többi csak contractId-t vagy semmit nem kér, ezért azok a getRecord-dal
+  // EGYSZERRE indulnak, nem utána: egy kevesebb kör az oldalbetöltésnél.
+  const [contract, visibleFields, fieldTypes, dbTabs, pagePermissions, sectionOrder, currentUser, attachments] =
+    await Promise.all([
+      getRecord(ENTITY_PATHS.contract, contractId),
+      getVisibleFields("contract"),
+      getFieldTypes("contract"),
+      getDetailTabs("contract"),
+      getMyPagePermissions(),
+      getSectionOrder("contract"),
+      getCurrentUser(),
+      getAttachments("contract", contractId),
+    ]);
   if (!contract) notFound();
 
-  const [employee, client, project, visibleFields, fieldTypes, dbTabs, pagePermissions, sectionOrder, currentUser, attachments] = await Promise.all([
+  const [employee, client, project] = await Promise.all([
     contract.employee_id ? getRecord(ENTITY_PATHS.employee, Number(contract.employee_id)) : null,
     contract.client_id ? getRecord(ENTITY_PATHS.client, Number(contract.client_id)) : null,
     contract.project_id ? getRecord(ENTITY_PATHS.project, Number(contract.project_id)) : null,
-    getVisibleFields("contract"),
-    getFieldTypes("contract"),
-    getDetailTabs("contract"),
-    getMyPagePermissions(),
-    getSectionOrder("contract"),
-    getCurrentUser(),
-    getAttachments("contract", contractId),
   ]);
 
   const tabs = buildFieldTabs({

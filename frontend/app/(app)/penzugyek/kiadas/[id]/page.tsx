@@ -9,14 +9,19 @@ import { toEditableDetailFields } from "@/lib/detail";
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const expenseId = Number(id);
-  const expense = await getRecord(ENTITY_PATHS.expense, expenseId);
-  if (!expense) notFound();
 
-  const [projectCode, employee, visibleFields, fieldTypes] = await Promise.all([
-    expense.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(expense.project_code_id)) : null,
-    expense.employee_id ? getRecord(ENTITY_PATHS.employee, Number(expense.employee_id)) : null,
+  // A projectCode/employee a kiadás mezőitől függ - a mezőleírók nem, ezért
+  // azok a getRecord-dal EGYSZERRE indulnak, nem utána.
+  const [expense, visibleFields, fieldTypes] = await Promise.all([
+    getRecord(ENTITY_PATHS.expense, expenseId),
     getVisibleFields("expense"),
     getFieldTypes("expense"),
+  ]);
+  if (!expense) notFound();
+
+  const [projectCode, employee] = await Promise.all([
+    expense.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(expense.project_code_id)) : null,
+    expense.employee_id ? getRecord(ENTITY_PATHS.employee, Number(expense.employee_id)) : null,
   ]);
 
   return (

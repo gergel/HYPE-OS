@@ -73,13 +73,14 @@ export default async function EmployeeDetailPage({
   const { id } = await params;
   const { from } = await searchParams;
   const employeeId = Number(id);
-  const employee = await getRecord(ENTITY_PATHS.employee, employeeId);
-  if (!employee) notFound();
 
   const backTarget = (from && BACK_TARGETS[from]) || { href: "/csapat", label: "Külsős" };
 
+  // A belsosIdoszakok az EGYETLEN, ami a rekord mezőjétől függ (employee.tipus)
+  // - a többi csak employeeId-t vagy semmit nem kér, ezért azok a getRecord-dal
+  // EGYSZERRE indulnak, nem utána: egy kevesebb kör az oldalbetöltésnél.
   const [
-    belsosIdoszakok,
+    employee,
     rates,
     expenses,
     contracts,
@@ -99,8 +100,7 @@ export default async function EmployeeDetailPage({
     emberCegei,
     osszesCeg,
   ] = await Promise.all([
-    // Csak belsősnél értelmes: náluk a havi TIG hónapjait szabja meg.
-    employee.tipus === "belsos" ? getBelsosIdoszakok(employeeId) : Promise.resolve(null),
+    getRecord(ENTITY_PATHS.employee, employeeId),
     getRelated(ENTITY_PATHS.rate, { employee_id: employeeId }),
     getRelated(ENTITY_PATHS.expense, { employee_id: employeeId }),
     getRelated(ENTITY_PATHS.contract, { employee_id: employeeId }),
@@ -120,6 +120,10 @@ export default async function EmployeeDetailPage({
     getEmberCegei(employeeId),
     getVallalkozasok(),
   ]);
+  if (!employee) notFound();
+
+  // Csak belsősnél értelmes: náluk a havi TIG hónapjait szabja meg.
+  const belsosIdoszakok = employee.tipus === "belsos" ? await getBelsosIdoszakok(employeeId) : null;
 
   const vallalkozasFieldKeys = visibleFields
     ? VALLALKOZAS_FIELD_KEYS.filter((k) => visibleFields.includes(k))

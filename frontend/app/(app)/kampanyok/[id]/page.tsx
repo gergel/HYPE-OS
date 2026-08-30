@@ -12,18 +12,24 @@ const PAGE = "/kampanyok";
 export default async function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const campaignId = Number(id);
-  const campaign = await getRecord(ENTITY_PATHS.campaign, campaignId);
-  if (!campaign) notFound();
 
-  const [felelos, client, projects, deliverables, visibleFields, fieldTypes, dbTabs, pagePermissions] = await Promise.all([
-    campaign.felelos_employee_id ? getRecord(ENTITY_PATHS.employee, Number(campaign.felelos_employee_id)) : null,
-    campaign.client_id ? getRecord(ENTITY_PATHS.client, Number(campaign.client_id)) : null,
+  // A felelos/client a kampány mezőitől függ (kikre mutat) - a többi csak
+  // campaignId-t vagy semmit nem kér, ezért azok a getRecord-dal EGYSZERRE
+  // indulnak, nem utána: egy kevesebb kör az oldalbetöltésnél.
+  const [campaign, projects, deliverables, visibleFields, fieldTypes, dbTabs, pagePermissions] = await Promise.all([
+    getRecord(ENTITY_PATHS.campaign, campaignId),
     getRelated(ENTITY_PATHS.project, { campaign_id: campaignId }),
     getRelated(ENTITY_PATHS.deliverable, { campaign_id: campaignId }),
     getVisibleFields("campaign"),
     getFieldTypes("campaign"),
     getDetailTabs("campaign"),
     getMyPagePermissions(),
+  ]);
+  if (!campaign) notFound();
+
+  const [felelos, client] = await Promise.all([
+    campaign.felelos_employee_id ? getRecord(ENTITY_PATHS.employee, Number(campaign.felelos_employee_id)) : null,
+    campaign.client_id ? getRecord(ENTITY_PATHS.client, Number(campaign.client_id)) : null,
   ]);
 
   const tabs = buildFieldTabs({

@@ -30,19 +30,23 @@ import {
 export default async function UtokovetesProjektkodDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectCodeId = Number(id);
-  const projectCode = await getRecord(ENTITY_PATHS.projectCode, projectCodeId);
-  if (!projectCode) notFound();
 
-  const [pendingSzerzodes, pendingTig, keszSzerzodesek, keszTigek, pagePermissions, employees] = await Promise.all([
-    getPendingSubcontractorsForProjectCode(projectCodeId),
-    getPendingTigForProjectCode(projectCodeId),
-    getAllContractsForProjectCode(projectCodeId),
-    getAllTigForProjectCode(projectCodeId),
-    getMyPagePermissions(),
-    // A TigInvoiceManager névvel jelöli a számlázó felet - lásd
-    // employeeNameById lent.
-    getEmployees(),
-  ]);
+  const [projectCode, pendingSzerzodes, pendingTig, keszSzerzodesek, keszTigek, pagePermissions, employees] =
+    await Promise.all([
+      // Egyik lenti hívás sem függ a projektkód rekord mezőitől, csak a
+      // projectCodeId-tól (ami az URL-ből már megvan) - egy kevesebb kör az
+      // oldalbetöltésnél, ha ez is a közös Promise.all-ba kerül.
+      getRecord(ENTITY_PATHS.projectCode, projectCodeId),
+      getPendingSubcontractorsForProjectCode(projectCodeId),
+      getPendingTigForProjectCode(projectCodeId),
+      getAllContractsForProjectCode(projectCodeId),
+      getAllTigForProjectCode(projectCodeId),
+      getMyPagePermissions(),
+      // A TigInvoiceManager névvel jelöli a számlázó felet - lásd
+      // employeeNameById lent.
+      getEmployees(),
+    ]);
+  if (!projectCode) notFound();
 
   // Ugyanaz a jog, mint a forgatás-alapú Utókövetés oldalon.
   const canEdit = pagePermissions === null || !!pagePermissions["/utokovetes"]?.includes("edit");
