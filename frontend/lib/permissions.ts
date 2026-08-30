@@ -61,19 +61,16 @@ export const FOGLALAS_OLDAL = "/felszereles/foglalas";
  * 2) A projekt szerkesztése a technika felvezetését is jelenti: az eszköz
  *    hozzáadása/levétele MAGA a szerkesztés. Ezért ad az "edit" itt
  *    create/delete jogot - de csak a foglalásra, magára a leltárra nem.
- * 3) Aki a projekten technikát vezet fel, a FELSZERELÉS oldalt is látja
- *    (nézésre): onnan tudja megnézni, mi van a leltárban. Bővíteni, javítani,
- *    törölni, leltározni továbbra is csak a /felszereles saját jogával lehet.
+ *
+ * (A Projektek/Naptár nézési jog KORÁBBAN a FELSZERELÉS oldalt is megnyitotta
+ * nézésre - ezt a felhasználó kifejezett kérésére vettük ki: aki nem kapott
+ * saját /felszereles jogot, az többé nem lát bele az Eszközök oldalba.)
  *
  * Ha ez a két lista elcsúszik egymástól, a felület mást mutat, mint amit a
  * szerver enged - ezért a két helyet EGYÜTT kell módosítani. */
 export const OLDAL_ALIASZOK: Record<string, Record<string, Record<string, readonly string[]>>> = {
   "/projektek": {
     "/naptar": { view: ["view"], edit: ["edit"] },
-  },
-  "/felszereles": {
-    "/projektek": { view: ["view"] },
-    "/naptar": { view: ["view"] },
   },
   [FOGLALAS_OLDAL]: {
     "/felszereles": { view: ["view"], create: ["create"], delete: ["delete"] },

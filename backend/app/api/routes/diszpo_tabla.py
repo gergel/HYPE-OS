@@ -24,7 +24,7 @@ from app.models.diszpo_tabla import (
     DiszpoOszlop,
     DiszpoSor,
 )
-from app.models.employee import Employee
+from app.models.employee import Employee, SystemRole
 from app.services import munkanap_szamlalo
 
 router = APIRouter(prefix="/diszpo-tabla", tags=["diszpo-tabla"])
@@ -33,6 +33,15 @@ PAGE = "/diszpo-tabla"
 #: A napidíj és a plusz napok ehhez az oldalhoz kötöttek: az bér-adat, nem
 #: beosztás (a felhasználó kifejezett kérése).
 PENZUGY_PAGE = "/penzugyek"
+
+#: A require_page_action ALAPÉRTELMEZETT write_roles-ja (admin/operator/
+#: adminisztráció) itt szándékosan nem érvényes: ezt a táblát bárki írja,
+#: akinek admin kifejezetten szerkesztői jogot adott rá (page_permissions) -
+#: a szerepköre (vágó, ügyfél, stb.) ne szűkítse tovább. Enélkül az admin
+#: beállította a szerkesztést a Beállításoknál, a felület be is engedte
+#: gépelni, de a mentés a durvább szerepkör-ellenőrzésen elhasalt "nincs
+#: jogosultsága" hibával - a page_permissions grant így értelmetlen volt.
+_MINDEN_SZEREPKOR = tuple(SystemRole)
 
 
 class MunkalapFej(BaseModel):
@@ -170,7 +179,7 @@ def set_cella(
     munkalap_id: int,
     payload: CellaIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """Egy cella szerkesztése. Üres cellához nem tartozik sor - ha mindkét
     mezője kiürül, a sort töröljük."""
@@ -196,7 +205,7 @@ def set_cellak(
     munkalap_id: int,
     payload: CellakIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     m = _munkalap_vagy_404(db, munkalap_id)
     if len(payload.cellak) > 5000:
@@ -246,7 +255,7 @@ def sor_beszurasa(
     munkalap_id: int,
     payload: BeszurasIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """Új, üres sor beszúrása - mint a táblázatban.
 
@@ -279,7 +288,7 @@ def sor_torlese(
     munkalap_id: int,
     idx: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     """Egy sor törlése a tartalmával együtt - a többi sor feljebb csúszik."""
     m = _munkalap_vagy_404(db, munkalap_id)
@@ -304,7 +313,7 @@ def oszlop_beszurasa(
     munkalap_id: int,
     payload: BeszurasIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """Új, üres oszlop beszúrása. A csoportot (szekciót) a bal szomszédtól
     örökli - a Sheetben is oda tartozik, ahova beszúrták."""
@@ -329,7 +338,7 @@ def oszlop_torlese(
     munkalap_id: int,
     idx: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     """Egy oszlop törlése a tartalmával együtt."""
     m = _munkalap_vagy_404(db, munkalap_id)
@@ -365,7 +374,7 @@ def sor_adat(
     idx: int,
     payload: SorAdatIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     m = _munkalap_vagy_404(db, munkalap_id)
     sor = db.scalar(select(DiszpoSor).where(DiszpoSor.munkalap_id == m.id, DiszpoSor.idx == idx))
@@ -394,7 +403,7 @@ def set_oszlop_kotes(
     idx: int,
     payload: OszlopKotesIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """Az oszlop hozzákötése egy munkatárshoz.
 

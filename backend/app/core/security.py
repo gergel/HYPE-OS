@@ -137,18 +137,13 @@ FOGLALAS_OLDAL = "/felszereles/foglalas"
 #:    A /felszereles oldal joga változatlanul viszi tovább a sajátját, hogy a
 #:    korábbi beállítások ugyanúgy működjenek.
 #:
-#: 3) Aki a projekten technikát vezet fel, annak a FELSZERELÉS oldalt is látnia
-#:    kell: onnan tudja megnézni, mi van a leltárban, mit is jelent egy tétel, és
-#:    a projekten felvett eszközök nevei is oda hivatkoznak. Ez NÉZÉS: a leltárat
-#:    bővíteni, javítani, törölni és leltározni továbbra is csak a /felszereles
-#:    saját jogával lehet.
+#: (A Projektek/Naptár nézési jog KORÁBBAN a FELSZERELÉS oldalt is megnyitotta
+#: nézésre - ezt a felhasználó kifejezett kérésére vettük ki: aki nem kapott
+#: saját /felszereles jogot, az többé nem lát bele az Eszközök oldalba, még
+#: akkor sem, ha lát Projekteket vagy a Naptárat.)
 OLDAL_ALIASZOK: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
     "/projektek": {
         "/naptar": {"view": ("view",), "edit": ("edit",)},
-    },
-    "/felszereles": {
-        "/projektek": {"view": ("view",)},
-        "/naptar": {"view": ("view",)},
     },
     FOGLALAS_OLDAL: {
         "/felszereles": {"view": ("view",), "create": ("create",), "delete": ("delete",)},
