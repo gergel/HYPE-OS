@@ -199,20 +199,27 @@ def elerheto_oldalak(page_permissions: dict[str, list[str]] | None) -> list[str]
     return oldalak
 
 
-def lathatja_az_oldalt(page_permissions: dict[str, list[str]] | None, page: str) -> bool:
-    """Igaz, ha ez a page_permissions (lásd elerheto_oldalak) beengedi az adott
-    oldalra - None (nincs korlátozás) esetén mindig igaz."""
+def van_kifejezett_oldal_joga(page_permissions: dict[str, list[str]] | None, page: str) -> bool:
+    """Igaz, ha admin KIFEJEZETTEN megadta ennek az oldalnak a jogát (lásd
+    Beállítások oldal) - None (nincs beállítva semmi = alapból mindenkit
+    beenged, lásd elerheto_oldalak) esetén HAMIS. Ez szándékosan szigorúbb,
+    mint az "alapból mindent lát" szabály: a HYPE TO-DO LIST Felelős-
+    választójánál (lásd lathatjak_az_oldalt) csak azt akarjuk felkínálni, akit
+    admin ténylegesen meghívott erre az oldalra, nem mindenkit, aki csak
+    korlátozás hiányában is hozzáférne."""
+    if page_permissions is None:
+        return False
     elerheto = elerheto_oldalak(page_permissions)
-    return elerheto is None or page in elerheto
+    return elerheto is not None and page in elerheto
 
 
 def lathatjak_az_oldalt(db: Session, page: str) -> list[int]:
-    """Mely munkatársak látják EGYÁLTALÁN ezt az oldalt - erre épül pl. a
-    HYPE TO-DO LIST "Felelős" választója (lásd routes/user_access.py
-    "lathatjak" végpontja): csak azt lehessen felelősnek megjelölni, aki
-    ténylegesen hozzáfér ahhoz az oldalhoz, ahol a feladat megjelenik -
-    különben egy olyan emberre osztanánk ki, aki a HYPE OS-ben soha nem is
-    látná a rá kiosztott feladatot.
+    """Mely munkatársak vannak KIFEJEZETTEN meghívva erre az oldalra - erre
+    épül a HYPE TO-DO LIST "Felelős" választója (lásd routes/user_access.py
+    "lathatjak" végpontja): csak azt lehessen felelősnek megjelölni, akinek
+    admin a Beállítások oldalon ténylegesen megadta ezt az oldalt - nem elég,
+    ha csak alapból (korlátozás hiányában) is hozzáférne, mert akkor a
+    választó gyakorlatilag mindenkit felkínálna.
 
     A védett rendszergazda mindig szerepel benne: neki semmilyen beállítás
     nem korlátozza a láthatóságát (lásd vedett_rendszergazda)."""
@@ -220,7 +227,7 @@ def lathatjak_az_oldalt(db: Session, page: str) -> list[int]:
     return [
         e.id
         for e in db.scalars(select(Employee)).all()
-        if vedett_rendszergazda(e) or lathatja_az_oldalt(configok.get(e.id), page)
+        if vedett_rendszergazda(e) or van_kifejezett_oldal_joga(configok.get(e.id), page)
     ]
 
 
