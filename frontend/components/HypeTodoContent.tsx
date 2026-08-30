@@ -5,6 +5,7 @@ import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
+import { EmployeeFkPicker } from "@/components/EmployeeFkPicker";
 import { M2mLinker } from "@/components/M2mLinker";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import type { Employee, HypeTodoItem } from "@/lib/api";
@@ -66,6 +67,14 @@ export function HypeTodoContent({
     const marHozzarendelt = new Set(item.felelos_employee_ids);
     return employees
       .filter((e) => assignableIds.has(e.id) || marHozzarendelt.has(e.id))
+      .map((e) => ({ id: e.id, label: e.full_name }));
+  }
+
+  /** Az Ellenőrzés felelős kínálata - ugyanaz a láthatóság-szűrés, mint a
+   * Felelősnél (felelosOptions), csak egyetlen emberre. */
+  function ellenorzoOptions(item: HypeTodoItem) {
+    return employees
+      .filter((e) => assignableIds.has(e.id) || e.id === item.ellenorzes_felelos_id)
       .map((e) => ({ id: e.id, label: e.full_name }));
   }
 
@@ -150,6 +159,23 @@ export function HypeTodoContent({
                 felelosNevek(t)
               ),
             sortAccessor: felelosNevek,
+          },
+          {
+            header: "Ellenőrzés felelős",
+            render: (t) =>
+              canEdit ? (
+                <EmployeeFkPicker
+                  patchPath={`${HYPE_TODO_BASE_PATH}/${t.id}`}
+                  field="ellenorzes_felelos_id"
+                  currentId={t.ellenorzes_felelos_id}
+                  options={ellenorzoOptions(t)}
+                  emptyLabel="Nincs kijelölve"
+                  className="min-w-[160px]"
+                />
+              ) : (
+                (t.ellenorzes_felelos_id ? employeeName.get(t.ellenorzes_felelos_id) : null) ?? "–"
+              ),
+            sortAccessor: (t) => (t.ellenorzes_felelos_id ? (employeeName.get(t.ellenorzes_felelos_id) ?? "") : ""),
           },
           {
             header: "Határidő",

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { DetailSections } from "@/components/DetailSections";
+import { EmployeeFkPicker } from "@/components/EmployeeFkPicker";
 import { M2mLinker } from "@/components/M2mLinker";
 import { ReadOnlyDetailField } from "@/components/ReadOnlyDetailField";
 import { TopBar } from "@/components/TopBar";
@@ -18,12 +19,15 @@ import { buildFieldTabs } from "@/lib/detailTabs";
 
 const PAGE = "/hype-todo-lista";
 const FELELOSOK_WIDGET_KEY = "felelos_employee_ids";
-//: Egyszemélyes idegenkulcs-mezők - a generikus mezőrács ezeket nyers
+const ELLENORZES_FELELOS_KEY = "ellenorzes_felelos_id";
+//: Egyszemélyes idegenkulcs-mezők, amiket a rendszer AUTOMATIKUSAN tölt ki
+//: (lásd backend routes/hype_todo.py: a létrehozó, illetve aki
+//: Ellenőrzés/Done állapotba teszi) - a generikus mezőrács ezeket nyers
 //: számként (id) mutatná; itt NÉVRE feloldva, csak olvashatóként jelenítjük
-//: meg (lásd components/ReadOnlyDetailField.tsx).
-const SZEMELY_MEZOK: { key: "aki_felvezette_id" | "ellenorzes_felelos_id" | "aki_ellenorizte_id"; label: string }[] = [
+//: meg (lásd components/ReadOnlyDetailField.tsx). Az "Ellenőrzés felelős"
+//: nincs köztük: az kézzel választható (lásd lent, EmployeeFkPicker).
+const SZEMELY_MEZOK: { key: "aki_felvezette_id" | "aki_ellenorizte_id"; label: string }[] = [
   { key: "aki_felvezette_id", label: "Aki felvezette" },
-  { key: "ellenorzes_felelos_id", label: "Ellenőrzés felelős" },
   { key: "aki_ellenorizte_id", label: "Aki ellenőrizte/készbe rakta" },
 ];
 
@@ -51,6 +55,13 @@ export default async function HypeTodoDetailPage({ params }: { params: Promise<{
   const felelosOptions = employees
     .filter((e) => lathatjakSet.has(e.id) || currentIds.includes(e.id))
     .map((e) => ({ id: e.id, label: e.full_name }));
+  // Az Ellenőrzés felelős ugyanazzal a szűréssel választható, mint a Felelős:
+  // csak aki látja az oldalt - a már beállított, de jogosultságot vesztett
+  // ember neve viszont látszik (csak leváltani lehet, újra kiválasztani nem).
+  const ellenorzesFelelosId = (item[ELLENORZES_FELELOS_KEY] as number | null) ?? null;
+  const ellenorzesFelelosOptions = employees
+    .filter((e) => lathatjakSet.has(e.id) || e.id === ellenorzesFelelosId)
+    .map((e) => ({ id: e.id, label: e.full_name }));
 
   const tabs = buildFieldTabs({
     page: PAGE,
@@ -65,7 +76,7 @@ export default async function HypeTodoDetailPage({ params }: { params: Promise<{
     // widgetet illesztjük be, minta: components/ProjectDetailContent.tsx. Az
     // egyszemélyes id-mezőket (SZEMELY_MEZOK) is kivesszük, hogy ne nyers
     // számként jelenjenek meg.
-    alwaysHidden: [FELELOSOK_WIDGET_KEY, ...SZEMELY_MEZOK.map((m) => m.key)],
+    alwaysHidden: [FELELOSOK_WIDGET_KEY, ELLENORZES_FELELOS_KEY, ...SZEMELY_MEZOK.map((m) => m.key)],
     widgets: {
       [FELELOSOK_WIDGET_KEY]: (
         <M2mLinker
@@ -76,6 +87,18 @@ export default async function HypeTodoDetailPage({ params }: { params: Promise<{
           addLabel="Felelős hozzáadása"
           emptyText="Nincs felelős hozzárendelve."
         />
+      ),
+      [ELLENORZES_FELELOS_KEY]: (
+        <div className="flex flex-col gap-1.5">
+          <span className="t-label">Ellenőrzés felelős</span>
+          <EmployeeFkPicker
+            patchPath={patchPath}
+            field={ELLENORZES_FELELOS_KEY}
+            currentId={ellenorzesFelelosId}
+            options={ellenorzesFelelosOptions}
+            emptyLabel="Nincs kijelölve"
+          />
+        </div>
       ),
       ...Object.fromEntries(
         SZEMELY_MEZOK.map(({ key, label }) => {

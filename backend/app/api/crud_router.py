@@ -3,6 +3,7 @@ egy SQLAlchemy modellre és a hozzá tartozó Pydantic sémákra, hogy a 20+ ent
 ne kelljen ugyanazt a boilerplate-et kézzel megismételni minden modulban.
 """
 
+import inspect
 from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
@@ -62,7 +63,11 @@ def build_crud_router(
     tags: list[str],
     page: str,
     write_roles: tuple[Role, ...] = DEFAULT_WRITE_ROLES,
-    before_create: Callable[[dict, Session], dict] | None = None,
+    #: (data, db) -> data, VAGY (data, db, current_user) -> data - a
+    #: paraméterszám dönti el, kapja-e a bejelentkezett embert (lásd lent a
+    #: create_item-ben; pl. routes/hype_todo.py "Aki felvezette" automatikus
+    #: kitöltése). A meglévő kétparaméteres hookok változatlanul működnek.
+    before_create: Callable[..., dict] | None = None,
     m2m_fields: dict[str, tuple[str, type]] | None = None,
     list_read_schema: type[BaseModel] | None = None,
     before_update: Callable[[Any, dict, Session, Employee], None] | None = None,
@@ -248,12 +253,17 @@ def build_crud_router(
     def get_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
         return _kimenet(_lathato_vagy_404(db, item_id, _user), read_schema, db, sajat_mezokkel=True)
 
+    # A before_create hook kaphatja a bejelentkezett embert is harmadik
+    # paraméterként - a paraméterszámot egyszer, a router építésekor nézzük
+    # meg, nem minden kérésnél (lásd a before_create paraméter kommentjét).
+    before_create_kell_user = before_create is not None and len(inspect.signature(before_create).parameters) >= 3
+
     @router.post("", response_model=None, status_code=status.HTTP_201_CREATED)
     def create_item(payload: create_schema, db: Session = Depends(get_db), _user: Employee = Depends(create_dependency)):
         data = payload.model_dump()
         m2m_data = {k: data.pop(k) for k in list(m2m_fields) if k in data}
         if before_create:
-            data = before_create(data, db)
+            data = before_create(data, db, _user) if before_create_kell_user else before_create(data, db)
         obj = model(**data)
         for payload_key, ids in m2m_data.items():
             attr_name, related_model = m2m_fields[payload_key]
