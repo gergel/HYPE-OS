@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.employee import Employee
-from app.models.kotelezettseg import Kotelezettseg, KotelezettsegCiklus, KotelezettsegIdoszak
+from app.models.kotelezettseg import Kotelezettseg, KotelezettsegCiklus, KotelezettsegIdoszak, KotelezettsegTipus
 from app.models.task import Task
 from app.services import notifications
 
@@ -196,7 +196,16 @@ def ensure_idoszakok(db: Session, ma: date | None = None) -> list[KotelezettsegI
     mit várni."""
     ma = ma or date.today()
     kotelezettsegek = db.scalars(
-        select(Kotelezettseg).options(selectinload(Kotelezettseg.idoszakok)).where(Kotelezettseg.aktiv.is_(True))
+        select(Kotelezettseg)
+        .options(selectinload(Kotelezettseg.idoszakok))
+        .where(
+            Kotelezettseg.aktiv.is_(True),
+            # Az ELŐFIZETÉSEK (E-Rezsi) kimaradnak: a felhasználó döntése
+            # (2026-08-30) szerint az csak egy adatbázis - mennyit költünk és
+            # mikor -, forduló-követés, "várt összeg" és jelzések nélkül. A
+            # biztosítások/forgalmik/bérletek fordulói változatlanul futnak.
+            Kotelezettseg.tipus != KotelezettsegTipus.ELOFIZETES.value,
+        )
     ).all()
 
     ujak: list[KotelezettsegIdoszak] = []
@@ -264,7 +273,14 @@ def ensure_feladatok(db: Session, ma: date | None = None) -> list[Task]:
     A lejárt fordulóra is készül feladat: éppen az a baj, ha valami már lejárt
     és senki nem tud róla."""
     ma = ma or date.today()
-    kotelezettsegek = db.scalars(select(Kotelezettseg).where(Kotelezettseg.aktiv.is_(True))).all()
+    kotelezettsegek = db.scalars(
+        select(Kotelezettseg).where(
+            Kotelezettseg.aktiv.is_(True),
+            # Előfizetésekről nincs forduló-jelzés - lásd ensure_idoszakok
+            # azonos szűrése és a felhasználó 2026-08-30-i döntése.
+            Kotelezettseg.tipus != KotelezettsegTipus.ELOFIZETES.value,
+        )
+    ).all()
 
     esedekes: list[tuple[Kotelezettseg, date]] = []
     for k in kotelezettsegek:

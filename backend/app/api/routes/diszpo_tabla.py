@@ -25,7 +25,7 @@ from app.models.diszpo_tabla import (
     DiszpoSor,
 )
 from app.models.employee import Employee, SystemRole
-from app.services import munkanap_szamlalo
+from app.services import diszpo_sheet_sync, munkanap_szamlalo
 
 router = APIRouter(prefix="/diszpo-tabla", tags=["diszpo-tabla"])
 
@@ -515,3 +515,30 @@ def havi_allas(
         )
     eredmeny.sort(key=lambda a: (-a.munkanapok, a.employee_nev or ""))
     return eredmeny
+
+
+@router.post("/sheet-sync")
+def sheet_sync(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A HYPE 2026 tábla szinkronja a megosztott Google Táblázattal - a
+    felületről, egy gombbal (lásd frontend DiszpoSheetSyncGomb). Munkalaponként
+    CSERÉLI a tartalmat (a Sheet az igazság), a kézzel beállított oszlop-ember
+    kötéseket viszont megőrzi - lásd services/diszpo_sheet_sync.py."""
+    try:
+        osszegzes = diszpo_sheet_sync.teljes_szinkron(db, vegrehajt=True)
+    except Exception as exc:  # noqa: BLE001 - hálózat/Google hiba érthető üzenettel
+        raise HTTPException(
+            status_code=502,
+            detail=f"A táblázat szinkronja nem sikerült: {type(exc).__name__}: {exc}",
+        ) from exc
+    return {
+        "munkalapok": [
+            {k: v for k, v in o.items()} for o in osszegzes
+        ],
+        "uzenet": " · ".join(
+            f"{o['munkalap']}: {o['sorok']}x{o['oszlopok']}, {o['cellak']} cella ({o['szines']} színes)"
+            for o in osszegzes
+        ),
+    }

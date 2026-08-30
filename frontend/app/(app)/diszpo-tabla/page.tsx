@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
+import { DiszpoSheetSyncGomb } from "@/components/DiszpoSheetSyncGomb";
 import { DiszpoTablaRacs } from "@/components/DiszpoTablaRacs";
 import { MunkanapokKartya } from "@/components/MunkanapokKartya";
 import {
@@ -36,13 +37,11 @@ export default async function DiszpoTablaPage({
         <TopBar />
         <div className="flex-1 p-4 md:p-8">
           <Card title="HYPE 2026 tábla">
-            <p className="text-[13px] text-text-secondary">
-              A táblázat még nincs átvéve. A backend gépén futtatható:{" "}
-              <code className="rounded bg-surface-3 px-1 py-0.5">
-                python scripts/diszpo_tabla_import.py --vegrehajt
-              </code>{" "}
-              – ez hozza át a Google Sheet minden munkalapját, a cellák színével együtt.
+            <p className="mb-3 text-[13px] text-text-secondary">
+              A táblázat még nincs átvéve - az alábbi gomb áthozza a Google Sheet minden
+              munkalapját, a cellák színével együtt.
             </p>
+            <DiszpoSheetSyncGomb />
           </Card>
         </div>
       </div>
@@ -71,21 +70,26 @@ export default async function DiszpoTablaPage({
       <TopBar />
       <div className="flex-1 space-y-6 p-4 md:p-8">
         <Card title="HYPE 2026 tábla">
-          {/* A FÜLEK - ahogy a Sheetben, balról jobbra. */}
-          <div className="mb-4 flex flex-wrap gap-1.5 border-b border-border pb-3">
-            {munkalapok.map((m) => (
-              <Link
-                key={m.id}
-                href={`/diszpo-tabla?lap=${m.id}`}
-                className={`rounded-[var(--radius)] px-3 py-1.5 text-[13px] transition-colors ${
-                  m.id === aktiv.id
-                    ? "bg-bg-accent text-text-accent"
-                    : "text-text-secondary hover:bg-surface-3"
-                }`}
-              >
-                {m.nev}
-              </Link>
-            ))}
+          {/* A FÜLEK - ahogy a Sheetben, balról jobbra. Mellettük a Google
+              Táblázat-szinkron: egy gombbal átveszi a Sheet friss tartalmát
+              (munkalaponként cserél, a kézi oszlop-ember kötések maradnak). */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+            <div className="flex flex-wrap gap-1.5">
+              {munkalapok.map((m) => (
+                <Link
+                  key={m.id}
+                  href={`/diszpo-tabla?lap=${m.id}`}
+                  className={`rounded-[var(--radius)] px-3 py-1.5 text-[13px] transition-colors ${
+                    m.id === aktiv.id
+                      ? "bg-bg-accent text-text-accent"
+                      : "text-text-secondary hover:bg-surface-3"
+                  }`}
+                >
+                  {m.nev}
+                </Link>
+              ))}
+            </div>
+            {canEdit && <DiszpoSheetSyncGomb />}
           </div>
 
           <DiszpoTablaRacs

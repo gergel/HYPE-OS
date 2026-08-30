@@ -8,16 +8,16 @@ import { formatHuf } from "@/lib/penz";
 
 const PAGE = "/kotelezettsegek";
 
-/** E-Rezsi: a cég előfizetései - ami hónapról hónapra vagy évről évre magától
- * lefut a kártyáról.
+/** E-Rezsi: a cég előfizetései - EGYSZERŰ ADATBÁZISKÉNT.
  *
- * Ez az oldal váltja ki a Google-táblázatot: ugyanaz az adat (szolgáltató,
- * csomag, forduló, ár, felelős, honnan jön a számla), de a forduló itt nem
- * szöveg, hanem dátum - ezért tud szólni, mielőtt lejár, és ezért tud
- * fordulónként várni egy összeget meg egy számlát.
+ * A felhasználó döntése (2026-08-30): nincs forduló-követés és "mikor újul"
+ * jelzés - az oldal csak azt mutatja, MENNYIT költünk és MIKOR (havi/éves
+ * gyakorisággal), meg az éves szummát. Az adat a Google-táblázat tükre
+ * (lásd lenti import), plusz ami kézzel kerül ide.
  *
- * A biztosítások és az autók papírjai ugyanezen a motoron futnak, csak külön
- * oldalon (lásd /kotelezettsegek és /autok). */
+ * A biztosítások és az autók papírjai (ahol a lejárat-figyelés továbbra is
+ * kell) ugyanezen a motoron futnak, külön oldalon (lásd /kotelezettsegek és
+ * /autok). */
 export default async function ERezsiPage() {
   const [kotelezettsegek, employees, currentUser, pagePermissions] = await Promise.all([
     getKotelezettsegek({ tipus: "elofizetes" }),
@@ -27,13 +27,10 @@ export default async function ERezsiPage() {
   ]);
 
   const aktiv = kotelezettsegek.filter((k) => k.aktiv);
-  const lejart = aktiv.filter((k) => k.allapot === "lejart").length;
-  const hamarosan = aktiv.filter((k) => k.allapot === "hamarosan").length;
-  const nyitott = kotelezettsegek.reduce((sum, k) => sum + k.nyitott_idoszakok, 0);
-  // A becsült havi költség a táblázatból hozott forintosított értékekből -
-  // csak tájékoztató, mert a devizás tételeknél az árfolyam napról napra
-  // változik (a tényleges összeg fordulónként, kézzel kerül be).
+  // A havi/éves költség a táblázatból hozott forintosított értékekből - a
+  // devizás tételeknél az árfolyam miatt becslés.
   const havonta = aktiv.reduce((sum, k) => sum + (k.huf_becsles_honap ?? 0), 0);
+  const evente = aktiv.reduce((sum, k) => sum + (k.huf_becsles_ev ?? 0), 0);
 
   const emberek = employees
     .map((e) => ({ id: e.id, full_name: e.full_name }))
@@ -46,15 +43,19 @@ export default async function ERezsiPage() {
         <Card title={`E-Rezsi – előfizetések (${kotelezettsegek.length})`}>
           <p className="mb-4 text-[13px] text-text-secondary">
             {aktiv.length} aktív előfizetés
-            {havonta > 0 && <> · becsült havi költség: {formatHuf(havonta)}</>}
-            {lejart > 0 && <> · {lejart} lejárt</>}
-            {hamarosan > 0 && <> · {hamarosan} hamarosan lejár</>}
-            {nyitott > 0 && <> · {nyitott} fordulónál hiányzik az összeg vagy a számla</>}
+            {havonta > 0 && <> · havi költség: {formatHuf(havonta)}</>}
+            {evente > 0 && (
+              <>
+                {" "}
+                · <span className="font-medium text-text-primary">éves szumma: {formatHuf(evente)}</span>
+              </>
+            )}
           </p>
           <KotelezettsegKezelo
             kotelezettsegek={kotelezettsegek}
             emberek={emberek}
             alapTipus="elofizetes"
+            fordulokNelkul
             canEdit={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
             canCreate={canDoAction(currentUser, pagePermissions, PAGE, "create")}
             canDelete={canDoAction(currentUser, pagePermissions, PAGE, "delete")}

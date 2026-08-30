@@ -455,13 +455,17 @@ def import_google_tablazat(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
-    """A Google-táblázatban vezetett előfizetés-lista átemelése.
+    """A Google-táblázatban vezetett előfizetés-lista átemelése - TÜKÖRKÉNT.
 
-    Újrafuttatható: az azonosítás a (név, csomag, forduló) hármas, tehát a
-    háromféle Adobe-előfizetés külön sor marad, egy második futás viszont nem
-    duplikálja őket - csak frissíti az árat és a többi mezőt. A KÉZZEL beírt
-    fordulónkénti összegek és a feltöltött számlák érintetlenek maradnak: azok
-    az időszakokon ülnek, amikhez az import nem nyúl."""
+    A felhasználó döntése (2026-08-30): az E-Rezsi pontosan azt mutassa, ami
+    a táblázatban van - ezért az import egy-az-egyben tükör:
+    - az azonosítás a (név, csomag) páros (azonos kulcsú sorok sorrendben
+      párosulnak, hogy a többfiókos Adobe-sorok ne olvadjanak össze);
+    - a FORDULÓT nem vesszük át, sőt töröljük: az E-Rezsi csak egy adatbázis
+      arról, mennyit költünk és mikor - forduló-követés és jelzés nélkül
+      (lásd services/kotelezettseg.py azonos szűrései);
+    - ami előfizetés a táblázatban már nincs benne, azt innen is töröljük
+      (a nem-előfizetés típusú sorokhoz - biztosítás, forgalmi - nem nyúlunk)."""
     try:
         csv_szoveg = kotelezettseg_import.letolt(payload.url)
     except ValueError as exc:
@@ -472,37 +476,29 @@ def import_google_tablazat(
     sorok = kotelezettseg_import.parse_sorok(csv_szoveg)
     emberek = {e.full_name.strip().lower(): e for e in db.scalars(select(Employee)).all()}
 
-    # A meglévő sorok kulcsonként CSOPORTOSÍTVA, nem egyetlen elemként: a
-    # táblázatban ugyanaz a szolgáltatás többször is szerepel azonos névvel,
-    # csomaggal és fordulóval (három Adobe-előfizetés, más-más fiókból). Ha a
-    # kulcs egyetlen sorra mutatna, a második ilyen sor felülírná az elsőt, és
-    # elveszne. Így viszont a fájl n-edik ilyen sora az n-edik meglévő sorra
-    # kerül - a futás stabil és ismételhető.
+    # A meglévő ELŐFIZETÉS-sorok kulcsonként CSOPORTOSÍTVA, nem egyetlen
+    # elemként: a táblázatban ugyanaz a szolgáltatás többször is szerepel
+    # azonos névvel és csomaggal (három Adobe-előfizetés, más-más fiókból). A
+    # fájl n-edik ilyen sora az n-edik meglévő sorra kerül - a futás stabil
+    # és ismételhető. Csak az előfizetéseket nézzük: egy azonos nevű
+    # biztosítást a tükör nem téríthet el.
     meglevok: dict[tuple, list[Kotelezettseg]] = {}
-    for meglevo in db.scalars(select(Kotelezettseg)).all():
-        kulcs = (
-            meglevo.nev.strip().lower(),
-            (meglevo.csomag or "").strip().lower(),
-            meglevo.fordulo_nap,
-            meglevo.fordulo_honap,
-        )
+    for meglevo in db.scalars(
+        select(Kotelezettseg).where(Kotelezettseg.tipus == KotelezettsegTipus.ELOFIZETES.value)
+    ).all():
+        kulcs = (meglevo.nev.strip().lower(), (meglevo.csomag or "").strip().lower())
         meglevok.setdefault(kulcs, []).append(meglevo)
     felhasznalt: dict[tuple, int] = {}
+    erintett_idk: set[int] = set()
 
     letrehozott = frissitett = 0
     ismeretlen: list[str] = []
     for sor in sorok:
-        fordulo = sor.fordulo
         felelos = emberek.get((sor.felelos_nev or "").strip().lower()) if sor.felelos_nev else None
         if sor.felelos_nev and felelos is None and sor.felelos_nev not in ismeretlen:
             ismeretlen.append(sor.felelos_nev)
 
-        kulcs = (
-            sor.nev.strip().lower(),
-            (sor.csomag or "").strip().lower(),
-            fordulo.nap if fordulo else None,
-            fordulo.honap if fordulo else None,
-        )
+        kulcs = (sor.nev.strip().lower(), (sor.csomag or "").strip().lower())
         sorszam = felhasznalt.get(kulcs, 0)
         felhasznalt[kulcs] = sorszam + 1
         csoport = meglevok.setdefault(kulcs, [])
@@ -517,9 +513,12 @@ def import_google_tablazat(
 
         k.csomag = sor.csomag
         k.ciklus = sor.ciklus
-        k.fordulo_nap = fordulo.nap if fordulo else None
-        k.fordulo_honap = fordulo.honap if fordulo else None
-        k.kovetkezo_fordulo = fordulo.datum if fordulo else None
+        # FORDULÓ NINCS: az E-Rezsi csak egy adatbázis arról, mennyit költünk
+        # és mikor - a megújulás-követést a felhasználó kivetette (a korábban
+        # importált dátumokat is töröljük, ne maradjon "mikor újul" jelzés).
+        k.fordulo_nap = None
+        k.fordulo_honap = None
+        k.kovetkezo_fordulo = None
         k.osztaly = sor.osztaly
         k.felelos_id = felelos.id if felelos else None
         k.aktiv = sor.aktiv
@@ -530,6 +529,18 @@ def import_google_tablazat(
         k.szamla_forras = sor.szamla_forras
         k.kartya = sor.kartya
         k.megjegyzes = sor.megjegyzes
+        db.flush()
+        erintett_idk.add(k.id)
+
+    # TÜKÖR-TAKARÍTÁS: az az előfizetés, ami a táblázatban már nincs benne,
+    # innen is törlődik (az időszakaival együtt - cascade), hogy a lista
+    # pontosan a táblázatot mutassa.
+    torolt = 0
+    for csoport in meglevok.values():
+        for k in csoport:
+            if k.id not in erintett_idk:
+                db.delete(k)
+                torolt += 1
 
     db.commit()
     szolg.ensure_mindent(db)
@@ -539,7 +550,9 @@ def import_google_tablazat(
         frissitett=frissitett,
         ismeretlen_felelosok=ismeretlen,
         uzenet=(
-            f"{len(sorok)} sor beolvasva: {letrehozott} új, {frissitett} frissítve."
+            f"{len(sorok)} sor beolvasva: {letrehozott} új, {frissitett} frissítve"
+            + (f", {torolt} törölve (a táblázatban már nincs benne)" if torolt else "")
+            + "."
             + (f" Ismeretlen felelős: {', '.join(ismeretlen)}." if ismeretlen else "")
         ),
     )

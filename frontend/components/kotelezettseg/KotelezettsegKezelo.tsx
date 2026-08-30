@@ -363,6 +363,7 @@ export function KotelezettsegKezelo({
   canCreate,
   canDelete,
   autoId,
+  fordulokNelkul = false,
 }: {
   kotelezettsegek: Kotelezettseg[];
   emberek: { id: number; full_name: string }[];
@@ -375,6 +376,12 @@ export function KotelezettsegKezelo({
   canDelete: boolean;
   /** Ha meg van adva, az új sor ehhez az autóhoz kerül. */
   autoId?: number;
+  /** FORDULÓ-KÖVETÉS NÉLKÜLI mód (E-Rezsi): nincs forduló, következő dátum,
+   * állapot-jelzés és fordulónkénti időszak - a lista csak egy adatbázis
+   * arról, mennyit költünk (havi/éves Ft oszlopokkal és összesítéssel). A
+   * felhasználó 2026-08-30-i döntése - a backend párja:
+   * services/kotelezettseg.py előfizetés-szűrése. */
+  fordulokNelkul?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -404,7 +411,7 @@ export function KotelezettsegKezelo({
       alert("Add meg a megnevezést.");
       return;
     }
-    if (!urlap.kovetkezo_fordulo) {
+    if (!fordulokNelkul && !urlap.kovetkezo_fordulo) {
       alert("Add meg a következő forduló (lejárat) dátumát.");
       return;
     }
@@ -415,7 +422,7 @@ export function KotelezettsegKezelo({
         csomag: urlap.csomag.trim() || null,
         tipus: urlap.tipus,
         ciklus: urlap.ciklus,
-        kovetkezo_fordulo: urlap.kovetkezo_fordulo || null,
+        kovetkezo_fordulo: fordulokNelkul ? null : urlap.kovetkezo_fordulo || null,
         felelos_id: urlap.felelos_id ? Number(urlap.felelos_id) : null,
         auto_id: autoId ?? null,
         aktiv: urlap.aktiv,
@@ -470,11 +477,24 @@ export function KotelezettsegKezelo({
           <thead>
             <tr className="border-b border-border">
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Megnevezés</th>
-              <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Forduló</th>
-              <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Következő</th>
-              <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Nettó ár</th>
+              {fordulokNelkul ? (
+                <>
+                  <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Gyakoriság</th>
+                  <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Nettó ár</th>
+                  <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Havi (Ft)</th>
+                  <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Éves (Ft)</th>
+                </>
+              ) : (
+                <>
+                  <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Forduló</th>
+                  <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Következő</th>
+                  <th className="py-1.5 pr-4 text-right font-medium text-text-secondary">Nettó ár</th>
+                </>
+              )}
               <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Felelős</th>
-              <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Állapot</th>
+              {!fordulokNelkul && (
+                <th className="py-1.5 pr-4 text-left font-medium text-text-secondary">Állapot</th>
+              )}
               <th className="py-1.5 text-right font-medium text-text-secondary" />
             </tr>
           </thead>
@@ -502,18 +522,24 @@ export function KotelezettsegKezelo({
                         </span>
                       </button>
                     </td>
-                    <td className="py-2.5 pr-4 text-text-secondary">
-                      {forduloSzoveg(k)}
-                      <span className="block text-[11.5px] text-text-muted">{CIKLUS_NEVEK[k.ciklus] ?? k.ciklus}</span>
-                    </td>
-                    <td className="py-2.5 pr-4 whitespace-nowrap text-text-secondary">
-                      {k.kovetkezo_esedekesseg ? huDatum(k.kovetkezo_esedekesseg) : "–"}
-                      {k.napok_hatra != null && (
-                        <span className="block text-[11.5px] text-text-muted">
-                          {k.napok_hatra < 0 ? `${-k.napok_hatra} napja lejárt` : `${k.napok_hatra} nap múlva`}
-                        </span>
-                      )}
-                    </td>
+                    {fordulokNelkul ? (
+                      <td className="py-2.5 pr-4 text-text-secondary">{CIKLUS_NEVEK[k.ciklus] ?? k.ciklus}</td>
+                    ) : (
+                      <>
+                        <td className="py-2.5 pr-4 text-text-secondary">
+                          {forduloSzoveg(k)}
+                          <span className="block text-[11.5px] text-text-muted">{CIKLUS_NEVEK[k.ciklus] ?? k.ciklus}</span>
+                        </td>
+                        <td className="py-2.5 pr-4 whitespace-nowrap text-text-secondary">
+                          {k.kovetkezo_esedekesseg ? huDatum(k.kovetkezo_esedekesseg) : "–"}
+                          {k.napok_hatra != null && (
+                            <span className="block text-[11.5px] text-text-muted">
+                              {k.napok_hatra < 0 ? `${-k.napok_hatra} napja lejárt` : `${k.napok_hatra} nap múlva`}
+                            </span>
+                          )}
+                        </td>
+                      </>
+                    )}
                     <td className="py-2.5 pr-4 text-right whitespace-nowrap text-text-secondary">
                       {penzzel(k.ar_osszeg, k.ar_penznem)}
                       {k.ar_plusz_afa && (
@@ -522,15 +548,27 @@ export function KotelezettsegKezelo({
                         </span>
                       )}
                     </td>
+                    {fordulokNelkul && (
+                      <>
+                        <td className="py-2.5 pr-4 text-right whitespace-nowrap text-text-secondary">
+                          {k.huf_becsles_honap != null ? formatHuf(k.huf_becsles_honap) : "–"}
+                        </td>
+                        <td className="py-2.5 pr-4 text-right whitespace-nowrap text-text-secondary">
+                          {k.huf_becsles_ev != null ? formatHuf(k.huf_becsles_ev) : "–"}
+                        </td>
+                      </>
+                    )}
                     <td className="py-2.5 pr-4 text-text-secondary">{k.felelos_nev ?? "–"}</td>
-                    <td className="py-2.5 pr-4">
-                      <StatusBadge label={jelzo.label} tone={jelzo.tone} />
-                      {k.nyitott_idoszakok > 0 && (
-                        <span className="mt-1 block text-[11.5px] text-text-warning">
-                          {k.nyitott_idoszakok} forduló nincs lezárva
-                        </span>
-                      )}
-                    </td>
+                    {!fordulokNelkul && (
+                      <td className="py-2.5 pr-4">
+                        <StatusBadge label={jelzo.label} tone={jelzo.tone} />
+                        {k.nyitott_idoszakok > 0 && (
+                          <span className="mt-1 block text-[11.5px] text-text-warning">
+                            {k.nyitott_idoszakok} forduló nincs lezárva
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="py-2.5 text-right whitespace-nowrap">
                       {canEdit && (
                         <button
@@ -580,9 +618,11 @@ export function KotelezettsegKezelo({
                               <span className="text-text-secondary">{formatHuf(k.huf_becsles_ev)}</span>
                             </p>
                           )}
-                          <p>
-                            Figyelmeztetés: <span className="text-text-secondary">{k.ertesites_napokkal} nappal előbb</span>
-                          </p>
+                          {!fordulokNelkul && (
+                            <p>
+                              Figyelmeztetés: <span className="text-text-secondary">{k.ertesites_napokkal} nappal előbb</span>
+                            </p>
+                          )}
                           {k.szamla_forras && (
                             <p className="sm:col-span-2 whitespace-pre-line">
                               Számla forrása: <span className="text-text-secondary">{k.szamla_forras}</span>
@@ -608,6 +648,8 @@ export function KotelezettsegKezelo({
                           />
                         </div>
 
+                        {!fordulokNelkul && (
+                        <>
                         <p className="t-label mb-1.5">Fordulók – mennyibe került, és hol a számla</p>
                         {k.idoszakok.length === 0 ? (
                           <p className="text-[12.5px] text-text-muted">
@@ -634,6 +676,8 @@ export function KotelezettsegKezelo({
                           </table>
                           </div>
                         )}
+                        </>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -641,6 +685,29 @@ export function KotelezettsegKezelo({
               );
             })}
           </tbody>
+          {fordulokNelkul && (
+            <tfoot>
+              <tr className="border-t border-border-strong">
+                <td className="py-2.5 pr-4 font-medium text-text-primary">
+                  Összesen ({kotelezettsegek.filter((k) => k.aktiv).length} aktív)
+                </td>
+                <td className="py-2.5 pr-4" />
+                <td className="py-2.5 pr-4" />
+                <td className="py-2.5 pr-4 text-right font-medium whitespace-nowrap text-text-primary">
+                  {formatHuf(
+                    kotelezettsegek.filter((k) => k.aktiv).reduce((s, k) => s + (k.huf_becsles_honap ?? 0), 0),
+                  )}
+                </td>
+                <td className="py-2.5 pr-4 text-right font-medium whitespace-nowrap text-text-primary">
+                  {formatHuf(
+                    kotelezettsegek.filter((k) => k.aktiv).reduce((s, k) => s + (k.huf_becsles_ev ?? 0), 0),
+                  )}
+                </td>
+                <td className="py-2.5 pr-4" />
+                <td className="py-2.5" />
+              </tr>
+            </tfoot>
+          )}
         </table>
         </div>
       )}
@@ -690,23 +757,26 @@ export function KotelezettsegKezelo({
 
               {/* A forduló EGY dátum: a nap és a hónap benne van, a ciklus
                   pedig megmondja, mennyivel lép tovább (havi egy hónapot, éves
-                  egy évet) - lásd backend services/kotelezettseg.py. */}
-              <div className="flex flex-col gap-1 sm:col-span-2">
-                <label className="text-[11px] text-text-muted">
-                  {urlap.ciklus === "egyszeri" ? "Lejárat *" : "Következő forduló *"}
-                </label>
-                <input
-                  type="date"
-                  value={urlap.kovetkezo_fordulo}
-                  onChange={(e) => setUrlap({ ...urlap, kovetkezo_fordulo: e.target.value })}
-                  className={inputClass}
-                />
-                <p className="text-[11px] text-text-muted">
-                  {urlap.ciklus === "egyszeri"
-                    ? "Ekkor jár le – magától nem újul meg."
-                    : "Innentől a ciklus lépteti tovább. Több évre előre kifizetett tételnél a tényleges lejáratot add meg."}
-                </p>
-              </div>
+                  egy évet) - lásd backend services/kotelezettseg.py. A
+                  forduló-követés nélküli módban (E-Rezsi) nincs ilyen mező. */}
+              {!fordulokNelkul && (
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-[11px] text-text-muted">
+                    {urlap.ciklus === "egyszeri" ? "Lejárat *" : "Következő forduló *"}
+                  </label>
+                  <input
+                    type="date"
+                    value={urlap.kovetkezo_fordulo}
+                    onChange={(e) => setUrlap({ ...urlap, kovetkezo_fordulo: e.target.value })}
+                    className={inputClass}
+                  />
+                  <p className="text-[11px] text-text-muted">
+                    {urlap.ciklus === "egyszeri"
+                      ? "Ekkor jár le – magától nem újul meg."
+                      : "Innentől a ciklus lépteti tovább. Több évre előre kifizetett tételnél a tényleges lejáratot add meg."}
+                  </p>
+                </div>
+              )}
 
               {/* Az ár NETTÓBAN, mellette az áfa-kapcsoló: a bruttót ebből
                   számoljuk, nem külön mezőben tároljuk. */}
@@ -760,16 +830,18 @@ export function KotelezettsegKezelo({
                 />
                 <p className="text-[11px] text-text-muted">Ő kapja az értesítést és a feladatot a fordulóról.</p>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Figyelmeztetés (nappal előbb)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={urlap.ertesites_napokkal}
-                  onChange={(e) => setUrlap({ ...urlap, ertesites_napokkal: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
+              {!fordulokNelkul && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] text-text-muted">Figyelmeztetés (nappal előbb)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={urlap.ertesites_napokkal}
+                    onChange={(e) => setUrlap({ ...urlap, ertesites_napokkal: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+              )}
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Terhelt kártya</label>
                 <input value={urlap.kartya} onChange={(e) => setUrlap({ ...urlap, kartya: e.target.value })} className={inputClass} />
