@@ -196,6 +196,13 @@ body {
   font-feature-settings: "cv01", "cv03", "ss01";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Védőháló: a viewport meta tag (lásd app/layout.tsx) megoldja, hogy
+     mobilon ne "asztali" méretben töltsön be az oldal, de ha egy komponens
+     mégis szélesebb tartalmat rendelne (pl. egy elfelejtett overflow-x-auto
+     egy táblázatnál), ez megakadályozza, hogy emiatt a TELJES oldal
+     vízszintesen elcsússzon/pásztázhatóvá váljon - a hibás komponens ilyenkor
+     saját magában vágódik le, nem viszi magával az egész layoutot. */
+  overflow-x: hidden;
 }
 
 @layer base {

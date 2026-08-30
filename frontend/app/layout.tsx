@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import { TEMA_INIT_SCRIPT } from "@/lib/tema";
 import "./globals.css";
@@ -35,6 +35,18 @@ const portalDisplay = Fraunces({
 export const metadata: Metadata = {
   title: "HYPE OS",
   description: "HYPE OS - belső operatív rendszer videóprodukciós működésre",
+};
+
+// EDDIG HIÁNYZOTT: a Next.js App Router nem tesz be automatikusan viewport
+// meta taget - enélkül a mobil böngészők egy ~980px széles "asztali" oldalt
+// feltételeztek, és azt kicsinyítve/pásztázhatóan mutatták - emiatt tűnt úgy,
+// mintha minden elem "kilógna" (a fejléc, a táblázatok, minden), miközben a
+// tényleges CSS (pl. DataTable overflow-auto-ja) helyesen működött, csak
+// sosem kapott esélyt rá, mert a böngésző eleve nem a telefon szélességéhez
+// méretezte az oldalt.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

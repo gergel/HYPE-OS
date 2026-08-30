@@ -174,13 +174,21 @@ export async function middleware(request: NextRequest) {
     allowedPages &&
     allowedPages.length > 0 &&
     topSegment !== "/dashboard" &&
+    // A "nincs jogosultság" oldal saját magát muszáj kivennie a zár alól -
+    // különben pont az irányítaná ide magát végtelen körben.
+    topSegment !== "/nincs-jogosultsag" &&
     // Az aliaszolt oldalak (pl. a Diszpó jogából nyíló Projektek és
     // Felszerelés) is BENNE VANNAK az allowed_pages-ben - a szerver számolja
     // bele, lásd backend core/security.elerheto_oldalak. Így a menü és ez a
     // zár ugyanabból az egy listából dolgozik, nem tud elcsúszni.
     !allowedPages.includes(topSegment)
   ) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    // "Nincs jogosultság" oldal, NEM csendben a Dashboard - így aki egy
+    // olyan linkre kattint, amihez nincs joga, kap egy magyarázatot ahelyett,
+    // hogy azt hinné, a link egyszerűen nem működik (lásd
+    // app/(app)/nincs-jogosultsag/page.tsx - onnan a böngésző-előzmény
+    // "Vissza" gombjával pontosan oda tud visszalépni, ahonnan jött).
+    return NextResponse.redirect(new URL("/nincs-jogosultsag", request.url));
   }
 
   const response = NextResponse.next();
