@@ -2,7 +2,6 @@ import { TopBar } from "@/components/TopBar";
 import { UtomunkaContent } from "@/components/deliverable/UtomunkaContent";
 import {
   getAllapotBeallitasok,
-  getCurrentUser,
   getDeliverables,
   getEmployees,
   getFieldTypes,
@@ -11,7 +10,7 @@ import {
   getProjects,
   getVinyoOptions,
 } from "@/lib/api";
-import { canDoAction } from "@/lib/permissions";
+import { canDoPageAction } from "@/lib/permissions";
 
 // Csak ennyi legutóbb módosított/létrehozott rekordot töltünk be azonnal (a
 // backend list_items alapértelmezetten updated_at szerint csökkenő sorrendben
@@ -34,7 +33,6 @@ export default async function UtomunkaPage() {
     vinyoOptions,
     allapotBeallitasok,
     kartyaMezok,
-    currentUser,
     pagePermissions,
   ] = await Promise.all([
     getDeliverables(INITIAL_BATCH),
@@ -44,7 +42,6 @@ export default async function UtomunkaPage() {
     getVinyoOptions(),
     getAllapotBeallitasok(),
     getKartyaMezok(),
-    getCurrentUser(),
     getMyPagePermissions(),
   ]);
 
@@ -72,9 +69,13 @@ export default async function UtomunkaPage() {
           allapotBeallitasok={allapotBeallitasok}
           kartyaMezok={kartyaMezok}
           vinyoOptions={vinyoOptions}
-          canCreate={canDoAction(currentUser, pagePermissions, PAGE, "create")}
-          canDelete={canDoAction(currentUser, pagePermissions, PAGE, "delete")}
-          canEdit={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
+          // SZÁNDÉKOSAN nem canDoAction: az Utómunkán a backend a szerepkör-
+          // kaput kikapcsolta, itt kizárólag a page_permissions dönt - így a
+          // vágó szerepkörű, teljes oldal-jogú munkatárs is tud kiosztani és
+          // állapotot állítani (lásd lib/permissions.canDoPageAction).
+          canCreate={canDoPageAction(pagePermissions, PAGE, "create")}
+          canDelete={canDoPageAction(pagePermissions, PAGE, "delete")}
+          canEdit={canDoPageAction(pagePermissions, PAGE, "edit")}
         />
       </div>
     </div>

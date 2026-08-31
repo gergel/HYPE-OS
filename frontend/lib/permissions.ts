@@ -137,3 +137,18 @@ export function canDoAction(
   if (pagePermissions === null) return true;
   return oldalMuveletei(pagePermissions, page)?.has(action) === true;
 }
+
+/** A canDoAction párja azokhoz az oldalakhoz, ahol a backend a durva
+ * szerepkör-kaput kikapcsolta (write_roles = MINDEN szerepkör - lásd backend
+ * routes/postproduction.py és routes/diszpo_tabla.py `_MINDEN_SZEREPKOR`):
+ * ott kizárólag a page_permissions dönt. Ilyen az Utómunka - azon épp a vágó
+ * szerepkörűek dolgoznak, a szerepkör-szűrés kizárná őket, hiába kaptak
+ * admintól teljes oldal-jogot a Beállításokban. */
+export function canDoPageAction(
+  pagePermissions: Record<string, string[]> | null,
+  page: string,
+  action: "create" | "edit" | "delete",
+): boolean {
+  if (pagePermissions === null) return true;
+  return oldalMuveletei(pagePermissions, page)?.has(action) === true;
+}

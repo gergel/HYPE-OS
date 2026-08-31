@@ -209,10 +209,25 @@ def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get
     """A "Teendőim" dashboard-widget adatai - a bejelentkezett felhasználóra
     kiosztott, még nyitott Utómunkák és Feladatok, hogy egy helyen lássa, mivel
     kell foglalkoznia."""
+    # Ami ELKÉSZÜLT állapotban van, az akkor sem teendő, ha még nincs
+    # kiküldve - ugyanaz a szabály, mint a lejárt-határidő számlálónál (lásd
+    # summary): melyik állapot számít késznek, azt az admin állítja be az
+    # Utómunka tábláján (models/deliverable_status.py).
+    kesz_allapotok = list(
+        db.scalars(
+            select(DeliverableStatusConfig.allapot).where(DeliverableStatusConfig.kesz_allapot.is_(True))
+        ).all()
+    )
+    nyitott_feltetelek = [
+        Deliverable.assigned_to_employee_id == current_user.id,
+        Deliverable.anyag_kikuldve.is_(False),
+    ]
+    if kesz_allapotok:
+        nyitott_feltetelek.append(
+            or_(Deliverable.allapot.is_(None), Deliverable.allapot.not_in(kesz_allapotok))
+        )
     deliverables = db.scalars(
-        select(Deliverable)
-        .where(Deliverable.assigned_to_employee_id == current_user.id, Deliverable.anyag_kikuldve.is_(False))
-        .order_by(Deliverable.hatarido.asc().nulls_last())
+        select(Deliverable).where(*nyitott_feltetelek).order_by(Deliverable.hatarido.asc().nulls_last())
     ).all()
     tasks = db.scalars(
         select(Task)

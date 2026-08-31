@@ -1,8 +1,8 @@
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { VisszajelzesLista } from "@/components/deliverable/VisszajelzesLista";
-import { getCurrentUser, getMyPagePermissions, getVagoiVisszajelzesek } from "@/lib/api";
-import { canDoAction } from "@/lib/permissions";
+import { getMyPagePermissions, getVagoiVisszajelzesek } from "@/lib/api";
+import { canDoPageAction } from "@/lib/permissions";
 
 const PAGE = "/utomunka";
 
@@ -14,9 +14,8 @@ const PAGE = "/utomunka";
  * diszpó-levelére válaszként - a stábnak CSAK a szöveges megjegyzés és a kész
  * anyag linkje megy ki (lásd backend routes/vagoi_visszajelzesek.py). */
 export default async function VagoiVisszajelzesekPage() {
-  const [visszajelzesek, currentUser, pagePermissions] = await Promise.all([
+  const [visszajelzesek, pagePermissions] = await Promise.all([
     getVagoiVisszajelzesek(),
-    getCurrentUser(),
     getMyPagePermissions(),
   ]);
 
@@ -40,7 +39,9 @@ export default async function VagoiVisszajelzesekPage() {
           </p>
           <VisszajelzesLista
             visszajelzesek={visszajelzesek}
-            canSend={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
+            // Az Utómunkán a szerepkör-kapu nem érvényes - kizárólag a
+            // page_permissions dönt (lásd lib/permissions.canDoPageAction).
+            canSend={canDoPageAction(pagePermissions, PAGE, "edit")}
           />
         </Card>
       </div>

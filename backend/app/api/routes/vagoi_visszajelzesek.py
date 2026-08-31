@@ -28,7 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_page_action
+from app.core.security import Role, get_current_user, require_page_action
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.feedback import Feedback, VisszajelzesAllapot
@@ -40,6 +40,12 @@ router = APIRouter(prefix="/vagoi-visszajelzesek", tags=["postproduction"])
 
 #: A visszajelzések az Utómunka oldalán születnek, és ott is olvassuk őket.
 PAGE = "/utomunka"
+
+#: Az Utómunka oldalon a durva szerepkör-kapu nem érvényes: aki a
+#: Beállításokban /utomunka edit jogot kapott, az írhat - a szerepköre (vágó,
+#: stb.) nem szűkíti tovább (ugyanaz az elv, mint routes/postproduction.py
+#: _MINDEN_SZEREPKOR-jánál).
+_MINDEN_SZEREPKOR = tuple(Role)
 
 
 class ResztvevoRead(BaseModel):
@@ -209,7 +215,7 @@ def set_allapot(
     feedback_id: int,
     payload: AllapotIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """A visszajelzés állapotának kézi átállítása.
 
@@ -238,7 +244,7 @@ class KikuldesEredmeny(BaseModel):
 def diszpo_valasz(
     feedback_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """A visszajelzés kiküldése a forgatás diszpó-levelére VÁLASZKÉNT.
 

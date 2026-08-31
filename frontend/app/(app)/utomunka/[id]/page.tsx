@@ -14,7 +14,7 @@ import { DetailSections } from "@/components/DetailSections";
 import { RelatedTable } from "@/components/RelatedTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TimesheetMinutesTable } from "@/components/deliverable/TimesheetMinutesTable";
-import { szerepkorei } from "@/lib/permissions";
+import { lathatjaAzOldalt, szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
@@ -134,8 +134,10 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
   const statusOptions = fieldTypes.allapot?.options ?? [];
   // Aki az Utómunka oldalon szerkeszthet, az javíthatja a rögzített perceket is.
   const canEditPage = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
-  // Forint összeg csak annak, akinek a Pénzügy oldalhoz van hozzáférése.
-  const canSeeCost = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
+  // Forint összeg csak annak, akinek a Pénzügy oldalhoz van hozzáférése -
+  // ugyanaz a szabály, mint a backend deliverable_actions._may_see_costs-é
+  // (az oldal kulcsának puszta megléte már "view"-t jelent).
+  const canSeeCost = lathatjaAzOldalt(pagePermissions, "/penzugyek");
 
   const tabs = buildFieldTabs({
     page: PAGE,
@@ -232,25 +234,32 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
           </Card>
         ),
       },
-      {
-        key: "munkaido",
-        label: "Munkaidő-elszámolások",
-        content: (
-          <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
-            {/* A perc helyben javítható - ha valaki elfelejti leállítani az
-                időmérőt, enélkül egy egész éjszakányi idő maradna a soron (és
-                az abból számolt költség a Pénzügyben). */}
-            <TimesheetMinutesTable
-              deliverableId={deliverableId}
-              rows={timesheets}
-              employeeNameById={employeeNameById}
-              koltsegById={timerState?.sor_koltsegek ?? {}}
-              canEdit={canEditPage}
-              showCost={canSeeCost}
-            />
-          </Card>
-        ),
-      },
+      // A munkaidő-elszámolás pénzügyi adat (belőle számolódik a vágás
+      // költsége) - a teljes kártya CSAK annak jelenik meg, akinek a Pénzügy
+      // oldalhoz van hozzáférése (a felhasználó kifejezett kérése).
+      ...(canSeeCost
+        ? [
+            {
+              key: "munkaido",
+              label: "Munkaidő-elszámolások",
+              content: (
+                <Card title={`Munkaidő-elszámolások (${timesheets.length})`}>
+                  {/* A perc helyben javítható - ha valaki elfelejti leállítani az
+                      időmérőt, enélkül egy egész éjszakányi idő maradna a soron (és
+                      az abból számolt költség a Pénzügyben). */}
+                  <TimesheetMinutesTable
+                    deliverableId={deliverableId}
+                    rows={timesheets}
+                    employeeNameById={employeeNameById}
+                    koltsegById={timerState?.sor_koltsegek ?? {}}
+                    canEdit={canEditPage}
+                    showCost={canSeeCost}
+                  />
+                </Card>
+              ),
+            },
+          ]
+        : []),
       {
         key: "visszajelzesek",
         label: "Visszajelzések",

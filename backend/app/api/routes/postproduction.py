@@ -35,6 +35,17 @@ from app.schemas.feedback import FeedbackCreate, FeedbackRead, FeedbackUpdate
 from app.schemas.timesheet import TimesheetCreate, TimesheetRead, TimesheetUpdate
 from app.services import deliverable_actions, notifications, projektkod_kotes, vagoi_jatek
 
+#: Az utómunka írásánál a DEFAULT_WRITE_ROLES (admin/operator/adminisztráció)
+#: durva szerepkör-kapuja szándékosan nem érvényes - ugyanaz az elv, mint a
+#: diszpó-táblánál (lásd routes/diszpo_tabla.py): ezen az oldalon épp a VÁGÓ
+#: szerepkörűek dolgoznak, nekik kell kiosztani a feladatot és átállítani az
+#: állapotot. Enélkül akinek admin a Beállításoknál teljes /utomunka
+#: hozzáférést adott, a felületen látta a szerkesztőket, de minden mentése a
+#: szerepkör-ellenőrzésen halt el "nincs jogosultsága" hibával. A finomabb
+#: oldal+művelet-szintű védelem (check_page_action) változatlanul él: akinek
+#: page_permissions-ben nincs /utomunka edit joga, továbbra sem írhat.
+_MINDEN_SZEREPKOR = tuple(Role)
+
 
 def _after_deliverable_update(
     obj: Deliverable, data: dict, m2m_changes: dict, db: Session, current_user: Employee
@@ -189,6 +200,7 @@ deliverables_router = build_crud_router(
     prefix="/deliverables",
     tags=["postproduction"],
     page="/utomunka",
+    write_roles=_MINDEN_SZEREPKOR,
     before_create=_vagas_projektkodja,
     before_update=_kovesd_a_vagas_projektkodjat,
     after_update=_after_deliverable_update,
@@ -204,6 +216,7 @@ timesheets_router = build_crud_router(
     prefix="/timesheets",
     tags=["postproduction"],
     page="/utomunka",
+    write_roles=_MINDEN_SZEREPKOR,
 )
 
 feedback_router = build_crud_router(
@@ -214,6 +227,7 @@ feedback_router = build_crud_router(
     prefix="/feedback",
     tags=["postproduction"],
     page="/utomunka",
+    write_roles=_MINDEN_SZEREPKOR,
 )
 
 # Külön router a Deliverable egyedi (nem CRUD) akcióihoz - FONTOS: ezt kell
@@ -271,7 +285,7 @@ def get_allapot_beallitasok(db: Session = Depends(get_db), _user: Employee = Dep
 def set_allapot_beallitasok(
     payload: AllapotBeallitasokIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action("/utomunka", "edit")),
+    _user: Employee = Depends(require_page_action("/utomunka", "edit", *_MINDEN_SZEREPKOR)),
 ):
     """A teljes beállítás-lista cseréje (a felület mindig az egészet küldi).
 
@@ -332,7 +346,7 @@ def get_kartya_mezok(db: Session = Depends(get_db), _user: Employee = Depends(ge
 def set_kartya_mezok(
     payload: KartyaMezokIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action("/utomunka", "edit")),
+    _user: Employee = Depends(require_page_action("/utomunka", "edit", *_MINDEN_SZEREPKOR)),
 ):
     config = _board_config(db)
     # Csak valódi Deliverable-oszlopokat fogadunk el: a kártya generikusan
@@ -455,7 +469,7 @@ def set_timesheet_minutes(
     timesheet_id: int,
     payload: PercekIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action("/utomunka", "edit")),
+    _user: Employee = Depends(require_page_action("/utomunka", "edit", *_MINDEN_SZEREPKOR)),
 ):
     """Egy munkaidő-sor percének UTÓLAGOS javítása - ha valaki elfelejtette
     leállítani az időmérőt (pl. egész éjjel futott), ez az egyetlen módja, hogy
