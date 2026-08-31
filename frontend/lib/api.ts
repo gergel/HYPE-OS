@@ -375,6 +375,8 @@ export type Deliverable = {
   /** A vinyó-nézet keresőjéhez - a lista-séma is hozza őket. */
   projektkod_szoveg?: string | null;
   esemeny_neve?: string | null;
+  /** A vinyó-nézet kártya-címkéje: az archiválás állapota. */
+  archivalas?: string | null;
   /** Mikor állították le UTOLJÁRA a vágás időmérőjét. Notion importnál a
    * 'Timesheet Public' End Date mezőjéből jön, a rendszeren belül a timer
    * leállítása írja. */

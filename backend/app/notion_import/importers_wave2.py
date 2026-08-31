@@ -633,8 +633,10 @@ def import_vinyo_sync(client: NotionClient, db: Session) -> ImportResult:
             helyi_nevek.update(str(v) for v in vinyok if v)
 
     notion_nevek: set[str] = set()
+    latott_page_idk: set[str] = set()
     for page in client.query_database(db_ids.UTOMUNKA):
         props = extract_properties(page, client)
+        latott_page_idk.add(page["id"])
         ertek = props.get("Vinyók")
         vinyok = [str(v) for v in ertek] if isinstance(ertek, list) else []
         notion_nevek.update(vinyok)
@@ -657,6 +659,34 @@ def import_vinyo_sync(client: NotionClient, db: Session) -> ImportResult:
             lekepezes.imported_fields = {**lekepezes.imported_fields, "vinyok": _ertek_kulcs(vinyok)}
         else:
             lekepezes.imported_fields = {"vinyok": _ertek_kulcs(vinyok)}
+
+    # Amit a Notionból KIVETTEK (a lap már nincs az Utómunka adatbázisban,
+    # mert áthelyezték/archiválták), arról a vinyókat itt is le kell venni -
+    # különben a vinyó-kártyákon örökre ott maradna olyan anyag, ami a
+    # Notion szerint már máshol van. Csak akkor futhat, ha a Notion tényleg
+    # adott vissza lapokat: üres válasznál (API-hiba) nem törlünk semmit.
+    leszedett = 0
+    if latott_page_idk:
+        for page_id, lekepezes in lekepezesek.items():
+            if page_id in latott_page_idk:
+                continue
+            obj = db.get(Deliverable, lekepezes.entity_id)
+            if obj is None:
+                continue
+            if isinstance(obj.vinyok, list) and obj.vinyok:
+                obj.vinyok = []
+                leszedett += 1
+                result.updated += 1
+            if isinstance(lekepezes.imported_fields, dict):
+                lekepezes.imported_fields = {**lekepezes.imported_fields, "vinyok": _ertek_kulcs([])}
+            else:
+                lekepezes.imported_fields = {"vinyok": _ertek_kulcs([])}
+    if leszedett:
+        result.errors.append(
+            f"MEGJEGYZÉS (nem hiba): {leszedett} anyag már nincs a Notion Utómunka adatbázisában "
+            "(áthelyezték/archiválták) - a vinyóit itt is levettük, hogy a vinyó-kártyák ne mutassanak "
+            "olyat, ami a Notionban már máshol van."
+        )
 
     db.flush()
 

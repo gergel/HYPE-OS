@@ -54,6 +54,9 @@ class DeliverableListItem(BaseModel):
     #: A vinyó-nézet keresőjéhez (projektkódra/eseményre is lehessen keresni).
     projektkod_szoveg: str | None = None
     esemeny_neve: str | None = None
+    #: A vinyó-nézet kártya-címkéjéhez (ott az archiválás állapota kell, nem
+    #: a vágás-állapot - a felhasználó kérése).
+    archivalas: str | None = None
 
     model_config = {"from_attributes": True}
 

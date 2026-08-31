@@ -274,7 +274,9 @@ export function UtomunkaContent({
     }
     return vinyoOptions
       .filter((v) => (byVinyo.get(v)?.length ?? 0) > 0)
-      .map((v) => ({ key: v, label: v, cards: byVinyo.get(v)!.map((d) => toCard(d, d.allapot ? [d.allapot] : [])) }));
+      // A kártya-címke itt az ARCHIVÁLÁS állapota (a felhasználó kérése) -
+      // a vágás-állapotot a fenti állapot-tábla úgyis mutatja.
+      .map((v) => ({ key: v, label: v, cards: byVinyo.get(v)!.map((d) => toCard(d, d.archivalas ? [d.archivalas] : [])) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliverables, vinyoOptions, vinyoKereses, kartyaMezok, employeeName, timerNevek]);
 
