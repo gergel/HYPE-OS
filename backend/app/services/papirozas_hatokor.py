@@ -98,10 +98,29 @@ RENDSZER_DISZPO_KEZDETE = date(2026, 9, 1)
 
 
 def diszpozott_projekt_feltetel():
-    """SQLAlchemy-feltétel: a papírozásba a DISZPÓ jogán csak a rendszer-éra
-    (szept. 1-től) forgatásai kerülnek be."""
-    from sqlalchemy import and_
+    """SQLAlchemy-feltétel: mely projektek tartoznak a papírozási nézetekbe.
 
+    Három jogcím, bármelyik elég:
+    1. a RENDSZER-ÉRA (szept. 1-től) kiküldött diszpója - a régebbi "Kiküldve"
+       visszamenőleges adatpótlás, önmagában nem papírozási jel;
+    2. MÁR VAN hozzá szerződés vagy TIG (közvetlenül vagy tételként) - a
+       visszamenőleg lepapírozott munkáknak is látszaniuk kell, különben épp a
+       kész áttekintés tűnne el (a felhasználó kérése);
+    3. (a hívók a maguk or_-jában) valós alvállalkozói kiadás.
+
+    Amit ez KISZŰR: a szept. 1. előtti, papír és kiadás nélküli projektek -
+    ezek csak a visszamenőleges "Kiküldve"-jelölés miatt tűntek teendőnek
+    (300+ hamis "hiányzó szerződés" sor a valós 20-30 helyett)."""
+    from sqlalchemy import and_, exists, or_
+
+    from app.models.contract import Contract, ContractTetel
+    from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateTetel
     from app.models.project import Project
 
-    return and_(Project.diszpo == "Kiküldve", Project.forgatas_datuma >= RENDSZER_DISZPO_KEZDETE)
+    return or_(
+        and_(Project.diszpo == "Kiküldve", Project.forgatas_datuma >= RENDSZER_DISZPO_KEZDETE),
+        exists().where(Contract.project_id == Project.id),
+        exists().where(ContractTetel.project_id == Project.id),
+        exists().where(PerformanceCertificate.project_id == Project.id),
+        exists().where(PerformanceCertificateTetel.project_id == Project.id),
+    )
