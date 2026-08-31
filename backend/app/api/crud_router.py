@@ -217,6 +217,20 @@ def build_crud_router(
         stmt = select(model)
         if sor_szuro is not None:
             stmt = sor_szuro(stmt, db, _user)
+        # Több rekord EGY kérésben, id-lista alapján (?ids=1,2,3): a frontend
+        # getRecordsByIds korábban rekordonként külön HTTP-kérést indított -
+        # egy sok-forgatásos eszköz adatlapja több száz párhuzamos kérést lőtt
+        # ki, ami kimerítette az adatbázis-kapcsolatokat és mindenki másnak
+        # megakasztotta a rendszert.
+        ids_param = request.query_params.get("ids")
+        if ids_param:
+            try:
+                id_lista = [int(x) for x in ids_param.split(",") if x.strip()]
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Az ids paraméter csak számokat tartalmazhat."
+                ) from None
+            stmt = stmt.where(model.id.in_(id_lista))
         # Eager load a lista-lekérdezéshez: ha a read séma számított mezői
         # kapcsolatokat járnak be (pl. ProjectCode.osszes_koltseg), azok
         # enélkül SORONKÉNT indítanának külön lekérdezést.

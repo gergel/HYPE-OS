@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from app.api.routes import api_router
 from app.core.config import settings
@@ -38,6 +39,17 @@ async def catch_unhandled_exceptions(request: Request, call_next):
     felhasználó felé megy egyértelmű üzenet)."""
     try:
         return await call_next(request)
+    except SQLAlchemyTimeoutError:
+        # Kapcsolat-kimerülés (pool timeout): EGY sor a logba, nem teljes
+        # traceback - túlterheléskor kérésenként egy ~100 soros traceback
+        # percenként több ezer log-sort jelentett, amit a Railway el is
+        # kezdett eldobni (500 log/mp korlát), és pont a hasznos sorok
+        # vesztek el. A válasz 503: a kliens tudja, hogy átmeneti.
+        logger.warning("Adatbázis-kapcsolat várakozás timeout: %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "A rendszer pillanatnyilag túlterhelt - próbáld újra pár másodperc múlva."},
+        )
     except Exception:
         logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
         return JSONResponse(status_code=500, content={"detail": "Váratlan szerverhiba történt."})

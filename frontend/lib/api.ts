@@ -1900,10 +1900,22 @@ export async function getContactsByClient(clientId: number): Promise<Contact[]> 
 
 /** Több rekord lekérése id lista alapján (many-to-many kapcsolatokhoz, pl. egy
  * Projekthez rendelt Equipment-ek - ott nincs egyetlen foreign key oszlop, amivel
- * getRelated szűrhetne, csak egy id-lista a rekordon). */
+ * getRelated szűrhetne, csak egy id-lista a rekordon).
+ *
+ * KÖTEGELVE megy (?ids=1,2,3 - lásd backend crud_router), NEM rekordonként
+ * külön kéréssel: a korábbi, párhuzamos darabonkénti lekérés egy sok-
+ * forgatásos eszköz adatlapjánál több száz egyidejű HTTP-kérést jelentett,
+ * ami kimerítette a szerver adatbázis-kapcsolatait, és az egész rendszert
+ * megakasztotta. */
 export async function getRecordsByIds(basePath: string, ids: number[]): Promise<JsonRecord[]> {
-  const records = await Promise.all(ids.map((id) => getRecord(basePath, id)));
-  return records.filter((r): r is JsonRecord => r !== null);
+  if (ids.length === 0) return [];
+  // Adagokban, hogy az URL ne nőhessen a határok fölé.
+  const adagok: number[][] = [];
+  for (let i = 0; i < ids.length; i += 200) adagok.push(ids.slice(i, i + 200));
+  const valaszok = await Promise.all(
+    adagok.map((adag) => apiGet<JsonRecord[]>(`${basePath}?ids=${adag.join(",")}&limit=${adag.length}`)),
+  );
+  return valaszok.flatMap((v) => v ?? []);
 }
 
 // A tényleges megvalósítás a függőség nélküli lib/penz.ts-ben van (kliens-
