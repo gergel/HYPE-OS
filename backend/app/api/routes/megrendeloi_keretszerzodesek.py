@@ -45,7 +45,9 @@ from app.services.google_email import send_message
 
 router = APIRouter(prefix="/megrendeloi-keretszerzodesek", tags=["megrendeloi-keretszerzodesek"])
 
-PAGE = "/projektek/project-kodok"
+# KÜLÖN adható jog (a felhasználó kérése): a megrendelői keretszerződések
+# oldala elvált a Project Code-ok jogosultságától.
+PAGE = "/projektek/megrendeloi-keretszerzodesek"
 
 
 class KeretRead(BaseModel):

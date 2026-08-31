@@ -526,6 +526,39 @@ export function DiszpoTablaRacs({
             >
               + Oszlop jobbra
             </button>
+            {/* KÜLÖN GOMB az oszlop elrejtésére (a felhasználó kérése) - eddig
+                csak a jobb-klikk menüből ment. A kijelölt oszlopo(ka)t rejti:
+                tartomány-kijelölésnél az összes érintett, nem-fagyasztott
+                oszlopot. A fagyasztott (dátum/nap/diszpószám) oszlopok
+                maradnak: azok igazítanak el, melyik sorban vagyunk. */}
+            {(() => {
+              const tol = Math.min(tartomany?.tol.oszlop ?? kijelolt.oszlop, tartomany?.ig.oszlop ?? kijelolt.oszlop);
+              const ig = Math.max(tartomany?.tol.oszlop ?? kijelolt.oszlop, tartomany?.ig.oszlop ?? kijelolt.oszlop);
+              const rejtendok: number[] = [];
+              for (let c = Math.max(tol, fagyasztott); c <= ig; c++) {
+                if (!oszlopTerkep.get(c)?.rejtett) rejtendok.push(c);
+              }
+              if (rejtendok.length === 0) return null;
+              return (
+                <button
+                  type="button"
+                  disabled={busy}
+                  title="A kijelölt oszlop(ok) elrejtése - lent a Rejtett oszlopok sávból bármikor visszahozható"
+                  onClick={async () => {
+                    for (const c of rejtendok) {
+                      // Sorban, nem párhuzamosan: a hivas() frissíti a munkalapot,
+                      // és az oszlop-indexek stabilak (az elrejtés nem indexel át).
+                      await hivas(`/oszlop/${c}`, { method: "PUT", body: JSON.stringify({ rejtett: true }) });
+                    }
+                  }}
+                  className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-40"
+                >
+                  {rejtendok.length > 1
+                    ? `${rejtendok.length} oszlop elrejtése`
+                    : `${oszlopBetu(rejtendok[0])} oszlop elrejtése`}
+                </button>
+              );
+            })()}
           </>
         )}
         <span className="ml-auto text-[11.5px] text-text-muted">

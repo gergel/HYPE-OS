@@ -48,6 +48,10 @@ export function VisszajelzesLista({
   const [busyId, setBusyId] = useState<number | null>(null);
   const [kereses, setKereses] = useState("");
   const [allapotSzuro, setAllapotSzuro] = useState("");
+  // Helyben szerkesztett visszajelzés (a felhasználó kérése): a három
+  // pontszám és a szöveg átírható - a mentés a generikus /feedback PATCH.
+  const [szerkesztettId, setSzerkesztettId] = useState<number | null>(null);
+  const [piszkozat, setPiszkozat] = useState({ megjegyzes: "", nyersanyag: "", technika: "", kreativ: "" });
 
   const szurt = useMemo(() => {
     const q = kereses.trim().toLowerCase();
@@ -66,7 +70,9 @@ export function VisszajelzesLista({
     if (!(await confirm(`Törlöd ezt a visszajelzést (${v.visszajelzo_nev ?? "ismeretlen"})?`))) return;
     setBusyId(v.id);
     try {
-      const res = await authFetch(`/api/v1/feedbacks/${v.id}`, { method: "DELETE" });
+      // FIGYELEM: a generikus végpont "/feedback" (egyes szám, lásd backend
+      // postproduction.feedback_router) - a korábbi "/feedbacks" 404 volt.
+      const res = await authFetch(`/api/v1/feedback/${v.id}`, { method: "DELETE" });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
@@ -90,6 +96,43 @@ export function VisszajelzesLista({
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
         return;
       }
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function szerkesztesInditasa(v: VagoiVisszajelzes) {
+    setSzerkesztettId(v.id);
+    setPiszkozat({
+      megjegyzes: v.megjegyzes ?? "",
+      nyersanyag: v.nyersanyag_felhasznalhatosaga?.toString() ?? "",
+      technika: v.technikai_helyesseg?.toString() ?? "",
+      kreativ: v.kreativ_kepivilag?.toString() ?? "",
+    });
+  }
+
+  async function szerkesztesMentese(v: VagoiVisszajelzes) {
+    const szam = (s: string) => (s.trim() === "" ? null : Number(s.replace(",", ".")));
+    setBusyId(v.id);
+    try {
+      // A mezőnevek a Feedback OSZLOPAI (a megjegyzés a visszajelzes_szoveg) -
+      // a generikus PATCH nyers oszlopneveket vár (lásd backend crud_router).
+      const res = await authFetch(`/api/v1/feedback/${v.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          visszajelzes_szoveg: piszkozat.megjegyzes || null,
+          nyersanyag_felhasznalhatosaga: szam(piszkozat.nyersanyag),
+          technikai_helyesseg: szam(piszkozat.technika),
+          kreativ_kepivilag: szam(piszkozat.kreativ),
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      setSzerkesztettId(null);
       router.refresh();
     } finally {
       setBusyId(null);
@@ -288,10 +331,79 @@ export function VisszajelzesLista({
                   {nyitva && (
                     <tr className="border-b border-border bg-surface-2">
                       <td colSpan={kompakt ? 7 : 9} className="px-3 py-4">
-                        <p className="t-label mb-1.5">Megjegyzés</p>
-                        <p className="mb-4 whitespace-pre-line text-[13px] text-text-secondary">
-                          {v.megjegyzes || "Nincs szöveges megjegyzés."}
-                        </p>
+                        {szerkesztettId === v.id ? (
+                          /* SZERKESZTÉS (a felhasználó kérése): a pontszámok és
+                             a szöveg átírhatók - pl. elgépelt pont, pontosított
+                             megfogalmazás. */
+                          <div className="mb-4 space-y-3">
+                            <div className="flex flex-wrap gap-3">
+                              {(
+                                [
+                                  ["Nyersanyag (1-10)", "nyersanyag"],
+                                  ["Technika (1-10)", "technika"],
+                                  ["Kreatív (1-10)", "kreativ"],
+                                ] as const
+                              ).map(([cimke, kulcs]) => (
+                                <label key={kulcs} className="flex flex-col gap-1 text-[11.5px] text-text-muted">
+                                  {cimke}
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={10}
+                                    step={0.5}
+                                    value={piszkozat[kulcs]}
+                                    onChange={(e) => setPiszkozat((p) => ({ ...p, [kulcs]: e.target.value }))}
+                                    className="w-28 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                            <label className="flex flex-col gap-1 text-[11.5px] text-text-muted">
+                              Megjegyzés
+                              <textarea
+                                rows={4}
+                                value={piszkozat.megjegyzes}
+                                onChange={(e) => setPiszkozat((p) => ({ ...p, megjegyzes: e.target.value }))}
+                                className="w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] leading-relaxed text-text-primary focus:outline-none"
+                              />
+                            </label>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                disabled={busyId === v.id}
+                                onClick={() => szerkesztesMentese(v)}
+                                className="btn btn-primary !text-[12.5px]"
+                              >
+                                {busyId === v.id ? "Mentés…" : "Mentés"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSzerkesztettId(null)}
+                                className="btn btn-ghost !text-[12.5px]"
+                              >
+                                Mégse
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="mb-1.5 flex items-center gap-3">
+                              <p className="t-label">Megjegyzés</p>
+                              {canSend && (
+                                <button
+                                  type="button"
+                                  onClick={() => szerkesztesInditasa(v)}
+                                  className="text-[12px] text-text-accent hover:underline"
+                                >
+                                  Szerkesztés
+                                </button>
+                              )}
+                            </div>
+                            <p className="mb-4 whitespace-pre-line text-[13px] text-text-secondary">
+                              {v.megjegyzes || "Nincs szöveges megjegyzés."}
+                            </p>
+                          </>
+                        )}
 
                         {/* Kik voltak a forgatáson: nekik szól a visszajelzés,
                             és ők kapják a diszpóra küldött levelet. */}

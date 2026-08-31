@@ -151,6 +151,22 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   // kitakarja a pénz-mezőket e jog nélkül (routes/project_codes.py
   // _penz_kimenet_szuro) - itt a teljes pénz-blokkokat rejtjük el.
   const lathatKoltseget = lathatjaAzOldalt(pagePermissions, "/penzugyek");
+  // A megrendelői szerződés/TIG oldalak KÜLÖN adható jogok (a felhasználó
+  // kérése) - ezek nélkül az adatlapon a papír-kártyák sem jelennek meg, és
+  // a műveleteikhez is a saját oldaluk joga kell (lásd backend
+  // routes/megrendeloi_papirok.py papir_jog).
+  const lathatSzerzodest = lathatjaAzOldalt(pagePermissions, "/projektek/megrendeloi-szerzodesek");
+  const lathatTiget = lathatjaAzOldalt(pagePermissions, "/projektek/megrendeloi-tigek");
+  const szerkeszthetSzerzodest = canDoAction(currentUser, pagePermissions, "/projektek/megrendeloi-szerzodesek", "edit");
+  const torolhetSzerzodest = canDoAction(currentUser, pagePermissions, "/projektek/megrendeloi-szerzodesek", "delete");
+  const szerkeszthetTiget = canDoAction(currentUser, pagePermissions, "/projektek/megrendeloi-tigek", "edit");
+  const torolhetTiget = canDoAction(currentUser, pagePermissions, "/projektek/megrendeloi-tigek", "delete");
+  const szerkeszthetKeretKotest = canDoAction(
+    currentUser,
+    pagePermissions,
+    "/projektek/megrendeloi-keretszerzodesek",
+    "edit",
+  );
   // Az AlvallalkozoiPapirokAttekintes kártyák az Utókövetés-hozzáféréshez
   // kötöttek - ugyanaz a szabály, mint a forgatás adatlapján
   // (lásd ProjectDetailContent lathatUtokovetest).
@@ -276,6 +292,10 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             sorrend maga az információ: a számla addig nem nyílik meg, amíg az
             első kettő nincs meg - így ránézésre látszik, hol tart a munka. */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          {/* A szerződés- és TIG-kártya a SAJÁT papír-oldal jogához kötött
+              (a felhasználó kérése): aki csak projektkódot lát, az ezt a
+              blokkot nem látja. */}
+          {lathatSzerzodest && (
           <Card title="1. Megrendelői szerződés" icon={FileSignature}>
             {/* Keret alatt nincs eseti szerződés-teendő - de ezt KI KELL
                 MONDANI a projektkódra, nem elég, hogy az ügyfélnek van
@@ -287,7 +307,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
                 keretNeve={szoveg(projectCode.keretszerzodes_neve)}
                 keretszerzodesId={typeof projectCode.contract_id === "number" ? projectCode.contract_id : null}
                 keretek={megrendeloiKeretek}
-                canEdit={canEdit}
+                canEdit={szerkeszthetKeretKotest}
               />
             </div>
             <MegrendeloiPapirKezelo
@@ -297,13 +317,15 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               ugyfelek={ugyfelek}
               kontaktok={megrendeloiKontaktok}
               megbizasTargyaLista={megbizasTargyaLista}
-              canEdit={canEdit}
-              canDelete={canDelete}
+              canEdit={szerkeszthetSzerzodest}
+              canDelete={torolhetSzerzodest}
               kellPapir={kellPapir}
               nincsPapirOka={elmaradt ? "Az esemény elmaradt - erre a kódra nem kérünk papírt." : undefined}
               penznem={penznemKod}
             />
           </Card>
+          )}
+          {lathatTiget && (
           <Card title="2. Megrendelői TIG" icon={FileCheck2}>
             <MegrendeloiPapirKezelo
               projectCodeId={projectCodeId}
@@ -312,13 +334,14 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               ugyfelek={ugyfelek}
               kontaktok={megrendeloiKontaktok}
               megbizasTargyaLista={megbizasTargyaLista}
-              canEdit={canEdit}
-              canDelete={canDelete}
+              canEdit={szerkeszthetTiget}
+              canDelete={torolhetTiget}
               kellPapir={kellPapir}
               nincsPapirOka={elmaradt ? "Az esemény elmaradt - erre a kódra nem kérünk papírt." : undefined}
               penznem={penznemKod}
             />
           </Card>
+          )}
           {/* A számla-kártya PÉNZ: összeg, fizetési határidő, kifizetés -
               Pénzügy-jog nélkül nem jelenik meg (a felhasználó kérése). */}
           {lathatKoltseget && (
@@ -374,12 +397,17 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
                       Az esemény elmaradt – erre a kódra nem kérünk papírt.
                     </p>
                   ) : (
+                    // A papír-állapot jelzői is csak a saját oldal jogával.
                     <div className="flex flex-wrap gap-2">
-                      <StatusBadge
-                        label={szerzodesKesz ? "Szerződés megvan" : "Szerződés hiányzik"}
-                        tone={szerzodesKesz ? "success" : "warning"}
-                      />
-                      <StatusBadge label={tigKesz ? "TIG megvan" : "TIG hiányzik"} tone={tigKesz ? "success" : "warning"} />
+                      {lathatSzerzodest && (
+                        <StatusBadge
+                          label={szerzodesKesz ? "Szerződés megvan" : "Szerződés hiányzik"}
+                          tone={szerzodesKesz ? "success" : "warning"}
+                        />
+                      )}
+                      {lathatTiget && (
+                        <StatusBadge label={tigKesz ? "TIG megvan" : "TIG hiányzik"} tone={tigKesz ? "success" : "warning"} />
+                      )}
                     </div>
                   )}
                 </div>

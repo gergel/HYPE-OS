@@ -25,7 +25,14 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import get_current_user, require_page_action
+from app.core.security import (
+    DEFAULT_WRITE_ROLES,
+    check_page_action,
+    get_current_user,
+    lathatja_e_az_oldalt,
+    require_page_action,
+    require_roles,
+)
 from app.models.contract import Contract
 from app.models.employee import Employee
 from app.models.megrendeloi_papir import ALLAPOTOK, LEZART_ALLAPOTOK, MegrendeloiSzerzodes, MegrendeloiTig
@@ -38,12 +45,40 @@ from app.services.hu_number_words import szam_betukkel
 
 router = APIRouter(prefix="/megrendeloi-papirok", tags=["megrendeloi-papirok"])
 
+#: A számla-állás végpontok jogosultsága maradt a Project Code-oké (a
+#: kifizetés-követés a kód adatlapjának része); a PAPÍROK (szerződés/TIG)
+#: viszont KÜLÖN adható jogot kaptak - a felhasználó kérése: aki csak
+#: projektkódokat lát, ne lássa és ne kezelhesse a szerződéseket/TIG-eket.
 PAGE = "/projektek/project-kodok"
+PAGE_SZERZODES = "/projektek/megrendeloi-szerzodesek"
+PAGE_TIG = "/projektek/megrendeloi-tigek"
+PAGE_KERET = "/projektek/megrendeloi-keretszerzodesek"
 
 #: A két papírfajta. A `kulcs` megy az útvonalba, hogy egy komponens
 #: szolgálhassa ki mindkettőt a felületen.
 SZERZODES = "szerzodes"
 TIG = "tig"
+
+
+def _papir_oldal(fajta: str) -> str:
+    return PAGE_TIG if fajta == TIG else PAGE_SZERZODES
+
+
+def papir_jog(action: str):
+    """Ugyanaz, mint a require_page_action, csak az oldalt a {fajta}
+    útvonal-paraméter dönti el: a szerződés-műveletekhez a szerződés-oldal,
+    a TIG-ekhez a TIG-oldal joga kell."""
+    role_dependency = require_roles(*DEFAULT_WRITE_ROLES)
+
+    def dependency(
+        fajta: str,
+        current_user: Employee = Depends(role_dependency),
+        db: Session = Depends(get_db),
+    ) -> Employee:
+        check_page_action(db, current_user, _papir_oldal(fajta), action)
+        return current_user
+
+    return dependency
 
 
 def _modell(fajta: str):
@@ -200,6 +235,8 @@ def get_elotoltes(
     services/megrendeloi_papir.szerzodo_fel_adatai) - a felületen mind
     szerkeszthető."""
     _modell(fajta)
+    if not lathatja_e_az_oldalt(db, _user, _papir_oldal(fajta)):
+        raise HTTPException(status_code=403, detail="Nincs hozzáférésed a megrendelői papírokhoz.")
     pk = _projektkod_vagy_404(db, project_code_id)
 
     # A TIG UGYANARRÓL A MUNKÁRÓL szól, mint a szerződés: amit oda egyszer
@@ -326,6 +363,10 @@ def list_papirok(
     ha eltűnnének, csak az látszana, hogy "nincs papír", az pedig hiányosságnak
     néz ki, nem döntésnek (ugyanaz a szabály, mint a külsős TIG-eknél)."""
     modell = _modell(fajta)
+    # A papírok LÁTÁSA is a saját (szerződés/TIG) oldal jogához kötött - a
+    # felhasználó kérése: aki csak projektkódokat lát, ne lásson papírokat.
+    if not lathatja_e_az_oldalt(db, _user, _papir_oldal(fajta)):
+        raise HTTPException(status_code=403, detail="Nincs hozzáférésed a megrendelői papírokhoz.")
     stmt = select(modell)
     if project_code_id is not None:
         stmt = stmt.where(modell.project_code_id == project_code_id)
@@ -383,7 +424,7 @@ def save_papir(
     payload: PapirIn,
     papir_id: int | None = None,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(papir_jog("edit")),
 ):
     """Piszkozat mentése kiküldés nélkül."""
     _projektkod_vagy_404(db, project_code_id)
@@ -469,7 +510,7 @@ def generate_and_send(
     payload: PapirIn,
     papir_id: int | None = None,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(papir_jog("create")),
 ):
     """A papír generálása a sablonból és azonnali kiküldése e-mailben.
 
@@ -536,7 +577,7 @@ def set_allapot(
     papir_id: int,
     payload: AllapotIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(papir_jog("edit")),
 ):
     """Az állapot kézi átállítása - egy tévesen kiküldöttre állított papír
     visszavehető, és újra elkészíthető."""
@@ -578,7 +619,7 @@ def set_keret_kotes(
     project_code_id: int,
     payload: KeretKotesIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE_KERET, "edit")),
 ):
     """"Ez a munka keretszerződés alatt van" - a projektkód rákötése a
     megrendelői keretszerződésre.
@@ -634,7 +675,7 @@ def skip_papir(
     payload: KihagyasIn,
     papir_id: int | None = None,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(papir_jog("edit")),
 ):
     """Kihagyás - INDOKKAL.
 
@@ -658,7 +699,7 @@ async def upload_sajat_papir(
     papir_id: int | None = None,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(papir_jog("edit")),
 ):
     """SAJÁT papír feltöltése a generálás helyett.
 
@@ -702,7 +743,7 @@ async def upload_alairt(
     papir_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(papir_jog("edit")),
 ):
     """Az ALÁÍRVA visszakapott példány. Amíg ez nincs meg, a papír
     "aláírásra vár" - a kiküldés önmagában még nem lezárt ügy.
@@ -737,7 +778,7 @@ def delete_papir(
     fajta: str,
     papir_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+    _user: Employee = Depends(papir_jog("delete")),
 ):
     """A papír törlése - utána tiszta lappal újrakezdhető.
 

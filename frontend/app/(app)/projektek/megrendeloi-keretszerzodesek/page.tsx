@@ -4,7 +4,9 @@ import { TopBar } from "@/components/TopBar";
 import { getCurrentUser, getMegrendeloiKeretek, getMyPagePermissions } from "@/lib/api";
 import { canDoAction } from "@/lib/permissions";
 
-const PAGE = "/projektek/project-kodok";
+// SAJÁT jogosultság (a felhasználó kérése) - lásd backend
+// routes/megrendeloi_keretszerzodesek.py PAGE.
+const PAGE = "/projektek/megrendeloi-keretszerzodesek";
 
 /** Megrendelői keretszerződések: akikkel KERETBEN dolgozunk.
  *

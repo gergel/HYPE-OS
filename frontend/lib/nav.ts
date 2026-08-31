@@ -103,25 +103,25 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Project Code-ok", href: "/projektek/project-kodok", icon: "Hash" },
       { label: "Projektek", href: "/projektek", icon: "FolderKanban" },
-      // A megrendelői papírok a projektkódhoz tartoznak, ezért ugyanaz a
-      // backend jogosultság védi őket (lásd routes/megrendeloi_papirok.py PAGE).
+      // A megrendelői papír-oldalak KÜLÖN adható jogok (a felhasználó
+      // kérése): a Project Code-ok joga önmagában már nem nyitja meg őket -
+      // aki csak kódokat lát, az a szerződéseket/TIG-eket nem látja (lásd
+      // backend routes/megrendeloi_papirok.py PAGE_SZERZODES/PAGE_TIG és
+      // megrendeloi_keretszerzodesek.py PAGE).
       {
         label: "Megrendelői keretszerződések",
         href: "/projektek/megrendeloi-keretszerzodesek",
         icon: "FileSignature",
-        permissionPage: "/projektek/project-kodok",
       },
       {
         label: "Megrendelői szerződések",
         href: "/projektek/megrendeloi-szerzodesek",
         icon: "FileText",
-        permissionPage: "/projektek/project-kodok",
       },
       {
         label: "Megrendelői TIG-ek",
         href: "/projektek/megrendeloi-tigek",
         icon: "FileCheck2",
-        permissionPage: "/projektek/project-kodok",
       },
     ],
   },

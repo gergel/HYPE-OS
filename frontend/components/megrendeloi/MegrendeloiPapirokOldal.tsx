@@ -15,7 +15,12 @@ import {
 import { devizas, penzzel } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 
-const PAGE = "/projektek/project-kodok";
+// A fajta SAJÁT oldal-joga (a felhasználó kérése: a szerződés/TIG oldalak
+// külön adható jogok) - lásd backend routes/megrendeloi_papirok.py.
+const OLDAL_FAJTANKENT: Record<string, string> = {
+  szerzodes: "/projektek/megrendeloi-szerzodesek",
+  tig: "/projektek/megrendeloi-tigek",
+};
 
 /** A megrendelői papírok GYŰJTŐ oldala - egy fajtából az összes, a
  * KIHAGYOTTAKKAL együtt.
@@ -46,7 +51,7 @@ export async function MegrendeloiPapirokOldal({
     getCurrentUser(),
     getMyPagePermissions(),
   ]);
-  const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+  const canDelete = canDoAction(currentUser, pagePermissions, OLDAL_FAJTANKENT[fajta], "delete");
 
   const kikuldott = rows.filter((p) => p.allapot === "Kiküldve").length;
   const kihagyott = rows.filter((p) => p.allapot === "Kihagyva").length;

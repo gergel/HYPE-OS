@@ -10,6 +10,7 @@ import { FeedbackSendButton } from "@/components/deliverable/FeedbackSendButton"
 import { VisszajelzesLista } from "@/components/deliverable/VisszajelzesLista";
 import { TimerControls } from "@/components/deliverable/TimerControls";
 import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
+import { DeleteButton } from "@/components/DeleteButton";
 import { DetailSections } from "@/components/DetailSections";
 import { RelatedTable } from "@/components/RelatedTable";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -138,6 +139,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
   const statusOptions = fieldTypes.allapot?.options ?? [];
   // Aki az Utómunka oldalon szerkeszthet, az javíthatja a rögzített perceket is.
   const canEditPage = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
+  const canDeletePage = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
   // Forint összeg csak annak, akinek a Pénzügy oldalhoz van hozzáférése -
   // ugyanaz a szabály, mint a backend deliverable_actions._may_see_costs-é
   // (az oldal kulcsának puszta megléte már "view"-t jelent).
@@ -307,6 +309,16 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               />
             ) : (
               Boolean(deliverable.allapot) && <StatusBadge label={String(deliverable.allapot)} tone="neutral" />
+            )}
+            {/* Az anyag TÖRLÉSE (a felhasználó kérése) - megerősítéssel, és a
+                törlés Ctrl+Z-vel visszavonható (lásd lib/visszavonas.ts). */}
+            {canDeletePage && (
+              <DeleteButton
+                path={`/api/v1/deliverables/${deliverableId}`}
+                redirectTo="/utomunka"
+                label="Kártya törlése"
+                className="btn btn-ghost !text-[12.5px] text-text-danger"
+              />
             )}
           </div>
         </div>

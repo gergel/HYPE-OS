@@ -177,21 +177,45 @@ _PENZ_MEZOK_URES = (
 )
 
 
+#: A SZERZŐDÉS-, illetve TIG-állapot mezői - a saját (külön adható) papír-oldal
+#: joga nélkül kitakarva mennek ki (a felhasználó kérése: aki csak kódokat lát,
+#: azt se lássa, van-e már szerződés/TIG egy munkán).
+_SZERZODES_MEZOK = ("szerzodes_kesz", "szerzodes_kihagyva", "szerzodes_kikuldve_varjuk")
+_TIG_MEZOK = ("tig_kesz", "tig_kihagyva", "tig_kikuldve_varjuk")
+
+
 def _penz_kimenet_szuro(sorok: list[dict], db: Session, user: Employee) -> list[dict]:
     """Pénzügy-hozzáférés nélkül a projektkód pénz-mezői kitakarva mennek ki -
     a jogot EGYSZER kérdezzük le, nem soronként (lásd crud_router
-    kimenet_szuro)."""
-    if lathatja_e_az_oldalt(db, user, "/penzugyek"):
+    kimenet_szuro). Ugyanitt takarjuk ki a szerződés/TIG állapot-mezőket is a
+    saját papír-oldal joga nélkül."""
+    lathat_penzt = lathatja_e_az_oldalt(db, user, "/penzugyek")
+    lathat_szerzodest = lathatja_e_az_oldalt(db, user, "/projektek/megrendeloi-szerzodesek")
+    lathat_tiget = lathatja_e_az_oldalt(db, user, "/projektek/megrendeloi-tigek")
+    if lathat_penzt and lathat_szerzodest and lathat_tiget:
         return sorok
     for sor in sorok:
-        for mezo in _PENZ_MEZOK_NULLA:
-            if mezo in sor:
-                sor[mezo] = 0
-        for mezo in _PENZ_MEZOK_URES:
-            if mezo in sor:
-                sor[mezo] = None
-        if "szamla_hataridok" in sor:
-            sor["szamla_hataridok"] = []
+        if not lathat_penzt:
+            for mezo in _PENZ_MEZOK_NULLA:
+                if mezo in sor:
+                    sor[mezo] = 0
+            for mezo in _PENZ_MEZOK_URES:
+                if mezo in sor:
+                    sor[mezo] = None
+            if "szamla_hataridok" in sor:
+                sor["szamla_hataridok"] = []
+        if not lathat_szerzodest:
+            for mezo in _SZERZODES_MEZOK:
+                if mezo in sor:
+                    sor[mezo] = False
+            if "keretszerzodes_neve" in sor:
+                sor["keretszerzodes_neve"] = None
+        if not lathat_tiget:
+            for mezo in _TIG_MEZOK:
+                if mezo in sor:
+                    sor[mezo] = False
+            if "tig_statusza" in sor:
+                sor["tig_statusza"] = None
     return sorok
 
 

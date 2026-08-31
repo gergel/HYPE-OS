@@ -224,6 +224,17 @@ def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get
             select(DeliverableStatusConfig.allapot).where(DeliverableStatusConfig.kesz_allapot.is_(True))
         ).all()
     )
+    # Amely állapothoz AUTOMATIKUS kiosztás tartozik, és ebben a felhasználó
+    # benne van (pl. "Kiküldésre vár" -> akik kiküldik), az az állapot NEKI
+    # akkor is teendő, ha egyébként "kész"-nek számít: pont ott van vele
+    # dolga (a felhasználó kérése - a dashboardon is jelenjen meg).
+    auto_allapotok = [
+        sor.allapot
+        for sor in db.scalars(
+            select(DeliverableStatusConfig).where(DeliverableStatusConfig.auto_kiosztott_employee_ids.is_not(None))
+        ).all()
+        if current_user.id in [int(i) for i in (sor.auto_kiosztott_employee_ids or [])]
+    ]
     nyitott_feltetelek = [
         # Több embert is ki lehet osztani egy anyagra (kiosztottak m2m) - a
         # régi egyértékű mezőt is nézzük, hátha egy régi író csak azt tölti.
@@ -234,9 +245,10 @@ def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get
         Deliverable.anyag_kikuldve.is_(False),
     ]
     if kesz_allapotok:
-        nyitott_feltetelek.append(
-            or_(Deliverable.allapot.is_(None), Deliverable.allapot.not_in(kesz_allapotok))
-        )
+        allapot_feltetelek = [Deliverable.allapot.is_(None), Deliverable.allapot.not_in(kesz_allapotok)]
+        if auto_allapotok:
+            allapot_feltetelek.append(Deliverable.allapot.in_(auto_allapotok))
+        nyitott_feltetelek.append(or_(*allapot_feltetelek))
     deliverables = db.scalars(
         select(Deliverable).where(*nyitott_feltetelek).order_by(Deliverable.hatarido.asc().nulls_last())
     ).all()
@@ -268,7 +280,15 @@ def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get
 
     return MyTasksSummary(
         deliverables=[
-            MyTaskItem(id=d.id, title=d.projekt_neve or f"Anyag #{d.id}", hatarido=d.hatarido, link=f"/utomunka/{d.id}")
+            MyTaskItem(
+                id=d.id,
+                # Az állapot-alapú (automatikus) teendőnél a cím az ÁLLAPOTOT
+                # is mondja - abból derül ki, MIÉRT teendő ("Kiküldésre vár").
+                title=(d.projekt_neve or f"Anyag #{d.id}")
+                + (f" – {d.allapot}" if d.allapot and d.allapot in auto_allapotok else ""),
+                hatarido=d.hatarido,
+                link=f"/utomunka/{d.id}",
+            )
             for d in deliverables
         ],
         tasks=[MyTaskItem(id=t.id, title=t.feladat, hatarido=t.hatarido, link="/feladatok") for t in tasks],

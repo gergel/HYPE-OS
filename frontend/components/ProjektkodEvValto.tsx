@@ -27,9 +27,13 @@ export function evheztartozik(projektkod: string, ev: ProjektkodEv): boolean {
 export function ProjektkodEvValto({
   aktiv,
   darabszamok,
+  teendokkel = true,
 }: {
   aktiv: ProjektkodEv;
   darabszamok: Record<ProjektkodEv, number>;
+  /** A Teendők nézet a papírozásról (szerződés/TIG) szól - a papír-oldalak
+   * joga nélkül a fül sem jelenik meg (a felhasználó kérése). */
+  teendokkel?: boolean;
 }) {
   const nezetek: { ev: ProjektkodEv; cimke: string }[] = [
     ...PROJEKTKOD_EVEK.map((e) => ({ ev: e.ev as ProjektkodEv, cimke: e.ev })),
@@ -37,7 +41,7 @@ export function ProjektkodEvValto({
     // A negyedik nézet nem évre szűr, hanem TEENDŐRE bont: hol nincs még
     // szerződés, hol hiányzik már csak a TIG, és mit nem fizettek ki. A
     // többi nézetben ezek elvegyülnek a kész munkák közt.
-    { ev: "teendok", cimke: "Teendők" },
+    ...(teendokkel ? [{ ev: "teendok" as ProjektkodEv, cimke: "Teendők" }] : []),
   ];
 
   return (

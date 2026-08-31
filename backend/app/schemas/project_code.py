@@ -5,6 +5,10 @@ from pydantic import BaseModel
 
 class ProjectCodeBase(BaseModel):
     projektkod: str
+    #: A projekt neve - felvételkor EZT kérjük az ügyfél helyett (a
+    #: felhasználó kérése): a kód lefoglalásakor a munka neve már megvan, az
+    #: ügyfél sokszor később dől el, és az adatlapon utólag megadható.
+    project_nev: str | None = None
     #: Opcionális: a kód gyakran előbb kell, mint ahogy eldől, kinek a munkája
     #: (lásd models/project_code.py).
     client_id: int | None = None

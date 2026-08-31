@@ -22,7 +22,6 @@ import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   formatHuf,
-  getClients,
   getCurrentUser,
   getFieldTypes,
   getMyPagePermissions,
@@ -46,7 +45,7 @@ const PAGE = "/projektek/project-kodok";
  *
  * Ahol nincs mit papírozni (nem szerződéses munka, vagy papír nélkül
  * elszámolt), ott egyetlen jelző áll: a hiányzó papír nem elmaradás. */
-function papirJelzo(pc: ProjectCode, lathatKoltseget: boolean) {
+function papirJelzo(pc: ProjectCode, lathatKoltseget: boolean, lathatSzerzodest = true, lathatTiget = true) {
   // Ami elmaradt, arról nincs mit igazolni - ott nem "nem kell papír" a
   // helyzet, hanem az, hogy meg sem történt. Ezt ki is írjuk, különben a
   // semleges jelzés mögött nem látszik az ok.
@@ -65,42 +64,49 @@ function papirJelzo(pc: ProjectCode, lathatKoltseget: boolean) {
           teendő), de a "Szerződés megvan" itt épp azt a néhány munkát
           rejtené el, amit időnként érdemes rákérdezni a megrendelőnél (lásd
           ProjektkodPapirSzuro "kiküldve" szűrője). */}
-      <StatusBadge
-        label={
-          !pc.szerzodes_kell
-            ? pc.keretszerzodes_neve
-              ? `Keret: ${pc.keretszerzodes_neve}`
-              : "Keretszerződés alatt"
-            : pc.szerzodes_kihagyva
-              ? "Szerződés kihagyva (nincs papír)"
+      {/* A szerződés- és a TIG-jelző a SAJÁT (külön adható) papír-oldal
+          jogához kötött - e nélkül azt sem szabad látni, van-e már papír a
+          munkán (a felhasználó kérése; a backend a mezőket is kitakarja). */}
+      {lathatSzerzodest && (
+        <StatusBadge
+          label={
+            !pc.szerzodes_kell
+              ? pc.keretszerzodes_neve
+                ? `Keret: ${pc.keretszerzodes_neve}`
+                : "Keretszerződés alatt"
+              : pc.szerzodes_kihagyva
+                ? "Szerződés kihagyva (nincs papír)"
+                : pc.szerzodes_kikuldve_varjuk
+                  ? "Szerződés kiküldve, várjuk vissza"
+                  : pc.szerzodes_kesz
+                    ? "Szerződés megvan"
+                    : "Nincs szerződés"
+          }
+          tone={
+            pc.szerzodes_kihagyva
+              ? "neutral"
               : pc.szerzodes_kikuldve_varjuk
-                ? "Szerződés kiküldve, várjuk vissza"
-                : pc.szerzodes_kesz
-                  ? "Szerződés megvan"
-                  : "Nincs szerződés"
-        }
-        tone={
-          pc.szerzodes_kihagyva
-            ? "neutral"
-            : pc.szerzodes_kikuldve_varjuk
-              ? "warning"
-              : !pc.szerzodes_kell || pc.szerzodes_kesz
-                ? "success"
-                : "warning"
-        }
-      />
-      <StatusBadge
-        label={
-          pc.tig_kihagyva
-            ? "TIG kihagyva (nincs papír)"
-            : pc.tig_kikuldve_varjuk
-              ? "TIG kiküldve, várjuk vissza"
-              : pc.tig_kesz
-                ? "TIG kész"
-                : "Nincs TIG"
-        }
-        tone={pc.tig_kihagyva ? "neutral" : pc.tig_kikuldve_varjuk ? "warning" : pc.tig_kesz ? "success" : "warning"}
-      />
+                ? "warning"
+                : !pc.szerzodes_kell || pc.szerzodes_kesz
+                  ? "success"
+                  : "warning"
+          }
+        />
+      )}
+      {lathatTiget && (
+        <StatusBadge
+          label={
+            pc.tig_kihagyva
+              ? "TIG kihagyva (nincs papír)"
+              : pc.tig_kikuldve_varjuk
+                ? "TIG kiküldve, várjuk vissza"
+                : pc.tig_kesz
+                  ? "TIG kész"
+                  : "Nincs TIG"
+          }
+          tone={pc.tig_kihagyva ? "neutral" : pc.tig_kikuldve_varjuk ? "warning" : pc.tig_kesz ? "success" : "warning"}
+        />
+      )}
       {/* A kifizetés és a fizetési határidő PÉNZ-adat: Pénzügy-hozzáférés
           nélkül nem jelenik meg (a felhasználó kérése) - a szerződés/TIG
           papír-jelzői attól még látszanak. */}
@@ -138,9 +144,8 @@ export default async function ProjectKodokPage({
   searchParams: Promise<{ ev?: string; papir?: string }>;
 }) {
   const params = await searchParams;
-  const [projectCodes, clients, fieldTypes, currentUser, pagePermissions] = await Promise.all([
+  const [projectCodes, fieldTypes, currentUser, pagePermissions] = await Promise.all([
     getProjectCodes(),
-    getClients(),
     getFieldTypes("projectCode"),
     getCurrentUser(),
     getMyPagePermissions(),
@@ -153,13 +158,19 @@ export default async function ProjectKodokPage({
   // (Bevétel/Kiadás/Profit oszlopok, kifizetés-jelzők) - a backend a
   // mezőket is kitakarja (lásd routes/project_codes._penz_kimenet_szuro).
   const lathatKoltseget = lathatjaAzOldalt(pagePermissions, "/penzugyek");
+  // A szerződés/TIG papír-oldalak KÜLÖN adható jogok - ezek nélkül a
+  // projektkód-listán a papír-állapot (és a Teendők nézet) sem látszik.
+  const lathatSzerzodest = lathatjaAzOldalt(pagePermissions, "/projektek/megrendeloi-szerzodesek");
+  const lathatTiget = lathatjaAzOldalt(pagePermissions, "/projektek/megrendeloi-tigek");
+  const lathatPapirt = lathatSzerzodest || lathatTiget;
 
   // Alapból a FOLYÓ év nézete nyílik meg (azon dolgozunk); ha arra az évre
   // nincs kódrendszerünk, az Összes marad.
   const idei = String(new Date().getFullYear()) as ProjektkodEv;
   const kertEv = params.ev as ProjektkodEv | undefined;
   const ismertNezet =
-    !!kertEv && (kertEv === "osszes" || kertEv === "teendok" || PROJEKTKOD_EVEK.some((e) => e.ev === kertEv));
+    !!kertEv &&
+    (kertEv === "osszes" || (kertEv === "teendok" && lathatPapirt) || PROJEKTKOD_EVEK.some((e) => e.ev === kertEv));
   const ev: ProjektkodEv = ismertNezet
     ? (kertEv as ProjektkodEv)
     : PROJEKTKOD_EVEK.some((e) => e.ev === idei)
@@ -325,18 +336,22 @@ export default async function ProjectKodokPage({
               },
                   ] as Column<ProjectCode>[])
                 : []),
-    {
-      // Hol tart a papírozás és a pénz - ez az oszlop válaszol arra, hogy
-      // "melyiken van már szerződés, hol van kész TIG, mit nem fizettek ki",
-      // anélkül hogy soronként meg kellene nyitni az adatlapot.
-      header: "Papírozás",
-      align: "right" as const,
-      // Függvényhívás, NEM külön komponens: a szűrő a cellában látszó szövegből
-      // dolgozik (lásd DataTable nodeToText), egy komponens-elemből viszont
-      // még nem látszik semmi - a jelzők szövege csak így válik szűrhetővé.
-      render: (pc: ProjectCode) => papirJelzo(pc, lathatKoltseget),
-      sortAccessor: (pc: ProjectCode) => papirRang(pc),
-    },
+    ...(lathatPapirt
+      ? ([
+          {
+            // Hol tart a papírozás és a pénz - ez az oszlop válaszol arra, hogy
+            // "melyiken van már szerződés, hol van kész TIG, mit nem fizettek ki",
+            // anélkül hogy soronként meg kellene nyitni az adatlapot.
+            header: "Papírozás",
+            align: "right" as const,
+            // Függvényhívás, NEM külön komponens: a szűrő a cellában látszó szövegből
+            // dolgozik (lásd DataTable nodeToText), egy komponens-elemből viszont
+            // még nem látszik semmi - a jelzők szövege csak így válik szűrhetővé.
+            render: (pc: ProjectCode) => papirJelzo(pc, lathatKoltseget, lathatSzerzodest, lathatTiget),
+            sortAccessor: (pc: ProjectCode) => papirRang(pc),
+          },
+        ] as Column<ProjectCode>[])
+      : []),
     {
       header: "Státusz",
       align: "right" as const,
@@ -372,14 +387,10 @@ export default async function ProjectKodokPage({
           defaultValue: kovetkezoKod,
           placeholder: `${kodElotag}0001`,
         },
-        // Az ügyfél NEM kötelező: a kódot sokszor előbb foglaljuk le, mint
-        // ahogy eldőlne, kinek a munkája - utólag az adatlapon megadható.
-        {
-          name: "client_id",
-          label: "Ügyfél (később is megadható)",
-          type: "select",
-          options: clients.map((c) => ({ value: c.id, label: c.nev })),
-        },
+        // A PROJEKT NEVÉT kérjük, nem az ügyfelet (a felhasználó kérése): a
+        // kód lefoglalásakor a munka neve már megvan, az ügyfél sokszor csak
+        // később dől el - az az adatlapon utólag megadható.
+        { name: "project_nev", label: "Projekt neve", placeholder: "Pl. HYPE Nyárzáró aftermovie" },
         // Nem naptári dátum, hanem SZÖVEG: egy projektkód alatt több forgatás
         // fut, és a valóságban "2026. május" vagy "két hétvégén" a pontos
         // válasz - a napokat úgyis a projektek hordozzák.
@@ -399,7 +410,7 @@ export default async function ProjectKodokPage({
         <TopBar />
         <div className="flex-1 p-4 md:p-8">
           <Card title={`Teendők (${teendos} projektkód)`}>
-            <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} />
+            <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} teendokkel={lathatPapirt} />
             {/* Ugyanaz a sorrend, mint a listán: a legnagyobb kód elöl. */}
             <ProjektkodTeendoTabla rows={[...projectCodes].sort(kodSzerint)} lathatKoltseget={lathatKoltseget} />
           </Card>
@@ -413,8 +424,9 @@ export default async function ProjectKodokPage({
       <TopBar />
       <div className="flex-1 p-4 md:p-8">
         <Card title={`Project Code-ok (${sorok.length})`}>
-          <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} />
-          <ProjektkodPapirSzuro ev={ev} aktiv={papirSzuro} darabszamok={papirDarabszamok} />
+          <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} teendokkel={lathatPapirt} />
+          {/* A papír-szűrő sor is a szerződés/TIG oldalak jogához kötött. */}
+          {lathatPapirt && <ProjektkodPapirSzuro ev={ev} aktiv={papirSzuro} darabszamok={papirDarabszamok} />}
           {ujProjektkodUrlap}
           <DataTable<ProjectCode>
             rows={sorok}
