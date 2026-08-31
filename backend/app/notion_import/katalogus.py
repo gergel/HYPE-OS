@@ -179,6 +179,19 @@ KATALOGUS: tuple[ImporterInfo, ...] = (
         fuggosegek=("Project",),
     ),
     ImporterInfo(
+        nev="VinyoSync",
+        cimke="Utómunka vinyók szinkron",
+        kor=2,
+        forrasok=("Utómunka",),
+        leiras=(
+            "CSAK a vinyó-mezőt igazítja a Notionhoz minden anyagnál - a helyi eltéréseket is "
+            "felülírja (a Notion az igazság), és a naplóban kilistázza a Notionban nem létező "
+            "vinyó-neveket."
+        ),
+        fn=importers_wave2.import_vinyo_sync,
+        fuggosegek=("Deliverable",),
+    ),
+    ImporterInfo(
         nev="Timesheet",
         cimke="Időmérések",
         kor=2,

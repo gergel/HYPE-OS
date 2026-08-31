@@ -572,6 +572,77 @@ def importal_kommenteket(
         )
 
 
+def import_vinyo_sync(client: NotionClient, db: Session) -> ImportResult:
+    """CSAK a vinyó-mezőt igazítja a Notionhoz, minden utómunkánál.
+
+    Miért kell külön: a rendes import a helyben módosított mezőket VÉDI (lásd
+    engine.upsert / _helyben_modositott) - ha valaki a HYPE OS-ben egyszer
+    átírta egy anyag vinyóit, azt a Notion-újraimport soha többé nem
+    frissítette, és a két rendszer szétcsúszott. Ez a szinkron a felhasználó
+    kifejezett kérésére a NOTION-t tekinti igazságnak: minden anyagnál pontosan
+    azt állítja be, ami ott van - a helyi eltéréseket is felülírva -, és a
+    baseline-t is frissíti, hogy a következő teljes import már ezt lássa
+    kiindulásnak.
+
+    A naplóba MEGJEGYZÉS-ként kerül a névkészlet-összevetés: mely vinyó-nevek
+    éltek eddig itt, amik a Notionban nem léteznek (elgépelések, régi nevek) -
+    ezek a szinkronnal el is tűnnek a kártyákról."""
+    from app.notion_import.engine import _ertek_kulcs
+
+    result = ImportResult(entity_type="VinyoSync")
+
+    lekepezesek = {
+        m.notion_page_id: m
+        for m in db.scalars(select(NotionImportMap).where(NotionImportMap.entity_type == "Deliverable")).all()
+    }
+
+    # A helyi névkészlet MÉG a szinkron előtt - ebből látszik, mi tért el.
+    helyi_nevek: set[str] = set()
+    for (vinyok,) in db.execute(select(Deliverable.vinyok)).all():
+        if isinstance(vinyok, list):
+            helyi_nevek.update(str(v) for v in vinyok if v)
+
+    notion_nevek: set[str] = set()
+    for page in client.query_database(db_ids.UTOMUNKA):
+        props = extract_properties(page, client)
+        ertek = props.get("Vinyók")
+        vinyok = [str(v) for v in ertek] if isinstance(ertek, list) else []
+        notion_nevek.update(vinyok)
+
+        lekepezes = lekepezesek.get(page["id"])
+        obj = db.get(Deliverable, lekepezes.entity_id) if lekepezes else None
+        if obj is None:
+            # Ide az kerül, amit a teljes Deliverable-import még nem hozott át.
+            result.skipped += 1
+            continue
+
+        regi = obj.vinyok if isinstance(obj.vinyok, list) else []
+        if regi != vinyok:
+            obj.vinyok = vinyok
+            result.updated += 1
+        # A baseline akkor is frissül, ha az érték nem változott: e nélkül a
+        # következő teljes import a mostani (immár helyes) értéket újra
+        # "helyi módosításnak" nézné, és megint nem frissítené.
+        if isinstance(lekepezes.imported_fields, dict):
+            lekepezes.imported_fields = {**lekepezes.imported_fields, "vinyok": _ertek_kulcs(vinyok)}
+        else:
+            lekepezes.imported_fields = {"vinyok": _ertek_kulcs(vinyok)}
+
+    db.flush()
+
+    csak_helyi = sorted(helyi_nevek - notion_nevek)
+    if csak_helyi:
+        result.errors.append(
+            "MEGJEGYZÉS (nem hiba): ezek a vinyó-nevek csak a HYPE OS-ben éltek, a Notionban nincsenek - "
+            f"a szinkron lecserélte őket a Notion szerinti nevekre: {', '.join(csak_helyi)}"
+        )
+    result.errors.append(
+        f"MEGJEGYZÉS (nem hiba): a Notion vinyó-névkészlete ({len(notion_nevek)} név): "
+        + ", ".join(sorted(notion_nevek))
+    )
+    return result
+
+
 def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
     """Deliverable <- 'Utómunka', a kártyák alatti kommentekkel együtt (lásd
     importal_kommenteket) - így az Utómunka oldal hozzászólás-chatje nem csak
