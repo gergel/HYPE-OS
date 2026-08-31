@@ -1918,6 +1918,9 @@ export type AllapotBeallitas = {
   szin: string | null;
   /** Elkészültnek számít: ilyenkor nem lesz belőle lejárt határidő. */
   kesz_allapot: boolean;
+  /** AUTOMATIKUS KIOSZTÁS: az ebbe az állapotba kerülő anyag ezekre az
+   * emberekre osztódik ki (üres/null = nincs szabály). */
+  auto_kiosztott_employee_ids?: number[] | null;
 };
 
 export async function getAllapotBeallitasok(): Promise<AllapotBeallitas[]> {

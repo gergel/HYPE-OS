@@ -351,6 +351,7 @@ export function UtomunkaContent({
                     kezdeti={allapotBeallitasok}
                     mezoValasztek={mezoValasztek}
                     kezdetiKartyaMezok={kartyaMezok}
+                    emberek={employees.map((e) => ({ id: e.id, nev: e.full_name }))}
                   />
                 ) : undefined
               }

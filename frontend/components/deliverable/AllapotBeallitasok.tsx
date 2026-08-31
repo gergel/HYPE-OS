@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
+import { KeresosSelect } from "@/components/KeresosSelect";
 import type { AllapotBeallitas } from "@/lib/api";
 
 /** Alapszínek, amiket egy kattintással lehet választani - a színválasztóval
@@ -25,12 +26,17 @@ export function AllapotBeallitasok({
   kezdeti,
   mezoValasztek,
   kezdetiKartyaMezok,
+  emberek,
 }: {
   allapotok: string[];
   kezdeti: AllapotBeallitas[];
   /** Miből lehet választani a kártyán megjelenő adatokhoz. */
   mezoValasztek: { kulcs: string; cimke: string }[];
   kezdetiKartyaMezok: string[];
+  /** Az AUTOMATIKUS KIOSZTÁS választójához: az ebbe az állapotba kerülő anyag
+   * kikre osztódjon ki (pl. Ellenőrzés/Beérkező -> az ellenőr, Kiküldhető ->
+   * akik kiküldik). */
+  emberek: { id: number; nev: string }[];
 }) {
   const router = useRouter();
   const [nyitva, setNyitva] = useState(false);
@@ -46,9 +52,16 @@ export function AllapotBeallitasok({
     const beallitottak = kezdeti.filter((b) => allapotok.includes(b.allapot));
     const ujak = allapotok
       .filter((a) => !mentett.has(a))
-      .map((allapot) => ({ allapot, sorrend: 0, szin: null, kesz_allapot: false }));
+      .map((allapot) => ({ allapot, sorrend: 0, szin: null, kesz_allapot: false, auto_kiosztott_employee_ids: [] }));
     return [...beallitottak, ...ujak];
   });
+
+  const emberNev = new Map(emberek.map((e) => [e.id, e.nev]));
+
+  /** Az automatikus kiosztás emberei egy állapot-soron. */
+  function autoKiosztas(sor: AllapotBeallitas): number[] {
+    return sor.auto_kiosztott_employee_ids ?? [];
+  }
 
   function mozgat(index: number, irany: -1 | 1) {
     setSorok((elozo) => {
@@ -70,7 +83,10 @@ export function AllapotBeallitasok({
   function allapotHozzaad() {
     const nev = ujAllapot.trim();
     if (!nev || sorok.some((sor) => sor.allapot === nev)) return;
-    setSorok((elozo) => [...elozo, { allapot: nev, sorrend: elozo.length, szin: null, kesz_allapot: false }]);
+    setSorok((elozo) => [
+      ...elozo,
+      { allapot: nev, sorrend: elozo.length, szin: null, kesz_allapot: false, auto_kiosztott_employee_ids: [] },
+    ]);
     setUjAllapot("");
   }
 
@@ -131,11 +147,14 @@ export function AllapotBeallitasok({
       <p className="mb-1 text-[13px] font-medium text-text-primary">Oszlopok sorrendje és színe</p>
       <p className="mb-3 text-[12px] text-text-muted">
         A nyilakkal állítható, melyik oszlop melyik után jöjjön. A szín halványan kerül az oszlopra és a benne lévő
-        kártyákra. Az &quot;elkészült&quot; állapotú anyag nem jelenik meg lejárt határidejűként.
+        kártyákra. Az &quot;elkészült&quot; állapotú anyag nem jelenik meg lejárt határidejűként. Az &quot;Automatikus
+        kiosztás&quot; emberei kapják a feladatot, amikor egy anyag az adott állapotba kerül - üresen hagyva a kiosztás
+        marad, ahogy volt.
       </p>
-      <div className="space-y-1.5">
+      <div className="space-y-2.5">
         {sorok.map((sor, index) => (
-          <div key={sor.allapot} className="flex flex-wrap items-center gap-2 text-[13px]">
+          <div key={sor.allapot} className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2 text-[13px]">
             <span className="flex gap-0.5">
               <button
                 type="button"
@@ -202,6 +221,43 @@ export function AllapotBeallitasok({
             >
               Oszlop törlése
             </button>
+          </div>
+          {/* AUTOMATIKUS KIOSZTÁS: az ebbe az állapotba kerülő anyag ezekre az
+              emberekre osztódik ki (pl. Ellenőrzés/Beérkező -> az ellenőr,
+              Kiküldhető -> akik kiküldik). Üresen hagyva nincs szabály: a
+              kiosztás marad, ahogy volt. */}
+          <div className="ml-[52px] flex flex-wrap items-center gap-1.5 text-[12px]">
+            <span className="text-text-muted">Automatikus kiosztás:</span>
+            {autoKiosztas(sor).map((id) => (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1 rounded-[var(--radius)] border border-border bg-surface-2 px-1.5 py-0.5 text-text-primary"
+              >
+                {emberNev.get(id) ?? `#${id}`}
+                <button
+                  type="button"
+                  onClick={() =>
+                    modosit(index, { auto_kiosztott_employee_ids: autoKiosztas(sor).filter((i) => i !== id) })
+                  }
+                  aria-label={`${sor.allapot}: ${emberNev.get(id) ?? id} levétele az automatikus kiosztásból`}
+                  className="text-text-muted hover:text-text-danger"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+            <KeresosSelect
+              value=""
+              placeholder={autoKiosztas(sor).length === 0 ? "nincs - válassz…" : "+ hozzáadás…"}
+              options={emberek
+                .filter((e) => !autoKiosztas(sor).includes(e.id))
+                .map((e) => ({ value: String(e.id), label: e.nev }))}
+              onChange={(value) => {
+                if (value) modosit(index, { auto_kiosztott_employee_ids: [...autoKiosztas(sor), Number(value)] });
+              }}
+              className="min-w-[170px]"
+            />
+          </div>
           </div>
         ))}
         {sorok.length === 0 && <p className="text-[12.5px] text-text-muted">Nincs felvett állapot.</p>}

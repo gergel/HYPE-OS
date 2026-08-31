@@ -88,6 +88,31 @@ def _kiosztottak_beallitasa(
     _kiosztas_ertesites(db, obj, [e.id for e in emberek if e.id not in korabbi_idk], current_user)
 
 
+def _auto_kiosztas_allapotvaltaskor(db: Session, obj: Deliverable, data: dict, current_user: Employee) -> None:
+    """Állapothoz kötött automatikus kiosztás.
+
+    Ha az admin egy állapothoz embereket állított be (lásd "Nézet beállítása"
+    panel / models/deliverable_status.auto_kiosztott_employee_ids), az ebbe az
+    állapotba kerülő anyag automatikusan RÁJUK osztódik ki - ebben a fázisban
+    nekik van vele dolguk. Csak TÉNYLEGES váltásnál fut (a before_update tette
+    el a régi értéket), hogy egy változatlan állapot újramentése ne írja felül
+    a kézzel átállított kiosztást."""
+    if "allapot" not in data or not obj.allapot:
+        return
+    if getattr(obj, "_regi_allapot", None) == obj.allapot:
+        return
+    config = db.scalar(select(DeliverableStatusConfig).where(DeliverableStatusConfig.allapot == obj.allapot))
+    auto_idk = [int(i) for i in (config.auto_kiosztott_employee_ids or [])] if config else []
+    if not auto_idk:
+        return
+    # Csak a még létező munkatársak - egy időközben törölt ember miatt ne
+    # hasaljon el maga az állapotváltás.
+    letezok = set(db.scalars(select(Employee.id).where(Employee.id.in_(auto_idk))).all())
+    auto_idk = [i for i in auto_idk if i in letezok]
+    if auto_idk:
+        _kiosztottak_beallitasa(db, obj, auto_idk, current_user)
+
+
 def _after_deliverable_update(
     obj: Deliverable, data: dict, m2m_changes: dict, db: Session, current_user: Employee
 ) -> None:
@@ -104,6 +129,11 @@ def _after_deliverable_update(
     if "assigned_to_employee_id" in data:
         new_id = data["assigned_to_employee_id"]
         _kiosztottak_beallitasa(db, obj, [int(new_id)] if new_id else [], current_user)
+    else:
+        # Állapothoz kötött AUTOMATIKUS kiosztás (pl. Ellenőrzés/Beérkező ->
+        # az ellenőr, Kiküldhető -> akik kiküldik) - de ha ugyanebben a
+        # PATCH-ben kifejezetten kiosztást is küldtek, az a kérés nyer.
+        _auto_kiosztas_allapotvaltaskor(db, obj, data, current_user)
 
 
 def _csak_a_sajat_anyagai(stmt, db: Session, user: Employee):
@@ -207,6 +237,11 @@ def _kovesd_a_vagas_projektkodjat(obj: Deliverable, data: dict, db: Session, cur
     hozzá (lásd _ellenorzeshez_kell_visszajelzes). Utána: ha átírják a vágás
     projektkódját, kövesse a kötés is - és ne lehessen kiüríteni: a vágásnak
     MINDIG van kódja (lásd _vagas_projektkodja)."""
+    # A RÉGI állapot félretétele az automatikus kiosztáshoz: az after_update
+    # már csak az új értéket látná, pedig a szabálynak csak TÉNYLEGES
+    # váltáskor szabad futnia (lásd _auto_kiosztas_allapotvaltaskor).
+    if "allapot" in data:
+        obj._regi_allapot = obj.allapot
     _ellenorzeshez_kell_visszajelzes(obj, data, db, current_user)
     if "projektkod_szoveg" not in data:
         return
@@ -298,6 +333,9 @@ class AllapotBeallitas(BaseModel):
     szin: str | None = None
     #: Elkészültnek számít-e (ilyenkor nem lesz belőle lejárt határidő).
     kesz_allapot: bool = False
+    #: AUTOMATIKUS KIOSZTÁS: az ide kerülő anyag ezekre az emberekre osztódik
+    #: ki (üres = nincs szabály) - lásd models/deliverable_status.py.
+    auto_kiosztott_employee_ids: list[int] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -405,6 +443,14 @@ def set_allapot_beallitasok(
         sor.sorrend = index
         sor.szin = (elem.szin or "").strip() or None
         sor.kesz_allapot = elem.kesz_allapot
+        # Az automatikus kiosztás emberei - csak létező munkatársat mentünk,
+        # egy elavult/rossz id ne akassza meg később az állapotváltást.
+        kert_idk = [int(i) for i in (elem.auto_kiosztott_employee_ids or [])]
+        letezok = (
+            set(db.scalars(select(Employee.id).where(Employee.id.in_(kert_idk))).all()) if kert_idk else set()
+        )
+        szurt_idk = [i for i in kert_idk if i in letezok]
+        sor.auto_kiosztott_employee_ids = szurt_idk or None
     # Amit a felület nem küldött vissza, az már nem választható állapot -
     # a beállítása is elévült.
     for allapot, sor in meglevo.items():

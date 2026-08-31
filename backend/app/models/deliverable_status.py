@@ -31,6 +31,14 @@ class DeliverableStatusConfig(TimestampMixin, Base):
     #: sorolja a lejárt határidejűek közé - a munka ott már megvan, csak a
     #: papírozás/kiküldés van hátra (lásd api/routes/dashboard.py).
     kesz_allapot: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    #: AUTOMATIKUS KIOSZTÁS: ha egy anyag EBBE az állapotba kerül, a rendszer
+    #: ezekre a munkatársakra osztja ki (employee id-k listája) - mert ebben a
+    #: fázisban nekik van vele dolguk (pl. Ellenőrzés/Beérkező -> az ellenőr,
+    #: Kiküldhető -> akik kiküldik). Üres/None = nincs szabály, a kiosztás
+    #: marad, ahogy volt. A lista az Utómunka tábla "Nézet beállítása"
+    #: paneljén szerkeszthető (lásd routes/postproduction.set_allapot_beallitasok,
+    #: a váltást a _after_deliverable_update hajtja végre).
+    auto_kiosztott_employee_ids: Mapped[list | None] = mapped_column(JSON)
 
 
 class DeliverableBoardConfig(TimestampMixin, Base):
