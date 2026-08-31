@@ -453,14 +453,18 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
         extra_cc=masolat_cimzettek(db),
     )
 
-    # A levél kiment - a kész PDF innentől archiválható a Drive mappájába.
-    pdf_link = _pdf_a_drive_ra(project, pdf_bytes)
-
+    # A levél kiment - ezt AZONNAL elkönyveljük és commitoljuk, mielőtt a
+    # küldés utáni kényelmi lépések (Drive archiválás, utókövetés ütemezése)
+    # bármelyike elhasalhatna: a "Kiküldve" állapotnak egy ténylegesen kiment
+    # levél után akkor is meg kell maradnia, ha a ráadás-lépések hibáznak.
     project.diszpo = "Kiküldve"
-    project.drive_diszpo_pdf_url = pdf_link or doc_link or project.drive_diszpo_pdf_url
     project.gmail_thread_id = thread_id or project.gmail_thread_id
     project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     project.aki_kikuldte_a_diszpot = [current_user.full_name]
+    db.commit()
+
+    pdf_link = _pdf_a_drive_ra(project, pdf_bytes)
+    project.drive_diszpo_pdf_url = pdf_link or doc_link or project.drive_diszpo_pdf_url
     _schedule_utokovetes_email(project)
     db.commit()
     db.refresh(project)

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -24,6 +25,8 @@ from google.oauth2.service_account import Credentials as ServiceAccountCredentia
 from googleapiclient.discovery import build
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
@@ -255,13 +258,21 @@ def send_message(
     thr = r.get("threadId")
     mid = r.get("id")
 
+    # A levél EKKOR MÁR KIMENT. Ami innentől jön (a Message-Id kiolvasása a
+    # szálba-válaszoláshoz), az csak kényelmi ráadás - ha ez a második Gmail
+    # hívás hibázik (átmeneti hiba, rate limit), attól a küldés még sikeres,
+    # és a hívónak ezt SIKERKÉNT kell látnia, különben a "Kiküldve" állapot
+    # sosem íródna be egy ténylegesen kiment levél után.
     rfc822 = None
     if mid:
-        meta = svc.users().messages().get(
-            userId="me", id=mid, format="metadata", metadataHeaders=["Message-Id"]
-        ).execute()
-        headers = (meta.get("payload") or {}).get("headers") or []
-        rfc822 = _extract_header(headers, "Message-Id")
+        try:
+            meta = svc.users().messages().get(
+                userId="me", id=mid, format="metadata", metadataHeaders=["Message-Id"]
+            ).execute()
+            headers = (meta.get("payload") or {}).get("headers") or []
+            rfc822 = _extract_header(headers, "Message-Id")
+        except Exception:  # noqa: BLE001 - a kiment levelet nem buktathatja meg
+            logger.exception("A kiküldött levél Message-Id-jét nem sikerült kiolvasni (a levél kiment).")
 
     return thr, mid, rfc822
 
