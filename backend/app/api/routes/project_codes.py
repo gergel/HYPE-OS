@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import get_current_user, require_page_action
+from app.core.security import Role, get_current_user, require_page_action
 from app.models.contract import Contract
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
@@ -128,6 +128,13 @@ def list_valaszthato(db: Session = Depends(get_db), _user: Employee = Depends(ge
     ]
 
 
+#: A durva admin/operator szerepkör-kapu itt nem érvényes: aki a
+#: Beállításokban szerkesztői jogot kapott a Project Code oldalra, az írhatja
+#: a projektkód mezőit (pl. a "Mennyiért vállaltuk" összegét) - a szerepköre
+#: nem szűkíti tovább. Ugyanaz az elv, mint az Utómunkánál és a
+#: diszpó-táblánál (lásd routes/postproduction.py _MINDEN_SZEREPKOR).
+_MINDEN_SZEREPKOR = tuple(Role)
+
 router = build_crud_router(
     model=ProjectCode,
     create_schema=ProjectCodeCreate,
@@ -145,6 +152,7 @@ router = build_crud_router(
     # a Project Code-okhoz csak külön, kifejezett jogosultsággal lehessen
     # hozzáférni, ne automatikusan a Projektek jogosultsággal együtt.
     page="/projektek/project-kodok",
+    write_roles=_MINDEN_SZEREPKOR,
     entity_type="projectCode",
     before_update=_projektkod_ellenorzese,
     # A ProjectCodeRead számított mezői (osszes_koltseg, becsult_profit)

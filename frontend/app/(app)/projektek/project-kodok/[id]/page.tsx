@@ -36,7 +36,7 @@ import {
   getRecord,
 } from "@/lib/api";
 import { bevetelDevizaNyom } from "@/lib/penz";
-import { canDoAction } from "@/lib/permissions";
+import { canDoAction, canDoPageAction } from "@/lib/permissions";
 import { FileCheck2, FileSignature, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const PAGE = "/projektek/project-kodok";
@@ -137,6 +137,11 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
 
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
+  // A "Mennyiért vállaltuk" a projektkód SAJÁT mezőit írja (generikus PATCH),
+  // amin a backend a szerepkör-kaput kikapcsolta: aki a Beállításokban
+  // szerkesztői jogot kapott erre az oldalra, az írhatja - a szerepkörétől
+  // függetlenül (a felhasználó kérése, lásd lib/permissions.canDoPageAction).
+  const canEditVallalasiAr = canDoPageAction(pagePermissions, PAGE, "edit");
   // Az alvállalkozói szerződés/TIG törlése az Utókövetés jogára hallgat, nem
   // a Project Code oldaléra - ugyanaz a jog, mint magán az Utókövetésen
   // (lásd backend subcontractor_contracts.py PAGE = "/utokovetes").
@@ -249,7 +254,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
             netto={typeof projectCode.netto_osszeg === "number" ? projectCode.netto_osszeg : null}
             pluszAfa={szoveg(projectCode.plusz_afa)}
-            canEdit={canEdit}
+            canEdit={canEditVallalasiAr}
             papirbolNetto={szamlaAllas?.netto ?? null}
             penznem={penznemKod}
             arfolyam={typeof projectCode.arfolyam === "number" ? projectCode.arfolyam : null}
