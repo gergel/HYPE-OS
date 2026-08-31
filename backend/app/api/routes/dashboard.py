@@ -15,7 +15,7 @@ from app.models.deliverable import Deliverable
 from app.models.hype_todo import HypeTodoItem, hype_todo_felelosok
 from app.models.deliverable_status import DeliverableStatusConfig
 from app.models.dispo_responsible import DispoResponsible, DispoSide
-from app.models.employee import Employee, SystemRole, van_szerepkore
+from app.models.employee import Employee, EmployeeType, SystemRole, van_szerepkore
 from app.services import elszamolas
 from app.services import kotelezettseg as kotelezettseg_szolg
 from app.services import megrendeloi_papir
@@ -89,6 +89,16 @@ class VagoiJatekNyertes(BaseModel):
     kep_url: str | None = None
 
 
+class VagoiUjNyeremeny(BaseModel):
+    """A FOLYÓ hónap frissen kihirdetett nyereménye - a kihirdetéstől 5 napig
+    minden aktív vágó dashboardján megjelenik (a felhasználó kérése)."""
+
+    honap_nev: str
+    nyeremeny: str
+    megjegyzes: str | None = None
+    kep_url: str | None = None
+
+
 class DashboardSummary(BaseModel):
     mai_forgatasok: int
     aktiv_project_codeok: int
@@ -102,6 +112,9 @@ class DashboardSummary(BaseModel):
     #: True, ha a felhasználó admin, és a FOLYÓ hónap vágói-játék nyereménye
     #: még nincs kihirdetve - a dashboard ebből mutat neki bekérő widgetet.
     vagoi_jatek_nyeremeny_bekeres: bool = False
+    #: Az aktív vágóknak, a nyeremény kihirdetése utáni 5 napban - egyébként
+    #: None.
+    vagoi_jatek_uj_nyeremeny: VagoiUjNyeremeny | None = None
 
 
 def _last_n_months(today: date, n: int) -> list[tuple[int, int]]:
@@ -246,10 +259,32 @@ def summary(db: Session = Depends(get_db), user: Employee = Depends(get_current_
                 nyeremeny=elozo_sor.nyeremeny,
                 kep_url=elozo_sor.kep_url,
             )
+    folyo_sor = vagoi_jatek_szolg.honap_beallitas(db, jatek_ma.year, jatek_ma.month)
     nyeremeny_bekeres = False
     if van_szerepkore(user, SystemRole.ADMIN):
-        folyo_sor = vagoi_jatek_szolg.honap_beallitas(db, jatek_ma.year, jatek_ma.month)
         nyeremeny_bekeres = folyo_sor is None or not folyo_sor.nyeremeny
+
+    # A frissen kihirdetett HAVI NYEREMÉNY az aktív vágóknak - a kihirdetéstől
+    # 5 napig (a felhasználó kérése). Vágó az, akinek vágó a típusa VAGY a
+    # szerepköre: a kettő nem mindig jár együtt (van vágó szerepkörű belsős).
+    uj_nyeremeny: VagoiUjNyeremeny | None = None
+    vago_e = user.is_active and (user.tipus == EmployeeType.VAGO or van_szerepkore(user, SystemRole.VAGO))
+    if (
+        vago_e
+        and folyo_sor is not None
+        and folyo_sor.nyeremeny
+        and folyo_sor.nyeremeny_kihirdetve_at is not None
+    ):
+        kihirdetve = folyo_sor.nyeremeny_kihirdetve_at
+        if kihirdetve.tzinfo is None:
+            kihirdetve = kihirdetve.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - kihirdetve <= timedelta(days=vagoi_jatek_szolg.GYOZTES_WIDGET_NAPOK):
+            uj_nyeremeny = VagoiUjNyeremeny(
+                honap_nev=honap_neve(jatek_ma.month),
+                nyeremeny=folyo_sor.nyeremeny,
+                megjegyzes=folyo_sor.megjegyzes,
+                kep_url=folyo_sor.kep_url,
+            )
 
     return DashboardSummary(
         mai_forgatasok=mai_forgatasok,
@@ -263,6 +298,7 @@ def summary(db: Session = Depends(get_db), user: Employee = Depends(get_current_
         alerts=DashboardAlerts(lejart_utomunka=lejart_utomunka, lejart_feladat=lejart_feladat),
         vagoi_jatek_nyertes=nyertes,
         vagoi_jatek_nyeremeny_bekeres=nyeremeny_bekeres,
+        vagoi_jatek_uj_nyeremeny=uj_nyeremeny,
     )
 
 

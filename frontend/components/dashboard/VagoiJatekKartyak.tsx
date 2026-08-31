@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Gift, Trophy } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
-import type { VagoiJatekNyertes } from "@/lib/api";
+import type { VagoiJatekNyertes, VagoiUjNyeremeny } from "@/lib/api";
 
 /** A vágói játék GYŐZTESÉNEK ünneplő kártyája (a felhasználó kérése).
  *
@@ -44,6 +44,48 @@ export function VagoiGyoztesKartya({ nyertes }: { nyertes: VagoiJatekNyertes }) 
           <img
             src={nyertes.kep_url}
             alt="A nyeremény"
+            className="h-16 w-24 shrink-0 rounded-[var(--radius)] border border-border object-cover"
+          />
+        )}
+      </div>
+    </Link>
+  );
+}
+
+/** Az E HAVI NYEREMÉNY kártyája minden aktív vágónak (a felhasználó kérése):
+ * amikor az admin kihirdeti az új havi nyereményt, a kihirdetéstől 5 napig
+ * ez a kártya mondja el a vágóknak, miért megy a verseny ebben a hónapban.
+ * Csak nekik jön adat (lásd backend routes/dashboard.summary). */
+export function VagoiUjNyeremenyKartya({ nyeremeny }: { nyeremeny: VagoiUjNyeremeny }) {
+  return (
+    <Link
+      href="/vagoi-jatek"
+      className="block rounded-[var(--radius-lg)] border border-border bg-surface-1 p-5 transition-colors hover:border-text-accent/40"
+      style={{
+        // Hűvösebb, kék-türkiz derengés - az ünneplő (győztes) kártya meleg
+        // tónusától eltér, hogy a kettő ránézésre is más hírt mondjon.
+        backgroundImage: "linear-gradient(120deg, rgba(109,148,144,0.16), transparent 60%)",
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-4">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2">
+          <Gift className="h-6 w-6" style={{ color: "#8fa9c4" }} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold text-text-primary">
+            Kihirdették a(z) {nyeremeny.honap_nev} havi vágói-játék nyereményt: {nyeremeny.nyeremeny}
+          </p>
+          <p className="mt-1 text-[13px] text-text-secondary">
+            {nyeremeny.megjegyzes
+              ? nyeremeny.megjegyzes
+              : "A hónap végén a legtöbb pontot gyűjtő viszi - hajrá! Kattints az állásért."}
+          </p>
+        </div>
+        {nyeremeny.kep_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={nyeremeny.kep_url}
+            alt="A hónap nyereménye"
             className="h-16 w-24 shrink-0 rounded-[var(--radius)] border border-border object-cover"
           />
         )}

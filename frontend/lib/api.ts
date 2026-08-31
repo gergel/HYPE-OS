@@ -42,6 +42,16 @@ export type DashboardSummary = {
   vagoi_jatek_nyertes: VagoiJatekNyertes | null;
   /** Admin vagy, és a folyó hónap vágói-játék nyereménye még nincs kihirdetve. */
   vagoi_jatek_nyeremeny_bekeres: boolean;
+  /** Aktív vágó vagy, és most hirdették ki az e havi nyereményt (5 napig jön). */
+  vagoi_jatek_uj_nyeremeny: VagoiUjNyeremeny | null;
+};
+
+/** A folyó hónap frissen kihirdetett vágói-játék nyereménye. */
+export type VagoiUjNyeremeny = {
+  honap_nev: string;
+  nyeremeny: string;
+  megjegyzes: string | null;
+  kep_url: string | null;
 };
 
 export type Client = {

@@ -61,6 +61,13 @@ class VagoJatekHonap(TimestampMixin, Base):
     nyeremeny: Mapped[str | None] = mapped_column(String(255))
     megjegyzes: Mapped[str | None] = mapped_column(Text)
 
+    #: Mikor hirdették ki a nyereményt - a kihirdetéstől 5 napig minden aktív
+    #: vágó dashboardján megjelenik az e havi nyeremény (a felhasználó
+    #: kérése, lásd routes/dashboard.summary). A szöveg későbbi javítása nem
+    #: indítja újra az 5 napot; a nyeremény törlése nullázza, tehát egy újbóli
+    #: kihirdetés újra feldobja mindenkinek.
+    nyeremeny_kihirdetve_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     #: Fotó a nyereményről. Egy kép többet mond, mint a "20 000 Ft utalvány" -
     #: a verseny attól megy, hogy LÁTJÁK, miért mennek.
     #:

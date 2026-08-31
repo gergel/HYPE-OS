@@ -12,6 +12,7 @@ kihirdetése és a munkanapok állítása szerkesztési jog.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -203,6 +204,14 @@ def set_nyeremeny(
         db.add(sor)
     sor.nyeremeny = (payload.nyeremeny or "").strip() or None
     sor.megjegyzes = (payload.megjegyzes or "").strip() or None
+    # A KIHIRDETÉS pillanata: ettől számít az 5 nap, amíg minden aktív vágó
+    # dashboardján megjelenik az új nyeremény (lásd routes/dashboard.summary).
+    # A szöveg későbbi javítása nem indítja újra az órát; a nyeremény törlése
+    # nullázza, tehát egy újbóli kihirdetés újra feldobja mindenkinek.
+    if sor.nyeremeny and sor.nyeremeny_kihirdetve_at is None:
+        sor.nyeremeny_kihirdetve_at = datetime.now(timezone.utc)
+    elif not sor.nyeremeny:
+        sor.nyeremeny_kihirdetve_at = None
     db.commit()
     return _honap_kimenet(db, payload.ev, payload.honap)
 

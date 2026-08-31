@@ -22,7 +22,11 @@ import {
 } from "@/lib/api";
 import { KorlatozottDashboard } from "@/components/dashboard/KorlatozottDashboard";
 import { MyTasksCard } from "@/components/dashboard/DashboardWidgets";
-import { VagoiGyoztesKartya, VagoiNyeremenyBekero } from "@/components/dashboard/VagoiJatekKartyak";
+import {
+  VagoiGyoztesKartya,
+  VagoiNyeremenyBekero,
+  VagoiUjNyeremenyKartya,
+} from "@/components/dashboard/VagoiJatekKartyak";
 
 const WIDGETS: WidgetOption[] = [
   { key: "teendoim", label: "Teendőim" },
@@ -125,6 +129,9 @@ export default async function DashboardPage() {
             időszakosak, és pont az a dolguk, hogy ne lehessen elrejteni őket. */}
         {summary?.vagoi_jatek_nyertes && <VagoiGyoztesKartya nyertes={summary.vagoi_jatek_nyertes} />}
         {summary?.vagoi_jatek_nyeremeny_bekeres && <VagoiNyeremenyBekero />}
+        {summary?.vagoi_jatek_uj_nyeremeny && (
+          <VagoiUjNyeremenyKartya nyeremeny={summary.vagoi_jatek_uj_nyeremeny} />
+        )}
 
         <div className="flex justify-end">
           <DashboardCustomizePanel widgets={permittedWidgets} initialVisible={visibleWidgets} />
