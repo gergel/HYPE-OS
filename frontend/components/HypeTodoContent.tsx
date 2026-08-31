@@ -145,16 +145,23 @@ export function HypeTodoContent({
           },
           {
             header: "Felelős",
+            // A stopPropagation nélkül a választóra kattintás a SORT is
+            // megnyitná (a sor maga link a feladat oldalára) - a felhasználó
+            // kifejezett kérése, hogy a legördülőből választás CSAK hozzáadjon,
+            // ne navigáljon. Az `azonnal` miatt külön Hozzáadás gomb sem kell.
             render: (t) =>
               canEdit ? (
-                <M2mLinker
-                  patchPath={`${HYPE_TODO_BASE_PATH}/${t.id}`}
-                  fieldName="felelos_employee_ids"
-                  currentIds={t.felelos_employee_ids}
-                  options={felelosOptions(t)}
-                  addLabel="Hozzáadás"
-                  emptyText="Nincs felelős."
-                />
+                <span onClick={(e) => e.stopPropagation()}>
+                  <M2mLinker
+                    patchPath={`${HYPE_TODO_BASE_PATH}/${t.id}`}
+                    fieldName="felelos_employee_ids"
+                    currentIds={t.felelos_employee_ids}
+                    options={felelosOptions(t)}
+                    addLabel="Hozzáadás"
+                    emptyText="Nincs felelős."
+                    azonnal
+                  />
+                </span>
               ) : (
                 felelosNevek(t)
               ),
@@ -164,14 +171,16 @@ export function HypeTodoContent({
             header: "Ellenőrzés felelős",
             render: (t) =>
               canEdit ? (
-                <EmployeeFkPicker
-                  patchPath={`${HYPE_TODO_BASE_PATH}/${t.id}`}
-                  field="ellenorzes_felelos_id"
-                  currentId={t.ellenorzes_felelos_id}
-                  options={ellenorzoOptions(t)}
-                  emptyLabel="Nincs kijelölve"
-                  className="min-w-[160px]"
-                />
+                <span onClick={(e) => e.stopPropagation()}>
+                  <EmployeeFkPicker
+                    patchPath={`${HYPE_TODO_BASE_PATH}/${t.id}`}
+                    field="ellenorzes_felelos_id"
+                    currentId={t.ellenorzes_felelos_id}
+                    options={ellenorzoOptions(t)}
+                    emptyLabel="Nincs kijelölve"
+                    className="min-w-[160px]"
+                  />
+                </span>
               ) : (
                 (t.ellenorzes_felelos_id ? employeeName.get(t.ellenorzes_felelos_id) : null) ?? "–"
               ),

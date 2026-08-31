@@ -530,6 +530,22 @@ export async function getFloraKommentek(floraId: number): Promise<FloraKomment[]
   return (await apiGet<FloraKomment[]>(`/api/v1/flora/${floraId}/comments`)) ?? [];
 }
 
+/** Egy hozzászólás egy HYPE TO-DO feladat oldalán (lásd backend
+ * routes/hype_todo.py) - a Notion-import a Notion-beli kommenteket is ide
+ * hozza. */
+export type HypeTodoKomment = {
+  id: number;
+  hype_todo_id: number;
+  employee_id: number;
+  employee_name: string;
+  body: string;
+  created_at: string;
+};
+
+export async function getHypeTodoKommentek(todoId: number): Promise<HypeTodoKomment[]> {
+  return (await apiGet<HypeTodoKomment[]>(`/api/v1/hype-todo/${todoId}/comments`)) ?? [];
+}
+
 export async function getAgiTodoItems(limit = 5000): Promise<AgiTodoItem[]> {
   return (await apiGet<AgiTodoItem[]>(`/api/v1/agi-todo?limit=${limit}`)) ?? [];
 }
@@ -2519,6 +2535,18 @@ export type AutoHatarido = {
   allapot: string;
 };
 
+/** Egy teendő egy autóhoz - pipálható lista járművenként (lásd backend
+ * routes/autok.py "teendok" végpontjai). */
+export type AutoTeendo = {
+  id: number;
+  auto_id: number;
+  szoveg: string;
+  kesz: boolean;
+  hatarido: string | null;
+  felelos_id: number | null;
+  felelos_nev: string | null;
+};
+
 export type Auto = {
   id: number;
   rendszam: string;
@@ -2532,6 +2560,7 @@ export type Auto = {
   megjegyzes: string | null;
   hataridok: AutoHatarido[];
   kiadasok: AutoKiadas[];
+  teendok: AutoTeendo[];
   koltseg_osszesen: number;
   /** lejart | hamarosan | rendben | nincs */
   hatarido_allapot: string;

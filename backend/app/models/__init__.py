@@ -29,6 +29,7 @@ from app.models.flora_feladat import FloraFeladat
 from app.models.flora_komment import FloraKomment
 from app.models.google_oauth_token import GoogleOAuthToken
 from app.models.hype_todo import HypeTodoItem, hype_todo_felelosok
+from app.models.hype_todo_komment import HypeTodoKomment
 from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
@@ -123,6 +124,7 @@ __all__ = [
     "FloraKomment",
     "GoogleOAuthToken",
     "HypeTodoItem",
+    "HypeTodoKomment",
     "hype_todo_felelosok",
     "Expense",
     "KpForgalom",

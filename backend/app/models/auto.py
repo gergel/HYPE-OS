@@ -21,7 +21,9 @@ tábla szándékosan sovány, csak magát a járművet írja le:
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from datetime import date
+
+from sqlalchemy import Boolean, Date, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -54,3 +56,27 @@ class Auto(TimestampMixin, Base):
     #: A járműre könyvelt kiadások. Ugyanezek a sorok a Pénzügy kiadásai közt
     #: is ott vannak - nem másolat, ugyanaz a rekord.
     kiadasok: Mapped[list["Expense"]] = relationship(back_populates="auto")
+    #: A járműhöz felvezetett teendők (lásd AutoTeendo) - az autóval együtt
+    #: törlődnek.
+    teendok: Mapped[list["AutoTeendo"]] = relationship(
+        back_populates="auto", order_by="AutoTeendo.id", cascade="all, delete-orphan"
+    )
+
+
+class AutoTeendo(TimestampMixin, Base):
+    """Egy teendő egy autóhoz (a felhasználó kérése): "vinni műszakira",
+    "izzót cserélni", "nyári gumi" - pipálható lista az Autók oldalán,
+    járművenként. Szándékosan egyszerű: szöveg + kész-pipa + opcionális
+    határidő és felelős."""
+
+    __tablename__ = "auto_teendok"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    auto_id: Mapped[int] = mapped_column(ForeignKey("autok.id"), nullable=False, index=True)
+    szoveg: Mapped[str] = mapped_column(Text, nullable=False)
+    kesz: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    hatarido: Mapped[date | None] = mapped_column(Date)
+    felelos_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
+
+    auto: Mapped["Auto"] = relationship(back_populates="teendok")
+    felelos: Mapped["Employee | None"] = relationship()

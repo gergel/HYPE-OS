@@ -19,6 +19,7 @@ export function M2mLinker({
   addLabel = "Hozzáadás",
   emptyText = "Nincs hozzárendelve.",
   onAdded,
+  azonnal = false,
 }: {
   patchPath: string;
   fieldName: string;
@@ -30,6 +31,10 @@ export function M2mLinker({
    * ebből nyílik meg a "mennyiért vállalja ezt a napot" kérdés (lásd
    * StabLinker) - a kapcsolat maga ettől függetlenül már létrejött. */
   onAdded?: (id: number) => void;
+  /** AZONNALI hozzáadás: a legördülőben kiválasztott elem rögtön mentődik,
+   * nincs külön "Hozzáadás" gomb (a felhasználó kérése a HYPE TO-DO Felelős
+   * oszlopánál - egy táblázat-cellában a kétlépéses felvétel körülményes). */
+  azonnal?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -88,24 +93,33 @@ export function M2mLinker({
               EquipmentBookingManager) - sok stábtagnál egy sima legördülőben
               végiggörgetni használhatatlan volt. */}
           <SearchableIdPicker
-            value={selected ? Number(selected) : null}
+            value={azonnal ? null : selected ? Number(selected) : null}
             options={available.map((o) => ({ id: o.id, label: o.label, sublabel: o.sublabel, group: o.group }))}
-            onChange={(next) => setSelected(next === null ? "" : String(next))}
-            placeholder="Keresés név szerint…"
+            onChange={(next) => {
+              if (azonnal) {
+                // A kiválasztás MAGA a hozzáadás - nem kell külön gomb.
+                if (next !== null) patch([...currentIds, next], next);
+                return;
+              }
+              setSelected(next === null ? "" : String(next));
+            }}
+            placeholder={azonnal ? `+ ${addLabel}…` : "Keresés név szerint…"}
             disabled={busy}
             className="min-w-[240px]"
           />
-          <button
-            type="button"
-            disabled={!selected || busy}
-            onClick={() => {
-              patch([...currentIds, Number(selected)], Number(selected));
-              setSelected("");
-            }}
-            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
-          >
-            {addLabel}
-          </button>
+          {!azonnal && (
+            <button
+              type="button"
+              disabled={!selected || busy}
+              onClick={() => {
+                patch([...currentIds, Number(selected)], Number(selected));
+                setSelected("");
+              }}
+              className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+            >
+              {addLabel}
+            </button>
+          )}
         </div>
       )}
     </div>

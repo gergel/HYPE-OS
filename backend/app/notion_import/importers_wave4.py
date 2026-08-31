@@ -16,6 +16,7 @@ from app.models.employee import Employee
 from app.models.flora_feladat import FloraFeladat
 from app.models.flora_komment import FloraKomment
 from app.models.hype_todo import HypeTodoItem
+from app.models.hype_todo_komment import HypeTodoKomment
 from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_relation_ids, safe_upsert
@@ -57,8 +58,23 @@ def _valtozatlan_link(eredeti: list | None, ujak: list | None) -> str | None:
 
 
 def import_hype_todo(client: NotionClient, db: Session) -> ImportResult:
-    """HypeTodoItem <- HYPE TO-DO LIST (önálló tábla, lásd models/hype_todo.py)."""
+    """HypeTodoItem <- HYPE TO-DO LIST (önálló tábla, lásd models/hype_todo.py).
+
+    A feladatok Notion-beli KOMMENTJEIT is áthozza a feladat saját
+    hozzászólás-chatjébe (a felhasználó kérése) - ugyanazzal a motorral, mint
+    az Utómunkánál és a FLÓRA táblánál (lásd importers_wave2.importal_kommenteket)."""
     result = ImportResult(entity_type="HypeTodoItem")
+    try:
+        felhasznalo_terkep = _notion_felhasznalo_terkep(client)
+    except Exception as exc:  # noqa: BLE001 - a userlista hibája ne vigye el a teljes importot
+        result.errors.append(
+            f"A Notion-felhasználók lekérése sikertelen: {type(exc).__name__}: {exc} - a kommentek szerzője emiatt "
+            "nem oldható fel, ezeknél kimarad a komment-átvétel, de a feladatok maguk importálódnak."
+        )
+        felhasznalo_terkep = {}
+    employee_email_szerint, employee_nev_szerint = _employee_terkepek(db)
+    komment_allapot: dict = {}
+
     for page in client.query_database(db_ids.HYPE_TODO_LIST):
         props = extract_properties(page, client)
         feladat = _cim(page) or _text(props.get("Feladat"))
@@ -96,6 +112,21 @@ def import_hype_todo(client: NotionClient, db: Session) -> ImportResult:
             obj.felelosok = db.scalars(select(Employee).where(Employee.id.in_(felelos_ids))).all()
         ujak = files.atemel_mindent(db, props, entity_type="hypeTodo", entity_id=obj.id, result=result)
         obj.csatolando_link = _valtozatlan_link(csatolni_valo_eredeti, ujak.get("Csatolni való"))
+        importal_kommenteket(
+            client,
+            db,
+            result,
+            page["id"],
+            felhasznalo_terkep,
+            employee_email_szerint,
+            employee_nev_szerint,
+            komment_allapot,
+            model=HypeTodoKomment,
+            entity_type="HypeTodoKomment",
+            fk_mezo="hype_todo_id",
+            cel_id=obj.id,
+            cimke="HYPE TO-DO",
+        )
     return result
 
 

@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
+import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
 import { EmployeeFkPicker } from "@/components/EmployeeFkPicker";
+import { KommentChat } from "@/components/KommentChat";
 import { M2mLinker } from "@/components/M2mLinker";
 import { ReadOnlyDetailField } from "@/components/ReadOnlyDetailField";
 import { TopBar } from "@/components/TopBar";
@@ -10,6 +12,7 @@ import {
   getDetailTabs,
   getEmployees,
   getFieldTypes,
+  getHypeTodoKommentek,
   getLathatjakAzOldalt,
   getMyPagePermissions,
   getRecord,
@@ -34,15 +37,17 @@ const SZEMELY_MEZOK: { key: "aki_felvezette_id" | "aki_ellenorizte_id"; label: s
 export default async function HypeTodoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const itemId = Number(id);
-  const [item, visibleFields, fieldTypes, dbTabs, pagePermissions, employees, lathatjakIds] = await Promise.all([
-    getRecord(ENTITY_PATHS.hypeTodo, itemId),
-    getVisibleFields("hypeTodo"),
-    getFieldTypes("hypeTodo"),
-    getDetailTabs("hypeTodo"),
-    getMyPagePermissions(),
-    getEmployees(),
-    getLathatjakAzOldalt(PAGE),
-  ]);
+  const [item, visibleFields, fieldTypes, dbTabs, pagePermissions, employees, lathatjakIds, kommentek] =
+    await Promise.all([
+      getRecord(ENTITY_PATHS.hypeTodo, itemId),
+      getVisibleFields("hypeTodo"),
+      getFieldTypes("hypeTodo"),
+      getDetailTabs("hypeTodo"),
+      getMyPagePermissions(),
+      getEmployees(),
+      getLathatjakAzOldalt(PAGE),
+      getHypeTodoKommentek(itemId),
+    ]);
   if (!item) notFound();
 
   const patchPath = `${ENTITY_PATHS.hypeTodo}/${item.id}`;
@@ -86,6 +91,7 @@ export default async function HypeTodoDetailPage({ params }: { params: Promise<{
           options={felelosOptions}
           addLabel="Felelős hozzáadása"
           emptyText="Nincs felelős hozzárendelve."
+          azonnal
         />
       ),
       [ELLENORZES_FELELOS_KEY]: (
@@ -119,6 +125,17 @@ export default async function HypeTodoDetailPage({ params }: { params: Promise<{
         </div>
 
         <DetailSections sections={tabs} />
+
+        {/* Hozzászólások - a Notion-import a feladat Notion-beli kommentjeit
+            is ide hozza (lásd backend notion_import/importers_wave4.import_hype_todo). */}
+        <Card title="Hozzászólások">
+          <KommentChat
+            endpoint={`/api/v1/hype-todo/${itemId}/comments`}
+            topic={`hypeTodoComments:${itemId}`}
+            initialComments={kommentek}
+            mentionableEmployees={employees.map((e) => ({ id: e.id, full_name: e.full_name }))}
+          />
+        </Card>
       </div>
     </div>
   );

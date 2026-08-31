@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Plus, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
+import { AutoTeendok } from "@/components/kotelezettseg/AutoTeendok";
 import { KotelezettsegKezelo } from "@/components/kotelezettseg/KotelezettsegKezelo";
 import { PapirFeltoltes } from "@/components/kotelezettseg/PapirFeltoltes";
 import { authFetch } from "@/lib/authFetch";
@@ -355,6 +356,19 @@ export function AutoKezelo({
                       canCreate={canCreate}
                       canDelete={canDelete}
                       autoId={auto.id}
+                    />
+                  </div>
+
+                  {/* Teendők az autóhoz - pipálható lista (a felhasználó
+                      kérése): "vinni műszakira", "izzót cserélni"... */}
+                  <div>
+                    <p className="t-label mb-2">Teendők</p>
+                    <AutoTeendok
+                      autoId={auto.id}
+                      teendok={auto.teendok ?? []}
+                      emberek={emberek}
+                      canEdit={canEdit}
+                      canDelete={canDelete}
                     />
                   </div>
 

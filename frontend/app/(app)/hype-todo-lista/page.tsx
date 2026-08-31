@@ -1,5 +1,4 @@
 import {
-  getCurrentUser,
   getEmployees,
   getFieldTypes,
   getHypeTodoItems,
@@ -8,24 +7,25 @@ import {
 } from "@/lib/api";
 import { HypeTodoContent } from "@/components/HypeTodoContent";
 import { TopBar } from "@/components/TopBar";
-import { canDoAction } from "@/lib/permissions";
+import { canDoPageAction } from "@/lib/permissions";
 
 const PAGE = "/hype-todo-lista";
 
 export default async function HypeTodoListaPage() {
-  const [items, fieldTypes, employees, currentUser, pagePermissions, lathatjakIds] = await Promise.all([
+  const [items, fieldTypes, employees, pagePermissions, lathatjakIds] = await Promise.all([
     getHypeTodoItems(),
     getFieldTypes("hypeTodo"),
     getEmployees(),
-    getCurrentUser(),
     getMyPagePermissions(),
     getLathatjakAzOldalt(PAGE),
   ]);
   const statusOptions = fieldTypes.allapot?.options ?? [];
   const kategoriaOptions = fieldTypes.kategoria?.options ?? [];
-  const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
-  const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
-  const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  // A szerepkör-kapu itt nem érvényes - kizárólag a page_permissions dönt,
+  // ugyanúgy, ahogy a backend (lásd routes/hype_todo.py _MINDEN_SZEREPKOR).
+  const canCreate = canDoPageAction(pagePermissions, PAGE, "create");
+  const canDelete = canDoPageAction(pagePermissions, PAGE, "delete");
+  const canEdit = canDoPageAction(pagePermissions, PAGE, "edit");
   // Felelősnek csak az választható, aki ténylegesen látja ezt az oldalt
   // (lásd getLathatjakAzOldalt) - a már hozzárendelt, de időközben
   // jogosultságot vesztett emberek NEVÉT továbbra is az összes `employees`

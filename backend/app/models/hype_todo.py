@@ -49,6 +49,11 @@ class HypeTodoItem(TimestampMixin, Base):
     ellenorzes_felelos: Mapped["Employee"] = relationship(foreign_keys=[ellenorzes_felelos_id])
     aki_ellenorizte: Mapped["Employee"] = relationship(foreign_keys=[aki_ellenorizte_id])
     felelosok: Mapped[list["Employee"]] = relationship(secondary=hype_todo_felelosok)
+    #: A feladat hozzászólásai (lásd models/hype_todo_komment.py) - a
+    #: feladattal együtt törlődnek.
+    kommentek: Mapped[list["HypeTodoKomment"]] = relationship(
+        back_populates="hype_todo", order_by="HypeTodoKomment.created_at", cascade="all, delete-orphan"
+    )
 
     #: A read-sémának adja a kiosztott munkatársak id-jét (lásd
     #: models/project.py Project.crew_employee_ids - ugyanaz a minta).

@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.security import Role, get_current_user, require_page_action
-from app.models.auto import Auto
+from app.models.auto import Auto, AutoTeendo
 from app.api.routes import kotelezettsegek
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
@@ -82,6 +82,19 @@ class AutoHataridoRead(BaseModel):
     allapot: str
 
 
+class AutoTeendoRead(BaseModel):
+    """Egy teendő az autó lapján - pipálható lista járművenként (lásd
+    models/auto.AutoTeendo)."""
+
+    id: int
+    auto_id: int
+    szoveg: str
+    kesz: bool = False
+    hatarido: date | None = None
+    felelos_id: int | None = None
+    felelos_nev: str | None = None
+
+
 class AutoRead(BaseModel):
     id: int
     rendszam: str
@@ -96,6 +109,7 @@ class AutoRead(BaseModel):
 
     hataridok: list[AutoHataridoRead] = []
     kiadasok: list[AutoKiadasRead] = []
+    teendok: list[AutoTeendoRead] = []
     #: A rá könyvelt kiadások NETTÓ összege forintban (a devizás sorokat nem
     #: számoljuk át - nincs árfolyam-forrás a rendszerben, egy kitalált
     #: átváltás pedig hamis összeget adna).
@@ -180,6 +194,12 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
     else:
         allapot = "nincs"
 
+    # A nyitott teendők elöl (a lejártabb határidő előrébb), a készek hátul.
+    teendok = sorted(
+        auto.teendok,
+        key=lambda t: (t.kesz, t.hatarido is None, t.hatarido or ma, t.id),
+    )
+
     return AutoRead(
         id=auto.id,
         rendszam=auto.rendszam,
@@ -193,6 +213,18 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
         megjegyzes=auto.megjegyzes,
         hataridok=hataridok,
         kiadasok=[_kiadas_kimenet(e, _kiadas_dokumentumok(db, [x.id for x in kiadasok])) for e in kiadasok],
+        teendok=[
+            AutoTeendoRead(
+                id=t.id,
+                auto_id=t.auto_id,
+                szoveg=t.szoveg,
+                kesz=t.kesz,
+                hatarido=t.hatarido,
+                felelos_id=t.felelos_id,
+                felelos_nev=t.felelos.full_name if t.felelos else None,
+            )
+            for t in teendok
+        ],
         koltseg_osszesen=osszesen,
         hatarido_allapot=allapot,
     )
@@ -206,6 +238,7 @@ def _betolt(db: Session) -> list[Auto]:
                 selectinload(Auto.kotelezettsegek),
                 selectinload(Auto.kiadasok),
                 selectinload(Auto.felelos),
+                selectinload(Auto.teendok).selectinload(AutoTeendo.felelos),
             )
             .order_by(Auto.rendszam)
         ).all()
@@ -386,4 +419,95 @@ def delete_auto_kiadas(
     if kiadas is None or kiadas.auto_id is None:
         raise HTTPException(status_code=404, detail="Ez a kiadás nem található az autóknál.")
     db.delete(kiadas)
+    db.commit()
+
+
+# --- Teendők autónként -------------------------------------------------------
+# Pipálható lista minden járműhöz ("vinni műszakira", "izzót cserélni") - a
+# felhasználó kérése. Lásd models/auto.AutoTeendo; a lista az AutoRead
+# `teendok` mezőjében jön a felületre.
+
+
+class AutoTeendoIn(BaseModel):
+    szoveg: str
+    hatarido: date | None = None
+    felelos_id: int | None = None
+
+
+class AutoTeendoUpdate(BaseModel):
+    szoveg: str | None = None
+    kesz: bool | None = None
+    hatarido: date | None = None
+    felelos_id: int | None = None
+    #: Melyik mezők változnak ténylegesen - enélkül egy "csak pipálás" PATCH a
+    #: None-ra maradt határidőt/felelőst is kiürítené.
+    model_config = {"extra": "forbid"}
+
+
+def _teendo_kimenet(t: AutoTeendo) -> AutoTeendoRead:
+    return AutoTeendoRead(
+        id=t.id,
+        auto_id=t.auto_id,
+        szoveg=t.szoveg,
+        kesz=t.kesz,
+        hatarido=t.hatarido,
+        felelos_id=t.felelos_id,
+        felelos_nev=t.felelos.full_name if t.felelos else None,
+    )
+
+
+@router.post("/{auto_id}/teendok", response_model=AutoTeendoRead, status_code=201)
+def create_auto_teendo(
+    auto_id: int,
+    payload: AutoTeendoIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    if db.get(Auto, auto_id) is None:
+        raise HTTPException(status_code=404, detail="Az autó nem található.")
+    szoveg = payload.szoveg.strip()
+    if not szoveg:
+        raise HTTPException(status_code=400, detail="A teendő szövege nem lehet üres.")
+    teendo = AutoTeendo(auto_id=auto_id, szoveg=szoveg, hatarido=payload.hatarido, felelos_id=payload.felelos_id)
+    db.add(teendo)
+    db.commit()
+    db.refresh(teendo)
+    return _teendo_kimenet(teendo)
+
+
+@router.patch("/{auto_id}/teendok/{teendo_id}", response_model=AutoTeendoRead)
+def update_auto_teendo(
+    auto_id: int,
+    teendo_id: int,
+    payload: AutoTeendoUpdate,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    teendo = db.get(AutoTeendo, teendo_id)
+    if teendo is None or teendo.auto_id != auto_id:
+        raise HTTPException(status_code=404, detail="A teendő nem található ennél az autónál.")
+    valtozasok = payload.model_dump(exclude_unset=True)
+    if "szoveg" in valtozasok:
+        szoveg = (valtozasok["szoveg"] or "").strip()
+        if not szoveg:
+            raise HTTPException(status_code=400, detail="A teendő szövege nem lehet üres.")
+        valtozasok["szoveg"] = szoveg
+    for mezo, ertek in valtozasok.items():
+        setattr(teendo, mezo, ertek)
+    db.commit()
+    db.refresh(teendo)
+    return _teendo_kimenet(teendo)
+
+
+@router.delete("/{auto_id}/teendok/{teendo_id}", status_code=204)
+def delete_auto_teendo(
+    auto_id: int,
+    teendo_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    teendo = db.get(AutoTeendo, teendo_id)
+    if teendo is None or teendo.auto_id != auto_id:
+        raise HTTPException(status_code=404, detail="A teendő nem található ennél az autónál.")
+    db.delete(teendo)
     db.commit()
