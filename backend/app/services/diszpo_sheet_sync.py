@@ -196,10 +196,15 @@ def munkalap_atvetele(db: Session, ws, sorrend: int, vegrehajt: bool) -> dict:
     # kötés nem talál egyértelmű embert - a felületen egyszer már rendbe tett
     # kötés ne vesszen el minden szinkronnál.
     korabbi_kotesek: dict[str, int] = {}
+    # Ugyanígy a kézzel ELREJTETT oszlopok is a feliratukon át öröklődnek -
+    # egy szinkron ne hozza vissza az egyszer már eltüntetett oszlopokat.
+    korabbi_rejtettek: set[str] = set()
     if meglevo is not None:
         for regi in db.scalars(select(DiszpoOszlop).where(DiszpoOszlop.munkalap_id == meglevo.id)).all():
             if regi.employee_id is not None and regi.cimke:
                 korabbi_kotesek[ekezet_nelkul(regi.cimke.strip())] = regi.employee_id
+            if regi.rejtett and regi.cimke:
+                korabbi_rejtettek.add(ekezet_nelkul(regi.cimke.strip()))
 
     # A CELLÁK
     cellak: list[tuple[int, int, str | None, str | None]] = []
@@ -244,6 +249,7 @@ def munkalap_atvetele(db: Session, ws, sorrend: int, vegrehajt: bool) -> dict:
                 "cimke": cimke,
                 "csoport": aktualis_csoport if fejlec_sorok == 2 else None,
                 "employee_id": employee_id,
+                "rejtett": bool(cimke) and ekezet_nelkul(cimke.strip()) in korabbi_rejtettek,
             }
         )
 

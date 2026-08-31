@@ -3199,6 +3199,9 @@ export type DiszpoOszlop = {
    * munkanap-számlálásba. */
   employee_id: number | null;
   employee_nev: string | null;
+  /** Elrejtett oszlop: a rács nem mutatja, az adata és a munkanap-számítása
+   * él (lásd backend models/diszpo_tabla.DiszpoOszlop.rejtett). */
+  rejtett: boolean;
 };
 
 export type DiszpoSor = {

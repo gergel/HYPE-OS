@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -102,6 +102,11 @@ class DiszpoOszlop(TimestampMixin, Base):
     #: Melyik szekcióhoz tartozik ("CAMERA CREW", "UTÓMUNKA OSZTÁLY").
     csoport: Mapped[str | None] = mapped_column(String(100))
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"), index=True)
+    #: Elrejtett oszlop: a felület nem mutatja (pl. aki már nem dolgozik
+    #: velünk), de az adata és a munkanap-számítása változatlanul él. A
+    #: sheet-szinkron a feliraton (cimke) át megőrzi - lásd
+    #: services/diszpo_sheet_sync.py.
+    rejtett: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     munkalap: Mapped["DiszpoMunkalap"] = relationship(back_populates="oszlopok")
     employee = relationship("Employee")

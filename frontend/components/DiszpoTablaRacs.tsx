@@ -86,6 +86,29 @@ export function DiszpoTablaRacs({
   const sorSzam = Math.max(munkalap.sor_szam, munkalap.sorok.length);
   const oszlopSzam = munkalap.oszlop_szam;
 
+  const oszlopTerkep = useMemo(() => new Map(munkalap.oszlopok.map((o) => [o.idx, o])), [munkalap.oszlopok]);
+
+  // Az oszlopok BALJA és SZÉLESSÉGE - halmozva, mint a soroknál: a REJTETT
+  // oszlop 0 széles, így a többi magától összecsúszik (a felhasználó kérése:
+  // a már nem kellő oszlopok eltüntethetők az adatuk elvesztése nélkül).
+  const { oszlopBal, oszlopSzelessege } = useMemo(() => {
+    const bal: number[] = new Array(oszlopSzam + 1);
+    const szel: number[] = new Array(oszlopSzam);
+    let fut = 0;
+    for (let c = 0; c < oszlopSzam; c++) {
+      bal[c] = fut;
+      szel[c] = oszlopTerkep.get(c)?.rejtett ? 0 : OSZLOP_SZELES;
+      fut += szel[c];
+    }
+    bal[oszlopSzam] = fut;
+    return { oszlopBal: bal, oszlopSzelessege: szel };
+  }, [oszlopTerkep, oszlopSzam]);
+
+  const rejtettOszlopok = useMemo(
+    () => munkalap.oszlopok.filter((o) => o.rejtett).sort((a, b) => a.idx - b.idx),
+    [munkalap.oszlopok],
+  );
+
   // A sorok TETEJE és MAGASSÁGA - halmozva. Azért kell tömb, mert az
   // elválasztó sorok magasabbak: fix magassággal a pozíciók elcsúsznának.
   const { sorTeteje, sorMagassaga, teljesMagassag } = useMemo(() => {
@@ -120,7 +143,22 @@ export function DiszpoTablaRacs({
   // Az első oszlopok BEFAGYASZTVA: 146 oszlopnál a dátum nélkül nem lehet
   // tudni, melyik sorban vagyunk. Ahol nincs dátum-oszlop, ott egy elég.
   const fagyasztott = munkalap.sorok.some((s) => s.datum) ? 3 : 1;
-  const fagyasztottSzeles = fagyasztott * OSZLOP_SZELES;
+  const fagyasztottSzeles = oszlopBal[Math.min(fagyasztott, oszlopSzam)] ?? 0;
+
+  /** Melyik oszlop van ennél a (tartalombeli) képpontnál. */
+  const oszlopAPontnal = useCallback(
+    (x: number) => {
+      let also = 0;
+      let felso = oszlopSzam;
+      while (also < felso) {
+        const kozep = (also + felso) >> 1;
+        if (oszlopBal[kozep] <= x) also = kozep + 1;
+        else felso = kozep;
+      }
+      return Math.max(also - 1, 0);
+    },
+    [oszlopBal, oszlopSzam],
+  );
 
   const cellaTerkep = useMemo(() => {
     const t = new Map<number, { ertek: string | null; szin: string | null }>();
@@ -136,7 +174,6 @@ export function DiszpoTablaRacs({
   );
 
   const sorTerkep = useMemo(() => new Map(munkalap.sorok.map((s) => [s.idx, s])), [munkalap.sorok]);
-  const oszlopTerkep = useMemo(() => new Map(munkalap.oszlopok.map((o) => [o.idx, o])), [munkalap.oszlopok]);
 
   useEffect(() => {
     const elem = gorgetoRef.current;
@@ -151,14 +188,8 @@ export function DiszpoTablaRacs({
   // A LÁTHATÓ ABLAK: csak ezt rajzoljuk ki.
   const elsoSor = Math.max(munkalap.fejlec_sorok, sorAPontnal(gorgetes.top) - RATARTAS);
   const utolsoSor = Math.min(sorSzam, sorAPontnal(gorgetes.top + meret.magas) + RATARTAS + 1);
-  const elsoOszlop = Math.max(
-    fagyasztott,
-    Math.floor((gorgetes.left - fagyasztottSzeles) / OSZLOP_SZELES) - RATARTAS,
-  );
-  const utolsoOszlop = Math.min(
-    oszlopSzam,
-    Math.ceil((gorgetes.left + meret.szeles - fagyasztottSzeles) / OSZLOP_SZELES) + RATARTAS,
-  );
+  const elsoOszlop = Math.max(fagyasztott, oszlopAPontnal(gorgetes.left + fagyasztottSzeles) - RATARTAS);
+  const utolsoOszlop = Math.min(oszlopSzam, oszlopAPontnal(gorgetes.left + meret.szeles) + RATARTAS + 1);
 
   const lathatoSorok: number[] = [];
   for (let r = elsoSor; r < utolsoSor; r++) lathatoSorok.push(r);
@@ -226,9 +257,19 @@ export function DiszpoTablaRacs({
 
   const lepj = useCallback(
     (dSor: number, dOszlop: number, kiterjeszt = false) => {
+      // Vízszintes lépésnél a REJTETT oszlopokat átugorjuk - különben a
+      // kijelölés egy láthatatlan cellán állna meg.
+      let celOszlop = Math.min(Math.max(kijelolt.oszlop + dOszlop, 0), oszlopSzam - 1);
+      if (dOszlop !== 0) {
+        const irany = dOszlop > 0 ? 1 : -1;
+        while (celOszlop >= 0 && celOszlop < oszlopSzam && oszlopTerkep.get(celOszlop)?.rejtett) {
+          celOszlop += irany;
+        }
+        if (celOszlop < 0 || celOszlop >= oszlopSzam) celOszlop = kijelolt.oszlop;
+      }
       const uj = {
         sor: Math.min(Math.max(kijelolt.sor + dSor, munkalap.fejlec_sorok), sorSzam - 1),
-        oszlop: Math.min(Math.max(kijelolt.oszlop + dOszlop, 0), oszlopSzam - 1),
+        oszlop: celOszlop,
       };
       if (kiterjeszt) {
         setTartomany({ tol: tartomany?.tol ?? kijelolt, ig: uj });
@@ -240,17 +281,17 @@ export function DiszpoTablaRacs({
       const elem = gorgetoRef.current;
       if (!elem) return;
       const y = sorTeteje[uj.sor];
-      const x = fagyasztottSzeles + (uj.oszlop - fagyasztott) * OSZLOP_SZELES;
+      const x = oszlopBal[uj.oszlop];
       if (y < elem.scrollTop) elem.scrollTop = y;
       if (y + sorMagassaga[uj.sor] > elem.scrollTop + elem.clientHeight)
         elem.scrollTop = y + sorMagassaga[uj.sor] - elem.clientHeight;
       if (uj.oszlop >= fagyasztott) {
         if (x < elem.scrollLeft + fagyasztottSzeles) elem.scrollLeft = x - fagyasztottSzeles;
-        if (x + OSZLOP_SZELES > elem.scrollLeft + elem.clientWidth)
-          elem.scrollLeft = x + OSZLOP_SZELES - elem.clientWidth;
+        if (x + oszlopSzelessege[uj.oszlop] > elem.scrollLeft + elem.clientWidth)
+          elem.scrollLeft = x + oszlopSzelessege[uj.oszlop] - elem.clientWidth;
       }
     },
-    [kijelolt, tartomany, sorSzam, oszlopSzam, munkalap.fejlec_sorok, fagyasztott, fagyasztottSzeles],
+    [kijelolt, tartomany, sorSzam, oszlopSzam, munkalap.fejlec_sorok, fagyasztott, fagyasztottSzeles, oszlopBal, oszlopSzelessege, oszlopTerkep, sorTeteje, sorMagassaga],
   );
 
   // BILLENTYŰZET: ahogy a táblázatban. Nyilak, Enter, Tab, gépelés, Delete.
@@ -283,6 +324,44 @@ export function DiszpoTablaRacs({
     return () => window.removeEventListener("keydown", kezel);
   });
 
+  // BEILLESZTÉS a vágólapról (Ctrl+V) - a felhasználó kérése. Egyetlen érték
+  // a kijelölt cellába megy; táblázatból másolt tartomány (tab/sortörés
+  // tagolás, ahogy a Sheets/Excel adja) cellánként szétosztva, a kijelölttől
+  // jobbra-lefelé. A REJTETT oszlopokat kihagyjuk, ahogy a Sheets is teszi.
+  useEffect(() => {
+    function beilleszt(e: ClipboardEvent) {
+      if (!canEdit || szerkesztes) return;
+      const cel = e.target as HTMLElement | null;
+      // Szerkesztő-inputba az input natív beillesztése dolgozik, azt nem
+      // vesszük el.
+      if (cel && (cel.tagName === "INPUT" || cel.tagName === "TEXTAREA" || cel.isContentEditable)) return;
+      const szoveg = e.clipboardData?.getData("text/plain");
+      if (!szoveg) return;
+      e.preventDefault();
+      const sorok = szoveg.replace(/\r/g, "").replace(/\n$/, "").split("\n").map((sor) => sor.split("\t"));
+      // A cél-oszlopok: a kijelölttől jobbra lévő LÁTHATÓ oszlopok sorban.
+      const celOszlopok: number[] = [];
+      for (let c = kijelolt.oszlop; c < oszlopSzam; c++) {
+        if (!oszlopTerkep.get(c)?.rejtett) celOszlopok.push(c);
+      }
+      const cellak: { sor_idx: number; oszlop_idx: number; ertek: string | null; ertek_valtozik: boolean }[] = [];
+      sorok.forEach((ertekek, dr) => {
+        const r = kijelolt.sor + dr;
+        if (r >= sorSzam) return;
+        ertekek.forEach((ertek, dc) => {
+          const c = celOszlopok[dc];
+          if (c === undefined) return;
+          cellak.push({ sor_idx: r, oszlop_idx: c, ertek: ertek.trim() || null, ertek_valtozik: true });
+        });
+      });
+      if (cellak.length > 0) {
+        hivas("/cellak", { method: "PUT", body: JSON.stringify({ cellak }) });
+      }
+    }
+    window.addEventListener("paste", beilleszt);
+    return () => window.removeEventListener("paste", beilleszt);
+  });
+
   function cellaStilus(szin: string | null | undefined): React.CSSProperties {
     if (!szin || !(szin in SZIN_LEIRAS)) return {};
     const s = SZIN_LEIRAS[szin as DiszpoSzin];
@@ -307,8 +386,9 @@ export function DiszpoTablaRacs({
   function Cella({ sor, oszlop, fagyott }: { sor: number; oszlop: number; fagyott: boolean }) {
     const c = cella(sor, oszlop);
     const s = sorTerkep.get(sor);
+    if (oszlopSzelessege[oszlop] === 0) return null;
     const szerkesztettE = szerkesztes?.pont.sor === sor && szerkesztes?.pont.oszlop === oszlop;
-    const bal = fagyott ? oszlop * OSZLOP_SZELES : fagyasztottSzeles + (oszlop - fagyasztott) * OSZLOP_SZELES;
+    const bal = oszlopBal[oszlop];
     const uresJelolt = c?.szin === "feher";
     return (
       <div
@@ -316,7 +396,7 @@ export function DiszpoTablaRacs({
           position: "absolute",
           top: sorTeteje[sor],
           left: bal,
-          width: OSZLOP_SZELES,
+          width: oszlopSzelessege[oszlop],
           height: sorMagassaga[sor],
           zIndex: fagyott ? 2 : undefined,
           ...cellaStilus(c?.szin),
@@ -457,6 +537,29 @@ export function DiszpoTablaRacs({
         </span>
       </div>
 
+      {/* A REJTETT oszlopok visszahozása: felsoroljuk őket, egy kattintás
+          újra megjeleníti. Enélkül az elrejtés egyirányú út lenne. */}
+      {rejtettOszlopok.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[12px]">
+          <span className="text-text-secondary">Rejtett oszlopok ({rejtettOszlopok.length}):</span>
+          {rejtettOszlopok.map((o) => (
+            <button
+              key={o.idx}
+              type="button"
+              disabled={busy || !canEdit}
+              title="Oszlop megjelenítése"
+              onClick={() =>
+                hivas(`/oszlop/${o.idx}`, { method: "PUT", body: JSON.stringify({ rejtett: false }) })
+              }
+              className="rounded-[var(--radius)] border border-border px-2 py-0.5 text-text-secondary hover:bg-surface-2 disabled:opacity-40"
+            >
+              {oszlopBetu(o.idx)}
+              {o.cimke ? ` · ${o.cimke}` : ""} ×
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Az oszlop-ember kötés: enélkül az oszlop színei nem számítanak bele a
           munkanap-számlálásba (lásd backend routes/diszpo_tabla.py). */}
       {canEdit && munkalap.fejlec_sorok > 1 && kijeloltOszlop && (
@@ -499,14 +602,13 @@ export function DiszpoTablaRacs({
           style={{ height: OSZLOPFEJ_MAGAS, marginLeft: SORFEJ_SZELES }}
         >
           {[...fagyasztottOszlopok, ...lathatoOszlopok].map((c) => {
+            if (oszlopSzelessege[c] === 0) return null;
             const fagyott = c < fagyasztott;
-            const bal = fagyott
-              ? c * OSZLOP_SZELES + gorgetes.left
-              : fagyasztottSzeles + (c - fagyasztott) * OSZLOP_SZELES;
+            const bal = fagyott ? oszlopBal[c] + gorgetes.left : oszlopBal[c];
             return (
               <div
                 key={c}
-                style={{ position: "absolute", left: bal - gorgetes.left, width: OSZLOP_SZELES, zIndex: fagyott ? 2 : 1 }}
+                style={{ position: "absolute", left: bal - gorgetes.left, width: oszlopSzelessege[c], zIndex: fagyott ? 2 : 1 }}
                 onClick={() => setTartomany({ tol: { sor: munkalap.fejlec_sorok, oszlop: c }, ig: { sor: sorSzam - 1, oszlop: c } })}
                 className={`h-[${OSZLOPFEJ_MAGAS}px] cursor-pointer border-r border-border bg-surface-3 text-center text-[10.5px] leading-[24px] ${
                   kijelolt.oszlop === c ? "text-text-accent" : "text-text-muted"
@@ -554,7 +656,7 @@ export function DiszpoTablaRacs({
             {/* A teljes méret - ettől lesz igazi a görgetősáv. */}
             <div
               style={{
-                width: fagyasztottSzeles + Math.max(oszlopSzam - fagyasztott, 0) * OSZLOP_SZELES,
+                width: oszlopBal[oszlopSzam],
                 height: teljesMagassag,
                 position: "relative",
               }}
@@ -564,18 +666,17 @@ export function DiszpoTablaRacs({
                 <div key={`f${r}`} style={{ position: "sticky", top: 0, zIndex: 3, height: 0 }}>
                   <div style={{ position: "absolute", top: sorTeteje[r], left: 0, right: 0 }}>
                     {[...fagyasztottOszlopok, ...lathatoOszlopok].map((c) => {
+                      if (oszlopSzelessege[c] === 0) return null;
                       const cl = cella(r, c);
                       const fagyott = c < fagyasztott;
-                      const bal = fagyott
-                        ? c * OSZLOP_SZELES + gorgetes.left
-                        : fagyasztottSzeles + (c - fagyasztott) * OSZLOP_SZELES;
+                      const bal = fagyott ? oszlopBal[c] + gorgetes.left : oszlopBal[c];
                       return (
                         <div
                           key={c}
                           style={{
                             position: "absolute",
                             left: bal,
-                            width: OSZLOP_SZELES,
+                            width: oszlopSzelessege[c],
                             height: sorMagassaga[r],
                             zIndex: fagyott ? 2 : 1,
                             // A fejléc-blokkban is látszódjon a cella színe: a
@@ -698,6 +799,20 @@ export function DiszpoTablaRacs({
               { cimke: "Oszlop beszúrása balra", tesz: () => hivas("/oszlop", { method: "POST", body: JSON.stringify({ idx: menu.pont.oszlop }) }) },
               { cimke: "Oszlop beszúrása jobbra", tesz: () => hivas("/oszlop", { method: "POST", body: JSON.stringify({ idx: menu.pont.oszlop, ala: true }) }) },
               { cimke: "Tartalom törlése", tesz: () => tartalmatTorol() },
+              // A fagyasztott (dátum/nap/diszpószám) oszlopokat nem engedjük
+              // elrejteni: azok igazítanak el, melyik sorban vagyunk.
+              ...(menu.pont.oszlop >= fagyasztott
+                ? [
+                    {
+                      cimke: `${oszlopBetu(menu.pont.oszlop)} oszlop elrejtése`,
+                      tesz: () =>
+                        hivas(`/oszlop/${menu.pont.oszlop}`, {
+                          method: "PUT",
+                          body: JSON.stringify({ rejtett: true }),
+                        }),
+                    },
+                  ]
+                : []),
             ].map((elem) => (
               <button
                 key={elem.cimke}
@@ -746,8 +861,8 @@ export function DiszpoTablaRacs({
           </span>
         ))}
         <span className="ml-auto">
-          Nyilak: mozgás · gépelés vagy Enter: szerkesztés · Shift+nyíl vagy húzás: tartomány · Delete: tartalom
-          törlése · jobb gomb: sor/oszlop
+          Nyilak: mozgás · gépelés vagy Enter: szerkesztés · Ctrl+V: beillesztés · Shift+nyíl vagy húzás: tartomány
+          · Delete: tartalom törlése · jobb gomb: sor/oszlop (beszúrás, elrejtés)
         </span>
       </div>
     </div>

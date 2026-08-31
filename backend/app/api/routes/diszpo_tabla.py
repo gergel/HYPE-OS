@@ -61,6 +61,9 @@ class OszlopOut(BaseModel):
     csoport: str | None = None
     employee_id: int | None = None
     employee_nev: str | None = None
+    #: Elrejtett oszlop: a felület nem mutatja, az adata és a
+    #: munkanap-számítása él (lásd models/diszpo_tabla.DiszpoOszlop.rejtett).
+    rejtett: bool = False
 
 
 class SorOut(BaseModel):
@@ -120,6 +123,7 @@ def get_munkalap(munkalap_id: int, db: Session = Depends(get_db), _user: Employe
                 csoport=o.csoport,
                 employee_id=o.employee_id,
                 employee_nev=o.employee.full_name if o.employee else None,
+                rejtett=o.rejtett,
             )
             for o in oszlopok
         ],
@@ -389,12 +393,16 @@ def sor_adat(
 
 
 class OszlopKotesIn(BaseModel):
-    """Melyik munkatárs oszlopa ez. `employee_id=None` = a kötés törlése."""
+    """Az oszlop saját adatai. Csak az ELKÜLDÖTT mezők változnak (a kérésben
+    nem szereplőket békén hagyjuk) - így egy elrejtés nem törli a kötést.
+    `employee_id=None` (elküldve) = a kötés törlése."""
 
     employee_id: int | None = None
     #: Az oszlop felirata (a fejlécben). None + `cimke_valtozik` = törlés.
     cimke: str | None = None
     cimke_valtozik: bool = False
+    #: Elrejtés/megjelenítés (lásd models/diszpo_tabla.DiszpoOszlop.rejtett).
+    rejtett: bool | None = None
 
 
 @router.put("/{munkalap_id}/oszlop/{idx}", response_model=OszlopOut)
@@ -416,11 +424,15 @@ def set_oszlop_kotes(
     )
     if oszlop is None:
         raise HTTPException(status_code=404, detail="Ez az oszlop nem található.")
-    if payload.employee_id is not None and db.get(Employee, payload.employee_id) is None:
-        raise HTTPException(status_code=404, detail="Ez a munkatárs nem található.")
-    oszlop.employee_id = payload.employee_id
+    valtozasok = payload.model_dump(exclude_unset=True)
+    if "employee_id" in valtozasok:
+        if valtozasok["employee_id"] is not None and db.get(Employee, valtozasok["employee_id"]) is None:
+            raise HTTPException(status_code=404, detail="Ez a munkatárs nem található.")
+        oszlop.employee_id = valtozasok["employee_id"]
     if payload.cimke_valtozik:
         oszlop.cimke = (payload.cimke or "").strip() or None
+    if payload.rejtett is not None:
+        oszlop.rejtett = payload.rejtett
     munkanap_szamlalo.urits_gyorsitotar(db)
     db.commit()
     db.refresh(oszlop)
@@ -430,6 +442,7 @@ def set_oszlop_kotes(
         csoport=oszlop.csoport,
         employee_id=oszlop.employee_id,
         employee_nev=oszlop.employee.full_name if oszlop.employee else None,
+        rejtett=oszlop.rejtett,
     )
 
 
