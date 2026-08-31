@@ -141,9 +141,17 @@ def rogzitsd_kimenetet(db: Session, deliverable: Deliverable, regi_allapot: str 
 
 
 def honap_hatarai(ev: int, honap: int) -> tuple[datetime, datetime]:
-    """A hónap [kezdet, vég) határa időbélyegként, UTC-ben."""
-    kezdet = datetime(ev, honap, 1, tzinfo=timezone.utc)
-    veg = datetime(ev + (honap == 12), 1 if honap == 12 else honap + 1, 1, tzinfo=timezone.utc)
+    """A hónap [kezdet, vég) határa időbélyegként, BUDAPESTI idő szerint.
+
+    A verseny hónapja a magyar naptár szerint fordul: aki magyar idő szerint
+    szeptember 1-én hajnali fél 1-kor tesz ellenőrzésbe egy anyagot, az már a
+    szeptemberi versenybe számít - UTC-határokkal még augusztusba esne, mert
+    a szerver órája ilyenkor még augusztus 31., este fél 11-et mutat. Az
+    összehasonlítás így is helyes: az időbélyegek zóna-tudatosak."""
+    from app.services.hu_datum import BUDAPEST_IDOZONA
+
+    kezdet = datetime(ev, honap, 1, tzinfo=BUDAPEST_IDOZONA)
+    veg = datetime(ev + (honap == 12), 1 if honap == 12 else honap + 1, 1, tzinfo=BUDAPEST_IDOZONA)
     return kezdet, veg
 
 
@@ -328,9 +336,13 @@ def havi_zaras(db: Session) -> None:
 
     from app.models.employee import SystemRole, van_szerepkore
     from app.services.notifications import create_notification
-    from app.services.hu_datum import honap_neve
+    from app.services.hu_datum import budapesti_ma, honap_neve
 
-    ma = date.today()
+    # BUDAPESTI idő szerint nézzük, mikor fordul a hónap (a felhasználó
+    # kérése): a szerver UTC-ben jár, és magyar idő szerint éjfél után még
+    # az előző napot mutatná - a kihirdetés így pontban magyar hónapfordulókor
+    # válik esedékessé.
+    ma = budapesti_ma()
     ev, honap = elozo_honap(ma)
 
     # Gyors kiugrás zár nélkül: az esetek 99%-ában már megtörtént a zárás.

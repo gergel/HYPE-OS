@@ -22,7 +22,7 @@ from app.services import megrendeloi_papir
 from app.services import papirozas_feladatok
 from app.services import papirozas_hatokor
 from app.services import vagoi_jatek as vagoi_jatek_szolg
-from app.services.hu_datum import honap_neve
+from app.services.hu_datum import budapesti_ma, honap_neve
 from app.models.finance import Revenue
 from app.models.project import Project
 from app.models.project_code import ProjectCode
@@ -223,8 +223,11 @@ def summary(db: Session = Depends(get_db), user: Employee = Depends(get_current_
 
     # Vágói játék: ünneplő widget a győztesnek (a kihirdetéstől 5 napig), és
     # nyeremény-bekérő az adminnak, amíg a folyó hónap nyereménye hiányzik.
+    # A hónap-fordulót BUDAPESTI idő szerint nézzük (a felhasználó kérése) -
+    # a szerver UTC-órája magyar éjfél után még az előző hónapot mutatná.
+    jatek_ma = budapesti_ma()
     nyertes: VagoiJatekNyertes | None = None
-    elozo_ev, elozo_ho = vagoi_jatek_szolg.elozo_honap(today)
+    elozo_ev, elozo_ho = vagoi_jatek_szolg.elozo_honap(jatek_ma)
     elozo_sor = vagoi_jatek_szolg.honap_beallitas(db, elozo_ev, elozo_ho)
     if (
         elozo_sor is not None
@@ -245,7 +248,7 @@ def summary(db: Session = Depends(get_db), user: Employee = Depends(get_current_
             )
     nyeremeny_bekeres = False
     if van_szerepkore(user, SystemRole.ADMIN):
-        folyo_sor = vagoi_jatek_szolg.honap_beallitas(db, today.year, today.month)
+        folyo_sor = vagoi_jatek_szolg.honap_beallitas(db, jatek_ma.year, jatek_ma.month)
         nyeremeny_bekeres = folyo_sor is None or not folyo_sor.nyeremeny
 
     return DashboardSummary(

@@ -1,7 +1,19 @@
 """Magyar hónapnevek - a Belsős TIG mindenhol BETŰVEL írja ki a hónapot
 (dokumentumban, email tárgyában, kiadás megnevezésében), nem számmal."""
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+#: A cég Budapesten dolgozik - ahol az számít, hogy "melyik nap/hónap van",
+#: ott ezt kell nézni, nem a szerver óráját (a Railway UTC-ben jár, tehát
+#: magyar idő szerint éjfél és hajnali 1-2 óra között a szerver még az ELŐZŐ
+#: napot írná).
+BUDAPEST_IDOZONA = ZoneInfo("Europe/Budapest")
+
+
+def budapesti_ma() -> date:
+    """A mai nap budapesti (magyar) idő szerint."""
+    return datetime.now(BUDAPEST_IDOZONA).date()
 
 HONAP_NEVEK = (
     "január",

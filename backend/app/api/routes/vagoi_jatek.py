@@ -11,8 +11,6 @@ kihirdetése és a munkanapok állítása szerkesztési jog.
 
 from __future__ import annotations
 
-from datetime import date
-
 import os
 from uuid import uuid4
 
@@ -34,6 +32,7 @@ from app.models.vagoi_jatek import (
     VagoJatekNap,
 )
 from app.services import document_storage, vagoi_jatek
+from app.services.hu_datum import budapesti_ma
 
 router = APIRouter(prefix="/vagoi-jatek", tags=["vagoi-jatek"])
 
@@ -86,7 +85,9 @@ class SzabalyokOut(BaseModel):
 
 
 def _ma() -> tuple[int, int]:
-    m = date.today()
+    # Budapesti idő szerint fordul a hónap - a szerver UTC-órája magyar idő
+    # szerint éjfél után még az előző hónapot mutatná (lásd hu_datum).
+    m = budapesti_ma()
     return m.year, m.month
 
 
