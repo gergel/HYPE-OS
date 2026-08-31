@@ -35,8 +35,11 @@ KATEGORIA = "Kötelezettség"
 #: azonnal több tucat üres hónap keletkezne, és elfedné az igazi teendőket.
 VISSZAMENOLEG_HONAP = 12
 
-#: Az oldal útvonala - az értesítés linkje mutat ide.
-PAGE = "/kotelezettsegek"
+#: Hova mutat az értesítés linkje. A lejárat-figyelés az E-Rezsi átalakítása
+#: óta csak a biztosításokra/autópapírokra fut (az ELOFIZETES kimarad, lásd
+#: ensure_idoszakok/ensure_feladatok), azok pedig az Autók oldalon élnek -
+#: a régi /kotelezettsegek útvonalon már nincs oldal.
+PAGE = "/autok"
 
 
 def _nap_a_honapban(ev: int, honap: int, nap: int) -> date:

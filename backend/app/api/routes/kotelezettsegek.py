@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_page_action
+from app.core.security import Role, get_current_user, require_page_action
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.schemas.document_attachment import DocumentAttachmentRead
@@ -37,6 +37,13 @@ from app.services import kotelezettseg_import
 router = APIRouter(prefix="/kotelezettsegek", tags=["kotelezettsegek"])
 
 PAGE = "/kotelezettsegek"
+
+#: A durva admin/operator szerepkör-kapu itt nem érvényes: akinek admin a
+#: Beállításokban jogot adott erre az oldalra, az a szerepkörétől
+#: függetlenül dolgozhat rajta (ugyanaz az elv, mint az Utómunkánál -
+#: lásd routes/postproduction.py _MINDEN_SZEREPKOR). A page_permissions
+#: védelem változatlanul él.
+_MINDEN_SZEREPKOR = tuple(Role)
 
 #: A csatolmányok entity_type-jai (lásd services/attachments.py):
 #: az EGY FORDULÓHOZ tartozó számla, és a kötelezettséghez MAGÁHOZ tartozó
@@ -334,7 +341,7 @@ def _ellenoriz(payload: KotelezettsegIn) -> None:
 def create_kotelezettseg(
     payload: KotelezettsegIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     _ellenoriz(payload)
     k = Kotelezettseg(**payload.model_dump())
@@ -352,7 +359,7 @@ def update_kotelezettseg(
     kotelezettseg_id: int,
     payload: KotelezettsegIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     k = db.get(Kotelezettseg, kotelezettseg_id)
     if k is None:
@@ -371,7 +378,7 @@ def update_kotelezettseg(
 def delete_kotelezettseg(
     kotelezettseg_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     k = db.get(Kotelezettseg, kotelezettseg_id)
     if k is None:
@@ -400,7 +407,7 @@ def update_idoszak(
     idoszak_id: int,
     payload: IdoszakIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """Egy forduló tényleges adatai. Csak az elküldött mezőket írjuk át, hogy
     az összeg beírása ne törölje a megjegyzést (és fordítva)."""
@@ -453,7 +460,7 @@ class ImportEredmeny(BaseModel):
 def import_google_tablazat(
     payload: ImportIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     """A Google-táblázatban vezetett előfizetés-lista átemelése - TÜKÖRKÉNT.
 

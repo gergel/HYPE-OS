@@ -2,11 +2,15 @@ import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { GoogleTablazatImport } from "@/components/kotelezettseg/GoogleTablazatImport";
 import { KotelezettsegKezelo } from "@/components/kotelezettseg/KotelezettsegKezelo";
-import { getCurrentUser, getEmployees, getKotelezettsegek, getMyPagePermissions } from "@/lib/api";
-import { canDoAction } from "@/lib/permissions";
+import { getEmployees, getKotelezettsegek, getMyPagePermissions } from "@/lib/api";
+import { canDoPageAction } from "@/lib/permissions";
 import { formatHuf } from "@/lib/penz";
 
-const PAGE = "/kotelezettsegek";
+// SAJÁT jogosultsági kulcs (a felhasználó kérése: az E-Rezsi és az Autók
+// külön adható) - a régi /kotelezettsegek grant aliaszon át ugyanígy megnyitja
+// (lásd lib/permissions.OLDAL_ALIASZOK). A szerepkör-kapu itt nem érvényes,
+// kizárólag a page_permissions dönt (lásd backend routes/kotelezettsegek.py).
+const PAGE = "/e-rezsi";
 
 /** E-Rezsi: a cég előfizetései - EGYSZERŰ ADATBÁZISKÉNT.
  *
@@ -19,10 +23,9 @@ const PAGE = "/kotelezettsegek";
  * kell) ugyanezen a motoron futnak, külön oldalon (lásd /kotelezettsegek és
  * /autok). */
 export default async function ERezsiPage() {
-  const [kotelezettsegek, employees, currentUser, pagePermissions] = await Promise.all([
+  const [kotelezettsegek, employees, pagePermissions] = await Promise.all([
     getKotelezettsegek({ tipus: "elofizetes" }),
     getEmployees(),
-    getCurrentUser(),
     getMyPagePermissions(),
   ]);
 
@@ -56,13 +59,13 @@ export default async function ERezsiPage() {
             emberek={emberek}
             alapTipus="elofizetes"
             fordulokNelkul
-            canEdit={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
-            canCreate={canDoAction(currentUser, pagePermissions, PAGE, "create")}
-            canDelete={canDoAction(currentUser, pagePermissions, PAGE, "delete")}
+            canEdit={canDoPageAction(pagePermissions, PAGE, "edit")}
+            canCreate={canDoPageAction(pagePermissions, PAGE, "create")}
+            canDelete={canDoPageAction(pagePermissions, PAGE, "delete")}
           />
         </Card>
 
-        {canDoAction(currentUser, pagePermissions, PAGE, "create") && (
+        {canDoPageAction(pagePermissions, PAGE, "create") && (
           <Card title="Behozatal Google Táblázatból">
             <GoogleTablazatImport />
           </Card>

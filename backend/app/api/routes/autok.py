@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_page_action
+from app.core.security import Role, get_current_user, require_page_action
 from app.models.auto import Auto
 from app.api.routes import kotelezettsegek
 from app.models.document_attachment import DocumentAttachment
@@ -33,6 +33,13 @@ from app.services import kotelezettseg as szolg
 router = APIRouter(prefix="/autok", tags=["autok"])
 
 PAGE = "/autok"
+
+#: A durva admin/operator szerepkör-kapu itt nem érvényes: akinek admin a
+#: Beállításokban jogot adott erre az oldalra, az a szerepkörétől
+#: függetlenül dolgozhat rajta (ugyanaz az elv, mint az Utómunkánál -
+#: lásd routes/postproduction.py _MINDEN_SZEREPKOR). A page_permissions
+#: védelem változatlanul él.
+_MINDEN_SZEREPKOR = tuple(Role)
 
 #: Mire költünk egy autóra. Szabad szöveg is beírható - ez csak a gyors
 #: választás a felületen, nem korlátozás.
@@ -246,7 +253,7 @@ def _rendszam_szabad(db: Session, rendszam: str, kiveve_id: int | None = None) -
 def create_auto(
     payload: AutoIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     rendszam = payload.rendszam.strip().upper()
     if not rendszam:
@@ -264,7 +271,7 @@ def update_auto(
     auto_id: int,
     payload: AutoIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     auto = db.get(Auto, auto_id)
     if auto is None:
@@ -285,7 +292,7 @@ def update_auto(
 def delete_auto(
     auto_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     """Az autó törlése.
 
@@ -329,7 +336,7 @@ def create_auto_kiadas(
     auto_id: int,
     payload: AutoKiadasIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     """Költés felvitele az autóra.
 
@@ -368,7 +375,7 @@ def create_auto_kiadas(
 def delete_auto_kiadas(
     kiadas_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "delete")),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     """Az autóhoz felvitt költés törlése.
 

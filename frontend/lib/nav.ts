@@ -210,11 +210,15 @@ export const navGroups: NavGroup[] = [
     // szolgáltatások ne folyjanak össze az évente lejáró papírokkal.
     //
     // Külön "Biztosítások" oldal NINCS: a biztosítás mindig egy autóhoz
-    // tartozik, és ott is kell kezelni - lásd /autok. A jogosultság-kulcs
-    // (/kotelezettsegek) megmarad, mert az E-Rezsi is azon fut.
+    // tartozik, és ott is kell kezelni - lásd /autok.
+    //
+    // Az E-Rezsi és az Autók KÜLÖN jogosultság (a felhasználó kérése) - a
+    // közös kötelezettség-motor kulcsát (/kotelezettsegek) mindkét oldal
+    // saját joga aliaszon át nyitja meg, és a régi /kotelezettsegek grantok
+    // is tovább működnek (lásd lib/permissions.OLDAL_ALIASZOK).
     label: "Kötelezettségek",
     items: [
-      { label: "E-Rezsi", href: "/e-rezsi", icon: "Repeat", permissionPage: "/kotelezettsegek" },
+      { label: "E-Rezsi", href: "/e-rezsi", icon: "Repeat" },
       { label: "Autók", href: "/autok", icon: "Car" },
     ],
   },

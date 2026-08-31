@@ -1,10 +1,14 @@
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { AutoKezelo } from "@/components/kotelezettseg/AutoKezelo";
-import { getAutok, getCurrentUser, getEmployees, getKotelezettsegek, getMyPagePermissions } from "@/lib/api";
-import { canDoAction } from "@/lib/permissions";
+import { getAutok, getEmployees, getKotelezettsegek, getMyPagePermissions } from "@/lib/api";
+import { canDoPageAction } from "@/lib/permissions";
 import { formatHuf } from "@/lib/penz";
 
+// Saját jogosultsági kulcs - a szerepkör-kapu itt nem érvényes, kizárólag a
+// page_permissions dönt (lásd backend routes/autok.py _MINDEN_SZEREPKOR). Az
+// /autok jog a kötelezettség-motort is megnyitja a biztosításokhoz (lásd
+// lib/permissions.OLDAL_ALIASZOK).
 const PAGE = "/autok";
 
 /** Céges autók: mikor jár le a forgalmi és a biztosítás, és mennyit költünk
@@ -15,13 +19,12 @@ const PAGE = "/autok";
  * bármelyik biztosításról -, a költések pedig sima kiadások, ezért jelennek
  * meg magától a Pénzügy összesítő kiadásai közt is. */
 export default async function AutokPage() {
-  const [autok, hataridok, employees, currentUser, pagePermissions] = await Promise.all([
+  const [autok, hataridok, employees, pagePermissions] = await Promise.all([
     getAutok(),
     // Az autókhoz kötött határidők - a kötelezettség-szerkesztő ezekkel
     // dolgozik az egyes járművek alatt.
     getKotelezettsegek(),
     getEmployees(),
-    getCurrentUser(),
     getMyPagePermissions(),
   ]);
 
@@ -50,9 +53,9 @@ export default async function AutokPage() {
             autok={autok}
             hataridok={autosHataridok}
             emberek={emberek}
-            canEdit={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
-            canCreate={canDoAction(currentUser, pagePermissions, PAGE, "create")}
-            canDelete={canDoAction(currentUser, pagePermissions, PAGE, "delete")}
+            canEdit={canDoPageAction(pagePermissions, PAGE, "edit")}
+            canCreate={canDoPageAction(pagePermissions, PAGE, "create")}
+            canDelete={canDoPageAction(pagePermissions, PAGE, "delete")}
           />
         </Card>
       </div>

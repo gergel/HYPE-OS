@@ -68,6 +68,18 @@ export const FOGLALAS_OLDAL = "/felszereles/foglalas";
  *
  * Ha ez a két lista elcsúszik egymástól, a felület mást mutat, mint amit a
  * szerver enged - ezért a két helyet EGYÜTT kell módosítani. */
+/** A kötelezettség-motor (előfizetések, biztosítások, autópapírok) közös
+ * jogosultsági kulcsa - nem valódi oldal, az E-Rezsi és az Autók saját
+ * kulcsán át kapható meg (lásd backend `core/security.KOTELEZETTSEG_OLDAL`). */
+export const KOTELEZETTSEG_OLDAL = "/kotelezettsegek";
+
+const MINDEN_MUVELET_ATKOTES = {
+  view: ["view"],
+  create: ["create"],
+  edit: ["edit"],
+  delete: ["delete"],
+} as const;
+
 export const OLDAL_ALIASZOK: Record<string, Record<string, Record<string, readonly string[]>>> = {
   "/projektek": {
     "/naptar": { view: ["view"], edit: ["edit"] },
@@ -76,6 +88,16 @@ export const OLDAL_ALIASZOK: Record<string, Record<string, Record<string, readon
     "/felszereles": { view: ["view"], create: ["create"], delete: ["delete"] },
     "/projektek": { view: ["view"], edit: ["view", "create", "delete"] },
     "/naptar": { view: ["view"], edit: ["view", "create", "delete"] },
+  },
+  // A kötelezettség-motort az E-Rezsi ÉS az Autók saját joga is megnyitja,
+  // az E-Rezsi oldalt pedig a régi /kotelezettsegek grant is - így a korábban
+  // kiadott jogosultságok változatlanul működnek.
+  [KOTELEZETTSEG_OLDAL]: {
+    "/e-rezsi": MINDEN_MUVELET_ATKOTES,
+    "/autok": MINDEN_MUVELET_ATKOTES,
+  },
+  "/e-rezsi": {
+    [KOTELEZETTSEG_OLDAL]: MINDEN_MUVELET_ATKOTES,
   },
 };
 

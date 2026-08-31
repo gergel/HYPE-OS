@@ -131,6 +131,13 @@ def require_roles(*roles: Role):
 #: engedné létrehozni/törölni - a kettőt nem szabad összekötni.
 FOGLALAS_OLDAL = "/felszereles/foglalas"
 
+#: A KÖTELEZETTSÉG-MOTOR (előfizetések, biztosítások, autópapírok - lásd
+#: routes/kotelezettsegek.py) közös jogosultsági kulcsa. Nem valódi oldal
+#: (nincs ilyen menüpont): az E-Rezsi és az Autók oldal saját kulcsán át
+#: kapható meg (lásd lent az aliaszokat) - a felhasználó kérése, hogy a
+#: kettőre KÜLÖN jogosultságot lehessen adni.
+KOTELEZETTSEG_OLDAL = "/kotelezettsegek"
+
 #: OLDAL-ALIASZOK: melyik MÁSIK oldal joga ér fel ezzel, és mely műveletekre.
 #:
 #: Felépítés: cél oldal -> forrás oldal -> {forrás művelet: átadott műveletek}.
@@ -152,10 +159,23 @@ FOGLALAS_OLDAL = "/felszereles/foglalas"
 #:    A /felszereles oldal joga változatlanul viszi tovább a sajátját, hogy a
 #:    korábbi beállítások ugyanúgy működjenek.
 #:
+#: 3) A kötelezettség-motor kulcsát az E-Rezsi ÉS az Autók oldal saját joga is
+#:    megnyitja (mindkét oldal ugyanazokat a végpontokat használja - az egyik
+#:    az előfizetésekhez, a másik a biztosításokhoz/autópapírokhoz), az
+#:    E-Rezsi oldalt pedig a RÉGI /kotelezettsegek grant is - így a korábban
+#:    kiadott jogosultságok pontosan úgy működnek tovább, mint eddig.
+#:
 #: (A Projektek/Naptár nézési jog KORÁBBAN a FELSZERELÉS oldalt is megnyitotta
 #: nézésre - ezt a felhasználó kifejezett kérésére vettük ki: aki nem kapott
 #: saját /felszereles jogot, az többé nem lát bele az Eszközök oldalba, még
 #: akkor sem, ha lát Projekteket vagy a Naptárat.)
+_MINDEN_MUVELET_ATKOTES = {
+    "view": ("view",),
+    "create": ("create",),
+    "edit": ("edit",),
+    "delete": ("delete",),
+}
+
 OLDAL_ALIASZOK: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
     "/projektek": {
         "/naptar": {"view": ("view",), "edit": ("edit",)},
@@ -165,10 +185,17 @@ OLDAL_ALIASZOK: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
         "/projektek": {"view": ("view",), "edit": ("view", "create", "delete")},
         "/naptar": {"view": ("view",), "edit": ("view", "create", "delete")},
     },
+    KOTELEZETTSEG_OLDAL: {
+        "/e-rezsi": _MINDEN_MUVELET_ATKOTES,
+        "/autok": _MINDEN_MUVELET_ATKOTES,
+    },
+    "/e-rezsi": {
+        KOTELEZETTSEG_OLDAL: _MINDEN_MUVELET_ATKOTES,
+    },
 }
 
 #: Amik nem valódi oldalak: sosem kerülnek a menübe és a navigáció-zárba.
-VIRTUALIS_OLDALAK: frozenset[str] = frozenset({FOGLALAS_OLDAL})
+VIRTUALIS_OLDALAK: frozenset[str] = frozenset({FOGLALAS_OLDAL, KOTELEZETTSEG_OLDAL})
 
 
 def _oldal_muveletei(page_permissions: dict[str, list[str]], page: str) -> set[str] | None:
