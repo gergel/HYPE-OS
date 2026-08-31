@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { FieldTypeInfo, formatDate, formatHuf } from "@/lib/api";
-import { Hivatkozas, LinkeltSzoveg } from "@/components/LinkeltSzoveg";
+import { LinkeltSzoveg, LinkMasolassal } from "@/components/LinkeltSzoveg";
 import { tartalmazLinket } from "@/lib/linkek";
 import { humanizeKey } from "@/lib/mezoNev";
 
@@ -34,7 +34,10 @@ function isUrl(value: string): boolean {
 }
 
 function LinkValue({ href }: { href: string }) {
-  return <Hivatkozas href={href} />;
+  // Másoló gombbal (a felhasználó kérése az utómunka "Kész anyag linkje"
+  // mezőjéhez): a linket gyakran tovább kell adni chaten/mailben, és a
+  // kijelölgetés hosszú URL-nél kínlódás.
+  return <LinkMasolassal href={href} />;
 }
 
 function formatValue(key: string, value: unknown, hint?: FieldTypeInfo): { node: ReactNode; wide: boolean } {
