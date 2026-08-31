@@ -108,6 +108,12 @@ class NotionClient:
                 return [data]
         return results
 
+    def get_database(self, database_id: str) -> dict:
+        """Az adatbázis SÉMÁJA (nem a sorai) - ebből olvasható ki pl. a
+        "Vinyók" multi-select property teljes, hivatalos opciólistája,
+        beleértve azokat az értékeket is, amiket egyetlen sor sem használ."""
+        return self._get(f"databases/{database_id}")
+
     def list_users(self) -> list[dict]:
         """Az egész workspace felhasználói, egyszer lekérve - a kommentek
         szerzőjének feloldásához kell (lásd importers_wave2.import_deliverables),

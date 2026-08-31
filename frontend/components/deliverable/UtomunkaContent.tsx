@@ -98,6 +98,10 @@ export function UtomunkaContent({
   // Épp futó időmérések - a kártyákon látszik, ki min dolgozik (lásd lent
   // a frissítő useEffect-et és a toCard-ot).
   const [futoTimerek, setFutoTimerek] = useState<FutoTimer[]>([]);
+  // Kereső a "Vinyók szerint" nézethez (a felhasználó kérése): projekt-névre,
+  // eseményre vagy projektkódra szűkíti a kártyákat - az üres oszlopok el is
+  // tűnnek, így rögtön látszik, melyik vinyón van a keresett projekt.
+  const [vinyoKereses, setVinyoKereses] = useState("");
 
   useEffect(() => {
     if (!deliverablesHasMore) return;
@@ -254,8 +258,15 @@ export function UtomunkaContent({
   }, [deliverables, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, timerNevek]);
 
   const vinyoColumns: BoardColumn[] = useMemo(() => {
+    const keresett = vinyoKereses.trim().toLocaleLowerCase("hu-HU");
+    const talal = (d: Deliverable) =>
+      !keresett ||
+      [d.projekt_neve, d.esemeny_neve, d.projektkod_szoveg].some((mezo) =>
+        (mezo ?? "").toLocaleLowerCase("hu-HU").includes(keresett),
+      );
     const byVinyo = new Map<string, Deliverable[]>();
     for (const d of deliverables) {
+      if (!talal(d)) continue;
       for (const v of d.vinyok ?? []) {
         if (!byVinyo.has(v)) byVinyo.set(v, []);
         byVinyo.get(v)!.push(d);
@@ -265,7 +276,7 @@ export function UtomunkaContent({
       .filter((v) => (byVinyo.get(v)?.length ?? 0) > 0)
       .map((v) => ({ key: v, label: v, cards: byVinyo.get(v)!.map((d) => toCard(d, d.allapot ? [d.allapot] : [])) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverables, vinyoOptions, kartyaMezok, employeeName, timerNevek]);
+  }, [deliverables, vinyoOptions, vinyoKereses, kartyaMezok, employeeName, timerNevek]);
 
   /** Az anyag ÁLLAPOTÁNAK tényleges átírása - ezt hívja mind a Kanban-húzás
    * (kartyaAthelyezes, a celOszlop -> allapot fordítás után), mind a lista
@@ -364,6 +375,17 @@ export function UtomunkaContent({
               <ForgatasokCalendar projects={calendarProjects} />
             </Card>
             <Card title="Vinyók szerint">
+              <input
+                type="search"
+                value={vinyoKereses}
+                onChange={(e) => setVinyoKereses(e.target.value)}
+                placeholder="Keresés projektre (név, esemény, projektkód)…"
+                aria-label="Keresés a vinyók közt projektre"
+                className="mb-3 w-80 max-w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+              />
+              {vinyoKereses.trim() && vinyoColumns.length === 0 && (
+                <p className="mb-2 text-[13px] text-text-muted">Nincs találat erre: „{vinyoKereses.trim()}”.</p>
+              )}
               <DeliverableBoard columns={vinyoColumns} />
             </Card>
           </div>

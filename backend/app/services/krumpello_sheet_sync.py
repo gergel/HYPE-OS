@@ -49,17 +49,48 @@ class SheetLetoltesHiba(RuntimeError):
     """A munkafüzet nem tölthető le - jellemzően nincs linkkel megosztva."""
 
 
-def letoltes(tablazat_id: str = TABLAZAT_ID) -> bytes:
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def letoltes(db: Session | None = None, tablazat_id: str = TABLAZAT_ID) -> bytes:
+    """A munkafüzet letöltése - ELŐSZÖR a bekötött Google-fiókkal.
+
+    A pénzügy-táblázat nem nyilvános linkkel, hanem a felhasználó fiókjával
+    van megosztva - a Beállításokban bekötött Google-fiók (lásd
+    services/google_oauth.py) Drive-olvasó jogával exportáljuk. Ha nincs
+    bekötve, vagy a token még a Drive-jog nélküli régi bekötésből való,
+    a nyilvános export URL a tartalék."""
+    if db is not None:
+        try:
+            from app.services import google_oauth
+
+            creds = google_oauth.load_credentials(db)
+            if creds is not None:
+                valasz = requests.get(
+                    f"https://www.googleapis.com/drive/v3/files/{tablazat_id}/export",
+                    params={"mimeType": XLSX_MIME},
+                    headers={"Authorization": f"Bearer {creds.token}"},
+                    timeout=120,
+                )
+                if valasz.status_code == 200 and not valasz.content[:100].lstrip().startswith(
+                    (b"<!DOCTYPE", b"<html")
+                ):
+                    return valasz.content
+        except Exception:  # noqa: BLE001 - a hitelesített út hibája ne állítsa meg a tartalék utat
+            pass
+
     cim = f"https://docs.google.com/spreadsheets/d/{tablazat_id}/export?format=xlsx"
     valasz = requests.get(cim, timeout=120)
     valasz.raise_for_status()
-    # Ha a táblázat nincs "Bárki a linkkel" megosztással, a Google egy
-    # bejelentkezési HTML-oldalt ad vissza 200-zal - azt openpyxl-hibaként
+    # Ha a táblázat nincs megosztva és a fiókos út sem járt sikerrel, a Google
+    # egy bejelentkezési HTML-oldalt ad vissza 200-zal - azt openpyxl-hibaként
     # elszállni hagyni csak egy rejtélyes "not a zip file"-t adna.
     if valasz.content[:100].lstrip().startswith((b"<!DOCTYPE", b"<html")):
         raise SheetLetoltesHiba(
-            "A táblázat nem tölthető le: a Google bejelentkezést kér. A munkafüzetet "
-            "'Bárki a linkkel: Megtekintő' módban kell megosztani (ugyanúgy, mint a HYPE 2026 táblát)."
+            "A táblázat nem tölthető le. Két megoldás van: a Beállításokban kösd újra a "
+            "Google-fiókot (az új bekötés már Drive-olvasó jogot is kap, és azzal a fiókkal "
+            "megosztott táblázat is elérhető), VAGY oszd meg a munkafüzetet 'Bárki a "
+            "linkkel: Megtekintő' módban."
         )
     return valasz.content
 
@@ -349,6 +380,6 @@ def teljes_szinkron(
     """Letöltés + feldolgozás egyben - a felületi háttér-szinkron ezt hívja.
     `xlsx_adat`-tal a letöltés kihagyható (teszt / kézi fájl)."""
     if xlsx_adat is None:
-        xlsx_adat = letoltes()
+        xlsx_adat = letoltes(db)
     wb = openpyxl.load_workbook(io.BytesIO(xlsx_adat), data_only=True)
     return szinkron(db, wb, felulir=felulir, naplo=naplo)

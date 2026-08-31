@@ -591,6 +591,36 @@ def import_vinyo_sync(client: NotionClient, db: Session) -> ImportResult:
 
     result = ImportResult(entity_type="VinyoSync")
 
+    # A HIVATALOS névkészlet a Notion adatbázis-SÉMÁJÁBÓL (nem a sorokból):
+    # így azok a vinyók is átjönnek, amiket még egyetlen anyag sem használ,
+    # és a nálunk élő, de a Notionból már törölt nevek is kiesnek a
+    # választékból. A lista a board-configba kerül - a felület választója
+    # onnan olvassa (lásd services/deliverable_actions.get_vinyo_options).
+    try:
+        sema = client.get_database(db_ids.UTOMUNKA)
+        opciok = [
+            o.get("name")
+            for o in (sema.get("properties", {}).get("Vinyók", {}).get("multi_select", {}).get("options", []))
+            if o.get("name")
+        ]
+        if opciok:
+            from app.models.deliverable_status import DeliverableBoardConfig
+
+            config = db.query(DeliverableBoardConfig).order_by(DeliverableBoardConfig.id).first()
+            if config is None:
+                config = DeliverableBoardConfig()
+                db.add(config)
+            config.vinyo_opciok = opciok
+            result.errors.append(
+                f"MEGJEGYZÉS (nem hiba): a hivatalos vinyó-lista frissítve a Notion sémájából "
+                f"({len(opciok)} név) - a felület választója mostantól pontosan ezt kínálja."
+            )
+    except Exception as exc:  # noqa: BLE001 - a séma-olvasás hibája ne vigye el a sor-szinkront
+        result.errors.append(
+            f"A Notion séma (vinyó-opciók) lekérése sikertelen: {type(exc).__name__}: {exc} - "
+            "a soronkénti szinkron ettől még lefutott."
+        )
+
     lekepezesek = {
         m.notion_page_id: m
         for m in db.scalars(select(NotionImportMap).where(NotionImportMap.entity_type == "Deliverable")).all()

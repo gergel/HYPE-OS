@@ -73,7 +73,16 @@ def get_vinyo_options(db: Session) -> VinyoOptions:
     választható opcióit. A ténylegesen valaha használt, de a fenti listából
     hiányzó értékeket (pl. régi, azóta törölt Notion opciók) a végére fűzzük,
     hogy semmilyen historikus adat ne tűnjön el a választhatók közül."""
-    declared = list(VINYO_OPTIONS)
+    # A Notion sémájából szinkronizált hivatalos lista az elsődleges (lásd
+    # notion_import/importers_wave2.import_vinyo_sync) - a kódban rögzített
+    # VINYO_OPTIONS csak tartalék, amíg a szinkron egyszer le nem futott.
+    from app.models.deliverable_status import DeliverableBoardConfig
+
+    config = db.query(DeliverableBoardConfig).order_by(DeliverableBoardConfig.id).first()
+    if config is not None and isinstance(config.vinyo_opciok, list) and config.vinyo_opciok:
+        declared = [str(v) for v in config.vinyo_opciok]
+    else:
+        declared = list(VINYO_OPTIONS)
     declared_set = set(declared)
     extras: dict[str, None] = {}
     for (raw,) in db.execute(select(Deliverable.vinyok).where(Deliverable.vinyok.is_not(None))):

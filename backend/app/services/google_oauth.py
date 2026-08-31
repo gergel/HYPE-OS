@@ -54,6 +54,11 @@ REVOKE_URI = "https://oauth2.googleapis.com/revoke"
 # elrontani, és e nélkül némán a rossz fiók naptárát szinkronizálnánk).
 CALENDAR_OAUTH_SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
+    # Csak-olvasó Drive-hozzáférés: a Krumpelló pénzügy-táblázat letöltéséhez
+    # (lásd services/krumpello_sheet_sync.py) - a munkafüzet a fiókkal van
+    # megosztva, nem nyilvános linkkel. A RÉGI tokenben ez a jog nincs benne:
+    # a Beállításokban újra kell kötni a Google-fiókot, hogy megkapjuk.
+    "https://www.googleapis.com/auth/drive.readonly",
     "openid",
     "email",
 ]

@@ -55,3 +55,8 @@ class DeliverableBoardConfig(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     #: A Deliverable mezőneveinek listája, a kártyán ebben a sorrendben.
     kartya_mezok: Mapped[list[str] | None] = mapped_column(JSON)
+    #: A vinyók HIVATALOS névlistája, a Notion "Vinyók" multi-select
+    #: opcióiból szinkronizálva (lásd notion_import/importers_wave2.
+    #: import_vinyo_sync) - None: a kódban rögzített tartalék-lista érvényes
+    #: (lásd services/deliverable_actions.VINYO_OPTIONS).
+    vinyo_opciok: Mapped[list[str] | None] = mapped_column(JSON)

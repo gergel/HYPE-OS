@@ -372,6 +372,9 @@ export type Deliverable = {
   kiosztott_nevek: string[];
   project_id: number | null;
   vinyok: string[] | null;
+  /** A vinyó-nézet keresőjéhez - a lista-séma is hozza őket. */
+  projektkod_szoveg?: string | null;
+  esemeny_neve?: string | null;
   /** Mikor állították le UTOLJÁRA a vágás időmérőjét. Notion importnál a
    * 'Timesheet Public' End Date mezőjéből jön, a rendszeren belül a timer
    * leállítása írja. */

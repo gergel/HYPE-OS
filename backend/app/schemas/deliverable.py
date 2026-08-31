@@ -51,6 +51,9 @@ class DeliverableListItem(BaseModel):
     vinyok: JsonScalar = None
     anyag_kikuldve: bool = False
     vagas_leallitva: datetime | None = None
+    #: A vinyó-nézet keresőjéhez (projektkódra/eseményre is lehessen keresni).
+    projektkod_szoveg: str | None = None
+    esemeny_neve: str | None = None
 
     model_config = {"from_attributes": True}
 
