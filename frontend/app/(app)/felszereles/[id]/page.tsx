@@ -56,10 +56,10 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
 
         <DetailSections sections={tabs} />
 
-        <Card title={`Projektek (${projects.length})`}>
+        <Card title={`Forgatások (összesen ${projects.length})`}>
           <RelatedTable
             rows={projects}
-            emptyText="Ez az eszköz még egyetlen projekthez sincs hozzárendelve."
+            emptyText="Ez az eszköz még egyetlen forgatáson sem volt."
             getHref={(p) => `/projektek/${p.id}`}
           />
         </Card>

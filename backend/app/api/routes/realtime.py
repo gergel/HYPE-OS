@@ -18,6 +18,8 @@ módosítás időpontja változatlan maradhat (a törölt sor egyszerűen eltűn
 darabszám viszont csökken."""
 
 from dataclasses import dataclass
+from threading import Lock
+from time import monotonic
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -110,7 +112,27 @@ TOPICS: dict[str, Topic] = {
 }
 
 
-def _fingerprint(db: Session, topic: Topic, scope: str | None, user_id: int) -> str:
+# RÖVID gyorsítótár az ujjlenyomatokra: 30 párhuzamos felhasználónál, fejenként
+# több nyitott füllel, 6 másodpercenkénti lekérdezéssel ugyanazok az
+# aggregátumok másodpercenként többször is lefutnának - a nagy táblákon
+# (utómunka, mérések, kiadások) ez állandó, fölösleges terhelés az
+# adatbázison. Az ujjlenyomat pár másodperces késése nem számít: a frontend
+# úgyis csak "változott-e?" kérdésre használja, és a következő körben így is
+# észreveszi a változást. Worker-processzenként külön cache - ez rendben van,
+# legfeljebb workerenként egyszer fut le ugyanaz a lekérdezés.
+_CACHE_TTL_MP = 3.0
+_cache: dict[tuple[str, str | None, int | None], tuple[float, str]] = {}
+_cache_zar = Lock()
+
+
+def _fingerprint(db: Session, nev: str, topic: Topic, scope: str | None, user_id: int) -> str:
+    kulcs = (nev, scope if topic.scope_column else None, user_id if topic.user_column else None)
+    most = monotonic()
+    with _cache_zar:
+        talalat = _cache.get(kulcs)
+        if talalat and talalat[0] > most:
+            return talalat[1]
+
     stmt = select(func.count(topic.model.id), func.max(topic.model.updated_at))
     if topic.user_column:
         stmt = stmt.where(getattr(topic.model, topic.user_column) == user_id)
@@ -120,7 +142,14 @@ def _fingerprint(db: Session, topic: Topic, scope: str | None, user_id: int) -> 
         if scope.isdigit():
             stmt = stmt.where(getattr(topic.model, topic.scope_column) == int(scope))
     count, latest = db.execute(stmt).one()
-    return f"{count}:{latest.isoformat() if latest else '-'}"
+    ujjlenyomat = f"{count}:{latest.isoformat() if latest else '-'}"
+    with _cache_zar:
+        # A cache ne nőhessen korlátlanul (sok scope-os téma sok kulcs): ha
+        # elszaladna, egyszerűen kezdjük elölről - pár lekérdezésbe kerül.
+        if len(_cache) > 5000:
+            _cache.clear()
+        _cache[kulcs] = (most + _CACHE_TTL_MP, ujjlenyomat)
+    return ujjlenyomat
 
 
 @router.get("/changes")
@@ -148,5 +177,5 @@ def get_changes(
         topic = TOPICS.get(name)
         if topic is None:
             continue
-        result[entry] = _fingerprint(db, topic, scope or None, current_user.id)
+        result[entry] = _fingerprint(db, name, topic, scope or None, current_user.id)
     return result

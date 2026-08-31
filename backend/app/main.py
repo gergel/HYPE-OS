@@ -2,6 +2,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import api_router
@@ -53,6 +54,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# A nagy listák (projektkódok, utómunka, kiadások) több száz kilobájtos
+# JSON-ok - tömörítve a töredékük megy át a hálózaton, ami 30 párhuzamos
+# felhasználónál érezhetően gyorsabb oldalbetöltést ad. A kis válaszokat
+# (minimum_size alatt) nem éri meg tömöríteni.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 app.include_router(api_router, prefix="/api/v1")
 

@@ -27,6 +27,9 @@ type FieldSpec = {
    * kliens-komponensnek ("Functions cannot be passed directly to Client
    * Components"). */
   showIf?: { field: string; oneOf?: string[]; noneOf?: string[] };
+  /** Gépelhető mező LEGÖRDÜLŐ javaslatokkal (datalist) - pl. az eszköz
+   * kategóriája: a meglévő kategóriák közül választható, de új is beírható. */
+  suggestions?: string[];
 };
 
 /** Látszik-e ez a mező a mostani beírások mellett (lásd FieldSpec.showIf)? */
@@ -146,14 +149,24 @@ export function QuickCreateForm({
               className="min-w-[200px]"
             />
           ) : (
-            <input
-              type={f.type ?? "text"}
-              required={f.required}
-              placeholder={f.placeholder}
-              value={values[f.name] ?? ""}
-              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-              className="field"
-            />
+            <>
+              <input
+                type={f.type ?? "text"}
+                required={f.required}
+                placeholder={f.placeholder}
+                value={values[f.name] ?? ""}
+                onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                list={f.suggestions ? `qcf-${f.name}-javaslatok` : undefined}
+                className="field"
+              />
+              {f.suggestions && (
+                <datalist id={`qcf-${f.name}-javaslatok`}>
+                  {f.suggestions.map((j) => (
+                    <option key={j} value={j} />
+                  ))}
+                </datalist>
+              )}
+            </>
           )}
         </div>
       ))}
