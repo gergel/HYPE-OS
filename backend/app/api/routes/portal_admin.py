@@ -203,11 +203,10 @@ def create_portal_from_deliverable(
         raise HTTPException(status_code=400, detail="Ehhez az utómunkához már tartozik Portál")
 
     title = deliverable.projekt_neve or f"Utómunka #{deliverable.id}"
-    client_name = ""
-    if deliverable.project_code and deliverable.project_code.client:
-        client_name = deliverable.project_code.client.nev
-    elif deliverable.project and deliverable.project.project_code and deliverable.project.project_code.client:
-        client_name = deliverable.project.project_code.client.nev
+    # Az ügyfél mező SZÁNDÉKOSAN ÜRESEN indul (a felhasználó kérése): a
+    # projektkód ügyfele sokszor csak import-gyűjtő ("Ismeretlen ügyfél"),
+    # és az ügyfélnek kimenő oldalon rosszabb egy téves név, mint az üres -
+    # ha kell, az admin utólag kitölti a Portál adatainál.
     project_date = deliverable.hatarido.strftime("%Y.%m.%d") if deliverable.hatarido else ""
 
     slug_base = slugify(title)
@@ -223,7 +222,7 @@ def create_portal_from_deliverable(
         password_hash=hash_password(payload.password) if payload.password else None,
         expires_at=date.today() + timedelta(days=30),
         title_override=title,
-        client_name_override=client_name,
+        client_name_override=None,
         project_date_override=project_date,
     )
     db.add(portal)
