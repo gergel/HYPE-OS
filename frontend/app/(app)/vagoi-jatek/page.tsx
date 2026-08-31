@@ -1,8 +1,9 @@
-import { Gift, Trophy } from "lucide-react";
+import { Gift } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Versenypalya } from "@/components/vagoi-jatek/Versenypalya";
 import { NyeremenySzerkeszto } from "@/components/vagoi-jatek/NyeremenySzerkeszto";
 import { MunkanapSzerkeszto } from "@/components/vagoi-jatek/MunkanapSzerkeszto";
+import { KorabbiHonapok } from "@/components/vagoi-jatek/KorabbiHonapok";
 import { getMyPagePermissions, getVagoHonap, getVagoKorabbiHonapok, getVagoSzabalyok } from "@/lib/api";
 import { HONAP_NEVEK } from "@/lib/ido";
 import type { VagoHonap } from "@/lib/api";
@@ -76,7 +77,9 @@ export default async function VagoiJatekPage() {
               <Reszletek honap={honap} szerkesztheto={szerkesztheto} alapMunkanap={szabalyok.alap_munkanap} />
             )}
 
-            <DicsosegTabla honapok={korabbiak} />
+            {/* Adminként (szerkesztési joggal) a korábbi hónapok lenyithatók,
+                és látszik a teljes pont-bontás - ki mivel mennyit szerzett. */}
+            <KorabbiHonapok honapok={korabbiak} reszletezheto={szerkesztheto} />
           </div>
         )}
       </div>
@@ -203,61 +206,5 @@ function Reszletek({
   );
 }
 
-/** A korábbi hónapok: ki nyert, ki hányadik lett, hány ponttal. */
-function DicsosegTabla({ honapok }: { honapok: VagoHonap[] }) {
-  if (honapok.length === 0) return null;
-  return (
-    <div className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6">
-      <h2 className="t-section mb-4">Korábbi hónapok</h2>
-      <div className="space-y-5">
-        {honapok.map((h) => (
-          <div key={`${h.ev}-${h.honap}`} className="border-b border-border pb-5 last:border-0 last:pb-0">
-            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-3">
-              <span className="flex items-center gap-2">
-                {/* A kupa a győztes mellett - a dicsőségtáblán ez az egyetlen
-                    dolog, amit messziről is látni kell. */}
-                <Trophy size={15} className="text-text-warning" aria-hidden />
-                <span className="text-[14px] font-medium text-text-primary">{honapCimke(h.ev, h.honap)}</span>
-                {h.gyoztes_nev && (
-                  <span className="text-[13px] text-text-secondary">
-                    – {h.gyoztes_nev} ({h.gyoztes_pont} pont)
-                  </span>
-                )}
-              </span>
-              {h.nyeremeny && (
-                <span className="flex items-center gap-2 text-[12.5px] text-text-muted">
-                  {/* Bélyegkép: a régi hónapoknál a kép emlékeztet rá, mi volt
-                      a tét - egy név önmagában pár hónap múlva nem mond semmit. */}
-                  {h.kep_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={h.kep_url}
-                      alt=""
-                      className="h-7 w-10 rounded-[var(--radius)] border border-border object-cover"
-                    />
-                  )}
-                  Nyeremény: {h.nyeremeny}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-1">
-              {h.allas
-                .filter((a) => a.helyezes > 0)
-                .map((a) => (
-                  <span key={a.employee_id} className="text-[12.5px] text-text-secondary">
-                    <span
-                      className={`mr-1 tabular-nums ${a.helyezes === 1 ? "text-text-warning" : "text-text-muted"}`}
-                    >
-                      {a.helyezes}.
-                    </span>
-                    {a.nev}
-                    <span className="ml-1 tabular-nums text-text-muted">{a.pont}</span>
-                  </span>
-                ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// A korábbi hónapok dicsőségtáblája (lenyitható pont-bontással) a
+// components/vagoi-jatek/KorabbiHonapok.tsx kliens-komponensbe költözött.
