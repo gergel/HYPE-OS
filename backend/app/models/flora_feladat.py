@@ -34,3 +34,9 @@ class FloraFeladat(TimestampMixin, Base):
 
     felelos: Mapped["Employee"] = relationship(foreign_keys=[felelos_id])
     felvezette: Mapped["Employee"] = relationship(foreign_keys=[felvezette_id])
+    #: A feladat hozzászólásai - a feladattal együtt törlődnek (egy komment a
+    #: feladata nélkül értelmezhetetlen, és idegen kulcsként a törlést is
+    #: megakasztaná).
+    kommentek: Mapped[list["FloraKomment"]] = relationship(
+        back_populates="flora_feladat", order_by="FloraKomment.created_at", cascade="all, delete-orphan"
+    )

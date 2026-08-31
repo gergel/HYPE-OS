@@ -472,7 +472,7 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
 def _notion_felhasznalo_terkep(client: NotionClient) -> dict[str, dict]:
     """Notion user id -> {"email":.., "nev":..}, EGYSZER lekérve az egész
     workspace-re - a kommentek szerzőjének feloldásához kell (lásd
-    _importal_kommenteket), és sokkal olcsóbb, mint kommentenként külön
+    importal_kommenteket), és sokkal olcsóbb, mint kommentenként külön
     /v1/users/{id} hívással. A Notion "bot" típusú szerzőket (automatizált
     integrációk, pl. Zapier) kihagyjuk - azoknak nincs Employee-párjuk."""
     terkep: dict[str, dict] = {}
@@ -496,23 +496,30 @@ def _employee_terkepek(db: Session) -> tuple[dict[str, "Employee"], dict[str, "E
     return email_szerint, nev_szerint
 
 
-def _importal_kommenteket(
+def importal_kommenteket(
     client: NotionClient,
     db: Session,
     result: ImportResult,
     page_id: str,
-    deliverable_id: int,
     felhasznalo_terkep: dict[str, dict],
     employee_email_szerint: dict[str, Employee],
     employee_nev_szerint: dict[str, Employee],
     allapot: dict,
+    *,
+    model: type,
+    entity_type: str,
+    fk_mezo: str,
+    cel_id: int,
+    cimke: str,
 ) -> None:
-    """Egy Utómunka-kártya Notion-beli kommentjeit hozza át a HYPE OS saját
-    hozzászólás-chatjébe (lásd models/deliverable_comment.py). A szerzőt a
-    Notion user email/név alapján próbáljuk Employee-re feloldani - ha nincs
-    egyértelmű találat (pl. külsős/vendég Notion-fiók, vagy egy már törölt
-    munkatárs), a komment kimarad, és a `result.skipped` számlálóban látszik,
-    nem hallgat el csendben.
+    """Egy Notion-oldal (kártya) kommentjeit hozza át a HYPE OS saját
+    hozzászólás-chatjébe - GENERIKUSAN: a `model`/`entity_type`/`fk_mezo`
+    mondja meg, melyik táblába (DeliverableComment az Utómunkánál, FloraKomment
+    a FLÓRA táblánál - lásd import_deliverables és import_flora_design). A
+    szerzőt a Notion user email/név alapján próbáljuk Employee-re feloldani -
+    ha nincs egyértelmű találat (pl. külsős/vendég Notion-fiók, vagy egy már
+    törölt munkatárs), a komment kimarad, és a `result.skipped` számlálóban
+    látszik, nem hallgat el csendben.
 
     Idempotens: a safe_upsert a komment Notion ID-ja alapján dolgozik, tehát
     egy újrafuttatás nem duplikál, és a HYPE OS-ben azóta módosított
@@ -523,16 +530,16 @@ def _importal_kommenteket(
     hívás minden egyes kártyánál 403-mal hibázna. Ezt EGYSZER, az ELSŐ ilyen
     hibánál jelezzük a naplóban (nem kártyánként újra és újra), és onnantól a
     futás hátralévő részében meg sem próbáljuk - így egy hiányzó jogosultság
-    nem lassítja/téríti el a teljes Utómunka-importot, csak a kommentek
-    maradnak ki belőle."""
+    nem lassítja/téríti el a teljes importot, csak a kommentek maradnak ki
+    belőle."""
     if allapot.get("kommentek_letiltva"):
         return
     try:
         kommentek = client.list_comments(page_id)
-    except Exception as exc:  # noqa: BLE001 - egy komment-lekérési hiba ne vigye el a teljes Deliverable importot
+    except Exception as exc:  # noqa: BLE001 - egy komment-lekérési hiba ne vigye el a teljes importot
         if not allapot.get("komment_hiba_jelezve"):
             result.errors.append(
-                f"Kommentek lekérése sikertelen (Utómunka #{deliverable_id}): {type(exc).__name__}: {exc} - "
+                f"Kommentek lekérése sikertelen ({cimke} #{cel_id}): {type(exc).__name__}: {exc} - "
                 "ellenőrizd, hogy a Notion integráció kapott-e 'Read comments' jogosultságot. "
                 "A további kártyáknál emiatt nem próbálkozunk újra ebben a futásban."
             )
@@ -557,17 +564,17 @@ def _importal_kommenteket(
         safe_upsert(
             db,
             result,
-            DeliverableComment,
-            "DeliverableComment",
+            model,
+            entity_type,
             c["id"],
-            {"deliverable_id": deliverable_id, "employee_id": employee.id, "body": szoveg},
-            label=f"Komment (Utómunka #{deliverable_id})",
+            {fk_mezo: cel_id, "employee_id": employee.id, "body": szoveg},
+            label=f"Komment ({cimke} #{cel_id})",
         )
 
 
 def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
     """Deliverable <- 'Utómunka', a kártyák alatti kommentekkel együtt (lásd
-    _importal_kommenteket) - így az Utómunka oldal hozzászólás-chatje nem csak
+    importal_kommenteket) - így az Utómunka oldal hozzászólás-chatje nem csak
     a HYPE OS-ben ezután írt üzeneteket mutatja, hanem a Notion-korabelieket
     is."""
     result = ImportResult(entity_type="Deliverable")
@@ -657,16 +664,20 @@ def import_deliverables(client: NotionClient, db: Session) -> ImportResult:
             ujak = files.atemel_mindent(db, props, entity_type="deliverable", entity_id=utomunka.id, result=result)
             if "Files vágáshoz" in ujak:
                 utomunka.files_vagashoz_urls = ujak["Files vágáshoz"]
-            _importal_kommenteket(
+            importal_kommenteket(
                 client,
                 db,
                 result,
                 page["id"],
-                utomunka.id,
                 felhasznalo_terkep,
                 employee_email_szerint,
                 employee_nev_szerint,
                 komment_allapot,
+                model=DeliverableComment,
+                entity_type="DeliverableComment",
+                fk_mezo="deliverable_id",
+                cel_id=utomunka.id,
+                cimke="Utómunka",
             )
 
     return result

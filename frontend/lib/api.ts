@@ -514,6 +514,22 @@ export async function getFloraFeladatok(limit = 5000): Promise<FloraFeladat[]> {
   return (await apiGet<FloraFeladat[]>(`/api/v1/flora?limit=${limit}`)) ?? [];
 }
 
+/** Egy hozzászólás egy FLÓRA feladat oldalán - ugyanaz a chat-minta, mint az
+ * Utómunkánál; a Notion-import a kártyák Notion-beli kommentjeit is ide
+ * hozza (lásd backend routes/flora.py, notion_import/importers_wave4.py). */
+export type FloraKomment = {
+  id: number;
+  flora_feladat_id: number;
+  employee_id: number;
+  employee_name: string;
+  body: string;
+  created_at: string;
+};
+
+export async function getFloraKommentek(floraId: number): Promise<FloraKomment[]> {
+  return (await apiGet<FloraKomment[]>(`/api/v1/flora/${floraId}/comments`)) ?? [];
+}
+
 export async function getAgiTodoItems(limit = 5000): Promise<AgiTodoItem[]> {
   return (await apiGet<AgiTodoItem[]>(`/api/v1/agi-todo?limit=${limit}`)) ?? [];
 }

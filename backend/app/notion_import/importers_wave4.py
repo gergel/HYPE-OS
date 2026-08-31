@@ -14,11 +14,17 @@ from sqlalchemy.orm import Session
 from app.models.agi_todo import AgiTodoItem
 from app.models.employee import Employee
 from app.models.flora_feladat import FloraFeladat
+from app.models.flora_komment import FloraKomment
 from app.models.hype_todo import HypeTodoItem
 from app.notion_import import database_ids as db_ids, files
 from app.notion_import.client import NotionClient, as_date, as_datetime, extract_properties
 from app.notion_import.engine import ImportResult, resolve_relation_id, resolve_relation_ids, safe_upsert
 from app.notion_import.importers import _text, _url
+from app.notion_import.importers_wave2 import (
+    _employee_terkepek,
+    _notion_felhasznalo_terkep,
+    importal_kommenteket,
+)
 
 
 def _cim(page: dict) -> str | None:
@@ -136,8 +142,24 @@ def import_agi_todo(client: NotionClient, db: Session) -> ImportResult:
 def import_flora_design(client: NotionClient, db: Session) -> ImportResult:
     """FloraFeladat <- FLÓRA "Design adatbázis" (önálló tábla, lásd
     models/flora_feladat.py) - a Kanban board `Állapot` oszlopa adja a
-    board-oszlopokat (lásd services/entity_registry.SELECT_FIELD_OVERRIDES)."""
+    board-oszlopokat (lásd services/entity_registry.SELECT_FIELD_OVERRIDES).
+
+    A kártyák Notion-beli KOMMENTJEIT is áthozza a feladat saját
+    hozzászólás-chatjébe (a felhasználó kérése) - ugyanazzal a motorral, mint
+    az Utómunkánál (lásd importers_wave2.importal_kommenteket): idempotens,
+    a szerzőt email/név alapján oldja fel."""
     result = ImportResult(entity_type="FloraFeladat")
+    try:
+        felhasznalo_terkep = _notion_felhasznalo_terkep(client)
+    except Exception as exc:  # noqa: BLE001 - a userlista hibája ne vigye el a teljes FLÓRA importot
+        result.errors.append(
+            f"A Notion-felhasználók lekérése sikertelen: {type(exc).__name__}: {exc} - a kommentek szerzője emiatt "
+            "nem oldható fel, ezeknél kimarad a komment-átvétel, de a FLÓRA kártyák maguk importálódnak."
+        )
+        felhasznalo_terkep = {}
+    employee_email_szerint, employee_nev_szerint = _employee_terkepek(db)
+    komment_allapot: dict = {}
+
     for page in client.query_database(db_ids.FLORA_DESIGN):
         props = extract_properties(page, client)
         megnevezes = _cim(page) or _text(props.get("Megnevezés"))
@@ -167,4 +189,19 @@ def import_flora_design(client: NotionClient, db: Session) -> ImportResult:
         if obj is None:
             continue
         files.atemel_mindent(db, props, entity_type="floraFeladat", entity_id=obj.id, result=result)
+        importal_kommenteket(
+            client,
+            db,
+            result,
+            page["id"],
+            felhasznalo_terkep,
+            employee_email_szerint,
+            employee_nev_szerint,
+            komment_allapot,
+            model=FloraKomment,
+            entity_type="FloraKomment",
+            fk_mezo="flora_feladat_id",
+            cel_id=obj.id,
+            cimke="FLÓRA",
+        )
     return result

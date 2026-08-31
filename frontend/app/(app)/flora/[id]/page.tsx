@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
+import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
+import { FloraCommentsSection } from "@/components/flora/FloraCommentsSection";
 import { ReadOnlyDetailField } from "@/components/ReadOnlyDetailField";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -8,6 +10,7 @@ import {
   getDetailTabs,
   getEmployees,
   getFieldTypes,
+  getFloraKommentek,
   getMyPagePermissions,
   getRecord,
   getVisibleFields,
@@ -25,13 +28,14 @@ const SZEMELY_MEZOK: { key: "felelos_id" | "felvezette_id"; label: string }[] = 
 export default async function FloraDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const feladatId = Number(id);
-  const [feladat, visibleFields, fieldTypes, dbTabs, pagePermissions, employees] = await Promise.all([
+  const [feladat, visibleFields, fieldTypes, dbTabs, pagePermissions, employees, kommentek] = await Promise.all([
     getRecord(ENTITY_PATHS.floraFeladat, feladatId),
     getVisibleFields("floraFeladat"),
     getFieldTypes("floraFeladat"),
     getDetailTabs("floraFeladat"),
     getMyPagePermissions(),
     getEmployees(),
+    getFloraKommentek(feladatId),
   ]);
   if (!feladat) notFound();
 
@@ -65,6 +69,17 @@ export default async function FloraDetailPage({ params }: { params: Promise<{ id
         </div>
 
         <DetailSections sections={tabs} />
+
+        {/* Hozzászólások - a Notion-import a kártya Notion-beli kommentjeit
+            is ide hozza, tehát a régi beszélgetések sem vesznek el (lásd
+            backend notion_import/importers_wave4.import_flora_design). */}
+        <Card title="Hozzászólások">
+          <FloraCommentsSection
+            floraId={feladatId}
+            initialComments={kommentek}
+            mentionableEmployees={employees.map((e) => ({ id: e.id, full_name: e.full_name }))}
+          />
+        </Card>
       </div>
     </div>
   );
