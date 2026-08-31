@@ -65,7 +65,11 @@ export async function TopBar() {
        törjön sortöbbszörre egy keskeny képernyőn. */
     <div
       data-app-chrome
-      className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-surface-1/85 px-4 py-4 backdrop-blur-xl sm:gap-6 md:px-8 md:py-5"
+      // z-40 + isolate + transform-gpu: iOS Safarin a backdrop-blur-ös sticky
+      // sáv alá tudtak festeni a natív jelölőnégyzetek (pl. a Portál admin
+      // videó-listájának checkboxai görgetéskor "átütöttek" a fejlécen) - a
+      // saját kompozit-réteg és a magasabb z-index ezt zárja ki.
+      className="sticky top-0 z-40 isolate flex transform-gpu items-center justify-between gap-3 border-b border-border bg-surface-1/85 px-4 py-4 backdrop-blur-xl sm:gap-6 md:px-8 md:py-5"
     >
       <div className="flex min-w-0 items-center gap-3">
         <MobileNav
