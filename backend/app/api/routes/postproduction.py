@@ -47,21 +47,8 @@ from app.services import deliverable_actions, notifications, projektkod_kotes, v
 _MINDEN_SZEREPKOR = tuple(Role)
 
 
-def _after_deliverable_update(
-    obj: Deliverable, data: dict, m2m_changes: dict, db: Session, current_user: Employee
-) -> None:
-    """A PATCH utáni mellékhatások: kiosztás-értesítés és a vágói játék pontja."""
-    # Ellenőrzésbe került az anyag -> a vágói játékban pont jár érte annak, aki
-    # odatette (lásd services/vagoi_jatek.py). Idempotens: ugyanaz az anyag
-    # akkor sem hoz még egyszer pontot, ha kiveszik és visszateszik.
-    if "allapot" in data and vagoi_jatek.ellenorzes_allapot(obj.allapot):
-        if vagoi_jatek.rogzitsd_ellenorzest(db, obj, current_user):
-            db.commit()
-
-    # Kiosztás (Assigned To) -> értesítés a munkatársnak, lásd AssignedToPicker.tsx.
-    if "assigned_to_employee_id" not in data:
-        return
-    new_id = data["assigned_to_employee_id"]
+def _kiosztas_ertesites(db: Session, obj: Deliverable, new_id: int | None, current_user: Employee) -> None:
+    """Kiosztás (Assigned To) -> értesítés a munkatársnak, lásd AssignedToPicker.tsx."""
     if not new_id:
         return
     title = obj.projekt_neve or f"Anyag #{obj.id}"
@@ -74,6 +61,21 @@ def _after_deliverable_update(
         actor_id=current_user.id,
     )
     db.commit()
+
+
+def _after_deliverable_update(
+    obj: Deliverable, data: dict, m2m_changes: dict, db: Session, current_user: Employee
+) -> None:
+    """A PATCH utáni mellékhatások: kiosztás-értesítés és a vágói játék pontja."""
+    # Ellenőrzésbe került az anyag -> a vágói játékban pont jár érte annak, aki
+    # odatette (lásd services/vagoi_jatek.py). Idempotens: ugyanaz az anyag
+    # akkor sem hoz még egyszer pontot, ha kiveszik és visszateszik.
+    if "allapot" in data and vagoi_jatek.ellenorzes_allapot(obj.allapot):
+        if vagoi_jatek.rogzitsd_ellenorzest(db, obj, current_user):
+            db.commit()
+
+    if "assigned_to_employee_id" in data:
+        _kiosztas_ertesites(db, obj, data["assigned_to_employee_id"], current_user)
 
 
 def _csak_a_sajat_anyagai(stmt, db: Session, user: Employee):
@@ -271,6 +273,38 @@ class AllapotBeallitas(BaseModel):
 
 class AllapotBeallitasokIn(BaseModel):
     beallitasok: list[AllapotBeallitas]
+
+
+class KiosztasIn(BaseModel):
+    """A "Kire van kiosztva" mező értéke - None = a kiosztás levétele."""
+
+    employee_id: int | None = None
+
+
+@deliverable_actions_router.put("/{deliverable_id}/kiosztas", response_model=None)
+def set_kiosztas(
+    deliverable_id: int,
+    payload: KiosztasIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action("/utomunka", "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A kiosztás (Assigned To) beállítása - SAJÁT végponton, nem a generikus
+    PATCH-en át (lásd AssignedToPicker.tsx).
+
+    Miért: a generikus PATCH az admin által ELTÁVOLÍTOTT mezőket némán
+    kihagyja (lásd crud_router update_item) - ha az assigned_to_employee_id
+    épp eltávolított mező, a Kiosztás kártya mentése hibaüzenet nélkül
+    elveszett ("nem menti, ha valakit kiválasztok"). A Kiosztás viszont saját
+    kártya a részletnézeten, nem a generikus mező-rács része - a mentésének a
+    mező-beállítástól függetlenül működnie kell, ahogy a többi bespoke
+    akciónak (kontaktok, időmérő) is."""
+    deliverable = _get_deliverable_or_404(deliverable_id, db, current_user)
+    if payload.employee_id is not None and db.get(Employee, payload.employee_id) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nincs ilyen munkatárs.")
+    deliverable.assigned_to_employee_id = payload.employee_id
+    db.commit()
+    _kiosztas_ertesites(db, deliverable, payload.employee_id, current_user)
+    return {"assigned_to_employee_id": deliverable.assigned_to_employee_id}
 
 
 @deliverable_actions_router.get("/allapot-beallitasok", response_model=list[AllapotBeallitas])

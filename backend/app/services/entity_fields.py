@@ -22,6 +22,17 @@ from app.services.entity_registry import ENTITY_MODELS
 #: Ezeket sosem lehet eltávolítani: a rendszer működéséhez kellenek.
 PROTECTED_FIELDS = {"id", "created_at", "updated_at"}
 
+#: Entitásonként védett mezők: nem az egész rendszerhez kellenek, hanem az
+#: adott oldal beépített funkcióihoz. Az eltávolításuk NÉMÁN törte el a
+#: funkciót: a generikus PATCH kihagyta az írásukat, a válaszból is kimaradtak
+#: - a Kiosztás kártya pl. hibaüzenet nélkül "felejtette el" a mentést, és
+#: mindig "Nincs kijelölve"-t mutatott. (A meglévő eltávolításokat a
+#: b7e2a91c4f60 migráció vonja vissza.)
+PROTECTED_ENTITY_FIELDS: dict[str, set[str]] = {
+    # Kiosztás kártya + Teendőim; állapot-tábla oszlopai.
+    "deliverable": {"assigned_to_employee_id", "allapot"},
+}
+
 CUSTOM_FIELD_TYPES = ("text", "number", "boolean", "date", "datetime", "select")
 
 
@@ -119,7 +130,7 @@ def remove_field(db: Session, entity_type: str, field_name: str, *, wipe_data: b
     columns = model.__table__.columns
     if field_name not in columns:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Nincs ilyen mező: {field_name}")
-    if field_name in PROTECTED_FIELDS:
+    if field_name in PROTECTED_FIELDS or field_name in PROTECTED_ENTITY_FIELDS.get(entity_type, set()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"A(z) '{field_name}' mező a rendszer működéséhez kell, nem távolítható el.",

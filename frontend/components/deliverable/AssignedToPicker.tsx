@@ -24,9 +24,13 @@ export function AssignedToPicker({
   async function handleChange(value: string) {
     setBusy(true);
     try {
-      const res = await authFetch(`/api/v1/deliverables/${deliverableId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ assigned_to_employee_id: value ? Number(value) : null }),
+      // SAJÁT végpont, nem a generikus PATCH: az admin által "eltávolított"
+      // mezőket a generikus PATCH némán kihagyja, és ha az
+      // assigned_to_employee_id épp ilyen, a mentés szó nélkül elveszett
+      // (lásd backend routes/postproduction.set_kiosztas).
+      const res = await authFetch(`/api/v1/deliverables/${deliverableId}/kiosztas`, {
+        method: "PUT",
+        body: JSON.stringify({ employee_id: value ? Number(value) : null }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
