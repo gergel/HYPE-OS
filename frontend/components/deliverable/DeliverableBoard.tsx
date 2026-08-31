@@ -12,6 +12,11 @@ export type BoardCard = {
   /** A kártyán megjelenő további adatok (címke + érték párok) - hogy pontosan
    * melyik mezők, azt a "Nézet beállítása" panelen lehet megadni. */
   mezok?: { cimke: string; ertek: string }[];
+  /** Kikre van kiosztva az anyag - a felhasználó kérése, hogy ez MINDIG
+   * látsszon a kártyán, a "Nézet beállítása" választástól függetlenül. */
+  kiosztva?: string[];
+  /** Akiknek épp FUT az időmérője ezen az anyagon - élő jelzés a kártyán. */
+  timerek?: string[];
 };
 
 export type BoardColumn = {
@@ -69,6 +74,21 @@ function BoardCardView({
     >
       <p className="font-medium text-text-primary">{card.title}</p>
       {card.subtitle && <p className="mt-0.5 text-[12px] text-text-muted">{card.subtitle}</p>}
+      {card.kiosztva && card.kiosztva.length > 0 && (
+        <p className="mt-0.5 text-[12px] text-text-muted">
+          Kiosztva: <span className="text-text-secondary">{card.kiosztva.join(", ")}</span>
+        </p>
+      )}
+      {card.timerek && card.timerek.length > 0 && (
+        <p className="mt-1 flex items-center gap-1.5 text-[12px] font-medium text-text-success">
+          {/* Pulzáló pötty: messziről is látszik, hogy ITT épp megy a munka. */}
+          <span aria-hidden className="relative flex h-2 w-2 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+          </span>
+          Épp vágja: {card.timerek.join(", ")}
+        </p>
+      )}
       {card.mezok && card.mezok.length > 0 && (
         <dl className="mt-1 space-y-0.5 text-[12px]">
           {card.mezok.map((m) => (

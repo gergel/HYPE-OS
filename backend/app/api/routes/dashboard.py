@@ -219,7 +219,12 @@ def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get
         ).all()
     )
     nyitott_feltetelek = [
-        Deliverable.assigned_to_employee_id == current_user.id,
+        # Több embert is ki lehet osztani egy anyagra (kiosztottak m2m) - a
+        # régi egyértékű mezőt is nézzük, hátha egy régi író csak azt tölti.
+        or_(
+            Deliverable.kiosztottak.any(Employee.id == current_user.id),
+            Deliverable.assigned_to_employee_id == current_user.id,
+        ),
         Deliverable.anyag_kikuldve.is_(False),
     ]
     if kesz_allapotok:

@@ -486,7 +486,10 @@ def add_comment(db: Session, deliverable_id: int, current_user: Employee, body: 
         )
         already_notified.add(employee_id)
 
-    for employee_id in filter(None, [deliverable.assigned_to_employee_id, deliverable.aki_felvezette_employee_id]):
+    # Minden kiosztott (több ember is lehet) + aki felvezette az anyagot.
+    kommentrol_ertesitendok = {e.id for e in deliverable.kiosztottak}
+    kommentrol_ertesitendok.update(filter(None, [deliverable.assigned_to_employee_id, deliverable.aki_felvezette_employee_id]))
+    for employee_id in sorted(kommentrol_ertesitendok):
         if employee_id in already_notified:
             continue
         notifications.create_notification(

@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
@@ -47,20 +47,45 @@ from app.services import deliverable_actions, notifications, projektkod_kotes, v
 _MINDEN_SZEREPKOR = tuple(Role)
 
 
-def _kiosztas_ertesites(db: Session, obj: Deliverable, new_id: int | None, current_user: Employee) -> None:
-    """Kiosztás (Assigned To) -> értesítés a munkatársnak, lásd AssignedToPicker.tsx."""
-    if not new_id:
+def _kiosztas_ertesites(db: Session, obj: Deliverable, uj_idk: list[int], current_user: Employee) -> None:
+    """Kiosztás -> értesítés az ÚJONNAN kiosztott munkatársaknak (aki eddig is
+    rajta volt, azt nem zaklatjuk újra), lásd AssignedToPicker.tsx."""
+    if not uj_idk:
         return
     title = obj.projekt_neve or f"Anyag #{obj.id}"
-    notifications.create_notification(
-        db,
-        employee_id=new_id,
-        kind="assignment",
-        message=f"{current_user.full_name} kiosztotta neked: {title}",
-        link=f"/utomunka/{obj.id}",
-        actor_id=current_user.id,
-    )
+    for employee_id in uj_idk:
+        notifications.create_notification(
+            db,
+            employee_id=employee_id,
+            kind="assignment",
+            message=f"{current_user.full_name} kiosztotta neked: {title}",
+            link=f"/utomunka/{obj.id}",
+            actor_id=current_user.id,
+        )
     db.commit()
+
+
+def _kiosztottak_beallitasa(
+    db: Session, obj: Deliverable, employee_ids: list[int], current_user: Employee
+) -> None:
+    """A kiosztottak listájának cseréje - EGY helyen, hogy a saját végpont és a
+    régi (egyértékű) PATCH-mező ugyanúgy viselkedjen.
+
+    A kanonikus forrás a kiosztottak m2m kapcsolat; az assigned_to_employee_id
+    oszlop tükörként az ELSŐ kiosztottat tartja, hogy a rá épülő régi
+    lekérdezések/megjelenítések ne törjenek el. Értesítést csak az újonnan
+    felkerülők kapnak."""
+    korabbi_idk = {e.id for e in obj.kiosztottak}
+    emberek = db.scalars(select(Employee).where(Employee.id.in_(employee_ids))).all() if employee_ids else []
+    if len(emberek) != len(set(employee_ids)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nincs ilyen munkatárs.")
+    # A beküldött sorrendet tartjuk (az első a tükör-mező értéke).
+    sorrend = {eid: i for i, eid in enumerate(employee_ids)}
+    emberek.sort(key=lambda e: sorrend[e.id])
+    obj.kiosztottak = emberek
+    obj.assigned_to_employee_id = emberek[0].id if emberek else None
+    db.commit()
+    _kiosztas_ertesites(db, obj, [e.id for e in emberek if e.id not in korabbi_idk], current_user)
 
 
 def _after_deliverable_update(
@@ -74,8 +99,11 @@ def _after_deliverable_update(
         if vagoi_jatek.rogzitsd_ellenorzest(db, obj, current_user):
             db.commit()
 
+    # A régi, egyértékű mező PATCH-e (pl. a generikus rács felől) a kiosztottak
+    # listáját is ehhez az EGY emberhez igazítja - a két forrás nem csúszhat szét.
     if "assigned_to_employee_id" in data:
-        _kiosztas_ertesites(db, obj, data["assigned_to_employee_id"], current_user)
+        new_id = data["assigned_to_employee_id"]
+        _kiosztottak_beallitasa(db, obj, [int(new_id)] if new_id else [], current_user)
 
 
 def _csak_a_sajat_anyagai(stmt, db: Session, user: Employee):
@@ -208,6 +236,9 @@ deliverables_router = build_crud_router(
     after_update=_after_deliverable_update,
     entity_type="deliverable",
     sor_szuro=_csak_a_sajat_anyagai,
+    # A lista sémája a kiosztottakat is adja (kártyákon "Kiosztva: A, B") -
+    # eager load nélkül ez soronként külön lekérdezés lenne.
+    list_options=(selectinload(Deliverable.kiosztottak),),
 )
 
 timesheets_router = build_crud_router(
@@ -276,8 +307,11 @@ class AllapotBeallitasokIn(BaseModel):
 
 
 class KiosztasIn(BaseModel):
-    """A "Kire van kiosztva" mező értéke - None = a kiosztás levétele."""
+    """A kiosztottak TELJES listája (üres lista = a kiosztás levétele). A régi,
+    egyértékű employee_id mezőt is elfogadjuk, hogy egy még nem frissült
+    felület se törjön el."""
 
+    employee_ids: list[int] | None = None
     employee_id: int | None = None
 
 
@@ -288,23 +322,55 @@ def set_kiosztas(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(require_page_action("/utomunka", "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """A kiosztás (Assigned To) beállítása - SAJÁT végponton, nem a generikus
-    PATCH-en át (lásd AssignedToPicker.tsx).
+    """A kiosztás beállítása - TÖBB ember is lehet (a felhasználó kérése), és
+    SAJÁT végponton, nem a generikus PATCH-en át (lásd AssignedToPicker.tsx).
 
-    Miért: a generikus PATCH az admin által ELTÁVOLÍTOTT mezőket némán
-    kihagyja (lásd crud_router update_item) - ha az assigned_to_employee_id
-    épp eltávolított mező, a Kiosztás kártya mentése hibaüzenet nélkül
-    elveszett ("nem menti, ha valakit kiválasztok"). A Kiosztás viszont saját
-    kártya a részletnézeten, nem a generikus mező-rács része - a mentésének a
-    mező-beállítástól függetlenül működnie kell, ahogy a többi bespoke
-    akciónak (kontaktok, időmérő) is."""
+    Miért saját végpont: a generikus PATCH az admin által ELTÁVOLÍTOTT mezőket
+    némán kihagyja (lásd crud_router update_item) - a Kiosztás viszont saját
+    kártya a részletnézeten, a mentésének a mező-beállítástól függetlenül
+    működnie kell, ahogy a többi bespoke akciónak (kontaktok, időmérő) is."""
     deliverable = _get_deliverable_or_404(deliverable_id, db, current_user)
-    if payload.employee_id is not None and db.get(Employee, payload.employee_id) is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nincs ilyen munkatárs.")
-    deliverable.assigned_to_employee_id = payload.employee_id
-    db.commit()
-    _kiosztas_ertesites(db, deliverable, payload.employee_id, current_user)
-    return {"assigned_to_employee_id": deliverable.assigned_to_employee_id}
+    if payload.employee_ids is not None:
+        employee_ids = payload.employee_ids
+    else:
+        employee_ids = [payload.employee_id] if payload.employee_id else []
+    _kiosztottak_beallitasa(db, deliverable, employee_ids, current_user)
+    return {
+        "employee_ids": [e.id for e in deliverable.kiosztottak],
+        "assigned_to_employee_id": deliverable.assigned_to_employee_id,
+    }
+
+
+class FutoTimer(BaseModel):
+    """Egy épp futó időmérés - a tábla kártyái mutatják, ki min dolgozik."""
+
+    deliverable_id: int
+    employee_id: int
+    full_name: str
+
+
+@deliverable_actions_router.get("/futo-timerek", response_model=list[FutoTimer])
+def get_futo_timerek(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    """MINDEN épp futó időmérés, egy körben - az Utómunka tábla kártyáin
+    látszik, melyik anyagot ki vágja éppen. A futó mérés ismérve ugyanaz, mint
+    a get_timer_state-ben: van kezdete, de még nincs vége. A korlátozott fiók
+    (külsős vágó) itt is csak a rá bízott anyagok méréseit látja."""
+    stmt = (
+        select(Timesheet.deliverable_id, Timesheet.employee_id, Employee.full_name)
+        .join(Employee, Employee.id == Timesheet.employee_id)
+        .where(
+            Timesheet.deliverable_id.is_not(None),
+            Timesheet.end_date.is_(None),
+            Timesheet.start_date.is_not(None),
+        )
+    )
+    engedett = lathato_anyagok(db, current_user)
+    if engedett is not None:
+        stmt = stmt.where(Timesheet.deliverable_id.in_(engedett or {0}))
+    return [
+        FutoTimer(deliverable_id=did, employee_id=eid, full_name=nev)
+        for did, eid, nev in db.execute(stmt).all()
+    ]
 
 
 @deliverable_actions_router.get("/allapot-beallitasok", response_model=list[AllapotBeallitas])

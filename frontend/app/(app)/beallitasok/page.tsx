@@ -65,6 +65,8 @@ const VISIBILITY_ENTITIES: { entityType: string; label: string; basePath: string
       "campaign_id",
       "aki_felvezette_employee_id",
       "assigned_to_employee_id",
+      "kiosztott_employee_ids",
+      "kiosztott_nevek",
       "vinyok",
       "megrendeloi_kontaktok_notion_ids",
       "megrendeloi_email_cimek",

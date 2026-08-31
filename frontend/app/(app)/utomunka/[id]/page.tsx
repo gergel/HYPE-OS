@@ -44,6 +44,10 @@ const HIDDEN_FIELDS = [
   "campaign_id",
   "aki_felvezette_employee_id",
   "assigned_to_employee_id",
+  // A kiosztást a bespoke Kiosztás kártya mutatja/szerkeszti (több ember is
+  // lehet) - a generikus rácson csak zaj lenne.
+  "kiosztott_employee_ids",
+  "kiosztott_nevek",
   // A "Kiküldve" jelzőt a lista Kiküldve oszlopa mutatja (StatusBadge) - itt,
   // az "Egyéb" kártyán külön mezőként semmi hasznot nem adna, csak zajt.
   "anyag_kikuldve",
@@ -155,12 +159,12 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
         content: (
           <Card title="Kiosztás">
             <p className="mb-2 text-[13px] text-text-secondary">
-              Kire van kiosztva ez a vágás - csak azok közül választhatsz, akiknek van bejelentkezési joga az Utómunka oldalhoz.
+              Kikre van kiosztva ez a vágás - több ember is lehet. Csak azok közül választhatsz, akiknek van bejelentkezési joga az Utómunka oldalhoz.
             </p>
             <AssignedToPicker
               deliverableId={deliverableId}
               employees={assignableEmployees}
-              currentId={deliverable.assigned_to_employee_id ? Number(deliverable.assigned_to_employee_id) : null}
+              currentIds={(deliverable.kiosztott_employee_ids as number[] | undefined) ?? []}
             />
           </Card>
         ),

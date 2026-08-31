@@ -43,6 +43,11 @@ class DeliverableListItem(BaseModel):
     allapot: str | None = None
     hatarido: date | None = None
     assigned_to_employee_id: int | None = None
+    #: Kikre van kiosztva (több ember is lehet) - a modell property-jeiből
+    #: töltődik (lásd models/deliverable.py); a lista végpont selectinload-dal
+    #: hozza be, hogy ne legyen soronkénti lekérdezés.
+    kiosztott_employee_ids: list[int] = []
+    kiosztott_nevek: list[str] = []
     vinyok: JsonScalar = None
     anyag_kikuldve: bool = False
     vagas_leallitva: datetime | None = None
@@ -60,6 +65,9 @@ class DeliverableUpdate(BaseModel):
 
 class DeliverableRead(DeliverableBase):
     id: int
+    #: Kikre van kiosztva (több ember is lehet) - lásd DeliverableListItem.
+    kiosztott_employee_ids: list[int] = []
+    kiosztott_nevek: list[str] = []
     # Ha van hozzá tartozó Média Portál (lásd routes/portal_admin.py
     # create_portal_from_deliverable), a frontend ez alapján dönti el, hogy
     # "Portál létrehozása" gombot vagy a meglévő Portálra mutató linket mutassa.

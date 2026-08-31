@@ -31,6 +31,8 @@ const LABEL_OVERRIDES: Record<string, string> = {
   nyersanyag_url: "Nyersanyag linkje",
   vago_employee_id: "Vágó",
   assigned_to_employee_id: "Kiosztva",
+  kiosztott_nevek: "Kiosztva",
+  kiosztott_employee_ids: "Kiosztva (azonosítók)",
   vinyok: "Vinyók",
   vagas_leiras: "Vágás leírása",
   time_minutes: "Vágással töltött perc",

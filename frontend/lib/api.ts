@@ -358,6 +358,11 @@ export type Deliverable = {
   anyag_kikuldve: boolean;
   vago_employee_id: number | null;
   assigned_to_employee_id: number | null;
+  /** Kikre van kiosztva - TÖBB ember is lehet (a kanonikus forrás, lásd
+   * backend models/deliverable.kiosztottak; az assigned_to_employee_id csak
+   * az első kiosztott tükre). */
+  kiosztott_employee_ids: number[];
+  kiosztott_nevek: string[];
   project_id: number | null;
   vinyok: string[] | null;
   /** Mikor állították le UTOLJÁRA a vágás időmérőjét. Notion importnál a

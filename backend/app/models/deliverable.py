@@ -13,6 +13,17 @@ deliverable_contacts = Table(
     Column("contact_id", ForeignKey("contacts.id"), primary_key=True),
 )
 
+#: Kikre van kiosztva az anyag - TÖBB ember is lehet (a felhasználó kérése).
+#: Ez a kanonikus forrás; a régi assigned_to_employee_id oszlop tükörként
+#: megmarad (mindig az első kiosztott), hogy a rá épülő régi lekérdezések és
+#: a Notion-importált adatok ne törjenek el.
+deliverable_kiosztottak = Table(
+    "deliverable_kiosztottak",
+    Base.metadata,
+    Column("deliverable_id", ForeignKey("deliverables.id"), primary_key=True),
+    Column("employee_id", ForeignKey("employees.id"), primary_key=True),
+)
+
 
 class Deliverable(TimestampMixin, Base):
     """Vágandó anyag - utómunka egység, Project Code-hoz és Project-hez is kötve."""
@@ -108,6 +119,8 @@ class Deliverable(TimestampMixin, Base):
     assigned_to: Mapped["Employee"] = relationship(foreign_keys=[assigned_to_employee_id])
     campaign: Mapped["Campaign"] = relationship(back_populates="deliverables")
     megrendeloi_kontaktok: Mapped[list["Contact"]] = relationship(secondary=deliverable_contacts)
+    #: Kikre van kiosztva - lásd a deliverable_kiosztottak tábla kommentjét.
+    kiosztottak: Mapped[list["Employee"]] = relationship(secondary=deliverable_kiosztottak)
 
     # Az anyaghoz tartozó munkaidő/visszajelzés/hozzászólás önmagában
     # értelmezhetetlen, ezért az anyaggal együtt törlődik - enélkül egy
@@ -119,6 +132,17 @@ class Deliverable(TimestampMixin, Base):
         back_populates="deliverable", order_by="DeliverableComment.created_at", cascade="all, delete-orphan"
     )
     portal: Mapped["Portal | None"] = relationship(back_populates="deliverable", uselist=False)
+
+    @property
+    def kiosztott_employee_ids(self) -> list[int]:
+        """A Read/ListItem sémák ebből töltik a kiosztottak azonosítóit."""
+        return [e.id for e in self.kiosztottak]
+
+    @property
+    def kiosztott_nevek(self) -> list[str]:
+        """A tábla kártyáin ("Kiosztva: A, B") - névfeloldás nélkül, hogy a
+        listának ne kelljen a teljes munkatárs-listát megkapnia hozzá."""
+        return [e.full_name for e in self.kiosztottak]
 
     @property
     def portal_id(self) -> int | None:

@@ -42,6 +42,13 @@ function formatDate(value: string | null): string {
 
 type CalendarProject = { id: number; nev: string; forgatas_datuma: string | null; forgatas_datuma_vege: string | null };
 
+type FutoTimer = { deliverable_id: number; employee_id: number; full_name: string };
+
+/** Milyen sűrűn frissüljön a "ki vág éppen" jelzés a kártyákon. Egy futó
+ * timer percekig-órákig megy, a 60 másodperc bőven elég friss - és a
+ * lekérdezés egyetlen olcsó kör (lásd backend get_futo_timerek). */
+const FUTO_TIMER_FRISSITES_MS = 60_000;
+
 /** Az Utómunka oldal tényleges tartalma (tábla + naptár + admin lista) - a
  * kezdeti szerver-oldali renderelés csak a legutóbb módosított anyagok/
  * forgatások egy szeletét kapja meg (lásd app/utomunka/page.tsx), hogy az
@@ -88,6 +95,9 @@ export function UtomunkaContent({
   const [visszajelzesKerve, setVisszajelzesKerve] = useState<{ deliverableId: number; allapot: string | null } | null>(
     null,
   );
+  // Épp futó időmérések - a kártyákon látszik, ki min dolgozik (lásd lent
+  // a frissítő useEffect-et és a toCard-ot).
+  const [futoTimerek, setFutoTimerek] = useState<FutoTimer[]>([]);
 
   useEffect(() => {
     if (!deliverablesHasMore) return;
@@ -108,6 +118,26 @@ export function UtomunkaContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A futó időmérések betöltése + időzített frissítése: aki elindít vagy
+  // leállít egy mérőt, az legfeljebb egy percen belül a többiek tábláján is
+  // látszik/eltűnik.
+  useEffect(() => {
+    let aktiv = true;
+    const betolt = () =>
+      authFetch("/api/v1/deliverables/futo-timerek")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((adat: FutoTimer[] | null) => {
+          if (aktiv && adat) setFutoTimerek(adat);
+        })
+        .catch(() => {});
+    void betolt();
+    const idozito = setInterval(betolt, FUTO_TIMER_FRISSITES_MS);
+    return () => {
+      aktiv = false;
+      clearInterval(idozito);
+    };
+  }, []);
+
   // Mindkét lista a komponens saját állapotában él (a szerver csak az első
   // szeletet adja), ezért a háttérfrissítésnél itt kell újratölteni.
   useLiveTopic("deliverables", () => {
@@ -126,6 +156,16 @@ export function UtomunkaContent({
 
   const employeeName = useMemo(() => new Map(employees.map((e) => [e.id, e.full_name])), [employees]);
 
+  // {anyag id -> akiknek épp fut rajta az időmérője}.
+  const timerNevek = useMemo(() => {
+    const nevek = new Map<number, string[]>();
+    for (const t of futoTimerek) {
+      if (!nevek.has(t.deliverable_id)) nevek.set(t.deliverable_id, []);
+      nevek.get(t.deliverable_id)!.push(t.full_name);
+    }
+    return nevek;
+  }, [futoTimerek]);
+
   /** Egy mező értéke emberi alakban a kártyára. A munkatárs-azonosítókat
    * névre oldjuk, a logikai mezőket Igen/Nem-re - különben "true" és nyers
    * id-k jelennének meg a kártyán. */
@@ -141,20 +181,26 @@ export function UtomunkaContent({
   }
 
   function toCard(d: Deliverable, badges: string[]): BoardCard {
-    // Beállítás nélkül marad az eddigi alapértelmezés (határidő + kiosztva),
-    // hogy a tábla ne ürüljön ki azoknál, akik sosem nyúlnak a beállításhoz.
+    // Beállítás nélkül marad az eddigi alapértelmezés (határidő), hogy a
+    // tábla ne ürüljön ki azoknál, akik sosem nyúlnak a beállításhoz. A
+    // kiosztás nem itt van: azt a kártya MINDIG mutatja (lásd lent).
     const alapertelmezett = kartyaMezok.length === 0;
     const subtitleParts = alapertelmezett
-      ? [
-          d.hatarido ? `Határidő: ${formatDate(d.hatarido)}` : null,
-          d.assigned_to_employee_id ? `Kiosztva: ${employeeName.get(d.assigned_to_employee_id) ?? "?"}` : null,
-        ].filter((p): p is string => p !== null)
+      ? [d.hatarido ? `Határidő: ${formatDate(d.hatarido)}` : null].filter((p): p is string => p !== null)
       : [];
     const mezok = alapertelmezett
       ? []
       : kartyaMezok
           .map((kulcs) => ({ cimke: humanizeKey(kulcs), ertek: mezoErteke(d, kulcs) }))
           .filter((m): m is { cimke: string; ertek: string } => m.ertek !== null);
+    // Kikre van kiosztva: az új több-emberes lista; régi (még egyértékű)
+    // adatnál az assigned_to mezőből oldjuk fel a nevet.
+    const kiosztva =
+      d.kiosztott_nevek && d.kiosztott_nevek.length > 0
+        ? d.kiosztott_nevek
+        : d.assigned_to_employee_id
+          ? [employeeName.get(d.assigned_to_employee_id) ?? "?"]
+          : [];
     return {
       id: d.id,
       href: `/utomunka/${d.id}`,
@@ -162,6 +208,10 @@ export function UtomunkaContent({
       subtitle: subtitleParts.length > 0 ? subtitleParts.join(" · ") : null,
       badges,
       mezok,
+      // A felhasználó kérése: a kártyán MINDIG látsszon, kinek van kiosztva
+      // és kinek fut rajta épp az időmérője.
+      kiosztva,
+      timerek: timerNevek.get(d.id) ?? [],
     };
   }
 
@@ -201,7 +251,7 @@ export function UtomunkaContent({
         : []),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverables, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName]);
+  }, [deliverables, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, timerNevek]);
 
   const vinyoColumns: BoardColumn[] = useMemo(() => {
     const byVinyo = new Map<string, Deliverable[]>();
@@ -215,7 +265,7 @@ export function UtomunkaContent({
       .filter((v) => (byVinyo.get(v)?.length ?? 0) > 0)
       .map((v) => ({ key: v, label: v, cards: byVinyo.get(v)!.map((d) => toCard(d, d.allapot ? [d.allapot] : [])) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverables, vinyoOptions, kartyaMezok, employeeName]);
+  }, [deliverables, vinyoOptions, kartyaMezok, employeeName, timerNevek]);
 
   /** Az anyag ÁLLAPOTÁNAK tényleges átírása - ezt hívja mind a Kanban-húzás
    * (kartyaAthelyezes, a celOszlop -> allapot fordítás után), mind a lista
