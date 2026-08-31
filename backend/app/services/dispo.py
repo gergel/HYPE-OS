@@ -438,7 +438,8 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
         name=project.nev or "",
         projektkod=project.projektkod_szoveg or "",
         idopont=_format_hu_date_range(project),
-        helyszin=project.helyszin or "",
+        # A helyszín többsoros lehet - a sortörések a levélben is látsszanak.
+        helyszin=(project.helyszin or "").replace("\n", "<br/>"),
     ) + _SIGNATURE_HTML
     thread_id, _msg_id, rfc822 = send_message(
         to_list,

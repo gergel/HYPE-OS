@@ -84,7 +84,9 @@ class Project(TimestampMixin, Base):
     notion_datum_vege: Mapped[date | None] = mapped_column(
         Date, comment="A Notion szerinti forgatás-vég (az import saját tükre - más nem írja)"
     )
-    helyszin: Mapped[str | None] = mapped_column(String(255))
+    # Text, nem String: a felhasználó kérésére többsoros (mint a brief) - a
+    # felület a Text oszlopokat automatikusan textarea-ként szerkeszti.
+    helyszin: Mapped[str | None] = mapped_column(Text)
     allapot: Mapped[str | None] = mapped_column(String(50))
     google_calendar_event_id: Mapped[str | None] = mapped_column(
         String(255),

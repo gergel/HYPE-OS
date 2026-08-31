@@ -1,5 +1,7 @@
 "use client";
 
+import { rogzitsVisszavonast } from "@/lib/visszavonas";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export const TOKEN_KEY = "hype_os_token";
 // Ugyanaz, mint a backend access_token_expire_minutes (30 nap) és a
@@ -43,11 +45,10 @@ export function clearToken() {
   document.cookie = `${TOKEN_KEY}=; path=/; max-age=0`;
 }
 
-/** Kliens-oldali, bejelentkezést igénylő (admin/operátor) írási műveletekhez -
- * a JWT-t a cookie-ból teszi az Authorization headerbe. Csak "use client"
- * komponensekből hívható (form submit, törlés gomb, stb.) - a szerver-oldali
- * listázó oldalak ugyanezt a cookie-t olvassák (lásd lib/api.ts apiGet). */
-export async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
+/** A tényleges hálózati hívás - a visszavonás-gyűjtés NÉLKÜL. A visszavonó
+ * akciók is ezt használják, hogy a visszavonás ne rögzítsen újabb
+ * visszavonást (végtelen kör). */
+async function nyersAuthFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const token = getToken();
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -58,4 +59,74 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
     headers.set("Content-Type", "application/json");
   }
   return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+}
+
+/** PATCH előtt a mező RÉGI értékeit kérdezzük le ugyanarról az útvonalról -
+ * ebből lesz a Ctrl+Z. Ha az útvonal nem GET-elhető (nem generikus rekord),
+ * vagy bármi hibázik, egyszerűen nincs visszavonás - a mentést nem
+ * akadályozza és nem lassítja hibával. */
+async function regiErtekekLekerese(path: string, body: unknown): Promise<Record<string, unknown> | null> {
+  if (typeof body !== "string") return null;
+  try {
+    const kuldott = JSON.parse(body) as unknown;
+    if (!kuldott || typeof kuldott !== "object" || Array.isArray(kuldott)) return null;
+    const res = await nyersAuthFetch(path);
+    if (!res.ok) return null;
+    const rekord = (await res.json()) as Record<string, unknown> | null;
+    if (!rekord || typeof rekord !== "object") return null;
+    const regi: Record<string, unknown> = {};
+    for (const kulcs of Object.keys(kuldott)) {
+      if (kulcs in rekord) regi[kulcs] = rekord[kulcs];
+    }
+    return Object.keys(regi).length > 0 ? regi : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Kliens-oldali, bejelentkezést igénylő (admin/operátor) írási műveletekhez -
+ * a JWT-t a cookie-ból teszi az Authorization headerbe. Csak "use client"
+ * komponensekből hívható (form submit, törlés gomb, stb.) - a szerver-oldali
+ * listázó oldalak ugyanezt a cookie-t olvassák (lásd lib/api.ts apiGet).
+ *
+ * RÁADÁS: a rendszerszintű Ctrl+Z (lásd lib/visszavonas.ts és a
+ * VisszavonasFigyelo komponenst) innen kapja a bejegyzéseit - minden sikeres
+ * PATCH-hez a mezők előző értékét, minden generikus DELETE-hez a backend
+ * törlés-pillanatképének azonosítóját tesszük a verembe. */
+export async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+
+  // A régi értékeket a PATCH ELŐTT kell lekérni (utána már az új él).
+  const regiErtekek = method === "PATCH" ? await regiErtekekLekerese(path, init.body) : null;
+
+  const res = await nyersAuthFetch(path, init);
+  if (!res.ok) return res;
+
+  if (method === "PATCH" && regiErtekek) {
+    rogzitsVisszavonast({
+      cimke: `Szerkesztés visszavonva: ${Object.keys(regiErtekek).join(", ")}`,
+      futtat: async () => {
+        const r = await nyersAuthFetch(path, { method: "PATCH", body: JSON.stringify(regiErtekek) });
+        return r.ok;
+      },
+    });
+  } else if (method === "DELETE") {
+    // A válasz-testet klónról olvassuk, hogy a hívó is olvashassa még.
+    try {
+      const adat = (await res.clone().json()) as { visszaallitas_id?: unknown } | null;
+      const visszaallitasId = adat?.visszaallitas_id;
+      if (typeof visszaallitasId === "number") {
+        rogzitsVisszavonast({
+          cimke: "Törlés visszavonva",
+          futtat: async () => {
+            const r = await nyersAuthFetch(`/api/v1/visszavonas/torles/${visszaallitasId}`, { method: "POST" });
+            return r.ok;
+          },
+        });
+      }
+    } catch {
+      // 204-es vagy test nélküli törlés (nem generikus végpont) - nincs Ctrl+Z rá.
+    }
+  }
+  return res;
 }

@@ -55,6 +55,7 @@ from app.api.routes.megrendeloi_keretszerzodesek import router as megrendeloi_ke
 from app.api.routes.megrendeloi_papirok import router as megrendeloi_papirok_router
 from app.api.routes.vagoi_jatek import router as vagoi_jatek_router
 from app.api.routes.vallalkozasok import router as vallalkozasok_router
+from app.api.routes.visszavonas import router as visszavonas_router
 
 api_router = APIRouter()
 
@@ -114,6 +115,7 @@ api_router.include_router(megrendeloi_keretszerzodesek_router)
 api_router.include_router(megrendeloi_papirok_router)
 api_router.include_router(vagoi_jatek_router)
 api_router.include_router(vallalkozasok_router)
+api_router.include_router(visszavonas_router)
 api_router.include_router(belsos_idoszakok_router)
 # Visszatérő kötelezettségek (E-Rezsi, biztosítások) és a céges autók - a
 # kettő ugyanazt a lejárat-figyelést használja (lásd services/kotelezettseg.py).

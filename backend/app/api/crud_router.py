@@ -24,7 +24,7 @@ from app.core.security import (
     require_roles,
 )
 from app.models.employee import Employee
-from app.services import entity_fields, notion_mapping
+from app.services import entity_fields, notion_mapping, visszavonas
 from app.services.detail_tabs import OTHER_TAB_KEY, get_field_tab_map
 
 # Soha nem PATCH-elhető mezők, még akkor sem, ha valódi oszlopok - a "minden
@@ -385,7 +385,10 @@ def build_crud_router(
             after_update(obj, data, m2m_changes, db, current_user)
         return _szurt_kimenet(_kimenet(obj, read_schema, db, sajat_mezokkel=True), db, current_user)
 
-    @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+    # 200 + JSON, nem 204: a válaszban megy vissza a törlés-pillanatkép
+    # azonosítója, amiből a Ctrl+Z (lásd frontend lib/authFetch.ts és
+    # routes/visszavonas.py) vissza tudja hozni a véletlenül törölt sort.
+    @router.delete("/{item_id}")
     def delete_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(delete_dependency)):
         obj = _lathato_vagy_404(db, item_id, _user)
         if before_delete:
@@ -398,9 +401,11 @@ def build_crud_router(
         # kiesne az importból (lásd services/notion_mapping.py). Az importer az
         # OSZTÁLYNEVET használja entitástípusként ("Contract", "Employee").
         notion_mapping.torold_a_leképezest(db, model.__name__, obj.id)
+        visszaallitas_id = visszavonas.mentsd_a_torlest(db, model, obj, _user)
         db.delete(obj)
         try:
             db.commit()
+            return {"ok": True, "visszaallitas_id": visszaallitas_id}
         except IntegrityError as exc:
             # Maradt olyan kapcsolódó rekord, ami hivatkozik erre a sorra (vagy
             # egy nem-nullázható idegen kulcsot próbáltunk nullázni). Enélkül a

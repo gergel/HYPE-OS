@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import { TEMA_INIT_SCRIPT } from "@/lib/tema";
+import { VisszavonasFigyelo } from "@/components/VisszavonasFigyelo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -77,7 +78,11 @@ export default function RootLayout({
             a fejlécben ülő kapcsoló javítja - lásd TemaKapcsolo.tsx. */}
         <script dangerouslySetInnerHTML={{ __html: TEMA_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-full bg-background text-text-primary">{children}</body>
+      <body className="min-h-full bg-background text-text-primary">
+        {children}
+        {/* Rendszerszintű Ctrl+Z / Cmd+Z - minden oldalon él, lásd a komponenst. */}
+        <VisszavonasFigyelo />
+      </body>
     </html>
   );
 }

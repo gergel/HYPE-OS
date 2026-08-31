@@ -86,6 +86,7 @@ from app.models.vagoi_jatek import (
     VagoJatekNap,
 )
 from app.models.vallalkozas import Vallalkozas, VallalkozasTag
+from app.models.visszavonas import ToroltRekord
 
 __all__ = [
     "Base",
@@ -168,6 +169,7 @@ __all__ = [
     "VagoJatekNap",
     "Vallalkozas",
     "VallalkozasTag",
+    "ToroltRekord",
     "ProjectCode",
     "ProjectCodeComment",
     "Rate",
