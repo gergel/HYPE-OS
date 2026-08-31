@@ -72,10 +72,13 @@ function BoardCardView({
         huzhato ? "cursor-grab active:cursor-grabbing" : ""
       }`}
     >
-      <p className="font-medium text-text-primary">{card.title}</p>
-      {card.subtitle && <p className="mt-0.5 text-[12px] text-text-muted">{card.subtitle}</p>}
+      {/* [overflow-wrap:anywhere]: a fájlnév-szerű címek (alulvonásokkal,
+          pontokkal) nem tartalmaznak törhető szóközt, e nélkül kilógnának a
+          kártyából. */}
+      <p className="font-medium text-text-primary [overflow-wrap:anywhere]">{card.title}</p>
+      {card.subtitle && <p className="mt-0.5 text-[12px] text-text-muted [overflow-wrap:anywhere]">{card.subtitle}</p>}
       {card.kiosztva && card.kiosztva.length > 0 && (
-        <p className="mt-0.5 text-[12px] text-text-muted">
+        <p className="mt-0.5 text-[12px] text-text-muted [overflow-wrap:anywhere]">
           Kiosztva: <span className="text-text-secondary">{card.kiosztva.join(", ")}</span>
         </p>
       )}

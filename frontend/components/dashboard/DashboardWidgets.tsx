@@ -1,12 +1,79 @@
 import Link from "next/link";
 import { PapirozasFolders } from "@/components/dashboard/PapirozasFolders";
-import { DashboardAlerts, MyTasksSummary, RevenueMonth, UpcomingEvent, formatHuf } from "@/lib/api";
+import { DashboardAlerts, MyTaskItem, MyTasksSummary, RevenueMonth, UpcomingEvent, formatHuf } from "@/lib/api";
 
 const MONTH_SHORT = ["jan", "feb", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
   return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}.`;
+}
+
+/** Hány nap van a határidőig (negatív = lejárt). A napok naptári napban
+ * számolódnak, hogy a "ma"/"holnap" a nap folyamán stabil maradjon. */
+function napokAHataridoig(iso: string): number {
+  const ma = new Date();
+  const maNap = new Date(ma.getFullYear(), ma.getMonth(), ma.getDate()).getTime();
+  const h = new Date(iso);
+  const hataridoNap = new Date(h.getFullYear(), h.getMonth(), h.getDate()).getTime();
+  return Math.round((hataridoNap - maNap) / 86_400_000);
+}
+
+/** A határidő-címke: lejárt → piros "lejárt X napja", közeli (≤3 nap) →
+ * sárga "ma"/"holnap"/"X nap múlva", távoli → tompított rövid dátum. */
+function HataridoCimke({ hatarido }: { hatarido: string | null }) {
+  if (!hatarido) return null;
+  const napok = napokAHataridoig(hatarido);
+  if (napok < 0) {
+    const szoveg = napok === -1 ? "lejárt tegnap" : `lejárt ${-napok} napja`;
+    return (
+      <span className="shrink-0 rounded-full bg-bg-danger px-2 py-0.5 text-[11px] font-medium text-text-danger">
+        {szoveg}
+      </span>
+    );
+  }
+  if (napok <= 3) {
+    const szoveg = napok === 0 ? "ma" : napok === 1 ? "holnap" : `${napok} nap múlva`;
+    return (
+      <span className="shrink-0 rounded-full bg-bg-warning px-2 py-0.5 text-[11px] font-medium text-text-warning">
+        {szoveg}
+      </span>
+    );
+  }
+  return <span className="shrink-0 text-text-secondary">{formatShortDate(hatarido)}</span>;
+}
+
+/** Határidő szerint növekvőbe rendez (lejárt legelöl), a határidő nélküliek
+ * a lista végére kerülnek. */
+function hataridoSorrend(items: MyTaskItem[]): MyTaskItem[] {
+  return [...items].sort((a, b) => {
+    if (!a.hatarido && !b.hatarido) return 0;
+    if (!a.hatarido) return 1;
+    if (!b.hatarido) return -1;
+    return a.hatarido.localeCompare(b.hatarido);
+  });
+}
+
+function TeendoLista({ cim, items, kulcs }: { cim: string; items: MyTaskItem[]; kulcs: string }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">{cim}</p>
+      <ul className="space-y-1">
+        {hataridoSorrend(items).map((t, i) => (
+          <li key={`${kulcs}-${t.id}-${i}`}>
+            <Link
+              href={t.link}
+              className="flex items-center justify-between gap-3 rounded-[var(--radius)] px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-3"
+            >
+              <span className="truncate text-text-primary">{t.title}</span>
+              <HataridoCimke hatarido={t.hatarido} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export function AlertsCard({ alerts, allowedPages }: { alerts: DashboardAlerts; allowedPages: string[] | null }) {
@@ -36,32 +103,22 @@ export function AlertsCard({ alerts, allowedPages }: { alerts: DashboardAlerts; 
 }
 
 export function MyTasksCard({ myTasks }: { myTasks: MyTasksSummary }) {
-  const { deliverables, tasks, diszpok, papirozas = [] } = myTasks;
-  if (deliverables.length === 0 && tasks.length === 0 && diszpok.length === 0 && papirozas.length === 0) {
+  const { deliverables, tasks, diszpok, papirozas = [], auto_teendok = [], hype_todok = [] } = myTasks;
+  if (
+    deliverables.length === 0 &&
+    tasks.length === 0 &&
+    diszpok.length === 0 &&
+    papirozas.length === 0 &&
+    auto_teendok.length === 0 &&
+    hype_todok.length === 0
+  ) {
     return <p className="text-[13px] text-text-muted">Nincs nyitott teendőd.</p>;
   }
   return (
     <div className="space-y-3">
       {/* Elöl a diszpók: ezek MÁSNAPI határidejűek, tehát a legsürgősebbek -
           lásd backend api/routes/dashboard.py _tomorrow_dispo_tasks. */}
-      {diszpok.length > 0 && (
-        <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">Holnapi diszpó</p>
-          <ul className="space-y-1">
-            {diszpok.map((d, i) => (
-              <li key={`diszpo-${d.id}-${i}`}>
-                <Link
-                  href={d.link}
-                  className="flex items-center justify-between gap-3 rounded-[var(--radius)] px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-3"
-                >
-                  <span className="truncate text-text-primary">{d.title}</span>
-                  {d.hatarido && <span className="shrink-0 text-text-secondary">{formatShortDate(d.hatarido)}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <TeendoLista cim="Holnapi diszpó" items={diszpok} kulcs="diszpo" />
       {/* Papírozás: csak az Adminisztráció szerepkörűeknek jön vissza a
           backendtől (belsős/külsős TIG, alvállalkozói és megrendelői
           szerződés) - lásd routes/dashboard.py _papirozas_tasks. */}
@@ -75,42 +132,10 @@ export function MyTasksCard({ myTasks }: { myTasks: MyTasksSummary }) {
           <PapirozasFolders items={papirozas} />
         </div>
       )}
-      {deliverables.length > 0 && (
-        <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">Rád kiosztott utómunka</p>
-          <ul className="space-y-1">
-            {deliverables.map((d) => (
-              <li key={`deliverable-${d.id}`}>
-                <Link
-                  href={d.link}
-                  className="flex items-center justify-between gap-3 rounded-[var(--radius)] px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-3"
-                >
-                  <span className="truncate text-text-primary">{d.title}</span>
-                  {d.hatarido && <span className="shrink-0 text-text-secondary">{formatShortDate(d.hatarido)}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {tasks.length > 0 && (
-        <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">Rád osztott feladat</p>
-          <ul className="space-y-1">
-            {tasks.map((t) => (
-              <li key={`task-${t.id}`}>
-                <Link
-                  href={t.link}
-                  className="flex items-center justify-between gap-3 rounded-[var(--radius)] px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-3"
-                >
-                  <span className="truncate text-text-primary">{t.title}</span>
-                  {t.hatarido && <span className="shrink-0 text-text-secondary">{formatShortDate(t.hatarido)}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <TeendoLista cim="Rád kiosztott utómunka" items={deliverables} kulcs="deliverable" />
+      <TeendoLista cim="Rád osztott feladat" items={tasks} kulcs="task" />
+      <TeendoLista cim="HYPE TO-DO" items={hype_todok} kulcs="hype-todo" />
+      <TeendoLista cim="Autó teendő" items={auto_teendok} kulcs="auto-teendo" />
     </div>
   );
 }

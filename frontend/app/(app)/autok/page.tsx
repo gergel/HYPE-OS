@@ -1,7 +1,7 @@
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { AutoKezelo } from "@/components/kotelezettseg/AutoKezelo";
-import { getAutok, getEmployees, getKotelezettsegek, getMyPagePermissions } from "@/lib/api";
+import { getAutok, getEmployees, getKotelezettsegek, getLathatjakAzOldalt, getMyPagePermissions } from "@/lib/api";
 import { canDoPageAction } from "@/lib/permissions";
 import { formatHuf } from "@/lib/penz";
 
@@ -19,13 +19,16 @@ const PAGE = "/autok";
  * bármelyik biztosításról -, a költések pedig sima kiadások, ezért jelennek
  * meg magától a Pénzügy összesítő kiadásai közt is. */
 export default async function AutokPage() {
-  const [autok, hataridok, employees, pagePermissions] = await Promise.all([
+  const [autok, hataridok, employees, pagePermissions, teendoFelelosIdk] = await Promise.all([
     getAutok(),
     // Az autókhoz kötött határidők - a kötelezettség-szerkesztő ezekkel
     // dolgozik az egyes járművek alatt.
     getKotelezettsegek(),
     getEmployees(),
     getMyPagePermissions(),
+    // Teendő csak olyanra osztható, aki hozzáfér ehhez az oldalhoz - a
+    // backend is ezt ellenőrzi (routes/autok.py _teendo_felelos_ellenorzese).
+    getLathatjakAzOldalt(PAGE),
   ]);
 
   const autosHataridok = hataridok.filter((k) => k.auto_id != null);
@@ -36,6 +39,9 @@ export default async function AutokPage() {
   const emberek = employees
     .map((e) => ({ id: e.id, full_name: e.full_name }))
     .sort((a, b) => a.full_name.localeCompare(b.full_name, "hu"));
+
+  // A teendő-felelős választóba csak az oldalhoz hozzáférők kerülnek.
+  const teendoEmberek = emberek.filter((e) => teendoFelelosIdk.includes(e.id));
 
   return (
     <div className="flex flex-1 flex-col">
@@ -53,6 +59,7 @@ export default async function AutokPage() {
             autok={autok}
             hataridok={autosHataridok}
             emberek={emberek}
+            teendoEmberek={teendoEmberek}
             canEdit={canDoPageAction(pagePermissions, PAGE, "edit")}
             canCreate={canDoPageAction(pagePermissions, PAGE, "create")}
             canDelete={canDoPageAction(pagePermissions, PAGE, "delete")}

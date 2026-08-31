@@ -210,6 +210,7 @@ export function AutoKezelo({
   autok,
   hataridok,
   emberek,
+  teendoEmberek,
   canEdit,
   canCreate,
   canDelete,
@@ -219,6 +220,9 @@ export function AutoKezelo({
    * szerkesztő ezekkel dolgozik. */
   hataridok: Kotelezettseg[];
   emberek: { id: number; full_name: string }[];
+  /** A teendő-felelős választó szűkített listája: csak akik hozzáférnek az
+   * Autók oldalhoz (a backend is ezt ellenőrzi - routes/autok.py). */
+  teendoEmberek: { id: number; full_name: string }[];
   canEdit: boolean;
   canCreate: boolean;
   canDelete: boolean;
@@ -359,6 +363,21 @@ export function AutoKezelo({
                     />
                   </div>
 
+                  {/* A jármű saját papírjai fájlként: a forgalmi másolata, a
+                      biztosítási kötvény - a lejáratokat a fenti kötelezettség-
+                      szerkesztő kezeli, itt maga a dokumentum van (lásd backend
+                      services/attachments.py "auto" entitás). */}
+                  <div>
+                    <p className="t-label mb-2">Dokumentumok (forgalmi, biztosítás…)</p>
+                    <PapirFeltoltes
+                      entityType="auto"
+                      entityId={auto.id}
+                      canEdit={canEdit}
+                      canDelete={canDelete}
+                      uresSzoveg="Nincs feltöltött dokumentum ehhez az autóhoz."
+                    />
+                  </div>
+
                   {/* Teendők az autóhoz - pipálható lista (a felhasználó
                       kérése): "vinni műszakira", "izzót cserélni"... */}
                   <div>
@@ -366,7 +385,7 @@ export function AutoKezelo({
                     <AutoTeendok
                       autoId={auto.id}
                       teendok={auto.teendok ?? []}
-                      emberek={emberek}
+                      emberek={teendoEmberek}
                       canEdit={canEdit}
                       canDelete={canDelete}
                     />

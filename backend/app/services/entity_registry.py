@@ -30,6 +30,7 @@ from app.models.contract import Contract
 from app.models.deliverable import Deliverable
 from app.models.deliverable_comment import DeliverableComment
 from app.models.agi_todo import AgiTodoItem
+from app.models.auto import Auto
 from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
@@ -82,6 +83,9 @@ ENTITY_MODELS: dict[str, type] = {
     # Az autós költés bizonylata: a rekord maga egy kiadás, csak a
     # jogosultsága az Autók oldaláé (lásd services/attachments.py).
     "autoKiadas": Expense,
+    # Maga az autó - a járműhöz tartozó papírok (forgalmi másolat, biztosítási
+    # kötvény) csatolmányként ide kerülnek fel (lásd frontend AutoKezelo).
+    "auto": Auto,
     # Krumpello: kiadás-tétel és napi kassza-zárás - mindkettőhöz tölthető fel
     # számla/blokk, de egyikhez sem kötelező.
     "krumpelloKiadas": KrumpelloKiadas,

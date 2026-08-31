@@ -37,10 +37,19 @@ def _ellenoriz(db: Session, entity_type: str, entity_id: int) -> None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "A rekord nem található")
 
 
+# Ezeknél az entitásoknál a durva admin/operator szerepkör-kapu NEM érvényes:
+# az oldaluk routere is kizárólag a page_permissions alapján enged írást (lásd
+# routes/autok.py és routes/kotelezettsegek.py _MINDEN_SZEREPKOR) - a
+# csatolmányra ugyanennek a szabálynak kell vonatkoznia, különben egy /autok
+# oldalra meghívott vágó a sort szerkeszthetné, de a forgalmit/kötvényt nem
+# tudná feltölteni hozzá.
+OLDAL_JOG_ELEG = {"auto", "autoKiadas", "kotelezettseg", "kotelezettsegIdoszak"}
+
+
 def _jogosultsag(db: Session, user: Employee, entity_type: str, action: str) -> None:
     from app.core.security import DEFAULT_WRITE_ROLES
 
-    if not van_szerepkore(user, *DEFAULT_WRITE_ROLES):
+    if entity_type not in OLDAL_JOG_ELEG and not van_szerepkore(user, *DEFAULT_WRITE_ROLES):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Nincs jogosultságod ehhez a művelethez")
     check_page_action(db, user, attachments.ENTITAS_OLDALAK[entity_type], action)
 

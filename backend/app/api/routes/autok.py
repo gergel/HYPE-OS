@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.core.security import Role, get_current_user, require_page_action
+from app.core.security import Role, get_current_user, lathatjak_az_oldalt, require_page_action
 from app.models.auto import Auto, AutoTeendo
 from app.api.routes import kotelezettsegek
 from app.models.document_attachment import DocumentAttachment
@@ -444,6 +444,21 @@ class AutoTeendoUpdate(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+def _teendo_felelos_ellenorzese(db: Session, felelos_id: int | None) -> None:
+    """Teendő felelősének csak az jelölhető, akinek admin hozzáférést adott az
+    Autók oldalhoz (a felhasználó kérése) - ugyanaz a szabály, mint a HYPE
+    TO-DO Felelős-választójánál (lásd core/security.lathatjak_az_oldalt). A
+    felület is ezt a szűrt listát kínálja fel (lásd AutoTeendok.tsx), ez itt
+    a szerveroldali biztosíték."""
+    if felelos_id is None:
+        return
+    if felelos_id not in lathatjak_az_oldalt(db, PAGE):
+        raise HTTPException(
+            status_code=400,
+            detail="Teendő felelősének csak olyan munkatárs jelölhető, akinek van hozzáférése az Autók oldalhoz.",
+        )
+
+
 def _teendo_kimenet(t: AutoTeendo) -> AutoTeendoRead:
     return AutoTeendoRead(
         id=t.id,
@@ -468,6 +483,7 @@ def create_auto_teendo(
     szoveg = payload.szoveg.strip()
     if not szoveg:
         raise HTTPException(status_code=400, detail="A teendő szövege nem lehet üres.")
+    _teendo_felelos_ellenorzese(db, payload.felelos_id)
     teendo = AutoTeendo(auto_id=auto_id, szoveg=szoveg, hatarido=payload.hatarido, felelos_id=payload.felelos_id)
     db.add(teendo)
     db.commit()
@@ -487,6 +503,8 @@ def update_auto_teendo(
     if teendo is None or teendo.auto_id != auto_id:
         raise HTTPException(status_code=404, detail="A teendő nem található ennél az autónál.")
     valtozasok = payload.model_dump(exclude_unset=True)
+    if "felelos_id" in valtozasok:
+        _teendo_felelos_ellenorzese(db, valtozasok["felelos_id"])
     if "szoveg" in valtozasok:
         szoveg = (valtozasok["szoveg"] or "").strip()
         if not szoveg:

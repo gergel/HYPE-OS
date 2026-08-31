@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.auto import Auto, AutoTeendo
 from app.models.dashboard_config import DashboardConfig
 from app.models.deliverable import Deliverable
+from app.models.hype_todo import HypeTodoItem, hype_todo_felelosok
 from app.models.deliverable_status import DeliverableStatusConfig
 from app.models.dispo_responsible import DispoResponsible, DispoSide
 from app.models.employee import Employee, SystemRole, van_szerepkore
@@ -59,6 +61,10 @@ class MyTaskItem(BaseModel):
 class MyTasksSummary(BaseModel):
     deliverables: list[MyTaskItem]
     tasks: list[MyTaskItem]
+    # A rád osztott AUTÓ-TEENDŐK (lásd models/auto.AutoTeendo) és a HYPE
+    # TO-DO feladataid - a felhasználó kérése, hogy ezek is itt legyenek.
+    auto_teendok: list[MyTaskItem] = []
+    hype_todok: list[MyTaskItem] = []
     # A másnapi forgatások diszpói, ha a felhasználó diszpó-felelős (lásd
     # models/dispo_responsible.py). Külön lista, mert nem egy Feladat/Utómunka
     # rekordból jön, hanem a forgatás diszpó-állapotából származtatjuk.
@@ -240,12 +246,40 @@ def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get
         .where(task_employees.c.employee_id == current_user.id, Task.checked.is_(False))
         .order_by(Task.hatarido.asc().nulls_last())
     ).all()
+    # A rád osztott AUTÓ-TEENDŐK - a rendszám mondja meg, melyik kocsiról van
+    # szó (lásd models/auto.AutoTeendo).
+    auto_teendok = db.execute(
+        select(AutoTeendo, Auto.rendszam)
+        .join(Auto, Auto.id == AutoTeendo.auto_id)
+        .where(AutoTeendo.felelos_id == current_user.id, AutoTeendo.kesz.is_(False))
+        .order_by(AutoTeendo.hatarido.asc().nulls_last())
+    ).all()
+
+    # A HYPE TO-DO feladataid, amíg nincsenek készre téve ("Done").
+    hype_todok = db.scalars(
+        select(HypeTodoItem)
+        .join(hype_todo_felelosok, hype_todo_felelosok.c.hype_todo_id == HypeTodoItem.id)
+        .where(
+            hype_todo_felelosok.c.employee_id == current_user.id,
+            or_(HypeTodoItem.allapot.is_(None), HypeTodoItem.allapot != "Done"),
+        )
+        .order_by(HypeTodoItem.hatarido.asc().nulls_last())
+    ).all()
+
     return MyTasksSummary(
         deliverables=[
             MyTaskItem(id=d.id, title=d.projekt_neve or f"Anyag #{d.id}", hatarido=d.hatarido, link=f"/utomunka/{d.id}")
             for d in deliverables
         ],
         tasks=[MyTaskItem(id=t.id, title=t.feladat, hatarido=t.hatarido, link="/feladatok") for t in tasks],
+        auto_teendok=[
+            MyTaskItem(id=t.id, title=f"{rendszam}: {t.szoveg}", hatarido=t.hatarido, link="/autok")
+            for t, rendszam in auto_teendok
+        ],
+        hype_todok=[
+            MyTaskItem(id=h.id, title=h.feladat, hatarido=h.hatarido, link=f"/hype-todo-lista/{h.id}")
+            for h in hype_todok
+        ],
         diszpok=_tomorrow_dispo_tasks(db, current_user),
         papirozas=_papirozas_tasks(db, current_user),
     )

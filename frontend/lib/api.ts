@@ -2255,6 +2255,12 @@ export type MyTasksSummary = {
    * szerződés) - csak az Adminisztráció szerepkörűeknek jön vissza (lásd
    * backend routes/dashboard.py _papirozas_tasks). */
   papirozas: MyTaskItem[];
+  /** A rád osztott, még nem kész autó-teendők (lásd backend
+   * routes/dashboard.py). Régebbi backenddel hiányozhat. */
+  auto_teendok?: MyTaskItem[];
+  /** A rád osztott, nem "Done" HYPE TO-DO feladatok. Régebbi backenddel
+   * hiányozhat. */
+  hype_todok?: MyTaskItem[];
 };
 
 /** Ki felel a diszpó kiküldéséért, oldalanként (gyártás / technika) - a
