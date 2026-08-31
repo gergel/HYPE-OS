@@ -280,3 +280,24 @@ export async function uploadVideo(
     throw err;
   }
 }
+
+// ─── Feltöltő link és rész-megosztás (a felhasználó kérése) ────────────────
+
+export async function createFeltoltoLink(portalId: number, folderId: number | null): Promise<{ url: string }> {
+  return req<{ url: string; token: string }>(`/api/v1/portal-admin/${portalId}/feltolto-link`, {
+    method: "POST",
+    body: JSON.stringify({ folder_id: folderId }),
+  });
+}
+
+export async function createFolderShareLink(folderId: number): Promise<{ url: string }> {
+  return req<{ url: string; token: string }>(`/api/v1/portal-admin/folders/${folderId}/share-link`, {
+    method: "POST",
+  });
+}
+
+export async function createVideoShareLink(videoId: number): Promise<{ url: string }> {
+  return req<{ url: string; token: string }>(`/api/v1/portal-admin/videos/${videoId}/share-link`, {
+    method: "POST",
+  });
+}

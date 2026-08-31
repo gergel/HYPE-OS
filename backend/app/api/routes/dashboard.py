@@ -403,7 +403,15 @@ def _papirozas_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
             )
         # TIG csak akkor, ha a munka már el is indult (volt kiküldött diszpójú
         # forgatás) - enélkül minden jövőbeli projektkód örökre teendő lenne.
-        if not allas.tig_kesz and any(p.diszpo == "Kiküldve" for p in pc.projects):
+        # Csak a RENDSZER-ÉRA (szept. 1-től) kiküldött diszpói jelentenek
+        # TIG-teendőt: a régebbi forgatások "Kiküldve" jelölése visszamenőleges
+        # adatpótlás (lásd services/papirozas_hatokor.RENDSZER_DISZPO_KEZDETE).
+        if not allas.tig_kesz and any(
+            p.diszpo == "Kiküldve"
+            and p.forgatas_datuma is not None
+            and p.forgatas_datuma >= papirozas_hatokor.RENDSZER_DISZPO_KEZDETE
+            for p in pc.projects
+        ):
             items.append(
                 MyTaskItem(
                     id=pc.id,

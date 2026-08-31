@@ -20,7 +20,10 @@ const BACKEND_TIMEOUT_MS = 4000;
 // "/adatvedelem" az adatkezelési tájékoztató - a portál fizetési űrlapja és a
 // süti-sáv is ide hivatkozik, tehát ugyanazoknak a kijelentkezett ügyfeleknek
 // kell elérhetőnek lennie, mint maga a portál.
-const PUBLIC_PATHS = ["/login", "/p", "/kerdoiv", "/adatvedelem"];
+// "/feltoltes" és "/megosztas" a portál token-alapú feltöltő- és rész-megosztó
+// linkjei - a címzettek külsősök, a token maga a belépő (lásd backend
+// portal_public.py feltoltes/megosztas végpontjai).
+const PUBLIC_PATHS = ["/login", "/p", "/kerdoiv", "/adatvedelem", "/feltoltes", "/megosztas"];
 
 // A publikus portál SAJÁT domainen fut (hypeclient.com), az admin felület a
 // magáén. Ugyanaz a Next.js telepítés szolgálja ki mindkettőt - ezért itt kell

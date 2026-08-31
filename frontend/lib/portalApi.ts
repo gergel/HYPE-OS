@@ -151,3 +151,45 @@ export async function startPayment(
   });
   return data.gateway_url;
 }
+
+// ─── Feltöltő link és rész-megosztás (a felhasználó kérése) ────────────────
+
+export type FeltoltesAdatok = {
+  title: string;
+  brand: string;
+  csak_mappa: boolean;
+  folders: { id: number; name: string; video_db: number; kep_db: number }[];
+};
+
+export async function getFeltoltesAdatok(token: string) {
+  return req<FeltoltesAdatok>(`/feltoltes/${token}`);
+}
+
+export async function feltoltesMappa(token: string, name: string) {
+  return req<{ id: number; name: string }>(`/feltoltes/${token}/mappa`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+/** Fájl feltöltése a feltöltő linkkel - multipart, ezért nem a `req` helper. */
+export async function feltoltesFajl(
+  token: string,
+  file: File,
+  folderId: number | null,
+): Promise<{ ok: boolean; hiba?: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  if (folderId != null) fd.append("folder_id", String(folderId));
+  const vegpont = file.type.startsWith("image/") ? "kep" : "video";
+  const res = await fetch(`${BASE}/feltoltes/${token}/${vegpont}`, { method: "POST", body: fd });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { ok: false, hiba: body.detail || `Sikertelen feltöltés (${res.status})` };
+  }
+  return { ok: true };
+}
+
+export async function getMegosztas(token: string) {
+  return req<{ tipus: "mappa" | "video"; project: PublicPortal }>(`/megosztas/${token}`);
+}

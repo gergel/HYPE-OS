@@ -32,6 +32,9 @@ import {
   deleteVideo,
   reorderVideos,
   deletePortal,
+  createFeltoltoLink,
+  createFolderShareLink,
+  createVideoShareLink,
 } from "@/lib/portalAdminApi";
 import { Card } from "@/components/Card";
 import { formatDuration, formatBytes } from "@/lib/portalUtils";
@@ -361,6 +364,18 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     next.splice(to, 0, moved);
     setVideos(next);
     await reorderVideos(initial.id, next.map((v) => v.id));
+  }
+
+  /** Link-generálás a backendtől + vágólapra másolás - a feltöltő és a
+   * mappa/videó megosztó linkekhez (a felhasználó kérése). */
+  async function linkMasol(keszit: () => Promise<{ url: string }>) {
+    try {
+      const { url } = await keszit();
+      setShareUrl(url);
+      await navigator.clipboard?.writeText(url).catch(() => {});
+    } catch (e) {
+      alert(String((e as Error)?.message ?? e));
+    }
   }
 
   function makeShare() {
@@ -726,6 +741,15 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
               Megosztó link
             </button>
             <button
+              type="button"
+              title="Aki ezt a linket kapja, mappákat hozhat létre és feltölthet a portálra - törölni nem tud"
+              onClick={() => void linkMasol(() => createFeltoltoLink(initial.id, null))}
+              className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-4 py-2 text-[13px] text-text-secondary hover:bg-surface-3"
+            >
+              <Upload className="h-4 w-4" />
+              Feltöltő link
+            </button>
+            <button
               onClick={onDeletePortal}
               className="ml-auto flex items-center gap-2 rounded-[var(--radius)] border border-text-danger/40 px-4 py-2 text-[13px] text-text-danger transition-colors hover:bg-bg-danger"
             >
@@ -894,6 +918,20 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                       <span className="truncate text-[13px] text-text-primary">{f.name}</span>
                       <span className="ml-auto shrink-0 text-[11px] text-text-muted">{vCount + iCount} elem</span>
                     </button>
+                    <button
+                      title="Mappa megosztó link (aki kapja, csak ezt a mappát látja)"
+                      onClick={() => void linkMasol(() => createFolderShareLink(f.id))}
+                      className="text-text-muted transition-colors hover:text-text-primary"
+                    >
+                      <Link2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      title="Feltöltő link ebbe a mappába (feltölthet, nem törölhet)"
+                      onClick={() => void linkMasol(() => createFeltoltoLink(initial.id, f.id))}
+                      className="text-text-muted transition-colors hover:text-text-primary"
+                    >
+                      <Upload className="h-4 w-4" />
+                    </button>
                     <button title="Átnevezés" onClick={() => onRenameFolder(f.id)} className="text-text-muted transition-colors hover:text-text-primary">
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -949,6 +987,13 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                       <ArrowLeft className="h-4 w-4" />
                     </button>
                   )}
+                  <button
+                    title="Videó megosztó link (aki kapja, csak ezt a videót látja)"
+                    onClick={() => void linkMasol(() => createVideoShareLink(v.id))}
+                    className="text-text-muted transition-colors hover:text-text-primary"
+                  >
+                    <Link2 className="h-4 w-4" />
+                  </button>
                   <button title="Átnevezés" onClick={() => onRenameVideo(v.id)} className="text-text-muted transition-colors hover:text-text-primary">
                     <Pencil className="h-4 w-4" />
                   </button>

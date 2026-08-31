@@ -27,6 +27,7 @@ from app.api.routes import kotelezettsegek
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense
+from app.models.project_code import ProjectCode
 from app.services import elszamolas
 from app.services import kotelezettseg as szolg
 from app.services import notifications
@@ -70,6 +71,11 @@ class AutoKiadasRead(BaseModel):
     kesz: bool = False
     #: Hány dokumentum (számla, blokk) van feltöltve hozzá.
     dokumentum_db: int = 0
+    #: Melyik PROJEKTKÓD költsége (a felhasználó kérése: a tankolás a
+    #: projektnél is látsszon). UGYANAZ az egy Expense-sor - a Pénzügyben
+    #: egyszer szerepel, az autó és a projektkód csak két nézete.
+    project_code_id: int | None = None
+    projektkod: str | None = None
 
 
 class AutoHataridoRead(BaseModel):
@@ -152,6 +158,8 @@ def _kiadas_kimenet(e: Expense, dokumentumok: dict[int, int] | None = None) -> A
         megjegyzes=e.megjegyzes,
         kesz=bool(e.kesz),
         dokumentum_db=(dokumentumok or {}).get(e.id, 0),
+        project_code_id=e.project_code_id,
+        projektkod=e.project_code.projektkod if e.project_code is not None else None,
     )
 
 
@@ -372,6 +380,10 @@ class AutoKiadasIn(BaseModel):
     #: Ki van-e már fizetve. Alapból igen: ami az autónál felmerül (tankolás,
     #: parkolás), azt jellemzően a helyszínen kifizetik.
     kifizetve: bool = True
+    #: Ha a költés egy PROJEKT miatt merült fel (pl. tankolás egy forgatáshoz),
+    #: itt köthető a projektkódhoz - a kiadás beleszámít a kód költségeibe,
+    #: de mivel ugyanaz az EGY sor, a Pénzügyben nem duplázódik.
+    project_code_id: int | None = None
 
 
 @router.post("/{auto_id}/kiadasok", response_model=AutoKiadasRead, status_code=201)
@@ -392,10 +404,14 @@ def create_auto_kiadas(
     if not payload.megnevezes.strip():
         raise HTTPException(status_code=400, detail="Add meg, mire ment a költés.")
 
+    if payload.project_code_id is not None and db.get(ProjectCode, payload.project_code_id) is None:
+        raise HTTPException(status_code=404, detail="A megadott projektkód nem található.")
+
     datum = payload.datum or date.today()
     kiadas = Expense(
         megnevezes=f"{auto.rendszam} – {payload.megnevezes.strip()}",
         auto_id=auto.id,
+        project_code_id=payload.project_code_id,
         tipus="extra",
         netto=payload.osszeg,
         brutto=kotelezettsegek.brutto(payload.osszeg, payload.plusz_afa),

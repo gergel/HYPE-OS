@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Plus, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -47,6 +47,17 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
   const router = useRouter();
   const [megnevezes, setMegnevezes] = useState("");
   const [osszeg, setOsszeg] = useState("");
+  // A költés PROJEKTHEZ köthető (a felhasználó kérése): pl. a forgatáshoz
+  // tankolás a projektkód költségei közt is látszik - de ugyanaz az EGY
+  // kiadás-sor marad, a Pénzügyben nem duplázódik.
+  const [projektkodId, setProjektkodId] = useState("");
+  const [projektkodok, setProjektkodok] = useState<{ id: number; projektkod: string; project_nev: string | null }[]>([]);
+  useEffect(() => {
+    authFetch("/api/v1/project-codes/valaszthato")
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setProjektkodok)
+      .catch(() => {});
+  }, []);
   const [pluszAfa, setPluszAfa] = useState(false);
   const [fizetesiMod, setFizetesiMod] = useState("");
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
@@ -75,6 +86,7 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
           fizetesi_mod: fizetesiMod || null,
           datum: datum || null,
           megjegyzes: megjegyzes.trim() || null,
+          project_code_id: projektkodId ? Number(projektkodId) : null,
         }),
       });
       if (!res.ok) {
@@ -110,6 +122,7 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       setPluszAfa(false);
       setFizetesiMod("");
       setMegjegyzes("");
+      setProjektkodId("");
       setFajlok([]);
       onKesz();
       router.refresh();
@@ -169,6 +182,22 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Megjegyzés</span>
         <input value={megjegyzes} onChange={(e) => setMegjegyzes(e.target.value)} className={`${inputClass} w-[220px]`} />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="t-label">Projekt (nem kötelező)</span>
+        <KeresosSelect
+          value={projektkodId || null}
+          options={[
+            { value: "", label: "– nincs projekthez kötve –" },
+            ...projektkodok.map((pk) => ({
+              value: String(pk.id),
+              label: pk.project_nev ? `${pk.projektkod} – ${pk.project_nev}` : pk.projektkod,
+            })),
+          ]}
+          onChange={(v) => setProjektkodId(v ?? "")}
+          placeholder="Projektkód…"
+          className="w-[240px]"
+        />
       </label>
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Bizonylat</span>
@@ -424,6 +453,16 @@ export function AutoKezelo({
                                 {kiadas.megnevezes}
                                 {kiadas.megjegyzes && (
                                   <span className="block text-[11.5px] text-text-muted">{kiadas.megjegyzes}</span>
+                                )}
+                                {/* Melyik projekt költsége - kattintva a kód
+                                    adatlapjára visz. */}
+                                {kiadas.projektkod && kiadas.project_code_id && (
+                                  <a
+                                    href={`/projektek/project-kodok/${kiadas.project_code_id}`}
+                                    className="block text-[11.5px] text-text-accent hover:underline"
+                                  >
+                                    {kiadas.projektkod}
+                                  </a>
                                 )}
                               </td>
                               {/* A NETTÓ a hangsúlyos: az összesítés (és

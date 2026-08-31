@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -392,3 +392,208 @@ def public_image_file(image_id: int, db: Session = Depends(get_db)):
     ext = image.key.split(".")[-1] if "." in image.key else "jpg"
     safe = (image.title or "image").replace('"', "").replace("\n", " ")
     return _stream_fajl(image.key, f"{safe}.{ext}", "image/jpeg")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FELTÖLTŐ LINK (a felhasználó kérése): aki a linket kapja, mappát hozhat
+# létre és feltölthet a portálra (vagy csak a kijelölt mappájába) - törölni
+# viszont SEMMIT nem tud (ilyen végpont ezen a tokenen nincs is).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _feltolto_portal(db: Session, token: str) -> Portal:
+    portal = db.scalar(select(Portal).where(Portal.feltolto_token == token))
+    if portal is None:
+        raise HTTPException(status_code=404, detail="Ez a feltöltő link nem él (visszavonták vagy hibás).")
+    return portal
+
+
+@router.get("/feltoltes/{token}")
+def feltoltes_adatok(token: str, db: Session = Depends(get_db)):
+    """Mit lát a feltöltő link birtokosa: a portál címe és a mappák (a
+    kijelölt mappára szűkítve, ha a link csak oda szól)."""
+    portal = _feltolto_portal(db, token)
+    mappak = [f for f in portal.folders if portal.feltolto_folder_id in (None, f.id)]
+    return {
+        "title": resolve_title(portal),
+        "brand": portal.brand,
+        "csak_mappa": portal.feltolto_folder_id is not None,
+        "folders": [
+            {"id": f.id, "name": f.name, "video_db": len(f.videos), "kep_db": len(f.images)} for f in mappak
+        ],
+    }
+
+
+class FeltoltesMappaIn(BaseModel):
+    name: str
+
+
+@router.post("/feltoltes/{token}/mappa")
+def feltoltes_mappa(token: str, payload: FeltoltesMappaIn, db: Session = Depends(get_db)):
+    from app.models.portal import PortalFolder
+
+    portal = _feltolto_portal(db, token)
+    if portal.feltolto_folder_id is not None:
+        raise HTTPException(status_code=403, detail="Ez a link csak egy megadott mappába enged feltölteni.")
+    if not payload.name.strip():
+        raise HTTPException(status_code=400, detail="Adj nevet a mappának.")
+    max_order = max([f.sort_order for f in portal.folders], default=-1)
+    folder = PortalFolder(portal_id=portal.id, name=payload.name.strip(), sort_order=max_order + 1)
+    db.add(folder)
+    db.commit()
+    db.refresh(folder)
+    return {"id": folder.id, "name": folder.name}
+
+
+def _feltoltes_cel_mappa(db: Session, portal: Portal, folder_id: int | None):
+    """A feltöltés cél-mappája - a link hatókörén belül."""
+    from app.models.portal import PortalFolder
+
+    if portal.feltolto_folder_id is not None:
+        # Mappára szűkített link: mindegy, mit kért, oda megy.
+        return portal.feltolto_folder_id
+    if folder_id is None:
+        return None
+    folder = db.get(PortalFolder, folder_id)
+    if folder is None or folder.portal_id != portal.id:
+        raise HTTPException(status_code=404, detail="Ez a mappa nem ehhez a portálhoz tartozik.")
+    return folder.id
+
+
+@router.post("/feltoltes/{token}/video")
+async def feltoltes_video(
+    token: str,
+    file: UploadFile = File(...),
+    folder_id: int | None = Form(None),
+    title: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Videó feltöltése a feltöltő linkkel - ugyanaz a tároló + feldolgozó
+    csővezeték, mint az admin feltöltésnél (lásd portal_admin.upload_video)."""
+    import os as _os
+    import tempfile as _tempfile
+
+    from app.api.routes.portal_admin import _enqueue_processing
+
+    portal = _feltolto_portal(db, token)
+    cel_mappa = _feltoltes_cel_mappa(db, portal, folder_id)
+    max_order = max([v.sort_order for v in portal.videos], default=-1)
+    video = PortalVideo(
+        portal_id=portal.id,
+        folder_id=cel_mappa,
+        title=(title or "").strip() or _os.path.splitext(file.filename or "Untitled")[0],
+        status="processing",
+        sort_order=max_order + 1,
+    )
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+
+    source_key = f"videos/{video.id}/upload.mp4"
+    with _tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+    storage.upload_file(tmp_path, source_key, "video/mp4")
+    _os.unlink(tmp_path)
+    video.source_key = source_key
+    db.commit()
+    _enqueue_processing(video.id, source_key)
+    return {"id": video.id, "title": video.title, "status": video.status}
+
+
+@router.post("/feltoltes/{token}/kep")
+async def feltoltes_kep(
+    token: str,
+    file: UploadFile = File(...),
+    folder_id: int | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Kép feltöltése a feltöltő linkkel - a bélyegkép-készítés ugyanaz, mint
+    az admin oldalon (lásd portal_admin.upload_image)."""
+    import io as _io
+
+    from PIL import Image as PILImage
+
+    portal = _feltolto_portal(db, token)
+    cel_mappa = _feltoltes_cel_mappa(db, portal, folder_id)
+    image = PortalImage(portal_id=portal.id, folder_id=cel_mappa)
+    db.add(image)
+    db.flush()
+
+    data = await file.read()
+    ext = (file.filename or "image.jpg").split(".")[-1].lower()
+    key = f"images/{image.id}/original.{ext}"
+    storage.upload_bytes(data, key, file.content_type or "image/jpeg")
+    thumb_url = ""
+    try:
+        img = PILImage.open(_io.BytesIO(data))
+        img = img.convert("RGB")
+        img.thumbnail((1200, 1200))
+        buf = _io.BytesIO()
+        img.save(buf, format="JPEG", quality=75, optimize=True)
+        thumb_key = f"images/{image.id}/thumb.jpg"
+        storage.upload_bytes(buf.getvalue(), thumb_key, "image/jpeg")
+        thumb_url = storage.public_url(thumb_key)
+    except Exception:  # noqa: BLE001 - bélyegkép nélkül is él a kép
+        thumb_url = ""
+    max_order = max([i.sort_order for i in portal.images], default=-1)
+    image.title = (file.filename or "").rsplit(".", 1)[0]
+    image.url = storage.public_url(key)
+    image.thumbnail_url = thumb_url
+    image.key = key
+    image.size_bytes = len(data)
+    image.sort_order = max_order + 1
+    db.commit()
+    return {"id": image.id, "title": image.title}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RÉSZ-MEGOSZTÁS: egy mappa vagy egy videó a saját linkjén - a link birtokosa
+# csak azt látja, a portál többi részét nem.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/megosztas/{token}")
+def megosztas(token: str, db: Session = Depends(get_db)):
+    from app.models.portal import PortalFolder
+
+    folder = db.scalar(select(PortalFolder).where(PortalFolder.share_token == token))
+    if folder is not None:
+        portal = folder.portal
+        ready = [v for v in folder.videos if v.status == "ready"]
+        project = PublicPortal(
+            slug=portal.slug,
+            title=f"{resolve_title(portal)} – {folder.name}" if folder.name else resolve_title(portal),
+            client_name=resolve_client_name(portal),
+            description="",
+            cover_image_url=portal.cover_image_url or "",
+            brand=portal.brand,
+            project_date=resolve_project_date(portal),
+            expires_at=portal.expires_at,
+            payment_mode="contact",
+            videos=[PortalVideoOut.model_validate(v) for v in ready],
+            folders=[PortalFolderOut.model_validate(folder)],
+            images=[PortalImageOut.model_validate(i) for i in folder.images],
+        )
+        return {"tipus": "mappa", "project": project.model_dump()}
+
+    video = db.scalar(select(PortalVideo).where(PortalVideo.share_token == token))
+    if video is not None and video.status == "ready":
+        portal = video.portal
+        project = PublicPortal(
+            slug=portal.slug,
+            title=video.title or resolve_title(portal),
+            client_name=resolve_client_name(portal),
+            description="",
+            cover_image_url=portal.cover_image_url or "",
+            brand=portal.brand,
+            project_date=resolve_project_date(portal),
+            expires_at=portal.expires_at,
+            payment_mode="contact",
+            videos=[PortalVideoOut.model_validate(video)],
+            folders=[],
+            images=[],
+        )
+        return {"tipus": "video", "project": project.model_dump()}
+
+    raise HTTPException(status_code=404, detail="Ez a megosztó link nem él (visszavonták vagy hibás).")

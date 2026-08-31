@@ -26,6 +26,7 @@ hozzá kellene nyúlni:
 from __future__ import annotations
 
 import os
+from datetime import date
 from typing import Any
 
 #: Alapértelmezetten kivett projektkód-előtagok. A HYPE24-es sorozat papírjai a
@@ -83,3 +84,24 @@ def papirozando_projektek(projektek: list[Any]) -> list[Any]:
     """A lista a kivett projektek nélkül - ezt hívja minden olyan végpont, ami
     hiányzó papírt keres."""
     return [p for p in projektek if not projekt_kivett(p)]
+
+
+#: 2026. szeptember 1-től megy a diszpó a HYPE OS-ből. Az EZELŐTTI forgatások
+#: "Kiküldve" jelölése visszamenőleges adatpótlás (lásd az
+#: a9e4c72d5b18/f4b6d28a9c53 migrációkat), nem valós papírozási jel - az
+#: utókövetés diszpó-ága ezért csak a rendszer-éra forgatásait nézi. A régi
+#: projektek továbbra is bekerülnek, ha valódi alvállalkozói kiadás köti őket
+#: (az a commitment maga). Enélkül a visszamenőleges jelölés után minden régi,
+#: stábos projekt "hiányzó szerződést" mutatott (300+ sor a valós 20-30
+#: helyett)."""
+RENDSZER_DISZPO_KEZDETE = date(2026, 9, 1)
+
+
+def diszpozott_projekt_feltetel():
+    """SQLAlchemy-feltétel: a papírozásba a DISZPÓ jogán csak a rendszer-éra
+    (szept. 1-től) forgatásai kerülnek be."""
+    from sqlalchemy import and_
+
+    from app.models.project import Project
+
+    return and_(Project.diszpo == "Kiküldve", Project.forgatas_datuma >= RENDSZER_DISZPO_KEZDETE)

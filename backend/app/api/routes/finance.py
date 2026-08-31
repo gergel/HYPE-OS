@@ -31,7 +31,7 @@ from app.models.portal import Payment
 from app.models.project import Project
 from app.models.project_code import KIFIZETETT_STATUSZ_MINTA, ProjectCode
 from app.schemas.document_attachment import DocumentAttachmentRead
-from app.services import attachments, bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
+from app.services import attachments, bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok, papirozas_hatokor
 from app.services import kassza as kassza_szolg
 from app.services import penznem as penznem_szolg
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
@@ -761,34 +761,40 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         for y, m in months
     ]
 
-    unpaid = db.scalars(
-        select(Revenue)
-        # A be nem számító sorok (nem volt tranzakció, máshogy rendezve) itt
-        # sem kintlévőségek: nem várunk rájuk pénzt.
-        .where(Revenue.fizetes_datuma.is_(None), _REVENUE_COUNTS_TOWARD_TOTALS)
-        .options(selectinload(Revenue.project_code))
-    ).all()
-
-    by_project: dict[int, list[Revenue]] = {}
-    for r in unpaid:
-        by_project.setdefault(r.project_code_id, []).append(r)
-
+    # A KINTLÉVŐSÉG FORRÁSA A PROJEKTKÓD (a felhasználó kérése): ott van
+    # felvezetve, mi nincs valójában kifizetve (bevetel_kifizetve + a
+    # feltöltött számlák fizetési állapota). A korábbi számítás a nyers
+    # bevétel-sorok üres fizetés-dátumából indult ki - ez főleg a Notionból
+    # örökölt soroknál hamis kintlévőket mutatott (a pénz rég megjött, csak a
+    # sorban nincs dátum).
     kintlevo_projektek: list[OutstandingProject] = []
-    for pc_id, rows in by_project.items():
-        pc = rows[0].project_code
-        # A kintlévőség is nettóban - ugyanaz a szám, ami a projekt bevételében
-        # és a profitjában szerepel (lásd services/elszamolas.py).
-        osszeg = float(sum(elszamolas.osszeg(r) for r in rows))
-        hataridok = [r.fizetes_hatarideje for r in rows if r.fizetes_hatarideje]
-        legkorabbi = min(hataridok) if hataridok else None
+    for pc in db.scalars(select(ProjectCode).options(selectinload(ProjectCode.revenues))).all():
+        # A papírozásból kivett sorozatok (HYPE24) és az elmaradt események
+        # nem kintlévők; ahol számlát sem várunk, ott pénzt sem.
+        if papirozas_hatokor.projektkod_kivett(pc.projektkod) or pc.elmaradt or not pc.szamla_kell:
+            continue
+        if pc.bevetel_kifizetve:
+            continue
+        # A még be nem jött rész: a projekt bevétele mínusz ami (dátummal
+        # igazoltan) már megjött - osztott számlázásnál csak a maradék kintlévő.
+        fizetett = float(
+            sum(elszamolas.osszeg(r) for r in pc.revenues if r.fizetes_datuma is not None)
+        )
+        osszeg = float(pc.bevetel) - fizetett
+        if osszeg <= 0:
+            continue
+        allas = pc.hatarido_allas
+        nyitott_hatarido = allas if allas and allas.get("allapot") in ("var", "lejart", "ma_jar_le") else None
         kintlevo_projektek.append(
             OutstandingProject(
-                project_code_id=pc_id,
-                projektkod=pc.projektkod if pc else f"#{pc_id}",
-                projekt_nev=(pc.project_nev if pc else None) or None,
+                project_code_id=pc.id,
+                projektkod=pc.projektkod,
+                projekt_nev=pc.project_nev or None,
                 kintlevo_osszeg=osszeg,
-                legkorabbi_hatarido=legkorabbi,
-                lejart=bool(legkorabbi and legkorabbi < today),
+                legkorabbi_hatarido=(
+                    date.fromisoformat(nyitott_hatarido["hatarido"]) if nyitott_hatarido else None
+                ),
+                lejart=bool(nyitott_hatarido and nyitott_hatarido.get("allapot") == "lejart"),
             )
         )
     kintlevo_projektek.sort(key=lambda p: p.kintlevo_osszeg, reverse=True)

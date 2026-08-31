@@ -202,7 +202,7 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
     feladatnál (nincs forgatás) ez az egyetlen jel, hogy szerződés/TIG kell."""
     projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
-        .filter(or_(Project.diszpo == "Kiküldve", Project.alvallalkozo_kiadasok.any()))
+        .filter(or_(papirozas_hatokor.diszpozott_projekt_feltetel(), Project.alvallalkozo_kiadasok.any()))
         .options(
             selectinload(Project.crew),
             selectinload(Project.alvallalkozo_kiadasok).selectinload(Expense.employee),

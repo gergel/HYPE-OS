@@ -53,6 +53,14 @@ class Portal(TimestampMixin, Base):
 
     password_hash: Mapped[str | None] = mapped_column(String(255))
     share_token: Mapped[str | None] = mapped_column(String(255), unique=True)
+    #: FELTÖLTŐ link (a felhasználó kérése): aki ezt a tokent kapja, mappát
+    #: hozhat létre és feltölthet a portálra (vagy csak a megadott mappájába),
+    #: de NEM törölhet és nem lát admin-felületet - lásd
+    #: routes/portal_public.py "feltoltes" végpontjai.
+    feltolto_token: Mapped[str | None] = mapped_column(String(64), unique=True)
+    feltolto_folder_id: Mapped[int | None] = mapped_column(
+        ForeignKey("portal_folders.id", ondelete="SET NULL"), nullable=True
+    )
     status: Mapped[PortalStatus] = mapped_column(
         Enum(PortalStatus, name="portal_status", values_callable=lambda obj: [e.value for e in obj]),
         default=PortalStatus.DRAFT,
@@ -74,8 +82,13 @@ class Portal(TimestampMixin, Base):
     project: Mapped["Project | None"] = relationship(back_populates="portal")
     deliverable: Mapped["Deliverable | None"] = relationship(back_populates="portal")
     payments: Mapped[list["Payment"]] = relationship(back_populates="portal")
+    # foreign_keys nélkül a feltolto_folder_id (lásd fent) kétértelművé tenné
+    # a kapcsolatot - a mappák a SAJÁT portal_id-jükön lógnak.
     folders: Mapped[list["PortalFolder"]] = relationship(
-        back_populates="portal", cascade="all, delete-orphan", order_by="PortalFolder.sort_order"
+        back_populates="portal",
+        cascade="all, delete-orphan",
+        order_by="PortalFolder.sort_order",
+        foreign_keys="PortalFolder.portal_id",
     )
     videos: Mapped[list["PortalVideo"]] = relationship(
         back_populates="portal", cascade="all, delete-orphan", order_by="PortalVideo.sort_order"
@@ -140,8 +153,11 @@ class PortalFolder(TimestampMixin, Base):
     portal_id: Mapped[int] = mapped_column(ForeignKey("portals.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    #: Ha van, a mappa ÖNMAGÁBAN megosztható linkkel (/megosztas/{token}) - a
+    #: link birtokosa csak ezt a mappát látja, a portál többi részét nem.
+    share_token: Mapped[str | None] = mapped_column(String(64), unique=True)
 
-    portal: Mapped["Portal"] = relationship(back_populates="folders")
+    portal: Mapped["Portal"] = relationship(back_populates="folders", foreign_keys=[portal_id])
     videos: Mapped[list["PortalVideo"]] = relationship(back_populates="folder", order_by="PortalVideo.sort_order")
     images: Mapped[list["PortalImage"]] = relationship(back_populates="folder", order_by="PortalImage.sort_order")
 
@@ -156,6 +172,9 @@ class PortalVideo(TimestampMixin, Base):
     portal_id: Mapped[int] = mapped_column(ForeignKey("portals.id", ondelete="CASCADE"), nullable=False, index=True)
     folder_id: Mapped[int | None] = mapped_column(ForeignKey("portal_folders.id", ondelete="SET NULL"))
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: Egyetlen videó megosztása linkkel (/megosztas/{token}) - a link
+    #: birtokosa csak ezt az egy videót látja.
+    share_token: Mapped[str | None] = mapped_column(String(64), unique=True)
 
     source_key: Mapped[str | None] = mapped_column(String(500), comment="Eredeti mp4 R2 kulcsa")
     mp4_url: Mapped[str | None] = mapped_column(String(500))

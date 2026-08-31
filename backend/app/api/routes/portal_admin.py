@@ -340,6 +340,114 @@ def regenerate_share(
     return PortalShareLink(token=portal.share_token, url=f"{front}/p/{portal.slug}?share={portal.share_token}")
 
 
+# ---------------- Feltöltő link és rész-megosztás (a felhasználó kérése) ----
+
+
+def _portal_front() -> str:
+    from app.core.config import settings
+
+    return settings.portal_front_base
+
+
+class FeltoltoLinkIn(BaseModel):
+    #: Ha meg van adva, a link CSAK ebbe a mappába enged feltölteni (és új
+    #: mappát sem hozhat létre); üresen az egész portálra érvényes.
+    folder_id: int | None = None
+
+
+@router.post("/{portal_id}/feltolto-link", response_model=PortalShareLink)
+def feltolto_link(
+    portal_id: int,
+    payload: FeltoltoLinkIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """FELTÖLTŐ link: aki megkapja, mappákat hozhat létre és feltölthet a
+    portálra (vagy csak a megadott mappába), de semmit nem törölhet - lásd
+    routes/portal_public.py "feltoltes" végpontjai."""
+    portal = _get_portal_or_404(db, portal_id)
+    if payload.folder_id is not None:
+        folder = db.get(PortalFolder, payload.folder_id)
+        if folder is None or folder.portal_id != portal.id:
+            raise HTTPException(status_code=404, detail="Ez a mappa nem ehhez a portálhoz tartozik.")
+    portal.feltolto_token = uuid.uuid4().hex
+    portal.feltolto_folder_id = payload.folder_id
+    db.commit()
+    return PortalShareLink(token=portal.feltolto_token, url=f"{_portal_front()}/feltoltes/{portal.feltolto_token}")
+
+
+@router.delete("/{portal_id}/feltolto-link", status_code=204)
+def feltolto_link_visszavonas(
+    portal_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    portal = _get_portal_or_404(db, portal_id)
+    portal.feltolto_token = None
+    portal.feltolto_folder_id = None
+    db.commit()
+
+
+@router.post("/folders/{folder_id}/share-link", response_model=PortalShareLink)
+def folder_share_link(
+    folder_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """EGY MAPPA megosztása linkkel - a link birtokosa csak ezt a mappát látja
+    (lásd routes/portal_public.megosztas)."""
+    folder = db.get(PortalFolder, folder_id)
+    if folder is None:
+        raise HTTPException(status_code=404, detail="A mappa nem található.")
+    if not folder.share_token:
+        folder.share_token = uuid.uuid4().hex
+        db.commit()
+    return PortalShareLink(token=folder.share_token, url=f"{_portal_front()}/megosztas/{folder.share_token}")
+
+
+@router.delete("/folders/{folder_id}/share-link", status_code=204)
+def folder_share_link_visszavonas(
+    folder_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    folder = db.get(PortalFolder, folder_id)
+    if folder is None:
+        raise HTTPException(status_code=404, detail="A mappa nem található.")
+    folder.share_token = None
+    db.commit()
+
+
+@router.post("/videos/{video_id}/share-link", response_model=PortalShareLink)
+def video_share_link(
+    video_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """EGY VIDEÓ megosztása linkkel - a link birtokosa csak ezt az egy videót
+    látja."""
+    video = db.get(PortalVideo, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="A videó nem található.")
+    if not video.share_token:
+        video.share_token = uuid.uuid4().hex
+        db.commit()
+    return PortalShareLink(token=video.share_token, url=f"{_portal_front()}/megosztas/{video.share_token}")
+
+
+@router.delete("/videos/{video_id}/share-link", status_code=204)
+def video_share_link_visszavonas(
+    video_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    video = db.get(PortalVideo, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="A videó nem található.")
+    video.share_token = None
+    db.commit()
+
+
 # ---------------- Videók ----------------
 
 

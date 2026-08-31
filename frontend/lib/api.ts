@@ -2554,6 +2554,9 @@ export type AutoKiadas = {
   megjegyzes: string | null;
   kesz: boolean;
   dokumentum_db: number;
+  /** Melyik projektkód költsége (ha a költés egy projekthez tartozik). */
+  project_code_id: number | null;
+  projektkod: string | null;
 };
 
 export type AutoHatarido = {

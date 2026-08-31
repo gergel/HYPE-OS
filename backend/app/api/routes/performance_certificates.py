@@ -287,7 +287,7 @@ def list_tig_ready_projects(db: Session = Depends(get_db), _user: Employee = Dep
     # a kiadás a commitment, nem a stáb-behívás.
     projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
-        .filter(or_(Project.diszpo == "Kiküldve", Project.alvallalkozo_kiadasok.any()))
+        .filter(or_(papirozas_hatokor.diszpozott_projekt_feltetel(), Project.alvallalkozo_kiadasok.any()))
         .options(selectinload(Project.crew), selectinload(Project.project_code))
         .all()
     )
@@ -658,7 +658,7 @@ def nyitott_munkak(db: Session, fel: SzamlazoFel, project_ids: set[int] | None =
     A `project_ids` szűkítéssel ugyanez kérdezhető egy adott projekthalmazra -
     ezt használja a szerződés szerinti előtöltés (lásd
     _szerzodes_szerinti_parok)."""
-    q = db.query(Project).filter(Project.diszpo == "Kiküldve")
+    q = db.query(Project).filter(papirozas_hatokor.diszpozott_projekt_feltetel())
     if project_ids is not None:
         if not project_ids:
             return []
