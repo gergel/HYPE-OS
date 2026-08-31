@@ -6,7 +6,14 @@ JsonScalar = dict | list | float | str | bool | None
 
 
 class ExpenseBase(BaseModel):
+    #: A felületen "Cégnév": kinek fizettünk (lásd models/finance.Expense).
     megnevezes: str
+    #: A felületen "Megnevezés": mire ment a kiadás.
+    kiadas_leiras: str | None = None
+    #: "+ÁFA" jelölés a nettóhoz ("igen" = van) és a százaléka - ezekből
+    #: számolja a szerver a bruttót (lásd routes/finance._afa_brutto).
+    plusz_afa: str | None = None
+    afa_szazalek: float | None = None
     project_code_id: int | None = None
     employee_id: int | None = None
     #: ALVÁLLALKOZÓI kiadás: ha ki van töltve, az `employee_id` embertől
@@ -60,7 +67,6 @@ class ExpenseRead(ExpenseBase):
     fizetes_datuma: date | None = None
     mikor_fizetett: str | None = None
     szamla_pdf_urls: JsonScalar = None
-    plusz_afa: str | None = None
     hozzaadas_a_kiadasokhoz: bool | None = None
     forintban_notion: float | None = None
     kiadas_datuma: date | None = None

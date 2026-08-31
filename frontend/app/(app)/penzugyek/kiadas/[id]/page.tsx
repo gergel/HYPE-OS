@@ -45,7 +45,12 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
           </div>
           <EditableDetailGrid
             patchPath={`${ENTITY_PATHS.expense}/${expense.id}`}
-            fields={toEditableDetailFields(expense, ["project_code_id", "employee_id"], visibleFields, fieldTypes)}
+            fields={toEditableDetailFields(expense, ["project_code_id", "employee_id"], visibleFields, fieldTypes).map(
+              // A kiadásnál a `megnevezes` a felületen "Cégnév" (kinek
+              // fizettünk) - a kulcsot más entitások is használják, ezért a
+              // címkét itt, helyben írjuk át (lásd backend models/finance).
+              (f) => (f.key === "megnevezes" ? { ...f, label: "Cégnév" } : f),
+            )}
           />
         </Card>
       </div>

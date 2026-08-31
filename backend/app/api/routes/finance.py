@@ -117,9 +117,46 @@ def _alvallalkozo_forgatas_kitoltese(adat: dict, db: Session) -> dict:
     return adat
 
 
+def _plusz_afa_jelolt(ertek) -> bool:
+    """Ugyanaz az értelmezés, mint az autós költéseknél (routes/autok.py): a
+    Notionből örökölt szöveges "+ÁFA" mező igen-változatai számítanak."""
+    return str(ertek or "").strip().lower() in ("igen", "true", "+afa", "+áfa")
+
+
+def _afa_brutto(adat: dict, *, netto=None, plusz_afa=None, afa_szazalek=None) -> None:
+    """Bruttó a nettóból, ha "+ÁFA" van jelölve: netto * (1 + százalék/100).
+
+    Csak akkor számolunk, ha a kérés NEM hozott kifejezett bruttót - egy
+    kézzel beírt bruttó (pl. a táblázat cellájából) mindig nyer. Százalék
+    nélkül 27-tel számolunk (az általános kulcs). A hívó a PATCH-nél a meglévő
+    rekord értékeit adja át alapnak, hogy egy önmagában érkező nettó-javítás
+    is újraszámolja a bruttót."""
+    if adat.get("brutto") is not None:
+        return
+    netto = adat.get("netto", netto)
+    plusz_afa = adat.get("plusz_afa", plusz_afa)
+    if netto is None or not _plusz_afa_jelolt(plusz_afa):
+        return
+    szazalek = adat.get("afa_szazalek", afa_szazalek)
+    szazalek = float(szazalek) if szazalek is not None else 27.0
+    adat["brutto"] = round(float(netto) * (1 + szazalek / 100), 2)
+
+
 def _expense_before_create(adat: dict, db: Session) -> dict:
+    # Az ÁFA-számítás a deviza-átváltás ELŐTT fut: a bruttó még az eredeti
+    # pénznemben számolódik ki, és az átváltás azt is forintosítja.
+    _afa_brutto(adat)
     adat = _devizat_forintra(adat, db)
     return _alvallalkozo_forgatas_kitoltese(adat, db)
+
+
+def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee) -> None:
+    """PATCH-nél a hiányzó alapokat a meglévő rekordból vesszük: egy
+    önmagában érkező nettó- vagy százalék-javítás is újraszámolja a bruttót,
+    ha a soron "+ÁFA" van jelölve."""
+    if any(mezo in adat for mezo in ("netto", "plusz_afa", "afa_szazalek")):
+        _afa_brutto(adat, netto=obj.netto, plusz_afa=obj.plusz_afa, afa_szazalek=obj.afa_szazalek)
+    _devizat_forintra_frissiteskor(obj, adat, db, _current_user)
 
 
 expenses_router = build_crud_router(
@@ -131,7 +168,7 @@ expenses_router = build_crud_router(
     tags=["finance"],
     page="/penzugyek",
     before_create=_expense_before_create,
-    before_update=_devizat_forintra_frissiteskor,
+    before_update=_expense_before_update,
     before_delete=_kiadas_torles_elott,
 )
 

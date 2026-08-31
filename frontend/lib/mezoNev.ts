@@ -16,6 +16,11 @@ const LABEL_OVERRIDES: Record<string, string> = {
   nyilvantartasi_szam: "Nyilvántartási szám",
   megbizas_targya: "Megbízás tárgya",
   plusz_afa: "Plusz ÁFA",
+  // Kiadás: a `megnevezes` a felületen "Cégnév" (azt a kiadás-oldalak
+  // helyben írják át, mert a megnevezes kulcsot más entitások is használják),
+  // a kiadas_leiras pedig a "mire ment" - lásd backend models/finance.Expense.
+  kiadas_leiras: "Megnevezés (mire ment)",
+  afa_szazalek: "ÁFA %",
   munkaszerzodes_url: "Munkaszerződés",
   email: "Email cím",
   vagas_leallitva: "Vágás leállítva",

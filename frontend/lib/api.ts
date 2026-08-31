@@ -304,7 +304,14 @@ export type FloraFeladat = {
 
 export type Expense = {
   id: number;
+  /** A felületen "Cégnév": kinek fizettünk (lásd backend models/finance). */
   megnevezes: string;
+  /** A felületen "Megnevezés": mire ment a kiadás. */
+  kiadas_leiras: string | null;
+  /** "+ÁFA" jelölés ("igen" = van) és a százaléka - a bruttót a szerver
+   * számolja belőlük (lásd backend routes/finance._afa_brutto). */
+  plusz_afa: string | null;
+  afa_szazalek: number | null;
   tipus: string | null;
   netto: number | null;
   brutto: number | null;

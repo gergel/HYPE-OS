@@ -178,8 +178,31 @@ export default async function PenzugyekPage() {
               postPath={ENTITY_PATHS.expense}
               addLabel="+ Új kiadás hozzáadása"
               fields={[
-                { name: "megnevezes", label: "Megnevezés", required: true },
-                { name: "netto", label: "Nettó", type: "number" },
+                // A `megnevezes` oszlop a felületen "Cégnév" (kinek fizettünk),
+                // a "Megnevezés" pedig az új kiadas_leiras: mire ment a pénz
+                // (a felhasználó kérése - lásd backend models/finance.Expense).
+                { name: "megnevezes", label: "Cégnév", required: true },
+                { name: "kiadas_leiras", label: "Megnevezés", placeholder: "Mire ment a kiadás" },
+                { name: "netto", label: "Nettó összeg", type: "number" },
+                // "+ÁFA" jelölés + százalék: a bruttót a szerver számolja
+                // belőlük (lásd backend routes/finance._afa_brutto).
+                {
+                  name: "plusz_afa",
+                  label: "ÁFA",
+                  type: "select",
+                  defaultValue: "",
+                  options: [
+                    { value: "", label: "Nincs ÁFA" },
+                    { value: "igen", label: "Plusz ÁFA" },
+                  ],
+                },
+                {
+                  name: "afa_szazalek",
+                  label: "ÁFA %",
+                  type: "number",
+                  defaultValue: "27",
+                  showIf: { field: "plusz_afa", oneOf: ["igen"] },
+                },
                 {
                   name: "kifizetes_modja",
                   label: "Fizetési mód",
@@ -218,7 +241,7 @@ export default async function PenzugyekPage() {
             filterable
             columns={[
               {
-                header: "Megnevezés",
+                header: "Cégnév",
                 render: (e) =>
                   canEdit ? (
                     <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="megnevezes" value={e.megnevezes} />
@@ -226,6 +249,20 @@ export default async function PenzugyekPage() {
                     e.megnevezes
                   ),
                 sortAccessor: (e) => e.megnevezes,
+              },
+              {
+                header: "Megnevezés",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
+                      field="kiadas_leiras"
+                      value={e.kiadas_leiras}
+                    />
+                  ) : (
+                    e.kiadas_leiras ?? "–"
+                  ),
+                sortAccessor: (e) => e.kiadas_leiras,
               },
               { header: "Típus", render: (e) => e.tipus ?? "–", sortAccessor: (e) => e.tipus },
               {

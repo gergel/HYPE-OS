@@ -13,7 +13,15 @@ class Expense(TimestampMixin, Base):
     __tablename__ = "expenses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    #: A felületen "Cégnév" a címkéje (a felhasználó kérése): KINEK fizettünk.
+    #: A Notionből importált sorokban is jellemzően a cég/partner neve áll itt.
     megnevezes: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: A felületen "Megnevezés": MIRE ment a kiadás (a felhasználó kérése) -
+    #: a `megnevezes` a partner, ez a tétel leírása.
+    kiadas_leiras: Mapped[str | None] = mapped_column(Text)
+    #: Ha a nettóhoz "+ÁFA"-t jelöltek (lásd `plusz_afa`), hány százalékkal -
+    #: ebből számolja a szerver a bruttót (lásd routes/finance._afa_brutto).
+    afa_szazalek: Mapped[float | None] = mapped_column(Numeric(5, 2))
 
     project_code_id: Mapped[int | None] = mapped_column(ForeignKey("project_codes.id"))
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
