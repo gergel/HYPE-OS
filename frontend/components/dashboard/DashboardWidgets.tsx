@@ -226,18 +226,33 @@ export function RevenueTrendChart({ trend }: { trend: RevenueMonth[] }) {
   return (
     <div>
       <div className="flex h-28 items-end gap-3">
-        {trend.map((t) => {
+        {trend.map((t, i) => {
           const heightPct = t.total > 0 ? Math.max(4, (t.total / max) * 100) : 2;
           const month = Number(t.month.split("-")[1]) - 1;
+          // Egy adatsor = egy szín (a hónapok nem külön kategóriák), de a
+          // korábbi --accent-gradient sötét téma alatt beleolvadt a kártyába
+          // (a felhasználó kérése, hogy legyen színesebb): a fánkdiagram
+          // kék->türkiz tónusaiból kap függőleges átmenetet, az UTOLSÓ hónap
+          // pedig a homok-tónusú kiemelést - ugyanarra a hónapra mutat, mint
+          // a lenti "Utolsó hónap" összeg.
+          const utolso = i === trend.length - 1;
           return (
             <div key={t.month} className="flex flex-1 flex-col items-center gap-2">
               <div className="flex h-24 w-full items-end justify-center">
                 <div
                   className="w-full max-w-6 rounded-t-[5px]"
-                  style={{ height: `${heightPct}%`, background: "var(--accent-gradient)" }}
+                  style={{
+                    height: `${heightPct}%`,
+                    background: utolso
+                      ? "linear-gradient(180deg, #cbb187 0%, #b0906f 100%)"
+                      : "linear-gradient(180deg, #8fa9c4 0%, #6d9490 100%)",
+                    boxShadow: utolso
+                      ? "0 0 16px -6px rgba(176,144,111,0.7)"
+                      : "0 0 16px -6px rgba(109,148,144,0.6)",
+                  }}
                 />
               </div>
-              <p className="text-[10px] text-text-muted">{MONTH_SHORT[month]}</p>
+              <p className={`text-[10px] ${utolso ? "text-text-secondary" : "text-text-muted"}`}>{MONTH_SHORT[month]}</p>
             </div>
           );
         })}

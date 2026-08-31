@@ -74,10 +74,11 @@ export function CreatePortalButton({
     setBusy(true);
     setError(null);
     try {
-      // Ha a dátum kézzel jött (nincs kötött forgatás), ISO-ból a Portálon
-      // használt "ÉÉÉÉ.HH.NN" formára váltjuk.
+      // A kézzel beírt dátum SZABAD SZÖVEG (a felhasználó kérése): mehet bele
+      // tartomány ("2026.08.15-17.") vagy bármilyen felirat, ugyanúgy, ahogy
+      // a Portál admin dátum-mezőjébe - változtatás nélkül továbbítjuk.
       const portal = await createPortalFromDeliverable(deliverableId, {
-        forgatasDatum: kezziDatum ? kezziDatum.replaceAll("-", ".") : undefined,
+        forgatasDatum: kezziDatum?.trim() || undefined,
       });
       const fullUrl = portalUrl(portal.slug);
       const res = await authFetch(`/api/v1/deliverables/${deliverableId}`, {
@@ -134,11 +135,15 @@ export function CreatePortalButton({
               megadni - enélkül nem jön létre a Portál.
             </p>
             <input
-              type="date"
+              type="text"
               value={datum}
               onChange={(e) => setDatum(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && datum.trim() && !busy) void letrehozas(datum);
+              }}
+              placeholder="pl. 2026.08.15. vagy 2026.08.15-17."
               autoFocus
-              className="mb-4 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary focus:outline-none focus:ring-1 focus:ring-border-strong"
+              className="mb-4 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-border-strong"
             />
             {error && <p className="mb-3 text-[12px] text-text-danger">Sikertelen: {error}</p>}
             <div className="flex justify-end gap-2">
@@ -157,7 +162,7 @@ export function CreatePortalButton({
               <button
                 type="button"
                 onClick={() => void letrehozas(datum)}
-                disabled={busy || !datum}
+                disabled={busy || !datum.trim()}
                 className="btn btn-primary"
               >
                 {busy ? "Létrehozás…" : "Portál létrehozása"}
