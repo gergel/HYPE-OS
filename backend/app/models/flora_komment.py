@@ -14,7 +14,7 @@ class FloraKomment(TimestampMixin, Base):
     __tablename__ = "flora_kommentek"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    flora_feladat_id: Mapped[int] = mapped_column(ForeignKey("flora_feladatok.id"), nullable=False)
+    flora_feladat_id: Mapped[int] = mapped_column(ForeignKey("flora_feladatok.id"), nullable=False, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
 

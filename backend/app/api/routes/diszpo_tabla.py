@@ -8,14 +8,14 @@ nap nyitva tartanak.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.core.security import check_page_action, get_current_user, require_page_action
 from app.models.diszpo_tabla import (
     SZINEK,
@@ -25,7 +25,7 @@ from app.models.diszpo_tabla import (
     DiszpoSor,
 )
 from app.models.employee import Employee, SystemRole
-from app.services import diszpo_sheet_sync, munkanap_szamlalo
+from app.services import diszpo_sheet_sync, hatter_feladat, munkanap_szamlalo
 
 router = APIRouter(prefix="/diszpo-tabla", tags=["diszpo-tabla"])
 
@@ -517,28 +517,61 @@ def havi_allas(
     return eredmeny
 
 
-@router.post("/sheet-sync")
+SHEET_SYNC_FELADAT = "diszpo-sheet-sync"
+
+
+def _sheet_sync_munka(naplo) -> dict:
+    """A tényleges szinkron a háttérszálban, saját kapcsolattal - a záró
+    összegzés a hatter_feladatok sor `reszletek` mezőjébe kerül, onnan olvassa
+    a státusz-végpont."""
+    db = SessionLocal()
+    try:
+        naplo("A Google Táblázat letöltése és feldolgozása…")
+        osszegzes = diszpo_sheet_sync.teljes_szinkron(db, vegrehajt=True)
+        uzenet = " · ".join(
+            f"{o['munkalap']}: {o['sorok']}x{o['oszlopok']}, {o['cellak']} cella ({o['szines']} színes)"
+            for o in osszegzes
+        )
+        naplo(uzenet)
+        return {"uzenet": uzenet}
+    finally:
+        db.close()
+
+
+@router.post("/sheet-sync", status_code=202)
 def sheet_sync(
-    db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """A HYPE 2026 tábla szinkronja a megosztott Google Táblázattal - a
     felületről, egy gombbal (lásd frontend DiszpoSheetSyncGomb). Munkalaponként
     CSERÉLI a tartalmat (a Sheet az igazság), a kézzel beállított oszlop-ember
-    kötéseket viszont megőrzi - lásd services/diszpo_sheet_sync.py."""
-    try:
-        osszegzes = diszpo_sheet_sync.teljes_szinkron(db, vegrehajt=True)
-    except Exception as exc:  # noqa: BLE001 - hálózat/Google hiba érthető üzenettel
-        raise HTTPException(
-            status_code=502,
-            detail=f"A táblázat szinkronja nem sikerült: {type(exc).__name__}: {exc}",
-        ) from exc
+    kötéseket viszont megőrzi - lásd services/diszpo_sheet_sync.py.
+
+    HÁTTÉRBEN fut (lásd services/hatter_feladat.py): a letöltés + feldolgozás
+    percekig is eltarthat, és amíg kérésen belül futott, a processzort is
+    lefoglalta - ez volt az egyik ok, amiért a teljes rendszer belassult, amíg
+    valaki szinkronizált. A gomb a /sheet-sync/allapot végpontot kérdezgetve
+    várja meg a végét."""
+    elindult = hatter_feladat.inditas(
+        SHEET_SYNC_FELADAT,
+        _sheet_sync_munka,
+        elavulas=timedelta(minutes=30),
+    )
+    if not elindult:
+        raise HTTPException(status_code=409, detail="Már fut egy táblázat-szinkron.")
+    return {"started": True}
+
+
+@router.get("/sheet-sync/allapot")
+def sheet_sync_allapot(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    sor = hatter_feladat.allapot(db, SHEET_SYNC_FELADAT)
+    if sor is None:
+        return {"running": False, "error": None, "uzenet": None}
     return {
-        "munkalapok": [
-            {k: v for k, v in o.items()} for o in osszegzes
-        ],
-        "uzenet": " · ".join(
-            f"{o['munkalap']}: {o['sorok']}x{o['oszlopok']}, {o['cellak']} cella ({o['szines']} színes)"
-            for o in osszegzes
-        ),
+        "running": sor.running,
+        "error": sor.error,
+        "uzenet": (sor.reszletek or {}).get("uzenet"),
     }

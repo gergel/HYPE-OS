@@ -3,59 +3,39 @@ ssh` nélkül - lásd app/notion_import/run_all.py docstringjét arról, miért 
 ez: a `railway ssh` kapcsolat rendszeresen megszakad, mielőtt a (Notion API
 rate-limitje miatt akár órákig tartó) import lefutna, és a megszakadt SSH-val
 együtt a benne futó Python-processz is leáll. Ez a végpont ehelyett egy
-háttérszálon indítja el az importot a Railway-en éppen FUTÓ backend service
-saját processzében - ez a szál a HTTP-válasz elküldése (és a kliens
-lecsatlakozása) után is tovább fut, egészen addig, amíg maga a szolgáltatás
-processze fut (redeploy/újraindítás esetén viszont, mint minden
-memóriabeli állapot, ez is elvész - lásd _STATE)."""
+háttérszálon indítja el az importot a futó backend service processzében.
 
-import threading
-from datetime import datetime, timezone
+Az állapot (fut-e, napló, hiba) az ADATBÁZISBAN van (lásd
+services/hatter_feladat.py): a backend több workerrel fut, és a memóriabeli
+állapotot csak az a worker látná, amelyik az importot ténylegesen futtatja -
+a státusz-lekérdezés fele "nem fut semmi"-t mondott volna, a dupla indítás
+elleni zár pedig nem is védett volna."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, get_db
 from app.core.security import Role, require_roles
 from app.models.employee import Employee
 from app.notion_import import katalogus
 from app.notion_import.run_all import run_import
+from app.services import hatter_feladat
 
 router = APIRouter(prefix="/admin/notion-import", tags=["admin"])
 
-# Egyszerű, folyamatban lévő processzen belüli állapot - egyszerre csak egy
-# import futhat, ezt egy lock védi. Szándékosan nem perzisztens (DB-be írt):
-# ez egy egyszeri, ritkán használt admin-művelet állapota, nem üzleti adat.
-_STATE: dict = {
-    "running": False,
-    "log": [],
-    "started_at": None,
-    "finished_at": None,
-    "error": None,
-    #: Mely adatbázisokat futtatja/futtatta az utolsó indítás (üres = mind).
-    "kivalasztott": [],
-}
-_LOCK = threading.Lock()
-_MAX_LOG_LINES = 4000
+FELADAT_NEV = "notion-import"
 
 
-def _append_log(line: str) -> None:
-    _STATE["log"].append(line)
-    if len(_STATE["log"]) > _MAX_LOG_LINES:
-        _STATE["log"] = _STATE["log"][-_MAX_LOG_LINES:]
+def _import_munka(nevek: list[str] | None):
+    def munka(naplo) -> None:
+        db = SessionLocal()
+        try:
+            run_import(db, nevek, log=naplo)
+        finally:
+            db.close()
 
-
-def _run_in_background(nevek: list[str] | None) -> None:
-    db = SessionLocal()
-    try:
-        run_import(db, nevek, log=_append_log)
-    except Exception as exc:  # noqa: BLE001 - az admin felületen akarjuk látni a pontos hibát
-        _STATE["error"] = f"{type(exc).__name__}: {exc}"
-        _append_log(f"\nHIBA: {_STATE['error']}")
-    finally:
-        db.close()
-        _STATE["running"] = False
-        _STATE["finished_at"] = datetime.now(timezone.utc).isoformat()
+    return munka
 
 
 class ImporterInfoOut(BaseModel):
@@ -113,30 +93,37 @@ def start_import(
                 f"Ismeretlen adatbázis: {', '.join(ismeretlen)}.",
             )
 
-    with _LOCK:
-        if _STATE["running"]:
-            raise HTTPException(status.HTTP_409_CONFLICT, "Már fut egy Notion import.")
-        kivalasztott = [info.nev for info in katalogus.valogat(nevek)]
-        _STATE.update(
-            running=True,
-            log=[],
-            started_at=datetime.now(timezone.utc).isoformat(),
-            finished_at=None,
-            error=None,
-            kivalasztott=kivalasztott,
-        )
-        thread = threading.Thread(target=_run_in_background, args=(nevek,), daemon=True)
-        thread.start()
+    kivalasztott = [info.nev for info in katalogus.valogat(nevek)]
+    elindult = hatter_feladat.inditas(
+        FELADAT_NEV,
+        _import_munka(nevek),
+        reszletek={"kivalasztott": kivalasztott},
+    )
+    if not elindult:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Már fut egy Notion import.")
     return {"started": True, "importerek": kivalasztott}
 
 
 @router.get("/status")
-def get_status(_user: Employee = Depends(require_roles(Role.ADMIN))) -> dict:
+def get_status(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_roles(Role.ADMIN)),
+) -> dict:
+    sor = hatter_feladat.allapot(db, FELADAT_NEV)
+    if sor is None:
+        return {
+            "running": False,
+            "started_at": None,
+            "finished_at": None,
+            "error": None,
+            "kivalasztott": [],
+            "log": [],
+        }
     return {
-        "running": _STATE["running"],
-        "started_at": _STATE["started_at"],
-        "finished_at": _STATE["finished_at"],
-        "error": _STATE["error"],
-        "kivalasztott": _STATE["kivalasztott"],
-        "log": _STATE["log"],
+        "running": sor.running,
+        "started_at": sor.started_at.isoformat() if sor.started_at else None,
+        "finished_at": sor.finished_at.isoformat() if sor.finished_at else None,
+        "error": sor.error,
+        "kivalasztott": (sor.reszletek or {}).get("kivalasztott", []),
+        "log": sor.log.splitlines(),
     }

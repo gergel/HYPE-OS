@@ -15,6 +15,25 @@ export function DiszpoSheetSyncGomb() {
   const [uzenet, setUzenet] = useState<string | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
 
+  /** A szinkron a HÁTTÉRBEN fut (lásd backend routes/diszpo_tabla.py) - az
+   * indítás után az állapot-végpontot kérdezgetjük, amíg el nem készül. */
+  async function varakozasAVegere() {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const res = await authFetch("/api/v1/diszpo-tabla/sheet-sync/allapot");
+      if (!res.ok) continue;
+      const adat = await res.json();
+      if (adat.running) continue;
+      if (adat.error) {
+        setHiba(`A táblázat szinkronja nem sikerült: ${adat.error}`);
+      } else {
+        setUzenet(adat.uzenet ?? "Kész.");
+        router.refresh();
+      }
+      return;
+    }
+  }
+
   async function indit() {
     if (!window.confirm(
       "A szinkron a Google Táblázat tartalmára CSERÉLI a táblát (a Sheet az igazság). " +
@@ -32,8 +51,7 @@ export function DiszpoSheetSyncGomb() {
         setHiba(adat?.detail ?? `Sikertelen szinkron (HTTP ${res.status})`);
         return;
       }
-      setUzenet(adat?.uzenet ?? "Kész.");
-      router.refresh();
+      await varakozasAVegere();
     } catch (err) {
       setHiba(`Sikertelen szinkron (hálózati hiba): ${err}`);
     } finally {

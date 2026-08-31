@@ -13,7 +13,7 @@ class DeliverableComment(TimestampMixin, Base):
     __tablename__ = "deliverable_comments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    deliverable_id: Mapped[int] = mapped_column(ForeignKey("deliverables.id"), nullable=False)
+    deliverable_id: Mapped[int] = mapped_column(ForeignKey("deliverables.id"), nullable=False, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
 

@@ -13,7 +13,7 @@ class Notification(TimestampMixin, Base):
     __tablename__ = "notifications"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(30), nullable=False)
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     link: Mapped[str] = mapped_column(String(300), nullable=False)

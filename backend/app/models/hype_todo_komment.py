@@ -14,7 +14,7 @@ class HypeTodoKomment(TimestampMixin, Base):
     __tablename__ = "hype_todo_kommentek"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    hype_todo_id: Mapped[int] = mapped_column(ForeignKey("hype_todo_items.id"), nullable=False)
+    hype_todo_id: Mapped[int] = mapped_column(ForeignKey("hype_todo_items.id"), nullable=False, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
 

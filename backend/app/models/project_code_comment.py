@@ -13,7 +13,7 @@ class ProjectCodeComment(TimestampMixin, Base):
     __tablename__ = "project_code_comments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    project_code_id: Mapped[int] = mapped_column(ForeignKey("project_codes.id"), nullable=False)
+    project_code_id: Mapped[int] = mapped_column(ForeignKey("project_codes.id"), nullable=False, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
 

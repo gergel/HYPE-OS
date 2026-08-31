@@ -87,7 +87,7 @@ class Assignment(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     equipment_id: Mapped[int] = mapped_column(ForeignKey("equipment.id"), nullable=False)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
 
     qty: Mapped[int] = mapped_column(Integer, default=1, comment="stock track_mode esetén hány db")
     aki_kivitte: Mapped[str | None] = mapped_column(String(255))

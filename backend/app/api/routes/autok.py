@@ -208,6 +208,10 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
     else:
         allapot = "nincs"
 
+    # A bizonylat-darabszámokat EGYSZER kérdezzük le az összes kiadásra -
+    # korábban ez a lekérdezés kiadásonként újra lefutott (N+1).
+    dokumentumok = _kiadas_dokumentumok(db, [x.id for x in kiadasok])
+
     # A nyitott teendők elöl (a lejártabb határidő előrébb), a készek hátul.
     teendok = sorted(
         auto.teendok,
@@ -226,7 +230,7 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
         aktiv=auto.aktiv,
         megjegyzes=auto.megjegyzes,
         hataridok=hataridok,
-        kiadasok=[_kiadas_kimenet(e, _kiadas_dokumentumok(db, [x.id for x in kiadasok])) for e in kiadasok],
+        kiadasok=[_kiadas_kimenet(e, dokumentumok) for e in kiadasok],
         teendok=[_teendo_kimenet(t) for t in teendok],
         koltseg_osszesen=osszesen,
         hatarido_allapot=allapot,
