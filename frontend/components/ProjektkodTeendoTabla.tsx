@@ -61,7 +61,16 @@ function HataridoSor({ allas }: { allas: HataridoAllas }) {
  * A kártyára kattintva a projektkód TELJES adatlapja nyílik meg felugró
  * ablakban (a papírozás ott végezhető el) - nem elnavigálva, mert itt
  * jellemzően több kódot nézünk végig egymás után. */
-export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
+export function ProjektkodTeendoTabla({
+  rows,
+  lathatKoltseget = true,
+}: {
+  rows: ProjectCode[];
+  /** Pénzügy-hozzáférés nélkül a kártyák pénz-sorai (bevétel, profit,
+   * fizetési határidő) és a pénz szerinti rendezés rejtve (a felhasználó
+   * kérése; a backend a mezőket is kitakarja). */
+  lathatKoltseget?: boolean;
+}) {
   const [kereses, setKereses] = useState("");
   const [rendezes, setRendezes] = useState<Rendezes>("kod");
   const [csakTeendo, setCsakTeendo] = useState(true);
@@ -109,7 +118,7 @@ export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
           aria-label="Rendezés"
           className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
         >
-          {RENDEZESEK.map((r) => (
+          {RENDEZESEK.filter((r) => lathatKoltseget || r.kulcs === "kod").map((r) => (
             <option key={r.kulcs} value={r.kulcs}>
               {r.cimke}
             </option>
@@ -182,20 +191,23 @@ export function ProjektkodTeendoTabla({ rows }: { rows: ProjectCode[] }) {
                       </p>
                       {/* A pénz azért van a kártyán, mert a teendő súlyát ez
                           adja: egy 3 milliós kintlévőség máshogy sürgős, mint
-                          egy 30 ezres. */}
-                      <p className="mt-1 flex flex-wrap gap-x-2 text-[11.5px] text-text-muted">
-                        <span>Bevétel {formatHuf(pc.bevetel)}</span>
-                        <span>Profit {formatHuf(pc.becsult_profit)}</span>
-                      </p>
+                          egy 30 ezres. Pénzügy-jog nélkül rejtve. */}
+                      {lathatKoltseget && (
+                        <p className="mt-1 flex flex-wrap gap-x-2 text-[11.5px] text-text-muted">
+                          <span>Bevétel {formatHuf(pc.bevetel)}</span>
+                          <span>Profit {formatHuf(pc.becsult_profit)}</span>
+                        </p>
+                      )}
                       {/* MENNYI IDŐ van a kifizetésig - a teendő sürgősségét
                           ez adja meg az összeg mellett: egy két hónapja lejárt
                           határidő máshogy szólít, mint egy jövő heti. Osztott
                           számlázásnál (több feltöltött számla) mindegyikhez
                           külön sor - egy összevont szám itt épp azt a
                           különbséget mosná el, hogy melyik számla késik. */}
-                      {pc.szamla_hataridok.length > 1
-                        ? pc.szamla_hataridok.map((allas, i) => <HataridoSor key={i} allas={allas} />)
-                        : pc.hatarido_allas && <HataridoSor allas={pc.hatarido_allas} />}
+                      {lathatKoltseget &&
+                        (pc.szamla_hataridok.length > 1
+                          ? pc.szamla_hataridok.map((allas, i) => <HataridoSor key={i} allas={allas} />)
+                          : pc.hatarido_allas && <HataridoSor allas={pc.hatarido_allas} />)}
                     </button>
                   ))
                 )}

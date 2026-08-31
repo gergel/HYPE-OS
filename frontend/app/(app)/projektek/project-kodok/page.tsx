@@ -31,7 +31,7 @@ import {
 } from "@/lib/api";
 import { hataridoHangsuly, hataridoSzoveg } from "@/lib/hatarido";
 import { bevetelDevizaNyom } from "@/lib/penz";
-import { canDoAction } from "@/lib/permissions";
+import { canDoAction, lathatjaAzOldalt } from "@/lib/permissions";
 import { kovetkezoProjektkod, projektkodElotag } from "@/lib/projektkod";
 import { projektkodFazisa } from "@/lib/projektkodFazis";
 
@@ -46,7 +46,7 @@ const PAGE = "/projektek/project-kodok";
  *
  * Ahol nincs mit papírozni (nem szerződéses munka, vagy papír nélkül
  * elszámolt), ott egyetlen jelző áll: a hiányzó papír nem elmaradás. */
-function papirJelzo(pc: ProjectCode) {
+function papirJelzo(pc: ProjectCode, lathatKoltseget: boolean) {
   // Ami elmaradt, arról nincs mit igazolni - ott nem "nem kell papír" a
   // helyzet, hanem az, hogy meg sem történt. Ezt ki is írjuk, különben a
   // semleges jelzés mögött nem látszik az ok.
@@ -101,14 +101,19 @@ function papirJelzo(pc: ProjectCode) {
         }
         tone={pc.tig_kihagyva ? "neutral" : pc.tig_kikuldve_varjuk ? "warning" : pc.tig_kesz ? "success" : "warning"}
       />
-      <StatusBadge
-        label={pc.bevetel_kifizetve ? "Kifizetve" : "Nincs kifizetve"}
-        tone={pc.bevetel_kifizetve ? "success" : "warning"}
-      />
+      {/* A kifizetés és a fizetési határidő PÉNZ-adat: Pénzügy-hozzáférés
+          nélkül nem jelenik meg (a felhasználó kérése) - a szerződés/TIG
+          papír-jelzői attól még látszanak. */}
+      {lathatKoltseget && (
+        <StatusBadge
+          label={pc.bevetel_kifizetve ? "Kifizetve" : "Nincs kifizetve"}
+          tone={pc.bevetel_kifizetve ? "success" : "warning"}
+        />
+      )}
       {/* MENNYI IDŐ van hátra a kifizetésig, vagy mennyivel csúszott. A
           "Nincs kifizetve" önmagában nem mondja meg, sürgős-e: egy jövő heti
           határidő és egy két hónapja lejárt ugyanúgy néz ki nélküle. */}
-      {hataridoSzoveg(pc.hatarido_allas) && (
+      {lathatKoltseget && hataridoSzoveg(pc.hatarido_allas) && (
         <StatusBadge
           label={hataridoSzoveg(pc.hatarido_allas) as string}
           tone={hataridoHangsuly(pc.hatarido_allas) ?? "neutral"}
@@ -144,6 +149,10 @@ export default async function ProjectKodokPage({
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  // Pénzügy-hozzáférés nélkül SEMMILYEN pénz-adat nem látszik a listán
+  // (Bevétel/Kiadás/Profit oszlopok, kifizetés-jelzők) - a backend a
+  // mezőket is kitakarja (lásd routes/project_codes._penz_kimenet_szuro).
+  const lathatKoltseget = lathatjaAzOldalt(pagePermissions, "/penzugyek");
 
   // Alapból a FOLYÓ év nézete nyílik meg (azon dolgozunk); ha arra az évre
   // nincs kódrendszerünk, az Összes marad.
@@ -245,6 +254,11 @@ export default async function ProjectKodokPage({
               // utómunka összege (lásd models/project_code.py). Itt átírni őket
               // annyit tenne, hogy a lista mást mond, mint a mögötte álló
               // tételek - a számot a tételeknél kell javítani.
+              // Pénzügy-hozzáférés nélkül a három oszlop egyáltalán nincs a
+              // táblában (a felhasználó kérése; a backend a mezőket is
+              // kitakarja).
+              ...(lathatKoltseget
+                ? ([
               {
                 header: "Bevétel",
                 align: "right",
@@ -309,6 +323,8 @@ export default async function ProjectKodokPage({
                 ),
                 sortAccessor: (pc) => pc.becsult_profit,
               },
+                  ] as Column<ProjectCode>[])
+                : []),
     {
       // Hol tart a papírozás és a pénz - ez az oszlop válaszol arra, hogy
       // "melyiken van már szerződés, hol van kész TIG, mit nem fizettek ki",
@@ -318,7 +334,7 @@ export default async function ProjectKodokPage({
       // Függvényhívás, NEM külön komponens: a szűrő a cellában látszó szövegből
       // dolgozik (lásd DataTable nodeToText), egy komponens-elemből viszont
       // még nem látszik semmi - a jelzők szövege csak így válik szűrhetővé.
-      render: (pc: ProjectCode) => papirJelzo(pc),
+      render: (pc: ProjectCode) => papirJelzo(pc, lathatKoltseget),
       sortAccessor: (pc: ProjectCode) => papirRang(pc),
     },
     {
@@ -385,7 +401,7 @@ export default async function ProjectKodokPage({
           <Card title={`Teendők (${teendos} projektkód)`}>
             <ProjektkodEvValto aktiv={ev} darabszamok={darabszamok} />
             {/* Ugyanaz a sorrend, mint a listán: a legnagyobb kód elöl. */}
-            <ProjektkodTeendoTabla rows={[...projectCodes].sort(kodSzerint)} />
+            <ProjektkodTeendoTabla rows={[...projectCodes].sort(kodSzerint)} lathatKoltseget={lathatKoltseget} />
           </Card>
         </div>
       </div>

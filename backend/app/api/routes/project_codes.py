@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
-from app.core.security import Role, get_current_user, require_page_action
+from app.core.security import Role, get_current_user, lathatja_e_az_oldalt, require_page_action
 from app.models.contract import Contract
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
@@ -135,6 +135,66 @@ def list_valaszthato(db: Session = Depends(get_db), _user: Employee = Depends(ge
 #: diszpó-táblánál (lásd routes/postproduction.py _MINDEN_SZEREPKOR).
 _MINDEN_SZEREPKOR = tuple(Role)
 
+#: A projektkód PÉNZ-mezői: aki nem látja a Pénzügyek oldalt, ezekből semmit
+#: nem kaphat (a felhasználó kérése) - a felület el is rejti a pénz-blokkokat,
+#: ez itt a szerveroldali biztosíték. A számok nullára, a többi üresre megy,
+#: hogy a válasz alakja ne változzon (a frontend típusai számot várnak).
+_PENZ_MEZOK_NULLA = (
+    "bevetel",
+    "osszes_koltseg",
+    "becsult_profit",
+    "kulsos_koltseg",
+    "egyeb_kiadas",
+    "vagas_koltseg",
+    "belsos_munka_koltseg",
+)
+_PENZ_MEZOK_URES = (
+    "bevetel_deviza",
+    "hatarido_allas",
+    "vallalasi_ar_magyarazat",
+    "netto_osszeg",
+    "szerzodes_netto_osszeg",
+    "fizetesi_hatarido",
+    "plusz_afa",
+    "szerzodes_plusz_afa",
+    "arfolyam",
+    # A Notionből örökölt pénz-mezők - a részletnézet mezőrácsában jelennének
+    # meg, ezért ezeket is ki kell takarni.
+    "profit_szazalek_notion",
+    "gyartasi_koltseg_notion",
+    "osszes_koltseg_notion",
+    "osszesen_netto_notion",
+    "netto_notion",
+    "brutto_notion",
+    "alvallalkozok_koltsege_notion",
+    "vagasi_koltseg_notion",
+    "forintban_notion",
+    "belsos_koltseg_akkor",
+    "vallalasi_ar_notion",
+    "belsos_koltseg_notion",
+    "belso_plusz_koltseg_notion",
+    "megerte_e",
+)
+
+
+def _penz_kimenet_szuro(sorok: list[dict], db: Session, user: Employee) -> list[dict]:
+    """Pénzügy-hozzáférés nélkül a projektkód pénz-mezői kitakarva mennek ki -
+    a jogot EGYSZER kérdezzük le, nem soronként (lásd crud_router
+    kimenet_szuro)."""
+    if lathatja_e_az_oldalt(db, user, "/penzugyek"):
+        return sorok
+    for sor in sorok:
+        for mezo in _PENZ_MEZOK_NULLA:
+            if mezo in sor:
+                sor[mezo] = 0
+        for mezo in _PENZ_MEZOK_URES:
+            if mezo in sor:
+                sor[mezo] = None
+        if "szamla_hataridok" in sor:
+            sor["szamla_hataridok"] = []
+    return sorok
+
+
 router = build_crud_router(
     model=ProjectCode,
     create_schema=ProjectCodeCreate,
@@ -195,6 +255,9 @@ router = build_crud_router(
         selectinload(ProjectCode.megrendeloi_tigek),
         selectinload(ProjectCode.contract).selectinload(Contract.idoszakok),
     ),
+    # Pénzügy-hozzáférés nélkül a pénz-mezők kitakarva mennek ki (a
+    # felhasználó kérése) - lásd _penz_kimenet_szuro.
+    kimenet_szuro=_penz_kimenet_szuro,
 )
 
 
@@ -246,7 +309,9 @@ class ProjektkodBontas(BaseModel):
 def get_bontas(
     project_code_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action("/projektek/project-kodok", "view")),
+    # A durva szerepkör-kapu itt sem érvényes (lásd _MINDEN_SZEREPKOR): a
+    # tényleges kapu a lenti Pénzügy-hozzáférés ellenőrzés + az oldal-jog.
+    _user: Employee = Depends(require_page_action("/projektek/project-kodok", "view", *_MINDEN_SZEREPKOR)),
 ):
     """A projektkód költségeinek TÉTELES bontása: forgatásonként, anyagonként
     és egyéb kiadásonként.
@@ -255,6 +320,10 @@ def get_bontas(
     mennyi ment el - ez a végpont azt, hogy MIRE. A számok ugyanabból a
     forrásból jönnek, mint az összesítés (lásd services/projektkod_bontas.py),
     tehát a tételek összege a fejléc-számot adja ki."""
+    # A tételes bontás színtiszta pénz-adat: Pénzügy-hozzáférés nélkül nem
+    # kérhető le (a felület nem is mutatja - lásd project-kodok/[id] oldal).
+    if not lathatja_e_az_oldalt(db, _user, "/penzugyek"):
+        raise HTTPException(status_code=403, detail="A költségbontáshoz Pénzügyek-hozzáférés kell.")
     kod = db.get(ProjectCode, project_code_id)
     if kod is None:
         raise HTTPException(status_code=404, detail="A projektkód nem található.")

@@ -36,7 +36,7 @@ import {
   getRecord,
 } from "@/lib/api";
 import { bevetelDevizaNyom } from "@/lib/penz";
-import { canDoAction, canDoPageAction } from "@/lib/permissions";
+import { canDoAction, canDoPageAction, lathatjaAzOldalt } from "@/lib/permissions";
 import { FileCheck2, FileSignature, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const PAGE = "/projektek/project-kodok";
@@ -147,8 +147,10 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
   // (lásd backend subcontractor_contracts.py PAGE = "/utokovetes").
   const torolhetAlvallalkozoiPapirt = canDoAction(currentUser, pagePermissions, "/utokovetes", "delete");
   // A forint összegek a Pénzügy-hozzáféréshez kötöttek - ugyanaz a szabály,
-  // mint a forgatás adatlapján (lásd ProjektPapirokEsKoltsegek).
-  const lathatKoltseget = pagePermissions === null || !!pagePermissions["/penzugyek"]?.includes("view");
+  // mint a forgatás adatlapján (lásd ProjektPapirokEsKoltsegek). A backend is
+  // kitakarja a pénz-mezőket e jog nélkül (routes/project_codes.py
+  // _penz_kimenet_szuro) - itt a teljes pénz-blokkokat rejtjük el.
+  const lathatKoltseget = lathatjaAzOldalt(pagePermissions, "/penzugyek");
   // Az AlvallalkozoiPapirokAttekintes kártyák az Utókövetés-hozzáféréshez
   // kötöttek - ugyanaz a szabály, mint a forgatás adatlapján
   // (lásd ProjectDetailContent lathatUtokovetest).
@@ -212,7 +214,10 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
 
         {/* Mind a három szám NETTÓ - a bevétel és a költség ugyanabban a
             szemléletben, különben a profit az ÁFA-tartalmak különbségével
-            csúszna el (lásd backend services/elszamolas.py). */}
+            csúszna el (lásd backend services/elszamolas.py). Pénzügy-jog
+            nélkül az egész blokk el van rejtve (a felhasználó kérése). */}
+        {lathatKoltseget && (
+        <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard
             label="Bevétel (nettó)"
@@ -245,10 +250,13 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           belsos={szam(projectCode.belsos_munka_koltseg)}
           osszesen={szam(projectCode.osszes_koltseg)}
         />
+        </>
+        )}
 
         {/* MENNYIÉRT csináltuk. Külön, jól látható helyen, mert az összeget
             gyakran MÁS tudja, mint aki a papírokat készíti - eddig csak a
             szerződés/TIG űrlapján (vagy a mezőrács mélyén) lehetett megadni. */}
+        {lathatKoltseget && (
         <Card title="Mennyiért vállaltuk" icon={Wallet}>
           <VallalasiAr
             patchPath={`${ENTITY_PATHS.projectCode}/${projectCodeId}`}
@@ -261,6 +269,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             magyarazat={szoveg(projectCode.vallalasi_ar_magyarazat)}
           />
         </Card>
+        )}
 
         {/* MEGRENDELŐI PAPÍROZÁS, három lépésben: szerződés → TIG → számla.
             Ugyanaz a sorrend, mint az alvállalkozói oldalon, és ugyanúgy a
@@ -310,6 +319,9 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               penznem={penznemKod}
             />
           </Card>
+          {/* A számla-kártya PÉNZ: összeg, fizetési határidő, kifizetés -
+              Pénzügy-jog nélkül nem jelenik meg (a felhasználó kérése). */}
+          {lathatKoltseget && (
           <Card title="3. Számla" icon={Receipt}>
             <div className="space-y-3">
               {/* Ha már ki van mondva, hogy erről a munkáról NEM lesz számla
@@ -374,6 +386,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
               )}
             </div>
           </Card>
+          )}
         </div>
 
         {/* ALVÁLLALKOZÓI papírozás, FORGATÁS NÉLKÜL: ha egy projekt-kiadáson
@@ -434,8 +447,9 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
         )}
 
         {/* A TÉTELES bontás: melyik forgatás mennyibe került, melyik anyagot
-            meddig vágtuk, és milyen kiadások terhelik a kódot. */}
-        {bontas ? (
+            meddig vágtuk, és milyen kiadások terhelik a kódot. Pénzügy-jog
+            nélkül az egész blokk rejtve (a backend végpontja is tiltja). */}
+        {lathatKoltseget && (bontas ? (
           <ProjektkodBontasTablak
             bontas={bontas}
             projectCodeId={projectCodeId}
@@ -449,7 +463,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           <Card title="Költségek tételesen">
             <p className="text-[13px] text-text-secondary">A bontás most nem érhető el.</p>
           </Card>
-        )}
+        ))}
 
         {/* HOZZÁSZÓLÁSOK - ugyanaz a chat-szerű minta, mint az Utómunkánál. */}
         <Card title="Hozzászólások">

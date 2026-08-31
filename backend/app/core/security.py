@@ -255,6 +255,21 @@ def van_kifejezett_oldal_joga(page_permissions: dict[str, list[str]] | None, pag
     return elerheto is not None and page in elerheto
 
 
+def lathatja_e_az_oldalt(db: Session, employee: Employee, page: str) -> bool:
+    """Látja-e EZ a felhasználó a megadott oldalt - ugyanaz a szabály, mint a
+    menü/navigáció-zár (lásd elerheto_oldalak): beállítás nélkül mindent lát,
+    beállítással csak a megadott (és aliaszon át kapott) oldalakat. Erre épül
+    pl. a projektkód pénz-mezőinek kitakarása /penzugyek-jog nélkül (lásd
+    routes/project_codes._penz_kimenet_szuro)."""
+    if vedett_rendszergazda(employee):
+        return True
+    config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
+    if config is None or config.page_permissions is None:
+        return True
+    elerheto = elerheto_oldalak(config.page_permissions)
+    return elerheto is None or page in elerheto
+
+
 def lathatjak_az_oldalt(db: Session, page: str) -> list[int]:
     """Mely munkatársak vannak KIFEJEZETTEN meghívva erre az oldalra - erre
     épül a HYPE TO-DO LIST "Felelős" választója (lásd routes/user_access.py

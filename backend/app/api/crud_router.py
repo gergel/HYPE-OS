@@ -76,6 +76,13 @@ def build_crud_router(
     entity_type: str | None = None,
     list_options: tuple[Any, ...] = (),
     sor_szuro: Callable[[Any, Session, Employee], Any] | None = None,
+    #: (sorok, db, current_user) -> sorok - a kimenő JSON-sorok MEZŐNKÉNTI
+    #: szűrése a bejelentkezett ember jogai szerint (pl. a projektkód
+    #: pénz-mezőinek kitakarása /penzugyek-jog nélkül, lásd
+    #: routes/project_codes._penz_kimenet_szuro). A lista, az egyedi GET, a
+    #: create és a PATCH válaszára is lefut - listát kap, hogy a jog-lekérdezés
+    #: egyszer fusson, ne soronként.
+    kimenet_szuro: Callable[[list[dict], Session, Employee], list[dict]] | None = None,
 ) -> APIRouter:
     """page: a frontend/lib/nav.ts oldal-href-je (pl. "/projektek"), amihez ez az
     entitás tartozik - a Beállítások oldalon egyénenként beállított
@@ -235,9 +242,15 @@ def build_crud_router(
         eltavolitott = entity_fields.hidden_fields(db, entity_type) if entity_type else set()
         # A listákba a saját mezők értékei nem kerülnek bele (rekordonként
         # külön lekérdezés lenne) - a részletnézeten viszont ott vannak.
-        return [
+        eredmeny = [
             _kimenet(o, list_read_schema, db, sajat_mezokkel=False, eltavolitott=eltavolitott) for o in sorok
         ]
+        return kimenet_szuro(eredmeny, db, _user) if kimenet_szuro else eredmeny
+
+    def _szurt_kimenet(adat: dict, db: Session, user: Employee) -> dict:
+        """Az egy-rekordos válaszokra is lefut a kimenet_szuro - listába
+        csomagolva, mert a szűrő listát vár (lásd a paraméter kommentjét)."""
+        return kimenet_szuro([adat], db, user)[0] if kimenet_szuro else adat
 
     def _lathato_vagy_404(db: Session, item_id: int, user: Employee):
         """A rekord, ha ez a felhasználó láthatja - különben 404 (nem 403: egy
@@ -251,7 +264,9 @@ def build_crud_router(
 
     @router.get("/{item_id}", response_model=None)
     def get_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
-        return _kimenet(_lathato_vagy_404(db, item_id, _user), read_schema, db, sajat_mezokkel=True)
+        return _szurt_kimenet(
+            _kimenet(_lathato_vagy_404(db, item_id, _user), read_schema, db, sajat_mezokkel=True), db, _user
+        )
 
     # A before_create hook kaphatja a bejelentkezett embert is harmadik
     # paraméterként - a paraméterszámot egyszer, a router építésekor nézzük
@@ -278,7 +293,7 @@ def build_crud_router(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Az érték már foglalt (egyedinek kell lennie)."
             ) from exc
         db.refresh(obj)
-        return _kimenet(obj, read_schema, db, sajat_mezokkel=True)
+        return _szurt_kimenet(_kimenet(obj, read_schema, db, sajat_mezokkel=True), db, _user)
 
     @router.patch("/{item_id}", response_model=None)
     async def update_item(
@@ -354,7 +369,7 @@ def build_crud_router(
         db.refresh(obj)
         if after_update:
             after_update(obj, data, m2m_changes, db, current_user)
-        return _kimenet(obj, read_schema, db, sajat_mezokkel=True)
+        return _szurt_kimenet(_kimenet(obj, read_schema, db, sajat_mezokkel=True), db, current_user)
 
     @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_item(item_id: int, db: Session = Depends(get_db), _user: Employee = Depends(delete_dependency)):
