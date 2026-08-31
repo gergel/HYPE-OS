@@ -1,6 +1,6 @@
 """Dashboard modul - a mockup összegző kártyáinak valós lekérdezései."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -21,6 +21,8 @@ from app.services import kotelezettseg as kotelezettseg_szolg
 from app.services import megrendeloi_papir
 from app.services import papirozas_feladatok
 from app.services import papirozas_hatokor
+from app.services import vagoi_jatek as vagoi_jatek_szolg
+from app.services.hu_datum import honap_neve
 from app.models.finance import Revenue
 from app.models.project import Project
 from app.models.project_code import ProjectCode
@@ -75,6 +77,18 @@ class MyTasksSummary(BaseModel):
     papirozas: list[MyTaskItem] = []
 
 
+class VagoiJatekNyertes(BaseModel):
+    """A bejelentkezett felhasználó MEGNYERTE az előző havi vágói játékot -
+    a dashboard a kihirdetéstől 5 napig ünneplő widgetet mutat neki ebből."""
+
+    ev: int
+    honap: int
+    honap_nev: str
+    pont: int
+    nyeremeny: str | None = None
+    kep_url: str | None = None
+
+
 class DashboardSummary(BaseModel):
     mai_forgatasok: int
     aktiv_project_codeok: int
@@ -83,6 +97,11 @@ class DashboardSummary(BaseModel):
     upcoming_events: list[UpcomingEvent]
     revenue_trend: list[RevenueMonth]
     alerts: DashboardAlerts
+    #: Csak a győztesnek, a kihirdetés utáni 5 napban - egyébként None.
+    vagoi_jatek_nyertes: VagoiJatekNyertes | None = None
+    #: True, ha a felhasználó admin, és a FOLYÓ hónap vágói-játék nyereménye
+    #: még nincs kihirdetve - a dashboard ebből mutat neki bekérő widgetet.
+    vagoi_jatek_nyeremeny_bekeres: bool = False
 
 
 def _last_n_months(today: date, n: int) -> list[tuple[int, int]]:
@@ -99,7 +118,7 @@ def _last_n_months(today: date, n: int) -> list[tuple[int, int]]:
 
 
 @router.get("/summary", response_model=DashboardSummary)
-def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+def summary(db: Session = Depends(get_db), user: Employee = Depends(get_current_user)):
     today = date.today()
 
     # A lefutott projektek papírozás-feladatai. Ütemező nincs a rendszerben,
@@ -112,6 +131,11 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
     # felelősnek, és megnyílnak az esedékes fordulók, amikhez összeget és
     # számlát várunk (lásd services/kotelezettseg.py).
     kotelezettseg_szolg.ensure_mindent(db)
+
+    # És ugyanígy a vágói játék hónapzárása: az új hónap első lekérése hirdeti
+    # ki az előző hónap győztesét (értesítéssel), és kéri be az adminoktól az
+    # új havi nyereményt (lásd services/vagoi_jatek.havi_zaras).
+    vagoi_jatek_szolg.havi_zaras(db)
 
     mai_forgatasok = (
         db.scalar(select(func.count()).select_from(Project).where(Project.forgatas_datuma == today)) or 0
@@ -197,6 +221,33 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
         or 0
     )
 
+    # Vágói játék: ünneplő widget a győztesnek (a kihirdetéstől 5 napig), és
+    # nyeremény-bekérő az adminnak, amíg a folyó hónap nyereménye hiányzik.
+    nyertes: VagoiJatekNyertes | None = None
+    elozo_ev, elozo_ho = vagoi_jatek_szolg.elozo_honap(today)
+    elozo_sor = vagoi_jatek_szolg.honap_beallitas(db, elozo_ev, elozo_ho)
+    if (
+        elozo_sor is not None
+        and elozo_sor.gyoztes_employee_id == user.id
+        and elozo_sor.kihirdetve_at is not None
+    ):
+        kihirdetve = elozo_sor.kihirdetve_at
+        if kihirdetve.tzinfo is None:
+            kihirdetve = kihirdetve.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - kihirdetve <= timedelta(days=vagoi_jatek_szolg.GYOZTES_WIDGET_NAPOK):
+            nyertes = VagoiJatekNyertes(
+                ev=elozo_ev,
+                honap=elozo_ho,
+                honap_nev=honap_neve(elozo_ho),
+                pont=elozo_sor.gyoztes_pont or 0,
+                nyeremeny=elozo_sor.nyeremeny,
+                kep_url=elozo_sor.kep_url,
+            )
+    nyeremeny_bekeres = False
+    if van_szerepkore(user, SystemRole.ADMIN):
+        folyo_sor = vagoi_jatek_szolg.honap_beallitas(db, today.year, today.month)
+        nyeremeny_bekeres = folyo_sor is None or not folyo_sor.nyeremeny
+
     return DashboardSummary(
         mai_forgatasok=mai_forgatasok,
         aktiv_project_codeok=aktiv_project_codeok,
@@ -207,6 +258,8 @@ def summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current
         upcoming_events=upcoming_events,
         revenue_trend=revenue_trend,
         alerts=DashboardAlerts(lejart_utomunka=lejart_utomunka, lejart_feladat=lejart_feladat),
+        vagoi_jatek_nyertes=nyertes,
+        vagoi_jatek_nyeremeny_bekeres=nyeremeny_bekeres,
     )
 
 

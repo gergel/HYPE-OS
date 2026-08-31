@@ -20,6 +20,17 @@ export type DashboardAlerts = {
   lejart_feladat: number;
 };
 
+/** A bejelentkezett felhasználó megnyerte az előző havi vágói játékot - a
+ * dashboard a kihirdetéstől 5 napig ünneplő kártyát mutat neki ebből. */
+export type VagoiJatekNyertes = {
+  ev: number;
+  honap: number;
+  honap_nev: string;
+  pont: number;
+  nyeremeny: string | null;
+  kep_url: string | null;
+};
+
 export type DashboardSummary = {
   mai_forgatasok: number;
   aktiv_project_codeok: number;
@@ -28,6 +39,9 @@ export type DashboardSummary = {
   upcoming_events: UpcomingEvent[];
   revenue_trend: RevenueMonth[];
   alerts: DashboardAlerts;
+  vagoi_jatek_nyertes: VagoiJatekNyertes | null;
+  /** Admin vagy, és a folyó hónap vágói-játék nyereménye még nincs kihirdetve. */
+  vagoi_jatek_nyeremeny_bekeres: boolean;
 };
 
 export type Client = {

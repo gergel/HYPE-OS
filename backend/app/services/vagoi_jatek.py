@@ -288,6 +288,118 @@ def honap_beallitas(db: Session, ev: int, honap: int) -> VagoJatekHonap | None:
     return db.scalar(select(VagoJatekHonap).where(VagoJatekHonap.ev == ev, VagoJatekHonap.honap == honap))
 
 
+#: A győztes ünneplő widgete ennyi napig látszik a dashboardján a kihirdetés
+#: után (a felhasználó kérése: 5 nap).
+GYOZTES_WIDGET_NAPOK = 5
+
+#: Az ELSŐ hónap, aminek hónapzáráskor győztest hirdetünk. A korábbi hónapokra
+#: van ugyan adat (timesheet-ek), de a játék akkor még nem élt - egy
+#: visszamenőleges "megnyerted a júliusi játékot" értesítés olyan versenyről
+#: gratulálna, amiről a versenyzők nem is tudtak.
+JATEK_KEZDETE: tuple[int, int] = (2026, 8)
+
+
+def elozo_honap(ma: date) -> tuple[int, int]:
+    """A mai naphoz képest az előző hónap (év, hónap) párja."""
+    utolso_nap = date(ma.year, ma.month, 1) - timedelta(days=1)
+    return utolso_nap.year, utolso_nap.month
+
+
+def havi_zaras(db: Session) -> None:
+    """Hónapváltáskor kihirdeti az ELŐZŐ hónap győztesét - lustán, egyszer.
+
+    Nincs ütemező a rendszerben (ugyanaz a helyzet, mint a
+    papirozas_feladatok-nál): az új hónap ELSŐ dashboard- vagy játék-oldal
+    lekérése "éri utol" a zárást. A kihirdetés EGYSZER történik
+    (kihirdetve_at őrzi), és onnantól a végeredmény kőbe van vésve - egy
+    utólag rögzített mérés már nem válthatja le a kihirdetett győztest.
+
+    A kihirdetéskor:
+    - a győztes ÉRTESÍTÉST kap (harang + 5 napig ünneplő dashboard-widget,
+      lásd routes/dashboard.summary);
+    - az adminok értesítést kapnak, hogy adják meg az ÚJ hónap nyereményét
+      (a dashboardjukon bekérő widget is nyílik, amíg meg nem adják) - ezzel
+      indul újra a játék az új hónapra.
+
+    Versenyhelyzet (több uvicorn worker egyszerre): a hónap sorát FOR
+    UPDATE-tel fogjuk meg, így a kihirdetés és az értesítések csak az egyik
+    kérésben történnek meg."""
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models.employee import SystemRole, van_szerepkore
+    from app.services.notifications import create_notification
+    from app.services.hu_datum import honap_neve
+
+    ma = date.today()
+    ev, honap = elozo_honap(ma)
+
+    # Gyors kiugrás zár nélkül: az esetek 99%-ában már megtörtént a zárás.
+    sor = honap_beallitas(db, ev, honap)
+    if sor is not None and sor.kihirdetve_at is not None:
+        return
+
+    if sor is None:
+        sor = VagoJatekHonap(ev=ev, honap=honap)
+        db.add(sor)
+        try:
+            db.flush()
+        except IntegrityError:
+            # Egy másik worker ugyanebben a pillanatban hozta létre - övé a zárás.
+            db.rollback()
+            return
+    else:
+        sor = db.execute(
+            select(VagoJatekHonap)
+            .where(VagoJatekHonap.ev == ev, VagoJatekHonap.honap == honap)
+            .with_for_update()
+        ).scalar_one()
+        if sor.kihirdetve_at is not None:
+            return
+
+    # A játék indulása ELŐTTI hónapot csendben zárjuk le (a jelölés kell, hogy
+    # ne fussunk neki minden kérésnél), győztes és értesítés nélkül.
+    gyoztes = None
+    if (ev, honap) >= JATEK_KEZDETE:
+        allas = honap_allasa(db, ev, honap)
+        gyoztes = next((a for a in allas if a.helyezes == 1), None)
+    sor.kihirdetve_at = datetime.now(timezone.utc)
+    if gyoztes is not None:
+        sor.gyoztes_employee_id = gyoztes.employee_id
+        sor.gyoztes_pont = gyoztes.pont
+        nyeremeny_resz = f" Nyereményed: {sor.nyeremeny}." if sor.nyeremeny else ""
+        create_notification(
+            db,
+            employee_id=gyoztes.employee_id,
+            kind="vagoi_jatek_gyoztes",
+            message=(
+                f"Gratulálunk! Megnyerted a {honap_neve(honap)} havi vágói játékot"
+                f" {gyoztes.pont} ponttal.{nyeremeny_resz}"
+            ),
+            link="/vagoi-jatek",
+        )
+
+    # Az új hónap nyereményét az adminoktól kérjük be - értesítéssel, azonnal.
+    # (A dashboard-widget ettől függetlenül addig látszik nekik, amíg a
+    # nyereményt meg nem adják, lásd routes/dashboard.summary.)
+    uj_sor = honap_beallitas(db, ma.year, ma.month)
+    if uj_sor is None or not uj_sor.nyeremeny:
+        adminok = db.scalars(select(Employee).where(Employee.is_active.is_(True))).all()
+        for admin in adminok:
+            if not van_szerepkore(admin, SystemRole.ADMIN):
+                continue
+            create_notification(
+                db,
+                employee_id=admin.id,
+                kind="vagoi_jatek_nyeremeny",
+                message=(
+                    f"Új hónap indult a vágói játékban - add meg a {honap_neve(ma.month)}"
+                    " havi nyereményt, hogy a verseny elindulhasson!"
+                ),
+                link="/vagoi-jatek",
+            )
+    db.commit()
+
+
 def elozo_honapok(ev: int, honap: int, darab: int) -> list[tuple[int, int]]:
     """Az adott hónapot MEGELŐZŐ `darab` hónap, a legfrissebbel elöl."""
     eredmeny: list[tuple[int, int]] = []

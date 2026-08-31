@@ -70,6 +70,20 @@ class VagoJatekHonap(TimestampMixin, Base):
     kep_url: Mapped[str | None] = mapped_column(String(500))
     kep_storage_key: Mapped[str | None] = mapped_column(String(500))
 
+    #: A hónap KIHIRDETETT győztese - a hónapváltáskor íródik be, EGYSZER
+    #: (lásd services/vagoi_jatek.havi_zaras). Azért tároljuk, és nem számoljuk
+    #: mindig újra, mert a kihirdetés után érkező javítások (utólag rögzített
+    #: mérés, munkanap-átírás) már nem billenthetik át a végeredményt - egy
+    #: kihirdetett győztest nem lehet visszamenőleg leváltani.
+    gyoztes_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
+    #: A győztes pontszáma a kihirdetés pillanatában.
+    gyoztes_pont: Mapped[int | None] = mapped_column(Integer)
+    #: Mikor történt a kihirdetés. None = a hónap még nem zárult le. Ez hajtja
+    #: a dashboard ünneplő widgetét is (a kihirdetéstől 5 napig látszik).
+    kihirdetve_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    gyoztes: Mapped["Employee | None"] = relationship()
+
 
 class VagoJatekNap(TimestampMixin, Base):
     """Hány munkanapja van egy embernek abban a hónapban.

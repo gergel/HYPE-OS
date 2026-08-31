@@ -115,7 +115,17 @@ def _honap_kimenet(db: Session, ev: int, honap: int) -> HonapOut:
     beallitas = vagoi_jatek.honap_beallitas(db, ev, honap)
     allas = vagoi_jatek.honap_allasa(db, ev, honap)
     folyo_ev, folyo_honap = _ma()
+    # A KIHIRDETETT győztes az erősebb: a hónapzáráskor kőbe vésett eredményt
+    # (lásd services/vagoi_jatek.havi_zaras) egy utólag rögzített mérés már
+    # nem írhatja felül. Amíg nincs kihirdetés, az élő állás elsője a "vezet".
     gyoztes = next((a for a in allas if a.helyezes == 1), None)
+    gyoztes_nev = gyoztes.nev if gyoztes else None
+    gyoztes_pont = gyoztes.pont if gyoztes else 0
+    if beallitas is not None and beallitas.kihirdetve_at is not None and beallitas.gyoztes_employee_id:
+        rogzitett = db.get(Employee, beallitas.gyoztes_employee_id)
+        if rogzitett is not None:
+            gyoztes_nev = rogzitett.full_name
+            gyoztes_pont = beallitas.gyoztes_pont or 0
     return HonapOut(
         ev=ev,
         honap=honap,
@@ -124,8 +134,8 @@ def _honap_kimenet(db: Session, ev: int, honap: int) -> HonapOut:
         kep_url=beallitas.kep_url if beallitas else None,
         folyamatban=(ev, honap) == (folyo_ev, folyo_honap),
         allas=_allas_kimenet(allas),
-        gyoztes_nev=gyoztes.nev if gyoztes else None,
-        gyoztes_pont=gyoztes.pont if gyoztes else 0,
+        gyoztes_nev=gyoztes_nev,
+        gyoztes_pont=gyoztes_pont,
     )
 
 
@@ -142,6 +152,9 @@ def get_honap(
     _user: Employee = Depends(get_current_user),
 ):
     """Egy hónap versenye. Paraméter nélkül a FOLYÓ hónap - az érdekes."""
+    # Hónapváltás utáni első lekérés: előbb az előző hónap zárása (győztes
+    # kihirdetése + értesítések), hogy az oldal már a lezárt eredményt mutassa.
+    vagoi_jatek.havi_zaras(db)
     folyo_ev, folyo_honap = _ma()
     return _honap_kimenet(db, ev or folyo_ev, honap or folyo_honap)
 

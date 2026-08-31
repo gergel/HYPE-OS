@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { KorlatozottDashboard } from "@/components/dashboard/KorlatozottDashboard";
 import { MyTasksCard } from "@/components/dashboard/DashboardWidgets";
+import { VagoiGyoztesKartya, VagoiNyeremenyBekero } from "@/components/dashboard/VagoiJatekKartyak";
 
 const WIDGETS: WidgetOption[] = [
   { key: "teendoim", label: "Teendőim" },
@@ -117,6 +118,13 @@ export default async function DashboardPage() {
             demó/placeholder adatok jelennek meg.
           </div>
         )}
+
+        {/* Vágói játék: ünneplő kártya a győztesnek (a kihirdetéstől 5 napig,
+            csak neki jön adat), és nyeremény-bekérő az adminnak, amíg a folyó
+            hónap nyereménye hiányzik. Szándékosan nem testreszabható widgetek:
+            időszakosak, és pont az a dolguk, hogy ne lehessen elrejteni őket. */}
+        {summary?.vagoi_jatek_nyertes && <VagoiGyoztesKartya nyertes={summary.vagoi_jatek_nyertes} />}
+        {summary?.vagoi_jatek_nyeremeny_bekeres && <VagoiNyeremenyBekero />}
 
         <div className="flex justify-end">
           <DashboardCustomizePanel widgets={permittedWidgets} initialVisible={visibleWidgets} />
