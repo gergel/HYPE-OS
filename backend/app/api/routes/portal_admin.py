@@ -23,7 +23,7 @@ from slugify import slugify
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user, hash_password, require_page_action
+from app.core.security import Role, get_current_user, hash_password, require_page_action
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.portal import Portal, PortalFolder, PortalImage, PortalVideo
@@ -48,6 +48,13 @@ from app.workers.portal_tasks import process_video_task
 router = APIRouter(prefix="/portal-admin", tags=["portal-admin"])
 
 PAGE = "/media-portal"
+
+#: A durva admin/operator szerepkör-kapu itt nem érvényes: akinek admin a
+#: Beállításokban TELJES hozzáférést adott a Portál oldalra, az mindent
+#: tud - egyéni portált létrehozni, feltölteni, törölni is. Ugyanaz az
+#: elv, mint az Utómunkánál (lásd routes/postproduction.py
+#: _MINDEN_SZEREPKOR); a page_permissions-védelem változatlanul él.
+_MINDEN_SZEREPKOR = tuple(Role)
 
 
 def _summary(p: Portal) -> PortalSummary:
@@ -133,7 +140,7 @@ class PortalAdminCreate(BaseModel):
 def create_portal(
     payload: PortalAdminCreate,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     if payload.project_id is not None:
         project = db.get(Project, payload.project_id)
@@ -182,7 +189,7 @@ def create_portal_from_deliverable(
     deliverable_id: int,
     payload: PortalFromDeliverableCreate,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     """Az Utómunka oldalon lévő "Portál létrehozása" gomb - egy Portált hoz
     létre KÖZVETLENÜL egy Deliverable-hez kötve (nem a mögöttes Projekthez,
@@ -257,7 +264,7 @@ def update_portal(
     portal_id: int,
     payload: PortalAdminUpdate,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     portal = _get_portal_or_404(db, portal_id)
     data = payload.model_dump(exclude_unset=True)
@@ -275,7 +282,7 @@ def update_portal(
 
 @router.delete("/{portal_id}", status_code=204)
 def delete_portal(
-    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete"))
+    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
 ):
     portal = _get_portal_or_404(db, portal_id)
     for v in portal.videos:
@@ -291,7 +298,7 @@ async def upload_cover(
     portal_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     portal = _get_portal_or_404(db, portal_id)
     ext = os.path.splitext(file.filename or "cover.jpg")[1] or ".jpg"
@@ -309,7 +316,7 @@ async def upload_cover(
 
 @router.delete("/{portal_id}/cover")
 def delete_cover(
-    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "edit"))
+    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR))
 ):
     portal = _get_portal_or_404(db, portal_id)
     storage.delete_prefix(f"covers/{portal_id}")
@@ -320,7 +327,7 @@ def delete_cover(
 
 @router.post("/{portal_id}/share", response_model=PortalShareLink)
 def regenerate_share(
-    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "edit"))
+    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR))
 ):
     portal = _get_portal_or_404(db, portal_id)
     portal.share_token = uuid.uuid4().hex
@@ -366,7 +373,7 @@ def multipart_init(
     portal_id: int,
     payload: MultipartInitIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     """Nagy videók feltöltéséhez - a kliens (admin UI) ezt hívja először,
     majd a kapott upload_id-vel darabolva, közvetlenül R2-be tölt fel
@@ -393,7 +400,7 @@ def multipart_init(
 
 
 @router.post("/videos/multipart/sign-part")
-def multipart_sign_part(payload: MultipartPartIn, _user: Employee = Depends(require_page_action(PAGE, "create"))):
+def multipart_sign_part(payload: MultipartPartIn, _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR))):
     return {"url": storage.presigned_part(payload.key, payload.upload_id, payload.part_number)}
 
 
@@ -401,7 +408,7 @@ def multipart_sign_part(payload: MultipartPartIn, _user: Employee = Depends(requ
 def multipart_complete(
     payload: MultipartCompleteIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     video = db.get(PortalVideo, payload.video_id)
     if not video:
@@ -418,7 +425,7 @@ def multipart_complete(
 def multipart_abort(
     payload: MultipartAbortIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     storage.abort_multipart(payload.key, payload.upload_id)
     video = db.get(PortalVideo, payload.video_id)
@@ -434,7 +441,7 @@ async def upload_video(
     file: UploadFile = File(...),
     title: str | None = Form(None),
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     portal = _get_portal_or_404(db, portal_id)
     max_order = max([v.sort_order for v in portal.videos], default=-1)
@@ -478,7 +485,7 @@ def update_video(
     video_id: int,
     payload: PortalVideoUpdate,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     video = db.get(PortalVideo, video_id)
     if not video:
@@ -494,7 +501,7 @@ async def replace_video(
     video_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     video = db.get(PortalVideo, video_id)
     if not video:
@@ -515,7 +522,7 @@ async def replace_video(
 
 @router.delete("/videos/{video_id}", status_code=204)
 def delete_video(
-    video_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete"))
+    video_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
 ):
     video = db.get(PortalVideo, video_id)
     if not video:
@@ -530,7 +537,7 @@ def reorder_videos(
     portal_id: int,
     payload: ReorderPayload,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     for index, vid in enumerate(payload.ordered_ids):
         video = db.get(PortalVideo, vid)
@@ -548,7 +555,7 @@ def create_folder(
     portal_id: int,
     payload: PortalFolderCreate,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     portal = _get_portal_or_404(db, portal_id)
     max_order = max([f.sort_order for f in portal.folders], default=-1)
@@ -564,7 +571,7 @@ def update_folder(
     folder_id: int,
     payload: PortalFolderUpdate,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     folder = db.get(PortalFolder, folder_id)
     if not folder:
@@ -577,7 +584,7 @@ def update_folder(
 
 @router.delete("/folders/{folder_id}", status_code=204)
 def delete_folder(
-    folder_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete"))
+    folder_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
 ):
     folder = db.get(PortalFolder, folder_id)
     if not folder:
@@ -601,7 +608,7 @@ async def upload_image(
     file: UploadFile = File(...),
     folder_id: int | None = Form(None),
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "create")),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     portal = _get_portal_or_404(db, portal_id)
     image = PortalImage(portal_id=portal_id, folder_id=folder_id)
@@ -643,7 +650,7 @@ def update_image(
     image_id: int,
     payload: PortalImageUpdate,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     image = db.get(PortalImage, image_id)
     if not image:
@@ -659,7 +666,7 @@ def update_image(
 
 @router.delete("/images/{image_id}", status_code=204)
 def delete_image(
-    image_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete"))
+    image_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
 ):
     image = db.get(PortalImage, image_id)
     if not image:
@@ -673,13 +680,13 @@ def delete_image(
 
 
 @router.post("/notion/sync")
-def notion_sync(db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "edit"))):
+def notion_sync(db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR))):
     return portal_notion.sync_portals(db)
 
 
 @router.post("/maintenance/backfill-video-sizes")
 def backfill_video_sizes(
-    db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "edit"))
+    db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR))
 ):
     videos = db.query(PortalVideo).all()
     updated = skipped = 0
@@ -733,7 +740,7 @@ def pending_deletion(db: Session = Depends(get_db), _user: Employee = Depends(ge
 
 @router.post("/maintenance/{portal_id}/purge-files")
 def purge_portal_files(
-    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete"))
+    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
 ):
     """Egy portál ÖSSZES fájlját törli az R2-ből (videók + képek), de a
     PORTÁLT meghagyja (hogy a kapcsolat-oldal továbbra is működjön)."""

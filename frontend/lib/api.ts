@@ -2234,6 +2234,15 @@ export async function getDispoResponsibles(): Promise<DispoResponsibles> {
   return (await apiGet<DispoResponsibles>("/api/v1/dispo-responsibles")) ?? { gyartas: [], technika: [] };
 }
 
+/** Kik kapják MÁSOLATBAN (CC) az összes kimenő diszpót - a Beállítások
+ * oldalon, adminként állítható névsor (lásd backend
+ * routes/dispo_responsibles.py "/masolat"). */
+export type DiszpoMasolatCimzettek = { employee_ids: number[] };
+
+export async function getDiszpoMasolatCimzettek(): Promise<DiszpoMasolatCimzettek> {
+  return (await apiGet<DiszpoMasolatCimzettek>("/api/v1/dispo-responsibles/masolat")) ?? { employee_ids: [] };
+}
+
 export async function getMyTasksSummary(): Promise<MyTasksSummary | null> {
   return apiGet<MyTasksSummary>("/api/v1/dashboard/my-tasks");
 }

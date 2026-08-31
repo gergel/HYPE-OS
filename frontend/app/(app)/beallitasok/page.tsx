@@ -3,6 +3,7 @@ import { CalendarSyncPanel } from "@/components/CalendarSyncPanel";
 import { Card } from "@/components/Card";
 import { DetailTabEditor } from "@/components/DetailTabEditor";
 import { DispoResponsiblesManager } from "@/components/DispoResponsiblesManager";
+import { DiszpoMasolatManager } from "@/components/DiszpoMasolatManager";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
 import { EntityFieldManager } from "@/components/EntityFieldManager";
 import { KpForgalomUjraszinkron } from "@/components/KpForgalomUjraszinkron";
@@ -14,6 +15,7 @@ import {
   ENTITY_PATHS,
   getAllDetailTabs,
   getDispoResponsibles,
+  getDiszpoMasolatCimzettek,
   getAllFieldVisibility,
   getAllPageAccess,
   getDeliverables,
@@ -91,6 +93,7 @@ export default async function BeallitasokPage() {
     currentUser,
     allDetailTabs,
     dispoResponsibles,
+    diszpoMasolat,
     anyagok,
   ] = await Promise.all([
     getEmployees(),
@@ -100,6 +103,7 @@ export default async function BeallitasokPage() {
     getCurrentUser(),
     getAllDetailTabs(),
     getDispoResponsibles(),
+    getDiszpoMasolatCimzettek(),
     getDeliverables(),
   ]);
   const pages = pagePermissionGroups();
@@ -197,6 +201,16 @@ export default async function BeallitasokPage() {
               szerepelhet.
             </p>
             <DispoResponsiblesManager initial={dispoResponsibles} employees={employees} />
+          </Card>
+        )}
+
+        {szerepkorei(currentUser).includes("admin") && (
+          <Card title="Diszpó másolat-címzettek">
+            <p className="mb-3 text-[13px] text-text-secondary">
+              Akik itt szerepelnek, MÁSOLATBAN (CC) megkapják az ÖSSZES kimenő diszpót - az előzetest és a teljeset
+              is, minden forgatásról. A rendszer fix másolat-címei (HYPE_CC) mellé kerülnek.
+            </p>
+            <DiszpoMasolatManager initial={diszpoMasolat.employee_ids} employees={employees} />
           </Card>
         )}
 

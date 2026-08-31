@@ -23,6 +23,20 @@ class DispoSide(str, enum.Enum):
     TECHNIKA = "technika"
 
 
+class DiszpoMasolatCimzett(TimestampMixin, Base):
+    """Kik kapják MÁSOLATBAN (CC) az ÖSSZES kimenő diszpót - az előzetest és a
+    teljeset is (lásd services/dispo.py). A Beállítások oldalon, adminként
+    állítható névsor; a leveleken a HYPE_CC env-ben megadott fix címek MELLÉ
+    kerülnek (lásd services/google_email.send_message)."""
+
+    __tablename__ = "diszpo_masolat_cimzettek"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+
+
 class DispoResponsible(TimestampMixin, Base):
     """Ki felel a diszpó kiküldéséért - a Beállítások oldalon állítható,
     oldalanként AKÁRHÁNY ember (a felhasználó kérése), és ugyanaz az ember

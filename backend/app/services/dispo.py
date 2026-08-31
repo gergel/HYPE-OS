@@ -27,9 +27,11 @@ import logging
 import secrets
 from datetime import datetime, time, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.dispo_responsible import DiszpoMasolatCimzett
 from app.models.employee import Employee
 from app.models.project import Project
 from app.services import attachments, document_storage, projektkod_kotes
@@ -300,6 +302,18 @@ def _diszpo_csatolmanyok(db: Session, project: Project) -> list[tuple[str, str, 
     return csatolmanyok
 
 
+def masolat_cimzettek(db: Session) -> list[str]:
+    """A Beállításokban megadott emberek email címei - MINDEN kimenő diszpó
+    (előzetes és teljes) másolatot (CC) kap rájuk, a HYPE_CC env fix címei
+    mellé (lásd models/dispo_responsible.DiszpoMasolatCimzett és
+    google_email.send_message extra_cc). Akinek nincs email címe, azt
+    csendben kihagyjuk - nincs hova küldeni."""
+    sorok = db.scalars(
+        select(Employee).join(DiszpoMasolatCimzett, DiszpoMasolatCimzett.employee_id == Employee.id)
+    ).all()
+    return [e.email.strip() for e in sorok if e.email and e.email.strip()]
+
+
 def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     """'Előzetes diszpó' gomb - rövid, technika-lista nélküli tájékoztató email
     (helyszín + diszpó szövege), nem generál PDF-et."""
@@ -317,6 +331,7 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
         thread_id=project.gmail_thread_id,
         in_reply_to=project.gmail_last_message_id,
         sender_name=settings.dispo_sender_name,
+        extra_cc=masolat_cimzettek(db),
     )
 
     # A levél ekkor már ténylegesen kiment (a send_message fentebb hibát dobna,
@@ -435,6 +450,7 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
         thread_id=project.gmail_thread_id,
         in_reply_to=project.gmail_last_message_id,
         sender_name=settings.dispo_sender_name,
+        extra_cc=masolat_cimzettek(db),
     )
 
     # A levél kiment - a kész PDF innentől archiválható a Drive mappájába.

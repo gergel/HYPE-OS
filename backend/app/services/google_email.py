@@ -185,6 +185,20 @@ def _build_mime(
     return {"raw": raw}
 
 
+def cc_lista(to_list: list[str], extra_cc: list[str] | None) -> list[str]:
+    """A levél tényleges CC listája: a HYPE_CC env fix címei + az extra címek
+    (pl. a Beállításokban megadott diszpó másolat-címzettek), kisbetű-
+    érzéketlenül szűrve - aki címzett vagy már CC, nem kerül fel még egyszer."""
+    cc = list(settings.hype_cc_list or [])
+    megvan = {c.strip().casefold() for c in cc} | {t.strip().casefold() for t in to_list}
+    for cim in extra_cc or []:
+        kulcs = (cim or "").strip().casefold()
+        if kulcs and kulcs not in megvan:
+            cc.append(cim.strip())
+            megvan.add(kulcs)
+    return cc
+
+
 def send_message(
     to_list: list[str],
     subject: str,
@@ -197,10 +211,14 @@ def send_message(
     in_reply_to: str | None = None,
     sender_name: str | None = None,
     sender_email: str | None = None,
+    extra_cc: list[str] | None = None,
 ) -> tuple[str | None, str | None, str | None]:
     """Visszatér: (gmailThreadId, gmailMessageId, rfc822MessageId). CC mindig a
-    HYPE_CC env-ben megadott lista. thread_id + in_reply_to esetén ugyanabban a
-    Gmail szálban válaszol, nem új levelet indít.
+    HYPE_CC env-ben megadott lista + az extra_cc címei (kisbetű-érzéketlenül
+    szűrve: aki címzett vagy már CC, az nem kerül fel még egyszer - pl. a
+    Beállításokban megadott diszpó másolat-címzettek, lásd services/dispo.py).
+    thread_id + in_reply_to esetén ugyanabban a Gmail szálban válaszol, nem új
+    levelet indít.
 
     sender_name: a címzett által látott feladónév erre a levélre (alapból a
     GMAIL_SENDER_NAME). sender_email: a küldő CÍM (alapból GMAIL_SENDER) -
@@ -212,7 +230,7 @@ def send_message(
         subject=subject,
         sender=sender,
         to_list=to_list,
-        cc_list=settings.hype_cc_list,
+        cc_list=cc_lista(to_list, extra_cc),
         pdf_bytes=pdf_bytes,
         pdf_filename=pdf_filename,
         csatolmanyok=csatolmanyok,
