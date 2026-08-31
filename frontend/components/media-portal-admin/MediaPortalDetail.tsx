@@ -559,15 +559,18 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
   const selectedCount = selectedVideos.size + selectedImages.size;
 
   return (
-    <div className="flex-1 space-y-4 p-6 lg:p-8">
+    // min-w-0 + overflow-x-hidden: telefonon a hosszú, nem törhető tartalmak
+    // (slug, fájlnevek) ne tolhassák a lapot a képernyőnél szélesebbre - ettől
+    // csúszott el a fejléc is (a felhasználó hibajelzése).
+    <div className="min-w-0 flex-1 space-y-4 overflow-x-hidden p-4 sm:p-6 lg:p-8">
       <Link href="/media-portal" className="inline-flex items-center gap-1.5 text-[13px] text-text-muted hover:text-text-primary">
         <ArrowLeft className="h-3.5 w-3.5" />
         Összes Portál
       </Link>
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         {/* Beállítások */}
-        <Card title="Portál adatai">
+        <Card title="Portál adatai" className="min-w-0">
           <div className="space-y-3">
             <Field label="Projekt címe" value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} />
             <Field
@@ -765,7 +768,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
         </Card>
 
         {/* Fájlok / Mappák (Drive-szerű) */}
-        <Card>
+        <Card className="min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               {currentFolder && (
