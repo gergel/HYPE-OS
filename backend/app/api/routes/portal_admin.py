@@ -182,6 +182,10 @@ def create_portal(
 
 class PortalFromDeliverableCreate(BaseModel):
     password: str | None = None
+    #: A forgatás dátuma "ÉÉÉÉ.HH.NN." formában - CSAK akkor kell megadni, ha
+    #: az utómunkához nincs forgatás (Project) kötve, ahonnan a dátum magától
+    #: kiolvasható (a frontend ilyenkor felugró ablakban kéri be).
+    forgatas_datum: str | None = None
 
 
 @router.post("/from-deliverable/{deliverable_id}", response_model=PortalSummary, status_code=201)
@@ -207,7 +211,21 @@ def create_portal_from_deliverable(
     # projektkód ügyfele sokszor csak import-gyűjtő ("Ismeretlen ügyfél"),
     # és az ügyfélnek kimenő oldalon rosszabb egy téves név, mint az üres -
     # ha kell, az admin utólag kitölti a Portál adatainál.
-    project_date = deliverable.hatarido.strftime("%Y.%m.%d") if deliverable.hatarido else ""
+    #
+    # A Portálon megjelenő dátum a FORGATÁS dátuma (a felhasználó kérése), nem
+    # az utómunka határideje: ha az utómunkához forgatás (Project) van kötve,
+    # onnan olvassuk ki magától; ha nincs, a frontend felugró ablakban kéri be
+    # KÖTELEZŐEN (payload.forgatas_datum) - dátum nélkül nem jön létre Portál.
+    projekt_forgatas = deliverable.project.forgatas_datuma if deliverable.project else None
+    if projekt_forgatas is not None:
+        project_date = projekt_forgatas.strftime("%Y.%m.%d")
+    elif (payload.forgatas_datum or "").strip():
+        project_date = (payload.forgatas_datum or "").strip()
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Add meg a forgatás dátumát - az utómunkához nincs forgatás kötve, ahonnan ki tudnánk olvasni",
+        )
 
     slug_base = slugify(title)
     slug = slug_base

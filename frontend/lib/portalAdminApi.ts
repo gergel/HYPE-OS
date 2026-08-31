@@ -47,10 +47,22 @@ export async function createManualPortal(
   });
 }
 
-export async function createPortalFromDeliverable(deliverableId: number, password?: string): Promise<PortalSummary> {
+export async function createPortalFromDeliverable(
+  deliverableId: number,
+  opts?: {
+    password?: string;
+    /** A forgatás dátuma "ÉÉÉÉ.HH.NN" formában - csak akkor kell, ha az
+     * utómunkához nincs forgatás kötve (a backend olyankor e nélkül 400-zal
+     * utasítja el a létrehozást). */
+    forgatasDatum?: string;
+  }
+): Promise<PortalSummary> {
   return req<PortalSummary>(`/api/v1/portal-admin/from-deliverable/${deliverableId}`, {
     method: "POST",
-    body: JSON.stringify({ password: password || undefined }),
+    body: JSON.stringify({
+      password: opts?.password || undefined,
+      forgatas_datum: opts?.forgatasDatum || undefined,
+    }),
   });
 }
 

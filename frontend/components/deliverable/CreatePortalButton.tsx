@@ -10,28 +10,40 @@ import { portalUrl } from "@/lib/portalUrl";
 /** Az Utómunka részletnézetén megjelenő "Portál létrehozása" gomb - egy Média
  * Portált hoz létre közvetlenül ehhez a Deliverable-hez kötve (nem a
  * mögöttes Projekthez, mert egy Projektnek több Deliverable-je is lehet), és
- * a Portál TELJES, kiküldhető publikus linkjét (megosztó token-nel, mint a
- * Portál admin "Megosztó link" gombja) automatikusan beírja a "Kész anyag
- * URL" mezőbe. Az abszolút URL-t szándékosan itt, a böngészőben rakjuk
- * össze (lib/portalUrl.ts), nem a backend teszi ezt - a backend nem tudhatja
- * megbízhatóan a publikus domain-t minden környezetben, és enélkül csak a
- * relatív "/p/{slug}..." útvonal kerülne a mezőbe, amit nem lehet közvetlenül
- * kiküldeni a megrendelőnek. A link a PORTÁL domainjére mutat, nem az admin
- * felületére, ahol ez a gomb megnyomódik.
+ * a Portál LETISZTULT publikus linkjét (a sima /p/{slug} címet, share token
+ * nélkül - ugyanazt, amit a Portál admin "Megosztó link" gombja ad)
+ * automatikusan beírja a "Kész anyag URL" mezőbe. Az abszolút URL-t
+ * szándékosan itt, a böngészőben rakjuk össze (lib/portalUrl.ts), nem a
+ * backend teszi ezt - a backend nem tudhatja megbízhatóan a publikus
+ * domain-t minden környezetben, és enélkül csak a relatív "/p/{slug}"
+ * útvonal kerülne a mezőbe, amit nem lehet közvetlenül kiküldeni a
+ * megrendelőnek. A link a PORTÁL domainjére mutat, nem az admin felületére,
+ * ahol ez a gomb megnyomódik.
+ *
+ * A Portálon megjelenő dátum a FORGATÁS dátuma: ha az utómunkához forgatás
+ * van kötve, onnan megy magától (forgatasDatum prop); ha nincs, a gomb
+ * felugró ablakban kéri be, és KÖTELEZŐ megadni (a felhasználó kérése).
+ *
  * A Portál Admin listában (/media-portal) is megjelenik, mert ugyanabba a
  * `portals` táblába kerül, mint a projekt-alapú vagy kézi Portálok. */
 export function CreatePortalButton({
   deliverableId,
   existingPortalId,
   keszAnyagUrl,
+  forgatasDatum,
 }: {
   deliverableId: number;
   existingPortalId: number | null;
   keszAnyagUrl: string | null;
+  /** A kötött forgatás (Project) dátuma ISO formában ("2026-09-12"), vagy
+   * null, ha az utómunkához nincs forgatás kötve. */
+  forgatasDatum: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [datumKerdes, setDatumKerdes] = useState(false);
+  const [datum, setDatum] = useState("");
 
   if (existingPortalId) {
     return (
@@ -58,12 +70,16 @@ export function CreatePortalButton({
     );
   }
 
-  async function onCreate() {
+  async function letrehozas(kezziDatum?: string) {
     setBusy(true);
     setError(null);
     try {
-      const portal = await createPortalFromDeliverable(deliverableId);
-      const fullUrl = portalUrl(portal.slug, portal.share_token);
+      // Ha a dátum kézzel jött (nincs kötött forgatás), ISO-ból a Portálon
+      // használt "ÉÉÉÉ.HH.NN" formára váltjuk.
+      const portal = await createPortalFromDeliverable(deliverableId, {
+        forgatasDatum: kezziDatum ? kezziDatum.replaceAll("-", ".") : undefined,
+      });
+      const fullUrl = portalUrl(portal.slug);
       const res = await authFetch(`/api/v1/deliverables/${deliverableId}`, {
         method: "PATCH",
         body: JSON.stringify({ kesz_anyag_url: fullUrl }),
@@ -73,6 +89,7 @@ export function CreatePortalButton({
         setError(`A portál létrejött, de a "Kész anyag URL" mentése sikertelen: ${detail?.detail ?? res.status}`);
         return;
       }
+      setDatumKerdes(false);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -81,21 +98,74 @@ export function CreatePortalButton({
     }
   }
 
+  function onCreateClick() {
+    // Kötött forgatás nélkül a dátumot KÖTELEZŐ bekérni - a backend enélkül
+    // el sem fogadja a létrehozást.
+    if (!forgatasDatum) {
+      setError(null);
+      setDatumKerdes(true);
+      return;
+    }
+    void letrehozas();
+  }
+
   return (
     <div>
       <p className="mb-2 text-[13px] text-text-secondary">
-        Hozz létre egy Média Portált ehhez az anyaghoz - a publikus linkje automatikusan bekerül a "Kész anyag URL" mezőbe.
+        Hozz létre egy Média Portált ehhez az anyaghoz - a publikus linkje automatikusan bekerül a &quot;Kész anyag URL&quot; mezőbe.
       </p>
       <button
         type="button"
-        onClick={onCreate}
+        onClick={onCreateClick}
         disabled={busy}
         className="btn btn-primary"
       >
         <Globe className="h-4 w-4" />
         {busy ? "Létrehozás…" : "Portál létrehozása"}
       </button>
-      {error && <p className="mt-2 text-[12px] text-text-danger">Sikertelen: {error}</p>}
+      {error && !datumKerdes && <p className="mt-2 text-[12px] text-text-danger">Sikertelen: {error}</p>}
+
+      {datumKerdes && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-[var(--radius)] border border-border bg-surface-1 p-5 shadow-xl">
+            <h3 className="mb-1 text-[15px] font-semibold text-text-primary">Mi volt a forgatás dátuma?</h3>
+            <p className="mb-4 text-[13px] text-text-secondary">
+              Ehhez az utómunkához nincs forgatás kötve, ezért a Portálon megjelenő forgatási dátumot itt kell
+              megadni - enélkül nem jön létre a Portál.
+            </p>
+            <input
+              type="date"
+              value={datum}
+              onChange={(e) => setDatum(e.target.value)}
+              autoFocus
+              className="mb-4 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary focus:outline-none focus:ring-1 focus:ring-border-strong"
+            />
+            {error && <p className="mb-3 text-[12px] text-text-danger">Sikertelen: {error}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDatumKerdes(false);
+                  setDatum("");
+                  setError(null);
+                }}
+                disabled={busy}
+                className="btn btn-ghost"
+              >
+                Mégse
+              </button>
+              <button
+                type="button"
+                onClick={() => void letrehozas(datum)}
+                disabled={busy || !datum}
+                className="btn btn-primary"
+              >
+                {busy ? "Létrehozás…" : "Portál létrehozása"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

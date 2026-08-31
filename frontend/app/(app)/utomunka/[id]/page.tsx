@@ -200,6 +200,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               deliverableId={deliverableId}
               existingPortalId={deliverable.portal_id ? Number(deliverable.portal_id) : null}
               keszAnyagUrl={deliverable.kesz_anyag_url ? String(deliverable.kesz_anyag_url) : null}
+              forgatasDatum={project?.forgatas_datuma ? String(project.forgatas_datuma) : null}
             />
           </Card>
         ),
