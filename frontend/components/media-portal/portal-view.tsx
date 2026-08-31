@@ -405,7 +405,13 @@ export function PortalView({
         </p>
       </footer>
 
-      {active && <VideoPlayer video={active} onClose={() => setActive(null)} />}
+      {active && (
+        <VideoPlayer
+          video={active}
+          onClose={() => setActive(null)}
+          onShare={linkMasolas ? () => void linkreMasol({ videoId: active.id }) : undefined}
+        />
+      )}
       {lightbox && (
         <ImageLightbox
           images={lightbox.images}

@@ -1,15 +1,32 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import { X, Download, Loader2 } from "lucide-react";
+import { X, Download, Loader2, Link as LinkIcon, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PortalVideo } from "@/lib/portalApi";
 import { downloadVideo } from "@/lib/portalUtils";
 
-export function VideoPlayer({ video, onClose }: { video: PortalVideo; onClose: () => void }) {
+export function VideoPlayer({
+  video,
+  onClose,
+  onShare,
+}: {
+  video: PortalVideo;
+  onClose: () => void;
+  /** A videó megosztó linkjének másolása a NAGYBAN megnyitott nézetből is
+   * (a felhasználó kérése) - lásd PortalView.linkreMasol. */
+  onShare?: () => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [linkMasolva, setLinkMasolva] = useState(false);
+
+  function handleShare() {
+    onShare?.();
+    setLinkMasolva(true);
+    window.setTimeout(() => setLinkMasolva(false), 2500);
+  }
 
   async function handleDownload() {
     if (preparing) return;
@@ -94,6 +111,17 @@ export function VideoPlayer({ video, onClose }: { video: PortalVideo; onClose: (
               <h3 className="truncate font-display text-lg text-bone">{video.title}</h3>
               <span className="font-mono text-xs uppercase tracking-eyebrow text-mist">{video.resolution_label}</span>
             </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+            {onShare && (
+              <button
+                onClick={handleShare}
+                title="A videó linkjének másolása - aki megkapja, csak ezt a videót látja"
+                className="flex items-center gap-2 whitespace-nowrap rounded-full border border-ink-line px-5 py-3 text-sm text-bone transition hover:border-bone/60"
+              >
+                {linkMasolva ? <Check className="h-5 w-5" /> : <LinkIcon className="h-5 w-5" />}
+                {linkMasolva ? "Link másolva" : "Link másolása"}
+              </button>
+            )}
             <button
               onClick={handleDownload}
               disabled={preparing}
@@ -113,6 +141,7 @@ export function VideoPlayer({ video, onClose }: { video: PortalVideo; onClose: (
                 )}
               </span>
             </button>
+            </div>
           </div>
         </motion.div>
       </motion.div>
