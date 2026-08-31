@@ -2904,6 +2904,12 @@ export type VagoAllas = {
   ellenorzes_pont: number;
   vagas_perc: number;
   vagas_pont: number;
+  /** Ellenőrzés-kimenetek: javítás nélkül átment (+) és javításba került (-)
+   * anyagok száma, meg a pont-egyenlegük (lásd backend
+   * models/vagoi_jatek.VagoEllenorzesKimenet). */
+  jovahagyas_db: number;
+  javitas_db: number;
+  kimenet_pont: number;
   /** Arányosítás ELŐTT. */
   nyers_pont: number;
   munkanap: number;
@@ -2930,6 +2936,8 @@ export type VagoSzabalyok = {
   ellenorzes_pont: number;
   perc_per_pont: number;
   alap_munkanap: number;
+  jovahagyas_pont: number;
+  javitas_pont: number;
 };
 
 export async function getVagoHonap(ev?: number, honap?: number): Promise<VagoHonap | null> {
@@ -2950,6 +2958,8 @@ export async function getVagoSzabalyok(): Promise<VagoSzabalyok> {
       ellenorzes_pont: 50,
       perc_per_pont: 3,
       alap_munkanap: 20,
+      jovahagyas_pont: 100,
+      javitas_pont: -20,
     }
   );
 }

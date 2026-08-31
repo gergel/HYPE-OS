@@ -39,7 +39,10 @@ export default async function VagoiJatekPage() {
             <h1 className="t-page">Vágói játék</h1>
             <p className="mt-1.5 text-[13px] text-text-secondary">
               Minden ellenőrzésbe tett anyag {szabalyok.ellenorzes_pont} pont, minden{" "}
-              {szabalyok.perc_per_pont} perc vágás 1 pont. A hónap végén a legtöbb pontot gyűjtő viszi a nyereményt.
+              {szabalyok.perc_per_pont} perc vágás 1 pont. Ha az anyag az ellenőrzésből javítás nélkül
+              megy tovább (kiküldésre vár / kész kiküldve), az +{szabalyok.jovahagyas_pont} pont — ha
+              javításba kerül, az {szabalyok.javitas_pont} pont. A hónap végén a legtöbb pontot gyűjtő
+              viszi a nyereményt.
             </p>
           </div>
           {honap && szerkesztheto && (
@@ -148,6 +151,7 @@ function Reszletek({
               <th className="py-2 pr-4 text-left font-medium text-text-muted">Név</th>
               <th className="py-2 pr-4 text-right font-medium text-text-muted">Ellenőrzésbe tett</th>
               <th className="py-2 pr-4 text-right font-medium text-text-muted">Vágás</th>
+              <th className="py-2 pr-4 text-right font-medium text-text-muted">Elsőre jó / javítás</th>
               <th className="py-2 pr-4 text-right font-medium text-text-muted">Nyers pont</th>
               <th className="py-2 pr-4 text-right font-medium text-text-muted">Munkanap</th>
               <th className="py-2 text-right font-medium text-text-muted">Pont</th>
@@ -164,6 +168,20 @@ function Reszletek({
                 <td className="py-2.5 pr-4 text-right tabular-nums text-text-secondary">
                   {Math.round(a.vagas_perc / 60)} óra
                   <span className="ml-1.5 text-[11px] text-text-muted">{a.vagas_pont} p</span>
+                </td>
+                {/* Az ellenőrzés kimenete: javítás nélkül átment (+100/db) és
+                    javításba került (-20/db) anyagok - a pont-egyenlegükkel. */}
+                <td className="py-2.5 pr-4 text-right tabular-nums text-text-secondary">
+                  {a.jovahagyas_db > 0 && <span className="text-text-success">{a.jovahagyas_db} jó</span>}
+                  {a.jovahagyas_db > 0 && a.javitas_db > 0 && " · "}
+                  {a.javitas_db > 0 && <span className="text-text-danger">{a.javitas_db} javítás</span>}
+                  {a.jovahagyas_db === 0 && a.javitas_db === 0 && "–"}
+                  {(a.jovahagyas_db > 0 || a.javitas_db > 0) && (
+                    <span className="ml-1.5 text-[11px] text-text-muted">
+                      {a.kimenet_pont > 0 ? "+" : ""}
+                      {a.kimenet_pont} p
+                    </span>
+                  )}
                 </td>
                 <td className="py-2.5 pr-4 text-right tabular-nums text-text-secondary">{a.nyers_pont}</td>
                 <td className="py-2.5 pr-4 text-right">

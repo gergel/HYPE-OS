@@ -124,6 +124,13 @@ def _after_deliverable_update(
         if vagoi_jatek.rogzitsd_ellenorzest(db, obj, current_user):
             db.commit()
 
+    # Az ellenőrzésből TOVÁBBLÉPŐ anyag ítélete: javítás nélkül tovább = +100
+    # annak, aki ellenőrzésbe tette; javításba került = -20 (lásd
+    # services/vagoi_jatek.rogzitsd_kimenetet - anyagonként egyszer).
+    if "allapot" in data:
+        if vagoi_jatek.rogzitsd_kimenetet(db, obj, getattr(obj, "_regi_allapot", None)):
+            db.commit()
+
     # A régi, egyértékű mező PATCH-e (pl. a generikus rács felől) a kiosztottak
     # listáját is ehhez az EGY emberhez igazítja - a két forrás nem csúszhat szét.
     if "assigned_to_employee_id" in data:

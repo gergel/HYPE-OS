@@ -81,6 +81,7 @@ from app.models.krumpello import (
 from app.models.megrendeloi_papir import MegrendeloiSzerzodes, MegrendeloiTig
 from app.models.vagoi_jatek import (
     VagoEllenorzesEsemeny,
+    VagoEllenorzesKimenet,
     VagoJatekHonap,
     VagoJatekNap,
 )
@@ -162,6 +163,7 @@ __all__ = [
     "MegrendeloiSzerzodes",
     "MegrendeloiTig",
     "VagoEllenorzesEsemeny",
+    "VagoEllenorzesKimenet",
     "VagoJatekHonap",
     "VagoJatekNap",
     "Vallalkozas",

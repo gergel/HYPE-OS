@@ -27,6 +27,8 @@ from app.models.employee import Employee
 from app.models.vagoi_jatek import (
     ALAP_MUNKANAP,
     ELLENORZES_PONT,
+    JAVITAS_PONT,
+    JOVAHAGYAS_PONT,
     PERC_PER_PONT,
     VagoJatekHonap,
     VagoJatekNap,
@@ -45,6 +47,11 @@ class AllasOut(BaseModel):
     ellenorzes_pont: int
     vagas_perc: float
     vagas_pont: int
+    #: Ellenőrzés-kimenetek: javítás nélkül átment (+100/db) és javításba
+    #: került (-20/db) anyagok száma, meg a pont-egyenlegük.
+    jovahagyas_db: int
+    javitas_db: int
+    kimenet_pont: int
     nyers_pont: int
     munkanap: int
     pont: int
@@ -74,6 +81,8 @@ class SzabalyokOut(BaseModel):
     ellenorzes_pont: int = ELLENORZES_PONT
     perc_per_pont: int = PERC_PER_PONT
     alap_munkanap: int = ALAP_MUNKANAP
+    jovahagyas_pont: int = JOVAHAGYAS_PONT
+    javitas_pont: int = JAVITAS_PONT
 
 
 def _ma() -> tuple[int, int]:
@@ -90,6 +99,9 @@ def _allas_kimenet(allas: list[vagoi_jatek.Allas]) -> list[AllasOut]:
             ellenorzes_pont=a.ellenorzes_pont,
             vagas_perc=round(a.vagas_perc, 1),
             vagas_pont=a.vagas_pont,
+            jovahagyas_db=a.jovahagyas_db,
+            javitas_db=a.javitas_db,
+            kimenet_pont=a.kimenet_pont,
             nyers_pont=a.nyers_pont,
             munkanap=a.munkanap,
             pont=a.pont,

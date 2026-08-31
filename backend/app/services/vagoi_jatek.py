@@ -29,8 +29,11 @@ from app.models.timesheet import Timesheet
 from app.models.vagoi_jatek import (
     ALAP_MUNKANAP,
     ELLENORZES_PONT,
+    JAVITAS_PONT,
+    JOVAHAGYAS_PONT,
     PERC_PER_PONT,
     VagoEllenorzesEsemeny,
+    VagoEllenorzesKimenet,
     VagoJatekHonap,
     VagoJatekNap,
 )
@@ -78,6 +81,65 @@ def rogzitsd_ellenorzest(db: Session, deliverable: Deliverable, employee: Employ
     return True
 
 
+def javitas_allapot(allapot: str | None) -> bool:
+    """Javításnak számít-e ez az állapot - ugyanaz a névben-keresős elv, mint
+    az ellenorzes_allapot-nál: egy átnevezés ne törje el némán a pontozást."""
+    if not allapot:
+        return False
+    return "javitas" in _ekezet_nelkul(allapot)
+
+
+def kikuldes_allapot(allapot: str | None) -> bool:
+    """Kiküldés-féle állapot-e ("Kiküldésre vár", "Kész kiküldve",
+    "Kiküldhető") - az ellenőrzésből ide lépés a "javítás nélkül jó" ítélet."""
+    if not allapot:
+        return False
+    return "kikuld" in _ekezet_nelkul(allapot)
+
+
+def rogzitsd_kimenetet(db: Session, deliverable: Deliverable, regi_allapot: str | None) -> bool:
+    """Az ellenőrzésből TOVÁBBLÉPŐ anyag ítélete - anyagonként egyszer.
+
+    +JOVAHAGYAS_PONT, ha az ellenőrzésből javítás nélkül ment kiküldés-féle
+    állapotba; JAVITAS_PONT (negatív), ha javításba került. A pontot az kapja,
+    aki az anyagot ellenőrzésbe tette (a VagoEllenorzesEsemeny szerint) - ha
+    ilyen esemény nincs (az anyag még a játék előtt került ellenőrzésbe),
+    nincs kit jutalmazni/büntetni, nem történik semmi.
+
+    Az ELSŐ ítélet számít: a deliverable_id egyedi, egy később oda-vissza
+    tologatott anyag nem termel újabb pontot. True, ha ÚJ kimenet keletkezett;
+    a commit a hívóé."""
+    if not ellenorzes_allapot(regi_allapot) or ellenorzes_allapot(deliverable.allapot):
+        return False
+    if javitas_allapot(deliverable.allapot):
+        kimenet, pont = "javitas", JAVITAS_PONT
+    elif kikuldes_allapot(deliverable.allapot):
+        kimenet, pont = "jovahagyva", JOVAHAGYAS_PONT
+    else:
+        return False
+    letezo = db.scalar(
+        select(VagoEllenorzesKimenet).where(VagoEllenorzesKimenet.deliverable_id == deliverable.id)
+    )
+    if letezo is not None:
+        return False
+    esemeny = db.scalar(
+        select(VagoEllenorzesEsemeny).where(VagoEllenorzesEsemeny.deliverable_id == deliverable.id)
+    )
+    if esemeny is None:
+        return False
+    db.add(
+        VagoEllenorzesKimenet(
+            deliverable_id=deliverable.id,
+            employee_id=esemeny.employee_id,
+            idopont=datetime.now(timezone.utc),
+            kimenet=kimenet,
+            pont=pont,
+            allapot=deliverable.allapot,
+        )
+    )
+    return True
+
+
 def honap_hatarai(ev: int, honap: int) -> tuple[datetime, datetime]:
     """A hónap [kezdet, vég) határa időbélyegként, UTC-ben."""
     kezdet = datetime(ev, honap, 1, tzinfo=timezone.utc)
@@ -97,6 +159,11 @@ class Allas:
     #: Vágással töltött percek és az abból járó pont.
     vagas_perc: float = 0.0
     vagas_pont: int = 0
+    #: Hány anyaga ment át ellenőrzésen javítás nélkül (+), és hány került
+    #: javításba (-), meg az ezekből járó pont-egyenleg.
+    jovahagyas_db: int = 0
+    javitas_db: int = 0
+    kimenet_pont: int = 0
     #: A kettő összege, arányosítás ELŐTT.
     nyers_pont: int = 0
     #: Ennyi munkanapja volt (beállítás vagy az alapérték).
@@ -163,13 +230,20 @@ def honap_allasa(db: Session, ev: int, honap: int) -> list[Allas]:
             VagoEllenorzesEsemeny.idopont >= kezdet, VagoEllenorzesEsemeny.idopont < veg
         )
     ).all()
+    kimenetek = db.scalars(
+        select(VagoEllenorzesKimenet).where(
+            VagoEllenorzesKimenet.idopont >= kezdet, VagoEllenorzesKimenet.idopont < veg
+        )
+    ).all()
     percek = _percek_honapra(db, kezdet, veg)
     napok = {
         n.employee_id: n
         for n in db.scalars(select(VagoJatekNap).where(VagoJatekNap.ev == ev, VagoJatekNap.honap == honap)).all()
     }
 
-    erintett: set[int] = set(percek) | {e.employee_id for e in esemenyek} | set(napok)
+    erintett: set[int] = (
+        set(percek) | {e.employee_id for e in esemenyek} | {k.employee_id for k in kimenetek} | set(napok)
+    )
     if not erintett:
         return []
     nevek = {
@@ -179,6 +253,7 @@ def honap_allasa(db: Session, ev: int, honap: int) -> list[Allas]:
     allasok: list[Allas] = []
     for employee_id in erintett:
         sajat_esemenyek = [e for e in esemenyek if e.employee_id == employee_id]
+        sajat_kimenetek = [k for k in kimenetek if k.employee_id == employee_id]
         vagas_perc = percek.get(employee_id, 0.0)
         munkanap = napok[employee_id].munkanap if employee_id in napok else ALAP_MUNKANAP
         # 0 vagy negatív munkanap: az arányosítás nullával osztana. Aki egy
@@ -194,9 +269,12 @@ def honap_allasa(db: Session, ev: int, honap: int) -> list[Allas]:
             vagas_perc=vagas_perc,
             # Lefelé kerekítünk: a megkezdett 3 perc még nem teljes pont.
             vagas_pont=int(vagas_perc // PERC_PER_PONT),
+            jovahagyas_db=sum(1 for k in sajat_kimenetek if k.kimenet == "jovahagyva"),
+            javitas_db=sum(1 for k in sajat_kimenetek if k.kimenet == "javitas"),
+            kimenet_pont=sum(k.pont for k in sajat_kimenetek),
             munkanap=munkanap,
         )
-        a.nyers_pont = a.ellenorzes_pont + a.vagas_pont
+        a.nyers_pont = a.ellenorzes_pont + a.vagas_pont + a.kimenet_pont
         a.pont = round(a.nyers_pont * szorzo)
         allasok.append(a)
 

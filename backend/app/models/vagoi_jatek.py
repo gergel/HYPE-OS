@@ -31,6 +31,11 @@ from app.models.base import TimestampMixin
 
 #: Egy ellenőrzésbe tett anyag pontértéke.
 ELLENORZES_PONT = 50
+#: BÓNUSZ annak, akinek az anyaga az ellenőrzésből JAVÍTÁS NÉLKÜL ment tovább
+#: (kiküldésre vár / kész kiküldve) - ez a "elsőre jó lett" jutalma.
+JOVAHAGYAS_PONT = 100
+#: LEVONÁS annak, akinek az anyaga az ellenőrzésből javításba került.
+JAVITAS_PONT = -20
 #: Ennyi perc vágás ér egy pontot.
 PERC_PER_PONT = 3
 #: Ehhez a munkanapszámhoz arányosítunk mindenkit (lásd VagoJatekNap).
@@ -116,6 +121,38 @@ class VagoEllenorzesEsemeny(TimestampMixin, Base):
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False, index=True)
     idopont: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     #: Melyik állapotba került (a felület ezt írja ki a magyarázatban).
+    allapot: Mapped[str | None] = mapped_column(String(50))
+
+    employee: Mapped["Employee"] = relationship()
+    deliverable: Mapped["Deliverable"] = relationship()
+
+
+class VagoEllenorzesKimenet(TimestampMixin, Base):
+    """Mi lett az ellenőrzésbe tett anyag SORSA - anyagonként egyszer.
+
+    Az ELSŐ továbblépés dönt: ha az ellenőrzésből javítás nélkül ment tovább
+    (kiküldésre vár / kész kiküldve), az +100 pont annak, aki ellenőrzésbe
+    tette (JOVAHAGYAS_PONT); ha javításba került, az -20 (JAVITAS_PONT). A
+    `deliverable_id` EGYEDI: egy később oda-vissza tologatott anyag nem
+    termel és nem is veszít több pontot - az első ítélet számít, mert az
+    mondja meg, elsőre jó volt-e.
+
+    Az `idopont` dönti el, melyik hónap versenyébe számít."""
+
+    __tablename__ = "vago_ellenorzes_kimenetek"
+    __table_args__ = (UniqueConstraint("deliverable_id", name="uq_vago_ellenorzes_kimenet"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    deliverable_id: Mapped[int] = mapped_column(ForeignKey("deliverables.id"), nullable=False)
+    #: Aki az anyagot ellenőrzésbe tette - ő kapja a bónuszt/levonást.
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False, index=True)
+    idopont: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    #: "jovahagyva" vagy "javitas".
+    kimenet: Mapped[str] = mapped_column(String(20), nullable=False)
+    #: A járó pont (+100 / -20) - kiírva tárolva, hogy egy későbbi
+    #: szabály-módosítás ne írja át visszamenőleg a régi hónapokat.
+    pont: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: Melyik állapotba lépett tovább (a felület magyarázatához).
     allapot: Mapped[str | None] = mapped_column(String(50))
 
     employee: Mapped["Employee"] = relationship()
