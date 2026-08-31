@@ -5,11 +5,20 @@ import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
-/** A HYPE 2026 tábla szinkronja a megosztott Google Táblázattal - egy
- * gombbal, a felületről (lásd backend routes/diszpo_tabla.py "sheet-sync").
- * Munkalaponként CSERÉLI a tartalmat (a Sheet az igazság), a kézzel
- * beállított oszlop-ember kötések megmaradnak. */
-export function DiszpoSheetSyncGomb() {
+/** Google Táblázat-szinkron gomb - a HYPE 2026 diszpó-táblához készült, de
+ * paraméterezve más táblázat-szinkronok (pl. a Krumpelló kassza) is ezt
+ * használják: a POST elindítja a háttér-szinkront, az allapot-végpont
+ * kérdezgetése várja meg a végét (lásd backend services/hatter_feladat.py). */
+export function DiszpoSheetSyncGomb({
+  postPath = "/api/v1/diszpo-tabla/sheet-sync",
+  allapotPath = "/api/v1/diszpo-tabla/sheet-sync/allapot",
+  confirmSzoveg = "A szinkron a Google Táblázat tartalmára CSERÉLI a táblát (a Sheet az igazság). " +
+    "Ami itt készült és a táblázatban nincs benne, az elveszik. Folytatod?",
+}: {
+  postPath?: string;
+  allapotPath?: string;
+  confirmSzoveg?: string;
+} = {}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [uzenet, setUzenet] = useState<string | null>(null);
@@ -20,7 +29,7 @@ export function DiszpoSheetSyncGomb() {
   async function varakozasAVegere() {
     for (;;) {
       await new Promise((r) => setTimeout(r, 3000));
-      const res = await authFetch("/api/v1/diszpo-tabla/sheet-sync/allapot");
+      const res = await authFetch(allapotPath);
       if (!res.ok) continue;
       const adat = await res.json();
       if (adat.running) continue;
@@ -35,17 +44,14 @@ export function DiszpoSheetSyncGomb() {
   }
 
   async function indit() {
-    if (!window.confirm(
-      "A szinkron a Google Táblázat tartalmára CSERÉLI a táblát (a Sheet az igazság). " +
-      "Ami itt készült és a táblázatban nincs benne, az elveszik. Folytatod?",
-    )) {
+    if (!window.confirm(confirmSzoveg)) {
       return;
     }
     setBusy(true);
     setHiba(null);
     setUzenet(null);
     try {
-      const res = await authFetch("/api/v1/diszpo-tabla/sheet-sync", { method: "POST" });
+      const res = await authFetch(postPath, { method: "POST" });
       const adat = await res.json().catch(() => null);
       if (!res.ok) {
         setHiba(adat?.detail ?? `Sikertelen szinkron (HTTP ${res.status})`);

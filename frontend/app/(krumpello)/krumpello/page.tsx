@@ -1,4 +1,5 @@
 import { getKrumpelloOsszesito } from "@/lib/api";
+import { DiszpoSheetSyncGomb } from "@/components/DiszpoSheetSyncGomb";
 import { KrumpelloFejlec } from "@/components/krumpello/KrumpelloFejlec";
 import { formatFt } from "@/lib/ido";
 
@@ -32,6 +33,19 @@ export default async function KrumpelloAttekintesPage({
         utvonal="/krumpello"
       />
       <div className="p-4 md:p-8">
+        {/* A kassza + munkabér áthozatala a megosztott pénzügy-táblázatból
+            (a felhasználó kérése): a táblázat az igazság, a napi kassza-sorok
+            értékei arra állnak - lásd backend routes/krumpello.py sheet-sync. */}
+        <div className="mb-4 flex justify-end">
+          <DiszpoSheetSyncGomb
+            postPath="/api/v1/krumpello/sheet-sync"
+            allapotPath="/api/v1/krumpello/sheet-sync/allapot"
+            confirmSzoveg={
+              "A szinkron a pénzügy-táblázatból hozza át a kasszát és a munkabért - a táblázat az " +
+              "igazság: a napi kassza-sorok értékei a táblázat szerintire állnak. Folytatod?"
+            }
+          />
+        </div>
         {o === null ? (
           <p className="text-[13px] text-text-danger">
             Nem sikerült betölteni az összesítőt. Ellenőrizd, hogy van-e jogosultságod a Krumpellóhoz.

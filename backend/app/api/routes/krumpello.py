@@ -21,7 +21,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from datetime import timedelta as _timedelta
+
+from app.core.database import SessionLocal, get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.employee import Employee
 from app.models.krumpello import (
@@ -38,7 +40,7 @@ from app.models.krumpello import (
 from app.models.document_attachment import DocumentAttachment
 from app.models.user_access import PageAccessConfig
 from app.schemas.document_attachment import DocumentAttachmentRead
-from app.services import attachments, krumpello_munkaber, krumpello_osszesito
+from app.services import attachments, hatter_feladat, krumpello_munkaber, krumpello_osszesito, krumpello_sheet_sync
 
 router = APIRouter(prefix="/krumpello", tags=["krumpello"])
 
@@ -1147,3 +1149,56 @@ class HozzaferesOut(BaseModel):
 @router.get("/hozzaferes", response_model=HozzaferesOut)
 def get_hozzaferes(db: Session = Depends(get_db), user: Employee = Depends(get_current_user)):
     return HozzaferesOut(van_hozzaferes=lathatja(db, user))
+
+
+# ── Google Sheet szinkron ────────────────────────────────────────────────────
+# A "HYPE PRODUCTIONS KFT. 2026 - PÉNZÜGY" munkafüzet KRUMPELLO-lapjainak
+# áthozatala egy gombbal, háttérben (lásd services/krumpello_sheet_sync.py és
+# services/hatter_feladat.py) - a táblázat az igazság: a napi kassza-sorok
+# értékei a táblázat szerintire állnak (felulir=True).
+
+SHEET_SYNC_FELADAT = "krumpello-sheet-sync"
+
+
+def _sheet_sync_munka(naplo) -> dict:
+    db = SessionLocal()
+    try:
+        naplo("A pénzügy-táblázat letöltése és feldolgozása…")
+        osszegzes = krumpello_sheet_sync.teljes_szinkron(db, felulir=True, naplo=naplo)
+        db.commit()
+        return {"uzenet": osszegzes["uzenet"]}
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@router.post("/sheet-sync", status_code=202)
+def sheet_sync(
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """A Krumpello kassza + munkabér szinkronja a megosztott táblázattal."""
+    elindult = hatter_feladat.inditas(
+        SHEET_SYNC_FELADAT,
+        _sheet_sync_munka,
+        elavulas=_timedelta(minutes=30),
+    )
+    if not elindult:
+        raise HTTPException(status_code=409, detail="Már fut egy táblázat-szinkron.")
+    return {"started": True}
+
+
+@router.get("/sheet-sync/allapot")
+def sheet_sync_allapot(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(olvashat),
+):
+    sor = hatter_feladat.allapot(db, SHEET_SYNC_FELADAT)
+    if sor is None:
+        return {"running": False, "error": None, "uzenet": None}
+    return {
+        "running": sor.running,
+        "error": sor.error,
+        "uzenet": (sor.reszletek or {}).get("uzenet"),
+    }
