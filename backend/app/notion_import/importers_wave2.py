@@ -296,7 +296,14 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
                 "helyszin": _text(props.get("Helyszín")) or _text(props.get("Location")),
                 "allapot": _text(props.get("Állapot")),
                 "teljesites_datuma": as_date(props.get("Teljesítés dátuma")),
-                "diszpo": _text(props.get("Diszpó")),
+                # A KÜLDÉS-ÁLLAPOT MEZŐKET (diszpo, elozetes_diszpo_kuldes,
+                # aki_kikuldte_a_diszpot, aki_az_elozetest_kuldte_ki) az import
+                # SZÁNDÉKOSAN NEM írja: 2026. szeptember 1-től a diszpót a
+                # HYPE OS küldi, az állapot egyetlen gazdája a küldés maga
+                # (lásd services/dispo.py). Amíg ezek a mezők itt szerepeltek,
+                # egy (főleg NOTION_IMPORT_OVERWRITE melletti) újraimport a
+                # Notion üres értékével visszaírta a nálunk már "Kiküldve"
+                # állapotot - ezért tűnt el a jelzés a felületről küldés után.
                 "diszpo_szovege": _text(props.get("Diszpó szövege")),
                 "diszpo_pdf_url": props.get("Diszpó pdf"),
                 "drive_diszpo_pdf_url": props.get("Drive diszpó pdf"),
@@ -304,12 +311,9 @@ def import_projects(client: NotionClient, db: Session) -> ImportResult:
                 "fo_diszpo_elozetes_teszteles": props.get("Fő diszpó előzetes tesztelés"),
                 "fo_esemenyre_elozetes_kuldes_statusz": _text(props.get("fő eseményre előzetes küldés státusz")),
                 "fo_esemenyre_diszpo_kuldes_statusz": _text(props.get("fő eseményre diszpó küldés státusz")),
-                "elozetes_diszpo_kuldes": _text(props.get("Előzetes diszpó küldés")),
                 "diszpo_teszteles": props.get("Diszpó tesztelés"),
                 "elozetes_teszteles": props.get("Előzetes tesztelés"),
                 "diszpo_targya_notion": props.get("Diszpó tárgya"),
-                "aki_kikuldte_a_diszpot": props.get("Aki kiküldte a diszpót"),
-                "aki_az_elozetest_kuldte_ki": props.get("Aki az előzetest küldte ki"),
                 "diszpo_iras_kezdete": as_date(props.get("diszpo írás kezdete")),
                 "diszpo_iras_vege": as_date(props.get("diszpo írás vége")),
                 "diszpo_irasal_toltott_ido": props.get("diszpo írásal töltött idő"),

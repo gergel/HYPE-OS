@@ -343,6 +343,12 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
     project.aki_az_elozetest_kuldte_ki = [current_user.full_name]
     db.commit()
     db.refresh(project)
+    # Beszédes nyom a Railway-loghoz: e sor után az állapot BIZTOSAN a DB-ben
+    # van - ha a felület mégsem mutatja, az már nem a küldésen múlik.
+    logger.info(
+        "Előzetes diszpó elküldve és elmentve: project_id=%s elozetes_diszpo_kuldes=%r",
+        project.id, project.elozetes_diszpo_kuldes,
+    )
     return {"status": "OK", "message": "Előzetes diszpó elküldve.", "thread_id": project.gmail_thread_id}
 
 
@@ -463,6 +469,7 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     project.aki_kikuldte_a_diszpot = [current_user.full_name]
     db.commit()
+    logger.info("Diszpó elküldve és elmentve: project_id=%s diszpo=%r", project.id, project.diszpo)
 
     pdf_link = _pdf_a_drive_ra(project, pdf_bytes)
     project.drive_diszpo_pdf_url = pdf_link or doc_link or project.drive_diszpo_pdf_url
