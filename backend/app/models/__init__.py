@@ -34,7 +34,7 @@ from app.models.internal_performance_certificate import (
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
 )
-from app.models.auto import Auto
+from app.models.auto import Auto, AutoTeendo, AutoTeendoKomment
 from app.models.keret_modositas import KeretModositas
 from app.models.kotelezettseg import (
     Kotelezettseg,

@@ -13,7 +13,7 @@ A jármű maga sovány rekord - a tartalom két, már meglévő rendszerből jö
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -22,13 +22,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.security import Role, get_current_user, lathatjak_az_oldalt, require_page_action
-from app.models.auto import Auto, AutoTeendo
+from app.models.auto import Auto, AutoTeendo, AutoTeendoKomment
 from app.api.routes import kotelezettsegek
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense
 from app.services import elszamolas
 from app.services import kotelezettseg as szolg
+from app.services import notifications
 
 router = APIRouter(prefix="/autok", tags=["autok"])
 
@@ -82,6 +83,18 @@ class AutoHataridoRead(BaseModel):
     allapot: str
 
 
+class AutoTeendoKommentRead(BaseModel):
+    """Hozzászólás egy autó-teendő alatt - ugyanaz a chat-minta, mint a HYPE
+    TO-DO kommenteknél (lásd models/auto.AutoTeendoKomment)."""
+
+    id: int
+    auto_teendo_id: int
+    employee_id: int
+    employee_name: str
+    body: str
+    created_at: datetime
+
+
 class AutoTeendoRead(BaseModel):
     """Egy teendő az autó lapján - pipálható lista járművenként (lásd
     models/auto.AutoTeendo)."""
@@ -93,6 +106,7 @@ class AutoTeendoRead(BaseModel):
     hatarido: date | None = None
     felelos_id: int | None = None
     felelos_nev: str | None = None
+    kommentek: list[AutoTeendoKommentRead] = []
 
 
 class AutoRead(BaseModel):
@@ -213,18 +227,7 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
         megjegyzes=auto.megjegyzes,
         hataridok=hataridok,
         kiadasok=[_kiadas_kimenet(e, _kiadas_dokumentumok(db, [x.id for x in kiadasok])) for e in kiadasok],
-        teendok=[
-            AutoTeendoRead(
-                id=t.id,
-                auto_id=t.auto_id,
-                szoveg=t.szoveg,
-                kesz=t.kesz,
-                hatarido=t.hatarido,
-                felelos_id=t.felelos_id,
-                felelos_nev=t.felelos.full_name if t.felelos else None,
-            )
-            for t in teendok
-        ],
+        teendok=[_teendo_kimenet(t) for t in teendok],
         koltseg_osszesen=osszesen,
         hatarido_allapot=allapot,
     )
@@ -239,6 +242,9 @@ def _betolt(db: Session) -> list[Auto]:
                 selectinload(Auto.kiadasok),
                 selectinload(Auto.felelos),
                 selectinload(Auto.teendok).selectinload(AutoTeendo.felelos),
+                selectinload(Auto.teendok)
+                .selectinload(AutoTeendo.kommentek)
+                .selectinload(AutoTeendoKomment.employee),
             )
             .order_by(Auto.rendszam)
         ).all()
@@ -459,6 +465,17 @@ def _teendo_felelos_ellenorzese(db: Session, felelos_id: int | None) -> None:
         )
 
 
+def _komment_kimenet(c: AutoTeendoKomment) -> AutoTeendoKommentRead:
+    return AutoTeendoKommentRead(
+        id=c.id,
+        auto_teendo_id=c.auto_teendo_id,
+        employee_id=c.employee_id,
+        employee_name=c.employee.full_name,
+        body=c.body,
+        created_at=c.created_at,
+    )
+
+
 def _teendo_kimenet(t: AutoTeendo) -> AutoTeendoRead:
     return AutoTeendoRead(
         id=t.id,
@@ -468,6 +485,7 @@ def _teendo_kimenet(t: AutoTeendo) -> AutoTeendoRead:
         hatarido=t.hatarido,
         felelos_id=t.felelos_id,
         felelos_nev=t.felelos.full_name if t.felelos else None,
+        kommentek=[_komment_kimenet(c) for c in t.kommentek],
     )
 
 
@@ -529,3 +547,77 @@ def delete_auto_teendo(
         raise HTTPException(status_code=404, detail="A teendő nem található ennél az autónál.")
     db.delete(teendo)
     db.commit()
+
+
+# --- Hozzászólások a teendőkhöz ---------------------------------------------
+# Ugyanaz a chat-szerű minta, mint a HYPE TO-DO és a FLÓRA kommentjeinél (lásd
+# routes/hype_todo.py) - kommentelni az oldal MEGTEKINTÉSI jogával lehet, mert
+# a beszélgetés nem a rekord szerkesztése.
+
+
+class AutoTeendoKommentCreate(BaseModel):
+    body: str
+
+
+def _teendo_betoltese(db: Session, auto_id: int, teendo_id: int) -> AutoTeendo:
+    teendo = db.get(AutoTeendo, teendo_id)
+    if teendo is None or teendo.auto_id != auto_id:
+        raise HTTPException(status_code=404, detail="A teendő nem található ennél az autónál.")
+    return teendo
+
+
+@router.get("/{auto_id}/teendok/{teendo_id}/kommentek", response_model=list[AutoTeendoKommentRead])
+def get_teendo_kommentek(
+    auto_id: int,
+    teendo_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    teendo = _teendo_betoltese(db, auto_id, teendo_id)
+    return [_komment_kimenet(c) for c in teendo.kommentek]
+
+
+@router.post("/{auto_id}/teendok/{teendo_id}/kommentek", response_model=AutoTeendoKommentRead, status_code=201)
+def post_teendo_komment(
+    auto_id: int,
+    teendo_id: int,
+    payload: AutoTeendoKommentCreate,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    teendo = _teendo_betoltese(db, auto_id, teendo_id)
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="A hozzászólás nem lehet üres.")
+
+    komment = AutoTeendoKomment(auto_teendo_id=teendo.id, employee_id=current_user.id, body=body)
+    db.add(komment)
+    db.commit()
+    db.refresh(komment)
+
+    # @Név említésnél a megemlített, egyébként a teendő felelőse kap
+    # értesítést - ugyanaz a minta, mint a HYPE TO-DO kommenteknél.
+    cim = f"{teendo.auto.rendszam}: {teendo.szoveg}"
+    mar_ertesitett: set[int] = set()
+    for employee_id in notifications.extract_mentioned_employee_ids(body, db):
+        notifications.create_notification(
+            db,
+            employee_id=employee_id,
+            kind="mention",
+            message=f"{current_user.full_name} megemlített egy hozzászólásban: {cim}",
+            link="/autok",
+            actor_id=current_user.id,
+        )
+        mar_ertesitett.add(employee_id)
+    if teendo.felelos_id and teendo.felelos_id not in mar_ertesitett:
+        notifications.create_notification(
+            db,
+            employee_id=teendo.felelos_id,
+            kind="comment",
+            message=f"{current_user.full_name} kommentelt: {cim}",
+            link="/autok",
+            actor_id=current_user.id,
+        )
+    db.commit()
+
+    return _komment_kimenet(komment)

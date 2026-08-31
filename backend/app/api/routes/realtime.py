@@ -36,6 +36,7 @@ from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.auto import AutoTeendoKomment
 from app.models.flora_komment import FloraKomment
 from app.models.hype_todo_komment import HypeTodoKomment
 from app.models.internal_performance_certificate import InternalPerformanceCertificate
@@ -83,6 +84,7 @@ TOPICS: dict[str, Topic] = {
     "documentAttachments": Topic(DocumentAttachment),
     "projectCodeComments": Topic(ProjectCodeComment, scope_column="project_code_id"),
     "floraComments": Topic(FloraKomment, scope_column="flora_feladat_id"),
+    "autoTeendoComments": Topic(AutoTeendoKomment, scope_column="auto_teendo_id"),
     "hypeTodoComments": Topic(HypeTodoKomment, scope_column="hype_todo_id"),
     "notifications": Topic(Notification, user_column="employee_id"),
     "tasks": Topic(Task),

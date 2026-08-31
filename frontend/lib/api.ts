@@ -2543,6 +2543,17 @@ export type AutoHatarido = {
 
 /** Egy teendő egy autóhoz - pipálható lista járművenként (lásd backend
  * routes/autok.py "teendok" végpontjai). */
+/** Hozzászólás egy autó-teendő alatt - ugyanaz a chat-minta, mint a HYPE
+ * TO-DO kommenteknél (lásd backend routes/autok.py komment-végpontjai). */
+export type AutoTeendoKomment = {
+  id: number;
+  auto_teendo_id: number;
+  employee_id: number;
+  employee_name: string;
+  body: string;
+  created_at: string;
+};
+
 export type AutoTeendo = {
   id: number;
   auto_id: number;
@@ -2551,6 +2562,7 @@ export type AutoTeendo = {
   hatarido: string | null;
   felelos_id: number | null;
   felelos_nev: string | null;
+  kommentek: AutoTeendoKomment[];
 };
 
 export type Auto = {

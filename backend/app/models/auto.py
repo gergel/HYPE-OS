@@ -80,3 +80,24 @@ class AutoTeendo(TimestampMixin, Base):
 
     auto: Mapped["Auto"] = relationship(back_populates="teendok")
     felelos: Mapped["Employee | None"] = relationship()
+    #: A teendő alatti beszélgetés (lásd AutoTeendoKomment) - a teendővel
+    #: együtt törlődik.
+    kommentek: Mapped[list["AutoTeendoKomment"]] = relationship(
+        back_populates="teendo", order_by="AutoTeendoKomment.created_at", cascade="all, delete-orphan"
+    )
+
+
+class AutoTeendoKomment(TimestampMixin, Base):
+    """Hozzászólás egy autó-teendőhöz - ugyanaz a chat-szerű minta, mint a
+    HYPE TO-DO és a FLÓRA kommentjeinél (lásd models/hype_todo_komment.py):
+    ki, mikor, mit írt."""
+
+    __tablename__ = "auto_teendo_kommentek"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    auto_teendo_id: Mapped[int] = mapped_column(ForeignKey("auto_teendok.id"), nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False, index=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    teendo: Mapped["AutoTeendo"] = relationship(back_populates="kommentek")
+    employee: Mapped["Employee"] = relationship()
