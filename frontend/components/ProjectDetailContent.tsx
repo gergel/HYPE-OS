@@ -335,7 +335,7 @@ export async function ProjectDetailContent({
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <ActionButton
-                    path={`/api/v1/projects/${project.id}/diszpo/elozetes`}
+                    path={`/api/v1/projects/${project.id}/diszpo/elozetes${elozetesAllapot ? "?ujrakuldes=1" : ""}`}
                     label={elozetesAllapot ? "Előzetes diszpó újraküldése" : "Előzetes diszpó"}
                     figyelmeztetes={elozetesAllapot ? "AZ ELŐZETES DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
                     megerositoCimke={elozetesAllapot ? "Igen, újraküldöm" : undefined}
@@ -349,7 +349,7 @@ export async function ProjectDetailContent({
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <ActionButton
-                    path={`/api/v1/projects/${project.id}/diszpo/kuldes`}
+                    path={`/api/v1/projects/${project.id}/diszpo/kuldes${diszpoAllapot ? "?ujrakuldes=1" : ""}`}
                     label={diszpoAllapot ? "Diszpó újraküldése" : "Diszpó küldése"}
                     figyelmeztetes={diszpoAllapot ? "A DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
                     megerositoCimke={diszpoAllapot ? "Igen, újraküldöm" : undefined}

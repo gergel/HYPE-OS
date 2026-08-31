@@ -210,20 +210,46 @@ def _run_dispatch_action(action, *args):
 _diszpo_kuldheti = require_page_action("/projektek", "edit", Role.ADMIN, Role.OPERATOR)
 
 
+def _dupla_kuldes_zar(mezo_ertek: str | None, ujrakuldes: bool, mi: str) -> None:
+    """SZERVER-oldali védelem a véletlen dupla küldés ellen: ha az állapot már
+    "Kiküldve", csak kifejezett újraküldés-szándékkal (?ujrakuldes=1 - a
+    felület a piros megerősítő kérdés után teszi hozzá) megy el újra a levél.
+    Így akkor sem megy ki kétszer, ha valakinél elavult képernyő van nyitva,
+    vagy ketten kattintanak majdnem egyszerre."""
+    if not ujrakuldes and (mezo_ertek or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{mi} már ki van küldve erre a forgatásra - nem küldtük el újra. "
+                "Ha tényleg még egyszer ki akarod küldeni, frissítsd az oldalt, és használd az Újraküldés gombot."
+            ),
+        )
+
+
 @router.post("/{project_id}/diszpo/elozetes", tags=["projects"])
 def run_elozetes_diszpo(
-    project_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(_diszpo_kuldheti)
+    project_id: int,
+    ujrakuldes: bool = False,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_diszpo_kuldheti),
 ):
     """'Előzetes diszpó' gomb (lásd app/services/dispo.py)."""
-    return _run_dispatch_action(send_elozetes_diszpo, db, _get_project_or_404(project_id, db), current_user)
+    project = _get_project_or_404(project_id, db)
+    _dupla_kuldes_zar(project.elozetes_diszpo_kuldes, ujrakuldes, "Az előzetes diszpó")
+    return _run_dispatch_action(send_elozetes_diszpo, db, project, current_user)
 
 
 @router.post("/{project_id}/diszpo/kuldes", tags=["projects"])
 def run_diszpo_kuldes(
-    project_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(_diszpo_kuldheti)
+    project_id: int,
+    ujrakuldes: bool = False,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_diszpo_kuldheti),
 ):
     """'Diszpó küldése' gomb (lásd app/services/dispo.py)."""
-    return _run_dispatch_action(send_diszpo, db, _get_project_or_404(project_id, db), current_user)
+    project = _get_project_or_404(project_id, db)
+    _dupla_kuldes_zar(project.diszpo, ujrakuldes, "A diszpó")
+    return _run_dispatch_action(send_diszpo, db, project, current_user)
 
 
 @router.post(

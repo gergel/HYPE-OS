@@ -19,6 +19,7 @@ export function ActionButton({
   figyelmeztetes,
   megerositoCimke,
   redirectPrefix,
+  onSuccess,
 }: {
   path: string;
   label: string;
@@ -29,6 +30,10 @@ export function ActionButton({
   /** A megerősítő gomb felirata ("Rendben" helyett). */
   megerositoCimke?: string;
   redirectPrefix?: string;
+  /** Sikeres művelet után hívódik (a router.refresh() MELLETT) - kliens
+   * komponensből átadva azonnali, helyi visszajelzésre (pl. a diszpó-küldés
+   * gombja rögtön "Kiküldve"-t mutasson, ne a szerver-frissítésre várjon). */
+  onSuccess?: () => void;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -53,6 +58,7 @@ export function ActionButton({
         return;
       }
       const data = await res.json().catch(() => null);
+      onSuccess?.();
       if (redirectPrefix && data && typeof data.id !== "undefined") {
         router.push(`${redirectPrefix}${data.id}`);
       } else {

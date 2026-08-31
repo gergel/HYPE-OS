@@ -293,6 +293,12 @@ def build_crud_router(
         m2m_data = {k: data.pop(k) for k in list(m2m_fields) if k in data}
         if before_create:
             data = before_create(data, db, _user) if before_create_kell_user else before_create(data, db)
+        # Védőháló: a séma SZÁMÍTOTT mezői (computed_field) is benne vannak a
+        # model_dump()-ban, de a modellnek nincs ilyen attribútuma - a
+        # konstruktor TypeError-ral (500) szállt el tőlük (pl. a Project
+        # veg_datum mezője minden projekt-létrehozást eltört). Ami nem létezik
+        # a modellen, azt egyszerűen kihagyjuk.
+        data = {k: v for k, v in data.items() if hasattr(model, k)}
         obj = model(**data)
         for payload_key, ids in m2m_data.items():
             attr_name, related_model = m2m_fields[payload_key]

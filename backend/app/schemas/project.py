@@ -26,6 +26,20 @@ class ProjectBase(BaseModel):
     # átjön, lásd services/google_calendar.py.
     forgatas_kezdes_ido: time | None = None
     forgatas_veg_ido: time | None = None
+    helyszin: str | None = None
+    allapot: str | None = None
+    #: A projektkód SZÖVEGE. Létrehozáskor is megadható: ebből keressük meg a
+    #: Project Code-ot, hogy a projekt rögtön a helyére kerüljön (lásd
+    #: routes/projects._kosd_a_projektkodhoz).
+    projektkod_szoveg: str | None = None
+
+
+class VegDatumSzamitas(BaseModel):
+    """A számított veg_datum - CSAK az olvasó sémák (lista + részlet) keverik
+    be. A ProjectBase-en volt, de onnan a ProjectCreate is örökölte, a
+    model_dump() a számított mezőt is beleteszi, és a Project(**data)
+    konstruktor 'invalid keyword argument'-tel elszállt tőle - vagyis
+    SEMMILYEN projektet nem lehetett létrehozni a felületről."""
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -47,19 +61,13 @@ class ProjectBase(BaseModel):
         if jelolt is None or self.forgatas_datuma is None or jelolt <= self.forgatas_datuma:
             return None
         return jelolt
-    helyszin: str | None = None
-    allapot: str | None = None
-    #: A projektkód SZÖVEGE. Létrehozáskor is megadható: ebből keressük meg a
-    #: Project Code-ot, hogy a projekt rögtön a helyére kerüljön (lásd
-    #: routes/projects._kosd_a_projektkodhoz).
-    projektkod_szoveg: str | None = None
 
 
 class ProjectCreate(ProjectBase):
     crew_employee_ids: list[int] = []
 
 
-class ProjectListItem(ProjectBase):
+class ProjectListItem(VegDatumSzamitas, ProjectBase):
     """A projekt lista nézet (GET /api/v1/projects) szűkített sémája - a Project
     ~140 oszlopos teljes ProjectRead helyett, mert a lista oldal ténylegesen csak
     ezt az 5-6 mezőt jeleníti meg (lásd frontend/app/projektek/page.tsx és
@@ -107,7 +115,7 @@ class ProjectUpdate(BaseModel):
     nem_diszponalando: bool | None = None
 
 
-class ProjectRead(ProjectBase):
+class ProjectRead(VegDatumSzamitas, ProjectBase):
     id: int
     crew_employee_ids: list[int] = []
     google_calendar_event_id: str | None = None

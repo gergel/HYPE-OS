@@ -84,6 +84,8 @@ function DiszpoGroupSection({
   gyerekSzam,
   canSend,
   onProjectClick,
+  helyiKuldve,
+  jeloldKuldottnek,
 }: {
   group: DiszpoGroup;
   emphasized?: boolean;
@@ -92,6 +94,10 @@ function DiszpoGroupSection({
   gyerekSzam: Map<number, number>;
   canSend: boolean;
   onProjectClick: (id: number) => void;
+  /** Amit EBBEN a munkamenetben küldtünk ki ("id:elozetes"/"id:teljes") - a
+   * gomb melletti jelzés azonnal átvált, nem várja meg a szerver-frissítést. */
+  helyiKuldve: Record<string, true>;
+  jeloldKuldottnek: (id: number, tipus: "elozetes" | "teljes") => void;
 }) {
   const tone = GROUP_TONES[group.tone];
   return (
@@ -150,57 +156,68 @@ function DiszpoGroupSection({
                 {p.naptar_szin && <span className="text-[12px] text-text-muted">naptár szín: {p.naptar_szin}</span>}
               </div>
             ) : (
-              <div className="flex flex-wrap items-end gap-x-6 gap-y-3" onClick={(e) => e.stopPropagation()}>
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">
-                    Előzetes diszpó
-                  </p>
-                  <div className="flex items-center gap-2">
-                    {p.elozetes_diszpo_kuldes ? (
-                      <StatusBadge label={p.elozetes_diszpo_kuldes} tone="teal" />
-                    ) : (
-                      <StatusBadge label="Nincs elküldve" tone="neutral" />
-                    )}
-                    {canSend && (
-                      <ActionButton
-                        path={`/api/v1/projects/${p.id}/diszpo/elozetes`}
-                        label={p.elozetes_diszpo_kuldes ? "Újraküldés" : "Küldés"}
-                        figyelmeztetes={p.elozetes_diszpo_kuldes ? "AZ ELŐZETES DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
-                        megerositoCimke={p.elozetes_diszpo_kuldes ? "Igen, újraküldöm" : undefined}
-                        confirmMessage={
-                          p.elozetes_diszpo_kuldes
-                            ? `${p.nev} – állapot: ${p.elozetes_diszpo_kuldes}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja ugyanazt a levelet. Biztosan újraküldöd?`
-                            : "Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
+              (() => {
+                // Az állapot a szerverről jön; amit MOST küldtünk ki, azt a
+                // helyi jelölés azonnal "Kiküldve"-nek mutatja, a szerver-
+                // frissítés megérkezéséig is.
+                const elozetesAllapot = p.elozetes_diszpo_kuldes ?? (helyiKuldve[`${p.id}:elozetes`] ? "Kiküldve" : null);
+                const teljesAllapot = p.diszpo ?? (helyiKuldve[`${p.id}:teljes`] ? "Kiküldve" : null);
+                return (
+                  <div className="flex flex-wrap items-end gap-x-6 gap-y-3" onClick={(e) => e.stopPropagation()}>
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                        Előzetes diszpó
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {elozetesAllapot ? (
+                          <StatusBadge label={elozetesAllapot} tone="teal" />
+                        ) : (
+                          <StatusBadge label="Nincs elküldve" tone="neutral" />
+                        )}
+                        {canSend && (
+                          <ActionButton
+                            path={`/api/v1/projects/${p.id}/diszpo/elozetes${elozetesAllapot ? "?ujrakuldes=1" : ""}`}
+                            label={elozetesAllapot ? "Újraküldés" : "Küldés"}
+                            figyelmeztetes={elozetesAllapot ? "AZ ELŐZETES DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
+                            megerositoCimke={elozetesAllapot ? "Igen, újraküldöm" : undefined}
+                            confirmMessage={
+                              elozetesAllapot
+                                ? `${p.nev} – állapot: ${elozetesAllapot}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja ugyanazt a levelet. Biztosan újraküldöd?`
+                                : "Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
+                            }
+                            onSuccess={() => jeloldKuldottnek(p.id, "elozetes")}
+                          />
+                        )}
+                      </div>
+                    </div>
 
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">Diszpó</p>
-                  <div className="flex items-center gap-2">
-                    {p.diszpo ? (
-                      <StatusBadge label={p.diszpo} tone="success" />
-                    ) : (
-                      <StatusBadge label="Nincs kiküldve" tone="neutral" />
-                    )}
-                    {canSend && (
-                      <ActionButton
-                        path={`/api/v1/projects/${p.id}/diszpo/kuldes`}
-                        label={p.diszpo ? "Újraküldés" : "Küldés"}
-                        figyelmeztetes={p.diszpo ? "A DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
-                        megerositoCimke={p.diszpo ? "Igen, újraküldöm" : undefined}
-                        confirmMessage={
-                          p.diszpo
-                            ? `${p.nev} – állapot: ${p.diszpo}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja a teljes diszpót (technika listával, PDF-fel). Biztosan újraküldöd?`
-                            : "Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
-                        }
-                      />
-                    )}
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">Diszpó</p>
+                      <div className="flex items-center gap-2">
+                        {teljesAllapot ? (
+                          <StatusBadge label={teljesAllapot} tone="success" />
+                        ) : (
+                          <StatusBadge label="Nincs kiküldve" tone="neutral" />
+                        )}
+                        {canSend && (
+                          <ActionButton
+                            path={`/api/v1/projects/${p.id}/diszpo/kuldes${teljesAllapot ? "?ujrakuldes=1" : ""}`}
+                            label={teljesAllapot ? "Újraküldés" : "Küldés"}
+                            figyelmeztetes={teljesAllapot ? "A DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
+                            megerositoCimke={teljesAllapot ? "Igen, újraküldöm" : undefined}
+                            confirmMessage={
+                              teljesAllapot
+                                ? `${p.nev} – állapot: ${teljesAllapot}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja a teljes diszpót (technika listával, PDF-fel). Biztosan újraküldöd?`
+                                : "Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
+                            }
+                            onSuccess={() => jeloldKuldottnek(p.id, "teljes")}
+                          />
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()
             )}
           </div>
         ))}
@@ -234,6 +251,12 @@ export function NaptarDiszpoContent({
   const [view, setView] = useState<"table" | "calendar">("table");
   const [query, setQuery] = useState("");
   const [modalProjectId, setModalProjectId] = useState<number | null>(null);
+  // Amit ebben a munkamenetben küldtünk ki - a jelzés AZONNAL átvált
+  // "Kiküldve"-re, nem a szerver-frissítést várja (a felhasználó kérése:
+  // amint kimegy, látsszon, hogy véletlenül se menjen ki kétszer).
+  const [helyiKuldve, setHelyiKuldve] = useState<Record<string, true>>({});
+  const jeloldKuldottnek = (id: number, tipus: "elozetes" | "teljes") =>
+    setHelyiKuldve((prev) => ({ ...prev, [`${id}:${tipus}`]: true }));
 
   const projectCodeById = new Map(projectCodes.map((pc) => [pc.id, pc.projektkod]));
 
@@ -488,6 +511,8 @@ export function NaptarDiszpoContent({
                     gyerekSzam={gyerekSzam}
                     canSend={canSend}
                     onProjectClick={setModalProjectId}
+                    helyiKuldve={helyiKuldve}
+                    jeloldKuldottnek={jeloldKuldottnek}
                   />
                 ))}
               </div>
@@ -509,6 +534,8 @@ export function NaptarDiszpoContent({
                     gyerekSzam={gyerekSzam}
                     canSend={canSend}
                     onProjectClick={setModalProjectId}
+                    helyiKuldve={helyiKuldve}
+                    jeloldKuldottnek={jeloldKuldottnek}
                   />
                 ))}
               </div>
