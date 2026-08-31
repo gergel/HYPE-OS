@@ -10,8 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
+  Link as LinkIcon,
 } from "lucide-react";
-import { PublicPortal, PortalVideo as VideoT, PortalImage as ImageType, startPayment } from "@/lib/portalApi";
+import { PublicPortal, PortalVideo as VideoT, PortalImage as ImageType, startPayment, mintReszletLink } from "@/lib/portalApi";
 import { Button } from "@/components/media-portal/ui/button";
 import { VideoCard } from "@/components/media-portal/video-card";
 import { VideoPlayer } from "@/components/media-portal/video-player";
@@ -24,12 +25,32 @@ export function PortalView({
   project,
   expiredContactEmail,
   expiredPaymentMode,
+  unlockToken,
+  linkMasolas = true,
 }: {
   project: PublicPortal;
   expiredContactEmail?: string;
   expiredPaymentMode?: string;
+  /** Jelszavas portálnál a feloldó token - a link-másolás ezzel megy. */
+  unlockToken?: string | null;
+  /** A mappa/videó link-másoló gombok (a felhasználó kérése: a portál-
+   * nézetből is lehessen linket továbbküldeni). */
+  linkMasolas?: boolean;
 }) {
   const [active, setActive] = useState<VideoT | null>(null);
+  const [masoltLink, setMasoltLink] = useState<string | null>(null);
+
+  /** Mappa/videó megosztó link kérése a szervertől + vágólapra másolás. */
+  async function linkreMasol(cel: { folderId?: number; videoId?: number }) {
+    try {
+      const url = await mintReszletLink(project.slug, cel, unlockToken);
+      await navigator.clipboard?.writeText(url).catch(() => {});
+      setMasoltLink(url);
+      window.setTimeout(() => setMasoltLink(null), 4000);
+    } catch (e) {
+      alert(String((e as Error)?.message ?? e));
+    }
+  }
   const [lightbox, setLightbox] = useState<{ images: ImageType[]; index: number } | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
   const [aszfOpen, setAszfOpen] = useState(false);
@@ -109,6 +130,11 @@ export function PortalView({
 
   return (
     <main className="relative">
+      {masoltLink && (
+        <div className="fixed bottom-5 left-1/2 z-[90] -translate-x-1/2 rounded-full border border-ink-line bg-ink-card px-4 py-2 font-mono text-xs text-bone shadow-xl">
+          Link a vágólapon: <span className="text-mist">{masoltLink}</span>
+        </div>
+      )}
       {/* ---------- Hero ---------- */}
       <section className="relative flex min-h-[88vh] items-end overflow-hidden">
         <div className="absolute inset-0">
@@ -272,7 +298,14 @@ export function PortalView({
           </div>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {looseVideos.map((v, i) => (
-              <VideoCard key={v.id} video={v} index={i} onPlay={markVideoSeen} isNew={!seenVideos.has(v.id)} />
+              <VideoCard
+                key={v.id}
+                video={v}
+                index={i}
+                onPlay={markVideoSeen}
+                isNew={!seenVideos.has(v.id)}
+                onShare={linkMasolas ? () => void linkreMasol({ videoId: v.id }) : undefined}
+              />
             ))}
           </div>
         </section>
@@ -303,6 +336,8 @@ export function PortalView({
                 onOpenImage={(imgs, idx) => setLightbox({ images: imgs, index: idx })}
                 seenVideos={seenVideos}
                 accent={accent}
+                onShare={linkMasolas ? () => void linkreMasol({ folderId: folder.id }) : undefined}
+                onShareVideo={linkMasolas ? (v) => void linkreMasol({ videoId: v.id }) : undefined}
               />
             ))}
           </div>
@@ -393,6 +428,8 @@ function FolderSection({
   onOpenImage,
   seenVideos,
   accent,
+  onShare,
+  onShareVideo,
 }: {
   name: string;
   videos: VideoT[];
@@ -401,6 +438,9 @@ function FolderSection({
   onOpenImage: (images: ImageType[], index: number) => void;
   seenVideos: Set<number>;
   accent?: string;
+  /** A mappa saját megosztó linkjének másolása (lásd PortalView.linkreMasol). */
+  onShare?: () => void;
+  onShareVideo?: (v: VideoT) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -423,6 +463,26 @@ function FolderSection({
               </span>
             )}
           </h3>
+          {onShare && (
+            <span
+              role="button"
+              tabIndex={0}
+              title="A mappa linkjének másolása - aki megkapja, csak ezt a mappát látja"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShare();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  onShare();
+                }
+              }}
+              className="mt-1.5 shrink-0 cursor-pointer text-mist transition hover:text-bone"
+            >
+              <LinkIcon className="h-[18px] w-[18px]" />
+            </span>
+          )}
           <ChevronDown className={`mt-1.5 h-5 w-5 shrink-0 text-mist transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
         </button>
         <div className="mt-2 flex items-center justify-between gap-3">
@@ -444,7 +504,14 @@ function FolderSection({
             {videos.length > 0 && (
               <div className="grid grid-cols-1 gap-6 pb-2 sm:grid-cols-2 lg:grid-cols-3">
                 {videos.map((v, i) => (
-                  <VideoCard key={v.id} video={v} index={i} onPlay={onPlay} isNew={!seenVideos.has(v.id)} />
+                  <VideoCard
+                    key={v.id}
+                    video={v}
+                    index={i}
+                    onPlay={onPlay}
+                    isNew={!seenVideos.has(v.id)}
+                    onShare={onShareVideo ? () => onShareVideo(v) : undefined}
+                  />
                 ))}
               </div>
             )}

@@ -160,5 +160,12 @@ function PortalContent() {
     );
   }
 
-  return project ? <PortalView project={project} /> : null;
+  return project ? (
+    <PortalView
+      project={project}
+      // Jelszavas portálnál a link-másoláshoz a feloldó token is kell (lásd
+      // PortalView.linkreMasol / backend reszlet_link).
+      unlockToken={typeof window !== "undefined" ? sessionStorage.getItem(`hype_unlock_${slug}`) : null}
+    />
+  ) : null;
 }

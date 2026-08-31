@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Play, Download, Loader2 } from "lucide-react";
+import { Play, Download, Loader2, Link as LinkIcon } from "lucide-react";
 import { PortalVideo } from "@/lib/portalApi";
 import { formatDuration, downloadVideo } from "@/lib/portalUtils";
 
@@ -10,6 +10,7 @@ export function VideoCard({
   index,
   onPlay,
   isNew = false,
+  onShare,
 }: {
   video: PortalVideo;
   index: number;
@@ -17,6 +18,9 @@ export function VideoCard({
   /** Még meg nem nyitott videó (localStorage-ban követve, lásd portal-view.tsx
    * seenVideos) - "Új" címkét kap, hogy az ügyfél lássa, mit nem nézett még meg. */
   isNew?: boolean;
+  /** A videó saját megosztó linkjének másolása (a felhasználó kérése: a
+   * portál-nézetből is lehessen linket továbbküldeni). */
+  onShare?: () => void;
 }) {
   const [preparing, setPreparing] = useState(false);
   async function handleDownload(e: React.MouseEvent) {
@@ -73,14 +77,29 @@ export function VideoCard({
             {video.aspect_ratio_label ? ` · ${video.aspect_ratio_label}` : ""}
           </p>
         </div>
-        <button
-          onClick={handleDownload}
-          disabled={preparing}
-          aria-label={`Letöltés: ${video.title}`}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bone text-ink transition hover:bg-white disabled:opacity-60"
-        >
-          {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {onShare && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onShare();
+              }}
+              aria-label={`Link másolása: ${video.title}`}
+              title="A videó linkjének másolása - aki megkapja, csak ezt a videót látja"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-ink-line text-mist transition hover:border-bone/60 hover:text-bone"
+            >
+              <LinkIcon className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={handleDownload}
+            disabled={preparing}
+            aria-label={`Letöltés: ${video.title}`}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bone text-ink transition hover:bg-white disabled:opacity-60"
+          >
+            {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
     </motion.article>
   );

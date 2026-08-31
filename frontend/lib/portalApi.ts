@@ -193,3 +193,22 @@ export async function feltoltesFajl(
 export async function getMegosztas(token: string) {
   return req<{ tipus: "mappa" | "video"; project: PublicPortal }>(`/megosztas/${token}`);
 }
+
+/** Mappa vagy videó megosztó linkjének kérése a PORTÁL-NÉZETBŐL (nem admin) -
+ * jelszavas portálnál a feloldó token is megy, hogy a link-készítés ne
+ * kerülje meg a jelszót. */
+export async function mintReszletLink(
+  slug: string,
+  cel: { folderId?: number; videoId?: number },
+  authToken?: string | null,
+): Promise<string> {
+  const valasz = await req<{ url: string }>(`/${slug}/reszlet-link`, {
+    method: "POST",
+    body: JSON.stringify({
+      folder_id: cel.folderId ?? null,
+      video_id: cel.videoId ?? null,
+      authorization: authToken ?? null,
+    }),
+  });
+  return valasz.url;
+}

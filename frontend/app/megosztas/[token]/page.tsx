@@ -22,16 +22,23 @@ export default function MegosztasPage() {
       .catch((e) => setHiba(String(e?.message ?? e)));
   }, [params.token]);
 
-  if (hiba) {
-    return (
-      <main className="mx-auto max-w-xl px-6 py-20 text-center">
-        <h1 className="mb-2 text-[20px] font-semibold">A megosztó link nem él</h1>
-        <p className="text-[14px] opacity-70">{hiba}</p>
-      </main>
-    );
-  }
-  if (!project) {
-    return <main className="mx-auto max-w-xl px-6 py-20 text-center text-[14px] opacity-70">Betöltés…</main>;
-  }
-  return <PortalView project={project} />;
+  // UGYANAZ a sötét portál-téma burkolja, mint a /p/{slug} ügyfél-nézetet
+  // (hype-portal + dark + bg-ink) - enélkül az oldal a belső app alap-témája
+  // alatt futott, és a színek "invertálódtak" (a felhasználó hibajelzése).
+  return (
+    <div className="hype-portal dark grain min-h-screen bg-ink text-bone">
+      {hiba ? (
+        <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+          <h1 className="font-display text-3xl text-bone">A megosztó link nem él</h1>
+          <p className="text-mist">{hiba}</p>
+        </main>
+      ) : !project ? (
+        <main className="flex min-h-screen items-center justify-center">
+          <span className="font-mono text-xs uppercase tracking-eyebrow text-mist">Betöltés…</span>
+        </main>
+      ) : (
+        <PortalView project={project} />
+      )}
+    </div>
+  );
 }

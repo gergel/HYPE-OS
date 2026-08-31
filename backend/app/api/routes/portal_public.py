@@ -597,3 +597,50 @@ def megosztas(token: str, db: Session = Depends(get_db)):
         return {"tipus": "video", "project": project.model_dump()}
 
     raise HTTPException(status_code=404, detail="Ez a megosztó link nem él (visszavonták vagy hibás).")
+
+
+class ReszletLinkIn(BaseModel):
+    """Mappa VAGY videó linkjének kérése a portál-nézetből (a felhasználó
+    kérése: ne csak adminból lehessen link-et másolni). Jelszavas portálnál a
+    feloldó tokent is kérjük - a link-készítés ne kerülje meg a jelszót."""
+
+    folder_id: int | None = None
+    video_id: int | None = None
+    authorization: str | None = None
+
+
+@router.post("/{slug}/reszlet-link")
+def reszlet_link(slug: str, payload: ReszletLinkIn, db: Session = Depends(get_db)):
+    import uuid
+
+    from app.models.portal import PortalFolder
+
+    portal = db.scalar(select(Portal).where(Portal.slug == slug, Portal.status == "live"))
+    if not portal:
+        raise HTTPException(status_code=404, detail="A portál nem található")
+    if portal.password_hash:
+        try:
+            data = _decode_unlock_token(payload.authorization or "")
+            if data.get("scope") != f"portal:{portal.id}":
+                raise ValueError
+        except (JWTError, ValueError):
+            raise HTTPException(status_code=401, detail="A link-készítéshez előbb old fel a portált a jelszóval.")
+
+    front = settings.portal_front_base
+    if payload.folder_id is not None:
+        folder = db.get(PortalFolder, payload.folder_id)
+        if folder is None or folder.portal_id != portal.id:
+            raise HTTPException(status_code=404, detail="Ez a mappa nem ehhez a portálhoz tartozik.")
+        if not folder.share_token:
+            folder.share_token = uuid.uuid4().hex
+            db.commit()
+        return {"url": f"{front}/megosztas/{folder.share_token}"}
+    if payload.video_id is not None:
+        video = db.get(PortalVideo, payload.video_id)
+        if video is None or video.portal_id != portal.id:
+            raise HTTPException(status_code=404, detail="Ez a videó nem ehhez a portálhoz tartozik.")
+        if not video.share_token:
+            video.share_token = uuid.uuid4().hex
+            db.commit()
+        return {"url": f"{front}/megosztas/{video.share_token}"}
+    raise HTTPException(status_code=400, detail="Adj meg mappát vagy videót.")

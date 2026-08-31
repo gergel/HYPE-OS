@@ -73,16 +73,24 @@ export default function FeltoltesPage() {
     }
   }
 
+  // Ugyanaz a sötét portál-téma, mint a /p/{slug} ügyfél-nézeten - a linket
+  // külsős kapja, neki a portál kinézete az ismerős, nem a belső appé.
   if (hiba) {
     return (
-      <main className="mx-auto max-w-xl px-6 py-20 text-center">
-        <h1 className="mb-2 text-[20px] font-semibold">A feltöltő link nem él</h1>
-        <p className="text-[14px] opacity-70">{hiba}</p>
-      </main>
+      <div className="hype-portal dark grain min-h-screen bg-ink text-bone">
+        <main className="mx-auto max-w-xl px-6 py-20 text-center">
+          <h1 className="mb-2 font-display text-2xl text-bone">A feltöltő link nem él</h1>
+          <p className="text-mist">{hiba}</p>
+        </main>
+      </div>
     );
   }
   if (!adatok) {
-    return <main className="mx-auto max-w-xl px-6 py-20 text-center text-[14px] opacity-70">Betöltés…</main>;
+    return (
+      <div className="hype-portal dark grain min-h-screen bg-ink text-bone">
+        <main className="mx-auto max-w-xl px-6 py-20 text-center text-mist">Betöltés…</main>
+      </div>
+    );
   }
 
   const fajlBemenet = (folderId: number | null, cimke: string) => (
@@ -105,6 +113,7 @@ export default function FeltoltesPage() {
   );
 
   return (
+    <div className="hype-portal dark grain min-h-screen bg-ink text-bone">
     <main className="mx-auto max-w-2xl px-6 py-12">
       <p className="mb-1 text-[12px] uppercase tracking-wide opacity-60">Fájl-feltöltés</p>
       <h1 className="mb-2 text-[24px] font-semibold">{adatok.title}</h1>
@@ -154,5 +163,6 @@ export default function FeltoltesPage() {
         ))}
       </div>
     </main>
+    </div>
   );
 }
