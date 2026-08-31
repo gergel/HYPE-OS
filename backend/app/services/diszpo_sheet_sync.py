@@ -144,9 +144,46 @@ def oszlop_embere(cimke: str | None, terkep: dict[str, list[Employee]]) -> tuple
     return None, f"„{cimke}” - többen is illenek rá ({nevek}), a kötést kézzel kell megadni"
 
 
+#: Ennél több felső sort akkor sem fagyasztunk be, ha a dátumok furcsán messze
+#: kezdődnek - egy fél képernyőnyi rögzített fejléc használhatatlan lenne.
+MAX_FEJLEC_SOROK = 20
+
+
+def fejlec_sorok_szama(ws, max_sor: int) -> int:
+    """Hány felső sor a FEJLÉC: minden, ami az első DÁTUMOS sor fölött áll.
+
+    A külsős táblán a dátumok előtt egy 12 soros blokk van (jelmagyarázat +
+    a nevek sora) - a felhasználó kérése, hogy görgetésnél ez az EGÉSZ maradjon
+    a helyén, hogy látszódjon, kinek az oszlopában jár az ember. A belsősön a
+    dátumok a 3. sorban kezdődnek, ott ez ugyanaz a 2 fejléc-sor, mint eddig.
+    Dátum nélküli munkalapon (Autók, AnyDesk...) marad a régi szabály."""
+    for r in range(1, max_sor + 1):
+        if isinstance(ws.cell(r, 1).value, (datetime, date)):
+            return min(max(r - 1, 1), MAX_FEJLEC_SOROK)
+    return 2 if ws.title in KETSOROS_FEJLECU else 1
+
+
+def nevsor_indexe(ws, fejlec_sorok: int, max_oszlop: int) -> int:
+    """A fejléc-blokkon belül az OSZLOPCÍMKÉK (nevek) sora - 1-alapú.
+
+    Az a fejléc-sor, amelyikben a legtöbb kitöltött cella áll a D oszloptól:
+    a külsős táblán ez a nevek sora (az A-C a dátum/nap/diszpószám blokk, a
+    többi fejléc-sor jelmagyarázat), a belsősön a 2. sor. Korábban a fejléc
+    utolsó sorát vettük, ami a külsősön üres volt - így az oszlopoknak nem
+    volt címkéjük, és a kézi oszlop-ember kötést sem lehetett a cimkén át
+    megőrizni a szinkronok közt."""
+    legjobb, legtobb = fejlec_sorok, 0
+    for r in range(1, fejlec_sorok + 1):
+        kitoltott = sum(1 for c in range(4, max_oszlop + 1) if cella_erteke(ws.cell(r, c).value))
+        if kitoltott > legtobb:
+            legtobb, legjobb = kitoltott, r
+    return legjobb
+
+
 def munkalap_atvetele(db: Session, ws, sorrend: int, vegrehajt: bool) -> dict:
     max_sor, max_oszlop = tartalom_hatara(ws)
-    fejlec_sorok = 2 if ws.title in KETSOROS_FEJLECU else 1
+    fejlec_sorok = fejlec_sorok_szama(ws, max_sor)
+    ketsoros = ws.title in KETSOROS_FEJLECU
 
     meglevo = db.scalar(select(DiszpoMunkalap).where(DiszpoMunkalap.nev == ws.title))
     regi_cellak = (
@@ -175,20 +212,24 @@ def munkalap_atvetele(db: Session, ws, sorrend: int, vegrehajt: bool) -> dict:
                 continue
             cellak.append((r - 1, c - 1, ertek, szin))
 
-    # AZ OSZLOPOK: a fejléc alsó sora a címke, a felső a szekció - a szekció a
-    # Sheetben csak az első oszlopánál áll ott, tehát jobbra "átfolyik".
-    nevsor = fejlec_sorok - 1
+    # AZ OSZLOPOK: a nevek sora a címke (lásd nevsor_indexe), a belsősön a
+    # legfelső sor a szekció - a szekció a Sheetben csak az első oszlopánál
+    # áll ott, tehát jobbra "átfolyik".
+    nevsor = nevsor_indexe(ws, fejlec_sorok, max_oszlop)
     terkep = belsos_nevterkep(db)
     oszlopok: list[dict] = []
     uzenetek: list[str] = []
     aktualis_csoport: str | None = None
     for c in range(1, max_oszlop + 1):
-        if fejlec_sorok == 2:
+        if ketsoros:
             csoport_ertek = cella_erteke(ws.cell(1, c).value)
             if csoport_ertek:
                 aktualis_csoport = csoport_ertek
-        cimke = cella_erteke(ws.cell(nevsor + 1, c).value)
-        ember, uzenet = oszlop_embere(cimke, terkep) if fejlec_sorok == 2 else (None, None)
+        cimke = cella_erteke(ws.cell(nevsor, c).value)
+        # Az automatikus névre-kötés csak a BELSŐS táblán fut: a külsős
+        # oszlopfeliratok külsősök/eszközök, egy véletlen név-egyezés ott
+        # rossz ember napjait számolná.
+        ember, uzenet = oszlop_embere(cimke, terkep) if ketsoros else (None, None)
         employee_id = ember.id if ember else None
         if employee_id is None and cimke:
             # A korábbi, kézzel megadott kötés visszaöröklése.

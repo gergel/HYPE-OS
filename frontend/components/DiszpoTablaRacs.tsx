@@ -578,6 +578,10 @@ export function DiszpoTablaRacs({
                             width: OSZLOP_SZELES,
                             height: sorMagassaga[r],
                             zIndex: fagyott ? 2 : 1,
+                            // A fejléc-blokkban is látszódjon a cella színe: a
+                            // külsős tábla felső sorai a JELMAGYARÁZAT (zöld =
+                            // ..., piros = ...), szín nélkül értelmetlenek.
+                            ...cellaStilus(cl?.szin),
                           }}
                           onMouseDown={() => {
                             setKijelolt({ sor: r, oszlop: c });
