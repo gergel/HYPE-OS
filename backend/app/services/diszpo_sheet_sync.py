@@ -199,12 +199,25 @@ def munkalap_atvetele(db: Session, ws, sorrend: int, vegrehajt: bool) -> dict:
     # Ugyanígy a kézzel ELREJTETT oszlopok is a feliratukon át öröklődnek -
     # egy szinkron ne hozza vissza az egyszer már eltüntetett oszlopokat.
     korabbi_rejtettek: set[str] = set()
+    # És a kézzel ELREJTETT SOROK is (a felhasznaló kérése: a szinkron ne
+    # hozza vissza őket): dátumos sort a (dátum, diszpószám) párja azonosít
+    # újra, dátum nélkülit a helye (idx) - a Sheet sorai jellemzően nem
+    # csúsznak el, és ha mégis, az elrejtés visszaadható egy kattintással.
+    korabbi_rejtett_sor_kulcsok: set[tuple[date, int | None]] = set()
+    korabbi_rejtett_sor_idxek: set[int] = set()
     if meglevo is not None:
         for regi in db.scalars(select(DiszpoOszlop).where(DiszpoOszlop.munkalap_id == meglevo.id)).all():
             if regi.employee_id is not None and regi.cimke:
                 korabbi_kotesek[ekezet_nelkul(regi.cimke.strip())] = regi.employee_id
             if regi.rejtett and regi.cimke:
                 korabbi_rejtettek.add(ekezet_nelkul(regi.cimke.strip()))
+        for regi_sor in db.scalars(select(DiszpoSor).where(DiszpoSor.munkalap_id == meglevo.id)).all():
+            if not regi_sor.rejtett:
+                continue
+            if regi_sor.datum is not None:
+                korabbi_rejtett_sor_kulcsok.add((regi_sor.datum, regi_sor.diszposzam))
+            else:
+                korabbi_rejtett_sor_idxek.add(regi_sor.idx)
 
     # A CELLÁK
     cellak: list[tuple[int, int, str | None, str | None]] = []
@@ -269,13 +282,22 @@ def munkalap_atvetele(db: Session, ws, sorrend: int, vegrehajt: bool) -> dict:
             utolso_datum = None
         nap = cella_erteke(ws.cell(r, 2).value) if max_oszlop >= 2 else None
         diszposzam = cella_erteke(ws.cell(r, 3).value) if max_oszlop >= 3 else None
+        sor_datum = utolso_datum if r > fejlec_sorok and not elvalaszto else None
+        sor_diszposzam = int(diszposzam) if (diszposzam or "").isdigit() else None
         sorok.append(
             {
                 "idx": r - 1,
-                "datum": utolso_datum if r > fejlec_sorok and not elvalaszto else None,
+                "datum": sor_datum,
                 "nap": nap if isinstance(nap, str) and len(nap) < 20 else None,
-                "diszposzam": int(diszposzam) if (diszposzam or "").isdigit() else None,
+                "diszposzam": sor_diszposzam,
                 "elvalaszto": elvalaszto,
+                # A kézzel elrejtett sor a csere után is rejtett marad - lásd
+                # fent a korabbi_rejtett_sor_* gyűjtését.
+                "rejtett": (
+                    (sor_datum, sor_diszposzam) in korabbi_rejtett_sor_kulcsok
+                    if sor_datum is not None
+                    else (r - 1) in korabbi_rejtett_sor_idxek
+                ),
             }
         )
 
