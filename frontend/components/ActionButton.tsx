@@ -20,7 +20,6 @@ export function ActionButton({
   megerositoCimke,
   redirectPrefix,
   onSuccess,
-  halkabb,
 }: {
   path: string;
   label: string;
@@ -35,9 +34,6 @@ export function ActionButton({
    * komponensből átadva azonnali, helyi visszajelzésre (pl. a diszpó-küldés
    * gombja rögtön "Kiküldve"-t mutasson, ne a szerver-frissítésre várjon). */
   onSuccess?: () => void;
-  /** Visszafogott (ghost) megjelenés a fő gomb MELLÉ szánt másodlagos
-   * művelethez (pl. "Kiküldöttnek jelölés küldés nélkül"). */
-  halkabb?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -76,12 +72,7 @@ export function ActionButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={busy}
-      className={halkabb ? "btn btn-ghost !text-[12.5px]" : "btn btn-primary"}
-    >
+    <button type="button" onClick={handleClick} disabled={busy} className="btn btn-primary">
       {busy ? "Folyamatban…" : label}
     </button>
   );

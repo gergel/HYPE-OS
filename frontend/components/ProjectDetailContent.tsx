@@ -7,6 +7,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { ActionButton } from "@/components/ActionButton";
+import { DiszpoKuldesGombok } from "@/components/DiszpoKuldesGombok";
 import { Card } from "@/components/Card";
 import { DeleteButton } from "@/components/DeleteButton";
 import { DetailHeader } from "@/components/DetailHeader";
@@ -14,7 +15,6 @@ import { DetailSections } from "@/components/DetailSections";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { GyartasKomment } from "@/components/GyartasKomment";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
-import { StatusBadge } from "@/components/StatusBadge";
 import { EquipmentBookingManager } from "@/components/EquipmentBookingManager";
 import { ForgatasIdopontEditor } from "@/components/ForgatasIdopontEditor";
 import { StabLinker } from "@/components/StabLinker";
@@ -332,55 +332,14 @@ export async function ProjectDetailContent({
         content: (
           <>
             <Card title="Diszpó küldése" icon={Send}>
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <ActionButton
-                    path={`/api/v1/projects/${project.id}/diszpo/elozetes${elozetesAllapot ? "?ujrakuldes=1" : ""}`}
-                    label={elozetesAllapot ? "Előzetes diszpó újraküldése" : "Előzetes diszpó"}
-                    figyelmeztetes={elozetesAllapot ? "AZ ELŐZETES DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
-                    megerositoCimke={elozetesAllapot ? "Igen, újraküldöm" : undefined}
-                    confirmMessage={
-                      elozetesAllapot
-                        ? `Állapot: ${elozetesAllapot}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja ugyanazt a levelet. Biztosan újraküldöd?`
-                        : "Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
-                    }
-                  />
-                  {elozetesAllapot && <StatusBadge label={elozetesAllapot} tone="success" />}
-                  {/* Ha a levél valójában kiment, de az állapot üres (pl. a
-                      régi import törölte), újraküldés NÉLKÜL is jelölhető -
-                      különben a stáb még egyszer megkapná ugyanazt a levelet. */}
-                  {!elozetesAllapot && (
-                    <ActionButton
-                      halkabb
-                      path={`/api/v1/projects/${project.id}/diszpo/kezi-jeloles?tipus=elozetes`}
-                      label="Kiküldöttnek jelölés küldés nélkül"
-                      confirmMessage="NEM küld semmit - csak az állapotot állítja Kiküldve-re. Akkor használd, ha az előzetes diszpó ténylegesen kiment, de a jelzés üres. Folytatod?"
-                    />
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <ActionButton
-                    path={`/api/v1/projects/${project.id}/diszpo/kuldes${diszpoAllapot ? "?ujrakuldes=1" : ""}`}
-                    label={diszpoAllapot ? "Diszpó újraküldése" : "Diszpó küldése"}
-                    figyelmeztetes={diszpoAllapot ? "A DISZPÓ MÁR KI VAN KÜLDVE" : undefined}
-                    megerositoCimke={diszpoAllapot ? "Igen, újraküldöm" : undefined}
-                    confirmMessage={
-                      diszpoAllapot
-                        ? `Állapot: ${diszpoAllapot}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja a teljes diszpót (technika listával, PDF-fel). Biztosan újraküldöd?`
-                        : "Elküldi a teljes diszpót (technika listával, PDF-fel) a résztvevőknek. Folytatod?"
-                    }
-                  />
-                  {diszpoAllapot && <StatusBadge label={diszpoAllapot} tone="success" />}
-                  {!diszpoAllapot && (
-                    <ActionButton
-                      halkabb
-                      path={`/api/v1/projects/${project.id}/diszpo/kezi-jeloles?tipus=teljes`}
-                      label="Kiküldöttnek jelölés küldés nélkül"
-                      confirmMessage="NEM küld semmit - csak az állapotot állítja Kiküldve-re. Akkor használd, ha a teljes diszpó ténylegesen kiment, de a jelzés üres. Folytatod?"
-                    />
-                  )}
-                </div>
-              </div>
+              {/* Kliens-komponens: a sikeres küldés AZONNAL zöld "Kiküldve"
+                  jelzésre és "Újraküldés" gombra vált, nem a szerver-frissítést
+                  várja (a felhasználó kérése). */}
+              <DiszpoKuldesGombok
+                projectId={Number(project.id)}
+                elozetesAllapot={elozetesAllapot}
+                diszpoAllapot={diszpoAllapot}
+              />
             </Card>
 
             {/* Ezek a fájlok a TELJES diszpó levél mellékleteként mennek ki a

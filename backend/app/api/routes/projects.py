@@ -252,32 +252,6 @@ def run_diszpo_kuldes(
     return _run_dispatch_action(send_diszpo, db, project, current_user)
 
 
-@router.post("/{project_id}/diszpo/kezi-jeloles", tags=["projects"])
-def diszpo_kezi_jeloles(
-    project_id: int,
-    tipus: str,
-    db: Session = Depends(get_db),
-    current_user: Employee = Depends(_diszpo_kuldheti),
-):
-    """KÉZI "Kiküldve" jelölés - KÜLDÉS NÉLKÜL (a felhasználó kérése).
-
-    Arra az esetre, amikor a diszpó ténylegesen kiment, de az állapot mégis
-    üres (pl. a korábbi Notion-import törölte, mielőtt a védelem élt volna,
-    vagy a levél még a rendszeren kívül ment ki): enélkül az egyetlen út az
-    újraküldés lenne - a stáb pedig még egyszer megkapná ugyanazt a levelet.
-    A jelölés nem küld semmit, csak az állapotot állítja be; ugyanaz a
-    jogosultság kell hozzá, mint a küldéshez."""
-    if tipus not in ("elozetes", "teljes"):
-        raise HTTPException(status_code=400, detail="A tipus 'elozetes' vagy 'teljes' lehet.")
-    project = _get_project_or_404(project_id, db)
-    if tipus == "elozetes":
-        project.elozetes_diszpo_kuldes = "Kiküldve"
-        project.aki_az_elozetest_kuldte_ki = [current_user.full_name]
-    else:
-        project.diszpo = "Kiküldve"
-        project.aki_kikuldte_a_diszpot = [current_user.full_name]
-    db.commit()
-    return {"ok": True, "tipus": tipus}
 
 
 @router.post(

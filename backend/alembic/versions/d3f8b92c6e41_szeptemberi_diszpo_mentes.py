@@ -11,8 +11,7 @@ services/dispo.py) - ahol ez ki van töltve, ott ténylegesen ment ki diszpó
 levél. Az ELŐZETES állapotot töltjük vissza belőle (a szál a szokásos
 munkamenetben az előzetessel indul); a TELJES diszpót szándékosan nem
 találgatjuk - egy téves "Kiküldve" miatt a stáb soha nem kapná meg a valódi
-diszpót. Ha a teljes is kiment, az admin a felület új "Kiküldöttnek jelölés
-küldés nélkül" gombjával pótolhatja (lásd routes/projects.diszpo_kezi_jeloles).
+diszpót.
 
 Csak az ÜRES mezőt írja, ezért akárhányszor lefuttatható.
 
