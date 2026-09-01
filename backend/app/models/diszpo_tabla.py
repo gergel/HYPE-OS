@@ -135,6 +135,10 @@ class DiszpoSor(TimestampMixin, Base):
     diszposzam: Mapped[int | None] = mapped_column(Integer)
     #: Hónap-elválasztó sor ("❄️ JANUÁR ❄️") - nem munkanap, csak felirat.
     elvalaszto: Mapped[bool] = mapped_column(default=False, nullable=False)
+    #: Elrejtett sor: a felület nem mutatja (pl. egy rég lezárt nap), de az
+    #: adata és a munkanap-számítása él - ugyanaz az elv, mint az oszlopnál
+    #: (lásd DiszpoOszlop.rejtett): az elrejtés rendrakás, nem törlés.
+    rejtett: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     munkalap: Mapped["DiszpoMunkalap"] = relationship(back_populates="sorok")
 

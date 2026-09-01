@@ -3265,6 +3265,8 @@ export type DiszpoSor = {
   diszposzam: number | null;
   /** Hónap-elválasztó sor ("❄️ JANUÁR ❄️"). */
   elvalaszto: boolean;
+  /** Elrejtett sor: a felület nem mutatja, az adata él (mint az oszlopnál). */
+  rejtett: boolean;
 };
 
 /** [sor_idx, oszlop_idx, érték, szín] - tömören, mert a külsős munkalap 34

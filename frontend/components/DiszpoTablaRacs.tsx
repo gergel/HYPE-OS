@@ -111,19 +111,27 @@ export function DiszpoTablaRacs({
 
   // A sorok TETEJE és MAGASSÁGA - halmozva. Azért kell tömb, mert az
   // elválasztó sorok magasabbak: fix magassággal a pozíciók elcsúsznának.
+  // A REJTETT sor 0 magas (mint a rejtett oszlop 0 széles) - a többi sor
+  // magától összecsúszik, az adat pedig megmarad (a felhasználó kérése).
   const { sorTeteje, sorMagassaga, teljesMagassag } = useMemo(() => {
     const elvalasztoSorok = new Set(munkalap.sorok.filter((s) => s.elvalaszto).map((s) => s.idx));
+    const rejtettSorIdxek = new Set(munkalap.sorok.filter((s) => s.rejtett).map((s) => s.idx));
     const teteje: number[] = new Array(sorSzam + 1);
     const magassaga: number[] = new Array(sorSzam);
     let fut = 0;
     for (let r = 0; r < sorSzam; r++) {
       teteje[r] = fut;
-      magassaga[r] = elvalasztoSorok.has(r) ? ELVALASZTO_MAGASSAG : SOR_MAGASSAG;
+      magassaga[r] = rejtettSorIdxek.has(r) ? 0 : elvalasztoSorok.has(r) ? ELVALASZTO_MAGASSAG : SOR_MAGASSAG;
       fut += magassaga[r];
     }
     teteje[sorSzam] = fut;
     return { sorTeteje: teteje, sorMagassaga: magassaga, teljesMagassag: fut };
   }, [munkalap.sorok, sorSzam]);
+
+  const rejtettSorok = useMemo(
+    () => munkalap.sorok.filter((s) => s.rejtett).sort((a, b) => a.idx - b.idx),
+    [munkalap.sorok],
+  );
 
   /** Melyik sor van ezen a képpontnál - a halmozott tömbön keresve. */
   const sorAPontnal = useCallback(
@@ -267,8 +275,18 @@ export function DiszpoTablaRacs({
         }
         if (celOszlop < 0 || celOszlop >= oszlopSzam) celOszlop = kijelolt.oszlop;
       }
+      // Függőleges lépésnél a REJTETT sorokat is átugorjuk - ugyanaz az elv,
+      // mint a rejtett oszlopoknál.
+      let celSor = Math.min(Math.max(kijelolt.sor + dSor, munkalap.fejlec_sorok), sorSzam - 1);
+      if (dSor !== 0) {
+        const sorIrany = dSor > 0 ? 1 : -1;
+        while (celSor >= munkalap.fejlec_sorok && celSor < sorSzam && sorTerkep.get(celSor)?.rejtett) {
+          celSor += sorIrany;
+        }
+        if (celSor < munkalap.fejlec_sorok || celSor >= sorSzam) celSor = kijelolt.sor;
+      }
       const uj = {
-        sor: Math.min(Math.max(kijelolt.sor + dSor, munkalap.fejlec_sorok), sorSzam - 1),
+        sor: celSor,
         oszlop: celOszlop,
       };
       if (kiterjeszt) {
@@ -291,7 +309,7 @@ export function DiszpoTablaRacs({
           elem.scrollLeft = x + oszlopSzelessege[uj.oszlop] - elem.clientWidth;
       }
     },
-    [kijelolt, tartomany, sorSzam, oszlopSzam, munkalap.fejlec_sorok, fagyasztott, fagyasztottSzeles, oszlopBal, oszlopSzelessege, oszlopTerkep, sorTeteje, sorMagassaga],
+    [kijelolt, tartomany, sorSzam, oszlopSzam, munkalap.fejlec_sorok, fagyasztott, fagyasztottSzeles, oszlopBal, oszlopSzelessege, oszlopTerkep, sorTerkep, sorTeteje, sorMagassaga],
   );
 
   // BILLENTYŰZET: ahogy a táblázatban. Nyilak, Enter, Tab, gépelés, Delete.
@@ -344,10 +362,16 @@ export function DiszpoTablaRacs({
       for (let c = kijelolt.oszlop; c < oszlopSzam; c++) {
         if (!oszlopTerkep.get(c)?.rejtett) celOszlopok.push(c);
       }
+      // A cél-sorok is a LÁTHATÓAK: a rejtett sorokat a beillesztés is
+      // kihagyja, ahogy a rejtett oszlopokat (és ahogy a Sheets teszi).
+      const celSorok: number[] = [];
+      for (let r = kijelolt.sor; r < sorSzam; r++) {
+        if (!sorTerkep.get(r)?.rejtett) celSorok.push(r);
+      }
       const cellak: { sor_idx: number; oszlop_idx: number; ertek: string | null; ertek_valtozik: boolean }[] = [];
       sorok.forEach((ertekek, dr) => {
-        const r = kijelolt.sor + dr;
-        if (r >= sorSzam) return;
+        const r = celSorok[dr];
+        if (r === undefined) return;
         ertekek.forEach((ertek, dc) => {
           const c = celOszlopok[dc];
           if (c === undefined) return;
@@ -386,7 +410,7 @@ export function DiszpoTablaRacs({
   function Cella({ sor, oszlop, fagyott }: { sor: number; oszlop: number; fagyott: boolean }) {
     const c = cella(sor, oszlop);
     const s = sorTerkep.get(sor);
-    if (oszlopSzelessege[oszlop] === 0) return null;
+    if (oszlopSzelessege[oszlop] === 0 || sorMagassaga[sor] === 0) return null;
     const szerkesztettE = szerkesztes?.pont.sor === sor && szerkesztes?.pont.oszlop === oszlop;
     const bal = oszlopBal[oszlop];
     const uresJelolt = c?.szin === "feher";
@@ -559,6 +583,33 @@ export function DiszpoTablaRacs({
                 </button>
               );
             })()}
+            {/* UGYANEZ SOROKRA (a felhasználó kérése): a kijelölt sor(ok)
+                elrejtése - a fejléc-sorok maradnak, azok igazítanak el. */}
+            {(() => {
+              const tol = Math.min(tartomany?.tol.sor ?? kijelolt.sor, tartomany?.ig.sor ?? kijelolt.sor);
+              const ig = Math.max(tartomany?.tol.sor ?? kijelolt.sor, tartomany?.ig.sor ?? kijelolt.sor);
+              const rejtendok: number[] = [];
+              for (let r = Math.max(tol, munkalap.fejlec_sorok); r <= ig; r++) {
+                if (!sorTerkep.get(r)?.rejtett) rejtendok.push(r);
+              }
+              if (rejtendok.length === 0) return null;
+              return (
+                <button
+                  type="button"
+                  disabled={busy}
+                  title="A kijelölt sor(ok) elrejtése - lent a Rejtett sorok sávból bármikor visszahozható"
+                  onClick={async () => {
+                    for (const r of rejtendok) {
+                      // Sorban, nem párhuzamosan - mint az oszlopoknál.
+                      await hivas(`/sor/${r}`, { method: "PUT", body: JSON.stringify({ rejtett: true }) });
+                    }
+                  }}
+                  className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-40"
+                >
+                  {rejtendok.length > 1 ? `${rejtendok.length} sor elrejtése` : `${rejtendok[0] + 1}. sor elrejtése`}
+                </button>
+              );
+            })()}
           </>
         )}
         <span className="ml-auto text-[11.5px] text-text-muted">
@@ -588,6 +639,25 @@ export function DiszpoTablaRacs({
             >
               {oszlopBetu(o.idx)}
               {o.cimke ? ` · ${o.cimke}` : ""} ×
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* A REJTETT sorok visszahozása - ugyanaz, mint az oszlopoknál. */}
+      {rejtettSorok.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[12px]">
+          <span className="text-text-secondary">Rejtett sorok ({rejtettSorok.length}):</span>
+          {rejtettSorok.map((s) => (
+            <button
+              key={s.idx}
+              type="button"
+              disabled={busy || !canEdit}
+              title="Sor megjelenítése"
+              onClick={() => hivas(`/sor/${s.idx}`, { method: "PUT", body: JSON.stringify({ rejtett: false }) })}
+              className="rounded-[var(--radius)] border border-border px-2 py-0.5 text-text-secondary hover:bg-surface-2 disabled:opacity-40"
+            >
+              {s.idx + 1}.{s.datum ? ` · ${s.datum}` : ""} ×
             </button>
           ))}
         </div>
@@ -771,6 +841,8 @@ export function DiszpoTablaRacs({
 
               {lathatoSorok.map((r) => {
                 const sorAdat = sorTerkep.get(r);
+                // A rejtett sor 0 magas - nem rajzolunk belőle semmit.
+                if (sorMagassaga[r] === 0) return null;
                 // HÓNAP-ELVÁLASZTÓ: nem cellák sora, hanem egy széles,
                 // középre írt sáv - az évet egyben görgetve ez mondja meg,
                 // hol tartunk.
@@ -840,6 +912,19 @@ export function DiszpoTablaRacs({
                       cimke: `${oszlopBetu(menu.pont.oszlop)} oszlop elrejtése`,
                       tesz: () =>
                         hivas(`/oszlop/${menu.pont.oszlop}`, {
+                          method: "PUT",
+                          body: JSON.stringify({ rejtett: true }),
+                        }),
+                    },
+                  ]
+                : []),
+              // A fejléc-sorokat nem engedjük elrejteni - azok a jelmagyarázat.
+              ...(menu.pont.sor >= munkalap.fejlec_sorok
+                ? [
+                    {
+                      cimke: `${menu.pont.sor + 1}. sor elrejtése`,
+                      tesz: () =>
+                        hivas(`/sor/${menu.pont.sor}`, {
                           method: "PUT",
                           body: JSON.stringify({ rejtett: true }),
                         }),

@@ -72,6 +72,9 @@ class SorOut(BaseModel):
     nap: str | None = None
     diszposzam: int | None = None
     elvalaszto: bool = False
+    #: Elrejtett sor: a felület nem mutatja, az adata és a munkanap-számítása
+    #: él (lásd models/diszpo_tabla.DiszpoSor.rejtett).
+    rejtett: bool = False
 
 
 class MunkalapOut(MunkalapFej):
@@ -128,7 +131,7 @@ def get_munkalap(munkalap_id: int, db: Session = Depends(get_db), _user: Employe
             for o in oszlopok
         ],
         sorok=[
-            SorOut(idx=s.idx, datum=s.datum, nap=s.nap, diszposzam=s.diszposzam, elvalaszto=s.elvalaszto)
+            SorOut(idx=s.idx, datum=s.datum, nap=s.nap, diszposzam=s.diszposzam, elvalaszto=s.elvalaszto, rejtett=s.rejtett)
             for s in sorok
         ],
         cellak=[(r, c, e, sz) for r, c, e, sz in cellak],
@@ -370,6 +373,8 @@ class SorAdatIn(BaseModel):
 
     datum: date | None = None
     datum_valtozik: bool = False
+    #: Elrejtés/megjelenítés (lásd models/diszpo_tabla.DiszpoSor.rejtett).
+    rejtett: bool | None = None
 
 
 @router.put("/{munkalap_id}/sor/{idx}", response_model=SorOut)
@@ -386,10 +391,12 @@ def sor_adat(
         raise HTTPException(status_code=404, detail="Ez a sor nem található.")
     if payload.datum_valtozik:
         sor.datum = payload.datum
+    if payload.rejtett is not None:
+        sor.rejtett = payload.rejtett
     munkanap_szamlalo.urits_gyorsitotar(db)
     db.commit()
     db.refresh(sor)
-    return SorOut(idx=sor.idx, datum=sor.datum, nap=sor.nap, diszposzam=sor.diszposzam, elvalaszto=sor.elvalaszto)
+    return SorOut(idx=sor.idx, datum=sor.datum, nap=sor.nap, diszposzam=sor.diszposzam, elvalaszto=sor.elvalaszto, rejtett=sor.rejtett)
 
 
 class OszlopKotesIn(BaseModel):
