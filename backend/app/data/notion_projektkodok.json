@@ -1,0 +1,7157 @@
+[
+ {
+  "kod": "HYPE25-0001",
+  "nev": "PAP felvétel",
+  "datum": "2025-01-01",
+  "helyszin": "Budahegyvidéki Református Egyházközség",
+  "datum_megjegyzes": "2025.01.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-810a-8db9-c1337ef7e27d"
+ },
+ {
+  "kod": "HYPE25-0002",
+  "nev": "MTE - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81aa-87ab-efcff15395a7"
+ },
+ {
+  "kod": "HYPE25-0003",
+  "nev": "Boban Markovic - újévi koncert",
+  "datum": null,
+  "helyszin": "Müpa; Pécs",
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8181-8211-c11a9096c3d4"
+ },
+ {
+  "kod": "HYPE25-0004",
+  "nev": "CEU - Határtalan tudás",
+  "datum": "2025-02-06",
+  "helyszin": "CEU",
+  "datum_megjegyzes": "2025.02.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81e8-88e3-cc8eb79724a9"
+ },
+ {
+  "kod": "HYPE25-0005",
+  "nev": "MP - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-818c-8e56-e8ab0ba252ee"
+ },
+ {
+  "kod": "HYPE25-0006",
+  "nev": "MP - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81b8-9a09-dcf732556b78"
+ },
+ {
+  "kod": "HYPE25-0007",
+  "nev": "MP - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-814a-8053-f91c1a3e3812"
+ },
+ {
+  "kod": "HYPE25-0008",
+  "nev": "MP - április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-813d-92a8-f444d928cc0e"
+ },
+ {
+  "kod": "HYPE25-0009",
+  "nev": "MP - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8135-bce8-ed40975a00db"
+ },
+ {
+  "kod": "HYPE25-0010",
+  "nev": "MP - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8159-9148-c98d4229922b"
+ },
+ {
+  "kod": "HYPE25-0011",
+  "nev": "MP - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8136-b57f-e4c5d17cf3a0"
+ },
+ {
+  "kod": "HYPE25-0012",
+  "nev": "MP - augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81b9-9760-d54063904a02"
+ },
+ {
+  "kod": "HYPE25-0013",
+  "nev": "MP - szeptember",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8167-98a7-e436a2e4ccc1"
+ },
+ {
+  "kod": "HYPE25-0014",
+  "nev": "MP - október",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-813d-8f78-d5a6b43ac3ae"
+ },
+ {
+  "kod": "HYPE25-0015",
+  "nev": "MP - november",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8163-9ebc-d239abfd5da5"
+ },
+ {
+  "kod": "HYPE25-0016",
+  "nev": "MP - december",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81e0-9ced-fca85075f4bb"
+ },
+ {
+  "kod": "HYPE25-0017",
+  "nev": "TE - fotózás",
+  "datum": "2025-01-10",
+  "helyszin": "Hungexpo",
+  "datum_megjegyzes": "2025.01.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ba-9061-f941a382af3a"
+ },
+ {
+  "kod": "HYPE25-0018",
+  "nev": "Art Színtér videó",
+  "datum": "2025-01-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.01.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8108-a731-eefcd1882125"
+ },
+ {
+  "kod": "HYPE25-0019",
+  "nev": "Művészetek Völgye 2025 - művészeti promo",
+  "datum": "2025-01-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.01.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8138-b484-d010b0eaa8cc"
+ },
+ {
+  "kod": "HYPE25-0020",
+  "nev": "MMA-MMKI - Építészeti vitaest",
+  "datum": "2025-01-22",
+  "helyszin": "Walter Rózsi-villa",
+  "datum_megjegyzes": "2025.01.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81fb-b991-c0546cc499d0"
+ },
+ {
+  "kod": "HYPE25-0021",
+  "nev": "TE Stúdió Munka - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8105-aaec-d216285e70c5"
+ },
+ {
+  "kod": "HYPE25-0022",
+  "nev": "MMA-MMKI - A Magyar Kultúra Napja",
+  "datum": "2025-01-22",
+  "helyszin": "Pesti Vígadó",
+  "datum_megjegyzes": "2025.01.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ba-8b28-ff2abddb77a3"
+ },
+ {
+  "kod": "HYPE25-0023",
+  "nev": "Krumpello 2025",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8141-b9bc-f25ae5e3bcb7"
+ },
+ {
+  "kod": "HYPE25-0024",
+  "nev": "TE Stúdió Munka - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81f8-b710-ca7ccf2b3093"
+ },
+ {
+  "kod": "HYPE25-0025",
+  "nev": "HH - Vissza a forrásokhoz!",
+  "datum": "2025-01-27",
+  "helyszin": "Hagyományok Háza",
+  "datum_megjegyzes": "2025.01.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815c-8434-f09fc73a19b9"
+ },
+ {
+  "kod": "HYPE25-0026",
+  "nev": "IDEA Alapítvány reklámfilm",
+  "datum": "2025-02-07",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.02.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-818a-8073-c8fa416b565a"
+ },
+ {
+  "kod": "HYPE25-0027",
+  "nev": "MTA - Üzenetek",
+  "datum": "2025-01-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.01.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d8-b324-dec73bfeaca0"
+ },
+ {
+  "kod": "HYPE25-0028",
+  "nev": "Art Színtér - greenbox felvétel",
+  "datum": null,
+  "helyszin": "BlackBox Studio",
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-8157-8aff-ede0ca0983a9"
+ },
+ {
+  "kod": "HYPE25-0029",
+  "nev": "Konferencia (Gulyás Kristóf)",
+  "datum": "2025-02-05",
+  "helyszin": "Ensana Thermal Budapest",
+  "datum_megjegyzes": "2025.02.05-06.",
+  "esemeny_allapota": "Függőben",
+  "notion_page_id": "20dc9afd-d53b-8151-8262-cea6a06ce817"
+ },
+ {
+  "kod": "HYPE25-0030",
+  "nev": "Art Színtér - Oltári Srácok előadás - főpróba",
+  "datum": "2025-01-31",
+  "helyszin": "Szeged Sportcsarnok",
+  "datum_megjegyzes": "2025.01.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8150-82d8-df72194253c6"
+ },
+ {
+  "kod": "HYPE25-0031",
+  "nev": "Bíró Eszter - Jubileumi koncert",
+  "datum": "2025-01-30",
+  "helyszin": "Budapest, Eötvös u. 10, 1067",
+  "datum_megjegyzes": "2025.01.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8105-b77e-ff9f56b106a5"
+ },
+ {
+  "kod": "HYPE25-0032",
+  "nev": "WSK weblapkészítés",
+  "datum": "2025-01-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.01.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d3-a8e9-f51aa3b6ce54"
+ },
+ {
+  "kod": "HYPE25-0033",
+  "nev": "Skipper - Párizsi kiszállók",
+  "datum": "2025-01-31",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.01.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81f5-9b3a-dbf2873d2a01"
+ },
+ {
+  "kod": "HYPE25-0034",
+  "nev": "Képszerkesztőség - Microsoft event felvétel",
+  "datum": "2025-02-04",
+  "helyszin": "Pesti Vigadó",
+  "datum_megjegyzes": "2025.02.04-05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8163-903a-cc02995e52fa"
+ },
+ {
+  "kod": "HYPE25-0035",
+  "nev": "Határtalan Tudás anyagok",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-817f-867a-ef59e6f449c2"
+ },
+ {
+  "kod": "HYPE25-0036",
+  "nev": "Bols Mixer Akadémia fotózás",
+  "datum": "2025-01-31",
+  "helyszin": "Bols Mixer Akadémia",
+  "datum_megjegyzes": "2025.01.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-817b-96dc-d35e8305c4e7"
+ },
+ {
+  "kod": "HYPE25-0037",
+  "nev": "Skipper - Heraklész Gála",
+  "datum": "2025-01-31",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.01.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81e5-8d27-ce901810a9f5"
+ },
+ {
+  "kod": "HYPE25-0038",
+  "nev": "MTE - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815c-a496-c254c349f849"
+ },
+ {
+  "kod": "HYPE25-0039",
+  "nev": "MTE - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8170-b64e-d3713f61f55a"
+ },
+ {
+  "kod": "HYPE25-0040",
+  "nev": "Lázár séf - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-816d-966f-ce165b93f432"
+ },
+ {
+  "kod": "HYPE25-0041",
+  "nev": "Víz, Zene, Virág Fesztivál",
+  "datum": "2025-06-25",
+  "helyszin": "Tata",
+  "datum_megjegyzes": "2025.06.25-29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d4-8c60-c0dbe0822083"
+ },
+ {
+  "kod": "HYPE25-0042",
+  "nev": "Gödöllő Groove koncertfelvétel",
+  "datum": "2025-02-23",
+  "helyszin": "Gödöllő, Művészetek Háza",
+  "datum_megjegyzes": "2025.02.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8186-b14e-e2f9e270ed2f"
+ },
+ {
+  "kod": "HYPE25-0043",
+  "nev": "TE fotózás",
+  "datum": "2025-02-07",
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.02.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8147-8bfe-fba459ed034d"
+ },
+ {
+  "kod": "HYPE25-0044",
+  "nev": "Lázár séf - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81f8-bd48-c421e4ea54b0"
+ },
+ {
+  "kod": "HYPE25-0045",
+  "nev": "VSLup - MOL ÚEA - Mester-M",
+  "datum": "2025-04-17",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8189-83a5-e64e0105252f"
+ },
+ {
+  "kod": "HYPE25-0046",
+  "nev": "Hegedűs Bori - live session",
+  "datum": "2025-03-10",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-811e-857d-c6db8bfd5ddf"
+ },
+ {
+  "kod": "HYPE25-0047",
+  "nev": "Startup Safari 2025",
+  "datum": "2025-04-08",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.08-09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d9-9e41-faf3a9fb9ebe"
+ },
+ {
+  "kod": "HYPE25-0048",
+  "nev": "Fonó - A közösségi mezőgazdálkodás napja 2025",
+  "datum": "2025-02-22",
+  "helyszin": "Fonó Budai Zeneház",
+  "datum_megjegyzes": "2025.02.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-810a-809c-f74e1d35405b"
+ },
+ {
+  "kod": "HYPE25-0049",
+  "nev": "Fonó stream",
+  "datum": "2025-02-26",
+  "helyszin": "Fonó Budai Zeneház",
+  "datum_megjegyzes": "2025.02.26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8145-8aba-c5cb52819b8a"
+ },
+ {
+  "kod": "HYPE25-0050",
+  "nev": "Pont Ott Parti",
+  "datum": "2025-07-23",
+  "helyszin": "Budapest Park",
+  "datum_megjegyzes": "2025.07.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ca-a88f-e0ec96039f81"
+ },
+ {
+  "kod": "HYPE25-0051",
+  "nev": "TigraTV 2025 - I.rész",
+  "datum": "2025-03-10",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8170-a08e-c6804f0f56b8"
+ },
+ {
+  "kod": "HYPE25-0052",
+  "nev": "Pajta Project - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8121-94dd-d34d27a0234e"
+ },
+ {
+  "kod": "HYPE25-0053",
+  "nev": "Pajta Project - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81f7-a879-f06324a0fbda"
+ },
+ {
+  "kod": "HYPE25-0054",
+  "nev": "Ultra Color Arena",
+  "datum": "2025-03-14",
+  "helyszin": "Vasúttörténeti Park",
+  "datum_megjegyzes": "2025.03.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81bf-bf37-d5d8ebd6a5f1"
+ },
+ {
+  "kod": "HYPE25-0055",
+  "nev": "HH - Közös ég alatt",
+  "datum": "2025-03-02",
+  "helyszin": "Hagyományok Háza",
+  "datum_megjegyzes": "2025.03.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815b-8215-f8e8424f516d"
+ },
+ {
+  "kod": "HYPE25-0056",
+  "nev": "A nyugat kapujában",
+  "datum": "2025-02-19",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.02.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81e4-905c-cfee0ad8bd87"
+ },
+ {
+  "kod": "HYPE25-0057",
+  "nev": "El Paso - Mysterio dj set",
+  "datum": "2025-04-12",
+  "helyszin": "Balatonelle, Y Club",
+  "datum_megjegyzes": "2025.04.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-813e-8f80-fb49ae6e28af"
+ },
+ {
+  "kod": "HYPE25-0058",
+  "nev": "BBGP - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8131-9f29-da79c026dd70"
+ },
+ {
+  "kod": "HYPE25-0059",
+  "nev": "Box stream",
+  "datum": "2025-03-22",
+  "helyszin": "Videoton Oktatási Központ",
+  "datum_megjegyzes": "2025.03.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8116-93df-c772856569e2"
+ },
+ {
+  "kod": "HYPE25-0060",
+  "nev": "TE Stúdió Munka - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ea-9b5e-c3d0b8c722bb"
+ },
+ {
+  "kod": "HYPE25-0061",
+  "nev": "CEU - Határtalan tudás",
+  "datum": "2025-04-02",
+  "helyszin": "CEU",
+  "datum_megjegyzes": "2025.04.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d4-9bcd-df534fc15c71"
+ },
+ {
+  "kod": "HYPE25-0062",
+  "nev": "Kerekdomb Fesztivál 2025",
+  "datum": "2025-09-19",
+  "helyszin": "Tállya",
+  "datum_megjegyzes": "2025.09.19-21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-812b-85d9-ed90f87310a8"
+ },
+ {
+  "kod": "HYPE25-0063",
+  "nev": "Pajta Project - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-812f-b7c4-fa79f74e779c"
+ },
+ {
+  "kod": "HYPE25-0064",
+  "nev": "Baga - NAK Agrártüntetés",
+  "datum": "2025-02-27",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.02.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8141-92d5-c7f5fb19636a"
+ },
+ {
+  "kod": "HYPE25-0065",
+  "nev": "Skipper - Mozgásakadémia",
+  "datum": "2025-03-18",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.18.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-81ae-943e-e8f389630f70"
+ },
+ {
+  "kod": "HYPE25-0066",
+  "nev": "Control-X - Bécs event video",
+  "datum": "2025-02-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.02.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8147-9362-c62f2adbb997"
+ },
+ {
+  "kod": "HYPE25-0067",
+  "nev": "VSLup - Déryné Konferencia 2025",
+  "datum": "2025-03-05",
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2025.03.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8122-9741-c2350984940d"
+ },
+ {
+  "kod": "HYPE25-0068",
+  "nev": "VSLup - Déryné - 5.évfordulós showreel",
+  "datum": "2025-02-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.02.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-812f-9b5a-d6446a9487de"
+ },
+ {
+  "kod": "HYPE25-0069",
+  "nev": "MTPA Eseménynaptár bemutató videó",
+  "datum": "2025-02-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.02.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-812f-a374-c323999f70e7"
+ },
+ {
+  "kod": "HYPE25-0070",
+  "nev": "Skipper - MKSZ Magyar Kupa női négyes döntő",
+  "datum": "2025-03-01",
+  "helyszin": "Tatabányai Multifunkcionális Sportcsarnok",
+  "datum_megjegyzes": "2025.03.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-810d-80d0-dba8547eb71f"
+ },
+ {
+  "kod": "HYPE25-0071",
+  "nev": "BBGP - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8150-a822-d70a7a92e167"
+ },
+ {
+  "kod": "HYPE25-0072",
+  "nev": "TF Napok",
+  "datum": "2025-03-01",
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.03.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81be-b9c2-e1adcec131d9"
+ },
+ {
+  "kod": "HYPE25-0073",
+  "nev": "Sport-Events - Vörösmarty Vásár 2025",
+  "datum": "2025-03-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8161-ad30-ef667a49371d"
+ },
+ {
+  "kod": "HYPE25-0074",
+  "nev": "MTE - április",
+  "datum": "2025-04-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81f8-b784-e058855acad5"
+ },
+ {
+  "kod": "HYPE25-0075",
+  "nev": "TE fotózás",
+  "datum": "2025-03-12",
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.03.12.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-810e-a5f0-f9aa9c4b1e53"
+ },
+ {
+  "kod": "HYPE25-0076",
+  "nev": "TE Stúdió Munka - április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-814b-a067-d54c26158243"
+ },
+ {
+  "kod": "HYPE25-0077",
+  "nev": "PAP felvétel",
+  "datum": "2025-04-20",
+  "helyszin": "Budahegyvidéki Református Egyházközség",
+  "datum_megjegyzes": "2025.04.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8173-acea-eab43d8f3c74"
+ },
+ {
+  "kod": "HYPE25-0078",
+  "nev": "MMA-MMKI - Építészeti vitaest",
+  "datum": "2025-03-18",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8192-8f1c-f249181f4c94"
+ },
+ {
+  "kod": "HYPE25-0079",
+  "nev": "Tigra Kupa",
+  "datum": "2025-05-18",
+  "helyszin": "Budaörsi út 64.",
+  "datum_megjegyzes": "2025.05.18.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-81e6-acbf-da7b7406e295"
+ },
+ {
+  "kod": "HYPE25-0080",
+  "nev": "Baga - BUD pantomim előadás forgatás",
+  "datum": "2025-05-09",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8134-be3d-e19cdf7c3c8f"
+ },
+ {
+  "kod": "HYPE25-0081",
+  "nev": "Lázár séf - április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-819c-a7f2-f1ce888b3fc6"
+ },
+ {
+  "kod": "HYPE25-0082",
+  "nev": "Lázár séf - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8154-a37c-f0b7009976ab"
+ },
+ {
+  "kod": "HYPE25-0083",
+  "nev": "Skipper - Recruitech",
+  "datum": "2025-03-27",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8122-8b5a-d0a7dd104f2e"
+ },
+ {
+  "kod": "HYPE25-0084",
+  "nev": "Ekereskedelem.com - event felvétel",
+  "datum": "2025-03-22",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-810d-85a6-c041868e77ce"
+ },
+ {
+  "kod": "HYPE25-0085",
+  "nev": "Vívó GKK 2025",
+  "datum": "2025-03-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2024.03.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8152-b8ff-d2487f435119"
+ },
+ {
+  "kod": "HYPE25-0086",
+  "nev": "HH - Társasjáték promo",
+  "datum": "2025-03-24",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8181-8030-f0d80dda9ca4"
+ },
+ {
+  "kod": "HYPE25-0087",
+  "nev": "TF100",
+  "datum": "2025-03-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2024.03.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-812f-a65e-f5c60a5757b5"
+ },
+ {
+  "kod": "HYPE25-0088",
+  "nev": "TE Stúdió Munka - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-818a-8bd2-ec84a2976843"
+ },
+ {
+  "kod": "HYPE25-0089",
+  "nev": "Lounge - fotózás",
+  "datum": "2025-03-27",
+  "helyszin": "Kamaraerdei út 11.",
+  "datum_megjegyzes": "2025.03.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81db-a750-fe4c9a7effb1"
+ },
+ {
+  "kod": "HYPE25-0090",
+  "nev": "TE fotózás",
+  "datum": "2025-03-27",
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.03.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d5-87d9-d3c60ecced7d"
+ },
+ {
+  "kod": "HYPE25-0091",
+  "nev": "Baga - NAK Magyar Termék (uborka)",
+  "datum": "2025-03-31",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-818f-a552-f30f41447cd8"
+ },
+ {
+  "kod": "HYPE25-0092",
+  "nev": "Everengine - tavaszi vásár",
+  "datum": "2025-03-01",
+  "helyszin": "Vörösmarty tér",
+  "datum_megjegyzes": "2025.03.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ec-9f69-f8a38f5f05f4"
+ },
+ {
+  "kod": "HYPE25-0093",
+  "nev": "Művészetek Völgye 2025 - 5db hangulati kisvideó",
+  "datum": "2025-03-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.03.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-818e-9c0d-e233a92de7f7"
+ },
+ {
+  "kod": "HYPE25-0094",
+  "nev": "Sajtótájékoztató felvétel",
+  "datum": "2025-03-29",
+  "helyszin": "Ferencvárosi Önkormányzat",
+  "datum_megjegyzes": "2025.03.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8124-bb64-c2c7bd0e6f41"
+ },
+ {
+  "kod": "HYPE25-0095",
+  "nev": "MONYO",
+  "datum": "2025-04-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81c6-8ea1-d0e16f60c834"
+ },
+ {
+  "kod": "HYPE25-0096",
+  "nev": "Art Színtér - Oltári Srácok promo",
+  "datum": "2025-04-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8165-be5c-e5d7d1e44930"
+ },
+ {
+  "kod": "HYPE25-0097",
+  "nev": "TF Nyári táborok",
+  "datum": "2025-04-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-812b-8e7b-fbb7dac239c9"
+ },
+ {
+  "kod": "HYPE25-0098",
+  "nev": "Barber Roadshow (D'Albini Ádám)",
+  "datum": "2025-04-05",
+  "helyszin": "Deák Palota",
+  "datum_megjegyzes": "2025.04.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-819d-84d2-ef9801cefabf"
+ },
+ {
+  "kod": "HYPE25-0099",
+  "nev": "BBGP - április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d9-a03a-ec166368e89d"
+ },
+ {
+  "kod": "HYPE25-0100",
+  "nev": "ContentBee - IndieCar I.",
+  "datum": "2025-05-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815d-a1f7-e2260ed36360"
+ },
+ {
+  "kod": "HYPE25-0101",
+  "nev": "Stream Terminal - Tánc EB",
+  "datum": "2025-06-13",
+  "helyszin": "Sport11",
+  "datum_megjegyzes": "2025.06.13-14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-813f-a67a-f0e99a4cbbcf"
+ },
+ {
+  "kod": "HYPE25-0102",
+  "nev": "CEU - Határtalan tudás",
+  "datum": "2025-05-13",
+  "helyszin": "CEU",
+  "datum_megjegyzes": "2025.05.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8183-9d51-f593e1d2d747"
+ },
+ {
+  "kod": "HYPE25-0103",
+  "nev": "TE - OTDK",
+  "datum": "2025-04-10",
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.04.10-12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81c2-a3d6-c50ff20162b6"
+ },
+ {
+  "kod": "HYPE25-0104",
+  "nev": "MTE 75",
+  "datum": "2025-04-27",
+  "helyszin": "W Hotel Budapest",
+  "datum_megjegyzes": "2025.04.27-28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-812e-b5a8-c98d1c9cf9d1"
+ },
+ {
+  "kod": "HYPE25-0105",
+  "nev": "HH - Táncháztalálkozó",
+  "datum": "2025-04-05",
+  "helyszin": "Papp László Budapest Sportaréna",
+  "datum_megjegyzes": "2025.04.05-06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ed-8f44-ccdd9e3a7c55"
+ },
+ {
+  "kod": "HYPE25-0106",
+  "nev": "Szamosi Film - mobilitási esemény",
+  "datum": "2025-04-11",
+  "helyszin": "Westend parkoló",
+  "datum_megjegyzes": "2025.04.11.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-8161-822c-f4ca3017a73f"
+ },
+ {
+  "kod": "HYPE25-0107",
+  "nev": "Lounge - fotózás",
+  "datum": "2025-05-10",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.10.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-813a-88db-f8385d307521"
+ },
+ {
+  "kod": "HYPE25-0108",
+  "nev": "Lounge - fotózás",
+  "datum": "2025-06-05",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.05.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-81b3-b1e9-d17477e9bf54"
+ },
+ {
+  "kod": "HYPE25-0109",
+  "nev": "Lounge - fotózás",
+  "datum": "2025-09-05",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.05.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-81c9-a4aa-df573b0cd810"
+ },
+ {
+  "kod": "HYPE25-0110",
+  "nev": "Skipper - Tour de Hongrie",
+  "datum": "2025-05-14",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.14-18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81cc-b5bc-d582eac2b6a5"
+ },
+ {
+  "kod": "HYPE25-0111",
+  "nev": "PAP felvétel",
+  "datum": "2025-04-13",
+  "helyszin": "Budahegyvidéki Református Egyházközség",
+  "datum_megjegyzes": "2025.04.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815f-8091-c121201039dd"
+ },
+ {
+  "kod": "HYPE25-0112",
+  "nev": "MMA-MMKI - Építészeti vitaest & építészeti témájú előadások",
+  "datum": "2025-04-15",
+  "helyszin": "Walter Rózsi-villa",
+  "datum_megjegyzes": "2025.04.15., 2025.04.29., 2025.05.20., 2025.05.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ab-9776-e33bc6cc746d"
+ },
+ {
+  "kod": "HYPE25-0113",
+  "nev": "Esküvő (Baráth Vince)",
+  "datum": "2025-04-12",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8159-aba5-e348760b941c"
+ },
+ {
+  "kod": "HYPE25-0114",
+  "nev": "MMA rövidfilm",
+  "datum": "2025-04-11",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.11., 2025.04.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8147-8ca5-e2849b66cd03"
+ },
+ {
+  "kod": "HYPE25-0115",
+  "nev": "TE - fotózás",
+  "datum": "2025-04-15",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8167-b7cf-e23edcb25078"
+ },
+ {
+  "kod": "HYPE25-0116",
+  "nev": "Baga - NAK",
+  "datum": "2025-04-15",
+  "helyszin": "Sárvár",
+  "datum_megjegyzes": "2025.04.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81c3-b96c-e064b02d1cb3"
+ },
+ {
+  "kod": "HYPE25-0117",
+  "nev": "Skipper - Recruitech",
+  "datum": "2025-05-22",
+  "helyszin": "CEU",
+  "datum_megjegyzes": "2025.05.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8186-85ba-ee2762a94314"
+ },
+ {
+  "kod": "HYPE25-0118",
+  "nev": "Dolák-Saly 70 előadás",
+  "datum": "2026-01-17",
+  "helyszin": "Riz Levente",
+  "datum_megjegyzes": "2026.01.17.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-8157-99a5-fae94e25f0a9"
+ },
+ {
+  "kod": "HYPE25-0119",
+  "nev": "Pap felvétel - nagypéntek",
+  "datum": "2025-04-18",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8180-8c7c-efe3d27c9b4a"
+ },
+ {
+  "kod": "HYPE25-0120",
+  "nev": "Tigra Nap",
+  "datum": "2025-06-14",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8100-a3f3-d61dee7b1ee4"
+ },
+ {
+  "kod": "HYPE25-0121",
+  "nev": "MITEM",
+  "datum": "2025-04-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025. 04.hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81e9-85e3-f536c4528266"
+ },
+ {
+  "kod": "HYPE25-0122",
+  "nev": "HH - anyák napi videó",
+  "datum": "2025-04-30",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8186-8899-c8beef0986de"
+ },
+ {
+  "kod": "HYPE25-0123",
+  "nev": "ContentBee",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ac-aa4e-c710daf28109"
+ },
+ {
+  "kod": "HYPE25-0124",
+  "nev": "Helit - Édesburgonya",
+  "datum": "2025-04-30",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8160-8639-c67b0632d5fd"
+ },
+ {
+  "kod": "HYPE25-0125",
+  "nev": "Laposa videóklip",
+  "datum": "2025-05-25",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.25.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-81d5-a962-d01f6dd5c795"
+ },
+ {
+  "kod": "HYPE25-0126",
+  "nev": "TE - Biomechanikai Szimpózium",
+  "datum": "2025-10-13",
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.10.13-14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ed-b513-d42922a0d575"
+ },
+ {
+  "kod": "HYPE25-0127",
+  "nev": "ContentBee - Reformsziget I.",
+  "datum": "2025-04-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8157-bd91-f6514aa1750b"
+ },
+ {
+  "kod": "HYPE25-0128",
+  "nev": "MEFOB",
+  "datum": "2025-05-05",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.05-08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8108-a9cb-f4a605e27fde"
+ },
+ {
+  "kod": "HYPE25-0129",
+  "nev": "Skipper - Futballfórum",
+  "datum": "2025-04-30",
+  "helyszin": "TRIBE Hotel Budapest",
+  "datum_megjegyzes": "2025.04.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-814f-8150-cc831ac7b822"
+ },
+ {
+  "kod": "HYPE25-0130",
+  "nev": "MTE - május",
+  "datum": "2025-05-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8113-8538-c2155e887b78"
+ },
+ {
+  "kod": "HYPE25-0131",
+  "nev": "Skipper - Jégkorong Magazin intro",
+  "datum": "2025-05-01",
+  "helyszin": "Vasas Jégcentrum",
+  "datum_megjegyzes": "2025.05.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ea-af34-dc26bb8eec49"
+ },
+ {
+  "kod": "HYPE25-0132",
+  "nev": "Skipper - ???",
+  "datum": "2025-05-05",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d7-a596-d0187da773b2"
+ },
+ {
+  "kod": "HYPE25-0133",
+  "nev": "HH - Fókuszban a koreográfusok",
+  "datum": "2025-05-11",
+  "helyszin": "Hagyományok Háza",
+  "datum_megjegyzes": "2025.05.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8178-872d-f206e0d0bc35"
+ },
+ {
+  "kod": "HYPE25-0134",
+  "nev": "Skipper - Tour de Balaton",
+  "datum": "2025-05-31",
+  "helyszin": "Siófok, Újhelyi strand",
+  "datum_megjegyzes": "2025.05.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8156-aa9d-d4afbae24e32"
+ },
+ {
+  "kod": "HYPE25-0135",
+  "nev": "Sport-Events - SZIN 2025",
+  "datum": "2025-08-16",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.08.16-20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8139-b4c2-f5e9b484325b"
+ },
+ {
+  "kod": "HYPE25-0136",
+  "nev": "TE fotózás",
+  "datum": "2025-05-06",
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.05.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815a-9a03-f76d38e222d6"
+ },
+ {
+  "kod": "HYPE25-0137",
+  "nev": "Hangvető - SOFAR koncertfelvétel",
+  "datum": "2025-05-31",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81b8-aef1-e79957c205b9"
+ },
+ {
+  "kod": "HYPE25-0138",
+  "nev": "Visual Creative - Ballagás",
+  "datum": "2025-05-27",
+  "helyszin": "RAM Színház",
+  "datum_megjegyzes": "2025.05.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-818a-ad0f-dff2e8b4b3e1"
+ },
+ {
+  "kod": "HYPE25-0139",
+  "nev": "Pajta Project - április",
+  "datum": "2025-04-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.04.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8196-9464-ca3d67e95d47"
+ },
+ {
+  "kod": "HYPE25-0140",
+  "nev": "Skipper - MKSZ",
+  "datum": "2025-05-06",
+  "helyszin": "Felcsút, Pancho Aréna",
+  "datum_megjegyzes": "2025.05.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-818c-876f-eaa14be03d50"
+ },
+ {
+  "kod": "HYPE25-0141",
+  "nev": "MEFOB - fotózás",
+  "datum": "2025-05-08",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8102-a476-ea3021d8c46a"
+ },
+ {
+  "kod": "HYPE25-0142",
+  "nev": "TF Napok",
+  "datum": "2025-05-08",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.08.-09.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-81d4-b84d-c76c6d4b9459"
+ },
+ {
+  "kod": "HYPE25-0143",
+  "nev": "Minisztériumi háttérintézmény - event",
+  "datum": "2025-05-09",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-819b-8738-ff12b1d7dc2a"
+ },
+ {
+  "kod": "HYPE25-0144",
+  "nev": "Lounge - fotózás",
+  "datum": "2025-05-31",
+  "helyszin": "Fővárosi Vízművek Zrt Sporttelepe, 1044 Bp Váci út 102.",
+  "datum_megjegyzes": "2025.05.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8159-b67b-c869326344b2"
+ },
+ {
+  "kod": "HYPE25-0145",
+  "nev": "Art Színtér - promo videó vágás",
+  "datum": "2025-05-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81b2-bc9a-d386686a4519"
+ },
+ {
+  "kod": "HYPE25-0146",
+  "nev": "Event forgatás (Török Áron)",
+  "datum": "2025-05-15",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8166-b903-e6d60ab4d59e"
+ },
+ {
+  "kod": "HYPE25-0147",
+  "nev": "Pajta Project - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8196-9518-fa8da1ed5612"
+ },
+ {
+  "kod": "HYPE25-0148",
+  "nev": "Pajta Project - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8154-8e8c-e054eadb6006"
+ },
+ {
+  "kod": "HYPE25-0149",
+  "nev": "Skipper - Héraklész sportlövészet",
+  "datum": "2025-05-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81bf-b86d-fb8225530462"
+ },
+ {
+  "kod": "HYPE25-0150",
+  "nev": "Skipper - Paravívó Bajnokság",
+  "datum": "2025-05-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-812f-b428-f011b69934ef"
+ },
+ {
+  "kod": "HYPE25-0151",
+  "nev": "Restart Konferencia",
+  "datum": "2025-05-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-810b-aeeb-e26441df30bb"
+ },
+ {
+  "kod": "HYPE25-0152",
+  "nev": "Haematology Conference",
+  "datum": "2025-06-10",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.10-12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8111-ac5a-e02eb02d6c16"
+ },
+ {
+  "kod": "HYPE25-0153",
+  "nev": "Derengő - Borgála",
+  "datum": "2025-05-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8119-a1ce-f4d351f766ce"
+ },
+ {
+  "kod": "HYPE25-0154",
+  "nev": "Tigra Kupa",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-81bd-ac26-e7e0dce3b283"
+ },
+ {
+  "kod": "HYPE25-0155",
+  "nev": "Legyél a Változás Egyesület - Gyereknap",
+  "datum": "2025-05-25",
+  "helyszin": "Margitszigeti Atlétikai Centrum",
+  "datum_megjegyzes": "2025.05.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ed-b7c0-e9d0271c4f38"
+ },
+ {
+  "kod": "HYPE25-0156",
+  "nev": "TE Stúdió Munka - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8180-8e5a-f11e6c626279"
+ },
+ {
+  "kod": "HYPE25-0157",
+  "nev": "Bizalmi Kör - Trust Summit",
+  "datum": "2025-06-06",
+  "helyszin": "Balatonfüred, Kongresszusi Center",
+  "datum_megjegyzes": "2025.06.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81dd-9ff4-ff5651cded23"
+ },
+ {
+  "kod": "HYPE25-0158",
+  "nev": "Kreatív osztályfotózás",
+  "datum": "2025-05-28",
+  "helyszin": "Budaörs, 1. számú Általános Iskola",
+  "datum_megjegyzes": "2025.05.28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d2-9ee8-f52f5fcf013d"
+ },
+ {
+  "kod": "HYPE25-0159",
+  "nev": "Green Motion - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-811b-85e1-e6aab3e1e661"
+ },
+ {
+  "kod": "HYPE25-0160",
+  "nev": "Művészetek Völgye Fesztivál 2025",
+  "datum": "2025-07-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.07.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81e7-84f9-d2e4dd60d861"
+ },
+ {
+  "kod": "HYPE25-0161",
+  "nev": "??? fotózás",
+  "datum": "2025-06-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.01.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-818b-95b3-e456be25e363"
+ },
+ {
+  "kod": "HYPE25-0162",
+  "nev": "ContentBee - Reformsziget II.",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8115-8a71-e9002efe422e"
+ },
+ {
+  "kod": "HYPE25-0163",
+  "nev": "Lounge - fotózás",
+  "datum": "2025-05-27",
+  "helyszin": "Bálna Budapest",
+  "datum_megjegyzes": "2025.05.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ec-8e57-e8f49b752277"
+ },
+ {
+  "kod": "HYPE25-0164",
+  "nev": "MTE - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-813d-a41c-d0fdd9f2dd6d"
+ },
+ {
+  "kod": "HYPE25-0165",
+  "nev": "Visual Creative - A XIII. kerület születésnapja",
+  "datum": "2025-05-31",
+  "helyszin": "Budapest 13.kerület, Béke tér",
+  "datum_megjegyzes": "2025.05.31. - 2025.06.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815f-a437-e8094daadcf6"
+ },
+ {
+  "kod": "HYPE25-0166",
+  "nev": "Baga - MKIK event",
+  "datum": "2025-05-30",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-813f-b1a9-e96bec7c5b95"
+ },
+ {
+  "kod": "HYPE25-0167",
+  "nev": "Pap felvétel - nagypéntek",
+  "datum": "2025-06-08",
+  "helyszin": "Budahegyvidéki Református Egyházközség",
+  "datum_megjegyzes": "2025.06.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-819e-82ef-d56cc335c121"
+ },
+ {
+  "kod": "HYPE25-0168",
+  "nev": "Országos Színházi Találkozó",
+  "datum": "2025-06-10",
+  "helyszin": "Szolnok",
+  "datum_megjegyzes": "2025.06.10-16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81c3-aa15-f023e2eb0a4f"
+ },
+ {
+  "kod": "HYPE25-0169",
+  "nev": "Peter Makto Birthday (D'Albini Ádám)",
+  "datum": "2025-05-31",
+  "helyszin": "Siófok, Krúdy stny., 8600",
+  "datum_megjegyzes": "2025.05.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8109-a9c9-e984d964ccfd"
+ },
+ {
+  "kod": "HYPE25-0170",
+  "nev": "Kolibri Színház - fotózás",
+  "datum": "2025-05-31",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8184-a454-fbe82d763420"
+ },
+ {
+  "kod": "HYPE25-0171",
+  "nev": "Vizuál Tipp - Orgonák Éjszakája",
+  "datum": "2025-06-07",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8149-9b68-c3b3b4863c45"
+ },
+ {
+  "kod": "HYPE25-0172",
+  "nev": "Migráció dokumentumfilm",
+  "datum": "2025-06-05",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-818b-8288-e4dba8517ba3"
+ },
+ {
+  "kod": "HYPE25-0173",
+  "nev": "Magániskola reklámvideo",
+  "datum": "2025-06-05",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d8-9032-cb6b147b77d5"
+ },
+ {
+  "kod": "HYPE25-0174",
+  "nev": "BBGP - május",
+  "datum": "2025-05-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.05.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81b7-8581-ca5309148d5a"
+ },
+ {
+  "kod": "HYPE25-0175",
+  "nev": "BBGP - június",
+  "datum": "2025-06-01",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815d-8a06-e68be5477da6"
+ },
+ {
+  "kod": "HYPE25-0176",
+  "nev": "Roxer - Öbölátúszás",
+  "datum": "2025-06-14",
+  "helyszin": "Balatonfüred",
+  "datum_megjegyzes": "2025.06.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8135-b6f4-c2b08b2d41ee"
+ },
+ {
+  "kod": "HYPE25-0177",
+  "nev": "Esküvő (D'Albini Ádám)",
+  "datum": "2025-06-21",
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81d3-b71f-f4532422a1d8"
+ },
+ {
+  "kod": "HYPE25-0178",
+  "nev": "NewU - Cserpes Laura koncertfelvétel",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81eb-9604-c413b03568a9"
+ },
+ {
+  "kod": "HYPE25-0179",
+  "nev": "Bejáró, vidéki színházak nyomában - promo",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. 6.hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81cf-b137-d232127fb6ac"
+ },
+ {
+  "kod": "HYPE25-0180",
+  "nev": "TE Stúdió Munka - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ed-adce-f9ab371869ec"
+ },
+ {
+  "kod": "HYPE25-0181",
+  "nev": "TE Stúdió Munka - augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815e-9d9a-d1a8bff1fd0a"
+ },
+ {
+  "kod": "HYPE25-0182",
+  "nev": "TE Stúdió Munka - szeptember",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ad-915c-fc157da9fbc1"
+ },
+ {
+  "kod": "HYPE25-0183",
+  "nev": "Eszközbérlés (Gulyás Kristóf)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-819e-b051-fd437b24a6bc"
+ },
+ {
+  "kod": "HYPE25-0184",
+  "nev": "MTE július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8169-aa52-cfbb05a6e7b4"
+ },
+ {
+  "kod": "HYPE25-0185",
+  "nev": "Mádl Intézet - konferencia",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-8103-85fe-e64f24ea0f95"
+ },
+ {
+  "kod": "HYPE25-0186",
+  "nev": "TigraTV 2025 - II.rész",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8165-a9d2-c814d0ad5223"
+ },
+ {
+  "kod": "HYPE25-0187",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Dr. Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2025.07.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8178-9af4-ff3f19702f51"
+ },
+ {
+  "kod": "HYPE25-0188",
+  "nev": "EUSA röplabda EB",
+  "datum": null,
+  "helyszin": "Dr. Koltai Jenő Sportközpont",
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-813c-8c18-f42754df270d"
+ },
+ {
+  "kod": "HYPE25-0189",
+  "nev": "TE - EASM 2025",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.02-05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-817e-a751-f8380e26b784"
+ },
+ {
+  "kod": "HYPE25-0190",
+  "nev": "Geri - esküvői videó vágás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. június hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8156-929a-e849524d9a2e"
+ },
+ {
+  "kod": "HYPE25-0191",
+  "nev": "PRO 3X3 TOUR0",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81fc-ba6d-ffe4d26379ee"
+ },
+ {
+  "kod": "HYPE25-0192",
+  "nev": "NBBH",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.02-11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815d-9f10-c36a65c7e8ae"
+ },
+ {
+  "kod": "HYPE25-0193",
+  "nev": "Sport manager TikTok forgatás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8104-8c6c-eca8c6c596e3"
+ },
+ {
+  "kod": "HYPE25-0194",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.06.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-818c-a531-e942296e7e9f"
+ },
+ {
+  "kod": "HYPE25-0195",
+  "nev": "MOBcast felvétel",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.06.26",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8165-8889-cebeb7cc8b16"
+ },
+ {
+  "kod": "HYPE25-0196",
+  "nev": "Baga - Karcagi Birkafőző Fesztivál",
+  "datum": null,
+  "helyszin": "Karcag",
+  "datum_megjegyzes": "2025.06.28.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "20dc9afd-d53b-81eb-8a98-d2162b3cd76a"
+ },
+ {
+  "kod": "HYPE25-0197",
+  "nev": "KvintEsszencia Mesteriskola - Mozart és a Múzsák gálakoncert",
+  "datum": null,
+  "helyszin": "Csajághy Laura Szabadtéri Színpad",
+  "datum_megjegyzes": "2025.06.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-811b-a9e1-d19bcb43df30"
+ },
+ {
+  "kod": "HYPE25-0198",
+  "nev": "EUSA röplabda EB - fotózás",
+  "datum": null,
+  "helyszin": "Dr. Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2025.07.28. - 2025.08.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815b-82ed-c3a81888bb32"
+ },
+ {
+  "kod": "HYPE25-0199",
+  "nev": "Skipper - Héraklész szörf",
+  "datum": null,
+  "helyszin": "Balatonföldvár",
+  "datum_megjegyzes": "2025.07.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-817a-a8d9-fc06480fa96f"
+ },
+ {
+  "kod": "HYPE25-0200",
+  "nev": "Skipper - Tiszaújvárosi Triatlon Fesztivál",
+  "datum": null,
+  "helyszin": "Tiszaújváros, Dísztó",
+  "datum_megjegyzes": "2025.07.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-8164-b109-d11fef8991e1"
+ },
+ {
+  "kod": "HYPE25-0201",
+  "nev": "HH - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-815a-8050-ce2286fdba4e"
+ },
+ {
+  "kod": "HYPE25-0202",
+  "nev": "KvintEsszencia Mesteriskola - japán turné",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "20dc9afd-d53b-81ef-98d0-e9add3b04f04"
+ },
+ {
+  "kod": "HYPE25-0203",
+  "nev": "BBGP - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "22ec9afd-d53b-80b5-8b78-c3706809a128"
+ },
+ {
+  "kod": "HYPE25-0204",
+  "nev": "Baga - SZIN 2025",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025 július hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "22ec9afd-d53b-80cf-a0f3-f7f86e020ae3"
+ },
+ {
+  "kod": "HYPE25-0205",
+  "nev": "ContentBee - Reformsziget III.",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.08.04-05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "231c9afd-d53b-80e0-84bd-ee3589646c46"
+ },
+ {
+  "kod": "HYPE25-0206",
+  "nev": "Esküvő (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.08.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "232c9afd-d53b-8088-ba8a-e627697c9fdc"
+ },
+ {
+  "kod": "HYPE25-0207",
+  "nev": "Esküvő (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "233c9afd-d53b-80d3-9595-f61421a80943"
+ },
+ {
+  "kod": "HYPE25-0208",
+  "nev": "Esküvő (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "233c9afd-d53b-80fe-bdf4-fa1b4c322282"
+ },
+ {
+  "kod": "HYPE25-0209",
+  "nev": "Baga - ???",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.07.22.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "233c9afd-d53b-801f-9b73-dfb84ef35c81"
+ },
+ {
+  "kod": "HYPE25-0210",
+  "nev": "Tigra - feeling videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "233c9afd-d53b-805b-8eac-f29c15ddc56f"
+ },
+ {
+  "kod": "HYPE25-0211",
+  "nev": "Gyerünk Anyukám",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "23ac9afd-d53b-8099-9925-ea55e84ffb45"
+ },
+ {
+  "kod": "HYPE25-0212",
+  "nev": "Pajta Project - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "23ac9afd-d53b-8037-8d6e-ec4f48af9d39"
+ },
+ {
+  "kod": "HYPE25-0213",
+  "nev": "DOT - SZIN 2025",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.08.16-20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "23ac9afd-d53b-8087-b6ff-f9e8de9de480"
+ },
+ {
+  "kod": "HYPE25-0214",
+  "nev": "Coronita Tábor aftermovie",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.08.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "23fc9afd-d53b-805e-bf95-d5b7b3bb15b6"
+ },
+ {
+  "kod": "HYPE25-0215",
+  "nev": "Tigra - parkoló parti",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.07.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "23fc9afd-d53b-800a-b08d-d7ba90d61fcd"
+ },
+ {
+  "kod": "HYPE25-0216",
+  "nev": "VIKI-SAAB konferencia fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025-09.10.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "254c9afd-d53b-800c-8a11-de786d38b405"
+ },
+ {
+  "kod": "HYPE25-0217",
+  "nev": "Lounge - SZIN",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.08-16.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8038-a8b4-d61c68b2e353"
+ },
+ {
+  "kod": "HYPE25-0218",
+  "nev": "KTM konferencia fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.08-09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-804a-9c97-c6527b1ada8e"
+ },
+ {
+  "kod": "HYPE25-0219",
+  "nev": "Skipper - DVTK Magazin",
+  "datum": null,
+  "helyszin": "Miskolc",
+  "datum_megjegyzes": "2025.08.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8038-8b55-ea7c5b0892c1"
+ },
+ {
+  "kod": "HYPE25-0220",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.08.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8096-9c6a-d5708af507ce"
+ },
+ {
+  "kod": "HYPE25-0221",
+  "nev": "Skipper - Kékek",
+  "datum": null,
+  "helyszin": "Hungaroring",
+  "datum_megjegyzes": "2025.8.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-805c-8513-ef9892422552"
+ },
+ {
+  "kod": "HYPE25-0222",
+  "nev": "TE Stúdió Munka - október",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. október",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8089-9941-c907646eec84"
+ },
+ {
+  "kod": "HYPE25-0223",
+  "nev": "Henkel (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": "Balatonfüred",
+  "datum_megjegyzes": "2025.08.05-06",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8063-bf1a-f5fb6a6a36b0"
+ },
+ {
+  "kod": "HYPE25-0224",
+  "nev": "MTE - augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8084-b351-eaeff707a46f"
+ },
+ {
+  "kod": "HYPE25-0225",
+  "nev": "Pannonsport - Magyar Bankok Sporttalálkozója",
+  "datum": null,
+  "helyszin": "Miskolc",
+  "datum_megjegyzes": "2025.08.29-30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-803d-af94-edb65bd926ac"
+ },
+ {
+  "kod": "HYPE25-0226",
+  "nev": "Baga - NAK Hajdúexpo",
+  "datum": null,
+  "helyszin": "Hajdúböszörmény",
+  "datum_megjegyzes": "2025.08.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-806b-8ea2-ccaf04d06239"
+ },
+ {
+  "kod": "HYPE25-0227",
+  "nev": "Lakáskiürítés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.8.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8085-b685-dea067628d2d"
+ },
+ {
+  "kod": "HYPE25-0228",
+  "nev": "Baga - NAK rendezvény",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.08.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-80e6-a657-d493b11b3cef"
+ },
+ {
+  "kod": "HYPE25-0229",
+  "nev": "Richter Cirkusz - promo",
+  "datum": null,
+  "helyszin": "Zamárdi",
+  "datum_megjegyzes": "2025.08.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-80f2-915e-e18837e07b0a"
+ },
+ {
+  "kod": "HYPE25-0230",
+  "nev": "Lounge - Mándoki",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.08.19-21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-800c-816f-d41b0852bb5b"
+ },
+ {
+  "kod": "HYPE25-0231",
+  "nev": "Baga - ???",
+  "datum": null,
+  "helyszin": "Bécs",
+  "datum_megjegyzes": "2025.08.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-80f4-8bec-cf4a2448bff7"
+ },
+ {
+  "kod": "HYPE25-0232",
+  "nev": "HH - szeptember",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. szeptember",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8095-9a8f-c28a8c3f4869"
+ },
+ {
+  "kod": "HYPE25-0233",
+  "nev": "CEU - Határtalan tudás",
+  "datum": null,
+  "helyszin": "CEU",
+  "datum_megjegyzes": "2025.09.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-80f2-b197-c96384514b17"
+ },
+ {
+  "kod": "HYPE25-0234",
+  "nev": "MUNDO",
+  "datum": null,
+  "helyszin": "Mundo, Győr",
+  "datum_megjegyzes": "2025.08.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-809a-a9ea-c26fd4864a1f"
+ },
+ {
+  "kod": "HYPE25-0235",
+  "nev": "Esküvő (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-80b9-afee-d6d18f710497"
+ },
+ {
+  "kod": "HYPE25-0236",
+  "nev": "KMI",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.08.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-803a-895a-f259e0700a3c"
+ },
+ {
+  "kod": "HYPE25-0237",
+  "nev": "Skipper - Kékek",
+  "datum": null,
+  "helyszin": "Pick Aréna",
+  "datum_megjegyzes": "2025.08.26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8035-9e7f-e7f616a8a88a"
+ },
+ {
+  "kod": "HYPE25-0238",
+  "nev": "Kolibri Színház - évadnyitó",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2025.08.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-8044-b30f-ee70eefb6074"
+ },
+ {
+  "kod": "HYPE25-0239",
+  "nev": "MMA-MMKI - Építészeti Vitaest",
+  "datum": null,
+  "helyszin": "Hild villa",
+  "datum_megjegyzes": "2025.09.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-804a-ad33-c88b704a4ad3"
+ },
+ {
+  "kod": "HYPE25-0240",
+  "nev": "MMA-MMKI - Építészeti Vitaest",
+  "datum": null,
+  "helyszin": "Walter Rózsi-villa",
+  "datum_megjegyzes": "2025.11.11",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-80b1-9cf0-ecb8da5daffd"
+ },
+ {
+  "kod": "HYPE25-0241",
+  "nev": "MMA-MMKI - 10 éves jubileumi rendezvény",
+  "datum": null,
+  "helyszin": "Pesti Vigadó",
+  "datum_megjegyzes": "2025.10.27",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-80ee-acda-f339c1b7d55a"
+ },
+ {
+  "kod": "HYPE25-0242",
+  "nev": "Skipper - Recruitech",
+  "datum": null,
+  "helyszin": "CEU",
+  "datum_megjegyzes": "2025.09.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "254c9afd-d53b-802c-ba3c-f81d5c3aa428"
+ },
+ {
+  "kod": "HYPE25-0243",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.09.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "262c9afd-d53b-8023-a3d7-e96072dfb14a"
+ },
+ {
+  "kod": "HYPE25-0244",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.09.02-05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "265c9afd-d53b-8033-b90f-d503837b93c3"
+ },
+ {
+  "kod": "HYPE25-0245",
+  "nev": "Sport Events - ICF Maraton Kajak-Kenu Világbajnokság",
+  "datum": null,
+  "helyszin": "Győr",
+  "datum_megjegyzes": "2025.09.03-06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "265c9afd-d53b-806a-a336-d1b0ffcfe58d"
+ },
+ {
+  "kod": "HYPE25-0246",
+  "nev": "Szerencsekoncertek",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. szeptember hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8049-a0f1-cdcb3d10817b"
+ },
+ {
+  "kod": "HYPE25-0247",
+  "nev": "Skipper - Héraklész",
+  "datum": null,
+  "helyszin": "Sukoró",
+  "datum_megjegyzes": "2025.08.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-80f2-984f-c5684eea3f48"
+ },
+ {
+  "kod": "HYPE25-0248",
+  "nev": "Kolibri Színház - Kolibri Fesztivál",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2025.09.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-801d-b3ec-ca08bf7bf581"
+ },
+ {
+  "kod": "HYPE25-0249",
+  "nev": "Skipper - ???",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.09.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-80e0-aa78-fa04c70f4dc8"
+ },
+ {
+  "kod": "HYPE25-0250",
+  "nev": "HH - augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. aug hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-80a5-80c4-f8129ae71cf0"
+ },
+ {
+  "kod": "HYPE25-0251",
+  "nev": "Lounge - fotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.09.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-80f7-85a7-eec7accbdd59"
+ },
+ {
+  "kod": "HYPE25-0252",
+  "nev": "Skipper - MKSZ",
+  "datum": null,
+  "helyszin": "Vecsés Airport Hotel",
+  "datum_megjegyzes": "2025.08.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-801d-bdcc-f998140cdbcf"
+ },
+ {
+  "kod": "HYPE25-0253",
+  "nev": "Nemzeti Színház - Társulati fotózás",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2025. szeptember hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8098-9344-c1f6aa10bbbd"
+ },
+ {
+  "kod": "HYPE25-0254",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": "Mikófalva",
+  "datum_megjegyzes": "2025.09.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8084-a842-e9381f0afb89"
+ },
+ {
+  "kod": "HYPE25-0255",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "025.09.04.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "268c9afd-d53b-80b8-bcf7-dbc4a55947c6"
+ },
+ {
+  "kod": "HYPE25-0256",
+  "nev": "Lounge - fotózás",
+  "datum": null,
+  "helyszin": "Bükkábrány, Sportpálya",
+  "datum_megjegyzes": "2025.09.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-80ad-9dae-fae915f070a3"
+ },
+ {
+  "kod": "HYPE25-0257",
+  "nev": "Lounge - fotózás",
+  "datum": null,
+  "helyszin": "Siófok",
+  "datum_megjegyzes": "2025.10.14-15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-80e5-8a6d-cd2844aabcd2"
+ },
+ {
+  "kod": "HYPE25-0258",
+  "nev": "TE - Tanévnyitó stream",
+  "datum": null,
+  "helyszin": "Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2025.09.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-807d-bf8a-e50843a4666b"
+ },
+ {
+  "kod": "HYPE25-0259",
+  "nev": "Impact - hangtechnika",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-80d9-8843-e0bfca75e021"
+ },
+ {
+  "kod": "HYPE25-0260",
+  "nev": "Tigra - szakmai videók",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. aug. hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8061-bf4a-d47f570a16e3"
+ },
+ {
+  "kod": "HYPE25-0261",
+  "nev": "Tigra - edzésvideók",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. aug. hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8097-88fd-eb4d014df2f8"
+ },
+ {
+  "kod": "HYPE25-0262",
+  "nev": "TE - EASM Closing Ceremony",
+  "datum": null,
+  "helyszin": "Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2025.09.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8062-8b9a-f533af17cf77"
+ },
+ {
+  "kod": "HYPE25-0263",
+  "nev": "Klastrom 30",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. szeptember hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8097-9114-c9882f9ed164"
+ },
+ {
+  "kod": "HYPE25-0264",
+  "nev": "KMI",
+  "datum": null,
+  "helyszin": "Millenáris D épület",
+  "datum_megjegyzes": "2025.09.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-803a-a918-e1355dc1ace6"
+ },
+ {
+  "kod": "HYPE25-0265",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": "Soponya, Ökoturisztikai Központ",
+  "datum_megjegyzes": "2025.09.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8098-9e04-c2646b27d370"
+ },
+ {
+  "kod": "HYPE25-0266",
+  "nev": "Déryné színész fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8065-93e7-f427e121de61"
+ },
+ {
+  "kod": "HYPE25-0267",
+  "nev": "Vizuál Tipp - Brain Bar",
+  "datum": null,
+  "helyszin": "Magyar Zene Háza",
+  "datum_megjegyzes": "2025.09.17-19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8038-8d0b-c1eb8c4cde79"
+ },
+ {
+  "kod": "HYPE25-0268",
+  "nev": "Restart Konferencia",
+  "datum": null,
+  "helyszin": "Akvárium Klub",
+  "datum_megjegyzes": "2025.10.02.",
+  "esemeny_allapota": null,
+  "notion_page_id": "268c9afd-d53b-80aa-9eda-d4608c8f308b"
+ },
+ {
+  "kod": "HYPE25-0269",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "268c9afd-d53b-8081-8ad0-c58a15208c8e"
+ },
+ {
+  "kod": "HYPE25-0270",
+  "nev": "Déryné - Vitéz László témanap",
+  "datum": null,
+  "helyszin": "8351 Sümegprága Rákóczi utca 38.",
+  "datum_megjegyzes": "2025.09.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "269c9afd-d53b-807d-968b-c92497da8d49"
+ },
+ {
+  "kod": "HYPE25-0271",
+  "nev": "Gulyás Kristóf - esemény fotó&videó",
+  "datum": null,
+  "helyszin": "Corinthia Budapest",
+  "datum_megjegyzes": "2025.09.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "269c9afd-d53b-805d-bf59-efb87a4d41ea"
+ },
+ {
+  "kod": "HYPE25-0272",
+  "nev": "Gyerünk, anyukám! intro-outro anim + ráhelyezés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "269c9afd-d53b-80d8-a673-dc56d6c6b9be"
+ },
+ {
+  "kod": "HYPE25-0273",
+  "nev": "Nemzeti Színház - Nyílt nap",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2025.09.19-20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-805a-8d90-e91bdaa04272"
+ },
+ {
+  "kod": "HYPE25-0274",
+  "nev": "KIM",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.22.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "286c9afd-d53b-80e5-bb79-d6ca7f9392bd"
+ },
+ {
+  "kod": "HYPE25-0275",
+  "nev": "BBGP-Augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8042-92a6-fb60602dec6b"
+ },
+ {
+  "kod": "HYPE25-0276",
+  "nev": "BBGP-Szeptember",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8040-ac53-ed747cd76c7e"
+ },
+ {
+  "kod": "HYPE25-0277",
+  "nev": "Ünnepi szentmise és emléktábla avatás",
+  "datum": null,
+  "helyszin": "Patrona Hungarie",
+  "datum_megjegyzes": "2025.09.20.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "286c9afd-d53b-8085-89de-cf8e7d45bf44"
+ },
+ {
+  "kod": "HYPE25-0278",
+  "nev": "Arthur Media - Kajak-kenu verseny",
+  "datum": null,
+  "helyszin": "Sukoró",
+  "datum_megjegyzes": "2025.09.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8016-92e1-f242da734634"
+ },
+ {
+  "kod": "HYPE25-0279",
+  "nev": "Geri - esküvői videó vágás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. szeptember hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-805a-98c3-e6e51e599e30"
+ },
+ {
+  "kod": "HYPE25-0280",
+  "nev": "Lounge - DMÜ",
+  "datum": null,
+  "helyszin": "Budapest, Vasúttörténeti park",
+  "datum_megjegyzes": "2025.09.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8083-ab84-fcd6b258698e"
+ },
+ {
+  "kod": "HYPE25-0281",
+  "nev": "LexHolding - Főtaxi x RedBull Showrun",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8086-a381-ec5b6eff4992"
+ },
+ {
+  "kod": "HYPE25-0282",
+  "nev": "TE Fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.09.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80fe-a4b3-e62f16a750bb"
+ },
+ {
+  "kod": "HYPE25-0283",
+  "nev": "Krumpello",
+  "datum": null,
+  "helyszin": "Budapest, Brainbar",
+  "datum_megjegyzes": "2025.09.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80a1-a8d8-dd0d4fecce53"
+ },
+ {
+  "kod": "HYPE25-0284",
+  "nev": "Kolibri színház fotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.09.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-800f-b139-df3fdc047dc4"
+ },
+ {
+  "kod": "HYPE25-0285",
+  "nev": "Kolibri Fészek színház fotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.09.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8011-a5d1-c12409c4382f"
+ },
+ {
+  "kod": "HYPE25-0286",
+  "nev": "CEU - Határtalan tudás",
+  "datum": null,
+  "helyszin": "CEU",
+  "datum_megjegyzes": "2025.10.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8069-93ed-cd1731e95ee6"
+ },
+ {
+  "kod": "HYPE25-0287",
+  "nev": "CEU - Határtalan tudás",
+  "datum": null,
+  "helyszin": "CEU",
+  "datum_megjegyzes": "2025.12.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-800f-9482-ff426f6b9101"
+ },
+ {
+  "kod": "HYPE25-0288",
+  "nev": "Baga - ???",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.29.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "286c9afd-d53b-8024-a029-ebcdb91b562a"
+ },
+ {
+  "kod": "HYPE25-0289",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8024-81f4-d00de7e275f6"
+ },
+ {
+  "kod": "HYPE25-0290",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.09.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8090-acfa-d4bef3a39e82"
+ },
+ {
+  "kod": "HYPE25-0291",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80c6-8f8c-e78ca49a5656"
+ },
+ {
+  "kod": "HYPE25-0292",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80f9-8f39-e20235d00f4a"
+ },
+ {
+  "kod": "HYPE25-0293",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8087-9011-de18ed8d8a96"
+ },
+ {
+  "kod": "HYPE25-0294",
+  "nev": "Kolibri Színház - Hangtál és társalgó",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2025.09.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8031-a345-f042168bff72"
+ },
+ {
+  "kod": "HYPE25-0295",
+  "nev": "LWP",
+  "datum": null,
+  "helyszin": "Fiumei úti sírkert",
+  "datum_megjegyzes": "2025.10.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-804c-931c-d12d3f599750"
+ },
+ {
+  "kod": "HYPE25-0296",
+  "nev": "Ma Belle Klinika",
+  "datum": null,
+  "helyszin": "Ma Belle Klinika",
+  "datum_megjegyzes": "2025.09.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8072-b1f9-d0f8fe01a2c9"
+ },
+ {
+  "kod": "HYPE25-0297",
+  "nev": "Lounge - U14",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.09.28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-802b-a350-dc667ce021ff"
+ },
+ {
+  "kod": "HYPE25-0298",
+  "nev": "Szamosi Film - eszközbérlés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. szeptember hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8059-a6b0-f935a45917ee"
+ },
+ {
+  "kod": "HYPE25-0299",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Népszigeti út 9.",
+  "datum_megjegyzes": "2025.09.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80e1-8a14-e63cc834805e"
+ },
+ {
+  "kod": "HYPE25-0300",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Szombathely",
+  "datum_megjegyzes": "2025.10.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8099-8ac8-fcdfcd5427aa"
+ },
+ {
+  "kod": "HYPE25-0301",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80aa-9690-e8cbd78ab3e8"
+ },
+ {
+  "kod": "HYPE25-0302",
+  "nev": "BBGP - október",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-803f-b1d6-dc340db47477"
+ },
+ {
+  "kod": "HYPE25-0303",
+  "nev": "MTE - szeptember",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-807c-b136-c36730dea29a"
+ },
+ {
+  "kod": "HYPE25-0304",
+  "nev": "MTE - október",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8042-8759-c88cc05a495a"
+ },
+ {
+  "kod": "HYPE25-0305",
+  "nev": "BBGP - november",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-807d-9eb7-d335f6d134c4"
+ },
+ {
+  "kod": "HYPE25-0306",
+  "nev": "BBGP - Gála",
+  "datum": null,
+  "helyszin": "MÜPA",
+  "datum_megjegyzes": "2025.11.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80d8-bce2-e51702071ab3"
+ },
+ {
+  "kod": "HYPE25-0307",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.10.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8003-b1dd-c6066309367b"
+ },
+ {
+  "kod": "HYPE25-0308",
+  "nev": "Meseóra",
+  "datum": null,
+  "helyszin": "1188 Budapest, Nagykőrösi út 55-57. Szenczi Molnár Albert Református Általános Iskola",
+  "datum_megjegyzes": "2025.09.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80ce-9f01-e0a61e00724a"
+ },
+ {
+  "kod": "HYPE25-0309",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-806b-93b2-cff6503236aa"
+ },
+ {
+  "kod": "HYPE25-0310",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8073-9eb8-d3824bc0439f"
+ },
+ {
+  "kod": "HYPE25-0311",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.10.,",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-806a-86ed-fcc1117bbfce"
+ },
+ {
+  "kod": "HYPE25-0312",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.10.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80aa-8771-e58e0d17a5db"
+ },
+ {
+  "kod": "HYPE25-0313",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.10.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8054-9f37-cf068a8e1bf9"
+ },
+ {
+  "kod": "HYPE25-0314",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.04.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-801f-967d-f8edffb4755c"
+ },
+ {
+  "kod": "HYPE25-0315",
+  "nev": "Art Színtér - hirdetés videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. október hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-801d-9492-e2449fd518db"
+ },
+ {
+  "kod": "HYPE25-0316",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80d5-9c6a-fc6ade3a3b11"
+ },
+ {
+  "kod": "HYPE25-0317",
+  "nev": "Fónó - koncertfelvétel",
+  "datum": null,
+  "helyszin": "Kobuci Kert",
+  "datum_megjegyzes": "2025.10.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8034-aa95-e7d3763116b8"
+ },
+ {
+  "kod": "HYPE25-0318",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8012-a7d3-f621ec3799ba"
+ },
+ {
+  "kod": "HYPE25-0319",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.10.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8016-9569-d175f3434c9c"
+ },
+ {
+  "kod": "HYPE25-0320",
+  "nev": "LWP",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-802a-a116-da4f6560ce91"
+ },
+ {
+  "kod": "HYPE25-0321",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2025.10.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8073-bf83-d4619412fd0b"
+ },
+ {
+  "kod": "HYPE25-0322",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": "Kolibri Fészek",
+  "datum_megjegyzes": "2025.10.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80c3-aa53-dcef9fb26fbb"
+ },
+ {
+  "kod": "HYPE25-0323",
+  "nev": "BOLD - One TikTok",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8017-bf11-e4c778cedd20"
+ },
+ {
+  "kod": "HYPE25-0324",
+  "nev": "MTPA - Rakéta web promo",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. október hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-806c-876e-f4b85aa09503"
+ },
+ {
+  "kod": "HYPE25-0325",
+  "nev": "TigraTV 2025 - III.rész",
+  "datum": null,
+  "helyszin": "Budaörsi út 64.",
+  "datum_megjegyzes": "2025.10.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8099-a94b-e0d6ba162bdb"
+ },
+ {
+  "kod": "HYPE25-0326",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2025.10.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80ef-9162-c1731f5db746"
+ },
+ {
+  "kod": "HYPE25-0327",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2025.10.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-8013-b5a9-c5a7389ed6df"
+ },
+ {
+  "kod": "HYPE25-0328",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80a8-9fe1-e40caa2ffb89"
+ },
+ {
+  "kod": "HYPE25-0329",
+  "nev": "Baga - NFZ",
+  "datum": null,
+  "helyszin": "NDustrial Studios",
+  "datum_megjegyzes": "2025.10.28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-809c-a22b-f5397b5a501f"
+ },
+ {
+  "kod": "HYPE25-0330",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.09.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "286c9afd-d53b-8036-b617-ef8e00a839c2"
+ },
+ {
+  "kod": "HYPE25-0331",
+  "nev": "HH - október",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80cb-a79d-f57c881c2d31"
+ },
+ {
+  "kod": "HYPE25-0332",
+  "nev": "Ne bánts világ project",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. október hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80a0-aecf-c52281f81566"
+ },
+ {
+  "kod": "HYPE25-0333",
+  "nev": "Art Group - Opel",
+  "datum": null,
+  "helyszin": "Mátra",
+  "datum_megjegyzes": "2025.10.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28bc9afd-d53b-805d-918b-f231d55672a6"
+ },
+ {
+  "kod": "HYPE25-0334",
+  "nev": "Friendly Creative Agency Kft. - Zseni Boglárka",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-801c-ac53-e449b12c5bd9"
+ },
+ {
+  "kod": "HYPE25-0335",
+  "nev": "Friendly Creative Agency Kft. - Zseni Boglárka",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.09.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "286c9afd-d53b-80c0-8f9a-ee01f468822a"
+ },
+ {
+  "kod": "HYPE25-0336",
+  "nev": "Blend41 - Szerencsekoncertek",
+  "datum": null,
+  "helyszin": "Lébény, Kapuvár",
+  "datum_megjegyzes": "2025.10.10 -11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-8033-ba9b-c2549ee017d9"
+ },
+ {
+  "kod": "HYPE25-0337",
+  "nev": "Kultúrpart - Térségi Téka",
+  "datum": null,
+  "helyszin": "Szada, Tájház udvara",
+  "datum_megjegyzes": "2025.10.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-8051-8110-fd558bf07a80"
+ },
+ {
+  "kod": "HYPE25-0338",
+  "nev": "Next Stage - FIVOSZ",
+  "datum": null,
+  "helyszin": "Bálna",
+  "datum_megjegyzes": "2025.11.14.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "28fc9afd-d53b-8070-bfba-c4d8ed68724e"
+ },
+ {
+  "kod": "HYPE25-0339",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": "Nyíregyháza",
+  "datum_megjegyzes": "2025.10.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-80c8-9cd0-c8fa89431900"
+ },
+ {
+  "kod": "HYPE25-0340",
+  "nev": "Lázár séf - október",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. október hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-8091-bc69-d2905ad9ff5d"
+ },
+ {
+  "kod": "HYPE25-0341",
+  "nev": "TE - Gólyabál",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.11.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-80f6-aa96-f209b0e13eef"
+ },
+ {
+  "kod": "HYPE25-0342",
+  "nev": "KIM - október",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025 október hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-803b-93d9-d2777caf2e44"
+ },
+ {
+  "kod": "HYPE25-0343",
+  "nev": "Déryné - KultUp Témanap",
+  "datum": null,
+  "helyszin": "Porpáczy Aladár Technikum",
+  "datum_megjegyzes": "2025.11.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-807a-88e8-cfb796bf64d3"
+ },
+ {
+  "kod": "HYPE25-0344",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-8008-8c03-e40fb82d8e40"
+ },
+ {
+  "kod": "HYPE25-0345",
+  "nev": "Déryné - stábfotózás",
+  "datum": null,
+  "helyszin": "Déryné Központ",
+  "datum_megjegyzes": "2025.11.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-8040-903e-ee667910b605"
+ },
+ {
+  "kod": "HYPE25-0346",
+  "nev": "Főtaxi",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.október hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-80ac-bccf-ca7e5aa00fb4"
+ },
+ {
+  "kod": "HYPE25-0347",
+  "nev": "TE - Táncház",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.10.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-8094-a52c-efcb564c5491"
+ },
+ {
+  "kod": "HYPE25-0348",
+  "nev": "LABA - céges karácsony",
+  "datum": null,
+  "helyszin": "LABA Hungary - Seregély utca",
+  "datum_megjegyzes": "2025.12.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-8017-a7d9-fc0257ce5172"
+ },
+ {
+  "kod": "HYPE25-0349",
+  "nev": "Maroni Grand Opening",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-8042-a741-e15d689c07d7"
+ },
+ {
+  "kod": "HYPE25-0350",
+  "nev": "Hajógyári klasszik",
+  "datum": null,
+  "helyszin": "Budapest, Symbol",
+  "datum_megjegyzes": "2025.10.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-80c9-abd8-d47d12880ea1"
+ },
+ {
+  "kod": "HYPE25-0351",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.18.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "28fc9afd-d53b-801a-b313-cf832abce50e"
+ },
+ {
+  "kod": "HYPE25-0352",
+  "nev": "Skipper - MKSZ",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "28fc9afd-d53b-80b9-a8c2-ce3b52399eb1"
+ },
+ {
+  "kod": "HYPE25-0353",
+  "nev": "Műugró Szövetség - Héraklész program",
+  "datum": null,
+  "helyszin": "Duna Aréna",
+  "datum_megjegyzes": "2025.10.24-25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-80de-a789-f3da80e942b8"
+ },
+ {
+  "kod": "HYPE25-0354",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-803b-8d21-d46cef2cdbb2"
+ },
+ {
+  "kod": "HYPE25-0355",
+  "nev": "4K Motion - ???",
+  "datum": null,
+  "helyszin": "Hatvan",
+  "datum_megjegyzes": "2025.10.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-80d1-8f65-c2cbc81ae1ee"
+ },
+ {
+  "kod": "HYPE25-0356",
+  "nev": "MonoTime - konferencia fotózás",
+  "datum": null,
+  "helyszin": "Mövenpick",
+  "datum_megjegyzes": "2025.10.20-21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-80f1-ae6d-cf6d515ab1e4"
+ },
+ {
+  "kod": "HYPE25-0357",
+  "nev": "Kolibri Színház - fotó",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2025.10.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-80ee-b28e-c268bc9418dc"
+ },
+ {
+  "kod": "HYPE25-0358",
+  "nev": "Lounge - Október 23.",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.10.22-23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-80d9-bbb1-d0e5c9f0b050"
+ },
+ {
+  "kod": "HYPE25-0359",
+  "nev": "Szamosi Film - eszközbérlés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.23-24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-80a6-8101-e0501c481756"
+ },
+ {
+  "kod": "HYPE25-0360",
+  "nev": "Erdei iskolai program - újravágás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. október hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-80b1-9468-e936b1794f15"
+ },
+ {
+  "kod": "HYPE25-0361",
+  "nev": "Kolibri Színház - Társulati fotózás",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2025.10.27-29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-80bd-b7c7-f678bcb7bd64"
+ },
+ {
+  "kod": "HYPE25-0362",
+  "nev": "Pajta Project - december",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-80bb-9cb1-e7b6dba1d3b0"
+ },
+ {
+  "kod": "HYPE25-0363",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-8027-a914-df0d5a62b309"
+ },
+ {
+  "kod": "HYPE25-0364",
+  "nev": "Kolibri Színház - fotó&videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.10.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "299c9afd-d53b-8052-ae1f-d6521248cb48"
+ },
+ {
+  "kod": "HYPE25-0365",
+  "nev": "TF 100 - Gála",
+  "datum": null,
+  "helyszin": "Dr. Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2025.11.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29ac9afd-d53b-80c0-beeb-ebf94c95138f"
+ },
+ {
+  "kod": "HYPE25-0366",
+  "nev": "TE Stúdió Munka - november",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. november hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29ac9afd-d53b-8030-bca2-c9d0e23f9352"
+ },
+ {
+  "kod": "HYPE25-0367",
+  "nev": "Mádl Intézet - konferencia",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29ac9afd-d53b-806d-9b68-cb136730f1e3"
+ },
+ {
+  "kod": "HYPE25-0368",
+  "nev": "Szamosi Film - Bizalom Gála",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.28",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29ac9afd-d53b-809a-871a-f097b71e3084"
+ },
+ {
+  "kod": "HYPE25-0369",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29dc9afd-d53b-8024-bc08-df6808f71e45"
+ },
+ {
+  "kod": "HYPE25-0370",
+  "nev": "Dani féle fusi",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. október hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29dc9afd-d53b-8005-932a-fa8230195c29"
+ },
+ {
+  "kod": "HYPE25-0371",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29dc9afd-d53b-80d6-8251-e1f37e1df806"
+ },
+ {
+  "kod": "HYPE25-0372",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29dc9afd-d53b-8085-9552-c319eaca43e0"
+ },
+ {
+  "kod": "HYPE25-0373",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29dc9afd-d53b-800c-9b9e-dc761d793c0f"
+ },
+ {
+  "kod": "HYPE25-0374",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29dc9afd-d53b-80d7-a5bc-c4de71ad7670"
+ },
+ {
+  "kod": "HYPE25-0375",
+  "nev": "Baga - ???",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "29dc9afd-d53b-80f1-a425-d98872053bb6"
+ },
+ {
+  "kod": "HYPE25-0376",
+  "nev": "III. Arbito Slap Fight - stream",
+  "datum": null,
+  "helyszin": "Club Heaven Budapest",
+  "datum_megjegyzes": "2025.11.06.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2a2c9afd-d53b-800d-ab44-f36e4be5e60a"
+ },
+ {
+  "kod": "HYPE25-0377",
+  "nev": "Box stream",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.06.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2a2c9afd-d53b-8099-9607-fd258d03cb4d"
+ },
+ {
+  "kod": "HYPE25-0378",
+  "nev": "Lounge fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a2c9afd-d53b-80f0-aaf8-cf172d492b6e"
+ },
+ {
+  "kod": "HYPE25-0379",
+  "nev": "Kolibri Színház - Micimackó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.06., 2025.11.08-09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a2c9afd-d53b-804c-9308-ccdf9b7374ff"
+ },
+ {
+  "kod": "HYPE25-0380",
+  "nev": "MTE - november",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a2c9afd-d53b-805b-beca-c969dc040f9d"
+ },
+ {
+  "kod": "HYPE25-0381",
+  "nev": "Déryné - János Vitéz 150.",
+  "datum": null,
+  "helyszin": "Fót",
+  "datum_megjegyzes": "2025.11.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a2c9afd-d53b-80d5-9933-c553c1271b86"
+ },
+ {
+  "kod": "HYPE25-0382",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "MTK Sportpark",
+  "datum_megjegyzes": "2025.11.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a2c9afd-d53b-80c3-8ba9-cd172ba5eaa8"
+ },
+ {
+  "kod": "HYPE25-0383",
+  "nev": "Next Stage - Tündérkert koncert felvétel",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a8c9afd-d53b-8061-839e-ced35411d58e"
+ },
+ {
+  "kod": "HYPE25-0384",
+  "nev": "Skipper - Halloween Run",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a8c9afd-d53b-8028-b005-ee91a1e5398e"
+ },
+ {
+  "kod": "HYPE25-0385",
+  "nev": "Pajta Project - november",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. november hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a8c9afd-d53b-8030-8252-e52467842794"
+ },
+ {
+  "kod": "HYPE25-0386",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.11",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a8c9afd-d53b-8004-a13b-eeac57dce795"
+ },
+ {
+  "kod": "HYPE25-0387",
+  "nev": "Art Group - event fotó&videó",
+  "datum": null,
+  "helyszin": "Symbol Budapest",
+  "datum_megjegyzes": "2025.11.12",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2a8c9afd-d53b-80e8-9c5d-cb9dee291f8b"
+ },
+ {
+  "kod": "HYPE25-0388",
+  "nev": "MV és Kerekdomb social media videók 2026-ra",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. november hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-805b-acd4-e677474648bb"
+ },
+ {
+  "kod": "HYPE25-0389",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Győr, Olimpiai Park",
+  "datum_megjegyzes": "2025.11.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-80fc-84a4-d0da22038d9c"
+ },
+ {
+  "kod": "HYPE25-0390",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Tiszaújváros",
+  "datum_megjegyzes": "2025.11.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-80f6-9567-e463abda2951"
+ },
+ {
+  "kod": "HYPE25-0391",
+  "nev": "Nemzeti Színház - Törőcsik Mari 90 emlékest",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2025.11.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-804d-8b9f-f859a0d04c5f"
+ },
+ {
+  "kod": "HYPE25-0392",
+  "nev": "Nemzeti Színház - Díszfüggöny avatás",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2025.12.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-803e-9b0f-c2ee95d8ed09"
+ },
+ {
+  "kod": "HYPE25-0393",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Debrecen, Oláh Gábor u. 5.",
+  "datum_megjegyzes": "2025.11.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-8088-a2a7-f441c14cbf77"
+ },
+ {
+  "kod": "HYPE25-0394",
+  "nev": "Katica fagyizó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "egész év",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-801e-b295-d0f0b4962312"
+ },
+ {
+  "kod": "HYPE25-0395",
+  "nev": "KIM - november",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-8069-8c96-c2f902bb2e38"
+ },
+ {
+  "kod": "HYPE25-0396",
+  "nev": "Kolibri Színház - Tücsöklakodalom",
+  "datum": null,
+  "helyszin": "Jókai tér 10.",
+  "datum_megjegyzes": "2025.11.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-80f1-b3e5-dca52d56da14"
+ },
+ {
+  "kod": "HYPE25-0397",
+  "nev": "Kolibri Színház - A Boldog Herceg 250.előadás",
+  "datum": null,
+  "helyszin": "Kolibri Fészek",
+  "datum_megjegyzes": "2025.11.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-809b-87e0-fdb1e20a93f0"
+ },
+ {
+  "kod": "HYPE25-0398",
+  "nev": "Kolibri Színház - Kövek",
+  "datum": null,
+  "helyszin": "Kolibri Fészek",
+  "datum_megjegyzes": "2025.11.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-8096-a612-cf6ac49d5bfa"
+ },
+ {
+  "kod": "HYPE25-0399",
+  "nev": "DRK divatbemutató (D'Albini Ádám)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aac9afd-d53b-80c7-9556-da8c14e9cfc3"
+ },
+ {
+  "kod": "HYPE25-0400",
+  "nev": "GVH - VII. Versenyjogi Fórum",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.11.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2aec9afd-d53b-80ea-8712-faca2d9506a2"
+ },
+ {
+  "kod": "HYPE25-0401",
+  "nev": "Nemzeti Színház - Csongor és Tünde",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2025.11.26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b0c9afd-d53b-801a-8fd5-cd1789ece723"
+ },
+ {
+  "kod": "HYPE25-0402",
+  "nev": "Skipper - DVTK",
+  "datum": null,
+  "helyszin": "Miskolc",
+  "datum_megjegyzes": "2025.11.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b0c9afd-d53b-80f4-b3c6-dad257ffc383"
+ },
+ {
+  "kod": "HYPE25-0403",
+  "nev": "Skipper -  MKSZ",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.11.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b0c9afd-d53b-807a-a468-cfeb5e907822"
+ },
+ {
+  "kod": "HYPE25-0404",
+  "nev": "Pajta Project",
+  "datum": null,
+  "helyszin": "Kakasd",
+  "datum_megjegyzes": "2025.11.19.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2b0c9afd-d53b-8076-86fe-fce536b25f1b"
+ },
+ {
+  "kod": "HYPE25-0405",
+  "nev": "Kolibri Színház - Kövek",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b0c9afd-d53b-80d3-a632-cabbc1bc45ae"
+ },
+ {
+  "kod": "HYPE25-0406",
+  "nev": "Lounge fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b0c9afd-d53b-8026-8d9c-f0ff7e4d5128"
+ },
+ {
+  "kod": "HYPE25-0407",
+  "nev": "Kolibri Színház - Tartuffe",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b0c9afd-d53b-803b-892d-f6d08e478b84"
+ },
+ {
+  "kod": "HYPE25-0408",
+  "nev": "Természetben egyenlően program",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b0c9afd-d53b-80c7-b7dc-e90fee21dc7e"
+ },
+ {
+  "kod": "HYPE25-0409",
+  "nev": "Skipper - CEV röplabda",
+  "datum": null,
+  "helyszin": "MET Székesfehérvár",
+  "datum_megjegyzes": "2025.11.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b1c9afd-d53b-8007-b1e6-f85d577de5af"
+ },
+ {
+  "kod": "HYPE25-0410",
+  "nev": "Kolibri Színház - Kerek élet fája",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2025.11.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b1c9afd-d53b-8015-9275-eda948d2f883"
+ },
+ {
+  "kod": "HYPE25-0411",
+  "nev": "Baga - NAK utómunka",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. november hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b1c9afd-d53b-80bd-81ee-d21f8dd46b95"
+ },
+ {
+  "kod": "HYPE25-0412",
+  "nev": "Baga - Baba-Mama Expo",
+  "datum": null,
+  "helyszin": "Hungexpo",
+  "datum_megjegyzes": "2025.11.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-80f6-8db1-d6b844471c04"
+ },
+ {
+  "kod": "HYPE25-0413",
+  "nev": "Baga - NAK utómunka 2.0",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. november hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-8001-a4e1-ccc55673806d"
+ },
+ {
+  "kod": "HYPE25-0414",
+  "nev": "BashElán videoklipp",
+  "datum": null,
+  "helyszin": "Fonó Budai Zeneház",
+  "datum_megjegyzes": "2025.11.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-8069-8a6b-f776f4bbb0de"
+ },
+ {
+  "kod": "HYPE25-0415",
+  "nev": "CB - Szentkirályi Alexandra",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-80dd-a3a9-eb207de7caa0"
+ },
+ {
+  "kod": "HYPE25-0416",
+  "nev": "Te fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.26",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-805b-beda-d566c623218b"
+ },
+ {
+  "kod": "HYPE25-0417",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Körcsarnok",
+  "datum_megjegyzes": "2025.12.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-80c2-bbc0-fc64ddf7e531"
+ },
+ {
+  "kod": "HYPE25-0418",
+  "nev": "Rockstar Photography - Masterclass felvétel",
+  "datum": null,
+  "helyszin": "BlackBox Stúdió Budapest",
+  "datum_megjegyzes": "2025.12.08-10.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2bcc9afd-d53b-80b9-b58c-d8b0b8d7cf7e"
+ },
+ {
+  "kod": "HYPE25-0419",
+  "nev": "TigraTV 2025 - IV.rész",
+  "datum": null,
+  "helyszin": "Budaörsi út 64.",
+  "datum_megjegyzes": "2025.12.04.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-8010-907f-d3092ee8f985"
+ },
+ {
+  "kod": "HYPE25-0420",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.11.28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-8017-b656-fb6295e6e3ae"
+ },
+ {
+  "kod": "HYPE25-0421",
+  "nev": "Déryné - karácsonyi buli",
+  "datum": null,
+  "helyszin": "Déryné Központ",
+  "datum_megjegyzes": "2025.12.15.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2bcc9afd-d53b-80c5-9886-dc5b25414519"
+ },
+ {
+  "kod": "HYPE25-0422",
+  "nev": "VEG - Mosoly Alapítvány fotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.11.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-805e-a52a-fafba0043308"
+ },
+ {
+  "kod": "HYPE25-0423",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-8061-b350-d5fdf84dc168"
+ },
+ {
+  "kod": "HYPE25-0424",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "BOK Csarnok",
+  "datum_megjegyzes": "2025.12.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-80dc-9b18-efb314a45087"
+ },
+ {
+  "kod": "HYPE25-0425",
+  "nev": "TE Stúdió Munka - december",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025 december hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-80b4-b793-ecbd7e054c01"
+ },
+ {
+  "kod": "HYPE25-0426",
+  "nev": "Skipper - Fővárosi Közgyűlés",
+  "datum": null,
+  "helyszin": "1113 Budapest, Hamzsabégi út 55.",
+  "datum_megjegyzes": "2025.12.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-8015-a467-ecc74bbc556e"
+ },
+ {
+  "kod": "HYPE25-0427",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-8064-a227-fc8c5558485b"
+ },
+ {
+  "kod": "HYPE25-0428",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bcc9afd-d53b-804d-b049-f364e71b3d53"
+ },
+ {
+  "kod": "HYPE25-0429",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bfc9afd-d53b-8091-a4bd-e1ade545a159"
+ },
+ {
+  "kod": "HYPE25-0430",
+  "nev": "MV video rebrand",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. december hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bfc9afd-d53b-8039-ad80-da11e023fe3c"
+ },
+ {
+  "kod": "HYPE25-0431",
+  "nev": "Tigra - Születésnapi videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. december hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bfc9afd-d53b-8087-9079-df06e1ecc142"
+ },
+ {
+  "kod": "HYPE25-0432",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.08.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2bfc9afd-d53b-8010-a07f-ffcadcae4c73"
+ },
+ {
+  "kod": "HYPE25-0433",
+  "nev": "Kolibri Színház - Hogyan születnek a fák",
+  "datum": null,
+  "helyszin": "Kolibri Fészek",
+  "datum_megjegyzes": "2025.12.11.-12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bfc9afd-d53b-80ed-a298-fab368605e42"
+ },
+ {
+  "kod": "HYPE25-0434",
+  "nev": "BDPST - One TikTok",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.12.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bfc9afd-d53b-8099-adb4-d4222fd93704"
+ },
+ {
+  "kod": "HYPE25-0435",
+  "nev": "TE felvételi kampány",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c3c9afd-d53b-809c-ab51-d1c07307bc22"
+ },
+ {
+  "kod": "HYPE25-0436",
+  "nev": "RG Egyesület",
+  "datum": null,
+  "helyszin": "Budapest, Kőbánya",
+  "datum_megjegyzes": "2025.12.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c3c9afd-d53b-80e0-91f4-c68ea80386a9"
+ },
+ {
+  "kod": "HYPE25-0437",
+  "nev": "HYPE stúdiórendezés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c3c9afd-d53b-8017-abf3-e9d607a15a57"
+ },
+ {
+  "kod": "HYPE25-0438",
+  "nev": "CB - Műugró Szövetség - november",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. november hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c4c9afd-d53b-8043-94ea-f5a29d7e6647"
+ },
+ {
+  "kod": "HYPE25-0439",
+  "nev": "CB - Műugró Szövetség - december",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. december hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c4c9afd-d53b-808f-953f-e53f1d64bc03"
+ },
+ {
+  "kod": "HYPE25-0440",
+  "nev": "MTE - december",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. december hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c4c9afd-d53b-8040-8ce2-ca81c4682229"
+ },
+ {
+  "kod": "HYPE25-0441",
+  "nev": "Lounge - fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c5c9afd-d53b-80fe-9083-cbb1642c3e21"
+ },
+ {
+  "kod": "HYPE25-0442",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.16.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2c5c9afd-d53b-8062-9c40-c719d4dbdf18"
+ },
+ {
+  "kod": "HYPE25-0443",
+  "nev": "Kolibri Színház - Társalgó",
+  "datum": null,
+  "helyszin": "1061 Budapest, Jókai tér 10",
+  "datum_megjegyzes": "2025.12.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c5c9afd-d53b-807d-8f41-fddaf9a2a442"
+ },
+ {
+  "kod": "HYPE25-0444",
+  "nev": "Hype Karácsony 2025.",
+  "datum": null,
+  "helyszin": "High Five Budapest",
+  "datum_megjegyzes": "2025.12.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c5c9afd-d53b-8026-b59c-ced91c61d3fa"
+ },
+ {
+  "kod": "HYPE25-0445",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2cbc9afd-d53b-80e0-95c7-f59cf753eb97"
+ },
+ {
+  "kod": "HYPE25-0446",
+  "nev": "HYPE stúdiórendezés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2cbc9afd-d53b-80e8-8185-ecfead779516"
+ },
+ {
+  "kod": "HYPE25-0447",
+  "nev": "MHSSZ - Díjátadó Gála",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.12.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2cbc9afd-d53b-80f6-bd8b-e0dbc63c67cf"
+ },
+ {
+  "kod": "HYPE25-0448",
+  "nev": "TE - intézményi karácsony",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2025.12.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2cbc9afd-d53b-800b-b404-e3e63b87ce9b"
+ },
+ {
+  "kod": "HYPE25-0449",
+  "nev": "CB - Főtaxi x FTC",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2cbc9afd-d53b-80ea-8832-cd07fe95a726"
+ },
+ {
+  "kod": "HYPE25-0450",
+  "nev": "Geri - jég hockey vágás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2cbc9afd-d53b-804f-8473-e0871ad7c314"
+ },
+ {
+  "kod": "HYPE25-0451",
+  "nev": "MV és Kerekdomb - 2026 év eleji kampány",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. dec. hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2cbc9afd-d53b-8036-bd98-f4862fbd65f4"
+ },
+ {
+  "kod": "HYPE25-0452",
+  "nev": "Kolibri Színház - Micimackó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025.12.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2ccc9afd-d53b-80de-8177-c8981f9d3a6c"
+ },
+ {
+  "kod": "HYPE25-0453",
+  "nev": "BBGP - december",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e2c9afd-d53b-80a9-ab20-d5644cd1ab91"
+ },
+ {
+  "kod": "HYPE25-0454",
+  "nev": "Skipper - Ügető Szilveszter (tesztnap)",
+  "datum": null,
+  "helyszin": "Kincsem Park",
+  "datum_megjegyzes": "2025.12.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e2c9afd-d53b-80a9-a389-f7cf7a869830"
+ },
+ {
+  "kod": "HYPE25-0455",
+  "nev": "Dorko Előkarácsonyi vásár -Influencer kampány",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fbc9afd-d53b-80d6-aea7-e62fb3bc5d27"
+ },
+ {
+  "kod": "HYPE25-0456",
+  "nev": "Kontroll - eszközbérlés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2025. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "309c9afd-d53b-8046-94e1-eaa027b417b2"
+ },
+ {
+  "kod": "HYPE26-0001",
+  "nev": "Fonó - videoklipp",
+  "datum": null,
+  "helyszin": "Fonó Budai Zeneház",
+  "datum_megjegyzes": "2025.01.02.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2b6c9afd-d53b-803d-9682-d45b4e162462"
+ },
+ {
+  "kod": "HYPE26-0002",
+  "nev": "Adri&Pipa esküvő",
+  "datum": null,
+  "helyszin": "Podmaniczky Rendezvénykastély",
+  "datum_megjegyzes": "2025.02.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b6c9afd-d53b-802f-993b-c8c68a232632"
+ },
+ {
+  "kod": "HYPE26-0003",
+  "nev": "Startup Safari 2026",
+  "datum": null,
+  "helyszin": "Create26",
+  "datum_megjegyzes": "2026.03.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b6c9afd-d53b-80c4-9811-ebf12284606c"
+ },
+ {
+  "kod": "HYPE26-0004",
+  "nev": "TF Napok",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b6c9afd-d53b-8014-a634-fc4c56303726"
+ },
+ {
+  "kod": "HYPE26-0005",
+  "nev": "Víz, Zene, Virág Fesztivál",
+  "datum": null,
+  "helyszin": "Tata, Öreg-tó",
+  "datum_megjegyzes": "2026.06.26-28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b6c9afd-d53b-80a5-a422-c55f08e159e6"
+ },
+ {
+  "kod": "HYPE26-0006",
+  "nev": "Művészetek Völgye Fesztivál 2026",
+  "datum": null,
+  "helyszin": "Kapolcs",
+  "datum_megjegyzes": "2026.07.24. - 2026.08.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b6c9afd-d53b-807a-91e9-c9ba06051517"
+ },
+ {
+  "kod": "HYPE26-0007",
+  "nev": "Esküvő",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.09.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b6c9afd-d53b-8017-a04d-c0a8e7187166"
+ },
+ {
+  "kod": "HYPE26-0008",
+  "nev": "KvintEsszencia Mesteriskola - vizsgakoncert felvétel",
+  "datum": null,
+  "helyszin": "PTE Művészeti Kar",
+  "datum_megjegyzes": "2026.01.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2b7c9afd-d53b-806d-9ec0-ff8e284d2b7e"
+ },
+ {
+  "kod": "HYPE26-0009",
+  "nev": "NVESZ - Gála",
+  "datum": null,
+  "helyszin": "Marriott Budapest",
+  "datum_megjegyzes": "2026.01.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bec9afd-d53b-8066-8746-ecabf9a87d7d"
+ },
+ {
+  "kod": "HYPE26-0010",
+  "nev": "LABA - Szakmai nap",
+  "datum": null,
+  "helyszin": "Turbina Kulturális Központ",
+  "datum_megjegyzes": "2026.02.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2bfc9afd-d53b-804e-86f7-d407d5b6b1f4"
+ },
+ {
+  "kod": "HYPE26-0011",
+  "nev": "CEU - Határtalan Tudás",
+  "datum": null,
+  "helyszin": "CEU Nador Building",
+  "datum_megjegyzes": "2026.02.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c5c9afd-d53b-807a-9a86-e0f83a5bc95b"
+ },
+ {
+  "kod": "HYPE26-0012",
+  "nev": "CEU - Határtalan Tudás",
+  "datum": null,
+  "helyszin": "CEU Nador Building",
+  "datum_megjegyzes": "2026.03.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c5c9afd-d53b-80d0-9e6f-c6975a7d7aaf"
+ },
+ {
+  "kod": "HYPE26-0013",
+  "nev": "CEU - Határtalan Tudás",
+  "datum": null,
+  "helyszin": "CEU Nador Building",
+  "datum_megjegyzes": "2026.05.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c5c9afd-d53b-8027-96ba-d3488d268451"
+ },
+ {
+  "kod": "HYPE26-0014",
+  "nev": "MNM - Attila kiállítás megnyitó",
+  "datum": null,
+  "helyszin": "Nemzeti Múzeum",
+  "datum_megjegyzes": "2026.01.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2c5c9afd-d53b-802a-a128-eb34d5f7e21b"
+ },
+ {
+  "kod": "HYPE26-0015",
+  "nev": "MP - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2cac9afd-d53b-80dc-a3f1-e8537b99cdeb"
+ },
+ {
+  "kod": "HYPE26-0016",
+  "nev": "Next Stage - Mága Zoltán újévi koncert",
+  "datum": null,
+  "helyszin": "Güntner Aréna Tata",
+  "datum_megjegyzes": "2026.01.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2ddc9afd-d53b-8087-8784-c65f91a1c052"
+ },
+ {
+  "kod": "HYPE26-0017",
+  "nev": "Art Group - Opel 2026",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2dfc9afd-d53b-803a-80ab-ed09ce19b121"
+ },
+ {
+  "kod": "HYPE26-0018",
+  "nev": "Művészetek Völgye - januári bejelentő videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2dfc9afd-d53b-8031-b4ea-df33a324217a"
+ },
+ {
+  "kod": "HYPE26-0019",
+  "nev": "TE Stúdió Munka - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2dfc9afd-d53b-80fa-8ee4-f12f52bbfbad"
+ },
+ {
+  "kod": "HYPE26-0020",
+  "nev": "ContentBee",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. éves",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e0c9afd-d53b-804b-812f-f57df56abd22"
+ },
+ {
+  "kod": "HYPE26-0021",
+  "nev": "IndieCar - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e1c9afd-d53b-804a-b629-ee9e341dc30b"
+ },
+ {
+  "kod": "HYPE26-0022",
+  "nev": "KIM",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e1c9afd-d53b-8041-9285-ea0ad2f98604"
+ },
+ {
+  "kod": "HYPE26-0023",
+  "nev": "MTE január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e1c9afd-d53b-80d7-8f09-d35776666f90"
+ },
+ {
+  "kod": "HYPE26-0024",
+  "nev": "Krumpello",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. éves",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e1c9afd-d53b-80e6-ab66-c6c06a7c84d9"
+ },
+ {
+  "kod": "HYPE26-0025",
+  "nev": "Skipper - KSI Családi Nap",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.01.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e2c9afd-d53b-8058-a6e2-d2cec9caaa7c"
+ },
+ {
+  "kod": "HYPE26-0026",
+  "nev": "Kolibri Színház - Tartuffe",
+  "datum": null,
+  "helyszin": "Jókai tér 3., Budapest 6.kerület",
+  "datum_megjegyzes": "2026.01.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e2c9afd-d53b-808c-9a5c-d4d5d9c5918e"
+ },
+ {
+  "kod": "HYPE26-0027",
+  "nev": "Kolibri Színház - Tartuffe",
+  "datum": null,
+  "helyszin": "Andrássy út 77., 1062 Budapest",
+  "datum_megjegyzes": "2026.01.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e2c9afd-d53b-808a-b5b1-efd77b05a15c"
+ },
+ {
+  "kod": "HYPE26-0028",
+  "nev": "Kolibri Színház - Tartuffe",
+  "datum": null,
+  "helyszin": "Andrássy út 77., 1062 Budapest",
+  "datum_megjegyzes": "2026.01.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e2c9afd-d53b-802c-be46-cd3554734764"
+ },
+ {
+  "kod": "HYPE26-0029",
+  "nev": "Kolibri Színház - image video",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e3c9afd-d53b-80dd-a021-ff7e6747573a"
+ },
+ {
+  "kod": "HYPE26-0030",
+  "nev": "Déryné - Csehov olvasópróba",
+  "datum": null,
+  "helyszin": "Déryné Központ",
+  "datum_megjegyzes": "2026.01.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e3c9afd-d53b-8010-837d-df1c65bf2047"
+ },
+ {
+  "kod": "HYPE26-0031",
+  "nev": "Ne bánts világ project",
+  "datum": null,
+  "helyszin": "Déryné Központ",
+  "datum_megjegyzes": "2026. január 12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e3c9afd-d53b-8000-a25a-fb3a9a4a00d2"
+ },
+ {
+  "kod": "HYPE26-0032",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Tatabánya",
+  "datum_megjegyzes": "2026.01.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e3c9afd-d53b-80f8-aa5e-f0396c9d08f0"
+ },
+ {
+  "kod": "HYPE26-0033",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2026.01.29.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2e4c9afd-d53b-8056-821b-d8e2d7725434"
+ },
+ {
+  "kod": "HYPE26-0034",
+  "nev": "Bársony Bálint - Attila videoklipp",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.01.13-14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e4c9afd-d53b-80e3-bb04-d463c25003c8"
+ },
+ {
+  "kod": "HYPE26-0035",
+  "nev": "Art Színtér - Oltári Srácok anyagok újravágása",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e6c9afd-d53b-8063-af58-fef8b8507590"
+ },
+ {
+  "kod": "HYPE26-0036",
+  "nev": "??? (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": "IDA Bistro",
+  "datum_megjegyzes": "2026.01.29.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2e7c9afd-d53b-80d5-8e6d-e9c8b1d53783"
+ },
+ {
+  "kod": "HYPE26-0037",
+  "nev": "Pajta Project - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2e7c9afd-d53b-80a1-b310-d8dfeae8c1cc"
+ },
+ {
+  "kod": "HYPE26-0038",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2026. január 29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2e7c9afd-d53b-813f-931b-de67b5c2779c"
+ },
+ {
+  "kod": "HYPE26-0039",
+  "nev": "Art Group - MG Konferencia",
+  "datum": null,
+  "helyszin": "Intercontinental Hotel Budapest",
+  "datum_megjegyzes": "2026. január 20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2eac9afd-d53b-813a-9258-cd48f85b6031"
+ },
+ {
+  "kod": "HYPE26-0040",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "MTK Sportpark",
+  "datum_megjegyzes": "2026.01.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2eac9afd-d53b-81da-8d97-c7f8f80397fc"
+ },
+ {
+  "kod": "HYPE26-0041",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.01.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2edc9afd-d53b-819f-82a8-e98e40f05973"
+ },
+ {
+  "kod": "HYPE26-0042",
+  "nev": "Nemzeti Színház - Marxtőkéje",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2026.01.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2eec9afd-d53b-819e-bf95-fc9b6124bb46"
+ },
+ {
+  "kod": "HYPE26-0043",
+  "nev": "Déryné - Vitéz László 200. jubileumi témanap",
+  "datum": null,
+  "helyszin": "Nádudvar",
+  "datum_megjegyzes": "2026.01.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2eec9afd-d53b-8118-90d7-f531dab7c99f"
+ },
+ {
+  "kod": "HYPE26-0044",
+  "nev": "Lázár séf - VI. Pecsenye Parádé",
+  "datum": null,
+  "helyszin": "Abony",
+  "datum_megjegyzes": "2026.03.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2eec9afd-d53b-8184-8cd1-fc8b6ca165ca"
+ },
+ {
+  "kod": "HYPE26-0045",
+  "nev": "KIM",
+  "datum": null,
+  "helyszin": "Liszt Ferenc Reptér, \nKeleti Pályaudvar",
+  "datum_megjegyzes": "2026.01.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2f0c9afd-d53b-81bf-866a-c5006732fd90"
+ },
+ {
+  "kod": "HYPE26-0046",
+  "nev": "MP - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. február",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2f0c9afd-d53b-811c-9fa5-caf91b7345aa"
+ },
+ {
+  "kod": "HYPE26-0047",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Flow Boulder",
+  "datum_megjegyzes": "2026. február 4.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2f6c9afd-d53b-8106-9807-d8a8df93f788"
+ },
+ {
+  "kod": "HYPE26-0048",
+  "nev": "IndieCar február",
+  "datum": null,
+  "helyszin": "Vecsés",
+  "datum_megjegyzes": "2026. február",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2f7c9afd-d53b-8124-aadf-f27b4227e216"
+ },
+ {
+  "kod": "HYPE26-0049",
+  "nev": "MTE február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. február",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2f9c9afd-d53b-8136-9794-d853175995f1"
+ },
+ {
+  "kod": "HYPE26-0050",
+  "nev": "Művészetek Völgye - pályázati forgatás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.02.04.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fbc9afd-d53b-8152-8242-e751f06e7281"
+ },
+ {
+  "kod": "HYPE26-0051",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "BHSE - Dózsa György út",
+  "datum_megjegyzes": "2026.02.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fbc9afd-d53b-81a2-87ee-c849aecb9753"
+ },
+ {
+  "kod": "HYPE26-0052",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Duna Aréna",
+  "datum_megjegyzes": "2026.02.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fbc9afd-d53b-8199-a7d6-cb3404b11cbe"
+ },
+ {
+  "kod": "HYPE26-0053",
+  "nev": "Műugró Szövetség - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. január",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fbc9afd-d53b-81ae-b6f7-c28efdf5c57c"
+ },
+ {
+  "kod": "HYPE26-0054",
+  "nev": "Műugró Szövetség - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. február",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fbc9afd-d53b-81f7-a9d5-d50f843a269a"
+ },
+ {
+  "kod": "HYPE26-0055",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.02.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fbc9afd-d53b-81a2-9aa1-f3e79848b586"
+ },
+ {
+  "kod": "HYPE26-0056",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.05.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2fbc9afd-d53b-81b2-b505-c3330367b4b6"
+ },
+ {
+  "kod": "HYPE26-0057",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.08.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2fbc9afd-d53b-81df-a805-d757c48ec0f7"
+ },
+ {
+  "kod": "HYPE26-0058",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Dunaújváros",
+  "datum_megjegyzes": "2026.02.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fcc9afd-d53b-81d5-a02e-ee74b03a2eaa"
+ },
+ {
+  "kod": "HYPE26-0059",
+  "nev": "TE Stúdió Munka - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. február",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fcc9afd-d53b-8110-b0b3-eecdd9e3dfe9"
+ },
+ {
+  "kod": "HYPE26-0060",
+  "nev": "BB - Tóth Diána",
+  "datum": null,
+  "helyszin": "BlackBox Studio Budapest",
+  "datum_megjegyzes": "2026.01.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fdc9afd-d53b-81fc-baf7-dd29161fab25"
+ },
+ {
+  "kod": "HYPE26-0061",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.02.05",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fdc9afd-d53b-81f0-9658-c47760a95911"
+ },
+ {
+  "kod": "HYPE26-0062",
+  "nev": "Videóklip forgatás - BECCA",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.02.08.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "2fec9afd-d53b-81d9-b935-c18dc7862314"
+ },
+ {
+  "kod": "HYPE26-0063",
+  "nev": "HH - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fec9afd-d53b-81fc-896e-c6b8db8f92d5"
+ },
+ {
+  "kod": "HYPE26-0064",
+  "nev": "Art Színtér - promo",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. február",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "2fec9afd-d53b-818b-9b37-fa0974cf07bb"
+ },
+ {
+  "kod": "HYPE26-0065",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.02.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "302c9afd-d53b-81d2-a3e5-f87fff641bea"
+ },
+ {
+  "kod": "HYPE26-0066",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "302c9afd-d53b-817b-8068-d4a0adea6d34"
+ },
+ {
+  "kod": "HYPE26-0067",
+  "nev": "MV - bejelentő videó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. február",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "302c9afd-d53b-8112-bad7-ff21809ba359"
+ },
+ {
+  "kod": "HYPE26-0068",
+  "nev": "BIC - Welcome back bowling",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.02.28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "303c9afd-d53b-81f5-8934-de291fe64ae0"
+ },
+ {
+  "kod": "HYPE26-0069",
+  "nev": "Nemzeti Színház - image video",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. február",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "303c9afd-d53b-8151-bf96-f9ba990d0fc1"
+ },
+ {
+  "kod": "HYPE26-0070",
+  "nev": "Nemzeti Színház - MITEM 2026",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "304c9afd-d53b-81bb-85dd-e49b3cbaaebc"
+ },
+ {
+  "kod": "HYPE26-0071",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2026.02.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "305c9afd-d53b-81d8-a087-f6a6b2186a63"
+ },
+ {
+  "kod": "HYPE26-0072",
+  "nev": "TE - Diplomaosztó hangosítás",
+  "datum": null,
+  "helyszin": "Dr. Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2026.02.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "305c9afd-d53b-8127-bb5b-f6ef951faa4e"
+ },
+ {
+  "kod": "HYPE26-0073",
+  "nev": "Romkert - Aprés Ski",
+  "datum": null,
+  "helyszin": "Budapest, Romkert",
+  "datum_megjegyzes": "2026.02.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "306c9afd-d53b-81b4-a150-c9a703151505"
+ },
+ {
+  "kod": "HYPE26-0074",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.02.28.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "309c9afd-d53b-8150-8a6e-e9eee4facdff"
+ },
+ {
+  "kod": "HYPE26-0075",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2026.02.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "309c9afd-d53b-81d4-b058-fa8cfebf2086"
+ },
+ {
+  "kod": "HYPE26-0076",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.04.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "309c9afd-d53b-8130-811d-c6b329cd9c16"
+ },
+ {
+  "kod": "HYPE26-0077",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.04.10.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "309c9afd-d53b-81ec-b217-f9acac1e5ec5"
+ },
+ {
+  "kod": "HYPE26-0078",
+  "nev": "MP - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "30ac9afd-d53b-81ee-84c9-e88b75f745d2"
+ },
+ {
+  "kod": "HYPE26-0079",
+  "nev": "Mezei Dani fusi - január",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "30ac9afd-d53b-8185-b5bc-fba17fa78110"
+ },
+ {
+  "kod": "HYPE26-0080",
+  "nev": "Lounge koncertek",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. tavasz",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "30bc9afd-d53b-8128-96df-ca791ae04ae2"
+ },
+ {
+  "kod": "HYPE26-0081",
+  "nev": "Főtaxi fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.02.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "30bc9afd-d53b-8122-b725-d51051cd52a1"
+ },
+ {
+  "kod": "HYPE26-0082",
+  "nev": "Mádl Intézet - Konferencia",
+  "datum": null,
+  "helyszin": "Károlyi-Csekonics Palota",
+  "datum_megjegyzes": "2026.02.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "30bc9afd-d53b-8142-b8ca-c46a46ec9544"
+ },
+ {
+  "kod": "HYPE26-0083",
+  "nev": "Lounge fotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.03.15.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "30cc9afd-d53b-80a5-adc6-c16dfe0337d2"
+ },
+ {
+  "kod": "HYPE26-0084",
+  "nev": "Déryné - Csehov előadás próbafotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.02.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "30cc9afd-d53b-80a7-a556-d435269a2ddd"
+ },
+ {
+  "kod": "HYPE26-0085",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": "Mezőhegyes",
+  "datum_megjegyzes": "2026.02.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "30cc9afd-d53b-80b0-8556-da7ac70865b0"
+ },
+ {
+  "kod": "HYPE26-0086",
+  "nev": "Kultúrpart - Konferencia a mesemondás hagyományának továbbéltetéséről",
+  "datum": null,
+  "helyszin": "Budapest, Hagyományok",
+  "datum_megjegyzes": "2026.02.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "30dc9afd-d53b-80e7-a804-d7742105051b"
+ },
+ {
+  "kod": "HYPE26-0087",
+  "nev": "Nemzeti Színház - MITEM 2026",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "30dc9afd-d53b-802f-80dd-c382269376a8"
+ },
+ {
+  "kod": "HYPE26-0088",
+  "nev": "Kolibri Színház - 300. Kippkopp gyerekei",
+  "datum": null,
+  "helyszin": "Kolibri Fészek",
+  "datum_megjegyzes": "2026.02.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "310c9afd-d53b-80c5-a1cd-d0ed410e50d5"
+ },
+ {
+  "kod": "HYPE26-0089",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.03.04.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "312c9afd-d53b-806e-934d-fc3f57ef871e"
+ },
+ {
+  "kod": "HYPE26-0090",
+  "nev": "Nemzeti Színház - A mi kis városunk",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2026.03.04.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "312c9afd-d53b-80a1-8358-facf457a20d8"
+ },
+ {
+  "kod": "HYPE26-0091",
+  "nev": "Fonó - stream",
+  "datum": null,
+  "helyszin": "Fonó Budai Zeneház",
+  "datum_megjegyzes": "2026.03.07.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "313c9afd-d53b-800b-b10a-d413a9205b90"
+ },
+ {
+  "kod": "HYPE26-0092",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Dunavarsány",
+  "datum_megjegyzes": "2026.03.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "315c9afd-d53b-80a7-aa0b-fca0233cc3b5"
+ },
+ {
+  "kod": "HYPE26-0093",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "FTC Uszoda Népliget",
+  "datum_megjegyzes": "2026.03.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "315c9afd-d53b-8039-b299-e03a774666f6"
+ },
+ {
+  "kod": "HYPE26-0094",
+  "nev": "TE Stúdió Munka - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "317c9afd-d53b-80fc-a36d-f27da43f928e"
+ },
+ {
+  "kod": "HYPE26-0095",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "317c9afd-d53b-801f-92ba-f2532301b568"
+ },
+ {
+  "kod": "HYPE26-0096",
+  "nev": "MTE március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "318c9afd-d53b-80a6-a230-ee26e1681298"
+ },
+ {
+  "kod": "HYPE26-0097",
+  "nev": "Főtaxi március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "318c9afd-d53b-80ea-9aba-f57ef023c0da"
+ },
+ {
+  "kod": "HYPE26-0098",
+  "nev": "Műugró Szövetség - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "318c9afd-d53b-8002-a302-fa9f00a1f826"
+ },
+ {
+  "kod": "HYPE26-0099",
+  "nev": "Baga - SZRT játszótér átadás",
+  "datum": null,
+  "helyszin": "Pákozd",
+  "datum_megjegyzes": "2026.03.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "318c9afd-d53b-8086-9491-dd0c7e5e3f9a"
+ },
+ {
+  "kod": "HYPE26-0100",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.26.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "319c9afd-d53b-80fc-b68f-d1564eb3eb2e"
+ },
+ {
+  "kod": "HYPE26-0101",
+  "nev": "Baga - NAK",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.27.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "319c9afd-d53b-8026-b0ca-d164b2d8a1c7"
+ },
+ {
+  "kod": "HYPE26-0102",
+  "nev": "TE - Lovarda forgatás",
+  "datum": null,
+  "helyszin": "Kecskemét",
+  "datum_megjegyzes": "2026.03.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "319c9afd-d53b-800c-ac0b-c25547e3d7d2"
+ },
+ {
+  "kod": "HYPE26-0103",
+  "nev": "Ivedo - Cardo x Pálinger",
+  "datum": null,
+  "helyszin": "Magyar Tudományos Akadémia",
+  "datum_megjegyzes": "2026.03.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "319c9afd-d53b-80bf-8edd-fb2b1018e64f"
+ },
+ {
+  "kod": "HYPE26-0104",
+  "nev": "GVH - ???",
+  "datum": null,
+  "helyszin": "GVH",
+  "datum_megjegyzes": "2026.03.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "319c9afd-d53b-8088-be61-e2146ca9656a"
+ },
+ {
+  "kod": "HYPE26-0105",
+  "nev": "Déryné - Kölcsönkért kastély olvasópróba fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "31ac9afd-d53b-80c9-95f1-c1a19a365b53"
+ },
+ {
+  "kod": "HYPE26-0106",
+  "nev": "Kolibri Színház - Barangolás promo",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "31bc9afd-d53b-8018-860b-e814765ab8ac"
+ },
+ {
+  "kod": "HYPE26-0107",
+  "nev": "Mezei Dani fusi - február",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. február",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "31bc9afd-d53b-805d-b23f-ee4e2fe97327"
+ },
+ {
+  "kod": "HYPE26-0108",
+  "nev": "BDPST - ONE",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "31ec9afd-d53b-80b3-bb98-f8034a33d0b5"
+ },
+ {
+  "kod": "HYPE26-0109",
+  "nev": "Art-Színtér - promo",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "31ec9afd-d53b-80ea-b66b-e2cddc37be1d"
+ },
+ {
+  "kod": "HYPE26-0110",
+  "nev": "Szamosi Film - imidzsfilm",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "31fc9afd-d53b-8007-941e-cbd307ed4057"
+ },
+ {
+  "kod": "HYPE26-0111",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Duna Aréna",
+  "datum_megjegyzes": "2026.03.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "31fc9afd-d53b-804d-923a-ff013c5525a4"
+ },
+ {
+  "kod": "HYPE26-0112",
+  "nev": "Szigethy Zsófi fusi",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "320c9afd-d53b-80ed-8f4c-c1f65fd4db1c"
+ },
+ {
+  "kod": "HYPE26-0113",
+  "nev": "Kolibri Színház - Egypercesek",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "321c9afd-d53b-8003-8864-f61b48c64003"
+ },
+ {
+  "kod": "HYPE26-0114",
+  "nev": "VitalSpa x Sárközi Ákos",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "321c9afd-d53b-80ee-9fa0-eae042ceb378"
+ },
+ {
+  "kod": "HYPE26-0115",
+  "nev": "Déryné - Csehov: Tripla tréfa - karakter- és főpróbafotózás",
+  "datum": null,
+  "helyszin": "Déryné Központ",
+  "datum_megjegyzes": "2026.03.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "321c9afd-d53b-8009-b958-cb2f191a312b"
+ },
+ {
+  "kod": "HYPE26-0116",
+  "nev": "Déryné - Csehov: Tripla tréfa - trailer",
+  "datum": null,
+  "helyszin": "Déryné Központ",
+  "datum_megjegyzes": "2026.04.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "321c9afd-d53b-802d-9d7b-ddffe1deb2ee"
+ },
+ {
+  "kod": "HYPE26-0117",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.03.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "322c9afd-d53b-80e9-ab41-c9c9db6f32c0"
+ },
+ {
+  "kod": "HYPE26-0118",
+  "nev": "Kolibri Színház - Egypercesek",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2026.03.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "322c9afd-d53b-8042-8345-f56d0f49e69e"
+ },
+ {
+  "kod": "HYPE26-0119",
+  "nev": "GVH - VIII. Magyar Versenyjogi Fórum - intróvideó",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. március",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "326c9afd-d53b-80f2-857e-fe834e79dd8a"
+ },
+ {
+  "kod": "HYPE26-0120",
+  "nev": "TE - Karikó Katalin",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2026.03.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "327c9afd-d53b-80a9-ac0a-c5ff4e8a7feb"
+ },
+ {
+  "kod": "HYPE26-0121",
+  "nev": "SZRT",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03. 28-28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "327c9afd-d53b-8027-ae97-e40c589e7c2a"
+ },
+ {
+  "kod": "HYPE26-0122",
+  "nev": "Skipper - Férfi Kézilabda Magyar Kupa",
+  "datum": null,
+  "helyszin": "Tatabánya",
+  "datum_megjegyzes": "2026.04.18-19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "328c9afd-d53b-8033-941c-e7da70a0b5eb"
+ },
+ {
+  "kod": "HYPE26-0123",
+  "nev": "Kolibri Színház - Társalgó",
+  "datum": null,
+  "helyszin": "Jókai tér 10., Budapest 6.kerület",
+  "datum_megjegyzes": "2026.3.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "328c9afd-d53b-80a7-86da-d937612f0dcb"
+ },
+ {
+  "kod": "HYPE26-0124",
+  "nev": "Clean Art",
+  "datum": null,
+  "helyszin": "Budapest, Bazilika",
+  "datum_megjegyzes": "2026.03.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "328c9afd-d53b-80e0-bd47-ce70af202a39"
+ },
+ {
+  "kod": "HYPE26-0125",
+  "nev": "Nemzeti Színház - Marxtőkéje trailer",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.03.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "329c9afd-d53b-8001-88c9-ef97a26fea59"
+ },
+ {
+  "kod": "HYPE26-0126",
+  "nev": "HH - Rákóczi 350 emlékév",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "329c9afd-d53b-803a-9601-d443eee8de56"
+ },
+ {
+  "kod": "HYPE26-0127",
+  "nev": "MP április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. április",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "329c9afd-d53b-8087-a63c-c22408160721"
+ },
+ {
+  "kod": "HYPE26-0128",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Ormai László Asztalitenisz Csarnok",
+  "datum_megjegyzes": "2026.03.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "32bc9afd-d53b-804f-b773-c34786ea600b"
+ },
+ {
+  "kod": "HYPE26-0129",
+  "nev": "HH - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "32cc9afd-d53b-802b-a02a-c843d5a33e5b"
+ },
+ {
+  "kod": "HYPE26-0130",
+  "nev": "HH - április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "32cc9afd-d53b-80cd-8718-d5aaa9ae17cd"
+ },
+ {
+  "kod": "HYPE26-0131",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "32cc9afd-d53b-80e3-9273-dc4c9275f388"
+ },
+ {
+  "kod": "HYPE26-0132",
+  "nev": "Fábri György felvétel",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.03.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "32cc9afd-d53b-8011-8d93-c0c899028b15"
+ },
+ {
+  "kod": "HYPE26-0133",
+  "nev": "TE - Stúdió beszerelés",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "32cc9afd-d53b-80e0-a3f6-c6683bfaea7b"
+ },
+ {
+  "kod": "HYPE26-0134",
+  "nev": "Skipper - recruiTECH",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.03.26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "32dc9afd-d53b-8051-ab69-e90fc58fa1a6"
+ },
+ {
+  "kod": "HYPE26-0135",
+  "nev": "KIM",
+  "datum": null,
+  "helyszin": "Budapest, Kossuth tér",
+  "datum_megjegyzes": "2026.03.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "32fc9afd-d53b-8084-9a4b-faf72c32a253"
+ },
+ {
+  "kod": "HYPE26-0136",
+  "nev": "I. Varázsszelence Konferencia és Előadás",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2026.03.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "32fc9afd-d53b-8003-90ba-c385eb440f0a"
+ },
+ {
+  "kod": "HYPE26-0137",
+  "nev": "SZRT - POV",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.04.01",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "330c9afd-d53b-803d-96ae-cec2225cae2c"
+ },
+ {
+  "kod": "HYPE26-0138",
+  "nev": "Baga - SZRT",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "333c9afd-d53b-80a8-b88a-e52e2d83889c"
+ },
+ {
+  "kod": "HYPE26-0139",
+  "nev": "BIC - Intézménybemutató",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.03.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "333c9afd-d53b-80a6-86d1-e79b5dbeb84f"
+ },
+ {
+  "kod": "HYPE26-0140",
+  "nev": "MEFOB FESZTIVÁL 2026",
+  "datum": null,
+  "helyszin": "Gödöllő, MATE",
+  "datum_megjegyzes": "2026.04.30. - 2026.05.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "333c9afd-d53b-80be-9a1b-ec310f9c8582"
+ },
+ {
+  "kod": "HYPE26-0141",
+  "nev": "MTE április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "április",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "333c9afd-d53b-8009-b636-c01b78d0976f"
+ },
+ {
+  "kod": "HYPE26-0142",
+  "nev": "MTE - fotózás",
+  "datum": null,
+  "helyszin": "Magyar Táncművészeti Egyetem",
+  "datum_megjegyzes": "2026.04.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "335c9afd-d53b-8003-b3f5-c15cd1df525b"
+ },
+ {
+  "kod": "HYPE26-0143",
+  "nev": "KIM - április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "336c9afd-d53b-8050-8229-ce8641099acd"
+ },
+ {
+  "kod": "HYPE26-0144",
+  "nev": "TigraTV 2026 - I.rész",
+  "datum": null,
+  "helyszin": "Tigra Zrt. - Budaörsi út 64.",
+  "datum_megjegyzes": "2026.04.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "336c9afd-d53b-80d8-9d97-c6172b9f0a68"
+ },
+ {
+  "kod": "HYPE26-0145",
+  "nev": "Budapest Handball Cup 2026 megnyitó",
+  "datum": null,
+  "helyszin": "Dr. Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2026.04.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "336c9afd-d53b-8083-b6ae-e142e745a511"
+ },
+ {
+  "kod": "HYPE26-0146",
+  "nev": "Skipper - DVTK",
+  "datum": null,
+  "helyszin": "DVTK Aréna",
+  "datum_megjegyzes": "2026.04.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "337c9afd-d53b-80d0-b350-cc3b01ff211f"
+ },
+ {
+  "kod": "HYPE26-0147",
+  "nev": "Vizuál Tipp - ???",
+  "datum": null,
+  "helyszin": "Opera",
+  "datum_megjegyzes": "2026.04.11.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "337c9afd-d53b-80ea-a5b6-fdb5bdd8a8d4"
+ },
+ {
+  "kod": "HYPE26-0148",
+  "nev": "Skipper - Bródy koncert",
+  "datum": null,
+  "helyszin": "Papp László Budapest Sportaréna",
+  "datum_megjegyzes": "2026.04.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "33bc9afd-d53b-80d3-92e6-f122d4cad770"
+ },
+ {
+  "kod": "HYPE26-0149",
+  "nev": "Geri vágás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. április",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "33bc9afd-d53b-80c5-b812-f9ddd1a2cd1d"
+ },
+ {
+  "kod": "HYPE26-0150",
+  "nev": "SLM - autóverseny közvetítés",
+  "datum": null,
+  "helyszin": "Spielberg, Red Bull Ring",
+  "datum_megjegyzes": "2026.04.11-12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "33cc9afd-d53b-8087-ba59-d19d0289bd09"
+ },
+ {
+  "kod": "HYPE26-0151",
+  "nev": "Mezei Dani fusi - március",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "33cc9afd-d53b-800a-8af2-c0d0e0f8abd3"
+ },
+ {
+  "kod": "HYPE26-0152",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.04.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "33cc9afd-d53b-8000-98f8-d2c094218309"
+ },
+ {
+  "kod": "HYPE26-0153",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Budapesti Honvéd",
+  "datum_megjegyzes": "2026.04.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "33cc9afd-d53b-8039-9390-f8124e5891d4"
+ },
+ {
+  "kod": "HYPE26-0154",
+  "nev": "Kontroll - Választási műsor",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.04.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "33dc9afd-d53b-8062-94ff-d90d501a564f"
+ },
+ {
+  "kod": "HYPE26-0155",
+  "nev": "TOP500 Bar fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.04.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "33dc9afd-d53b-80ac-b75e-e12dc27a4f39"
+ },
+ {
+  "kod": "HYPE26-0156",
+  "nev": "Erdei iskolai program",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "33ec9afd-d53b-8074-b5a0-c173099e8369"
+ },
+ {
+  "kod": "HYPE26-0157",
+  "nev": "Deutsche Welle - LiveU bérlés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.04.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "33fc9afd-d53b-80d5-8fb0-f2a7f70e98c4"
+ },
+ {
+  "kod": "HYPE26-0158",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.04.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "342c9afd-d53b-80ce-9358-fa531d4c7f61"
+ },
+ {
+  "kod": "HYPE26-0159",
+  "nev": "Főtaxi április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.04.16.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "342c9afd-d53b-80b6-9e4f-fe3f10f1817d"
+ },
+ {
+  "kod": "HYPE26-0160",
+  "nev": "VitalSpa X Sárközi Ákos II.",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026. április 15. - május 15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "342c9afd-d53b-8004-b1bb-fb435f588a06"
+ },
+ {
+  "kod": "HYPE26-0161",
+  "nev": "BB - Fotó Művek Kft.",
+  "datum": null,
+  "helyszin": "BlackBox Stúdió Budapest",
+  "datum_megjegyzes": "2026.04.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "342c9afd-d53b-806d-a25d-c18deabd90db"
+ },
+ {
+  "kod": "HYPE26-0162",
+  "nev": "Esküvő (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.04.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "343c9afd-d53b-8058-aa1d-c36e2d57a090"
+ },
+ {
+  "kod": "HYPE26-0163",
+  "nev": "HH - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "343c9afd-d53b-80eb-82fd-cab2d9ae355d"
+ },
+ {
+  "kod": "HYPE26-0164",
+  "nev": "Esküvő (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.06.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "343c9afd-d53b-8053-a05e-ecc9866dfa5d"
+ },
+ {
+  "kod": "HYPE26-0165",
+  "nev": "Esküvő (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.08.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "343c9afd-d53b-80dc-b17e-c41d3119081d"
+ },
+ {
+  "kod": "HYPE26-0166",
+  "nev": "Skipper - LUX-ISR",
+  "datum": null,
+  "helyszin": "Budaörs",
+  "datum_megjegyzes": "2026.04.18.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "344c9afd-d53b-8019-9b8d-d28591c6e868"
+ },
+ {
+  "kod": "HYPE26-0167",
+  "nev": "Nemzeti Színház - Greenbox",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2026.04.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "344c9afd-d53b-80bf-bd87-dc67fa303691"
+ },
+ {
+  "kod": "HYPE26-0168",
+  "nev": "Kolibri Színház - Világ születése",
+  "datum": null,
+  "helyszin": "Kolibri Színház",
+  "datum_megjegyzes": "2026.04.27., 04.28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "344c9afd-d53b-8012-bad3-fb113b378fa8"
+ },
+ {
+  "kod": "HYPE26-0169",
+  "nev": "Tuttnauer Factory",
+  "datum": null,
+  "helyszin": "Tuttnauer Kft.",
+  "datum_megjegyzes": "2026.05.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "344c9afd-d53b-8039-abc4-d7c6ae3722af"
+ },
+ {
+  "kod": "HYPE26-0170",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.04.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "345c9afd-d53b-80bf-bcd3-c77d8b718606"
+ },
+ {
+  "kod": "HYPE26-0171",
+  "nev": "Nemzeti Színház - Szívem Királynője",
+  "datum": null,
+  "helyszin": "Nemzeti Színház",
+  "datum_megjegyzes": "2026.04.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "345c9afd-d53b-8003-bb8b-ccc3efc1023d"
+ },
+ {
+  "kod": "HYPE26-0172",
+  "nev": "Bársony Bálint forgatás",
+  "datum": null,
+  "helyszin": "Szeged",
+  "datum_megjegyzes": "2026.04.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "347c9afd-d53b-80e4-b8aa-f5feaf05bd09"
+ },
+ {
+  "kod": "HYPE26-0173",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.04.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "348c9afd-d53b-80dc-af06-fda18a913648"
+ },
+ {
+  "kod": "HYPE26-0174",
+  "nev": "TE Stúdió Munka - április",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "április hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "348c9afd-d53b-80b3-b79c-e428077826de"
+ },
+ {
+  "kod": "HYPE26-0175",
+  "nev": "Főtaxi május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "május hónap",
+  "esemeny_allapota": "Függőben",
+  "notion_page_id": "348c9afd-d53b-808f-8cf0-c26ac4b9adae"
+ },
+ {
+  "kod": "HYPE26-0176",
+  "nev": "BBGP - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. május",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "34ac9afd-d53b-80e3-9ef9-e668f8dd4f18"
+ },
+ {
+  "kod": "HYPE26-0177",
+  "nev": "383 ásványvíz fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. április",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "34ac9afd-d53b-8074-862f-c17970ac8ed8"
+ },
+ {
+  "kod": "HYPE26-0178",
+  "nev": "TE Stúdió Munka - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. május",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "34ac9afd-d53b-803f-be2f-e2658957c49d"
+ },
+ {
+  "kod": "HYPE26-0179",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "MTK RITMIKUS GIMNASZTIKA csarnoka",
+  "datum_megjegyzes": "2026.04.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "34ac9afd-d53b-80d9-8339-d3d17f72d188"
+ },
+ {
+  "kod": "HYPE26-0180",
+  "nev": "IndieCar május",
+  "datum": null,
+  "helyszin": "Vecsés",
+  "datum_megjegyzes": "2026.05.10.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "34ac9afd-d53b-80d4-8f5c-f5952871c0b7"
+ },
+ {
+  "kod": "HYPE26-0181",
+  "nev": "MTE - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. május",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "34cc9afd-d53b-8098-aeb2-df6987953b3f"
+ },
+ {
+  "kod": "HYPE26-0182",
+  "nev": "MTE - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "34cc9afd-d53b-80dd-a6d5-c1eab95f00c7"
+ },
+ {
+  "kod": "HYPE26-0183",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.05.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "34fc9afd-d53b-80e0-b466-f30175b6a552"
+ },
+ {
+  "kod": "HYPE26-0184",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2026.04.28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "34fc9afd-d53b-80a8-94d8-d019891768d4"
+ },
+ {
+  "kod": "HYPE26-0185",
+  "nev": "MP május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. május",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "350c9afd-d53b-801b-bf53-fed31687bdef"
+ },
+ {
+  "kod": "HYPE26-0186",
+  "nev": "Skipper - Darts matek",
+  "datum": null,
+  "helyszin": "Kecskemét",
+  "datum_megjegyzes": "2026.04.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "350c9afd-d53b-80af-8e44-e2516ef79fab"
+ },
+ {
+  "kod": "HYPE26-0187",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.05.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "351c9afd-d53b-80ea-a2dc-ed6e9904fdf4"
+ },
+ {
+  "kod": "HYPE26-0188",
+  "nev": "Porcher Áron",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.04.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "351c9afd-d53b-8084-92cd-cf1010d92a01"
+ },
+ {
+  "kod": "HYPE26-0189",
+  "nev": "Hanzel Henrik",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.05.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "357c9afd-d53b-808e-aae4-f254fea98da8"
+ },
+ {
+  "kod": "HYPE26-0190",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.05.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "357c9afd-d53b-805f-98bc-c182c66199a6"
+ },
+ {
+  "kod": "HYPE26-0191",
+  "nev": "Aerobik MEFOB fotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.05.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "357c9afd-d53b-80df-9133-d49d0e19b119"
+ },
+ {
+  "kod": "HYPE26-0192",
+  "nev": "Déryné - A kölcsönkért kastély - próba fotózása",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.05.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "357c9afd-d53b-806f-8ad2-daf68cae10fe"
+ },
+ {
+  "kod": "HYPE26-0193",
+  "nev": "Geri Bar vágás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026 május",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "358c9afd-d53b-80ba-b9bc-e5e95fa7d159"
+ },
+ {
+  "kod": "HYPE26-0194",
+  "nev": "Pajta Project - május",
+  "datum": null,
+  "helyszin": "Erdély",
+  "datum_megjegyzes": "2026. május 8-10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "359c9afd-d53b-80bb-a410-e75f215d5501"
+ },
+ {
+  "kod": "HYPE26-0195",
+  "nev": "Geri esküvő",
+  "datum": "2026-05-09",
+  "helyszin": null,
+  "datum_megjegyzes": "2026.05.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35dc9afd-d53b-8013-abfc-ebb1d2689101"
+ },
+ {
+  "kod": "HYPE26-0196",
+  "nev": "Skipper - Tour De Hongrie",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.05.12-17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35dc9afd-d53b-80b5-bbf5-f7b3fa429ac4"
+ },
+ {
+  "kod": "HYPE26-0197",
+  "nev": "Izabella koncertfelvétel",
+  "datum": null,
+  "helyszin": "HH",
+  "datum_megjegyzes": "2026.05.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35dc9afd-d53b-8028-9d08-de83bdba3c92"
+ },
+ {
+  "kod": "HYPE26-0198",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.05.12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35dc9afd-d53b-80a3-a67d-ddab170273bb"
+ },
+ {
+  "kod": "HYPE26-0199",
+  "nev": "LED-fal bérlés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. egész év",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35dc9afd-d53b-807d-9ba6-eec1d95855c2"
+ },
+ {
+  "kod": "HYPE26-0200",
+  "nev": "Mezei Dani fusi - április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35ec9afd-d53b-8059-ac09-fb99ec5b51ae"
+ },
+ {
+  "kod": "HYPE26-0201",
+  "nev": "Műugró Szövetség - április",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35ec9afd-d53b-80c6-9669-d64f367af7a4"
+ },
+ {
+  "kod": "HYPE26-0202",
+  "nev": "Műugró Szövetség - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35ec9afd-d53b-807e-933c-d8c8c4ca73fc"
+ },
+ {
+  "kod": "HYPE26-0203",
+  "nev": "Geri - HotsyTotsy vágás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.05.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35fc9afd-d53b-80f9-ab05-dd61f6641636"
+ },
+ {
+  "kod": "HYPE26-0204",
+  "nev": "Geri - Side Coctail bar vágás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.05.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35fc9afd-d53b-8027-b164-fa4228bf6b93"
+ },
+ {
+  "kod": "HYPE26-0205",
+  "nev": "Déryné - A kölcsönkért kastély karakter és jelmezes próba fotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.05.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35fc9afd-d53b-80bc-9fe1-c9188b02d321"
+ },
+ {
+  "kod": "HYPE26-0206",
+  "nev": "Déryné - A kölcsönkért kastély felvétel",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2025.05.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35fc9afd-d53b-801f-936a-e662af99eeb2"
+ },
+ {
+  "kod": "HYPE26-0207",
+  "nev": "Governess&CO vágás",
+  "datum": "2026-05-13",
+  "helyszin": null,
+  "datum_megjegyzes": "2026.05.13.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "360c9afd-d53b-80fb-beb0-d6db9d0b12f2"
+ },
+ {
+  "kod": "HYPE26-0208",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.05.28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "361c9afd-d53b-80be-91fa-f17912df55a2"
+ },
+ {
+  "kod": "HYPE26-0209",
+  "nev": "Esküvő (Vidor Geri)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.08.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "361c9afd-d53b-8050-a481-ef9ca03550d4"
+ },
+ {
+  "kod": "HYPE26-0210",
+  "nev": "Porcher Áron",
+  "datum": null,
+  "helyszin": "Parlament, Budapest",
+  "datum_megjegyzes": "2026.05.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "361c9afd-d53b-80b2-b61d-e983b913d948"
+ },
+ {
+  "kod": "HYPE26-0211",
+  "nev": "Déryné - Vitéz László alprogram 250. témanap",
+  "datum": null,
+  "helyszin": "Bonyhád, Zsámbék",
+  "datum_megjegyzes": "2026.05.26., 2026.06.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "361c9afd-d53b-803f-962d-da2c594b627c"
+ },
+ {
+  "kod": "HYPE26-0212",
+  "nev": "383 ásványvíz fotózás",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.05.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "362c9afd-d53b-8087-868e-e1f114b1c1b9"
+ },
+ {
+  "kod": "HYPE26-0213",
+  "nev": "Varga Lőrinc",
+  "datum": null,
+  "helyszin": "Bonyhád",
+  "datum_megjegyzes": "2026.05.21.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "364c9afd-d53b-80f3-b6d0-f6e661f9defa"
+ },
+ {
+  "kod": "HYPE26-0214",
+  "nev": "MTE - néptánc vizsgakoncert",
+  "datum": null,
+  "helyszin": "Nemzeti Táncszínház",
+  "datum_megjegyzes": "2026.06.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "364c9afd-d53b-80c8-9c78-db33dc7787e0"
+ },
+ {
+  "kod": "HYPE26-0215",
+  "nev": "Minden nap németül",
+  "datum": null,
+  "helyszin": "BlackBox stúdió",
+  "datum_megjegyzes": "2026. június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "366c9afd-d53b-802d-8652-c3991260d009"
+ },
+ {
+  "kod": "HYPE26-0216",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "MTK Kajak-kenu vízitelep",
+  "datum_megjegyzes": "2026.05.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "366c9afd-d53b-8046-959c-cc03d2dec902"
+ },
+ {
+  "kod": "HYPE26-0217",
+  "nev": "HH - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "367c9afd-d53b-809e-aa41-d73e52f327c6"
+ },
+ {
+  "kod": "HYPE26-0218",
+  "nev": "TE fotózás",
+  "datum": "2026-05-27",
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2026.05.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36cc9afd-d53b-80b1-a2ac-c7df39d9b36b"
+ },
+ {
+  "kod": "HYPE26-0219",
+  "nev": "mibollesz.hu - online tanfolyam videók",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36cc9afd-d53b-8054-82e8-fcb45bd71741"
+ },
+ {
+  "kod": "HYPE26-0220",
+  "nev": "SLM - autóverseny közvetítés",
+  "datum": null,
+  "helyszin": "Salzburg",
+  "datum_megjegyzes": "2026.05.29-31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36cc9afd-d53b-8065-95fd-f8dae7061a60"
+ },
+ {
+  "kod": "HYPE26-0221",
+  "nev": "Skipper - SCO-ISR",
+  "datum": null,
+  "helyszin": "Bozsik Stadion",
+  "datum_megjegyzes": "2026.06.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36cc9afd-d53b-8017-a9f2-d94fd8968997"
+ },
+ {
+  "kod": "HYPE26-0222",
+  "nev": "Bársony Bálint - trailer",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. május",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "36dc9afd-d53b-8092-ae1b-c00157866139"
+ },
+ {
+  "kod": "HYPE26-0223",
+  "nev": "TE - Sportmedicina központ promo",
+  "datum": null,
+  "helyszin": "Testnevelési Egyetem",
+  "datum_megjegyzes": "2026.05.28.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36dc9afd-d53b-800e-b4e9-cc28227aa0dd"
+ },
+ {
+  "kod": "HYPE26-0224",
+  "nev": "Videó üzenet felvétel",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.06.01.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36ec9afd-d53b-805b-9970-ff50561f5822"
+ },
+ {
+  "kod": "HYPE26-0225",
+  "nev": "Luca és Márk esküvő",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.05.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36fc9afd-d53b-807b-8c69-cd9ea7c9293c"
+ },
+ {
+  "kod": "HYPE26-0226",
+  "nev": "Art-Színtér - promo",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. május",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36fc9afd-d53b-809e-a88a-d5f8e3929720"
+ },
+ {
+  "kod": "HYPE26-0227",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.06.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36fc9afd-d53b-8063-9c5d-e668e7e4b591"
+ },
+ {
+  "kod": "HYPE26-0228",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.06.04.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36fc9afd-d53b-80b8-b07b-cb77b34d945e"
+ },
+ {
+  "kod": "HYPE26-0229",
+  "nev": "Karcher menhely forgatás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "36fc9afd-d53b-801f-bd52-d4d049977b23"
+ },
+ {
+  "kod": "HYPE26-0230",
+  "nev": "TE Stúdió Munka - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "370c9afd-d53b-80b9-bf99-e8de714ca81c"
+ },
+ {
+  "kod": "HYPE26-0231",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.06.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "370c9afd-d53b-80e4-a308-e0ca25370908"
+ },
+ {
+  "kod": "HYPE26-0232",
+  "nev": "MP június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "371c9afd-d53b-808d-8442-e26248c2d411"
+ },
+ {
+  "kod": "HYPE26-0233",
+  "nev": "Pénzügyminisztérium - Kármán",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.06.05.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "372c9afd-d53b-80cf-b400-cb0c1853763a"
+ },
+ {
+  "kod": "HYPE26-0234",
+  "nev": "Adama",
+  "datum": null,
+  "helyszin": "Szákszend",
+  "datum_megjegyzes": "2026.06.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "375c9afd-d53b-8012-9417-e9efa57c0e96"
+ },
+ {
+  "kod": "HYPE26-0235",
+  "nev": "MTA200-RG125",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.06.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "375c9afd-d53b-80fc-ab38-d0f994bc943f"
+ },
+ {
+  "kod": "HYPE26-0236",
+  "nev": "Furever by Csányi - eszközbérlés",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "376c9afd-d53b-808c-8366-cc4941ab0c28"
+ },
+ {
+  "kod": "HYPE26-0237",
+  "nev": "Online Genius - Árkád",
+  "datum": null,
+  "helyszin": "Budapest, Árkád",
+  "datum_megjegyzes": "2026.06.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "376c9afd-d53b-809f-8a81-d88d8a352021"
+ },
+ {
+  "kod": "HYPE26-0238",
+  "nev": "Mezei Dani fusi - május",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "376c9afd-d53b-80ec-af13-fbab84dec4ff"
+ },
+ {
+  "kod": "HYPE26-0239",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.05.20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "35dc9afd-d53b-803d-b059-de5a1d352fcf"
+ },
+ {
+  "kod": "HYPE26-0240",
+  "nev": "Restart Konferencia",
+  "datum": null,
+  "helyszin": "BMC",
+  "datum_megjegyzes": "2026.06.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "379c9afd-d53b-8031-9262-d1ef0513bed4"
+ },
+ {
+  "kod": "HYPE26-0241",
+  "nev": "KvintEsszencia Mesteriskola - Vizsgakoncert",
+  "datum": null,
+  "helyszin": "Kápolnásnyéki Halász-kastély, Kastélypark",
+  "datum_megjegyzes": "2026.06.19.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "379c9afd-d53b-80cb-97ab-d6d636e91e8c"
+ },
+ {
+  "kod": "HYPE26-0242",
+  "nev": "Adama",
+  "datum": null,
+  "helyszin": "Hajdúböszörmény",
+  "datum_megjegyzes": "2026.06.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "379c9afd-d53b-80fd-883a-f3b0f4551a03"
+ },
+ {
+  "kod": "HYPE26-0243",
+  "nev": "Szamosi Film - Trust Summit (Bizalmi Kör)",
+  "datum": null,
+  "helyszin": "Balatonfüred",
+  "datum_megjegyzes": "2026.06.11-12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "379c9afd-d53b-80e0-8894-f9dfbd79bd7c"
+ },
+ {
+  "kod": "HYPE26-0244",
+  "nev": "TTM június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "37ac9afd-d53b-804a-9357-d828363d71ef"
+ },
+ {
+  "kod": "HYPE26-0245",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Dunaújváros",
+  "datum_megjegyzes": "2026.06.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "37ac9afd-d53b-80ef-b202-fd2cd7c24c8e"
+ },
+ {
+  "kod": "HYPE26-0246",
+  "nev": "Richter Híradó",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.06.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "37bc9afd-d53b-8048-a88a-e54c94a0dd89"
+ },
+ {
+  "kod": "HYPE26-0247",
+  "nev": "TE - Diplomaosztó",
+  "datum": null,
+  "helyszin": "Dr. Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2026.07.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "37bc9afd-d53b-8074-8996-e7685f8ec7de"
+ },
+ {
+  "kod": "HYPE26-0248",
+  "nev": "PM - Luxemburg",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.06.11-12.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "37bc9afd-d53b-807c-80d6-f5fc860d26af"
+ },
+ {
+  "kod": "HYPE26-0249",
+  "nev": "Déryné - Déryné Program évadzáró",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.06.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "37cc9afd-d53b-80ee-b094-fee9fa9f27f9"
+ },
+ {
+  "kod": "HYPE26-0250",
+  "nev": "Baga - Axiál 35",
+  "datum": null,
+  "helyszin": "Baja",
+  "datum_megjegyzes": "2026.06.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "37cc9afd-d53b-8058-90f9-e1fe25790f3b"
+ },
+ {
+  "kod": "HYPE26-0251",
+  "nev": "TTM július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "37cc9afd-d53b-8082-a745-f06c4596a6af"
+ },
+ {
+  "kod": "HYPE26-0252",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Dunavarsányi Olimpiai Központ",
+  "datum_megjegyzes": "2026.06.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "380c9afd-d53b-80ed-833d-eaa563a7a451"
+ },
+ {
+  "kod": "HYPE26-0253",
+  "nev": "Boban Markovic - videoklipp",
+  "datum": null,
+  "helyszin": "Fonó Budai Zeneház",
+  "datum_megjegyzes": "2026.07.22-23.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "380c9afd-d53b-80fa-99bd-feda6ec77468"
+ },
+ {
+  "kod": "HYPE26-0254",
+  "nev": "Dombos Fest 2026",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "380c9afd-d53b-8097-a159-de535da3be51"
+ },
+ {
+  "kod": "HYPE26-0255",
+  "nev": "Juhász Gábor felvétel",
+  "datum": null,
+  "helyszin": "Fonó Budai Zeneház",
+  "datum_megjegyzes": "2026.07.10.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "380c9afd-d53b-80ca-ab9e-d92427d85ca4"
+ },
+ {
+  "kod": "HYPE26-0256",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.01.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "380c9afd-d53b-8023-84a3-c29899cf4a2c"
+ },
+ {
+  "kod": "HYPE26-0257",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.06.18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "380c9afd-d53b-8083-abc4-d0dbaace91dd"
+ },
+ {
+  "kod": "HYPE26-0258",
+  "nev": "IndieCar június",
+  "datum": null,
+  "helyszin": "Vecsés",
+  "datum_megjegyzes": "2026.06.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "381c9afd-d53b-8077-bcb3-d8b2a70797be"
+ },
+ {
+  "kod": "HYPE26-0259",
+  "nev": "Art Színtér - Oltári Srácok",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.06.27.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "382c9afd-d53b-8047-9c98-dfa5fbc339d0"
+ },
+ {
+  "kod": "HYPE26-0260",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.06.26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "382c9afd-d53b-8074-9bf2-db0179d4fd7c"
+ },
+ {
+  "kod": "HYPE26-0261",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.06.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "383c9afd-d53b-80e2-b603-f3b00cca6eba"
+ },
+ {
+  "kod": "HYPE26-0262",
+  "nev": "Adama",
+  "datum": null,
+  "helyszin": "Aszód",
+  "datum_megjegyzes": "2026.06.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "383c9afd-d53b-8004-89da-d64adcdd655f"
+ },
+ {
+  "kod": "HYPE26-0263",
+  "nev": "Richter Híradó",
+  "datum": null,
+  "helyszin": "Richter Központ",
+  "datum_megjegyzes": "2026.06.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "385c9afd-d53b-80ba-9321-dc3b7dac10f3"
+ },
+ {
+  "kod": "HYPE26-0264",
+  "nev": "Katica fagyizó",
+  "datum": null,
+  "helyszin": "Katica fagyizó",
+  "datum_megjegyzes": "egész év",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "385c9afd-d53b-80d7-b493-ec337a8b009e"
+ },
+ {
+  "kod": "HYPE26-0265",
+  "nev": "Richter Híradó",
+  "datum": null,
+  "helyszin": "Dorog",
+  "datum_megjegyzes": "2026.06.26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "386c9afd-d53b-8031-9dae-faa1b14f7280"
+ },
+ {
+  "kod": "HYPE26-0266",
+  "nev": "Kármán András tartalomgyártás június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "386c9afd-d53b-803c-b779-d53512ce88a1"
+ },
+ {
+  "kod": "HYPE26-0267",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "387c9afd-d53b-803c-bc44-f83e7eeedfd3"
+ },
+ {
+  "kod": "HYPE26-0268",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "387c9afd-d53b-802a-8a9c-e32bd95dc51d"
+ },
+ {
+  "kod": "HYPE26-0269",
+  "nev": "BECCA - videoklipp",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "389c9afd-d53b-806d-8e53-c0e7ac7d977e"
+ },
+ {
+  "kod": "HYPE26-0270",
+  "nev": "Minden nap németül",
+  "datum": null,
+  "helyszin": "BlackBox stúdió",
+  "datum_megjegyzes": "2026. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "389c9afd-d53b-800e-b8a5-dac75625ab31"
+ },
+ {
+  "kod": "HYPE26-0271",
+  "nev": "Porcher Áron",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.06.25.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "389c9afd-d53b-8097-943c-f00f306f20ca"
+ },
+ {
+  "kod": "HYPE26-0272",
+  "nev": "HH - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "38ac9afd-d53b-8077-9306-ed9576b00b93"
+ },
+ {
+  "kod": "HYPE26-0273",
+  "nev": "Adama",
+  "datum": null,
+  "helyszin": "Füzesabony",
+  "datum_megjegyzes": "2026.06.30.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "38ac9afd-d53b-800c-ad54-c0fdc5ca4bc8"
+ },
+ {
+  "kod": "HYPE26-0274",
+  "nev": "Esküvő (Vidor Geri)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.09.26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "38bc9afd-d53b-80ac-b72f-ce018a9cb1d4"
+ },
+ {
+  "kod": "HYPE26-0275",
+  "nev": "VitalSpa X Sárközi Ákos III.",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.05.15. - 2026.06.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "38ec9afd-d53b-8078-8516-fb7f114e8f5d"
+ },
+ {
+  "kod": "HYPE26-0276",
+  "nev": "Skipper - Tour de Mátra",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.04-05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "38fc9afd-d53b-80e3-be1e-fed08573dfbb"
+ },
+ {
+  "kod": "HYPE26-0277",
+  "nev": "Kármán András tartalomgyártás (PM) - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": null,
+  "esemeny_allapota": "Van",
+  "notion_page_id": "38fc9afd-d53b-806c-a33a-fa2fd8890555"
+ },
+ {
+  "kod": "HYPE26-0278",
+  "nev": "TE Stúdió Munka - július",
+  "datum": null,
+  "helyszin": "Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2026. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "390c9afd-d53b-808e-935d-ccec31a8ca5d"
+ },
+ {
+  "kod": "HYPE26-0279",
+  "nev": "VitalSpa X Sárközi Ákos IV.",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.06.15. - 2026.07.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "390c9afd-d53b-80b3-85e0-dcb4c0055f26"
+ },
+ {
+  "kod": "HYPE26-0280",
+  "nev": "Műugró Szövetség - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "391c9afd-d53b-8004-a23b-d6bbb6292fbd"
+ },
+ {
+  "kod": "HYPE26-0281",
+  "nev": "Mezei Dani fusi - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "391c9afd-d53b-8059-a480-c3bf99066b9e"
+ },
+ {
+  "kod": "HYPE26-0282",
+  "nev": "BBGP - június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "391c9afd-d53b-8084-922a-fb6aa532f592"
+ },
+ {
+  "kod": "HYPE26-0283",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.07.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "395c9afd-d53b-806e-8f35-c33dea381e7d"
+ },
+ {
+  "kod": "HYPE26-0284",
+  "nev": "MTE július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "396c9afd-d53b-802f-bec8-d5e6512b554a"
+ },
+ {
+  "kod": "HYPE26-0285",
+  "nev": "CB - Főtaxi július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "július hónap",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "399c9afd-d53b-8052-9fc3-c93b1964181e"
+ },
+ {
+  "kod": "HYPE26-0286",
+  "nev": "Skipper - Balance",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.17.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "399c9afd-d53b-8000-a4a5-c9e92c7af7bb"
+ },
+ {
+  "kod": "HYPE26-0287",
+  "nev": "Esküvő",
+  "datum": "2026-07-04",
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.04.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "39bc9afd-d53b-8017-a278-e7fc8c62f137"
+ },
+ {
+  "kod": "HYPE26-0288",
+  "nev": "Varga Lőrinc július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "39cc9afd-d53b-803e-bfe2-cdaaef1312f9"
+ },
+ {
+  "kod": "HYPE26-0289",
+  "nev": "Richter Híradó",
+  "datum": null,
+  "helyszin": "Debrecen",
+  "datum_megjegyzes": "2026.07.25.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "39ec9afd-d53b-80c9-8663-d0c304e0247c"
+ },
+ {
+  "kod": "HYPE26-0290",
+  "nev": "Minden nap németül augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3a4c9afd-d53b-80e1-b2f4-ef1b9f8da055"
+ },
+ {
+  "kod": "HYPE26-0291",
+  "nev": "Szerencsejáték Zrt. - Élménynap",
+  "datum": null,
+  "helyszin": "Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2026.09.05-06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3a5c9afd-d53b-801e-9cfb-eff3764ddcc4"
+ },
+ {
+  "kod": "HYPE26-0292",
+  "nev": "TF - Gólyatábor 1.",
+  "datum": null,
+  "helyszin": "Sport Hotel Velence",
+  "datum_megjegyzes": "2026.08.23-26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3a5c9afd-d53b-803c-9824-d8b9b2b06498"
+ },
+ {
+  "kod": "HYPE26-0293",
+  "nev": "TF - Gólyatábor 2.",
+  "datum": null,
+  "helyszin": "Sport Hotel Velence",
+  "datum_megjegyzes": "2026.08.28-31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3a5c9afd-d53b-80e5-9e3a-d6af0fa9b368"
+ },
+ {
+  "kod": "HYPE26-0294",
+  "nev": "FIC",
+  "datum": null,
+  "helyszin": "Symbol Budapest",
+  "datum_megjegyzes": "2026.09.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3a5c9afd-d53b-8064-99ba-e2206a584164"
+ },
+ {
+  "kod": "HYPE26-0295",
+  "nev": "TE fotózás - szeptember",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. szeptember",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3a5c9afd-d53b-80e1-9ead-e51bb2351fe3"
+ },
+ {
+  "kod": "HYPE26-0296",
+  "nev": "TE Stúdió Munka - szeptember",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. szeptember",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3a5c9afd-d53b-80c5-8b1d-ca3b99d3ba48"
+ },
+ {
+  "kod": "HYPE26-0297",
+  "nev": "Tűzzsonglőr show (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": "ÁGOTA Falva",
+  "datum_megjegyzes": "2026.07.23.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3a6c9afd-d53b-800e-ad36-def6ae0fb177"
+ },
+ {
+  "kod": "HYPE26-0298",
+  "nev": "Ivedo - Cardo",
+  "datum": null,
+  "helyszin": "Győr",
+  "datum_megjegyzes": "2026.08.18.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "3a6c9afd-d53b-8013-bfda-e08b8393ff86"
+ },
+ {
+  "kod": "HYPE26-0299",
+  "nev": "Online Genius - Árkád Pécs",
+  "datum": null,
+  "helyszin": "Árkád Pécs",
+  "datum_megjegyzes": "2026.08.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3a8c9afd-d53b-80dc-b385-d7c1123c1598"
+ },
+ {
+  "kod": "HYPE26-0300",
+  "nev": "Skipper - Felkészülési mérkőzés",
+  "datum": null,
+  "helyszin": "Szeged",
+  "datum_megjegyzes": "2026.08.08.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3acc9afd-d53b-8024-9b33-cf94c553ccd9"
+ },
+ {
+  "kod": "HYPE26-0301",
+  "nev": "Skipper - Heraklesz",
+  "datum": null,
+  "helyszin": "Balatonföldvár",
+  "datum_megjegyzes": "2026.08.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3acc9afd-d53b-80a7-ad06-fa069257b91f"
+ },
+ {
+  "kod": "HYPE26-0302",
+  "nev": "CB - Főtaxi június",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "június",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3acc9afd-d53b-80fd-a0de-c240933b2f9a"
+ },
+ {
+  "kod": "HYPE26-0303",
+  "nev": "Skipper - Balance",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.08.03.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3acc9afd-d53b-801e-aa69-e8a5a513a726"
+ },
+ {
+  "kod": "HYPE26-0304",
+  "nev": "AUG20 - Elektronikus zenei fesztivál",
+  "datum": null,
+  "helyszin": "Műegyetem Rakpart",
+  "datum_megjegyzes": "2026.08.19-20.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3acc9afd-d53b-8025-a147-d925abc7ac2b"
+ },
+ {
+  "kod": "HYPE26-0305",
+  "nev": "Centrum Production - AUG20",
+  "datum": null,
+  "helyszin": "Margit-sziget",
+  "datum_megjegyzes": "2026.08.20-21.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "3adc9afd-d53b-80e5-9d85-c3ab8f3fc7da"
+ },
+ {
+  "kod": "HYPE26-0306",
+  "nev": "TTM augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3afc9afd-d53b-8096-8416-d38a14d37601"
+ },
+ {
+  "kod": "HYPE26-0307",
+  "nev": "MTE augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b1c9afd-d53b-80a2-8bfa-c2d7843a5517"
+ },
+ {
+  "kod": "HYPE26-0308",
+  "nev": "Adama augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b1c9afd-d53b-80aa-a5b1-c5184a5e8111"
+ },
+ {
+  "kod": "HYPE26-0309",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.08.31.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b1c9afd-d53b-80d4-b969-cc62c96cb66b"
+ },
+ {
+  "kod": "HYPE26-0310",
+  "nev": "Radnai Márk",
+  "datum": null,
+  "helyszin": "Kossuth Lajos tér",
+  "datum_megjegyzes": "2026.08.05.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b2c9afd-d53b-8000-bba2-ccc1e3df04fd"
+ },
+ {
+  "kod": "HYPE26-0311",
+  "nev": "Skipper - Salzbourg",
+  "datum": null,
+  "helyszin": "Salzbourg",
+  "datum_megjegyzes": "2026.08.06.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b2c9afd-d53b-80e4-a78e-d5fffd79c684"
+ },
+ {
+  "kod": "HYPE26-0312",
+  "nev": "CB - Főtaxi augusztus",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026. augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b3c9afd-d53b-8000-b9c9-ef2b14148088"
+ },
+ {
+  "kod": "HYPE26-0313",
+  "nev": "Varga Lőrinc augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b4c9afd-d53b-8079-9c1f-ddfc7e7f170a"
+ },
+ {
+  "kod": "HYPE26-0314",
+  "nev": "Műugró Szövetség - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b4c9afd-d53b-807e-b48f-f68dba0196f7"
+ },
+ {
+  "kod": "HYPE26-0315",
+  "nev": "HH augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. Augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b5c9afd-d53b-803f-92fd-c77f263755ae"
+ },
+ {
+  "kod": "HYPE26-0316",
+  "nev": "TE Stúdió Munka - augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b5c9afd-d53b-80c7-9dce-ee2f003fd705"
+ },
+ {
+  "kod": "HYPE26-0317",
+  "nev": "Skipper - MKSZ promó",
+  "datum": null,
+  "helyszin": "Veszprém",
+  "datum_megjegyzes": "2026.08.11.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b5c9afd-d53b-8040-aec3-dec70167bf64"
+ },
+ {
+  "kod": "HYPE26-0318",
+  "nev": "BBGP - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b7c9afd-d53b-80eb-a973-f98d8521b7f5"
+ },
+ {
+  "kod": "HYPE26-0319",
+  "nev": "Mezei Dani fusi - július",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. július",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b7c9afd-d53b-80dd-be53-da91a4166152"
+ },
+ {
+  "kod": "HYPE26-0320",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.09.02.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3b8c9afd-d53b-804b-9018-c142a753a7ac"
+ },
+ {
+  "kod": "HYPE26-0321",
+  "nev": "CB - Főtaxi Hungaroring",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.24.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3bac9afd-d53b-807b-a444-e12347dada57"
+ },
+ {
+  "kod": "HYPE26-0322",
+  "nev": "Centrum - Sajtótájékoztató",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.08.13",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3bbc9afd-d53b-80fa-a0b3-c1b31325d4f2"
+ },
+ {
+  "kod": "HYPE26-0323",
+  "nev": "Centrum - Sajtótájékoztató",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.08.14.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3bbc9afd-d53b-80fe-adf0-e0334711f72a"
+ },
+ {
+  "kod": "HYPE26-0324",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.08.26.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3bfc9afd-d53b-80f9-b38e-deb16b419ca0"
+ },
+ {
+  "kod": "HYPE26-0325",
+  "nev": "Esküvő (D’Albini Ádám)",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.08.22.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c3c9afd-d53b-802c-8f53-cce28011287c"
+ },
+ {
+  "kod": "HYPE26-0326",
+  "nev": "Sport-Events - WAUC2026",
+  "datum": null,
+  "helyszin": "ZSGYNAK",
+  "datum_megjegyzes": "206. szeptember",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c4c9afd-d53b-80f4-8d6f-fdf5b28b2a3b"
+ },
+ {
+  "kod": "HYPE26-0327",
+  "nev": "Kármán András tartalomgyártás (PM) - augusztus",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c6c9afd-d53b-8021-859d-dc1fcb78cb43"
+ },
+ {
+  "kod": "HYPE26-0328",
+  "nev": "Skipper - Pick Szeged",
+  "datum": null,
+  "helyszin": "Szeged",
+  "datum_megjegyzes": "2026.09.03.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "3c6c9afd-d53b-8074-9c1c-ed3f49d6dacc"
+ },
+ {
+  "kod": "HYPE26-0329",
+  "nev": "VitalSpa X Sárközi Ákos V.",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.07.15. - 2026.08.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c6c9afd-d53b-802e-bc80-ce4a46983a83"
+ },
+ {
+  "kod": "HYPE26-0330",
+  "nev": "VitalSpa Kecskeméti gyár - kiegészítő forgatás",
+  "datum": null,
+  "helyszin": "Kecskemét",
+  "datum_megjegyzes": "2026. július - augusztus",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c6c9afd-d53b-80dc-a547-d6458b6e107d"
+ },
+ {
+  "kod": "HYPE26-0331",
+  "nev": "VitalSpa X Sárközi Ákos VI.",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026.08.15. - 2026.09.15.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c6c9afd-d53b-8072-a219-fe2cfac0030b"
+ },
+ {
+  "kod": "HYPE26-0332",
+  "nev": "TTM szeptember",
+  "datum": null,
+  "helyszin": null,
+  "datum_megjegyzes": "2026. szeptember",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c6c9afd-d53b-8042-8994-c9d9d4aad466"
+ },
+ {
+  "kod": "HYPE26-0333",
+  "nev": "Skipper - Viapan",
+  "datum": null,
+  "helyszin": "Biatorbágy",
+  "datum_megjegyzes": "2026.08.31.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "3c7c9afd-d53b-8025-94fd-ff32fc46108f"
+ },
+ {
+  "kod": "HYPE26-0334",
+  "nev": "Mi vagyunk a rendszerváltás! koncert",
+  "datum": null,
+  "helyszin": "Hősök tere",
+  "datum_megjegyzes": "2026.09.04-05.",
+  "esemeny_allapota": "Elmarad",
+  "notion_page_id": "3c8c9afd-d53b-80ba-8e48-c8c139216697"
+ },
+ {
+  "kod": "HYPE26-0335",
+  "nev": "Skipper - LA10",
+  "datum": null,
+  "helyszin": "Budapest",
+  "datum_megjegyzes": "2026.09.09.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c8c9afd-d53b-800f-b41a-c0c2af0da83d"
+ },
+ {
+  "kod": "HYPE26-0336",
+  "nev": "Vizuál Tipp - BrainBar",
+  "datum": null,
+  "helyszin": "Magyar Zene Háza",
+  "datum_megjegyzes": "2026.09.16-18.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c9c9afd-d53b-802c-977b-df018ad5b6e8"
+ },
+ {
+  "kod": "HYPE26-0337",
+  "nev": "Kolibri - Balaland",
+  "datum": null,
+  "helyszin": "Szántód",
+  "datum_megjegyzes": "2026.08.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3c9c9afd-d53b-8045-98be-f2234b1115b0"
+ },
+ {
+  "kod": "HYPE26-0338",
+  "nev": "TE fotózás",
+  "datum": null,
+  "helyszin": "TE",
+  "datum_megjegyzes": "2026.08.29.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3cac9afd-d53b-809a-91f7-fea9bc7cb97f"
+ },
+ {
+  "kod": "HYPE26-0339",
+  "nev": "TE - Tanévnyitó hangosítás",
+  "datum": null,
+  "helyszin": "Koltai Jenő Sportközpont",
+  "datum_megjegyzes": "2026.09.07.",
+  "esemeny_allapota": "Van",
+  "notion_page_id": "3cac9afd-d53b-805c-bca1-d089822f3a9b"
+ }
+]
