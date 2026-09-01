@@ -31,6 +31,20 @@ PROTECTED_FIELDS = {"id", "created_at", "updated_at"}
 PROTECTED_ENTITY_FIELDS: dict[str, set[str]] = {
     # Kiosztás kártya + Teendőim; állapot-tábla oszlopai.
     "deliverable": {"assigned_to_employee_id", "allapot"},
+    # A Naptár/Diszpó oldal és a "Diszpó küldése" kártya állapot-mezői: az
+    # eltávolításuk miatt a "Kiküldve" jelzés MINDEN válaszból kimaradt -
+    # a küldés-zár tudta, hogy kiment (409), a felület viszont üresnek látta,
+    # és újratöltés után mindenkinél eltűnt a jelzés (a felhasználó
+    # 2026-09-01-i hibajelzése; a meglévő eltávolításokat a c4f8a63e9b17
+    # migráció vonja vissza).
+    "project": {
+        "diszpo",
+        "elozetes_diszpo_kuldes",
+        "elozetes_kikuldve_at",
+        "diszpo_kikuldve_at",
+        "nem_diszponalando",
+        "feldarabolas_szulo_id",
+    },
 }
 
 CUSTOM_FIELD_TYPES = ("text", "number", "boolean", "date", "datetime", "select")
@@ -44,13 +58,18 @@ def _model_or_404(entity_type: str) -> type:
 
 
 def hidden_fields(db: Session, entity_type: str) -> set[str]:
-    """Az entitástípuson eltávolított (rendszerszinten elrejtett) mezőnevek."""
+    """Az entitástípuson eltávolított (rendszerszinten elrejtett) mezőnevek.
+
+    A VÉDETT mezőket akkor is kivesszük a halmazból, ha valahogy bekerült
+    rájuk egy elrejtő sor (a tiltás előttről, vagy kézzel az adatbázisban) -
+    egy védett mező eltávolítása némán tör el beépített funkciót (lásd
+    PROTECTED_ENTITY_FIELDS)."""
     rows = db.scalars(
         select(EntityFieldConfig.field_name).where(
             EntityFieldConfig.entity_type == entity_type, EntityFieldConfig.hidden.is_(True)
         )
     ).all()
-    return set(rows)
+    return set(rows) - PROTECTED_FIELDS - PROTECTED_ENTITY_FIELDS.get(entity_type, set())
 
 
 def custom_defs(db: Session, entity_type: str) -> list[CustomFieldDef]:
