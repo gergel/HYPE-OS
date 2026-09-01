@@ -28,7 +28,8 @@ type FormState = {
 };
 
 /** A bejelentett alkalmazott havi fizetése - nála ez a TIG-űrlap helyett áll,
- * mert nincs TIG, nincs számla és nincs kifizetés-jelölés. */
+ * mert nincs TIG és nincs számla; a kifizetés-jelölés a beírt fizetés után
+ * külön gombbal megy (jegyzék nélkül is). */
 type FizetesForm = {
   /** Ami az emberhez tartozik ("mennyi a fizetése") = a hónap alapbér tétele. */
   netto_ber: string;
@@ -441,9 +442,9 @@ export function BelsosTigManager({
           {szurtEmployees.map((employee) => {
             const record = employee.record;
             // Bejelentett alkalmazott: a bérét bérszámfejtés fizeti, tehát
-            // nincs TIG, nincs számla és nincs kifizetés-jelölés - egyedül az
-            // számít, be van-e írva a hónapra a fizetése (lásd backend
-            // models/employee.py BelsosJogviszony).
+            // nincs TIG és nincs számla - a hónaphoz a fizetése kerül be, ami
+            // után kifizetettnek is jelölhető (a fizetési jegyzék utólag is
+            // feltölthető, lásd backend models/employee.py BelsosJogviszony).
             const alkalmazott = !employee.kell_tig;
             const vanFizetes = record?.netto_osszeg != null && record.netto_osszeg !== 0;
             const allapot = record?.allapot;
@@ -485,9 +486,27 @@ export function BelsosTigManager({
                 </td>
                 <td className="py-3 pr-6">
                   {alkalmazott ? (
-                    <span className="text-text-muted" title="Bejelentett alkalmazottnál nincs TIG.">
-                      nem kell
-                    </span>
+                    /* Alkalmazottnál a hónap papírja a FIZETÉSI JEGYZÉK - ha
+                       már fel van töltve, innen nyitható; ha még nincs, az nem
+                       akadály: utólag is feltölthető a Fizetés ablakból (a
+                       felhasználó kérése). */
+                    record?.file_url ? (
+                      <a
+                        href={record.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-text-accent hover:underline"
+                      >
+                        Fizetési jegyzék
+                      </a>
+                    ) : (
+                      <span
+                        className="text-text-muted"
+                        title="A fizetési jegyzék utólag is feltölthető a Fizetés ablakban."
+                      >
+                        –
+                      </span>
+                    )
                   ) : record?.file_url ? (
                     <a
                       href={record.file_url}
@@ -550,17 +569,35 @@ export function BelsosTigManager({
                 </td>
                 <td className="py-3 text-right">
                   {alkalmazott ? (
-                    /* Az egyetlen teendő: a hónap két összegének beírása
-                       (nettó bér + szuperbruttó) - ezt nyitja ez a gomb. */
+                    /* A fizetés beírása után a hónap KIFIZETETTNEK is
+                       jelölhető (a felhasználó kérése) - a fizetési jegyzék
+                       nem előfeltétel, utólag is feltölthető a Fizetés
+                       ablakból. A gomb a fizetés-szerkesztés mellett marad,
+                       hogy a jegyzék a jelölés után is pótolható legyen. */
                     allapot === "Kihagyva" ? null : (
-                      <button
-                        type="button"
-                        onClick={() => openFizetes(employee)}
-                        disabled={busy}
-                        className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
-                      >
-                        {vanFizetes ? "Fizetés módosítása" : "Fizetés megadása"}
-                      </button>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openFizetes(employee)}
+                          disabled={busy}
+                          className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                        >
+                          {vanFizetes ? "Fizetés módosítása" : "Fizetés megadása"}
+                        </button>
+                        {vanFizetes &&
+                          (record?.szamla_kifizetve ? (
+                            <StatusBadge label="Kifizetve" tone="success" />
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => setKifizetendoId(employee.id)}
+                              className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                            >
+                              Kifizetve jelölés
+                            </button>
+                          ))}
+                      </div>
                     )
                   ) : !isTerminal ? (
                     <button

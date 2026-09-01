@@ -967,10 +967,27 @@ def mark_szamla_kifizetve(
 
     Az UTALÁS DÁTUMA a `kifizetes_datuma` mezőből jön - üresen a mai nap -, és
     a papír `utalas_datuma` mezőjébe is bekerül (ugyanígy a külsős TIG-nél,
-    lásd routes/performance_certificates.py)."""
-    record = _get_finalized_or_404(db, employee_id, ev, honap)
-    if not record.invoices:
-        raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
+    lásd routes/performance_certificates.py).
+
+    BEJELENTETT ALKALMAZOTTNÁL (lásd belsos_idoszak.kell_havi_tig) nincs
+    kiküldött TIG és nincs számla, amit meg lehetne követelni - nála a
+    kifizetéshez elég a beírt havi fizetés, a fizetési jegyzék pedig UTÓLAG
+    is feltölthető (a felhasználó kérése): a jelölés nem függ tőle."""
+    record = _find(db, employee_id, ev, honap)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Ehhez a hónaphoz nem tartozik Belsős TIG bejegyzés.")
+    alkalmazott = not belsos_idoszak.kell_havi_tig(record.employee)
+    if alkalmazott:
+        if record.netto_osszeg is None or float(record.netto_osszeg) == 0:
+            raise HTTPException(status_code=400, detail="Előbb írd be a hónap fizetését.")
+    else:
+        if record.allapot not in FINALIZED_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail="Kifizetettnek csak kiküldött (véglegesített) Belsős TIG jelölhető.",
+            )
+        if not record.invoices:
+            raise HTTPException(status_code=400, detail="Előbb töltsd fel a számlát.")
 
     utalas = (payload.kifizetes_datuma if payload is not None else None) or date.today()
     record.utalas_datuma = utalas
@@ -993,9 +1010,11 @@ def mark_szamla_kifizetve(
     if expense is None:
         expense = Expense(
             # A hónap a TIG dátumaiból (lásd hu_datum.belsos_tig_honapja): a
-            # 07.20-i határidejű a JÚNIUSI elszámolásé.
+            # 07.20-i határidejű a JÚNIUSI elszámolásé. Alkalmazottnál nem
+            # TIG a papír, hanem a havi fizetés - a Kiadások közt is az
+            # legyen a neve.
             megnevezes=(
-                f"Belsős TIG - {record.employee.full_name} - "
+                f"{'Belsős fizetés' if alkalmazott else 'Belsős TIG'} - {record.employee.full_name} - "
                 f"{ev_honap_szoveg(*belsos_tig_honapja(record.ev, record.honap, record.teljesites_datuma, record.fizetesi_hatarido, record.utalas_datuma))}"
             ),
             employee_id=record.employee_id,
