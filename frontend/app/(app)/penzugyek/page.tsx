@@ -184,6 +184,10 @@ export default async function PenzugyekPage() {
                 // (a felhasználó kérése - lásd backend models/finance.Expense).
                 { name: "megnevezes", label: "Cégnév", required: true },
                 { name: "kiadas_leiras", label: "Megnevezés", placeholder: "Mire ment a kiadás" },
+                // KÖTELEZŐ dátum (a felhasználó kérése): a kiadás e nélkül
+                // nem köthető hónaphoz - az összesítők és a számla-csomag is
+                // ebből dolgozik.
+                { name: "kiadas_datuma", label: "Kiadás dátuma", type: "date", required: true },
                 { name: "netto", label: "Nettó összeg", type: "number" },
                 // "+ÁFA" jelölés + százalék: a bruttót a szerver számolja
                 // belőlük (lásd backend routes/finance._afa_brutto).
