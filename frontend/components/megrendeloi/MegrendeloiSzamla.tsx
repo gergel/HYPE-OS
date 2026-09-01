@@ -208,7 +208,14 @@ export function MegrendeloiSzamla({
           )}
         </div>
       ) : (
-        canEdit && (
+        // A projektkód-szintű "Kifizetve" gomb CSAK számla nélkül áll itt (a
+        // felhasználó kérése): ha van feltöltött számla, a fizetést a fájl
+        // melletti "Fizetés" gombbal kell jelölni - két Kifizetve gomb
+        // egymás alatt csak azt kérdezte, melyik az igazi. A fájlonkénti
+        // fizetés ugyanúgy lezárja a projektkódot (kifizetett bevétel-sort
+        // nyit - lásd backend models/project_code.bevetel_kifizetve).
+        canEdit &&
+        (!allas.van_szamla_fajl || allas.szamla_kihagyva) && (
           <button
             type="button"
             disabled={busy}
