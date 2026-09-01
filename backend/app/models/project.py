@@ -122,6 +122,18 @@ class Project(TimestampMixin, Base):
         String(100), comment="fő eseményre diszpó küldés státusz"
     )
     elozetes_diszpo_kuldes: Mapped[str | None] = mapped_column(String(100), comment="Előzetes diszpó küldés")
+    #: SAJÁT TÜKÖR-OSZLOPOK a küldés tényéhez (ugyanaz a minta, mint a
+    #: naptar_datum_vege): ezt KIZÁRÓLAG a tényleges kiküldés írja (lásd
+    #: services/dispo.py), se import, se szinkron nem nyúl hozzá - így ami
+    #: egyszer kiment, azt semmilyen külső folyamat nem tudja "elfelejtetni".
+    #: A felület felé a szöveges diszpo/elozetes_diszpo_kuldes mezőt ebből
+    #: pótoljuk, ha az kiürült (lásd schemas/project.py _diszpo_potlas).
+    elozetes_kikuldve_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), comment="Mikor ment ki ténylegesen az előzetes diszpó (kitörölhetetlen nyom)"
+    )
+    diszpo_kikuldve_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), comment="Mikor ment ki ténylegesen a teljes diszpó (kitörölhetetlen nyom)"
+    )
     diszpo_teszteles: Mapped[bool | None] = mapped_column(Boolean, comment="Diszpó tesztelés")
     elozetes_teszteles: Mapped[bool | None] = mapped_column(Boolean, comment="Előzetes tesztelés")
     diszpo_targya_notion: Mapped[dict | None] = mapped_column(JSON, comment="Diszpó tárgya")

@@ -1,6 +1,6 @@
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, computed_field, model_validator
 
 JsonScalar = dict | list | float | str | bool | None
 
@@ -63,11 +63,30 @@ class VegDatumSzamitas(BaseModel):
         return jelolt
 
 
+class DiszpoPotlas(BaseModel):
+    """A "Kiküldve" jelzés pótlása a küldés kitörölhetetlen nyomából.
+
+    A szöveges diszpo/elozetes_diszpo_kuldes mezőt külső folyamat (felülíró
+    Notion-import) többször kiürítette élesben - a felé a felület felé menő
+    válaszban ezért az elozetes_kikuldve_at/diszpo_kikuldve_at tükör-oszlop
+    (lásd models/project.py, services/dispo.py) pótolja: ami egyszer kiment,
+    az a felületen akkor is "Kiküldve", ha a szöveges mezőt valami letörölte.
+    CSAK az olvasó sémák keverik be (lista + részlet)."""
+
+    @model_validator(mode="after")
+    def _diszpo_potlas(self):
+        if not getattr(self, "diszpo", None) and getattr(self, "diszpo_kikuldve_at", None):
+            self.diszpo = "Kiküldve"
+        if not getattr(self, "elozetes_diszpo_kuldes", None) and getattr(self, "elozetes_kikuldve_at", None):
+            self.elozetes_diszpo_kuldes = "Kiküldve"
+        return self
+
+
 class ProjectCreate(ProjectBase):
     crew_employee_ids: list[int] = []
 
 
-class ProjectListItem(VegDatumSzamitas, ProjectBase):
+class ProjectListItem(DiszpoPotlas, VegDatumSzamitas, ProjectBase):
     """A projekt lista nézet (GET /api/v1/projects) szűkített sémája - a Project
     ~140 oszlopos teljes ProjectRead helyett, mert a lista oldal ténylegesen csak
     ezt az 5-6 mezőt jeleníti meg (lásd frontend/app/projektek/page.tsx és
@@ -84,6 +103,10 @@ class ProjectListItem(VegDatumSzamitas, ProjectBase):
     id: int
     diszpo: str | None = None
     elozetes_diszpo_kuldes: str | None = None
+    #: A küldés kitörölhetetlen nyomai (lásd models/project.py) - a szöveges
+    #: mezőt ezekből pótoljuk, ha kiürült (lásd DiszpoPotlas).
+    elozetes_kikuldve_at: datetime | None = None
+    diszpo_kikuldve_at: datetime | None = None
     resztvevok_email: str | None = None
     # A Naptár/Diszpó oldalnak tudnia kell, melyik esemény meeting/helyszín-
     # bejárás - azokat nem kell (és nem is lehet) diszponálni.
@@ -115,7 +138,7 @@ class ProjectUpdate(BaseModel):
     nem_diszponalando: bool | None = None
 
 
-class ProjectRead(VegDatumSzamitas, ProjectBase):
+class ProjectRead(DiszpoPotlas, VegDatumSzamitas, ProjectBase):
     id: int
     crew_employee_ids: list[int] = []
     google_calendar_event_id: str | None = None
@@ -137,6 +160,9 @@ class ProjectRead(VegDatumSzamitas, ProjectBase):
     fo_esemenyre_elozetes_kuldes_statusz: str | None = None
     fo_esemenyre_diszpo_kuldes_statusz: str | None = None
     elozetes_diszpo_kuldes: str | None = None
+    #: A küldés kitörölhetetlen nyomai - lásd DiszpoPotlas.
+    elozetes_kikuldve_at: datetime | None = None
+    diszpo_kikuldve_at: datetime | None = None
     diszpo_teszteles: bool | None = None
     elozetes_teszteles: bool | None = None
     diszpo_targya_notion: JsonScalar = None

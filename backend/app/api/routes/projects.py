@@ -18,6 +18,7 @@ from app.schemas.deliverable_actions import TimerEmployeeSummary
 from app.schemas.project import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate, SzerzodesKeszitesPayload
 from app.services import deliverable_actions, projektkod_kotes
 from app.services.contract_actions import apply_szerzodes_keszites, send_szerzodes
+from app.services import dispo
 from app.services.dispo import send_diszpo, send_elozetes_diszpo
 from app.services.project_actions import DarabolasHiba, create_feldarabolas, create_utomunka
 from app.services.technika import check_technika
@@ -235,7 +236,7 @@ def run_elozetes_diszpo(
 ):
     """'Előzetes diszpó' gomb (lásd app/services/dispo.py)."""
     project = _get_project_or_404(project_id, db)
-    _dupla_kuldes_zar(project.elozetes_diszpo_kuldes, ujrakuldes, "Az előzetes diszpó")
+    _dupla_kuldes_zar(dispo.elozetes_allapota(project), ujrakuldes, "Az előzetes diszpó")
     return _run_dispatch_action(send_elozetes_diszpo, db, project, current_user)
 
 
@@ -248,7 +249,7 @@ def run_diszpo_kuldes(
 ):
     """'Diszpó küldése' gomb (lásd app/services/dispo.py)."""
     project = _get_project_or_404(project_id, db)
-    _dupla_kuldes_zar(project.diszpo, ujrakuldes, "A diszpó")
+    _dupla_kuldes_zar(dispo.diszpo_allapota(project), ujrakuldes, "A diszpó")
     return _run_dispatch_action(send_diszpo, db, project, current_user)
 
 

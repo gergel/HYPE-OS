@@ -118,7 +118,13 @@ def diszpozott_projekt_feltetel():
     from app.models.project import Project
 
     return or_(
-        and_(Project.diszpo == "Kiküldve", Project.forgatas_datuma >= RENDSZER_DISZPO_KEZDETE),
+        # A szöveges mező VAGY a küldés kitörölhetetlen nyoma (lásd
+        # models/project.diszpo_kikuldve_at) - a kiürített mező ne ejtse ki a
+        # ténylegesen diszpózott projektet a papírozásból.
+        and_(
+            or_(Project.diszpo == "Kiküldve", Project.diszpo_kikuldve_at.is_not(None)),
+            Project.forgatas_datuma >= RENDSZER_DISZPO_KEZDETE,
+        ),
         exists().where(Contract.project_id == Project.id),
         exists().where(ContractTetel.project_id == Project.id),
         exists().where(PerformanceCertificate.project_id == Project.id),

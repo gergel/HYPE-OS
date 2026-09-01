@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -314,6 +314,18 @@ def masolat_cimzettek(db: Session) -> list[str]:
     return [e.email.strip() for e in sorok if e.email and e.email.strip()]
 
 
+def elozetes_allapota(project: Project) -> str | None:
+    """Az előzetes diszpó ÉRVÉNYES állapota: a szöveges mező, vagy - ha azt
+    egy külső folyamat kiürítette - a kitörölhetetlen nyom (lásd
+    models/project.elozetes_kikuldve_at)."""
+    return project.elozetes_diszpo_kuldes or ("Kiküldve" if project.elozetes_kikuldve_at else None)
+
+
+def diszpo_allapota(project: Project) -> str | None:
+    """A teljes diszpó érvényes állapota - lásd elozetes_allapota."""
+    return project.diszpo or ("Kiküldve" if project.diszpo_kikuldve_at else None)
+
+
 def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     """'Előzetes diszpó' gomb - rövid, technika-lista nélküli tájékoztató email
     (helyszín + diszpó szövege), nem generál PDF-et."""
@@ -338,6 +350,10 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
     # ha nem), ezért "Kiküldve" - ugyanaz a szöveg, mint a teljes diszpónál, hogy
     # a két állapot egységes legyen a Naptár/Projekt nézetekben.
     project.elozetes_diszpo_kuldes = "Kiküldve"
+    # A kitörölhetetlen nyom (lásd models/project.elozetes_kikuldve_at): ehhez
+    # a mezőhöz rajtunk kívül semmi nem nyúl, tehát akkor is bizonyítja a
+    # küldést, ha a szöveges mezőt egy külső folyamat kiüríti.
+    project.elozetes_kikuldve_at = datetime.now(timezone.utc)
     project.gmail_thread_id = thread_id or project.gmail_thread_id
     project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     project.aki_az_elozetest_kuldte_ki = [current_user.full_name]
@@ -465,6 +481,8 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     # bármelyike elhasalhatna: a "Kiküldve" állapotnak egy ténylegesen kiment
     # levél után akkor is meg kell maradnia, ha a ráadás-lépések hibáznak.
     project.diszpo = "Kiküldve"
+    # Kitörölhetetlen nyom - lásd az előzetes párját fent.
+    project.diszpo_kikuldve_at = datetime.now(timezone.utc)
     project.gmail_thread_id = thread_id or project.gmail_thread_id
     project.gmail_last_message_id = rfc822 or project.gmail_last_message_id
     project.aki_kikuldte_a_diszpot = [current_user.full_name]

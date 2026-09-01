@@ -561,8 +561,11 @@ def _tomorrow_dispo_tasks(db: Session, user: Employee) -> list[MyTaskItem]:
     for p in projects:
         if p.id in szulo_idk:
             continue
-        teljes_kiment = bool(p.diszpo)
-        elozetes_kiment = bool(p.elozetes_diszpo_kuldes)
+        # A kitörölhetetlen nyom is számít (lásd models/project.py
+        # diszpo_kikuldve_at) - egy külső folyamat által kiürített szöveges
+        # mező ne gyártson hamis "küldd ki a diszpót" teendőt.
+        teljes_kiment = bool(p.diszpo or p.diszpo_kikuldve_at)
+        elozetes_kiment = bool(p.elozetes_diszpo_kuldes or p.elozetes_kikuldve_at)
         if DispoSide.GYARTAS in sides and not elozetes_kiment and not teljes_kiment:
             items.append(
                 MyTaskItem(
