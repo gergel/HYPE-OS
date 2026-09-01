@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 JsonScalar = dict | list | float | str | bool | None
 
@@ -52,6 +52,26 @@ class ExpenseUpdate(BaseModel):
 
 class ExpenseRead(ExpenseBase):
     id: int
+
+    @model_validator(mode="after")
+    def _kiadas_datum_potlas(self):
+        """A "Dátum" oszlop a régi, Notionból jött soroknál is mutasson napot.
+
+        A Notion Kiadások tábláiban a dátum sokszor a nyers "Dátum" mezőben
+        érkezett (datum_notion), a tipizált kiadas_datuma üresen maradt - a
+        lista dátum-oszlopa ilyenkor a nyers mezőből pótolja a MEGJELENÍTETT
+        értéket. Csak a kimenetet érinti: az adatbázisban semmi nem változik,
+        és amint valaki kézzel beírja a kiadas_datuma-t, az az erősebb."""
+        if self.kiadas_datuma is None and self.datum_notion:
+            nyers = self.datum_notion
+            if isinstance(nyers, dict):
+                nyers = nyers.get("start")
+            if isinstance(nyers, str) and len(nyers) >= 10:
+                try:
+                    self.kiadas_datuma = date.fromisoformat(nyers[:10])
+                except ValueError:
+                    pass
+        return self
 
     #: MIBŐL lett a forint összeg - devizás felvezetésnél (services/penznem.py).
     eredeti_penznem: str | None = None
