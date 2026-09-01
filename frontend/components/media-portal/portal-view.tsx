@@ -289,9 +289,45 @@ export function PortalView({
         </section>
       )}
 
+      {/* ---------- Mappák (mindegyik: videók + fotók egy helyen) ----------
+          A MAPPÁK ÁLLNAK LEGFELÜL (a felhasználó kérése): aki megnyitja a
+          portált, először a rendezett mappákat lássa, a mappa nélküli laza
+          elemek csak utánuk jönnek. */}
+      {!isExpired && foldersWithContent.length > 0 && (
+        <section
+          // Ha minden videó mappában van, a laza videó-szekció (és vele a
+          // #films horgony) nem létezik - a hero "N videó" gombja ilyenkor
+          // ide, a mappákhoz hozzon.
+          id={looseVideos.length === 0 ? "films" : undefined}
+          className="mx-auto max-w-6xl px-6 py-20 sm:py-28"
+        >
+          <div className="space-y-12">
+            {foldersWithContent.map(({ folder, videos, images }) => (
+              <FolderSection
+                key={folder.id}
+                name={folder.name}
+                videos={videos}
+                images={images}
+                onPlay={markVideoSeen}
+                onOpenImage={(imgs, idx) => setLightbox({ images: imgs, index: idx })}
+                seenVideos={seenVideos}
+                accent={accent}
+                onShare={linkMasolas ? () => void linkreMasol({ folderId: folder.id }) : undefined}
+                onShareVideo={linkMasolas ? (v) => void linkreMasol({ videoId: v.id }) : undefined}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ---------- Mappa nélküli (laza) videók ---------- */}
       {!isExpired && looseVideos.length > 0 && (
-        <section id="films" className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
+        <section
+          id="films"
+          // A felső térköz azé, aki tényleg az első szekció: mappák után
+          // csak alsó margó kell, különben dupla lyuk tátongana köztük.
+          className={`mx-auto max-w-6xl px-6 ${foldersWithContent.length > 0 ? "pb-20 sm:pb-28" : "py-20 sm:py-28"}`}
+        >
           <div className="mb-10 flex items-end justify-between border-b border-ink-line pb-6">
             <h2 className="font-display text-2xl text-bone sm:text-3xl">Videók</h2>
             <span className="font-mono text-xs uppercase tracking-eyebrow text-mist">Megtekintés · Letöltés</span>
@@ -319,28 +355,6 @@ export function PortalView({
             <ImagesDownloadButton images={looseImages} label={`Összes letöltése (${looseImages.length})`} />
           </div>
           <ImageGrid images={looseImages} onOpen={(imgs, idx) => setLightbox({ images: imgs, index: idx })} />
-        </section>
-      )}
-
-      {/* ---------- Mappák (mindegyik: videók + fotók egy helyen) ---------- */}
-      {!isExpired && foldersWithContent.length > 0 && (
-        <section className="mx-auto max-w-6xl px-6 pb-20 sm:pb-28">
-          <div className="space-y-12">
-            {foldersWithContent.map(({ folder, videos, images }) => (
-              <FolderSection
-                key={folder.id}
-                name={folder.name}
-                videos={videos}
-                images={images}
-                onPlay={markVideoSeen}
-                onOpenImage={(imgs, idx) => setLightbox({ images: imgs, index: idx })}
-                seenVideos={seenVideos}
-                accent={accent}
-                onShare={linkMasolas ? () => void linkreMasol({ folderId: folder.id }) : undefined}
-                onShareVideo={linkMasolas ? (v) => void linkreMasol({ videoId: v.id }) : undefined}
-              />
-            ))}
-          </div>
         </section>
       )}
 
