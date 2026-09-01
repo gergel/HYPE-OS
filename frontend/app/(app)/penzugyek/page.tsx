@@ -181,6 +181,9 @@ export default async function PenzugyekPage() {
             <QuickCreateForm
               postPath={ENTITY_PATHS.expense}
               addLabel="+ Új kiadás hozzáadása"
+              // A számla/blokk már felvitelkor csatolható (a felhasználó
+              // kérése) - a mentés után a létrejött tételhez töltődik fel.
+              fajlFeltoltes={{ entityType: "expense", kategoria: "szamla" }}
               fields={[
                 // A `megnevezes` oszlop a felületen "Cégnév" (kinek fizettünk),
                 // a "Megnevezés" pedig az új kiadas_leiras: mire ment a pénz
@@ -242,7 +245,10 @@ export default async function PenzugyekPage() {
             />
           )}
           <DataTable<Expense>
-            rows={expenses}
+            // Alap rendezés: a LEGUTÓBB FELVITT tétel legfelül (a felhasználó
+            // kérése). Szándékosan id szerint, nem updated_at szerint: egy
+            // régi sor szerkesztése ne dobja a lista tetejére.
+            rows={[...expenses].sort((a, b) => b.id - a.id)}
             emptyText="Még nincs felvett kiadás - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(e) => `/penzugyek/kiadas/${e.id}`}
             deleteHref={canDelete ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}

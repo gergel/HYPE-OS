@@ -4,6 +4,8 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { KeresosSelect } from "@/components/KeresosSelect";
+import { UjFajlValaszto } from "@/components/UjFajlValaszto";
+import { toltsdFelAFajlokat } from "@/lib/csatolmany";
 
 type FieldSpec = {
   name: string;
@@ -57,18 +59,25 @@ export function QuickCreateForm({
   presetFields = {},
   addLabel = "+ Új hozzáadása",
   submitLabel = "Hozzáadás",
+  fajlFeltoltes,
 }: {
   postPath: string;
   fields: FieldSpec[];
   presetFields?: Record<string, unknown>;
   addLabel?: string;
   submitLabel?: string;
+  /** Ha meg van adva, az űrlapon fájl is választható, és a MENTÉS UTÁN a
+   * létrejött rekordhoz töltődik fel (a csatolmány-végpontnak kell az id,
+   * lásd lib/csatolmany.toltsdFelAFajlokat). Pl. kiadás-felvitelnél a
+   * számla/blokk - akkor van kéznél, amikor a tételt felvezetik. */
+  fajlFeltoltes?: { entityType: string; kategoria?: string; cimke?: string; sugo?: string };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<Record<string, string>>(() => kezdoErtekek(fields));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fajlok, setFajlok] = useState<File[]>([]);
 
   // A rejtett mezők nem is léteznek: se validálni, se elküldeni nem kell őket.
   const lathatoMezok = fields.filter((f) => lathato(f, values));
@@ -100,7 +109,28 @@ export function QuickCreateForm({
         setError(`Sikertelen: ${detail?.detail ?? res.status}`);
         return;
       }
+      // A kiválasztott fájlok a MOST létrejött rekordhoz töltődnek fel. Ha a
+      // feltöltés elhasal, a rekord attól még megvan - ezt mondjuk is, és az
+      // űrlap nyitva marad, hogy a hibaüzenet ne tűnjön el.
+      if (fajlFeltoltes && fajlok.length > 0) {
+        const letrejott = (await res.json().catch(() => null)) as { id?: number } | null;
+        if (letrejott?.id) {
+          const hiba = await toltsdFelAFajlokat(
+            fajlFeltoltes.entityType,
+            letrejott.id,
+            fajlok,
+            fajlFeltoltes.kategoria ?? "szamla",
+          );
+          if (hiba) {
+            setError(hiba);
+            setFajlok([]);
+            router.refresh();
+            return;
+          }
+        }
+      }
       setValues(kezdoErtekek(fields));
+      setFajlok([]);
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -118,6 +148,7 @@ export function QuickCreateForm({
         // "Mégse"-vel bezárt űrlap után ne a régi gépelés fogadjon.
         onClick={() => {
           setValues(kezdoErtekek(fields));
+          setFajlok([]);
           setError(null);
           setOpen(true);
         }}
@@ -170,6 +201,15 @@ export function QuickCreateForm({
           )}
         </div>
       ))}
+      {fajlFeltoltes && (
+        <UjFajlValaszto
+          fajlok={fajlok}
+          onValtozas={setFajlok}
+          disabled={busy}
+          cimke={fajlFeltoltes.cimke ?? "Számla / blokk"}
+          sugo={fajlFeltoltes.sugo ?? "Nem kötelező – utólag is feltölthető a listában."}
+        />
+      )}
       <button
         type="submit"
         disabled={busy}
