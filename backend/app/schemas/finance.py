@@ -21,6 +21,11 @@ class ExpenseBase(BaseModel):
     #: (lásd models/finance.py Expense.alvallalkozo_project_id).
     alvallalkozo_project_id: int | None = None
     tipus: str | None = None
+    #: Mikor történt a kiadás - a felviteli űrlapok kötelezően kérik, és a
+    #: listák Dátum oszlopa ezt mutatja. Korábban csak az olvasó sémában volt:
+    #: a létrehozáskor beküldött dátumot a szerver némán eldobta, és a lista
+    #: üres dátummal mutatta az épp felvitt tételt.
+    kiadas_datuma: date | None = None
     netto: float | None = None
     brutto: float | None = None
     penznem: str = "HUF"
@@ -89,7 +94,7 @@ class ExpenseRead(ExpenseBase):
     szamla_pdf_urls: JsonScalar = None
     hozzaadas_a_kiadasokhoz: bool | None = None
     forintban_notion: float | None = None
-    kiadas_datuma: date | None = None
+    # (a kiadas_datuma az ExpenseBase-ből öröklődik - létrehozáskor is megy)
     projekt_kiadasok_notion_ids: JsonScalar = None
     kiadasok_notion_ids: JsonScalar = None
     szamla_statusza: str | None = None
