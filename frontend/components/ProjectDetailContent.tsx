@@ -346,6 +346,17 @@ export async function ProjectDetailContent({
                     }
                   />
                   {elozetesAllapot && <StatusBadge label={elozetesAllapot} tone="success" />}
+                  {/* Ha a levél valójában kiment, de az állapot üres (pl. a
+                      régi import törölte), újraküldés NÉLKÜL is jelölhető -
+                      különben a stáb még egyszer megkapná ugyanazt a levelet. */}
+                  {!elozetesAllapot && (
+                    <ActionButton
+                      halkabb
+                      path={`/api/v1/projects/${project.id}/diszpo/kezi-jeloles?tipus=elozetes`}
+                      label="Kiküldöttnek jelölés küldés nélkül"
+                      confirmMessage="NEM küld semmit - csak az állapotot állítja Kiküldve-re. Akkor használd, ha az előzetes diszpó ténylegesen kiment, de a jelzés üres. Folytatod?"
+                    />
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <ActionButton
@@ -360,6 +371,14 @@ export async function ProjectDetailContent({
                     }
                   />
                   {diszpoAllapot && <StatusBadge label={diszpoAllapot} tone="success" />}
+                  {!diszpoAllapot && (
+                    <ActionButton
+                      halkabb
+                      path={`/api/v1/projects/${project.id}/diszpo/kezi-jeloles?tipus=teljes`}
+                      label="Kiküldöttnek jelölés küldés nélkül"
+                      confirmMessage="NEM küld semmit - csak az állapotot állítja Kiküldve-re. Akkor használd, ha a teljes diszpó ténylegesen kiment, de a jelzés üres. Folytatod?"
+                    />
+                  )}
                 </div>
               </div>
             </Card>
