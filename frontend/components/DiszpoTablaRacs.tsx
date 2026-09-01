@@ -828,6 +828,19 @@ export function DiszpoTablaRacs({
               {fejlecSorok.map((r) => (
                 <div key={`f${r}`} style={{ position: "sticky", top: 0, zIndex: 3, height: 0 }}>
                   <div style={{ position: "absolute", top: sorTeteje[r], left: 0, right: 0 }}>
+                    {/* Átlátszatlan aljzat a TELJES látható szélességben: a
+                        fejléc-cellák csak az oszlopokig érnek, és az utolsó
+                        oszloptól jobbra a mögötte elhaladó hónap-elválasztó
+                        sáv (pl. "❄️ JANUÁR ❄️") vége átütött a fejléc-zónában. */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: gorgetes.left,
+                        width: meret.szeles,
+                        height: sorMagassaga[r],
+                      }}
+                      className="border-b border-border bg-surface-2"
+                    />
                     {[...fagyasztottOszlopok, ...lathatoOszlopok].map((c) => {
                       if (oszlopSzelessege[c] === 0) return null;
                       const cl = cella(r, c);
@@ -920,7 +933,11 @@ export function DiszpoTablaRacs({
                         left: gorgetes.left,
                         width: meret.szeles,
                         height: sorMagassaga[r],
-                        zIndex: 3,
+                        // A rögzített fejléc-sorok (zIndex 3) ALATT kell
+                        // maradnia: 3-mal a hónap-felirat görgetéskor a
+                        // fejlécre csúszott rá. A fagyasztott oszlopokat
+                        // (zIndex 2) a DOM-sorrend miatt így is fedi.
+                        zIndex: 2,
                       }}
                       onMouseDown={() => {
                         setKijelolt({ sor: r, oszlop: 0 });
