@@ -1080,7 +1080,12 @@ def generate_and_send(
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
 
         subject = f"{draft.ceg_neve or fel.nev}_{project.projektkod_szoveg or ''} - Projekt_TIG"
-        html = _TIG_EMAIL_HTML.format(projektdatum=projektdatum or "–")
+        # A levélben a teljesítés ideje: ha SZÖVEGGEL adták meg (pl. "2026
+        # július"), az az igazság - az kerül ide is, ne egy "–" (a felhasználó
+        # kérése). Szöveg híján a forgatás dátuma, végső tartalékként a
+        # tételekből számolt teljesítés-szöveg.
+        email_datum = (draft.teljesites_szoveg or "").strip() or projektdatum or teljesites_str
+        html = _TIG_EMAIL_HTML.format(projektdatum=email_datum or "–")
         send_message([cimzett], subject, html, pdf_bytes=pdf_bytes, pdf_filename="teljesitesi_igazolas.pdf")
     except RuntimeError as exc:
         # A kitöltött adatokat akkor is mentsük el, ha a küldés elhasal (pl.
@@ -1920,7 +1925,10 @@ def generate_and_send_projektkodon(
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
 
         subject = f"{draft.ceg_neve or fel.nev}_{projektkod.projektkod} - Projekt_TIG"
-        html = _TIG_EMAIL_HTML.format(projektdatum="–")
+        # A projektkód-alapú TIG-nél nincs forgatás-dátum - a szöveggel megadott
+        # teljesítés (pl. "2026 július") kerül a levélbe is, ne egy "–"
+        # (a felhasználó kérése).
+        html = _TIG_EMAIL_HTML.format(projektdatum=teljesites_str or "–")
         send_message([cimzett], subject, html, pdf_bytes=pdf_bytes, pdf_filename="teljesitesi_igazolas.pdf")
     except RuntimeError as exc:
         db.commit()

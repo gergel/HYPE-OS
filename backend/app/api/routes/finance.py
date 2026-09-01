@@ -202,9 +202,49 @@ def _kp_forgalom_osszeg_elojel_nelkul(adat: dict) -> None:
         adat["osszeg"] = abs(float(adat["osszeg"]))
 
 
+def _kp_felvetel_kiadas_sorral(adat: dict, db: Session) -> None:
+    """KP FELVÉTEL (ATM) felvezetésekor automatikus kiadás-sor (a felhasználó
+    kérése).
+
+    A készpénzfelvétel a KASSZÁBAN pluszként jelenik meg (a pénz oda érkezik,
+    lásd services/kassza.kp_forgalom_iranya), de a BANKSZÁMLÁRÓL ment ki -
+    ez a bank-oldali mozgás eddig sehol nem látszott. Itt hozzuk létre hozzá
+    a Kiadások sorát, és kötjük a KP forgalomhoz (expense_id), hogy a kettő
+    összetartozása látsszon (a kiadás törlése a kötést is leoldja, lásd
+    services/kiadas_kapcsolatok.py).
+
+    A sor SZÁNDÉKOSAN nem számít bele az éves kiadás-összesítésbe
+    (hozzaadas_a_kiadasokhoz=False): ez a saját pénzünk átvezetése a bankból
+    a kasszába, nem költés - a tényleges költés majd a kasszából történik, a
+    saját kiadás-soraival. Ha ez is beleszámítana, ugyanaz a pénz kétszer
+    jelenne meg kiadásként."""
+    from app.services.kassza import keszpenzfelvetel
+
+    if not keszpenzfelvetel(adat.get("megnevezes")):
+        return
+    osszeg = adat.get("osszeg")
+    if not osszeg:
+        return
+    kiadas = Expense(
+        megnevezes=str(adat.get("megnevezes") or "KP felvétel"),
+        kiadas_leiras="Készpénzfelvétel a bankszámláról a kasszába (automatikus átvezetés a KP forgalomból)",
+        netto=osszeg,
+        brutto=osszeg,
+        kifizetes_modja="Bankkártya",
+        kiadas_datuma=adat.get("kiadas_datuma"),
+        fizetes_datuma=adat.get("kiadas_datuma"),
+        project_code_id=adat.get("project_code_id"),
+        hozzaadas_a_kiadasokhoz=False,
+    )
+    db.add(kiadas)
+    db.flush()
+    adat["expense_id"] = kiadas.id
+
+
 def _kp_forgalom_before_create(adat: dict, db: Session) -> dict:
     _kp_forgalom_devizat_forintra(adat, db)
     _kp_forgalom_osszeg_elojel_nelkul(adat)
+    _kp_felvetel_kiadas_sorral(adat, db)
     return adat
 
 
