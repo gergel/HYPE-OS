@@ -82,6 +82,11 @@ export function DiszpoTablaRacs({
   const [szerkesztes, setSzerkesztes] = useState<{ pont: Pont; ertek: string } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; pont: Pont } | null>(null);
   const [busy, setBusy] = useState(false);
+  // A legutóbbi Ctrl+C belső másolata: a szöveg mellett a cellák SZÍNÉT is
+  // őrzi. A rendszer-vágólapra csak szöveg fér; beillesztéskor a szöveg
+  // egyezéséből ismerjük fel, hogy a sajátunkat illesztik vissza - olyankor
+  // a szín is megy (a felhasználó kérése).
+  const belsoMasolat = useRef<{ szoveg: string; racs: { ertek: string | null; szin: string | null }[][] } | null>(null);
 
   const sorSzam = Math.max(munkalap.sor_szam, munkalap.sorok.length);
   const oszlopSzam = munkalap.oszlop_szam;
@@ -342,6 +347,40 @@ export function DiszpoTablaRacs({
     return () => window.removeEventListener("keydown", kezel);
   });
 
+  // MÁSOLÁS (Ctrl+C) - a felhasználó kérése: a kijelölt cella/tartomány
+  // szövege a rendszer-vágólapra kerül (Sheets-be is beilleszthető), a SZÍNE
+  // pedig egy belső pufferbe. A beillesztés (lent) felismeri a saját
+  // másolatot, és olyankor a színt is visszateszi, nem csak a szöveget.
+  useEffect(() => {
+    function masol(e: ClipboardEvent) {
+      if (szerkesztes) return;
+      const cel = e.target as HTMLElement | null;
+      if (cel && (cel.tagName === "INPUT" || cel.tagName === "TEXTAREA" || cel.isContentEditable)) return;
+      const tolS = Math.min(tartomany?.tol.sor ?? kijelolt.sor, tartomany?.ig.sor ?? kijelolt.sor);
+      const igS = Math.max(tartomany?.tol.sor ?? kijelolt.sor, tartomany?.ig.sor ?? kijelolt.sor);
+      const tolO = Math.min(tartomany?.tol.oszlop ?? kijelolt.oszlop, tartomany?.ig.oszlop ?? kijelolt.oszlop);
+      const igO = Math.max(tartomany?.tol.oszlop ?? kijelolt.oszlop, tartomany?.ig.oszlop ?? kijelolt.oszlop);
+      // Csak a LÁTHATÓ sorok/oszlopok - ugyanígy hagyja ki őket a beillesztés is.
+      const sorIdxek: number[] = [];
+      for (let r = tolS; r <= igS; r++) if (!sorTerkep.get(r)?.rejtett) sorIdxek.push(r);
+      const oszlopIdxek: number[] = [];
+      for (let c = tolO; c <= igO; c++) if (!oszlopTerkep.get(c)?.rejtett) oszlopIdxek.push(c);
+      if (sorIdxek.length === 0 || oszlopIdxek.length === 0) return;
+      const racs = sorIdxek.map((r) =>
+        oszlopIdxek.map((c) => {
+          const cl = cella(r, c);
+          return { ertek: cl?.ertek ?? null, szin: cl?.szin ?? null };
+        }),
+      );
+      const szoveg = racs.map((sor) => sor.map((x) => x.ertek ?? "").join("\t")).join("\n");
+      e.clipboardData?.setData("text/plain", szoveg);
+      e.preventDefault();
+      belsoMasolat.current = { szoveg, racs };
+    }
+    window.addEventListener("copy", masol);
+    return () => window.removeEventListener("copy", masol);
+  });
+
   // BEILLESZTÉS a vágólapról (Ctrl+V) - a felhasználó kérése. Egyetlen érték
   // a kijelölt cellába megy; táblázatból másolt tartomány (tab/sortörés
   // tagolás, ahogy a Sheets/Excel adja) cellánként szétosztva, a kijelölttől
@@ -356,7 +395,13 @@ export function DiszpoTablaRacs({
       const szoveg = e.clipboardData?.getData("text/plain");
       if (!szoveg) return;
       e.preventDefault();
-      const sorok = szoveg.replace(/\r/g, "").replace(/\n$/, "").split("\n").map((sor) => sor.split("\t"));
+      const normalizalt = szoveg.replace(/\r/g, "").replace(/\n$/, "");
+      const sorok = normalizalt.split("\n").map((sor) => sor.split("\t"));
+      // Ha a vágólapon a SAJÁT másolatunk van (Ctrl+C ebből a táblából), a
+      // színt is visszatesszük - máshonnan (Sheets, Excel) jött szövegnél
+      // csak a tartalom megy, ott nincs honnan tudni a színt.
+      const belso = belsoMasolat.current;
+      const szines = belso !== null && belso.szoveg === normalizalt ? belso : null;
       // A cél-oszlopok: a kijelölttől jobbra lévő LÁTHATÓ oszlopok sorban.
       const celOszlopok: number[] = [];
       for (let c = kijelolt.oszlop; c < oszlopSzam; c++) {
@@ -368,14 +413,29 @@ export function DiszpoTablaRacs({
       for (let r = kijelolt.sor; r < sorSzam; r++) {
         if (!sorTerkep.get(r)?.rejtett) celSorok.push(r);
       }
-      const cellak: { sor_idx: number; oszlop_idx: number; ertek: string | null; ertek_valtozik: boolean }[] = [];
+      const cellak: {
+        sor_idx: number;
+        oszlop_idx: number;
+        ertek: string | null;
+        ertek_valtozik: boolean;
+        szin?: string | null;
+        szin_valtozik?: boolean;
+      }[] = [];
       sorok.forEach((ertekek, dr) => {
         const r = celSorok[dr];
         if (r === undefined) return;
         ertekek.forEach((ertek, dc) => {
           const c = celOszlopok[dc];
           if (c === undefined) return;
-          cellak.push({ sor_idx: r, oszlop_idx: c, ertek: ertek.trim() || null, ertek_valtozik: true });
+          cellak.push({
+            sor_idx: r,
+            oszlop_idx: c,
+            ertek: ertek.trim() || null,
+            ertek_valtozik: true,
+            ...(szines
+              ? { szin: szines.racs[dr]?.[dc]?.szin ?? null, szin_valtozik: true }
+              : {}),
+          });
         });
       });
       if (cellak.length > 0) {
@@ -979,7 +1039,7 @@ export function DiszpoTablaRacs({
           </span>
         ))}
         <span className="ml-auto">
-          Nyilak: mozgás · gépelés vagy Enter: szerkesztés · Ctrl+V: beillesztés · Shift+nyíl vagy húzás: tartomány
+          Nyilak: mozgás · gépelés vagy Enter: szerkesztés · Ctrl+C: másolás (színnel) · Ctrl+V: beillesztés · Shift+nyíl vagy húzás: tartomány
           · Delete: tartalom törlése · jobb gomb: sor/oszlop (beszúrás, elrejtés)
         </span>
       </div>

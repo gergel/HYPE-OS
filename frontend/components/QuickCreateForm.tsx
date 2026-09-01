@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { KeresosSelect } from "@/components/KeresosSelect";
@@ -78,6 +78,17 @@ export function QuickCreateForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fajlok, setFajlok] = useState<File[]>([]);
+  // A router.refresh() átmenetben fut, hogy TUDJUK, mikor ért végig: az űrlap
+  // addig nyitva marad "a lista frissül" jelzéssel, és csak akkor záródik be,
+  // amikor az új sor már tényleg ott van a listában. Enélkül (pl. a nehéz
+  // projektkód-listánál) másodpercekig úgy nézett ki, mintha a mentés nem
+  // csinált volna semmit, és kézzel kellett frissíteni az oldalt.
+  const [frissites, startFrissites] = useTransition();
+  const [zarasFuggoben, setZarasFuggoben] = useState(false);
+  // SZÁRMAZTATOTT nyitottság (nem effect): amint a frissítés-átmenet véget
+  // ért, az űrlap zárva renderelődik - a zarasFuggoben jelzőt a következő
+  // megnyitás nullázza.
+  const nyitva = open && !(zarasFuggoben && !frissites);
 
   // A rejtett mezők nem is léteznek: se validálni, se elküldeni nem kell őket.
   const lathatoMezok = fields.filter((f) => lathato(f, values));
@@ -131,8 +142,8 @@ export function QuickCreateForm({
       }
       setValues(kezdoErtekek(fields));
       setFajlok([]);
-      setOpen(false);
-      router.refresh();
+      startFrissites(() => router.refresh());
+      setZarasFuggoben(true);
     } catch (err) {
       setError(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
@@ -140,7 +151,7 @@ export function QuickCreateForm({
     }
   }
 
-  if (!open) {
+  if (!nyitva) {
     return (
       <button
         type="button"
@@ -150,6 +161,7 @@ export function QuickCreateForm({
           setValues(kezdoErtekek(fields));
           setFajlok([]);
           setError(null);
+          setZarasFuggoben(false);
           setOpen(true);
         }}
         className="mb-2 text-[13px] text-text-accent hover:underline"
@@ -205,19 +217,19 @@ export function QuickCreateForm({
         <UjFajlValaszto
           fajlok={fajlok}
           onValtozas={setFajlok}
-          disabled={busy}
+          disabled={busy || zarasFuggoben}
           cimke={fajlFeltoltes.cimke ?? "Számla / blokk"}
           sugo={fajlFeltoltes.sugo ?? "Nem kötelező – utólag is feltölthető a listában."}
         />
       )}
       <button
         type="submit"
-        disabled={busy}
+        disabled={busy || zarasFuggoben}
         className="btn btn-primary"
       >
-        {busy ? "Mentés…" : submitLabel}
+        {zarasFuggoben ? "Mentve – a lista frissül…" : busy ? "Mentés…" : submitLabel}
       </button>
-      <button type="button" onClick={() => setOpen(false)} className="text-[13px] text-text-muted hover:text-text-primary">
+      <button type="button" onClick={() => { setZarasFuggoben(false); setOpen(false); }} className="text-[13px] text-text-muted hover:text-text-primary">
         Mégse
       </button>
       {error && <p className="w-full text-[12px] text-text-danger">{error}</p>}
