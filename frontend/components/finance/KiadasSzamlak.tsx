@@ -197,10 +197,14 @@ export function KiadasSzamlaGomb({
   expenseId,
   canEdit,
   canDelete,
+  darab = 0,
 }: {
   expenseId: number;
   canEdit: boolean;
   canDelete: boolean;
+  /** Hány számla-fájl van fent ehhez a tételhez (saját + átvezetett) - a
+   * lista tölti be egyben, lásd lib/api.getKiadasSzamlaDarab. */
+  darab?: number;
 }) {
   const [nyitva, setNyitva] = useState(false);
   return (
@@ -208,10 +212,11 @@ export function KiadasSzamlaGomb({
       <button
         type="button"
         onClick={() => setNyitva(true)}
-        title="Számlák"
-        className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-accent"
+        title={darab > 0 ? `Számlák (${darab} fájl)` : "Számlák"}
+        className="inline-flex items-center gap-0.5 rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-accent"
       >
-        <Paperclip size={14} />
+        <Paperclip size={14} className={darab > 0 ? "text-text-accent" : undefined} />
+        {darab > 0 && <span className="text-[11px] text-text-secondary">{darab}</span>}
       </button>
       {nyitva && (
         <ModalReteg onClose={() => setNyitva(false)}>

@@ -1371,6 +1371,73 @@ def utalasra_varo(
     return [tetel for tetel, _ in _utalasra_varo_tetelek(db)]
 
 
+@summary_router.get("/kiadas-szamla-darab", response_model=dict[int, int])
+def kiadas_szamla_darab(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """Kiadásonként hány számla-fájl van fent - a Kiadások lista gemkapocs-
+    ikonja mellé (a felhasználó kérése). Az összes forrást számolja, amit a
+    kiadás számla-nézete mutat (lásd kiadas_atvezetett_szamlak): a saját
+    feltöltést, az autó-oldali bizonylatot, a külsős/belsős TIG számláit és
+    a KP forgalom bizonylatát - néhány csoportosított lekérdezéssel, nem
+    kiadásonként külön körrel."""
+    darab: dict[int, int] = {}
+
+    def _hozzaad(sorok) -> None:
+        for expense_id, db_ in sorok:
+            if expense_id is not None:
+                darab[expense_id] = darab.get(expense_id, 0) + int(db_)
+
+    # Saját számla-csatolmány + az Autók oldal bizonylata: mindkettő az
+    # Expense-sor id-jára mutat, csak más entitás-néven.
+    _hozzaad(
+        db.execute(
+            select(DocumentAttachment.entity_id, func.count())
+            .where(
+                DocumentAttachment.entity_type.in_(["expense", "autoKiadas"]),
+                DocumentAttachment.kategoria == "szamla",
+            )
+            .group_by(DocumentAttachment.entity_id)
+        ).all()
+    )
+    _hozzaad(
+        db.execute(
+            select(PerformanceCertificate.expense_id, func.count())
+            .join(
+                PerformanceCertificateInvoice,
+                PerformanceCertificateInvoice.certificate_id == PerformanceCertificate.id,
+            )
+            .where(PerformanceCertificate.expense_id.is_not(None))
+            .group_by(PerformanceCertificate.expense_id)
+        ).all()
+    )
+    _hozzaad(
+        db.execute(
+            select(InternalPerformanceCertificate.expense_id, func.count())
+            .join(
+                InternalPerformanceCertificateInvoice,
+                InternalPerformanceCertificateInvoice.certificate_id == InternalPerformanceCertificate.id,
+            )
+            .where(InternalPerformanceCertificate.expense_id.is_not(None))
+            .group_by(InternalPerformanceCertificate.expense_id)
+        ).all()
+    )
+    _hozzaad(
+        db.execute(
+            select(KpForgalom.expense_id, func.count())
+            .join(
+                DocumentAttachment,
+                (DocumentAttachment.entity_type == "kpForgalom")
+                & (DocumentAttachment.entity_id == KpForgalom.id),
+            )
+            .where(KpForgalom.expense_id.is_not(None))
+            .group_by(KpForgalom.expense_id)
+        ).all()
+    )
+    return darab
+
+
 class AtvezetettSzamla(BaseModel):
     """Egy MÁSHOL feltöltött számla, ami ehhez a kiadáshoz tartozik - a
     kiadás egy átvezetett tétel (TIG-kifizetés, autó-költés, KP forgalom),

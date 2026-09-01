@@ -7,6 +7,7 @@ import {
   getExpenses,
   getFieldTypes,
   getFinanceSummary,
+  getKiadasSzamlaDarab,
   getMyPagePermissions,
   getProjectCodeOptions,
   getRevenues,
@@ -43,6 +44,7 @@ export default async function PenzugyekPage() {
     currentUser,
     pagePermissions,
     utalasraVaro,
+    szamlaDarab,
   ] = await Promise.all([
     getExpenses(),
     getRevenues(),
@@ -53,6 +55,7 @@ export default async function PenzugyekPage() {
     getCurrentUser(),
     getMyPagePermissions(),
     getUtalasraVaro(),
+    getKiadasSzamlaDarab(),
   ]);
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
@@ -271,6 +274,23 @@ export default async function PenzugyekPage() {
               },
               { header: "Típus", render: (e) => e.tipus ?? "–", sortAccessor: (e) => e.tipus },
               {
+                // MIKOR történt a kiadás (a felhasználó kérése) - itt, a
+                // listában is látszódjon és szerkeszthető legyen.
+                header: "Dátum",
+                render: (e) =>
+                  canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
+                      field="kiadas_datuma"
+                      value={e.kiadas_datuma}
+                      type="date"
+                    />
+                  ) : (
+                    e.kiadas_datuma ?? "–"
+                  ),
+                sortAccessor: (e) => e.kiadas_datuma,
+              },
+              {
                 header: "Nettó",
                 align: "right",
                 render: (e) => (
@@ -321,7 +341,14 @@ export default async function PenzugyekPage() {
                 // forrásánál feltöltött számlák is itt látszanak.
                 header: "Számla",
                 align: "right",
-                render: (e) => <KiadasSzamlaGomb expenseId={e.id} canEdit={canEdit} canDelete={canDelete} />,
+                render: (e) => (
+                  <KiadasSzamlaGomb
+                    expenseId={e.id}
+                    canEdit={canEdit}
+                    canDelete={canDelete}
+                    darab={szamlaDarab[e.id] ?? 0}
+                  />
+                ),
               },
               // Állapot-oszlop SZÁNDÉKOSAN nincs: a kiadások közé az kerül, ami
               // már ki van fizetve - egy "Kifizetve / Nyitott" jelző itt minden

@@ -337,6 +337,8 @@ export type Expense = {
   plusz_afa: string | null;
   afa_szazalek: number | null;
   tipus: string | null;
+  /** Mikor történt a kiadás - a listában is látszik és szerkeszthető. */
+  kiadas_datuma: string | null;
   netto: number | null;
   brutto: number | null;
   penznem: string;
@@ -528,6 +530,12 @@ export async function getEmployeeDocuments(employeeId: number): Promise<Employee
 
 export async function getAttachments(entityType: string, entityId: number): Promise<DocumentAttachment[]> {
   return (await apiGet<DocumentAttachment[]>(`/api/v1/csatolmanyok/${entityType}/${entityId}`)) ?? [];
+}
+
+/** Kiadásonként hány számla-fájl van fent (saját + átvezetett források) - a
+ * Kiadások lista gemkapocs-ikonjának darabszámához. */
+export async function getKiadasSzamlaDarab(): Promise<Record<number, number>> {
+  return (await apiGet<Record<number, number>>("/api/v1/finance/kiadas-szamla-darab")) ?? {};
 }
 
 export async function getEquipment(limit = 5000): Promise<Equipment[]> {
