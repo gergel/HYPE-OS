@@ -57,10 +57,12 @@ VINYO_OPTIONS = [
     "MyBook_25_01", "MyBook_25_02", "MyBook_25_03", "MyBook_25_04", "MyBook_25_05",
     "MyBook_25_06", "MyBook_25_07", "MyBook_25_08", "MyBook_11", "MyBook_12", "MyBook_16",
     "Pajta_01", "Pajta_02", "Pajta_03", "Pajta_04",
-    "Sárga_01", "Sárga_02",
-    "Archive_24_01", "Archive_24_02", "MyBook_25_09", "Archive_24_04", "MTE_01", "BBGP_01",
+    # Az Archive_23_01..03, Archive_24_02 és Sárga_02 vinyók törölve (a
+    # felhasználó kérése) - lásd az alembic d2a6b94e8c31 adat-migrációt.
+    "Sárga_01",
+    "Archive_24_01", "MyBook_25_09", "Archive_24_04", "MTE_01", "BBGP_01",
     "Archive_24_10",
-    "Archive_23_01", "Archive_23_02", "Archive_23_03", "Archive_23_04", "Archive_23_05", "Archive_23_06",
+    "Archive_23_04", "Archive_23_05", "Archive_23_06",
     "Archive_21_101", "Archive_21_102", "Archive_21_103", "Archive_21_104", "Archive_21_105", "Archive_21_106",
     "HYPE_F_01", "HYPE_F_02", "MyBook_F_01", "MyBook_F_02",
     "MEGSEMMISÜLT",
