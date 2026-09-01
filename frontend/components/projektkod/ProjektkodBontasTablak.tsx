@@ -177,6 +177,9 @@ export function ProjektkodBontasTablak({
             addLabel="+ Új kiadás"
             fields={[
               { name: "megnevezes", label: "Megnevezés", required: true },
+              // A KIADÁS dátumát kérjük be (a felhasználó kérése) - a lenti
+              // Dátum oszlop és a Pénzügyek listája is ebből dolgozik.
+              { name: "kiadas_datuma", label: "Kiadás dátuma", type: "date", required: true },
               { name: "netto", label: "Nettó összeg (Ft)", type: "number", required: true },
               {
                 name: "tipus",

@@ -152,7 +152,10 @@ def kiadas_sorok(project_code: Any) -> list[dict]:
                 "id": e.id,
                 "megnevezes": e.megnevezes,
                 "kinek": e.employee.full_name if e.employee is not None else None,
-                "datum": e.fizetes_datuma or e.kiadas_datuma or e.fizetes_hatarideje,
+                # A KIADÁS dátuma az első (a felhasználó kérése): az mondja
+                # meg, mikor történt a költés - a fizetés/határidő csak
+                # tartalék, ha a kiadás-dátum nincs kitöltve.
+                "datum": e.kiadas_datuma or e.fizetes_datuma or e.fizetes_hatarideje,
                 "netto": float(e.netto) if e.netto is not None else None,
                 "osszeg": _osszeg(e),
                 "kifizetve": bool(e.kesz),
