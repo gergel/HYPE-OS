@@ -124,7 +124,8 @@ def _plusz_afa_jelolt(ertek) -> bool:
 
 
 def _afa_brutto(adat: dict, *, netto=None, plusz_afa=None, afa_szazalek=None) -> None:
-    """Bruttó a nettóból, ha "+ÁFA" van jelölve: netto * (1 + százalék/100).
+    """Bruttó a nettóból: "+ÁFA" jelöléssel netto * (1 + százalék/100), ÁFA
+    nélkül a bruttó maga a nettó (a kettő ilyenkor ugyanaz az összeg).
 
     Csak akkor számolunk, ha a kérés NEM hozott kifejezett bruttót - egy
     kézzel beírt bruttó (pl. a táblázat cellájából) mindig nyer. Százalék
@@ -135,7 +136,10 @@ def _afa_brutto(adat: dict, *, netto=None, plusz_afa=None, afa_szazalek=None) ->
         return
     netto = adat.get("netto", netto)
     plusz_afa = adat.get("plusz_afa", plusz_afa)
-    if netto is None or not _plusz_afa_jelolt(plusz_afa):
+    if netto is None:
+        return
+    if not _plusz_afa_jelolt(plusz_afa):
+        adat["brutto"] = round(float(netto), 2)
         return
     szazalek = adat.get("afa_szazalek", afa_szazalek)
     szazalek = float(szazalek) if szazalek is not None else 27.0
