@@ -7,11 +7,12 @@
  * lib/mezoNev.ts és a lib/ido.ts esetében. */
 import { normalizal } from "@/lib/szoveg";
 
+/** Forint összeg, FORINTRA PONTOSAN (a felhasználó kérése): nincs "1,2M Ft"
+ * és "545k Ft" rövidítés sehol - a teljes szám áll ott, ezres tagolással.
+ * Csak a fillér kerekedik el (a forint-összegeink egészek). */
 export function formatHuf(value: number | null): string {
   if (value === null) return "–";
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(".0", "")}M Ft`;
-  if (Math.abs(value) >= 1_000) return `${Math.round(value / 1_000)}k Ft`;
-  return `${value} Ft`;
+  return `${Math.round(value).toLocaleString("hu-HU")} Ft`;
 }
 
 /** Miért NEM számít bele ez a bevétel-sor az ÉVES bevételbe? `null`, ha
@@ -69,9 +70,8 @@ export function devizas(penznem: string | null | undefined): boolean {
   return penznemKod(penznem) !== "HUF";
 }
 
-/** Összeg a saját pénznemében: forintnál a tömör "1,2M Ft" alak, devizánál a
- * teljes szám a kóddal ("1 500 EUR") - egy devizás összeg nem elég nagy ahhoz,
- * hogy rövidíteni kelljen, viszont a pontossága számít. */
+/** Összeg a saját pénznemében: forintnál a teljes, forintra pontos alak
+ * ("1 234 567 Ft"), devizánál ugyanez a kóddal ("1 500 EUR"). */
 export function penzzel(osszeg: number | null, penznem: string | null | undefined): string {
   if (osszeg === null) return "–";
   if (!devizas(penznem)) return formatHuf(osszeg);

@@ -68,10 +68,11 @@ export function needsValue(operator: FilterOperator): boolean {
 }
 
 /** Egy cella (vagy a szűrőbe beírt érték) szám-e - ide értve a rövidített
- * forint-jelölést is (lásd lib/penz.formatHuf: "545k Ft", "1.5M Ft"). A
- * DataTable ugyanezt használja az oszlop "szám" jellegének eldöntéséhez
- * (kind), hogy a kettő szét ne csússzon: ami itt számnak számít, azon
- * kínáljuk fel a nagyobb/kisebb szűrést is. */
+ * forint-jelölést is ("545k Ft", "1.5M Ft"): a felület már forintra pontosan
+ * ír ki (lásd lib/penz.formatHuf), de a szűrőbe beírva ezek a rövid alakok
+ * továbbra is érthetőek. A DataTable ugyanezt használja az oszlop "szám"
+ * jellegének eldöntéséhez (kind), hogy a kettő szét ne csússzon: ami itt
+ * számnak számít, azon kínáljuk fel a nagyobb/kisebb szűrést is. */
 export const NUMBER_PATTERN = /^-?[\d\s .,]+\s*(k|m)?\s*(?:ft|huf|eur|usd|db|%)?$/i;
 
 function toNumber(text: string): number | null {
