@@ -181,6 +181,18 @@ export function ProjektkodBontasTablak({
               // Dátum oszlop és a Pénzügyek listája is ebből dolgozik.
               { name: "kiadas_datuma", label: "Kiadás dátuma", type: "date", required: true },
               { name: "netto", label: "Nettó összeg (Ft)", type: "number", required: true },
+              // KÖTELEZŐ fizetési mód (a felhasználó kérése) - ugyanaz a
+              // lista, mint a Pénzügyek oldali kiadás-űrlapon.
+              {
+                name: "kifizetes_modja",
+                label: "Fizetési mód",
+                type: "select",
+                required: true,
+                options: ["Készpénz", "Átutalás", "Bankkártya", "Nincs pénzmozgás"].map((m) => ({
+                  value: m,
+                  label: m,
+                })),
+              },
               {
                 name: "tipus",
                 label: "Besorolás",

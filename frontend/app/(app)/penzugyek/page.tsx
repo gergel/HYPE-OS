@@ -218,6 +218,10 @@ export default async function PenzugyekPage() {
                   name: "kifizetes_modja",
                   label: "Fizetési mód",
                   type: "select",
+                  // KÖTELEZŐ (a felhasználó kérése): a fizetés típusa nélkül a
+                  // kassza és a "Kiadás fizetési mód szerint" összesítő sem
+                  // tudja hova sorolni a tételt.
+                  required: true,
                   options: fizetesiModOptions.map((m) => ({ value: m, label: m })),
                 },
                 // Az összeget a választott PÉNZNEMBEN kell beírni; a szerver
