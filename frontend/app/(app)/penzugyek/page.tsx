@@ -22,6 +22,7 @@ import { FinanceMonthlyChart, KasszaWidget, OutstandingProjectsTable } from "@/c
 import { SzamlaCsomagLetoltes } from "@/components/finance/SzamlaCsomagLetoltes";
 import { UtalasraVaroSzamlak } from "@/components/finance/UtalasraVaroSzamlak";
 import { KimenoSzamlaCella } from "@/components/finance/KimenoSzamlaCella";
+import { KiadasSzamlaGomb } from "@/components/finance/KiadasSzamlak";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -309,6 +310,14 @@ export default async function PenzugyekPage() {
                   />
                 ),
                 sortAccessor: (e) => e.kifizetes_modja,
+              },
+              {
+                // Számla-feltöltés felugróban (a felhasználó kérése) - az
+                // átvezetett tételek (TIG-kifizetés, autó-költés, KP forgalom)
+                // forrásánál feltöltött számlák is itt látszanak.
+                header: "Számla",
+                align: "right",
+                render: (e) => <KiadasSzamlaGomb expenseId={e.id} canEdit={canEdit} canDelete={canDelete} />,
               },
               // Állapot-oszlop SZÁNDÉKOSAN nincs: a kiadások közé az kerül, ami
               // már ki van fizetve - egy "Kifizetve / Nyitott" jelző itt minden

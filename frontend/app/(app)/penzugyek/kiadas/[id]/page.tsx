@@ -2,9 +2,18 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { EditableDetailGrid } from "@/components/EditableDetailGrid";
+import { KiadasSzamlak } from "@/components/finance/KiadasSzamlak";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getFieldTypes, getRecord, getVisibleFields } from "@/lib/api";
+import {
+  ENTITY_PATHS,
+  getCurrentUser,
+  getFieldTypes,
+  getMyPagePermissions,
+  getRecord,
+  getVisibleFields,
+} from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
+import { canDoAction } from "@/lib/permissions";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,12 +21,16 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
   // A projectCode/employee a kiadás mezőitől függ - a mezőleírók nem, ezért
   // azok a getRecord-dal EGYSZERRE indulnak, nem utána.
-  const [expense, visibleFields, fieldTypes] = await Promise.all([
+  const [expense, visibleFields, fieldTypes, currentUser, pagePermissions] = await Promise.all([
     getRecord(ENTITY_PATHS.expense, expenseId),
     getVisibleFields("expense"),
     getFieldTypes("expense"),
+    getCurrentUser(),
+    getMyPagePermissions(),
   ]);
   if (!expense) notFound();
+  const canEdit = canDoAction(currentUser, pagePermissions, "/penzugyek", "edit");
+  const canDelete = canDoAction(currentUser, pagePermissions, "/penzugyek", "delete");
 
   const [projectCode, employee] = await Promise.all([
     expense.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(expense.project_code_id)) : null,
@@ -52,6 +65,13 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
               (f) => (f.key === "megnevezes" ? { ...f, label: "Cégnév" } : f),
             )}
           />
+        </Card>
+
+        {/* A kiadás számlái (a felhasználó kérése): közvetlen feltöltés, és -
+            átvezetett tételnél - a forrásnál (TIG, autó, KP forgalom)
+            feltöltött számlák is, hogy ne kelljen kétszer feltölteni. */}
+        <Card title="Számlák">
+          <KiadasSzamlak expenseId={expenseId} canEdit={canEdit} canDelete={canDelete} />
         </Card>
       </div>
     </div>

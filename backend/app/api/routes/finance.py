@@ -1331,6 +1331,114 @@ def utalasra_varo(
     return [tetel for tetel, _ in _utalasra_varo_tetelek(db)]
 
 
+class AtvezetettSzamla(BaseModel):
+    """Egy MÁSHOL feltöltött számla, ami ehhez a kiadáshoz tartozik - a
+    kiadás egy átvezetett tétel (TIG-kifizetés, autó-költés, KP forgalom),
+    és a számláját ott töltötték fel, ahonnan átvezették."""
+
+    filename: str
+    url: str
+    #: Emberi címke: honnan jött a számla (pl. "Külsős TIG – Kovács Béla").
+    forras: str
+    #: A forrás oldala a felületen - ide visz a kattintás.
+    forras_link: str | None = None
+
+
+@summary_router.get("/kiadas/{expense_id}/atvezetett-szamlak", response_model=list[AtvezetettSzamla])
+def kiadas_atvezetett_szamlak(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """A kiadáshoz MÁSHOL feltöltött számlák (a felhasználó kérése).
+
+    Sok kiadás-sor nem kézzel születik, hanem átvezetés: a külsős/belsős TIG
+    "kifizetve" jelölése hozza létre (PerformanceCertificate.expense_id /
+    InternalPerformanceCertificate.expense_id), az autó-költést az Autók
+    oldalon vezetik fel (Expense.auto_id, a bizonylat az "autoKiadas"
+    csatolmány-entitáson él), a KP forgalom sora pedig a saját bizonylatával
+    kapcsolódik (KpForgalom.expense_id). A számlát ilyenkor a FORRÁSNÁL
+    töltötték fel - itt gyűjtjük össze, hogy a Kiadások oldalon ne kelljen
+    újra feltölteni (és ne is legyen "hiányzó számla" érzete annak, ami
+    valójában megvan)."""
+    expense = db.get(Expense, expense_id)
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Kiadás nem található")
+
+    eredmeny: list[AtvezetettSzamla] = []
+
+    def _tig_nev(cert) -> str:
+        ceg = getattr(cert, "ceg_neve", None)
+        if ceg:
+            return str(ceg)
+        return cert.employee.full_name if cert.employee is not None else f"#{cert.id}"
+
+    for tig in db.query(PerformanceCertificate).filter(PerformanceCertificate.expense_id == expense_id).all():
+        for inv in tig.invoices:
+            eredmeny.append(
+                AtvezetettSzamla(
+                    filename=inv.filename,
+                    url=inv.url,
+                    forras=f"Külsős TIG – {_tig_nev(tig)}",
+                    forras_link="/utokovetes/kulsos-tigek",
+                )
+            )
+    for tig in (
+        db.query(InternalPerformanceCertificate)
+        .filter(InternalPerformanceCertificate.expense_id == expense_id)
+        .all()
+    ):
+        for inv in tig.invoices:
+            eredmeny.append(
+                AtvezetettSzamla(
+                    filename=inv.filename,
+                    url=inv.url,
+                    forras=f"Belsős TIG – {_tig_nev(tig)}",
+                    forras_link="/belsos-tig",
+                )
+            )
+
+    # Autó-költés: UGYANEZ az Expense-sor, csak a bizonylatát az Autók oldal
+    # saját csatolmány-entitása alatt tárolja (lásd routes/autok.py
+    # KIADAS_ENTITAS) - az entity_id ott is a kiadás id-ja.
+    if expense.auto_id is not None:
+        auto_nev = (
+            (expense.auto.megnevezes or expense.auto.rendszam) if expense.auto is not None else "autó"
+        )
+        for a in db.scalars(
+            select(DocumentAttachment).where(
+                DocumentAttachment.entity_type == "autoKiadas",
+                DocumentAttachment.entity_id == expense_id,
+            )
+        ).all():
+            eredmeny.append(
+                AtvezetettSzamla(
+                    filename=a.filename,
+                    url=a.url,
+                    forras=f"Autó költés – {auto_nev}",
+                    forras_link=f"/autok/{expense.auto_id}",
+                )
+            )
+
+    kp_idk = list(db.scalars(select(KpForgalom.id).where(KpForgalom.expense_id == expense_id)).all())
+    if kp_idk:
+        for a in db.scalars(
+            select(DocumentAttachment).where(
+                DocumentAttachment.entity_type == "kpForgalom",
+                DocumentAttachment.entity_id.in_(kp_idk),
+            )
+        ).all():
+            eredmeny.append(
+                AtvezetettSzamla(
+                    filename=a.filename,
+                    url=a.url,
+                    forras="KP forgalom",
+                    forras_link="/penzugyek/kp-forgalom",
+                )
+            )
+    return eredmeny
+
+
 @summary_router.post("/utalasra-varo/zip")
 def utalasra_varo_zip(
     payload: UtalasraVaroKeres,
