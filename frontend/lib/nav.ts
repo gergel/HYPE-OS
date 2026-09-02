@@ -138,6 +138,10 @@ export const navGroups: NavGroup[] = [
         icon: "Contact",
         permissionPage: "/ugyfelek",
       },
+      // KÜLÖN adható jog (a felhasználó kérése): az árajánlat-készítő a
+      // saját "/arajanlatok" kulcsán áll, semelyik másik oldal joga nem
+      // nyitja meg (lásd backend routes/arajanlatok.py PAGE).
+      { label: "Árajánlatok", href: "/arajanlatok", icon: "Calculator" },
     ],
   },
   {

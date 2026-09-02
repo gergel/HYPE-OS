@@ -2,6 +2,7 @@
 
 import {
   BadgeCheck,
+  Calculator,
   Car,
   CheckSquare,
   Clapperboard,
@@ -43,6 +44,7 @@ import { NavItem, navGroups } from "@/lib/nav";
 import { oldalMuveletei } from "@/lib/permissions";
 
 const ICONS: Record<string, LucideIcon> = {
+  Calculator,
   LayoutDashboard,
   Building2,
   Hash,

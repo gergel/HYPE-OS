@@ -1897,6 +1897,8 @@ export const ENTITY_PATHS = {
   contract: "/api/v1/contracts",
   assignment: "/api/v1/assignments",
   kpForgalom: "/api/v1/kp-forgalom",
+  arajanlat: "/api/v1/arajanlatok",
+  arajanlatTetel: "/api/v1/arajanlat-tetelek",
 } as const;
 
 /** Egy rekord összes mezőjének lekérése (a részletnézetekhez) - nem szűkítjük
@@ -3317,4 +3319,40 @@ export type DiszpoHaviAllas = {
 
 export async function getDiszpoHaviAllas(ev: number, honap: number): Promise<DiszpoHaviAllas[]> {
   return (await apiGet<DiszpoHaviAllas[]>(`/api/v1/diszpo-tabla/munkanapok/${ev}/${honap}`)) ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// Árajánlat-készítő (lásd backend models/arajanlat.py)
+
+export type ArajanlatListItem = {
+  id: number;
+  nev: string;
+  sablon: boolean;
+  brand: string;
+  ugyfel: string | null;
+  vegosszeg: number | null;
+  updated_at: string | null;
+};
+
+export type Arajanlat = ArajanlatListItem & {
+  /** A teljes szerkesztő-állapot egyben - a szerkesztő tölti/menti, a
+   * pontos alakját a frontend ismeri (lásd components/arajanlat). */
+  adat: Record<string, unknown>;
+};
+
+export type ArajanlatTetel = {
+  id: number;
+  nev: string;
+  megjegyzes: string | null;
+  szekcio: string | null;
+  egysegar: number | null;
+  sorrend: number;
+};
+
+export async function getArajanlatok(): Promise<ArajanlatListItem[]> {
+  return (await apiGet<ArajanlatListItem[]>("/api/v1/arajanlatok?limit=5000")) ?? [];
+}
+
+export async function getArajanlatTetelek(): Promise<ArajanlatTetel[]> {
+  return (await apiGet<ArajanlatTetel[]>("/api/v1/arajanlat-tetelek?limit=5000")) ?? [];
 }

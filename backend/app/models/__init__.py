@@ -25,6 +25,7 @@ from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.feedback import Feedback, VisszajelzesAllapot
 from app.models.field_visibility import FieldVisibilityConfig
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.arajanlat import Arajanlat, ArajanlatTetel
 from app.models.flora_feladat import FloraFeladat
 from app.models.flora_komment import FloraKomment
 from app.models.google_oauth_token import GoogleOAuthToken
@@ -180,4 +181,6 @@ __all__ = [
     "Timesheet",
     "TimelineEvent",
     "PageAccessConfig",
+    "Arajanlat",
+    "ArajanlatTetel",
 ]
