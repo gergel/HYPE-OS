@@ -19,6 +19,7 @@ from io import BytesIO
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials as UserCredentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 from app.core.config import settings
@@ -27,6 +28,45 @@ DOCS_SCOPES = [
     "https://www.googleapis.com/auth/documents",
     "https://www.googleapis.com/auth/drive",
 ]
+
+#: A Google Drive/Docs időnként átmeneti 500 "Internal Error"-t ad (élesben
+#: is előfordult a TIG-sablon másolásánál úgy, hogy a következő próbálkozás
+#: már sikerült). A googleapiclient num_retries paramétere ilyenkor
+#: véletlenített exponenciális backoffal (~1-2-4-8-16 mp) automatikusan
+#: újrapróbálja az 5xx-es és rate-limites válaszokat.
+UJRAPROBALKOZASOK = 4
+
+
+def _google_hiba_szoveg(muvelet: str, exc: HttpError) -> str:
+    allapot = exc.resp.status if exc.resp is not None else None
+    if allapot in (403,):
+        return (
+            f"A Google-fiók nem fér hozzá a fájlhoz ennél a lépésnél: {muvelet}. "
+            "Ellenőrizd a sablon/mappa megosztását a beállított Google-fiókkal."
+        )
+    if allapot in (404,):
+        return (
+            f"A Google Drive nem találja a fájlt ennél a lépésnél: {muvelet}. "
+            "Ellenőrizd a beállított sablon/mappa azonosítót."
+        )
+    return (
+        f"A Google Drive/Docs hibát adott ({allapot or 'ismeretlen'}) ennél a lépésnél: "
+        f"{muvelet}. Többszöri újrapróbálkozás után sem sikerült - ez jellemzően átmeneti "
+        "Google-oldali hiba, próbáld újra pár perc múlva."
+    )
+
+
+def _futtat(request, muvelet: str):
+    """Google API kérés végrehajtása újrapróbálkozással és magyar hibával.
+
+    Ha minden próbálkozás elfogy, RuntimeError megy tovább - a küldő
+    végpontok azt egységesen 503-as, olvasható hibaként adják vissza a
+    beírt adatok elmentése mellett (lásd pl.
+    routes/performance_certificates.py generate_and_send)."""
+    try:
+        return request.execute(num_retries=UJRAPROBALKOZASOK)
+    except HttpError as exc:
+        raise RuntimeError(_google_hiba_szoveg(muvelet, exc)) from exc
 
 
 def _load_user_creds_from_json(token_json: str) -> UserCredentials:
@@ -69,7 +109,10 @@ def _copy_template(template_file_id: str, name: str, parent_folder_id: str | Non
     if parent_folder_id:
         body["parents"] = [parent_folder_id]
     # supportsAllDrives: megosztott meghajtón lévő sablon/mappa esetén is működjön.
-    new_file = drive.files().copy(fileId=template_file_id, body=body, supportsAllDrives=True).execute()
+    new_file = _futtat(
+        drive.files().copy(fileId=template_file_id, body=body, supportsAllDrives=True),
+        "a sablon másolása",
+    )
     return new_file["id"]
 
 
@@ -88,7 +131,10 @@ def _replace_placeholders(doc_id: str, fields: dict[str, str]) -> None:
                 }
             )
     if requests:
-        docs.documents().batchUpdate(documentId=doc_id, body={"requests": requests}).execute()
+        _futtat(
+            docs.documents().batchUpdate(documentId=doc_id, body={"requests": requests}),
+            "a sablon kitöltése",
+        )
 
 
 def _export_pdf_bytes(doc_id: str) -> bytes:
@@ -97,8 +143,11 @@ def _export_pdf_bytes(doc_id: str) -> bytes:
     fh = BytesIO()
     downloader = MediaIoBaseDownload(fh, req)
     done = False
-    while not done:
-        _status, done = downloader.next_chunk()
+    try:
+        while not done:
+            _status, done = downloader.next_chunk(num_retries=UJRAPROBALKOZASOK)
+    except HttpError as exc:
+        raise RuntimeError(_google_hiba_szoveg("a PDF exportálása", exc)) from exc
     return fh.getvalue()
 
 
@@ -111,9 +160,10 @@ def _upload_pdf(filename: str, pdf_bytes: bytes, folder_id: str | None) -> str |
     if folder_id:
         body["parents"] = [folder_id]
     media = MediaIoBaseUpload(BytesIO(pdf_bytes), mimetype="application/pdf", resumable=False)
-    uploaded = drive.files().create(
-        body=body, media_body=media, fields="id, webViewLink", supportsAllDrives=True
-    ).execute()
+    uploaded = _futtat(
+        drive.files().create(body=body, media_body=media, fields="id, webViewLink", supportsAllDrives=True),
+        "a kész PDF feltöltése a Drive-ra",
+    )
     return uploaded.get("webViewLink")
 
 
@@ -137,14 +187,17 @@ def szulo_mappa(file_id: str) -> str | None:
     kettő sosem csúszhat szét. A supportsAllDrives azért kell, hogy megosztott
     meghajtón lévő sablon esetén is működjön."""
     drive = _google_service("drive", "v3")
-    adat = drive.files().get(fileId=file_id, fields="parents", supportsAllDrives=True).execute()
+    adat = _futtat(
+        drive.files().get(fileId=file_id, fields="parents", supportsAllDrives=True),
+        "a sablon mappájának lekérdezése",
+    )
     szulok = adat.get("parents") or []
     return szulok[0] if szulok else None
 
 
 def _delete_file(file_id: str) -> None:
     drive = _google_service("drive", "v3")
-    drive.files().delete(fileId=file_id).execute()
+    _futtat(drive.files().delete(fileId=file_id), "az ideiglenes dokumentum törlése")
 
 
 def gdoc_fill_export_and_store_pdf(
