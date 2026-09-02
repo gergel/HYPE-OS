@@ -1,6 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -116,6 +117,31 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
 
     obj = Assignment(**data)
     db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+class AssignmentQtyIn(BaseModel):
+    qty: int
+
+
+@assignments_router.patch(
+    "/{assignment_id}",
+    response_model=AssignmentRead,
+    dependencies=[Depends(require_page_action(FOGLALAS_OLDAL, "edit"))],
+)
+def update_assignment_qty(assignment_id: int, payload: AssignmentQtyIn, db: Session = Depends(get_db)):
+    """Egy MÁR HOZZÁADOTT eszköz darabszámának átírása (a felhasználó kérése)
+    - készletes (stock) eszköznél van értelme, a felület csak ott kínálja.
+    Az ütközés-ellenőrzés itt sem fut (lásd create_assignment): a hivatalos
+    riport a "Technika ready" gomb."""
+    obj = db.get(Assignment, assignment_id)
+    if obj is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment nem található")
+    if payload.qty < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A darabszám legalább 1.")
+    obj.qty = payload.qty
     db.commit()
     db.refresh(obj)
     return obj

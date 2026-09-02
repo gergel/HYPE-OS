@@ -60,6 +60,12 @@ export function AnchoredPanel({
     function onPointerDown(e: MouseEvent) {
       const target = e.target as Node;
       if (panelRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
+      // A data-panel-tars jelölésű felület (pl. a panelből nyíló
+      // darabszám-kérdező ablak, lásd EquipmentBookingManager) kattintásai
+      // nem számítanak "kívülre" - a panel nyitva marad, amíg ott dolgoznak.
+      // A stopPropagation itt nem véd: a React a documentre delegál, így ez a
+      // szintén document-szintű figyelő attól még lefutna.
+      if (target instanceof Element && target.closest("[data-panel-tars]")) return;
       onClose();
     }
     document.addEventListener("mousedown", onPointerDown);
