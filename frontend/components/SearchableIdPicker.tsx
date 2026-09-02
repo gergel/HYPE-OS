@@ -44,6 +44,8 @@ export function SearchableIdPicker({
   placeholder = "Válassz…",
   disabled = false,
   className = "",
+  colorByGroup = false,
+  keepOpenOnSelect = false,
 }: {
   value: number | null;
   options: IdOption[];
@@ -51,6 +53,13 @@ export function SearchableIdPicker({
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** A sorok színét a CSOPORT (pl. eszköz-kategória: hang, kamera…) adja, ne
+   * az elem saját neve - így az azonos kategóriájú elemek azonos színűek. */
+  colorByGroup?: boolean;
+  /** Választás után a lista NYITVA marad (és a keresőszó is megmarad) - ahol
+   * a kattintás azonnali műveletet indít (pl. eszköz hozzáadása a
+   * projekthez), ott így egymás után több elem is kattintható. */
+  keepOpenOnSelect?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -71,10 +80,13 @@ export function SearchableIdPicker({
     ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
     : options;
   const groupedFiltered = groupOptions(filtered);
-  const color = current ? selectColor(current.label) : { bg: "var(--surface-3)", text: "var(--text-muted)" };
+
+  const szine = (opt: IdOption) => selectColor((colorByGroup && opt.group?.trim()) || opt.label);
+  const color = current ? szine(current) : { bg: "var(--surface-3)", text: "var(--text-muted)" };
 
   function select(next: number | null) {
     onChange(next);
+    if (keepOpenOnSelect) return;
     setOpen(false);
     setQuery("");
   }
@@ -119,7 +131,7 @@ export function SearchableIdPicker({
                 )}
                 <div className="space-y-1">
                   {items.map((opt) => {
-                    const c = selectColor(opt.label);
+                    const c = szine(opt);
                     return (
                       <button
                         key={opt.id}

@@ -94,6 +94,26 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
     if data.get("visszahozatal_datuma") is None:
         data["visszahozatal_datuma"] = project.forgatas_datuma_vege or project.forgatas_datuma
 
+    # UGYANAZ az eszköz, UGYANARRA a projektre és időszakra: nem nyitunk új
+    # sort. Készletes (stock) eszköznél a darabszám adódik hozzá - a felületen
+    # a listára kattintás azonnal hozzáad, így az ismételt kattintás +1 db,
+    # nem egy zavaró duplikált sor. Egyedi (asset) eszköznél nincs mit
+    # növelni: a meglévő sort adjuk vissza változatlanul.
+    meglevo = db.scalar(
+        select(Assignment).where(
+            Assignment.equipment_id == payload.equipment_id,
+            Assignment.project_id == payload.project_id,
+            Assignment.kivitel_datuma == data["kivitel_datuma"],
+            Assignment.visszahozatal_datuma == data["visszahozatal_datuma"],
+        )
+    )
+    if meglevo is not None:
+        if equipment.track_mode == "stock":
+            meglevo.qty = (meglevo.qty or 0) + (data.get("qty") or 1)
+            db.commit()
+            db.refresh(meglevo)
+        return meglevo
+
     obj = Assignment(**data)
     db.add(obj)
     db.commit()

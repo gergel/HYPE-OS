@@ -79,10 +79,19 @@ export function EquipmentBookingManager({
       ? availability.available
       : undefined;
 
-  async function handleAdd() {
-    if (!selected) return;
+  /** Egy eszköz hozzáadása AZONNAL, a listára kattintáskor (a felhasználó
+   * kérése: ne kelljen külön "Hozzáadás" gomb, és a lista maradjon nyitva,
+   * hogy sorban több eszközt is hozzá lehessen kattintani). A darabszám a
+   * mellette lévő mezőből jön; ugyanarra az eszközre újra kattintva a backend
+   * a meglévő sor darabszámát növeli (lásd routes/equipment.py
+   * create_assignment), nem nyit duplikált sort. */
+  async function handleAdd(equipmentId: number) {
+    if (busy) return;
     const requestedQty = Number(qty) || 1;
-    if (typeof maxQty === "number" && requestedQty > maxQty) {
+    // Az elérhetőség-őr csak arra az eszközre tud szólni, amire már le van
+    // kérdezve (az előző kattintás óta kiválasztott) - a backend szándékosan
+    // nem blokkol, a hivatalos ellenőrzés a "Technika ready" gomb.
+    if (String(equipmentId) === selected && typeof maxQty === "number" && requestedQty > maxQty) {
       alert(`Csak ${maxQty} db érhető el ebből az eszközből erre az időszakra.`);
       return;
     }
@@ -91,7 +100,7 @@ export function EquipmentBookingManager({
       const res = await authFetch("/api/v1/assignments", {
         method: "POST",
         body: JSON.stringify({
-          equipment_id: Number(selected),
+          equipment_id: equipmentId,
           project_id: projectId,
           qty: requestedQty,
           kivitel_datuma: kivitelDatuma || null,
@@ -103,7 +112,9 @@ export function EquipmentBookingManager({
         alert(`Sikertelen: ${detail?.detail ?? res.status}`);
         return;
       }
-      setSelected("");
+      // A kiválasztás megmarad: az elérhetőség-sor a most hozzáadott
+      // eszközről ad visszajelzést, miközben a lista nyitva marad.
+      setSelected(String(equipmentId));
       setQty("1");
       router.refresh();
     } catch (err) {
@@ -154,11 +165,15 @@ export function EquipmentBookingManager({
             sublabel: o.trackMode === "stock" ? "készlet" : null,
             group: o.kategoria,
           }))}
+          // A kattintás AZONNAL hozzáad, és a lista nyitva marad - egymás
+          // után több eszköz is kattintható. A sorok színét a kategória adja
+          // (hang, kamera…), így egy kategória egy szín.
+          colorByGroup
+          keepOpenOnSelect
           onChange={(next) => {
-            setSelected(next === null ? "" : String(next));
-            setQty("1");
+            if (next !== null) void handleAdd(next);
           }}
-          placeholder="Válassz eszközt…"
+          placeholder="Eszköz hozzáadása…"
           className="min-w-[14rem]"
         />
         {selectedOption?.trackMode === "stock" && (
@@ -189,17 +204,11 @@ export function EquipmentBookingManager({
             className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
           />
         </div>
-        <button
-          type="button"
-          disabled={!selected || busy || maxQty === 0}
-          onClick={handleAdd}
-          className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
-        >
-          Hozzáadás
-        </button>
       </div>
       <p className="mt-1 text-[11px] text-text-muted">
-        A "Mikortól" / "Meddig" mező üresen hagyva a projekt teljes forgatási időszakára foglal.
+        A listára kattintva az eszköz azonnal hozzáadódik, a lista pedig nyitva marad – ugyanarra az eszközre
+        újra kattintva a darabszám nő. A &quot;Mikortól&quot; / &quot;Meddig&quot; mező üresen hagyva a projekt
+        teljes forgatási időszakára foglal.
       </p>
       {selected && (
         <p className={`mt-1.5 text-[12px] ${availabilityError ? "text-text-danger" : "text-text-muted"}`}>
