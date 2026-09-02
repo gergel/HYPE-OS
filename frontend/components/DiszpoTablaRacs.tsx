@@ -501,6 +501,29 @@ export function DiszpoTablaRacs({
           // nem fest hátteret (lásd cellaStilus) - itt ezért külön kezeljük.
           fagyott && (!c?.szin || uresJelolt) ? "bg-surface-2" : ""
         }`}
+        onPointerDown={(e) => {
+          // ÉRINTŐKIJELZŐN nincs dupla katt és billentyűzet sem, amivel a
+          // szerkesztés elindulna (a felhasználó jelzése: telefonról nem
+          // lehetett írni a táblába). A Google Táblázatok mintája: az első
+          // koppintás kijelöl, a MÁR KIJELÖLT cellára koppintás szerkeszt. A
+          // pointerdown még a kijelölést beállító mousedown ELŐTT fut, ezért
+          // itt a koppintás előtti kijelölést látjuk - pont ez kell.
+          if (e.pointerType !== "touch" || !canEdit || szerkesztettE) return;
+          // A `tartomany`-t szándékosan nem nézzük: az érintés utáni
+          // szintetikus egér-események (mouseenter a koppintás után
+          // újrarajzolt cellákon, amíg a huzas igaz) kiszámíthatatlanul
+          // hagynak hátra egy-két cellás tartományt - a koppintás szándéka
+          // viszont egyértelmű: a MÁR kijelölt cellát szerkeszteni akarja.
+          if (kijelolt.sor === sor && kijelolt.oszlop === oszlop) {
+            // A preventDefault elnyomja ENNEK a koppintásnak a szintetikus
+            // egér-eseményeit (mousedown/mouseenter/...): azok újra
+            // kijelölnének és újrarajzolnának, amitől a frissen nyílt
+            // szerkesztő-input azonnal blur-t kapna és bezáródna.
+            e.preventDefault();
+            setTartomany(null);
+            setSzerkesztes({ pont: { sor, oszlop }, ertek: c?.ertek ?? "" });
+          }
+        }}
         onMouseDown={(e) => {
           if (e.button === 2) return;
           if (e.shiftKey) setTartomany({ tol: tartomany?.tol ?? kijelolt, ig: { sor, oszlop } });
@@ -866,6 +889,17 @@ export function DiszpoTablaRacs({
                             // külsős tábla felső sorai a JELMAGYARÁZAT (zöld =
                             // ..., piros = ...), szín nélkül értelmetlenek.
                             ...cellaStilus(cl?.szin),
+                          }}
+                          onPointerDown={(e) => {
+                            // Koppintás a már kijelölt fejléc-cellára =
+                            // szerkesztés (lásd a Cella azonos kezelőjét,
+                            // a preventDefault magyarázatával együtt).
+                            if (e.pointerType !== "touch" || !canEdit) return;
+                            if (kijelolt.sor === r && kijelolt.oszlop === c) {
+                              e.preventDefault();
+                              setTartomany(null);
+                              setSzerkesztes({ pont: { sor: r, oszlop: c }, ertek: cl?.ertek ?? "" });
+                            }
                           }}
                           onMouseDown={() => {
                             setKijelolt({ sor: r, oszlop: c });
