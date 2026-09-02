@@ -86,31 +86,67 @@ def papirozando_projektek(projektek: list[Any]) -> list[Any]:
     return [p for p in projektek if not projekt_kivett(p)]
 
 
-#: 2026. szeptember 1-től megy a diszpó a HYPE OS-ből. Az EZELŐTTI forgatások
-#: "Kiküldve" jelölése visszamenőleges adatpótlás (lásd az
-#: a9e4c72d5b18/f4b6d28a9c53 migrációkat), nem valós papírozási jel - az
-#: utókövetés diszpó-ága ezért csak a rendszer-éra forgatásait nézi. A régi
-#: projektek továbbra is bekerülnek, ha valódi alvállalkozói kiadás köti őket
-#: (az a commitment maga). Enélkül a visszamenőleges jelölés után minden régi,
-#: stábos projekt "hiányzó szerződést" mutatott (300+ sor a valós 20-30
-#: helyett)."""
-RENDSZER_DISZPO_KEZDETE = date(2026, 9, 1)
+#: A papírozás (alvállalkozói szerződés, külsős TIG, utókövetés) 2026. JÚLIUS
+#: elejétől megy a HYPE OS-ben (a modulok 2026-07-03..09 közt élesedtek) - az
+#: ez utáni forgatások papírjait már itt intézik, tehát a kiküldött diszpójuk
+#: valós papírozási jel akkor is, ha még egyetlen papírjuk sincs a rendszerben.
+#:
+#: Az EZELŐTTI forgatások "Kiküldve" jelölése viszont visszamenőleges
+#: adatpótlás (az a9e4c72d5b18/f4b6d28a9c53 migrációk minden szept. 1. előtti
+#: forgatást megjelöltek), nem papírozási jel - és utólag nem is állapítható
+#: meg róluk, hogy a rendszerből mentek-e: a jelöltjeink (diszpo_kikuldve_at,
+#: aki_kikuldte_a_diszpot, gmail_thread_id) mindegyikét vagy a visszamenőleges
+#: időbélyeg-pótlás (f7b2d84e9a53), vagy a régi Notion-import is írta. Ezért
+#: dátumhatár kell: a régi projektek csak akkor kerülnek be, ha valódi papír
+#: vagy alvállalkozói kiadás köti őket. Enélkül minden régi, stábos projekt
+#: "hiányzó szerződést" mutatott (300+ sor a valós 20-30 helyett).
+#:
+#: A határ env-változóval igazítható újratelepítés nélkül:
+#:
+#:     PAPIROZAS_RENDSZER_KEZDETE=2026-07-01
+ALAP_RENDSZER_KEZDETE = date(2026, 7, 1)
+
+
+def rendszer_kezdete() -> date:
+    """Mettől számít egy forgatás a rendszer-érába (papírozás a HYPE OS-ben)."""
+    nyers = os.environ.get("PAPIROZAS_RENDSZER_KEZDETE")
+    if nyers:
+        try:
+            return date.fromisoformat(nyers.strip())
+        except ValueError:
+            pass
+    return ALAP_RENDSZER_KEZDETE
+
+
+def rendszer_diszpozott(project: Any) -> bool:
+    """Python-oldali párja a diszpozott_projekt_feltetel diszpó-ágának - ott
+    használjuk, ahol a projektek már be vannak töltve (lásd dashboard.py)."""
+    if not (getattr(project, "diszpo", None) == "Kiküldve" or getattr(project, "diszpo_kikuldve_at", None)):
+        return False
+    forgatas = getattr(project, "forgatas_datuma", None)
+    return forgatas is not None and forgatas >= rendszer_kezdete()
 
 
 def diszpozott_projekt_feltetel():
     """SQLAlchemy-feltétel: mely projektek tartoznak a papírozási nézetekbe.
 
     Három jogcím, bármelyik elég:
-    1. a RENDSZER-ÉRA (szept. 1-től) kiküldött diszpója - a régebbi "Kiküldve"
-       visszamenőleges adatpótlás, önmagában nem papírozási jel;
+    1. a RENDSZER-ÉRA (lásd rendszer_kezdete) kiküldött diszpója - a régebbi
+       "Kiküldve" visszamenőleges adatpótlás, önmagában nem papírozási jel;
     2. MÁR VAN hozzá szerződés vagy TIG (közvetlenül vagy tételként) - a
        visszamenőleg lepapírozott munkáknak is látszaniuk kell, különben épp a
        kész áttekintés tűnne el (a felhasználó kérése);
     3. (a hívók a maguk or_-jában) valós alvállalkozói kiadás.
 
-    Amit ez KISZŰR: a szept. 1. előtti, papír és kiadás nélküli projektek -
+    Amit ez KISZŰR: a rendszer-éra előtti, papír és kiadás nélküli projektek -
     ezek csak a visszamenőleges "Kiküldve"-jelölés miatt tűntek teendőnek
-    (300+ hamis "hiányzó szerződés" sor a valós 20-30 helyett)."""
+    (300+ hamis "hiányzó szerződés" sor a valós 20-30 helyett).
+
+    FONTOS: az utókövetés RÉSZLETNÉZETE (utokovetes_admin.get_utokovetes_detail)
+    szándékosan szűretlen - egy projekt adatlapjáról odalépve bármelyik projekt
+    papírozható. Ez a feltétel csak a LISTÁKAT és a teendő-számlálókat szűri,
+    tehát a kettőnek együtt kell mozognia: ami itt kiesik, azt a listában nem
+    lehet megtalálni, hiába van vele teendő."""
     from sqlalchemy import and_, exists, or_
 
     from app.models.contract import Contract, ContractTetel
@@ -123,7 +159,7 @@ def diszpozott_projekt_feltetel():
         # ténylegesen diszpózott projektet a papírozásból.
         and_(
             or_(Project.diszpo == "Kiküldve", Project.diszpo_kikuldve_at.is_not(None)),
-            Project.forgatas_datuma >= RENDSZER_DISZPO_KEZDETE,
+            Project.forgatas_datuma >= rendszer_kezdete(),
         ),
         exists().where(Contract.project_id == Project.id),
         exists().where(ContractTetel.project_id == Project.id),
