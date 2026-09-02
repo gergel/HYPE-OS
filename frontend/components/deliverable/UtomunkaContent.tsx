@@ -56,6 +56,7 @@ const FUTO_TIMER_FRISSITES_MS = 60_000;
  * mellett is - a maradékot ez a komponens tölti be a háttérben,
  * betöltés-jelző/blokkolás nélkül, és csendben beleolvasztja a listába. */
 export function UtomunkaContent({
+  lejartSzures = false,
   initialDeliverables,
   deliverablesHasMore,
   initialProjects,
@@ -69,6 +70,10 @@ export function UtomunkaContent({
   canDelete,
   canEdit,
 }: {
+  /** Igaz esetén az oldal a LEJÁRT határidejű anyagokra szűrve nyílik (a
+   * dashboard figyelmeztetéséről jövet, ?szures=lejart) - a felületen
+   * kikapcsolható. */
+  lejartSzures?: boolean;
   initialDeliverables: Deliverable[];
   deliverablesHasMore: boolean;
   initialProjects: CalendarProject[];
@@ -102,6 +107,9 @@ export function UtomunkaContent({
   // eseményre vagy projektkódra szűkíti a kártyákat - az üres oszlopok el is
   // tűnnek, így rögtön látszik, melyik vinyón van a keresett projekt.
   const [vinyoKereses, setVinyoKereses] = useState("");
+  // A dashboard figyelmeztetéséről jövet csak a lejárt anyagok látszanak -
+  // a sávon kikapcsolható, és onnantól a teljes oldal a megszokott.
+  const [csakLejart, setCsakLejart] = useState(lejartSzures);
 
   useEffect(() => {
     if (!deliverablesHasMore) return;
@@ -219,9 +227,27 @@ export function UtomunkaContent({
     };
   }
 
+  // Ugyanaz a "lejárt" definíció, mint a dashboard figyelmeztetés-számlálójában
+  // (lásd backend routes/dashboard.py): a határidő a múltban van, az anyag
+  // nincs kiküldve, és nem áll kész állapotban (a kész állapotokat az admin
+  // jelöli az állapot-beállításokon).
+  const lathatoAnyagok = useMemo(() => {
+    if (!csakLejart) return deliverables;
+    const ma = new Date();
+    const maNap = `${ma.getFullYear()}-${String(ma.getMonth() + 1).padStart(2, "0")}-${String(ma.getDate()).padStart(2, "0")}`;
+    const keszek = new Set(allapotBeallitasok.filter((b) => b.kesz_allapot).map((b) => b.allapot));
+    return deliverables.filter(
+      (d) =>
+        d.hatarido !== null &&
+        d.hatarido.slice(0, 10) < maNap &&
+        !d.anyag_kikuldve &&
+        !(d.allapot !== null && keszek.has(d.allapot)),
+    );
+  }, [deliverables, csakLejart, allapotBeallitasok]);
+
   const statusColumns: BoardColumn[] = useMemo(() => {
     const byStatus = new Map<string, Deliverable[]>();
-    for (const d of deliverables) {
+    for (const d of lathatoAnyagok) {
       const key = d.allapot && statusOptions.includes(d.allapot) ? d.allapot : NO_STATUS_KEY;
       if (!byStatus.has(key)) byStatus.set(key, []);
       byStatus.get(key)!.push(d);
@@ -255,7 +281,7 @@ export function UtomunkaContent({
         : []),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverables, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, timerNevek]);
+  }, [lathatoAnyagok, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, timerNevek]);
 
   const vinyoColumns: BoardColumn[] = useMemo(() => {
     const keresett = vinyoKereses.trim().toLocaleLowerCase("hu-HU");
@@ -265,7 +291,7 @@ export function UtomunkaContent({
         (mezo ?? "").toLocaleLowerCase("hu-HU").includes(keresett),
       );
     const byVinyo = new Map<string, Deliverable[]>();
-    for (const d of deliverables) {
+    for (const d of lathatoAnyagok) {
       if (!talal(d)) continue;
       for (const v of d.vinyok ?? []) {
         if (!byVinyo.has(v)) byVinyo.set(v, []);
@@ -278,7 +304,7 @@ export function UtomunkaContent({
       // a vágás-állapotot a fenti állapot-tábla úgyis mutatja.
       .map((v) => ({ key: v, label: v, cards: byVinyo.get(v)!.map((d) => toCard(d, d.archivalas ? [d.archivalas] : [])) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverables, vinyoOptions, vinyoKereses, kartyaMezok, employeeName, timerNevek]);
+  }, [lathatoAnyagok, vinyoOptions, vinyoKereses, kartyaMezok, employeeName, timerNevek]);
 
   /** Az anyag ÁLLAPOTÁNAK tényleges átírása - ezt hívja mind a Kanban-húzás
    * (kartyaAthelyezes, a celOszlop -> allapot fordítás után), mind a lista
@@ -352,6 +378,23 @@ export function UtomunkaContent({
 
   return (
     <>
+      {/* A dashboard figyelmeztetéséről jövet aktív lejárt-szűrés jelzése -
+          innen kapcsolható vissza a teljes lista. */}
+      {csakLejart && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] bg-bg-warning px-3 py-2.5 text-[13px] text-text-warning">
+          <span>
+            Csak a lejárt határidejű anyagok látszanak ({lathatoAnyagok.length}) - amiknek a
+            határideje elmúlt, de nincsenek kiküldve vagy kész állapotban.
+          </span>
+          <button
+            type="button"
+            onClick={() => setCsakLejart(false)}
+            className="rounded-[var(--radius)] border border-text-warning/40 px-2.5 py-1 font-medium hover:opacity-80"
+          >
+            Szűrés kikapcsolása
+          </button>
+        </div>
+      )}
       <UtomunkaViewTabs
         board={
           <div className="space-y-6">
@@ -393,7 +436,7 @@ export function UtomunkaContent({
           </div>
         }
         list={
-          <Card title={`Utómunka (${deliverables.length})`}>
+          <Card title={`Utómunka (${lathatoAnyagok.length})`}>
             {canCreate && (
               <QuickCreateForm
                 postPath={DELIVERABLE_BASE_PATH}
@@ -409,7 +452,7 @@ export function UtomunkaContent({
               />
             )}
             <DataTable<Deliverable>
-              rows={deliverables}
+              rows={lathatoAnyagok}
               emptyText="Még nincs felvett vágandó anyag - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
               getHref={(d) => `/utomunka/${d.id}`}
               deleteHref={canDelete ? (d) => `${DELIVERABLE_BASE_PATH}/${d.id}` : undefined}

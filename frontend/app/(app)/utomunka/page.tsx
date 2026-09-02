@@ -24,7 +24,15 @@ const PAGE = "/utomunka";
  * tábla + forgatások naptár + vinyó szerinti tábla - hogy a vágóknak ne a
  * nyers adattáblát kelljen böngészniük), és a régi "Admin listát" (a teljes
  * DataTable, szűréssel/rendezéssel/törléssel). */
-export default async function UtomunkaPage() {
+export default async function UtomunkaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ szures?: string }>;
+}) {
+  // ?szures=lejart: a dashboard "lejárt utómunka határidő" figyelmeztetése
+  // ezzel nyitja az oldalt - csak a lejárt anyagok látszanak (a szűrés a
+  // felületen kikapcsolható, lásd UtomunkaContent).
+  const { szures } = await searchParams;
   const [
     deliverables,
     employees,
@@ -60,6 +68,7 @@ export default async function UtomunkaPage() {
       <TopBar />
       <div className="flex-1 p-4 md:p-8">
         <UtomunkaContent
+          lejartSzures={szures === "lejart"}
           initialDeliverables={deliverables}
           deliverablesHasMore={deliverables.length === INITIAL_BATCH}
           initialProjects={calendarProjects}

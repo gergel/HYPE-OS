@@ -78,10 +78,13 @@ function TeendoLista({ cim, items, kulcs }: { cim: string; items: MyTaskItem[]; 
 
 export function AlertsCard({ alerts, allowedPages }: { alerts: DashboardAlerts; allowedPages: string[] | null }) {
   const hasPage = (page: string) => allowedPages === null || allowedPages.includes(page);
+  // A figyelmeztetésre kattintva a céloldal MÁR a lejárt tételekre szűrve
+  // nyílik (a felhasználó kérése) - a ?szures=lejart paramétert az oldalak
+  // értelmezik; a jogosultság-ellenőrzéshez a paraméter nélküli oldal kell.
   const items = [
-    { label: "lejárt utómunka határidő", count: alerts.lejart_utomunka, href: "/utomunka" },
-    { label: "lejárt feladat határidő", count: alerts.lejart_feladat, href: "/feladatok" },
-  ].filter((i) => i.count > 0 && hasPage(i.href));
+    { label: "lejárt utómunka határidő", count: alerts.lejart_utomunka, page: "/utomunka", href: "/utomunka?szures=lejart" },
+    { label: "lejárt feladat határidő", count: alerts.lejart_feladat, page: "/feladatok", href: "/feladatok?szures=lejart" },
+  ].filter((i) => i.count > 0 && hasPage(i.page));
 
   if (items.length === 0) {
     return <p className="text-[13px] text-text-muted">Nincs aktív figyelmeztetés.</p>;
