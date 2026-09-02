@@ -8,7 +8,7 @@ nap nyitva tartanak.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -562,24 +562,16 @@ def _sheet_sync_munka(naplo) -> dict:
 def sheet_sync(
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """A HYPE 2026 tábla szinkronja a megosztott Google Táblázattal - a
-    felületről, egy gombbal (lásd frontend DiszpoSheetSyncGomb). Munkalaponként
-    CSERÉLI a tartalmat (a Sheet az igazság), a kézzel beállított oszlop-ember
-    kötéseket viszont megőrzi - lásd services/diszpo_sheet_sync.py.
-
-    HÁTTÉRBEN fut (lásd services/hatter_feladat.py): a letöltés + feldolgozás
-    percekig is eltarthat, és amíg kérésen belül futott, a processzort is
-    lefoglalta - ez volt az egyik ok, amiért a teljes rendszer belassult, amíg
-    valaki szinkronizált. A gomb a /sheet-sync/allapot végpontot kérdezgetve
-    várja meg a végét."""
-    elindult = hatter_feladat.inditas(
-        SHEET_SYNC_FELADAT,
-        _sheet_sync_munka,
-        elavulas=timedelta(minutes=30),
+    """KIKAPCSOLVA (a felhasználó kérése: többet ne szinkronizáljon a Google
+    Táblázattal - a tábla mostantól itt, a rendszerben vezetve él). A gomb a
+    felületről is lekerült; a végpont azért ad kifejezett hibát, hogy egy
+    ottfelejtett kliens se indíthasson szinkront. A szinkron-kód
+    (services/diszpo_sheet_sync.py) megmarad, ha valaha vissza kellene
+    kapcsolni."""
+    raise HTTPException(
+        status_code=410,
+        detail="A Google Táblázat-szinkron ki van kapcsolva - a HYPE 2026 tábla a rendszerben vezetve él.",
     )
-    if not elindult:
-        raise HTTPException(status_code=409, detail="Már fut egy táblázat-szinkron.")
-    return {"started": True}
 
 
 @router.get("/sheet-sync/allapot")

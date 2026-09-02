@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
-import { DiszpoSheetSyncGomb } from "@/components/DiszpoSheetSyncGomb";
 import { DiszpoTablaRacs } from "@/components/DiszpoTablaRacs";
 import { MunkanapokKartya } from "@/components/MunkanapokKartya";
 import {
@@ -38,10 +37,9 @@ export default async function DiszpoTablaPage({
         <div className="flex-1 p-4 md:p-8">
           <Card title="HYPE 2026 tábla">
             <p className="mb-3 text-[13px] text-text-secondary">
-              A táblázat még nincs átvéve - az alábbi gomb áthozza a Google Sheet minden
-              munkalapját, a cellák színével együtt.
+              A táblázat még üres. A Google Táblázat-szinkron ki van kapcsolva (a felhasználó
+              kérése) - a tábla itt, a rendszerben vezetve él tovább.
             </p>
-            <DiszpoSheetSyncGomb />
           </Card>
         </div>
       </div>
@@ -70,9 +68,9 @@ export default async function DiszpoTablaPage({
       <TopBar />
       <div className="flex-1 space-y-6 p-4 md:p-8">
         <Card title="HYPE 2026 tábla">
-          {/* A FÜLEK - ahogy a Sheetben, balról jobbra. Mellettük a Google
-              Táblázat-szinkron: egy gombbal átveszi a Sheet friss tartalmát
-              (munkalaponként cserél, a kézi oszlop-ember kötések maradnak). */}
+          {/* A FÜLEK - ahogy a Sheetben, balról jobbra. A Google
+              Táblázat-szinkron gombja lekerült (a felhasználó kérése: többet
+              ne szinkronizáljon) - a tábla itt, a rendszerben vezetve él. */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
             <div className="flex flex-wrap gap-1.5">
               {munkalapok.map((m) => (
@@ -89,7 +87,6 @@ export default async function DiszpoTablaPage({
                 </Link>
               ))}
             </div>
-            {canEdit && <DiszpoSheetSyncGomb />}
           </div>
 
           <DiszpoTablaRacs
