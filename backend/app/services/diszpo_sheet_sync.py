@@ -159,7 +159,14 @@ def fejlec_sorok_szama(ws, max_sor: int) -> int:
     Dátum nélküli munkalapon (Autók, AnyDesk...) marad a régi szabály."""
     for r in range(1, max_sor + 1):
         if isinstance(ws.cell(r, 1).value, (datetime, date)):
-            return min(max(r - 1, 1), MAX_FEJLEC_SOROK)
+            fejlec = min(max(r - 1, 1), MAX_FEJLEC_SOROK)
+            # A belsős táblán MINDIG legalább két sor rögzül (szekciók + a
+            # nevek sora): a felhasználó kérése, hogy görgetés közben is
+            # látsszon, kihez ír be - akkor is, ha a Sheetben a dátumok
+            # feljebb csúsznának.
+            if ws.title in KETSOROS_FEJLECU:
+                fejlec = max(fejlec, 2)
+            return fejlec
     return 2 if ws.title in KETSOROS_FEJLECU else 1
 
 
