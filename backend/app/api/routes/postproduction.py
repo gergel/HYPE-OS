@@ -1,5 +1,7 @@
 """Utómunka modul: Deliverable (vágandó anyag) + Timesheet (ledolgozott idő) + Feedback (gombos visszajelzés)."""
 
+import unicodedata
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -88,6 +90,19 @@ def _kiosztottak_beallitasa(
     _kiosztas_ertesites(db, obj, [e.id for e in emberek if e.id not in korabbi_idk], current_user)
 
 
+def _kesz_kikuldve_allapot(allapot: str | None) -> bool:
+    """"Kész kiküldve"-féle LEZÁRÓ állapot-e? Névben-keresős elv (mint a
+    services/vagoi_jatek állapot-felismerői), hogy egy átnevezés ne törje el:
+    a "kész" ÉS a "kiküld" is szerepel benne. A "Kiküldésre vár"/"Kiküldhető"
+    szándékosan NEM ilyen - ott még van kinek dolga az anyaggal."""
+    if not allapot:
+        return False
+    egyszeru = "".join(
+        c for c in unicodedata.normalize("NFD", allapot.lower()) if unicodedata.category(c) != "Mn"
+    )
+    return "kesz" in egyszeru and "kikuld" in egyszeru
+
+
 def _auto_kiosztas_allapotvaltaskor(db: Session, obj: Deliverable, data: dict, current_user: Employee) -> None:
     """Állapothoz kötött automatikus kiosztás.
 
@@ -104,6 +119,12 @@ def _auto_kiosztas_allapotvaltaskor(db: Session, obj: Deliverable, data: dict, c
     config = db.scalar(select(DeliverableStatusConfig).where(DeliverableStatusConfig.allapot == obj.allapot))
     auto_idk = [int(i) for i in (config.auto_kiosztott_employee_ids or [])] if config else []
     if not auto_idk:
+        # "Kész kiküldve"-be került az anyag: le is zárult, senkinek nincs
+        # többé dolga vele - MINDENKI lekerül a kiosztásból (a felhasználó
+        # kérése). Ha az admin ehhez az állapothoz mégis állított be
+        # auto-kiosztást, az a fenti ág szerint nyer.
+        if _kesz_kikuldve_allapot(obj.allapot) and obj.kiosztottak:
+            _kiosztottak_beallitasa(db, obj, [], current_user)
         return
     # Csak a még létező munkatársak - egy időközben törölt ember miatt ne
     # hasaljon el maga az állapotváltás.
