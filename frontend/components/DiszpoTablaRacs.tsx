@@ -155,7 +155,14 @@ export function DiszpoTablaRacs({
 
   // Az első oszlopok BEFAGYASZTVA: 146 oszlopnál a dátum nélkül nem lehet
   // tudni, melyik sorban vagyunk. Ahol nincs dátum-oszlop, ott egy elég.
-  const fagyasztott = munkalap.sorok.some((s) => s.datum) ? 3 : 1;
+  // TELEFONON (keskeny nézetben) viszont csak EGY oszlop marad rögzítve: a
+  // három rögzített oszlop (3 x 116px) egy ~390px-es kijelzőt teljesen
+  // kitöltene, és a görgethető rész el sem férne mellettük (a felhasználó
+  // jelzése). A mérés a rács saját szélességén történik (lásd a
+  // ResizeObserver-t lentebb), nem a viewporton - így a szűk oldalsávos
+  // elrendezésekben is jól dönt.
+  const keskeny = meret.szeles < 640;
+  const fagyasztott = !keskeny && munkalap.sorok.some((s) => s.datum) ? 3 : 1;
   const fagyasztottSzeles = oszlopBal[Math.min(fagyasztott, oszlopSzam)] ?? 0;
 
   /** Melyik oszlop van ennél a (tartalombeli) képpontnál. */
