@@ -54,6 +54,10 @@ export default function EszkozKivitelOldal() {
   const [potKivitel, setPotKivitel] = useState(false);
   const [potDarabok, setPotDarabok] = useState<Map<number, number>>(new Map());
   const [lezarasNyitva, setLezarasNyitva] = useState(false);
+  //: A kivitel lezárásakor: a forgatásra KIÍRT, de be nem pakolt technika
+  //: listája - ha van ilyen, rákérdezünk, biztos nélkülük indul-e (a
+  //: felhasználó kérése). null = nincs nyitva a kérdés.
+  const [kiirtHianyzik, setKiirtHianyzik] = useState<Ajanlott[] | null>(null);
   const [eszrevetel, setEszrevetel] = useState("");
   //: Sikeres lezárás után a kezdő (kód) képernyőre esünk vissza, ezzel az
   //: üzenettel (a felhasználó kérése).
@@ -155,6 +159,7 @@ export default function EszkozKivitelOldal() {
       setPotKivitel(false);
       setPotDarabok(new Map());
       setLezarasNyitva(false);
+      setKiirtHianyzik(null);
       setEszrevetel("");
       setKulso("");
       setMuveletHiba(null);
@@ -217,7 +222,7 @@ export default function EszkozKivitelOldal() {
           <h1 className="text-2xl font-semibold text-text-primary">Eszközkivitel</h1>
           {kezdoUzenet && (
             <p className="mt-3 rounded-[var(--radius-lg)] border border-text-success/40 bg-surface-2 px-3 py-2.5 text-[14px] text-text-success">
-              ✅ {kezdoUzenet}
+              {kezdoUzenet}
             </p>
           )}
           <p className="mt-2 text-[14px] text-text-secondary">
@@ -258,8 +263,7 @@ export default function EszkozKivitelOldal() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-surface-1 p-6">
         <div className="w-full max-w-sm text-center">
-          <p className="text-4xl">✅</p>
-          <h1 className="mt-3 text-xl font-semibold text-text-primary">Ez a kivitel le van zárva</h1>
+          <h1 className="text-xl font-semibold text-text-primary">Ez a kivitel le van zárva</h1>
           <p className="mt-2 text-[14px] text-text-secondary">
             Köszönjük! A kivitel és a visszahozatal rögzítve van - ha mégis módosítani kell, szólj az
             irodának.
@@ -319,7 +323,7 @@ export default function EszkozKivitelOldal() {
                 : "border-text-warning/40 bg-text-warning/10 text-text-warning"
             }`}
           >
-            {fazisKivitel ? "📦 Kivitel" : potKivitel ? "📦 Pót-kivitel" : "↩ Visszahozatal"}
+            {fazisKivitel ? "Kivitel" : potKivitel ? "Pót-kivitel" : "Visszahozatal"}
           </div>
           <h1 className="text-xl font-semibold text-text-primary">
             {adat.projekt_nev ?? "Forgatás"}
@@ -353,7 +357,7 @@ export default function EszkozKivitelOldal() {
                     className={`rounded-full px-3 py-1.5 text-[13.5px] ${megvan ? "ring-2 ring-text-accent" : ""}`}
                     style={{ background: c.bg, color: c.text }}
                   >
-                    {megvan ? "✓ " : "+ "}
+                    {megvan ? "" : "+ "}
                     {a.nev}
                     {a.db > 1 ? ` (${a.db} db)` : ""}
                   </button>
@@ -422,7 +426,7 @@ export default function EszkozKivitelOldal() {
                           >
                             <span className="truncate">{e.nev}</span>
                             <span className="ml-2 shrink-0 text-[13px] text-text-muted">
-                              {darab > 0 ? `${darab} db ✓` : "+"}
+                              {darab > 0 ? `${darab} db` : "+"}
                             </span>
                           </button>
                         );
@@ -515,7 +519,15 @@ export default function EszkozKivitelOldal() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => void lezar("kivitel")}
+              onClick={() => {
+                // Ha a forgatásra kiírt technikából valami nincs bepakolva,
+                // előbb rákérdezünk - csak megerősítés után zárunk le.
+                const hianyzik = adat.ajanlott.filter(
+                  (a) => (tetelTerkep.get(a.id)?.kivitt_db ?? 0) === 0,
+                );
+                if (hianyzik.length > 0) setKiirtHianyzik(hianyzik);
+                else void lezar("kivitel");
+              }}
               className="w-full rounded-[var(--radius-lg)] bg-text-accent px-4 py-3.5 text-[16px] font-semibold text-surface-1 disabled:opacity-50"
             >
               {busy ? "Lezárás…" : "Kivitel lezárása – indulhat a forgatás"}
@@ -549,6 +561,60 @@ export default function EszkozKivitelOldal() {
 
         <footer className="mt-6 text-center text-[12px] text-text-muted">Minden beírás azonnal mentődik.</footer>
       </div>
+
+      {/* KIÍRT-DE-KIMARADT ABLAK: a kivitel lezárása előtt rákérdezünk a
+          forgatásra kiírt, de be nem pakolt technikára (a felhasználó
+          kérése). */}
+      {kiirtHianyzik && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setKiirtHianyzik(null);
+          }}
+        >
+          <div className="w-full max-w-md rounded-[var(--radius-lg)] border border-border bg-surface-1 p-4 shadow-xl">
+            <h2 className="text-[16px] font-semibold text-text-primary">
+              Ki van írva, de nincs a listádban
+            </h2>
+            <p className="mt-1 text-[13.5px] text-text-secondary">
+              Ezek ki lettek írva erre a forgatásra, de nem raktad be a kivitelbe. Biztos nem akarod
+              elvinni őket?
+            </p>
+            <ul className="mt-3 max-h-56 space-y-1.5 overflow-y-auto">
+              {kiirtHianyzik.map((a) => {
+                const c = selectColor(a.kategoria?.trim() || a.nev);
+                return (
+                  <li
+                    key={a.id}
+                    className="flex items-center gap-2 rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary"
+                  >
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.text }} />
+                    <span className="min-w-0 flex-1 truncate">{a.nev}</span>
+                    {a.db > 1 && <span className="shrink-0 text-[13px] text-text-muted">{a.db} db</span>}
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setKiirtHianyzik(null)}
+                className="rounded-[var(--radius)] bg-text-accent px-3 py-2 text-[13.5px] font-semibold text-surface-1"
+              >
+                Visszamegyek, még pakolok
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void lezar("kivitel")}
+                className="rounded-[var(--radius)] border border-border px-3 py-2 text-[13.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Biztos nem viszem – lezárás
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* LEZÁRÁS-ABLAK: észrevétel megadható vagy kihagyható. */}
       {lezarasNyitva && (
