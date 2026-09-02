@@ -300,9 +300,12 @@ class ProjectCode(TimestampMixin, Base):
         latott: set[int] = set()
         eredmeny: list["Employee"] = []
         for e in self.expenses:
-            if e.employee is None or e.alvallalkozo_project_id is not None:
+            # Csak a KÜLSŐS besorolású kiadás papírozandó - az "egyéb"
+            # besorolású extra kiadás emberrel együtt sem kér utókövetést
+            # (lásd models/finance.py Expense.alvallalkozoi_papirt_igenyel).
+            if not e.alvallalkozoi_papirt_igenyel or e.alvallalkozo_project_id is not None:
                 continue
-            if e.employee.id in latott:
+            if e.employee is None or e.employee.id in latott:
                 continue
             latott.add(e.employee.id)
             eredmeny.append(e.employee)

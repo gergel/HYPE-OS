@@ -287,7 +287,7 @@ def list_tig_ready_projects(db: Session = Depends(get_db), _user: Employee = Dep
     # a kiadás a commitment, nem a stáb-behívás.
     projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
-        .filter(or_(papirozas_hatokor.diszpozott_projekt_feltetel(), Project.alvallalkozo_kiadasok.any()))
+        .filter(or_(papirozas_hatokor.diszpozott_projekt_feltetel(), Project.alvallalkozo_kiadasok.any(Expense.alvallalkozoi_papir_feltetel())))
         .options(selectinload(Project.crew), selectinload(Project.project_code))
         .all()
     )
@@ -1663,6 +1663,10 @@ def projektkodok_alvallalkozoi_kiadassal(db: Session) -> list[ProjectCode]:
                 Expense.employee_id.is_not(None),
                 Expense.alvallalkozo_project_id.is_(None),
                 Expense.project_code_id.is_not(None),
+                # Csak a KÜLSŐS besorolású kiadás papírozandó - az "egyéb"
+                # extra kiadás emberrel együtt sem (lásd models/finance.py
+                # Expense.alvallalkozoi_papirt_igenyel).
+                Expense.alvallalkozoi_papir_feltetel(),
             )
         ).all()
     )

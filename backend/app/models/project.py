@@ -395,5 +395,12 @@ class Project(TimestampMixin, Base):
         """Azok az emberek, akik NEM stábtagok (tehát a diszpó sosem hívja be
         őket), de egy hozzájuk kötött alvállalkozói projekt kiadás miatt mégis
         kell tőlük szerződés és TIG - lásd Expense.alvallalkozo_project_id és
-        api/routes/subcontractor_contracts.szerzodest_igenylo_emberek."""
-        return [e.employee for e in self.alvallalkozo_kiadasok if e.employee is not None]
+        api/routes/subcontractor_contracts.szerzodest_igenylo_emberek.
+
+        Csak a KÜLSŐS besorolású kiadás számít (a felhasználó kérése) - lásd
+        models/finance.py Expense.alvallalkozoi_papirt_igenyel."""
+        return [
+            e.employee
+            for e in self.alvallalkozo_kiadasok
+            if e.employee is not None and e.alvallalkozoi_papirt_igenyel
+        ]

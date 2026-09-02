@@ -374,7 +374,7 @@ def list_pending_projects(db: Session = Depends(get_db), _user: Employee = Depen
     # és api/routes/finance._alvallalkozo_helyetto_forgatas).
     projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
-        .filter(or_(papirozas_hatokor.diszpozott_projekt_feltetel(), Project.alvallalkozo_kiadasok.any()))
+        .filter(or_(papirozas_hatokor.diszpozott_projekt_feltetel(), Project.alvallalkozo_kiadasok.any(Expense.alvallalkozoi_papir_feltetel())))
         .options(selectinload(Project.crew), selectinload(Project.project_code))
         .all()
     )

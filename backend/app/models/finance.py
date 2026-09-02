@@ -49,6 +49,26 @@ class Expense(TimestampMixin, Base):
     auto_id: Mapped[int | None] = mapped_column(ForeignKey("autok.id"), index=True)
 
     tipus: Mapped[str | None] = mapped_column(String(50), comment="belsos / kulsos / extra")
+
+    @property
+    def alvallalkozoi_papirt_igenyel(self) -> bool:
+        """Kell-e ehhez a kiadáshoz alvállalkozói szerződés + TIG (utókövetés).
+
+        Csak a KÜLSŐS besorolású, emberhez kötött kiadás számít (a felhasználó
+        kérése): az "egyéb" besorolású extra kiadás akkor sem papírozandó, ha
+        van hozzárendelt embere - az csak azt mondja meg, kinek fizettük ki.
+        A kifizetett TIG-hez automatikusan létrejövő "TIG - ..." kiadás-sor
+        tipus="kulsos"-t kap (lásd performance_certificates.py
+        mark_szamla_kifizetve), tehát az itt marad a populációban."""
+        return self.employee_id is not None and (self.tipus or "").strip().lower() == "kulsos"
+
+    @classmethod
+    def alvallalkozoi_papir_feltetel(cls):
+        """A fenti alvallalkozoi_papirt_igenyel SQL-párja - a papírozási
+        hatókör-szűrők (utókövetés, szerződés- és TIG-listák) használják."""
+        from sqlalchemy import and_, func
+
+        return and_(cls.employee_id.is_not(None), func.lower(func.trim(cls.tipus)) == "kulsos")
     netto: Mapped[float | None] = mapped_column(Numeric(12, 2))
     brutto: Mapped[float | None] = mapped_column(Numeric(12, 2))
     penznem: Mapped[str] = mapped_column(String(10), default="HUF")
