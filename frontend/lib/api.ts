@@ -143,6 +143,9 @@ export type Project = {
   id: number;
   nev: string;
   project_code_id: number;
+  /** A kapcsolt projektkód szövege (backend schemas/project.py) - listákban
+   * és keresőkben ez alapján azonosítható a projekt. */
+  projektkod_szoveg?: string | null;
   forgatas_datuma: string | null;
   forgatas_datuma_vege: string | null;
   /** A forgatás TÉNYLEGES (megjelenítendő) záró napja - a backend számítja a

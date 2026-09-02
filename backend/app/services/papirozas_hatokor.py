@@ -131,8 +131,14 @@ def diszpozott_projekt_feltetel():
     """SQLAlchemy-feltétel: mely projektek tartoznak a papírozási nézetekbe.
 
     Három jogcím, bármelyik elég:
-    1. a RENDSZER-ÉRA (lásd rendszer_kezdete) kiküldött diszpója - a régebbi
-       "Kiküldve" visszamenőleges adatpótlás, önmagában nem papírozási jel;
+    1. RENDSZER-ÉRA forgatás (lásd rendszer_kezdete), amin már van élet:
+       kiküldött diszpó VAGY kiküldött előzetes VAGY beosztott stáb. A stáb
+       azért elég önmagában, mert a szerződések a forgatás ELŐTT mennek ki -
+       ha a listába csak a diszpó kiküldése után kerülne be a projekt, a
+       szerződés-teendő pont akkor nem látszana, amikor esedékes (a
+       felhasználó ezt hiányolta: a projekt felől megvan a teendő, a listában
+       nincs). A csak-belsős stábú projekt így is "kész"-ként jelenik meg,
+       mert nincs rajta papírozandó fél;
     2. MÁR VAN hozzá szerződés vagy TIG (közvetlenül vagy tételként) - a
        visszamenőleg lepapírozott munkáknak is látszaniuk kell, különben épp a
        kész áttekintés tűnne el (a felhasználó kérése);
@@ -154,12 +160,20 @@ def diszpozott_projekt_feltetel():
     from app.models.project import Project
 
     return or_(
-        # A szöveges mező VAGY a küldés kitörölhetetlen nyoma (lásd
-        # models/project.diszpo_kikuldve_at) - a kiürített mező ne ejtse ki a
-        # ténylegesen diszpózott projektet a papírozásból.
         and_(
-            or_(Project.diszpo == "Kiküldve", Project.diszpo_kikuldve_at.is_not(None)),
             Project.forgatas_datuma >= rendszer_kezdete(),
+            or_(
+                # A szöveges mező VAGY a küldés kitörölhetetlen nyoma (lásd
+                # models/project.diszpo_kikuldve_at) - a kiürített mező ne
+                # ejtse ki a ténylegesen diszpózott projektet a papírozásból.
+                Project.diszpo == "Kiküldve",
+                Project.diszpo_kikuldve_at.is_not(None),
+                Project.elozetes_diszpo_kuldes == "Kiküldve",
+                Project.elozetes_kikuldve_at.is_not(None),
+                # Beosztott stáb: a szerződés a forgatás ELŐTT esedékes, a
+                # diszpónál nem várhat (lásd a docstring 1. pontját).
+                Project.crew.any(),
+            ),
         ),
         exists().where(Contract.project_id == Project.id),
         exists().where(ContractTetel.project_id == Project.id),
