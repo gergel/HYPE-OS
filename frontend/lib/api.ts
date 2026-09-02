@@ -1486,8 +1486,9 @@ export async function getUtokovetesDetail(projectId: number): Promise<Utokovetes
 
 /** Egy projektkód, amin FORGATÁS NÉLKÜL van alvállalkozói kiadás - lásd
  * backend utokovetes_admin.py "projektkód-szintű ág". Ugyanazok a mezők,
- * mint UtokovetesOverview-én (szándékosan azonos nevekkel - lásd
- * lib/utokovetesProjektkod.ts). */
+ * mint UtokovetesOverview-én (szándékosan azonos nevekkel) - az Utókövetés
+ * oldal ezekből negatív azonosítójú közös sorokat képez (lásd
+ * app/(app)/utokovetes/page.tsx). */
 export type UtokovetesOverviewProjectCode = {
   project_code_id: number;
   projektkod: string;

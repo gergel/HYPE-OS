@@ -59,7 +59,11 @@ export function UtokovetesLista({ rows }: { rows: UtokovetesOverview[] }) {
       filterable
       rows={rows.map((r) => ({ ...r, id: r.project_id }))}
       emptyText="Nincs még diszpózott projekt."
-      getHref={(r) => `/utokovetes/${r.project_id}`}
+      // NEGATÍV azonosító = projektkód-szintű (forgatás nélküli) sor - arra
+      // a projektkód-részletnézet nyílik (lásd UtokovetesDetailModal).
+      getHref={(r) =>
+        r.project_id < 0 ? `/utokovetes/projektkodok/${-r.project_id}` : `/utokovetes/${r.project_id}`
+      }
       onRowClick={setNyitottProjekt}
       columns={[
         { header: "Projekt", render: (r) => r.project_nev ?? `#${r.project_id}`, sortAccessor: (r) => r.project_nev },

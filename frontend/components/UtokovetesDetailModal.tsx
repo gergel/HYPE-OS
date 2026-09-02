@@ -17,7 +17,13 @@ import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
  * művelettel (szerződés, TIG, törlés, állapotváltás) együtt.
  *
  * A lista mögötte marad: aki végigmegy tíz projekten, nem veszíti el a
- * szűrését és a görgetési helyét minden egyes megnyitásnál. */
+ * szűrését és a görgetési helyét minden egyes megnyitásnál.
+ *
+ * NEGATÍV projectId = PROJEKTKÓD: az utókövetés egyetlen közös listája
+ * (a felhasználó kérése) forgatásos projekteket ÉS forgatás nélküli,
+ * projektkód-szintű papírozást is tartalmaz - utóbbiak azonosítója
+ * -project_code_id-ként utazik (lásd app/(app)/utokovetes/page.tsx), és a
+ * projektkód-részletnézet nyílik rájuk. */
 export function UtokovetesDetailModal({
   projectId,
   onClose,
@@ -56,6 +62,8 @@ export function UtokovetesDetailModal({
 
   if (projectId === null) return null;
 
+  const utvonal = projectId < 0 ? `/utokovetes/projektkodok/${-projectId}` : `/utokovetes/${projectId}`;
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={close}>
       <div
@@ -67,7 +75,7 @@ export function UtokovetesDetailModal({
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
           <span className="text-[13px] text-text-secondary">Utókövetés</span>
           <div className="flex items-center gap-2">
-            <a href={`/utokovetes/${projectId}`} className="btn btn-ghost !text-[12px]">
+            <a href={utvonal} className="btn btn-ghost !text-[12px]">
               Megnyitás új oldalon →
             </a>
             <button type="button" onClick={close} className="btn btn-ghost !text-[12px]">
@@ -77,7 +85,7 @@ export function UtokovetesDetailModal({
         </div>
         <iframe
           key={projectId}
-          src={`/embed/utokovetes/${projectId}`}
+          src={`/embed${utvonal}`}
           title="Utókövetés részletei"
           className="min-h-0 flex-1 border-0 bg-background"
         />

@@ -132,7 +132,9 @@ export function UtokovetesTabla({ rows }: { rows: UtokovetesOverview[] }) {
                       <p className="truncate text-[13px] text-text-primary">{sor.project_nev ?? `#${sor.project_id}`}</p>
                       <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[11.5px] text-text-muted">
                         {sor.projektkod && <span>{sor.projektkod}</span>}
-                        <span>{datum(sor.forgatas_datuma)}</span>
+                        {/* Negatív azonosító = projektkód-szintű sor: nincs
+                            forgatása, a "–" helyett mondjuk is ki. */}
+                        <span>{sor.project_id < 0 ? "forgatás nélkül" : datum(sor.forgatas_datuma)}</span>
                       </p>
                       <p
                         className={`mt-1 text-[12px] ${
