@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 import { SearchableIdPicker } from "@/components/SearchableIdPicker";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { EszkozKivitelSor } from "@/lib/api";
@@ -30,6 +31,10 @@ export function EszkozkivitelekContent({
   canDelete: boolean;
 }) {
   const router = useRouter();
+  // Az app saját megerősítő ablaka - a natív confirm()-ot a böngésző
+  // némán blokkolhatja ("ne jelenítsen meg több párbeszédablakot"), és
+  // akkor a gomb látszólag nem csinál semmit (a felhasználó jelzése).
+  const confirm = useConfirm();
   const [valasztott, setValasztott] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [nyitott, setNyitott] = useState<Set<number>>(new Set());
@@ -57,13 +62,41 @@ export function EszkozkivitelekContent({
   }
 
   async function torol(id: number) {
-    if (!confirm("Biztosan törlöd ezt a kivitelt a beírt tételeivel együtt?")) return;
-    const res = await authFetch(`/api/v1/eszkozkivitelek/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      alert(`Sikertelen törlés: ${res.status}`);
-      return;
+    if (!(await confirm("Biztosan törlöd ezt a kivitelt a beírt tételeivel együtt?"))) return;
+    try {
+      const res = await authFetch(`/api/v1/eszkozkivitelek/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen törlés (hálózati hiba): ${err}`);
     }
-    router.refresh();
+  }
+
+  /** Fázis-átállítás a kezelőről: kivitel lezárása, visszahozatal lezárása,
+   * vagy egy lezárt kivitel újranyitása (a felhasználó kérése). */
+  async function allapotValt(id: number, allapot: string, kerdes: string) {
+    if (!(await confirm(kerdes))) return;
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/eszkozkivitelek/${id}/allapot`, {
+        method: "POST",
+        body: JSON.stringify({ allapot }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function nyitZar(id: number) {
@@ -190,15 +223,55 @@ export function EszkozkivitelekContent({
                         </tbody>
                       </table>
                     )}
-                    {canDelete && (
-                      <button
-                        type="button"
-                        onClick={() => torol(k.id)}
-                        className="mt-2 inline-flex items-center gap-1 text-[12.5px] text-text-secondary hover:text-text-danger"
-                      >
-                        <Trash2 size={13} /> Kivitel törlése
-                      </button>
-                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      {/* Fázis-léptetés a kezelőről (a felhasználó kérése) -
+                          pl. ha a stáb elfelejtette lezárni. */}
+                      {k.allapot === "kivitel" && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            allapotValt(k.id, "vissza", "Lezárod a kivitelt? Utána már csak visszahozatal írható.")
+                          }
+                          className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                        >
+                          Kivitel lezárása
+                        </button>
+                      )}
+                      {k.allapot === "vissza" && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            allapotValt(k.id, "lezart", "Lezárod a visszahozatalt? Utána a kóddal már nem írható semmi.")
+                          }
+                          className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                        >
+                          Visszahozatal lezárása
+                        </button>
+                      )}
+                      {k.allapot === "lezart" && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            allapotValt(k.id, "vissza", "Újranyitod a visszahozatalt? A kóddal újra írható lesz.")
+                          }
+                          className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                        >
+                          Újranyitás (visszahozatal)
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => torol(k.id)}
+                          className="inline-flex items-center gap-1 text-[12.5px] text-text-secondary hover:text-text-danger"
+                        >
+                          <Trash2 size={13} /> Kivitel törlése
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

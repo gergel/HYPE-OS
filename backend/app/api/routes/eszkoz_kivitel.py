@@ -375,6 +375,30 @@ def kod_generalas(
     return _admin_sor(db, kivitel)
 
 
+class AllapotKeres(BaseModel):
+    allapot: str
+
+
+@admin_router.post(
+    "/{kivitel_id}/allapot",
+    response_model=KivitelAdminSor,
+    dependencies=[Depends(require_page_action(PAGE, "edit"))],
+)
+def set_allapot(kivitel_id: int, payload: AllapotKeres, db: Session = Depends(get_db)):
+    """A kivitel fázisának átállítása a KEZELŐ oldalról (a felhasználó
+    kérése): kivitel lezárása, visszahozatal lezárása, vagy egy lezárt
+    kivitel újranyitása - az irodából, a kód nélkül is."""
+    if payload.allapot not in ("kivitel", "vissza", "lezart"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ismeretlen állapot.")
+    kivitel = db.get(EszkozKivitel, kivitel_id)
+    if kivitel is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nincs ilyen kivitel.")
+    kivitel.allapot = payload.allapot
+    db.commit()
+    db.refresh(kivitel)
+    return _admin_sor(db, kivitel)
+
+
 @admin_router.delete(
     "/{kivitel_id}",
     status_code=status.HTTP_204_NO_CONTENT,

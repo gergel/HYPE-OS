@@ -54,6 +54,12 @@ export default function EszkozKivitelOldal() {
   const [potDarabok, setPotDarabok] = useState<Map<number, number>>(new Map());
   const [lezarasNyitva, setLezarasNyitva] = useState(false);
   const [eszrevetel, setEszrevetel] = useState("");
+  //: A kivitel-lezárás KÉTLÉPCSŐS, natív confirm() nélkül: a böngésző a
+  //: natív párbeszédablakot némán blokkolhatja ("ne jelenítsen meg több
+  //: párbeszédablakot"), és akkor a gomb látszólag nem csinál semmit.
+  const [lezarasMegerosites, setLezarasMegerosites] = useState(false);
+  //: Művelet-hiba beágyazott sávként (natív alert() helyett, ugyanazért).
+  const [muveletHiba, setMuveletHiba] = useState<string | null>(null);
 
   async function belep() {
     if (!kod.trim() || busy) return;
@@ -95,13 +101,14 @@ export default function EszkozKivitelOldal() {
       );
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
-        alert(detail?.detail ?? "Nem sikerült menteni.");
+        setMuveletHiba(detail?.detail ?? "Nem sikerült menteni.");
         return false;
       }
       setAdat({ ...adat, tetelek: await res.json() });
+      setMuveletHiba(null);
       return true;
     } catch {
-      alert("Hálózati hiba - próbáld újra.");
+      setMuveletHiba("Hálózati hiba - próbáld újra.");
       return false;
     }
   }
@@ -120,7 +127,7 @@ export default function EszkozKivitelOldal() {
       );
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
-        alert(detail?.detail ?? "Nem sikerült lezárni.");
+        setMuveletHiba(detail?.detail ?? "Nem sikerült lezárni.");
         return;
       }
       setAdat(await res.json());
@@ -128,8 +135,10 @@ export default function EszkozKivitelOldal() {
       setPotKivitel(false);
       setPotDarabok(new Map());
       setLezarasNyitva(false);
+      setLezarasMegerosites(false);
+      setMuveletHiba(null);
     } catch {
-      alert("Hálózati hiba - próbáld újra.");
+      setMuveletHiba("Hálózati hiba - próbáld újra.");
     } finally {
       setBusy(false);
     }
@@ -407,21 +416,47 @@ export default function EszkozKivitelOldal() {
           />
         )}
 
-        {/* FÁZIS-GOMBOK. */}
+        {/* FÁZIS-GOMBOK. A kivitel-lezárás kétlépcsős: első koppintásra a gomb
+            megerősítést kér, a másodikra zár - natív confirm() nélkül. */}
+        {muveletHiba && (
+          <p className="mt-6 rounded-[var(--radius)] border border-text-danger/40 bg-surface-2 px-3 py-2 text-[13.5px] text-text-danger">
+            {muveletHiba}
+          </p>
+        )}
         <div className="mt-8 space-y-2">
           {fazisKivitel ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                if (confirm("Biztosan lezárod a kivitelt? Utána már csak a visszahozatalt tudod beírni.")) {
-                  void lezar("kivitel");
-                }
-              }}
-              className="w-full rounded-[var(--radius-lg)] bg-text-accent px-4 py-3.5 text-[16px] font-semibold text-surface-1 disabled:opacity-50"
-            >
-              Kivitel lezárása – indulhat a forgatás
-            </button>
+            !lezarasMegerosites ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setLezarasMegerosites(true)}
+                className="w-full rounded-[var(--radius-lg)] bg-text-accent px-4 py-3.5 text-[16px] font-semibold text-surface-1 disabled:opacity-50"
+              >
+                Kivitel lezárása – indulhat a forgatás
+              </button>
+            ) : (
+              <>
+                <p className="text-center text-[13.5px] text-text-secondary">
+                  Biztosan lezárod? Utána már csak a visszahozatalt tudod beírni.
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void lezar("kivitel")}
+                  className="w-full rounded-[var(--radius-lg)] bg-text-accent px-4 py-3.5 text-[16px] font-semibold text-surface-1 disabled:opacity-50"
+                >
+                  Igen, lezárom a kivitelt
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setLezarasMegerosites(false)}
+                  className="w-full rounded-[var(--radius-lg)] border border-border px-4 py-3 text-[14.5px] text-text-secondary hover:bg-surface-2"
+                >
+                  Mégse, még dolgozom rajta
+                </button>
+              </>
+            )
           ) : (
             !potKivitel && (
               <>
