@@ -1074,10 +1074,15 @@ def szamlak_zip(
 
 # --- Utalásra váró számlák --------------------------------------------------
 #
-# Ami már megérkezett hozzánk számlaként, de még nem utaltuk el. Három helyről
-# jön össze - a felület egyben mutatja őket, hogy az utalási körnél ne kelljen
-# három listát végigkattintani, és a kijelöltek számlái egyetlen ZIP-ben
-# letölthetők legyenek (azt viszi a könyvelő/ügyintéző a banki utaláshoz).
+# Ami már megérkezett hozzánk számlaként, de még nem utaltuk el. Két helyről
+# jön össze (külsős és belsős TIG-ek) - a felület egyben mutatja őket, hogy az
+# utalási körnél ne kelljen több listát végigkattintani, és a kijelöltek
+# számlái egyetlen ZIP-ben letölthetők legyenek (azt viszi a
+# könyvelő/ügyintéző a banki utaláshoz).
+#
+# A KIADÁSOK szándékosan NEM szerepelnek itt (a felhasználó kérése): a
+# házirendjük szerint amit kiadásként rögzítenek, az már el van utalva -
+# a kiadás-sor maga a megtörtént fizetés könyvelése, nem fizetnivaló.
 
 
 #: A fedezettség lehetséges állapotai (lásd _fedezettseg).
@@ -1121,24 +1126,6 @@ def _belsos_honap(tig) -> tuple[int, int]:
     return belsos_tig_honapja(
         tig.ev, tig.honap, tig.teljesites_datuma, tig.fizetesi_hatarido, tig.utalas_datuma
     )
-
-
-def _szamla_csatolmanyok(db: Session, entity_type: str, entity_ids: list[int]) -> dict[int, list[DocumentAttachment]]:
-    """Rekordonként a SZÁMLA kategóriájú csatolmányok (feltöltve vagy Notionból
-    átemelve) - ez az, ami az utaláshoz kell."""
-    if not entity_ids:
-        return {}
-    sorok = db.scalars(
-        select(DocumentAttachment).where(
-            DocumentAttachment.entity_type == entity_type,
-            DocumentAttachment.entity_id.in_(entity_ids),
-            DocumentAttachment.kategoria == "szamla",
-        )
-    ).all()
-    eredmeny: dict[int, list[DocumentAttachment]] = {}
-    for sor in sorok:
-        eredmeny.setdefault(sor.entity_id, []).append(sor)
-    return eredmeny
 
 
 def _projektkod_fedezet(db: Session) -> tuple[dict[int, str], set[int]]:
@@ -1198,58 +1185,23 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
     """(tétel, [(fájlnév a ZIP-ben, tárhely-kulcs)]) párok.
 
     "Utalásra vár" az, ami még nincs kifizetve:
-      - kiadás, ami nincs késznek jelölve, nincs fizetési dátuma, és VAN
-        feltöltött számlája (enélkül utalni sem tudnánk mi alapján),
       - külsős TIG, aminek van számlája, de nincs kifizetettként jelölve,
       - belsős TIG, ami LE VAN ZÁRVA (a TIG legenerálva és kiküldve a
         munkatársnak), van összege és nem kihagyott hónap - számla viszont
         nem kell hozzá: a belsős munkatárs nem számlázik, a TIG maga a papír.
 
-    A kiadásokhoz és a külsős TIG-ekhez kiszámoljuk a FEDEZETTSÉGET is: megjött-e
+    A KIADÁS-sorok szándékosan nincsenek itt (a felhasználó kérése): náluk a
+    kiadás rögzítése azt jelenti, hogy a pénz MÁR elment - a Notionből
+    importált és a kézzel felvitt kiadás is a megtörtént fizetés könyvelése,
+    nem utalnivaló (korábban az Adobe/Dropbox-féle, fizetési dátum nélkül
+    importált sorok hamis "fizetendőként" ültek a listán).
+
+    A külsős TIG-ekhez kiszámoljuk a FEDEZETTSÉGET is: megjött-e
     már a pénz arra a projektkódra, amihez tartozik (lásd _fedezettseg) - ebből
     látszik, kinek mehet nyugodtan az utalás. A belsős TIG ebből kimarad: a bér
     nem a megrendelő pénzéből megy, tehát sosem vár fedezetre."""
     eredmeny: list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]] = []
     kodok, kifizetett = _projektkod_fedezet(db)
-
-    kiadasok = list(
-        db.scalars(
-            select(Expense).where(Expense.kesz.is_(False), Expense.fizetes_datuma.is_(None))
-        ).all()
-    )
-    csatolmanyok = _szamla_csatolmanyok(db, "expense", [k.id for k in kiadasok])
-    munkatarsak = {
-        e.id: e.full_name
-        for e in db.scalars(
-            select(Employee).where(Employee.id.in_([k.employee_id for k in kiadasok if k.employee_id]))
-        ).all()
-    } if kiadasok else {}
-    for kiadas in kiadasok:
-        fajlok = csatolmanyok.get(kiadas.id) or []
-        if not fajlok:
-            continue
-        allapot, minden_kod, fedezetlen = _fedezettseg(
-            [kiadas.project_code_id] if kiadas.project_code_id else [], kodok, kifizetett
-        )
-        eredmeny.append(
-            (
-                UtalasraVaroTetel(
-                    fedezettseg=allapot,
-                    projektkodok=minden_kod,
-                    fedezetlen_projektkodok=fedezetlen,
-                    kulcs=f"expense:{kiadas.id}",
-                    tipus="Kiadás",
-                    megnevezes=kiadas.megnevezes,
-                    kinek=munkatarsak.get(kiadas.employee_id) if kiadas.employee_id else None,
-                    osszeg=float(kiadas.brutto) if kiadas.brutto is not None else (float(kiadas.netto) if kiadas.netto is not None else None),
-                    penznem=kiadas.penznem or "HUF",
-                    hatarido=kiadas.fizetes_hatarideje,
-                    szamla_db=len(fajlok),
-                    link=f"/penzugyek/kiadas/{kiadas.id}",
-                ),
-                [(f"kiadas_{kiadas.id}_{f.id}_{f.filename}", f.storage_key) for f in fajlok],
-            )
-        )
 
     kulsos = (
         db.query(PerformanceCertificate)
