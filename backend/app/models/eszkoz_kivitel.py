@@ -17,7 +17,7 @@ generálni és onnan kiadni."""
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -33,6 +33,16 @@ class EszkozKivitel(TimestampMixin, Base):
     #: A belépő kód: 6 számjegy, vagy a mindig élő "admin" (teszt).
     kod: Mapped[str] = mapped_column(String(12), unique=True, nullable=False)
     teszt: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: A folyamat fázisa (a felhasználó kérése, hogy ne lehessen csalni):
+    #:   "kivitel" - csak kivitel írható;
+    #:   "vissza"  - a kivitel lezárva, csak visszahozatal írható (a kivitt
+    #:               lista a publikus oldalon már nem látszik; pót-kivitel
+    #:               csak NÖVELÉSKÉNT vihető fel, a korábbiak nélkül);
+    #:   "lezart"  - minden lezárva, csak a kezelő oldal látja.
+    allapot: Mapped[str] = mapped_column(String(20), nullable=False, default="kivitel")
+    #: A visszahozatal lezárásakor megadható észrevétel (eszközökről,
+    #: forgatásról) - kihagyható.
+    megjegyzes: Mapped[str | None] = mapped_column(Text)
 
     project = relationship("Project")
     tetelek: Mapped[list["EszkozKivitelTetel"]] = relationship(

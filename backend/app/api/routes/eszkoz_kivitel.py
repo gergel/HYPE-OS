@@ -101,6 +101,8 @@ class BelepesValasz(BaseModel):
     forgatas_vege: date | None
     ervenyes_eddig: date | None
     teszt: bool
+    #: "kivitel" | "vissza" | "lezart" - lásd models/eszkoz_kivitel.py.
+    allapot: str
     ajanlott: list[AjanlottTetel]
     tetelek: list[KivitelTetelInfo]
     #: A teljes eszközkészlet a keresőhöz - kategória szerint csoportosítva
@@ -116,21 +118,31 @@ class TetelKeres(BaseModel):
     equipment_id: int
     kivitt_db: int | None = None
     visszahozott_db: int | None = None
+    #: PÓT-KIVITEL a visszahozatal fázisban: ennyivel NŐ a kivitt darabszám.
+    #: Szándékosan csak növelés (nem beállítás): a korábban beírt kivitelt a
+    #: visszahozatal fázisban már nem lehet se látni, se csökkenteni - ez
+    #: zárja ki a "visszaírom kevesebbre, amit kivittem" csalást.
+    kivitt_hozzaadas: int | None = None
 
 
-def _tetelek_valasz(db: Session, kivitel: EszkozKivitel) -> list[KivitelTetelInfo]:
+def _tetelek_valasz(db: Session, kivitel: EszkozKivitel, publikus: bool = False) -> list[KivitelTetelInfo]:
+    """A tételek. `publikus=True` esetén a kivitel-fázis LEZÁRÁSA után a
+    kivitt darabszámok kinullázva mennek ki - a hiány csak a kezelő oldalon
+    derülhet ki, és a hálózati válaszból se lehessen kiolvasni, mit kellene
+    "visszahozottnak" írni (a felhasználó kérése)."""
     sorok = db.scalars(
         select(EszkozKivitelTetel)
         .where(EszkozKivitelTetel.kivitel_id == kivitel.id)
         .options(selectinload(EszkozKivitelTetel.equipment))
         .order_by(EszkozKivitelTetel.id)
     ).all()
+    rejtett_kivitt = publikus and kivitel.allapot != "kivitel"
     return [
         KivitelTetelInfo(
             id=t.equipment_id,
             nev=t.equipment.nev if t.equipment else f"#{t.equipment_id}",
             kategoria=t.equipment.kategoria if t.equipment else None,
-            kivitt_db=t.kivitt_db,
+            kivitt_db=0 if rejtett_kivitt else t.kivitt_db,
             visszahozott_db=t.visszahozott_db,
         )
         for t in sorok
@@ -167,8 +179,9 @@ def _belepes_valasz(db: Session, kivitel: EszkozKivitel) -> BelepesValasz:
         forgatas_vege=(project.forgatas_datuma_vege or project.forgatas_datuma) if project else None,
         ervenyes_eddig=ervenyes_eddig(kivitel),
         teszt=kivitel.teszt,
+        allapot=kivitel.allapot,
         ajanlott=ajanlott,
-        tetelek=_tetelek_valasz(db, kivitel),
+        tetelek=_tetelek_valasz(db, kivitel, publikus=True),
         eszkozok=eszkozok,
     )
 
@@ -176,19 +189,44 @@ def _belepes_valasz(db: Session, kivitel: EszkozKivitel) -> BelepesValasz:
 @public_router.post("/belepes", response_model=BelepesValasz)
 def belepes(payload: BelepesKeres, db: Session = Depends(get_db)):
     """Belépés kóddal - vissza a forgatás adatai, a kiírt technika (súgó), a
-    már beírt tételek és a keresőhöz a teljes eszközlista."""
+    már beírt tételek és a keresőhöz a teljes eszközlista.
+
+    Az admin (teszt) kivitel LEZÁRT állapotban belépéskor tisztán újraindul
+    - így akárhányszor végig lehet próbálni a teljes folyamatot."""
     kivitel = _kivitel_a_kodhoz(db, payload.kod)
+    if kivitel.teszt and kivitel.allapot == "lezart":
+        db.query(EszkozKivitelTetel).filter(EszkozKivitelTetel.kivitel_id == kivitel.id).delete()
+        kivitel.allapot = "kivitel"
+        kivitel.megjegyzes = None
+        db.commit()
     return _belepes_valasz(db, kivitel)
 
 
 @public_router.put("/{kod}/tetel", response_model=list[KivitelTetelInfo])
 def tetel_mentes(kod: str, payload: TetelKeres, db: Session = Depends(get_db)):
-    """Egy eszköz kivitt/visszahozott darabszámának beírása (upsert).
+    """Egy eszköz darabszámainak beírása (upsert) - FÁZISHOZ kötve.
 
-    Csak a megadott mező változik (a kivitel-képernyő a kivittet, a
-    visszahozatal-képernyő a visszahozottat írja). Ha mindkét szám nullára
-    csökken, a sor törlődik - így a véletlen kattintás visszavonható."""
+    - "kivitel" fázisban csak a kivitt darab írható (kivitt_db);
+    - "vissza" fázisban a visszahozott darab írható (visszahozott_db), és
+      pót-kivitel vihető fel NÖVELÉSKÉNT (kivitt_hozzaadas) - a korábbi
+      kivitel nem látható és nem csökkenthető (ne lehessen csalni);
+    - "lezart" állapotban semmi.
+
+    Ha a kivitel fázisban mindkét szám nullára csökken, a sor törlődik -
+    így a véletlen kattintás visszavonható."""
     kivitel = _kivitel_a_kodhoz(db, kod)
+    if kivitel.allapot == "lezart":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ez a kivitel már le van zárva.")
+    if kivitel.allapot == "kivitel" and (payload.visszahozott_db is not None or payload.kivitt_hozzaadas is not None):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A visszahozatal csak a kivitel lezárása után írható.",
+        )
+    if kivitel.allapot == "vissza" and payload.kivitt_db is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A kivitel már lezárult - pót-kivitel csak hozzáadásként vihető fel.",
+        )
     eszkoz = db.get(Equipment, payload.equipment_id)
     if eszkoz is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nincs ilyen eszköz.")
@@ -203,6 +241,9 @@ def tetel_mentes(kod: str, payload: TetelKeres, db: Session = Depends(get_db)):
         db.add(tetel)
     if payload.kivitt_db is not None:
         tetel.kivitt_db = max(0, payload.kivitt_db)
+    if payload.kivitt_hozzaadas is not None:
+        # Csak pozitív irányban - lásd a TetelKeres mező-kommentjét.
+        tetel.kivitt_db = (tetel.kivitt_db or 0) + max(0, payload.kivitt_hozzaadas)
     if payload.visszahozott_db is not None:
         tetel.visszahozott_db = max(0, payload.visszahozott_db)
     if tetel.kivitt_db == 0 and tetel.visszahozott_db == 0:
@@ -211,7 +252,39 @@ def tetel_mentes(kod: str, payload: TetelKeres, db: Session = Depends(get_db)):
         else:
             db.expunge(tetel)
     db.commit()
-    return _tetelek_valasz(db, kivitel)
+    return _tetelek_valasz(db, kivitel, publikus=True)
+
+
+class LezarasKeres(BaseModel):
+    #: "kivitel" (kivitel vége -> jöhet a visszahozatal) vagy "vissza"
+    #: (minden lezárva).
+    mit: str
+    #: A visszahozatal lezárásakor megadható észrevétel - kihagyható.
+    megjegyzes: str | None = None
+
+
+@public_router.post("/{kod}/lezaras", response_model=BelepesValasz)
+def lezaras(kod: str, payload: LezarasKeres, db: Session = Depends(get_db)):
+    """Fázis-lezárás: a kivitel vége után jön a visszahozatal, a
+    visszahozatal vége után minden lezárul (opcionális észrevétellel)."""
+    kivitel = _kivitel_a_kodhoz(db, kod)
+    if payload.mit == "kivitel":
+        if kivitel.allapot != "kivitel":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A kivitel már le van zárva.")
+        kivitel.allapot = "vissza"
+    elif payload.mit == "vissza":
+        if kivitel.allapot != "vissza":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A visszahozatal csak a kivitel lezárása után zárható le.",
+            )
+        kivitel.allapot = "lezart"
+        if payload.megjegyzes and payload.megjegyzes.strip():
+            kivitel.megjegyzes = payload.megjegyzes.strip()
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ismeretlen lezárás.")
+    db.commit()
+    return _belepes_valasz(db, kivitel)
 
 
 # ── Kezelő végpontok (bejelentkezve, saját oldal-joggal) ─────────────────────
@@ -227,6 +300,9 @@ class KivitelAdminSor(BaseModel):
     forgatas_datuma: date | None
     ervenyes_eddig: date | None
     ervenyes: bool
+    allapot: str
+    #: A visszahozatal lezárásakor megadott észrevétel (ha volt).
+    megjegyzes: str | None
     tetelek: list[KivitelTetelInfo]
     #: Hány tételből hoztak vissza kevesebbet, mint amennyi kiment.
     hianyos_tetelek: int
@@ -249,6 +325,8 @@ def _admin_sor(db: Session, kivitel: EszkozKivitel) -> KivitelAdminSor:
         forgatas_datuma=project.forgatas_datuma if project else None,
         ervenyes_eddig=ervenyes_eddig(kivitel),
         ervenyes=kivitel_ervenyes(kivitel),
+        allapot=kivitel.allapot,
+        megjegyzes=kivitel.megjegyzes,
         tetelek=tetelek,
         hianyos_tetelek=sum(1 for t in tetelek if t.visszahozott_db < t.kivitt_db),
     )

@@ -16,6 +16,7 @@ type Belepes = {
   forgatas_vege: string | null;
   ervenyes_eddig: string | null;
   teszt: boolean;
+  allapot: "kivitel" | "vissza" | "lezart";
   ajanlott: Ajanlott[];
   tetelek: Tetel[];
   eszkozok: Eszkoz[];
@@ -26,23 +27,33 @@ function datum(value: string | null): string {
 }
 
 /** Publikus (bejelentkezés nélküli) ESZKÖZKIVITELI oldal - a felhasználó
- * kérése: a forgatásra kimenő ember egy 6 jegyű kóddal belép, és beírja,
- * pontosan mit visz ki (a forgatásra kiírt technika csak súgó - mást is
- * vihet), majd visszaérve azt, hogy mit hozott vissza (ott már súgó nélkül).
- * A hiány - mi nem jött vissza - szándékosan NEM itt, hanem a bejelentkezett
- * kezelő oldalon látszik (/eszkozkivitelek).
+ * kérése szerint FÁZISOKBAN:
  *
- * Az "admin" kód mindig él, és egy teszt-kivitelbe lép be. A keresés a
- * diszpós listánál átláthatóbb: kategóriánként csoportosított, színezett,
- * nagy találat-gombok (a felhasználó kérése). */
+ * 1. KIVITEL: a forgatásra kiírt technika súgó + kereső; a "Kivitel
+ *    lezárása" gombbal zárul.
+ * 2. VISSZAHOZATAL: a kivitt lista már NEM látszik (a backend a kivitt
+ *    darabszámokat ki is nullázza a publikus válaszban), így nem lehet
+ *    belőle "visszamásolni", mit kellene visszahozottnak írni. Innen
+ *    nyitható a PÓT-KIVITEL (újabb kivitel felvezetése): csak hozzáadás,
+ *    a korábbi kivitel nélkül.
+ * 3. LEZÁRÁS: a visszahozatal lezárásakor megadható (vagy kihagyható) egy
+ *    észrevétel az eszközökről/forgatásról.
+ *
+ * Az "admin" kód mindig él, a teszt-kivitelbe visz, és lezárás után
+ * belépéskor tisztán újraindul - a folyamat akárhányszor végigpróbálható. */
 export default function EszkozKivitelOldal() {
   const [kod, setKod] = useState("");
   const [adat, setAdat] = useState<Belepes | null>(null);
   const [aktivKod, setAktivKod] = useState("");
   const [hiba, setHiba] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [mod, setMod] = useState<"kivitel" | "vissza">("kivitel");
   const [kereses, setKereses] = useState("");
+  //: Pót-kivitel mód a visszahozatal fázisban - a most hozzáadott darabok
+  //: KLIENS-oldali számlálója (a szerver a teljes kivittet nem adja vissza).
+  const [potKivitel, setPotKivitel] = useState(false);
+  const [potDarabok, setPotDarabok] = useState<Map<number, number>>(new Map());
+  const [lezarasNyitva, setLezarasNyitva] = useState(false);
+  const [eszrevetel, setEszrevetel] = useState("");
 
   async function belep() {
     if (!kod.trim() || busy) return;
@@ -62,6 +73,8 @@ export default function EszkozKivitelOldal() {
       setAdat(await res.json());
       setAktivKod(kod.trim());
       setKereses("");
+      setPotKivitel(false);
+      setPotDarabok(new Map());
     } catch {
       setHiba("Hálózati hiba - próbáld újra.");
     } finally {
@@ -69,24 +82,56 @@ export default function EszkozKivitelOldal() {
     }
   }
 
-  /** Egy eszköz darabszámának mentése - a szerver a teljes tétel-listát adja
-   * vissza, így a képernyő mindig a valós állapotot mutatja. */
-  async function ment(equipmentId: number, mezo: "kivitt_db" | "visszahozott_db", darab: number) {
-    if (!adat) return;
+  async function ment(equipmentId: number, mezok: Record<string, number>) {
+    if (!adat) return false;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/public/eszkozkivitel/${encodeURIComponent(aktivKod)}/tetel`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ equipment_id: equipmentId, [mezo]: darab }),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/v1/public/eszkozkivitel/${encodeURIComponent(aktivKod)}/tetel`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ equipment_id: equipmentId, ...mezok }),
+        },
+      );
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         alert(detail?.detail ?? "Nem sikerült menteni.");
-        return;
+        return false;
       }
       setAdat({ ...adat, tetelek: await res.json() });
+      return true;
     } catch {
       alert("Hálózati hiba - próbáld újra.");
+      return false;
+    }
+  }
+
+  async function lezar(mit: "kivitel" | "vissza", megjegyzes?: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v1/public/eszkozkivitel/${encodeURIComponent(aktivKod)}/lezaras`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mit, megjegyzes: megjegyzes || null }),
+        },
+      );
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(detail?.detail ?? "Nem sikerült lezárni.");
+        return;
+      }
+      setAdat(await res.json());
+      setKereses("");
+      setPotKivitel(false);
+      setPotDarabok(new Map());
+      setLezarasNyitva(false);
+    } catch {
+      alert("Hálózati hiba - próbáld újra.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -111,11 +156,6 @@ export default function EszkozKivitelOldal() {
     }
     return [...csoportok.entries()];
   }, [adat, kereses]);
-
-  const aktualisMezo = mod === "kivitel" ? "kivitt_db" : "visszahozott_db";
-  const listam = (adat?.tetelek ?? []).filter((t) =>
-    mod === "kivitel" ? t.kivitt_db > 0 : t.visszahozott_db > 0,
-  );
 
   // ── 1. képernyő: kód ───────────────────────────────────────────────────────
   if (!adat) {
@@ -156,15 +196,64 @@ export default function EszkozKivitelOldal() {
     );
   }
 
-  // ── 2. képernyő: kivitel / visszahozatal ──────────────────────────────────
+  // ── Lezárt kivitel ────────────────────────────────────────────────────────
+  if (adat.allapot === "lezart") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-surface-1 p-6">
+        <div className="w-full max-w-sm text-center">
+          <p className="text-4xl">✅</p>
+          <h1 className="mt-3 text-xl font-semibold text-text-primary">Ez a kivitel le van zárva</h1>
+          <p className="mt-2 text-[14px] text-text-secondary">
+            Köszönjük! A kivitel és a visszahozatal rögzítve van - ha mégis módosítani kell, szólj az
+            irodának.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  const fazisKivitel = adat.allapot === "kivitel";
+  const kivitelLista = adat.tetelek.filter((t) => t.kivitt_db > 0);
+  const visszaLista = adat.tetelek.filter((t) => t.visszahozott_db > 0);
+
+  /** Mit tegyen a kereső-találatra kattintás az aktuális fázisban. */
+  async function talalatKattintas(e: Eszkoz) {
+    if (fazisKivitel) {
+      const darab = tetelTerkep.get(e.id)?.kivitt_db ?? 0;
+      await ment(e.id, { kivitt_db: darab + 1 });
+    } else if (potKivitel) {
+      const ok = await ment(e.id, { kivitt_hozzaadas: 1 });
+      if (ok) {
+        setPotDarabok((elozo) => {
+          const uj = new Map(elozo);
+          uj.set(e.id, (uj.get(e.id) ?? 0) + 1);
+          return uj;
+        });
+      }
+    } else {
+      const darab = tetelTerkep.get(e.id)?.visszahozott_db ?? 0;
+      await ment(e.id, { visszahozott_db: darab + 1 });
+    }
+  }
+
+  const keresoSzoveg = fazisKivitel
+    ? "Keress eszközt, amit kiviszel…"
+    : potKivitel
+      ? "Keress eszközt, amit még kiviszel…"
+      : "Keress eszközt, amit visszahoztál…";
+
   return (
     <main className="min-h-screen bg-surface-1 pb-24">
       <div className="mx-auto w-full max-w-3xl p-4 md:p-8">
         <header className="mb-5">
-          <p className="text-[12.5px] uppercase tracking-wide text-text-muted">Eszközkivitel</p>
+          <p className="text-[12.5px] uppercase tracking-wide text-text-muted">
+            Eszközkivitel · {fazisKivitel ? "1. lépés: kivitel" : potKivitel ? "pót-kivitel" : "2. lépés: visszahozatal"}
+          </p>
           <h1 className="text-xl font-semibold text-text-primary">
             {adat.projekt_nev ?? "Forgatás"}
-            {adat.teszt && <span className="ml-2 rounded-full bg-surface-3 px-2 py-0.5 text-[12px] text-text-warning">TESZT</span>}
+            {adat.teszt && (
+              <span className="ml-2 rounded-full bg-surface-3 px-2 py-0.5 text-[12px] text-text-warning">TESZT</span>
+            )}
           </h1>
           <p className="mt-1 text-[13px] text-text-secondary">
             Forgatás: {datum(adat.forgatas_datuma)}
@@ -173,33 +262,8 @@ export default function EszkozKivitelOldal() {
           </p>
         </header>
 
-        {/* Mód-váltó: két nagy gomb. */}
-        <div className="mb-5 grid grid-cols-2 gap-2">
-          {(
-            [
-              ["kivitel", "Kivitel", "Mit viszel ki a forgatásra?"],
-              ["vissza", "Visszahozatal", "Mit hoztál vissza?"],
-            ] as const
-          ).map(([kulcs, cim, leiras]) => (
-            <button
-              key={kulcs}
-              type="button"
-              onClick={() => {
-                setMod(kulcs);
-                setKereses("");
-              }}
-              className={`rounded-[var(--radius-lg)] border p-3 text-left ${
-                mod === kulcs ? "border-text-accent bg-surface-2" : "border-border bg-surface-2/50 opacity-70"
-              }`}
-            >
-              <span className="block text-[15px] font-semibold text-text-primary">{cim}</span>
-              <span className="block text-[12px] text-text-muted">{leiras}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* SÚGÓ - csak a kivitelnél: a forgatásra kiírt technika. */}
-        {mod === "kivitel" && adat.ajanlott.length > 0 && (
+        {/* SÚGÓ - csak a kivitel fázisban: a forgatásra kiírt technika. */}
+        {fazisKivitel && adat.ajanlott.length > 0 && (
           <section className="mb-5 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-3">
             <p className="mb-2 text-[13px] font-medium text-text-primary">Erre a forgatásra ez lett kiírva</p>
             <p className="mb-2 text-[12px] text-text-muted">
@@ -213,7 +277,7 @@ export default function EszkozKivitelOldal() {
                   <button
                     key={a.id}
                     type="button"
-                    onClick={() => void ment(a.id, "kivitt_db", megvan ? 0 : a.db)}
+                    onClick={() => void ment(a.id, { kivitt_db: megvan ? 0 : a.db })}
                     className={`rounded-full px-3 py-1.5 text-[13.5px] ${megvan ? "ring-2 ring-text-accent" : ""}`}
                     style={{ background: c.bg, color: c.text }}
                   >
@@ -227,12 +291,33 @@ export default function EszkozKivitelOldal() {
           </section>
         )}
 
+        {/* PÓT-KIVITEL magyarázat. */}
+        {!fazisKivitel && potKivitel && (
+          <section className="mb-5 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-3">
+            <p className="text-[13px] text-text-primary">
+              Újabb kivitelt vezetsz fel: amit itt beírsz, HOZZÁADÓDIK a kivitelhez. A korábban beírt
+              kivitel itt nem látszik, és nem is módosítható.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setPotKivitel(false);
+                setPotDarabok(new Map());
+                setKereses("");
+              }}
+              className="mt-2 rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+            >
+              ← Kész, vissza a visszahozatalhoz
+            </button>
+          </section>
+        )}
+
         {/* KERESŐ - kategóriánként csoportosított, nagy találat-gombok. */}
         <section className="mb-5">
           <input
             value={kereses}
             onChange={(e) => setKereses(e.target.value)}
-            placeholder={mod === "kivitel" ? "Keress eszközt, amit kiviszel…" : "Keress eszközt, amit visszahoztál…"}
+            placeholder={keresoSzoveg}
             aria-label="Eszköz keresése"
             className="w-full rounded-[var(--radius-lg)] border border-border bg-surface-2 px-4 py-3 text-[16px] text-text-primary focus:outline-none"
           />
@@ -251,12 +336,16 @@ export default function EszkozKivitelOldal() {
                     </p>
                     <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                       {elemek.map((e) => {
-                        const darab = (tetelTerkep.get(e.id)?.[aktualisMezo] ?? 0) as number;
+                        const darab = fazisKivitel
+                          ? (tetelTerkep.get(e.id)?.kivitt_db ?? 0)
+                          : potKivitel
+                            ? (potDarabok.get(e.id) ?? 0)
+                            : (tetelTerkep.get(e.id)?.visszahozott_db ?? 0);
                         return (
                           <button
                             key={e.id}
                             type="button"
-                            onClick={() => void ment(e.id, aktualisMezo, darab + 1)}
+                            onClick={() => void talalatKattintas(e)}
                             className="flex items-center justify-between rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5 text-left text-[14px] text-text-primary hover:border-text-accent/50"
                           >
                             <span className="truncate">{e.nev}</span>
@@ -274,62 +363,213 @@ export default function EszkozKivitelOldal() {
           )}
         </section>
 
-        {/* A SAJÁT LISTÁM - amit ebben a módban már beírtam. */}
-        <section>
-          <p className="mb-2 text-[13px] font-medium text-text-primary">
-            {mod === "kivitel" ? "Amit kiviszek" : "Amit visszahoztam"}
-            {listam.length > 0 && <span className="ml-1 text-text-muted">({listam.length} tétel)</span>}
-          </p>
-          {listam.length === 0 ? (
-            <p className="rounded-[var(--radius-lg)] border border-dashed border-border p-4 text-[13px] text-text-muted">
-              {mod === "kivitel"
-                ? "Még nincs beírva semmi - válassz a kiírt technikából, vagy keress rá fent."
-                : "Még nincs beírva semmi - keress rá fent arra, amit visszahoztál."}
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              {listam.map((t) => {
-                const darab = t[aktualisMezo];
-                const c = selectColor(t.kategoria?.trim() || t.nev);
-                return (
-                  <div
-                    key={t.id}
-                    className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border bg-surface-2 px-3 py-2.5"
-                  >
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.text }} />
-                    <span className="min-w-0 flex-1 truncate text-[14.5px] text-text-primary">{t.nev}</span>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <button
-                        type="button"
-                        aria-label="Kevesebb"
-                        onClick={() => void ment(t.id, aktualisMezo, darab - 1)}
-                        className="h-9 w-9 rounded-full border border-border text-[18px] text-text-secondary hover:bg-surface-3"
-                      >
-                        −
-                      </button>
-                      <span className="w-10 text-center text-[15px] font-semibold tabular-nums text-text-primary">
-                        {darab}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label="Több"
-                        onClick={() => void ment(t.id, aktualisMezo, darab + 1)}
-                        className="h-9 w-9 rounded-full border border-border text-[18px] text-text-secondary hover:bg-surface-3"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                );
+        {/* A LISTÁM az aktuális fázisban. */}
+        {fazisKivitel && (
+          <SajatLista
+            cim="Amit kiviszek"
+            ures="Még nincs beírva semmi - válassz a kiírt technikából, vagy keress rá fent."
+            sorok={kivitelLista.map((t) => ({ ...t, darab: t.kivitt_db }))}
+            valtoztat={(id, darab) => void ment(id, { kivitt_db: darab })}
+          />
+        )}
+        {!fazisKivitel && !potKivitel && (
+          <SajatLista
+            cim="Amit visszahoztam"
+            ures="Még nincs beírva semmi - keress rá fent arra, amit visszahoztál."
+            sorok={visszaLista.map((t) => ({ ...t, darab: t.visszahozott_db }))}
+            valtoztat={(id, darab) => void ment(id, { visszahozott_db: darab })}
+          />
+        )}
+        {!fazisKivitel && potKivitel && (
+          <SajatLista
+            cim="Amit most viszek ki (pót-kivitel)"
+            ures="Még nincs beírva semmi - keress rá fent."
+            sorok={[...potDarabok.entries()]
+              .filter(([, darab]) => darab > 0)
+              .map(([id, darab]) => {
+                const e = adat.eszkozok.find((x) => x.id === id);
+                return { id, nev: e?.nev ?? `#${id}`, kategoria: e?.kategoria ?? null, darab };
               })}
-            </div>
-          )}
-        </section>
+            // Pót-kivitelnél csak NÖVELNI lehet (a csökkentés a korábbi
+            // kivitelt is vissza tudná írni) - a "-" gomb ezért nincs.
+            csakNoveles
+            valtoztat={(id) => {
+              void ment(id, { kivitt_hozzaadas: 1 }).then((ok) => {
+                if (ok) {
+                  setPotDarabok((elozo) => {
+                    const uj = new Map(elozo);
+                    uj.set(id, (uj.get(id) ?? 0) + 1);
+                    return uj;
+                  });
+                }
+              });
+            }}
+          />
+        )}
 
-        <footer className="mt-8 text-center text-[12px] text-text-muted">
-          Minden beírás azonnal mentődik. Kilépéshez egyszerűen zárd be az oldalt.
-        </footer>
+        {/* FÁZIS-GOMBOK. */}
+        <div className="mt-8 space-y-2">
+          {fazisKivitel ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (confirm("Biztosan lezárod a kivitelt? Utána már csak a visszahozatalt tudod beírni.")) {
+                  void lezar("kivitel");
+                }
+              }}
+              className="w-full rounded-[var(--radius-lg)] bg-text-accent px-4 py-3.5 text-[16px] font-semibold text-surface-1 disabled:opacity-50"
+            >
+              Kivitel lezárása – indulhat a forgatás
+            </button>
+          ) : (
+            !potKivitel && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setLezarasNyitva(true)}
+                  className="w-full rounded-[var(--radius-lg)] bg-text-accent px-4 py-3.5 text-[16px] font-semibold text-surface-1 disabled:opacity-50"
+                >
+                  Visszahozatal lezárása
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setPotKivitel(true);
+                    setKereses("");
+                  }}
+                  className="w-full rounded-[var(--radius-lg)] border border-border px-4 py-3 text-[14.5px] text-text-secondary hover:bg-surface-2"
+                >
+                  Újabb kivitel felvezetése
+                </button>
+              </>
+            )
+          )}
+        </div>
+
+        <footer className="mt-6 text-center text-[12px] text-text-muted">Minden beírás azonnal mentődik.</footer>
       </div>
+
+      {/* LEZÁRÁS-ABLAK: észrevétel megadható vagy kihagyható. */}
+      {lezarasNyitva && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setLezarasNyitva(false);
+          }}
+        >
+          <div className="w-full max-w-md rounded-[var(--radius-lg)] border border-border bg-surface-1 p-4 shadow-xl">
+            <h2 className="text-[16px] font-semibold text-text-primary">Mielőtt lezárod…</h2>
+            <p className="mt-1 text-[13.5px] text-text-secondary">
+              Volt az eszközökkel vagy a forgatással kapcsolatban észrevétel, vagy bármi, amiről jó, ha
+              tudunk? (Pl. sérült eszköz, hiányzó tartozék.)
+            </p>
+            <textarea
+              autoFocus
+              value={eszrevetel}
+              onChange={(e) => setEszrevetel(e.target.value)}
+              rows={4}
+              placeholder="Írd ide, ha van…"
+              className="mt-3 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary focus:outline-none"
+            />
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setLezarasNyitva(false)}
+                className="rounded-[var(--radius)] border border-border px-3 py-2 text-[13.5px] text-text-secondary hover:bg-surface-3"
+              >
+                Mégse
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void lezar("vissza")}
+                className="rounded-[var(--radius)] border border-border px-3 py-2 text-[13.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Nincs észrevétel – lezárás
+              </button>
+              <button
+                type="button"
+                disabled={busy || !eszrevetel.trim()}
+                onClick={() => void lezar("vissza", eszrevetel)}
+                className="rounded-[var(--radius)] bg-text-accent px-3 py-2 text-[13.5px] font-semibold text-surface-1 disabled:opacity-50"
+              >
+                Lezárás észrevétellel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+/** Az aktuális fázis saját listája: név + darabszám, −/+ gombokkal (a
+ * pót-kivitelnél csak +, lásd a hívót). */
+function SajatLista({
+  cim,
+  ures,
+  sorok,
+  valtoztat,
+  csakNoveles = false,
+}: {
+  cim: string;
+  ures: string;
+  sorok: { id: number; nev: string; kategoria: string | null; darab: number }[];
+  valtoztat: (id: number, darab: number) => void;
+  csakNoveles?: boolean;
+}) {
+  return (
+    <section>
+      <p className="mb-2 text-[13px] font-medium text-text-primary">
+        {cim}
+        {sorok.length > 0 && <span className="ml-1 text-text-muted">({sorok.length} tétel)</span>}
+      </p>
+      {sorok.length === 0 ? (
+        <p className="rounded-[var(--radius-lg)] border border-dashed border-border p-4 text-[13px] text-text-muted">
+          {ures}
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {sorok.map((t) => {
+            const c = selectColor(t.kategoria?.trim() || t.nev);
+            return (
+              <div
+                key={t.id}
+                className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border bg-surface-2 px-3 py-2.5"
+              >
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.text }} />
+                <span className="min-w-0 flex-1 truncate text-[14.5px] text-text-primary">{t.nev}</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {!csakNoveles && (
+                    <button
+                      type="button"
+                      aria-label="Kevesebb"
+                      onClick={() => valtoztat(t.id, t.darab - 1)}
+                      className="h-9 w-9 rounded-full border border-border text-[18px] text-text-secondary hover:bg-surface-3"
+                    >
+                      −
+                    </button>
+                  )}
+                  <span className="w-10 text-center text-[15px] font-semibold tabular-nums text-text-primary">
+                    {t.darab}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Több"
+                    onClick={() => valtoztat(t.id, t.darab + 1)}
+                    className="h-9 w-9 rounded-full border border-border text-[18px] text-text-secondary hover:bg-surface-3"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

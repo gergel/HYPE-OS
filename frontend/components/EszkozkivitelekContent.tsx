@@ -132,6 +132,9 @@ export function EszkozkivitelekContent({
                     {datum(k.forgatas_datuma)}
                     {k.ervenyes_eddig && ` · érvényes: ${datum(k.ervenyes_eddig)}`}
                   </span>
+                  {k.allapot === "kivitel" && <StatusBadge label="Kivitel folyamatban" tone="blue" />}
+                  {k.allapot === "vissza" && <StatusBadge label="Visszahozatal folyamatban" tone="orange" />}
+                  {k.allapot === "lezart" && <StatusBadge label="Lezárva" tone="success" />}
                   {!k.ervenyes && <StatusBadge label="Lejárt" tone="neutral" />}
                   <span className="text-[12.5px] text-text-secondary">
                     {kivittOsszes} db kivitt · {visszaOsszes} db vissza
@@ -144,6 +147,11 @@ export function EszkozkivitelekContent({
                 </button>
                 {lenyitva && (
                   <div className="border-t border-border px-3 py-2">
+                    {k.megjegyzes && (
+                      <p className="mb-2 rounded-[var(--radius)] bg-surface-3 px-3 py-2 text-[13px] text-text-primary">
+                        <span className="font-medium">Észrevétel a lezáráskor:</span> {k.megjegyzes}
+                      </p>
+                    )}
                     {k.tetelek.length === 0 ? (
                       <p className="py-1 text-[12.5px] text-text-muted">Még nincs beírt tétel.</p>
                     ) : (

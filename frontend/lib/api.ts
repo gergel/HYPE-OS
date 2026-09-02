@@ -3381,6 +3381,10 @@ export type EszkozKivitelSor = {
   forgatas_datuma: string | null;
   ervenyes_eddig: string | null;
   ervenyes: boolean;
+  /** "kivitel" | "vissza" | "lezart" - a folyamat fázisa. */
+  allapot: string;
+  /** A visszahozatal lezárásakor megadott észrevétel (ha volt). */
+  megjegyzes: string | null;
   tetelek: EszkozKivitelTetel[];
   hianyos_tetelek: number;
 };
