@@ -19,6 +19,7 @@ from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.detail_tabs import router as detail_tabs_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
 from app.api.routes.eseti_szerzodesek import router as eseti_szerzodesek_router
+from app.api.routes.eszkoz_kivitel import admin_router as eszkoz_kivitel_admin_router, public_router as eszkoz_kivitel_public_router
 from app.api.routes.entity_fields import router as entity_fields_router
 from app.api.routes.field_visibility import router as field_visibility_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router, summary_router as finance_summary_router
@@ -90,6 +91,8 @@ api_router.include_router(media_router)
 # 10. Naptár / Diszpó
 api_router.include_router(callsheets_router)
 api_router.include_router(public_utokovetes_router)
+api_router.include_router(eszkoz_kivitel_public_router)
+api_router.include_router(eszkoz_kivitel_admin_router)
 # 11. Utómunka
 api_router.include_router(deliverable_actions_router)
 api_router.include_router(deliverables_router)

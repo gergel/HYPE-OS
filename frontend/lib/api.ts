@@ -3360,3 +3360,31 @@ export async function getArajanlatok(): Promise<ArajanlatListItem[]> {
 export async function getArajanlatTetelek(): Promise<ArajanlatTetel[]> {
   return (await apiGet<ArajanlatTetel[]>("/api/v1/arajanlat-tetelek?limit=5000")) ?? [];
 }
+
+/** Eszközkivitel (kódos, bejelentkezés nélküli kivitel-oldal kezelője) -
+ * lásd backend routes/eszkoz_kivitel.py. */
+export type EszkozKivitelTetel = {
+  id: number;
+  nev: string;
+  kategoria: string | null;
+  kivitt_db: number;
+  visszahozott_db: number;
+};
+
+export type EszkozKivitelSor = {
+  id: number;
+  kod: string;
+  teszt: boolean;
+  project_id: number | null;
+  projekt_nev: string | null;
+  projektkod: string | null;
+  forgatas_datuma: string | null;
+  ervenyes_eddig: string | null;
+  ervenyes: boolean;
+  tetelek: EszkozKivitelTetel[];
+  hianyos_tetelek: number;
+};
+
+export async function getEszkozKivitelek(): Promise<EszkozKivitelSor[]> {
+  return (await apiGet<EszkozKivitelSor[]>("/api/v1/eszkozkivitelek")) ?? [];
+}

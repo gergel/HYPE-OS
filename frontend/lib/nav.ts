@@ -163,6 +163,10 @@ export const navGroups: NavGroup[] = [
         permissionPage: "/felszereles",
         permissionAction: "edit",
       },
+      // A kódos (bejelentkezés nélküli) eszközkiviteli oldal kezelője: kódok
+      // generálása + ki mit vitt/hozott vissza, hiányokkal (a felhasználó
+      // kérése) - lásd backend routes/eszkoz_kivitel.py.
+      { label: "Eszközkivitelek", href: "/eszkozkivitelek", icon: "PackageOpen" },
     ],
   },
   {

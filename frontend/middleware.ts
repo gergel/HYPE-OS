@@ -23,7 +23,7 @@ const BACKEND_TIMEOUT_MS = 4000;
 // "/feltoltes" és "/megosztas" a portál token-alapú feltöltő- és rész-megosztó
 // linkjei - a címzettek külsősök, a token maga a belépő (lásd backend
 // portal_public.py feltoltes/megosztas végpontjai).
-const PUBLIC_PATHS = ["/login", "/p", "/kerdoiv", "/adatvedelem", "/feltoltes", "/megosztas"];
+const PUBLIC_PATHS = ["/login", "/p", "/kerdoiv", "/adatvedelem", "/feltoltes", "/megosztas", "/eszkozkivitel"];
 
 // A publikus portál SAJÁT domainen fut (hypeclient.com), az admin felület a
 // magáén. Ugyanaz a Next.js telepítés szolgálja ki mindkettőt - ezért itt kell
