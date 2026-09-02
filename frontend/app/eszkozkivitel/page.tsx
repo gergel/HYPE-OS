@@ -218,6 +218,7 @@ export default function EszkozKivitelOldal() {
   if (!adat) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-surface-1 p-6">
+        <SugoGomb />
         <div className="w-full max-w-sm text-center">
           <h1 className="text-2xl font-semibold text-text-primary">Eszközkivitel</h1>
           {kezdoUzenet && (
@@ -311,7 +312,10 @@ export default function EszkozKivitelOldal() {
 
   return (
     <main className="min-h-screen bg-surface-1 pb-24">
-      <div className="mx-auto w-full max-w-3xl p-4 md:p-8">
+      <SugoGomb />
+      {/* Felül extra térköz, amíg a sarokban ülő Súgó gomb a tartalom fölé
+          lógna - széles kijelzőn (lg) már elfér mellette. */}
+      <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-16 md:px-8 md:pb-8 lg:pt-8">
         <header className="mb-5">
           {/* NAGY fázis-jelző sáv - egyértelműen látszódjon, hogy épp a
               kivitelt vagy a visszahozatalt írja az ember (a felhasználó
@@ -667,6 +671,104 @@ export default function EszkozKivitelOldal() {
         </div>
       )}
     </main>
+  );
+}
+
+/** Súgó gomb a jobb felső sarokban + felugró ablak, ami pontosan
+ * elmagyarázza, hogyan működik a rendszer (a felhasználó kérése). Ugyanez a
+ * gomb van a kezdő (kód) képernyőn, a kivitelnél és a visszahozatalnál is. */
+function SugoGomb() {
+  const [nyitva, setNyitva] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setNyitva(true)}
+        aria-label="Súgó"
+        className="fixed right-4 top-4 z-[200] rounded-full border border-border bg-surface-2 px-4 py-2 text-[14px] font-semibold text-text-secondary shadow-md hover:bg-surface-3"
+      >
+        Súgó
+      </button>
+      {nyitva && (
+        <div
+          className="fixed inset-0 z-[400] flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setNyitva(false);
+          }}
+        >
+          <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-[var(--radius-lg)] border border-border bg-surface-1 shadow-xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="text-[16px] font-semibold text-text-primary">Hogyan működik?</h2>
+              <button
+                type="button"
+                onClick={() => setNyitva(false)}
+                aria-label="Bezárás"
+                className="rounded-full border border-border px-3 py-1 text-[13px] text-text-secondary hover:bg-surface-3"
+              >
+                Bezárás
+              </button>
+            </div>
+            <div className="space-y-4 overflow-y-auto px-4 py-4 text-[14px] text-text-secondary">
+              <p>
+                Ezen az oldalon írod fel, milyen technikát viszel ki egy forgatásra, és mit hozol
+                vissza utána. Így mindig tudjuk, mi van kint, és mi hiányzik.
+              </p>
+              <div>
+                <p className="font-semibold text-text-primary">Belépés</p>
+                <p className="mt-1">
+                  Minden forgatásnak saját 6 jegyű kódja van - ezt az irodától kapod. A kód a
+                  forgatás utolsó napja után még 48 óráig él, utána lejár.
+                </p>
+              </div>
+              <div>
+                <p className="font-semibold text-text-primary">1. Kivitel (pakolásnál)</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  <li>
+                    Felül látod, mi lett kiírva erre a forgatásra - ez csak segítség: koppints arra,
+                    amit tényleg viszel.
+                  </li>
+                  <li>A keresővel bármilyen más eszközt is hozzáadhatsz.</li>
+                  <li>Készletes eszközből több darabot is vihetsz, egyediből legfeljebb egyet.</li>
+                  <li>
+                    Ha bérelt vagy más, nem leltári cucc is megy, írd be a szabad szövegmezőbe.
+                  </li>
+                  <li>
+                    Ha kész vagy, nyomd meg a &quot;Kivitel lezárása&quot; gombot. Ha kiírt technika
+                    maradt ki, az oldal rákérdez, biztos nélküle indulsz-e.
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-semibold text-text-primary">2. Visszahozatal (visszaéréskor)</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  <li>Ugyanazzal a kóddal lépsz be, és beírod, mit hoztál vissza.</li>
+                  <li>
+                    A kivitelkor beírt lista itt szándékosan nem látszik - fejből (vagy a pakolás
+                    alapján) írd be, mi jött vissza.
+                  </li>
+                  <li>
+                    Ha a forgatás közben még vittél ki valamit, az &quot;Újabb kivitel
+                    felvezetése&quot; gombbal tudod hozzáadni.
+                  </li>
+                  <li>
+                    A lezárásnál írhatsz észrevételt (pl. sérült eszköz, hiányzó tartozék), de ki is
+                    hagyhatod.
+                  </li>
+                  <li>
+                    Amíg a kód él, a lezárt visszahozatalba is vissza tudsz lépni ugyanazzal a
+                    kóddal, és még bele tudsz írni.
+                  </li>
+                </ul>
+              </div>
+              <p>
+                Minden beírás azonnal mentődik, külön menteni nem kell. Ami nem jött vissza, azt az
+                iroda látja - ha bármi gond van, szólj nekik.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
