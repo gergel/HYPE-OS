@@ -10,7 +10,7 @@ diszpó-kiküldésbe szándékosan nincs bekötve (a felhasználó kérése: el�
 from __future__ import annotations
 
 import secrets
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -82,6 +82,8 @@ class EszkozInfo(BaseModel):
     id: int
     nev: str
     kategoria: str | None = None
+    #: "asset" (egyedi - legfeljebb 1 db vihető) vagy "stock" (készletes).
+    track_mode: str = "asset"
 
 
 class AjanlottTetel(EszkozInfo):
@@ -103,6 +105,9 @@ class BelepesValasz(BaseModel):
     teszt: bool
     #: "kivitel" | "vissza" | "lezart" - lásd models/eszkoz_kivitel.py.
     allapot: str
+    #: Az AKTUÁLIS fázis "nem leltári eszköz" szabad szövege - a
+    #: visszahozatal fázisban a kivitelé szándékosan nem jön vissza.
+    kulso_szoveg: str | None
     ajanlott: list[AjanlottTetel]
     tetelek: list[KivitelTetelInfo]
     #: A teljes eszközkészlet a keresőhöz - kategória szerint csoportosítva
@@ -142,6 +147,7 @@ def _tetelek_valasz(db: Session, kivitel: EszkozKivitel, publikus: bool = False)
             id=t.equipment_id,
             nev=t.equipment.nev if t.equipment else f"#{t.equipment_id}",
             kategoria=t.equipment.kategoria if t.equipment else None,
+            track_mode=str(t.equipment.track_mode) if t.equipment else "asset",
             kivitt_db=0 if rejtett_kivitt else t.kivitt_db,
             visszahozott_db=t.visszahozott_db,
         )
@@ -165,11 +171,12 @@ def _belepes_valasz(db: Session, kivitel: EszkozKivitel) -> BelepesValasz:
                     id=f.equipment_id,
                     nev=f.equipment.nev,
                     kategoria=f.equipment.kategoria,
+                    track_mode=str(f.equipment.track_mode),
                     db=f.qty or 1,
                 )
             )
     eszkozok = [
-        EszkozInfo(id=e.id, nev=e.nev, kategoria=e.kategoria)
+        EszkozInfo(id=e.id, nev=e.nev, kategoria=e.kategoria, track_mode=str(e.track_mode))
         for e in db.scalars(select(Equipment).order_by(Equipment.kategoria, Equipment.nev)).all()
     ]
     project = kivitel.project
@@ -180,6 +187,7 @@ def _belepes_valasz(db: Session, kivitel: EszkozKivitel) -> BelepesValasz:
         ervenyes_eddig=ervenyes_eddig(kivitel),
         teszt=kivitel.teszt,
         allapot=kivitel.allapot,
+        kulso_szoveg=kivitel.kulso_kivitel if kivitel.allapot == "kivitel" else kivitel.kulso_vissza,
         ajanlott=ajanlott,
         tetelek=_tetelek_valasz(db, kivitel, publikus=True),
         eszkozok=eszkozok,
@@ -198,6 +206,10 @@ def belepes(payload: BelepesKeres, db: Session = Depends(get_db)):
         db.query(EszkozKivitelTetel).filter(EszkozKivitelTetel.kivitel_id == kivitel.id).delete()
         kivitel.allapot = "kivitel"
         kivitel.megjegyzes = None
+        kivitel.kivitel_lezarva_at = None
+        kivitel.vissza_lezarva_at = None
+        kivitel.kulso_kivitel = None
+        kivitel.kulso_vissza = None
         db.commit()
     return _belepes_valasz(db, kivitel)
 
@@ -246,6 +258,11 @@ def tetel_mentes(kod: str, payload: TetelKeres, db: Session = Depends(get_db)):
         tetel.kivitt_db = (tetel.kivitt_db or 0) + max(0, payload.kivitt_hozzaadas)
     if payload.visszahozott_db is not None:
         tetel.visszahozott_db = max(0, payload.visszahozott_db)
+    # EGYEDI (asset) eszközből legfeljebb 1 db mehet és jöhet (a felhasználó
+    # kérése) - a készletesből (stock) több is.
+    if str(eszkoz.track_mode) == "asset":
+        tetel.kivitt_db = min(tetel.kivitt_db or 0, 1)
+        tetel.visszahozott_db = min(tetel.visszahozott_db or 0, 1)
     if tetel.kivitt_db == 0 and tetel.visszahozott_db == 0:
         if tetel.id is not None:
             db.delete(tetel)
@@ -253,6 +270,27 @@ def tetel_mentes(kod: str, payload: TetelKeres, db: Session = Depends(get_db)):
             db.expunge(tetel)
     db.commit()
     return _tetelek_valasz(db, kivitel, publikus=True)
+
+
+class KulsoKeres(BaseModel):
+    szoveg: str | None = None
+    #: Melyik fázis szövege - a KLIENS mondja meg, nem a pillanatnyi allapot:
+    #: a mező blur-mentése és a lezárás versenyezhet, és a lezárás UTÁN beérő
+    #: mentés különben a rossz fázis mezőjébe írna.
+    fazis: str = "kivitel"
+
+
+@public_router.put("/{kod}/kulso", status_code=status.HTTP_204_NO_CONTENT)
+def kulso_mentes(kod: str, payload: KulsoKeres, db: Session = Depends(get_db)):
+    """A NEM LELTÁRI eszközök szabad szövege (bérelt, külsős cucc) - a kért
+    fázis mezőjébe ír (a felhasználó kérése)."""
+    kivitel = _kivitel_a_kodhoz(db, kod)
+    szoveg = (payload.szoveg or "").strip() or None
+    if payload.fazis == "kivitel":
+        kivitel.kulso_kivitel = szoveg
+    else:
+        kivitel.kulso_vissza = szoveg
+    db.commit()
 
 
 class LezarasKeres(BaseModel):
@@ -272,6 +310,7 @@ def lezaras(kod: str, payload: LezarasKeres, db: Session = Depends(get_db)):
         if kivitel.allapot != "kivitel":
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A kivitel már le van zárva.")
         kivitel.allapot = "vissza"
+        kivitel.kivitel_lezarva_at = datetime.now(timezone.utc)
     elif payload.mit == "vissza":
         if kivitel.allapot != "vissza":
             raise HTTPException(
@@ -279,6 +318,7 @@ def lezaras(kod: str, payload: LezarasKeres, db: Session = Depends(get_db)):
                 detail="A visszahozatal csak a kivitel lezárása után zárható le.",
             )
         kivitel.allapot = "lezart"
+        kivitel.vissza_lezarva_at = datetime.now(timezone.utc)
         if payload.megjegyzes and payload.megjegyzes.strip():
             kivitel.megjegyzes = payload.megjegyzes.strip()
     else:
@@ -303,6 +343,11 @@ class KivitelAdminSor(BaseModel):
     allapot: str
     #: A visszahozatal lezárásakor megadott észrevétel (ha volt).
     megjegyzes: str | None
+    kivitel_lezarva_at: datetime | None
+    vissza_lezarva_at: datetime | None
+    #: Nem leltári (bérelt) eszközök szabad szövege a két fázisból.
+    kulso_kivitel: str | None
+    kulso_vissza: str | None
     tetelek: list[KivitelTetelInfo]
     #: Hány tételből hoztak vissza kevesebbet, mint amennyi kiment.
     hianyos_tetelek: int
@@ -327,6 +372,10 @@ def _admin_sor(db: Session, kivitel: EszkozKivitel) -> KivitelAdminSor:
         ervenyes=kivitel_ervenyes(kivitel),
         allapot=kivitel.allapot,
         megjegyzes=kivitel.megjegyzes,
+        kivitel_lezarva_at=kivitel.kivitel_lezarva_at,
+        vissza_lezarva_at=kivitel.vissza_lezarva_at,
+        kulso_kivitel=kivitel.kulso_kivitel,
+        kulso_vissza=kivitel.kulso_vissza,
         tetelek=tetelek,
         hianyos_tetelek=sum(1 for t in tetelek if t.visszahozott_db < t.kivitt_db),
     )
@@ -393,6 +442,14 @@ def set_allapot(kivitel_id: int, payload: AllapotKeres, db: Session = Depends(ge
     kivitel = db.get(EszkozKivitel, kivitel_id)
     if kivitel is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nincs ilyen kivitel.")
+    if payload.allapot == "vissza" and kivitel.allapot == "kivitel":
+        kivitel.kivitel_lezarva_at = datetime.now(timezone.utc)
+    if payload.allapot == "lezart" and kivitel.allapot != "lezart":
+        kivitel.vissza_lezarva_at = datetime.now(timezone.utc)
+    if payload.allapot != "lezart" and kivitel.allapot == "lezart":
+        # Újranyitáskor a vissza-lezárás időpontja törlődik - a következő
+        # lezárás írja majd újra.
+        kivitel.vissza_lezarva_at = None
     kivitel.allapot = payload.allapot
     db.commit()
     db.refresh(kivitel)

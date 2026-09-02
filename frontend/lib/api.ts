@@ -3385,6 +3385,12 @@ export type EszkozKivitelSor = {
   allapot: string;
   /** A visszahozatal lezárásakor megadott észrevétel (ha volt). */
   megjegyzes: string | null;
+  /** Mikor zárták le a kivitelt, ill. a visszahozatalt. */
+  kivitel_lezarva_at: string | null;
+  vissza_lezarva_at: string | null;
+  /** Nem leltári (bérelt) eszközök szabad szövege a két fázisból. */
+  kulso_kivitel: string | null;
+  kulso_vissza: string | null;
   tetelek: EszkozKivitelTetel[];
   hianyos_tetelek: number;
 };

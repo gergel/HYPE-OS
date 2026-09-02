@@ -15,6 +15,18 @@ function datum(value: string | null): string {
   return value ? value.slice(0, 10) : "–";
 }
 
+/** Lezárás-időpont percre pontosan ("2026. 09. 02. 14:35"). */
+function idopont(value: string | null): string {
+  if (!value) return "–";
+  return new Date(value).toLocaleString("hu-HU", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** Az eszközkivitelek kezelő-nézete: kód-generálás forgatásokhoz, és
  * kivitelenkénti tétel-lista a HIÁNNYAL (kivitt > visszahozott). A hiány
  * szándékosan csak itt látszik, a publikus /eszkozkivitel oldalon nem
@@ -162,9 +174,17 @@ export function EszkozkivitelekContent({
                     {k.projektkod && <span className="ml-2 text-text-muted">{k.projektkod}</span>}
                   </span>
                   <span className="text-[12.5px] text-text-muted">
-                    {datum(k.forgatas_datuma)}
+                    Forgatás: {datum(k.forgatas_datuma)}
                     {k.ervenyes_eddig && ` · érvényes: ${datum(k.ervenyes_eddig)}`}
                   </span>
+                  {/* Mikor zárták le a két fázist (a felhasználó kérése). */}
+                  {(k.kivitel_lezarva_at || k.vissza_lezarva_at) && (
+                    <span className="text-[12px] text-text-muted">
+                      {k.kivitel_lezarva_at && `Kivitel lezárva: ${idopont(k.kivitel_lezarva_at)}`}
+                      {k.kivitel_lezarva_at && k.vissza_lezarva_at && " · "}
+                      {k.vissza_lezarva_at && `Vissza lezárva: ${idopont(k.vissza_lezarva_at)}`}
+                    </span>
+                  )}
                   {k.allapot === "kivitel" && <StatusBadge label="Kivitel folyamatban" tone="blue" />}
                   {k.allapot === "vissza" && <StatusBadge label="Visszahozatal folyamatban" tone="orange" />}
                   {k.allapot === "lezart" && <StatusBadge label="Lezárva" tone="success" />}
@@ -180,6 +200,20 @@ export function EszkozkivitelekContent({
                 </button>
                 {lenyitva && (
                   <div className="border-t border-border px-3 py-2">
+                    {(k.kulso_kivitel || k.kulso_vissza) && (
+                      <div className="mb-2 space-y-1">
+                        {k.kulso_kivitel && (
+                          <p className="rounded-[var(--radius)] bg-surface-3 px-3 py-2 text-[13px] text-text-primary">
+                            <span className="font-medium">Nem leltári eszköz (kivitel):</span> {k.kulso_kivitel}
+                          </p>
+                        )}
+                        {k.kulso_vissza && (
+                          <p className="rounded-[var(--radius)] bg-surface-3 px-3 py-2 text-[13px] text-text-primary">
+                            <span className="font-medium">Nem leltári eszköz (visszahozatal):</span> {k.kulso_vissza}
+                          </p>
+                        )}
+                      </div>
+                    )}
                     {k.megjegyzes && (
                       <p className="mb-2 rounded-[var(--radius)] bg-surface-3 px-3 py-2 text-[13px] text-text-primary">
                         <span className="font-medium">Észrevétel a lezáráskor:</span> {k.megjegyzes}

@@ -7,7 +7,7 @@ import { selectColor } from "@/lib/selectColor";
 // környezet) a lokális backend - élesben a NEXT_PUBLIC_API_URL van beállítva.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-type Eszkoz = { id: number; nev: string; kategoria: string | null };
+type Eszkoz = { id: number; nev: string; kategoria: string | null; track_mode: string };
 type Ajanlott = Eszkoz & { db: number };
 type Tetel = Eszkoz & { kivitt_db: number; visszahozott_db: number };
 type Belepes = {
@@ -17,6 +17,7 @@ type Belepes = {
   ervenyes_eddig: string | null;
   teszt: boolean;
   allapot: "kivitel" | "vissza" | "lezart";
+  kulso_szoveg: string | null;
   ajanlott: Ajanlott[];
   tetelek: Tetel[];
   eszkozok: Eszkoz[];
@@ -54,10 +55,11 @@ export default function EszkozKivitelOldal() {
   const [potDarabok, setPotDarabok] = useState<Map<number, number>>(new Map());
   const [lezarasNyitva, setLezarasNyitva] = useState(false);
   const [eszrevetel, setEszrevetel] = useState("");
-  //: A kivitel-lezárás KÉTLÉPCSŐS, natív confirm() nélkül: a böngésző a
-  //: natív párbeszédablakot némán blokkolhatja ("ne jelenítsen meg több
-  //: párbeszédablakot"), és akkor a gomb látszólag nem csinál semmit.
-  const [lezarasMegerosites, setLezarasMegerosites] = useState(false);
+  //: Sikeres lezárás után a kezdő (kód) képernyőre esünk vissza, ezzel az
+  //: üzenettel (a felhasználó kérése).
+  const [kezdoUzenet, setKezdoUzenet] = useState<string | null>(null);
+  //: A "nem leltári eszköz" szabad szöveg az aktuális fázishoz.
+  const [kulso, setKulso] = useState("");
   //: Művelet-hiba beágyazott sávként (natív alert() helyett, ugyanazért).
   const [muveletHiba, setMuveletHiba] = useState<string | null>(null);
 
@@ -76,11 +78,14 @@ export default function EszkozKivitelOldal() {
         setHiba(detail?.detail ?? "Nem sikerült belépni.");
         return;
       }
-      setAdat(await res.json());
+      const valasz: Belepes = await res.json();
+      setAdat(valasz);
       setAktivKod(kod.trim());
       setKereses("");
       setPotKivitel(false);
       setPotDarabok(new Map());
+      setKulso(valasz.kulso_szoveg ?? "");
+      setKezdoUzenet(null);
     } catch {
       setHiba("Hálózati hiba - próbáld újra.");
     } finally {
@@ -117,6 +122,9 @@ export default function EszkozKivitelOldal() {
     if (busy) return;
     setBusy(true);
     try {
+      // A "nem leltári eszköz" szöveg biztosan mentve legyen, mielőtt a
+      // fázis lezárul (a gombra kattintás megelőzheti a mező blur-mentését).
+      await mentKulso();
       const res = await fetch(
         `${API_BASE}/api/v1/public/eszkozkivitel/${encodeURIComponent(aktivKod)}/lezaras`,
         {
@@ -130,17 +138,44 @@ export default function EszkozKivitelOldal() {
         setMuveletHiba(detail?.detail ?? "Nem sikerült lezárni.");
         return;
       }
-      setAdat(await res.json());
+      // Bármelyik lezárás után vissza a kezdő (kód) képernyőre (a
+      // felhasználó kérése) - a visszahozatalhoz újra a kóddal kell belépni.
+      setAdat(null);
+      setKod("");
+      setAktivKod("");
       setKereses("");
       setPotKivitel(false);
       setPotDarabok(new Map());
       setLezarasNyitva(false);
-      setLezarasMegerosites(false);
+      setEszrevetel("");
+      setKulso("");
       setMuveletHiba(null);
+      setHiba(null);
+      setKezdoUzenet(
+        mit === "kivitel"
+          ? "A kivitel lezárva - jó forgatást! Visszaéréskor ugyanezzel a kóddal írd be, mit hoztál vissza."
+          : "A visszahozatal lezárva - köszönjük!",
+      );
     } catch {
       setMuveletHiba("Hálózati hiba - próbáld újra.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** A "nem leltári eszköz" szöveg mentése (elkattintáskor). A fázist a
+   * kliens küldi, hogy egy lezárás után beérő mentés is a JÓ mezőbe írjon
+   * (lásd a backend kulso_mentes kommentjét). */
+  async function mentKulso() {
+    if (!adat) return;
+    try {
+      await fetch(`${API_BASE}/api/v1/public/eszkozkivitel/${encodeURIComponent(aktivKod)}/kulso`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ szoveg: kulso, fazis: adat.allapot === "kivitel" ? "kivitel" : "vissza" }),
+      });
+    } catch {
+      setMuveletHiba("Nem sikerült menteni a szabad szöveget - hálózati hiba.");
     }
   }
 
@@ -172,6 +207,11 @@ export default function EszkozKivitelOldal() {
       <main className="flex min-h-screen items-center justify-center bg-surface-1 p-6">
         <div className="w-full max-w-sm text-center">
           <h1 className="text-2xl font-semibold text-text-primary">Eszközkivitel</h1>
+          {kezdoUzenet && (
+            <p className="mt-3 rounded-[var(--radius-lg)] border border-text-success/40 bg-surface-2 px-3 py-2.5 text-[14px] text-text-success">
+              ✅ {kezdoUzenet}
+            </p>
+          )}
           <p className="mt-2 text-[14px] text-text-secondary">
             Írd be a forgatásod 6 jegyű kódját, és add meg, mit viszel ki és mit hozol vissza.
           </p>
@@ -225,12 +265,17 @@ export default function EszkozKivitelOldal() {
   const kivitelLista = adat.tetelek.filter((t) => t.kivitt_db > 0);
   const visszaLista = adat.tetelek.filter((t) => t.visszahozott_db > 0);
 
-  /** Mit tegyen a kereső-találatra kattintás az aktuális fázisban. */
+  /** Mit tegyen a kereső-találatra kattintás az aktuális fázisban.
+   * EGYEDI (asset) eszközből legfeljebb 1 db - a további kattintás nem növel
+   * (a felhasználó kérése); a készletesből (stock) annyi, amennyi kell. */
   async function talalatKattintas(e: Eszkoz) {
+    const egyedi = e.track_mode !== "stock";
     if (fazisKivitel) {
       const darab = tetelTerkep.get(e.id)?.kivitt_db ?? 0;
+      if (egyedi && darab >= 1) return;
       await ment(e.id, { kivitt_db: darab + 1 });
     } else if (potKivitel) {
+      if (egyedi && (potDarabok.get(e.id) ?? 0) >= 1) return;
       const ok = await ment(e.id, { kivitt_hozzaadas: 1 });
       if (ok) {
         setPotDarabok((elozo) => {
@@ -241,6 +286,7 @@ export default function EszkozKivitelOldal() {
       }
     } else {
       const darab = tetelTerkep.get(e.id)?.visszahozott_db ?? 0;
+      if (egyedi && darab >= 1) return;
       await ment(e.id, { visszahozott_db: darab + 1 });
     }
   }
@@ -397,7 +443,13 @@ export default function EszkozKivitelOldal() {
               .filter(([, darab]) => darab > 0)
               .map(([id, darab]) => {
                 const e = adat.eszkozok.find((x) => x.id === id);
-                return { id, nev: e?.nev ?? `#${id}`, kategoria: e?.kategoria ?? null, darab };
+                return {
+                  id,
+                  nev: e?.nev ?? `#${id}`,
+                  kategoria: e?.kategoria ?? null,
+                  track_mode: e?.track_mode,
+                  darab,
+                };
               })}
             // Pót-kivitelnél csak NÖVELNI lehet (a csökkentés a korábbi
             // kivitelt is vissza tudná írni) - a "-" gomb ezért nincs.
@@ -416,8 +468,26 @@ export default function EszkozKivitelOldal() {
           />
         )}
 
-        {/* FÁZIS-GOMBOK. A kivitel-lezárás kétlépcsős: első koppintásra a gomb
-            megerősítést kér, a másodikra zár - natív confirm() nélkül. */}
+        {/* NEM LELTÁRI ESZKÖZ (bérelt, külsős cucc) - szabad szöveg, az
+            aktuális fázishoz mentve (a felhasználó kérése). */}
+        <section className="mt-5">
+          <p className="mb-1.5 text-[13px] font-medium text-text-primary">
+            {fazisKivitel || potKivitel
+              ? "Nem leltári eszköz kivitele (bérelt, külsős cucc)"
+              : "Nem leltári eszköz visszahozatala (bérelt, külsős cucc)"}
+          </p>
+          <textarea
+            value={kulso}
+            onChange={(e) => setKulso(e.target.value)}
+            onBlur={() => void mentKulso()}
+            rows={2}
+            placeholder="Pl. 2 db bérelt robotlámpa a Rentaltól…"
+            className="w-full rounded-[var(--radius-lg)] border border-border bg-surface-2 px-3 py-2.5 text-[14px] text-text-primary focus:outline-none"
+          />
+        </section>
+
+        {/* FÁZIS-GOMBOK - a lezárás EGY gombnyomás, azonnal (a felhasználó
+            kérése). */}
         {muveletHiba && (
           <p className="mt-6 rounded-[var(--radius)] border border-text-danger/40 bg-surface-2 px-3 py-2 text-[13.5px] text-text-danger">
             {muveletHiba}
@@ -425,38 +495,14 @@ export default function EszkozKivitelOldal() {
         )}
         <div className="mt-8 space-y-2">
           {fazisKivitel ? (
-            !lezarasMegerosites ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setLezarasMegerosites(true)}
-                className="w-full rounded-[var(--radius-lg)] bg-text-accent px-4 py-3.5 text-[16px] font-semibold text-surface-1 disabled:opacity-50"
-              >
-                Kivitel lezárása – indulhat a forgatás
-              </button>
-            ) : (
-              <>
-                <p className="text-center text-[13.5px] text-text-secondary">
-                  Biztosan lezárod? Utána már csak a visszahozatalt tudod beírni.
-                </p>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void lezar("kivitel")}
-                  className="w-full rounded-[var(--radius-lg)] bg-text-accent px-4 py-3.5 text-[16px] font-semibold text-surface-1 disabled:opacity-50"
-                >
-                  Igen, lezárom a kivitelt
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => setLezarasMegerosites(false)}
-                  className="w-full rounded-[var(--radius-lg)] border border-border px-4 py-3 text-[14.5px] text-text-secondary hover:bg-surface-2"
-                >
-                  Mégse, még dolgozom rajta
-                </button>
-              </>
-            )
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void lezar("kivitel")}
+              className="w-full rounded-[var(--radius-lg)] bg-text-accent px-4 py-3.5 text-[16px] font-semibold text-surface-1 disabled:opacity-50"
+            >
+              {busy ? "Lezárás…" : "Kivitel lezárása – indulhat a forgatás"}
+            </button>
           ) : (
             !potKivitel && (
               <>
@@ -552,7 +598,7 @@ function SajatLista({
 }: {
   cim: string;
   ures: string;
-  sorok: { id: number; nev: string; kategoria: string | null; darab: number }[];
+  sorok: { id: number; nev: string; kategoria: string | null; track_mode?: string; darab: number }[];
   valtoztat: (id: number, darab: number) => void;
   csakNoveles?: boolean;
 }) {
@@ -594,8 +640,11 @@ function SajatLista({
                   <button
                     type="button"
                     aria-label="Több"
+                    // Egyedi (asset) eszközből legfeljebb 1 db (a felhasználó
+                    // kérése) - készletesből bármennyi.
+                    disabled={t.track_mode !== "stock" && t.darab >= 1}
                     onClick={() => valtoztat(t.id, t.darab + 1)}
-                    className="h-9 w-9 rounded-full border border-border text-[18px] text-text-secondary hover:bg-surface-3"
+                    className="h-9 w-9 rounded-full border border-border text-[18px] text-text-secondary hover:bg-surface-3 disabled:opacity-30"
                   >
                     +
                   </button>

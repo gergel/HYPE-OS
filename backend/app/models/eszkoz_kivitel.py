@@ -17,7 +17,9 @@ generálni és onnan kiadni."""
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -43,6 +45,15 @@ class EszkozKivitel(TimestampMixin, Base):
     #: A visszahozatal lezárásakor megadható észrevétel (eszközökről,
     #: forgatásról) - kihagyható.
     megjegyzes: Mapped[str | None] = mapped_column(Text)
+    #: Mikor zárták le a kivitelt, illetve a visszahozatalt - a kezelő
+    #: oldalon látszik (a felhasználó kérése).
+    kivitel_lezarva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    vissza_lezarva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: NEM LELTÁRI eszköz (bérelt, külsős cucc) szabad szöveggel - külön a
+    #: kivitelnél és a visszahozatalnál (a felhasználó kérése). A vissza-
+    #: hozatal fázisban a kivitelé már nem látszik (csalás-védelem).
+    kulso_kivitel: Mapped[str | None] = mapped_column(Text)
+    kulso_vissza: Mapped[str | None] = mapped_column(Text)
 
     project = relationship("Project")
     tetelek: Mapped[list["EszkozKivitelTetel"]] = relationship(
