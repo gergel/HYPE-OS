@@ -3,8 +3,10 @@ import { TopBar } from "@/components/TopBar";
 import { UtokovetesLista } from "@/components/UtokovetesLista";
 import { UtokovetesNezetek } from "@/components/UtokovetesNezetek";
 import { UtokovetesProjektKereso } from "@/components/UtokovetesProjektKereso";
+import { UtokovetesProjektkodTabla } from "@/components/UtokovetesProjektkodTabla";
 import { fazisa } from "@/lib/utokovetes";
-import { getProjects, getUtokovetesOverview } from "@/lib/api";
+import { fazisaProjektkod } from "@/lib/utokovetesProjektkod";
+import { getProjects, getUtokovetesOverview, getUtokovetesOverviewProjectCodes } from "@/lib/api";
 
 /** Utókövetés - EGY oldalon mutatja minden diszpózott projekthez tartozó
  * eseti szerződés + teljesítési igazolás + kifizetés + forgatás utáni
@@ -29,8 +31,13 @@ export default async function UtokovetesPage({
   // A limit szándékosan bő: a projektek száma több ezer, és a keresőnek a
   // TELJES állományt kell látnia - pont az a dolga, hogy az áttekintő
   // hatóköréből kimaradó projektet is meg lehessen nyitni.
-  const [rows, projektek] = await Promise.all([getUtokovetesOverview(), getProjects(20000)]);
+  const [rows, projektek, projektkodSorok] = await Promise.all([
+    getUtokovetesOverview(),
+    getProjects(20000),
+    getUtokovetesOverviewProjectCodes(),
+  ]);
   const keszDarab = rows.filter((r) => fazisa(r) === "kesz").length;
+  const projektkodKeszDarab = projektkodSorok.filter((r) => fazisaProjektkod(r) === "kesz").length;
   // Csak a kereséshez kellő pár mező megy le a kliensre, nem a teljes
   // projekt-rekord (annak Notion-mezőstül több MB lenne).
   const keresoProjektek = projektek.map((p) => ({
@@ -60,10 +67,22 @@ export default async function UtokovetesPage({
           />
         </Card>
 
-        {/* A korábbi "Alvállalkozói papírozás forgatás nélkül" külön tábla
-            SZÁNDÉKOSAN nincs többé itt (a felhasználó kérése): a papírozást
-            összevontuk, ezek a tételek a fenti áttekintésben és a projektkód
-            oldalain jelennek meg - a külön szakasz csak duplázta őket. */}
+        {/* PROJEKTKÓDOK, forgatás nélkül: alvállalkozói kiadás, amihez nincs
+            konkrét forgatás - a szerződés/TIG közvetlenül a projektkódhoz
+            kötve készül (lásd backend utokovetes_admin.py "projektkód-szintű
+            ág"). Ez a szakasz egyszer már lekerült az oldalról azzal, hogy
+            "a fő áttekintés úgyis mutatja" - de az TÉVEDÉS volt: a fő
+            áttekintés projekt-alapú, a forgatás nélküli papírozás ott SOSEM
+            jelent meg, így ezek a tételek (pl. kész TIG-es projektkódok)
+            láthatatlanná váltak (a felhasználó jelzése, HYPE26-0024 példával).
+            Csak akkor jelenik meg, ha van is ilyen kód. */}
+        {projektkodSorok.length > 0 && (
+          <Card
+            title={`Alvállalkozói papírozás forgatás nélkül – ${projektkodSorok.length} projektkód, ${projektkodKeszDarab} kész, ${projektkodSorok.length - projektkodKeszDarab} folyamatban`}
+          >
+            <UtokovetesProjektkodTabla rows={projektkodSorok} />
+          </Card>
+        )}
       </div>
     </div>
   );
