@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { selectColor } from "@/lib/selectColor";
 
 // Ugyanaz az alapértelmezés, mint a lib/authFetch-ben: env nélkül (fejlesztői
@@ -62,6 +62,14 @@ export default function EszkozKivitelOldal() {
   const [kulso, setKulso] = useState("");
   //: Művelet-hiba beágyazott sávként (natív alert() helyett, ugyanazért).
   const [muveletHiba, setMuveletHiba] = useState<string | null>(null);
+
+  // A lezárás utáni zöld siker-sáv 5 másodperc után magától eltűnik (a
+  // felhasználó kérése).
+  useEffect(() => {
+    if (!kezdoUzenet) return;
+    const idozito = setTimeout(() => setKezdoUzenet(null), 5000);
+    return () => clearTimeout(idozito);
+  }, [kezdoUzenet]);
 
   async function belep() {
     if (!kod.trim() || busy) return;
@@ -154,7 +162,7 @@ export default function EszkozKivitelOldal() {
       setKezdoUzenet(
         mit === "kivitel"
           ? "A kivitel lezárva - jó forgatást! Visszaéréskor ugyanezzel a kóddal írd be, mit hoztál vissza."
-          : "A visszahozatal lezárva - köszönjük!",
+          : "A visszahozatal lezárva - köszönjük! Amíg a kód él, ugyanezzel a kóddal még bele tudsz írni.",
       );
     } catch {
       setMuveletHiba("Hálózati hiba - próbáld újra.");
@@ -301,9 +309,18 @@ export default function EszkozKivitelOldal() {
     <main className="min-h-screen bg-surface-1 pb-24">
       <div className="mx-auto w-full max-w-3xl p-4 md:p-8">
         <header className="mb-5">
-          <p className="text-[12.5px] uppercase tracking-wide text-text-muted">
-            Eszközkivitel · {fazisKivitel ? "1. lépés: kivitel" : potKivitel ? "pót-kivitel" : "2. lépés: visszahozatal"}
-          </p>
+          {/* NAGY fázis-jelző sáv - egyértelműen látszódjon, hogy épp a
+              kivitelt vagy a visszahozatalt írja az ember (a felhasználó
+              kérése). */}
+          <div
+            className={`mb-3 rounded-[var(--radius-lg)] border px-4 py-3 text-center text-[22px] font-bold uppercase tracking-widest ${
+              fazisKivitel
+                ? "border-text-accent/40 bg-text-accent/10 text-text-accent"
+                : "border-text-warning/40 bg-text-warning/10 text-text-warning"
+            }`}
+          >
+            {fazisKivitel ? "📦 Kivitel" : potKivitel ? "📦 Pót-kivitel" : "↩ Visszahozatal"}
+          </div>
           <h1 className="text-xl font-semibold text-text-primary">
             {adat.projekt_nev ?? "Forgatás"}
             {adat.teszt && (

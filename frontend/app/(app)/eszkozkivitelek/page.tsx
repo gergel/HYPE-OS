@@ -19,8 +19,8 @@ export default async function EszkozkivitelekPage() {
   ]);
 
   // A kód-generátor projekt-választójának elég a friss időszak: a mai naphoz
-  // képest -30..+90 nap forgatásai (a kód úgyis a forgatás vége után 7 nappal
-  // lejár, régi forgatáshoz nincs értelme kódot adni).
+  // képest -30..+90 nap forgatásai (a kód úgyis a forgatás vége után 48
+  // órával lejár, régi forgatáshoz nincs értelme kódot adni).
   const ma = new Date();
   const tol = new Date(ma.getTime() - 30 * 86400000).toISOString().slice(0, 10);
   const ig = new Date(ma.getTime() + 90 * 86400000).toISOString().slice(0, 10);

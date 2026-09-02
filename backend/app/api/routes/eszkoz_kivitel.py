@@ -30,8 +30,10 @@ PAGE = "/eszkozkivitelek"
 #: projekt nélküli, és a kezelő oldalon TESZT-ként látszik.
 ADMIN_KOD = "admin"
 
-#: A forgatás vége után ennyi napig él még a kód.
-ERVENYESSEG_NAP = 7
+#: A forgatás utolsó napja után ennyi napig él még a kód (48 óra - a
+#: felhasználó kérése). A határ nap-pontos: az utolsó forgatási nap után
+#: még 2 teljes napig lehet belépni.
+ERVENYESSEG_NAP = 2
 
 public_router = APIRouter(prefix="/public/eszkozkivitel", tags=["eszkozkivitel-public"])
 admin_router = APIRouter(prefix="/eszkozkivitelek", tags=["eszkozkivitel-admin"])
@@ -70,7 +72,7 @@ def _kivitel_a_kodhoz(db: Session, kod: str) -> EszkozKivitel:
     if not kivitel_ervenyes(kivitel):
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
-            detail="Ez a kód már lejárt (a forgatás vége után 7 napig él).",
+            detail="Ez a kód már lejárt (a forgatás utolsó napja után 48 óráig él).",
         )
     return kivitel
 
@@ -200,16 +202,23 @@ def belepes(payload: BelepesKeres, db: Session = Depends(get_db)):
     már beírt tételek és a keresőhöz a teljes eszközlista.
 
     Az admin (teszt) kivitel LEZÁRT állapotban belépéskor tisztán újraindul
-    - így akárhányszor végig lehet próbálni a teljes folyamatot."""
+    - így akárhányszor végig lehet próbálni a teljes folyamatot. Az éles
+    kivitelnél a LEZÁRT visszahozatal újranyílik, amíg a kód él (a
+    felhasználó kérése) - a beírt adatok megmaradnak, csak tovább lehet
+    írni; a lezárás-időpontot a következő lezárás írja majd újra."""
     kivitel = _kivitel_a_kodhoz(db, payload.kod)
-    if kivitel.teszt and kivitel.allapot == "lezart":
-        db.query(EszkozKivitelTetel).filter(EszkozKivitelTetel.kivitel_id == kivitel.id).delete()
-        kivitel.allapot = "kivitel"
-        kivitel.megjegyzes = None
-        kivitel.kivitel_lezarva_at = None
-        kivitel.vissza_lezarva_at = None
-        kivitel.kulso_kivitel = None
-        kivitel.kulso_vissza = None
+    if kivitel.allapot == "lezart":
+        if kivitel.teszt:
+            db.query(EszkozKivitelTetel).filter(EszkozKivitelTetel.kivitel_id == kivitel.id).delete()
+            kivitel.allapot = "kivitel"
+            kivitel.megjegyzes = None
+            kivitel.kivitel_lezarva_at = None
+            kivitel.vissza_lezarva_at = None
+            kivitel.kulso_kivitel = None
+            kivitel.kulso_vissza = None
+        else:
+            kivitel.allapot = "vissza"
+            kivitel.vissza_lezarva_at = None
         db.commit()
     return _belepes_valasz(db, kivitel)
 

@@ -7,8 +7,9 @@ visszaérve azt, hogy mit hozott vissza (ott már súgó nélkül). A kettő
 különbsége - mi nem jött vissza - csak a bejelentkezett kezelő oldalon
 látszik (/eszkozkivitelek).
 
-A kód a forgatás vége után 7 napig él (lásd
-api/routes/eszkoz_kivitel.kivitel_ervenyes). Az "admin" kód mindig él, és
+A kód a forgatás utolsó napja után 48 óráig él (lásd
+api/routes/eszkoz_kivitel.kivitel_ervenyes) - amíg él, a lezárt
+visszahozatal is újranyitható belépéssel. Az "admin" kód mindig él, és
 egy projekt nélküli TESZT-kivitelbe lép be.
 
 A diszpó-kiküldésbe SZÁNDÉKOSAN nincs bekötve: előbb önállóan épül fel és
