@@ -72,7 +72,6 @@ from app.models.rate import Rate
 from app.models.stocktake import StocktakeItem, StocktakeSession
 from app.models.task import Task, task_employees
 from app.models.timesheet import Timesheet
-from app.models.torolt_naptar_esemeny import ToroltNaptarEsemeny
 from app.models.timeline import TimelineEvent
 from app.models.user_access import PageAccessConfig
 from app.models.krumpello import (

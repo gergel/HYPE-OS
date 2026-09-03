@@ -12,8 +12,8 @@ from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
+from app.models.calendar_sync import CalendarSyncState
 from app.models.timesheet import Timesheet
-from app.models.torolt_naptar_esemeny import ToroltNaptarEsemeny
 from app.schemas.deliverable import DeliverableRead
 from app.schemas.deliverable_actions import TimerEmployeeSummary
 from app.schemas.project import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate, SzerzodesKeszitesPayload
@@ -26,17 +26,16 @@ from app.services.technika import check_technika
 
 def _projekt_torles_elott(project: Project, db: Session) -> None:
     """Törlés előtt: (1) a Média Portál-tartalom védelme; (2) ha a projekt
-    naptár-eseményhez kötött, az esemény-azonosító felkerül a törölt-listára,
-    hogy a percenkénti naptár-szinkron NE hozza vissza a kitörölt projektet
-    (a felhasználó kérése) - lásd models/torolt_naptar_esemeny.py és
-    services/google_calendar.py."""
+    naptár-eseményhez kötött, a naptár-szinkron jelzőjének (sync token)
+    nullázása. A felhasználó kérése: a rendszerből törölt, de a naptárban még
+    ÉLŐ eseményt a következő szinkron hozza vissza - a percenkénti
+    NÖVEKMÉNYES szinkron viszont csak a VÁLTOZOTT eseményeket kapja meg,
+    tehát a változatlan naptár-esemény magától sosem jönne újra. A token
+    nullázása a következő körben teljes szinkront kényszerít ki, ami a még
+    élő eseményből újra létrehozza a projektet."""
     _block_delete_if_portal_content(project, db)
     if project.google_calendar_event_id:
-        megvan = db.query(ToroltNaptarEsemeny).filter(
-            ToroltNaptarEsemeny.event_id == project.google_calendar_event_id
-        ).first()
-        if megvan is None:
-            db.add(ToroltNaptarEsemeny(event_id=project.google_calendar_event_id, projekt_nev=project.nev))
+        db.query(CalendarSyncState).update({CalendarSyncState.sync_token: None}, synchronize_session=False)
 
 
 def _block_delete_if_portal_content(project: Project, _db: Session) -> None:
