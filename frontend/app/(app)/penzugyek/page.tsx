@@ -22,6 +22,7 @@ import { EditableTableCell } from "@/components/EditableTableCell";
 import { FinanceMonthlyChart, KasszaWidget, OutstandingProjectsTable } from "@/components/finance/FinanceSummaryWidgets";
 import { SzamlaCsomagLetoltes } from "@/components/finance/SzamlaCsomagLetoltes";
 import { UtalasraVaroSzamlak } from "@/components/finance/UtalasraVaroSzamlak";
+import { KiadasProjektkodCella } from "@/components/finance/KiadasProjektkodCella";
 import { KimenoSzamlaCella } from "@/components/finance/KimenoSzamlaCella";
 import { KiadasSzamlaGomb } from "@/components/finance/KiadasSzamlak";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
@@ -90,6 +91,11 @@ export default async function PenzugyekPage() {
       { projektkod: pc.projektkod, projektNev: pc.project_nev || null },
     ]),
   );
+  // A kiadások Projektkód oszlopának/űrlapjának választéka (lásd
+  // KiadasProjektkodCella): kód + a munka neve, kód szerint rendezve.
+  const projektkodOpciok = [...projectCodes]
+    .sort((a, b) => (b.projektkod ?? "").localeCompare(a.projektkod ?? "", "hu"))
+    .map((pc) => ({ id: pc.id, projektkod: pc.projektkod, nev: pc.project_nev || null }));
 
   return (
     <div className="flex flex-1 flex-col">
@@ -245,6 +251,19 @@ export default async function PenzugyekPage() {
                   // hogy kellene kitölteni. (Üres pénznem is forintot jelent.)
                   showIf: { field: "penznem", noneOf: ["", "HUF"] },
                 },
+                // Melyik projektkódra terheljen (a felhasználó kérése) - NEM
+                // kötelező: utólag is hozzárendelhető a lista Projektkód
+                // oszlopában. A hozzárendelt tétel a projektkód adatlapján is
+                // megjelenik (ugyanaz a rekord).
+                {
+                  name: "project_code_id",
+                  label: "Projektkód (ha van)",
+                  type: "select",
+                  options: projektkodOpciok.map((pc) => ({
+                    value: pc.id,
+                    label: pc.nev ? `${pc.projektkod} – ${pc.nev}` : pc.projektkod,
+                  })),
+                },
               ]}
             />
           )}
@@ -283,6 +302,22 @@ export default async function PenzugyekPage() {
                 sortAccessor: (e) => e.kiadas_leiras,
               },
               { header: "Típus", render: (e) => e.tipus ?? "–", sortAccessor: (e) => e.tipus },
+              {
+                // Melyik projektkódra terhel a kiadás (a felhasználó kérése):
+                // itt látszik, és utólag is hozzárendelhető/átrendelhető - a
+                // hozzárendelt tétel a projektkód adatlapján is megjelenik
+                // (ugyanaz a rekord).
+                header: "Projektkód",
+                render: (e) => (
+                  <KiadasProjektkodCella
+                    expenseId={e.id}
+                    projectCodeId={e.project_code_id}
+                    opciok={projektkodOpciok}
+                    canEdit={canEdit}
+                  />
+                ),
+                sortAccessor: (e) => bevetelForrasa.get(e.project_code_id ?? -1)?.projektkod ?? "",
+              },
               {
                 // MIKOR történt a kiadás (a felhasználó kérése) - itt, a
                 // listában is látszódjon és szerkeszthető legyen.

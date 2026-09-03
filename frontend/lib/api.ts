@@ -335,6 +335,9 @@ export type Expense = {
   megnevezes: string;
   /** A felületen "Megnevezés": mire ment a kiadás. */
   kiadas_leiras: string | null;
+  /** Melyik projektkódra terhel - a listában is látszik, és utólag is
+   * hozzárendelhető (lásd KiadasProjektkodCella). */
+  project_code_id: number | null;
   /** "+ÁFA" jelölés ("igen" = van) és a százaléka - a bruttót a szerver
    * számolja belőlük (lásd backend routes/finance._afa_brutto). */
   plusz_afa: string | null;
