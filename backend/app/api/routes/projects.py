@@ -13,6 +13,7 @@ from app.models.employee import Employee
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.models.timesheet import Timesheet
+from app.models.torolt_naptar_esemeny import ToroltNaptarEsemeny
 from app.schemas.deliverable import DeliverableRead
 from app.schemas.deliverable_actions import TimerEmployeeSummary
 from app.schemas.project import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate, SzerzodesKeszitesPayload
@@ -22,6 +23,21 @@ from app.services import dispo
 from app.services.dispo import send_diszpo, send_elozetes_diszpo
 from app.services.project_actions import DarabolasHiba, create_feldarabolas, create_utomunka
 from app.services.technika import check_technika
+
+def _projekt_torles_elott(project: Project, db: Session) -> None:
+    """Törlés előtt: (1) a Média Portál-tartalom védelme; (2) ha a projekt
+    naptár-eseményhez kötött, az esemény-azonosító felkerül a törölt-listára,
+    hogy a percenkénti naptár-szinkron NE hozza vissza a kitörölt projektet
+    (a felhasználó kérése) - lásd models/torolt_naptar_esemeny.py és
+    services/google_calendar.py."""
+    _block_delete_if_portal_content(project, db)
+    if project.google_calendar_event_id:
+        megvan = db.query(ToroltNaptarEsemeny).filter(
+            ToroltNaptarEsemeny.event_id == project.google_calendar_event_id
+        ).first()
+        if megvan is None:
+            db.add(ToroltNaptarEsemeny(event_id=project.google_calendar_event_id, projekt_nev=project.nev))
+
 
 def _block_delete_if_portal_content(project: Project, _db: Session) -> None:
     """A projekt saját rekordjai (eszközfoglalás, diszpó-adatlap, szerződések,
@@ -144,7 +160,7 @@ router = build_crud_router(
     before_create=_kosd_a_projektkodhoz,
     before_update=_projekt_before_update,
     after_update=_takaritsd_a_szamlazokat,
-    before_delete=_block_delete_if_portal_content,
+    before_delete=_projekt_torles_elott,
     entity_type="project",
 )
 

@@ -52,6 +52,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.calendar_sync import CalendarSyncState
 from app.models.project import Project
+from app.models.torolt_naptar_esemeny import ToroltNaptarEsemeny
 from app.services import diszpo_sablon, project_matching
 from app.services.google_oauth import OAuthError, load_credentials as load_db_credentials
 
@@ -322,6 +323,11 @@ def sync_hype_calendar(db: Session) -> dict:
 
     events, next_sync_token, did_full_resync = _fetch_events(service, calendar_id, state.sync_token)
 
+    # A rendszerből kézzel törölt projektek esemény-azonosítói - ezekből a
+    # szinkron nem hoz létre újra projektet (a felhasználó kérése), lásd
+    # models/torolt_naptar_esemeny.py.
+    torolt_esemenyek = {sor.event_id for sor in db.query(ToroltNaptarEsemeny.event_id).all()}
+
     stats = {
         "created": 0,
         "linked_existing": 0,
@@ -345,6 +351,13 @@ def sync_hype_calendar(db: Session) -> dict:
                 project = db.query(Project).filter(Project.google_calendar_event_id == event_id).first()
 
                 if event.get("status") == "cancelled":
+                    # Ha az esemény a naptárból is eltűnt, a törölt-lista
+                    # bejegyzésére sincs többé szükség (rendrakás).
+                    if event_id in torolt_esemenyek:
+                        db.query(ToroltNaptarEsemeny).filter(
+                            ToroltNaptarEsemeny.event_id == event_id
+                        ).delete(synchronize_session=False)
+                        torolt_esemenyek.discard(event_id)
                     if project is not None:
                         db.delete(project)
                         stats["deleted"] += 1
@@ -359,6 +372,12 @@ def sync_hype_calendar(db: Session) -> dict:
                 szin, meeting = _szin_adatok(event)
 
                 if project is None:
+                    # KÉZZEL TÖRÖLT projekt eseménye: nem hozzuk vissza (a
+                    # felhasználó kérése) - lásd models/torolt_naptar_esemeny.py
+                    # és routes/projects._projekt_torles_elott.
+                    if event_id in torolt_esemenyek:
+                        stats["skipped"] += 1
+                        continue
                     project = _find_unlinked_match(db, nev, forgatas_datuma)
                     if project is not None:
                         project.google_calendar_event_id = event_id
