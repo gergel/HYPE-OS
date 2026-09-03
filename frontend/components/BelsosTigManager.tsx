@@ -174,7 +174,13 @@ export function BelsosTigManager({
       { cimke: "Székhely", ertek: ceg ? ceg.szekhely : openEmployee.szekhely },
       { cimke: "Adószám", ertek: ceg ? ceg.adoszam : openEmployee.adoszam },
       { cimke: "Megbízás tárgya", ertek: form.megbizas_targya },
-      { cimke: "Melyik hónapról szól", ertek: honapCel ? huEvHonap(honapCel.ev, honapCel.honap) : null },
+      {
+        // A papírra PONTOSAN ez kerül ({{tido}}): a szabad szöveges
+        // teljesítés, üresen hagyva a hónap szövege (a felhasználó kérése,
+        // hogy itt a teljesítés dátuma látsszon, ne a származtatott hónap).
+        cimke: "Teljesítés dátuma",
+        ertek: form.teljesites_szoveg || (honapCel ? huEvHonap(honapCel.ev, honapCel.honap) : null),
+      },
       {
         cimke: "Nettó összeg",
         ertek: form.netto_osszeg.trim() ? `${formatHuf(Number(form.netto_osszeg))}${form.plusz_afa ? " + ÁFA" : ""}` : null,
