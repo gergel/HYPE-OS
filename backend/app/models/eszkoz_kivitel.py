@@ -55,6 +55,12 @@ class EszkozKivitel(TimestampMixin, Base):
     #: hozatal fázisban a kivitelé már nem látszik (csalás-védelem).
     kulso_kivitel: Mapped[str | None] = mapped_column(Text)
     kulso_vissza: Mapped[str | None] = mapped_column(Text)
+    #: HIÁNY-KEZELÉS (a felhasználó kérése): ha a kód lejárta után is maradt
+    #: hiány (kevesebb jött vissza, mint amennyi kiment), a dashboard jól
+    #: láthatóan kiírja - ott magyarázat írható (mi lett a megoldás), és a
+    #: "kész" jelöléssel vehető le a figyelmeztetés.
+    hiany_megoldas: Mapped[str | None] = mapped_column(Text)
+    hiany_megoldva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     project = relationship("Project")
     tetelek: Mapped[list["EszkozKivitelTetel"]] = relationship(

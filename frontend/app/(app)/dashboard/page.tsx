@@ -14,12 +14,14 @@ import { TopBar } from "@/components/TopBar";
 import {
   getDashboardSummary,
   getDeliverables,
+  getEszkozKivitelHianyok,
   getMyAnyagKorlat,
   getMyDashboardConfig,
   getMyPageAccess,
   getMyTasksSummary,
   getProjectCodeOptions,
 } from "@/lib/api";
+import { EszkozHianyKartya } from "@/components/dashboard/EszkozHianyKartya";
 import { KorlatozottDashboard } from "@/components/dashboard/KorlatozottDashboard";
 import { MyTasksCard } from "@/components/dashboard/DashboardWidgets";
 import {
@@ -88,6 +90,11 @@ export default async function DashboardPage() {
   // Code->/projektek/project-kodok, Equipment ütközés->/felszereles, stb.) -
   // ezért nem egyetlen requiredPages listával, hanem "legalább egy elérhető
   // al-elem" logikával döntjük el, hogy egyáltalán felkínálható-e a widget.
+  // ESZKÖZKIVITEL-HIÁNYOK: lejárt kódú, hiányos kivitelek - jól láthatóan a
+  // dashboard tetején (a felhasználó kérése). Csak annak, aki az
+  // Eszközkivitelek oldalt is látja; jog nélkül a végpont üresen tér vissza.
+  const eszkozHianyok = hasPage(allowedPages, "/eszkozkivitelek") ? await getEszkozKivitelHianyok() : [];
+
   const canSeeProjektek = hasPage(allowedPages, "/projektek");
   const canSeeProjectCodes = hasPage(allowedPages, "/projektek/project-kodok");
   const canSeeFelszereles = hasPage(allowedPages, "/felszereles");
@@ -127,6 +134,10 @@ export default async function DashboardPage() {
             csak neki jön adat), és nyeremény-bekérő az adminnak, amíg a folyó
             hónap nyereménye hiányzik. Szándékosan nem testreszabható widgetek:
             időszakosak, és pont az a dolguk, hogy ne lehessen elrejteni őket. */}
+        {/* Eszközkivitel-hiányok: kiemelt, nem elrejthető figyelmeztetés (a
+            felhasználó kérése) - csak akkor látszik, ha van nyitott hiány. */}
+        {eszkozHianyok.length > 0 && <EszkozHianyKartya kezdeti={eszkozHianyok} />}
+
         {summary?.vagoi_jatek_nyertes && <VagoiGyoztesKartya nyertes={summary.vagoi_jatek_nyertes} />}
         {summary?.vagoi_jatek_nyeremeny_bekeres && <VagoiNyeremenyBekero />}
         {summary?.vagoi_jatek_uj_nyeremeny && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ModalReteg } from "@/components/ModalReteg";
 import { authFetch } from "@/lib/authFetch";
@@ -28,6 +28,8 @@ const SZEMPONTOK = [
 
 type Pontok = Partial<Record<(typeof SZEMPONTOK)[number]["kulcs"], number>>;
 
+type ForgatasStab = { forgatas: string | null; datum: string | null; nevek: string[] };
+
 /** A vágói visszajelzés felugró űrlapja - ide szedve ki a FeedbackSendButton-
  * ból, hogy máshonnan is nyitható legyen (lásd UtomunkaContent.kartyaAthelyezes:
  * ha valaki visszajelzés nélkül próbál egy anyagot ellenőrzésbe tenni, EZ az
@@ -53,6 +55,22 @@ export function VisszajelzesModal({
   const [pontok, setPontok] = useState<Pontok>({});
   const [megjegyzes, setMegjegyzes] = useState("");
   const [busy, setBusy] = useState(false);
+  // KIK FORGATTAK az anyag projektjén (a felhasználó kérése) - a vágó lássa,
+  // kiknek szól a visszajelzés. Csendben marad üres, ha nincs stáb-adat.
+  const [stab, setStab] = useState<ForgatasStab[]>([]);
+
+  useEffect(() => {
+    let aktiv = true;
+    authFetch(`/api/v1/deliverables/${deliverableId}/forgatas-stab`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((adat: ForgatasStab[]) => {
+        if (aktiv) setStab(adat.filter((s) => s.nevek.length > 0));
+      })
+      .catch(() => {});
+    return () => {
+      aktiv = false;
+    };
+  }, [deliverableId]);
 
   async function kuld() {
     const vanPont = SZEMPONTOK.some((sz) => pontok[sz.kulcs] != null);
@@ -92,9 +110,30 @@ export function VisszajelzesModal({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-1 text-[15px] font-medium text-text-primary">Vágói visszajelzés</h3>
-        <p className="mb-5 text-[12px] text-text-muted">
+        <p className="mb-4 text-[12px] text-text-muted">
           Milyen volt a leforgatott anyag? 1 = használhatatlan, 10 = kifogástalan.
         </p>
+
+        {/* KIK FORGATTAK ezen a projekten - hogy a vágó tudja, kiknek szól a
+            visszajelzés (a felhasználó kérése). */}
+        {stab.length > 0 && (
+          <div className="mb-5 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5">
+            <p className="mb-1.5 text-[12px] font-medium text-text-primary">Ezen a projekten forgattak</p>
+            <div className="space-y-1">
+              {stab.map((s, i) => (
+                <p key={i} className="text-[12.5px] text-text-secondary">
+                  {stab.length > 1 && (
+                    <span className="text-text-muted">
+                      {s.forgatas ?? "Forgatás"}
+                      {s.datum ? ` (${s.datum})` : ""}:{" "}
+                    </span>
+                  )}
+                  {s.nevek.join(", ")}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-5">
           {SZEMPONTOK.map((sz) => (

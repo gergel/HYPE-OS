@@ -357,6 +357,10 @@ class KivitelAdminSor(BaseModel):
     #: Nem leltári (bérelt) eszközök szabad szövege a két fázisból.
     kulso_kivitel: str | None
     kulso_vissza: str | None
+    #: Hiány-kezelés (lásd models/eszkoz_kivitel.py): a megoldás szövege és
+    #: hogy készre lett-e jelölve.
+    hiany_megoldas: str | None
+    hiany_megoldva: bool
     tetelek: list[KivitelTetelInfo]
     #: Hány tételből hoztak vissza kevesebbet, mint amennyi kiment.
     hianyos_tetelek: int
@@ -385,6 +389,8 @@ def _admin_sor(db: Session, kivitel: EszkozKivitel) -> KivitelAdminSor:
         vissza_lezarva_at=kivitel.vissza_lezarva_at,
         kulso_kivitel=kivitel.kulso_kivitel,
         kulso_vissza=kivitel.kulso_vissza,
+        hiany_megoldas=kivitel.hiany_megoldas,
+        hiany_megoldva=kivitel.hiany_megoldva,
         tetelek=tetelek,
         hianyos_tetelek=sum(1 for t in tetelek if t.visszahozott_db < t.kivitt_db),
     )
@@ -431,6 +437,120 @@ def kod_generalas(
     db.commit()
     db.refresh(kivitel)
     return _admin_sor(db, kivitel)
+
+
+# ── Hiány-figyelmeztetés a dashboardra (a felhasználó kérése) ────────────────
+
+
+class HianyTetel(BaseModel):
+    nev: str
+    kivitt_db: int
+    visszahozott_db: int
+    hiany_db: int
+
+
+class HianySor(BaseModel):
+    id: int
+    kod: str
+    projekt_nev: str | None
+    forgatas_datuma: date | None
+    #: A visszahozatal lezárásakor írt észrevétel (ha volt).
+    megjegyzes: str | None
+    #: A kezelő által írt magyarázat: mi lett a megoldás.
+    hiany_megoldas: str | None
+    tetelek: list[HianyTetel]
+
+
+@admin_router.get("/hianyok", response_model=list[HianySor])
+def hianyok(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view")),
+):
+    """A LEJÁRT kódú, hiányos kivitelek - a dashboard jól láthatóan kiírja
+    őket (a felhasználó kérése): mi hiányzik és melyik forgatásnál. Csak az
+    számít ide, aminek a kódja már nem él (a forgatás utolsó napja + 48 óra
+    letelt, tehát több beírás nem jöhet), van hiányzó tétele, és még nincs
+    megoldva-ra jelölve."""
+    kivitelek = db.scalars(
+        select(EszkozKivitel)
+        .where(EszkozKivitel.teszt.is_(False), EszkozKivitel.hiany_megoldva.is_(False))
+        .options(selectinload(EszkozKivitel.project))
+        .order_by(EszkozKivitel.id.desc())
+    ).all()
+    sorok: list[HianySor] = []
+    for kivitel in kivitelek:
+        if kivitel_ervenyes(kivitel):
+            continue
+        hianyzo = [t for t in _tetelek_valasz(db, kivitel) if t.visszahozott_db < t.kivitt_db]
+        if not hianyzo:
+            continue
+        project = kivitel.project
+        sorok.append(
+            HianySor(
+                id=kivitel.id,
+                kod=kivitel.kod,
+                projekt_nev=project.nev if project else None,
+                forgatas_datuma=project.forgatas_datuma if project else None,
+                megjegyzes=kivitel.megjegyzes,
+                hiany_megoldas=kivitel.hiany_megoldas,
+                tetelek=[
+                    HianyTetel(
+                        nev=t.nev,
+                        kivitt_db=t.kivitt_db,
+                        visszahozott_db=t.visszahozott_db,
+                        hiany_db=t.kivitt_db - t.visszahozott_db,
+                    )
+                    for t in hianyzo
+                ],
+            )
+        )
+    return sorok
+
+
+class HianyMegoldasKeres(BaseModel):
+    #: Mi lett a megoldás (szabad szöveg) - None = nem változik.
+    megoldas: str | None = None
+    #: True = kész, a figyelmeztetés lekerül a dashboardról; False = még
+    #: nyitva (csak a magyarázat mentődik).
+    megoldva: bool | None = None
+
+
+@admin_router.post(
+    "/{kivitel_id}/hiany-megoldas",
+    response_model=HianySor,
+    dependencies=[Depends(require_page_action(PAGE, "edit"))],
+)
+def hiany_megoldas(kivitel_id: int, payload: HianyMegoldasKeres, db: Session = Depends(get_db)):
+    """Magyarázat a hiányhoz (mi lett a megoldás) és/vagy a "kész" jelölés -
+    a dashboard hiány-kártyájáról (a felhasználó kérése)."""
+    kivitel = db.get(EszkozKivitel, kivitel_id)
+    if kivitel is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nincs ilyen kivitel.")
+    if payload.megoldas is not None:
+        kivitel.hiany_megoldas = payload.megoldas.strip() or None
+    if payload.megoldva is not None:
+        kivitel.hiany_megoldva = payload.megoldva
+    db.commit()
+    db.refresh(kivitel)
+    hianyzo = [t for t in _tetelek_valasz(db, kivitel) if t.visszahozott_db < t.kivitt_db]
+    project = kivitel.project
+    return HianySor(
+        id=kivitel.id,
+        kod=kivitel.kod,
+        projekt_nev=project.nev if project else None,
+        forgatas_datuma=project.forgatas_datuma if project else None,
+        megjegyzes=kivitel.megjegyzes,
+        hiany_megoldas=kivitel.hiany_megoldas,
+        tetelek=[
+            HianyTetel(
+                nev=t.nev,
+                kivitt_db=t.kivitt_db,
+                visszahozott_db=t.visszahozott_db,
+                hiany_db=t.kivitt_db - t.visszahozott_db,
+            )
+            for t in hianyzo
+        ],
+    )
 
 
 class AllapotKeres(BaseModel):

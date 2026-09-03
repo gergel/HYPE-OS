@@ -599,6 +599,51 @@ def get_timer_state(deliverable_id: int, db: Session = Depends(get_db), current_
     return deliverable_actions.get_timer_state(db, _get_deliverable_or_404(deliverable_id, db, current_user), current_user)
 
 
+class ForgatasStab(BaseModel):
+    """Kik forgattak az anyaghoz tartozó projekten - a visszajelzés-űrlap
+    mutatja (a felhasználó kérése), hogy a vágó tudja, kiknek szól."""
+
+    forgatas: str | None
+    datum: str | None
+    nevek: list[str]
+
+
+@deliverable_actions_router.get("/{deliverable_id}/forgatas-stab", response_model=list[ForgatasStab])
+def forgatas_stab(
+    deliverable_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Az anyaghoz tartozó forgatás(ok) stábja. Ha az anyag közvetlenül egy
+    forgatáshoz kötött, azé; ha csak projektkódhoz, a kód összes forgatásáé
+    (forgatásonként csoportosítva). A stáb a diszpós stáblista (Project.crew)
+    plusz az alvállalkozók (alvallalkozo_stab)."""
+    obj = _get_deliverable_or_404(deliverable_id, db, current_user)
+    projektek = []
+    if obj.project_id is not None:
+        projekt = db.get(Project, obj.project_id)
+        if projekt is not None:
+            projektek = [projekt]
+    elif obj.project_code_id is not None:
+        projektek = db.scalars(
+            select(Project).where(Project.project_code_id == obj.project_code_id).order_by(Project.forgatas_datuma)
+        ).all()
+    valasz: list[ForgatasStab] = []
+    for projekt in projektek:
+        nevek: list[str] = []
+        for ember in list(projekt.crew) + list(getattr(projekt, "alvallalkozo_stab", []) or []):
+            if ember.full_name and ember.full_name not in nevek:
+                nevek.append(ember.full_name)
+        valasz.append(
+            ForgatasStab(
+                forgatas=projekt.nev,
+                datum=projekt.forgatas_datuma.isoformat() if projekt.forgatas_datuma else None,
+                nevek=nevek,
+            )
+        )
+    return valasz
+
+
 class VisszajelzesIn(BaseModel):
     """A vágói visszajelzés űrlapja: három pontszám (1-10) és a megjegyzés."""
 

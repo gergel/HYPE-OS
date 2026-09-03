@@ -219,6 +219,16 @@ export function EszkozkivitelekContent({
                         <span className="font-medium">Észrevétel a lezáráskor:</span> {k.megjegyzes}
                       </p>
                     )}
+                    {/* A hiány kezelése a dashboard hiány-kártyáján történik
+                        (lásd EszkozHianyKartya) - itt csak látszik, mi lett. */}
+                    {(k.hiany_megoldas || k.hiany_megoldva) && (
+                      <p className="mb-2 rounded-[var(--radius)] bg-surface-3 px-3 py-2 text-[13px] text-text-primary">
+                        <span className="font-medium">
+                          Hiány {k.hiany_megoldva ? "(megoldva)" : "(nyitott)"}:
+                        </span>{" "}
+                        {k.hiany_megoldas ?? "nincs magyarázat"}
+                      </p>
+                    )}
                     {k.tetelek.length === 0 ? (
                       <p className="py-1 text-[12.5px] text-text-muted">Még nincs beírt tétel.</p>
                     ) : (

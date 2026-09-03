@@ -6,7 +6,8 @@ import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { KattinthatoAllapot } from "@/components/projektkod/KattinthatoAllapot";
 import { ENTITY_PATHS, formatHuf, type ProjektkodBontas } from "@/lib/api";
-import { Clapperboard, Receipt, Scissors } from "lucide-react";
+import { PENZNEMEK } from "@/lib/penz";
+import { Clapperboard, Paperclip, Receipt, Scissors } from "lucide-react";
 
 /** Mért idő emberi alakban: 95 perc -> "1 ó 35 p".
  *
@@ -175,12 +176,57 @@ export function ProjektkodBontasTablak({
             postPath={ENTITY_PATHS.expense}
             presetFields={{ project_code_id: projectCodeId }}
             addLabel="+ Új kiadás"
+            // A számla/blokk már felvitelkor csatolható (a felhasználó
+            // kérése) - a mentés után a létrejött tételhez töltődik fel, és a
+            // lenti lista "Fájlok" oszlopa mutatja, hány fájl tartozik hozzá.
+            fajlFeltoltes={{ entityType: "expense", kategoria: "szamla" }}
             fields={[
-              { name: "megnevezes", label: "Megnevezés", required: true },
+              // A `megnevezes` a felületen "Cégnév" (kinek fizettünk), a
+              // "Megnevezés" a kiadas_leiras: mire ment a pénz - MINDKETTŐ
+              // kötelező (a felhasználó kérése), ugyanúgy, mint a Pénzügyek
+              // oldali kiadás-űrlapon (lásd backend models/finance.Expense).
+              { name: "megnevezes", label: "Cégnév", required: true },
+              { name: "kiadas_leiras", label: "Megnevezés", placeholder: "Mire ment a kiadás", required: true },
               // A KIADÁS dátumát kérjük be (a felhasználó kérése) - a lenti
               // Dátum oszlop és a Pénzügyek listája is ebből dolgozik.
               { name: "kiadas_datuma", label: "Kiadás dátuma", type: "date", required: true },
-              { name: "netto", label: "Nettó összeg (Ft)", type: "number", required: true },
+              { name: "netto", label: "Nettó összeg", type: "number", required: true },
+              // "+ÁFA" jelölés + százalék: a bruttót a szerver számolja
+              // belőlük (lásd backend routes/finance._afa_brutto).
+              {
+                name: "plusz_afa",
+                label: "ÁFA",
+                type: "select",
+                defaultValue: "",
+                options: [
+                  { value: "", label: "Nincs ÁFA" },
+                  { value: "igen", label: "Plusz ÁFA" },
+                ],
+              },
+              {
+                name: "afa_szazalek",
+                label: "ÁFA %",
+                type: "number",
+                defaultValue: "27",
+                showIf: { field: "plusz_afa", oneOf: ["igen"] },
+              },
+              // Az összeget a választott PÉNZNEMBEN kell beírni; a szerver
+              // váltja át forintra az árfolyammal (lásd backend
+              // services/penznem.py). Devizánál az árfolyam kötelező.
+              {
+                name: "penznem",
+                label: "Pénznem",
+                type: "select",
+                defaultValue: "HUF",
+                options: PENZNEMEK.map((k) => ({ value: k, label: k })),
+              },
+              {
+                name: "arfolyam",
+                label: "Árfolyam (Ft)",
+                type: "number",
+                required: true,
+                showIf: { field: "penznem", noneOf: ["", "HUF"] },
+              },
               // KÖTELEZŐ fizetési mód (a felhasználó kérése) - ugyanaz a
               // lista, mint a Pénzügyek oldali kiadás-űrlapon.
               {
@@ -278,6 +324,21 @@ export function ProjektkodBontasTablak({
                   (k.resz === "kulsos" ? "Külsős" : "Egyéb")
                 ),
               sortAccessor: (k) => k.resz,
+            },
+            {
+              // Hány számla/blokk van a kiadáshoz csatolva (a felhasználó
+              // kérése) - a fájlok maguk a kiadás adatlapján nézhetők meg.
+              header: "Fájlok",
+              render: (k) =>
+                k.fajlok > 0 ? (
+                  <span className="inline-flex items-center gap-1 text-text-secondary">
+                    <Paperclip size={12} />
+                    {k.fajlok} fájl
+                  </span>
+                ) : (
+                  <span className="text-text-muted">–</span>
+                ),
+              sortAccessor: (k) => k.fajlok,
             },
             {
               header: "Összeg (nettó)",

@@ -130,7 +130,7 @@ def utomunka_sorok(db: Session, project_code: Any) -> list[dict]:
     ]
 
 
-def kiadas_sorok(project_code: Any) -> list[dict]:
+def kiadas_sorok(db: Session, project_code: Any) -> list[dict]:
     """A projektkód KIADÁS-SORAI tételesen, a besorolásukkal együtt.
 
     Kimarad belőle, ami már a TIG-eken keresztül számít: a TIG-ekből
@@ -143,10 +143,26 @@ def kiadas_sorok(project_code: Any) -> list[dict]:
     stimmelne egyik fejléc-számmal sem, és az úgy nézne ki, mintha hiányozna
     valami."""
     _, tig_kiadas_idk = kulsos_koltseg.projektkod_kulsos(project_code)
+    kiadasok = [e for e in (getattr(project_code, "expenses", []) or []) if e.id not in tig_kiadas_idk]
+    # Hány fájl (számla/blokk) van a kiadáshoz csatolva - a lista mutatja (a
+    # felhasználó kérése), egyetlen csoportosított számlálással.
+    fajl_darab: dict[int, int] = {}
+    if kiadasok:
+        from sqlalchemy import func
+
+        from app.models.document_attachment import DocumentAttachment
+
+        for entity_id, darab in db.execute(
+            select(DocumentAttachment.entity_id, func.count())
+            .where(
+                DocumentAttachment.entity_type == "expense",
+                DocumentAttachment.entity_id.in_([e.id for e in kiadasok]),
+            )
+            .group_by(DocumentAttachment.entity_id)
+        ).all():
+            fajl_darab[int(entity_id)] = int(darab)
     sorok = []
-    for e in getattr(project_code, "expenses", []) or []:
-        if e.id in tig_kiadas_idk:
-            continue
+    for e in kiadasok:
         sorok.append(
             {
                 "id": e.id,
@@ -160,6 +176,7 @@ def kiadas_sorok(project_code: Any) -> list[dict]:
                 "osszeg": _osszeg(e),
                 "kifizetve": bool(e.kesz),
                 "resz": "kulsos" if _kulsos_kiadas(e) else "egyeb",
+                "fajlok": fajl_darab.get(e.id, 0),
             }
         )
     return sorted(sorok, key=lambda s: (s["datum"] or date.max, s["megnevezes"] or ""))

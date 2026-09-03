@@ -1039,6 +1039,8 @@ export type ProjektkodBontas = {
     kifizetve: boolean;
     /** Melyik fejléc-részbe számít: "kulsos" vagy "egyeb". */
     resz: string;
+    /** Hány fájl (számla/blokk) van a kiadáshoz csatolva. */
+    fajlok: number;
   }[];
 };
 
@@ -3391,10 +3393,29 @@ export type EszkozKivitelSor = {
   /** Nem leltári (bérelt) eszközök szabad szövege a két fázisból. */
   kulso_kivitel: string | null;
   kulso_vissza: string | null;
+  /** Hiány-kezelés: a megoldás szövege és hogy készre lett-e jelölve. */
+  hiany_megoldas: string | null;
+  hiany_megoldva: boolean;
   tetelek: EszkozKivitelTetel[];
   hianyos_tetelek: number;
 };
 
 export async function getEszkozKivitelek(): Promise<EszkozKivitelSor[]> {
   return (await apiGet<EszkozKivitelSor[]>("/api/v1/eszkozkivitelek")) ?? [];
+}
+
+/** Egy LEJÁRT kódú, hiányos eszközkivitel a dashboard figyelmeztetéséhez -
+ * lásd backend routes/eszkoz_kivitel.hianyok. */
+export type EszkozKivitelHiany = {
+  id: number;
+  kod: string;
+  projekt_nev: string | null;
+  forgatas_datuma: string | null;
+  megjegyzes: string | null;
+  hiany_megoldas: string | null;
+  tetelek: { nev: string; kivitt_db: number; visszahozott_db: number; hiany_db: number }[];
+};
+
+export async function getEszkozKivitelHianyok(): Promise<EszkozKivitelHiany[]> {
+  return (await apiGet<EszkozKivitelHiany[]>("/api/v1/eszkozkivitelek/hianyok")) ?? [];
 }

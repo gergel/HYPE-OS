@@ -321,6 +321,9 @@ class BontasKiadas(BaseModel):
     #: Melyik fejléc-részbe számít: "kulsos" (TIG-en kívüli külsős kifizetés)
     #: vagy "egyeb" (minden más).
     resz: str
+    #: Hány fájl (számla/blokk) van a kiadáshoz csatolva - a lista mutatja
+    #: (a felhasználó kérése).
+    fajlok: int = 0
 
 
 class ProjektkodBontas(BaseModel):
@@ -354,7 +357,7 @@ def get_bontas(
     return ProjektkodBontas(
         projektek=[BontasProjekt(**sor) for sor in projektkod_bontas.projekt_sorok(db, kod)],
         utomunkak=[BontasUtomunka(**sor) for sor in projektkod_bontas.utomunka_sorok(db, kod)],
-        kiadasok=[BontasKiadas(**sor) for sor in projektkod_bontas.kiadas_sorok(kod)],
+        kiadasok=[BontasKiadas(**sor) for sor in projektkod_bontas.kiadas_sorok(db, kod)],
     )
 
 
