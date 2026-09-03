@@ -10,8 +10,9 @@ import { authFetch } from "@/lib/authFetch";
  * választható ki, MELYIK napot vagy dátum-tartományt válasszuk le a
  * forgatásból - ugyanazzal a dátum-választóval, mint a projekt "Forgatás
  * dátuma" mezője. A leválasztott nap új projektként jön létre ugyanahhoz a
- * Project Code-hoz, az eredetiből pedig kikerül a leválasztott időszak
- * (lásd backend services/project_actions.create_feldarabolas). */
+ * Project Code-hoz - az eredeti forgatás hossza nem változik, csak bekerül
+ * mellé egy plusz esemény (lásd backend
+ * services/project_actions.create_feldarabolas). */
 export function FeldarabolasGomb({
   projectId,
   javasoltKezdet,
@@ -88,7 +89,8 @@ export function FeldarabolasGomb({
             <p className="mt-1 text-[12.5px] text-text-secondary">
               Melyik napot vagy dátum-tartományt válasszuk le? A leválasztott időszak új
               projektként jön létre ugyanahhoz a Project Code-hoz (név, stáb, projektkód
-              átmásolva), az eredeti forgatásból pedig kikerül.
+              átmásolva) - az eredeti forgatás hossza nem változik, csak bekerül mellé egy
+              plusz esemény.
             </p>
             <div className="mt-4">
               <DateRangePicker value={value} onChange={setValue} readOnly={busy} />

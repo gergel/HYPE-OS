@@ -25,14 +25,12 @@ def create_feldarabolas(
     napja utáni nap.
 
     A leválasztott nap MEGJEGYZI, melyik projektből származik
-    (feldarabolas_szulo_id), és az eredeti projektből KIVESSZÜK a leválasztott
-    napot. Enélkül az "egész" (több napos) projekt is ugyanúgy diszponálandóként
-    jelent meg, mint a leválasztott nap - pedig darabolás után már a napokat
-    kell diszponálni, nem az egészet.
+    (feldarabolas_szulo_id). Az EREDETI projekt dátumaihoz a darabolás NEM
+    nyúl (a felhasználó 2026-09-03-i kérése): a fő esemény hossza változatlan
+    marad, egyszerűen bekerül mellé egy plusz esemény.
 
-    Egynapos forgatásból nincs mit leválasztani a SAJÁT napjára: abból nem két
-    forgatás lenne, hanem ugyanaz kétszer. (A záró nap UTÁNI napra darabolás
-    viszont továbbra is megengedett - az a "vegyünk fel még egy napot" eset.)"""
+    A teljes forgatást lefedő darabolást viszont elutasítjuk: abból nem két
+    forgatás lenne, hanem ugyanaz kétszer (lásd _ellenorizd_a_darabolast)."""
     if datum is not None:
         new_date = datum
         # Egy napra mutató "tartomány" (vég <= kezdet) = egynapos leválasztás.
@@ -83,8 +81,6 @@ def create_feldarabolas(
     ]
     db.add(new_project)
 
-    _vagd_le_a_leszakitott_napot(project, new_date, datum_vege)
-
     db.commit()
     db.refresh(new_project)
     return new_project
@@ -109,44 +105,6 @@ def _ellenorizd_a_darabolast(project: Project, new_date: date | None, new_end: d
             "rövidebb tartományt) emeljük ki, vagy a záró nap utáni dátummal vegyél fel "
             "egy új napot."
         )
-
-
-def _vagd_le_a_leszakitott_napot(project: Project, new_date: date | None, new_end: date | None = None) -> None:
-    """Az eredeti projektből KIVESSZÜK a leválasztott napot/tartományt.
-
-    Három eset van (a tartomány egy napnál a [nap, nap] tartomány):
-
-    - a leválasztás az ELSŐ napon kezdődik: az eredeti a tartomány utáni
-      naptól él tovább. Enélkül az eredeti érintetlen maradt, tehát ugyanarra
-      a napra az "egész" forgatás is ott állt a diszponálandók közt a
-      leválasztott nap mellett - pont az, amit a darabolásnak meg kellene
-      szüntetnie;
-    - a leválasztás a tartományon BELÜL kezdődik: az eredeti a kezdőnap
-      előtti napig tart;
-    - a leválasztás a tartományon KÍVÜL esik (pl. a záró nap UTÁNI napra
-      daraboltak, ami a régi, Notionből hozott alapértelmezés): az eredetihez
-      nem nyúlunk, ott nincs mit levágni.
-
-    Ha az eredeti egyetlen naposra zsugorodik, a záró dátumot töröljük - a
-    `forgatas_datuma_vege` csak több napos forgatásnál értelmes."""
-    if new_date is None or project.forgatas_datuma is None:
-        return
-    utolso_nap = project.forgatas_datuma_vege or project.forgatas_datuma
-    veg = new_end or new_date
-    if new_date > utolso_nap or veg < project.forgatas_datuma:
-        return
-    if new_date <= project.forgatas_datuma:
-        uj_kezdet = veg + timedelta(days=1)
-        project.forgatas_datuma = uj_kezdet
-        project.forgatas_datuma_vege = None if uj_kezdet >= utolso_nap else utolso_nap
-        # A megkurtított eredeti dátumait se írhassa vissza a szinkron a
-        # darabolás előtti (teljes) tartományra - lásd models/project.py
-        # forgatas_datum_kezzel_beallitva.
-        project.forgatas_datum_kezzel_beallitva = True
-        return
-    uj_veg = new_date - timedelta(days=1)
-    project.forgatas_datuma_vege = None if uj_veg == project.forgatas_datuma else uj_veg
-    project.forgatas_datum_kezzel_beallitva = True
 
 
 def create_utomunka(db: Session, project: Project, current_user: Employee) -> Deliverable:
