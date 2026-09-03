@@ -52,7 +52,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.calendar_sync import CalendarSyncState
 from app.models.project import Project
-from app.services import project_matching
+from app.services import diszpo_sablon, project_matching
 from app.services.google_oauth import OAuthError, load_credentials as load_db_credentials
 
 CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
@@ -373,6 +373,10 @@ def sync_hype_calendar(db: Session) -> dict:
                         # lehet (lásd services/projektkod_kotes.py), és a diszpó
                         # úgyis kéri a kódot a kiküldés előtt.
                         project = Project(google_calendar_event_id=event_id, nev=nev)
+                        # Az új diszpóba az alapértelmezett kontakt/szöveg/brief
+                        # sablonok (a felhasználó kérése) - lásd
+                        # services/diszpo_sablon.py.
+                        diszpo_sablon.toltsd_ki_a_sablonokat_objektumon(project)
                         db.add(project)
                         stats["created"] += 1
                 else:

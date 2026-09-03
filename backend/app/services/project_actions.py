@@ -9,6 +9,7 @@ from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.project import Project
 from app.models.project_szamlazo import ProjectSzamlazo
+from app.services import diszpo_sablon
 
 
 def create_feldarabolas(db: Session, project: Project) -> Project:
@@ -49,6 +50,9 @@ def create_feldarabolas(db: Session, project: Project) -> Project:
         # forgatas_datum_kezzel_beallitva).
         forgatas_datum_kezzel_beallitva=True,
     )
+    # Az üres kontakt/diszpó-szöveg/brief mezőkbe az alapértelmezett sablon
+    # kerül (a felhasználó kérése) - ami az eredetiről átjött, az marad.
+    diszpo_sablon.toltsd_ki_a_sablonokat_objektumon(new_project)
     new_project.crew = list(project.crew)
     # A számlázási felállás (ki számláz kiért) a leválasztott napra is
     # ugyanaz - lásd models/project_szamlazo.py. Enélkül a feldarabolt nap

@@ -16,7 +16,7 @@ from app.models.timesheet import Timesheet
 from app.schemas.deliverable import DeliverableRead
 from app.schemas.deliverable_actions import TimerEmployeeSummary
 from app.schemas.project import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate, SzerzodesKeszitesPayload
-from app.services import deliverable_actions, projektkod_kotes
+from app.services import deliverable_actions, diszpo_sablon, projektkod_kotes
 from app.services.contract_actions import apply_szerzodes_keszites, send_szerzodes
 from app.services import dispo
 from app.services.dispo import send_diszpo, send_elozetes_diszpo
@@ -89,7 +89,9 @@ def _kosd_a_projektkodhoz(data: dict, db: Session) -> dict:
         talalat = projektkod_kotes.keresd(db, kod)
         if talalat is not None:
             data["project_code_id"] = talalat.id
-    return data
+    # Az üres kontakt/diszpó-szöveg/brief mezőkbe az alapértelmezett sablon
+    # kerül (a felhasználó kérése) - lásd services/diszpo_sablon.py.
+    return diszpo_sablon.toltsd_ki_a_sablonokat(data)
 
 
 def _kovesd_a_projektkod_valtozast(obj: Project, data: dict, db: Session, _current_user: Employee) -> None:
