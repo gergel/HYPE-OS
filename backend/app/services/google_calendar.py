@@ -64,6 +64,14 @@ CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 FULL_SYNC_LOOKBACK_DAYS = 14
 FULL_SYNC_LOOKAHEAD_DAYS = 548  # kb. 18 hónap
 
+#: EGYSZERI, széles teljes átnézés jelölője (a felhasználó 2026. szeptemberi
+#: kérése): a migráció (alembic b6f3c72d9e84) ezt írja a sync_token helyére,
+#: és az ezt találó következő kör 2026. január 1-től nézi át a TELJES
+#: naptárat - ami nincs a rendszerben, azt behozza. A kör végén a Google
+#: friss sync tokenje felülírja, tehát magától egyszeri marad.
+EGYSZERI_TELJES_TOKEN = "TELJES-ATNEZES-2026-09"
+EGYSZERI_TELJES_KEZDETE = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
 # A naptárból érkező projektek RÉGI gyűjtő kódja ("NAPTAR-IMPORT") itt már nem
 # szerepel: ma nem hozunk létre ilyet (a projekt kód nélkül is létezhet), a régi
 # adatok felismerése pedig egy helyen él - services/projektkod_kotes.py.
@@ -262,13 +270,21 @@ def _fetch_events(service, calendar_id: str, sync_token: str | None) -> tuple[li
     egyébként egy behatárolt ablakú teljes listát (lásd modul-fejléc). Lapoz,
     amíg el nem fogynak az oldalak, és visszaadja az utolsó oldal
     nextSyncToken-jét (a Google csak az utolsó lapon adja vissza)."""
+    # Az EGYSZERI, széles átnézés jelölője (lásd EGYSZERI_TELJES_TOKEN):
+    # token nélküli teljes szinkronként fut, de 2026. január 1-től.
+    szeles_atnezes = sync_token == EGYSZERI_TELJES_TOKEN
+    if szeles_atnezes:
+        sync_token = None
     did_full_resync = sync_token is None
     kwargs: dict = {"calendarId": calendar_id, "singleEvents": True, "showDeleted": True, "maxResults": 250}
     if sync_token:
         kwargs["syncToken"] = sync_token
     else:
         now = datetime.now(timezone.utc)
-        kwargs["timeMin"] = (now - timedelta(days=FULL_SYNC_LOOKBACK_DAYS)).isoformat()
+        if szeles_atnezes:
+            kwargs["timeMin"] = EGYSZERI_TELJES_KEZDETE.isoformat()
+        else:
+            kwargs["timeMin"] = (now - timedelta(days=FULL_SYNC_LOOKBACK_DAYS)).isoformat()
         kwargs["timeMax"] = (now + timedelta(days=FULL_SYNC_LOOKAHEAD_DAYS)).isoformat()
 
     events: list[dict] = []
