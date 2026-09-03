@@ -33,7 +33,16 @@ export default async function FeladatokPage({
   const ma = new Date();
   const maNap = `${ma.getFullYear()}-${String(ma.getMonth() + 1).padStart(2, "0")}-${String(ma.getDate()).padStart(2, "0")}`;
   const tasks = csakLejart
-    ? osszesFeladat.filter((t) => t.hatarido !== null && t.hatarido.slice(0, 10) < maNap && !t.checked)
+    ? osszesFeladat.filter(
+        (t) =>
+          t.hatarido !== null &&
+          t.hatarido.slice(0, 10) < maNap &&
+          !t.checked &&
+          // Az ARCHIVÁLT feladat nem lejárt teendő (a felhasználó kérése) -
+          // ugyanaz a kivétel, mint a dashboard számlálójában (lásd backend
+          // routes/dashboard.py lejart_feladat).
+          (t.allapot ?? "").toLowerCase() !== "archived",
+      )
     : osszesFeladat;
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");

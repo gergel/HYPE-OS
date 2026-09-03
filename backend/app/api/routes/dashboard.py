@@ -229,7 +229,16 @@ def summary(db: Session = Depends(get_db), user: Employee = Depends(get_current_
         db.scalar(
             select(func.count())
             .select_from(Task)
-            .where(Task.hatarido.is_not(None), Task.hatarido < today, Task.checked.is_(False))
+            .where(
+                Task.hatarido.is_not(None),
+                Task.hatarido < today,
+                Task.checked.is_(False),
+                # Az ARCHIVÁLT feladat nem lejárt teendő (a felhasználó
+                # kérése): az "Archive feladatok" importból jött sorok
+                # allapot="archived" jelölést hordoznak (lásd
+                # notion_import/importers.import_tasks).
+                or_(Task.allapot.is_(None), func.lower(Task.allapot) != "archived"),
+            )
         )
         or 0
     )
