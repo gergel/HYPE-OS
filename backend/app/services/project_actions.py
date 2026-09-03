@@ -27,10 +27,9 @@ def create_feldarabolas(
     A leválasztott nap MEGJEGYZI, melyik projektből származik
     (feldarabolas_szulo_id). Az EREDETI projekt dátumaihoz a darabolás NEM
     nyúl (a felhasználó 2026-09-03-i kérése): a fő esemény hossza változatlan
-    marad, egyszerűen bekerül mellé egy plusz esemény.
-
-    A teljes forgatást lefedő darabolást viszont elutasítjuk: abból nem két
-    forgatás lenne, hanem ugyanaz kétszer (lásd _ellenorizd_a_darabolast)."""
+    marad, egyszerűen bekerül mellé egy plusz esemény - akár ugyanarra a
+    napra/tartományra is (az esemény DUPLÁZÁSA is megengedett, a felhasználó
+    kérése: pl. egy napon két stáb két diszpója)."""
     if datum is not None:
         new_date = datum
         # Egy napra mutató "tartomány" (vég <= kezdet) = egynapos leválasztás.
@@ -46,7 +45,6 @@ def create_feldarabolas(
     else:
         new_date = None
         datum_vege = None
-    _ellenorizd_a_darabolast(project, new_date, datum_vege)
 
     new_project = Project(
         nev=project.nev,
@@ -87,24 +85,10 @@ def create_feldarabolas(
 
 
 class DarabolasHiba(ValueError):
-    """A darabolás nem végezhető el - a felület ezt az üzenetet mutatja."""
+    """A darabolás nem végezhető el - a felület ezt az üzenetet mutatja.
 
-
-def _ellenorizd_a_darabolast(project: Project, new_date: date | None, new_end: date | None) -> None:
-    """A leválasztott nap/tartomány nem fedheti le az EGÉSZ forgatást: abból
-    nem két forgatás lenne, hanem ugyanaz kétszer. (A záró nap UTÁNI napra
-    darabolás továbbra is megengedett - az a "vegyünk fel még egy napot"
-    eset.)"""
-    if new_date is None or project.forgatas_datuma is None:
-        return
-    utolso_nap = project.forgatas_datuma_vege or project.forgatas_datuma
-    if new_date <= project.forgatas_datuma and (new_end or new_date) >= utolso_nap:
-        raise DarabolasHiba(
-            "A leválasztott nap/tartomány a teljes forgatást lefedné - a darabolással "
-            "ugyanaz a forgatás jelenne meg kétszer. Válaszd ki, MELYIK napot (vagy "
-            "rövidebb tartományt) emeljük ki, vagy a záró nap utáni dátummal vegyél fel "
-            "egy új napot."
-        )
+    Jelenleg semmi nem dobja (az esemény duplázása is megengedett, a
+    felhasználó kérése) - a route hibakezelése miatt marad meg."""
 
 
 def create_utomunka(db: Session, project: Project, current_user: Employee) -> Deliverable:
