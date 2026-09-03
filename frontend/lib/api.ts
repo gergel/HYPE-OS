@@ -1288,6 +1288,9 @@ export type InternalPerformanceCertificate = {
   brutto_osszeg: number | null;
   megbizas_targya: string | null;
   teljesites_datuma: string | null;
+  /** A teljesítés szabad szövegként (bármi megadható) - a TIG papírra is ez
+   * kerül; a hónap-besorolást a belőle kiolvasott dátum viszi. */
+  teljesites_szoveg: string | null;
   keltezes: string | null;
   /** A számla fizetési határideje és a tényleges utalás napja - a Notionban
    * vezetett belsős TIG-eknél ez a két dátum is megvan. */

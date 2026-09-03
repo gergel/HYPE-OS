@@ -23,9 +23,21 @@ type FormState = {
   plusz_afa: boolean;
   megjegyzes: string;
   megbizas_targya: string;
-  teljesites_datuma: string;
+  /** A teljesítés SZABAD SZÖVEGKÉNT (a felhasználó kérése: bármi megadható,
+   * pl. "2026.06.01-2026.06.30.") - a TIG papírra is ez kerül; a
+   * hónap-besorolást a szöveg elejéről kiolvasott dátum viszi. */
+  teljesites_szoveg: string;
   keltezes: string;
 };
+
+/** Dátum a szabad szöveg elejéről ("2026.06.01-..." / "2026-06-01" ->
+ * "2026-06-01") - a backend ugyanígy olvassa ki (lásd
+ * internal_performance_certificates._teljesites_szovegbol_datum). */
+function teljesitesDatumASzovegbol(szoveg: string): string | null {
+  const talalat = /(\d{4})[.\-/ ]{1,3}(\d{1,2})[.\-/ ]{1,3}(\d{1,2})/.exec(szoveg);
+  if (!talalat) return null;
+  return `${talalat[1]}-${talalat[2].padStart(2, "0")}-${talalat[3].padStart(2, "0")}`;
+}
 
 /** A bejelentett alkalmazott havi fizetése - nála ez a TIG-űrlap helyett áll,
  * mert nincs TIG és nincs számla; a kifizetés-jelölés a beírt fizetés után
@@ -58,7 +70,7 @@ function formFromRecord(employee: BelsosTigMonthEmployee, ev: number, honap: num
     plusz_afa: record?.plusz_afa ?? employee.plusz_afa ?? false,
     megjegyzes: record?.megjegyzes ?? "",
     megbizas_targya: record?.megbizas_targya ?? employee.megbizas_targya ?? "",
-    teljesites_datuma: record?.teljesites_datuma ?? alapTeljesitesDatum(ev, honap),
+    teljesites_szoveg: record?.teljesites_szoveg ?? record?.teljesites_datuma ?? alapTeljesitesDatum(ev, honap),
     keltezes: record?.keltezes ?? "",
   };
 }
@@ -130,7 +142,8 @@ export function BelsosTigManager({
   // A teljesítés dátuma dönti el, melyik hónapé a TIG (mindig az azt megelőző
   // hónap) - ha az admin olyat ír be, ami másik hónapra mutat, ezt előre
   // jelezzük, mert a bejegyzés át fog kerülni oda.
-  const celHonap = form?.teljesites_datuma ? tigHonapTeljesitesbol(form.teljesites_datuma) : null;
+  const celTeljesitesDatum = form ? teljesitesDatumASzovegbol(form.teljesites_szoveg) : null;
+  const celHonap = celTeljesitesDatum ? tigHonapTeljesitesbol(celTeljesitesDatum) : null;
   const celHonapEltero = !!celHonap && (celHonap.ev !== ev || celHonap.honap !== honap);
 
   function openForm(employee: BelsosTigMonthEmployee) {
@@ -154,7 +167,8 @@ export function BelsosTigManager({
   function ellenorzoSorok(): EllenorzoSor[] {
     if (!openEmployee || !form) return [];
     const ceg = openEmployee.cegek.find((c) => String(c.vallalkozas_id) === form.vallalkozas_id) ?? null;
-    const honapCel = form.teljesites_datuma ? tigHonapTeljesitesbol(form.teljesites_datuma) : null;
+    const honapDatum = teljesitesDatumASzovegbol(form.teljesites_szoveg);
+    const honapCel = honapDatum ? tigHonapTeljesitesbol(honapDatum) : null;
     return [
       { cimke: "Név a papíron", ertek: ceg ? ceg.nev : openEmployee.full_name },
       { cimke: "Székhely", ertek: ceg ? ceg.szekhely : openEmployee.szekhely },
@@ -237,7 +251,7 @@ export function BelsosTigManager({
       plusz_afa: form.plusz_afa,
       megjegyzes: form.megjegyzes || null,
       megbizas_targya: form.megbizas_targya || null,
-      teljesites_datuma: form.teljesites_datuma || null,
+      teljesites_szoveg: form.teljesites_szoveg || null,
       keltezes: form.keltezes || null,
     };
   }
@@ -777,11 +791,14 @@ export function BelsosTigManager({
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Teljesítés dátuma</label>
+                {/* SZABAD SZÖVEG (a felhasználó kérése): bármi beírható, pl.
+                    tól-ig tartomány - a papírra pontosan ez kerül; a hónapot
+                    a szöveg elejéről kiolvasott dátum sorolja be. */}
                 <input
-                  type="date"
-                  value={form.teljesites_datuma}
-                  onChange={(e) => update("teljesites_datuma", e.target.value)}
+                  value={form.teljesites_szoveg}
+                  onChange={(e) => update("teljesites_szoveg", e.target.value)}
                   disabled={!!busyId}
+                  placeholder="Pl. 2026-07-01 vagy 2026.06.01-2026.06.30."
                   className={inputClass}
                 />
                 <p className={`text-[11px] ${celHonapEltero ? "text-text-warning" : "text-text-muted"}`}>

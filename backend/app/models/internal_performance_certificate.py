@@ -65,6 +65,12 @@ class InternalPerformanceCertificate(TimestampMixin, Base):
     teljesites_datuma: Mapped[date | None] = mapped_column(
         Date, comment="Ebből jön az igazolt hónap: MINDIG az azt megelőző hónap"
     )
+    #: A teljesítés SZABAD SZÖVEGKÉNT (a felhasználó kérése: "bármit
+    #: megadhassak ott") - a felület ezt kéri be és a TIG dokumentumra is ez
+    #: kerül ({{tido}}). Ha az elejéről dátum olvasható ki, abból töltődik a
+    #: teljesites_datuma (és így a hónap-besorolás) - lásd
+    #: routes/internal_performance_certificates._teljesites_szovegbol_datum.
+    teljesites_szoveg: Mapped[str | None] = mapped_column(String(255))
     keltezes: Mapped[date | None] = mapped_column(Date, comment="A dokumentum keltezése")
     file_url: Mapped[str | None] = mapped_column(String(500), comment="A kiküldött TIG dokumentum Drive linkje")
     # Csak akkor van kitöltve, ha a TIG dokumentumot MI tároljuk (kézzel

@@ -21,6 +21,7 @@ következő hónap 20-a (lásd services/hu_datum.tig_hatarido)."""
 from __future__ import annotations
 
 import os
+import re
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -572,6 +573,10 @@ class TigDraftIn(BaseModel):
     megjegyzes: str | None = None
     megbizas_targya: str | None = None
     teljesites_datuma: date | None = None
+    #: A teljesítés SZABAD SZÖVEGKÉNT (a felhasználó kérése: bármi megadható,
+    #: pl. "2026.06.01-2026.06.30.") - a felület ezt küldi; ha az elejéről
+    #: dátum olvasható ki, abból töltődik a teljesites_datuma (hónap-besorolás).
+    teljesites_szoveg: str | None = None
     keltezes: date | None = None
     #: A számla útja: meddig kell fizetni, és mikor utaltuk el. (A Notionból
     #: áthozott régi TIG-eknél ez a két dátum már megvan - lásd
@@ -586,10 +591,32 @@ _DRAFT_FIELDS = (
     "megjegyzes",
     "megbizas_targya",
     "teljesites_datuma",
+    "teljesites_szoveg",
     "keltezes",
     "fizetesi_hatarido",
     "utalas_datuma",
 )
+
+#: Dátum a szabad szöveg ELEJÉRŐL: "2026.06.01-2026.06.30." / "2026-06-01" /
+#: "2026. 06. 01" mind jó - az ELSŐ dátum számít (a tartomány kezdete).
+_TELJESITES_DATUM_MINTA = re.compile(r"(\d{4})[.\-/ ]{1,3}(\d{1,2})[.\-/ ]{1,3}(\d{1,2})")
+
+
+def _teljesites_szovegbol_datum(record: InternalPerformanceCertificate) -> None:
+    """Ha a szabad szövegből dátum olvasható ki, az tölti a teljesites_datuma
+    mezőt - így a hónap-besorolás (lásd _apply_teljesites_honap) a szabad
+    szöveges mezővel is ugyanúgy működik. Kiolvashatatlan szövegnél a meglévő
+    dátum (és hónap) marad."""
+    if not record.teljesites_szoveg:
+        return
+    talalat = _TELJESITES_DATUM_MINTA.search(record.teljesites_szoveg)
+    if not talalat:
+        return
+    ev, honap, nap = (int(x) for x in talalat.groups())
+    try:
+        record.teljesites_datuma = date(ev, honap, nap)
+    except ValueError:
+        pass
 
 
 def _apply_draft_fields(record: InternalPerformanceCertificate, payload: TigDraftIn) -> None:
@@ -597,6 +624,8 @@ def _apply_draft_fields(record: InternalPerformanceCertificate, payload: TigDraf
         value = getattr(payload, field)
         if value is not None:
             setattr(record, field, value)
+    if payload.teljesites_szoveg is not None:
+        _teljesites_szovegbol_datum(record)
     if payload.vallalkozas_id is not None:
         # A -1 a "vissza a saját nevére" jelzés, lásd TigDraftIn.
         record.vallalkozas_id = None if payload.vallalkozas_id < 0 else payload.vallalkozas_id
@@ -709,9 +738,11 @@ def generate_and_send(
         "hely": (ceg.szekhely if ceg else employee.vallakozas_szekhely) or "",
         "adoszam": (ceg.adoszam if ceg else employee.vallalkozas_adoszama) or "",
         "targy": record.megbizas_targya or "",
-        # Az eredeti sablonban a {{tido}} a HÓNAP szövege (nem a teljesítés
-        # napja) - a teljesítés dátuma csak a hónap kiszámolására szolgál.
-        "tido": honap_szoveg,
+        # Az eredeti sablonban a {{tido}} a HÓNAP szövege volt - ha viszont a
+        # teljesítést szabad szövegként adták meg (a felhasználó kérése), a
+        # papírra PONTOSAN az kerül; a hónap-besorolást a szövegből kiolvasott
+        # dátum viszi tovább (lásd _teljesites_szovegbol_datum).
+        "tido": record.teljesites_szoveg or honap_szoveg,
         "honap": honap_szoveg,
         # Ezres elválasztó ponttal, ahogy az eredeti program írja: "120.000".
         "netto": f"{record.netto_osszeg:,.0f}".replace(",", "."),

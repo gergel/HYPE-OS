@@ -50,7 +50,9 @@ export default async function BelsosTigHonapPage({
   // kell fizetni, mikor utaltuk el). Csak azt írjuk ki, amit tudunk.
   const datumok = (
     [
-      ["Teljesítés", record?.teljesites_datuma],
+      // A szabad szöveges teljesítés az erősebb (arra kerül a papírra is) -
+      // a régi, csak-dátumos rekordoknál a dátum marad.
+      ["Teljesítés", record?.teljesites_szoveg ?? record?.teljesites_datuma],
       ["Keltezés", record?.keltezes],
       ["Fizetési határidő", record?.fizetesi_hatarido],
       ["Utalás dátuma", record?.utalas_datuma],
@@ -188,7 +190,11 @@ export default async function BelsosTigHonapPage({
               {datumok.map(([cimke, ertek]) => (
                 <div key={cimke}>
                   <dt className="t-label mb-1">{cimke}</dt>
-                  <dd className="text-[13px] text-text-primary">{formatDate(ertek)}</dd>
+                  {/* A teljesítés szabad szöveg is lehet (a felhasználó
+                      kérése) - csak a valódi ISO dátumot formázzuk. */}
+                  <dd className="text-[13px] text-text-primary">
+                    {/^\d{4}-\d{2}-\d{2}/.test(ertek) ? formatDate(ertek) : ertek}
+                  </dd>
                 </div>
               ))}
             </dl>

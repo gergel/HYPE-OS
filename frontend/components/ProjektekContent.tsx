@@ -122,8 +122,21 @@ export function ProjektekContent({
           addLabel="+ Új projekt hozzáadása"
           fields={[
             { name: "nev", label: "Név", required: true },
-            { name: "project_code_id", label: "Project Code", type: "select", required: true, options: projectCodes.map((pc) => ({ value: pc.id, label: pc.projektkod })) },
+            // A projektkód NEM kötelező (a felhasználó kérése) - a szerver is
+            // enged nélküle (lásd backend routes/projects._kosd_a_projektkodhoz):
+            // a kapunál (diszpó kiküldés) úgyis kelleni fog, addig utólag is
+            // hozzárendelhető.
+            {
+              name: "project_code_id",
+              label: "Project Code (ha van)",
+              type: "select",
+              options: projectCodes.map((pc) => ({ value: pc.id, label: pc.projektkod })),
+            },
             { name: "forgatas_datuma", label: "Forgatás dátuma", type: "date" },
+            // Több napos forgatásnál már felvitelkor megadható a záró nap (a
+            // felhasználó kérése) - utólag a projekt adatlapján a "Forgatás
+            // dátuma" választóval is állítható.
+            { name: "forgatas_datuma_vege", label: "Forgatás vége (ha több napos)", type: "date" },
             { name: "helyszin", label: "Helyszín" },
           ]}
         />

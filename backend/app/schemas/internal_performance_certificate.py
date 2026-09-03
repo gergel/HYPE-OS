@@ -28,6 +28,9 @@ class InternalPerformanceCertificateRead(BaseModel):
     plusz_afa: bool | None = None
     megbizas_targya: str | None = None
     teljesites_datuma: date | None = None
+    #: A teljesítés szabad szövegként (a felhasználó kérése) - a felület ezt
+    #: kéri be, és a TIG dokumentumra is ez kerül.
+    teljesites_szoveg: str | None = None
     keltezes: date | None = None
     fizetesi_hatarido: date | None = None
     utalas_datuma: date | None = None

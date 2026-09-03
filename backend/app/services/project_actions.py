@@ -12,11 +12,17 @@ from app.models.project_szamlazo import ProjectSzamlazo
 from app.services import diszpo_sablon
 
 
-def create_feldarabolas(db: Session, project: Project) -> Project:
-    """'Feldarabolás' gomb: leválaszt EGY NAPOT egy több napos forgatásból - új
-    Project sort hoz létre ugyanahhoz a Project Code-hoz és kampányhoz,
-    átmásolva a nevet/leírást/projektkódot/stábot. A dátum a 'Darabolás
-    dátuma' mező, ha ki van töltve, egyébként a forgatás záró napja utáni nap.
+def create_feldarabolas(
+    db: Session, project: Project, datum: date | None = None, datum_vege: date | None = None
+) -> Project:
+    """'Feldarabolás' gomb: leválaszt egy NAPOT vagy DÁTUM-TARTOMÁNYT egy
+    forgatásból - új Project sort hoz létre ugyanahhoz a Project Code-hoz és
+    kampányhoz, átmásolva a nevet/leírást/projektkódot/stábot.
+
+    A napot/tartományt a felugró ablak adja át (`datum` + opcionális
+    `datum_vege` - a felhasználó kérése); ha nincs megadva, a régi
+    alapértelmezés él: a 'Darabolás dátuma' mező, egyébként a forgatás záró
+    napja utáni nap.
 
     A leválasztott nap MEGJEGYZI, melyik projektből származik
     (feldarabolas_szulo_id), és az eredeti projektből KIVESSZÜK a leválasztott
@@ -27,20 +33,29 @@ def create_feldarabolas(db: Session, project: Project) -> Project:
     Egynapos forgatásból nincs mit leválasztani a SAJÁT napjára: abból nem két
     forgatás lenne, hanem ugyanaz kétszer. (A záró nap UTÁNI napra darabolás
     viszont továbbra is megengedett - az a "vegyünk fel még egy napot" eset.)"""
-    _ellenorizd_a_darabolast(project)
-    if project.darabolas_datuma:
+    if datum is not None:
+        new_date = datum
+        # Egy napra mutató "tartomány" (vég <= kezdet) = egynapos leválasztás.
+        if datum_vege is not None and datum_vege <= datum:
+            datum_vege = None
+    elif project.darabolas_datuma:
         new_date = project.darabolas_datuma
+        datum_vege = None
     elif project.forgatas_datuma:
         base = project.forgatas_datuma_vege or project.forgatas_datuma
         new_date = base + timedelta(days=1)
+        datum_vege = None
     else:
         new_date = None
+        datum_vege = None
+    _ellenorizd_a_darabolast(project, new_date, datum_vege)
 
     new_project = Project(
         nev=project.nev,
         project_code_id=project.project_code_id,
         campaign_id=project.campaign_id,
         forgatas_datuma=new_date,
+        forgatas_datuma_vege=datum_vege,
         description=project.description,
         projektkod_szoveg=project.projektkod_szoveg,
         helyszin=project.helyszin,
@@ -68,7 +83,7 @@ def create_feldarabolas(db: Session, project: Project) -> Project:
     ]
     db.add(new_project)
 
-    _vagd_le_a_leszakitott_napot(project, new_date)
+    _vagd_le_a_leszakitott_napot(project, new_date, datum_vege)
 
     db.commit()
     db.refresh(new_project)
@@ -79,30 +94,36 @@ class DarabolasHiba(ValueError):
     """A darabolás nem végezhető el - a felület ezt az üzenetet mutatja."""
 
 
-def _ellenorizd_a_darabolast(project: Project) -> None:
-    if not project.darabolas_datuma or not project.forgatas_datuma:
+def _ellenorizd_a_darabolast(project: Project, new_date: date | None, new_end: date | None) -> None:
+    """A leválasztott nap/tartomány nem fedheti le az EGÉSZ forgatást: abból
+    nem két forgatás lenne, hanem ugyanaz kétszer. (A záró nap UTÁNI napra
+    darabolás továbbra is megengedett - az a "vegyünk fel még egy napot"
+    eset.)"""
+    if new_date is None or project.forgatas_datuma is None:
         return
     utolso_nap = project.forgatas_datuma_vege or project.forgatas_datuma
-    if project.darabolas_datuma == project.forgatas_datuma == utolso_nap:
+    if new_date <= project.forgatas_datuma and (new_end or new_date) >= utolso_nap:
         raise DarabolasHiba(
-            "Ez a forgatás egynapos, ezért nincs mit leválasztani róla: a darabolással "
-            "ugyanaz a nap jelenne meg kétszer. Több napos forgatásnál válaszd ki, MELYIK "
-            "napot emeljük ki, vagy a záró nap utáni dátummal vegyél fel egy új napot."
+            "A leválasztott nap/tartomány a teljes forgatást lefedné - a darabolással "
+            "ugyanaz a forgatás jelenne meg kétszer. Válaszd ki, MELYIK napot (vagy "
+            "rövidebb tartományt) emeljük ki, vagy a záró nap utáni dátummal vegyél fel "
+            "egy új napot."
         )
 
 
-def _vagd_le_a_leszakitott_napot(project: Project, new_date: date | None) -> None:
-    """Az eredeti projektből KIVESSZÜK a leválasztott napot.
+def _vagd_le_a_leszakitott_napot(project: Project, new_date: date | None, new_end: date | None = None) -> None:
+    """Az eredeti projektből KIVESSZÜK a leválasztott napot/tartományt.
 
-    Három eset van:
+    Három eset van (a tartomány egy napnál a [nap, nap] tartomány):
 
-    - a leválasztott nap az ELSŐ nap: az eredeti a következő naptól él tovább.
-      Ez hiányzott: az eredeti érintetlen maradt, tehát ugyanarra a napra az
-      "egész" forgatás is ott állt a diszponálandók közt a leválasztott nap
-      mellett - pont az, amit a darabolásnak meg kellene szüntetnie;
-    - a leválasztott nap a tartományon BELÜL van: az eredeti a nap előtti napig
-      tart;
-    - a leválasztott nap a tartományon KÍVÜL esik (pl. a záró nap UTÁNI napra
+    - a leválasztás az ELSŐ napon kezdődik: az eredeti a tartomány utáni
+      naptól él tovább. Enélkül az eredeti érintetlen maradt, tehát ugyanarra
+      a napra az "egész" forgatás is ott állt a diszponálandók közt a
+      leválasztott nap mellett - pont az, amit a darabolásnak meg kellene
+      szüntetnie;
+    - a leválasztás a tartományon BELÜL kezdődik: az eredeti a kezdőnap
+      előtti napig tart;
+    - a leválasztás a tartományon KÍVÜL esik (pl. a záró nap UTÁNI napra
       daraboltak, ami a régi, Notionből hozott alapértelmezés): az eredetihez
       nem nyúlunk, ott nincs mit levágni.
 
@@ -111,10 +132,11 @@ def _vagd_le_a_leszakitott_napot(project: Project, new_date: date | None) -> Non
     if new_date is None or project.forgatas_datuma is None:
         return
     utolso_nap = project.forgatas_datuma_vege or project.forgatas_datuma
-    if new_date > utolso_nap or new_date < project.forgatas_datuma:
+    veg = new_end or new_date
+    if new_date > utolso_nap or veg < project.forgatas_datuma:
         return
-    if new_date == project.forgatas_datuma:
-        uj_kezdet = new_date + timedelta(days=1)
+    if new_date <= project.forgatas_datuma:
+        uj_kezdet = veg + timedelta(days=1)
         project.forgatas_datuma = uj_kezdet
         project.forgatas_datuma_vege = None if uj_kezdet >= utolso_nap else utolso_nap
         # A megkurtított eredeti dátumait se írhassa vissza a szinkron a

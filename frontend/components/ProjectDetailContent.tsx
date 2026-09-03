@@ -7,6 +7,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { ActionButton } from "@/components/ActionButton";
+import { FeldarabolasGomb } from "@/components/FeldarabolasGomb";
 import { DiszpoKuldesGombok } from "@/components/DiszpoKuldesGombok";
 import { Card } from "@/components/Card";
 import { DeleteButton } from "@/components/DeleteButton";
@@ -98,6 +99,15 @@ const ALWAYS_HIDDEN = [
 ];
 
 const PAGE = "/projektek";
+
+/** A megadott ISO-nap utáni nap ("2026-09-10" -> "2026-09-11") - a
+ * feldarabolás javasolt kezdete a forgatás záró napja utáni nap. */
+function kovetkezoNap(iso: string | null): string | null {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return null;
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  const nap = new Date(y, m - 1, d + 1);
+  return `${nap.getFullYear()}-${String(nap.getMonth() + 1).padStart(2, "0")}-${String(nap.getDate()).padStart(2, "0")}`;
+}
 //: A Diszpó menüpont jogosultsági kulcsa (lásd lib/nav.ts).
 const DISZPO_PAGE = "/naptar";
 
@@ -524,10 +534,17 @@ export async function ProjectDetailContent({
           }
           actions={
             <>
-              <ActionButton
-                path={`/api/v1/projects/${project.id}/feldarabolas`}
-                label="Feldarabolás"
-                confirmMessage="Új projekt jön létre ugyanahhoz a Project Code-hoz (feldarabolt forgatási nap). Folytatod?"
+              {/* Feldarabolás felugró ablakkal (a felhasználó kérése): itt
+                  választható ki a leválasztandó nap vagy dátum-tartomány -
+                  a javasolt kezdet a záró nap utáni nap (a régi
+                  alapértelmezés). */}
+              <FeldarabolasGomb
+                projectId={project.id}
+                javasoltKezdet={kovetkezoNap(
+                  ((project.veg_datum as string | null) ??
+                    (project.forgatas_datuma_vege as string | null)) ||
+                    (project.forgatas_datuma as string | null),
+                )}
                 redirectPrefix={embedded ? "/embed/projektek/" : "/projektek/"}
               />
               <DeleteButton

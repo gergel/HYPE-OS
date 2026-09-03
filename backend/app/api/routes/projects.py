@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
@@ -171,13 +171,30 @@ def run_technika_check(project_id: int, db: Session = Depends(get_db)):
     return check_technika(db, _get_project_or_404(project_id, db))
 
 
+class FeldarabolasIn(BaseModel):
+    """Melyik napot vagy tartományt válasszuk le (a felugró ablakból, a
+    felhasználó kérése). Üresen a régi alapértelmezés: a záró nap utáni nap."""
+
+    datum: date | None = None
+    datum_vege: date | None = None
+
+
 @router.post("/{project_id}/feldarabolas", response_model=ProjectRead, tags=["projects"])
-def run_feldarabolas(project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_roles(Role.ADMIN, Role.OPERATOR))):
+def run_feldarabolas(
+    project_id: int,
+    payload: FeldarabolasIn | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_roles(Role.ADMIN, Role.OPERATOR)),
+):
     """A 'Feldarabolás' gomb - új Project sort hoz létre ugyanahhoz a Project
     Code-hoz, átmásolva a nevet/leírást/projektkódot/stábot (lásd
-    app/services/project_actions.py)."""
+    app/services/project_actions.py). A leválasztott nap/tartomány a felugró
+    ablakból jön (payload) - nélküle a régi alapértelmezés él."""
+    adatok = payload or FeldarabolasIn()
     try:
-        return create_feldarabolas(db, _get_project_or_404(project_id, db))
+        return create_feldarabolas(
+            db, _get_project_or_404(project_id, db), datum=adatok.datum, datum_vege=adatok.datum_vege
+        )
     except DarabolasHiba as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
