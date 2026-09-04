@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Paperclip, X } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { authFetch } from "@/lib/authFetch";
@@ -66,6 +66,7 @@ export function CommentsSection({
   initialComments,
   mentionableEmployees,
   canUpload,
+  currentEmployeeId = null,
 }: {
   deliverableId: number;
   initialComments: DeliverableComment[];
@@ -74,13 +75,35 @@ export function CommentsSection({
    * ugyanazt a jogosultságot kéri, mint az Utómunka oldal szerkesztése (lásd
    * backend services/attachments.ENTITAS_OLDALAK "deliverableComment"). */
   canUpload: boolean;
+  /** A bejelentkezett munkatárs id-je - a SAJÁT hozzászólás küldés után is
+   * szerkeszthető (a felhasználó kérése), ehhez kell tudni, melyik az övé. */
+  currentEmployeeId?: number | null;
 }) {
+  // A FÉLBEHAGYOTT hozzászólás megőrzése (a felhasználó kérése): a piszkozat
+  // a böngészőben marad, oldalváltás után visszatérve folytatható és
+  // elküldhető. Anyagonként külön kulcs - két anyag piszkozata nem keveredik.
+  const piszkozatKulcs = `hype_utomunka_komment_piszkozat_${deliverableId}`;
   const [comments, setComments] = useState(initialComments);
   const [body, setBody] = useState("");
+  // A piszkozat EFFEKTUSBAN töltődik be, nem a useState kezdőértékeként: a
+  // szerver-render üres mezőt ad (ott nincs localStorage), és egy eltérő
+  // kliens-kezdőérték hidratálási eltérést okozna.
+  useEffect(() => {
+    try {
+      const mentett = localStorage.getItem(piszkozatKulcs);
+      if (mentett) setBody(mentett);
+    } catch {
+      // localStorage nem elérhető (privát böngészés stb.) - piszkozat nélkül indulunk.
+    }
+    // csak első betöltéskor - a kulcs a komponens élete alatt nem változik
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [busy, setBusy] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploadingCommentId, setUploadingCommentId] = useState<number | null>(null);
+  // A SAJÁT hozzászólás szerkesztése: melyiket írja át épp, és mire.
+  const [szerkesztes, setSzerkesztes] = useState<{ id: number; ertek: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const confirm = useConfirm();
 
@@ -103,6 +126,14 @@ export function CommentsSection({
 
   function handleChange(value: string) {
     setBody(value);
+    // A piszkozat MINDEN leütésnél mentődik - így akkor is megmarad, ha a
+    // felhasználó egy linkre kattintva elnavigál, vagy bezárja a lapot.
+    try {
+      if (value) localStorage.setItem(piszkozatKulcs, value);
+      else localStorage.removeItem(piszkozatKulcs);
+    } catch {
+      // localStorage nélkül a piszkozat egyszerűen nem marad meg - nem hiba.
+    }
     const cursor = textareaRef.current?.selectionStart ?? value.length;
     const uptoCursor = value.slice(0, cursor);
     const match = uptoCursor.match(MENTION_PATTERN);
@@ -115,6 +146,11 @@ export function CommentsSection({
     const replaced = uptoCursor.replace(MENTION_PATTERN, `@${name} `);
     const next = replaced + body.slice(cursor);
     setBody(next);
+    try {
+      localStorage.setItem(piszkozatKulcs, next);
+    } catch {
+      // ua., mint handleChange-ben.
+    }
     setMentionQuery(null);
     textareaRef.current?.focus();
   }
@@ -183,6 +219,33 @@ export function CommentsSection({
     }
   }
 
+  /** A saját hozzászólás átírásának mentése (a felhasználó kérése: küldés
+   * után is szerkeszthető - mindenki csak a sajátját, a backend is ezt
+   * ellenőrzi). */
+  async function szerkesztesMentese() {
+    if (!szerkesztes || !szerkesztes.ertek.trim()) return;
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/deliverables/${deliverableId}/comments/${szerkesztes.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ body: szerkesztes.ertek.trim() }),
+      });
+      const adat = await res.json().catch(() => null);
+      if (!res.ok) {
+        alert(`Sikertelen mentés: ${adat?.detail ?? res.status}`);
+        return;
+      }
+      setComments((prev) =>
+        prev.map((c) => (c.id === szerkesztes.id ? { ...c, body: adat.body, updated_at: adat.updated_at } : c)),
+      );
+      setSzerkesztes(null);
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function send() {
     const trimmed = body.trim();
     if (!trimmed) return;
@@ -205,6 +268,12 @@ export function CommentsSection({
       setComments((prev) => [...prev, created]);
       setBody("");
       setPendingFiles([]);
+      // Elment a hozzászólás - a piszkozatra nincs többé szükség.
+      try {
+        localStorage.removeItem(piszkozatKulcs);
+      } catch {
+        // ua.
+      }
     } catch (err) {
       alert(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
@@ -221,8 +290,55 @@ export function CommentsSection({
             <div className="mb-1 flex items-center gap-2">
               <span className="text-[13px] font-medium text-text-primary">{c.employee_name}</span>
               <span className="text-[11px] text-text-muted">{formatTimestamp(c.created_at)}</span>
+              {/* Az átírt hozzászólás jelölve van - a többiek lássák, hogy nem
+                  az eredeti szöveget olvassák. Pár másodperces eltérés még nem
+                  szerkesztés (a mentés két időbélyege sosem pont ugyanaz). */}
+              {c.updated_at && new Date(c.updated_at).getTime() - new Date(c.created_at).getTime() > 5000 && (
+                <span className="text-[11px] text-text-muted">(szerkesztve)</span>
+              )}
+              {/* A SAJÁT hozzászólás küldés után is szerkeszthető (a
+                  felhasználó kérése) - másét senki nem írhatja át. */}
+              {currentEmployeeId !== null && c.employee_id === currentEmployeeId && szerkesztes?.id !== c.id && (
+                <button
+                  type="button"
+                  onClick={() => setSzerkesztes({ id: c.id, ertek: c.body })}
+                  className="ml-auto text-[11.5px] text-text-muted hover:text-text-secondary"
+                >
+                  Szerkesztés
+                </button>
+              )}
             </div>
-            <BodyWithMentions body={c.body} />
+            {szerkesztes?.id === c.id ? (
+              <div>
+                <textarea
+                  autoFocus
+                  rows={Math.min(Math.max(szerkesztes.ertek.split("\n").length + 1, 3), 16)}
+                  value={szerkesztes.ertek}
+                  onChange={(e) => setSzerkesztes({ id: c.id, ertek: e.target.value })}
+                  className="w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+                />
+                <div className="mt-1.5 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={busy || !szerkesztes.ertek.trim()}
+                    onClick={() => void szerkesztesMentese()}
+                    className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                  >
+                    {busy ? "Mentés…" : "Mentés"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setSzerkesztes(null)}
+                    className="rounded-[var(--radius)] px-2.5 py-1 text-[12.5px] text-text-muted hover:text-text-secondary"
+                  >
+                    Mégse
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <BodyWithMentions body={c.body} />
+            )}
             {(c.attachments.length > 0 || canUpload) && (
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                 {c.attachments.map((a) => (
@@ -281,7 +397,10 @@ export function CommentsSection({
         )}
         <textarea
           ref={textareaRef}
-          rows={2}
+          // A mező együtt nő a szöveggel (a felhasználó kérése: a komment
+          // teljes hossza mindig látszódjon) - hosszú piszkozatnál se kelljen
+          // két sorban görgetni.
+          rows={Math.min(Math.max(body.split("\n").length + 1, 2), 16)}
           value={body}
           onChange={(e) => handleChange(e.target.value)}
           placeholder="Írj hozzászólást… (@ a taggeléshez)"

@@ -2,15 +2,16 @@ import { TopBar } from "@/components/TopBar";
 import { UtomunkaContent } from "@/components/deliverable/UtomunkaContent";
 import {
   getAllapotBeallitasok,
+  getCurrentUser,
   getDeliverables,
   getEmployees,
   getFieldTypes,
   getKartyaMezok,
   getMyPagePermissions,
   getProjects,
-  getVinyoOptions,
+  getVinyoOptionsReszletes,
 } from "@/lib/api";
-import { canDoPageAction } from "@/lib/permissions";
+import { canDoPageAction, szerepkorei } from "@/lib/permissions";
 
 // Csak ennyi legutóbb módosított/létrehozott rekordot töltünk be azonnal (a
 // backend list_items alapértelmezetten updated_at szerint csökkenő sorrendben
@@ -38,19 +39,23 @@ export default async function UtomunkaPage({
     employees,
     projects,
     fieldTypes,
-    vinyoOptions,
+    vinyoReszletes,
     allapotBeallitasok,
     kartyaMezok,
     pagePermissions,
+    currentUser,
   ] = await Promise.all([
     getDeliverables(INITIAL_BATCH),
     getEmployees(),
     getProjects(INITIAL_BATCH),
     getFieldTypes("deliverable"),
-    getVinyoOptions(),
+    // A lista mellett azt is megmondja, kezelheti-e a lekérő a vinyó-neveket
+    // (a felhasználó kérése: külön, adminból adható jogosultság).
+    getVinyoOptionsReszletes(),
     getAllapotBeallitasok(),
     getKartyaMezok(),
     getMyPagePermissions(),
+    getCurrentUser(),
   ]);
 
   const statusOptions = fieldTypes.allapot?.options ?? [];
@@ -77,7 +82,9 @@ export default async function UtomunkaPage({
           statusOptions={statusOptions}
           allapotBeallitasok={allapotBeallitasok}
           kartyaMezok={kartyaMezok}
-          vinyoOptions={vinyoOptions}
+          vinyoOptions={vinyoReszletes.options}
+          vinyoKezelheto={vinyoReszletes.kezelheto}
+          isAdmin={szerepkorei(currentUser).includes("admin")}
           // SZÁNDÉKOSAN nem canDoAction: az Utómunkán a backend a szerepkör-
           // kaput kikapcsolta, itt kizárólag a page_permissions dönt - így a
           // vágó szerepkörű, teljes oldal-jogú munkatárs is tud kiosztani és

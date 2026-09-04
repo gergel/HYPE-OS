@@ -43,6 +43,7 @@ export function VisszajelzesModal({
   deliverableId,
   onClose,
   onSaved,
+  kihagyhato = false,
 }: {
   deliverableId: number;
   /** Bezárás mentés NÉLKÜL (Mégse, háttérre kattintás). */
@@ -50,10 +51,16 @@ export function VisszajelzesModal({
   /** Sikeres mentés után - a hívó dönti el, mi történjen (pl. újra
    * megpróbálni az elakadt állapotváltást). */
   onSaved: () => void;
+  /** Az AUTOMATIKUSAN feldobott űrlap (elutasított állapotváltás után)
+   * kihagyható (a felhasználó kérése) - de csak indoklással: a "Kihagyom"
+   * szakasz ilyenkor jelenik meg. A kézzel nyitott űrlapon nincs mit
+   * kihagyni, ott a Mégse ugyanezt tudja. */
+  kihagyhato?: boolean;
 }) {
   const router = useRouter();
   const [pontok, setPontok] = useState<Pontok>({});
   const [megjegyzes, setMegjegyzes] = useState("");
+  const [kihagyasIndok, setKihagyasIndok] = useState("");
   const [busy, setBusy] = useState(false);
   // KIK FORGATTAK az anyag projektjén (a felhasználó kérése) - a vágó lássa,
   // kiknek szól a visszajelzés. Csendben marad üres, ha nincs stáb-adat.
@@ -72,22 +79,33 @@ export function VisszajelzesModal({
     };
   }, [deliverableId]);
 
-  async function kuld() {
-    const vanPont = SZEMPONTOK.some((sz) => pontok[sz.kulcs] != null);
-    if (!vanPont && !megjegyzes.trim()) {
-      alert("Adj legalább egy pontszámot, vagy írj megjegyzést.");
-      return;
+  async function kuld(kihagyassal = false) {
+    if (kihagyassal) {
+      if (!kihagyasIndok.trim()) {
+        alert("A kihagyáshoz írd le, miért hagyod ki a visszajelzést.");
+        return;
+      }
+    } else {
+      const vanPont = SZEMPONTOK.some((sz) => pontok[sz.kulcs] != null);
+      if (!vanPont && !megjegyzes.trim()) {
+        alert("Adj legalább egy pontszámot, vagy írj megjegyzést.");
+        return;
+      }
     }
     setBusy(true);
     try {
       const res = await authFetch(`/api/v1/deliverables/${deliverableId}/visszajelzes`, {
         method: "POST",
-        body: JSON.stringify({
-          nyersanyag_felhasznalhatosaga: pontok.nyersanyag_felhasznalhatosaga ?? null,
-          technikai_helyesseg: pontok.technikai_helyesseg ?? null,
-          kreativ_kepivilag: pontok.kreativ_kepivilag ?? null,
-          megjegyzes: megjegyzes.trim() || null,
-        }),
+        body: JSON.stringify(
+          kihagyassal
+            ? { kihagyas_indoka: kihagyasIndok.trim() }
+            : {
+                nyersanyag_felhasznalhatosaga: pontok.nyersanyag_felhasznalhatosaga ?? null,
+                technikai_helyesseg: pontok.technikai_helyesseg ?? null,
+                kreativ_kepivilag: pontok.kreativ_kepivilag ?? null,
+                megjegyzes: megjegyzes.trim() || null,
+              },
+        ),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -186,6 +204,32 @@ export function VisszajelzesModal({
           </div>
         </div>
 
+        {/* KIHAGYÁS (a felhasználó kérése): az automatikusan feldobott űrlap
+            átugorható, de csak indoklással - az indok "kihagyva" jelöléssel a
+            visszajelzések közé kerül, és az állapotváltás így is folytatódik. */}
+        {kihagyhato && (
+          <div className="mt-5 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+            <p className="mb-1.5 text-[13px] text-text-primary">Most nem írok visszajelzést</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+              <textarea
+                rows={2}
+                value={kihagyasIndok}
+                onChange={(e) => setKihagyasIndok(e.target.value)}
+                placeholder="Miért hagyod ki? (kötelező megindokolni)"
+                className="w-full flex-1 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => void kuld(true)}
+                disabled={busy || !kihagyasIndok.trim()}
+                className="shrink-0 rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-2 disabled:opacity-50"
+              >
+                Kihagyom
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 flex justify-end gap-3 border-t border-border pt-4">
           <button
             type="button"
@@ -197,7 +241,7 @@ export function VisszajelzesModal({
           </button>
           <button
             type="button"
-            onClick={kuld}
+            onClick={() => void kuld()}
             disabled={busy}
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >

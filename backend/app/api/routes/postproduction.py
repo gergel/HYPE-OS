@@ -28,6 +28,7 @@ from app.schemas.deliverable_actions import (
     AssignableEmployee,
     CommentCreate,
     CommentRead,
+    CommentUpdate,
     ContactIdsPayload,
     ContactOption,
     TimerState,
@@ -232,6 +233,11 @@ def _ellenorzeshez_kell_visszajelzes(obj: Deliverable, data: dict, db: Session, 
     a konkrét pillanathoz - ha valamikor korábban már írt egyet erre az
     anyagra, azzal a feltétel teljesül."""
     if "allapot" not in data or not vagoi_jatek.ellenorzes_allapot(data.get("allapot")):
+        return
+    # JAVÍTÁSBÓL vissza ellenőrzésbe (a felhasználó kérése): ott NEM követelmény
+    # a visszajelzés - a vágó már az első körben megírta (vagy kihagyta), a
+    # javító kör után csak visszateszi az anyagot az ellenőrnek.
+    if vagoi_jatek.javitas_allapot(obj.allapot):
         return
     van_visszajelzese = (
         db.scalar(
@@ -531,11 +537,101 @@ def set_kartya_mezok(
     return KartyaMezok(kartya_mezok=mezok)
 
 
+def _vinyo_kezelheto(db: Session, user: Employee) -> bool:
+    """Kezelheti-e a vinyó-neveket (új/átnevezés/törlés): admin mindig, más
+    csak ha admin KÜLÖN megadta neki (a felhasználó kérése - ez nem jár az
+    /utomunka edit joggal). A kezelők listája: models/deliverable_status.
+    DeliverableBoardConfig.vinyo_kezelo_employee_ids."""
+    from app.core.security import van_szerepkore, vedett_rendszergazda
+
+    if vedett_rendszergazda(user) or van_szerepkore(user, Role.ADMIN):
+        return True
+    config = db.query(DeliverableBoardConfig).order_by(DeliverableBoardConfig.id).first()
+    kezelok = config.vinyo_kezelo_employee_ids if config else None
+    return isinstance(kezelok, list) and user.id in [int(i) for i in kezelok]
+
+
+def _vinyo_kezeles_jog(db: Session, user: Employee) -> None:
+    if not _vinyo_kezelheto(db, user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A vinyók kezeléséhez külön jogosultság kell - admintól kérhető.",
+        )
+
+
 @deliverable_actions_router.get("/vinyo-options", response_model=VinyoOptions)
-def get_vinyo_options(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+def get_vinyo_options(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     """A valaha használt vinyó-értékek egyesített listája (choose-from lista a
-    "Vinyók" többválasztós mezőhöz)."""
-    return deliverable_actions.get_vinyo_options(db)
+    "Vinyók" többválasztós mezőhöz) + hogy a lekérő kezelheti-e a neveket."""
+    valasz = deliverable_actions.get_vinyo_options(db)
+    valasz.kezelheto = _vinyo_kezelheto(db, current_user)
+    return valasz
+
+
+class VinyoNevIn(BaseModel):
+    nev: str
+
+
+class VinyoAtnevezesIn(BaseModel):
+    regi: str
+    uj: str
+
+
+@deliverable_actions_router.post("/vinyo-nevek", response_model=VinyoOptions)
+def add_vinyo_nev(
+    payload: VinyoNevIn, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
+):
+    """Új vinyó név felvétele (a felhasználó kérése) - külön jogosultsághoz
+    kötve, lásd _vinyo_kezeles_jog."""
+    _vinyo_kezeles_jog(db, current_user)
+    return VinyoOptions(options=deliverable_actions.add_vinyo_nev(db, payload.nev), kezelheto=True)
+
+
+@deliverable_actions_router.post("/vinyo-nevek/atnevezes", response_model=VinyoOptions)
+def rename_vinyo_nev(
+    payload: VinyoAtnevezesIn, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
+):
+    """Vinyó átnevezése - az összes anyag vinyó-listájában is átíródik."""
+    _vinyo_kezeles_jog(db, current_user)
+    return VinyoOptions(options=deliverable_actions.rename_vinyo_nev(db, payload.regi, payload.uj), kezelheto=True)
+
+
+@deliverable_actions_router.post("/vinyo-nevek/torles", response_model=VinyoOptions)
+def delete_vinyo_nev(
+    payload: VinyoNevIn, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
+):
+    """Vinyó törlése - az anyagokról is lekerül (a rajtuk lévő TÖBBI vinyó
+    marad). POST és nem DELETE: a név az útvonalban per-jelet is tartalmazhatna."""
+    _vinyo_kezeles_jog(db, current_user)
+    return VinyoOptions(options=deliverable_actions.delete_vinyo_nev(db, payload.nev), kezelheto=True)
+
+
+class VinyoKezelok(BaseModel):
+    """Kik kezelhetik a vinyó-neveket az adminon kívül."""
+
+    employee_ids: list[int] = []
+
+
+@deliverable_actions_router.get(
+    "/vinyo-kezelok", response_model=VinyoKezelok, dependencies=[Depends(require_roles(Role.ADMIN))]
+)
+def get_vinyo_kezelok(db: Session = Depends(get_db)):
+    config = db.query(DeliverableBoardConfig).order_by(DeliverableBoardConfig.id).first()
+    kezelok = config.vinyo_kezelo_employee_ids if config else None
+    return VinyoKezelok(employee_ids=[int(i) for i in kezelok] if isinstance(kezelok, list) else [])
+
+
+@deliverable_actions_router.put(
+    "/vinyo-kezelok", response_model=VinyoKezelok, dependencies=[Depends(require_roles(Role.ADMIN))]
+)
+def set_vinyo_kezelok(payload: VinyoKezelok, db: Session = Depends(get_db)):
+    """A vinyó-kezelő jogosultság kiadása/elvétele - CSAK admin (a felhasználó
+    kérése: adminból lehessen megadni, ki kezelheti a vinyókat)."""
+    config = _board_config(db)
+    letezok = set(db.scalars(select(Employee.id).where(Employee.id.in_(payload.employee_ids))).all())
+    config.vinyo_kezelo_employee_ids = [i for i in payload.employee_ids if i in letezok] or None
+    db.commit()
+    return VinyoKezelok(employee_ids=list(config.vinyo_kezelo_employee_ids or []))
 
 
 @deliverable_actions_router.get("/{deliverable_id}/contacts", response_model=list[ContactOption])
@@ -645,12 +741,18 @@ def forgatas_stab(
 
 
 class VisszajelzesIn(BaseModel):
-    """A vágói visszajelzés űrlapja: három pontszám (1-10) és a megjegyzés."""
+    """A vágói visszajelzés űrlapja: három pontszám (1-10) és a megjegyzés.
+
+    A kihagyas_indoka kitöltve a visszajelzés KIHAGYÁSÁT jelenti (a felhasználó
+    kérése): az automatikusan feldobott űrlap indoklással átugorható - ilyenkor
+    a pontszámok/megjegyzés nem számítanak, egy "kihagyva" jelölésű sor
+    születik (lásd services/deliverable_actions.send_visszajelzes)."""
 
     nyersanyag_felhasznalhatosaga: float | None = None
     technikai_helyesseg: float | None = None
     kreativ_kepivilag: float | None = None
     megjegyzes: str | None = None
+    kihagyas_indoka: str | None = None
 
 
 @deliverable_actions_router.post("/{deliverable_id}/visszajelzes", response_model=FeedbackRead)
@@ -671,6 +773,7 @@ def send_visszajelzes(
             technikai_helyesseg=payload.technikai_helyesseg,
             kreativ_kepivilag=payload.kreativ_kepivilag,
             megjegyzes=payload.megjegyzes,
+            kihagyas_indoka=payload.kihagyas_indoka,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -730,3 +833,19 @@ def post_comment(
     if not payload.body.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A hozzászólás nem lehet üres")
     return deliverable_actions.add_comment(db, deliverable_id, current_user, payload.body.strip())
+
+
+@deliverable_actions_router.patch("/{deliverable_id}/comments/{comment_id}", response_model=CommentRead)
+def patch_comment(
+    deliverable_id: int,
+    comment_id: int,
+    payload: CommentUpdate,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Saját hozzászólás szerkesztése küldés után is (a felhasználó kérése) -
+    mindenki CSAK a sajátját, lásd services/deliverable_actions.edit_comment."""
+    _get_deliverable_or_404(deliverable_id, db, current_user)
+    if not payload.body.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A hozzászólás nem lehet üres")
+    return deliverable_actions.edit_comment(db, comment_id, current_user, payload.body.strip())

@@ -15,7 +15,9 @@ import { AllapotBeallitasok } from "@/components/deliverable/AllapotBeallitasok"
 import { DeliverableBoard, type BoardCard, type BoardColumn } from "@/components/deliverable/DeliverableBoard";
 import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar";
 import { UtomunkaViewTabs } from "@/components/deliverable/UtomunkaViewTabs";
+import { VinyoKezeles } from "@/components/deliverable/VinyoKezeles";
 import { VisszajelzesModal } from "@/components/deliverable/FeedbackSendButton";
+import { RecordDetailModal } from "@/components/RecordDetailModal";
 import type { AllapotBeallitas, Deliverable, Employee } from "@/lib/api";
 
 // Nem importáljuk az ENTITY_PATHS-t a lib/api.ts-ből (bár csak egy sima
@@ -69,6 +71,8 @@ export function UtomunkaContent({
   canCreate,
   canDelete,
   canEdit,
+  vinyoKezelheto = false,
+  isAdmin = false,
 }: {
   /** Igaz esetén az oldal a LEJÁRT határidejű anyagokra szűrve nyílik (a
    * dashboard figyelmeztetéséről jövet, ?szures=lejart) - a felületen
@@ -88,6 +92,11 @@ export function UtomunkaContent({
   canCreate: boolean;
   canDelete: boolean;
   canEdit: boolean;
+  /** Kezelheti-e a vinyó-neveket (új/átnevezés/törlés) - admin, vagy akinek
+   * admin külön megadta (lásd backend postproduction._vinyo_kezelheto). */
+  vinyoKezelheto?: boolean;
+  /** Admin a vinyó-kezelésben a jogosultság-kiosztást is látja. */
+  isAdmin?: boolean;
 }) {
   const [deliverables, setDeliverables] = useState(initialDeliverables);
   const [projects, setProjects] = useState(initialProjects);
@@ -107,6 +116,11 @@ export function UtomunkaContent({
   // eseményre vagy projektkódra szűkíti a kártyákat - az üres oszlopok el is
   // tűnnek, így rögtön látszik, melyik vinyón van a keresett projekt.
   const [vinyoKereses, setVinyoKereses] = useState("");
+  // Ugyanilyen kereső az "Állapot szerint" nézethez is (a felhasználó kérése).
+  const [allapotKereses, setAllapotKereses] = useState("");
+  // A kártya FELUGRÓ ABLAKBAN nyílik (a felhasználó kérése), nem teljes
+  // oldalként - itt az épp nyitott anyag útvonala (lásd RecordDetailModal).
+  const [modalHref, setModalHref] = useState<string | null>(null);
   // A dashboard figyelmeztetéséről jövet csak a lejárt anyagok látszanak -
   // a sávon kikapcsolható, és onnantól a teljes oldal a megszokott.
   const [csakLejart, setCsakLejart] = useState(lejartSzures);
@@ -246,8 +260,17 @@ export function UtomunkaContent({
   }, [deliverables, csakLejart, allapotBeallitasok]);
 
   const statusColumns: BoardColumn[] = useMemo(() => {
+    // Kereső az állapot-nézeten (a felhasználó kérése) - ugyanarra a három
+    // mezőre, mint a vinyó-nézet keresője.
+    const keresett = allapotKereses.trim().toLocaleLowerCase("hu-HU");
+    const talal = (d: Deliverable) =>
+      !keresett ||
+      [d.projekt_neve, d.esemeny_neve, d.projektkod_szoveg].some((mezo) =>
+        (mezo ?? "").toLocaleLowerCase("hu-HU").includes(keresett),
+      );
     const byStatus = new Map<string, Deliverable[]>();
     for (const d of lathatoAnyagok) {
+      if (!talal(d)) continue;
       const key = d.allapot && statusOptions.includes(d.allapot) ? d.allapot : NO_STATUS_KEY;
       if (!byStatus.has(key)) byStatus.set(key, []);
       byStatus.get(key)!.push(d);
@@ -281,7 +304,7 @@ export function UtomunkaContent({
         : []),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lathatoAnyagok, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, timerNevek]);
+  }, [lathatoAnyagok, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, timerNevek, allapotKereses]);
 
   const vinyoColumns: BoardColumn[] = useMemo(() => {
     const keresett = vinyoKereses.trim().toLocaleLowerCase("hu-HU");
@@ -366,6 +389,27 @@ export function UtomunkaContent({
 
   const calendarProjects = useMemo(() => projects.filter((p) => p.forgatas_datuma !== null), [projects]);
 
+  // DUPLIKÁLT anyagok (a felhasználó kérése): ugyanaz az anyagnév több
+  // vinyón is szerepel - név szerint összevonva (akár egy anyag több vinyóval,
+  // akár több azonos nevű anyag külön vinyókkal), hogy takarításkor látszódjon,
+  // mi hol foglal helyet feleslegesen.
+  const duplikaltak = useMemo(() => {
+    const nevhez = new Map<string, { nev: string; vinyok: Set<string> }>();
+    for (const d of deliverables) {
+      const nev = (d.projekt_neve ?? "").trim();
+      if (!nev) continue;
+      const kulcs = nev.toLocaleLowerCase("hu-HU");
+      for (const v of d.vinyok ?? []) {
+        if (!nevhez.has(kulcs)) nevhez.set(kulcs, { nev, vinyok: new Set() });
+        nevhez.get(kulcs)!.vinyok.add(v);
+      }
+    }
+    return Array.from(nevhez.values())
+      .filter((x) => x.vinyok.size >= 2)
+      .map((x) => ({ nev: x.nev, vinyok: Array.from(x.vinyok).sort((a, b) => a.localeCompare(b, "hu")) }))
+      .sort((a, b) => a.nev.localeCompare(b.nev, "hu"));
+  }, [deliverables]);
+
   // Miből lehet válogatni a kártyára: az anyagok mezői (a nevet és a
   // technikai azonosítókat kihagyva - azok nem mondanak semmit a kártyán).
   const mezoValasztek = useMemo(() => {
@@ -412,14 +456,41 @@ export function UtomunkaContent({
                 ) : undefined
               }
             >
+              {/* Kereső az állapot-nézet tetején (a felhasználó kérése). */}
+              <input
+                type="search"
+                value={allapotKereses}
+                onChange={(e) => setAllapotKereses(e.target.value)}
+                placeholder="Keresés projektre (név, esemény, projektkód)…"
+                aria-label="Keresés az állapot nézetben projektre"
+                className="mb-3 w-80 max-w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+              />
               {/* Szerkesztési joggal a kártyák áthúzhatók másik oszlopba - ez
-                  írja át az anyag állapotát. */}
-              <DeliverableBoard columns={statusColumns} onAthelyezes={canEdit ? kartyaAthelyezes : undefined} />
+                  írja át az anyag állapotát. A kártya felugró ablakban nyílik
+                  (a felhasználó kérése). */}
+              <DeliverableBoard
+                columns={statusColumns}
+                onAthelyezes={canEdit ? kartyaAthelyezes : undefined}
+                onMegnyitas={setModalHref}
+              />
             </Card>
             <Card title="Forgatások naptár">
               <ForgatasokCalendar projects={calendarProjects} />
             </Card>
-            <Card title="Vinyók szerint">
+            <Card
+              title="Vinyók szerint"
+              // A vinyó-nevek kezelése (a felhasználó kérése) - csak annak,
+              // akinek admin megadta a külön jogosultságot (vagy adminnak).
+              actions={
+                vinyoKezelheto ? (
+                  <VinyoKezeles
+                    kezdetiOpciok={vinyoOptions}
+                    isAdmin={isAdmin}
+                    emberek={employees.map((e) => ({ id: e.id, nev: e.full_name }))}
+                  />
+                ) : undefined
+              }
+            >
               <input
                 type="search"
                 value={vinyoKereses}
@@ -431,8 +502,48 @@ export function UtomunkaContent({
               {vinyoKereses.trim() && vinyoColumns.length === 0 && (
                 <p className="mb-2 text-[13px] text-text-muted">Nincs találat erre: „{vinyoKereses.trim()}”.</p>
               )}
-              <DeliverableBoard columns={vinyoColumns} />
+              <DeliverableBoard columns={vinyoColumns} onMegnyitas={setModalHref} />
             </Card>
+            {/* DUPLIKÁLT anyagok (a felhasználó kérése): ugyanaz az anyagnév
+                több vinyón - takarításkor innen látszik, mi hol foglal
+                feleslegesen. Csak akkor jelenik meg, ha van ilyen. */}
+            {duplikaltak.length > 0 && (
+              <Card title={`Több vinyóra mentett anyagok (${duplikaltak.length})`}>
+                <p className="mb-3 text-[13px] text-text-secondary">
+                  Ezek az anyagnevek egyszerre több vinyón is szerepelnek - ha valamelyik példány már nem kell,
+                  itt látszik, honnan lehet törölni.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="border-b border-border text-left text-text-secondary">
+                        <th className="py-1.5 pr-4 font-medium">Anyag</th>
+                        <th className="py-1.5 font-medium">Ezeken a vinyókon</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {duplikaltak.map((sor) => (
+                        <tr key={sor.nev} className="border-b border-border/60 align-top">
+                          <td className="py-2 pr-4 text-text-primary [overflow-wrap:anywhere]">{sor.nev}</td>
+                          <td className="py-2">
+                            <div className="flex flex-wrap gap-1">
+                              {sor.vinyok.map((v) => (
+                                <span
+                                  key={v}
+                                  className="rounded bg-surface-3 px-1.5 py-0.5 text-[12px] text-text-secondary"
+                                >
+                                  {v}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
           </div>
         }
         list={
@@ -455,6 +566,9 @@ export function UtomunkaContent({
               rows={lathatoAnyagok}
               emptyText="Még nincs felvett vágandó anyag - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
               getHref={(d) => `/utomunka/${d.id}`}
+              // A sor felugró ablakban nyílik (a felhasználó kérése) - a
+              // teljes adatlap, elnavigálás nélkül.
+              openInModal
               deleteHref={canDelete ? (d) => `${DELIVERABLE_BASE_PATH}/${d.id}` : undefined}
               filterable
               columns={[
@@ -526,8 +640,13 @@ export function UtomunkaContent({
           deliverableId={visszajelzesKerve.deliverableId}
           onClose={() => setVisszajelzesKerve(null)}
           onSaved={visszajelzesUtan}
+          // Automatikusan dobtuk fel - kihagyható, de csak indoklással.
+          kihagyhato
         />
       )}
+      {/* A tábla-kártyákról felugró ablakban nyíló teljes adatlap (a
+          felhasználó kérése) - ugyanaz a nézet, mint a külön oldal. */}
+      <RecordDetailModal href={modalHref} onClose={() => setModalHref(null)} />
     </>
   );
 }

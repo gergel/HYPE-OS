@@ -2046,6 +2046,13 @@ export async function getVinyoOptions(): Promise<string[]> {
   return res?.options ?? [];
 }
 
+/** A vinyó-lista + hogy a bejelentkezett ember kezelheti-e a neveket
+ * (új/átnevezés/törlés) - lásd backend postproduction._vinyo_kezelheto. */
+export async function getVinyoOptionsReszletes(): Promise<{ options: string[]; kezelheto: boolean }> {
+  const res = await apiGet<{ options: string[]; kezelheto: boolean }>("/api/v1/deliverables/vinyo-options");
+  return { options: res?.options ?? [], kezelheto: !!res?.kezelheto };
+}
+
 export type DeliverableContact = { id: number; full_name: string; email: string | null };
 
 export async function getDeliverableContacts(deliverableId: number): Promise<DeliverableContact[]> {
@@ -2274,6 +2281,8 @@ export type DeliverableComment = {
   employee_name: string;
   body: string;
   created_at: string;
+  /** Mikor írták át utoljára - ebből látszik a "(szerkesztve)" jelölés. */
+  updated_at?: string | null;
   /** A hozzászóláshoz mellékelt fájlok (entity_type: "deliverableComment"). */
   attachments: DocumentAttachment[];
 };
@@ -2719,6 +2728,8 @@ export type VagoiVisszajelzes = {
   diszpora_kikuldve: string | null;
   /** "uj" | "kikuldve" | "nem_kuldjuk" */
   allapot: string;
+  /** KIHAGYOTT visszajelzés - a megjegyzés maga a kihagyás indoka. */
+  kihagyva?: boolean;
   kikuldheto: boolean;
   /** Ha nem küldhető ki, ez mondja meg, miért. */
   kikuldes_akadalya: string | null;

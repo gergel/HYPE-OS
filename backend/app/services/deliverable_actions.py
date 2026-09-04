@@ -413,6 +413,7 @@ def send_visszajelzes(
     technikai_helyesseg: float | None = None,
     kreativ_kepivilag: float | None = None,
     megjegyzes: str | None = None,
+    kihagyas_indoka: str | None = None,
 ) -> Feedback:
     """Egy vágói visszajelzés rögzítése az űrlapról.
 
@@ -423,6 +424,27 @@ def send_visszajelzes(
     A kész anyag linkjét MÁSOLJUK a rekordba (lásd models/feedback.py), és az
     anyagra is ráírjuk a mostani pontszámokat, hogy a listákban a legutóbbi
     értékelés látszódjon - a történetet viszont a Feedback sorok őrzik."""
+    # KIHAGYÁS (a felhasználó kérése): az automatikusan feldobott űrlap
+    # kihagyható, de csak indoklással - ilyenkor pontszám nem kell, a szöveg
+    # maga az indok, és a sor nem küldhető ki a stábnak (nem_kuldjuk). Az
+    # ellenőrzésbe-tétel feltételét viszont teljesíti.
+    if (kihagyas_indoka or "").strip():
+        from app.models.feedback import VisszajelzesAllapot
+
+        feedback = Feedback(
+            deliverable_id=deliverable.id,
+            project_id=deliverable.project_id,
+            visszajelzo_employee_id=current_user.id,
+            visszajelzes_szoveg=(kihagyas_indoka or "").strip(),
+            kesz_anyag_url=deliverable.kesz_anyag_url,
+            kihagyva=True,
+            allapot=VisszajelzesAllapot.NEM_KULDJUK,
+        )
+        db.add(feedback)
+        db.commit()
+        db.refresh(feedback)
+        return feedback
+
     _ellenoriz_pont("nyersanyag felhasználhatósága", nyersanyag_felhasznalhatosaga)
     _ellenoriz_pont("technikai helyesség", technikai_helyesseg)
     _ellenoriz_pont("kreativitás és képi világ", kreativ_kepivilag)
@@ -470,6 +492,7 @@ def list_comments(db: Session, deliverable_id: int) -> list[CommentRead]:
             employee_name=c.employee.full_name,
             body=c.body,
             created_at=c.created_at,
+            updated_at=c.updated_at,
             attachments=csatolmanyok.get(c.id, []),
         )
         for c in rows
@@ -523,3 +546,112 @@ def add_comment(db: Session, deliverable_id: int, current_user: Employee, body: 
         created_at=comment.created_at,
         attachments=[],
     )
+
+
+def edit_comment(db: Session, comment_id: int, current_user: Employee, body: str) -> CommentRead:
+    """Egy hozzászólás átírása - mindenki CSAK a sajátját szerkesztheti, küldés
+    után is (a felhasználó kérése). A szerkesztés tényét az updated_at őrzi,
+    a felület "(szerkesztve)" jelölést tesz mellé."""
+    comment = db.get(DeliverableComment, comment_id)
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Nincs ilyen hozzászólás.")
+    if comment.employee_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Csak a saját hozzászólásodat szerkesztheted.")
+    comment.body = body
+    db.commit()
+    db.refresh(comment)
+    csatolmanyok = attachments.list_for_many(db, "deliverableComment", [comment.id])
+    return CommentRead(
+        id=comment.id,
+        deliverable_id=comment.deliverable_id,
+        employee_id=comment.employee_id,
+        employee_name=comment.employee.full_name,
+        body=comment.body,
+        created_at=comment.created_at,
+        updated_at=comment.updated_at,
+        attachments=csatolmanyok.get(comment.id, []),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Vinyó-nevek kezelése (a felhasználó kérése): új név felvétele, átnevezés,
+# törlés - külön, adminból adható jogosultsághoz kötve (lásd
+# routes/postproduction.vinyo_kezeles_jog).
+# ---------------------------------------------------------------------------
+
+
+def _vinyo_lista_szerkesztesre(db: Session) -> tuple["DeliverableBoardConfig", list[str]]:
+    """A hivatalos vinyó-lista ÍRHATÓ alakban: ha a configban még nincs lista
+    (None), az aktuális tényleges listából (deklarált + historikus) indulunk,
+    hogy az első szerkesztés ne "tüntessen el" opciókat."""
+    from app.models.deliverable_status import DeliverableBoardConfig
+
+    config = db.query(DeliverableBoardConfig).order_by(DeliverableBoardConfig.id).first()
+    if config is None:
+        config = DeliverableBoardConfig()
+        db.add(config)
+        db.flush()
+    lista = (
+        [str(v) for v in config.vinyo_opciok]
+        if isinstance(config.vinyo_opciok, list) and config.vinyo_opciok
+        else list(get_vinyo_options(db).options)
+    )
+    return config, lista
+
+
+def add_vinyo_nev(db: Session, nev: str) -> list[str]:
+    nev = nev.strip()
+    if not nev:
+        raise HTTPException(status_code=400, detail="A vinyó neve nem lehet üres.")
+    config, lista = _vinyo_lista_szerkesztesre(db)
+    if nev in lista:
+        raise HTTPException(status_code=400, detail="Már van ilyen nevű vinyó.")
+    config.vinyo_opciok = lista + [nev]
+    db.commit()
+    return get_vinyo_options(db).options
+
+
+def _vinyo_atiras_az_anyagokon(db: Session, regi: str, uj: str | None) -> int:
+    """A vinyó-név cseréje (uj=None: levétele) MINDEN anyag vinyok listájában.
+    A JSON-oszlop módosulását kézzel kell jelezni (flag_modified), különben az
+    SQLAlchemy nem veszi észre a lista belső változását."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    erintett = 0
+    for anyag in db.scalars(select(Deliverable).where(Deliverable.vinyok.is_not(None))):
+        if not isinstance(anyag.vinyok, list) or regi not in anyag.vinyok:
+            continue
+        maradek = [v for v in anyag.vinyok if v != regi]
+        if uj is not None and uj not in maradek:
+            maradek.append(uj)
+        anyag.vinyok = maradek or None
+        flag_modified(anyag, "vinyok")
+        erintett += 1
+    return erintett
+
+
+def rename_vinyo_nev(db: Session, regi: str, uj: str) -> list[str]:
+    uj = uj.strip()
+    if not uj:
+        raise HTTPException(status_code=400, detail="A vinyó új neve nem lehet üres.")
+    config, lista = _vinyo_lista_szerkesztesre(db)
+    if regi not in lista:
+        raise HTTPException(status_code=404, detail="Nincs ilyen nevű vinyó.")
+    if uj != regi and uj in lista:
+        raise HTTPException(status_code=400, detail="Már van ilyen nevű vinyó.")
+    config.vinyo_opciok = [uj if v == regi else v for v in lista]
+    _vinyo_atiras_az_anyagokon(db, regi, uj)
+    db.commit()
+    return get_vinyo_options(db).options
+
+
+def delete_vinyo_nev(db: Session, nev: str) -> list[str]:
+    config, lista = _vinyo_lista_szerkesztesre(db)
+    if nev not in lista:
+        raise HTTPException(status_code=404, detail="Nincs ilyen nevű vinyó.")
+    config.vinyo_opciok = [v for v in lista if v != nev]
+    # Az anyagokról is lekerül - különben a "historikus érték" ágon (lásd
+    # get_vinyo_options) azonnal visszakerülne a választhatók közé.
+    _vinyo_atiras_az_anyagokon(db, nev, None)
+    db.commit()
+    return get_vinyo_options(db).options

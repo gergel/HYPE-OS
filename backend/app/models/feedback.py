@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -69,6 +69,12 @@ class Feedback(TimestampMixin, Base):
     allapot: Mapped[str] = mapped_column(
         String(20), nullable=False, default=VisszajelzesAllapot.UJ, server_default=VisszajelzesAllapot.UJ.value
     )
+    #: KIHAGYOTT visszajelzés (a felhasználó kérése): az automatikusan
+    #: feldobott űrlapot ki lehet hagyni, de csak indoklással - ilyenkor a
+    #: visszajelzes_szoveg maga az indok, pontszám nincs, és nem is küldjük ki
+    #: a stábnak (allapot=nem_kuldjuk). Az ellenőrzésbe-tétel feltételét
+    #: viszont teljesíti (lásd routes/postproduction._ellenorzeshez_kell_visszajelzes).
+    kihagyva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
     deliverable: Mapped["Deliverable"] = relationship(back_populates="feedbacks")
     forgatta: Mapped["Employee"] = relationship(back_populates="feedbacks", foreign_keys=[forgatta_employee_id])

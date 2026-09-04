@@ -76,6 +76,8 @@ export function AllapotValaszto({
           deliverableId={deliverableId}
           onClose={() => setVisszajelzesKerve(null)}
           onSaved={visszajelzesUtan}
+          // Automatikusan dobtuk fel - kihagyható, de csak indoklással.
+          kihagyhato
         />
       )}
     </>

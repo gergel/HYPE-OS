@@ -60,3 +60,7 @@ class DeliverableBoardConfig(TimestampMixin, Base):
     #: import_vinyo_sync) - None: a kódban rögzített tartalék-lista érvényes
     #: (lásd services/deliverable_actions.VINYO_OPTIONS).
     vinyo_opciok: Mapped[list[str] | None] = mapped_column(JSON)
+    #: KIK kezelhetik a vinyó-neveket (új felvétele, átnevezés, törlés) az
+    #: adminon kívül - employee id-k listája, admin adja (a felhasználó
+    #: kérése: ez KÜLÖN jogosultság, nem jár az /utomunka edit joggal).
+    vinyo_kezelo_employee_ids: Mapped[list[int] | None] = mapped_column(JSON)

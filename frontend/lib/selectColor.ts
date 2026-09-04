@@ -38,11 +38,17 @@ const ZOLD = { bg: "var(--bg-success)", text: "var(--text-success)" };
  *
  * Ugyanaz a szabály, mint a backend models/project_code.esemeny_elmaradt-ban:
  * ami ott "elmaradt", az itt piros. */
+const KEK = { bg: "var(--bg-blue)", text: "var(--text-blue)" };
+
 const SZEMANTIKUS_SZINEK: Record<string, { bg: string; text: string }> = {
   van: ZOLD,
   volt: ZOLD,
   megvolt: ZOLD,
   megtortent: ZOLD,
+  // Az utómunka archiválás-mezője (a felhasználó kérése): az "Archiválható"
+  // kék (még teendő van vele), az "Archiválva" zöld (kész).
+  archivalhato: KEK,
+  archivalva: ZOLD,
 };
 
 /** Lásd backend models/project_code.ELMARADT_ELOTAG - a kettőt együtt kell

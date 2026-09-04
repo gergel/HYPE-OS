@@ -48,14 +48,28 @@ function BoardCardView({
   card,
   szin,
   huzhato,
+  onMegnyitas,
 }: {
   card: BoardCard;
   szin?: string | null;
   huzhato: boolean;
+  /** Ha meg van adva, a kártya kattintásra EZT hívja a href-fel (felugró
+   * ablakos megnyitás) a teljes oldalra navigálás helyett. */
+  onMegnyitas?: (href: string) => void;
 }) {
   return (
     <a
       href={card.href}
+      onClick={
+        onMegnyitas
+          ? (e) => {
+              // Ctrl/Cmd/középső katt: hadd nyíljon új lapon, ahogy szokott.
+              if (e.ctrlKey || e.metaKey || e.button !== 0) return;
+              e.preventDefault();
+              onMegnyitas(card.href);
+            }
+          : undefined
+      }
       draggable={huzhato}
       onDragStart={
         huzhato
@@ -125,10 +139,12 @@ function BoardCardView({
 function BoardColumnView({
   column,
   onAthelyezes,
+  onMegnyitas,
 }: {
   column: BoardColumn;
   /** Ha meg van adva, ide lehet kártyát HÚZNI: (kártya id, cél oszlop kulcsa). */
   onAthelyezes?: (cardId: number, celOszlop: string) => void;
+  onMegnyitas?: (href: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [felette, setFelette] = useState(false);
@@ -179,7 +195,7 @@ function BoardColumnView({
       <div className="flex flex-col gap-2">
         {visible.length === 0 && <p className="text-[12px] text-text-muted italic">Üres.</p>}
         {visible.map((card) => (
-          <BoardCardView key={card.id} card={card} szin={column.szin} huzhato={huzhato} />
+          <BoardCardView key={card.id} card={card} szin={column.szin} huzhato={huzhato} onMegnyitas={onMegnyitas} />
         ))}
       </div>
       {remaining > 0 && (
@@ -203,12 +219,16 @@ function BoardColumnView({
 export function DeliverableBoard({
   columns,
   onAthelyezes,
+  onMegnyitas,
 }: {
   columns: BoardColumn[];
   /** Ha meg van adva, a kártyák megfoghatók és másik oszlopba húzhatók -
    * ettől változik az anyag állapota (lásd UtomunkaContent). A vinyó szerinti
    * táblán szándékosan nincs: ott az oszlop nem egy állítható mező. */
   onAthelyezes?: (cardId: number, celOszlop: string) => void;
+  /** Ha meg van adva, a kártya FELUGRÓ ABLAKBAN nyílik (a felhasználó
+   * kérése), nem teljes oldalként - lásd UtomunkaContent + RecordDetailModal. */
+  onMegnyitas?: (href: string) => void;
 }) {
   if (columns.length === 0) {
     return <p className="text-[13px] text-text-muted">Nincs megjeleníthető anyag.</p>;
@@ -216,7 +236,7 @@ export function DeliverableBoard({
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">
       {columns.map((col) => (
-        <BoardColumnView key={col.key} column={col} onAthelyezes={onAthelyezes} />
+        <BoardColumnView key={col.key} column={col} onAthelyezes={onAthelyezes} onMegnyitas={onMegnyitas} />
       ))}
     </div>
   );

@@ -12,6 +12,10 @@ class AssignableEmployee(BaseModel):
 
 class VinyoOptions(BaseModel):
     options: list[str]
+    #: Kezelheti-e a lekérő a vinyó-neveket (új/átnevezés/törlés) - admin,
+    #: vagy akinek admin külön megadta (lásd models/deliverable_status.
+    #: vinyo_kezelo_employee_ids).
+    kezelheto: bool = False
 
 
 class ContactOption(BaseModel):
@@ -28,6 +32,13 @@ class CommentCreate(BaseModel):
     body: str
 
 
+class CommentUpdate(BaseModel):
+    """Saját hozzászólás átírása (a felhasználó kérése) - lásd
+    services/deliverable_actions.edit_comment."""
+
+    body: str
+
+
 class CommentRead(BaseModel):
     id: int
     deliverable_id: int
@@ -35,6 +46,8 @@ class CommentRead(BaseModel):
     employee_name: str
     body: str
     created_at: datetime
+    #: Mikor írták át utoljára - ebből látszik a "(szerkesztve)" jelölés.
+    updated_at: datetime | None = None
     #: A hozzászóláshoz mellékelt fájlok - lásd
     #: services/attachments.py ("deliverableComment" entity_type).
     attachments: list[DocumentAttachmentRead] = []

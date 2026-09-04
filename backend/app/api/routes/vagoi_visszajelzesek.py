@@ -83,6 +83,9 @@ class VisszajelzesRead(BaseModel):
     diszpora_kikuldve: datetime | None = None
     #: uj | kikuldve | nem_kuldjuk - lásd models/feedback.VisszajelzesAllapot.
     allapot: str = VisszajelzesAllapot.UJ.value
+    #: KIHAGYOTT visszajelzés: az automatikusan feldobott űrlapot indoklással
+    #: átugorták - a megjegyzes maga az indok (lásd models/feedback.kihagyva).
+    kihagyva: bool = False
     #: Kiküldhető-e a diszpóra: kell hozzá forgatás, címzett és megjegyzés -
     #: és az sem lehet, hogy eldöntöttük, ezt nem küldjük ki.
     kikuldheto: bool = False
@@ -135,6 +138,7 @@ def _kimenet(feedback: Feedback) -> VisszajelzesRead:
         ],
         diszpora_kikuldve=feedback.diszpora_kikuldve,
         allapot=feedback.allapot,
+        kihagyva=feedback.kihagyva,
         kikuldheto=akadaly is None,
         kikuldes_akadalya=akadaly,
     )

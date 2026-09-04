@@ -312,13 +312,15 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               Boolean(deliverable.allapot) && <StatusBadge label={String(deliverable.allapot)} tone="neutral" />
             )}
             {/* Az anyag TÖRLÉSE (a felhasználó kérése) - megerősítéssel, és a
-                törlés Ctrl+Z-vel visszavonható (lásd lib/visszavonas.ts). */}
+                törlés Ctrl+Z-vel visszavonható (lásd lib/visszavonas.ts). A
+                gomb JOBBRA kitolva (ml-auto, a felhasználó kérése) - ne a cím
+                mellett legyen, ahol könnyű véletlenül rákattintani. */}
             {canDeletePage && (
               <DeleteButton
                 path={`/api/v1/deliverables/${deliverableId}`}
                 redirectTo="/utomunka"
                 label="Kártya törlése"
-                className="btn btn-ghost !text-[12.5px] text-text-danger"
+                className="btn btn-ghost ml-auto !text-[12.5px] text-text-danger"
               />
             )}
           </div>
@@ -368,6 +370,9 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
             initialComments={comments}
             mentionableEmployees={assignableEmployees}
             canUpload={canEditPage}
+            // A saját hozzászólás küldés után is szerkeszthető - ehhez kell
+            // tudni, melyik az övé (lásd CommentsSection).
+            currentEmployeeId={currentUser ? Number(currentUser.id) : null}
           />
         </Card>
       </div>

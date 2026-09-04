@@ -235,6 +235,13 @@ export function VisszajelzesLista({
                           <span className="block text-[11.5px] text-text-muted">
                             {v.visszajelzo_nev ?? "ismeretlen"}
                           </span>
+                          {/* KIHAGYOTT visszajelzés: az űrlapot indoklással
+                              átugorták - a szöveg maga az indok. */}
+                          {v.kihagyva && (
+                            <span className="mt-0.5 inline-block rounded bg-bg-warning px-1.5 py-0.5 text-[10.5px] font-medium text-text-warning">
+                              Kihagyva
+                            </span>
+                          )}
                         </span>
                       </button>
                     </td>
