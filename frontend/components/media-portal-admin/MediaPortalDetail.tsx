@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  Eye,
+  EyeOff,
   Folder as FolderIcon,
   FolderPlus,
   GripVertical,
@@ -19,6 +21,7 @@ import {
   updateFolder,
   deleteFolder,
   setVideoFolder,
+  setVideoRejtett,
   uploadImage,
   deleteImage,
   setImageFolder,
@@ -484,6 +487,18 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
   async function onRemoveFromFolder(videoId: number) {
     await setVideoFolder(videoId, null);
     refresh();
+  }
+
+  /** A videó "csak belső ellenőrzésre" (rejtett) kapcsolója - a rejtett
+   * videót az ügyfél nem látja a portálon, pedig a link már kint van nála
+   * (a felhasználó kérése: pl. a vágó ellenőrzésre feltöltött anyaga). */
+  async function onToggleRejtett(videoId: number, rejtett: boolean) {
+    try {
+      await setVideoRejtett(videoId, rejtett);
+      refresh();
+    } catch (err) {
+      alert(`Sikertelen: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   async function onRemoveImageFromFolder(imageId: number) {
@@ -1008,7 +1023,14 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] text-text-primary">{v.title}</p>
+                    <p className="flex items-center gap-1.5 truncate text-[13px] text-text-primary">
+                      <span className="truncate">{v.title}</span>
+                      {v.rejtett && (
+                        <span className="shrink-0 rounded bg-bg-warning px-1.5 py-0.5 text-[10.5px] font-medium text-text-warning">
+                          Rejtett
+                        </span>
+                      )}
+                    </p>
                     <p className="text-[11px] text-text-muted">
                       {v.status === "ready"
                         ? `${v.resolution_label} · ${formatDuration(v.duration_seconds)} · ${formatBytes(v.size_bytes)}`
@@ -1017,6 +1039,19 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                           : "Sikertelen"}
                     </p>
                   </div>
+                  {/* Rejtés/megjelenítés: a rejtett videót az ügyfél nem
+                      látja a portálon (csak belső ellenőrzésre). */}
+                  <button
+                    title={
+                      v.rejtett
+                        ? "Megjelenítés az ügyfélnek (most rejtett - csak belső ellenőrzésre)"
+                        : "Elrejtés az ügyfél elől (csak belső ellenőrzésre)"
+                    }
+                    onClick={() => void onToggleRejtett(v.id, !v.rejtett)}
+                    className={`transition-colors ${v.rejtett ? "text-text-warning hover:text-text-primary" : "text-text-muted hover:text-text-primary"}`}
+                  >
+                    {v.rejtett ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                   {currentFolder && (
                     <button title="Kivétel a mappából" onClick={() => onRemoveFromFolder(v.id)} className="text-text-muted transition-colors hover:text-text-primary">
                       <ArrowLeft className="h-4 w-4" />

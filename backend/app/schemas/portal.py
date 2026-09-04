@@ -106,12 +106,16 @@ class PortalVideoOut(BaseModel):
     size_bytes: int = 0
     status: str
     sort_order: int
+    #: Csak belső ellenőrzésre - az ügyfél nem látja a portálon (lásd
+    #: models/portal.PortalVideo.rejtett).
+    rejtett: bool = False
 
 
 class PortalVideoUpdate(BaseModel):
     title: str | None = None
     sort_order: int | None = None
     folder_id: int | None = None
+    rejtett: bool | None = None
 
 
 class PortalImageOut(BaseModel):

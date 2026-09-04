@@ -30,6 +30,10 @@ export default function FeltoltesPage() {
   const [busy, setBusy] = useState(false);
   const [allapot, setAllapot] = useState<string | null>(null);
   const [dragCel, setDragCel] = useState<number | "root" | null>(null);
+  // CSAK BELSŐ ELLENŐRZÉSRE (a felhasználó kérése): bejelölve a feltöltött
+  // videókat az ügyfél nem látja a portálon, amíg admin láthatóra nem
+  // állítja - pl. amikor a vágó ellenőrzésre tölt fel egy anyagot.
+  const [belsoEllenorzesre, setBelsoEllenorzesre] = useState(false);
 
   const betolt = useCallback(() => {
     getFeltoltesAdatok(token)
@@ -67,7 +71,7 @@ export default function FeltoltesPage() {
       let kesz = 0;
       for (const file of lista) {
         setAllapot(`Feltöltés: ${file.name} (${kesz + 1}/${lista.length})…`);
-        const eredmeny = await feltoltesFajl(token, file, folderId);
+        const eredmeny = await feltoltesFajl(token, file, folderId, belsoEllenorzesre);
         if (!eredmeny.ok) {
           alert(`${file.name}: ${eredmeny.hiba}`);
           break;
@@ -140,6 +144,24 @@ export default function FeltoltesPage() {
             {allapot}
           </p>
         )}
+
+        {/* CSAK BELSŐ ELLENŐRZÉSRE (a felhasználó kérése): bejelölve az itt
+            feltöltött videókat az ügyfél nem látja a portálon, amíg az admin
+            láthatóra nem állítja - pl. amikor a vágó ellenőrzésre tölt fel. */}
+        <label className="mb-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-ink-line bg-ink-card px-4 py-3">
+          <input
+            type="checkbox"
+            checked={belsoEllenorzesre}
+            onChange={(e) => setBelsoEllenorzesre(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer"
+          />
+          <span>
+            <span className="block text-sm text-bone">Csak belső ellenőrzésre töltöm fel</span>
+            <span className="block text-[13px] leading-relaxed text-mist">
+              A így feltöltött videókat az ügyfél nem látja a portálon, amíg az admin láthatóra nem állítja.
+            </span>
+          </span>
+        </label>
 
         {/* Fejléc: Tartalom + Új mappa - ugyanaz a minta, mint az adminon. */}
         <div className="mb-3 flex items-center justify-between gap-3">

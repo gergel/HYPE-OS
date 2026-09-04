@@ -177,11 +177,15 @@ export async function feltoltesFajl(
   token: string,
   file: File,
   folderId: number | null,
+  /** CSAK BELSŐ ELLENŐRZÉSRE (a felhasználó kérése): a videót az ügyfél nem
+   * látja a portálon, amíg admin láthatóra nem állítja. Képekre nincs hatása. */
+  belsoEllenorzesre = false,
 ): Promise<{ ok: boolean; hiba?: string }> {
   const fd = new FormData();
   fd.append("file", file);
   if (folderId != null) fd.append("folder_id", String(folderId));
   const vegpont = file.type.startsWith("image/") ? "kep" : "video";
+  if (vegpont === "video" && belsoEllenorzesre) fd.append("rejtett", "true");
   const res = await fetch(`${BASE}/feltoltes/${token}/${vegpont}`, { method: "POST", body: fd });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

@@ -1,7 +1,7 @@
 from datetime import date
 from enum import StrEnum
 
-from sqlalchemy import BigInteger, Date, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import BigInteger, Boolean, Date, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -179,6 +179,12 @@ class PortalVideo(TimestampMixin, Base):
     source_key: Mapped[str | None] = mapped_column(String(500), comment="Eredeti mp4 R2 kulcsa")
     mp4_url: Mapped[str | None] = mapped_column(String(500))
     hls_url: Mapped[str | None] = mapped_column(String(500), comment=".m3u8 master playlist URL")
+    #: CSAK BELSŐ ELLENŐRZÉSRE (a felhasználó kérése): a rejtett videót az
+    #: ügyfél nem látja a portálon (és a mappa-megosztásban sem), pedig a
+    #: link már kint van nála - jellemzően a vágó tölti fel így, amíg az
+    #: anyag jóváhagyásra vár. A videó SAJÁT megosztó linkje viszont
+    #: szándékosan él: azzal küldhető el az ellenőrnek.
+    rejtett: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     thumbnail_url: Mapped[str | None] = mapped_column(String(500))
 
     duration_seconds: Mapped[int] = mapped_column(Integer, default=0)

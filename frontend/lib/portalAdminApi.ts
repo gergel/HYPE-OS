@@ -142,6 +142,15 @@ export async function renameVideo(videoId: number, title: string): Promise<Porta
   });
 }
 
+/** A videó "csak belső ellenőrzésre" (rejtett) jelölése - a rejtett videót
+ * az ügyfél nem látja a portálon (a felhasználó kérése). */
+export async function setVideoRejtett(videoId: number, rejtett: boolean): Promise<PortalVideoItem> {
+  return req<PortalVideoItem>(`/api/v1/portal-admin/videos/${videoId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ rejtett }),
+  });
+}
+
 export async function setVideoFolder(videoId: number, folderId: number | null): Promise<void> {
   return req(`/api/v1/portal-admin/videos/${videoId}`, {
     method: "PATCH",

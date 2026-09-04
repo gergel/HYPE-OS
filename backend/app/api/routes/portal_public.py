@@ -71,7 +71,9 @@ def _payment_window_closed(portal: Portal) -> bool:
 
 
 def _serialize(portal: Portal) -> PublicPortal:
-    ready = [v for v in portal.videos if v.status == "ready"]
+    # A REJTETT (csak belső ellenőrzésre feltöltött) videó nem megy ki az
+    # ügyfélnek (a felhasználó kérése) - hiába él nála a portál linkje.
+    ready = [v for v in portal.videos if v.status == "ready" and not v.rejtett]
     return PublicPortal(
         slug=portal.slug,
         title=resolve_title(portal),
@@ -466,6 +468,10 @@ async def feltoltes_video(
     file: UploadFile = File(...),
     folder_id: int | None = Form(None),
     title: str | None = Form(None),
+    # CSAK BELSŐ ELLENŐRZÉSRE (a felhasználó kérése): a vágó a feltöltő
+    # oldalon bejelölheti, hogy az ügyfél még ne lássa - lásd
+    # models/portal.PortalVideo.rejtett.
+    rejtett: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     """Videó feltöltése a feltöltő linkkel - ugyanaz a tároló + feldolgozó
@@ -484,6 +490,7 @@ async def feltoltes_video(
         title=(title or "").strip() or _os.path.splitext(file.filename or "Untitled")[0],
         status="processing",
         sort_order=max_order + 1,
+        rejtett=rejtett,
     )
     db.add(video)
     db.commit()
@@ -560,7 +567,8 @@ def megosztas(token: str, db: Session = Depends(get_db)):
     folder = db.scalar(select(PortalFolder).where(PortalFolder.share_token == token))
     if folder is not None:
         portal = folder.portal
-        ready = [v for v in folder.videos if v.status == "ready"]
+        # A rejtett videó a mappa-megosztásból is kimarad (lásd _serialize).
+        ready = [v for v in folder.videos if v.status == "ready" and not v.rejtett]
         project = PublicPortal(
             slug=portal.slug,
             title=f"{resolve_title(portal)} – {folder.name}" if folder.name else resolve_title(portal),
@@ -577,6 +585,9 @@ def megosztas(token: str, db: Session = Depends(get_db)):
         )
         return {"tipus": "mappa", "project": project.model_dump()}
 
+    # A videó SAJÁT megosztó linkje a rejtett videónál is él (szándékosan):
+    # ezt a linket kézzel adja ki valaki (pl. az ellenőrnek) - a rejtés a
+    # PORTÁL nézete elől takar, nem a célzottan megosztott link elől.
     video = db.scalar(select(PortalVideo).where(PortalVideo.share_token == token))
     if video is not None and video.status == "ready":
         portal = video.portal

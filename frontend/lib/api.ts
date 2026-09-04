@@ -2487,6 +2487,8 @@ export type PortalVideoItem = {
   size_bytes: number;
   status: string;
   sort_order: number;
+  /** Csak belső ellenőrzésre - az ügyfél nem látja a portálon. */
+  rejtett?: boolean;
 };
 
 export type PortalImageItem = {
