@@ -2503,6 +2503,8 @@ export type PortalFolderItem = {
   id: number;
   name: string;
   sort_order: number;
+  /** Rejtett mappa - az ügyfél nem látja a portálon. */
+  rejtett?: boolean;
 };
 
 export type PortalDetailData = PortalSummary & {

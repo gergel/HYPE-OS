@@ -22,12 +22,17 @@ export interface PortalVideo {
   size_bytes: number;
   status: string;
   sort_order: number;
+  /** Csak belső ellenőrzésre - az ügyfél nem látja; a belsős néző rejtett-
+   * jelöléssel igen (lásd backend portal_public._serialize). */
+  rejtett?: boolean;
 }
 
 export interface PortalFolder {
   id: number;
   name: string;
   sort_order: number;
+  /** Rejtett mappa - az ügyfél nem látja; a belsős néző jelöléssel igen. */
+  rejtett?: boolean;
 }
 
 export interface PortalImage {
@@ -67,8 +72,14 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
-export async function getPublicProject(slug: string, token?: string) {
-  const q = token ? `?authorization=${encodeURIComponent(token)}` : "";
+export async function getPublicProject(slug: string, token?: string, belsosToken?: string | null) {
+  const reszek = [
+    token ? `authorization=${encodeURIComponent(token)}` : null,
+    // A BELSŐS (bejelentkezett, portál-jogú) néző HYPE OS tokenje: vele a
+    // rejtett videók/mappák is jönnek, rejtett-jelöléssel.
+    belsosToken ? `belsos_token=${encodeURIComponent(belsosToken)}` : null,
+  ].filter(Boolean);
+  const q = reszek.length > 0 ? `?${reszek.join("&")}` : "";
   return req<{
     locked: boolean;
     expired?: boolean;

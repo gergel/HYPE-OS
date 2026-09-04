@@ -501,6 +501,17 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     }
   }
 
+  /** Egész MAPPA elrejtése/megjelenítése (a felhasználó kérése) - a rejtett
+   * mappát és a tartalmát az ügyfél nem látja, a belsős néző jelöléssel igen. */
+  async function onToggleFolderRejtett(folderId: number, rejtett: boolean) {
+    try {
+      await updateFolder(folderId, { rejtett });
+      refresh();
+    } catch (err) {
+      alert(`Sikertelen: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
   async function onRemoveImageFromFolder(imageId: number) {
     await setImageFolder(imageId, null);
     refresh();
@@ -966,7 +977,25 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                     <button onClick={() => setCurrentFolder(f.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                       <FolderIcon className="h-5 w-5 shrink-0 text-text-accent" />
                       <span className="truncate text-[13px] text-text-primary">{f.name}</span>
+                      {f.rejtett && (
+                        <span className="shrink-0 rounded bg-bg-warning px-1.5 py-0.5 text-[10.5px] font-medium text-text-warning">
+                          Rejtett
+                        </span>
+                      )}
                       <span className="ml-auto shrink-0 text-[11px] text-text-muted">{vCount + iCount} elem</span>
+                    </button>
+                    {/* Egész mappa elrejtése az ügyfél elől (a felhasználó
+                        kérése) - a belsős néző a portálon jelöléssel látja. */}
+                    <button
+                      title={
+                        f.rejtett
+                          ? "Megjelenítés az ügyfélnek (most rejtett - a tartalmával együtt)"
+                          : "Mappa elrejtése az ügyfél elől (a tartalmával együtt)"
+                      }
+                      onClick={() => void onToggleFolderRejtett(f.id, !f.rejtett)}
+                      className={`transition-colors ${f.rejtett ? "text-text-warning hover:text-text-primary" : "text-text-muted hover:text-text-primary"}`}
+                    >
+                      {f.rejtett ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                     <button
                       title="Mappa megosztó link (aki kapja, csak ezt a mappát látja)"

@@ -70,10 +70,49 @@ def _payment_window_closed(portal: Portal) -> bool:
     return datetime.now(timezone.utc).date() > (portal.expires_at + timedelta(days=90))
 
 
-def _serialize(portal: Portal) -> PublicPortal:
-    # A REJTETT (csak belső ellenőrzésre feltöltött) videó nem megy ki az
-    # ügyfélnek (a felhasználó kérése) - hiába él nála a portál linkje.
-    ready = [v for v in portal.videos if v.status == "ready" and not v.rejtett]
+def _belsos_nezo(db: Session, hype_token: str | None) -> bool:
+    """BELSŐS NÉZŐ-e a portál látogatója: bejelentkezett HYPE OS felhasználó,
+    akinek van hozzáférése a Média Portál oldalhoz. Neki a rejtett videók/
+    mappák is látszanak a portálon, feltűnő jelöléssel (a felhasználó
+    kérése) - az ügyfélnek nem. A token hibája nem hiba: olyankor egyszerűen
+    ügyfél-nézetet adunk."""
+    if not hype_token:
+        return False
+    try:
+        from app.core.security import _oldal_muveletei
+        from app.models.employee import Employee
+        from app.models.user_access import PageAccessConfig
+
+        payload = jwt.decode(hype_token, settings.secret_key, algorithms=[settings.algorithm])
+        employee = db.get(Employee, int(payload.get("sub") or 0))
+        if employee is None or not employee.is_active:
+            return False
+        config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
+        if config is None or config.page_permissions is None:
+            return True
+        return _oldal_muveletei(config.page_permissions, "/media-portal") is not None
+    except Exception:  # noqa: BLE001 - rossz/lejárt token = sima ügyfél-nézet
+        return False
+
+
+def _serialize(portal: Portal, belsos: bool = False) -> PublicPortal:
+    # A REJTETT (csak belső ellenőrzésre feltöltött) videó és a REJTETT mappa
+    # (a tartalmával együtt) nem megy ki az ügyfélnek (a felhasználó kérése) -
+    # hiába él nála a portál linkje. A BELSŐS néző viszont mindent lát, a
+    # rejtett elemeket a felület feltűnően jelöli (a rejtett flag megy ki).
+    rejtett_mappak = {f.id for f in portal.folders if f.rejtett}
+    if belsos:
+        ready = [v for v in portal.videos if v.status == "ready"]
+        folders = list(portal.folders)
+        images = list(portal.images)
+    else:
+        ready = [
+            v
+            for v in portal.videos
+            if v.status == "ready" and not v.rejtett and v.folder_id not in rejtett_mappak
+        ]
+        folders = [f for f in portal.folders if not f.rejtett]
+        images = [i for i in portal.images if i.folder_id not in rejtett_mappak]
     return PublicPortal(
         slug=portal.slug,
         title=resolve_title(portal),
@@ -85,13 +124,20 @@ def _serialize(portal: Portal) -> PublicPortal:
         expires_at=portal.expires_at,
         payment_mode=portal.payment_mode,
         videos=[PortalVideoOut.model_validate(v) for v in ready],
-        folders=[PortalFolderOut.model_validate(f) for f in portal.folders],
-        images=[PortalImageOut.model_validate(i) for i in portal.images],
+        folders=[PortalFolderOut.model_validate(f) for f in folders],
+        images=[PortalImageOut.model_validate(i) for i in images],
     )
 
 
 @router.get("/{slug}")
-def get_public_portal(slug: str, db: Session = Depends(get_db), authorization: str | None = None):
+def get_public_portal(
+    slug: str,
+    db: Session = Depends(get_db),
+    authorization: str | None = None,
+    # A BELSŐS néző HYPE OS tokenje (a felhasználó kérése): vele a rejtett
+    # videók/mappák is jönnek, rejtett-jelöléssel - lásd _belsos_nezo.
+    belsos_token: str | None = None,
+):
     portal = db.scalar(select(Portal).where(Portal.slug == slug, Portal.status == "live"))
     if not portal:
         raise HTTPException(status_code=404, detail="A portál nem található")
@@ -118,7 +164,7 @@ def get_public_portal(slug: str, db: Session = Depends(get_db), authorization: s
         except (JWTError, ValueError):
             return {"locked": True, "title": resolve_title(portal), "cover_image_url": portal.cover_image_url or ""}
 
-    return {"locked": False, "project": _serialize(portal).model_dump()}
+    return {"locked": False, "project": _serialize(portal, belsos=_belsos_nezo(db, belsos_token)).model_dump()}
 
 
 class PortalUnlockPayload(BaseModel):

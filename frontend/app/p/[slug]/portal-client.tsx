@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { getPublicProject, getByShare, PublicPortal } from "@/lib/portalApi";
+import { getToken } from "@/lib/authFetch";
 import { PortalView } from "@/components/media-portal/portal-view";
 import { PasswordGate } from "@/components/media-portal/password-gate";
 import { BarionPixel } from "@/components/media-portal/BarionPixel";
@@ -85,7 +86,10 @@ function PortalContent() {
         }
       } else {
         const stored = unlockToken || sessionStorage.getItem(`hype_unlock_${slug}`) || undefined;
-        const data = await getPublicProject(slug, stored);
+        // Ha a néző be van jelentkezve a HYPE OS-be, a tokenje is megy: a
+        // portál-jogú belsős a rejtett videókat/mappákat is látja, feltűnő
+        // jelöléssel (a felhasználó kérése) - az ügyfélnek ez nincs.
+        const data = await getPublicProject(slug, stored, getToken());
         if (data.expired) {
           setExpired({
             title: data.title || "",

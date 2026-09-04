@@ -79,6 +79,8 @@ class PortalFolderOut(BaseModel):
     id: int
     name: str
     sort_order: int
+    #: Rejtett mappa - az ügyfél nem látja (lásd models/portal.PortalFolder.rejtett).
+    rejtett: bool = False
 
 
 class PortalFolderCreate(BaseModel):
@@ -88,6 +90,7 @@ class PortalFolderCreate(BaseModel):
 class PortalFolderUpdate(BaseModel):
     name: str | None = None
     sort_order: int | None = None
+    rejtett: bool | None = None
 
 
 class PortalVideoOut(BaseModel):

@@ -57,7 +57,15 @@ export function VideoCard({
           <div className="h-full w-full bg-ink-soft" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-80 transition-opacity group-hover:opacity-95" />
-        {isNew && (
+        {/* REJTETT videó (csak belső ellenőrzésre): ezt csak a belsős néző
+            látja - a szerver az ügyfélnek ki sem küldi (lásd backend
+            portal_public._serialize). A jelölés szándékosan feltűnő. */}
+        {video.rejtett && (
+          <span className="absolute left-3 top-3 rounded-full bg-red-600 px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-eyebrow text-white shadow-lg">
+            Rejtett – az ügyfél nem látja
+          </span>
+        )}
+        {isNew && !video.rejtett && (
           <span className="absolute left-3 top-3 rounded-full bg-flare px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-eyebrow text-white shadow-lg">
             Új
           </span>

@@ -306,6 +306,7 @@ export function PortalView({
               <FolderSection
                 key={folder.id}
                 name={folder.name}
+                rejtett={folder.rejtett}
                 videos={videos}
                 images={images}
                 onPlay={markVideoSeen}
@@ -442,6 +443,7 @@ export function PortalView({
 
 function FolderSection({
   name,
+  rejtett = false,
   videos,
   images,
   onPlay,
@@ -452,6 +454,9 @@ function FolderSection({
   onShareVideo,
 }: {
   name: string;
+  /** REJTETT mappa - csak a belsős néző kapja meg (a szerver az ügyfélnek ki
+   * sem küldi), neki feltűnő jelölés jár. */
+  rejtett?: boolean;
   videos: VideoT[];
   images: ImageType[];
   onPlay: (v: VideoT) => void;
@@ -477,6 +482,11 @@ function FolderSection({
         <button onClick={() => setOpen((o) => !o)} className="flex w-full items-start gap-3 text-left transition hover:opacity-80">
           <h3 className="min-w-0 flex-1 font-display text-xl text-bone sm:text-2xl" style={accent ? { color: accent } : undefined}>
             {name}
+            {rejtett && (
+              <span className="ml-2.5 inline-block translate-y-[-2px] rounded-full bg-red-600 px-2 py-0.5 align-middle font-mono text-[10px] font-semibold uppercase tracking-eyebrow text-white">
+                Rejtett – az ügyfél nem látja
+              </span>
+            )}
             {hasNewVideo && (
               <span className="ml-2.5 inline-block translate-y-[-2px] rounded-full bg-flare px-2 py-0.5 align-middle font-mono text-[10px] font-semibold uppercase tracking-eyebrow text-white">
                 Új

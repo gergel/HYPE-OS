@@ -153,6 +153,12 @@ class PortalFolder(TimestampMixin, Base):
     portal_id: Mapped[int] = mapped_column(ForeignKey("portals.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    #: REJTETT mappa (a felhasználó kérése): az ügyfél a portálon nem látja a
+    #: mappát és a tartalmát sem - a belsős (bejelentkezett, portál-jogú)
+    #: néző viszont feltűnő jelöléssel igen. A mappa SAJÁT megosztó linkje
+    #: szándékosan él (célzottan kiadott link) - ugyanaz az elv, mint a
+    #: PortalVideo.rejtett-nél.
+    rejtett: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     #: Ha van, a mappa ÖNMAGÁBAN megosztható linkkel (/megosztas/{token}) - a
     #: link birtokosa csak ezt a mappát látja, a portál többi részét nem.
     share_token: Mapped[str | None] = mapped_column(String(64), unique=True)
