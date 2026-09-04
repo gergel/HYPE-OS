@@ -216,7 +216,13 @@ def run_feldarabolas(
 
 @router.post("/{project_id}/create-utomunka", response_model=DeliverableRead, tags=["projects"])
 def run_create_utomunka(
-    project_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(require_roles(Role.ADMIN, Role.OPERATOR))
+    project_id: int,
+    db: Session = Depends(get_db),
+    # NEM szerepkörhöz kötött (a felhasználó kérése): aki az Utómunka oldalon
+    # létrehozhat anyagot (page_permissions create), az a projekt oldaláról is
+    # létrehozhatja - ugyanaz az elv, mint routes/postproduction.py
+    # _MINDEN_SZEREPKOR-jánál (a durva szerepkör-kapu ott sem érvényes).
+    current_user: Employee = Depends(require_page_action("/utomunka", "create", *tuple(Role))),
 ):
     """Az 'Utómunka' gomb - új Deliverable-t hoz létre ehhez a projekthez, a Notion
     automatizmussal megegyező névképzéssel (lásd app/services/project_actions.py)."""
