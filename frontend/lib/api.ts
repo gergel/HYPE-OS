@@ -2505,6 +2505,8 @@ export type PortalFolderItem = {
   sort_order: number;
   /** Rejtett mappa - az ügyfél nem látja a portálon. */
   rejtett?: boolean;
+  /** Szülő mappa (null = főszint) - mappán belüli mappa. */
+  parent_folder_id?: number | null;
 };
 
 export type PortalDetailData = PortalSummary & {

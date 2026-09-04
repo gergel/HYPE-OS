@@ -107,14 +107,30 @@ export function PortalView({
   // Egységes mappa-lista: minden mappa a saját videóival ÉS képeivel EGYBEN
   // (nem külön videó- és fotó-mappalista) - csak azok a mappák, amikben van
   // legalább egy elem. Legújabb (név szerint fordítva) elöl.
+  // Beágyazott mappánál a TELJES útvonal a megjelenített név ("Szülő /
+  // Gyerek") - a lapos szekció-listában enélkül nem derülne ki, mi hova
+  // tartozik (a felhasználó kérése: mappán belüli mappák).
+  const mappaNevById = new Map(folders.map((f) => [f.id, f]));
+  const mappaUtvonal = (f: (typeof folders)[number]): string => {
+    const reszek = [f.name];
+    let szuloId = f.parent_folder_id ?? null;
+    while (szuloId != null) {
+      const szulo = mappaNevById.get(szuloId);
+      if (!szulo) break;
+      reszek.push(szulo.name);
+      szuloId = szulo.parent_folder_id ?? null;
+    }
+    return reszek.reverse().join(" / ");
+  };
   const foldersWithContent = folders
     .map((f) => ({
       folder: f,
+      utvonal: mappaUtvonal(f),
       videos: project.videos.filter((v) => v.folder_id === f.id),
       images: allImages.filter((i) => i.folder_id === f.id),
     }))
     .filter((g) => g.videos.length > 0 || g.images.length > 0)
-    .sort((a, b) => b.folder.name.localeCompare(a.folder.name, "hu"));
+    .sort((a, b) => b.utvonal.localeCompare(a.utvonal, "hu"));
 
   function daysUntilExpiry(): number | null {
     if (!project.expires_at) return null;
@@ -302,10 +318,10 @@ export function PortalView({
           className="mx-auto max-w-6xl px-6 py-20 sm:py-28"
         >
           <div className="space-y-12">
-            {foldersWithContent.map(({ folder, videos, images }) => (
+            {foldersWithContent.map(({ folder, utvonal, videos, images }) => (
               <FolderSection
                 key={folder.id}
-                name={folder.name}
+                name={utvonal}
                 rejtett={folder.rejtett}
                 videos={videos}
                 images={images}

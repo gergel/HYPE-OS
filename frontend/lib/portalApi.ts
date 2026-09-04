@@ -33,6 +33,8 @@ export interface PortalFolder {
   sort_order: number;
   /** Rejtett mappa - az ügyfél nem látja; a belsős néző jelöléssel igen. */
   rejtett?: boolean;
+  /** Szülő mappa (null = főszint) - mappán belüli mappa. */
+  parent_folder_id?: number | null;
 }
 
 export interface PortalImage {

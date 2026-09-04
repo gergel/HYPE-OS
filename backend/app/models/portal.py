@@ -153,6 +153,12 @@ class PortalFolder(TimestampMixin, Base):
     portal_id: Mapped[int] = mapped_column(ForeignKey("portals.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    #: SZÜLŐ mappa (a felhasználó kérése: mappán belülre is lehessen mappát
+    #: tenni). None = főszintű mappa. A szülő törlésekor a gyerek a főszintre
+    #: kerül (SET NULL), nem törlődik vele.
+    parent_folder_id: Mapped[int | None] = mapped_column(
+        ForeignKey("portal_folders.id", ondelete="SET NULL"), index=True
+    )
     #: REJTETT mappa (a felhasználó kérése): az ügyfél a portálon nem látja a
     #: mappát és a tartalmát sem - a belsős (bejelentkezett, portál-jogú)
     #: néző viszont feltűnő jelöléssel igen. A mappa SAJÁT megosztó linkje

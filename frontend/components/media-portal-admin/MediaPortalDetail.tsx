@@ -409,7 +409,9 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
       value: "",
       onConfirm: async (name) => {
         if (!name.trim()) return;
-        await createFolder(initial.id, name.trim());
+        // Nyitott mappán belül az új mappa ALMAPPAKÉNT jön létre (a
+        // felhasználó kérése: mappán belülre is lehessen mappát tenni).
+        await createFolder(initial.id, name.trim(), currentFolder);
         refresh();
       },
     });
@@ -512,6 +514,38 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     }
   }
 
+  /** Videó/kép ÁTHELYEZÉSE másik mappába (a felhasználó kérése) - null =
+   * mappán kívülre. */
+  async function onMoveVideo(videoId: number, folderId: number | null) {
+    try {
+      await setVideoFolder(videoId, folderId);
+      refresh();
+    } catch (err) {
+      alert(`Sikertelen áthelyezés: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  async function onMoveImage(imageId: number, folderId: number | null) {
+    try {
+      await setImageFolder(imageId, folderId);
+      refresh();
+    } catch (err) {
+      alert(`Sikertelen áthelyezés: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  /** MAPPA áthelyezése másik mappába (vagy a főszintre) - a felhasználó
+   * kérése: mappán belülre is lehessen mappát tenni. A kör-védelem a
+   * backendben is megvan, itt csak a választékot szűkítjük. */
+  async function onMoveFolder(folderId: number, parentId: number | null) {
+    try {
+      await updateFolder(folderId, { parent_folder_id: parentId });
+      refresh();
+    } catch (err) {
+      alert(`Sikertelen áthelyezés: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
   async function onRemoveImageFromFolder(imageId: number) {
     await setImageFolder(imageId, null);
     refresh();
@@ -587,6 +621,40 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
   // legnagyobb sort_order-t kapja (lásd backend portal_admin.create_folder),
   // ezért csökkenő sorrendben a frissen létrehozott kerül a lista tetejére.
   const mappakUjElol = [...folders].sort((a, b) => b.sort_order - a.sort_order || b.id - a.id);
+  // Az AKTUÁLIS szinten lévő mappák: főszinten a szülő nélküliek, nyitott
+  // mappában annak az almappái (a felhasználó kérése: mappán belüli mappák).
+  const szintMappai = mappakUjElol.filter((f) =>
+    currentFolder ? f.parent_folder_id === currentFolder : !f.parent_folder_id,
+  );
+  /** Egy mappa teljes útvonala ("Szülő / Gyerek") - az áthelyezés-választó
+   * lapos listájában ebből derül ki, mi hol van. */
+  function mappaUtvonal(f: PortalFolderItem): string {
+    const reszek = [f.name || "Névtelen mappa"];
+    let szuloId = f.parent_folder_id ?? null;
+    while (szuloId != null) {
+      const szulo = folders.find((x) => x.id === szuloId);
+      if (!szulo) break;
+      reszek.push(szulo.name || "Névtelen mappa");
+      szuloId = szulo.parent_folder_id ?? null;
+    }
+    return reszek.reverse().join(" / ");
+  }
+  /** Egy mappa összes leszármazottjának id-je - a mappa-áthelyezésnél ezek
+   * nem lehetnek célpontok (kör keletkezne, a backend is elutasítja). */
+  function leszarmazottak(folderId: number): Set<number> {
+    const eredmeny = new Set<number>();
+    const sor = [folderId];
+    while (sor.length > 0) {
+      const szulo = sor.pop()!;
+      for (const f of folders) {
+        if (f.parent_folder_id === szulo && !eredmeny.has(f.id)) {
+          eredmeny.add(f.id);
+          sor.push(f.id);
+        }
+      }
+    }
+    return eredmeny;
+  }
   // ÖSSZES KIJELÖLÉSE (a felhasználó kérése): az épp látható (nyitott mappa
   // vagy a mappán kívüli) elemek egy kattintással kijelölhetők - ha már mind
   // ki van jelölve, ugyanaz a gomb megszünteti.
@@ -820,14 +888,19 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
             <div className="flex min-w-0 items-center gap-2">
               {currentFolder && (
                 <button
-                  onClick={() => setCurrentFolder(null)}
+                  // Beágyazott mappából egy SZINTET lépünk vissza (a szülő
+                  // mappába), nem rögtön a főszintre.
+                  onClick={() => setCurrentFolder(openFolder?.parent_folder_id ?? null)}
                   title="Vissza"
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
               )}
-              <h2 className="truncate text-[15px] font-medium text-text-primary">{openFolder ? openFolder.name : "Tartalom"}</h2>
+              <h2 className="truncate text-[15px] font-medium text-text-primary">
+                {/* Beágyazott mappánál a teljes útvonal ("Szülő / Gyerek"). */}
+                {openFolder ? mappaUtvonal(openFolder) : "Tartalom"}
+              </h2>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {/* Az épp látható elemek kijelölése egyben (a felhasználó
@@ -967,9 +1040,9 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
             </div>
           )}
 
-          {!currentFolder && folders.length > 0 && (
+          {szintMappai.length > 0 && (
             <ul className="mt-4 space-y-2">
-              {mappakUjElol.map((f) => {
+              {szintMappai.map((f) => {
                 const vCount = videos.filter((v) => v.folder_id === f.id).length;
                 const iCount = images.filter((i) => i.folder_id === f.id).length;
                 return (
@@ -984,6 +1057,15 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                       )}
                       <span className="ml-auto shrink-0 text-[11px] text-text-muted">{vCount + iCount} elem</span>
                     </button>
+                    {/* Mappa áthelyezése másik mappába vagy a főszintre (a
+                        felhasználó kérése) - saját magába/almappájába nem. */}
+                    <MappaValaszto
+                      gyokerCimke="Főszintre"
+                      opciok={mappakUjElol
+                        .filter((cel) => cel.id !== f.id && !leszarmazottak(f.id).has(cel.id) && cel.id !== (f.parent_folder_id ?? null))
+                        .map((cel) => ({ id: cel.id, nev: mappaUtvonal(cel) }))}
+                      onValaszt={(celId) => void onMoveFolder(f.id, celId)}
+                    />
                     {/* Egész mappa elrejtése az ügyfél elől (a felhasználó
                         kérése) - a belsős néző a portálon jelöléssel látja. */}
                     <button
@@ -1068,6 +1150,14 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                           : "Sikertelen"}
                     </p>
                   </div>
+                  {/* A videó áthelyezése másik mappába (a felhasználó kérése). */}
+                  <MappaValaszto
+                    gyokerCimke="Mappán kívülre"
+                    opciok={mappakUjElol
+                      .filter((cel) => cel.id !== (v.folder_id ?? null))
+                      .map((cel) => ({ id: cel.id, nev: mappaUtvonal(cel) }))}
+                    onValaszt={(celId) => void onMoveVideo(v.id, celId)}
+                  />
                   {/* Rejtés/megjelenítés: a rejtett videót az ügyfél nem
                       látja a portálon (csak belső ellenőrzésre). */}
                   <button
@@ -1132,6 +1222,11 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                     onToggle={() => toggleImage(img.id)}
                     onRemoveFromFolder={() => onRemoveImageFromFolder(img.id)}
                     onDelete={() => onDeleteImage(img.id)}
+                    // Áthelyezés másik mappába (a felhasználó kérése).
+                    mappaOpciok={mappakUjElol
+                      .filter((cel) => cel.id !== (img.folder_id ?? null))
+                      .map((cel) => ({ id: cel.id, nev: mappaUtvonal(cel) }))}
+                    onMove={(celId) => void onMoveImage(img.id, celId)}
                   />
                 ))}
               </div>
@@ -1175,6 +1270,8 @@ function LazyImageCell({
   onToggle,
   onRemoveFromFolder,
   onDelete,
+  mappaOpciok = [],
+  onMove,
 }: {
   img: PortalImageItem;
   selected: boolean;
@@ -1182,6 +1279,9 @@ function LazyImageCell({
   onToggle: () => void;
   onRemoveFromFolder: () => void;
   onDelete: () => void;
+  /** A kép áthelyezéséhez választható cél-mappák (a felhasználó kérése). */
+  mappaOpciok?: { id: number; nev: string }[];
+  onMove?: (folderId: number | null) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -1208,23 +1308,36 @@ function LazyImageCell({
           <label className="absolute left-2 top-2 z-20 flex h-6 w-6 cursor-pointer items-center justify-center rounded bg-black/60" onClick={(e) => e.stopPropagation()}>
             <input type="checkbox" checked={selected} onChange={onToggle} className="h-4 w-4 cursor-pointer accent-[var(--accent-solid)]" />
           </label>
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 transition group-hover:opacity-100">
-            {inFolder && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 opacity-0 transition group-hover:opacity-100">
+            <div className="flex items-center gap-2">
+              {inFolder && (
+                <button
+                  title="Kivétel a mappából"
+                  onClick={onRemoveFromFolder}
+                  className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition hover:text-white/80"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              )}
               <button
-                title="Kivétel a mappából"
-                onClick={onRemoveFromFolder}
-                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition hover:text-white/80"
+                title="Törlés"
+                onClick={onDelete}
+                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition hover:text-text-danger"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" />
               </button>
+            </div>
+            {/* Áthelyezés másik mappába (a felhasználó kérése). */}
+            {onMove && (
+              <span className="pointer-events-auto">
+                <MappaValaszto
+                  gyokerCimke="Mappán kívülre"
+                  opciok={mappaOpciok}
+                  onValaszt={onMove}
+                  vilagos
+                />
+              </span>
             )}
-            <button
-              title="Törlés"
-              onClick={onDelete}
-              className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition hover:text-text-danger"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
           </div>
         </>
       )}
@@ -1329,5 +1442,49 @@ function ConfirmDialog({ message, onCancel, onConfirm }: { message: string; onCa
         </div>
       </div>
     </div>
+  );
+}
+
+/** Kis "Áthelyezés…" legördülő (a felhasználó kérése): videó/kép/mappa
+ * áthelyezése másik mappába. Natív <select>, mindig a placeholder áll benne -
+ * a választás azonnal áthelyez, az érték nem "ragad be". */
+function MappaValaszto({
+  opciok,
+  gyokerCimke,
+  onValaszt,
+  vilagos = false,
+}: {
+  /** A választható cél-mappák (teljes útvonal-névvel). */
+  opciok: { id: number; nev: string }[];
+  /** A "mappán kívülre / főszintre" opció felirata. */
+  gyokerCimke: string;
+  onValaszt: (folderId: number | null) => void;
+  /** Sötét (kép-overlay) háttéren világos változat. */
+  vilagos?: boolean;
+}) {
+  return (
+    <select
+      value=""
+      title="Áthelyezés másik mappába"
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (v === "") return;
+        onValaszt(v === "root" ? null : Number(v));
+      }}
+      className={`max-w-[130px] shrink-0 cursor-pointer rounded-[var(--radius)] border px-1.5 py-1 text-[11.5px] ${
+        vilagos
+          ? "border-white/40 bg-black/60 text-white"
+          : "border-border bg-surface-2 text-text-secondary"
+      }`}
+    >
+      <option value="">Áthelyezés…</option>
+      <option value="root">{gyokerCimke}</option>
+      {opciok.map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.nev}
+        </option>
+      ))}
+    </select>
   );
 }

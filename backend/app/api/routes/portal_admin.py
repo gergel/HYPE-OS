@@ -683,8 +683,16 @@ def create_folder(
     _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     portal = _get_portal_or_404(db, portal_id)
+    # Mappán BELÜLRE is létrehozható (a felhasználó kérése) - a szülőnek
+    # ugyanennek a portálnak a mappájának kell lennie.
+    if payload.parent_folder_id is not None:
+        szulo = db.get(PortalFolder, payload.parent_folder_id)
+        if szulo is None or szulo.portal_id != portal_id:
+            raise HTTPException(status_code=404, detail="A szülő mappa nem ehhez a portálhoz tartozik.")
     max_order = max([f.sort_order for f in portal.folders], default=-1)
-    folder = PortalFolder(portal_id=portal_id, name=payload.name, sort_order=max_order + 1)
+    folder = PortalFolder(
+        portal_id=portal_id, name=payload.name, sort_order=max_order + 1, parent_folder_id=payload.parent_folder_id
+    )
     db.add(folder)
     db.commit()
     db.refresh(folder)
@@ -701,7 +709,21 @@ def update_folder(
     folder = db.get(PortalFolder, folder_id)
     if not folder:
         raise HTTPException(status_code=404, detail="Nem található")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    valtozasok = payload.model_dump(exclude_unset=True)
+    # Áthelyezés másik mappába (a felhasználó kérése): a cél nem lehet saját
+    # maga vagy a saját leszármazottja (kör keletkezne), és ugyanennek a
+    # portálnak a mappája kell legyen. None = főszintre.
+    if "parent_folder_id" in valtozasok and valtozasok["parent_folder_id"] is not None:
+        cel_id = valtozasok["parent_folder_id"]
+        cel = db.get(PortalFolder, cel_id)
+        if cel is None or cel.portal_id != folder.portal_id:
+            raise HTTPException(status_code=404, detail="A cél mappa nem ehhez a portálhoz tartozik.")
+        lanc = cel
+        while lanc is not None:
+            if lanc.id == folder.id:
+                raise HTTPException(status_code=400, detail="A mappa nem tehető saját magába (vagy a saját almappájába).")
+            lanc = db.get(PortalFolder, lanc.parent_folder_id) if lanc.parent_folder_id else None
+    for k, v in valtozasok.items():
         setattr(folder, k, v)
     db.commit()
     return PortalFolderOut.model_validate(folder)

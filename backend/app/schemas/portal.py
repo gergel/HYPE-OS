@@ -81,16 +81,21 @@ class PortalFolderOut(BaseModel):
     sort_order: int
     #: Rejtett mappa - az ügyfél nem látja (lásd models/portal.PortalFolder.rejtett).
     rejtett: bool = False
+    #: Szülő mappa (None = főszint) - lásd models/portal.PortalFolder.parent_folder_id.
+    parent_folder_id: int | None = None
 
 
 class PortalFolderCreate(BaseModel):
     name: str
+    #: Melyik mappán BELÜLRE jöjjön létre (None = főszint).
+    parent_folder_id: int | None = None
 
 
 class PortalFolderUpdate(BaseModel):
     name: str | None = None
     sort_order: int | None = None
     rejtett: bool | None = None
+    parent_folder_id: int | None = None
 
 
 class PortalVideoOut(BaseModel):

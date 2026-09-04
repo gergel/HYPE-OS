@@ -89,10 +89,16 @@ export async function reorderVideos(portalId: number, orderedIds: number[]): Pro
   });
 }
 
-export async function createFolder(portalId: number, name: string): Promise<PortalFolderItem> {
+export async function createFolder(
+  portalId: number,
+  name: string,
+  /** Melyik mappán BELÜLRE jöjjön létre (null/kihagyva = főszint) - a
+   * felhasználó kérése: mappán belülre is lehessen mappát tenni. */
+  parentFolderId: number | null = null,
+): Promise<PortalFolderItem> {
   return req<PortalFolderItem>(`/api/v1/portal-admin/${portalId}/folders`, {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, parent_folder_id: parentFolderId }),
   });
 }
 

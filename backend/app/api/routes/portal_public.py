@@ -95,12 +95,29 @@ def _belsos_nezo(db: Session, hype_token: str | None) -> bool:
         return False
 
 
+def _rejtett_mappak_rekurzivan(portal: Portal) -> set[int]:
+    """A rejtett mappák ÉS az összes almappájuk id-i - egy rejtett mappa a
+    teljes tartalmával (az almappáival együtt) tűnik el az ügyfél elől."""
+    gyerekek: dict[int | None, list[int]] = {}
+    for f in portal.folders:
+        gyerekek.setdefault(f.parent_folder_id, []).append(f.id)
+    rejtett = {f.id for f in portal.folders if f.rejtett}
+    sor = list(rejtett)
+    while sor:
+        szulo = sor.pop()
+        for gyerek in gyerekek.get(szulo, []):
+            if gyerek not in rejtett:
+                rejtett.add(gyerek)
+                sor.append(gyerek)
+    return rejtett
+
+
 def _serialize(portal: Portal, belsos: bool = False) -> PublicPortal:
     # A REJTETT (csak belső ellenőrzésre feltöltött) videó és a REJTETT mappa
-    # (a tartalmával együtt) nem megy ki az ügyfélnek (a felhasználó kérése) -
-    # hiába él nála a portál linkje. A BELSŐS néző viszont mindent lát, a
-    # rejtett elemeket a felület feltűnően jelöli (a rejtett flag megy ki).
-    rejtett_mappak = {f.id for f in portal.folders if f.rejtett}
+    # (a tartalmával és az almappáival együtt) nem megy ki az ügyfélnek (a
+    # felhasználó kérése) - hiába él nála a portál linkje. A BELSŐS néző
+    # viszont mindent lát, a rejtett elemeket a felület feltűnően jelöli.
+    rejtett_mappak = _rejtett_mappak_rekurzivan(portal)
     if belsos:
         ready = [v for v in portal.videos if v.status == "ready"]
         folders = list(portal.folders)
@@ -111,7 +128,7 @@ def _serialize(portal: Portal, belsos: bool = False) -> PublicPortal:
             for v in portal.videos
             if v.status == "ready" and not v.rejtett and v.folder_id not in rejtett_mappak
         ]
-        folders = [f for f in portal.folders if not f.rejtett]
+        folders = [f for f in portal.folders if f.id not in rejtett_mappak]
         images = [i for i in portal.images if i.folder_id not in rejtett_mappak]
     return PublicPortal(
         slug=portal.slug,
@@ -462,12 +479,26 @@ def feltoltes_adatok(token: str, db: Session = Depends(get_db)):
     kijelölt mappára szűkítve, ha a link csak oda szól)."""
     portal = _feltolto_portal(db, token)
     mappak = [f for f in portal.folders if portal.feltolto_folder_id in (None, f.id)]
+
+    # Beágyazott mappánál a TELJES útvonal a név ("Szülő / Gyerek") - a lapos
+    # listában enélkül nem derülne ki, melyik mappán belül van.
+    nev_szerint = {f.id: f for f in portal.folders}
+
+    def utvonal(f) -> str:
+        reszek = [f.name or "Névtelen mappa"]
+        szulo_id = f.parent_folder_id
+        while szulo_id is not None and szulo_id in nev_szerint:
+            szulo = nev_szerint[szulo_id]
+            reszek.append(szulo.name or "Névtelen mappa")
+            szulo_id = szulo.parent_folder_id
+        return " / ".join(reversed(reszek))
+
     return {
         "title": resolve_title(portal),
         "brand": portal.brand,
         "csak_mappa": portal.feltolto_folder_id is not None,
         "folders": [
-            {"id": f.id, "name": f.name, "video_db": len(f.videos), "kep_db": len(f.images)} for f in mappak
+            {"id": f.id, "name": utvonal(f), "video_db": len(f.videos), "kep_db": len(f.images)} for f in mappak
         ],
     }
 
