@@ -97,7 +97,15 @@ export function resolvePermissionPage(pathname: string): string {
 }
 
 export const navGroups: NavGroup[] = [
-  { label: null, items: [{ label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" }] },
+  {
+    label: null,
+    items: [
+      { label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
+      // Mindenki a SAJÁT diszpóit látja itt (csak PDF) - jogosultság nélkül
+      // jár, mint a Dashboard (lásd NavList.isAllowed).
+      { label: "Diszpóim", href: "/diszpoim", icon: "FileText" },
+    ],
+  },
   {
     label: "Projektek",
     items: [

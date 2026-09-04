@@ -64,11 +64,15 @@ export function DiszpoTablaRacs({
   munkalap,
   canEdit = true,
   canDelete = false,
+  canEmberKotes = false,
   emberek,
 }: {
   munkalap: DiszpoMunkalap;
   canEdit?: boolean;
   canDelete?: boolean;
+  /** Az oszlop-ember kötés vezérlője CSAK az adminnak látszik (a felhasználó
+   * kérése) - a kötés maga a munkanap-számláláshoz kell. */
+  canEmberKotes?: boolean;
   /** A munkatársak az oszlop-ember kötéshez. */
   emberek: { id: number; nev: string }[];
 }) {
@@ -754,8 +758,9 @@ export function DiszpoTablaRacs({
       )}
 
       {/* Az oszlop-ember kötés: enélkül az oszlop színei nem számítanak bele a
-          munkanap-számlálásba (lásd backend routes/diszpo_tabla.py). */}
-      {canEdit && munkalap.fejlec_sorok > 1 && kijeloltOszlop && (
+          munkanap-számlálásba (lásd backend routes/diszpo_tabla.py). CSAK az
+          admin látja (a felhasználó kérése). */}
+      {canEmberKotes && canEdit && munkalap.fejlec_sorok > 1 && kijeloltOszlop && (
         <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[12.5px]">
           <span className="text-text-secondary">
             „{kijeloltOszlop.cimke ?? oszlopBetu(kijelolt.oszlop)}” oszlop munkatársa:

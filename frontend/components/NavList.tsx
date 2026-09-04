@@ -106,6 +106,9 @@ export function NavList({
     if (anyagKorlat !== null) return page === "/dashboard";
     if (!allowedPages) return true;
     if (page === "/dashboard") return true;
+    // A Diszpóim mindenkinek jár (mindenki csak a sajátját látja, csak
+    // PDF-fel) - nem jogosultság-köteles oldal.
+    if (page === "/diszpoim") return true;
     if (!allowedPages.includes(page)) return false;
     if (item.permissionAction && pagePermissions !== null) {
       return oldalMuveletei(pagePermissions, page)?.has(item.permissionAction) === true;

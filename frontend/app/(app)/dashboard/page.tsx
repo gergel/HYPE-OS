@@ -22,6 +22,8 @@ import {
   getProjectCodeOptions,
 } from "@/lib/api";
 import { EszkozHianyKartya } from "@/components/dashboard/EszkozHianyKartya";
+import { SajatDiszpoKartya } from "@/components/dashboard/SajatDiszpoKartya";
+import { getSajatDiszpok } from "@/lib/api";
 import { KorlatozottDashboard } from "@/components/dashboard/KorlatozottDashboard";
 import { MyTasksCard } from "@/components/dashboard/DashboardWidgets";
 import {
@@ -77,12 +79,13 @@ export default async function DashboardPage() {
     );
   }
 
-  const [summary, projectCodes, visibleWidgets, myTasks, allowedPages] = await Promise.all([
+  const [summary, projectCodes, visibleWidgets, myTasks, allowedPages, sajatDiszpok] = await Promise.all([
     getDashboardSummary(),
     getProjectCodeOptions(),
     getMyDashboardConfig(),
     getMyTasksSummary(),
     getMyPageAccess(),
+    getSajatDiszpok(),
   ]);
 
   // A "Mai feladatok" és "Figyelmeztetések" widget több különböző oldalra
@@ -134,6 +137,10 @@ export default async function DashboardPage() {
             csak neki jön adat), és nyeremény-bekérő az adminnak, amíg a folyó
             hónap nyereménye hiányzik. Szándékosan nem testreszabható widgetek:
             időszakosak, és pont az a dolguk, hogy ne lehessen elrejteni őket. */}
+        {/* MAI/HOLNAPI DISZPÓD: nagy kártya annak, aki mai vagy holnapi
+            forgatás stábjában van (a felhasználó kérése) - a PDF-fel. */}
+        <SajatDiszpoKartya diszpok={sajatDiszpok} />
+
         {/* Eszközkivitel-hiányok: kiemelt, nem elrejthető figyelmeztetés (a
             felhasználó kérése) - csak akkor látszik, ha van nyitott hiány. */}
         {eszkozHianyok.length > 0 && <EszkozHianyKartya kezdeti={eszkozHianyok} />}

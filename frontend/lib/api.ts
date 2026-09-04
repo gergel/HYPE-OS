@@ -3430,3 +3430,17 @@ export type EszkozKivitelHiany = {
 export async function getEszkozKivitelHianyok(): Promise<EszkozKivitelHiany[]> {
   return (await apiGet<EszkozKivitelHiany[]>("/api/v1/eszkozkivitelek/hianyok")) ?? [];
 }
+
+/** Egy diszpó, amin a bejelentkezett munkatárs rajta van - csak a név, a
+ * dátum és a PDF (lásd backend routes/dashboard.sajat_diszpok). */
+export type SajatDiszpo = {
+  project_id: number;
+  projekt_nev: string | null;
+  forgatas_datuma: string | null;
+  forgatas_vege: string | null;
+  pdf_url: string | null;
+};
+
+export async function getSajatDiszpok(): Promise<SajatDiszpo[]> {
+  return (await apiGet<SajatDiszpo[]>("/api/v1/dashboard/sajat-diszpok")) ?? [];
+}

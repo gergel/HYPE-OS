@@ -5,6 +5,7 @@ import { TopBar } from "@/components/TopBar";
 import { DiszpoTablaRacs } from "@/components/DiszpoTablaRacs";
 import { MunkanapokKartya } from "@/components/MunkanapokKartya";
 import {
+  getCurrentUser,
   getDiszpoMunkalap,
   getDiszpoMunkalapok,
   getEmployees,
@@ -50,7 +51,11 @@ export default async function DiszpoTablaPage({
   const aktiv = munkalapok.find((m) => m.id === aktivId);
   if (!aktiv) notFound();
 
-  const [munkalap, emberek] = await Promise.all([getDiszpoMunkalap(aktiv.id), getEmployees()]);
+  const [munkalap, emberek, currentUser] = await Promise.all([
+    getDiszpoMunkalap(aktiv.id),
+    getEmployees(),
+    getCurrentUser(),
+  ]);
   if (!munkalap) notFound();
 
   const canEdit = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
@@ -93,6 +98,9 @@ export default async function DiszpoTablaPage({
             munkalap={munkalap}
             canEdit={canEdit}
             canDelete={canDelete}
+            // Az oszlop-ember kötés vezérlője CSAK az adminnak (a felhasználó
+            // kérése) - másnál a kijelöléskor nem jelenik meg a választó.
+            canEmberKotes={currentUser?.role === "admin"}
             emberek={emberek.map((e) => ({ id: e.id, nev: e.full_name }))}
           />
         </Card>

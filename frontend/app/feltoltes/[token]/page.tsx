@@ -117,9 +117,18 @@ export default function FeltoltesPage() {
 
   return (
     <div className="hype-portal dark grain min-h-screen bg-ink text-bone">
-      <main className="mx-auto max-w-3xl px-6 py-12">
+      {/* RAGADÓS fejléc a portál nevével (a felhasználó kérése): telefonon,
+          hosszú mappalistában görgetve is mindig látszik, hova tölt fel az
+          ember. */}
+      <div className="sticky top-0 z-40 border-b border-ink-line bg-ink/95 px-6 py-2.5 backdrop-blur">
+        <p className="mx-auto max-w-3xl truncate text-sm text-bone">
+          <span className="mr-2 font-mono text-[11px] uppercase tracking-eyebrow text-mist">Feltöltés ide:</span>
+          {adatok.title}
+        </p>
+      </div>
+      <main className="mx-auto max-w-3xl px-6 py-10">
         <p className="mb-1 font-mono text-xs uppercase tracking-eyebrow text-mist">Fájl-feltöltés</p>
-        <h1 className="mb-2 font-display text-3xl text-bone">{adatok.title}</h1>
+        <h1 className="mb-2 break-words font-display text-3xl text-bone">{adatok.title}</h1>
         <p className="mb-8 text-sm leading-relaxed text-mist">
           Ezen az oldalon mappákba rendezve tölthetsz fel videókat és képeket. Törölni innen nem lehet – ha
           valami rossz helyre került, szólj annak, akitől a linket kaptad.

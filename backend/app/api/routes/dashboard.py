@@ -311,6 +311,48 @@ def summary(db: Session = Depends(get_db), user: Employee = Depends(get_current_
     )
 
 
+class SajatDiszpo(BaseModel):
+    """Egy diszpó, amin a bejelentkezett munkatárs rajta van (a stábban) - a
+    dashboard "Mai/Holnapi diszpód" kártyája és a Diszpóim gyűjtő oldal
+    használja (a felhasználó kérése). SZÁNDÉKOSAN csak a név, a dátum és a
+    PDF: a diszpó többi adatát a stábtag innen nem látja."""
+
+    project_id: int
+    projekt_nev: str | None
+    forgatas_datuma: date | None
+    forgatas_vege: date | None
+    #: A kiküldött diszpó PDF-je (Drive link) - None, amíg nincs kiküldve.
+    pdf_url: str | None
+
+
+@router.get("/sajat-diszpok", response_model=list[SajatDiszpo])
+def sajat_diszpok(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    """A bejelentkezett munkatárs SAJÁT diszpói (amiknek a stábjában benne
+    van), dátum szerint csökkenő sorrendben. Nincs oldal-jogosultsághoz kötve:
+    mindenki a saját diszpóit látja, mást nem."""
+    projektek = (
+        db.query(Project)
+        .filter(Project.crew.any(Employee.id == current_user.id))
+        .order_by(Project.forgatas_datuma.desc().nulls_last(), Project.id.desc())
+        .limit(500)
+        .all()
+    )
+    return [
+        SajatDiszpo(
+            project_id=p.id,
+            projekt_nev=p.nev,
+            forgatas_datuma=p.forgatas_datuma,
+            forgatas_vege=(
+                p.forgatas_datuma_vege
+                or getattr(p, "naptar_datum_vege", None)
+                or getattr(p, "notion_datum_vege", None)
+            ),
+            pdf_url=p.drive_diszpo_pdf_url or p.diszpo_pdf_url,
+        )
+        for p in projektek
+    ]
+
+
 @router.get("/my-tasks", response_model=MyTasksSummary)
 def my_tasks(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     """A "Teendőim" dashboard-widget adatai - a bejelentkezett felhasználóra

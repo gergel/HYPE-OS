@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { setToken } from "@/lib/authFetch";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -27,6 +28,9 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Jelszó-megjelenítés kapcsoló (a felhasználó kérése): a szemecske ikonnal
+  // ellenőrizhető, mit gépelt be az ember.
+  const [jelszoLatszik, setJelszoLatszik] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,13 +86,24 @@ function LoginForm() {
 
         <label className="mb-6 block">
           <span className="mb-1.5 block text-[13px] text-text-secondary">Jelszó</span>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="field w-full"
-          />
+          <div className="relative">
+            <input
+              type={jelszoLatszik ? "text" : "password"}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="field w-full pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setJelszoLatszik((v) => !v)}
+              aria-label={jelszoLatszik ? "Jelszó elrejtése" : "Jelszó megjelenítése"}
+              tabIndex={-1}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary"
+            >
+              {jelszoLatszik ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
         </label>
 
         {error && <p className="mb-3 text-[13px] text-text-danger">{error}</p>}
