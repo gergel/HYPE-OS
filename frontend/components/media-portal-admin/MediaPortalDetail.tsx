@@ -557,6 +557,27 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
   const visibleImages = images.filter((i) => (currentFolder ? i.folder_id === currentFolder : !i.folder_id));
   const openFolder = folders.find((f) => f.id === currentFolder) || null;
   const selectedCount = selectedVideos.size + selectedImages.size;
+  // A LEGÚJABB mappa mindig legfölül (a felhasználó kérése): az új mappa a
+  // legnagyobb sort_order-t kapja (lásd backend portal_admin.create_folder),
+  // ezért csökkenő sorrendben a frissen létrehozott kerül a lista tetejére.
+  const mappakUjElol = [...folders].sort((a, b) => b.sort_order - a.sort_order || b.id - a.id);
+  // ÖSSZES KIJELÖLÉSE (a felhasználó kérése): az épp látható (nyitott mappa
+  // vagy a mappán kívüli) elemek egy kattintással kijelölhetők - ha már mind
+  // ki van jelölve, ugyanaz a gomb megszünteti.
+  const lathatoElemSzam = visibleVideos.length + visibleImages.length;
+  const mindKijelolve =
+    lathatoElemSzam > 0 &&
+    visibleVideos.every((v) => selectedVideos.has(v.id)) &&
+    visibleImages.every((i) => selectedImages.has(i.id));
+
+  function osszesKijelolese() {
+    if (mindKijelolve) {
+      clearSelection();
+      return;
+    }
+    setSelectedVideos(new Set(visibleVideos.map((v) => v.id)));
+    setSelectedImages(new Set(visibleImages.map((i) => i.id)));
+  }
 
   return (
     // min-w-0 + overflow-x-hidden: telefonon a hosszú, nem törhető tartalmak
@@ -783,6 +804,17 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
               <h2 className="truncate text-[15px] font-medium text-text-primary">{openFolder ? openFolder.name : "Tartalom"}</h2>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {/* Az épp látható elemek kijelölése egyben (a felhasználó
+                  kérése) - ha már mind ki van jelölve, ugyanez megszünteti. */}
+              {lathatoElemSzam > 0 && (
+                <button
+                  type="button"
+                  onClick={osszesKijelolese}
+                  className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-3 py-1.5 text-[12px] text-text-secondary hover:bg-surface-3"
+                >
+                  {mindKijelolve ? "Kijelölés megszüntetése" : `Összes kijelölése (${lathatoElemSzam})`}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onCreateFolder}
@@ -911,7 +943,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
 
           {!currentFolder && folders.length > 0 && (
             <ul className="mt-4 space-y-2">
-              {folders.map((f) => {
+              {mappakUjElol.map((f) => {
                 const vCount = videos.filter((v) => v.folder_id === f.id).length;
                 const iCount = images.filter((i) => i.folder_id === f.id).length;
                 return (
