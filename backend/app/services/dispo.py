@@ -491,6 +491,19 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
 
     pdf_link = _pdf_a_drive_ra(project, pdf_bytes)
     project.drive_diszpo_pdf_url = pdf_link or doc_link or project.drive_diszpo_pdf_url
+    # A kész PDF a SAJÁT tárhelyünkre (R2) is felkerül: a stábtagok a
+    # dashboardról/Diszpóim oldalról innen nyitják meg (a felhasználó kérése:
+    # ne a Drive-ról). Hiba esetén csak napló - a levél már kiment.
+    if pdf_bytes:
+        try:
+            from app.services import document_storage
+
+            if document_storage.is_configured():
+                key = f"diszpo-pdf/{project.id}/{_pdf_filename(project)}"
+                project.diszpo_pdf_r2_url = document_storage.upload_bytes(pdf_bytes, key, "application/pdf")
+                project.diszpo_pdf_r2_key = key
+        except Exception:  # noqa: BLE001 - a kiküldést ez nem buktathatja meg
+            logger.exception("Nem sikerült feltölteni a diszpó PDF-et az R2-re project_id=%s", project.id)
     _schedule_utokovetes_email(project)
     db.commit()
     db.refresh(project)

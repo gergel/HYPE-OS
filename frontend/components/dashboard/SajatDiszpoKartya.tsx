@@ -1,4 +1,5 @@
-import { CalendarClock, FileText } from "lucide-react";
+import { CalendarClock } from "lucide-react";
+import { DiszpoPdfGomb } from "@/components/dashboard/DiszpoPdfGomb";
 import type { SajatDiszpo } from "@/lib/api";
 
 /** MAI/HOLNAPI DISZPÓD - nagy, kiemelt kártya a dashboard tetején annak, aki
@@ -51,15 +52,12 @@ export function SajatDiszpoKartya({ diszpok }: { diszpok: SajatDiszpo[] }) {
             </p>
           </div>
           {d.pdf_url ? (
-            <a
-              href={d.pdf_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex shrink-0 items-center gap-2 rounded-[var(--radius)] bg-text-accent px-4 py-2.5 text-[14px] font-semibold text-surface-1 hover:opacity-90"
-            >
-              <FileText size={16} />
-              Diszpó PDF megnyitása
-            </a>
+            /* A PDF a saját tárhelyről (R2) nyílik, nagyban, új lapon - a
+               cím a kattintáskor jön a szervertől (lásd DiszpoPdfGomb). */
+            <DiszpoPdfGomb
+              projectId={d.project_id}
+              className="inline-flex shrink-0 items-center gap-2 rounded-[var(--radius)] bg-text-accent px-4 py-2.5 text-[14px] font-semibold text-surface-1 hover:opacity-90 disabled:opacity-60"
+            />
           ) : (
             <span className="shrink-0 text-[13px] text-text-muted">A diszpó PDF még nem érhető el.</span>
           )}

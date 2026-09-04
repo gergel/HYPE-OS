@@ -1,6 +1,6 @@
-import { FileText } from "lucide-react";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
+import { DiszpoPdfGomb } from "@/components/dashboard/DiszpoPdfGomb";
 import { getSajatDiszpok } from "@/lib/api";
 
 /** DISZPÓIM - gyűjtő oldal (a felhasználó kérése): a bejelentkezett
@@ -43,15 +43,13 @@ export default async function DiszpoimPage() {
                       <td className="py-2.5 pr-4 text-text-primary">{d.projekt_nev ?? `Forgatás #${d.project_id}`}</td>
                       <td className="py-2.5 text-right">
                         {d.pdf_url ? (
-                          <a
-                            href={d.pdf_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-2.5 py-1.5 text-[13px] text-text-accent hover:bg-surface-3"
-                          >
-                            <FileText size={14} />
-                            PDF megnyitása
-                          </a>
+                          /* A PDF a saját tárhelyről (R2) nyílik, nagyban, új
+                             lapon - lásd DiszpoPdfGomb. */
+                          <DiszpoPdfGomb
+                            projectId={d.project_id}
+                            cimke="PDF megnyitása"
+                            className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-2.5 py-1.5 text-[13px] text-text-accent hover:bg-surface-3 disabled:opacity-60"
+                          />
                         ) : (
                           <span className="text-[12.5px] text-text-muted">nincs PDF</span>
                         )}

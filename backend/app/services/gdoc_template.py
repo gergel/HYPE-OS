@@ -151,6 +151,23 @@ def _export_pdf_bytes(doc_id: str) -> bytes:
     return fh.getvalue()
 
 
+def drive_fajl_letoltes(file_id: str) -> bytes:
+    """Egy Drive-on tárolt fájl (pl. régebbi diszpó PDF) letöltése bájtokként
+    - az R2-re költöztetéshez (lásd routes/dashboard.sajat_diszpo_pdf_url:
+    a régi, csak Drive-linkes diszpók első megnyitáskor kerülnek át R2-re)."""
+    drive = _google_service("drive", "v3")
+    req = drive.files().get_media(fileId=file_id, supportsAllDrives=True)
+    fh = BytesIO()
+    downloader = MediaIoBaseDownload(fh, req)
+    done = False
+    try:
+        while not done:
+            _status, done = downloader.next_chunk(num_retries=UJRAPROBALKOZASOK)
+    except HttpError as exc:
+        raise RuntimeError(_google_hiba_szoveg("a PDF letöltése a Drive-ról", exc)) from exc
+    return fh.getvalue()
+
+
 def _upload_pdf(filename: str, pdf_bytes: bytes, folder_id: str | None) -> str | None:
     """A kész PDF-et FÁJLKÉNT tölti fel a Drive-ra, és a webViewLink-jével tér
     vissza. Az eredeti program lemezre írt (/tmp), majd onnan töltött fel -

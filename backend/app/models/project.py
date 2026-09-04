@@ -113,6 +113,12 @@ class Project(TimestampMixin, Base):
     diszpo_szovege: Mapped[str | None] = mapped_column(Text, comment="Diszpó szövege")
     diszpo_pdf_url: Mapped[str | None] = mapped_column(String(500), comment="Diszpó pdf")
     drive_diszpo_pdf_url: Mapped[str | None] = mapped_column(String(500), comment="Drive diszpó pdf")
+    #: A diszpó PDF a SAJÁT tárhelyünkön (R2) - a stábtagok innen nyitják meg
+    #: (a felhasználó kérése: ne a Drive-ról). A kiküldés tölti fel (lásd
+    #: services/dispo.py); a régi, csak Drive-linkes diszpók az első
+    #: megnyitáskor kerülnek át (lásd routes/dashboard.sajat_diszpo_pdf_url).
+    diszpo_pdf_r2_url: Mapped[str | None] = mapped_column(String(500))
+    diszpo_pdf_r2_key: Mapped[str | None] = mapped_column(String(500))
     fo_diszpo_teszteles: Mapped[bool | None] = mapped_column(Boolean, comment="Fő diszpó tesztelés")
     fo_diszpo_elozetes_teszteles: Mapped[bool | None] = mapped_column(Boolean, comment="Fő diszpó előzetes tesztelés")
     fo_esemenyre_elozetes_kuldes_statusz: Mapped[str | None] = mapped_column(

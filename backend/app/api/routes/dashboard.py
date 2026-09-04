@@ -1,8 +1,9 @@
 """Dashboard modul - a mockup összegző kártyáinak valós lekérdezései."""
 
+import logging
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import extract, func, or_, select
 from sqlalchemy.orm import Session
@@ -28,6 +29,8 @@ from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.task import Task, task_employees
 from app.schemas.dashboard_config import DashboardConfigUpdate, MyDashboardConfig
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -347,10 +350,59 @@ def sajat_diszpok(db: Session = Depends(get_db), current_user: Employee = Depend
                 or getattr(p, "naptar_datum_vege", None)
                 or getattr(p, "notion_datum_vege", None)
             ),
-            pdf_url=p.drive_diszpo_pdf_url or p.diszpo_pdf_url,
+            # Elsőként a saját tárhely (R2) - a Drive linkek csak jelzik, hogy
+            # VAN pdf (a megnyitás a pdf-url végponton át megy, ami a régit
+            # át is költözteti R2-re).
+            pdf_url=p.diszpo_pdf_r2_url or p.drive_diszpo_pdf_url or p.diszpo_pdf_url,
         )
         for p in projektek
     ]
+
+
+class SajatDiszpoPdf(BaseModel):
+    url: str
+
+
+@router.get("/sajat-diszpok/{project_id}/pdf-url", response_model=SajatDiszpoPdf)
+def sajat_diszpo_pdf_url(
+    project_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
+):
+    """A diszpó PDF megnyitási címe - a SAJÁT tárhelyünkről (R2), nem a
+    Drive-ról (a felhasználó kérése). Az új kiküldések már R2-re is
+    feltöltődnek (services/dispo.py); a régi, csak Drive-linkes diszpók itt,
+    az első megnyitáskor költöznek át: letöltjük a Drive-ról, feltöltjük az
+    R2-re, és onnantól onnan nyílnak. Csak a forgatás stábtagja kérheti."""
+    import re as _re
+
+    project = db.get(Project, project_id)
+    if project is None or all(e.id != current_user.id for e in project.crew):
+        raise HTTPException(status_code=404, detail="Nincs ilyen diszpód.")
+    if project.diszpo_pdf_r2_url:
+        return SajatDiszpoPdf(url=project.diszpo_pdf_r2_url)
+    drive_url = project.drive_diszpo_pdf_url or project.diszpo_pdf_url
+    if not drive_url:
+        raise HTTPException(status_code=404, detail="Ehhez a diszpóhoz még nincs PDF.")
+    talalat = _re.search(r"/d/([A-Za-z0-9_-]{10,})", drive_url) or _re.search(
+        r"[?&]id=([A-Za-z0-9_-]{10,})", drive_url
+    )
+    if talalat is not None:
+        try:
+            from app.services import document_storage
+            from app.services.gdoc_template import drive_fajl_letoltes
+
+            if document_storage.is_configured():
+                pdf_bytes = drive_fajl_letoltes(talalat.group(1))
+                key = f"diszpo-pdf/{project.id}/diszpo.pdf"
+                url = document_storage.upload_bytes(pdf_bytes, key, "application/pdf")
+                project.diszpo_pdf_r2_url = url
+                project.diszpo_pdf_r2_key = key
+                db.commit()
+                return SajatDiszpoPdf(url=url)
+        except Exception:  # noqa: BLE001 - tartalékként marad a Drive link
+            logger.exception("Nem sikerült átköltöztetni a diszpó PDF-et R2-re project_id=%s", project.id)
+    # Végső tartalék: a Drive link (pl. ha az R2 nincs beállítva, vagy a
+    # letöltés elhasalt) - rosszabb, mint a saját tárhely, de működik.
+    return SajatDiszpoPdf(url=drive_url)
 
 
 @router.get("/my-tasks", response_model=MyTasksSummary)
