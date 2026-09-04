@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { sajatAlapUrl } from "@/lib/sajatAlapUrl";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -14,6 +15,7 @@ export async function generateMetadata({
   const { token } = await params;
   let cim: string | null = null;
   let brand = "hype";
+  let boritokep: string | null = null;
   try {
     const res = await fetch(`${API}/api/v1/public/portal/megosztas/${token}`, { cache: "no-store" });
     if (res.ok) {
@@ -21,16 +23,23 @@ export async function generateMetadata({
       const t = data?.project?.title;
       if (typeof t === "string" && t.trim()) cim = t.trim();
       if (data?.project?.brand) brand = data.project.brand;
+      // A portál BORÍTÓKÉPE az előnézetbe (a felhasználó kérése) - ha nincs,
+      // lent a márka szerinti alap háttér megy.
+      const kep = data?.project?.cover_image_url;
+      if (typeof kep === "string" && kep.trim()) boritokep = kep.trim();
     }
   } catch {
     // marad az alapértelmezett
   }
-  const name = brand === "contentbee" ? "ContentBee" : "HYPE Productions";
+  const isContentBee = brand === "contentbee";
+  const name = isContentBee ? "ContentBee" : "HYPE Productions";
   const title = cim ? `${cim} — ${name}` : `${name} — Megosztott tartalom`;
   const description = cim
     ? `${cim} – megosztott videók/képek megtekintése a ${name} felületén.`
     : `Megosztott tartalom a ${name} felületén.`;
-  return { title, description, openGraph: { title, description } };
+  const kepUrl =
+    boritokep ?? `${await sajatAlapUrl()}${isContentBee ? "/contentbee-desktop.png" : "/default-cover-desktop.png"}`;
+  return { title, description, openGraph: { title, description, images: [{ url: kepUrl }] } };
 }
 
 export default function MegosztasLayout({ children }: { children: React.ReactNode }) {

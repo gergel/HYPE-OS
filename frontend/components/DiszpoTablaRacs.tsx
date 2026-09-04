@@ -65,6 +65,7 @@ export function DiszpoTablaRacs({
   canEdit = true,
   canDelete = false,
   canEmberKotes = false,
+  rejtettetLatja = false,
   emberek,
 }: {
   munkalap: DiszpoMunkalap;
@@ -73,6 +74,10 @@ export function DiszpoTablaRacs({
   /** Az oszlop-ember kötés vezérlője CSAK az adminnak látszik (a felhasználó
    * kérése) - a kötés maga a munkanap-számláláshoz kell. */
   canEmberKotes?: boolean;
+  /** A REJTETT oszlopok/sorok CSAK az adminnak látszanak (a felhasználó
+   * kérése): neki halványítva, de teljes szélességben megjelennek, és csak ő
+   * rejthet el/hozhat vissza - mindenki másnak tényleg eltűnnek (0 széles). */
+  rejtettetLatja?: boolean;
   /** A munkatársak az oszlop-ember kötéshez. */
   emberek: { id: number; nev: string }[];
 }) {
@@ -100,18 +105,20 @@ export function DiszpoTablaRacs({
   // Az oszlopok BALJA és SZÉLESSÉGE - halmozva, mint a soroknál: a REJTETT
   // oszlop 0 széles, így a többi magától összecsúszik (a felhasználó kérése:
   // a már nem kellő oszlopok eltüntethetők az adatuk elvesztése nélkül).
+  // Az ADMINNAK viszont a rejtett oszlop is teljes szélességű (halványítva) -
+  // neki a rejtés csak a többiek elől takar.
   const { oszlopBal, oszlopSzelessege } = useMemo(() => {
     const bal: number[] = new Array(oszlopSzam + 1);
     const szel: number[] = new Array(oszlopSzam);
     let fut = 0;
     for (let c = 0; c < oszlopSzam; c++) {
       bal[c] = fut;
-      szel[c] = oszlopTerkep.get(c)?.rejtett ? 0 : OSZLOP_SZELES;
+      szel[c] = oszlopTerkep.get(c)?.rejtett && !rejtettetLatja ? 0 : OSZLOP_SZELES;
       fut += szel[c];
     }
     bal[oszlopSzam] = fut;
     return { oszlopBal: bal, oszlopSzelessege: szel };
-  }, [oszlopTerkep, oszlopSzam]);
+  }, [oszlopTerkep, oszlopSzam, rejtettetLatja]);
 
   const rejtettOszlopok = useMemo(
     () => munkalap.oszlopok.filter((o) => o.rejtett).sort((a, b) => a.idx - b.idx),
@@ -130,12 +137,13 @@ export function DiszpoTablaRacs({
     let fut = 0;
     for (let r = 0; r < sorSzam; r++) {
       teteje[r] = fut;
-      magassaga[r] = rejtettSorIdxek.has(r) ? 0 : elvalasztoSorok.has(r) ? ELVALASZTO_MAGASSAG : SOR_MAGASSAG;
+      magassaga[r] =
+        rejtettSorIdxek.has(r) && !rejtettetLatja ? 0 : elvalasztoSorok.has(r) ? ELVALASZTO_MAGASSAG : SOR_MAGASSAG;
       fut += magassaga[r];
     }
     teteje[sorSzam] = fut;
     return { sorTeteje: teteje, sorMagassaga: magassaga, teljesMagassag: fut };
-  }, [munkalap.sorok, sorSzam]);
+  }, [munkalap.sorok, sorSzam, rejtettetLatja]);
 
   const rejtettSorok = useMemo(
     () => munkalap.sorok.filter((s) => s.rejtett).sort((a, b) => a.idx - b.idx),
@@ -282,9 +290,10 @@ export function DiszpoTablaRacs({
   const lepj = useCallback(
     (dSor: number, dOszlop: number, kiterjeszt = false) => {
       // Vízszintes lépésnél a REJTETT oszlopokat átugorjuk - különben a
-      // kijelölés egy láthatatlan cellán állna meg.
+      // kijelölés egy láthatatlan cellán állna meg. Az adminnál nem: neki a
+      // rejtett oszlop is látszik (rejtettetLatja).
       let celOszlop = Math.min(Math.max(kijelolt.oszlop + dOszlop, 0), oszlopSzam - 1);
-      if (dOszlop !== 0) {
+      if (dOszlop !== 0 && !rejtettetLatja) {
         const irany = dOszlop > 0 ? 1 : -1;
         while (celOszlop >= 0 && celOszlop < oszlopSzam && oszlopTerkep.get(celOszlop)?.rejtett) {
           celOszlop += irany;
@@ -294,7 +303,7 @@ export function DiszpoTablaRacs({
       // Függőleges lépésnél a REJTETT sorokat is átugorjuk - ugyanaz az elv,
       // mint a rejtett oszlopoknál.
       let celSor = Math.min(Math.max(kijelolt.sor + dSor, munkalap.fejlec_sorok), sorSzam - 1);
-      if (dSor !== 0) {
+      if (dSor !== 0 && !rejtettetLatja) {
         const sorIrany = dSor > 0 ? 1 : -1;
         while (celSor >= munkalap.fejlec_sorok && celSor < sorSzam && sorTerkep.get(celSor)?.rejtett) {
           celSor += sorIrany;
@@ -325,7 +334,7 @@ export function DiszpoTablaRacs({
           elem.scrollLeft = x + oszlopSzelessege[uj.oszlop] - elem.clientWidth;
       }
     },
-    [kijelolt, tartomany, sorSzam, oszlopSzam, munkalap.fejlec_sorok, fagyasztott, fagyasztottSzeles, oszlopBal, oszlopSzelessege, oszlopTerkep, sorTerkep, sorTeteje, sorMagassaga],
+    [kijelolt, tartomany, sorSzam, oszlopSzam, munkalap.fejlec_sorok, fagyasztott, fagyasztottSzeles, oszlopBal, oszlopSzelessege, oszlopTerkep, sorTerkep, sorTeteje, sorMagassaga, rejtettetLatja],
   );
 
   // BILLENTYŰZET: ahogy a táblázatban. Nyilak, Enter, Tab, gépelés, Delete.
@@ -371,11 +380,12 @@ export function DiszpoTablaRacs({
       const igS = Math.max(tartomany?.tol.sor ?? kijelolt.sor, tartomany?.ig.sor ?? kijelolt.sor);
       const tolO = Math.min(tartomany?.tol.oszlop ?? kijelolt.oszlop, tartomany?.ig.oszlop ?? kijelolt.oszlop);
       const igO = Math.max(tartomany?.tol.oszlop ?? kijelolt.oszlop, tartomany?.ig.oszlop ?? kijelolt.oszlop);
-      // Csak a LÁTHATÓ sorok/oszlopok - ugyanígy hagyja ki őket a beillesztés is.
+      // Csak a LÁTHATÓ sorok/oszlopok - ugyanígy hagyja ki őket a beillesztés
+      // is. Az adminnál a rejtett is látható, ezért nála semmi nem marad ki.
       const sorIdxek: number[] = [];
-      for (let r = tolS; r <= igS; r++) if (!sorTerkep.get(r)?.rejtett) sorIdxek.push(r);
+      for (let r = tolS; r <= igS; r++) if (rejtettetLatja || !sorTerkep.get(r)?.rejtett) sorIdxek.push(r);
       const oszlopIdxek: number[] = [];
-      for (let c = tolO; c <= igO; c++) if (!oszlopTerkep.get(c)?.rejtett) oszlopIdxek.push(c);
+      for (let c = tolO; c <= igO; c++) if (rejtettetLatja || !oszlopTerkep.get(c)?.rejtett) oszlopIdxek.push(c);
       if (sorIdxek.length === 0 || oszlopIdxek.length === 0) return;
       const racs = sorIdxek.map((r) =>
         oszlopIdxek.map((c) => {
@@ -416,13 +426,14 @@ export function DiszpoTablaRacs({
       // A cél-oszlopok: a kijelölttől jobbra lévő LÁTHATÓ oszlopok sorban.
       const celOszlopok: number[] = [];
       for (let c = kijelolt.oszlop; c < oszlopSzam; c++) {
-        if (!oszlopTerkep.get(c)?.rejtett) celOszlopok.push(c);
+        if (rejtettetLatja || !oszlopTerkep.get(c)?.rejtett) celOszlopok.push(c);
       }
       // A cél-sorok is a LÁTHATÓAK: a rejtett sorokat a beillesztés is
-      // kihagyja, ahogy a rejtett oszlopokat (és ahogy a Sheets teszi).
+      // kihagyja, ahogy a rejtett oszlopokat (és ahogy a Sheets teszi). Az
+      // adminnál a rejtett is látható, nála nem marad ki semmi.
       const celSorok: number[] = [];
       for (let r = kijelolt.sor; r < sorSzam; r++) {
-        if (!sorTerkep.get(r)?.rejtett) celSorok.push(r);
+        if (rejtettetLatja || !sorTerkep.get(r)?.rejtett) celSorok.push(r);
       }
       const cellak: {
         sor_idx: number;
@@ -485,6 +496,9 @@ export function DiszpoTablaRacs({
     const szerkesztettE = szerkesztes?.pont.sor === sor && szerkesztes?.pont.oszlop === oszlop;
     const bal = oszlopBal[oszlop];
     const uresJelolt = c?.szin === "feher";
+    // Az admin a REJTETT oszlopot/sort is látja, de halványítva - így látszik,
+    // hogy ezt a többiek nem látják.
+    const rejtveDeLatszik = rejtettetLatja && !!(oszlopTerkep.get(oszlop)?.rejtett || s?.rejtett);
     return (
       <div
         style={{
@@ -504,7 +518,7 @@ export function DiszpoTablaRacs({
           // átütnének rajta. Az "üresen hagyva" jelölés (feher) szándékosan
           // nem fest hátteret (lásd cellaStilus) - itt ezért külön kezeljük.
           fagyott && (!c?.szin || uresJelolt) ? "bg-surface-2" : ""
-        }`}
+        } ${rejtveDeLatszik ? "opacity-50" : ""}`}
         onPointerDown={(e) => {
           // ÉRINTŐKIJELZŐN nincs dupla katt és billentyűzet sem, amivel a
           // szerkesztés elindulna (a felhasználó jelzése: telefonról nem
@@ -648,8 +662,10 @@ export function DiszpoTablaRacs({
                 csak a jobb-klikk menüből ment. A kijelölt oszlopo(ka)t rejti:
                 tartomány-kijelölésnél az összes érintett, nem-fagyasztott
                 oszlopot. A fagyasztott (dátum/nap/diszpószám) oszlopok
-                maradnak: azok igazítanak el, melyik sorban vagyunk. */}
-            {(() => {
+                maradnak: azok igazítanak el, melyik sorban vagyunk.
+                CSAK az adminé (a felhasználó kérése): a rejtés a többiek elől
+                takar, ezért csak az rejthet, aki a rejtettet látja is. */}
+            {rejtettetLatja && (() => {
               const tol = Math.min(tartomany?.tol.oszlop ?? kijelolt.oszlop, tartomany?.ig.oszlop ?? kijelolt.oszlop);
               const ig = Math.max(tartomany?.tol.oszlop ?? kijelolt.oszlop, tartomany?.ig.oszlop ?? kijelolt.oszlop);
               const rejtendok: number[] = [];
@@ -678,8 +694,9 @@ export function DiszpoTablaRacs({
               );
             })()}
             {/* UGYANEZ SOROKRA (a felhasználó kérése): a kijelölt sor(ok)
-                elrejtése - a fejléc-sorok maradnak, azok igazítanak el. */}
-            {(() => {
+                elrejtése - a fejléc-sorok maradnak, azok igazítanak el.
+                Ez is csak az adminé. */}
+            {rejtettetLatja && (() => {
               const tol = Math.min(tartomany?.tol.sor ?? kijelolt.sor, tartomany?.ig.sor ?? kijelolt.sor);
               const ig = Math.max(tartomany?.tol.sor ?? kijelolt.sor, tartomany?.ig.sor ?? kijelolt.sor);
               const rejtendok: number[] = [];
@@ -716,8 +733,10 @@ export function DiszpoTablaRacs({
       </div>
 
       {/* A REJTETT oszlopok visszahozása: felsoroljuk őket, egy kattintás
-          újra megjeleníti. Enélkül az elrejtés egyirányú út lenne. */}
-      {rejtettOszlopok.length > 0 && (
+          újra megjeleníti. Enélkül az elrejtés egyirányú út lenne. CSAK az
+          adminnak (a felhasználó kérése) - másnak még a sáv sem árulja el,
+          hogy vannak rejtett oszlopok. */}
+      {rejtettetLatja && rejtettOszlopok.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[12px]">
           <span className="text-text-secondary">Rejtett oszlopok ({rejtettOszlopok.length}):</span>
           {rejtettOszlopok.map((o) => (
@@ -739,7 +758,7 @@ export function DiszpoTablaRacs({
       )}
 
       {/* A REJTETT sorok visszahozása - ugyanaz, mint az oszlopoknál. */}
-      {rejtettSorok.length > 0 && (
+      {rejtettetLatja && rejtettSorok.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[12px]">
           <span className="text-text-secondary">Rejtett sorok ({rejtettSorok.length}):</span>
           {rejtettSorok.map((s) => (
@@ -1028,8 +1047,9 @@ export function DiszpoTablaRacs({
               { cimke: "Oszlop beszúrása jobbra", tesz: () => hivas("/oszlop", { method: "POST", body: JSON.stringify({ idx: menu.pont.oszlop, ala: true }) }) },
               { cimke: "Tartalom törlése", tesz: () => tartalmatTorol() },
               // A fagyasztott (dátum/nap/diszpószám) oszlopokat nem engedjük
-              // elrejteni: azok igazítanak el, melyik sorban vagyunk.
-              ...(menu.pont.oszlop >= fagyasztott
+              // elrejteni: azok igazítanak el, melyik sorban vagyunk. Az
+              // elrejtés admin-vezérlő (rejtettetLatja) - másnak nincs a menüben.
+              ...(rejtettetLatja && menu.pont.oszlop >= fagyasztott
                 ? [
                     {
                       cimke: `${oszlopBetu(menu.pont.oszlop)} oszlop elrejtése`,
@@ -1042,7 +1062,7 @@ export function DiszpoTablaRacs({
                   ]
                 : []),
               // A fejléc-sorokat nem engedjük elrejteni - azok a jelmagyarázat.
-              ...(menu.pont.sor >= munkalap.fejlec_sorok
+              ...(rejtettetLatja && menu.pont.sor >= munkalap.fejlec_sorok
                 ? [
                     {
                       cimke: `${menu.pont.sor + 1}. sor elrejtése`,

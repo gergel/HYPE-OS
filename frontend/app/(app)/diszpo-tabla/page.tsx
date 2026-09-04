@@ -101,6 +101,10 @@ export default async function DiszpoTablaPage({
             // Az oszlop-ember kötés vezérlője CSAK az adminnak (a felhasználó
             // kérése) - másnál a kijelöléskor nem jelenik meg a választó.
             canEmberKotes={currentUser?.role === "admin"}
+            // A REJTETT oszlopok/sorok is csak az adminnak látszanak (a
+            // felhasználó kérése) - neki halványítva megjelennek, más elől
+            // tényleg eltűnnek, és rejteni/visszahozni is csak ő tud.
+            rejtettetLatja={currentUser?.role === "admin"}
             emberek={emberek.map((e) => ({ id: e.id, nev: e.full_name }))}
           />
         </Card>
