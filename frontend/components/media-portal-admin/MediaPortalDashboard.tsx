@@ -304,12 +304,16 @@ export function MediaPortalDashboard({
         )}
         <div className="divide-y divide-border">
           {visibleProjects.map((p) => (
+            /* TELEFONON két soros elrendezés (a felhasználó kérése): felül a
+               kép + a TELJES, sortöréssel kiírt cím (nem csonkolódik), alul
+               jobbra a jelvények/gombok. Széles kijelzőn (sm+) marad az
+               egysoros, csonkolós elrendezés. */
             <a
               key={p.id}
               href={`/media-portal/${p.id}`}
-              className="flex items-center gap-4 bg-surface-2 px-5 py-4 transition-colors hover:bg-surface-3"
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-surface-2 px-4 py-4 transition-colors hover:bg-surface-3 sm:flex-nowrap sm:px-5"
             >
-              <div className="flex h-12 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius)] bg-surface-3">
+              <div className="flex h-10 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius)] bg-surface-3 sm:h-12 sm:w-20">
                 {p.cover_image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={p.cover_image_url} alt="" className="h-full w-full object-cover" />
@@ -318,22 +322,24 @@ export function MediaPortalDashboard({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="truncate text-[15px] font-medium text-text-primary">{p.title}</h3>
-                <p className="truncate text-[13px] text-text-secondary">
+                <h3 className="break-words text-[15px] font-medium text-text-primary sm:truncate">{p.title}</h3>
+                <p className="break-words text-[13px] text-text-secondary sm:truncate">
                   {p.client_name}
                   {p.project_date ? ` · ${p.project_date}` : ""}
                 </p>
               </div>
-              <StatusBadge label={p.status === "live" ? "Élő" : p.status} tone={p.status === "live" ? "success" : "neutral"} />
-              {p.has_password && <Lock className="h-3.5 w-3.5 shrink-0 text-text-accent" aria-hidden />}
-              <ExternalLink className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
-              <button
-                onClick={(e) => onDelete(e, p.id, p.title)}
-                title="Portál törlése"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-danger hover:text-text-danger"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex w-full shrink-0 items-center justify-end gap-3 sm:w-auto">
+                <StatusBadge label={p.status === "live" ? "Élő" : p.status} tone={p.status === "live" ? "success" : "neutral"} />
+                {p.has_password && <Lock className="h-3.5 w-3.5 shrink-0 text-text-accent" aria-hidden />}
+                <ExternalLink className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
+                <button
+                  onClick={(e) => onDelete(e, p.id, p.title)}
+                  title="Portál törlése"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-danger hover:text-text-danger"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </a>
           ))}
         </div>
