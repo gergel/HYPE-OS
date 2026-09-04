@@ -91,52 +91,84 @@ def javitas_allapot(allapot: str | None) -> bool:
 
 def kikuldes_allapot(allapot: str | None) -> bool:
     """Kiküldés-féle állapot-e ("Kiküldésre vár", "Kész kiküldve",
-    "Kiküldhető") - az ellenőrzésből ide lépés a "javítás nélkül jó" ítélet."""
+    "Kiküldhető") - az ide lépés a "jó az anyag" ítélet."""
     if not allapot:
         return False
     return "kikuld" in _ekezet_nelkul(allapot)
 
 
-def rogzitsd_kimenetet(db: Session, deliverable: Deliverable, regi_allapot: str | None) -> bool:
-    """Az ellenőrzésből TOVÁBBLÉPŐ anyag ítélete - anyagonként egyszer.
-
-    +JOVAHAGYAS_PONT, ha az ellenőrzésből javítás nélkül ment kiküldés-féle
-    állapotba; JAVITAS_PONT (negatív), ha javításba került. A pontot az kapja,
-    aki az anyagot ellenőrzésbe tette (a VagoEllenorzesEsemeny szerint) - ha
-    ilyen esemény nincs (az anyag még a játék előtt került ellenőrzésbe),
-    nincs kit jutalmazni/büntetni, nem történik semmi.
-
-    Az ELSŐ ítélet számít: a deliverable_id egyedi, egy később oda-vissza
-    tologatott anyag nem termel újabb pontot. True, ha ÚJ kimenet keletkezett;
-    a commit a hívóé."""
-    if not ellenorzes_allapot(regi_allapot) or ellenorzes_allapot(deliverable.allapot):
+def aktualis_allapot(allapot: str | None) -> bool:
+    """"Aktuális"-féle (épp vágás alatt álló) állapot-e - ugyanaz a
+    névben-keresős elv, mint a többi felismerőnél."""
+    if not allapot:
         return False
-    if javitas_allapot(deliverable.allapot):
-        kimenet, pont = "javitas", JAVITAS_PONT
-    elif kikuldes_allapot(deliverable.allapot):
+    return "aktualis" in _ekezet_nelkul(allapot)
+
+
+def rogzitsd_kimenetet(db: Session, deliverable: Deliverable, regi_allapot: str | None) -> bool:
+    """A TOVÁBBLÉPŐ anyag ítélete.
+
+    - Ellenőrzésből kiküldés-féle állapotba: +JOVAHAGYAS_PONT ("javítás
+      nélkül jó"); ellenőrzésből javításba: JAVITAS_PONT (negatív).
+    - JAVÍTÁSBÓL vagy AKTUÁLISBÓL KÖZVETLENÜL kiküldés-féle állapotba (a
+      felhasználó kérése): az is +JOVAHAGYAS_PONT - ugyanaz, mintha rögtön
+      el lett volna fogadva, csak a lépés nem ment át még egyszer az
+      ellenőrzés oszlopon.
+
+    A pontot az kapja, aki az anyagot ellenőrzésbe tette (VagoEllenorzesEsemeny);
+    ha ilyen esemény nincs (pl. aktuálisból ugrott rögtön kiküldésre), akkor
+    az anyagra kiosztott vágó. Ha egyik sincs, nincs kit jutalmazni.
+
+    Jóváhagyás és javítás anyagonként EGYSZER-EGYSZER jár: a ki-be tologatás
+    nem termel újabb pontot, de egy javítás UTÁNI elfogadás plusz pontja a
+    korábbi levonás mellett is megszületik. True, ha ÚJ kimenet keletkezett;
+    a commit a hívóé."""
+    uj_allapot = deliverable.allapot
+    if ellenorzes_allapot(uj_allapot):
+        return False
+    if ellenorzes_allapot(regi_allapot):
+        if javitas_allapot(uj_allapot):
+            kimenet, pont = "javitas", JAVITAS_PONT
+        elif kikuldes_allapot(uj_allapot):
+            kimenet, pont = "jovahagyva", JOVAHAGYAS_PONT
+        else:
+            return False
+    elif (javitas_allapot(regi_allapot) or aktualis_allapot(regi_allapot)) and kikuldes_allapot(uj_allapot):
         kimenet, pont = "jovahagyva", JOVAHAGYAS_PONT
     else:
         return False
-    letezo = db.scalar(
+    letezok = db.scalars(
         select(VagoEllenorzesKimenet).where(VagoEllenorzesKimenet.deliverable_id == deliverable.id)
-    )
-    if letezo is not None:
+    ).all()
+    # Ugyanabból a fajta ítéletből nem születik második; javítás-ítélet pedig
+    # csak ELSŐ ítéletként (aki egyszer már jóvá lett hagyva, azt egy későbbi
+    # tologatás ne büntesse).
+    if any(k.kimenet == kimenet for k in letezok):
+        return False
+    if kimenet == "javitas" and letezok:
         return False
     esemeny = db.scalar(
         select(VagoEllenorzesEsemeny).where(VagoEllenorzesEsemeny.deliverable_id == deliverable.id)
     )
-    if esemeny is None:
+    if esemeny is not None:
+        employee_id = esemeny.employee_id
+    elif kimenet == "jovahagyva" and deliverable.assigned_to_employee_id:
+        employee_id = deliverable.assigned_to_employee_id
+    else:
         return False
     db.add(
         VagoEllenorzesKimenet(
             deliverable_id=deliverable.id,
-            employee_id=esemeny.employee_id,
+            employee_id=employee_id,
             idopont=datetime.now(timezone.utc),
             kimenet=kimenet,
             pont=pont,
-            allapot=deliverable.allapot,
+            allapot=uj_allapot,
         )
     )
+    # A session autoflush=False - flush nélkül egy ugyanebben a tranzakcióban
+    # jövő második hívás nem látná ezt a sort, és duplán pontozna.
+    db.flush()
     return True
 
 

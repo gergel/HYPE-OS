@@ -149,23 +149,26 @@ class VagoEllenorzesEsemeny(TimestampMixin, Base):
 
 
 class VagoEllenorzesKimenet(TimestampMixin, Base):
-    """Mi lett az ellenőrzésbe tett anyag SORSA - anyagonként egyszer.
+    """Mi lett az anyag SORSA - ítélet-fajtánként (jóváhagyva/javítás)
+    anyagonként egyszer.
 
-    Az ELSŐ továbblépés dönt: ha az ellenőrzésből javítás nélkül ment tovább
-    (kiküldésre vár / kész kiküldve), az +100 pont annak, aki ellenőrzésbe
-    tette (JOVAHAGYAS_PONT); ha javításba került, az -20 (JAVITAS_PONT). A
-    `deliverable_id` EGYEDI: egy később oda-vissza tologatott anyag nem
-    termel és nem is veszít több pontot - az első ítélet számít, mert az
-    mondja meg, elsőre jó volt-e.
+    Ha az anyag javítás nélkül ment kiküldés-féle állapotba (akár az
+    ellenőrzésből, akár javításból/aktuálisból KÖZVETLENÜL - a felhasználó
+    kérése: az ugyanaz, mintha rögtön el lett volna fogadva), az +100 pont
+    (JOVAHAGYAS_PONT); ha javításba került, az -20 (JAVITAS_PONT). Egy
+    anyagnak így legfeljebb KÉT sora lehet (egy javítás + egy későbbi
+    jóváhagyás) - az egyediséget a services/vagoi_jatek.rogzitsd_kimenetet
+    őrzi, nem táblakényszer.
 
     Az `idopont` dönti el, melyik hónap versenyébe számít."""
 
     __tablename__ = "vago_ellenorzes_kimenetek"
-    __table_args__ = (UniqueConstraint("deliverable_id", name="uq_vago_ellenorzes_kimenet"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    deliverable_id: Mapped[int] = mapped_column(ForeignKey("deliverables.id"), nullable=False)
-    #: Aki az anyagot ellenőrzésbe tette - ő kapja a bónuszt/levonást.
+    deliverable_id: Mapped[int] = mapped_column(ForeignKey("deliverables.id"), nullable=False, index=True)
+    #: Aki az anyagot ellenőrzésbe tette (vagy - közvetlen elfogadásnál, ha
+    #: ellenőrzés-esemény nincs - az anyagra kiosztott vágó): ő kapja a
+    #: bónuszt/levonást.
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False, index=True)
     idopont: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     #: "jovahagyva" vagy "javitas".
