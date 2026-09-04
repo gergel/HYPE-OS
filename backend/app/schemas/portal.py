@@ -92,10 +92,13 @@ class PortalFolderCreate(BaseModel):
 
 
 class PortalFolderUpdate(BaseModel):
+    """A mappa szülője (parent_folder_id) szándékosan NEM szerkeszthető: a
+    mappa oda tartozik, ahol létrehozták (a felhasználó kérése - az
+    áthelyezés a videókra/képekre van, a mappákra nincs)."""
+
     name: str | None = None
     sort_order: int | None = None
     rejtett: bool | None = None
-    parent_folder_id: int | None = None
 
 
 class PortalVideoOut(BaseModel):

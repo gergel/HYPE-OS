@@ -709,21 +709,7 @@ def update_folder(
     folder = db.get(PortalFolder, folder_id)
     if not folder:
         raise HTTPException(status_code=404, detail="Nem található")
-    valtozasok = payload.model_dump(exclude_unset=True)
-    # Áthelyezés másik mappába (a felhasználó kérése): a cél nem lehet saját
-    # maga vagy a saját leszármazottja (kör keletkezne), és ugyanennek a
-    # portálnak a mappája kell legyen. None = főszintre.
-    if "parent_folder_id" in valtozasok and valtozasok["parent_folder_id"] is not None:
-        cel_id = valtozasok["parent_folder_id"]
-        cel = db.get(PortalFolder, cel_id)
-        if cel is None or cel.portal_id != folder.portal_id:
-            raise HTTPException(status_code=404, detail="A cél mappa nem ehhez a portálhoz tartozik.")
-        lanc = cel
-        while lanc is not None:
-            if lanc.id == folder.id:
-                raise HTTPException(status_code=400, detail="A mappa nem tehető saját magába (vagy a saját almappájába).")
-            lanc = db.get(PortalFolder, lanc.parent_folder_id) if lanc.parent_folder_id else None
-    for k, v in valtozasok.items():
+    for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(folder, k, v)
     db.commit()
     return PortalFolderOut.model_validate(folder)

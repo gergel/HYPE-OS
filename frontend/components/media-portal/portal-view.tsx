@@ -107,30 +107,34 @@ export function PortalView({
   // Egységes mappa-lista: minden mappa a saját videóival ÉS képeivel EGYBEN
   // (nem külön videó- és fotó-mappalista) - csak azok a mappák, amikben van
   // legalább egy elem. Legújabb (név szerint fordítva) elöl.
-  // Beágyazott mappánál a TELJES útvonal a megjelenített név ("Szülő /
-  // Gyerek") - a lapos szekció-listában enélkül nem derülne ki, mi hova
-  // tartozik (a felhasználó kérése: mappán belüli mappák).
-  const mappaNevById = new Map(folders.map((f) => [f.id, f]));
-  const mappaUtvonal = (f: (typeof folders)[number]): string => {
-    const reszek = [f.name];
-    let szuloId = f.parent_folder_id ?? null;
-    while (szuloId != null) {
-      const szulo = mappaNevById.get(szuloId);
-      if (!szulo) break;
-      reszek.push(szulo.name);
-      szuloId = szulo.parent_folder_id ?? null;
-    }
-    return reszek.reverse().join(" / ");
+  // MAPPA-FA (a felhasználó kérése): a mappán belül létrehozott mappa CSAK a
+  // szülőjén belül jelenik meg, nem külön főszintű szekcióként. Egy mappa
+  // akkor kerül be, ha a RÉSZFÁJÁBAN (saját maga vagy bármelyik almappája)
+  // van tartalom - egy üres szülő is látszik, ha az almappájában van anyag.
+  type MappaCsoport = {
+    folder: (typeof folders)[number];
+    videos: VideoT[];
+    images: ImageType[];
+    gyerekek: MappaCsoport[];
   };
+  const csoportEpito = (f: (typeof folders)[number]): MappaCsoport => ({
+    folder: f,
+    videos: project.videos.filter((v) => v.folder_id === f.id),
+    images: allImages.filter((i) => i.folder_id === f.id),
+    gyerekek: folders
+      .filter((gy) => gy.parent_folder_id === f.id)
+      .map(csoportEpito)
+      .filter(vanTartalma)
+      .sort((a, b) => b.folder.name.localeCompare(a.folder.name, "hu")),
+  });
+  function vanTartalma(g: MappaCsoport): boolean {
+    return g.videos.length > 0 || g.images.length > 0 || g.gyerekek.length > 0;
+  }
   const foldersWithContent = folders
-    .map((f) => ({
-      folder: f,
-      utvonal: mappaUtvonal(f),
-      videos: project.videos.filter((v) => v.folder_id === f.id),
-      images: allImages.filter((i) => i.folder_id === f.id),
-    }))
-    .filter((g) => g.videos.length > 0 || g.images.length > 0)
-    .sort((a, b) => b.utvonal.localeCompare(a.utvonal, "hu"));
+    .filter((f) => !f.parent_folder_id)
+    .map(csoportEpito)
+    .filter(vanTartalma)
+    .sort((a, b) => b.folder.name.localeCompare(a.folder.name, "hu"));
 
   function daysUntilExpiry(): number | null {
     if (!project.expires_at) return null;
@@ -318,21 +322,31 @@ export function PortalView({
           className="mx-auto max-w-6xl px-6 py-20 sm:py-28"
         >
           <div className="space-y-12">
-            {foldersWithContent.map(({ folder, utvonal, videos, images }) => (
-              <FolderSection
-                key={folder.id}
-                name={utvonal}
-                rejtett={folder.rejtett}
-                videos={videos}
-                images={images}
-                onPlay={markVideoSeen}
-                onOpenImage={(imgs, idx) => setLightbox({ images: imgs, index: idx })}
-                seenVideos={seenVideos}
-                accent={accent}
-                onShare={linkMasolas ? () => void linkreMasol({ folderId: folder.id }) : undefined}
-                onShareVideo={linkMasolas ? (v) => void linkreMasol({ videoId: v.id }) : undefined}
-              />
-            ))}
+            {foldersWithContent.map(function renderCsoport(g): React.ReactNode {
+              return (
+                <FolderSection
+                  key={g.folder.id}
+                  name={g.folder.name}
+                  rejtett={g.folder.rejtett}
+                  videos={g.videos}
+                  images={g.images}
+                  onPlay={markVideoSeen}
+                  onOpenImage={(imgs, idx) => setLightbox({ images: imgs, index: idx })}
+                  seenVideos={seenVideos}
+                  accent={accent}
+                  onShare={linkMasolas ? () => void linkreMasol({ folderId: g.folder.id }) : undefined}
+                  onShareVideo={linkMasolas ? (v) => void linkreMasol({ videoId: v.id }) : undefined}
+                  // Az ALMAPPÁK a szülő lenyílóján BELÜL, behúzva - rekurzívan.
+                  alszekciok={
+                    g.gyerekek.length > 0 ? (
+                      <div className="mt-10 space-y-10 border-l border-ink-line pl-4 sm:pl-6">
+                        {g.gyerekek.map(renderCsoport)}
+                      </div>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
           </div>
         </section>
       )}
@@ -468,6 +482,7 @@ function FolderSection({
   accent,
   onShare,
   onShareVideo,
+  alszekciok,
 }: {
   name: string;
   /** REJTETT mappa - csak a belsős néző kapja meg (a szerver az ügyfélnek ki
@@ -475,6 +490,9 @@ function FolderSection({
   rejtett?: boolean;
   videos: VideoT[];
   images: ImageType[];
+  /** Az ALMAPPÁK szekciói (a felhasználó kérése: a mappán belüli mappa csak
+   * a szülőn belül látszik) - a lenyíló tartalom végére kerülnek. */
+  alszekciok?: React.ReactNode;
   onPlay: (v: VideoT) => void;
   onOpenImage: (images: ImageType[], index: number) => void;
   seenVideos: Set<number>;
@@ -568,6 +586,9 @@ function FolderSection({
                 <ImageGrid images={images} onOpen={onOpenImage} />
               </div>
             )}
+
+            {/* Végül az almappák szekciói (rekurzívan). */}
+            {alszekciok}
           </motion.div>
         )}
       </AnimatePresence>
