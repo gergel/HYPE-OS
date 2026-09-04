@@ -92,11 +92,14 @@ class DarabolasHiba(ValueError):
 
 
 def create_utomunka(db: Session, project: Project, current_user: Employee) -> Deliverable:
-    """'Utómunka' gomb: új Deliverable-t hoz létre ehhez a projekthez, a Notion
-    automatizmus PROJEK NEVE formulájával megegyező névvel:
-    <Name>_<Forgatás időpontja YYYY.MM.DD>_<Projektkód első 4 karaktere>."""
+    """'Utómunka' gomb: új Deliverable-t hoz létre ehhez a projekthez:
+    <Name>_<Forgatás időpontja YYYY.MM.DD>_<Projektkód az első 4 karakter
+    nélkül> (a felhasználó kérése) - pl. HYPE26-0001 kódnál a név vége
+    "26-0001", nem az eddigi "HYPE". Rövid (legfeljebb 4 karakteres) kódnál
+    a teljes kód megy a névbe, hogy ne maradjon üresen."""
     date_part = project.forgatas_datuma.strftime("%Y.%m.%d") if project.forgatas_datuma else ""
-    kod_part = (project.projektkod_szoveg or "")[:4]
+    kod = project.projektkod_szoveg or ""
+    kod_part = kod[4:] if len(kod) > 4 else kod
     projekt_neve = "_".join(part for part in (project.nev, date_part, kod_part) if part)
 
     deliverable = Deliverable(
