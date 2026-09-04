@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { selectColor } from "@/lib/selectColor";
 
 export type BoardCard = {
@@ -9,6 +9,9 @@ export type BoardCard = {
   title: string;
   subtitle?: string | null;
   badges: string[];
+  /** Interaktív elem a kártya alján (pl. a vinyó-nézet archiválás-állítója) -
+   * a kattintása NEM nyitja meg a kártyát (lásd BoardCardView click-védelme). */
+  extra?: ReactNode;
   /** A kártyán megjelenő további adatok (címke + érték párok) - hogy pontosan
    * melyik mezők, azt a "Nézet beállítása" panelen lehet megadni. */
   mezok?: { cimke: string; ertek: string }[];
@@ -128,6 +131,20 @@ function BoardCardView({
             </span>
           ))}
         </div>
+      )}
+      {card.extra && (
+        /* A kártya egy <a> - a benne ülő vezérlő kattintása ne navigáljon és
+           ne nyissa a felugró ablakot sem. A preventDefault CAPTURE fázisban
+           fut: a vezérlő (pl. SelectDropdown) maga stopPropagation-nel elnyeli
+           a buborékot, így egy sima onClick ide el sem érne - a link
+           alap-navigációja viszont enélkül is lefutna. */
+        <span
+          className="mt-1.5 block"
+          onClickCapture={(e) => e.preventDefault()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {card.extra}
+        </span>
       )}
     </a>
   );

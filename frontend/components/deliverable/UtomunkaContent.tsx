@@ -68,6 +68,7 @@ export function UtomunkaContent({
   allapotBeallitasok,
   kartyaMezok,
   vinyoOptions,
+  archivalasOptions = [],
   canCreate,
   canDelete,
   canEdit,
@@ -89,6 +90,9 @@ export function UtomunkaContent({
   /** Mely mezők látszódjanak a tábla kártyáin (üres = alapértelmezés). */
   kartyaMezok: string[];
   vinyoOptions: string[];
+  /** Az archiválás mező választható értékei (fieldTypes.archivalas) - a
+   * vinyó-nézet kártyáin helyben állítható (a felhasználó kérése). */
+  archivalasOptions?: string[];
   canCreate: boolean;
   canDelete: boolean;
   canEdit: boolean;
@@ -118,6 +122,9 @@ export function UtomunkaContent({
   const [vinyoKereses, setVinyoKereses] = useState("");
   // Ugyanilyen kereső az "Állapot szerint" nézethez is (a felhasználó kérése).
   const [allapotKereses, setAllapotKereses] = useState("");
+  // A vinyón BELÜLI sorrend (a felhasználó kérése): alapból a legutóbb
+  // módosított elöl (ahogy a lista jön), de név szerint is rendezhető.
+  const [vinyoRendezes, setVinyoRendezes] = useState<"alap" | "nev-az" | "nev-za">("alap");
   // A kártya FELUGRÓ ABLAKBAN nyílik (a felhasználó kérése), nem teljes
   // oldalként - itt az épp nyitott anyag útvonala (lásd RecordDetailModal).
   const [modalHref, setModalHref] = useState<string | null>(null);
@@ -206,7 +213,7 @@ export function UtomunkaContent({
     return /^\d{4}-\d{2}-\d{2}/.test(szoveg) ? formatDate(szoveg) : szoveg;
   }
 
-  function toCard(d: Deliverable, badges: string[]): BoardCard {
+  function toCard(d: Deliverable, badges: string[], extra?: React.ReactNode): BoardCard {
     // Beállítás nélkül marad az eddigi alapértelmezés (határidő), hogy a
     // tábla ne ürüljön ki azoknál, akik sosem nyúlnak a beállításhoz. A
     // kiosztás nem itt van: azt a kártya MINDIG mutatja (lásd lent).
@@ -238,7 +245,34 @@ export function UtomunkaContent({
       // és kinek fut rajta épp az időmérője.
       kiosztva,
       timerek: timerNevek.get(d.id) ?? [],
+      extra,
     };
+  }
+
+  /** Az archiválás átírása a vinyó-nézet kártyájáról (a felhasználó kérése) -
+   * optimista frissítéssel, hibánál visszaállítjuk és szólunk. */
+  async function archivalasAllitasa(deliverableId: number, ertek: string | null) {
+    const eredeti = deliverables.find((d) => d.id === deliverableId);
+    if (!eredeti || (eredeti.archivalas ?? null) === ertek) return;
+    setDeliverables((elozo) => elozo.map((d) => (d.id === deliverableId ? { ...d, archivalas: ertek } : d)));
+    try {
+      const res = await authFetch(`${DELIVERABLE_BASE_PATH}/${deliverableId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ archivalas: ertek }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        setDeliverables((elozo) =>
+          elozo.map((d) => (d.id === deliverableId ? { ...d, archivalas: eredeti.archivalas } : d)),
+        );
+        alert(`Az archiválás módosítása nem sikerült: ${detail?.detail ?? res.status}`);
+      }
+    } catch (err) {
+      setDeliverables((elozo) =>
+        elozo.map((d) => (d.id === deliverableId ? { ...d, archivalas: eredeti.archivalas } : d)),
+      );
+      alert(`Az archiválás módosítása nem sikerült (hálózati hiba): ${err}`);
+    }
   }
 
   // Ugyanaz a "lejárt" definíció, mint a dashboard figyelmeztetés-számlálójában
@@ -321,13 +355,40 @@ export function UtomunkaContent({
         byVinyo.get(v)!.push(d);
       }
     }
+    // A vinyón BELÜLI sorrend (a felhasználó kérése): név szerint is
+    // rendezhető - alapból marad a lista sorrendje (legutóbb módosított elöl).
+    const rendezve = (lista: Deliverable[]) => {
+      if (vinyoRendezes === "alap") return lista;
+      const elojel = vinyoRendezes === "nev-az" ? 1 : -1;
+      return [...lista].sort(
+        (a, b) => elojel * (a.projekt_neve ?? "").localeCompare(b.projekt_neve ?? "", "hu", { sensitivity: "base" }),
+      );
+    };
     return vinyoOptions
       .filter((v) => (byVinyo.get(v)?.length ?? 0) > 0)
-      // A kártya-címke itt az ARCHIVÁLÁS állapota (a felhasználó kérése) -
-      // a vágás-állapotot a fenti állapot-tábla úgyis mutatja.
-      .map((v) => ({ key: v, label: v, cards: byVinyo.get(v)!.map((d) => toCard(d, d.archivalas ? [d.archivalas] : [])) }));
+      // A kártyán az ARCHIVÁLÁS állapota (a felhasználó kérése) - a vágás-
+      // állapotot a fenti állapot-tábla úgyis mutatja. Szerkesztési joggal
+      // ez itt helyben át is állítható (nem csak az adatlapon).
+      .map((v) => ({
+        key: v,
+        label: v,
+        cards: rendezve(byVinyo.get(v)!).map((d) =>
+          canEdit && archivalasOptions.length > 0
+            ? toCard(
+                d,
+                [],
+                <SelectDropdown
+                  value={d.archivalas ?? null}
+                  options={archivalasOptions}
+                  onChange={(next) => void archivalasAllitasa(d.id, next)}
+                  placeholder="Nincs archiválás"
+                />,
+              )
+            : toCard(d, d.archivalas ? [d.archivalas] : []),
+        ),
+      }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lathatoAnyagok, vinyoOptions, vinyoKereses, kartyaMezok, employeeName, timerNevek]);
+  }, [lathatoAnyagok, vinyoOptions, vinyoKereses, vinyoRendezes, kartyaMezok, employeeName, timerNevek, canEdit, archivalasOptions]);
 
   /** Az anyag ÁLLAPOTÁNAK tényleges átírása - ezt hívja mind a Kanban-húzás
    * (kartyaAthelyezes, a celOszlop -> allapot fordítás után), mind a lista
@@ -491,14 +552,29 @@ export function UtomunkaContent({
                 ) : undefined
               }
             >
-              <input
-                type="search"
-                value={vinyoKereses}
-                onChange={(e) => setVinyoKereses(e.target.value)}
-                placeholder="Keresés projektre (név, esemény, projektkód)…"
-                aria-label="Keresés a vinyók közt projektre"
-                className="mb-3 w-80 max-w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
-              />
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <input
+                  type="search"
+                  value={vinyoKereses}
+                  onChange={(e) => setVinyoKereses(e.target.value)}
+                  placeholder="Keresés projektre (név, esemény, projektkód)…"
+                  aria-label="Keresés a vinyók közt projektre"
+                  className="w-80 max-w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+                />
+                {/* A vinyón belüli sorrend (a felhasználó kérése): pl. ABC. */}
+                <label className="flex items-center gap-1.5 text-[13px] text-text-secondary">
+                  Sorrend:
+                  <select
+                    value={vinyoRendezes}
+                    onChange={(e) => setVinyoRendezes(e.target.value as typeof vinyoRendezes)}
+                    className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+                  >
+                    <option value="alap">Legutóbb módosított elöl</option>
+                    <option value="nev-az">Név (A–Z)</option>
+                    <option value="nev-za">Név (Z–A)</option>
+                  </select>
+                </label>
+              </div>
               {vinyoKereses.trim() && vinyoColumns.length === 0 && (
                 <p className="mb-2 text-[13px] text-text-muted">Nincs találat erre: „{vinyoKereses.trim()}”.</p>
               )}

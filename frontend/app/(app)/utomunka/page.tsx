@@ -83,6 +83,9 @@ export default async function UtomunkaPage({
           allapotBeallitasok={allapotBeallitasok}
           kartyaMezok={kartyaMezok}
           vinyoOptions={vinyoReszletes.options}
+          // A vinyó-nézet kártyáin helyben állítható az archiválás (a
+          // felhasználó kérése) - ezek a választható értékei.
+          archivalasOptions={fieldTypes.archivalas?.options ?? []}
           vinyoKezelheto={vinyoReszletes.kezelheto}
           isAdmin={szerepkorei(currentUser).includes("admin")}
           // SZÁNDÉKOSAN nem canDoAction: az Utómunkán a backend a szerepkör-
