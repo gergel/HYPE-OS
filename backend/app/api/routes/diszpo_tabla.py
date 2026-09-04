@@ -24,7 +24,7 @@ from app.models.diszpo_tabla import (
     DiszpoOszlop,
     DiszpoSor,
 )
-from app.models.employee import Employee, SystemRole
+from app.models.employee import Employee, SystemRole, van_szerepkore
 from app.services import diszpo_sheet_sync, hatter_feladat, munkanap_szamlalo
 
 router = APIRouter(prefix="/diszpo-tabla", tags=["diszpo-tabla"])
@@ -42,6 +42,17 @@ PENZUGY_PAGE = "/penzugyek"
 #: gépelni, de a mentés a durvább szerepkör-ellenőrzésen elhasalt "nincs
 #: jogosultsága" hibával - a page_permissions grant így értelmetlen volt.
 _MINDEN_SZEREPKOR = tuple(SystemRole)
+
+
+def _csak_admin_rejthet(user: Employee) -> None:
+    """Az elrejtés ADMIN-VEZÉRLŐ (a felhasználó kérése): amit az admin elrejt,
+    az mindenki más elől el van rejtve, és más ezt nem is állíthatja - se
+    elrejteni, se visszahozni nem tud. A felület a vezérlőket eleve csak az
+    adminnak mutatja (lásd DiszpoTablaRacs rejtettetLatja), ez itt a
+    szerver-oldali kikényszerítése, hogy kézzel küldött kéréssel se lehessen
+    megkerülni."""
+    if not van_szerepkore(user, SystemRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Sor/oszlop elrejtését csak admin állíthatja.")
 
 
 class MunkalapFej(BaseModel):
@@ -383,7 +394,7 @@ def sor_adat(
     idx: int,
     payload: SorAdatIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+    current_user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     m = _munkalap_vagy_404(db, munkalap_id)
     sor = db.scalar(select(DiszpoSor).where(DiszpoSor.munkalap_id == m.id, DiszpoSor.idx == idx))
@@ -392,6 +403,7 @@ def sor_adat(
     if payload.datum_valtozik:
         sor.datum = payload.datum
     if payload.rejtett is not None:
+        _csak_admin_rejthet(current_user)
         sor.rejtett = payload.rejtett
     munkanap_szamlalo.urits_gyorsitotar(db)
     db.commit()
@@ -418,7 +430,7 @@ def set_oszlop_kotes(
     idx: int,
     payload: OszlopKotesIn,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+    current_user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """Az oszlop hozzákötése egy munkatárshoz.
 
@@ -439,6 +451,7 @@ def set_oszlop_kotes(
     if payload.cimke_valtozik:
         oszlop.cimke = (payload.cimke or "").strip() or None
     if payload.rejtett is not None:
+        _csak_admin_rejthet(current_user)
         oszlop.rejtett = payload.rejtett
     munkanap_szamlalo.urits_gyorsitotar(db)
     db.commit()
