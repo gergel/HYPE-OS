@@ -369,55 +369,27 @@ def sajat_diszpo_pdf_url(
 ):
     """A diszpó PDF megnyitási címe - a SAJÁT tárhelyünkről (R2), nem a
     Drive-ról (a felhasználó kérése). Az új kiküldések már R2-re is
-    feltöltődnek (services/dispo.py); a régi, csak Drive-linkes diszpók itt,
-    az első megnyitáskor költöznek át: letöltjük a Drive-ról, feltöltjük az
-    R2-re, és onnantól onnan nyílnak. Csak a forgatás stábtagja kérheti."""
-    import re as _re
-
+    feltöltődnek (services/dispo.py); a régieket egy indulási háttérfeladat
+    hozza át (services/diszpo_pdf_koltoztetes), és ha egy még nem került át,
+    itt, az első megnyitáskor költözik. Csak a forgatás stábtagja kérheti."""
     project = db.get(Project, project_id)
     if project is None or all(e.id != current_user.id for e in project.crew):
         raise HTTPException(status_code=404, detail="Nincs ilyen diszpód.")
-    if project.diszpo_pdf_r2_url:
-        return SajatDiszpoPdf(url=project.diszpo_pdf_r2_url)
-    drive_url = project.drive_diszpo_pdf_url or project.diszpo_pdf_url
-    if not drive_url:
+    regi_link = project.drive_diszpo_pdf_url or project.diszpo_pdf_url
+    if not project.diszpo_pdf_r2_url and not regi_link:
         raise HTTPException(status_code=404, detail="Ehhez a diszpóhoz még nincs PDF.")
-    talalat = _re.search(r"/d/([A-Za-z0-9_-]{10,})", drive_url) or _re.search(
-        r"[?&]id=([A-Za-z0-9_-]{10,})", drive_url
-    )
     try:
-        from app.services import document_storage
+        from app.services import diszpo_pdf_koltoztetes
 
-        if document_storage.is_configured():
-            if talalat is not None:
-                from app.services.gdoc_template import drive_fajl_letoltes
-
-                pdf_bytes = drive_fajl_letoltes(talalat.group(1))
-            else:
-                # NEM Drive-os fájllink (régi diszpóknál előfordul sima URL) -
-                # akkor is áthozzuk: egyszerű letöltés, és onnantól az R2-ről
-                # nyílik (a felhasználó kérése: régi diszpót se Drive-on/külső
-                # linken át nyissunk).
-                import httpx
-
-                valasz = httpx.get(drive_url, follow_redirects=True, timeout=30)
-                valasz.raise_for_status()
-                pdf_bytes = valasz.content
-                # Ha nem PDF jött (pl. egy bejelentkező/HTML oldal), azt nem
-                # mentjük el "diszpo.pdf"-ként - marad a link tartaléknak.
-                if not pdf_bytes.startswith(b"%PDF"):
-                    raise ValueError("A letöltött tartalom nem PDF")
-            key = f"diszpo-pdf/{project.id}/diszpo.pdf"
-            url = document_storage.upload_bytes(pdf_bytes, key, "application/pdf")
-            project.diszpo_pdf_r2_url = url
-            project.diszpo_pdf_r2_key = key
-            db.commit()
+        url = diszpo_pdf_koltoztetes.koltoztesd_at(db, project)
+        if url:
             return SajatDiszpoPdf(url=url)
-    except Exception:  # noqa: BLE001 - tartalékként marad a Drive link
+    except Exception:  # noqa: BLE001 - tartalékként marad a régi link
         logger.exception("Nem sikerült átköltöztetni a diszpó PDF-et R2-re project_id=%s", project.id)
-    # Végső tartalék: a Drive link (pl. ha az R2 nincs beállítva, vagy a
-    # letöltés elhasalt) - rosszabb, mint a saját tárhely, de működik.
-    return SajatDiszpoPdf(url=drive_url)
+    # Végső tartalék: a régi (Drive/külső) link - pl. ha az R2 nincs
+    # beállítva, vagy a letöltés elhasalt - rosszabb, mint a saját tárhely,
+    # de működik.
+    return SajatDiszpoPdf(url=regi_link)
 
 
 @router.get("/my-tasks", response_model=MyTasksSummary)

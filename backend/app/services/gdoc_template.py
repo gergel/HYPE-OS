@@ -153,10 +153,26 @@ def _export_pdf_bytes(doc_id: str) -> bytes:
 
 def drive_fajl_letoltes(file_id: str) -> bytes:
     """Egy Drive-on tárolt fájl (pl. régebbi diszpó PDF) letöltése bájtokként
-    - az R2-re költöztetéshez (lásd routes/dashboard.sajat_diszpo_pdf_url:
-    a régi, csak Drive-linkes diszpók első megnyitáskor kerülnek át R2-re)."""
+    - az R2-re költöztetéshez (lásd services/diszpo_pdf_koltoztetes.py).
+
+    A régi diszpók egy részénél a mentett link nem a kész PDF-re, hanem a
+    szerkeszthető Google DOKUMENTUMRA mutat (a dispo._pdf_a_drive_ra `pdf_link
+    or doc_link` tartaléka miatt) - a natív Docs fájlt a get_media nem tudja
+    letölteni ("Only files with binary content can be downloaded"), azt
+    PDF-ként EXPORTÁLJUK. Ezért előbb a fájl típusát kérdezzük le."""
     drive = _google_service("drive", "v3")
-    req = drive.files().get_media(fileId=file_id, supportsAllDrives=True)
+    try:
+        meta = (
+            drive.files()
+            .get(fileId=file_id, fields="mimeType", supportsAllDrives=True)
+            .execute(num_retries=UJRAPROBALKOZASOK)
+        )
+    except HttpError as exc:
+        raise RuntimeError(_google_hiba_szoveg("a fájl lekérdezése a Drive-ról", exc)) from exc
+    if str(meta.get("mimeType") or "").startswith("application/vnd.google-apps"):
+        req = drive.files().export_media(fileId=file_id, mimeType="application/pdf")
+    else:
+        req = drive.files().get_media(fileId=file_id, supportsAllDrives=True)
     fh = BytesIO()
     downloader = MediaIoBaseDownload(fh, req)
     done = False

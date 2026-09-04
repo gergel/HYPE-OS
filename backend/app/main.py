@@ -76,6 +76,23 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.include_router(api_router, prefix="/api/v1")
 
 
+@app.on_event("startup")
+def _regi_diszpo_pdfek_athozasa() -> None:
+    """A RÉGI diszpó PDF-ek átköltöztetése a saját tárhelyre (R2) - a
+    felhasználó kérése: a diszpók ne a Drive-ról nyíljanak. Induláskor
+    háttérszálon fut (az app azonnal kiszolgál), idempotens: csak addig
+    csinál bármit, amíg van még át nem hozott régi diszpó - utána minden
+    indulásnál üresen tér vissza. Több worker esetén a hatter_feladatok
+    tábla zárja, hogy csak egy példány fusson."""
+    try:
+        from app.services import diszpo_pdf_koltoztetes
+
+        if diszpo_pdf_koltoztetes.inditsd_a_teljes_koltoztetest():
+            logger.info("Régi diszpó PDF-ek R2-re költöztetése elindult a háttérben.")
+    except Exception:  # noqa: BLE001 - az app indulását ez nem akaszthatja meg
+        logger.exception("A régi diszpó PDF-ek költöztetését nem sikerült elindítani.")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "environment": settings.environment}
