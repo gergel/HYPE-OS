@@ -170,7 +170,14 @@ export function BelsosTigManager({
     const honapDatum = teljesitesDatumASzovegbol(form.teljesites_szoveg);
     const honapCel = honapDatum ? tigHonapTeljesitesbol(honapDatum) : null;
     return [
-      { cimke: "Név a papíron", ertek: ceg ? ceg.nev : openEmployee.full_name },
+      {
+        // A papíron a NÉV mindig a vállalkozás képviselője (a felhasználó
+        // kérése) - a backend generate_and_send ugyanígy számolja.
+        cimke: "Név a papíron",
+        ertek: ceg
+          ? ceg.kepviselo || ceg.nev
+          : openEmployee.vallalkozas_kepviselo || openEmployee.full_name,
+      },
       { cimke: "Székhely", ertek: ceg ? ceg.szekhely : openEmployee.szekhely },
       { cimke: "Adószám", ertek: ceg ? ceg.adoszam : openEmployee.adoszam },
       { cimke: "Megbízás tárgya", ertek: form.megbizas_targya },

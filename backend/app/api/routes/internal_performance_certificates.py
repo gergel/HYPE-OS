@@ -159,6 +159,9 @@ class CegValasztek(BaseModel):
     #: mutathassa, ami a papírra megy, ne egy másik forrásból vett közelítést.
     szekhely: str | None = None
     adoszam: str | None = None
+    #: A cég képviselője - a papíron a NÉV mindig a képviselő (a felhasználó
+    #: kérése), a cég neve csak tartalék, ha nincs képviselő megadva.
+    kepviselo: str | None = None
     kezdet: date | None = None
     veg: date | None = None
     #: Erre a hónapra érvényes-e az időszaka. A lejárt/még nem kezdődött
@@ -186,6 +189,7 @@ def _ceg_valasztek(tagsagok: list[VallalkozasTag], ev: int, honap: int) -> list[
             nev=t.vallalkozas.nev if t.vallalkozas else f"#{t.vallalkozas_id}",
             szekhely=t.vallalkozas.szekhely if t.vallalkozas else None,
             adoszam=t.vallalkozas.adoszam if t.vallalkozas else None,
+            kepviselo=t.vallalkozas.kepviselo if t.vallalkozas else None,
             kezdet=t.kezdet,
             veg=t.veg,
             ervenyes=(t.kezdet is None or t.kezdet <= utolso) and (t.veg is None or t.veg >= elso),
@@ -232,6 +236,9 @@ class MonthEmployeeInfo(BaseModel):
     #: a kiküldés előtti áttekintő ezekkel mutatja, mi megy ki a papírra.
     szekhely: str | None = None
     adoszam: str | None = None
+    #: A papíron a NÉV mindig a vállalkozás képviselője (a felhasználó
+    #: kérése) - saját névben a munkatárs adatlapjának képviselő-mezője.
+    vallalkozas_kepviselo: str | None = None
     #: Kell-e tőle havi TIG. Bejelentett alkalmazottnál NEM: nála a havi
     #: teendő csak a fizetés beírása (lásd models/employee.py
     #: BelsosJogviszony) - a felület ettől függően más vezérlőket mutat.
@@ -315,6 +322,7 @@ def list_month(
             plusz_afa=e.plusz_afa,
             szekhely=e.vallakozas_szekhely,
             adoszam=e.vallalkozas_adoszama,
+            vallalkozas_kepviselo=e.vallalkozas_kepviselo,
             kell_tig=belsos_idoszak.kell_havi_tig(e),
             jogviszony=e.belsos_jogviszony.value,
             record=InternalPerformanceCertificateRead.model_validate(lookup[e.id]) if e.id in lookup else None,
@@ -734,7 +742,11 @@ def generate_and_send(
     # munkatársnak megy, mert a cég az övé, ő intézi.
     ceg = record.vallalkozas
     fields = {
-        "nev": ceg.nev if ceg else employee.full_name,
+        # A papíron a NÉV mindig a vállalkozás KÉPVISELŐJE (a felhasználó
+        # kérése) - céges számlázásnál a cég képviselője (tartalék: a cég
+        # neve), saját névben a munkatárs adatlapján megadott képviselő
+        # (tartalék: a saját neve).
+        "nev": (ceg.kepviselo or ceg.nev) if ceg else (employee.vallalkozas_kepviselo or employee.full_name),
         "hely": (ceg.szekhely if ceg else employee.vallakozas_szekhely) or "",
         "adoszam": (ceg.adoszam if ceg else employee.vallalkozas_adoszama) or "",
         "targy": record.megbizas_targya or "",

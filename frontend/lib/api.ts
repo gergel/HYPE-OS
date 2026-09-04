@@ -1317,6 +1317,9 @@ export type BelsosTigMonthEmployee = {
    * a kiküldés előtti áttekintő ezekkel mutatja, mi megy ki a papírra. */
   szekhely: string | null;
   adoszam: string | null;
+  /** A papíron a név mindig a vállalkozás képviselője - saját névben a
+   * munkatárs adatlapjának képviselő-mezője (tartalék: a saját neve). */
+  vallalkozas_kepviselo: string | null;
   /** Kell-e tőle havi TIG. Bejelentett alkalmazottnál NEM: nála a havi teendő
    * csak a fizetés beírása (lásd backend models/employee.py BelsosJogviszony). */
   kell_tig: boolean;
@@ -1342,6 +1345,8 @@ export type BelsosTigCeg = {
    * ebből mutatja, mi megy ki a papírra. */
   szekhely: string | null;
   adoszam: string | null;
+  /** A cég képviselője - a papíron a név mindig ő (tartalék: a cég neve). */
+  kepviselo: string | null;
   kezdet: string | null;
   veg: string | null;
   /** Erre a hónapra érvényes-e az időszaka. */
