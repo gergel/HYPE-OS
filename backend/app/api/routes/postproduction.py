@@ -1,6 +1,7 @@
 """Utómunka modul: Deliverable (vágandó anyag) + Timesheet (ledolgozott idő) + Feedback (gombos visszajelzés)."""
 
 import unicodedata
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -414,22 +415,35 @@ def set_kiosztas(
 
 
 class FutoTimer(BaseModel):
-    """Egy épp futó időmérés - a tábla kártyái mutatják, ki min dolgozik."""
+    """Egy épp futó időmérés - a tábla kártyái és az admin dashboard "épp
+    vágás alatt" kártyája mutatják, ki min dolgozik."""
 
     deliverable_id: int
     employee_id: int
     full_name: str
+    #: Az anyag neve + mikor indult a mérés - az admin dashboard-kártyához
+    #: (a felhasználó kérése: lássa, melyik projekt van épp vágás alatt).
+    projekt_neve: str | None = None
+    kezdet: datetime | None = None
 
 
 @deliverable_actions_router.get("/futo-timerek", response_model=list[FutoTimer])
 def get_futo_timerek(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
-    """MINDEN épp futó időmérés, egy körben - az Utómunka tábla kártyáin
-    látszik, melyik anyagot ki vágja éppen. A futó mérés ismérve ugyanaz, mint
-    a get_timer_state-ben: van kezdete, de még nincs vége. A korlátozott fiók
-    (külsős vágó) itt is csak a rá bízott anyagok méréseit látja."""
+    """MINDEN épp futó időmérés, egy körben - az Utómunka tábla kártyáin és az
+    admin dashboardján látszik, melyik anyagot ki vágja éppen. A futó mérés
+    ismérve ugyanaz, mint a get_timer_state-ben: van kezdete, de még nincs
+    vége. A korlátozott fiók (külsős vágó) itt is csak a rá bízott anyagok
+    méréseit látja."""
     stmt = (
-        select(Timesheet.deliverable_id, Timesheet.employee_id, Employee.full_name)
+        select(
+            Timesheet.deliverable_id,
+            Timesheet.employee_id,
+            Employee.full_name,
+            Deliverable.projekt_neve,
+            Timesheet.start_date,
+        )
         .join(Employee, Employee.id == Timesheet.employee_id)
+        .join(Deliverable, Deliverable.id == Timesheet.deliverable_id)
         .where(
             Timesheet.deliverable_id.is_not(None),
             Timesheet.end_date.is_(None),
@@ -440,8 +454,8 @@ def get_futo_timerek(db: Session = Depends(get_db), current_user: Employee = Dep
     if engedett is not None:
         stmt = stmt.where(Timesheet.deliverable_id.in_(engedett or {0}))
     return [
-        FutoTimer(deliverable_id=did, employee_id=eid, full_name=nev)
-        for did, eid, nev in db.execute(stmt).all()
+        FutoTimer(deliverable_id=did, employee_id=eid, full_name=nev, projekt_neve=anyag_nev, kezdet=kezdet)
+        for did, eid, nev, anyag_nev, kezdet in db.execute(stmt).all()
     ]
 
 

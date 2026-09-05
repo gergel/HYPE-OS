@@ -12,6 +12,7 @@ import {
 import { StatCard } from "@/components/StatCard";
 import { TopBar } from "@/components/TopBar";
 import {
+  getCurrentUser,
   getDashboardSummary,
   getDeliverables,
   getEszkozKivitelHianyok,
@@ -21,6 +22,8 @@ import {
   getMyTasksSummary,
   getProjectCodeOptions,
 } from "@/lib/api";
+import { szerepkorei } from "@/lib/permissions";
+import { EppVagasKartya } from "@/components/dashboard/EppVagasKartya";
 import { EszkozHianyKartya } from "@/components/dashboard/EszkozHianyKartya";
 import { SajatDiszpoKartya } from "@/components/dashboard/SajatDiszpoKartya";
 import { getSajatDiszpok } from "@/lib/api";
@@ -79,14 +82,16 @@ export default async function DashboardPage() {
     );
   }
 
-  const [summary, projectCodes, visibleWidgets, myTasks, allowedPages, sajatDiszpok] = await Promise.all([
+  const [summary, projectCodes, visibleWidgets, myTasks, allowedPages, sajatDiszpok, currentUser] = await Promise.all([
     getDashboardSummary(),
     getProjectCodeOptions(),
     getMyDashboardConfig(),
     getMyTasksSummary(),
     getMyPageAccess(),
     getSajatDiszpok(),
+    getCurrentUser(),
   ]);
+  const isAdmin = szerepkorei(currentUser).includes("admin");
 
   // A "Mai feladatok" és "Figyelmeztetések" widget több különböző oldalra
   // mutató al-kártyát/sort tartalmaz (Forgatás->/projektek, Aktív Project
@@ -144,6 +149,11 @@ export default async function DashboardPage() {
         {/* Eszközkivitel-hiányok: kiemelt, nem elrejthető figyelmeztetés (a
             felhasználó kérése) - csak akkor látszik, ha van nyitott hiány. */}
         {eszkozHianyok.length > 0 && <EszkozHianyKartya kezdeti={eszkozHianyok} />}
+
+        {/* ÉPP VÁGÁS ALATT (a felhasználó kérése): az admin lássa, melyik
+            anyagot ki vágja éppen (futó időmérők alapján, percenként
+            frissülve). Csak adminnak, és csak ha tényleg fut mérés. */}
+        {isAdmin && <EppVagasKartya />}
 
         {summary?.vagoi_jatek_nyertes && <VagoiGyoztesKartya nyertes={summary.vagoi_jatek_nyertes} />}
         {summary?.vagoi_jatek_nyeremeny_bekeres && <VagoiNyeremenyBekero />}
