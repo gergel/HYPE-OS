@@ -9,6 +9,7 @@ import { EntityFieldManager } from "@/components/EntityFieldManager";
 import { KpForgalomUjraszinkron } from "@/components/KpForgalomUjraszinkron";
 import { NotionImportPanel } from "@/components/NotionImportPanel";
 import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
+import { TorlesNaplo } from "@/components/TorlesNaplo";
 import { szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -168,6 +169,17 @@ export default async function BeallitasokPage() {
           </p>
           <DetailTabEditor entities={detailTabEntities} initialConfigsByEntity={detailTabsByEntity} />
         </Card>
+
+        {szerepkorei(currentUser).includes("admin") && (
+          <Card title="Törlési napló">
+            <p className="mb-3 text-[13px] text-text-secondary">
+              Ki mit törölt bárhonnan a rendszerben az elmúlt 30 napban - és innen vissza is állítható. A
+              visszaállítás az eredeti azonosítóval hozza vissza a rekordot; a vele együtt (kaszkáddal) törölt
+              kapcsolt sorokat nem.
+            </p>
+            <TorlesNaplo />
+          </Card>
+        )}
 
         {szerepkorei(currentUser).includes("admin") && (
           <Card title="Mezők kezelése">
