@@ -563,10 +563,6 @@ async def feltoltes_video(
     file: UploadFile = File(...),
     folder_id: int | None = Form(None),
     title: str | None = Form(None),
-    # CSAK BELSŐ ELLENŐRZÉSRE (a felhasználó kérése): a vágó a feltöltő
-    # oldalon bejelölheti, hogy az ügyfél még ne lássa - lásd
-    # models/portal.PortalVideo.rejtett.
-    rejtett: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     """Videó feltöltése a feltöltő linkkel - ugyanaz a tároló + feldolgozó
@@ -585,9 +581,10 @@ async def feltoltes_video(
         title=(title or "").strip() or _os.path.splitext(file.filename or "Untitled")[0],
         status="processing",
         sort_order=max_order + 1,
-        # Rejtett mappába a feltöltés KÉNYSZERÍTVE rejtett - a feltöltő a
-        # jelölőtől függetlenül nem tehet láthatóvá semmit (lásd _rejtett_agban).
-        rejtett=rejtett or _rejtett_agban(portal, cel_mappa),
+        # A rejtett jelölést nem a feltöltő dönti el (a felhasználó kérése):
+        # rejtett mappába a feltöltés KÉNYSZERÍTVE rejtett, máshova látható -
+        # elrejteni utólag az admin felületen lehet (lásd _rejtett_agban).
+        rejtett=_rejtett_agban(portal, cel_mappa),
     )
     db.add(video)
     db.commit()
