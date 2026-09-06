@@ -614,6 +614,13 @@ function ImageGrid({ images, onOpen }: { images: ImageType[]; onOpen: (images: I
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
           <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/20" />
+          {/* Rejtett kép (csak a belsős néző kapja meg egyáltalán): feltűnő
+              jelölés, hogy az ügyfél ezt a képet nem látja. */}
+          {img.rejtett && (
+            <span className="absolute left-2 top-2 rounded-full bg-red-600/90 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+              Rejtett – az ügyfél nem látja
+            </span>
+          )}
         </button>
       ))}
     </div>

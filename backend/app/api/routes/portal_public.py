@@ -129,7 +129,7 @@ def _serialize(portal: Portal, belsos: bool = False) -> PublicPortal:
             if v.status == "ready" and not v.rejtett and v.folder_id not in rejtett_mappak
         ]
         folders = [f for f in portal.folders if f.id not in rejtett_mappak]
-        images = [i for i in portal.images if i.folder_id not in rejtett_mappak]
+        images = [i for i in portal.images if not i.rejtett and i.folder_id not in rejtett_mappak]
     return PublicPortal(
         slug=portal.slug,
         title=resolve_title(portal),
@@ -493,12 +493,22 @@ def feltoltes_adatok(token: str, db: Session = Depends(get_db)):
             szulo_id = szulo.parent_folder_id
         return " / ".join(reversed(reszek))
 
+    # A feltöltő oldal ebből tudja jelezni: rejtett (ágban lévő) mappába
+    # minden feltöltés automatikusan rejtett lesz (lásd _rejtett_agban).
+    rejtett_mappak = _rejtett_mappak_rekurzivan(portal)
     return {
         "title": resolve_title(portal),
         "brand": portal.brand,
         "csak_mappa": portal.feltolto_folder_id is not None,
         "folders": [
-            {"id": f.id, "name": utvonal(f), "video_db": len(f.videos), "kep_db": len(f.images)} for f in mappak
+            {
+                "id": f.id,
+                "name": utvonal(f),
+                "video_db": len(f.videos),
+                "kep_db": len(f.images),
+                "rejtett": f.id in rejtett_mappak,
+            }
+            for f in mappak
         ],
     }
 
@@ -522,6 +532,14 @@ def feltoltes_mappa(token: str, payload: FeltoltesMappaIn, db: Session = Depends
     db.commit()
     db.refresh(folder)
     return {"id": folder.id, "name": folder.name}
+
+
+def _rejtett_agban(portal: Portal, folder_id: int | None) -> bool:
+    """A cél-mappa rejtett ágban van-e (ő maga vagy bármely őse rejtett).
+    Ilyen mappába a feltöltő linken érkező kép/videó AUTOMATIKUSAN rejtett
+    lesz, és ezt a feltöltő nem tudja felülbírálni (a felhasználó kérése) -
+    a rejtett mappa megosztott feltöltő linkje ne szivárogtasson az ügyfélnek."""
+    return folder_id is not None and folder_id in _rejtett_mappak_rekurzivan(portal)
 
 
 def _feltoltes_cel_mappa(db: Session, portal: Portal, folder_id: int | None):
@@ -567,7 +585,9 @@ async def feltoltes_video(
         title=(title or "").strip() or _os.path.splitext(file.filename or "Untitled")[0],
         status="processing",
         sort_order=max_order + 1,
-        rejtett=rejtett,
+        # Rejtett mappába a feltöltés KÉNYSZERÍTVE rejtett - a feltöltő a
+        # jelölőtől függetlenül nem tehet láthatóvá semmit (lásd _rejtett_agban).
+        rejtett=rejtett or _rejtett_agban(portal, cel_mappa),
     )
     db.add(video)
     db.commit()
@@ -600,7 +620,9 @@ async def feltoltes_kep(
 
     portal = _feltolto_portal(db, token)
     cel_mappa = _feltoltes_cel_mappa(db, portal, folder_id)
-    image = PortalImage(portal_id=portal.id, folder_id=cel_mappa)
+    # Rejtett mappába érkező kép automatikusan rejtett - a feltöltő ezen nem
+    # tud változtatni, csak az admin felület (lásd _rejtett_agban).
+    image = PortalImage(portal_id=portal.id, folder_id=cel_mappa, rejtett=_rejtett_agban(portal, cel_mappa))
     db.add(image)
     db.flush()
 
@@ -644,8 +666,9 @@ def megosztas(token: str, db: Session = Depends(get_db)):
     folder = db.scalar(select(PortalFolder).where(PortalFolder.share_token == token))
     if folder is not None:
         portal = folder.portal
-        # A rejtett videó a mappa-megosztásból is kimarad (lásd _serialize).
+        # A rejtett videó ÉS kép a mappa-megosztásból is kimarad (lásd _serialize).
         ready = [v for v in folder.videos if v.status == "ready" and not v.rejtett]
+        kepek = [i for i in folder.images if not i.rejtett]
         project = PublicPortal(
             slug=portal.slug,
             title=f"{resolve_title(portal)} – {folder.name}" if folder.name else resolve_title(portal),
@@ -658,7 +681,7 @@ def megosztas(token: str, db: Session = Depends(get_db)):
             payment_mode="contact",
             videos=[PortalVideoOut.model_validate(v) for v in ready],
             folders=[PortalFolderOut.model_validate(folder)],
-            images=[PortalImageOut.model_validate(i) for i in folder.images],
+            images=[PortalImageOut.model_validate(i) for i in kepek],
         )
         return {"tipus": "mappa", "project": project.model_dump()}
 

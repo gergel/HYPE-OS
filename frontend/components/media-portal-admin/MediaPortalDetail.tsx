@@ -25,6 +25,7 @@ import {
   uploadImage,
   deleteImage,
   setImageFolder,
+  setImageRejtett,
   renameVideo,
   uploadCover,
   deleteCover,
@@ -531,6 +532,18 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
       refresh();
     } catch (err) {
       alert(`Sikertelen áthelyezés: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  /** A kép rejtett kapcsolója (a felhasználó kérése): a rejtett mappába a
+   * feltöltő linken érkezett kép automatikusan rejtett - az admin itt tudja
+   * láthatóvá tenni (vagy kézzel elrejteni). */
+  async function onToggleImageRejtett(imageId: number, rejtett: boolean) {
+    try {
+      await setImageRejtett(imageId, rejtett);
+      refresh();
+    } catch (err) {
+      alert(`Sikertelen: ${err instanceof Error ? err.message : err}`);
     }
   }
 
@@ -1227,6 +1240,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                       .filter((cel) => cel.id !== (img.folder_id ?? null))
                       .map((cel) => ({ id: cel.id, nev: mappaUtvonal(cel) }))}
                     onMove={(celId) => void onMoveImage(img.id, celId)}
+                    onToggleRejtett={() => void onToggleImageRejtett(img.id, !img.rejtett)}
                   />
                 ))}
               </div>
@@ -1272,6 +1286,7 @@ function LazyImageCell({
   onDelete,
   mappaOpciok = [],
   onMove,
+  onToggleRejtett,
 }: {
   img: PortalImageItem;
   selected: boolean;
@@ -1282,6 +1297,9 @@ function LazyImageCell({
   /** A kép áthelyezéséhez választható cél-mappák (a felhasználó kérése). */
   mappaOpciok?: { id: number; nev: string }[];
   onMove?: (folderId: number | null) => void;
+  /** A rejtett jelölés ki/be kapcsolása (a rejtett mappába feltöltő linken
+   * érkezett kép automatikusan rejtett - itt tehető láthatóvá). */
+  onToggleRejtett?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -1308,8 +1326,24 @@ function LazyImageCell({
           <label className="absolute left-2 top-2 z-20 flex h-6 w-6 cursor-pointer items-center justify-center rounded bg-black/60" onClick={(e) => e.stopPropagation()}>
             <input type="checkbox" checked={selected} onChange={onToggle} className="h-4 w-4 cursor-pointer accent-[var(--accent-solid)]" />
           </label>
+          {/* Rejtett kép jelvénye - az ügyfél nem látja ezt a képet a portálon. */}
+          {img.rejtett && (
+            <span className="absolute right-2 top-2 z-20 flex items-center gap-1 rounded bg-red-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
+              <EyeOff className="h-3 w-3" />
+              Rejtett
+            </span>
+          )}
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 opacity-0 transition group-hover:opacity-100">
             <div className="flex items-center gap-2">
+              {onToggleRejtett && (
+                <button
+                  title={img.rejtett ? "Láthatóvá tétel az ügyfélnek" : "Elrejtés az ügyfél elől"}
+                  onClick={onToggleRejtett}
+                  className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition hover:text-white/80"
+                >
+                  {img.rejtett ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+              )}
               {inFolder && (
                 <button
                   title="Kivétel a mappából"

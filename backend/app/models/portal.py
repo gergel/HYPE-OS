@@ -221,6 +221,11 @@ class PortalImage(TimestampMixin, Base):
     portal_id: Mapped[int] = mapped_column(ForeignKey("portals.id", ondelete="CASCADE"), nullable=False, index=True)
     folder_id: Mapped[int | None] = mapped_column(ForeignKey("portal_folders.id", ondelete="SET NULL"))
     title: Mapped[str | None] = mapped_column(String(255))
+    #: REJTETT kép - az ügyfél nem látja (ugyanaz az elv, mint a
+    #: PortalVideo.rejtett-nél). A rejtett mappába feltöltő linken érkező kép
+    #: automatikusan ezt kapja (a felhasználó kérése), és a feltöltő nem is
+    #: tudja levenni - csak az admin.
+    rejtett: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     url: Mapped[str | None] = mapped_column(String(500))
     thumbnail_url: Mapped[str | None] = mapped_column(String(500))
     key: Mapped[str | None] = mapped_column(String(500), comment="Eredeti kép R2 kulcsa")

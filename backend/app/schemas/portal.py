@@ -136,12 +136,16 @@ class PortalImageOut(BaseModel):
     folder_id: int | None = None
     url: str | None = ""
     thumbnail_url: str | None = ""
+    #: Rejtett kép - az ügyfél nem látja (rejtett mappába a feltöltő linken
+    #: érkező kép automatikusan ezt kapja, lásd models/portal.PortalImage.rejtett).
+    rejtett: bool = False
 
 
 class PortalImageUpdate(BaseModel):
     folder_id: int | None = None
     title: str | None = None
     set_folder: bool = False
+    rejtett: bool | None = None
 
 
 class ReorderPayload(BaseModel):

@@ -792,6 +792,10 @@ def update_image(
         image.folder_id = payload.folder_id
     if payload.title is not None:
         image.title = payload.title
+    # A rejtett jelölést csak az admin felület állítja - a feltöltő linknek
+    # ilyen végpontja nincs, így a feltöltő nem tudja levenni (a felhasználó kérése).
+    if payload.rejtett is not None:
+        image.rejtett = payload.rejtett
     db.commit()
     db.refresh(image)
     return PortalImageOut.model_validate(image)

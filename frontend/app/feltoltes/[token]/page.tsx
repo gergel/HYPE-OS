@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Folder as FolderIcon, FolderPlus, Loader2, Upload } from "lucide-react";
+import { EyeOff, Folder as FolderIcon, FolderPlus, Loader2, Upload } from "lucide-react";
 import {
   feltoltesFajl,
   feltoltesMappa,
@@ -251,6 +251,15 @@ export default function FeltoltesPage() {
                   <p className="font-mono text-[11px] uppercase tracking-eyebrow text-mist">
                     {f.video_db} videó · {f.kep_db} kép
                   </p>
+                  {/* REJTETT MAPPA (a felhasználó kérése): az ide feltöltött
+                      fájlokat a szerver automatikusan rejtettre állítja - ezt
+                      innen nem lehet felülbírálni, csak az admin felületről. */}
+                  {f.rejtett && (
+                    <p className="mt-1 flex items-center gap-1.5 text-[12px] text-amber-400">
+                      <EyeOff className="h-3.5 w-3.5 shrink-0" />
+                      Rejtett mappa – az ide feltöltött fájlokat az ügyfél nem látja.
+                    </p>
+                  )}
                 </div>
               </div>
               <label

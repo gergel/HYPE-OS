@@ -141,6 +141,16 @@ export async function setImageFolder(imageId: number, folderId: number | null): 
   });
 }
 
+/** A kép rejtett jelölése (a felhasználó kérése): a rejtett mappába a feltöltő
+ * linken érkezett kép automatikusan rejtett - itt tudja az admin láthatóvá
+ * tenni (vagy kézzel elrejteni). */
+export async function setImageRejtett(imageId: number, rejtett: boolean): Promise<void> {
+  return req(`/api/v1/portal-admin/images/${imageId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ rejtett }),
+  });
+}
+
 export async function renameVideo(videoId: number, title: string): Promise<PortalVideoItem> {
   return req<PortalVideoItem>(`/api/v1/portal-admin/videos/${videoId}`, {
     method: "PATCH",

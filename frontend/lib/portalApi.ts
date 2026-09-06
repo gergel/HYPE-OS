@@ -43,6 +43,9 @@ export interface PortalImage {
   folder_id: number | null;
   url: string;
   thumbnail_url: string;
+  /** Rejtett kép - az ügyfél nem látja (rejtett mappába a feltöltő linken
+   * érkező kép automatikusan ezt kapja, csak admin veheti le). */
+  rejtett?: boolean;
 }
 
 export interface PublicPortal {
@@ -171,7 +174,15 @@ export type FeltoltesAdatok = {
   title: string;
   brand: string;
   csak_mappa: boolean;
-  folders: { id: number; name: string; video_db: number; kep_db: number }[];
+  folders: {
+    id: number;
+    name: string;
+    video_db: number;
+    kep_db: number;
+    /** Rejtett (ágban lévő) mappa: ide minden feltöltés automatikusan rejtett
+     * lesz, és ezt a feltöltő nem tudja felülbírálni (a szerver kényszeríti). */
+    rejtett?: boolean;
+  }[];
 };
 
 export async function getFeltoltesAdatok(token: string) {

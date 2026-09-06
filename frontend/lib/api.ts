@@ -2497,6 +2497,9 @@ export type PortalImageItem = {
   folder_id: number | null;
   url: string;
   thumbnail_url: string;
+  /** Rejtett kép - az ügyfél nem látja a portálon (rejtett mappába a feltöltő
+   * linken érkező kép automatikusan ezt kapja); adminból kapcsolható. */
+  rejtett?: boolean;
 };
 
 export type PortalFolderItem = {
