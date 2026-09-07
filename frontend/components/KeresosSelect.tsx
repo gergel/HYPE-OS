@@ -47,6 +47,7 @@ export function KeresosSelect({
   placeholder = "Válassz…",
   disabled = false,
   className = "",
+  onUjFelvetel,
 }: {
   value: string | null;
   options: KeresosOpcio[];
@@ -54,6 +55,12 @@ export function KeresosSelect({
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** ÚJ elem felvétele a keresőből (a felhasználó kérése): ha meg van adva,
+   * a lista alján megjelenik a "„{beírt szöveg}" hozzáadása" sor - rá
+   * kattintva a hívó kapja meg a beírt nevet, és nyithat felvevő ablakot
+   * (pl. új alvállalkozó a kiadás-űrlapon). Az értékkészlet ettől még zárt:
+   * maga a kereső nem hoz létre semmit, csak jelez. */
+  onUjFelvetel?: (beirtNev: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -150,7 +157,30 @@ export function KeresosSelect({
                 ))}
               </div>
             ))}
-            {szurt.length === 0 && <p className="px-2 py-3 text-[12.5px] text-text-muted">Nincs találat.</p>}
+            {szurt.length === 0 && !onUjFelvetel && (
+              <p className="px-2 py-3 text-[12.5px] text-text-muted">Nincs találat.</p>
+            )}
+            {/* A beírt név felvétele újként - akkor is látszik, ha VAN
+                találat (hasonló nevű másik ember), csak üres keresésnél nem:
+                név nélkül nincs mit felvenni. */}
+            {onUjFelvetel && query.trim() && (
+              <button
+                type="button"
+                onClick={() => {
+                  const nev = query.trim();
+                  close();
+                  onUjFelvetel(nev);
+                }}
+                className="block w-full truncate rounded-[var(--radius)] border-t border-border px-2 py-1.5 text-left text-[13px] text-text-accent hover:bg-surface-3"
+              >
+                + „{query.trim()}” hozzáadása újként
+              </button>
+            )}
+            {szurt.length === 0 && onUjFelvetel && !query.trim() && (
+              <p className="px-2 py-3 text-[12.5px] text-text-muted">
+                Nincs találat – kezdj el gépelni egy nevet az új felvételhez.
+              </p>
+            )}
           </div>
         </AnchoredPanel>
       )}

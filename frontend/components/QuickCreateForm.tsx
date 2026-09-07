@@ -3,7 +3,8 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
-import { KeresosSelect } from "@/components/KeresosSelect";
+import { KeresosSelect, type KeresosOpcio } from "@/components/KeresosSelect";
+import { UjAlvallalkozoDialog } from "@/components/UjAlvallalkozoDialog";
 import { UjFajlValaszto } from "@/components/UjFajlValaszto";
 import { toltsdFelAFajlokat } from "@/lib/csatolmany";
 
@@ -45,6 +46,12 @@ type FieldSpec = {
    * A másik mező utána is szabadon átírható - ez csak az alapértelmezést
    * igazítja. Adat, nem függvény - ugyanazért, amiért a showIf. */
   autoSet?: { field: string; value: string };
+  /** ÚJ ALVÁLLALKOZÓ felvétele a keresőből (a felhasználó kérése): a select
+   * keresőjébe beírt név a lista alján "hozzáadása újként" sorral vehető
+   * fel - felugró ablak nyílik minden adatával (lásd UjAlvallalkozoDialog),
+   * mentés után pedig az új ember rögtön ki is választódik ebben a mezőben.
+   * Adat-jelző, nem függvény - ugyanazért, amiért a showIf. */
+  ujAlvallalkozo?: boolean;
 };
 
 /** Teljesül-e a mező-feltétel a mostani beírások mellett (showIf/requiredIf). */
@@ -111,6 +118,12 @@ export function QuickCreateForm({
   // csinált volna semmit, és kézzel kellett frissíteni az oldalt.
   const [frissites, startFrissites] = useTransition();
   const [zarasFuggoben, setZarasFuggoben] = useState(false);
+  // ÚJ ALVÁLLALKOZÓ felvétele a keresőből (lásd FieldSpec.ujAlvallalkozo):
+  // melyik mezőből nyílt az ablak, és milyen névvel.
+  const [ujAlvMezo, setUjAlvMezo] = useState<{ mezoNev: string; nev: string } | null>(null);
+  // A most felvett emberek opciói mezőnként: a szerver-oldali lista csak a
+  // router.refresh() után frissül, addig ebből tudja a select a nevet kiírni.
+  const [ujOpciok, setUjOpciok] = useState<Record<string, KeresosOpcio[]>>({});
   // SZÁRMAZTATOTT nyitottság (nem effect): amint a frissítés-átmenet véget
   // ért, az űrlap zárva renderelődik - a zarasFuggoben jelzőt a következő
   // megnyitás nullázza.
@@ -222,10 +235,16 @@ export function QuickCreateForm({
           {f.type === "select" ? (
             <KeresosSelect
               value={values[f.name] || null}
-              options={(f.options ?? []).map((opt) => ({ value: String(opt.value), label: opt.label }))}
+              options={[
+                ...(f.options ?? []).map((opt) => ({ value: String(opt.value), label: opt.label })),
+                // A most felvett emberek: a szerver-lista frissüléséig innen
+                // jön a nevük (lásd ujOpciok).
+                ...(ujOpciok[f.name] ?? []),
+              ]}
               onChange={(ertek) => mezoValtozas(f, ertek)}
               placeholder="Válassz…"
               className="min-w-[200px]"
+              onUjFelvetel={f.ujAlvallalkozo ? (nev) => setUjAlvMezo({ mezoNev: f.name, nev }) : undefined}
             />
           ) : (
             <>
@@ -269,6 +288,27 @@ export function QuickCreateForm({
         Mégse
       </button>
       {error && <p className="w-full text-[12px] text-text-danger">{error}</p>}
+      {/* Új alvállalkozó felvétele a kereső "hozzáadása újként" sorából -
+          mentés után az új ember rögtön ki is választódik a mezőben (az
+          autoSet lánccal együtt, tehát pl. a besorolás is külsősre vált). */}
+      {ujAlvMezo && (
+        <UjAlvallalkozoDialog
+          kezdoNev={ujAlvMezo.nev}
+          onMegse={() => setUjAlvMezo(null)}
+          onKesz={(id, nev) => {
+            const mezoSpec = fields.find((f) => f.name === ujAlvMezo.mezoNev);
+            setUjOpciok((o) => ({
+              ...o,
+              [ujAlvMezo.mezoNev]: [...(o[ujAlvMezo.mezoNev] ?? []), { value: String(id), label: nev }],
+            }));
+            if (mezoSpec) mezoValtozas(mezoSpec, String(id));
+            setUjAlvMezo(null);
+            // A szerver-oldali munkatárs-lista is tudjon róla - a nyitott
+            // űrlap beírt értékei kliens-állapotban vannak, megmaradnak.
+            router.refresh();
+          }}
+        />
+      )}
     </form>
   );
 }

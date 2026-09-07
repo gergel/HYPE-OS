@@ -3,7 +3,6 @@ import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
-import { UjAlvallalkozoGomb } from "@/components/UjAlvallalkozoGomb";
 import { StatusBadge } from "@/components/StatusBadge";
 import { KattinthatoAllapot } from "@/components/projektkod/KattinthatoAllapot";
 import { ENTITY_PATHS, formatHuf, type ProjektkodBontas } from "@/lib/api";
@@ -172,10 +171,6 @@ export function ProjektkodBontasTablak({
             bármelyik oldalon szerkesztve a másikon is azonnal (a
             háttérfrissítés a "expenses" témát figyeli) a friss érték
             látszik. */}
-        {/* Új alvállalkozó felvétele helyben (a felhasználó kérése): ha az
-            illető még nincs a listában, itt egyben megadható minden adata -
-            mentés után azonnal választható lent. */}
-        {szerkesztheiKiadast && <UjAlvallalkozoGomb />}
         {szerkesztheiKiadast && (
           <QuickCreateForm
             postPath={ENTITY_PATHS.expense}
@@ -279,6 +274,10 @@ export function ProjektkodBontasTablak({
                 label: "Alvállalkozó (ha van)",
                 type: "select",
                 autoSet: { field: "tipus", value: "kulsos" },
+                // A keresőbe beírt, nem létező név a lista aljáról vehető fel
+                // ÚJ alvállalkozóként, minden adatával (a felhasználó kérése)
+                // - lásd QuickCreateForm + UjAlvallalkozoDialog.
+                ujAlvallalkozo: true,
                 options: [...employees]
                   .sort((a, b) => a.full_name.localeCompare(b.full_name, "hu"))
                   .map((e) => ({ value: e.id, label: e.full_name })),
