@@ -29,6 +29,12 @@ type FieldSpec = {
    * kliens-komponensnek ("Functions cannot be passed directly to Client
    * Components"). */
   showIf?: { field: string; oneOf?: string[]; noneOf?: string[] };
+  /** Csak akkor KÖTELEZŐ, ha egy másik mező értéke ilyen (ugyanaz a
+   * feltétel-alak, mint a showIf) - pl. a kiadás dátuma külsős besorolásnál
+   * nem kötelező, mert ott a szerződés/TIG készül, és a dátum majd a
+   * kifizetésnél derül ki. A `required`-del együtt nem használatos: vagy
+   * mindig kötelező (required), vagy feltételesen (requiredIf). */
+  requiredIf?: { field: string; oneOf?: string[]; noneOf?: string[] };
   /** Gépelhető mező LEGÖRDÜLŐ javaslatokkal (datalist) - pl. az eszköz
    * kategóriája: a meglévő kategóriák közül választható, de új is beírható. */
   suggestions?: string[];
@@ -41,13 +47,26 @@ type FieldSpec = {
   autoSet?: { field: string; value: string };
 };
 
+/** Teljesül-e a mező-feltétel a mostani beírások mellett (showIf/requiredIf). */
+function feltetelTeljesul(
+  feltetel: { field: string; oneOf?: string[]; noneOf?: string[] },
+  values: Record<string, string>,
+): boolean {
+  const ertek = values[feltetel.field] ?? "";
+  if (feltetel.oneOf && !feltetel.oneOf.includes(ertek)) return false;
+  if (feltetel.noneOf && feltetel.noneOf.includes(ertek)) return false;
+  return true;
+}
+
 /** Látszik-e ez a mező a mostani beírások mellett (lásd FieldSpec.showIf)? */
 function lathato(f: FieldSpec, values: Record<string, string>): boolean {
-  if (!f.showIf) return true;
-  const ertek = values[f.showIf.field] ?? "";
-  if (f.showIf.oneOf && !f.showIf.oneOf.includes(ertek)) return false;
-  if (f.showIf.noneOf && f.showIf.noneOf.includes(ertek)) return false;
-  return true;
+  return !f.showIf || feltetelTeljesul(f.showIf, values);
+}
+
+/** Kötelező-e ez a mező MOST (lásd FieldSpec.required és requiredIf)? */
+function kotelezo(f: FieldSpec, values: Record<string, string>): boolean {
+  if (f.requiredIf) return feltetelTeljesul(f.requiredIf, values);
+  return Boolean(f.required);
 }
 
 /** A mezők kezdőértékei - az űrlap minden megnyitásakor ezzel indul. */
@@ -118,7 +137,7 @@ export function QuickCreateForm({
     // ilyenkor a kattintás úgy nézett ki, mintha semmi nem történt volna
     // (nem ment ki kérés a szerver felé). Explicit, jól látható hibaüzenetet
     // adunk ilyenkor is.
-    const missing = lathatoMezok.filter((f) => f.required && !values[f.name]?.trim());
+    const missing = lathatoMezok.filter((f) => kotelezo(f, values) && !values[f.name]?.trim());
     if (missing.length > 0) {
       setError(`Kötelező mező hiányzik: ${missing.map((f) => f.label).join(", ")}`);
       return;
@@ -198,7 +217,7 @@ export function QuickCreateForm({
         <div key={f.name} className="flex flex-col gap-1">
           <label className="t-label">
             {f.label}
-            {f.required && " *"}
+            {kotelezo(f, values) && " *"}
           </label>
           {f.type === "select" ? (
             <KeresosSelect
@@ -212,7 +231,7 @@ export function QuickCreateForm({
             <>
               <input
                 type={f.type ?? "text"}
-                required={f.required}
+                required={kotelezo(f, values)}
                 placeholder={f.placeholder}
                 value={values[f.name] ?? ""}
                 onChange={(e) => mezoValtozas(f, e.target.value)}

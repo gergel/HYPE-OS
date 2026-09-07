@@ -189,7 +189,15 @@ export function ProjektkodBontasTablak({
               { name: "kiadas_leiras", label: "Megnevezés", placeholder: "Mire ment a kiadás", required: true },
               // A KIADÁS dátumát kérjük be (a felhasználó kérése) - a lenti
               // Dátum oszlop és a Pénzügyek listája is ebből dolgozik.
-              { name: "kiadas_datuma", label: "Kiadás dátuma", type: "date", required: true },
+              // KÜLSŐS besorolásnál viszont NEM kötelező (a felhasználó
+              // kérése): ott a szerződés/TIG készül, a tényleges dátum majd
+              // a kifizetésnél derül ki.
+              {
+                name: "kiadas_datuma",
+                label: "Kiadás dátuma",
+                type: "date",
+                requiredIf: { field: "tipus", noneOf: ["kulsos"] },
+              },
               { name: "netto", label: "Nettó összeg", type: "number", required: true },
               // "+ÁFA" jelölés + százalék: a bruttót a szerver számolja
               // belőlük (lásd backend routes/finance._afa_brutto).

@@ -1512,6 +1512,11 @@ def mark_szamla_kifizetve(
 
     expense.kesz = True
     expense.fizetes_datuma = utalas
+    # A kiadás dátuma is a kifizetéskor derül ki, ha a felvitelkor üresen
+    # maradt (külsős kiadásnál nem kötelező megadni - a felhasználó kérése:
+    # ott a szerződés/TIG készül, a dátum a kifizetésé).
+    if expense.kiadas_datuma is None:
+        expense.kiadas_datuma = utalas
     # A számláról ismert határidő a Kiadás sorra is átmegy, ha ott még nincs -
     # a Pénzügy "Utalandók" nézete ebből tudja, mi jár le hamarosan. Egy már
     # ott kézzel beírt határidőt nem írunk felül.
@@ -2275,6 +2280,11 @@ def mark_szamla_kifizetve_projektkodon(
 
     expense.kesz = True
     expense.fizetes_datuma = utalas
+    # A kiadás dátuma is a kifizetéskor derül ki, ha a felvitelkor üresen
+    # maradt (külsős kiadásnál nem kötelező megadni - a felhasználó kérése:
+    # ott a szerződés/TIG készül, a dátum a kifizetésé).
+    if expense.kiadas_datuma is None:
+        expense.kiadas_datuma = utalas
     if expense.fizetes_hatarideje is None and cert.fizetesi_hatarido is not None:
         expense.fizetes_hatarideje = cert.fizetesi_hatarido
     cert.szamla_kifizetve = True
