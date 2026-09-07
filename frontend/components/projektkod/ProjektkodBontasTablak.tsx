@@ -254,10 +254,18 @@ export function ProjektkodBontasTablak({
               // stábtagoknál), de NEM kerül be egyik forgatás stábjába se - a
               // diszpó nem fogja behívni (lásd backend models/finance.py
               // Expense.alvallalkozo_project_id).
+              //
+              // Az alvállalkozó kiválasztása AUTOMATIKUSAN "Külsős"-re állítja
+              // a besorolást (a felhasználó hibajelzése): szerződés/TIG csak a
+              // külsős besorolású kiadás emberéről jár, és az alapértelmezett
+              // "Egyéb"-en hagyva az illető csendben kimaradt az Utókövetésből.
+              // A besorolás utána is átírható, ha tényleg csak "kinek fizettük
+              // ki" címke kell.
               {
                 name: "employee_id",
                 label: "Alvállalkozó (ha van)",
                 type: "select",
+                autoSet: { field: "tipus", value: "kulsos" },
                 options: [...employees]
                   .sort((a, b) => a.full_name.localeCompare(b.full_name, "hu"))
                   .map((e) => ({ value: e.id, label: e.full_name })),

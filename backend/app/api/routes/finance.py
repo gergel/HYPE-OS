@@ -161,6 +161,21 @@ def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee
     if any(mezo in adat for mezo in ("netto", "plusz_afa", "afa_szazalek")):
         _afa_brutto(adat, netto=obj.netto, plusz_afa=obj.plusz_afa, afa_szazalek=obj.afa_szazalek)
     _devizat_forintra_frissiteskor(obj, adat, db, _current_user)
+    # UTÓLAG alvállalkozóivá váló kiadás (a felhasználó hibajelzése nyomán):
+    # ha egy meglévő soron kap embert vagy vált "külsős" besorolásra, ugyanaz
+    # a forgatás-hozzárendelés jár neki, mint felvitelkor - enélkül a
+    # projektkód forgatásai mellett is a forgatás nélküli ágra került volna.
+    if ("employee_id" in adat or "tipus" in adat) and not obj.alvallalkozo_project_id:
+        osszevonva = {
+            "employee_id": adat.get("employee_id", obj.employee_id),
+            "tipus": adat.get("tipus", obj.tipus),
+            "project_code_id": adat.get("project_code_id", obj.project_code_id),
+            "alvallalkozo_project_id": adat.get("alvallalkozo_project_id"),
+        }
+        if (osszevonva["tipus"] or "").strip().lower() == "kulsos":
+            _alvallalkozo_forgatas_kitoltese(osszevonva, db)
+            if osszevonva["alvallalkozo_project_id"] is not None:
+                adat["alvallalkozo_project_id"] = osszevonva["alvallalkozo_project_id"]
 
 
 expenses_router = build_crud_router(

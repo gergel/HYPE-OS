@@ -32,6 +32,13 @@ type FieldSpec = {
   /** Gépelhető mező LEGÖRDÜLŐ javaslatokkal (datalist) - pl. az eszköz
    * kategóriája: a meglévő kategóriák közül választható, de új is beírható. */
   suggestions?: string[];
+  /** Ha EBBEN a mezőben nem üres értéket választanak, egy MÁSIK mező
+   * automatikusan a megadott értékre áll - pl. alvállalkozó kiválasztásakor a
+   * besorolás "kulsos"-ra vált, mert enélkül a szerződés/TIG-igény csendben
+   * elveszne (lásd backend models/finance.Expense.alvallalkozoi_papirt_igenyel).
+   * A másik mező utána is szabadon átírható - ez csak az alapértelmezést
+   * igazítja. Adat, nem függvény - ugyanazért, amiért a showIf. */
+  autoSet?: { field: string; value: string };
 };
 
 /** Látszik-e ez a mező a mostani beírások mellett (lásd FieldSpec.showIf)? */
@@ -92,6 +99,16 @@ export function QuickCreateForm({
 
   // A rejtett mezők nem is léteznek: se validálni, se elküldeni nem kell őket.
   const lathatoMezok = fields.filter((f) => lathato(f, values));
+
+  /** Egy mező új értéke - az autoSet-tel összekapcsolt mezővel együtt
+   * (lásd FieldSpec.autoSet). */
+  function mezoValtozas(f: FieldSpec, ertek: string) {
+    setValues((v) => {
+      const kovetkezo = { ...v, [f.name]: ertek };
+      if (f.autoSet && ertek) kovetkezo[f.autoSet.field] = f.autoSet.value;
+      return kovetkezo;
+    });
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -187,7 +204,7 @@ export function QuickCreateForm({
             <KeresosSelect
               value={values[f.name] || null}
               options={(f.options ?? []).map((opt) => ({ value: String(opt.value), label: opt.label }))}
-              onChange={(ertek) => setValues((v) => ({ ...v, [f.name]: ertek }))}
+              onChange={(ertek) => mezoValtozas(f, ertek)}
               placeholder="Válassz…"
               className="min-w-[200px]"
             />
@@ -198,7 +215,7 @@ export function QuickCreateForm({
                 required={f.required}
                 placeholder={f.placeholder}
                 value={values[f.name] ?? ""}
-                onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                onChange={(e) => mezoValtozas(f, e.target.value)}
                 list={f.suggestions ? `qcf-${f.name}-javaslatok` : undefined}
                 className="field"
               />
