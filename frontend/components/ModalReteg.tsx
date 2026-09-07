@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 
 /** Felugró ablak rétege: a tartalmat a `<body>` VÉGÉRE teszi ki, nem oda, ahol
  * a komponens áll.
@@ -28,9 +29,12 @@ export function ModalReteg({ onClose, children }: { onClose?: () => void; childr
   if (!mount) return null;
 
   return createPortal(
+    // VÉDETT zárás (lásd lib/vedettOverlayZaras): az ablakon BELÜL indult
+    // kijelölés/húzás akkor sem zár, ha az egér az overlay fölött ér földet -
+    // a beírt adatok nem veszhetnek el egy félrecsúszott mozdulattól.
     <div
       className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-black/60 px-6 py-10"
-      onClick={onClose}
+      {...vedettOverlayZaras(onClose)}
     >
       {children}
     </div>,

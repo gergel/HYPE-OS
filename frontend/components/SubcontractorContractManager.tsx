@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -378,7 +379,7 @@ export function SubcontractorContractManager({
       )}
 
       {selectedEmployee && form && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={busyState ? undefined : closeForm}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" {...vedettOverlayZaras(busyState ? undefined : closeForm)}>
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 p-6"
             onClick={(e) => e.stopPropagation()}

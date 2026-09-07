@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
 
 /** A megerősítő ablak extra díszei. Egyelőre egy dolgot tud: egy NAGY, PIROS
@@ -76,7 +77,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           // gombjai láthatatlanok voltak, és csak az ablakot bezárva lehetett
           // válaszolni. Réteg-sorrend: modál < panel < kérdés < értesítés.
           className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 px-6"
-          onClick={() => respond(false)}
+          {...vedettOverlayZaras(() => respond(false))}
         >
           <div
             role="alertdialog"

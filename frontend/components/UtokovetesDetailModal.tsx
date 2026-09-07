@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useRouter } from "next/navigation";
 import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
 
@@ -65,7 +66,7 @@ export function UtokovetesDetailModal({
   const utvonal = projectId < 0 ? `/utokovetes/projektkodok/${-projectId}` : `/utokovetes/${projectId}`;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={close}>
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" {...vedettOverlayZaras(close)}>
       <div
         role="dialog"
         aria-modal="true"

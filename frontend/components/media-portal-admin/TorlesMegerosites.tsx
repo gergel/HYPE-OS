@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import type { ReactNode } from "react";
 
 /** NAGY, PIROS törlés-megerősítő a Média Portál adminhoz (a felhasználó
@@ -29,7 +30,7 @@ export function TorlesMegerosites({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6"
-      onClick={() => !busy && onMegse()}
+      {...vedettOverlayZaras(() => !busy && onMegse())}
     >
       <div
         role="alertdialog"

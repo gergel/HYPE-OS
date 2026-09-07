@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -1423,7 +1424,7 @@ function PromptDialog({
 }) {
   const [value, setValue] = useState(initialValue);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" {...vedettOverlayZaras(onCancel)}>
       <div className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-[15px] font-medium text-text-primary">{title}</h3>
         <input

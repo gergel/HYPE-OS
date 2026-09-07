@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -312,7 +313,7 @@ export function IdoszakKezelo({
       )}
 
       {nyitva && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={busy ? undefined : () => setNyitva(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" {...vedettOverlayZaras(busy ? undefined : () => setNyitva(false))}>
           <div
             className="w-full max-w-lg rounded-[var(--radius)] border border-border bg-surface-2 p-6"
             onClick={(e) => e.stopPropagation()}

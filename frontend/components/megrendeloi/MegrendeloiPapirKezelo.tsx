@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useRouter } from "next/navigation";
 import { IndoklasDialog } from "@/components/IndoklasDialog";
 import { KeresosSelect } from "@/components/KeresosSelect";
@@ -582,7 +583,7 @@ export function MegrendeloiPapirKezelo({
       {nyitva && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
-          onClick={dolgozik ? undefined : bezar}
+          {...vedettOverlayZaras(dolgozik ? undefined : bezar)}
         >
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 p-6"

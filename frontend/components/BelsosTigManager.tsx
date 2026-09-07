@@ -1,6 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
@@ -660,7 +661,7 @@ export function BelsosTigManager({
       {fizetesEmployee && fizetesForm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
-          onClick={busyId ? undefined : closeFizetes}
+          {...vedettOverlayZaras(busyId ? undefined : closeFizetes)}
         >
           <div
             className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 p-6"
@@ -761,7 +762,7 @@ export function BelsosTigManager({
       )}
 
       {openEmployee && form && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={busyId ? undefined : closeForm}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" {...vedettOverlayZaras(busyId ? undefined : closeForm)}>
           <div
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 p-6"
             onClick={(e) => e.stopPropagation()}

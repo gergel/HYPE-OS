@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useRouter } from "next/navigation";
 import { KeretszerzodesModal } from "@/components/megrendeloi/KeretszerzodesModal";
 import { StopClickPropagation } from "@/components/StopClickPropagation";
@@ -417,7 +418,7 @@ export function KeretszerzodesKezelo({
       )}
 
       {nyitva && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={busy ? undefined : bezar}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" {...vedettOverlayZaras(busy ? undefined : bezar)}>
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 p-6"
             onClick={(e) => e.stopPropagation()}

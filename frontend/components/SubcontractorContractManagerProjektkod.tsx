@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { IndoklasDialog } from "@/components/IndoklasDialog";
@@ -251,7 +252,7 @@ export function SubcontractorContractManagerProjektkod({
       {selectedEmployee && form && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
-          onClick={busyState ? undefined : closeForm}
+          {...vedettOverlayZaras(busyState ? undefined : closeForm)}
         >
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 p-6"

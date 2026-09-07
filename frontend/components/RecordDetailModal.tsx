@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useRouter } from "next/navigation";
 import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
 
@@ -50,7 +51,7 @@ export function RecordDetailModal({ href, onClose }: { href: string | null; onCl
   if (!href) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={close}>
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" {...vedettOverlayZaras(close)}>
       <div
         role="dialog"
         aria-modal="true"
