@@ -14,6 +14,8 @@ env varokkal tesztelendő."""
 from __future__ import annotations
 
 import json
+import logging
+import re
 from io import BytesIO
 
 from google.auth.transport.requests import Request
@@ -23,6 +25,8 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 from app.core.config import settings
+
+logger = logging.getLogger("hype_os")
 
 DOCS_SCOPES = [
     "https://www.googleapis.com/auth/documents",
@@ -135,6 +139,84 @@ def _replace_placeholders(doc_id: str, fields: dict[str, str]) -> None:
             docs.documents().batchUpdate(documentId=doc_id, body={"requests": requests}),
             "a sablon kitöltése",
         )
+
+
+#: URL-minta a beillesztett szövegekben (pl. a diszpó briefje): http(s) link
+#: vagy "www."-val kezdődő cím. A záró írásjeleket levágjuk - egy mondat végi
+#: pont nem része a linknek.
+_URL_MINTA = re.compile(r"(?:https?://|www\.)[^\s<>()\[\]{}\"']+")
+
+
+def _url_tartomanyok(doc: dict) -> list[tuple[int, int, str]]:
+    """(kezdet, vég, url) hármasok a dokumentum szövegéből - a kattinthatóvá
+    tételhez (lásd _urlek_kattinthatova). Tiszta függvény, hogy Google API
+    nélkül is tesztelhető legyen.
+
+    Csak azokat a futamokat nézzük, amiken még NINCS link-stílus - a sablonban
+    kézzel belinkelt szövegekhez nem nyúlunk."""
+    talalatok: list[tuple[int, int, str]] = []
+
+    def futamok(content):
+        for el in content or []:
+            para = el.get("paragraph")
+            if para:
+                for pe in para.get("elements", []):
+                    tr = pe.get("textRun")
+                    if tr and pe.get("startIndex") is not None:
+                        yield pe["startIndex"], tr
+            table = el.get("table")
+            if table:
+                for row in table.get("tableRows", []):
+                    for cell in row.get("tableCells", []):
+                        yield from futamok(cell.get("content"))
+
+    for kezdet, tr in futamok((doc.get("body") or {}).get("content")):
+        if (tr.get("textStyle") or {}).get("link"):
+            continue
+        szoveg = tr.get("content") or ""
+        for m in _URL_MINTA.finditer(szoveg):
+            nyers = m.group(0)
+            url = nyers.rstrip(".,;:!?)")
+            if not url:
+                continue
+            cel = url if url.lower().startswith("http") else f"https://{url}"
+            talalatok.append((kezdet + m.start(), kezdet + m.start() + len(url), cel))
+    return talalatok
+
+
+def _urlek_kattinthatova(doc_id: str) -> None:
+    """A kitöltés után a szövegbe került URL-ek KATTINTHATÓ linkké alakítása
+    (a felhasználó kérése: a diszpó briefjébe illesztett link a PDF-ben is
+    link legyen). A replaceAllText sima szövegként illeszt be mindent - a
+    Docs (és így az exportált PDF) csak akkor csinál belőle linket, ha
+    kifejezetten rárakjuk a link-stílust.
+
+    A hiba itt NEM buktatja meg a küldést: link-stílus nélkül a diszpó
+    ugyanúgy kimehet, csak a link nem kattintható - ezért csak naplózunk."""
+    try:
+        docs = _google_service("docs", "v1")
+        doc = _futtat(docs.documents().get(documentId=doc_id), "a kitöltött dokumentum beolvasása")
+        keresek = [
+            {
+                "updateTextStyle": {
+                    "range": {"startIndex": kezdet, "endIndex": veg},
+                    "textStyle": {
+                        "link": {"url": url},
+                        "underline": True,
+                        "foregroundColor": {"color": {"rgbColor": {"red": 0.06, "green": 0.33, "blue": 0.8}}},
+                    },
+                    "fields": "link,underline,foregroundColor",
+                }
+            }
+            for kezdet, veg, url in _url_tartomanyok(doc)
+        ]
+        if keresek:
+            _futtat(
+                docs.documents().batchUpdate(documentId=doc_id, body={"requests": keresek}),
+                "a linkek kattinthatóvá tétele",
+            )
+    except Exception:  # noqa: BLE001 - a link-stílus nem érhet többet a kiküldésnél
+        logger.exception("Nem sikerült kattinthatóvá tenni a linkeket doc_id=%s", doc_id)
 
 
 def _export_pdf_bytes(doc_id: str) -> bytes:
@@ -257,6 +339,7 @@ def gdoc_fill_export_and_store_pdf(
     doc_id = _copy_template(template_file_id, doc_name, None)
     try:
         _replace_placeholders(doc_id, fields)
+        _urlek_kattinthatova(doc_id)
         pdf_bytes = _export_pdf_bytes(doc_id)
         link = _upload_pdf(f"{doc_name}.pdf", pdf_bytes, output_folder_id)
     finally:
@@ -293,6 +376,7 @@ def gdoc_fill_export_and_store_both(
     cel_mappa = output_folder_id or szulo_mappa(template_file_id)
     doc_id = _copy_template(template_file_id, doc_name, cel_mappa)
     _replace_placeholders(doc_id, fields)
+    _urlek_kattinthatova(doc_id)
     pdf_bytes = _export_pdf_bytes(doc_id)
     pdf_link = _upload_pdf(f"{doc_name}.pdf", pdf_bytes, cel_mappa)
     return pdf_bytes, doc_id, pdf_link
@@ -310,5 +394,8 @@ def gdoc_fill_and_export_pdf(
     doc_name = (base_name or "Dokumentum").strip() or "Dokumentum"
     new_doc_id = _copy_template(template_file_id, doc_name, output_folder_id)
     _replace_placeholders(new_doc_id, fields)
+    # A beillesztett URL-ek (pl. a diszpó briefjében) a PDF-ben is
+    # kattintható linkek legyenek (a felhasználó kérése).
+    _urlek_kattinthatova(new_doc_id)
     pdf_bytes = _export_pdf_bytes(new_doc_id)
     return pdf_bytes, new_doc_id

@@ -1,11 +1,13 @@
 import {
   Clapperboard,
   FileText,
+  Globe,
   Paperclip,
   Send,
   Users,
   Wrench,
 } from "lucide-react";
+import { ProjektPortalGomb } from "@/components/ProjektPortalGomb";
 import { ActionButton } from "@/components/ActionButton";
 import { FeldarabolasGomb } from "@/components/FeldarabolasGomb";
 import { DiszpoKuldesGombok } from "@/components/DiszpoKuldesGombok";
@@ -368,6 +370,14 @@ export async function ProjectDetailContent({
                 maxOsszMeretBajt={DISZPO_MAX_BAJT}
                 meretTanacs={DISZPO_MERET_TANACS}
               />
+            </Card>
+
+            {/* MÉDIA PORTÁL a diszpó/projekt oldalról (a felhasználó kérése):
+                ha már van - akár az Utómunkán keresztül létrehozva -, azt
+                mutatja és nyitja; ha nincs, innen is létrehozható, és a
+                backend az utómunkához is beköti (lásd ProjektPortalGomb). */}
+            <Card title="Média Portál" icon={Globe}>
+              <ProjektPortalGomb projectId={Number(project.id)} />
             </Card>
 
             {/* A gyártásvezető jegyzettömbje a projekten: szabad szöveg

@@ -142,14 +142,24 @@ def create_portal(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
+    deliverable_id = None
     if payload.project_id is not None:
         project = db.get(Project, payload.project_id)
         if not project:
             raise HTTPException(status_code=404, detail="Projekt nem található")
-        if project.portal is not None:
+        if _projekt_portalja(db, project) is not None:
             raise HTTPException(status_code=400, detail="Ennek a projektnek már van Portálja")
         slug_base = payload.slug or slugify(project.nev)
         project_id = project.id
+        # A projekt-oldali Portál az UTÓMUNKÁHOZ is bekötődik (a felhasználó
+        # kérése: "vigye az utómunkához, hogy oda dolgozzanak ők is") - a
+        # projekt első, Portál nélküli anyagát kapja meg. Így az Utómunka
+        # oldalon is a "Portál megnyitása" jelenik meg, nem egy második
+        # létrehozó gomb.
+        for d in sorted(project.deliverables, key=lambda x: x.id):
+            if d.portal is None:
+                deliverable_id = d.id
+                break
         title_override = client_name_override = project_date_override = None
     else:
         if not (payload.title or "").strip():
@@ -166,6 +176,7 @@ def create_portal(
 
     portal = Portal(
         project_id=project_id,
+        deliverable_id=deliverable_id,
         slug=slug,
         status="live",  # az eredeti Hype-repo-main is közvetlenül "live"-ként hozza létre, nincs külön "vázlat" lépés
         password_hash=hash_password(payload.password) if payload.password else None,
@@ -178,6 +189,33 @@ def create_portal(
     db.commit()
     db.refresh(portal)
     return _summary(portal)
+
+
+def _projekt_portalja(db: Session, project: Project) -> Portal | None:
+    """A projekthez tartozó Portál - AKÁRHONNAN jött létre: közvetlenül a
+    projekthez kötve (Portal.project_id), vagy a projekt valamelyik
+    utómunkáján keresztül (Portal.deliverable_id). A felhasználó kérése: egy
+    munkának EGY portálja legyen - a diszpó/projekt oldal a meglévőt mutassa
+    meg, ne engedjen másodikat létrehozni."""
+    if project.portal is not None:
+        return project.portal
+    for d in project.deliverables:
+        if d.portal is not None:
+            return d.portal
+    return None
+
+
+@router.get("/projekt/{project_id}", response_model=PortalSummary | None)
+def get_projekt_portalja(
+    project_id: int, db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)
+):
+    """A projekt Portálja (ha van) - a projekt/diszpó oldal "Portál" gombja
+    ebből tudja, hogy megnyitni vagy létrehozni kell (lásd _projekt_portalja)."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Projekt nem található")
+    portal = _projekt_portalja(db, project)
+    return _summary(portal) if portal is not None else None
 
 
 class PortalFromDeliverableCreate(BaseModel):
@@ -232,8 +270,17 @@ def create_portal_from_deliverable(
     if db.query(Portal).filter(Portal.slug == slug).first():
         slug = f"{slug_base}-{uuid.uuid4().hex[:6]}"
 
+    # A FORGATÁSHOZ is bekötjük (a felhasználó kérése): az utómunkán át
+    # létrehozott Portál a projekt/diszpó oldalon is jelenjen meg
+    # "megnyitható"-ként, ne lehessen ott egy másodikat létrehozni. Csak
+    # akkor, ha a projektnek még nincs saját Portálja.
+    projekt_kotes = None
+    if deliverable.project is not None and deliverable.project.portal is None:
+        projekt_kotes = deliverable.project.id
+
     portal = Portal(
         deliverable_id=deliverable.id,
+        project_id=projekt_kotes,
         slug=slug,
         share_token=uuid.uuid4().hex,
         status="live",
