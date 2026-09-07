@@ -166,15 +166,24 @@ export function ElkeszultSzerzodesek({
             {kesz.map((s) => (
               <tr key={s.contract_id} className="border-b border-border last:border-0">
                 <td className="py-2.5 pr-6">
-                  {s.full_name}
-                  {/* Egy szerződés több forgatási napra is szólhat. Enélkül a
-                      többi napon úgy tűnne, hogy oda nem készült papír - vagy
-                      hogy ott egy másik, külön szerződés van. */}
-                  {s.projektek.length > 1 && (
-                    <span className="mt-0.5 block text-[11.5px] text-text-muted">
-                      Közös papír {s.projektek.length} projektre: {s.projektek.join(", ")}
-                    </span>
-                  )}
+                  {/* Az oszlop szélessége korlátozva (belső div-en, mert a td-n
+                      a táblázat auto-elrendezése nem mindig tartja be): a sok
+                      projektet fedő papír felsorolása különben egyetlen hosszú
+                      sorként kitolta a többi oszlopot a képernyőről. */}
+                  <div className="max-w-[20rem] whitespace-normal [overflow-wrap:anywhere]">
+                    {s.full_name}
+                    {/* Egy szerződés több forgatási napra is szólhat. Enélkül a
+                        többi napon úgy tűnne, hogy oda nem készült papír - vagy
+                        hogy ott egy másik, külön szerződés van. */}
+                    {s.projektek.length > 1 && (
+                      <details className="mt-0.5 text-[11.5px] text-text-muted">
+                        <summary className="cursor-pointer list-none hover:text-text-secondary">
+                          Közös papír {s.projektek.length} projektre ▾
+                        </summary>
+                        <span className="block">{s.projektek.join(", ")}</span>
+                      </details>
+                    )}
+                  </div>
                 </td>
                 <td className="py-2.5 pr-6">
                   {/* Legördíthető: "Készítés alatt"-ra visszavéve a fél újra a

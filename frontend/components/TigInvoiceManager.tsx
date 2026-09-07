@@ -286,18 +286,35 @@ export function TigInvoiceManager({
               const projektek = fedettProjektek(c);
               return (
                 <tr key={c.id} className="border-b border-border align-top last:border-0">
+                  {/* Az első oszlop szélessége KORLÁTOZVA: a sok forgatást fedő
+                      TIG-nél a felsorolás egyetlen hosszú sorként több ezer
+                      pixelre szélesítette az oszlopot, és az összes művelet
+                      (számla-feltöltés, határidő, kifizetés) kicsúszott a
+                      képernyőről - ezért tűnt úgy, hogy nem lehet számlát
+                      feltölteni (a felhasználó hibajelzése). */}
                   <td className="py-3 pr-6">
-                    {nev}
-                    {tovabbiak.length > 0 && (
-                      <span className="block text-[11px] text-text-muted">
-                        + {Array.from(new Set(tovabbiak)).join(", ")} munkája
-                      </span>
-                    )}
-                    {projektek.length > 1 && (
-                      <span className="mt-0.5 block text-[11px] text-text-muted">
-                        {projektek.length} forgatás egy számlán: {projektek.join(", ")}
-                      </span>
-                    )}
+                    {/* A max-width a cellán belüli div-en van, mert a td-n a
+                        táblázat auto-elrendezése nem mindig tartja tiszteletben.
+                        A whitespace-normal a globális .os-table td nowrap-ját
+                        írja felül - enélkül a hosszú felsorolás sosem tördelne. */}
+                    <div className="max-w-[20rem] whitespace-normal [overflow-wrap:anywhere]">
+                      {nev}
+                      {tovabbiak.length > 0 && (
+                        <span className="block text-[11px] text-text-muted">
+                          + {Array.from(new Set(tovabbiak)).join(", ")} munkája
+                        </span>
+                      )}
+                      {projektek.length > 1 && (
+                        // Sok forgatásnál a lista alapból összecsukva - kattintásra
+                        // nyílik ki, hogy a sor ne legyen tíz sor magas.
+                        <details className="mt-0.5 text-[11px] text-text-muted">
+                          <summary className="cursor-pointer list-none hover:text-text-secondary">
+                            {projektek.length} forgatás egy számlán ▾
+                          </summary>
+                          <span className="block">{projektek.join(", ")}</span>
+                        </details>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 pr-6">
                     {/* Kézzel is javítható: egy tévesen kiküldöttre állított TIG
