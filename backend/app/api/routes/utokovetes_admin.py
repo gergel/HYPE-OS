@@ -249,7 +249,41 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
                 visszajelzes_darab=len(p.post_shoot_feedbacks),
             )
         )
-    return result
+    return _duplikatumok_osszevonva(result)
+
+
+def _duplikatumok_osszevonva(sorok: list[ProjectOverviewSummary]) -> list[ProjectOverviewSummary]:
+    """EGY projekt = EGY kártya (a felhasználó kérése): az azonos nevű, kódú
+    és dátumú Project-sorok (duplikált/szinkronizált események) közül csak
+    egy jelenik meg a listában - ugyanaz a munka háromszor kirakva csak
+    zavart kelt, és háromszor kéri ugyanazt a papírt.
+
+    A csoportot a LEGELŐREHALADOTTABB sor képviseli: ahol a legtöbb papír már
+    megvan (kiküldött szerződés, kész TIG, kifizetés), holtversenyben a
+    legnépesebb (ahol egyáltalán van stáb - egy üres, szinkron-szülte másolat
+    ne takarja el a valódit), végül a legrégebbi azonosító. A többi példány a
+    projekt saját oldaláról továbbra is elérhető és papírozható."""
+    csoportok: dict[tuple, ProjectOverviewSummary] = {}
+    sorrend: list[tuple] = []
+
+    def pontszam(s: ProjectOverviewSummary) -> tuple:
+        kesz_papirok = (
+            (s.szerzodes_osszes - s.szerzodes_fuggo)
+            + (s.tig_osszes - s.tig_fuggo)
+            + (s.kifizetes_osszes - s.kifizetes_fuggo)
+        )
+        osszes = s.szerzodes_osszes + s.tig_osszes + s.kifizetes_osszes
+        return (kesz_papirok, osszes, s.visszajelzes_darab, -s.project_id)
+
+    for s in sorok:
+        kulcs = (s.project_nev, s.projektkod, s.forgatas_datuma, s.forgatas_datuma_vege)
+        eddigi = csoportok.get(kulcs)
+        if eddigi is None:
+            csoportok[kulcs] = s
+            sorrend.append(kulcs)
+        elif pontszam(s) > pontszam(eddigi):
+            csoportok[kulcs] = s
+    return [csoportok[k] for k in sorrend]
 
 
 class LefedettEmber(BaseModel):
