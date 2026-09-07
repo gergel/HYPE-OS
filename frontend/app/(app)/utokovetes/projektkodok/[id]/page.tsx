@@ -87,7 +87,6 @@ export default async function UtokovetesProjektkodDetailPage({ params }: { param
             canEdit={canEdit}
             canDelete={canDelete}
             basePath={`/api/v1/alvallalkozoi-szerzodesek/projektkodok/${projectCodeId}`}
-            torliATigetIs
           />
         </Card>
 

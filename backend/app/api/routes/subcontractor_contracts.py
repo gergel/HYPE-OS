@@ -1394,10 +1394,17 @@ def delete_contract(
     Az állapot visszaállítása nem mindig elég: ha rossz adattal ment ki a
     szerződés (vagy tévesen lett kihagyva), tiszta lappal kell újrakezdeni.
 
-    Ha a projekten már készült TIG ehhez az emberhez, azt előbb törölni kell:
-    a TIG a szerződés lezárása UTÁN következő lépés, és a szerződés törlésével
-    a projekt visszalép a szerződés-fázisba - a fázisok ne csúszhassanak
-    egymásba."""
+    Ha a projekten már készült TIG is ehhez a félhez, az EGYÜTT törlődik a
+    szerződéssel (a felhasználó kérése): a TIG a szerződés adataira épül,
+    tehát a szerződés újrakezdésével úgyis újra kellene készíteni - a korábbi
+    blokkolás ("előbb a TIG-et töröld") csak felesleges plusz lépés volt.
+    Ugyanígy működik a projektkód-szintű ág is (lásd
+    delete_contract_projektkodon).
+
+    Ha a TIG-hez már Kiadás sor tartozik (ki van fizetve), a törlés viszont
+    MEGÁLL - ugyanaz a védelem, mint a TIG saját törlésénél (lásd
+    performance_certificates.delete_certificate): a kifizetés tényét nem
+    lehet csak úgy, mellékesen eldobni."""
     fel = szamlazo.feloldas(db, szamlazo_kulcs)
     if fel is None:
         raise HTTPException(status_code=404, detail="A számlázó fél nem található")
@@ -1407,22 +1414,34 @@ def delete_contract(
     contract = _szerzodes_vagy_none(db, project_id, szamlazo_kulcs)
     if contract is None:
         raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nincs szerződés-bejegyzés.")
-    if _van_tig_a_projekten(db, project_id, fel):
-        raise HTTPException(
-            status_code=400,
-            detail="Ehhez a félhez már készült TIG ezen a projekten - előbb a TIG-et kell törölni.",
-        )
+    for tig in _tigek_a_projekten(db, project_id, fel):
+        if tig.expense_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Ehhez a félhez már kifizetett TIG tartozik ezen a projekten - előbb a hozzá tartozó "
+                    "Kiadás sort kell rendezni a Pénzügyben."
+                ),
+            )
+        # A feltöltött számla-fájlok a tárolóból is mennek - ugyanúgy, mint a
+        # TIG saját törlésénél (a DB-sorokat a cascade viszi).
+        for invoice in tig.invoices:
+            document_storage.delete_object(invoice.storage_key)
+        db.delete(tig)
     db.delete(contract)
     db.commit()
 
 
-def _van_tig_a_projekten(db: Session, project_id: int, fel: SzamlazoFel) -> bool:
-    """Készült-e már TIG ehhez a félhez ezen a projekten?
+def _tigek_a_projekten(db: Session, project_id: int, fel: SzamlazoFel) -> list[PerformanceCertificate]:
+    """A fél TIG-jei ezen a projekten - a szerződés törlésekor ezek is mennek.
 
-    A TIG akkor is ide tartozik, ha egy MÁSIK projektről indult, de van ezt a
+    Egy TIG akkor is ide tartozik, ha egy MÁSIK projektről indult, de van ezt a
     projektet érintő tétele (egy fél több projektjét egy TIG-en igazolhatja) -
-    ezért a tételeken keresztül keresünk, nem a TIG saját project_id-jén."""
-    lekerdezes = db.query(PerformanceCertificate.id).filter(
+    ezért a tételeken keresztül keresünk, nem a TIG saját project_id-jén.
+    Ugyanez a lefedettség-alapú keresés fut a TIG saját törlésénél is (lásd
+    performance_certificates._certificate_or_none), tehát az összevont törlés
+    pontosan azt viszi, amit a régi kétlépéses út is vitt volna."""
+    lekerdezes = db.query(PerformanceCertificate).filter(
         papir_fedettseg.fedi_a_projektet(PerformanceCertificate, PerformanceCertificateTetel, project_id)
     )
     if fel.vallalkozas is not None:
@@ -1432,7 +1451,7 @@ def _van_tig_a_projekten(db: Session, project_id: int, fel: SzamlazoFel) -> bool
             PerformanceCertificate.employee_id == fel.employee.id,
             PerformanceCertificate.vallalkozas_id.is_(None),
         )
-    return lekerdezes.first() is not None
+    return lekerdezes.all()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
