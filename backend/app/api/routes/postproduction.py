@@ -5,7 +5,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
@@ -208,6 +208,23 @@ def _vagas_projektkodja(data: dict, db: Session) -> dict:
             ),
         )
     data["projektkod_szoveg"] = kod
+
+    # DUPLIKÁTUM-VÉDELEM (a felhasználó hibajelzése: egy-egy anyag kétszer
+    # jelent meg a listán): pontosan ugyanilyen nevű anyag nem vehető fel még
+    # egyszer - a dupla kattintás vagy az ismételt felvitel eddig szó nélkül
+    # második sort csinált. Aki tényleg két külön anyagot akar, az a névben
+    # úgyis megkülönbözteti őket.
+    nev = (data.get("projekt_neve") or "").strip()
+    if nev:
+        letezo = db.scalar(
+            select(Deliverable.id).where(func.lower(func.trim(Deliverable.projekt_neve)) == nev.lower()).limit(1)
+        )
+        if letezo is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Már van pontosan ilyen nevű anyag az utómunkában (#{letezo}). "
+                "Dolgozz a meglévőn, vagy adj a névhez megkülönböztetést.",
+            )
     # A szöveghez tartozó Project Code-ot magunk keressük meg: így a vágás
     # rögtön a helyére kerül, nem kell utólag összekötni.
     if not data.get("project_code_id"):

@@ -244,10 +244,22 @@ def szerzodest_igenylo_emberek(
 
     "Belsős" itt A FORGATÁS NAPJÁRA értendő, nem a mai típusra: aki ma belsős,
     de a forgatás idején még külsősként dolgozott, attól ugyanúgy jár a papír
-    (lásd services/belsos_idoszak.belsos_a_napon)."""
+    (lásd services/belsos_idoszak.belsos_a_napon).
+
+    A belsős-szűrő CSAK a stábra vonatkozik: az ALVÁLLALKOZÓI KIADÁSBAN
+    megjelölt féltől akkor is papír kell, ha a rendszerben belsős a típusa (a
+    felhasználó hibajelzése: egy külsős besorolású, emberhez kötött kiadás
+    némán kimaradt az utókövetésből). A kiadás "Külsős" besorolása a kifejezett
+    kimondása annak, hogy ez külsős kifizetés - a havi bérezés (amiért a belsős
+    stábtag nem papírozandó) itt nem játszik."""
     crew_ids = {e.id for e in project.crew}
+    alvallalkozo_idk = {e.id for e in project.alvallalkozo_stab}
     alap_lista = list(project.crew) + [e for e in project.alvallalkozo_stab if e.id not in crew_ids]
-    emberek = [e for e in alap_lista if not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)]
+    emberek = [
+        e
+        for e in alap_lista
+        if e.id in alvallalkozo_idk or not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)
+    ]
     if felulirasok is None:
         return emberek
     return szamlazo.papirt_igenylo_emberek(project, emberek, felulirasok)
@@ -1484,13 +1496,11 @@ def szerzodest_igenylo_emberek_projektkodon(project_code: ProjectCode) -> list[E
     lásd szerzodest_igenylo_emberek (forgatás-alapú megfelelője) és
     models/project_code.py ProjectCode.alvallalkozo_stab_forgatas_nelkul.
 
-    "Belsős" itt A PROJEKTKÓD DÁTUMÁRA értendő (forgatás híján ez a legjobb
-    közelítés a "mikor történt" kérdésre)."""
-    return [
-        e
-        for e in project_code.alvallalkozo_stab_forgatas_nelkul
-        if not belsos_idoszak.belsos_a_napon(e, project_code.datum)
-    ]
+    Belsős-szűrő itt NINCS: ezen az ágon mindenki alvállalkozói kiadásból jön,
+    és a kiadás "Külsős" besorolása a kifejezett kimondása annak, hogy ez
+    külsős kifizetés, papírral - a rendszerbeli belsős típus ezt nem írja
+    felül (lásd szerzodest_igenylo_emberek, a felhasználó hibajelzése)."""
+    return list(project_code.alvallalkozo_stab_forgatas_nelkul)
 
 
 def szamlazo_csoportok_projektkodon(project_code: ProjectCode) -> list[SzamlazoCsoport]:

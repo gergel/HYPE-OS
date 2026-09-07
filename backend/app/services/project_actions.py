@@ -3,6 +3,7 @@ portolása - lásd a felhasználó által küldött screenshotokat a pontos mez�
 
 from datetime import date, timedelta
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.deliverable import Deliverable
@@ -101,6 +102,23 @@ def create_utomunka(db: Session, project: Project, current_user: Employee) -> De
     kod = project.projektkod_szoveg or ""
     kod_part = kod[4:] if len(kod) > 4 else kod
     projekt_neve = "_".join(part for part in (project.nev, date_part, kod_part) if part)
+
+    # DUPLIKÁTUM-VÉDELEM (a felhasználó hibajelzése: egy-egy anyag kétszer
+    # jelent meg a listán): ha ehhez a projekthez már létezik pontosan
+    # ugyanilyen nevű anyag, NEM készül második - a meglévőt adjuk vissza. Így
+    # a gomb kétszeri megnyomása (vagy egy türelmetlen dupla kattintás) sem
+    # tud duplát csinálni; a gomb egyszerűen odavisz a már létező anyaghoz.
+    if projekt_neve:
+        letezo = db.scalar(
+            select(Deliverable)
+            .where(
+                Deliverable.project_id == project.id,
+                func.lower(func.trim(Deliverable.projekt_neve)) == projekt_neve.strip().lower(),
+            )
+            .limit(1)
+        )
+        if letezo is not None:
+            return letezo
 
     deliverable = Deliverable(
         projekt_neve=projekt_neve or f"Utómunka – {project.nev}",
