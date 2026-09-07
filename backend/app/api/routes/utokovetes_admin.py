@@ -60,7 +60,7 @@ from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.post_shoot_feedback import PostShootFeedbackRead
-from app.services import papirozas_hatokor
+from app.services import papirozas_hatokor, szamlazo
 from app.services.szamlazo import SzamlazoCsoport
 
 router = APIRouter(prefix="/utokovetes", tags=["utokovetes-admin"])
@@ -387,7 +387,9 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
             full_name=csoport.fel.nev,
             cimke=csoport.cimke(),
             lefedettek=_lefedettek(csoport),
-            email=csoport.fel.email,
+            # A címzett a RÉSZTVEVŐ, nem a számlázó fél (a felhasználó
+            # kérése) - lásd szamlazo.kikuldes_cimzettje.
+            email=szamlazo.kikuldes_cimzettje(csoport),
             draft=_contract_draft_info(existing),
         )
         for csoport, existing in pending_szerzodesek
@@ -417,7 +419,9 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
                 full_name=csoport.fel.nev,
                 cimke=csoport.cimke(),
                 lefedettek=_lefedettek(csoport),
-                email=csoport.fel.email,
+                # A címzett a RÉSZTVEVŐ, nem a számlázó fél (a felhasználó
+                # kérése) - lásd szamlazo.kikuldes_cimzettje.
+                email=szamlazo.kikuldes_cimzettje(csoport),
                 draft=_tig_draft_info(tig),
                 szamla_kifizetve=bool(tig and tig.szamla_kifizetve),
                 van_szamla=bool(tig and tig.invoices),

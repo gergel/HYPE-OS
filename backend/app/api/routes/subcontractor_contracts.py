@@ -637,7 +637,9 @@ def pending_info(project: Project, csoport: SzamlazoCsoport, existing: Contract 
         cimke=csoport.cimke(),
         lefedettek=_lefedettek_info(project, csoport),
         vallalkozas_id=fel.vallalkozas.id if fel.vallalkozas else None,
-        email=fel.email,
+        # A címzett a RÉSZTVEVŐ, nem a számlázó fél (a felhasználó kérése) -
+        # lásd szamlazo.kikuldes_cimzettje.
+        email=szamlazo.kikuldes_cimzettje(csoport),
         ceg_neve=fel.ceg_neve,
         szekhely=fel.szekhely,
         adoszam=fel.adoszam,
@@ -880,7 +882,9 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
         megbizas_targya=fel.megbizas_targya,
         netto_osszeg=megbeszelt_dij.csoport_osszege(dijak, [t.id for t in csoport.tagok]),
         plusz_afa=fel.plusz_afa,
-        email=fel.email,
+        # A kiküldés címzettje a RÉSZTVEVŐ (a felhasználó kérése): akkor is az
+        # ő címére megy a papír, ha helyette cég vagy másik ember számláz.
+        email=szamlazo.kikuldes_cimzettje(csoport),
     )
     db.add(draft)
     db.flush()
@@ -1082,9 +1086,12 @@ def generate_and_send(
 
     if not draft.netto_osszeg or draft.netto_osszeg <= 0:
         raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
-    cimzett = (draft.email or fel.email or "").strip()
+    # A kézzel beírt cím (draft.email) nyer; alapból a RÉSZTVEVŐ címére megy
+    # (a felhasználó kérése), nem a számlázó félére - lásd
+    # szamlazo.kikuldes_cimzettje.
+    cimzett = (draft.email or szamlazo.kikuldes_cimzettje(csoport) or "").strip()
     if not cimzett:
-        raise HTTPException(status_code=400, detail="A számlázó félnek nincs email címe.")
+        raise HTTPException(status_code=400, detail="Nincs email cím - se a résztvevőnek, se a számlázó félnek.")
 
     keltezes = draft.keltezes or date.today()
     draft.keltezes = keltezes

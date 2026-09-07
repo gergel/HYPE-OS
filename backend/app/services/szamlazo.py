@@ -151,6 +151,20 @@ def papirt_igenylo_emberek(
     return [e for e in emberek if not kiadaskent_elszamolt(project.id, e.id, felulirasok)]
 
 
+def kikuldes_cimzettje(csoport: "SzamlazoCsoport") -> str | None:
+    """A szerződés/TIG e-mailjének címzettje: MINDIG a projekten RÉSZT VEVŐ
+    ember címe (a felhasználó kérése) - akkor is, ha helyette cég vagy másik
+    ember számláz. A papírt az intézi, aki ott volt a munkán; a számlázó fél
+    címe csak végső tartalék, ha egyik résztvevőnek sincs e-mailje.
+
+    A felugró ablak e-mail mezője ebből töltődik elő, és kézzel átírható -
+    az átírt cím mindig nyer (lásd a generate-and-send végpontokat)."""
+    for tag in csoport.tagok:
+        if (tag.email or "").strip():
+            return tag.email.strip()
+    return (csoport.fel.email or "").strip() or None
+
+
 def szamlazo_fele(
     project: Project, employee: Employee, felulirasok: dict[tuple[int, int], ProjectSzamlazo]
 ) -> SzamlazoFel:
