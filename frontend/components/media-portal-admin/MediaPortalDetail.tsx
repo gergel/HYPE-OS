@@ -41,6 +41,7 @@ import {
   createVideoShareLink,
 } from "@/lib/portalAdminApi";
 import { Card } from "@/components/Card";
+import { TorlesMegerosites } from "@/components/media-portal-admin/TorlesMegerosites";
 import { formatDuration, formatBytes } from "@/lib/portalUtils";
 import { portalUrl } from "@/lib/portalUrl";
 import type { PortalDetailData, PortalFolderItem, PortalImageItem, PortalVideoItem } from "@/lib/api";
@@ -1262,11 +1263,14 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
         />
       )}
 
+      {/* NAGY, PIROS megerősítés minden törlés előtt (a felhasználó kérése) -
+          kép, videó, mappa, kijelöltek és a teljes portál törlése is ezen
+          megy át. */}
       {confirmDialog && (
-        <ConfirmDialog
-          message={confirmDialog.message}
-          onCancel={() => setConfirmDialog(null)}
-          onConfirm={() => {
+        <TorlesMegerosites
+          uzenet={confirmDialog.message}
+          onMegse={() => setConfirmDialog(null)}
+          onTorles={() => {
             const cb = confirmDialog.onConfirm;
             setConfirmDialog(null);
             cb();
@@ -1447,31 +1451,6 @@ function PromptDialog({
             style={{ background: "var(--accent-gradient)" }}
           >
             OK
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmDialog({ message, onCancel, onConfirm }: { message: string; onCancel: () => void; onConfirm: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onCancel}>
-      <div className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6" onClick={(e) => e.stopPropagation()}>
-        <p className="text-[13px] leading-relaxed text-text-primary">{message}</p>
-        <div className="mt-5 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-[var(--radius)] border border-border px-4 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
-          >
-            Mégse
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex items-center gap-2 rounded-[var(--radius)] border border-text-danger/40 px-4 py-2 text-[13px] text-text-danger transition-colors hover:bg-bg-danger"
-          >
-            Törlés
           </button>
         </div>
       </div>

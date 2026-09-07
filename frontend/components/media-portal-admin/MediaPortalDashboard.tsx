@@ -13,6 +13,7 @@ import {
   purgePortalFiles,
   PendingDeletionPortal,
 } from "@/lib/portalAdminApi";
+import { TorlesMegerosites } from "@/components/media-portal-admin/TorlesMegerosites";
 import { useLiveTopic } from "@/lib/live";
 import type { PortalSummary, Project } from "@/lib/api";
 import { KeresosSelect } from "@/components/KeresosSelect";
@@ -345,68 +346,36 @@ export function MediaPortalDashboard({
         </div>
       </div>
 
+      {/* NAGY, PIROS megerősítés (a felhasználó kérése) - a teljes portál
+          törlése a legveszélyesebb művelet ezen az oldalon. */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={() => setConfirmDelete(null)}>
-          <div
-            className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-[13px] leading-relaxed text-text-primary">
-              Biztosan törlöd a(z) &ldquo;{confirmDelete.title}&rdquo; Portált az összes videójával és képével együtt? Ez
-              nem vonható vissza.
-            </p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(null)}
-                className="rounded-[var(--radius)] border border-border px-4 py-2 text-[13px] text-text-secondary hover:bg-surface-3"
-              >
-                Mégse
-              </button>
-              <button
-                onClick={doDelete}
-                className="flex items-center gap-2 rounded-[var(--radius)] border border-text-danger/40 px-4 py-2 text-[13px] text-text-danger transition-colors hover:bg-bg-danger"
-              >
-                Törlés
-              </button>
-            </div>
-          </div>
-        </div>
+        <TorlesMegerosites
+          uzenet={
+            <>
+              Törlöd a(z) <strong>&ldquo;{confirmDelete.title}&rdquo;</strong> Portált az összes videójával és
+              képével együtt? Ez nem vonható vissza.
+            </>
+          }
+          gombCimke="Igen, törlöm a portált"
+          onMegse={() => setConfirmDelete(null)}
+          onTorles={doDelete}
+        />
       )}
 
       {confirmPurge && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
-          onClick={() => !purging && setConfirmPurge(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-[13px] leading-relaxed text-text-primary">
-              Törlöd a(z) &ldquo;{confirmPurge.title}&rdquo; Portál összes fájlját (videók és képek) az R2 tárhelyből? A
-              projekt megmarad, a kapcsolatfelvételi oldal továbbra is működik. Ez a művelet nem vonható vissza.
-            </p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmPurge(null)}
-                disabled={purging}
-                className="rounded-[var(--radius)] border border-border px-4 py-2 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
-              >
-                Mégse
-              </button>
-              <button
-                onClick={doPurge}
-                disabled={purging}
-                className="flex items-center gap-2 rounded-[var(--radius)] border border-text-danger/40 px-4 py-2 text-[13px] text-text-danger transition-colors hover:bg-bg-danger disabled:opacity-60"
-              >
-                <Trash2 className="h-4 w-4" />
-                {purging ? "Törlés…" : "Fájlok törlése"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <TorlesMegerosites
+          uzenet={
+            <>
+              Törlöd a(z) <strong>&ldquo;{confirmPurge.title}&rdquo;</strong> Portál összes fájlját (videók és
+              képek) az R2 tárhelyből? A projekt megmarad, a kapcsolatfelvételi oldal továbbra is működik. Ez a
+              művelet nem vonható vissza.
+            </>
+          }
+          gombCimke="Igen, törlöm a fájlokat"
+          busy={purging}
+          onMegse={() => setConfirmPurge(null)}
+          onTorles={doPurge}
+        />
       )}
     </div>
   );
