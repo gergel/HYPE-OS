@@ -33,6 +33,17 @@ class EmployeeCreate(EmployeeBase):
     # mint a Notionből importált munkatársaknál), az admin később a
     # Beállítások oldalon állíthat be jelszót neki, ha bejelentkezést igényel.
     password: str | None = None
+    #: A VÁLLALKOZÁSI (papírozási) adatok már felvételkor megadhatók (a
+    #: felhasználó kérése: az utókövetéshez felvett új alvállalkozónál minden
+    #: adata egyben rögzíthető) - ezekből tölt elő a szerződés és a TIG (lásd
+    #: services/szamlazo.SzamlazoFel).
+    vallakozas_neve: str | None = None
+    vallakozas_szekhely: str | None = None
+    vallalkozas_adoszama: str | None = None
+    nyilvantartasi_szam: str | None = None
+    vallalkozas_kepviselo: str | None = None
+    megbizas_targya: str | None = None
+    plusz_afa: bool | None = None
 
 
 class EmployeeUpdate(BaseModel):
