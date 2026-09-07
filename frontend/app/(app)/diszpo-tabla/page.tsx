@@ -11,6 +11,7 @@ import {
   getEmployees,
   getMyPagePermissions,
 } from "@/lib/api";
+import { szerepkorei } from "@/lib/permissions";
 
 const PAGE = "/diszpo-tabla";
 
@@ -100,11 +101,16 @@ export default async function DiszpoTablaPage({
             canDelete={canDelete}
             // Az oszlop-ember kötés vezérlője CSAK az adminnak (a felhasználó
             // kérése) - másnál a kijelöléskor nem jelenik meg a választó.
-            canEmberKotes={currentUser?.role === "admin"}
+            // A TELJES szerepkör-halmazt nézzük (szerepkorei), nem csak az
+            // elsődleges role mezőt: akinek az adminság a további szerepkörei
+            // közt van, annál a szűk `role === "admin"` ellenőrzés miatt a
+            // rejtés-vezérlők el sem látszottak (a felhasználó hibajelzése) -
+            // a backend eddig is a teljes halmazt nézte (van_szerepkore).
+            canEmberKotes={szerepkorei(currentUser).includes("admin")}
             // A REJTETT oszlopok/sorok is csak az adminnak látszanak (a
             // felhasználó kérése) - neki halványítva megjelennek, más elől
             // tényleg eltűnnek, és rejteni/visszahozni is csak ő tud.
-            rejtettetLatja={currentUser?.role === "admin"}
+            rejtettetLatja={szerepkorei(currentUser).includes("admin")}
             emberek={emberek.map((e) => ({ id: e.id, nev: e.full_name }))}
           />
         </Card>
