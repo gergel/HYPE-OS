@@ -219,6 +219,39 @@ def _penz_kimenet_szuro(sorok: list[dict], db: Session, user: Employee) -> list[
     return sorok
 
 
+def _szamlak_elotoltese(sorok: list[ProjectCode], db: Session) -> None:
+    """A számla-csatolmányok EGY lekérdezéssel, az egész listára.
+
+    A `hatarido_allas` / `szamla_hataridok` számított mezők a
+    ProjectCode._szamlak()-on át SORONKÉNT kérdezték le a feltöltött
+    számla-fájlokat - 400+ kódnál ez 400+ külön adatbázis-kört jelentett
+    minden egyes listabetöltésre, és élesben (hálózati késleltetéssel) ez
+    tette lassúvá a Project Code-ok oldalt (a felhasználó hibajelzése).
+    Itt egyben töltjük be őket, és a _szamlak() példány-gyorsítótárába
+    tesszük - a számított mezők így már lekérdezés nélkül dolgoznak."""
+    from app.models.document_attachment import DocumentAttachment
+
+    idk = [pc.id for pc in sorok]
+    if not idk:
+        return
+    csoportok: dict[int, list[DocumentAttachment]] = {pc.id: [] for pc in sorok}
+    szamlak = db.scalars(
+        select(DocumentAttachment)
+        .where(
+            DocumentAttachment.entity_type == "projectCode",
+            DocumentAttachment.entity_id.in_(idk),
+            DocumentAttachment.kategoria == "szamla",
+        )
+        # Ugyanaz a sorrend, mint a ProjectCode._szamlak()-ban - a
+        # "legsürgősebb számla" kiválasztása erre épít.
+        .order_by(DocumentAttachment.fizetesi_hatarido.asc().nullslast(), DocumentAttachment.id.asc())
+    ).all()
+    for szamla in szamlak:
+        csoportok.setdefault(szamla.entity_id, []).append(szamla)
+    for pc in sorok:
+        pc.__dict__["_szamlak_cache"] = csoportok.get(pc.id, [])
+
+
 router = build_crud_router(
     model=ProjectCode,
     create_schema=ProjectCodeCreate,
@@ -282,6 +315,8 @@ router = build_crud_router(
     # Pénzügy-hozzáférés nélkül a pénz-mezők kitakarva mennek ki (a
     # felhasználó kérése) - lásd _penz_kimenet_szuro.
     kimenet_szuro=_penz_kimenet_szuro,
+    # A számla-csatolmányok egyben, nem soronként (lásd _szamlak_elotoltese).
+    lista_elotoltes=_szamlak_elotoltese,
 )
 
 

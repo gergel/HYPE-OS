@@ -83,6 +83,12 @@ def build_crud_router(
     #: create és a PATCH válaszára is lefut - listát kap, hogy a jog-lekérdezés
     #: egyszer fusson, ne soronként.
     kimenet_szuro: Callable[[list[dict], Session, Employee], list[dict]] | None = None,
+    #: (sorok, db) -> None - a LISTA betöltött sorain fut, MÉG a szerializálás
+    #: előtt: itt lehet EGY lekérdezéssel előtölteni azt, amit a séma számított
+    #: mezői egyébként soronként kérdeznének le (pl. a projektkód
+    #: számla-csatolmányai, lásd routes/project_codes._szamlak_elotoltese -
+    #: enélkül 400 kódnál 400 külön lekérdezés futott minden listázásra).
+    lista_elotoltes: Callable[[list[Any], Session], None] | None = None,
 ) -> APIRouter:
     """page: a frontend/lib/nav.ts oldal-href-je (pl. "/projektek"), amihez ez az
     entitás tartozik - a Beállítások oldalon egyénenként beállított
@@ -252,6 +258,8 @@ def build_crud_router(
         order_column = getattr(model, "updated_at", None)
         stmt = stmt.order_by(order_column.desc() if order_column is not None else model.id.desc())
         sorok = db.scalars(stmt.offset(skip).limit(limit)).all()
+        if lista_elotoltes is not None:
+            lista_elotoltes(list(sorok), db)
         # Az eltávolított mezőket EGYSZER kérdezzük le az egész listára.
         eltavolitott = entity_fields.hidden_fields(db, entity_type) if entity_type else set()
         # A listákba a saját mezők értékei nem kerülnek bele (rekordonként
