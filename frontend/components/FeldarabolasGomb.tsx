@@ -52,12 +52,24 @@ export function FeldarabolasGomb({
         setHiba(String(data?.detail ?? `Sikertelen művelet (HTTP ${res.status}).`));
         return;
       }
-      setNyitva(false);
       if (data && typeof data.id !== "undefined") {
-        router.push(`${redirectPrefix}${data.id}`);
-      } else {
-        router.refresh();
+        // KEMÉNY navigáció, nem router.push (a felhasználó hibajelzése: a
+        // darabolás után nem dobta át az új projektre). Két dolog is elütötte
+        // a sima kliens-átirányítást:
+        // 1. a darabolás megböki a "projects" élő témát, és a beeső
+        //    router.refresh() megszakította a folyamatban lévő push-t;
+        // 2. a modál zárása (useModalVisszaVedelem) history.back()-et hív,
+        //    ami a már elindult betöltést is visszavonja.
+        // Ezért: NEM zárjuk be a modált (az oldal úgyis elnavigál), és
+        // location.replace-szel megyünk - az a modál mesterséges
+        // history-rétegét is felülírja, így a Vissza gomb is jó helyre visz.
+        // Az eredmény: darabolás után azonnal a leválasztott projekten
+        // állunk, és mehet a diszpó írása.
+        window.location.replace(`${redirectPrefix}${data.id}`);
+        return;
       }
+      setNyitva(false);
+      router.refresh();
     } catch (err) {
       setHiba(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
