@@ -2515,6 +2515,10 @@ export type PortalFolderItem = {
 export type PortalDetailData = PortalSummary & {
   description: string;
   share_token: string | null;
+  /** Az élő feltöltő link tokenje (null = nincs kiadva) - lásd a Feltöltő
+   * link sávot a portál-részletnézeten. */
+  feltolto_token?: string | null;
+  feltolto_folder_id?: number | null;
   title_override: string | null;
   client_name_override: string | null;
   project_date_override: string | null;

@@ -15,12 +15,16 @@ import type { ReactNode } from "react";
  * a törléshez a piros gombig kell menni. */
 export function TorlesMegerosites({
   uzenet,
+  cim = "Biztosan törlöd?",
   gombCimke = "Igen, törlöm",
   busy = false,
   onMegse,
   onTorles,
 }: {
   uzenet: ReactNode;
+  /** A piros főcím - visszavonás-jellegű műveletnél más szöveg kell, mint
+   * törlésnél (pl. "Biztosan visszavonod?"). */
+  cim?: string;
   gombCimke?: string;
   /** Folyamatban lévő törlésnél a gombok tiltva (pl. R2-ürítés). */
   busy?: boolean;
@@ -42,7 +46,7 @@ export function TorlesMegerosites({
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-600/15">
             <AlertTriangle className="h-5 w-5 text-red-500" />
           </span>
-          <h3 className="text-[19px] font-semibold text-red-500">Biztosan törlöd?</h3>
+          <h3 className="text-[19px] font-semibold text-red-500">{cim}</h3>
         </div>
         <p className="text-[14.5px] leading-relaxed text-text-primary">{uzenet}</p>
         <div className="mt-6 flex items-center justify-end gap-3">

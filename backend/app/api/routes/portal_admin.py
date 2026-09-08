@@ -80,6 +80,8 @@ def _detail(p: Portal) -> PortalDetail:
     return PortalDetail(
         **_summary(p).model_dump(),
         description=p.description or "",
+        feltolto_token=p.feltolto_token,
+        feltolto_folder_id=p.feltolto_folder_id,
         title_override=p.title_override,
         client_name_override=p.client_name_override,
         project_date_override=p.project_date_override,
@@ -434,6 +436,22 @@ def feltolto_link(
         folder = db.get(PortalFolder, payload.folder_id)
         if folder is None or folder.portal_id != portal.id:
             raise HTTPException(status_code=404, detail="Ez a mappa nem ehhez a portálhoz tartozik.")
+    # Ha MÁR VAN élő link, nem generálunk némán újat (a felhasználó kérése:
+    # a visszavonás - és egy új token kiadása a régit pont visszavonja - ne
+    # történhessen véletlenül). Azonos hatókörű kérésre a meglévő linket
+    # adjuk vissza; más hatókörhöz előbb a felületen kell visszavonni.
+    if portal.feltolto_token:
+        if portal.feltolto_folder_id == payload.folder_id:
+            return PortalShareLink(
+                token=portal.feltolto_token, url=f"{_portal_front()}/feltoltes/{portal.feltolto_token}"
+            )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Ehhez a portálhoz már van élő feltöltő link (más hatókörrel). Egy új link a régit "
+                "érvénytelenítené - előbb vond vissza a mostanit a Feltöltő link sávban."
+            ),
+        )
     portal.feltolto_token = uuid.uuid4().hex
     portal.feltolto_folder_id = payload.folder_id
     db.commit()

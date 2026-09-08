@@ -184,6 +184,12 @@ class PortalSummary(BaseModel):
 
 class PortalDetail(PortalSummary):
     description: str
+    #: Az ÉLŐ feltöltő link tokenje (None = nincs kiadva) - a felület ebből
+    #: mutatja a feltűnő "aktív feltöltő link" sávot a visszavonás gombbal
+    #: (a felhasználó kérése: a visszavonás ne történhessen véletlenül).
+    feltolto_token: str | None = None
+    #: Ha a link csak egy mappába enged feltölteni, annak azonosítója.
+    feltolto_folder_id: int | None = None
     # A nyers felülírás-mezők (nem a resolve_*-tal számolt title/client_name/
     # project_date) - kellenek az admin felületnek, hogy meg tudja mutatni,
     # mi van ténylegesen felülírva, és üresen (None) tudja előtölteni a
