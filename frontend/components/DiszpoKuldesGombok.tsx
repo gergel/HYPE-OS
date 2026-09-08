@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ActionButton } from "@/components/ActionButton";
 import { StatusBadge } from "@/components/StatusBadge";
+import { nincsUtomunkaja, UtomunkaFelvezetesKerdes } from "@/components/UtomunkaFelvezetesKerdes";
 
 /** A projekt "Diszpó küldése" kártyájának két küldés-sora.
 
@@ -11,17 +12,26 @@ import { StatusBadge } from "@/components/StatusBadge";
  * eltűnik, és már csak az "Újraküldés" marad - nem a szerver-frissítés
  * megérkezésére vár (ugyanez a minta, mint a Naptár/Diszpó oldalon, lásd
  * NaptarDiszpoContent helyiKuldve). A tartós állapot a szerverről jön
- * (Project.elozetes_diszpo_kuldes / diszpo, lásd backend services/dispo.py). */
+ * (Project.elozetes_diszpo_kuldes / diszpo, lásd backend services/dispo.py).
+ *
+ * Az ELŐZETES diszpó ELSŐ kiküldése után - ha a projekthez még nincs
+ * utómunka - felugró kérdés jön: vezessük-e fel most (a felhasználó kérése,
+ * lásd UtomunkaFelvezetesKerdes). */
 export function DiszpoKuldesGombok({
   projectId,
   elozetesAllapot,
   diszpoAllapot,
+  utomunkaElotag = "/utomunka/",
 }: {
   projectId: number;
   elozetesAllapot: string | null;
   diszpoAllapot: string | null;
+  /** Hova nyíljon a felvezetett utómunka - a felugró (embed) nézetben az
+   * /embed/utomunka/ útvonal, hogy a modálon belül maradjunk. */
+  utomunkaElotag?: string;
 }) {
   const [helyiKuldve, setHelyiKuldve] = useState<{ elozetes?: boolean; teljes?: boolean }>({});
+  const [utomunkaKerdes, setUtomunkaKerdes] = useState(false);
   const elozetes = elozetesAllapot || (helyiKuldve.elozetes ? "Kiküldve" : null);
   const teljes = diszpoAllapot || (helyiKuldve.teljes ? "Kiküldve" : null);
 
@@ -38,7 +48,17 @@ export function DiszpoKuldesGombok({
               ? `Állapot: ${elozetes}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja ugyanazt a levelet. Biztosan újraküldöd?`
               : "Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
           }
-          onSuccess={() => setHelyiKuldve((h) => ({ ...h, elozetes: true }))}
+          onSuccess={() => {
+            // Csak az ELSŐ kiküldésnél kérdezünk az utómunkáról - újraküldésnél
+            // már nyilván megvolt a lehetőség.
+            const elsoKuldes = !elozetes;
+            setHelyiKuldve((h) => ({ ...h, elozetes: true }));
+            if (elsoKuldes) {
+              void nincsUtomunkaja(projectId).then((nincs) => {
+                if (nincs) setUtomunkaKerdes(true);
+              });
+            }
+          }}
         />
         {elozetes && <StatusBadge label={elozetes} tone="success" />}
       </div>
@@ -57,6 +77,14 @@ export function DiszpoKuldesGombok({
         />
         {teljes && <StatusBadge label={teljes} tone="success" />}
       </div>
+
+      {utomunkaKerdes && (
+        <UtomunkaFelvezetesKerdes
+          projectId={projectId}
+          onClose={() => setUtomunkaKerdes(false)}
+          utomunkaElotag={utomunkaElotag}
+        />
+      )}
     </div>
   );
 }

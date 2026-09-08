@@ -7,6 +7,7 @@ import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar"
 import { ProjectDetailModal } from "@/components/ProjectDetailModal";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { nincsUtomunkaja, UtomunkaFelvezetesKerdes } from "@/components/UtomunkaFelvezetesKerdes";
 import type { Project, ProjectCodeOption } from "@/lib/api";
 import { AlertTriangle, CalendarClock, Send, SendHorizonal } from "lucide-react";
 
@@ -86,6 +87,7 @@ function DiszpoGroupSection({
   onProjectClick,
   helyiKuldve,
   jeloldKuldottnek,
+  onElsoElozetes,
 }: {
   group: DiszpoGroup;
   emphasized?: boolean;
@@ -98,6 +100,9 @@ function DiszpoGroupSection({
    * gomb melletti jelzés azonnal átvált, nem várja meg a szerver-frissítést. */
   helyiKuldve: Record<string, true>;
   jeloldKuldottnek: (id: number, tipus: "elozetes" | "teljes") => void;
+  /** Az előzetes ELSŐ kiküldése után hívjuk - a szülő ebből dönti el, kell-e
+   * az "utómunkát felvezessük?" kérdés (lásd UtomunkaFelvezetesKerdes). */
+  onElsoElozetes: (id: number) => void;
 }) {
   const tone = GROUP_TONES[group.tone];
   return (
@@ -185,7 +190,13 @@ function DiszpoGroupSection({
                                 ? `${p.nev} – állapot: ${elozetesAllapot}. Ha most újraküldöd, a stáb MÉG EGYSZER megkapja ugyanazt a levelet. Biztosan újraküldöd?`
                                 : "Elküldi az előzetes diszpót a résztvevőknek. Folytatod?"
                             }
-                            onSuccess={() => jeloldKuldottnek(p.id, "elozetes")}
+                            onSuccess={() => {
+                              // Az ELSŐ kiküldés után jöhet az utómunka-kérdés -
+                              // újraküldésnél már nyilván megvolt a lehetőség.
+                              const elsoKuldes = !elozetesAllapot;
+                              jeloldKuldottnek(p.id, "elozetes");
+                              if (elsoKuldes) onElsoElozetes(p.id);
+                            }}
                           />
                         )}
                       </div>
@@ -257,6 +268,14 @@ export function NaptarDiszpoContent({
   const [helyiKuldve, setHelyiKuldve] = useState<Record<string, true>>({});
   const jeloldKuldottnek = (id: number, tipus: "elozetes" | "teljes") =>
     setHelyiKuldve((prev) => ({ ...prev, [`${id}:${tipus}`]: true }));
+  // Az előzetes ELSŐ kiküldése után: ha a projekthez még nincs utómunka,
+  // felugró kérdés ajánlja fel a felvezetését (a felhasználó kérése).
+  const [utomunkaKerdesProjekt, setUtomunkaKerdesProjekt] = useState<number | null>(null);
+  const onElsoElozetes = (id: number) => {
+    void nincsUtomunkaja(id).then((nincs) => {
+      if (nincs) setUtomunkaKerdesProjekt(id);
+    });
+  };
 
   const projectCodeById = new Map(projectCodes.map((pc) => [pc.id, pc.projektkod]));
 
@@ -513,6 +532,7 @@ export function NaptarDiszpoContent({
                     onProjectClick={setModalProjectId}
                     helyiKuldve={helyiKuldve}
                     jeloldKuldottnek={jeloldKuldottnek}
+                    onElsoElozetes={onElsoElozetes}
                   />
                 ))}
               </div>
@@ -536,6 +556,7 @@ export function NaptarDiszpoContent({
                     onProjectClick={setModalProjectId}
                     helyiKuldve={helyiKuldve}
                     jeloldKuldottnek={jeloldKuldottnek}
+                    onElsoElozetes={onElsoElozetes}
                   />
                 ))}
               </div>
@@ -557,6 +578,12 @@ export function NaptarDiszpoContent({
           költségek hetekkel később, más kézben történnek (lásd
           ProjectDetailContent). */}
       <ProjectDetailModal projectId={modalProjectId} nezet="diszpo" onClose={() => setModalProjectId(null)} />
+      {utomunkaKerdesProjekt !== null && (
+        <UtomunkaFelvezetesKerdes
+          projectId={utomunkaKerdesProjekt}
+          onClose={() => setUtomunkaKerdesProjekt(null)}
+        />
+      )}
     </Card>
   );
 }

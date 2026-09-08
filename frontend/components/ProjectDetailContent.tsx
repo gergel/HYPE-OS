@@ -351,6 +351,9 @@ export async function ProjectDetailContent({
                 projectId={Number(project.id)}
                 elozetesAllapot={elozetesAllapot}
                 diszpoAllapot={diszpoAllapot}
+                // A felvezetett utómunka a felugró (embed) nézetben is a
+                // modálon belül nyíljon meg.
+                utomunkaElotag={embedded ? "/embed/utomunka/" : "/utomunka/"}
               />
             </Card>
 

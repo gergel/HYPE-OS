@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { SearchableIdPicker } from "@/components/SearchableIdPicker";
@@ -39,23 +39,34 @@ export function M2mLinker({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState("");
+  // OPTIMISTA lista (a felhasználó hibajelzése: a stábtag hozzáadása/levétele
+  // nagyon lassú volt): a chip azonnal megjelenik/eltűnik, nem várja meg a
+  // teljes oldal-újratöltést - a PATCH maga gyors, a router.refresh() (a
+  // nehéz szerver-oldal újrarenderelése) csak a háttérben fut le. Hibánál
+  // visszaállunk a szerver szerinti állapotra.
+  const [ids, setIds] = useState<number[]>(currentIds);
+  useEffect(() => setIds(currentIds), [currentIds]);
 
   const optionById = new Map(options.map((o) => [o.id, o]));
-  const linked = currentIds.map((id) => optionById.get(id)).filter((o): o is Option => !!o);
-  const available = options.filter((o) => !currentIds.includes(o.id));
+  const linked = ids.map((id) => optionById.get(id)).filter((o): o is Option => !!o);
+  const available = options.filter((o) => !ids.includes(o.id));
 
   async function patch(newIds: number[], hozzaadott?: number) {
+    const elozo = ids;
+    setIds(newIds);
     setBusy(true);
     try {
       const res = await authFetch(patchPath, { method: "PATCH", body: JSON.stringify({ [fieldName]: newIds }) });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
+        setIds(elozo);
         alert(`Sikertelen: ${detail?.detail ?? res.status}`);
         return;
       }
       if (hozzaadott !== undefined) onAdded?.(hozzaadott);
       router.refresh();
     } catch (err) {
+      setIds(elozo);
       alert(`Sikertelen (hálózati hiba): ${err}`);
     } finally {
       setBusy(false);
@@ -78,7 +89,7 @@ export function M2mLinker({
             <button
               type="button"
               disabled={busy}
-              onClick={() => patch(currentIds.filter((id) => id !== o.id))}
+              onClick={() => patch(ids.filter((id) => id !== o.id))}
               className="text-text-muted hover:text-text-danger disabled:opacity-50"
               title="Leválasztás"
             >
@@ -98,7 +109,7 @@ export function M2mLinker({
             onChange={(next) => {
               if (azonnal) {
                 // A kiválasztás MAGA a hozzáadás - nem kell külön gomb.
-                if (next !== null) patch([...currentIds, next], next);
+                if (next !== null) patch([...ids, next], next);
                 return;
               }
               setSelected(next === null ? "" : String(next));
@@ -112,7 +123,7 @@ export function M2mLinker({
               type="button"
               disabled={!selected || busy}
               onClick={() => {
-                patch([...currentIds, Number(selected)], Number(selected));
+                patch([...ids, Number(selected)], Number(selected));
                 setSelected("");
               }}
               className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
