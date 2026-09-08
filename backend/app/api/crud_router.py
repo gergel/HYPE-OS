@@ -24,14 +24,19 @@ def build_crud_router(
     prefix: str,
     tags: list[str],
     write_roles: tuple[Role, ...] = (Role.ADMIN, Role.OPERATOR),
+    read_roles: tuple[Role, ...] | None = None,
     before_create: Callable[[dict, Session], dict] | None = None,
     m2m_fields: dict[str, tuple[str, type]] | None = None,
 ) -> APIRouter:
     """m2m_fields: {payload_key: (relationship_attr_name, related_model)} a many-to-many mezőkhöz
     (pl. Project.crew_employee_ids -> ("crew", Employee)), amiket a sima **data konstruktor nem tud kezelni.
+
+    read_roles: ha meg van adva, a list/get végpontok is bejelentkezést és a felsorolt
+    szerepkörök egyikét követelik (alapból - a régi viselkedést megtartva - nyilvánosak).
     """
     router = APIRouter(prefix=prefix, tags=tags)
     write_dependency = require_roles(*write_roles) if write_roles else None
+    read_kwargs = {"dependencies": [Depends(require_roles(*read_roles))]} if read_roles else {}
     m2m_fields = m2m_fields or {}
 
     def _get_or_404(db: Session, obj_id: int) -> Any:
@@ -48,11 +53,11 @@ def build_crud_router(
             related = db.scalars(select(related_model).where(related_model.id.in_(ids))).all() if ids else []
             setattr(obj, attr_name, related)
 
-    @router.get("", response_model=list[read_schema])
+    @router.get("", response_model=list[read_schema], **read_kwargs)
     def list_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
         return db.scalars(select(model).offset(skip).limit(limit)).all()
 
-    @router.get("/{item_id}", response_model=read_schema)
+    @router.get("/{item_id}", response_model=read_schema, **read_kwargs)
     def get_item(item_id: int, db: Session = Depends(get_db)):
         return _get_or_404(db, item_id)
 

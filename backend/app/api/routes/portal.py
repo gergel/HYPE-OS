@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.api.crud_router import build_crud_router
-from app.core.security import hash_password
+from app.core.security import Role, hash_password
 from app.models.portal import Payment, Portal
 from app.schemas.portal import PaymentCreate, PaymentRead, PaymentUpdate, PortalCreate, PortalRead, PortalUpdate
 
@@ -20,6 +20,8 @@ router = build_crud_router(
     prefix="/portal",
     tags=["portal"],
     before_create=_hash_portal_password,
+    # A share_token és a jelszóval védett portál adatai nem lehetnek nyilvánosak.
+    read_roles=(Role.ADMIN, Role.OPERATOR, Role.VAGO),
 )
 
 payments_router = build_crud_router(
@@ -29,4 +31,5 @@ payments_router = build_crud_router(
     read_schema=PaymentRead,
     prefix="/payments",
     tags=["portal"],
+    read_roles=(Role.ADMIN, Role.OPERATOR),
 )

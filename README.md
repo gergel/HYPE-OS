@@ -31,7 +31,7 @@ Next.js (frontend)  ──/api──▶  FastAPI (backend)  ──▶  PostgreSQ
 
 ```bash
 cp backend/.env.example backend/.env
-docker compose up --build
+docker compose up --build            # postgres + redis + backend + export-worker + frontend
 ```
 
 - Backend: http://localhost:8000/docs
@@ -61,7 +61,8 @@ Lásd `backend/README.md` és `frontend/README.md`.
 | 6 | Crew (Employee + Rate) | `/api/v1/crew`, `/api/v1/rates` | kész API, UI placeholder |
 | 7 | Equipment | `/api/v1/equipment`, `/api/v1/assignments` | kész API **+ ütközés-detektálás** (409), UI placeholder |
 | 8 | Timeline | `/api/v1/timeline` | kész API (esemény-napló), UI placeholder |
-| 9 | Storage | `/api/v1/media`, `/api/v1/folders` | kész API (R2 kulcsokra épít), UI placeholder |
+| 9 | Storage | `/api/v1/media`, `/api/v1/folders` | kész API (privát objektumtár: local/R2), olvasás belsős joghoz kötve |
+| 9/b | Galéria ZIP64 export | `/api/v1/projects/{id}/gallery-export`, `/api/v1/gallery-exports` | **kész**: háttér-worker, ZIP64 STORE, Range-képes letöltés, TTL - lásd `docs/gallery-export.md` |
 | 10 | Portal | `/api/v1/portal`, `/api/v1/payments` | kész API, UI placeholder |
 | 11 | Automation | `/api/v1/automation/generate-document` | API-alak kész, PDF/Storage/Email Fázis 3 |
 | 12 | Contracts | `/api/v1/contracts` | kész API, UI placeholder |
@@ -90,6 +91,8 @@ A `docs/` mappa a teljes tervezési alapot tartalmazza:
 - `hype_os_build_roadmap.md` - fázisterv (Fázis 0-5)
 - `hype_os_kapcsolati_abra.mermaid` - a teljes ER-diagram (séma-forrás)
 - `hype_os_dashboard_mockup.html` - a dashboard vizuális referenciája (sötét téma, üveg-hatású kártyák)
+- `gallery-export.md` - a galéria ZIP64 export (akár 50 GB) architektúrája, gyökérok, konfiguráció, worker, mérések
+- `gallery-export-evidence/` - tesztlogok, mérési jegyzőkönyvek, UI képernyőképek
 
 ## Ismert nyitott pontok
 

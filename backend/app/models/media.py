@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import BigInteger, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -33,7 +33,12 @@ class Media(TimestampMixin, Base):
     thumbnail_url: Mapped[str | None] = mapped_column(String(500))
     duration_seconds: Mapped[int | None] = mapped_column(Integer)
     resolution_label: Mapped[str | None] = mapped_column(String(20))
-    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    # 64 bites: egyetlen videó master is lehet 2 GiB felett (a korábbi 32 bites
+    # INTEGER 2 147 483 647 bájt felett "integer out of range" hibát adott).
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    #: A forrásobjektum tartalmi hash-e (hex sha256), ha ismert. Az export
+    #: ujjlenyomatába beleszámít, így a tartalom változása új exportot kényszerít.
+    checksum_sha256: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(20), default="processing", comment="processing/ready/failed")
 
     project: Mapped["Project"] = relationship(back_populates="media_items")

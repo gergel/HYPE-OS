@@ -9,6 +9,9 @@ backend/.env
 .pytest_cache/
 .ruff_cache/
 
+# --- Privát objektumtár / mérési munkakönyvtár (STORAGE_BACKEND=local) ---
+backend/var/
+
 # --- Node / frontend ---
 node_modules/
 .next/

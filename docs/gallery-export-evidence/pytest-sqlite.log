@@ -1,0 +1,66 @@
+# pytest a teljes backend tesztkészlettel, SQLite-on (alapértelmezett, társzerver nélkül)
+# parancs: cd backend && .venv/bin/python -m pytest tests -v -p no:warnings
+generated=2026-09-08T08:23:02Z
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0 -- /home/user/HYPE-OS/backend/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/user/HYPE-OS/backend
+configfile: pyproject.toml
+plugins: anyio-4.15.1
+collecting ... collected 53 items
+
+tests/test_gallery_export_api.py::test_small_gallery_end_to_end_extract_and_hash PASSED [  1%]
+tests/test_gallery_export_api.py::test_dangerous_and_duplicate_names_inside_archive PASSED [  3%]
+tests/test_gallery_export_api.py::test_double_click_is_idempotent PASSED [  5%]
+tests/test_gallery_export_api.py::test_page_reopen_finds_same_job_without_client_state PASSED [  7%]
+tests/test_gallery_export_api.py::test_empty_gallery_is_409 PASSED       [  9%]
+tests/test_gallery_export_api.py::test_source_change_requires_new_export PASSED [ 11%]
+tests/test_gallery_export_api.py::test_unauthenticated_is_401 PASSED     [ 13%]
+tests/test_gallery_export_api.py::test_other_tenant_cannot_see_create_or_download PASSED [ 15%]
+tests/test_gallery_export_api.py::test_ugyfel_without_tenant_sees_nothing PASSED [ 16%]
+tests/test_gallery_export_api.py::test_token_for_other_job_or_tampered_is_rejected PASSED [ 18%]
+tests/test_gallery_export_api.py::test_revoked_user_cannot_use_issued_link PASSED [ 20%]
+tests/test_gallery_export_api.py::test_media_and_portal_crud_reads_now_require_auth PASSED [ 22%]
+tests/test_gallery_export_api.py::test_range_resume_across_link_renewal_final_hash PASSED [ 24%]
+tests/test_gallery_export_api.py::test_range_edge_cases PASSED           [ 26%]
+tests/test_gallery_export_api.py::test_download_url_not_ready_or_expired PASSED [ 28%]
+tests/test_gallery_export_api.py::test_gallery_finalized_hook_prepares_export PASSED [ 30%]
+tests/test_worker.py::test_worker_failure_then_retry_succeeds PASSED     [ 32%]
+tests/test_worker.py::test_worker_gives_up_after_max_attempts PASSED     [ 33%]
+tests/test_worker.py::test_stale_running_job_is_reclaimed_and_finishes PASSED [ 35%]
+tests/test_worker.py::test_stale_job_past_max_attempts_fails_with_stale_timeout PASSED [ 37%]
+tests/test_worker.py::test_running_job_with_live_lease_is_not_reclaimed PASSED [ 39%]
+tests/test_worker.py::test_missing_source_fails_not_masked PASSED        [ 41%]
+tests/test_worker.py::test_source_truncated_during_packaging_fails PASSED [ 43%]
+tests/test_worker.py::test_gallery_changed_during_packaging_is_rejected_at_the_end PASSED [ 45%]
+tests/test_worker.py::test_ttl_cleanup_deletes_only_export_never_sources PASSED [ 47%]
+tests/test_worker.py::test_safe_delete_refuses_non_export_keys PASSED    [ 49%]
+tests/test_worker.py::test_concurrent_claim_only_one_wins PASSED         [ 50%]
+tests/test_worker.py::test_worker_memory_stays_bounded_for_large_file PASSED [ 52%]
+tests/test_zip64_writer.py::test_roundtrip_python_zipfile_and_unzip[data_descriptor] PASSED [ 54%]
+tests/test_zip64_writer.py::test_roundtrip_python_zipfile_and_unzip[crc_in_header] PASSED [ 56%]
+tests/test_zip64_writer.py::test_zip64_end_records_present PASSED        [ 58%]
+tests/test_zip64_writer.py::test_deterministic_output PASSED             [ 60%]
+tests/test_zip64_writer.py::test_more_than_65535_entries_uses_zip64_counts PASSED [ 62%]
+tests/test_zip64_writer.py::test_source_shrunk_is_integrity_error PASSED [ 64%]
+tests/test_zip64_writer.py::test_source_grew_is_integrity_error PASSED   [ 66%]
+tests/test_zip64_writer.py::test_crc_mismatch_is_integrity_error PASSED  [ 67%]
+tests/test_zip64_writer.py::test_sanitize_component[../../etc/passwd-.._.._etc_passwd] PASSED [ 69%]
+tests/test_zip64_writer.py::test_sanitize_component[..-fajl] PASSED      [ 71%]
+tests/test_zip64_writer.py::test_sanitize_component[.-fajl] PASSED       [ 73%]
+tests/test_zip64_writer.py::test_sanitize_component[-fajl] PASSED        [ 75%]
+tests/test_zip64_writer.py::test_sanitize_component[C:\\Users\\x\\k\xe9p.jpg-C__Users_x_k\xe9p.jpg] PASSED [ 77%]
+tests/test_zip64_writer.py::test_sanitize_component[CON.txt-_CON.txt] PASSED [ 79%]
+tests/test_zip64_writer.py::test_sanitize_component[lpt1-_lpt1] PASSED   [ 81%]
+tests/test_zip64_writer.py::test_sanitize_component[trailing dots...-trailing dots] PASSED [ 83%]
+tests/test_zip64_writer.py::test_sanitize_component[  sz\xf3k\xf6z  -sz\xf3k\xf6z] PASSED [ 84%]
+tests/test_zip64_writer.py::test_sanitize_component[bad<>:"|?*chars.jpg-bad_______chars.jpg] PASSED [ 86%]
+tests/test_zip64_writer.py::test_sanitize_component[ctrl\x00\x1fchars.jpg-ctrl__chars.jpg] PASSED [ 88%]
+tests/test_zip64_writer.py::test_sanitize_component[k\xe9p\u202egnp.exe-k\xe9pgnp.exe] PASSED [ 90%]
+tests/test_zip64_writer.py::test_sanitize_component[\xe1rv\xedzt\u0171r\u0151 t\xfck\xf6rf\xfar\xf3g\xe9p.JPG-\xe1rv\xedzt\u0171r\u0151 t\xfck\xf6rf\xfar\xf3g\xe9p.JPG] PASSED [ 92%]
+tests/test_zip64_writer.py::test_sanitize_component[\u65e5\u672c\u8a9e\u30d5\u30a1\u30a4\u30eb.png-\u65e5\u672c\u8a9e\u30d5\u30a1\u30a4\u30eb.png] PASSED [ 94%]
+tests/test_zip64_writer.py::test_sanitize_component_truncates_utf8_bytes_keeping_extension PASSED [ 96%]
+tests/test_zip64_writer.py::test_sanitize_arcpath_never_traverses PASSED [ 98%]
+tests/test_zip64_writer.py::test_arcname_allocator_dedupes_case_insensitively PASSED [100%]
+
+============================== 53 passed in 9.62s ==============================

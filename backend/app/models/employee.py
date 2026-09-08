@@ -57,6 +57,9 @@ class Employee(TimestampMixin, Base):
     )
     hashed_password: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    #: Bérlő-kulcs az "ugyfel" szerepkörhöz: egy ügyfél-felhasználó KIZÁRÓLAG
+    #: ennek a Client-nek az adatait láthatja. Belsős szerepköröknél NULL.
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"), index=True)
 
     rates: Mapped[list["Rate"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
     timesheets: Mapped[list["Timesheet"]] = relationship(back_populates="employee")

@@ -1,0 +1,26 @@
+# Alembic migráció ellenőrzése valódi PostgreSQL 16-on (upgrade -> downgrade -> upgrade)
+generated=2026-09-08T08:16:32Z
+## upgrade head
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 55ae8901b9c5 -> 34d5969952c8, gallery export jobs (ZIP64), bigint media size, employee tenant key
+## media_items.size_bytes típusa a migráció után
+bigint
+## 8 GiB-os fájl beszúrása MOST (a javított sémába)
+  1 | 8589934592
+(1 row)
+
+INSERT 0 1
+## downgrade -1
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 34d5969952c8 -> 55ae8901b9c5, gallery export jobs (ZIP64), bigint media size, employee tenant key
+integer
+0
+## upgrade head újra
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 55ae8901b9c5 -> 34d5969952c8, gallery export jobs (ZIP64), bigint media size, employee tenant key
+## alembic check (a modellek és a séma szinkronban vannak-e)
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.comments
+No new upgrade operations detected.
