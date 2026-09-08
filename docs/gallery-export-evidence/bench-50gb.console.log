@@ -1,0 +1,3 @@
+[08:31:01] Szabad lemezhely: 29.93 GB, szükséges: 101.00 GB (forrás 50.00 GB + archívum 50.00 GB + 1 GB sáv)
+[08:31:01] NEM TESZTELT: Nincs elég szabad lemezhely: 29927714816 bájt szabad, 101000000000 bájt szükséges (29.93 GB < 101.00 GB).
+[08:31:01] Jegyzőkönyv: ../docs/gallery-export-evidence/bench-50gb.md

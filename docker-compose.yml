@@ -34,6 +34,25 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - export_storage:/app/var/storage
+
+  # Galéria ZIP64 export worker - külön processz, az API nem csomagol.
+  # Több példány is indítható (docker compose up --scale export-worker=2);
+  # a sor az adatbázisban van, az elvétel atomikus.
+  export-worker:
+    build: ./backend
+    command: python -m app.worker --concurrency 2
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://hype:hype@postgres:5432/hype_os
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - export_storage:/app/var/storage
 
   frontend:
     build: ./frontend
@@ -46,3 +65,5 @@ services:
 
 volumes:
   postgres_data:
+  # STORAGE_BACKEND=local esetén a privát objektumtár (API + worker közös).
+  export_storage:

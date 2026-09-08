@@ -31,6 +31,7 @@ class MediaBase(BaseModel):
     duration_seconds: int | None = None
     resolution_label: str | None = None
     size_bytes: int | None = None
+    checksum_sha256: str | None = None
     status: str = "processing"
 
 
@@ -40,6 +41,8 @@ class MediaCreate(MediaBase):
 
 class MediaUpdate(BaseModel):
     folder_id: int | None = None
+    size_bytes: int | None = None
+    checksum_sha256: str | None = None
     thumbnail_url: str | None = None
     status: str | None = None
 

@@ -1,0 +1,47 @@
+# Másodlagos (önálló) hiba bizonyítéka: media_items.size_bytes 32 bites INTEGER
+#
+# FONTOS PONTOSÍTÁS / HATÓKÖR:
+#   Ez NEM az 50 GB-os galéria-letöltés elsődleges gyökéroka.
+#   Ez a korlát KIZÁRÓLAG az EGYEDI, 2 147 483 647 byte-nál (2 GiB) nagyobb
+#   forrásfájlok méretének tárolását töri el (pl. ProRes/4K videó masterek).
+#   Sok kisebb képből álló 50 GB-os galéria emiatt NEM bukik el:
+#   a PostgreSQL SUM(integer) BIGINT eredményt ad, tehát az összméret
+#   aggregálása helyes marad (lásd az utolsó ellenőrzést).
+#   Az 50 GB-os letöltés elsődleges gyökéroka külön van dokumentálva:
+#   docs/gallery-export.md -> "Gyökérok" fejezet (nincs semmilyen szerveroldali
+#   letöltési/csomagolási útvonal a repóban).
+generated=2026-09-08T08:01:55Z
+
+## Séma a repó HEAD-jén (migráció 55ae8901b9c5)
+                                          Table "public.media_items"
+      Column      |           Type           | Collation | Nullable |                 Default                 
+------------------+--------------------------+-----------+----------+-----------------------------------------
+ id               | integer                  |           | not null | nextval('media_items_id_seq'::regclass)
+ title            | character varying(255)   |           | not null | 
+ project_id       | integer                  |           | not null | 
+ folder_id        | integer                  |           |          | 
+ storage_key      | character varying(500)   |           | not null | 
+ thumbnail_url    | character varying(500)   |           |          | 
+ duration_seconds | integer                  |           |          | 
+ resolution_label | character varying(20)    |           |          | 
+ size_bytes       | integer                  |           |          | 
+ status           | character varying(20)    |           | not null | 
+ created_at       | timestamp with time zone |           | not null | now()
+ updated_at       | timestamp with time zone |           | not null | now()
+
+## 1) EGYEDI 8 GiB-os fájl (8589934592 byte) beszúrása a JELENLEGI sémába
+ERROR:  integer out of range
+
+## 2) A maximum, ami még belefér: 2147483647 byte (2 GiB - 1)
+INSERT 0 1
+
+## 3) ELLENPRÓBA: az ÖSSZMÉRET aggregálása NEM bukik el (SUM -> bigint)
+ sum_tipus | osszmeret_byte | db 
+-----------+----------------+----
+ bigint    |     4294967294 |  2
+(1 row)
+
+
+## KÖVETKEZTETÉS
+  - Egyedi > 2 GiB fájl mérete NEM tárolható  -> valós hiba, javítva (BigInteger).
+  - Galéria összméret (akár 50 GB) SUM-mal helyesen kijön -> ez NEM emiatt bukik.

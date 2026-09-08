@@ -10,6 +10,7 @@ from app.models.employee import Employee, EmployeeType, SystemRole
 from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.feedback import Feedback
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.gallery_export import ExportErrorCode, ExportStatus, GalleryExportJob
 from app.models.media import Folder, Media
 from app.models.portal import Brand, PaymentMode, Payment, Portal, PortalStatus
 from app.models.project import Project, project_crew
@@ -38,7 +39,10 @@ __all__ = [
     "Expense",
     "KpForgalom",
     "Revenue",
+    "ExportErrorCode",
+    "ExportStatus",
     "Folder",
+    "GalleryExportJob",
     "Media",
     "Brand",
     "PaymentMode",

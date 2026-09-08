@@ -1,0 +1,21 @@
+[08:30:54] Szabad lemezhely: 30.73 GB, szükséges: 11.00 GB (forrás 5.00 GB + archívum 5.00 GB + 1 GB sáv)
+[08:30:55] Szintetikus bemenet generálása: 5,000,000,000 bájt, 40 fájl
+[08:31:30]   forrás 1/40: 4.50 GB (130.67 MB/s)
+[08:31:30]   forrás 5/40: 4.55 GB (130.28 MB/s)
+[08:31:31]   forrás 9/40: 4.60 GB (130.05 MB/s)
+[08:31:31]   forrás 13/40: 4.65 GB (129.70 MB/s)
+[08:31:32]   forrás 17/40: 4.71 GB (129.42 MB/s)
+[08:31:32]   forrás 21/40: 4.76 GB (129.00 MB/s)
+[08:31:33]   forrás 25/40: 4.81 GB (128.85 MB/s)
+[08:31:33]   forrás 29/40: 4.86 GB (128.55 MB/s)
+[08:31:34]   forrás 33/40: 4.91 GB (128.26 MB/s)
+[08:31:34]   forrás 37/40: 4.96 GB (127.93 MB/s)
+[08:31:34]   forrás 40/40: 5.00 GB (127.85 MB/s)
+[08:31:34] Bemenet kész: 5,000,000,000 bájt 39.1 s alatt
+[08:31:35] Job létrehozva: 6d98263e-f2c3-4751-aafc-9e1f7ea72036 (várt csomagméret 5,000,006,906 bájt)
+[08:32:05] Export kész: 5,000,006,906 bájt, 30.0 s, worker csúcs-RSS 108.41 MB
+[08:32:07]   letöltés megszakítva 1.50 GB-nál, új link kérése és folytatás Range-dzsel
+[08:32:10] Letöltés kész: 5,000,006,906 bájt, sha256 egyezik
+[08:32:11] ZIP64 ellenőrzés és minden bejegyzés hash-ellenőrzése...
+[08:32:40] Ellenőrzés kész: 40 bejegyzés egyezik
+[08:32:40] Jegyzőkönyv: ../docs/gallery-export-evidence/bench-5gb-zip64.md

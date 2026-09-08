@@ -1,0 +1,77 @@
+{
+  "label": "5gb-zip64",
+  "started_at": "2026-09-08T08:30:54+00:00",
+  "command": "bench_gallery_export.py --total-bytes 5000000000 --file-count 40 --big-file-bytes 4500000000 --label 5gb-zip64 --report-dir ../docs/gallery-export-evidence",
+  "params": {
+    "total_bytes": 5000000000,
+    "file_count": 40,
+    "big_file_bytes": 4500000000
+  },
+  "report_dir": "../docs/gallery-export-evidence",
+  "preflight": {
+    "work_dir": "/home/user/HYPE-OS/backend/var/bench/5gb-zip64",
+    "disk_total_bytes": 270553174016,
+    "disk_free_bytes": 30733258752,
+    "disk_needed_bytes": 11000000000,
+    "mem_total_bytes": 16856092672,
+    "mem_available_bytes": 16069042176,
+    "cpu_count": 4,
+    "python": "3.11.15",
+    "kernel": "6.18.44-fc-v24"
+  },
+  "generation": {
+    "files": 40,
+    "bytes_written": 5000000000,
+    "bytes_allocated": 5000163328,
+    "seconds": 39.111,
+    "throughput_bytes_per_s": 127841960,
+    "generator_peak_rss_bytes": 108412928
+  },
+  "export": {
+    "status": "ready",
+    "files": 40,
+    "archive_bytes": 5000006906,
+    "expected_archive_bytes": 5000006906,
+    "size_matches_prediction": true,
+    "seconds": 29.987,
+    "throughput_bytes_per_s": 166738400,
+    "worker_peak_rss_bytes": 108412928,
+    "worker_returncode": 0,
+    "archive_sha256": "7f6b9254e5af17eb0d3d0a3ecce60c22d29465c0d49079c5f1606a254f242fcf",
+    "error": null
+  },
+  "download": {
+    "bytes_received": 5000006906,
+    "content_length": 5000006906,
+    "interrupted_at": 1500002071,
+    "resumed_with_range": true,
+    "etag_stable_across_renewal": true,
+    "content_disposition": "attachment; filename=\"BENCH-5GB-ZIP64-Bench-5gb-zip64-fea93ee0.zip\"; filename*=UTF-8''BENCH-5GB-ZIP64-Bench-5gb-zip64-fea93ee0.zip",
+    "seconds": 4.881,
+    "throughput_bytes_per_s": 1024323239,
+    "sha256": "7f6b9254e5af17eb0d3d0a3ecce60c22d29465c0d49079c5f1606a254f242fcf"
+  },
+  "download_hash_matches": true,
+  "api_peak_rss_bytes": 132706304,
+  "verification": {
+    "archive_bytes": 5000006906,
+    "entries": 40,
+    "all_entries_stored": true,
+    "zip64_eocd_present": true,
+    "zip64_locator_present": true,
+    "zip64_eocd_entries": 40,
+    "zip64_eocd_cd_offset": 5000003720,
+    "classic_eocd_cd_offset_saturated": true,
+    "entries_over_4gib": 1,
+    "entries_with_offset_over_4gib": 39,
+    "zip64_extra_present_where_required": true,
+    "python_zipfile_testzip": "ok",
+    "unzip_t_returncode": 0,
+    "unzip_t_output": "No errors detected in compressed data of /home/user/HYPE-OS/backend/var/bench/5gb-zip64/storage/exports/1/fea93ee0565a98ddbb697d1313b034225eec8ae00ec7bd424bebe4e2462af4a3.zip.",
+    "entries_hash_verified": 40,
+    "entries_hash_mismatch": [],
+    "seconds": 29.731
+  },
+  "total_seconds": 105.902,
+  "verdict": "SIKERES"
+}

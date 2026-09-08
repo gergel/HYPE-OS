@@ -11,6 +11,7 @@ from app.api.routes.crew import rates_router, router as crew_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
 from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router
+from app.api.routes.gallery_exports import router as gallery_exports_router
 from app.api.routes.portal import payments_router, router as portal_router
 from app.api.routes.postproduction import deliverables_router, feedback_router, timesheets_router
 from app.api.routes.project_codes import router as project_codes_router
@@ -42,6 +43,8 @@ api_router.include_router(timeline_router)
 # 9. Storage
 api_router.include_router(folders_router)
 api_router.include_router(media_router)
+# 9/b. Galéria ZIP64 export (háttérfeladat + Range-képes letöltés)
+api_router.include_router(gallery_exports_router)
 # 10. Naptár / Diszpó
 api_router.include_router(callsheets_router)
 # 11. Utómunka

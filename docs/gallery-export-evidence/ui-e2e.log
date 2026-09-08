@@ -1,0 +1,23 @@
+# UI végponttól-végpontig teszt (Playwright/Chromium + uvicorn + next start)
+# parancs: cd backend && .venv/bin/python scripts/ui_e2e_gallery_export.py
+generated=2026-09-08T08:32:48+00:00
+
+[08:32:39] Backend és frontend fut.
+[08:32:41] OK   bejelentkezés, token a böngészőben
+[08:32:42] OK   terv: 5 fájl · 760 KB forrás · várható csomag 761 KB
+[08:32:42] OK   állapot: Várakozó
+[08:32:42] OK   dupla kattintás után is 1 job (db=1)
+[08:32:42] OK   újranyitás után ugyanaz a várakozó job látszik (szerveroldali állapot)
+[08:32:44] OK   Készülő állapot, valós százalék a szerverről: 40%
+[08:32:45] OK   worker: {'ready': 1, 'failed': 0, 'retry': 0}
+[08:32:47] OK   Kész állapot, 100%
+[08:32:47] OK   5/5 fájl
+[08:32:47] OK   letöltött fájl sha256 egyezik (UI-001-UI-forgatás-249528c8.zip)
+[08:32:47] OK   méret 760946 == 760946
+[08:32:47] OK   ZIP kibontható, 5 bejegyzés
+[08:32:47] OK   minden bejegyzés hash-e egyezik a forrással
+[08:32:47] OK   2. projekt exportja létrehozva
+[08:32:48] OK   Hibás állapot + emberi hibaüzenet: Egy forrásfájl hiányzik a tárból. (1/3 próbálkozás)
+[08:32:48] OK   újrakérés gomb
+[08:32:48] OK   Lejárt állapot
+[08:32:48] UI E2E: minden ellenőrzés sikeres.
