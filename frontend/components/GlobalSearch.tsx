@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
 
 type SearchHit = { id: number; label: string; sublabel: string | null; href: string };
 type SearchGroup = { entity_type: string; title: string; hits: SearchHit[]; truncated: boolean };
@@ -28,6 +30,15 @@ export function GlobalSearch() {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // TELEFONOS kereső (a felhasználó kérése): md alatt az inline mező nem fér
+  // el, helyette egy nagyító-gomb nyit teljes képernyős kereső-lapot.
+  const [mobilNyitva, setMobilNyitva] = useState(false);
+  // Szerveren nincs document - a portálos lapot csak beillesztés után rendereljük.
+  const [mount, setMount] = useState(false);
+  useEffect(() => setMount(true), []);
+  // A VISSZA gesztus (telefonon a leggyakoribb zárás) csak a kereső-lapot
+  // csukja be, nem navigál el az oldalról.
+  useModalVisszaVedelem(mobilNyitva, () => setMobilNyitva(false));
 
   const needle = query.trim();
   const longEnough = needle.length >= MIN_QUERY_LENGTH;
@@ -63,6 +74,15 @@ export function GlobalSearch() {
   }, []);
 
   function go(hit: SearchHit) {
+    if (mobilNyitva) {
+      // A telefonos lap zárása (useModalVisszaVedelem) history.back()-et hív,
+      // ami elütné a kliens-oldali router.push-t (ugyanaz a verseny, mint a
+      // FeldarabolasGomb-nál). A location.replace-t semmi nem tudja elütni,
+      // és a lap mesterséges history-rétegét is felülírja - a Vissza gomb a
+      // kiinduló oldalra visz, nem egy üres rétegre.
+      window.location.replace(hit.href);
+      return;
+    }
     setOpen(false);
     setQuery("");
     router.push(hit.href);
@@ -87,7 +107,95 @@ export function GlobalSearch() {
     }
   }
 
+  // A találat-lista közös renderelője: az asztali lenyíló és a telefonos
+  // teljes képernyős lap ugyanazt mutatja.
+  const talalatLista = (
+    <>
+      {loading && <p className="px-3 py-2 text-[13px] text-text-muted">Keresés…</p>}
+      {!loading && groups.length === 0 && (
+        <p className="px-3 py-2 text-[13px] text-text-muted">Nincs találat erre: „{needle}”</p>
+      )}
+      {groups.map((group) => (
+        <div key={group.entity_type} className="mb-1 last:mb-0">
+          <p className="px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">{group.title}</p>
+          {group.hits.map((hit) => (
+            <button
+              key={`${group.entity_type}-${hit.id}`}
+              type="button"
+              onClick={() => go(hit)}
+              onPointerEnter={() => setActiveIndex(indexOfHit.get(hit) ?? 0)}
+              className={`block w-full px-3 py-1.5 text-left transition-colors hover:bg-surface-3 ${
+                indexOfHit.get(hit) === safeIndex ? "bg-surface-3" : ""
+              }`}
+            >
+              <span className="block truncate text-[13px] text-text-primary">{hit.label}</span>
+              {hit.sublabel && <span className="block truncate text-[11px] text-text-muted">{hit.sublabel}</span>}
+            </button>
+          ))}
+          {group.truncated && (
+            <p className="px-3 py-1 text-[11px] text-text-muted">További találatok is vannak – pontosíts.</p>
+          )}
+        </div>
+      ))}
+    </>
+  );
+
   return (
+    <>
+    {/* TELEFONOS kereső-gomb (a felhasználó kérése): md alatt az inline mező
+        helyett egy nagyító nyit teljes képernyős keresőt - ugyanaz a "bármiben
+        keresés", mint asztali nézetben. */}
+    <button
+      type="button"
+      onClick={() => setMobilNyitva(true)}
+      title="Keresés bármiben"
+      className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface-1 text-text-muted transition-colors hover:text-text-primary md:hidden"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </svg>
+    </button>
+    {/* PORTÁLBÓL renderelve: a TopBar transform-gpu rétege miatt egy sima
+        fixed elem a fejléchez tapadna, nem a képernyőhöz. */}
+    {mount && mobilNyitva &&
+      createPortal(
+        <div className="fixed inset-0 z-[130] flex flex-col bg-surface-1 md:hidden">
+          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+            <label className="flex flex-1 items-center gap-2 rounded-full border border-border bg-surface-2 px-3.5 py-2 text-text-muted focus-within:border-text-accent/40">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Keresés bármiben…"
+                className="w-full bg-transparent text-[15px] text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => setMobilNyitva(false)}
+              className="shrink-0 px-1 py-2 text-[14px] text-text-secondary"
+            >
+              Mégse
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto py-2">
+            {longEnough ? (
+              talalatLista
+            ) : (
+              <p className="px-4 py-3 text-[13px] text-text-muted">
+                Írj be legalább {MIN_QUERY_LENGTH} betűt - projektek, kódok, ügyfelek, anyagok, bármi kereshető.
+              </p>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
     <div ref={containerRef} className="relative hidden md:block">
       <label className="flex items-center gap-2 rounded-full border border-border bg-surface-1 px-3.5 py-2 text-text-muted transition-colors focus-within:border-text-accent/40">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -111,34 +219,10 @@ export function GlobalSearch() {
 
       {open && longEnough && (
         <div className="absolute right-0 z-50 mt-2 max-h-[70vh] w-[380px] overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 py-2 shadow-lg">
-          {loading && <p className="px-3 py-2 text-[13px] text-text-muted">Keresés…</p>}
-          {!loading && groups.length === 0 && (
-            <p className="px-3 py-2 text-[13px] text-text-muted">Nincs találat erre: „{needle}”</p>
-          )}
-          {groups.map((group) => (
-            <div key={group.entity_type} className="mb-1 last:mb-0">
-              <p className="px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">{group.title}</p>
-              {group.hits.map((hit) => (
-                <button
-                  key={`${group.entity_type}-${hit.id}`}
-                  type="button"
-                  onClick={() => go(hit)}
-                  onPointerEnter={() => setActiveIndex(indexOfHit.get(hit) ?? 0)}
-                  className={`block w-full px-3 py-1.5 text-left transition-colors hover:bg-surface-3 ${
-                    indexOfHit.get(hit) === safeIndex ? "bg-surface-3" : ""
-                  }`}
-                >
-                  <span className="block truncate text-[13px] text-text-primary">{hit.label}</span>
-                  {hit.sublabel && <span className="block truncate text-[11px] text-text-muted">{hit.sublabel}</span>}
-                </button>
-              ))}
-              {group.truncated && (
-                <p className="px-3 py-1 text-[11px] text-text-muted">További találatok is vannak – pontosíts.</p>
-              )}
-            </div>
-          ))}
+          {talalatLista}
         </div>
       )}
     </div>
+    </>
   );
 }
