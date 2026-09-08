@@ -327,10 +327,11 @@ export async function createFeltoltoLink(portalId: number, folderId: number | nu
   });
 }
 
-/** A feltöltő link VISSZAVONÁSA - a link birtokosa többé nem tud feltölteni.
- * A felület feltűnő megerősítéssel hívja (a felhasználó kérése). */
-export async function deleteFeltoltoLink(portalId: number): Promise<void> {
-  return req(`/api/v1/portal-admin/${portalId}/feltolto-link`, { method: "DELETE" });
+/** EGY feltöltő link VISSZAVONÁSA - a link birtokosa többé nem tud
+ * feltölteni, a portál többi élő linkje tovább él. A felület feltűnő
+ * megerősítéssel hívja (a felhasználó kérése). */
+export async function deleteFeltoltoLink(portalId: number, linkId: number): Promise<void> {
+  return req(`/api/v1/portal-admin/${portalId}/feltolto-link/${linkId}`, { method: "DELETE" });
 }
 
 export async function createFolderShareLink(folderId: number): Promise<{ url: string }> {

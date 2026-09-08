@@ -380,21 +380,22 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
       const { url } = await keszit();
       setShareUrl(url);
       await navigator.clipboard?.writeText(url).catch(() => {});
-      // A feltöltő link sávja (data.feltolto_token) is frissüljön, ha most
-      // jött létre a link.
+      // A feltöltő linkek sávja (data.feltolto_linkek) is frissüljön, ha
+      // most jött létre a link.
       refresh();
     } catch (e) {
       alert(String((e as Error)?.message ?? e));
     }
   }
 
-  /** A feltöltő link VISSZAVONÁSA - a feltűnő piros megerősítés után (lásd
+  /** EGY feltöltő link VISSZAVONÁSA (az id-ja alapján - több link is élhet
+   * egyszerre, a többi tovább él) - a feltűnő piros megerősítés után (lásd
    * lent, a felhasználó kérése: véletlenül ne lehessen visszavonni). */
-  const [feltoltoVisszavonas, setFeltoltoVisszavonas] = useState(false);
-  async function feltoltoLinkVisszavon() {
-    setFeltoltoVisszavonas(false);
+  const [feltoltoVisszavonas, setFeltoltoVisszavonas] = useState<number | null>(null);
+  async function feltoltoLinkVisszavon(linkId: number) {
+    setFeltoltoVisszavonas(null);
     try {
-      await deleteFeltoltoLink(initial.id);
+      await deleteFeltoltoLink(initial.id, linkId);
       refresh();
     } catch (e) {
       alert(`Sikertelen visszavonás: ${String((e as Error)?.message ?? e)}`);
@@ -889,21 +890,20 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
               <Link2 className="h-4 w-4" />
               Megosztó link
             </button>
-            {/* Új feltöltő link csak akkor készíthető innen, ha még NINCS élő -
-                az élőt a lenti feltűnő sáv mutatja, a visszavonásával együtt
-                (a felhasználó kérése: a link ne szűnhessen meg véletlenül;
-                a szerver sem enged némán új tokent generálni). */}
-            {!data.feltolto_token && (
-              <button
-                type="button"
-                title="Aki ezt a linket kapja, mappákat hozhat létre és feltölthet a portálra - törölni nem tud"
-                onClick={() => void linkMasol(() => createFeltoltoLink(initial.id, null))}
-                className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-4 py-2 text-[13px] text-text-secondary hover:bg-surface-3"
-              >
-                <Upload className="h-4 w-4" />
-                Feltöltő link
-              </button>
-            )}
+            {/* PORTÁL-SZINTŰ feltöltő link (több link is élhet egyszerre,
+                akár mappánként külön - azokat a mappa-sorok Upload-ikonja
+                adja). Azonos hatókörre a szerver nem duplikál, a meglévő
+                linket adja vissza; az élő linkeket a lenti feltűnő sáv
+                mutatja, linkenkénti védett visszavonással. */}
+            <button
+              type="button"
+              title="Aki ezt a linket kapja, mappákat hozhat létre és feltölthet a portálra - törölni nem tud"
+              onClick={() => void linkMasol(() => createFeltoltoLink(initial.id, null))}
+              className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-4 py-2 text-[13px] text-text-secondary hover:bg-surface-3"
+            >
+              <Upload className="h-4 w-4" />
+              Feltöltő link
+            </button>
             <button
               onClick={onDeletePortal}
               className="ml-auto flex items-center gap-2 rounded-[var(--radius)] border border-text-danger/40 px-4 py-2 text-[13px] text-text-danger transition-colors hover:bg-bg-danger"
@@ -918,43 +918,50 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
             </p>
           )}
 
-          {/* AZ ÉLŐ FELTÖLTŐ LINK feltűnő sávja (a felhasználó kérése):
-              egyértelműen látszik, hogy kint van egy link, és a visszavonás
-              külön, piros megerősítéssel megy - véletlenül nem történhet. */}
-          {data.feltolto_token && (
-            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-[var(--radius)] border border-emerald-600/50 bg-emerald-600/10 px-3.5 py-3">
+          {/* AZ ÉLŐ FELTÖLTŐ LINKEK feltűnő sávja (a felhasználó kérése):
+              egyértelműen látszik, hogy melyik linkek vannak kint (több is
+              élhet egyszerre, akár mappánként külön), és a visszavonás
+              linkenként, piros megerősítéssel megy - véletlenül nem történhet. */}
+          {(data.feltolto_linkek?.length ?? 0) > 0 && (
+            <div className="mt-3 space-y-2 rounded-[var(--radius)] border border-emerald-600/50 bg-emerald-600/10 px-3.5 py-3">
               <span className="flex items-center gap-2 text-[13px] font-medium text-emerald-500">
                 <Upload className="h-4 w-4" />
-                Feltöltő link AKTÍV
-                {data.feltolto_folder_id != null && (
-                  <span className="font-normal text-text-secondary">
-                    – csak ebbe a mappába:{" "}
-                    {folders.find((f) => f.id === data.feltolto_folder_id)?.name ?? `#${data.feltolto_folder_id}`}
-                  </span>
-                )}
+                {(data.feltolto_linkek?.length ?? 0) === 1
+                  ? "Feltöltő link AKTÍV"
+                  : `${data.feltolto_linkek?.length} feltöltő link AKTÍV`}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[12px] text-text-muted">
-                {portalBaseUrl()}/feltoltes/{data.feltolto_token}
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  void navigator.clipboard
-                    ?.writeText(`${portalBaseUrl()}/feltoltes/${data.feltolto_token}`)
-                    .then(() => setShareUrl(`${portalBaseUrl()}/feltoltes/${data.feltolto_token}`))
-                    .catch(() => {})
-                }
-                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3"
-              >
-                Másolás
-              </button>
-              <button
-                type="button"
-                onClick={() => setFeltoltoVisszavonas(true)}
-                className="rounded-[var(--radius)] border border-red-600/50 px-3 py-1.5 text-[12.5px] font-medium text-red-500 hover:bg-red-600/10"
-              >
-                Link visszavonása
-              </button>
+              {data.feltolto_linkek?.map((link) => {
+                const url = `${portalBaseUrl()}/feltoltes/${link.token}`;
+                return (
+                  <div key={link.id} className="flex flex-wrap items-center gap-3">
+                    <span className="text-[12.5px] text-text-secondary">
+                      {link.folder_id != null
+                        ? `Csak ebbe a mappába: ${folders.find((f) => f.id === link.folder_id)?.name ?? `#${link.folder_id}`}`
+                        : "Egész portál"}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-text-muted">{url}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void navigator.clipboard
+                          ?.writeText(url)
+                          .then(() => setShareUrl(url))
+                          .catch(() => {})
+                      }
+                      className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3"
+                    >
+                      Másolás
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFeltoltoVisszavonas(link.id)}
+                      className="rounded-[var(--radius)] border border-red-600/50 px-3 py-1.5 text-[12.5px] font-medium text-red-500 hover:bg-red-600/10"
+                    >
+                      Link visszavonása
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
@@ -1337,14 +1344,15 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
       )}
 
       {/* A feltöltő link visszavonása CSAK a nagy piros megerősítésen át megy
-          (a felhasználó kérése) - a link birtokosa onnantól nem tud feltölteni. */}
-      {feltoltoVisszavonas && (
+          (a felhasználó kérése) - a link birtokosa onnantól nem tud feltölteni,
+          a portál TÖBBI élő linkje viszont tovább él. */}
+      {feltoltoVisszavonas != null && (
         <TorlesMegerosites
-          cim="Biztosan visszavonod a feltöltő linket?"
-          uzenet="Aki nála van a link, onnantól NEM tud több fájlt feltölteni erre a portálra. A már feltöltött anyagok megmaradnak. Később bármikor készíthetsz új linket - de az egy MÁSIK cím lesz, amit újra ki kell küldeni."
+          cim="Biztosan visszavonod ezt a feltöltő linket?"
+          uzenet="Aki nála van ez a link, onnantól NEM tud több fájlt feltölteni vele. A már feltöltött anyagok és a portál többi élő feltöltő linkje megmaradnak. Később bármikor készíthetsz új linket - de az egy MÁSIK cím lesz, amit újra ki kell küldeni."
           gombCimke="Igen, visszavonom"
-          onMegse={() => setFeltoltoVisszavonas(false)}
-          onTorles={() => void feltoltoLinkVisszavon()}
+          onMegse={() => setFeltoltoVisszavonas(null)}
+          onTorles={() => void feltoltoLinkVisszavon(feltoltoVisszavonas)}
         />
       )}
 

@@ -182,14 +182,23 @@ class PortalSummary(BaseModel):
     share_token: str | None = None
 
 
+class PortalFeltoltoLinkOut(BaseModel):
+    """Egy élő feltöltő link (models/portal.PortalFeltoltoLink) - a felület
+    ebből mutatja a feltűnő "aktív feltöltő link" sávot linkenként, a
+    visszavonás gombbal (a felhasználó kérése: a visszavonás ne
+    történhessen véletlenül, és több link is élhet egyszerre)."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    token: str
+    #: Ha a link csak egy mappába enged feltölteni, annak azonosítója.
+    folder_id: int | None = None
+
+
 class PortalDetail(PortalSummary):
     description: str
-    #: Az ÉLŐ feltöltő link tokenje (None = nincs kiadva) - a felület ebből
-    #: mutatja a feltűnő "aktív feltöltő link" sávot a visszavonás gombbal
-    #: (a felhasználó kérése: a visszavonás ne történhessen véletlenül).
-    feltolto_token: str | None = None
-    #: Ha a link csak egy mappába enged feltölteni, annak azonosítója.
-    feltolto_folder_id: int | None = None
+    #: Az ÉLŐ feltöltő linkek (több is lehet, akár mappánként külön).
+    feltolto_linkek: list[PortalFeltoltoLinkOut] = []
     # A nyers felülírás-mezők (nem a resolve_*-tal számolt title/client_name/
     # project_date) - kellenek az admin felületnek, hogy meg tudja mutatni,
     # mi van ténylegesen felülírva, és üresen (None) tudja előtölteni a

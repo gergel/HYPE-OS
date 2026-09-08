@@ -26,10 +26,11 @@ from app.core.database import get_db
 from app.core.security import Role, get_current_user, hash_password, require_page_action
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
-from app.models.portal import Portal, PortalFolder, PortalImage, PortalVideo
+from app.models.portal import Portal, PortalFeltoltoLink, PortalFolder, PortalImage, PortalVideo
 from app.models.project import Project
 from app.schemas.portal import (
     PortalDetail,
+    PortalFeltoltoLinkOut,
     PortalFolderCreate,
     PortalFolderOut,
     PortalFolderUpdate,
@@ -80,8 +81,7 @@ def _detail(p: Portal) -> PortalDetail:
     return PortalDetail(
         **_summary(p).model_dump(),
         description=p.description or "",
-        feltolto_token=p.feltolto_token,
-        feltolto_folder_id=p.feltolto_folder_id,
+        feltolto_linkek=[PortalFeltoltoLinkOut.model_validate(l) for l in p.feltolto_linkek],
         title_override=p.title_override,
         client_name_override=p.client_name_override,
         project_date_override=p.project_date_override,
@@ -430,43 +430,37 @@ def feltolto_link(
 ):
     """FELTÖLTŐ link: aki megkapja, mappákat hozhat létre és feltölthet a
     portálra (vagy csak a megadott mappába), de semmit nem törölhet - lásd
-    routes/portal_public.py "feltoltes" végpontjai."""
+    routes/portal_public.py "feltoltes" végpontjai. TÖBB link is élhet
+    egyszerre (a felhasználó kérése: akár minden mappához külön) - azonos
+    hatókörre viszont nem duplázunk, a meglévő linket adjuk vissza, így a
+    gomb ismételt megnyomása nem szór szét sok egyforma címet."""
     portal = _get_portal_or_404(db, portal_id)
     if payload.folder_id is not None:
         folder = db.get(PortalFolder, payload.folder_id)
         if folder is None or folder.portal_id != portal.id:
             raise HTTPException(status_code=404, detail="Ez a mappa nem ehhez a portálhoz tartozik.")
-    # Ha MÁR VAN élő link, nem generálunk némán újat (a felhasználó kérése:
-    # a visszavonás - és egy új token kiadása a régit pont visszavonja - ne
-    # történhessen véletlenül). Azonos hatókörű kérésre a meglévő linket
-    # adjuk vissza; más hatókörhöz előbb a felületen kell visszavonni.
-    if portal.feltolto_token:
-        if portal.feltolto_folder_id == payload.folder_id:
-            return PortalShareLink(
-                token=portal.feltolto_token, url=f"{_portal_front()}/feltoltes/{portal.feltolto_token}"
-            )
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Ehhez a portálhoz már van élő feltöltő link (más hatókörrel). Egy új link a régit "
-                "érvénytelenítené - előbb vond vissza a mostanit a Feltöltő link sávban."
-            ),
-        )
-    portal.feltolto_token = uuid.uuid4().hex
-    portal.feltolto_folder_id = payload.folder_id
+    meglevo = next((l for l in portal.feltolto_linkek if l.folder_id == payload.folder_id), None)
+    if meglevo is not None:
+        return PortalShareLink(token=meglevo.token, url=f"{_portal_front()}/feltoltes/{meglevo.token}")
+    link = PortalFeltoltoLink(portal_id=portal.id, folder_id=payload.folder_id, token=uuid.uuid4().hex)
+    db.add(link)
     db.commit()
-    return PortalShareLink(token=portal.feltolto_token, url=f"{_portal_front()}/feltoltes/{portal.feltolto_token}")
+    return PortalShareLink(token=link.token, url=f"{_portal_front()}/feltoltes/{link.token}")
 
 
-@router.delete("/{portal_id}/feltolto-link", status_code=204)
+@router.delete("/{portal_id}/feltolto-link/{link_id}", status_code=204)
 def feltolto_link_visszavonas(
     portal_id: int,
+    link_id: int,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
+    """EGY feltöltő link visszavonása - a portál többi élő linkje tovább él."""
     portal = _get_portal_or_404(db, portal_id)
-    portal.feltolto_token = None
-    portal.feltolto_folder_id = None
+    link = db.get(PortalFeltoltoLink, link_id)
+    if link is None or link.portal_id != portal.id:
+        raise HTTPException(status_code=404, detail="Ez a feltöltő link nem található (már visszavonták?).")
+    db.delete(link)
     db.commit()
 
 

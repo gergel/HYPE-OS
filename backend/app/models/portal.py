@@ -53,14 +53,6 @@ class Portal(TimestampMixin, Base):
 
     password_hash: Mapped[str | None] = mapped_column(String(255))
     share_token: Mapped[str | None] = mapped_column(String(255), unique=True)
-    #: FELTÖLTŐ link (a felhasználó kérése): aki ezt a tokent kapja, mappát
-    #: hozhat létre és feltölthet a portálra (vagy csak a megadott mappájába),
-    #: de NEM törölhet és nem lát admin-felületet - lásd
-    #: routes/portal_public.py "feltoltes" végpontjai.
-    feltolto_token: Mapped[str | None] = mapped_column(String(64), unique=True)
-    feltolto_folder_id: Mapped[int | None] = mapped_column(
-        ForeignKey("portal_folders.id", ondelete="SET NULL"), nullable=True
-    )
     status: Mapped[PortalStatus] = mapped_column(
         Enum(PortalStatus, name="portal_status", values_callable=lambda obj: [e.value for e in obj]),
         default=PortalStatus.DRAFT,
@@ -82,8 +74,11 @@ class Portal(TimestampMixin, Base):
     project: Mapped["Project | None"] = relationship(back_populates="portal")
     deliverable: Mapped["Deliverable | None"] = relationship(back_populates="portal")
     payments: Mapped[list["Payment"]] = relationship(back_populates="portal")
-    # foreign_keys nélkül a feltolto_folder_id (lásd fent) kétértelművé tenné
-    # a kapcsolatot - a mappák a SAJÁT portal_id-jükön lógnak.
+    #: FELTÖLTŐ linkek (a felhasználó kérése: TÖBB is élhet egyszerre, akár
+    #: mappánként külön) - lásd a PortalFeltoltoLink táblát lent.
+    feltolto_linkek: Mapped[list["PortalFeltoltoLink"]] = relationship(
+        back_populates="portal", cascade="all, delete-orphan", order_by="PortalFeltoltoLink.id"
+    )
     folders: Mapped[list["PortalFolder"]] = relationship(
         back_populates="portal",
         cascade="all, delete-orphan",
@@ -96,6 +91,31 @@ class Portal(TimestampMixin, Base):
     images: Mapped[list["PortalImage"]] = relationship(
         back_populates="portal", cascade="all, delete-orphan", order_by="PortalImage.sort_order"
     )
+
+
+class PortalFeltoltoLink(TimestampMixin, Base):
+    """FELTÖLTŐ link (a felhasználó kérése): aki a tokent kapja, feltölthet a
+    portálra (vagy csak a megadott mappájába), de NEM törölhet és nem lát
+    admin-felületet - lásd routes/portal_public.py "feltoltes" végpontjai.
+
+    Külön tábla, mert egy portálon TÖBB link is élhet egyszerre (a felhasználó
+    kérése: akár minden mappához külön feltöltő link) - mindegyik önállóan
+    vonható vissza, a többi tovább él."""
+
+    __tablename__ = "portal_feltolto_linkek"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    portal_id: Mapped[int] = mapped_column(ForeignKey("portals.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: Ha ki van töltve, a link CSAK ebbe a mappába enged feltölteni. A mappa
+    #: törlésekor a rá szűkített link is megszűnik (CASCADE) - SET NULL itt
+    #: veszélyes lenne: a szűkített link némán az EGÉSZ portálra tágulna.
+    folder_id: Mapped[int | None] = mapped_column(
+        ForeignKey("portal_folders.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+
+    portal: Mapped["Portal"] = relationship(back_populates="feltolto_linkek")
+    folder: Mapped["PortalFolder | None"] = relationship()
 
 
 class Payment(TimestampMixin, Base):

@@ -466,19 +466,25 @@ def public_image_file(image_id: int, db: Session = Depends(get_db)):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _feltolto_portal(db: Session, token: str) -> Portal:
-    portal = db.scalar(select(Portal).where(Portal.feltolto_token == token))
-    if portal is None:
+def _feltolto_link(db: Session, token: str):
+    """A token feltöltő LINK-sorát adja vissza (portálonként több is élhet,
+    akár mappánként külön - lásd models/portal.PortalFeltoltoLink); a link
+    sora hordozza a mappa-hatókört is (link.folder_id)."""
+    from app.models.portal import PortalFeltoltoLink
+
+    link = db.scalar(select(PortalFeltoltoLink).where(PortalFeltoltoLink.token == token))
+    if link is None:
         raise HTTPException(status_code=404, detail="Ez a feltöltő link nem él (visszavonták vagy hibás).")
-    return portal
+    return link
 
 
 @router.get("/feltoltes/{token}")
 def feltoltes_adatok(token: str, db: Session = Depends(get_db)):
     """Mit lát a feltöltő link birtokosa: a portál címe és a mappák (a
     kijelölt mappára szűkítve, ha a link csak oda szól)."""
-    portal = _feltolto_portal(db, token)
-    mappak = [f for f in portal.folders if portal.feltolto_folder_id in (None, f.id)]
+    link = _feltolto_link(db, token)
+    portal = link.portal
+    mappak = [f for f in portal.folders if link.folder_id in (None, f.id)]
 
     # Beágyazott mappánál a TELJES útvonal a név ("Szülő / Gyerek") - a lapos
     # listában enélkül nem derülne ki, melyik mappán belül van.
@@ -499,7 +505,7 @@ def feltoltes_adatok(token: str, db: Session = Depends(get_db)):
     return {
         "title": resolve_title(portal),
         "brand": portal.brand,
-        "csak_mappa": portal.feltolto_folder_id is not None,
+        "csak_mappa": link.folder_id is not None,
         "folders": [
             {
                 "id": f.id,
@@ -521,8 +527,9 @@ class FeltoltesMappaIn(BaseModel):
 def feltoltes_mappa(token: str, payload: FeltoltesMappaIn, db: Session = Depends(get_db)):
     from app.models.portal import PortalFolder
 
-    portal = _feltolto_portal(db, token)
-    if portal.feltolto_folder_id is not None:
+    link = _feltolto_link(db, token)
+    portal = link.portal
+    if link.folder_id is not None:
         raise HTTPException(status_code=403, detail="Ez a link csak egy megadott mappába enged feltölteni.")
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Adj nevet a mappának.")
@@ -542,17 +549,17 @@ def _rejtett_agban(portal: Portal, folder_id: int | None) -> bool:
     return folder_id is not None and folder_id in _rejtett_mappak_rekurzivan(portal)
 
 
-def _feltoltes_cel_mappa(db: Session, portal: Portal, folder_id: int | None):
+def _feltoltes_cel_mappa(db: Session, link, folder_id: int | None):
     """A feltöltés cél-mappája - a link hatókörén belül."""
     from app.models.portal import PortalFolder
 
-    if portal.feltolto_folder_id is not None:
+    if link.folder_id is not None:
         # Mappára szűkített link: mindegy, mit kért, oda megy.
-        return portal.feltolto_folder_id
+        return link.folder_id
     if folder_id is None:
         return None
     folder = db.get(PortalFolder, folder_id)
-    if folder is None or folder.portal_id != portal.id:
+    if folder is None or folder.portal_id != link.portal_id:
         raise HTTPException(status_code=404, detail="Ez a mappa nem ehhez a portálhoz tartozik.")
     return folder.id
 
@@ -572,8 +579,9 @@ async def feltoltes_video(
 
     from app.api.routes.portal_admin import _enqueue_processing
 
-    portal = _feltolto_portal(db, token)
-    cel_mappa = _feltoltes_cel_mappa(db, portal, folder_id)
+    link = _feltolto_link(db, token)
+    portal = link.portal
+    cel_mappa = _feltoltes_cel_mappa(db, link, folder_id)
     max_order = max([v.sort_order for v in portal.videos], default=-1)
     video = PortalVideo(
         portal_id=portal.id,
@@ -615,8 +623,9 @@ async def feltoltes_kep(
 
     from PIL import Image as PILImage
 
-    portal = _feltolto_portal(db, token)
-    cel_mappa = _feltoltes_cel_mappa(db, portal, folder_id)
+    link = _feltolto_link(db, token)
+    portal = link.portal
+    cel_mappa = _feltoltes_cel_mappa(db, link, folder_id)
     # Rejtett mappába érkező kép automatikusan rejtett - a feltöltő ezen nem
     # tud változtatni, csak az admin felület (lásd _rejtett_agban).
     image = PortalImage(portal_id=portal.id, folder_id=cel_mappa, rejtett=_rejtett_agban(portal, cel_mappa))
