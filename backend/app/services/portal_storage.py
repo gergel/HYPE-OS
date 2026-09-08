@@ -69,10 +69,21 @@ def upload_bytes(data: bytes, key: str, content_type: str) -> str:
 def delete_prefix(prefix: str) -> None:
     client = _client()
     full_prefix = _key(prefix)
-    resp = client.list_objects_v2(Bucket=settings.r2_bucket_name, Prefix=full_prefix)
-    objs = [{"Key": o["Key"]} for o in resp.get("Contents", [])]
-    if objs:
-        client.delete_objects(Bucket=settings.r2_bucket_name, Delete={"Objects": objs})
+    # LAPOZVA: a list_objects_v2 egy körben legfeljebb 1000 kulcsot ad vissza -
+    # egy hosszabb videó HLS-szeletei ennél többen is lehetnek, lapozás nélkül
+    # a maradék árván ott ragadna az R2-ben. (A delete_objects korlátja is 1000.)
+    token: str | None = None
+    while True:
+        kw = {"Bucket": settings.r2_bucket_name, "Prefix": full_prefix}
+        if token:
+            kw["ContinuationToken"] = token
+        resp = client.list_objects_v2(**kw)
+        objs = [{"Key": o["Key"]} for o in resp.get("Contents", [])]
+        if objs:
+            client.delete_objects(Bucket=settings.r2_bucket_name, Delete={"Objects": objs})
+        if not resp.get("IsTruncated"):
+            break
+        token = resp.get("NextContinuationToken")
 
 
 def create_multipart(key: str, content_type: str) -> str:

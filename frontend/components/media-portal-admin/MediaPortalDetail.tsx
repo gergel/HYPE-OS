@@ -483,11 +483,15 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     setConfirmDialog({
       message: "Törlöd ezt a videót? Ez nem vonható vissza.",
       onConfirm: async () => {
+        // OPTIMISTA törlés (a felhasználó hibajelzése: a törlés lassú volt):
+        // a sor azonnal eltűnik, a szerver-hívás a háttérben megy - hiba
+        // esetén a refresh() visszahozza.
+        setVideos((prev) => prev.filter((v) => v.id !== videoId));
         try {
           await deleteVideo(videoId);
-          refresh();
         } catch (err) {
           alert(`Videó törlése sikertelen: ${err instanceof Error ? err.message : err}`);
+          refresh();
         }
       },
     });
@@ -497,11 +501,13 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     setConfirmDialog({
       message: "Törlöd ezt a képet? Ez nem vonható vissza.",
       onConfirm: async () => {
+        // Optimista törlés - lásd onDeleteVideo.
+        setImages((prev) => prev.filter((i) => i.id !== imageId));
         try {
           await deleteImage(imageId);
-          refresh();
         } catch (err) {
           alert(`Kép törlése sikertelen: ${err instanceof Error ? err.message : err}`);
+          refresh();
         }
       },
     });
@@ -630,28 +636,22 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     setConfirmDialog({
       message: `Törlöd a kijelölt ${total} elemet? Ez nem vonható vissza.`,
       onConfirm: async () => {
-        let failCount = 0;
-        let lastError: string | null = null;
-        for (const vid of vIds) {
-          try {
-            await deleteVideo(vid);
-          } catch (err) {
-            failCount++;
-            lastError = err instanceof Error ? err.message : String(err);
-          }
-        }
-        for (const iid of iIds) {
-          try {
-            await deleteImage(iid);
-          } catch (err) {
-            failCount++;
-            lastError = err instanceof Error ? err.message : String(err);
-          }
-        }
+        // OPTIMISTA + PÁRHUZAMOS törlés (a felhasználó hibajelzése: lassú
+        // volt): a kijelöltek azonnal eltűnnek, a szerver-hívások egyszerre
+        // mennek ki, nem egyenként sorban - hiba esetén a refresh()
+        // visszahozza, ami tényleg megmaradt.
+        setVideos((prev) => prev.filter((v) => !selectedVideos.has(v.id)));
+        setImages((prev) => prev.filter((i) => !selectedImages.has(i.id)));
         clearSelection();
-        refresh();
-        if (failCount > 0) {
-          alert(`${failCount} elem törlése sikertelen volt: ${lastError}`);
+        const eredmenyek = await Promise.allSettled([
+          ...vIds.map((vid) => deleteVideo(vid)),
+          ...iIds.map((iid) => deleteImage(iid)),
+        ]);
+        const hibak = eredmenyek.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+        if (hibak.length > 0) {
+          const utolso = hibak[hibak.length - 1].reason;
+          alert(`${hibak.length} elem törlése sikertelen volt: ${utolso instanceof Error ? utolso.message : utolso}`);
+          refresh();
         }
       },
     });

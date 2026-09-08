@@ -11,12 +11,13 @@ projekt) admin.py 1:1 portolt üzleti logikája, két lényegi különbséggel:
 from __future__ import annotations
 
 import io
+import logging
 import os
 import tempfile
 import uuid
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from PIL import Image as PILImage
 from pydantic import BaseModel
 from slugify import slugify
@@ -47,6 +48,8 @@ from app.services.portal_resolve import resolve_client_name, resolve_project_dat
 from app.workers.portal_tasks import process_video_task
 
 router = APIRouter(prefix="/portal-admin", tags=["portal-admin"])
+
+logger = logging.getLogger(__name__)
 
 PAGE = "/media-portal"
 
@@ -89,6 +92,20 @@ def _detail(p: Portal) -> PortalDetail:
         folders=[PortalFolderOut.model_validate(f) for f in p.folders],
         images=[PortalImageOut.model_validate(i) for i in p.images],
     )
+
+
+def _r2_prefixek_torlese(prefixek: list[str]) -> None:
+    """R2 tárhely-takarítás a VÁLASZ UTÁN, háttérben (a felhasználó
+    hibajelzése: a kép/videó törlése nagyon lassú volt). A lassú rész nem a
+    DB-sor törlése, hanem az R2-hívások (kliens-építés + listázás + törlés,
+    több hálózati kör) - ezek nem tartják fel a választ. Ha a takarítás
+    elhasal, árva fájl marad az R2-ben (a portálon már nem látszik, csak
+    tárhelyet foglal) - ezt naplózzuk, a felhasználó felé nem hiba."""
+    for prefix in prefixek:
+        try:
+            storage.delete_prefix(prefix)
+        except Exception:  # noqa: BLE001 - a többi prefix takarítása menjen tovább
+            logger.exception("R2 háttér-takarítás sikertelen: %s", prefix)
 
 
 def _get_portal_or_404(db: Session, portal_id: int) -> Portal:
@@ -348,15 +365,17 @@ def update_portal(
 
 @router.delete("/{portal_id}", status_code=204)
 def delete_portal(
-    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
+    portal_id: int,
+    tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     portal = _get_portal_or_404(db, portal_id)
-    for v in portal.videos:
-        storage.delete_prefix(f"videos/{v.id}")
-    for img in portal.images:
-        storage.delete_prefix(f"images/{img.id}")
+    prefixek = [f"videos/{v.id}" for v in portal.videos] + [f"images/{img.id}" for img in portal.images]
     db.delete(portal)
     db.commit()
+    # A tárhely-takarítás a válasz után, háttérben (lásd _r2_prefixek_torlese).
+    tasks.add_task(_r2_prefixek_torlese, prefixek)
 
 
 @router.post("/{portal_id}/cover")
@@ -382,12 +401,15 @@ async def upload_cover(
 
 @router.delete("/{portal_id}/cover")
 def delete_cover(
-    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR))
+    portal_id: int,
+    tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     portal = _get_portal_or_404(db, portal_id)
-    storage.delete_prefix(f"covers/{portal_id}")
     portal.cover_image_url = ""
     db.commit()
+    tasks.add_task(_r2_prefixek_torlese, [f"covers/{portal_id}"])
     return {"cover_image_url": ""}
 
 
@@ -706,14 +728,17 @@ async def replace_video(
 
 @router.delete("/videos/{video_id}", status_code=204)
 def delete_video(
-    video_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
+    video_id: int,
+    tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     video = db.get(PortalVideo, video_id)
     if not video:
         raise HTTPException(status_code=404, detail="Nem található")
-    storage.delete_prefix(f"videos/{video.id}")
     db.delete(video)
     db.commit()
+    tasks.add_task(_r2_prefixek_torlese, [f"videos/{video_id}"])
 
 
 @router.post("/{portal_id}/videos/reorder")
@@ -776,19 +801,22 @@ def update_folder(
 
 @router.delete("/folders/{folder_id}", status_code=204)
 def delete_folder(
-    folder_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
+    folder_id: int,
+    tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     folder = db.get(PortalFolder, folder_id)
     if not folder:
         raise HTTPException(status_code=404, detail="Nem található")
+    prefixek = [f"videos/{v.id}" for v in folder.videos] + [f"images/{img.id}" for img in folder.images]
     for v in list(folder.videos):
-        storage.delete_prefix(f"videos/{v.id}")
         db.delete(v)
     for img in list(folder.images):
-        storage.delete_prefix(f"images/{img.id}")
         db.delete(img)
     db.delete(folder)
     db.commit()
+    tasks.add_task(_r2_prefixek_torlese, prefixek)
 
 
 # ---------------- Képek ----------------
@@ -862,14 +890,17 @@ def update_image(
 
 @router.delete("/images/{image_id}", status_code=204)
 def delete_image(
-    image_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
+    image_id: int,
+    tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     image = db.get(PortalImage, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Nem található")
-    storage.delete_prefix(f"images/{image.id}")
     db.delete(image)
     db.commit()
+    tasks.add_task(_r2_prefixek_torlese, [f"images/{image_id}"])
 
 
 # ---------------- Notion + karbantartás ----------------
@@ -936,16 +967,19 @@ def pending_deletion(db: Session = Depends(get_db), _user: Employee = Depends(ge
 
 @router.post("/maintenance/{portal_id}/purge-files")
 def purge_portal_files(
-    portal_id: int, db: Session = Depends(get_db), _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR))
+    portal_id: int,
+    tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     """Egy portál ÖSSZES fájlját törli az R2-ből (videók + képek), de a
     PORTÁLT meghagyja (hogy a kapcsolat-oldal továbbra is működjön)."""
     portal = _get_portal_or_404(db, portal_id)
+    prefixek = [f"videos/{v.id}" for v in portal.videos] + [f"images/{img.id}" for img in portal.images]
     for v in list(portal.videos):
-        storage.delete_prefix(f"videos/{v.id}")
         db.delete(v)
     for img in list(portal.images):
-        storage.delete_prefix(f"images/{img.id}")
         db.delete(img)
     db.commit()
+    tasks.add_task(_r2_prefixek_torlese, prefixek)
     return {"ok": True, "purged": True}
