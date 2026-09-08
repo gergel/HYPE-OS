@@ -63,6 +63,10 @@ export interface PublicPortal {
   images: PortalImage[];
 }
 
+export type ExportAccess = { slug?: string; authorization?: string; belsos_token?: string; share?: string; part?: string };
+let exportAccess: ExportAccess = {};
+export function getExportAccess(): ExportAccess { return { ...exportAccess }; }
+
 const BASE = `${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/public/portal`;
 
 async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
@@ -78,6 +82,7 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
 }
 
 export async function getPublicProject(slug: string, token?: string, belsosToken?: string | null) {
+  exportAccess = { slug, authorization: token, belsos_token: belsosToken || undefined };
   const reszek = [
     token ? `authorization=${encodeURIComponent(token)}` : null,
     // A BELSŐS (bejelentkezett, portál-jogú) néző HYPE OS tokenje: vele a
@@ -105,6 +110,7 @@ export async function unlockProject(slug: string, password: string) {
 }
 
 export async function getByShare(token: string) {
+  exportAccess = { share: token };
   return req<{
     locked: boolean;
     expired?: boolean;
@@ -217,6 +223,7 @@ export async function feltoltesFajl(
 }
 
 export async function getMegosztas(token: string) {
+  exportAccess = { part: token };
   return req<{ tipus: "mappa" | "video"; project: PublicPortal }>(`/megosztas/${token}`);
 }
 

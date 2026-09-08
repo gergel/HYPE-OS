@@ -85,3 +85,4 @@ def build_hls_task(video_id: int, source_key: str) -> None:
 # elindulna, különben a taskjaik ismeretlenek maradnának a worker számára.
 from app.workers import calendar_tasks  # noqa: E402,F401
 from app.workers import dispo_tasks  # noqa: E402,F401
+from app.workers import portal_export_tasks  # noqa: E402,F401

@@ -1,10 +1,9 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import JSZip from "jszip";
+import { getExportAccess } from "@/lib/portalApi";
 import {
   getVideoDownloadUrl,
   getImageDownloadUrl,
-  getVideoFileProxyUrl,
   getImageFileProxyUrl,
 } from "@/lib/portalApi";
 
@@ -170,204 +169,51 @@ export async function downloadImage(imageId: number, title?: string) {
   setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
 }
 
-export async function downloadImagesAll(
-  images: { id: number; title: string }[],
-  onProgress?: (done: number, total: number) => void,
-  signal?: AbortSignal,
-) {
-  if (isMobileDevice()) {
-    let done = 0;
-    for (const img of images) {
-      if (signal?.aborted) return;
-      await downloadImage(img.id, img.title);
-      done++;
-      if (onProgress) onProgress(done, images.length);
-    }
-    return;
+type ExportItem = { id: number; title: string; folder?: string | null };
+type ExportJob = { id: string; state: string; bytes_done: number; total_bytes: number; error?: string; url?: string };
+
+async function backgroundZip(filename: string, videos: ExportItem[], images: ExportItem[],
+  onProgress?: (done: number, total: number) => void, signal?: AbortSignal) {
+  const base = `${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/public/portal-exports`;
+  const access = getExportAccess();
+  async function post(path: string, body: unknown): Promise<ExportJob> {
+    const res = await fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body), signal });
+    const data = await res.json();
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "A csomag nem készíthető el.");
+    return data;
   }
-
-  const zip = new JSZip();
-  const total = images.length;
-  let done = 0;
-  const CONCURRENCY = 5;
-  let cursor = 0;
-
-  async function worker() {
-    while (cursor < images.length) {
-      if (signal?.aborted) return;
-      const i = cursor++;
-      const img = images[i];
-      try {
-        const blob = await fetchBlobWithFallback(getImageDownloadUrl(img.id), getImageFileProxyUrl(img.id), signal);
-        const ext = (blob.type.split("/")[1] || "jpg").split("+")[0];
-        const safeTitle = (img.title || `image-${i + 1}`).replace(/[^\w.-]+/g, "_");
-        zip.file(`${safeTitle}.${ext}`, blob, { compression: "STORE" });
-      } catch {
-        // egy hibás kép kimarad
+  try {
+    const created = await post("", { access, filename, videos, images });
+    while (!signal?.aborted) {
+      const job = await post(`/${created.id}/status`, access);
+      onProgress?.(job.bytes_done, job.total_bytes || 1);
+      if (job.state === "ready" && job.url) {
+        // Native download streams directly from R2 to disk, never through a Blob.
+        const a = document.createElement("a");
+        a.href = job.url; a.download = `${filename}.zip`;
+        document.body.appendChild(a); a.click(); a.remove();
+        return;
       }
-      done++;
-      if (onProgress) onProgress(done, total);
+      if (job.state === "failed") throw new Error(job.error || "A csomag nem készült el.");
+      if (job.state === "expired") throw new Error("A csomag lejárt. Kattints újra az elkészítéshez.");
+      await new Promise<void>((resolve) => setTimeout(resolve, 2500));
     }
+  } catch (err) {
+    if (!signal?.aborted) alert(err instanceof Error ? err.message : "A letöltés nem sikerült.");
   }
-
-  const workers = Array.from({ length: Math.min(CONCURRENCY, images.length) }, () => worker());
-  await Promise.all(workers);
-  if (signal?.aborted) return;
-
-  const content = await zip.generateAsync({ type: "blob", compression: "STORE" });
-  const blobUrl = URL.createObjectURL(content);
-  const a = document.createElement("a");
-  a.href = blobUrl;
-  a.download = "photos.zip";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
 }
 
-async function finalizeZip(zip: JSZip, filename: string) {
-  const content = await zip.generateAsync({ type: "blob", compression: "STORE" });
-  const blobUrl = URL.createObjectURL(content);
-  const a = document.createElement("a");
-  a.href = blobUrl;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+export async function downloadImagesAll(images: ExportItem[], onProgress?: (done: number, total: number) => void, signal?: AbortSignal) {
+  return backgroundZip("Fotók", [], images, onProgress, signal);
 }
 
-// EGY mappa (videók + fotók) egyetlen ZIP-be - a mappa-kártyán lévő "Mappa
-// letöltése" gomb hívja.
-export async function downloadFolderZip(
-  folderName: string,
-  videos: { id: number; title: string }[],
-  images: { id: number; title: string }[],
-  onProgress?: (done: number, total: number) => void,
-  signal?: AbortSignal,
-) {
-  const total = videos.length + images.length;
-  let done = 0;
-  let added = 0;
-  const safeFolder = (folderName || "mappa").replace(/[^\w.-]+/g, "_");
-
-  const zip = new JSZip();
-
-  const IMG_CONCURRENCY = 5;
-  let imgCursor = 0;
-  async function imgWorker() {
-    while (imgCursor < images.length) {
-      if (signal?.aborted) return;
-      const i = imgCursor++;
-      const img = images[i];
-      try {
-        const blob = await fetchBlobWithFallback(getImageDownloadUrl(img.id), getImageFileProxyUrl(img.id), signal);
-        const ext = (blob.type.split("/")[1] || "jpg").split("+")[0];
-        const safe = (img.title || `kep-${i + 1}`).replace(/[^\w.-]+/g, "_");
-        zip.file(`${safe}.${ext}`, blob, { compression: "STORE" });
-        added++;
-      } catch (err) {
-        console.error("[zip] kép kimaradt:", img.id, err);
-      }
-      done++;
-      if (onProgress) onProgress(done, total);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(IMG_CONCURRENCY, images.length) }, () => imgWorker()));
-
-  // Videók egyesével (nagyok - párhuzamosan elfogyna a memória).
-  for (let i = 0; i < videos.length; i++) {
-    if (signal?.aborted) return;
-    const v = videos[i];
-    try {
-      const blob = await fetchBlobWithFallback(getVideoDownloadUrl(v.id), getVideoFileProxyUrl(v.id), signal);
-      const safe = (v.title || `video-${i + 1}`).replace(/[^\w.-]+/g, "_");
-      zip.file(`${safe}.mp4`, blob, { compression: "STORE" });
-      added++;
-    } catch (err) {
-      console.error("[zip] videó kimaradt:", v.id, err);
-    }
-    done++;
-    if (onProgress) onProgress(done, total);
-  }
-
-  if (signal?.aborted) return;
-  if (added === 0) {
-    alert("A letöltés nem sikerült (a fájlok nem elérhetők). Próbáld újra később.");
-    return;
-  }
-  await finalizeZip(zip, `${safeFolder}.zip`);
+export async function downloadFolderZip(folderName: string, videos: ExportItem[], images: ExportItem[],
+  onProgress?: (done: number, total: number) => void, signal?: AbortSignal) {
+  return backgroundZip(folderName, videos, images, onProgress, signal);
 }
 
-// A TELJES projekt egy ZIP-be, a ZIP-en belül megtartva a mappaszerkezetet -
-// a "folder" mező adja meg, melyik almappába kerüljön a fájl (null = gyökér).
-export async function downloadEverythingZip(
-  projectName: string,
-  videos: { id: number; title: string; folder?: string | null }[],
-  images: { id: number; title: string; folder?: string | null }[],
-  onProgress?: (done: number, total: number) => void,
-  signal?: AbortSignal,
-) {
-  const zip = new JSZip();
-  const total = videos.length + images.length;
-  let done = 0;
-  let added = 0;
-
-  const usedNames = new Set<string>();
-  function uniquePath(folder: string | null | undefined, base: string, ext: string): string {
-    const dir = folder ? `${folder.replace(/[^\w.-]+/g, "_")}/` : "";
-    let name = `${dir}${base}.${ext}`;
-    let n = 1;
-    while (usedNames.has(name)) {
-      name = `${dir}${base}-${n}.${ext}`;
-      n++;
-    }
-    usedNames.add(name);
-    return name;
-  }
-
-  const IMG_CONCURRENCY = 5;
-  let imgCursor = 0;
-  async function imgWorker() {
-    while (imgCursor < images.length) {
-      if (signal?.aborted) return;
-      const i = imgCursor++;
-      const img = images[i];
-      try {
-        const blob = await fetchBlobWithFallback(getImageDownloadUrl(img.id), getImageFileProxyUrl(img.id), signal);
-        const ext = (blob.type.split("/")[1] || "jpg").split("+")[0];
-        const base = (img.title || `kep-${i + 1}`).replace(/[^\w.-]+/g, "_");
-        zip.file(uniquePath(img.folder, base, ext), blob, { compression: "STORE" });
-        added++;
-      } catch (err) {
-        console.error("[zip] kép kimaradt:", img.id, err);
-      }
-      done++;
-      if (onProgress) onProgress(done, total);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(IMG_CONCURRENCY, images.length) }, () => imgWorker()));
-
-  for (let i = 0; i < videos.length; i++) {
-    if (signal?.aborted) return;
-    const v = videos[i];
-    try {
-      const blob = await fetchBlobWithFallback(getVideoDownloadUrl(v.id), getVideoFileProxyUrl(v.id), signal);
-      const base = (v.title || `video-${i + 1}`).replace(/[^\w.-]+/g, "_");
-      zip.file(uniquePath(v.folder, base, "mp4"), blob, { compression: "STORE" });
-      added++;
-    } catch (err) {
-      console.error("[zip] videó kimaradt:", v.id, err);
-    }
-    done++;
-    if (onProgress) onProgress(done, total);
-  }
-
-  if (signal?.aborted) return;
-  if (added === 0) {
-    alert("A letöltés nem sikerült (a fájlok nem elérhetők). Próbáld újra később.");
-    return;
-  }
-  const safeProject = (projectName || "anyagok").replace(/[^\w.-]+/g, "_");
-  await finalizeZip(zip, `${safeProject}.zip`);
+export async function downloadEverythingZip(projectName: string, videos: ExportItem[], images: ExportItem[],
+  onProgress?: (done: number, total: number) => void, signal?: AbortSignal) {
+  return backgroundZip(projectName, videos, images, onProgress, signal);
 }

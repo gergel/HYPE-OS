@@ -813,13 +813,13 @@ function DownloadAllButton({
         images,
         (done, total) => {
           if (done === 0) {
-            setStatus(`0 / ${total}`);
+            setStatus("Várakozás a csomagolásra…");
             return;
           }
           const elapsed = (Date.now() - startedAt.current) / 1000;
           const remaining = Math.round((elapsed / done) * (total - done));
           const timeStr = remaining < 60 ? `~${remaining} mp` : `~${Math.ceil(remaining / 60)} perc`;
-          setStatus(`${done} / ${total} · ${timeStr}`);
+          setStatus(`Csomagolás ${Math.min(100, Math.floor(done / total * 100))}% · ${timeStr}`);
         },
         controller.signal,
       );
@@ -834,7 +834,7 @@ function DownloadAllButton({
   return (
     <Button variant="primary" size="lg" onClick={handleClick} disabled={!total}>
       {busy ? <X className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-      {busy ? `${status || "Előkészítés…"} · Mégse` : "Összes letöltése"}
+      {busy ? `${status || "Előkészítés…"} · Bezárás` : "Összes letöltése"}
     </Button>
   );
 }
@@ -877,11 +877,11 @@ function FolderDownloadButton({ folderName, videos, images }: { folderName: stri
   function progressLabel() {
     if (!progress) return "Előkészítés…";
     const { done, total: t } = progress;
-    if (done === 0) return `0 / ${t}`;
+    if (done === 0) return "Várakozás a csomagolásra…";
     const elapsed = (Date.now() - startedAt.current) / 1000;
     const remaining = Math.round((elapsed / done) * (t - done));
     const timeStr = remaining < 60 ? `~${remaining} mp` : `~${Math.ceil(remaining / 60)} perc`;
-    return `${done} / ${t} · ${timeStr}`;
+    return `Csomagolás ${Math.min(100, Math.floor(done / t * 100))}% · ${timeStr}`;
   }
 
   return (
@@ -891,7 +891,7 @@ function FolderDownloadButton({ folderName, videos, images }: { folderName: stri
       className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-ink-line px-3.5 py-2 text-xs font-medium text-bone transition hover:border-ember/60 disabled:opacity-60 sm:px-4 sm:text-sm"
     >
       {busy ? <X className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-      {busy ? `${progressLabel()} · Mégse` : "Mappa letöltése"}
+      {busy ? `${progressLabel()} · Bezárás` : "Mappa letöltése"}
     </button>
   );
 }
@@ -928,11 +928,11 @@ function ImagesDownloadButton({ images, label }: { images: ImageType[]; label: s
   function progressLabel() {
     if (!progress) return "Előkészítés…";
     const { done, total } = progress;
-    if (done === 0) return `0 / ${total}`;
+    if (done === 0) return "Várakozás a csomagolásra…";
     const elapsed = (Date.now() - startedAt.current) / 1000;
     const remaining = Math.round((elapsed / done) * (total - done));
     const timeStr = remaining < 60 ? `~${remaining} mp` : `~${Math.ceil(remaining / 60)} perc`;
-    return `${done} / ${total} · ${timeStr}`;
+    return `Csomagolás ${Math.min(100, Math.floor(done / total * 100))}% · ${timeStr}`;
   }
 
   return (
@@ -941,7 +941,7 @@ function ImagesDownloadButton({ images, label }: { images: ImageType[]; label: s
       className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-bone px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-white disabled:opacity-60"
     >
       {busy ? <X className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-      {busy ? `${progressLabel()} · Mégse` : label}
+      {busy ? `${progressLabel()} · Bezárás` : label}
     </button>
   );
 }

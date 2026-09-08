@@ -162,3 +162,5 @@ api_router.include_router(dispo_responsibles_router)
 # Globális kereső (TopBar "Keresés bármiben…")
 api_router.include_router(realtime_router)
 api_router.include_router(search_router)
+from app.api.routes.portal_exports import router as portal_exports_router
+api_router.include_router(portal_exports_router)

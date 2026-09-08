@@ -187,3 +187,5 @@ __all__ = [
     "Arajanlat",
     "ArajanlatTetel",
 ]
+
+from app.models.portal_export import PortalExport  # noqa: F401
