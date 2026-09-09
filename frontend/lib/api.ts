@@ -409,6 +409,9 @@ export type Deliverable = {
   esemeny_neve?: string | null;
   /** A vinyó-nézet kártya-címkéje: az archiválás állapota. */
   archivalas?: string | null;
+  /** PRIORITÁS (a felhasználó kérése): a kiemelt anyag kártyája piros
+   * körvonalat kap, amíg kész/kiküldhető állapotba nem kerül. */
+  prioritas?: boolean;
   /** Mikor állították le UTOLJÁRA a vágás időmérőjét. Notion importnál a
    * 'Timesheet Public' End Date mezőjéből jön, a rendszeren belül a timer
    * leállítása írja. */

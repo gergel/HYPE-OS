@@ -47,6 +47,11 @@ class Deliverable(TimestampMixin, Base):
     assigned_to_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
 
     allapot: Mapped[str | None] = mapped_column(String(50))
+    #: PRIORITÁS (a felhasználó kérése): a kiemelt anyag kártyája piros
+    #: körvonalat kap az Utómunka táblán, amíg kész/kiküldhető állapotba nem
+    #: kerül - a vágó innen tudja, mivel kezdjen. Az adatlap fejlécének
+    #: kapcsolója állítja (lásd frontend PrioritasKapcsolo).
+    prioritas: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     hatarido: Mapped[date | None] = mapped_column(Date)
     koltseg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     kesz_anyag_url: Mapped[str | None] = mapped_column(String(500))

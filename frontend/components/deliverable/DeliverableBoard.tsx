@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { Flag } from "lucide-react";
 import { selectColor } from "@/lib/selectColor";
 
 export type BoardCard = {
@@ -9,6 +10,10 @@ export type BoardCard = {
   title: string;
   subtitle?: string | null;
   badges: string[];
+  /** PRIORITÁS-kiemelés (a felhasználó kérése): piros körvonal + jelzés a
+   * kártyán, hogy a vágó lássa, ezzel kezdjen. A kész/kiküldhető állapotú
+   * anyagoknál már nem jár (lásd UtomunkaContent prioritasKiemeles). */
+  kiemelt?: boolean;
   /** Interaktív elem a kártya alján (pl. a vinyó-nézet archiválás-állítója) -
    * a kattintása NEM nyitja meg a kártyát (lásd BoardCardView click-védelme). */
   extra?: ReactNode;
@@ -84,11 +89,27 @@ function BoardCardView({
             }
           : undefined
       }
-      style={szin ? { background: halvany(szin, 14), borderColor: halvany(szin, 38) } : undefined}
-      className={`block rounded-[var(--radius)] border border-border bg-surface-3 p-2.5 text-[13px] hover:bg-surface-2 ${
-        huzhato ? "cursor-grab active:cursor-grabbing" : ""
-      }`}
+      // Prioritásnál az oszlop-szín NEM írhatja felül a piros keretet (az
+      // inline borderColor erősebb lenne a class-nál) - a halvány háttér marad.
+      style={
+        szin
+          ? card.kiemelt
+            ? { background: halvany(szin, 14) }
+            : { background: halvany(szin, 14), borderColor: halvany(szin, 38) }
+          : undefined
+      }
+      className={`block rounded-[var(--radius)] border bg-surface-3 p-2.5 text-[13px] hover:bg-surface-2 ${
+        card.kiemelt ? "border-red-600 ring-1 ring-red-600/70" : "border-border"
+      } ${huzhato ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
+      {/* PRIORITÁS jelzés (a felhasználó kérése) - a piros körvonal mellé
+          szövegesen is, hogy félreérthetetlen legyen, ezzel kell kezdeni. */}
+      {card.kiemelt && (
+        <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-red-500">
+          <Flag className="h-3 w-3" />
+          Prioritás
+        </p>
+      )}
       {/* [overflow-wrap:anywhere]: a fájlnév-szerű címek (alulvonásokkal,
           pontokkal) nem tartalmaznak törhető szóközt, e nélkül kilógnának a
           kártyából. */}

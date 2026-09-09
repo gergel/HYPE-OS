@@ -7,6 +7,7 @@ import { CommentsSection } from "@/components/deliverable/CommentsSection";
 import { ContactsManager } from "@/components/deliverable/ContactsManager";
 import { CreatePortalButton } from "@/components/deliverable/CreatePortalButton";
 import { FeedbackSendButton } from "@/components/deliverable/FeedbackSendButton";
+import { PrioritasKapcsolo } from "@/components/deliverable/PrioritasKapcsolo";
 import { VisszajelzesLista } from "@/components/deliverable/VisszajelzesLista";
 import { TimerControls } from "@/components/deliverable/TimerControls";
 import { VinyokEditor } from "@/components/deliverable/VinyokEditor";
@@ -59,6 +60,9 @@ const HIDDEN_FIELDS = [
   // (az BÁRMELYIK entitáshoz szól, nem ismerhet Deliverable-specifikus
   // szabályt).
   "allapot",
+  // A prioritást a fejléc bespoke kapcsolója állítja (PrioritasKapcsolo) -
+  // a generikus rácson másodszor csak zavart okozna.
+  "prioritas",
   "vinyok",
   "megrendeloi_kontaktok_notion_ids",
   "megrendeloi_email_cimek",
@@ -310,6 +314,14 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               />
             ) : (
               Boolean(deliverable.allapot) && <StatusBadge label={String(deliverable.allapot)} tone="neutral" />
+            )}
+            {/* PRIORITÁS (a felhasználó kérése): bekapcsolva a kártya piros
+                körvonalat kap az Utómunka táblán, amíg kész/kiküldhető
+                állapotba nem kerül - a vágó ezzel kezdjen. */}
+            {canEditPage ? (
+              <PrioritasKapcsolo deliverableId={deliverableId} kezdeti={Boolean(deliverable.prioritas)} />
+            ) : (
+              Boolean(deliverable.prioritas) && <StatusBadge label="Prioritás" tone="danger" />
             )}
             {/* Az anyag TÖRLÉSE (a felhasználó kérése) - megerősítéssel, és a
                 törlés Ctrl+Z-vel visszavonható (lásd lib/visszavonas.ts). A

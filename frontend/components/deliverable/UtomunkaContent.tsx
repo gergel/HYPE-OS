@@ -213,6 +213,29 @@ export function UtomunkaContent({
     return /^\d{4}-\d{2}-\d{2}/.test(szoveg) ? formatDate(szoveg) : szoveg;
   }
 
+  /** Jár-e a kártyának a piros prioritás-kiemelés (a felhasználó kérése):
+   * a prioritásos anyagé igen, AMÍG kész vagy kiküldhető állapotba nem kerül
+   * (vagy ki nem küldik) - onnantól már nincs mit sürgetni rajta. A "kész"
+   * állapotokat az admin jelöli az állapot-beállításokon (kesz_allapot), a
+   * "kiküldhető"-féléket névről ismerjük fel (ékezet-függetlenül), mint a
+   * backend hasonló szabályai. */
+  const lezaroAllapot = useMemo(() => {
+    const keszek = new Set(allapotBeallitasok.filter((b) => b.kesz_allapot).map((b) => b.allapot));
+    return (allapot: string | null) => {
+      if (!allapot) return false;
+      if (keszek.has(allapot)) return true;
+      const egyszeru = allapot
+        .toLocaleLowerCase("hu-HU")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      return egyszeru.includes("kikuld") || egyszeru.includes("kesz");
+    };
+  }, [allapotBeallitasok]);
+
+  function prioritasKiemeles(d: Deliverable): boolean {
+    return Boolean(d.prioritas) && !d.anyag_kikuldve && !lezaroAllapot(d.allapot);
+  }
+
   function toCard(d: Deliverable, badges: string[], extra?: React.ReactNode): BoardCard {
     // Beállítás nélkül marad az eddigi alapértelmezés (határidő), hogy a
     // tábla ne ürüljön ki azoknál, akik sosem nyúlnak a beállításhoz. A
@@ -245,6 +268,9 @@ export function UtomunkaContent({
       // és kinek fut rajta épp az időmérője.
       kiosztva,
       timerek: timerNevek.get(d.id) ?? [],
+      // Piros prioritás-körvonal, amíg az anyag le nem zárul (a felhasználó
+      // kérése) - lásd prioritasKiemeles fent.
+      kiemelt: prioritasKiemeles(d),
       extra,
     };
   }
@@ -388,7 +414,7 @@ export function UtomunkaContent({
         ),
       }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lathatoAnyagok, vinyoOptions, vinyoKereses, vinyoRendezes, kartyaMezok, employeeName, timerNevek, canEdit, archivalasOptions]);
+  }, [lathatoAnyagok, vinyoOptions, vinyoKereses, vinyoRendezes, kartyaMezok, employeeName, timerNevek, canEdit, archivalasOptions, allapotBeallitasok]);
 
   /** Az anyag ÁLLAPOTÁNAK tényleges átírása - ezt hívja mind a Kanban-húzás
    * (kartyaAthelyezes, a celOszlop -> allapot fordítás után), mind a lista

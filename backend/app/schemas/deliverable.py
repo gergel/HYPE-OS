@@ -57,6 +57,9 @@ class DeliverableListItem(BaseModel):
     #: A vinyó-nézet kártya-címkéjéhez (ott az archiválás állapota kell, nem
     #: a vágás-állapot - a felhasználó kérése).
     archivalas: str | None = None
+    #: PRIORITÁS: a kiemelt anyag kártyája piros körvonalat kap a táblán,
+    #: amíg kész/kiküldhető állapotba nem kerül (a felhasználó kérése).
+    prioritas: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -78,6 +81,8 @@ class DeliverableRead(DeliverableBase):
     # create_portal_from_deliverable), a frontend ez alapján dönti el, hogy
     # "Portál létrehozása" gombot vagy a meglévő Portálra mutató linket mutassa.
     portal_id: int | None = None
+    #: PRIORITÁS - lásd DeliverableListItem.prioritas.
+    prioritas: bool = False
 
     # az 'Utómunka' Notion tábla maradék mezői, egyenként (lásd scripts/dump_extra_keys.py)
     tobb_vinyo: bool | None = None
