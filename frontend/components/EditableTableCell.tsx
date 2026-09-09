@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { formatSzam } from "@/lib/penz";
 
 type InputType = "text" | "number" | "date";
 
@@ -90,7 +91,17 @@ export function EditableTableCell({
         }}
         className="-mx-1 cursor-text rounded px-1 py-0.5 hover:bg-surface-3"
       >
-        {displayValue !== null && displayValue !== "" ? String(displayValue) : <span className="text-text-muted italic">{placeholder}</span>}
+        {displayValue !== null && displayValue !== "" ? (
+          // Szám-mezők ezres tagolással (a felhasználó kérése - pl. a projekt
+          // kiadások nettó oszlopa); szerkesztésbe lépve a nyers szám marad.
+          type === "number" && typeof displayValue === "number" ? (
+            formatSzam(displayValue, field)
+          ) : (
+            String(displayValue)
+          )
+        ) : (
+          <span className="text-text-muted italic">{placeholder}</span>
+        )}
       </span>
     );
   }

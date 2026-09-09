@@ -15,6 +15,18 @@ export function formatHuf(value: number | null): string {
   return `${Math.round(value).toLocaleString("hu-HU")} Ft`;
 }
 
+/** SZÁM ezres tagolással (a felhasználó kérése: mindenhol, ahol számot ír ki
+ * a rendszer - pl. projekt kiadások -, ezresenként tagolva jelenjen meg).
+ * A tizedesjegy megmarad (hu-HU: vesszővel). Az évszám-szerű mezők NEM
+ * tagolódnak ("2 026" évszámként értelmezhetetlen) - ezekre a mezőnév utal. */
+const EVSZAM_MEZO_MINTA = /(^|_)(ev|evszam|year|honap)($|_)/i;
+
+export function formatSzam(value: number | null, mezoNev = ""): string {
+  if (value === null) return "–";
+  if (EVSZAM_MEZO_MINTA.test(mezoNev)) return String(value);
+  return value.toLocaleString("hu-HU");
+}
+
 /** Miért NEM számít bele ez a bevétel-sor az ÉVES bevételbe? `null`, ha
  * beleszámít.
  *

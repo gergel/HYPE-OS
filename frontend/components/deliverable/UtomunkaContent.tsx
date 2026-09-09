@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { formatIdopont } from "@/lib/ido";
 import { humanizeKey } from "@/lib/mezoNev";
+import { formatSzam } from "@/lib/penz";
 import { useLiveTopic } from "@/lib/live";
 import { AllapotBeallitasok } from "@/components/deliverable/AllapotBeallitasok";
 import { DeliverableBoard, type BoardCard, type BoardColumn } from "@/components/deliverable/DeliverableBoard";
@@ -207,6 +208,9 @@ export function UtomunkaContent({
     if (nyers === null || nyers === undefined || nyers === "") return null;
     if (kulcs.endsWith("employee_id")) return employeeName.get(Number(nyers)) ?? `#${nyers}`;
     if (typeof nyers === "boolean") return nyers ? "Igen" : "Nem";
+    // Szám ezres tagolással (a felhasználó kérése - mindenhol, ahol számot
+    // ír ki a rendszer).
+    if (typeof nyers === "number") return formatSzam(nyers, kulcs);
     if (Array.isArray(nyers)) return nyers.length > 0 ? nyers.join(", ") : null;
     const szoveg = String(nyers);
     // Dátum/időpont: elég a nap (a kártyán nincs hely az ISO-időbélyegre).

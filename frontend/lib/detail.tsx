@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { FieldTypeInfo, formatDate, formatHuf } from "@/lib/api";
+import { formatSzam } from "@/lib/penz";
 import { LinkeltSzoveg, LinkMasolassal } from "@/components/LinkeltSzoveg";
 import { tartalmazLinket } from "@/lib/linkek";
 import { humanizeKey } from "@/lib/mezoNev";
@@ -62,7 +63,9 @@ function formatValue(key: string, value: unknown, hint?: FieldTypeInfo): { node:
   }
   if (typeof value === "object") return { node: JSON.stringify(value), wide: false };
   if (typeof value === "number") {
-    return { node: MONEY_KEY_PATTERN.test(key) ? formatHuf(value) : String(value), wide: false };
+    // Minden szám ezres tagolással (a felhasználó kérése) - a pénz-mezők
+    // Ft-tal, a többi csak tagolva (az évszám-féléket a formatSzam kihagyja).
+    return { node: MONEY_KEY_PATTERN.test(key) ? formatHuf(value) : formatSzam(value, key), wide: false };
   }
   // A Time oszlopok "08:30:00" alakban jönnek - a másodperc itt zaj, a
   // felhasználó órát:percet vár (lásd Project.forgatas_kezdes_ido).

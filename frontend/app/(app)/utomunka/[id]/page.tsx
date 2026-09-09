@@ -21,6 +21,7 @@ import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   getAssignableEmployees,
+  getClients,
   getMegrendeloiKontaktok,
   getVagoiVisszajelzesek,
   getDeliverableComments,
@@ -106,6 +107,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     currentUser,
     contactOptions,
     vagoiVisszajelzesek,
+    clients,
   ] = await Promise.all([
     deliverable.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(deliverable.project_code_id)) : null,
     deliverable.project_id ? getRecord(ENTITY_PATHS.project, Number(deliverable.project_id)) : null,
@@ -135,6 +137,9 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     // A visszajelzések saját, részletes alakja (ki írta, mikor, pontszámok) -
     // a nyers `feedbacks` sorokból ez nem állna elő.
     getVagoiVisszajelzesek(deliverableId),
+    // Az ügyfelek az ÚJ kontakt helyben-felvételéhez kellenek (a felhasználó
+    // kérése) - lásd ContactsManager ujKontakt űrlapja.
+    getClients(),
   ]);
 
   const clientId = projectCode ? Number(projectCode.client_id) : null;
@@ -186,6 +191,9 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
               current={contacts}
               options={contactOptions}
               clientId={clientId}
+              ugyfelek={clients
+                .map((c) => ({ id: c.id, nev: c.nev }))
+                .sort((a, b) => a.nev.localeCompare(b.nev, "hu"))}
             />
             {deliverable.megrendeloi_email_cimek != null && (
               <p className="mt-3 text-[12px] text-text-muted">
