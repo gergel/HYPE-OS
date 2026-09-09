@@ -10,7 +10,8 @@ class ContactBase(BaseModel):
 
 
 class ContactCreate(ContactBase):
-    client_id: int
+    #: Ügyfél nélkül is felvehető (a felhasználó kérése) - lásd models/client.Contact.
+    client_id: int | None = None
 
 
 class ContactUpdate(BaseModel):
@@ -23,7 +24,7 @@ class ContactUpdate(BaseModel):
 
 class ContactRead(ContactBase):
     id: int
-    client_id: int
+    client_id: int | None = None
     keresztnev_notion: str | None = None
     vezeteknev_notion: str | None = None
     torolt_anyagok_notion_ids: dict | list | None = None

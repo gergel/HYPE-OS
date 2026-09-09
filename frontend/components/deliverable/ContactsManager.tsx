@@ -96,10 +96,6 @@ export function ContactsManager({
       alert("Add meg a kontakt nevét.");
       return;
     }
-    if (!ujKontakt.client_id) {
-      alert("Válaszd ki, melyik ügyfélhez tartozik a kontakt.");
-      return;
-    }
     setBusy(true);
     try {
       const res = await authFetch("/api/v1/contacts", {
@@ -108,7 +104,9 @@ export function ContactsManager({
           full_name: ujKontakt.full_name.trim(),
           email: ujKontakt.email.trim() || null,
           phone: ujKontakt.phone.trim() || null,
-          client_id: Number(ujKontakt.client_id),
+          // Ügyfél NEM kötelező (a felhasználó kérése) - üresen hagyva a
+          // kontakt ügyfél nélkül jön létre.
+          client_id: ujKontakt.client_id ? Number(ujKontakt.client_id) : null,
         }),
       });
       if (!res.ok) {
@@ -239,13 +237,22 @@ export function ContactsManager({
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Ügyfél *</label>
+                <label className="text-[11px] text-text-muted">Ügyfél (nem kötelező)</label>
                 <KeresosSelect
                   value={ujKontakt.client_id || null}
                   options={ugyfelek.map((u) => ({ value: String(u.id), label: u.nev }))}
                   onChange={(ertek) => setUjKontakt({ ...ujKontakt, client_id: ertek })}
-                  placeholder="Válassz ügyfelet…"
+                  placeholder="Válassz ügyfelet… (elhagyható)"
                 />
+                {ujKontakt.client_id && (
+                  <button
+                    type="button"
+                    onClick={() => setUjKontakt({ ...ujKontakt, client_id: "" })}
+                    className="self-start text-[11px] text-text-muted hover:text-text-primary hover:underline"
+                  >
+                    Ügyfél törlése (nélküle is felvehető)
+                  </button>
+                )}
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-text-muted">Email</label>

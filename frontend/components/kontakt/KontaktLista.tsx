@@ -83,7 +83,9 @@ export function KontaktLista({
       full_name: k.full_name,
       email: k.email ?? "",
       phone: k.phone ?? "",
-      client_id: String(k.client_id),
+      // Ügyfél nélkül felvett kontaktnál (a felhasználó kérése) nincs
+      // client_id - a String(null) "null" szövege elrontaná a választót.
+      client_id: k.client_id != null ? String(k.client_id) : "",
     });
   }
 
@@ -91,10 +93,6 @@ export function KontaktLista({
     if (!urlap) return;
     if (!urlap.full_name.trim()) {
       alert("A név kötelező.");
-      return;
-    }
-    if (!urlap.client_id) {
-      alert("Válaszd ki, melyik ügyfélhez tartozik.");
       return;
     }
     setBusy(true);
@@ -107,7 +105,9 @@ export function KontaktLista({
           full_name: urlap.full_name.trim(),
           email: urlap.email.trim() || null,
           phone: urlap.phone.trim() || null,
-          ...(szerkesztettId ? {} : { client_id: Number(urlap.client_id) }),
+          // Ügyfél NEM kötelező (a felhasználó kérése) - üresen hagyva a
+          // kontakt ügyfél nélkül jön létre.
+          ...(szerkesztettId ? {} : { client_id: urlap.client_id ? Number(urlap.client_id) : null }),
         }),
       });
       if (!res.ok) {
@@ -263,13 +263,13 @@ export function KontaktLista({
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Ügyfél *</label>
+                <label className="text-[11px] text-text-muted">Ügyfél (nem kötelező)</label>
                 <KeresosSelect
                   value={urlap.client_id || null}
                   options={ugyfelek.map((u) => ({ value: String(u.id), label: u.nev }))}
                   onChange={(ertek) => setUrlap({ ...urlap, client_id: ertek })}
                   disabled={!!szerkesztettId}
-                  placeholder="Válassz ügyfelet…"
+                  placeholder="Válassz ügyfelet… (elhagyható)"
                 />
                 {szerkesztettId && (
                   <p className="text-[11px] text-text-muted">

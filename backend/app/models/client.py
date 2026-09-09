@@ -29,7 +29,10 @@ class Contact(TimestampMixin, Base):
     __tablename__ = "contacts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    #: Ügyfél NÉLKÜL is felvehető (a felhasználó kérése: az utómunka
+    #: adatlapról helyben felvett új kontaktnál ne legyen kötelező) - a
+    #: felületek ilyenkor ügyfélnév nélkül mutatják.
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"), nullable=True)
 
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     first_name: Mapped[str | None] = mapped_column(String(120))

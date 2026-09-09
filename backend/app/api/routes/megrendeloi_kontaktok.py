@@ -39,7 +39,8 @@ class KontaktRead(BaseModel):
     full_name: str
     email: str | None = None
     phone: str | None = None
-    client_id: int
+    #: None, ha a kontakt ügyfél nélkül lett felvéve (a felhasználó kérése).
+    client_id: int | None = None
     client_nev: str | None = None
     #: Hány utómunka-anyagnál van beállítva, hogy neki is ki kell küldeni.
     anyagok_szama: int = 0

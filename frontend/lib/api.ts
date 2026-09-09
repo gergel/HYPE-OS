@@ -2703,7 +2703,8 @@ export type MegrendeloiKontakt = {
   full_name: string;
   email: string | null;
   phone: string | null;
-  client_id: number;
+  /** null, ha a kontakt ügyfél nélkül lett felvéve (a felhasználó kérése). */
+  client_id: number | null;
   client_nev: string | null;
   /** Hány utómunka-anyagnál van beállítva, hogy neki is ki kell küldeni. */
   anyagok_szama: number;
