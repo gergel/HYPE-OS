@@ -166,8 +166,14 @@ def kiadas_sorok(db: Session, project_code: Any) -> list[dict]:
         sorok.append(
             {
                 "id": e.id,
-                "megnevezes": e.megnevezes,
-                "kinek": e.employee.full_name if e.employee is not None else None,
+                # A "Megnevezés" a tétel LEÍRÁSA (mire ment a pénz, lásd
+                # Expense.kiadas_leiras) - az Expense.megnevezes a PARTNER
+                # cégneve, az eddig tévesen ült ebben az oszlopban (a
+                # felhasználó hibajelzése). Régi soroknál, ahol nincs leírás,
+                # a partner marad, hogy ne ürüljön ki a lista.
+                "megnevezes": e.kiadas_leiras or e.megnevezes,
+                # A "Kinek": az alvállalkozó, ha van - különben a partner cég.
+                "kinek": e.employee.full_name if e.employee is not None else e.megnevezes,
                 # A KIADÁS dátuma az első (a felhasználó kérése): az mondja
                 # meg, mikor történt a költés - a fizetés/határidő csak
                 # tartalék, ha a kiadás-dátum nincs kitöltve.

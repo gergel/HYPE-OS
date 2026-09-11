@@ -191,6 +191,29 @@ expenses_router = build_crud_router(
     before_delete=_kiadas_torles_elott,
 )
 
+@expenses_router.post("/kiolvasas")
+async def kiadas_kiolvasas_dokumentumbol(
+    file: UploadFile = File(...),
+    _user: Employee = Depends(require_page_action("/penzugyek", "create")),
+):
+    """Kiadás-mezők KIOLVASÁSA feltöltött szerződésből/számlából (a felhasználó
+    kérése) - a válasz a kiadás-űrlap mezőnevein kulcsolt előtöltés (cégnév,
+    megnevezés, nettó, ÁFA, pénznem, dátum), amit a felület az űrlapba tölt.
+    Semmit nem ment: a felhasználó ellenőrzi és a megszokott úton menti."""
+    from app.services import kiadas_kiolvasas
+
+    mime = (file.content_type or "").lower()
+    if mime not in kiadas_kiolvasas.ENGEDETT_MIME:
+        raise HTTPException(status_code=400, detail="PDF-et vagy fotót (JPG/PNG) tölts fel.")
+    adat = await file.read()
+    if len(adat) > kiadas_kiolvasas.MAX_MERET:
+        raise HTTPException(status_code=400, detail="A fájl túl nagy a kiolvasáshoz (max. 20 MB).")
+    try:
+        return kiadas_kiolvasas.olvasd_ki(adat, mime)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 revenues_router = build_crud_router(
     model=Revenue,
     create_schema=RevenueCreate,

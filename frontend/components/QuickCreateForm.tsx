@@ -115,6 +115,7 @@ export function QuickCreateForm({
   addLabel = "+ Új hozzáadása",
   submitLabel = "Hozzáadás",
   fajlFeltoltes,
+  aiKitoltes,
 }: {
   postPath: string;
   fields: FieldSpec[];
@@ -126,6 +127,12 @@ export function QuickCreateForm({
    * lásd lib/csatolmany.toltsdFelAFajlokat). Pl. kiadás-felvitelnél a
    * számla/blokk - akkor van kéznél, amikor a tételt felvezetik. */
   fajlFeltoltes?: { entityType: string; kategoria?: string; cimke?: string; sugo?: string };
+  /** AI-s KITÖLTÉS dokumentumból (a felhasználó kérése): a feltöltött
+   * szerződést/számlát a szerver kiolvassa (lásd backend
+   * services/kiadas_kiolvasas.py), és a visszaadott mezőkkel előtölti az
+   * űrlapot - az értékek szabadon javíthatók, a mentés a megszokott.
+   * A dokumentum a csatolmányok közé is bekerül (fajlFeltoltes esetén). */
+  aiKitoltes?: { endpoint: string; cimke?: string };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -133,6 +140,8 @@ export function QuickCreateForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fajlok, setFajlok] = useState<File[]>([]);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiUzenet, setAiUzenet] = useState<string | null>(null);
   // A router.refresh() átmenetben fut, hogy TUDJUK, mikor ért végig: az űrlap
   // addig nyitva marad "a lista frissül" jelzéssel, és csak akkor záródik be,
   // amikor az új sor már tényleg ott van a listában. Enélkül (pl. a nehéz
@@ -162,6 +171,51 @@ export function QuickCreateForm({
       if (f.autoSet && ertek) kovetkezo[f.autoSet.field] = f.autoSet.value;
       return kovetkezo;
     });
+  }
+
+  /** A feltöltött dokumentum kiolvastatása és az űrlap előtöltése (lásd az
+   * aiKitoltes propot). Csak a ténylegesen kiolvasott (nem null/üres) és az
+   * űrlapon LÉTEZŐ mezőket írjuk be - a többi marad, ahogy volt. */
+  async function aiKitolt(fajl: File) {
+    if (!aiKitoltes) return;
+    setAiBusy(true);
+    setAiUzenet(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", fajl);
+      const res = await authFetch(aiKitoltes.endpoint, { method: "POST", body: fd });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        setAiUzenet(`Nem sikerült kiolvasni: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      const adatok = (await res.json()) as Record<string, unknown>;
+      const mezoNevek = new Set(fields.map((f) => f.name));
+      let beirt = 0;
+      setValues((elozo) => {
+        const kovetkezo = { ...elozo };
+        for (const [nev, ertek] of Object.entries(adatok)) {
+          if (!mezoNevek.has(nev)) continue;
+          if (ertek === null || ertek === undefined || ertek === "") continue;
+          kovetkezo[nev] = String(ertek);
+          beirt++;
+        }
+        return kovetkezo;
+      });
+      // A dokumentum a csatolmányok közé is bekerül (pl. számla/blokk) -
+      // mentéskor a létrejött tételhez töltődik fel, nem kell kétszer
+      // kiválasztani ugyanazt a fájlt.
+      if (fajlFeltoltes) setFajlok((elozo) => (elozo.some((f) => f === fajl) ? elozo : [...elozo, fajl]));
+      setAiUzenet(
+        beirt > 0
+          ? `Kiolvasva (${beirt} mező kitöltve) – ellenőrizd az értékeket mentés előtt.`
+          : "A dokumentumból nem sikerült mezőt kiolvasni.",
+      );
+    } catch (err) {
+      setAiUzenet(`Nem sikerült kiolvasni (hálózati hiba): ${err}`);
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -248,6 +302,33 @@ export function QuickCreateForm({
       noValidate
       className="fade-in mb-4 flex flex-wrap items-end gap-4 rounded-[var(--radius-lg)] border border-border bg-surface-3 p-4"
     >
+      {/* AI-s kitöltés dokumentumból (a felhasználó kérése): a szerződés/
+          számla feltöltése után a mezők maguktól kitöltődnek - és a fájl a
+          csatolmányok közé is bekerül. Az értékek mentés előtt javíthatók. */}
+      {aiKitoltes && (
+        <div className="flex w-full flex-wrap items-center gap-2">
+          <label
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius)] border border-dashed border-border px-3 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-2 ${
+              aiBusy ? "pointer-events-none opacity-60" : ""
+            }`}
+          >
+            {aiBusy ? "Kiolvasás…" : (aiKitoltes.cimke ?? "Kitöltés szerződésből / számlából (AI)")}
+            <input
+              type="file"
+              accept="application/pdf,image/*"
+              className="hidden"
+              disabled={aiBusy || busy}
+              onChange={(e) => {
+                const fajl = e.target.files?.[0];
+                // Ugyanaz a fájl újra kiválasztható legyen (pl. újrapróbálás).
+                e.target.value = "";
+                if (fajl) void aiKitolt(fajl);
+              }}
+            />
+          </label>
+          {aiUzenet && <span className="text-[12px] text-text-accent">{aiUzenet}</span>}
+        </div>
+      )}
       {lathatoMezok.map((f) => (
         <div key={f.name} className="flex flex-col gap-1">
           <label className="t-label">

@@ -190,6 +190,9 @@ export default async function PenzugyekPage() {
               // A számla/blokk már felvitelkor csatolható (a felhasználó
               // kérése) - a mentés után a létrejött tételhez töltődik fel.
               fajlFeltoltes={{ entityType: "expense", kategoria: "szamla" }}
+              // A feltöltött szerződésből/számlából az AI előtölti a mezőket
+              // (a felhasználó kérése) - lásd backend services/kiadas_kiolvasas.py.
+              aiKitoltes={{ endpoint: "/api/v1/expenses/kiolvasas" }}
               fields={[
                 // A `megnevezes` oszlop a felületen "Cégnév" (kinek fizettünk),
                 // a "Megnevezés" pedig az új kiadas_leiras: mire ment a pénz

@@ -180,6 +180,9 @@ export function ProjektkodBontasTablak({
             // kérése) - a mentés után a létrejött tételhez töltődik fel, és a
             // lenti lista "Fájlok" oszlopa mutatja, hány fájl tartozik hozzá.
             fajlFeltoltes={{ entityType: "expense", kategoria: "szamla" }}
+            // A feltöltött szerződésből/számlából az AI előtölti a mezőket
+            // (a felhasználó kérése), és a fájl a csatolmányok közé is bekerül.
+            aiKitoltes={{ endpoint: "/api/v1/expenses/kiolvasas" }}
             fields={[
               // A `megnevezes` a felületen "Cégnév" (kinek fizettünk), a
               // "Megnevezés" a kiadas_leiras: mire ment a pénz - MINDKETTŐ
@@ -316,7 +319,10 @@ export function ProjektkodBontasTablak({
                 szerkesztheiKiadast ? (
                   <EditableTableCell
                     patchPath={`${ENTITY_PATHS.expense}/${k.id}`}
-                    field="megnevezes"
+                    // A tétel LEÍRÁSA (mire ment) - a partner cégneve külön,
+                    // a "Kinek" oszlopban van (a felhasználó hibajelzése:
+                    // eddig itt is a cégnév állt).
+                    field="kiadas_leiras"
                     value={k.megnevezes}
                   />
                 ) : (
