@@ -187,7 +187,9 @@ export default async function PenzugyekPage() {
           <SzamlaCsomagLetoltes />
         </Card>
 
-        <Card title={`Kiadások (${expenses.length})`}>
+        {/* A listázott kiadások: a dátum nélküli, még ki nem fizetett
+            (csak a projektkódon élő) tételek nélkül - lásd lent a rows-nál. */}
+        <Card title={`Kiadások (${expenses.filter((e) => e.kesz || e.kiadas_datuma !== null).length})`}>
           {canCreate && (
             <QuickCreateForm
               postPath={ENTITY_PATHS.expense}
@@ -305,7 +307,11 @@ export default async function PenzugyekPage() {
             // Alap rendezés: a LEGUTÓBB FELVITT tétel legfelül (a felhasználó
             // kérése). Szándékosan id szerint, nem updated_at szerint: egy
             // régi sor szerkesztése ne dobja a lista tetejére.
-            rows={[...expenses].sort((a, b) => b.id - a.id)}
+            //
+            // A DÁTUM NÉLKÜLI, még ki nem fizetett tételek NEM szerepelnek (a
+            // felhasználó kérése): azok csak a projektkódjukon élnek, és a
+            // Fizetés gomb + fizetés-dátum megadása után kerülnek ide.
+            rows={[...expenses].filter((e) => e.kesz || e.kiadas_datuma !== null).sort((a, b) => b.id - a.id)}
             emptyText="Még nincs felvett kiadás - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(e) => `/penzugyek/kiadas/${e.id}`}
             deleteHref={canDelete ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}

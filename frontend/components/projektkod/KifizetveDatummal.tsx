@@ -56,13 +56,15 @@ export function KifizetveDatummal({
 
   function katt() {
     if (busy) return;
-    if (!ertek && !vanDatum) {
-      // Dátum nélküli tétel kifizetése: előbb a fizetés dátumát kérdezzük.
+    if (!ertek) {
+      // Kifizetés MINDIG a fizetés dátumának bekérdezésével megy (a
+      // felhasználó kérése): ebből lesz a fizetes_datuma, amiből a Pénzügyek
+      // összesítői számolnak - enélkül a tétel nem kerülne a kiadások közé.
       setDatum(new Date().toISOString().slice(0, 10));
       setDatumKerdes(true);
       return;
     }
-    void ment({ kesz: !ertek }, !ertek);
+    void ment({ kesz: false }, false);
   }
 
   return (
@@ -107,7 +109,7 @@ export function KifizetveDatummal({
           >
             <h3 className="mb-2 text-[14px] font-medium text-text-primary">Mikor lett kifizetve?</h3>
             <p className="mb-3 text-[13px] text-text-secondary">
-              Ennek a kiadásnak még nincs dátuma - a fizetés dátumával együtt kerül a kiadások közé.
+              A tétel a fizetés dátumával kerül be a kiadások közé és az összesítőkbe.
             </p>
             <input
               type="date"
@@ -129,7 +131,15 @@ export function KifizetveDatummal({
                 disabled={!datum}
                 onClick={() => {
                   setDatumKerdes(false);
-                  void ment({ kesz: true, kiadas_datuma: datum }, true);
+                  // A fizetes_datuma az összesítők alapja; a kiadás dátumát
+                  // csak akkor írjuk, ha eddig üres volt (nem írunk felül
+                  // kézzel megadott költés-dátumot).
+                  void ment(
+                    vanDatum
+                      ? { kesz: true, fizetes_datuma: datum }
+                      : { kesz: true, fizetes_datuma: datum, kiadas_datuma: datum },
+                    true,
+                  );
                 }}
                 className="rounded-[var(--radius)] bg-[var(--accent-solid)] px-4 py-1.5 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-60"
               >
