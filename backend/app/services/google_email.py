@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -188,6 +189,43 @@ def _build_mime(
     return {"raw": raw}
 
 
+#: Egy e-mail cím alakja egy emberi kézből jött szövegben. Szándékosan
+#: megengedő: a cél a CÍM KISZEDÉSE a bejegyzésből ("Kiss Éva <eva@x.hu>",
+#: "eva@x.hu; peti@y.hu"), nem a szabvány teljes kikényszerítése.
+_EMAIL_MINTA = re.compile(r"[A-Za-z0-9._%+'\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+
+
+def cimek_tisztitasa(cimek: list[str]) -> tuple[list[str], list[str]]:
+    """Emberi kézből jött címzett-bejegyzésekből a VALÓDI e-mail címek.
+
+    A címek jó része kézzel beírt vagy Notionből importált mező: van benne
+    név is ("Kiss Éva <eva@x.hu>"), több cím vesszővel/pontosvesszővel, kósza
+    szóköz - a Gmail ezekre nyers 400-at ("Invalid To header") dobott, amiből
+    a felhasználó semmit nem értett (a felhasználó hibajelzése). Itt minden
+    bejegyzésből kiszedjük a benne lévő címe(ke)t; ami cím nélkülinek
+    bizonyul (pl. "nincs", "később"), azt hibásként adjuk vissza, hogy a
+    hívó beszédes hibát mondhasson.
+
+    Visszatér: (tiszta címek ismétlés nélkül, hibás bejegyzések)."""
+    tiszta: list[str] = []
+    megvan: set[str] = set()
+    hibasak: list[str] = []
+    for bejegyzes in cimek or []:
+        szoveg = (bejegyzes or "").strip()
+        if not szoveg:
+            continue
+        talalatok = _EMAIL_MINTA.findall(szoveg)
+        if not talalatok:
+            hibasak.append(szoveg)
+            continue
+        for cim in talalatok:
+            kulcs = cim.casefold()
+            if kulcs not in megvan:
+                megvan.add(kulcs)
+                tiszta.append(cim)
+    return tiszta, hibasak
+
+
 def cc_lista(to_list: list[str], extra_cc: list[str] | None) -> list[str]:
     """A levél tényleges CC listája: a HYPE_CC env fix címei + az extra címek
     (pl. a Beállításokban megadott diszpó másolat-címzettek), kisbetű-
@@ -226,14 +264,32 @@ def send_message(
     sender_name: a címzett által látott feladónév erre a levélre (alapból a
     GMAIL_SENDER_NAME). sender_email: a küldő CÍM (alapból GMAIL_SENDER) -
     lásd _format_sender."""
+    # A CÍMZETTEK ellenőrzése MÉG a küldés előtt: egy rossz címre a Gmail nyers
+    # "Invalid To header" 400-at dob, amiből a felhasználó semmit nem ért. A
+    # bejegyzésekből a valódi címeket szedjük ki (név, több cím egy mezőben);
+    # ha egy bejegyzésben nincs értelmezhető cím, beszédes hibát adunk.
+    to_tiszta, hibasak = cimek_tisztitasa(to_list)
+    if hibasak:
+        raise RuntimeError(
+            "Hibás e-mail cím a címzettek között: "
+            + ", ".join(f"„{h}”" for h in hibasak)
+            + ". Javítsd a címet (a kiküldő ablak E-mail mezőjében vagy az illető adatlapján), és küldd újra."
+        )
+    if not to_tiszta:
+        raise RuntimeError("Nincs egyetlen érvényes címzett e-mail cím sem - a levél nem küldhető ki.")
+    # A CC-nél a hibás bejegyzés nem állítja meg a küldést (a másolat kényelem,
+    # nem feltétel) - csendben kimarad, de a naplóban nyoma van.
+    cc_tiszta, cc_hibasak = cimek_tisztitasa(cc_lista(to_tiszta, extra_cc))
+    if cc_hibasak:
+        logger.warning("Hibás CC címek kihagyva a levélből: %s", ", ".join(cc_hibasak))
     svc = _gmail_service()
     sender = _format_sender(sender_name, sender_email)
     body = _build_mime(
         html=html_body,
         subject=subject,
         sender=sender,
-        to_list=to_list,
-        cc_list=cc_lista(to_list, extra_cc),
+        to_list=to_tiszta,
+        cc_list=cc_tiszta,
         pdf_bytes=pdf_bytes,
         pdf_filename=pdf_filename,
         csatolmanyok=csatolmanyok,
