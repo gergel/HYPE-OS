@@ -209,6 +209,13 @@ export default async function KeretszerzodesekPage() {
                         email={c.email ?? null}
                         szerzodesFileUrl={c.szerzodes_file_url}
                         alairtFileUrl={c.alairt_file_url ?? null}
+                        cegNeve={c.ceg_neve}
+                        szekhely={c.szekhely}
+                        adoszam={c.adoszam}
+                        kepviselo={c.vallalkozas_kepviseloje ?? null}
+                        nyilvantartasiSzam={c.vallalkozas_nyilvantartasi_szam ?? null}
+                        megbizasTargya={c.megbizas_targya}
+                        szerzodesKelte={c.keltezes}
                         canCreate={canCreate}
                         canEdit={canEdit}
                         canDelete={canEdit}

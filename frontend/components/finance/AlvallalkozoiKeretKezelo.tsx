@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FolderOpen, Paperclip } from "lucide-react";
 import { ModalReteg } from "@/components/ModalReteg";
+import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { authFetch } from "@/lib/authFetch";
@@ -38,6 +39,13 @@ export function AlvallalkozoiKeretKezelo({
   email,
   szerzodesFileUrl,
   alairtFileUrl,
+  cegNeve,
+  szekhely,
+  adoszam,
+  kepviselo,
+  nyilvantartasiSzam,
+  megbizasTargya,
+  szerzodesKelte,
   canCreate,
   canEdit,
   canDelete,
@@ -47,6 +55,16 @@ export function AlvallalkozoiKeretKezelo({
   email: string | null;
   szerzodesFileUrl: string | null;
   alairtFileUrl: string | null;
+  /** A szerződés cégadatai - a módosítás PILLANATKÉPKÉNT ezeket viszi a
+   * papírra (lásd backend keret_modositas.uj_modositas), ezért a kiküldés
+   * előtti ellenőrzőben pontosan ezeket mutatjuk (a felhasználó kérése). */
+  cegNeve: string | null;
+  szekhely: string | null;
+  adoszam: string | null;
+  kepviselo: string | null;
+  nyilvantartasiSzam: string | null;
+  megbizasTargya: string | null;
+  szerzodesKelte: string | null;
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -65,6 +83,9 @@ export function AlvallalkozoiKeretKezelo({
   const [keltezes, setKeltezes] = useState(() => new Date().toISOString().slice(0, 10));
   const [targy, setTargy] = useState("");
   const [letrejott, setLetrejott] = useState("");
+  // Kiküldés előtti ELLENŐRZŐ (a felhasználó kérése): egyben minden adat,
+  // amivel a módosítás kimegy - a tényleges küldés csak innen indul.
+  const [ellenorzes, setEllenorzes] = useState(false);
 
   const betolt = useCallback(async () => {
     try {
@@ -111,7 +132,23 @@ export function AlvallalkozoiKeretKezelo({
     }
   }
 
+  /** Amivel a papír TÉNYLEGESEN kimegy: az űrlap értéke, üresen a szerződésé
+   * (ugyanaz a tartalék-lánc, mint a backend uj_modositas-ban). */
+  function ellenorzoSorok(): EllenorzoSor[] {
+    return [
+      { cimke: "Cég neve", ertek: cegNeve || nev },
+      { cimke: "Székhely", ertek: szekhely },
+      { cimke: "Adószám", ertek: adoszam },
+      { cimke: "Képviselő", ertek: kepviselo },
+      { cimke: "Nyilvántartási szám", ertek: nyilvantartasiSzam },
+      { cimke: "Megbízás tárgya", ertek: targy.trim() || megbizasTargya },
+      { cimke: "Módosítás keltezése", ertek: keltezes },
+      { cimke: "Eredeti szerződés kelte", ertek: letrejott || szerzodesKelte },
+    ];
+  }
+
   async function modositasKuldes() {
+    setEllenorzes(false);
     const ok = await muvelet(
       () =>
         authFetch(`/api/v1/contracts/${contractId}/modositasok/generalas-es-kuldes`, {
@@ -365,7 +402,10 @@ export function AlvallalkozoiKeretKezelo({
                   className="w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
                 />
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => void modositasKuldes()} disabled={busy} className="btn btn-primary disabled:opacity-50">
+                  {/* Nem küld azonnal: előbb az ellenőrző mutatja egyben az
+                      összes adatot, amivel a papír kimegy (a felhasználó
+                      kérése). */}
+                  <button type="button" onClick={() => setEllenorzes(true)} disabled={busy} className="btn btn-primary disabled:opacity-50">
                     {busy ? "Küldés…" : "Generálás és kiküldés"}
                   </button>
                   <button type="button" onClick={() => setKuldoNyitva(false)} className="text-[12.5px] text-text-secondary hover:underline">
@@ -376,6 +416,22 @@ export function AlvallalkozoiKeretKezelo({
             )}
           </div>
         </ModalReteg>
+      )}
+      {ellenorzes && (
+        <KuldesEllenorzo
+          cim="Szerződésmódosítás kiküldése"
+          bevezeto="A módosítás ezekkel az adatokkal generálódik a sablonból, és azonnal ki is megy e-mailben. Ellenőrizd, mielőtt elindítod."
+          cimzett={email}
+          sorok={ellenorzoSorok()}
+          gombCimke="Kiküldés"
+          onMegse={() => setEllenorzes(false)}
+          onKuld={() => void modositasKuldes()}
+        >
+          <p className="text-[12.5px] text-text-secondary">
+            Kísérőlevél: {levelSzoveg.trim() ? `„${levelSzoveg.trim()}”` : "az alapszöveg megy"} - a végére a küldő
+            fiók aláírása kerül.
+          </p>
+        </KuldesEllenorzo>
       )}
     </span>
   );

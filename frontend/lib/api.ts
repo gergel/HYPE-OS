@@ -474,6 +474,10 @@ export type Contract = {
    * alairt-fajl) és a papírok címzettje - a keret-kezelő mutatja őket. */
   alairt_file_url?: string | null;
   email?: string | null;
+  /** A vállalkozás képviselője és nyilvántartási száma - a módosítás
+   * kiküldés előtti ellenőrzője mutatja őket (a felhasználó kérése). */
+  vallalkozas_kepviseloje?: string | null;
+  vallalkozas_nyilvantartasi_szam?: string | null;
 };
 
 /** A backend GET végpontok mostantól bejelentkezést igényelnek (lásd
