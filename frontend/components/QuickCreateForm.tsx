@@ -8,6 +8,28 @@ import { UjAlvallalkozoDialog } from "@/components/UjAlvallalkozoDialog";
 import { UjFajlValaszto } from "@/components/UjFajlValaszto";
 import { toltsdFelAFajlokat } from "@/lib/csatolmany";
 
+/** Szám-mező GÉPELÉS KÖZBENI ezres tagolása (a felhasználó kérése - pl. a
+ * projekt kiadás nettó összegénél az 500000 "500 000"-ként látsszon már
+ * beíráskor is). A values-ban a NYERS számszöveg él (azt kapja a Number() a
+ * mentésnél), csak a megjelenítés tagolt; a tizedes vesszővel írható. */
+function szamMegjelenites(nyers: string): string {
+  if (!nyers) return "";
+  const [egesz = "", tizedes] = nyers.split(".");
+  const elojel = egesz.startsWith("-") ? "-" : "";
+  const tagolt = egesz.replace(/\D/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return elojel + tagolt + (tizedes !== undefined ? `,${tizedes}` : "");
+}
+
+function szamNyersre(beirt: string): string {
+  // Szóközök (a saját tagolásunk is) ki, tizedes vessző -> pont, minden más
+  // nem-szám karakter eldobva - így a "másolt" összegek (pl. "1 234 567 Ft")
+  // is beilleszthetők.
+  return beirt
+    .replace(/[\s  ]/g, "")
+    .replace(/,/g, ".")
+    .replace(/[^0-9.-]/g, "");
+}
+
 type FieldSpec = {
   name: string;
   label: string;
@@ -249,11 +271,17 @@ export function QuickCreateForm({
           ) : (
             <>
               <input
-                type={f.type ?? "text"}
+                // Szám-mezőnél szöveg-input tagolt megjelenítéssel (a natív
+                // type="number" nem enged szóközöket) - a values-ban a nyers
+                // szám marad, csak a kijelzés ezres tagolású.
+                type={f.type === "number" ? "text" : (f.type ?? "text")}
+                inputMode={f.type === "number" ? "decimal" : undefined}
                 required={kotelezo(f, values)}
                 placeholder={f.placeholder}
-                value={values[f.name] ?? ""}
-                onChange={(e) => mezoValtozas(f, e.target.value)}
+                value={f.type === "number" ? szamMegjelenites(values[f.name] ?? "") : (values[f.name] ?? "")}
+                onChange={(e) =>
+                  mezoValtozas(f, f.type === "number" ? szamNyersre(e.target.value) : e.target.value)
+                }
                 list={f.suggestions ? `qcf-${f.name}-javaslatok` : undefined}
                 className="field"
               />
