@@ -4,7 +4,7 @@ import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { KeresosSelect, type KeresosOpcio } from "@/components/KeresosSelect";
-import { UjAlvallalkozoDialog } from "@/components/UjAlvallalkozoDialog";
+import { UjAlvallalkozoDialog, type UjAlvallalkozoElotoltes } from "@/components/UjAlvallalkozoDialog";
 import { UjFajlValaszto } from "@/components/UjFajlValaszto";
 import { toltsdFelAFajlokat } from "@/lib/csatolmany";
 
@@ -150,8 +150,13 @@ export function QuickCreateForm({
   const [frissites, startFrissites] = useTransition();
   const [zarasFuggoben, setZarasFuggoben] = useState(false);
   // ÚJ ALVÁLLALKOZÓ felvétele a keresőből (lásd FieldSpec.ujAlvallalkozo):
-  // melyik mezőből nyílt az ablak, és milyen névvel.
-  const [ujAlvMezo, setUjAlvMezo] = useState<{ mezoNev: string; nev: string } | null>(null);
+  // melyik mezőből nyílt az ablak, milyen névvel - és az AI-s kitöltésnél a
+  // szerződésből kiolvasott előtöltő adatokkal (a felhasználó kérése).
+  const [ujAlvMezo, setUjAlvMezo] = useState<{
+    mezoNev: string;
+    nev: string;
+    kezdoAdatok?: UjAlvallalkozoElotoltes;
+  } | null>(null);
   // A most felvett emberek opciói mezőnként: a szerver-oldali lista csak a
   // router.refresh() után frissül, addig ebből tudja a select a nevet kiírni.
   const [ujOpciok, setUjOpciok] = useState<Record<string, KeresosOpcio[]>>({});
@@ -189,16 +194,24 @@ export function QuickCreateForm({
         setAiUzenet(`Nem sikerült kiolvasni: ${detail?.detail ?? res.status}`);
         return;
       }
-      const adatok = (await res.json()) as Record<string, unknown>;
+      const adatok = (await res.json()) as Record<string, unknown> & {
+        alvallalkozo?: { id: number; full_name: string } | null;
+        alvallalkozo_adatok?: (UjAlvallalkozoElotoltes & { full_name?: string }) | null;
+      };
       const mezoNevek = new Set(fields.map((f) => f.name));
+      const mezoSzerint = new Map(fields.map((f) => [f.name, f]));
       let beirt = 0;
       setValues((elozo) => {
         const kovetkezo = { ...elozo };
         for (const [nev, ertek] of Object.entries(adatok)) {
           if (!mezoNevek.has(nev)) continue;
-          if (ertek === null || ertek === undefined || ertek === "") continue;
+          if (ertek === null || ertek === undefined || ertek === "" || typeof ertek === "object") continue;
           kovetkezo[nev] = String(ertek);
           beirt++;
+          // Az autoSet lánc itt is fusson le (pl. alvállalkozó kiválasztása
+          // -> a besorolás külsősre vált), mint a kézi kiválasztásnál.
+          const spec = mezoSzerint.get(nev);
+          if (spec?.autoSet) kovetkezo[spec.autoSet.field] = spec.autoSet.value;
         }
         return kovetkezo;
       });
@@ -206,11 +219,37 @@ export function QuickCreateForm({
       // mentéskor a létrejött tételhez töltődik fel, nem kell kétszer
       // kiválasztani ugyanazt a fájlt.
       if (fajlFeltoltes) setFajlok((elozo) => (elozo.some((f) => f === fajl) ? elozo : [...elozo, fajl]));
-      setAiUzenet(
-        beirt > 0
-          ? `Kiolvasva (${beirt} mező kitöltve) – ellenőrizd az értékeket mentés előtt.`
-          : "A dokumentumból nem sikerült mezőt kiolvasni.",
-      );
+      // ALVÁLLALKOZÓ (a felhasználó kérése): ha a kiolvasott partner megvan a
+      // meglévők közt, ki is választjuk (a neve a helyi opciók közé kerül,
+      // amíg a szerver-lista frissül); ha nincs, az "Új alvállalkozó" ablak
+      // nyílik a kiolvasott adatokkal előtöltve - csak a hiányzót kell pótolni.
+      const alvMezo = fields.find((f) => f.ujAlvallalkozo);
+      if (alvMezo && adatok.alvallalkozo) {
+        const { id, full_name } = adatok.alvallalkozo;
+        setUjOpciok((o) => ({
+          ...o,
+          [alvMezo.name]: (o[alvMezo.name] ?? []).some((opc) => opc.value === String(id))
+            ? (o[alvMezo.name] ?? [])
+            : [...(o[alvMezo.name] ?? []), { value: String(id), label: full_name }],
+        }));
+        setAiUzenet(`Kiolvasva (${beirt} mező) – alvállalkozó: ${full_name}. Ellenőrizd az értékeket.`);
+      } else if (alvMezo && adatok.alvallalkozo_adatok) {
+        const eloToltes = adatok.alvallalkozo_adatok;
+        setUjAlvMezo({
+          mezoNev: alvMezo.name,
+          nev: eloToltes.full_name || "",
+          kezdoAdatok: eloToltes,
+        });
+        setAiUzenet(
+          `Kiolvasva (${beirt} mező). Az alvállalkozó még nincs a rendszerben – az adatai előtöltve, pótold a hiányzókat.`,
+        );
+      } else {
+        setAiUzenet(
+          beirt > 0
+            ? `Kiolvasva (${beirt} mező kitöltve) – ellenőrizd az értékeket mentés előtt.`
+            : "A dokumentumból nem sikerült mezőt kiolvasni.",
+        );
+      }
     } catch (err) {
       setAiUzenet(`Nem sikerült kiolvasni (hálózati hiba): ${err}`);
     } finally {
@@ -403,6 +442,7 @@ export function QuickCreateForm({
       {ujAlvMezo && (
         <UjAlvallalkozoDialog
           kezdoNev={ujAlvMezo.nev}
+          kezdoAdatok={ujAlvMezo.kezdoAdatok}
           onMegse={() => setUjAlvMezo(null)}
           onKesz={(id, nev) => {
             const mezoSpec = fields.find((f) => f.name === ujAlvMezo.mezoNev);

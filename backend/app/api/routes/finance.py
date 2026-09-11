@@ -194,12 +194,17 @@ expenses_router = build_crud_router(
 @expenses_router.post("/kiolvasas")
 async def kiadas_kiolvasas_dokumentumbol(
     file: UploadFile = File(...),
+    db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action("/penzugyek", "create")),
 ):
     """Kiadás-mezők KIOLVASÁSA feltöltött szerződésből/számlából (a felhasználó
     kérése) - a válasz a kiadás-űrlap mezőnevein kulcsolt előtöltés (cégnév,
     megnevezés, nettó, ÁFA, pénznem, dátum), amit a felület az űrlapba tölt.
-    Semmit nem ment: a felhasználó ellenőrzi és a megszokott úton menti."""
+    A kiolvasott partnert a MEGLÉVŐ alvállalkozók közt is megkeresi
+    (employee_id + alvallalkozo a válaszban); ha nincs meg, a felvételhez
+    előtöltő adatcsomagot ad (alvallalkozo_adatok - a felhasználó kérése:
+    ilyenkor fel lehessen venni, csak a hiányzókra rákérdezve). Semmit nem
+    ment: a felhasználó ellenőrzi és a megszokott úton menti."""
     from app.services import kiadas_kiolvasas
 
     mime = (file.content_type or "").lower()
@@ -209,9 +214,30 @@ async def kiadas_kiolvasas_dokumentumbol(
     if len(adat) > kiadas_kiolvasas.MAX_MERET:
         raise HTTPException(status_code=400, detail="A fájl túl nagy a kiolvasáshoz (max. 20 MB).")
     try:
-        return kiadas_kiolvasas.olvasd_ki(adat, mime)
+        adatok = kiadas_kiolvasas.olvasd_ki(adat, mime)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    meglevo = kiadas_kiolvasas.alvallalkozo_egyeztetes(db, adatok)
+    if meglevo is not None:
+        adatok["employee_id"] = meglevo.id
+        adatok["alvallalkozo"] = {"id": meglevo.id, "full_name": meglevo.full_name}
+    elif adatok.get("megnevezes") or adatok.get("kepviselo"):
+        # Nincs ilyen alvállalkozó - a felület ebből tölti elő az "Új
+        # alvállalkozó" ablakot (a mezőnevek az UjAlvallalkozoDialog-éi).
+        adatok["alvallalkozo_adatok"] = {
+            "full_name": adatok.get("kepviselo") or adatok.get("megnevezes") or "",
+            "vallakozas_neve": adatok.get("megnevezes") or "",
+            "vallakozas_szekhely": adatok.get("szekhely") or "",
+            "vallalkozas_adoszama": adatok.get("adoszam") or "",
+            "nyilvantartasi_szam": adatok.get("nyilvantartasi_szam") or "",
+            "vallalkozas_kepviselo": adatok.get("kepviselo") or "",
+            "megbizas_targya": adatok.get("kiadas_leiras") or "",
+            "email": adatok.get("email") or "",
+            "telefon": adatok.get("telefon") or "",
+            "plusz_afa": adatok.get("plusz_afa") == "igen",
+        }
+    return adatok
 
 
 revenues_router = build_crud_router(

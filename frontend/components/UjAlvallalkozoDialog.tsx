@@ -14,13 +14,31 @@ import { authFetch } from "@/lib/authFetch";
  * A hívó FELTÉTELESEN rendereli (mint az IndoklasDialog-ot): minden
  * megnyitás friss példány. Sikeres mentés után az onKesz kapja az új ember
  * azonosítóját és nevét - a kiválasztás a hívó dolga. */
+export type UjAlvallalkozoElotoltes = Partial<{
+  full_name: string;
+  email: string;
+  telefon: string;
+  vallakozas_neve: string;
+  vallakozas_szekhely: string;
+  vallalkozas_adoszama: string;
+  nyilvantartasi_szam: string;
+  vallalkozas_kepviselo: string;
+  megbizas_targya: string;
+  plusz_afa: boolean;
+}>;
+
 export function UjAlvallalkozoDialog({
   kezdoNev,
+  kezdoAdatok,
   onMegse,
   onKesz,
 }: {
   /** A keresőbe beírt név - ezzel előtöltve nyílik az ablak. */
   kezdoNev: string;
+  /** A szerződésből/számlából KIOLVASOTT adatok (a felhasználó kérése): az
+   * AI-s kitöltés ezekkel tölti elő az űrlapot, és csak a hiányzókat kell
+   * kézzel pótolni. Minden mező szabadon javítható. */
+  kezdoAdatok?: UjAlvallalkozoElotoltes;
   onMegse: () => void;
   onKesz: (id: number, nev: string) => void;
 }) {
@@ -37,6 +55,7 @@ export function UjAlvallalkozoDialog({
     vallalkozas_kepviselo: "",
     megbizas_targya: "",
     plusz_afa: false,
+    ...(kezdoAdatok ?? {}),
   });
 
   function mezo(kulcs: keyof typeof adatok, ertek: string | boolean) {

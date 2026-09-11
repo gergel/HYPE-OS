@@ -36,7 +36,10 @@ Add vissza KIZÁRÓLAG ezt a JSON objektumot, más szöveg nélkül:
   "kiadas_datuma": a teljesítés/esemény dátuma "YYYY-MM-DD" alakban; ha nincs, a keltezés dátuma; ha az sincs, null,
   "adoszam": a partner adószáma, ha kiolvasható, különben null,
   "szekhely": a partner székhelye, ha kiolvasható, különben null,
-  "kepviselo": a partner képviselője, ha kiolvasható, különben null
+  "kepviselo": a partner képviselője (természetes személy neve), ha kiolvasható, különben null,
+  "nyilvantartasi_szam": a partner cégjegyzék-/nyilvántartási száma, ha kiolvasható, különben null,
+  "email": a partner e-mail címe, ha szerepel, különben null,
+  "telefon": a partner telefonszáma, ha szerepel, különben null
 }
 
 Amit nem találsz a dokumentumban, annak az értéke legyen null. Ne találj ki adatot."""
@@ -59,9 +62,16 @@ def olvasd_ki(adat: bytes, mime_type: str) -> dict:
                 types.Part.from_bytes(data=adat, mime_type=mime_type),
                 types.Part(text=_UTASITAS),
             ],
-            # JSON-kényszer: a modell ne írjon köré magyarázó szöveget.
+            # JSON-kényszer: a modell ne írjon köré magyarázó szöveget. A
+            # gondolkodás KI van kapcsolva (thinking_budget=0): a 2.5-ös
+            # modellek gondolkodó-tokenjei a max_output_tokens keretből
+            # fogynak, és élesben pont emiatt jött ÜRES válasz - a
+            # "nem sikerült kiolvasni" hibát az okozta (a felhasználó
+            # hibajelzése). Egy mező-kinyeréshez nem is kell gondolkodás.
             config=types.GenerateContentConfig(
-                response_mime_type="application/json", max_output_tokens=1024
+                response_mime_type="application/json",
+                max_output_tokens=4096,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
     except Exception as exc:  # noqa: BLE001 - a hívó emberi hibaüzenetet vár
@@ -69,11 +79,64 @@ def olvasd_ki(adat: bytes, mime_type: str) -> dict:
         raise ValueError(f"A dokumentum kiolvasása nem sikerült: {exc}") from exc
 
     szoveg = (valasz.text or "").strip()
-    try:
-        adatok = json.loads(szoveg)
-    except json.JSONDecodeError as exc:
-        logger.warning("Kiadás-kiolvasás: nem-JSON válasz: %r", szoveg[:500])
-        raise ValueError("A dokumentumból nem sikerült értelmezhető adatokat kiolvasni.") from exc
-    if not isinstance(adatok, dict):
-        raise ValueError("A dokumentumból nem sikerült értelmezhető adatokat kiolvasni.")
+    adatok = _json_kiszedese(szoveg)
+    if adatok is None:
+        logger.warning("Kiadás-kiolvasás: nem-JSON válasz: %r", szoveg[:1000])
+        raise ValueError(
+            "A dokumentumból nem sikerült értelmezhető adatokat kiolvasni. Próbáld újra - "
+            "ha többször is ez jön, a dokumentum lehet, hogy csak képként tartalmazza a szöveget."
+        )
     return adatok
+
+
+def _json_kiszedese(szoveg: str) -> dict | None:
+    """A modell válaszából a JSON objektum - elnézően: a ```json kerítést és
+    a köré tévedt szöveget is levágja (a response_mime_type ellenére néha
+    becsúszik), a lényeg az első és az utolsó kapcsos zárójel köze."""
+    if not szoveg:
+        return None
+    eleje, vege = szoveg.find("{"), szoveg.rfind("}")
+    if eleje == -1 or vege <= eleje:
+        return None
+    try:
+        adatok = json.loads(szoveg[eleje : vege + 1])
+    except json.JSONDecodeError:
+        return None
+    return adatok if isinstance(adatok, dict) else None
+
+
+def _norm(szoveg: str | None) -> str:
+    return " ".join((szoveg or "").lower().split())
+
+
+def _adoszam_szamjegyei(adoszam: str | None) -> str:
+    return "".join(ch for ch in (adoszam or "") if ch.isdigit())
+
+
+def alvallalkozo_egyeztetes(db, adatok: dict):
+    """A kiolvasott partnerhez tartozó MEGLÉVŐ alvállalkozó (Employee) -
+    adószám szerint a legbiztosabb, különben cégnév/név egyezéssel; None, ha
+    nincs találat (ilyenkor a felület ajánlja fel az új felvételét, a
+    kiolvasott adatokkal előtöltve - a felhasználó kérése)."""
+    from sqlalchemy import select
+
+    from app.models.employee import Employee
+
+    adoszam = _adoszam_szamjegyei(adatok.get("adoszam"))
+    cegnev = _norm(adatok.get("megnevezes"))
+    kepviselo = _norm(adatok.get("kepviselo"))
+
+    jeloltek = db.scalars(select(Employee)).all()
+    if adoszam:
+        for e in jeloltek:
+            if _adoszam_szamjegyei(getattr(e, "vallalkozas_adoszama", None)) == adoszam:
+                return e
+    if cegnev:
+        for e in jeloltek:
+            if _norm(getattr(e, "vallakozas_neve", None)) == cegnev or _norm(e.full_name) == cegnev:
+                return e
+    if kepviselo:
+        for e in jeloltek:
+            if _norm(e.full_name) == kepviselo:
+                return e
+    return None
