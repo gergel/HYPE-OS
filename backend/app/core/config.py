@@ -115,6 +115,11 @@ class Settings(BaseSettings):
     # beállítás nélkül is működjön - env-ből felülírható, ha új sablon kell.
     # Placeholderek: {{nev}} {{hely}} {{nyilvszam}} {{adoszam}} {{kepvis}}.
     gdoc_keret_modositas_template_id: str = "1EcuVGgyUvazBFDzFmDSYUfcioQWFH6-tvLmSDh5ASNY"
+    #: Az ALVÁLLALKOZÓI keretszerződés MÓDOSÍTÁSÁNAK sablonja (a felhasználó
+    #: kérése: a módosítás innen is kiküldhető legyen). Külön sablon kell: a
+    #: fentiben a szerepek a megrendelői viszonyra szólnak (ott mi vagyunk a
+    #: megbízott), itt fordítva. Üresen a kiküldés beszédes hibát ad.
+    gdoc_alvallalkozoi_keret_modositas_template_id: str = ""
     # Hova kerüljön a kész módosítás-PDF. A felhasználó által megadott mappa az
     # alapérték, hogy beállítás nélkül is a helyére kerüljön; env-ből
     # felülírható. Ha üresre állítják, a keretszerződések mappája, majd a

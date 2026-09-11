@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.api.routes.keret_modositasok import epits_modositas_utvonalakat
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_page_action
 from app.models.contract import Contract, ContractPeriod, ContractType, megkotott_keretszerzodes
@@ -210,7 +211,21 @@ def delete_alairt_keretszerzodes(
 
 # A szerződésmódosítás végpontjai KÖZÖSEK a megrendelői keretszerződéssel -
 # lásd routes/keret_modositasok.py.
-epits_modositas_utvonalakat(router, page=PAGE, keret_betoltes=_keret_or_404, generalas=False)
+epits_modositas_utvonalakat(
+    router,
+    page=PAGE,
+    keret_betoltes=_keret_or_404,
+    # A módosítás innen is KIKÜLDHETŐ (a felhasználó kérése) - de a saját,
+    # alvállalkozói szereposztású sablonjából, nem a megrendelőiből.
+    generalas=False,
+    sablon_id_forras=lambda: settings.gdoc_alvallalkozoi_keret_modositas_template_id,
+    sablon_hiba=(
+        "Nincs beállítva az alvállalkozói szerződésmódosítás sablonja. Állítsd be a "
+        "GDOC_ALVALLALKOZOI_KERET_MODOSITAS_TEMPLATE_ID környezeti változót a backendhez "
+        "(a sablonban a szerepek az alvállalkozói viszonyra szólnak: mi vagyunk a megbízó). "
+        "Addig a kész módosító dokumentum feltölthető, és ugyanúgy aláírásra vár."
+    ),
+)
 
 
 def _ceg_cegadata(vallalkozas: Vallalkozas) -> dict:

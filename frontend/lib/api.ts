@@ -470,6 +470,10 @@ export type Contract = {
   plusz_afa: boolean | null;
   brutto_osszeg: number | null;
   szerzodes_file_url: string | null;
+  /** Az aláírva visszakapott példány (lásd backend routes/contracts.py
+   * alairt-fajl) és a papírok címzettje - a keret-kezelő mutatja őket. */
+  alairt_file_url?: string | null;
+  email?: string | null;
 };
 
 /** A backend GET végpontok mostantól bejelentkezést igényelnek (lásd

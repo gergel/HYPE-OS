@@ -134,6 +134,12 @@ def epits_modositas_utvonalakat(
     page: str,
     keret_betoltes: Callable[[Session, int], Contract],
     generalas: bool = True,
+    #: A generáláshoz használt sablon azonosítója, ha nem az alap (megrendelői)
+    #: sablon kell - az ALVÁLLALKOZÓI keret a saját, fordított szereposztású
+    #: sablonját adja itt át (hívás pillanatában olvasva, hogy az env-változás
+    #: újraindítás után érvényesüljön). A hozzá tartozó hibaüzenettel együtt.
+    sablon_id_forras: Callable[[], str] | None = None,
+    sablon_hiba: str | None = None,
 ) -> None:
     """A `/{keret_id}/modositasok...` végpontok felfűzése egy meglévő routerre.
 
@@ -161,7 +167,7 @@ def epits_modositas_utvonalakat(
         "/{keret_id}/modositasok/generalas-es-kuldes",
         response_model=KeretModositasRead,
         status_code=201,
-        include_in_schema=generalas,
+        include_in_schema=generalas or sablon_id_forras is not None,
     )
     def modositas_generalas_es_kuldes(
         keret_id: int,
@@ -174,7 +180,7 @@ def epits_modositas_utvonalakat(
         A levél az admin fiókból megy, a felhasználó által megírt szöveggel és
         a fiók Gmailben beállított aláírásával; a kész PDF a Drive mappába
         kerül - a részletek és az OK a services/keret_modositas.py-ban."""
-        if not generalas:
+        if not generalas and sablon_id_forras is None:
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -193,6 +199,8 @@ def epits_modositas_utvonalakat(
                 keltezes=payload.keltezes if payload else None,
                 megbizas_targya=payload.megbizas_targya if payload else None,
                 szerzodes_letrejotte=payload.szerzodes_letrejotte if payload else None,
+                sablon_id=sablon_id_forras() if sablon_id_forras is not None else None,
+                sablon_hiba=sablon_hiba,
             )
         except RuntimeError as exc:
             # A félbemaradt sor MARADJON meg "Készítés alatt" állapotban: abból

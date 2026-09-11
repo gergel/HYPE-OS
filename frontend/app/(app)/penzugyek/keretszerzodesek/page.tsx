@@ -3,6 +3,7 @@ import { DataTable } from "@/components/DataTable";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { KeretszerzodesErvenyesseg } from "@/components/finance/KeretszerzodesErvenyesseg";
 import { KeretAlairasok } from "@/components/finance/KeretAlairasok";
+import { AlvallalkozoiKeretKezelo } from "@/components/finance/AlvallalkozoiKeretKezelo";
 import { KeretszerzodesKuldes } from "@/components/finance/KeretszerzodesKuldes";
 import { TopBar } from "@/components/TopBar";
 import { KeretszerzodesAddWidget } from "@/components/KeretszerzodesAddWidget";
@@ -199,9 +200,19 @@ export default async function KeretszerzodesekPage() {
                 render: (c) => (
                   <StopClickPropagation>
                     <span className="flex flex-col items-end gap-1">
-                      <a href={`/szerzodesek/${c.id}`} className="text-text-accent hover:underline">
-                        Fájlok
-                      </a>
+                      {/* Egy helyen minden (a felhasználó kérése, a
+                          megrendelői keret mintájára): fájlok, módosítás
+                          kiküldése/feltöltése, aláírt példányok. */}
+                      <AlvallalkozoiKeretKezelo
+                        contractId={c.id}
+                        nev={c.employee_name}
+                        email={c.email ?? null}
+                        szerzodesFileUrl={c.szerzodes_file_url}
+                        alairtFileUrl={c.alairt_file_url ?? null}
+                        canCreate={canCreate}
+                        canEdit={canEdit}
+                        canDelete={canEdit}
+                      />
                       {/* Új kiküldés: akkor is, ha már van szerződése - pl. a
                           régi lejárt (lásd backend routes/contracts.py
                           send_keretszerzodes). */}

@@ -152,6 +152,11 @@ def generalj_es_kuldj(
     keltezes: date | None = None,
     megbizas_targya: str | None = None,
     szerzodes_letrejotte: date | None = None,
+    #: Melyik sablonból menjen - alapból a megrendelői; az ALVÁLLALKOZÓI
+    #: keretnél a saját (fordított szereposztású) sablonja jön ide (lásd
+    #: config.gdoc_alvallalkozoi_keret_modositas_template_id).
+    sablon_id: str | None = None,
+    sablon_hiba: str | None = None,
 ) -> KeretModositas:
     """A módosítás legyártása és kiküldése. Hibánál RuntimeError-t dob.
 
@@ -161,10 +166,14 @@ def generalj_es_kuldj(
     tűnik el nyomtalanul, de nem is állítja azt magáról, hogy kiment."""
     if not (c.email or "").strip():
         raise RuntimeError("Nincs e-mail cím a keretszerződésen, így nem lehet kiküldeni a módosítást.")
-    if not settings.gdoc_keret_modositas_template_id:
+    sablon = sablon_id if sablon_id is not None else settings.gdoc_keret_modositas_template_id
+    if not sablon:
         raise RuntimeError(
-            "Nincs beállítva a szerződésmódosítás sablonja. Állítsd be a "
-            "GDOC_KERET_MODOSITAS_TEMPLATE_ID környezeti változót a backendhez."
+            sablon_hiba
+            or (
+                "Nincs beállítva a szerződésmódosítás sablonja. Állítsd be a "
+                "GDOC_KERET_MODOSITAS_TEMPLATE_ID környezeti változót a backendhez."
+            )
         )
 
     m = uj_modositas(
@@ -178,7 +187,7 @@ def generalj_es_kuldj(
 
     alap_nev = fajlnev(c)
     pdf_bytes, pdf_link = gdoc_template.gdoc_fill_export_and_store_pdf(
-        template_file_id=settings.gdoc_keret_modositas_template_id,
+        template_file_id=sablon,
         base_name=alap_nev,
         fields=sablon_mezok(m),
         output_folder_id=celmappa(),
