@@ -158,11 +158,14 @@ def kikuldes_cimzettje(csoport: "SzamlazoCsoport") -> str | None:
     címe csak végső tartalék, ha egyik résztvevőnek sincs e-mailje.
 
     A felugró ablak e-mail mezője ebből töltődik elő, és kézzel átírható -
-    az átírt cím mindig nyer (lásd a generate-and-send végpontokat)."""
-    for tag in csoport.tagok:
-        if (tag.email or "").strip():
-            return tag.email.strip()
-    return (csoport.fel.email or "").strip() or None
+    az átírt cím mindig nyer (lásd a generate-and-send végpontokat).
+
+    Csak olyan mező számít, amiben tényleg van értelmezhető e-mail cím: az
+    importból maradt selejt ("–", "nincs") nem takarhatja ki a mögötte álló
+    jó címet (lásd google_email.elso_ervenyes_cim)."""
+    from app.services.google_email import elso_ervenyes_cim
+
+    return elso_ervenyes_cim(*(tag.email for tag in csoport.tagok), csoport.fel.email)
 
 
 def szamlazo_fele(

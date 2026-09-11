@@ -54,7 +54,7 @@ from app.services import (
     szamlazo,
 )
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
-from app.services.google_email import send_message
+from app.services.google_email import elso_ervenyes_cim, send_message
 from app.services.hu_number_words import szam_betukkel
 from app.services.szamlazo import SzamlazoCsoport, SzamlazoFel
 
@@ -1089,7 +1089,7 @@ def generate_and_send(
     # A kézzel beírt cím (draft.email) nyer; alapból a RÉSZTVEVŐ címére megy
     # (a felhasználó kérése), nem a számlázó félére - lásd
     # szamlazo.kikuldes_cimzettje.
-    cimzett = (draft.email or szamlazo.kikuldes_cimzettje(csoport) or "").strip()
+    cimzett = elso_ervenyes_cim(draft.email, szamlazo.kikuldes_cimzettje(csoport)) or ""
     if not cimzett:
         raise HTTPException(status_code=400, detail="Nincs email cím - se a résztvevőnek, se a számlázó félnek.")
 
@@ -1799,7 +1799,7 @@ def generate_and_send_projektkodon(
 
     if not draft.netto_osszeg or draft.netto_osszeg <= 0:
         raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
-    cimzett = (draft.email or fel.email or "").strip()
+    cimzett = elso_ervenyes_cim(draft.email, fel.email) or ""
     if not cimzett:
         raise HTTPException(status_code=400, detail="A számlázó félnek nincs email címe.")
 

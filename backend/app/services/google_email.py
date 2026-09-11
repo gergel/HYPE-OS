@@ -226,6 +226,22 @@ def cimek_tisztitasa(cimek: list[str]) -> tuple[list[str], list[str]]:
     return tiszta, hibasak
 
 
+def elso_ervenyes_cim(*jeloltek: str | None) -> str | None:
+    """Az első olyan jelölt, amiben van értelmezhető e-mail cím.
+
+    A kiküldés címzettje több forrásból eshet ki (a piszkozatban tárolt cím,
+    a résztvevő adatlapja, a számlázó fél) - és egy-egy forrásban importból
+    maradt selejt is állhat ("–", "nincs"). A sima `a or b` láncban az ilyen
+    selejt "kitakarta" a mögötte álló jó címet (a felhasználó hibajelzése:
+    az ablakban jó cím látszott, a küldés mégis a piszkozat „–"-ára ment) -
+    ezért jelöltet csak akkor fogadunk el, ha tényleg van benne cím."""
+    for jelolt in jeloltek:
+        tiszta, _ = cimek_tisztitasa([jelolt or ""])
+        if tiszta:
+            return (jelolt or "").strip()
+    return None
+
+
 def cc_lista(to_list: list[str], extra_cc: list[str] | None) -> list[str]:
     """A levél tényleges CC listája: a HYPE_CC env fix címei + az extra címek
     (pl. a Beállításokban megadott diszpó másolat-címzettek), kisbetű-
