@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -141,6 +141,35 @@ class DiszpoSor(TimestampMixin, Base):
     rejtett: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     munkalap: Mapped["DiszpoMunkalap"] = relationship(back_populates="sorok")
+
+
+class DiszpoNezet(TimestampMixin, Base):
+    """Egy munkatárs SZEMÉLYES nézete egy munkalapon (a felhasználó kérése).
+
+    Az admin-elrejtés (DiszpoOszlop.rejtett) mindenkire vonatkozik - ez itt
+    viszont csak a saját képernyőt rendezi: ki mely oszlopokat csukta össze
+    magának, és milyen szélesre húzta őket. Az adatot nem érinti (a
+    munkanap-számítás a nézetről nem is tud), és mástól nem vesz el semmit.
+
+    Az oszlopokat a STABIL DiszpoOszlop.id azonosítja, nem az idx: egy
+    oszlop-beszúrás az idx-eket eltolja, és a rejtés akkor másik oszlopra
+    csúszna át."""
+
+    __tablename__ = "diszpo_nezetek"
+    __table_args__ = (UniqueConstraint("employee_id", "munkalap_id", name="uq_diszpo_nezet"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    munkalap_id: Mapped[int] = mapped_column(
+        ForeignKey("diszpo_munkalapok.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: A SAJÁT nézetben elrejtett oszlopok DiszpoOszlop.id listája.
+    rejtett_oszlop_idk: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    #: Oszlopszélességek képpontban, {oszlop_id: szélesség} - csak az áll
+    #: benne, amit kézzel átméreteztek.
+    oszlop_szelessegek: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class DiszpoCella(TimestampMixin, Base):

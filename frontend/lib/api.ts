@@ -3339,6 +3339,9 @@ export type DiszpoMunkalapFej = {
 };
 
 export type DiszpoOszlop = {
+  /** STABIL azonosító (diszpo_oszlopok.id) - a személyes nézetek ezen át
+   * hivatkoznak az oszlopra, mert az idx-et a beszúrás eltolja. */
+  id: number;
   idx: number;
   cimke: string | null;
   csoport: string | null;
@@ -3378,6 +3381,18 @@ export async function getDiszpoMunkalapok(): Promise<DiszpoMunkalapFej[]> {
 
 export async function getDiszpoMunkalap(id: number): Promise<DiszpoMunkalap | null> {
   return apiGet<DiszpoMunkalap>(`/api/v1/diszpo-tabla/${id}`);
+}
+
+/** A bejelentkezett munkatárs SZEMÉLYES nézete egy munkalapon: mely oszlopokat
+ * rejtette el magának és milyen szélesek - másokét nem érinti (lásd backend
+ * models/diszpo_tabla.DiszpoNezet). A kulcs az oszlop stabil id-je. */
+export type DiszpoNezet = {
+  rejtett_oszlop_idk: number[];
+  oszlop_szelessegek: Record<string, number>;
+};
+
+export async function getDiszpoNezet(munkalapId: number): Promise<DiszpoNezet | null> {
+  return apiGet<DiszpoNezet>(`/api/v1/diszpo-tabla/${munkalapId}/nezet`);
 }
 
 /** Ki hány napot dolgozott egy hónapban, és kinél fogyott el a szerződött

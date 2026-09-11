@@ -8,6 +8,7 @@ import {
   getCurrentUser,
   getDiszpoMunkalap,
   getDiszpoMunkalapok,
+  getDiszpoNezet,
   getEmployees,
   getMyPagePermissions,
 } from "@/lib/api";
@@ -52,10 +53,13 @@ export default async function DiszpoTablaPage({
   const aktiv = munkalapok.find((m) => m.id === aktivId);
   if (!aktiv) notFound();
 
-  const [munkalap, emberek, currentUser] = await Promise.all([
+  const [munkalap, emberek, currentUser, sajatNezet] = await Promise.all([
     getDiszpoMunkalap(aktiv.id),
     getEmployees(),
     getCurrentUser(),
+    // A SZEMÉLYES nézet (saját oszlop-elrejtés, szélességek) - a rács ezzel
+    // indul, hogy újratöltés után is ugyanúgy nézzen ki (a felhasználó kérése).
+    getDiszpoNezet(aktiv.id),
   ]);
   if (!munkalap) notFound();
 
@@ -112,6 +116,7 @@ export default async function DiszpoTablaPage({
             // tényleg eltűnnek, és rejteni/visszahozni is csak ő tud.
             rejtettetLatja={szerepkorei(currentUser).includes("admin")}
             emberek={emberek.map((e) => ({ id: e.id, nev: e.full_name }))}
+            kezdoNezet={sajatNezet ?? undefined}
           />
         </Card>
 

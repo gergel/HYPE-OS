@@ -21,6 +21,7 @@ from app.models.diszpo_tabla import (
     SZINEK,
     DiszpoCella,
     DiszpoMunkalap,
+    DiszpoNezet,
     DiszpoOszlop,
     DiszpoSor,
 )
@@ -67,6 +68,9 @@ class MunkalapFej(BaseModel):
 
 
 class OszlopOut(BaseModel):
+    #: A STABIL azonosító (diszpo_oszlopok.id) - a személyes nézetek ezen át
+    #: hivatkoznak az oszlopra, mert az idx-et a beszúrás eltolja.
+    id: int
     idx: int
     cimke: str | None = None
     csoport: str | None = None
@@ -132,6 +136,7 @@ def get_munkalap(munkalap_id: int, db: Session = Depends(get_db), _user: Employe
         **MunkalapFej.model_validate(m).model_dump(),
         oszlopok=[
             OszlopOut(
+                id=o.id,
                 idx=o.idx,
                 cimke=o.cimke,
                 csoport=o.csoport,
@@ -457,6 +462,7 @@ def set_oszlop_kotes(
     db.commit()
     db.refresh(oszlop)
     return OszlopOut(
+        id=oszlop.id,
         idx=oszlop.idx,
         cimke=oszlop.cimke,
         csoport=oszlop.csoport,
@@ -548,6 +554,76 @@ def havi_allas(
         )
     eredmeny.sort(key=lambda a: (-a.munkanapok, a.employee_nev or ""))
     return eredmeny
+
+
+# ── SZEMÉLYES NÉZET ─────────────────────────────────────────────────────────
+#
+# Ki mely oszlopokat rejtette el MAGÁNAK, és milyen szélesre húzta őket (a
+# felhasználó kérése: a saját képernyő rendezése ne rendezze át másokét).
+# Az admin-elrejtéstől (DiszpoOszlop.rejtett) független: az mindenkire
+# vonatkozik, ez csak a sajátunkra. Lásd models/diszpo_tabla.DiszpoNezet.
+
+
+class NezetOut(BaseModel):
+    #: A saját nézetben elrejtett oszlopok STABIL azonosítói (OszlopOut.id).
+    rejtett_oszlop_idk: list[int] = []
+    #: Oszlopszélességek képpontban, {oszlop_id: szélesség}.
+    oszlop_szelessegek: dict[str, int] = {}
+
+
+@router.get("/{munkalap_id}/nezet", response_model=NezetOut)
+def get_nezet(
+    munkalap_id: int,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(get_current_user),
+):
+    _munkalap_vagy_404(db, munkalap_id)
+    nezet = db.scalar(
+        select(DiszpoNezet).where(DiszpoNezet.munkalap_id == munkalap_id, DiszpoNezet.employee_id == user.id)
+    )
+    if nezet is None:
+        return NezetOut()
+    return NezetOut(
+        rejtett_oszlop_idk=list(nezet.rejtett_oszlop_idk or []),
+        oszlop_szelessegek=dict(nezet.oszlop_szelessegek or {}),
+    )
+
+
+@router.put("/{munkalap_id}/nezet", response_model=NezetOut)
+def set_nezet(
+    munkalap_id: int,
+    payload: NezetOut,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(get_current_user),
+):
+    """A SAJÁT nézet mentése - a teljes állapotot kapjuk és tesszük el.
+
+    Szándékosan nem kell hozzá szerkesztési jog: a nézet nem adat, csak a
+    saját képernyő rendezése - aki látja a táblát, rendezheti magának."""
+    m = _munkalap_vagy_404(db, munkalap_id)
+    # Csak LÉTEZŐ oszlop-id-k maradnak: egy közben törölt oszlop hivatkozása
+    # ne gyűljön a nézetben a végtelenségig.
+    letezo = {
+        o_id for (o_id,) in db.execute(select(DiszpoOszlop.id).where(DiszpoOszlop.munkalap_id == m.id))
+    }
+    rejtett = [i for i in dict.fromkeys(payload.rejtett_oszlop_idk) if i in letezo]
+    # A szélesség józan határok között marad (a felület is ezt tartja) - egy
+    # kézzel küldött 0 vagy 100000 ne tudja szétzilálni a rácsot.
+    szelessegek = {
+        k: min(max(int(v), 40), 600)
+        for k, v in payload.oszlop_szelessegek.items()
+        if k.isdigit() and int(k) in letezo
+    }
+    nezet = db.scalar(
+        select(DiszpoNezet).where(DiszpoNezet.munkalap_id == m.id, DiszpoNezet.employee_id == user.id)
+    )
+    if nezet is None:
+        nezet = DiszpoNezet(munkalap_id=m.id, employee_id=user.id)
+        db.add(nezet)
+    nezet.rejtett_oszlop_idk = rejtett
+    nezet.oszlop_szelessegek = szelessegek
+    db.commit()
+    return NezetOut(rejtett_oszlop_idk=rejtett, oszlop_szelessegek=szelessegek)
 
 
 SHEET_SYNC_FELADAT = "diszpo-sheet-sync"

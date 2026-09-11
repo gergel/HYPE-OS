@@ -21,6 +21,26 @@ export function MunkanapokKartya({ kezdoEv, kezdoHonap }: { kezdoEv: number; kez
   const [ev, setEv] = useState(kezdoEv);
   const [honap, setHonap] = useState(kezdoHonap);
   const [haviAllas, setHaviAllas] = useState<DiszpoHaviAllas[] | null>(null);
+  // ÖSSZECSUKHATÓ (a felhasználó kérése): így több hely marad a táblának.
+  // A választás a böngészőben marad meg - kényelem, nem adat.
+  const [nyitva, setNyitva] = useState(true);
+  useEffect(() => {
+    try {
+      setNyitva(localStorage.getItem("munkanapok-kartya-nyitva") !== "0");
+    } catch {
+      /* privát mód - marad nyitva */
+    }
+  }, []);
+  function nyitvaValt() {
+    setNyitva((n) => {
+      try {
+        localStorage.setItem("munkanapok-kartya-nyitva", n ? "0" : "1");
+      } catch {
+        /* privát mód */
+      }
+      return !n;
+    });
+  }
 
   useEffect(() => {
     let elve = false;
@@ -48,7 +68,20 @@ export function MunkanapokKartya({ kezdoEv, kezdoHonap }: { kezdoEv: number; kez
   const elfogyott = adat.filter((a) => a.plusz_napok.length > 0);
 
   return (
-    <Card title={`Munkanapok – ${ev}. ${HONAP_NEVEK[honap - 1]}`}>
+    <Card
+      title={`Munkanapok – ${ev}. ${HONAP_NEVEK[honap - 1]}`}
+      actions={
+        <button
+          type="button"
+          onClick={nyitvaValt}
+          className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12px] text-text-secondary hover:bg-surface-3"
+        >
+          {nyitva ? "Összecsukás" : "Kibontás"}
+        </button>
+      }
+    >
+      {!nyitva ? null : (
+      <>
       {/* HÓNAPLÉPTETŐ: kliens-oldali állapot, nem URL/Link - a fölötte lévő
           rács görgetése ettől nem áll vissza. */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
@@ -162,6 +195,8 @@ export function MunkanapokKartya({ kezdoEv, kezdoHonap }: { kezdoEv: number; kez
             </p>
           )}
         </>
+      )}
+      </>
       )}
     </Card>
   );
