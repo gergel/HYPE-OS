@@ -4,6 +4,7 @@ import {
   Expense,
   formatHuf,
   getCurrentUser,
+  getEmployees,
   getExpenses,
   getFieldTypes,
   getFinanceSummary,
@@ -46,6 +47,7 @@ export default async function PenzugyekPage() {
     pagePermissions,
     utalasraVaro,
     szamlaDarab,
+    employees,
   ] = await Promise.all([
     getExpenses(),
     getRevenues(),
@@ -57,6 +59,9 @@ export default async function PenzugyekPage() {
     getMyPagePermissions(),
     getUtalasraVaro(),
     getKiadasSzamlaDarab(),
+    // Az alvállalkozó-választóhoz (a felhasználó kérése: a kiadáshoz itt is
+    // hozzá lehessen kötni - vagy újként felvenni - az alvállalkozót).
+    getEmployees(),
   ]);
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
@@ -253,6 +258,32 @@ export default async function PenzugyekPage() {
                   // egy mindig ott álló, üresen hagyott mező azt sugallná,
                   // hogy kellene kitölteni. (Üres pénznem is forintot jelent.)
                   showIf: { field: "penznem", noneOf: ["", "HUF"] },
+                },
+                // BESOROLÁS + ALVÁLLALKOZÓ - ugyanaz a páros, mint a
+                // projektkód oldali kiadás-űrlapon: az alvállalkozó
+                // kiválasztása automatikusan Külsősre állítja a besorolást
+                // (szerződés/TIG csak arról jár), a nem létező név pedig a
+                // kereső "hozzáadása újként" sorával vehető fel - az AI-s
+                // kitöltés is ezt a mezőt tölti/nyitja (a felhasználó kérése).
+                {
+                  name: "tipus",
+                  label: "Besorolás",
+                  type: "select",
+                  defaultValue: "egyeb",
+                  options: [
+                    { value: "egyeb", label: "Egyéb" },
+                    { value: "kulsos", label: "Külsős" },
+                  ],
+                },
+                {
+                  name: "employee_id",
+                  label: "Alvállalkozó (ha van)",
+                  type: "select",
+                  autoSet: { field: "tipus", value: "kulsos" },
+                  ujAlvallalkozo: true,
+                  options: [...employees]
+                    .sort((a, b) => a.full_name.localeCompare(b.full_name, "hu"))
+                    .map((e) => ({ value: e.id, label: e.full_name })),
                 },
                 // Melyik projektkódra terheljen (a felhasználó kérése) - NEM
                 // kötelező: utólag is hozzárendelhető a lista Projektkód
