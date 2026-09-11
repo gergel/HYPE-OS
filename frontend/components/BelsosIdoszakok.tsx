@@ -21,6 +21,13 @@ const JOGVISZONYOK = [
   },
 ];
 
+// Rövid címkék az időszakonkénti választóhoz - a hosszú magyarázat a fenti
+// rádiógomboknál olvasható.
+const ROVID_CIMKE: Record<string, string> = {
+  megbizas: "Megbízásos",
+  alkalmazott: "Alkalmazott",
+};
+
 /** EGY munkatárs belsős beállításai: milyen JOGVISZONYBAN dolgozik, és mettől
  * meddig volt belsős.
  *
@@ -48,6 +55,9 @@ export function BelsosIdoszakok({
   const [jogviszony, setJogviszony] = useState(adat.jogviszony);
   const [kezdet, setKezdet] = useState("");
   const [veg, setVeg] = useState("");
+  // Az új időszak jogviszonya - az alapértelmezéssel indul, hogy a gyakori
+  // esetben ne kelljen hozzányúlni.
+  const [ujJogviszony, setUjJogviszony] = useState(adat.jogviszony);
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
 
@@ -78,7 +88,7 @@ export function BelsosIdoszakok({
     }
     const ok = await hivas(`/api/v1/belsos-idoszakok/${adat.employee_id}`, {
       method: "POST",
-      body: JSON.stringify({ kezdet: kezdet || null, veg: veg || null }),
+      body: JSON.stringify({ kezdet: kezdet || null, veg: veg || null, jogviszony: ujJogviszony }),
     });
     if (ok) {
       setKezdet("");
@@ -90,6 +100,16 @@ export function BelsosIdoszakok({
   async function torol(idoszakId: number) {
     if (!(await confirm("Törlöd ezt a belsős időszakot?"))) return;
     await hivas(`/api/v1/belsos-idoszakok/idoszak/${idoszakId}`, { method: "DELETE" });
+  }
+
+  /** Egy MEGLÉVŐ időszak jogviszonyának átállítása (a felhasználó kérése):
+   * aki hó közben váltott megbízásról alkalmazottra, annál a régi időszak
+   * hónapjaira TIG-et várunk, az újakéra csak a fizetés beírását. */
+  async function idoszakJogviszony(idoszakId: number, ertek: string) {
+    await hivas(`/api/v1/belsos-idoszakok/idoszak/${idoszakId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ jogviszony: ertek }),
+    });
   }
 
   // Ha nincs felvett időszak, a munkanapok döntenek - ezt ki is írjuk, hogy
@@ -119,7 +139,10 @@ export function BelsosIdoszakok({
     <div>
       {/* Ez dönti el, kell-e egyáltalán havi TIG - ezért van legelöl. */}
       <div className="mb-4">
-        <p className="mb-2 text-[12.5px] text-text-muted">Milyen formában dolgozik nálunk?</p>
+        <p className="mb-2 text-[12.5px] text-text-muted">
+          Milyen formában dolgozik nálunk? Ez az alapértelmezés – lent az egyes időszakoknál külön is átállítható,
+          ha közben váltott (pl. megbízásról alkalmazottra).
+        </p>
         <div className="flex flex-col gap-1.5">
           {JOGVISZONYOK.map((j) => (
             <label
@@ -164,10 +187,31 @@ export function BelsosIdoszakok({
       ) : (
         <ul className="mb-3 space-y-1">
           {adat.idoszakok.map((i) => (
-            <li key={i.id} className="flex items-center gap-2 text-[13px]">
+            <li key={i.id} className="flex flex-wrap items-center gap-2 text-[13px]">
               <span className="text-text-primary">
                 {i.kezdet ? huDatum(i.kezdet) : "a kezdetektől"} – {i.veg ? huDatum(i.veg) : "azóta is"}
               </span>
+              {/* Az időszak SAJÁT jogviszonya (a felhasználó kérése) - üresen
+                  a fenti alapértelmezés érvényes rá. */}
+              {canEdit ? (
+                <select
+                  value={i.jogviszony ?? jogviszony}
+                  disabled={busy}
+                  onChange={(e) => idoszakJogviszony(i.id, e.target.value)}
+                  title="Ebben az időszakban milyen jogviszonyban dolgozott"
+                  className="rounded-[var(--radius)] border border-border bg-surface-3 px-1.5 py-0.5 text-[11.5px] text-text-secondary focus:outline-none disabled:opacity-50"
+                >
+                  {JOGVISZONYOK.map((j) => (
+                    <option key={j.ertek} value={j.ertek}>
+                      {ROVID_CIMKE[j.ertek]}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[11px] text-text-muted">
+                  {ROVID_CIMKE[i.jogviszony ?? jogviszony] ?? ""}
+                </span>
+              )}
               {canEdit && (
                 <button
                   type="button"
@@ -207,6 +251,21 @@ export function BelsosIdoszakok({
                 className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12.5px] text-text-primary focus:outline-none"
               />
             </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[11px] text-text-muted">Jogviszony ekkor</label>
+              <select
+                value={ujJogviszony}
+                onChange={(e) => setUjJogviszony(e.target.value)}
+                disabled={busy}
+                className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12.5px] text-text-primary focus:outline-none"
+              >
+                {JOGVISZONYOK.map((j) => (
+                  <option key={j.ertek} value={j.ertek}>
+                    {ROVID_CIMKE[j.ertek]}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               type="button"
               disabled={busy}
@@ -234,6 +293,7 @@ export function BelsosIdoszakok({
               setNyitva(true);
               setKezdet("");
               setVeg("");
+              setUjJogviszony(jogviszony);
               setHiba(null);
             }}
             className="text-[12.5px] text-text-accent hover:underline"

@@ -169,7 +169,33 @@ def idoszak_szoveg(idoszakok: list[BelsosIdoszak]) -> str:
     return ", ".join(reszek)
 
 
-def kell_havi_tig(employee: Employee) -> bool:
+def honap_jogviszonya(employee: Employee, ev: int, honap: int) -> BelsosJogviszony:
+    """Milyen jogviszonyban dolgozott ez az ember EBBEN a hónapban?
+
+    A jogviszony időben változhat: aki 2026 nyaráig megbízással számlázott,
+    majd bejelentett alkalmazott lett, annál a régi hónapokra TIG-et várunk,
+    az újakra csak a fizetés beírását (a felhasználó kérése). Ezért az
+    IDŐSZAKONKÉNT beállított jogviszony dönt, ha van: a hónapot fedő időszaké.
+
+    Ha a hónapot fedő időszakon nincs külön jogviszony (vagy nincs is
+    időszak), a munkatárs adatlapján beállított alapértelmezés érvényes - így
+    a mező bevezetése önmagában senkinél semmin nem változtat.
+
+    Ha a hónapba VEGYES időszakok lógnak bele (hó közben váltott), a megbízás
+    nyer: a megbízásos napokról akkor is kell TIG és számla, ha a hónap másik
+    felében már alkalmazott volt - inkább kérünk papírt, mint hogy elmaradjon."""
+    eleje, vege = honap_hatarok(ev, honap)
+    fedok = [
+        i.jogviszony
+        for i in (employee.belsos_idoszakok or [])
+        if i.jogviszony is not None and _atfedi(i.kezdet, i.veg, eleje, vege)
+    ]
+    if fedok:
+        return BelsosJogviszony.MEGBIZAS if BelsosJogviszony.MEGBIZAS in fedok else fedok[0]
+    return employee.belsos_jogviszony
+
+
+def kell_havi_tig(employee: Employee, ev: int | None = None, honap: int | None = None) -> bool:
     """Kell-e ettől a belsőstől havi teljesítési igazolás?
 
     A bejelentett ALKALMAZOTT bérét bérszámfejtés fizeti: nála nincs TIG,
@@ -178,7 +204,10 @@ def kell_havi_tig(employee: Employee) -> bool:
     models/employee.py BelsosJogviszony).
 
     Aki folyamatos MEGBÍZÁSI szerződéssel dolgozik, az havonta számláz, tehát
-    nála marad a teljes TIG -> számla -> kifizetés folyamat. Ez az
-    alapértelmezés, vagyis a mező bevezetése önmagában senkinél nem változtat
-    a viselkedésen."""
+    nála marad a teljes TIG -> számla -> kifizetés folyamat.
+
+    Hónappal hívva az ARRA a hónapra érvényes jogviszony dönt (lásd
+    honap_jogviszonya) - hónap nélkül a munkatárs alapértelmezése."""
+    if ev is not None and honap is not None:
+        return honap_jogviszonya(employee, ev, honap) != BelsosJogviszony.ALKALMAZOTT
     return employee.belsos_jogviszony != BelsosJogviszony.ALKALMAZOTT

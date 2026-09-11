@@ -323,8 +323,8 @@ def list_month(
             szekhely=e.vallakozas_szekhely,
             adoszam=e.vallalkozas_adoszama,
             vallalkozas_kepviselo=e.vallalkozas_kepviselo,
-            kell_tig=belsos_idoszak.kell_havi_tig(e),
-            jogviszony=e.belsos_jogviszony.value,
+            kell_tig=belsos_idoszak.kell_havi_tig(e, ev, honap),
+            jogviszony=belsos_idoszak.honap_jogviszonya(e, ev, honap).value,
             record=InternalPerformanceCertificateRead.model_validate(lookup[e.id]) if e.id in lookup else None,
             cegek=_cegek(e.id),
             javasolt_vallalkozas_id=_javaslat(_cegek(e.id)),
@@ -507,7 +507,7 @@ def havi_attekintes(
                 if osszeg is not None:
                     brutto += float(osszeg)
                     van_brutto = True
-            hianyzik = _honap_teendoje(record, kell_tig=belsos_idoszak.kell_havi_tig(e))
+            hianyzik = _honap_teendoje(record, kell_tig=belsos_idoszak.kell_havi_tig(e, ev, honap))
             if hianyzik is None:
                 if record is not None and record.allapot == "Kihagyva":
                     kihagyva += 1
@@ -952,7 +952,7 @@ async def upload_tig_fajl(
     kulcs = f"belsos-tig-dokumentum/{employee_id}/{ev}-{honap:02d}-{record.id}{os.path.splitext(filename)[1]}"
     record.file_url = document_storage.upload_bytes(data, kulcs, content_type)
     record.file_storage_key = kulcs
-    if belsos_idoszak.kell_havi_tig(employee) and record.allapot not in TERMINAL_STATUSES:
+    if belsos_idoszak.kell_havi_tig(employee, ev, honap) and record.allapot not in TERMINAL_STATUSES:
         record.allapot = "Kiküldve"
     db.commit()
     # A cserélt fájl törlése CSAK a mentés után, és csak ha tényleg másik
@@ -1019,7 +1019,7 @@ def mark_szamla_kifizetve(
     record = _find(db, employee_id, ev, honap)
     if record is None:
         raise HTTPException(status_code=404, detail="Ehhez a hónaphoz nem tartozik Belsős TIG bejegyzés.")
-    alkalmazott = not belsos_idoszak.kell_havi_tig(record.employee)
+    alkalmazott = not belsos_idoszak.kell_havi_tig(record.employee, ev, honap)
     if alkalmazott:
         if record.netto_osszeg is None or float(record.netto_osszeg) == 0:
             raise HTTPException(status_code=400, detail="Előbb írd be a hónap fizetését.")
@@ -1342,11 +1342,11 @@ def save_fizetes(
     számolódik (lásd _ujraszamol_tig_osszeget), tehát ha ezt megkerülnénk, egy
     később felvitt extra némán felülírná a beírt fizetést."""
     employee = _validate_belsos_employee(db, employee_id)
-    if belsos_idoszak.kell_havi_tig(employee):
+    if belsos_idoszak.kell_havi_tig(employee, ev, honap):
         raise HTTPException(
             status_code=400,
             detail=(
-                f"{employee.full_name} megbízási szerződéssel dolgozik, nála havi TIG készül. "
+                f"{employee.full_name} ebben a hónapban megbízási szerződéssel dolgozott, nála havi TIG készül. "
                 "A fizetés beírása bejelentett alkalmazotthoz való."
             ),
         )

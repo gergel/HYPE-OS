@@ -932,6 +932,9 @@ export type BelsosIdoszak = {
   kezdet: string | null;
   veg: string | null;
   megjegyzes: string | null;
+  /** Ebben az időszakban milyen jogviszonyban dolgozott ("megbizas" |
+   * "alkalmazott") - null = a munkatárs alapértelmezése érvényes. */
+  jogviszony: string | null;
 };
 
 /** Egy munkatárs belsős időszakai - a saját adatlapján szerkeszthető. */

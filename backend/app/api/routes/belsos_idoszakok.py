@@ -52,6 +52,10 @@ class IdoszakRead(BaseModel):
     kezdet: date | None = None
     veg: date | None = None
     megjegyzes: str | None = None
+    #: Ebben az időszakban milyen jogviszonyban dolgozott - NULL = a
+    #: munkatárs adatlapján beállított alapértelmezés érvényes (lásd
+    #: models/belsos_idoszak.py).
+    jogviszony: BelsosJogviszony | None = None
 
     model_config = {"from_attributes": True}
 
@@ -60,6 +64,7 @@ class IdoszakIn(BaseModel):
     kezdet: date | None = None
     veg: date | None = None
     megjegyzes: str | None = None
+    jogviszony: BelsosJogviszony | None = None
 
 
 class JogviszonyIn(BaseModel):
@@ -143,7 +148,9 @@ def update_idoszak(
         raise HTTPException(status_code=404, detail="Az időszak nem található.")
     if payload.kezdet is not None and payload.veg is not None and payload.veg < payload.kezdet:
         raise HTTPException(status_code=400, detail="Az időszak vége nem lehet korábban, mint a kezdete.")
-    for mezo, ertek in payload.model_dump().items():
+    # Csak a ténylegesen küldött mezőket írjuk: így a jogviszony átállítása
+    # nem törli a dátumokat (és fordítva).
+    for mezo, ertek in payload.model_dump(exclude_unset=True).items():
         setattr(idoszak, mezo, ertek)
     db.commit()
     return _nezet(_get_employee_or_404(db, idoszak.employee_id))
