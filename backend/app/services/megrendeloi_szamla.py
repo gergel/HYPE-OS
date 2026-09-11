@@ -510,26 +510,46 @@ def jelold_szamlat_kifizetettnek(
     else:
         ft_netto, ft_brutto = eredeti_netto, eredeti_brutto
 
-    sor = Revenue(
-        project_code_id=pk.id,
-        netto=ft_netto,
-        brutto=ft_brutto,
-        penznem=penznem_szolg.FORINT,
-        eredeti_penznem=penznem_szolg.normalizald(pk.penznem) if devizas else None,
-        eredeti_netto=eredeti_netto if devizas else None,
-        eredeti_brutto=eredeti_brutto if devizas else None,
-        arfolyam=pk.arfolyam if devizas else None,
-        fizetes_datuma=kifizetes_datuma,
-        fizetes_hatarideje=doc.fizetesi_hatarido,
-        fizetes_modja=mod or fizetesi_mod_szolg.BEVETEL_ALAPERTELMEZES,
-        szamla_file_url=doc.url[:500] if doc.url else None,
-        beleszamit_a_bevetelekbe=False if bevetelbe_ne_keruljon else None,
-        megjegyzes=BEVETEL_MEGJEGYZES,
+    # ELŐBB a meglévő, még kifizetetlen bevétel-sort használjuk újra (a
+    # felhasználó hibajelzése: a fájlonkénti kifizetés DUPLÁN vette fel a
+    # bevételt): a projektkódon sokszor már ott a sor - a számla
+    # kiállításából, a papír-átvételből vagy a Notion-importból -, és a
+    # projektkód-szintű "Kifizetve" (lásd _vezesd_fel_a_bevetelt) azt tölti
+    # ki, ez az út viszont mindig ÚJAT nyitott mellé. Csak olyan sort veszünk
+    # át, amit még nem fizettek ki, és nem egy MÁSIK számla-fájlhoz tartozik
+    # (több számlánál fájlonként külön sor a helyes).
+    foglalt_sor_idk = {
+        r_id
+        for (r_id,) in db.execute(
+            select(DocumentAttachment.revenue_id).where(DocumentAttachment.revenue_id.is_not(None))
+        )
+    }
+    sor = next(
+        (r for r in (pk.revenues or []) if r.fizetes_datuma is None and r.id not in foglalt_sor_idk),
+        None,
     )
-    # A KAPCSOLATON át adjuk hozzá, nem `db.add()`-del - ugyanaz az ok, mint
-    # `_vezesd_fel_a_bevetelt`-nél: a projektkód `revenues` gyűjteménye rögtön
-    # tudjon róla, ne csak a következő betöltéskor.
-    pk.revenues.append(sor)
+    if sor is None:
+        sor = Revenue(project_code_id=pk.id, megjegyzes=BEVETEL_MEGJEGYZES)
+        # A KAPCSOLATON át adjuk hozzá, nem `db.add()`-del - ugyanaz az ok,
+        # mint `_vezesd_fel_a_bevetelt`-nél: a projektkód `revenues`
+        # gyűjteménye rögtön tudjon róla, ne csak a következő betöltéskor.
+        pk.revenues.append(sor)
+    # A kifizetés adatai a mérvadók - az átvett soron is ezek állnak be.
+    sor.netto = ft_netto
+    sor.brutto = ft_brutto
+    sor.penznem = penznem_szolg.FORINT
+    sor.eredeti_penznem = penznem_szolg.normalizald(pk.penznem) if devizas else None
+    sor.eredeti_netto = eredeti_netto if devizas else None
+    sor.eredeti_brutto = eredeti_brutto if devizas else None
+    sor.arfolyam = pk.arfolyam if devizas else None
+    sor.fizetes_datuma = kifizetes_datuma
+    if sor.fizetes_hatarideje is None:
+        sor.fizetes_hatarideje = doc.fizetesi_hatarido
+    if mod or not (sor.fizetes_modja or "").strip():
+        sor.fizetes_modja = mod or fizetesi_mod_szolg.BEVETEL_ALAPERTELMEZES
+    if doc.url:
+        sor.szamla_file_url = doc.url[:500]
+    sor.beleszamit_a_bevetelekbe = False if bevetelbe_ne_keruljon else None
     db.flush()  # kell a sor.id a visszavonáshoz
 
     doc.kifizetve_datuma = kifizetes_datuma
