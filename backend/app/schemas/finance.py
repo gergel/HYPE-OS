@@ -119,7 +119,8 @@ class ExpenseRead(ExpenseBase):
 
 
 class RevenueBase(BaseModel):
-    project_code_id: int
+    #: Projektkód nélkül is felvehető (a felhasználó kérése).
+    project_code_id: int | None = None
     bevetel_formaja: str | None = None
     #: Beleszámít-e az ÉVES bevételbe (None = igen). Lásd
     #: services/elszamolas.bevetel_beleszamit - a "nem volt tranzakció"

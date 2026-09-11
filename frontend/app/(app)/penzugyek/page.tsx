@@ -481,10 +481,12 @@ export default async function PenzugyekPage() {
               addLabel="+ Új bevétel hozzáadása"
               fields={[
                 {
+                  // NEM kötelező (a felhasználó kérése): projektkód nélkül is
+                  // felvehető a bevétel - a kintlévőség-nézetben nem jelenik
+                  // meg, az összesítőkbe beszámít.
                   name: "project_code_id",
-                  label: "Project Code",
+                  label: "Project Code (ha van)",
                   type: "select",
-                  required: true,
                   options: projectCodes.map((pc) => ({ value: pc.id, label: pc.projektkod })),
                 },
                 { name: "netto", label: "Nettó", type: "number" },

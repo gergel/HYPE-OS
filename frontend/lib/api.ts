@@ -365,7 +365,8 @@ export type Expense = {
 
 export type Revenue = {
   id: number;
-  project_code_id: number;
+  /** null = projektkód nélkül felvett bevétel (a felhasználó kérése). */
+  project_code_id: number | null;
   bevetel_formaja: string | null;
   /** Beleszámít-e az ÉVES bevételbe (null = igen). A "nem volt tranzakció"
    * formájú sorok e mező nélkül is kimaradnak - lásd bevetelBeleszamit(). */

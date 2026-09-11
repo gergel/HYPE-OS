@@ -135,7 +135,10 @@ class Revenue(TimestampMixin, Base):
     __tablename__ = "revenues"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    project_code_id: Mapped[int] = mapped_column(ForeignKey("project_codes.id"), nullable=False)
+    #: Projektkód NÉLKÜL is felvehető (a felhasználó kérése) - pl. nem
+    #: projekthez kötött bevétel. A kintlévőség-nézet projektkódonként megy,
+    #: ott a kód nélküli sor nem jelenik meg; az összesítőkbe beszámít.
+    project_code_id: Mapped[int | None] = mapped_column(ForeignKey("project_codes.id"), nullable=True)
 
     bevetel_formaja: Mapped[str | None] = mapped_column(String(50))
     #: Beleszámít-e az ÉVES bevételbe? A kiadás-oldali
@@ -229,10 +232,6 @@ class KpForgalom(TimestampMixin, Base):
     eredeti_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Az összeg az eredeti pénznemben")
     legalis: Mapped[str | None] = mapped_column(String(50))
     kiadas_datuma: Mapped[date | None] = mapped_column(Date)
-    #: NINCS SZÁMLA (a felhasználó kérése): ehhez a tételhez nem is lesz
-    #: számla/blokk (pl. borravaló, magánszemélyes tétel) - a felületek ne
-    #: hiányzó számlaként mutassák.
-    nincs_szamla: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     #: Van-e mögötte SZÁMLA - a felhasználó KÉZZEL állítja (legördülő: van /
     #: nincs), nem a feltöltött fájlból derül ki: a bizonylat-feltöltés csak
     #: akkor jelenik meg a felületen, ha ez igazra van állítva (lásd frontend
