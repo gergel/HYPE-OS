@@ -11,6 +11,7 @@ import { PapirTetelValaszto, tetelKulcs } from "@/components/PapirTetelValaszto"
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingTigEmployee, TigTetel } from "@/lib/api";
 import { KeresosSelect } from "@/components/KeresosSelect";
+import { TigAdatValaszto } from "@/components/TigAdatValaszto";
 
 type FormState = {
   ceg_neve: string;
@@ -386,6 +387,27 @@ export function PerformanceCertificateManager({
               </p>
             )}
             {(selectedEmployee.draft || !selectedEmployee.szerzodes) && <div className="mb-4" />}
+            {/* Kitöltés mentett adatokból (a felhasználó kérése): a fél
+                adatlapja + korábbi TIG-jei/szerződései közül választva a
+                cégadat-mezők kitöltődnek - gépelni csak az újat kell. */}
+            <TigAdatValaszto
+              szamlazoKulcs={selectedEmployee.szamlazo}
+              disabled={busyState}
+              onValaszt={(j) =>
+                setForm((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        ceg_neve: j.ceg_neve ?? prev.ceg_neve,
+                        szekhely: j.szekhely ?? prev.szekhely,
+                        adoszam: j.adoszam ?? prev.adoszam,
+                        megbizas_targya: j.megbizas_targya ?? prev.megbizas_targya,
+                        plusz_afa: j.plusz_afa ?? prev.plusz_afa,
+                      }
+                    : prev,
+                )
+              }
+            />
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Megbízott neve">
                 <input

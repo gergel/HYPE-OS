@@ -2369,3 +2369,93 @@ def mark_szamla_kifizetve_projektkodon(
     db.commit()
     db.refresh(cert)
     return PerformanceCertificateRead.model_validate(cert)
+
+
+# ---------------- Kitöltési javaslatok (a felhasználó kérése) ----------------
+
+
+class TigAdatJavaslat(BaseModel):
+    """Egy ismert adat-készlet a TIG-űrlap kitöltéséhez - a felhasználó
+    kérése: a mezőket listából lehessen kitölteni, ne kelljen gépelni."""
+
+    forras: str
+    ceg_neve: str | None = None
+    szekhely: str | None = None
+    adoszam: str | None = None
+    megbizas_targya: str | None = None
+    plusz_afa: bool | None = None
+
+
+@router.get("/adat-javaslatok/{szamlazo_kulcs}", response_model=list[TigAdatJavaslat])
+def tig_adat_javaslatok(
+    szamlazo_kulcs: str,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """A fél ISMERT adatai egy listában: a munkatárs/cég adatlapja, a korábbi
+    TIG-jei és a szerződései - a TIG-űrlap ezekből tölthető ki egy
+    választással. Tartalmilag azonos készletek csak egyszer szerepelnek."""
+    fel = szamlazo.feloldas(db, szamlazo_kulcs)
+    if fel is None:
+        raise HTTPException(status_code=404, detail="A számlázó fél nem található")
+
+    javaslatok: list[TigAdatJavaslat] = []
+    latott: set[tuple] = set()
+
+    def hozzaad(forras: str, ceg, szekhely_, adoszam_, targy, afa) -> None:
+        # Üres készletet nem ajánlunk; a tartalmi kulcsban a tárgy nem számít
+        # (ugyanaz a cég más tárggyal nem külön javaslat).
+        if not any([ceg, szekhely_, adoszam_]):
+            return
+        kulcs = (
+            (ceg or "").strip().lower(),
+            (szekhely_ or "").strip().lower(),
+            (adoszam_ or "").strip().lower(),
+        )
+        if kulcs in latott:
+            return
+        latott.add(kulcs)
+        javaslatok.append(
+            TigAdatJavaslat(
+                forras=forras,
+                ceg_neve=ceg,
+                szekhely=szekhely_,
+                adoszam=adoszam_,
+                megbizas_targya=targy,
+                plusz_afa=afa,
+            )
+        )
+
+    # 1) Az adatlap (Csapat / Vállalkozások) - a legfrissebb igazság.
+    hozzaad("Adatlap", fel.ceg_neve, fel.szekhely, fel.adoszam, fel.megbizas_targya, fel.plusz_afa)
+
+    # 2) Korábbi TIG-ek és szerződések - a legutóbbi elöl.
+    fel_szuro = (
+        (PerformanceCertificate.vallalkozas_id == fel.vallalkozas.id)
+        if fel.vallalkozas is not None
+        else (PerformanceCertificate.employee_id == fel.employee.id)
+    )
+    for cert in db.scalars(
+        select(PerformanceCertificate).where(fel_szuro).order_by(PerformanceCertificate.id.desc()).limit(30)
+    ):
+        mikor = f" ({cert.keltezes})" if cert.keltezes else ""
+        hozzaad(
+            f"Korábbi TIG{mikor}", cert.ceg_neve, cert.szekhely, cert.adoszam, cert.megbizas_targya, cert.plusz_afa
+        )
+    szerzodes_szuro = (
+        (Contract.vallalkozas_id == fel.vallalkozas.id)
+        if fel.vallalkozas is not None
+        else (Contract.employee_id == fel.employee.id)
+    )
+    for szerzodes in db.scalars(select(Contract).where(szerzodes_szuro).order_by(Contract.id.desc()).limit(30)):
+        cimke = "Keretszerződés" if szerzodes.keretszerzodes else "Szerződés"
+        mikor = f" ({szerzodes.keltezes})" if szerzodes.keltezes else ""
+        hozzaad(
+            f"{cimke}{mikor}",
+            szerzodes.ceg_neve,
+            szerzodes.szekhely,
+            szerzodes.adoszam,
+            szerzodes.megbizas_targya,
+            szerzodes.plusz_afa,
+        )
+    return javaslatok
