@@ -72,6 +72,18 @@ export default async function UtomunkaPage({
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 p-4 md:p-8">
+        {/* VÁGÓ-ÓRÁK - csak adminnak (a felhasználó kérése): napi/havi
+            munkaidő-áttekintés vágónként, munkanapos átlaggal. */}
+        {szerepkorei(currentUser).includes("admin") && (
+          <div className="mb-3 flex justify-end">
+            <a
+              href="/utomunka/vago-orak"
+              className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+            >
+              Vágó-órák (admin)
+            </a>
+          </div>
+        )}
         <UtomunkaContent
           lejartSzures={szures === "lejart"}
           initialDeliverables={deliverables}

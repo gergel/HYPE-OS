@@ -4,7 +4,7 @@ import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatusBadge } from "@/components/StatusBadge";
-import { KattinthatoAllapot } from "@/components/projektkod/KattinthatoAllapot";
+import { KifizetveDatummal } from "@/components/projektkod/KifizetveDatummal";
 import { ENTITY_PATHS, formatHuf, type ProjektkodBontas } from "@/lib/api";
 import { PENZNEMEK } from "@/lib/penz";
 import { Clapperboard, Paperclip, Receipt, Scissors } from "lucide-react";
@@ -190,16 +190,14 @@ export function ProjektkodBontasTablak({
               // oldali kiadás-űrlapon (lásd backend models/finance.Expense).
               { name: "megnevezes", label: "Cégnév", required: true },
               { name: "kiadas_leiras", label: "Megnevezés", placeholder: "Mire ment a kiadás", required: true },
-              // A KIADÁS dátumát kérjük be (a felhasználó kérése) - a lenti
-              // Dátum oszlop és a Pénzügyek listája is ebből dolgozik.
-              // KÜLSŐS besorolásnál viszont NEM kötelező (a felhasználó
-              // kérése): ott a szerződés/TIG készül, a tényleges dátum majd
-              // a kifizetésnél derül ki.
+              // A KIADÁS dátuma NEM kötelező (a felhasznaló kérése): üresen
+              // hagyva a tétel csak a projektkódon él, és a "Kifizetve"
+              // átállításakor kérdezzük meg a fizetés dátumát (lásd
+              // KifizetveDatummal) - úgy kerül dátummal a kiadások közé.
               {
                 name: "kiadas_datuma",
-                label: "Kiadás dátuma",
+                label: "Kiadás dátuma (üresen hagyható)",
                 type: "date",
-                requiredIf: { field: "tipus", noneOf: ["kulsos"] },
               },
               { name: "netto", label: "Nettó összeg", type: "number", required: true },
               // "+ÁFA" jelölés + százalék: a bruttót a szerver számolja
@@ -387,16 +385,13 @@ export function ProjektkodBontasTablak({
               align: "right",
               render: (k) =>
                 szerkesztheiKiadast ? (
-                  <KattinthatoAllapot
+                  // Dátum nélküli tételnél a Kifizetve átállítása bekérdezi a
+                  // fizetés dátumát (a felhasználó kérése) - úgy kerül
+                  // dátummal a kiadások közé.
+                  <KifizetveDatummal
                     patchPath={`${ENTITY_PATHS.expense}/${k.id}`}
-                    field="kesz"
-                    value={k.kifizetve}
-                    aktivErtek={true}
-                    inaktivErtek={false}
-                    aktivLabel="Kifizetve"
-                    inaktivLabel="Nyitott"
-                    aktivTone="success"
-                    inaktivTone="warning"
+                    kifizetve={k.kifizetve}
+                    vanDatum={k.datum != null}
                   />
                 ) : (
                   <StatusBadge label={k.kifizetve ? "Kifizetve" : "Nyitott"} tone={k.kifizetve ? "success" : "warning"} />

@@ -2256,6 +2256,28 @@ export async function getKulsosMunkak(employeeId: number): Promise<KulsosMunkakO
   return apiGet<KulsosMunkakOsszesites>(`/api/v1/crew/${employeeId}/munkak`);
 }
 
+// ── Vágó-órák (admin nézet, a felhasználó kérése) ───────────────────────────
+
+export type VagoNapiOrak = {
+  employee_id: number;
+  full_name: string;
+  /** "YYYY-MM-DD" -> percek azon a napon. */
+  napi_percek: Record<string, number>;
+  osszes_perc: number;
+  atlag_perc_munkanap: number;
+};
+
+export type VagoOrak = {
+  ev: number;
+  honap: number;
+  munkanapok: number;
+  vagok: VagoNapiOrak[];
+};
+
+export async function getVagoOrak(ev: number, honap: number): Promise<VagoOrak | null> {
+  return apiGet<VagoOrak>(`/api/v1/deliverables/vago-orak?ev=${ev}&honap=${honap}`);
+}
+
 export async function getTimerState(deliverableId: number): Promise<TimerState | null> {
   return apiGet<TimerState>(`/api/v1/deliverables/${deliverableId}/timer/state`);
 }

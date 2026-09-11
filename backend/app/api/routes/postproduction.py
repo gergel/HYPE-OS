@@ -880,3 +880,105 @@ def patch_comment(
     if not payload.body.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A hozzászólás nem lehet üres")
     return deliverable_actions.edit_comment(db, comment_id, current_user, payload.body.strip())
+
+
+# ---------------- Vágó-órák (admin nézet, a felhasználó kérése) ----------------
+
+
+class VagoNapiOrak(BaseModel):
+    employee_id: int
+    full_name: str
+    #: "YYYY-MM-DD" -> percek azon a napon.
+    napi_percek: dict[str, float]
+    osszes_perc: float
+    #: Átlagos NAPI munkaidő percben, csak a munkanapokat számolva (a
+    #: felhasználó kérése) - a hónap munkanapjainak számával osztva.
+    atlag_perc_munkanap: float
+
+
+class VagoOrakValasz(BaseModel):
+    ev: int
+    honap: int
+    #: Hány munkanap (hétfő-péntek) van a hónapban - folyó hónapnál csak a
+    #: MÁIG eltelt munkanapok, hogy az átlagot ne húzza le a hónap hátralévő,
+    #: még le sem dolgozott része.
+    munkanapok: int
+    vagok: list[VagoNapiOrak]
+
+
+@deliverable_actions_router.get("/vago-orak", response_model=VagoOrakValasz)
+def vago_orak(
+    ev: int,
+    honap: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_roles(Role.ADMIN)),
+):
+    """ADMIN nézet (a felhasználó kérése): melyik nap hány percet vágott
+    melyik vágó, és havonta átlagosan napi mennyit - CSAK a munkanapokat
+    (hétfő-péntek) számolva. Ugyanazok a szabályok, mint a személy adatlapján
+    lévő havi bontásnál (crew.get_utomunka_ido): a nap a munka KEZDÉSE, a még
+    futó mérés a mostani állásával számít."""
+    from calendar import monthrange
+    from datetime import date as date_type, timedelta, timezone as tz
+
+    if not (1 <= honap <= 12):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Érvénytelen hónap.")
+    elso = date_type(ev, honap, 1)
+    utolso = date_type(ev, honap, monthrange(ev, honap)[1])
+
+    rows = (
+        db.query(Timesheet, Employee.full_name)
+        .join(Employee, Employee.id == Timesheet.employee_id)
+        .filter(
+            Timesheet.deliverable_id.is_not(None),
+            Timesheet.start_date.is_not(None),
+            func.date(Timesheet.start_date) >= elso,
+            func.date(Timesheet.start_date) <= utolso,
+        )
+        .all()
+    )
+
+    most = datetime.now(tz.utc)
+    vagonkent: dict[int, dict] = {}
+    for ts, nev in rows:
+        if ts.end_date is None:
+            percek = max(0.0, (most - ts.start_date).total_seconds() / 60)
+        else:
+            percek = deliverable_actions.sor_percei(ts)
+        if percek <= 0:
+            continue
+        nap = ts.start_date.date().isoformat()
+        adat = vagonkent.setdefault(
+            ts.employee_id, {"full_name": nev, "napi": {}, "osszes": 0.0}
+        )
+        adat["napi"][nap] = adat["napi"].get(nap, 0.0) + percek
+        adat["osszes"] += percek
+
+    # Munkanapok: hétfő-péntek; folyó hónapnál csak a máig elteltek.
+    ma = date_type.today()
+    hatar = min(utolso, ma) if (ev, honap) == (ma.year, ma.month) else utolso
+    munkanapok = 0
+    nap = elso
+    while nap <= hatar:
+        if nap.weekday() < 5:
+            munkanapok += 1
+        nap += timedelta(days=1)
+
+    return VagoOrakValasz(
+        ev=ev,
+        honap=honap,
+        munkanapok=munkanapok,
+        vagok=sorted(
+            (
+                VagoNapiOrak(
+                    employee_id=eid,
+                    full_name=adat["full_name"],
+                    napi_percek=adat["napi"],
+                    osszes_perc=round(adat["osszes"], 1),
+                    atlag_perc_munkanap=round(adat["osszes"] / munkanapok, 1) if munkanapok > 0 else 0.0,
+                )
+                for eid, adat in vagonkent.items()
+            ),
+            key=lambda v: v.full_name.lower(),
+        ),
+    )
