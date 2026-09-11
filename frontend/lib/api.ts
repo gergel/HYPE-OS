@@ -349,6 +349,9 @@ export type Expense = {
   brutto: number | null;
   penznem: string;
   kesz: boolean;
+  /** "Nincs számla" jelölés (a felhasználó kérése): a tételhez nem is lesz
+   * számla/blokk - a Számla oszlop nem hiányzóként mutatja. */
+  nincs_szamla?: boolean;
   kifizetes_modja: string | null;
   hozzaadas_a_kiadasokhoz: boolean | null;
   /** MIBŐL lett a forint összeg. A `netto`/`brutto` MINDIG forint - ha a
@@ -1055,6 +1058,8 @@ export type ProjektkodBontas = {
     resz: string;
     /** Hány fájl (számla/blokk) van a kiadáshoz csatolva. */
     fajlok: number;
+    /** A felvitelkor bejelölt "nincs számla" (a felhasználó kérése). */
+    nincs_szamla?: boolean;
   }[];
 };
 

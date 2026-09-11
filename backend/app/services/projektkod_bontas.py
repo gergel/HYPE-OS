@@ -181,6 +181,9 @@ def kiadas_sorok(db: Session, project_code: Any) -> list[dict]:
                 "netto": float(e.netto) if e.netto is not None else None,
                 "osszeg": _osszeg(e),
                 "kifizetve": bool(e.kesz),
+                # "Nincs számla" jelölés (a felhasználó kérése): a Fájlok
+                # oszlop ne hiányzóként mutassa.
+                "nincs_szamla": bool(e.nincs_szamla),
                 "resz": "kulsos" if _kulsos_kiadas(e) else "egyeb",
                 "fajlok": fajl_darab.get(e.id, 0),
             }

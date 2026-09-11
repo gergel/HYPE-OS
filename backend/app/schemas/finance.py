@@ -26,6 +26,9 @@ class ExpenseBase(BaseModel):
     #: a létrehozáskor beküldött dátumot a szerver némán eldobta, és a lista
     #: üres dátummal mutatta az épp felvitt tételt.
     kiadas_datuma: date | None = None
+    #: NINCS SZÁMLA: ehhez a tételhez nem is lesz számla/blokk (a felhasználó
+    #: kérése) - a felületek ne hiányzóként mutassák.
+    nincs_szamla: bool = False
     netto: float | None = None
     brutto: float | None = None
     penznem: str = "HUF"

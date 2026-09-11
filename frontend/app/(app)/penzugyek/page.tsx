@@ -196,7 +196,12 @@ export default async function PenzugyekPage() {
               addLabel="+ Új kiadás hozzáadása"
               // A számla/blokk már felvitelkor csatolható (a felhasználó
               // kérése) - a mentés után a létrejött tételhez töltődik fel.
-              fajlFeltoltes={{ entityType: "expense", kategoria: "szamla" }}
+              fajlFeltoltes={{
+                entityType: "expense",
+                kategoria: "szamla",
+                // "Nincs számla" kapcsoló (a felhasználó kérése).
+                nincsKapcsolo: { name: "nincs_szamla" },
+              }}
               // A feltöltött szerződésből/számlából az AI előtölti a mezőket
               // (a felhasználó kérése) - lásd backend services/kiadas_kiolvasas.py.
               aiKitoltes={{ endpoint: "/api/v1/expenses/kiolvasas" }}
@@ -426,14 +431,20 @@ export default async function PenzugyekPage() {
                 // forrásánál feltöltött számlák is itt látszanak.
                 header: "Számla",
                 align: "right",
-                render: (e) => (
-                  <KiadasSzamlaGomb
-                    expenseId={e.id}
-                    canEdit={canEdit}
-                    canDelete={canDelete}
-                    darab={szamlaDarab[e.id] ?? 0}
-                  />
-                ),
+                render: (e) =>
+                  // A felvitelkor bejelölt "nincs számla" (a felhasználó
+                  // kérése): nem hiányzik, nem is lesz - fájl ettől még
+                  // utólag feltölthető a gemkapoccsal.
+                  e.nincs_szamla && !(szamlaDarab[e.id] ?? 0) ? (
+                    <span className="text-[12px] text-text-muted">Nincs számla</span>
+                  ) : (
+                    <KiadasSzamlaGomb
+                      expenseId={e.id}
+                      canEdit={canEdit}
+                      canDelete={canDelete}
+                      darab={szamlaDarab[e.id] ?? 0}
+                    />
+                  ),
               },
               // Állapot-oszlop SZÁNDÉKOSAN nincs: a kiadások közé az kerül, ami
               // már ki van fizetve - egy "Kifizetve / Nyitott" jelző itt minden

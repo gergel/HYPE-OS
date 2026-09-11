@@ -179,7 +179,13 @@ export function ProjektkodBontasTablak({
             // A számla/blokk már felvitelkor csatolható (a felhasználó
             // kérése) - a mentés után a létrejött tételhez töltődik fel, és a
             // lenti lista "Fájlok" oszlopa mutatja, hány fájl tartozik hozzá.
-            fajlFeltoltes={{ entityType: "expense", kategoria: "szamla" }}
+            fajlFeltoltes={{
+              entityType: "expense",
+              kategoria: "szamla",
+              // "Nincs számla" kapcsoló (a felhasználó kérése) - bejelölve a
+              // tétel nem hiányzó számlaként jelenik meg a listákban.
+              nincsKapcsolo: { name: "nincs_szamla" },
+            }}
             // A feltöltött szerződésből/számlából az AI előtölti a mezőket
             // (a felhasználó kérése), és a fájl a csatolmányok közé is bekerül.
             aiKitoltes={{ endpoint: "/api/v1/expenses/kiolvasas" }}
@@ -359,6 +365,10 @@ export function ProjektkodBontasTablak({
                     <Paperclip size={12} />
                     {k.fajlok} fájl
                   </span>
+                ) : k.nincs_szamla ? (
+                  // A felvitelkor bejelölt "nincs számla" (a felhasználó
+                  // kérése): nem hiányzik, nem is lesz.
+                  <span className="text-text-muted">Nincs számla</span>
                 ) : (
                   <span className="text-text-muted">–</span>
                 ),

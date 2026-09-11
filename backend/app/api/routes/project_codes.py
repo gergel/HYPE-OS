@@ -359,6 +359,9 @@ class BontasKiadas(BaseModel):
     #: Hány fájl (számla/blokk) van a kiadáshoz csatolva - a lista mutatja
     #: (a felhasználó kérése).
     fajlok: int = 0
+    #: A felvitelkor bejelölt "nincs számla" (a felhasználó kérése): a Fájlok
+    #: oszlop nem hiányzóként mutatja.
+    nincs_szamla: bool = False
 
 
 class ProjektkodBontas(BaseModel):

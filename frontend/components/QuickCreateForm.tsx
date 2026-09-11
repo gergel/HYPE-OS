@@ -126,7 +126,17 @@ export function QuickCreateForm({
    * létrejött rekordhoz töltődik fel (a csatolmány-végpontnak kell az id,
    * lásd lib/csatolmany.toltsdFelAFajlokat). Pl. kiadás-felvitelnél a
    * számla/blokk - akkor van kéznél, amikor a tételt felvezetik. */
-  fajlFeltoltes?: { entityType: string; kategoria?: string; cimke?: string; sugo?: string };
+  fajlFeltoltes?: {
+    entityType: string;
+    kategoria?: string;
+    cimke?: string;
+    sugo?: string;
+    /** "NINCS SZÁMLA" kapcsoló (a felhasználó kérése): bejelölve a fájl-
+     * választó eltűnik, és a mentés a megadott nevű logikai mezőt küldi
+     * igazra (pl. Expense.nincs_szamla) - a listák így nem hiányzó
+     * számlaként mutatják a tételt. */
+    nincsKapcsolo?: { name: string; cimke?: string };
+  };
   /** AI-s KITÖLTÉS dokumentumból (a felhasználó kérése): a feltöltött
    * szerződést/számlát a szerver kiolvassa (lásd backend
    * services/kiadas_kiolvasas.py), és a visszaadott mezőkkel előtölti az
@@ -140,6 +150,8 @@ export function QuickCreateForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fajlok, setFajlok] = useState<File[]>([]);
+  // A "nincs számla" kapcsoló állása (lásd fajlFeltoltes.nincsKapcsolo).
+  const [nincsFajl, setNincsFajl] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiUzenet, setAiUzenet] = useState<string | null>(null);
   // A router.refresh() átmenetben fut, hogy TUDJUK, mikor ért végig: az űrlap
@@ -273,6 +285,7 @@ export function QuickCreateForm({
     setBusy(true);
     try {
       const body: Record<string, unknown> = { ...presetFields };
+      if (fajlFeltoltes?.nincsKapcsolo && nincsFajl) body[fajlFeltoltes.nincsKapcsolo.name] = true;
       for (const f of lathatoMezok) {
         if (!values[f.name]) continue;
         const isNumericSelect = f.type === "select" && typeof f.options?.[0]?.value === "number";
@@ -306,6 +319,7 @@ export function QuickCreateForm({
       }
       setValues(kezdoErtekek(fields));
       setFajlok([]);
+      setNincsFajl(false);
       startFrissites(() => router.refresh());
       setZarasFuggoben(true);
     } catch (err) {
@@ -324,6 +338,7 @@ export function QuickCreateForm({
         onClick={() => {
           setValues(kezdoErtekek(fields));
           setFajlok([]);
+          setNincsFajl(false);
           setError(null);
           setZarasFuggoben(false);
           setOpen(true);
@@ -417,13 +432,34 @@ export function QuickCreateForm({
         </div>
       ))}
       {fajlFeltoltes && (
-        <UjFajlValaszto
-          fajlok={fajlok}
-          onValtozas={setFajlok}
-          disabled={busy || zarasFuggoben}
-          cimke={fajlFeltoltes.cimke ?? "Számla / blokk"}
-          sugo={fajlFeltoltes.sugo ?? "Nem kötelező – utólag is feltölthető a listában."}
-        />
+        <div className="flex flex-col gap-1.5">
+          {/* Bejelölt "nincs számla" mellett a fájl-választó el is tűnik -
+              nincs értelme fájlt kérni ahhoz, amihez nem lesz. */}
+          {!(fajlFeltoltes.nincsKapcsolo && nincsFajl) && (
+            <UjFajlValaszto
+              fajlok={fajlok}
+              onValtozas={setFajlok}
+              disabled={busy || zarasFuggoben}
+              cimke={fajlFeltoltes.cimke ?? "Számla / blokk"}
+              sugo={fajlFeltoltes.sugo ?? "Nem kötelező – utólag is feltölthető a listában."}
+            />
+          )}
+          {fajlFeltoltes.nincsKapcsolo && (
+            <label className="flex cursor-pointer items-center gap-1.5 text-[12.5px] text-text-secondary">
+              <input
+                type="checkbox"
+                checked={nincsFajl}
+                disabled={busy || zarasFuggoben}
+                onChange={(e) => {
+                  setNincsFajl(e.target.checked);
+                  if (e.target.checked) setFajlok([]);
+                }}
+                className="cursor-pointer"
+              />
+              {fajlFeltoltes.nincsKapcsolo.cimke ?? "Nincs számla (nem is lesz)"}
+            </label>
+          )}
+        </div>
       )}
       <button
         type="submit"
