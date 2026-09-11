@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ExternalLink, Paperclip, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { ModalReteg } from "@/components/ModalReteg";
+import { UjAlvallalkozoDialog, type UjAlvallalkozoElotoltes } from "@/components/UjAlvallalkozoDialog";
 import { authFetch } from "@/lib/authFetch";
 import type { DocumentAttachment } from "@/lib/api";
 
@@ -40,11 +42,19 @@ export function KiadasSzamlak({
   canDelete: boolean;
 }) {
   const confirm = useConfirm();
+  const router = useRouter();
   const [sajat, setSajat] = useState<DocumentAttachment[] | null>(null);
   const [atvezetett, setAtvezetett] = useState<AtvezetettSzamla[]>([]);
   const [hiba, setHiba] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  // A feltöltött számla KIOLVASÁSA (a felhasználó kérése): az AI a számlából
+  // kitölti a kiadás ÜRES mezőit - a már kitöltötteket nem bántja. Az
+  // eredményről itt szólunk; ha a partner nincs a rendszerben, az
+  // alvJavaslat-ból nyitható az előtöltött "Új alvállalkozó" ablak.
+  const [kiolvasasUzenet, setKiolvasasUzenet] = useState<string | null>(null);
+  const [alvJavaslat, setAlvJavaslat] = useState<(UjAlvallalkozoElotoltes & { full_name?: string }) | null>(null);
+  const [alvAblak, setAlvAblak] = useState(false);
 
   const betolt = useCallback(async () => {
     try {
@@ -71,11 +81,96 @@ export function KiadasSzamlak({
     void betolt();
   }, [betolt]);
 
+  /** Az employee_id mellé a besorolást is külsősre állítjuk, ha még üres -
+   * ugyanaz a szabály, mint a kiadás-űrlap autoSet-je (szerződés/TIG csak a
+   * külsős besorolású kiadás emberéről jár). */
+  async function alvallalkozoBeallitasa(employeeId: number) {
+    const exp = await authFetch(`/api/v1/expenses/${expenseId}`)
+      .then((r) => (r.ok ? (r.json() as Promise<Record<string, unknown>>) : null))
+      .catch(() => null);
+    const patch: Record<string, unknown> = { employee_id: employeeId };
+    if (!exp?.tipus) patch.tipus = "kulsos";
+    await authFetch(`/api/v1/expenses/${expenseId}`, { method: "PATCH", body: JSON.stringify(patch) });
+    router.refresh();
+  }
+
+  /** A most feltöltött számla kiolvastatása (a felhasználó kérése): az AI-tól
+   * kapott értékekkel a kiadás ÜRES mezőit töltjük ki (PATCH) - amit kézzel
+   * már beírtak, azt nem írjuk felül. */
+  async function kiolvasEsKitolt(file: File) {
+    setKiolvasasUzenet("Számla kiolvasása…");
+    setAlvJavaslat(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await authFetch("/api/v1/expenses/kiolvasas", { method: "POST", body: fd });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        setKiolvasasUzenet(`A számla kiolvasása nem sikerült: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      const adatok = (await res.json()) as Record<string, unknown> & {
+        alvallalkozo?: { id: number; full_name: string } | null;
+        alvallalkozo_adatok?: (UjAlvallalkozoElotoltes & { full_name?: string }) | null;
+      };
+      const exp = await authFetch(`/api/v1/expenses/${expenseId}`)
+        .then((r) => (r.ok ? (r.json() as Promise<Record<string, unknown>>) : null))
+        .catch(() => null);
+      if (!exp) {
+        setKiolvasasUzenet("A számla kiolvasása kész, de a kiadás adatai nem érhetők el.");
+        return;
+      }
+      const patch: Record<string, unknown> = {};
+      for (const kulcs of [
+        "megnevezes",
+        "kiadas_leiras",
+        "netto",
+        "plusz_afa",
+        "afa_szazalek",
+        "penznem",
+        "kiadas_datuma",
+        "employee_id",
+      ]) {
+        const uj = adatok[kulcs];
+        if (uj === null || uj === undefined || uj === "" || typeof uj === "object") continue;
+        const regi = exp[kulcs];
+        // Csak az ÜRES mezőt töltjük - a "HUF" pénznem-alapértéket is békén
+        // hagyjuk, azt csak üres értéknél írnánk.
+        if (regi === null || regi === undefined || regi === "") patch[kulcs] = uj;
+      }
+      if (patch.employee_id !== undefined && !exp.tipus) patch.tipus = "kulsos";
+      if (Object.keys(patch).length > 0) {
+        const mentes = await authFetch(`/api/v1/expenses/${expenseId}`, {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        });
+        if (!mentes.ok) {
+          const detail = await mentes.json().catch(() => null);
+          setKiolvasasUzenet(`A kiolvasott adatok mentése nem sikerült: ${detail?.detail ?? mentes.status}`);
+          return;
+        }
+      }
+      const alvNev = adatok.alvallalkozo?.full_name;
+      if (!adatok.alvallalkozo && adatok.alvallalkozo_adatok && !exp.employee_id) {
+        setAlvJavaslat(adatok.alvallalkozo_adatok);
+      }
+      setKiolvasasUzenet(
+        Object.keys(patch).length > 0
+          ? `Számla kiolvasva – ${Object.keys(patch).length} üres mező kitöltve${alvNev ? `, alvállalkozó: ${alvNev}` : ""}. Ellenőrizd az adatokat.`
+          : "Számla kiolvasva – minden mező ki volt már töltve, nem írtunk felül semmit.",
+      );
+      router.refresh();
+    } catch (err) {
+      setKiolvasasUzenet(`A számla kiolvasása nem sikerült (hálózati hiba): ${err}`);
+    }
+  }
+
   async function feltolt(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (files.length === 0) return;
     const hibak: string[] = [];
+    let elsoSikeres: File | null = null;
     for (const file of files) {
       setUploading(file.name);
       try {
@@ -88,6 +183,8 @@ export function KiadasSzamlak({
         if (!res.ok) {
           const detail = await res.json().catch(() => null);
           hibak.push(`${file.name}: ${detail?.detail ?? res.status}`);
+        } else if (!elsoSikeres) {
+          elsoSikeres = file;
         }
       } catch (err) {
         hibak.push(`${file.name}: ${err}`);
@@ -96,6 +193,9 @@ export function KiadasSzamlak({
     setUploading(null);
     if (hibak.length > 0) alert(`Sikertelen feltöltés:\n${hibak.join("\n")}`);
     void betolt();
+    // Az ELSŐ sikeresen feltöltött számlából az AI kitölti a kiadás üres
+    // mezőit (a felhasználó kérése) - a háttérben, a lista már frissül.
+    if (elsoSikeres && canEdit) void kiolvasEsKitolt(elsoSikeres);
   }
 
   async function torol(doc: DocumentAttachment) {
@@ -155,6 +255,32 @@ export function KiadasSzamlak({
           {uploading ? `Feltöltés… (${uploading})` : "+ Számla feltöltése"}
           <input type="file" multiple className="hidden" disabled={!!uploading} onChange={feltolt} />
         </label>
+      )}
+      {/* A feltöltött számla AI-s kiolvasásának eredménye (a felhasználó
+          kérése: a számlából minden adatot szedjen ki) - és ha a partner
+          nincs a rendszerben, innen vehető fel előtöltve. */}
+      {kiolvasasUzenet && <p className="text-[12.5px] text-text-accent">{kiolvasasUzenet}</p>}
+      {alvJavaslat && (
+        <button
+          type="button"
+          onClick={() => setAlvAblak(true)}
+          className="rounded-[var(--radius)] border border-dashed border-border px-3 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3"
+        >
+          + „{alvJavaslat.full_name || alvJavaslat.vallakozas_neve}” felvétele alvállalkozóként (adatai előtöltve)
+        </button>
+      )}
+      {alvAblak && alvJavaslat && (
+        <UjAlvallalkozoDialog
+          kezdoNev={alvJavaslat.full_name || ""}
+          kezdoAdatok={alvJavaslat}
+          onMegse={() => setAlvAblak(false)}
+          onKesz={(id, nev) => {
+            setAlvAblak(false);
+            setAlvJavaslat(null);
+            setKiolvasasUzenet(`Alvállalkozó felvéve és a kiadáshoz kötve: ${nev}.`);
+            void alvallalkozoBeallitasa(id);
+          }}
+        />
       )}
 
       {/* Az átvezetett tétel forrásánál feltöltött számlák - csak olvasásra:
