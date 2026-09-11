@@ -769,6 +769,55 @@ def _projekt_teljesites_szoveg(project: Project) -> str:
     return start.strftime("%Y.%m.%d.")
 
 
+def _alvallalkozoi_kiadas_a_felhez(
+    db: Session,
+    employee_id: int | None,
+    *,
+    project: Project | None = None,
+    projektkod: ProjectCode | None = None,
+) -> Expense | None:
+    """A felet papírozásra kötelező EREDETI kiadás-sor, ha a fél KIADÁS-ALAPÚ
+    alvállalkozó (lásd Expense.alvallalkozoi_papirt_igenyel). A TIG-piszkozat
+    erre kötve (expense_id) jön létre, mert e nélkül ugyanaz a pénz KÉTSZER
+    szerepelt (a felhasználó hibajelzése, pl. 26-0291 / NDR):
+
+    1. a projektkód bontása a TIG összegét ÉS a kézi kiadás-sort is
+       beszámolta (a kizárás a cert.expense_id-n áll, lásd
+       services/kulsos_koltseg.projektkod_kulsos), és
+    2. a kifizetés (mark_szamla_kifizetve) egy MÁSODIK, "TIG - ..." kiadás-
+       sort hozott létre a meglévő mellé.
+
+    A sima stábtagok TIG-jéhez nem nyúlunk: hozzájuk nincs ilyen kiadás-sor,
+    a keresés üresen tér vissza."""
+    if employee_id is None:
+        return None
+    mar_kotott = select(PerformanceCertificate.expense_id).where(
+        PerformanceCertificate.expense_id.is_not(None)
+    )
+    feltetelek = [
+        Expense.employee_id == employee_id,
+        Expense.alvallalkozoi_papir_feltetel(),
+        Expense.id.not_in(mar_kotott),
+    ]
+    if project is not None:
+        # A forgatáshoz kötött kiadás az első; a csak-projektkódos (forgatás
+        # nélkül felvett, lásd a felhasználó esetét) tartalékként ide is
+        # tartozik, ha a kód egyezik.
+        feltetelek.append(
+            or_(
+                Expense.alvallalkozo_project_id == project.id,
+                (Expense.alvallalkozo_project_id.is_(None))
+                & (Expense.project_code_id == project.project_code_id),
+            )
+        )
+    elif projektkod is not None:
+        feltetelek.append(Expense.alvallalkozo_project_id.is_(None))
+        feltetelek.append(Expense.project_code_id == projektkod.id)
+    else:
+        return None
+    return db.scalar(select(Expense).where(*feltetelek).order_by(Expense.id).limit(1))
+
+
 def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport) -> PerformanceCertificate:
     """A fél piszkozata ezen a projekten - vagy a meglévő, vagy egy új, a
     projekten hozzá tartozó stábtagok tételeivel feltöltve.
@@ -853,6 +902,14 @@ def _get_or_create_draft(db: Session, project: Project, csoport: SzamlazoCsoport
                 megnevezes=forras.megnevezes if forras is not None else None,
             )
         )
+    # Kiadás-alapú alvállalkozónál a piszkozat az EREDETI kiadás-sorra kötve
+    # jön létre - e nélkül ugyanaz a pénz kétszer szerepelne (lásd
+    # _alvallalkozoi_kiadas_a_felhez).
+    kiadas = _alvallalkozoi_kiadas_a_felhez(db, draft.employee_id, project=project)
+    if kiadas is not None:
+        draft.expense_id = kiadas.id
+        if not draft.netto_osszeg and kiadas.netto:
+            draft.netto_osszeg = kiadas.netto
     db.flush()
     return draft
 
@@ -1425,10 +1482,12 @@ def skip_szamla(
             status_code=400,
             detail="Írd le, miért marad el a számla és a kifizetés - enélkül később nem lehet mihez kötni.",
         )
-    if cert.expense_id is not None:
+    # Csak a már KIFIZETETT kiadás-állapot akadály - a kiadás-alapú
+    # alvállalkozó piszkozata eleve a kiadására kötve él, az kihagyható.
+    if cert.expense_id is not None and cert.szamla_kifizetve:
         raise HTTPException(
             status_code=400,
-            detail="Ehhez a TIG-hez már tartozik Kiadás sor a Pénzügyben - előbb azt kell rendezni.",
+            detail="Ehhez a TIG-hez már KIFIZETETT Kiadás sor tartozik a Pénzügyben - előbb azt kell rendezni.",
         )
     cert.szamla_kihagyva = True
     cert.szamla_kihagyas_oka = indok
@@ -1555,11 +1614,15 @@ def delete_certificate(
     cert = _certificate_or_none(db, project_id, szamlazo_kulcs)
     if cert is None:
         raise HTTPException(status_code=404, detail="Ehhez a projekthez és félhez nincs TIG bejegyzés.")
-    if cert.expense_id is not None:
+    # Csak a MÁR KIFIZETETT TIG-et védi a kiadás-sora (a pénz-állapot ne
+    # maradjon árván) - a kiadás-alapú alvállalkozó PISZKOZATA is az eredeti
+    # kiadására kötve él (lásd _alvallalkozoi_kiadas_a_felhez), az szabadon
+    # törölhető, a kiadás marad, ahogy volt.
+    if cert.expense_id is not None and cert.szamla_kifizetve:
         raise HTTPException(
             status_code=400,
             detail=(
-                "Ehhez a TIG-hez Kiadás sor tartozik a Pénzügyben - előbb azt töröld ott. "
+                "Ehhez a TIG-hez KIFIZETETT Kiadás sor tartozik a Pénzügyben - előbb azt töröld ott. "
                 "A Kiadás törlése ezt a TIG-et is visszaállítja „nincs kifizetve” állapotba."
             ),
         )
@@ -1842,6 +1905,15 @@ def _get_or_create_draft_projektkodon(
     )
     db.add(draft)
     db.flush()
+    # Kiadás-alapú alvállalkozónál az eredeti kiadás-sorra kötve (lásd
+    # _alvallalkozoi_kiadas_a_felhez) - a kifizetés így AZT frissíti, nem
+    # hoz létre második sort.
+    kiadas = _alvallalkozoi_kiadas_a_felhez(db, draft.employee_id, projektkod=projektkod)
+    if kiadas is not None:
+        draft.expense_id = kiadas.id
+        if not draft.netto_osszeg and kiadas.netto:
+            draft.netto_osszeg = kiadas.netto
+        db.flush()
     return draft
 
 
@@ -2075,11 +2147,15 @@ def delete_certificate_projektkodon(
     cert = _certificate_or_none_projektkodon(db, project_code_id, szamlazo_kulcs)
     if cert is None:
         raise HTTPException(status_code=404, detail="Ehhez a projektkódhoz és félhez nincs TIG bejegyzés.")
-    if cert.expense_id is not None:
+    # Csak a MÁR KIFIZETETT TIG-et védi a kiadás-sora (a pénz-állapot ne
+    # maradjon árván) - a kiadás-alapú alvállalkozó PISZKOZATA is az eredeti
+    # kiadására kötve él (lásd _alvallalkozoi_kiadas_a_felhez), az szabadon
+    # törölhető, a kiadás marad, ahogy volt.
+    if cert.expense_id is not None and cert.szamla_kifizetve:
         raise HTTPException(
             status_code=400,
             detail=(
-                "Ehhez a TIG-hez Kiadás sor tartozik a Pénzügyben - előbb azt töröld ott. "
+                "Ehhez a TIG-hez KIFIZETETT Kiadás sor tartozik a Pénzügyben - előbb azt töröld ott. "
                 "A Kiadás törlése ezt a TIG-et is visszaállítja „nincs kifizetve” állapotba."
             ),
         )
@@ -2213,10 +2289,12 @@ def skip_szamla_projektkodon(
             status_code=400,
             detail="Írd le, miért marad el a számla és a kifizetés - enélkül később nem lehet mihez kötni.",
         )
-    if cert.expense_id is not None:
+    # Csak a már KIFIZETETT kiadás-állapot akadály - a kiadás-alapú
+    # alvállalkozó piszkozata eleve a kiadására kötve él, az kihagyható.
+    if cert.expense_id is not None and cert.szamla_kifizetve:
         raise HTTPException(
             status_code=400,
-            detail="Ehhez a TIG-hez már tartozik Kiadás sor a Pénzügyben - előbb azt kell rendezni.",
+            detail="Ehhez a TIG-hez már KIFIZETETT Kiadás sor tartozik a Pénzügyben - előbb azt kell rendezni.",
         )
     cert.szamla_kihagyva = True
     cert.szamla_kihagyas_oka = indok
