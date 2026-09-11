@@ -62,22 +62,15 @@ def tetel_sor(tetel) -> str:
     return " – ".join(reszek)
 
 
-def felsorolas(tetelek: list) -> str:
-    """A tételek egy sorban, pontosvesszővel elválasztva. Üres, ha legfeljebb
-    egy tétel van (olyankor nincs mit felsorolni)."""
-    if len(tetelek) <= 1:
-        return ""
-    return "; ".join(sor for sor in (tetel_sor(t) for t in tetelek) if sor)
-
-
 def targy_szovege(megbizas_targya: str | None, tetelek: list) -> str:
-    """A "megbízás tárgya" mező a papíron - több tételnél a felsorolással
-    kiegészítve, hogy a dokumentumból kiderüljön, mit fed."""
-    alap = (megbizas_targya or "").strip()
-    lista = felsorolas(tetelek)
-    if not lista:
-        return alap
-    return f"{alap} ({lista})" if alap else lista
+    """A "megbízás tárgya" mező a papíron.
+
+    A tételes felsorolás SZÁNDÉKOSAN NEM kerül bele (a felhasználó kérése):
+    egy sok forgatást/embert fedő papíron a dátum-kód-név lista bekezdésnyi,
+    olvashatatlan zárójelet csinált a tárgyból. Hogy a papír mit fed, azt a
+    `projkod` helyőrző (az érintett kódok rövid listája - lásd
+    projektkodok_szovege) és a rendszerben tárolt tételek mondják meg."""
+    return (megbizas_targya or "").strip()
 
 
 def projektkodok_szovege(tetelek: list, tartalek: str | None = None) -> str:
