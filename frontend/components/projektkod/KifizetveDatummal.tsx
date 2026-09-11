@@ -67,18 +67,36 @@ export function KifizetveDatummal({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          katt();
-        }}
-        disabled={busy}
-        title="Kattints a váltáshoz"
-        className="disabled:opacity-50"
-      >
-        <StatusBadge label={ertek ? "Kifizetve" : "Nyitott"} tone={ertek ? "success" : "warning"} />
-      </button>
+      {/* Nyitott tételen nem felirat, hanem FIZETÉS gomb áll (a felhasználó
+          kérése) - kifizetés után a zöld Kifizetve jelölő, ami kattintva
+          vissza is vonható. */}
+      {ertek ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            katt();
+          }}
+          disabled={busy}
+          title="Kattints a kifizetés visszavonásához"
+          className="disabled:opacity-50"
+        >
+          <StatusBadge label="Kifizetve" tone="success" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            katt();
+          }}
+          disabled={busy}
+          title="Kifizetettnek jelölés - dátum nélküli tételnél a fizetés dátumát is bekérdezi"
+          className="rounded-[var(--radius)] border border-text-accent/50 px-3 py-1 text-[12.5px] font-medium text-text-accent hover:bg-bg-accent disabled:opacity-50"
+        >
+          Fizetés
+        </button>
+      )}
       {datumKerdes && (
         <KerdesOverlay onZaras={() => setDatumKerdes(false)}>
           <div
