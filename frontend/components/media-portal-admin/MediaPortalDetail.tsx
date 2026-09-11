@@ -1140,10 +1140,15 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                 const vCount = videos.filter((v) => v.folder_id === f.id).length;
                 const iCount = images.filter((i) => i.folder_id === f.id).length;
                 return (
-                  <li key={f.id} className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5">
+                  // flex-wrap: TELEFONON az ikon-sor a mappanév ALÁ törik, így
+                  // a név teljes szélességet kap és sosem csonkolódik (a
+                  // felhasználó kérése). sm-től minden egy sorban, mint eddig.
+                  <li key={f.id} className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-2.5 sm:flex-nowrap sm:gap-3 sm:px-3">
                     <button onClick={() => setCurrentFolder(f.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                       <FolderIcon className="h-5 w-5 shrink-0 text-text-accent" />
-                      <span className="truncate text-[13px] text-text-primary">{f.name}</span>
+                      {/* Nincs truncate: a hosszú mappanév inkább többsoros,
+                          mint csonkolt - a szó közepén is törhet. */}
+                      <span className="min-w-0 whitespace-normal text-[13px] text-text-primary [overflow-wrap:anywhere]">{f.name}</span>
                       {f.rejtett && (
                         <span className="shrink-0 rounded bg-bg-warning px-1.5 py-0.5 text-[10.5px] font-medium text-text-warning">
                           Rejtett
@@ -1151,6 +1156,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                       )}
                       <span className="ml-auto shrink-0 text-[11px] text-text-muted">{vCount + iCount} elem</span>
                     </button>
+                    <div className="flex w-full items-center justify-end gap-3 sm:w-auto">
                     {/* Egész mappa elrejtése az ügyfél elől (a felhasználó
                         kérése) - a belsős néző a portálon jelöléssel látja. */}
                     <button
@@ -1184,6 +1190,7 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                     <button title="Mappa törlése" onClick={() => onDeleteFolder(f.id)} className="text-text-muted transition-colors hover:text-text-danger">
                       <Trash2 className="h-4 w-4" />
                     </button>
+                    </div>
                   </li>
                 );
               })}
