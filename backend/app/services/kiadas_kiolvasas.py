@@ -62,17 +62,15 @@ def olvasd_ki(adat: bytes, mime_type: str) -> dict:
                 types.Part.from_bytes(data=adat, mime_type=mime_type),
                 types.Part(text=_UTASITAS),
             ],
-            # JSON-kényszer: a modell ne írjon köré magyarázó szöveget. A
-            # gondolkodás KI van kapcsolva (thinking_budget=0): a 2.5-ös
-            # modellek gondolkodó-tokenjei a max_output_tokens keretből
-            # fogynak, és élesben pont emiatt jött ÜRES válasz - a
-            # "nem sikerült kiolvasni" hibát az okozta (a felhasználó
-            # hibajelzése). Egy mező-kinyeréshez nem is kell gondolkodás.
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                max_output_tokens=4096,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            ),
+            # JSON-kényszer: a modell ne írjon köré magyarázó szöveget.
+            # SZÁNDÉKOSAN nincs se max_output_tokens, se thinking_config: a
+            # szűk token-keretet a gondolkodó-tokenek ették el (üres válasz
+            # jött), a thinking_budget=0-t pedig a Gemini 3-as modellek 400
+            # INVALID_ARGUMENT-tel dobják vissza (élesben 3.6 fut) - mindkét
+            # hibát a felhasználó jelezte. Beállítások nélkül a hívás minden
+            # modell-generáción megy, a választ a _json_kiszedese türelmesen
+            # értelmezi.
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
     except Exception as exc:  # noqa: BLE001 - a hívó emberi hibaüzenetet vár
         logger.exception("Kiadás-kiolvasás: a Gemini-hívás elhasalt")
