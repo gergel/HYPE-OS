@@ -27,6 +27,7 @@ from app.models.feedback import Feedback, VisszajelzesAllapot
 from app.models.field_visibility import FieldVisibilityConfig
 from app.models.bejovo_szamla import BejovoEmail, BejovoSzamla
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.utalas_felvezetes import UtalasAdag, UtalasTetel
 from app.models.arajanlat import Arajanlat, ArajanlatTetel
 from app.models.flora_feladat import FloraFeladat
 from app.models.flora_komment import FloraKomment
@@ -192,6 +193,8 @@ __all__ = [
     "PageAccessConfig",
     "Arajanlat",
     "ArajanlatTetel",
+    "UtalasAdag",
+    "UtalasTetel",
 ]
 
 from app.models.portal_export import PortalExport  # noqa: F401

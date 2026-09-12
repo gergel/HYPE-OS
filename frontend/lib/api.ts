@@ -1025,6 +1025,73 @@ export async function getBejovoSzamlak(allapot?: string): Promise<BejovoSzamla[]
   return (await apiGet<BejovoSzamla[]>(`/api/v1/bejovo-szamlak${qs}`)) ?? [];
 }
 
+/** UTALÁSOK FELVEZETÉSE - egy már elutalt számlacsomag (ZIP) adminisztrálása
+ * (lásd backend services/utalas_felvezetes.py). Banki utalást nem indít. */
+export type UtalasTetel = {
+  id: number;
+  adag_id: number;
+  fajl_nev: string | null;
+  fajl_utvonal: string | null;
+  url: string | null;
+  content_type: string | null;
+  allapot: string;
+  allapot_cimke: string | null;
+  hiba_uzenet: string | null;
+  elszamolas: string;
+  szamlaszam: string | null;
+  kibocsato_nev: string | null;
+  kibocsato_adoszam: string | null;
+  vevo_nev: string | null;
+  dokumentum_tipus: string | null;
+  netto: number | null;
+  brutto: number | null;
+  penznem: string;
+  kiallitas_datuma: string | null;
+  teljesites_datuma: string | null;
+  fizetesi_hatarido: string | null;
+  cel_tipus: string | null;
+  cel_expense_id: number | null;
+  cel_certificate_id: number | null;
+  cel_internal_certificate_id: number | null;
+  uj_kiadas: { project_code_id?: number | null; employee_id?: number | null; auto_id?: number | null; mukodesi?: boolean; arfolyam?: number | null; kiadas_leiras?: string | null } | null;
+  javaslat: {
+    indoklas?: string;
+    alternativak?: { tipus: string; cel_id: number; cimke: string; indoklas?: string; reszletek?: Record<string, unknown> | null }[];
+    figyelmeztetesek?: string[];
+  } | null;
+  utalas_datum: string | null;
+  osszeg_elteres_elfogadva: boolean;
+  duplikatum_tetel_id: number | null;
+  rogzitve_at: string | null;
+  rogzites_naplo: Record<string, unknown> | null;
+  visszavonva_at: string | null;
+  cel_cimke: string | null;
+  cel_link: string | null;
+  cel_fizetesi_allapot: { kifizetve: boolean; datum: string | null; netto: number | null; cimke: string } | null;
+  ervenyes_datum: string | null;
+};
+
+export type UtalasAdag = {
+  id: number;
+  nev: string | null;
+  megjegyzes: string | null;
+  utalas_datum: string;
+  zip_fajl_nev: string | null;
+  allapot: string;
+  hiba_uzenet: string | null;
+  fajl_darab: number;
+  kihagyott_fajlok: { nev: string; ok: string }[] | null;
+  created_at: string;
+  tetel_darab: number;
+  rogzitett_darab: number;
+};
+
+export type UtalasAdagReszlet = UtalasAdag & { tetelek: UtalasTetel[] };
+
+export async function getUtalasAdagok(): Promise<UtalasAdag[]> {
+  return (await apiGet<UtalasAdag[]>("/api/v1/utalasok")) ?? [];
+}
+
 export async function getBelsosIdoszakok(employeeId: number): Promise<EmployeeBelsosIdoszakok | null> {
   return apiGet<EmployeeBelsosIdoszakok>(`/api/v1/belsos-idoszakok/${employeeId}`);
 }

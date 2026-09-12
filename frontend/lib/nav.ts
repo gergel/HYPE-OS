@@ -212,6 +212,10 @@ export const navGroups: NavGroup[] = [
       // érkezett számlák ellenőrzése és jóváhagyása - éles kiadás csak innen,
       // jóváhagyással születik (lásd backend services/szamla_erkeztetes.py).
       { label: "Beérkező számlák", href: "/penzugyek/bejovo-szamlak", icon: "Inbox", permissionPage: "/penzugyek" },
+      // Utalások felvezetése: egy MÁR ELUTALT számlacsomag (ZIP) adminisztrálása
+      // közös utalási dátummal - párosítás a meglévő tételekhez, ellenőrzés,
+      // majd a kifizetések rögzítése (lásd backend services/utalas_felvezetes.py).
+      { label: "Utalások felvezetése", href: "/penzugyek/utalasok", icon: "Banknote", permissionPage: "/penzugyek" },
       // A kassza "főkönyve": minden készpénz-mozgás időrendben, futó
       // egyenleggel - ide kell jönni, ha a dobozban más van, mint amit a
       // rendszer mond.

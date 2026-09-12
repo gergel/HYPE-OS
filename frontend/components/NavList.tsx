@@ -2,6 +2,7 @@
 
 import {
   BadgeCheck,
+  Banknote,
   Calculator,
   Car,
   CheckSquare,
@@ -46,6 +47,7 @@ import { oldalMuveletei } from "@/lib/permissions";
 
 const ICONS: Record<string, LucideIcon> = {
   Calculator,
+  Banknote,
   LayoutDashboard,
   Building2,
   Hash,
