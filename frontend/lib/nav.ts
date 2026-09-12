@@ -208,6 +208,10 @@ export const navGroups: NavGroup[] = [
     label: "Pénzügyek",
     items: [
       { label: "Pénzügyek", href: "/penzugyek", icon: "Wallet" },
+      // Számla-érkeztető: az e-mailben (szamla@) vagy az AI Assistantba dobva
+      // érkezett számlák ellenőrzése és jóváhagyása - éles kiadás csak innen,
+      // jóváhagyással születik (lásd backend services/szamla_erkeztetes.py).
+      { label: "Beérkező számlák", href: "/penzugyek/bejovo-szamlak", icon: "Inbox", permissionPage: "/penzugyek" },
       // A kassza "főkönyve": minden készpénz-mozgás időrendben, futó
       // egyenleggel - ide kell jönni, ha a dobozban más van, mint amit a
       // rendszer mond.

@@ -25,6 +25,7 @@ from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.eszkoz_kivitel import EszkozKivitel, EszkozKivitelTetel
 from app.models.feedback import Feedback, VisszajelzesAllapot
 from app.models.field_visibility import FieldVisibilityConfig
+from app.models.bejovo_szamla import BejovoEmail, BejovoSzamla
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.arajanlat import Arajanlat, ArajanlatTetel
 from app.models.flora_feladat import FloraFeladat
@@ -135,6 +136,8 @@ __all__ = [
     "HypeTodoItem",
     "HypeTodoKomment",
     "hype_todo_felelosok",
+    "BejovoEmail",
+    "BejovoSzamla",
     "Expense",
     "KpForgalom",
     "Revenue",

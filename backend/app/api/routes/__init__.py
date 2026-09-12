@@ -9,6 +9,7 @@ from app.api.routes.attachments import router as attachments_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.automation import router as automation_router
 from app.api.routes.autok import router as autok_router
+from app.api.routes.bejovo_szamlak import router as bejovo_szamlak_router
 from app.api.routes.belsos_idoszakok import router as belsos_idoszakok_router
 from app.api.routes.callsheets import router as callsheets_router
 from app.api.routes.campaigns import router as campaigns_router
@@ -120,6 +121,7 @@ api_router.include_router(megrendeloi_papirok_router)
 api_router.include_router(vagoi_jatek_router)
 api_router.include_router(vallalkozasok_router)
 api_router.include_router(visszavonas_router)
+api_router.include_router(bejovo_szamlak_router)
 api_router.include_router(belsos_idoszakok_router)
 # Visszatérő kötelezettségek (E-Rezsi, biztosítások) és a céges autók - a
 # kettő ugyanazt a lejárat-figyelést használja (lásd services/kotelezettseg.py).

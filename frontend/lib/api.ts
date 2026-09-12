@@ -952,6 +952,78 @@ export type EmployeeBelsosIdoszakok = {
   utolso_munkanap: string | null;
 };
 
+/** Egy BEÉRKEZŐ SZÁMLA érkeztető-piszkozata (lásd backend
+ * models/bejovo_szamla.py): az e-mailben vagy az AI Assistantba dobva érkezett
+ * számla kiolvasott adatai + besorolási javaslat. Éles pénzügyi rekord csak a
+ * jóváhagyáskor születik belőle. */
+export type BejovoSzamla = {
+  id: number;
+  forras: string;
+  /** feldolgozas | ellenorzendo | pontositas | jovahagyva | duplikatum | nem_szamla | hiba */
+  allapot: string;
+  fajl_nev: string | null;
+  url: string | null;
+  content_type: string | null;
+  email_felado: string | null;
+  email_targy: string | null;
+  email_beerkezes: string | null;
+  created_at: string;
+  dokumentum_tipus: string | null;
+  szamlaszam: string | null;
+  kibocsato_nev: string | null;
+  netto: number | null;
+  brutto: number | null;
+  penznem: string;
+  fizetesi_hatarido: string | null;
+  irany: string | null;
+  cel_tipus: string | null;
+  cel_cimke: string | null;
+  javaslat_indoklas: string | null;
+  jovahagyo_nev: string | null;
+  rogzitett_expense_id: number | null;
+  hiba_uzenet: string | null;
+};
+
+export type BejovoSzamlaReszlet = BejovoSzamla & {
+  kinyert: {
+    mezok?: Record<string, unknown>;
+    mezo_forrasok?: Record<string, string>;
+    bizonytalan?: string[];
+    osszeg_figyelmeztetesek?: string[];
+  } | null;
+  javaslat: {
+    tipus: string | null;
+    indoklas: string;
+    alternativak: { tipus: string; cel_id: number; cimke: string; indoklas: string }[];
+    figyelmeztetesek: string[];
+  } | null;
+  felhasznaloi_utasitas: string | null;
+  kiallitas_datuma: string | null;
+  teljesites_datuma: string | null;
+  afa_osszeg: number | null;
+  kibocsato_adoszam: string | null;
+  vevo_nev: string | null;
+  vevo_adoszam: string | null;
+  email_szoveg: string | null;
+  cel_project_code_id: number | null;
+  cel_expense_id: number | null;
+  cel_certificate_id: number | null;
+  cel_internal_certificate_id: number | null;
+  cel_kotelezettseg_idoszak_id: number | null;
+  cel_auto_id: number | null;
+  cel_kp_forgalom_id: number | null;
+  cel_employee_id: number | null;
+  rogzites_naplo: { cel_tipus?: string; letrejott?: { tipus: string; id: number }[]; csatolt?: unknown[] } | null;
+  duplikatum_bejovo_id: number | null;
+  duplikatum_megjegyzes: string | null;
+  valtozat_szamla_id: number | null;
+};
+
+export async function getBejovoSzamlak(allapot?: string): Promise<BejovoSzamla[]> {
+  const qs = allapot ? `?allapot=${allapot}` : "";
+  return (await apiGet<BejovoSzamla[]>(`/api/v1/bejovo-szamlak${qs}`)) ?? [];
+}
+
 export async function getBelsosIdoszakok(employeeId: number): Promise<EmployeeBelsosIdoszakok | null> {
   return apiGet<EmployeeBelsosIdoszakok>(`/api/v1/belsos-idoszakok/${employeeId}`);
 }
