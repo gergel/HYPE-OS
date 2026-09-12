@@ -238,6 +238,10 @@ class Settings(BaseSettings):
     # nincs (a felhasználó kérése): csak a kézi "Lehúzás most" gomb hoz be
     # leveleket.
     szamla_bejovo_cim: str = "szamla@hypestab.hu"
+    # A lehúzás LEGKORÁBBI napja (ÉÉÉÉ-HH-NN): ennél régebbi levelet SOHA nem
+    # nézünk, akkor sem, ha valaki korábbi kezdődátumot ad meg - a rendszer
+    # indulása előtti, kézzel már lerendezett számlák ne jöjjenek be.
+    szamla_email_kezdet: str = "2026-09-01"
 
     # ───────── Média Portál (ügyfél videó/kép átadó felület, /p/{slug}) ─────────
     # A Hype-repo-main (különálló client-portál projekt) 1:1 portolt funkciója -

@@ -262,7 +262,7 @@ export function BejovoSzamlak({
  * OLVASATLAN levelek jönnek be - ez a szerveren kikényszerített szabály
  * (lásd backend services/szamla_email_lehuzas.py), itt csak a gomb van. */
 function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDelete: boolean; onFrissul: () => void }) {
-  const [adat, setAdat] = useState<{ cel_cim: string } | null>(null);
+  const [adat, setAdat] = useState<{ cel_cim: string; legkorabbi_nap?: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [uzenet, setUzenet] = useState<string | null>(null);
   const [elonezet, setElonezet] = useState<{ felado: string; targy: string; csatolmanyok: string[] }[] | null>(null);
@@ -375,7 +375,9 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-text-secondary">
           Bejövő cím: <b className="text-text-primary">{adat?.cel_cim ?? "…"}</b>
-          <span className="ml-2 text-text-muted">· magától semmit nem hoz át; csak az olvasatlan leveleket nézi</span>
+          <span className="ml-2 text-text-muted">
+            · magától semmit nem hoz át; csak az olvasatlan{adat?.legkorabbi_nap ? `, ${huDatum(adat.legkorabbi_nap)} utáni` : ""} leveleket nézi
+          </span>
         </span>
         {canEdit && (
           <span className="ml-auto flex flex-wrap items-center gap-1.5">

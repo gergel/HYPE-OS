@@ -50,16 +50,29 @@ def _cel_cim() -> str:
     return (settings.szamla_bejovo_cim or "szamla@hypestab.hu").strip()
 
 
+def _legkorabbi_nap() -> date:
+    """A lehúzás fix alsó dátumhatára (a felhasználó kérése: 2026. 09. 01.
+    előtti levelet SOHA ne nézzünk) - env-ből (SZAMLA_EMAIL_KEZDET) írható át."""
+    try:
+        return date.fromisoformat((settings.szamla_email_kezdet or "").strip())
+    except ValueError:
+        return date(2026, 9, 1)
+
+
 def _query(kezdo_datum: date | None) -> str:
     # CSAK AZ OLVASATLAN leveleket hozzuk be (a felhasználó kérése): amit a
     # postafiókban már elolvastak/lerendeztek, azt a lehúzás békén hagyja. A
     # kettős védelem megmarad: az olvasatlanok közül is csak az kerül be, ami
     # a bejovo_emailek naplóban még nem szerepel. A csatolmány-kérdést
     # üzenetenként döntjük el (a linkes levél is kapjon piszkozatot).
-    q = f"to:{_cel_cim()} is:unread"
-    if kezdo_datum:
-        q += f" after:{kezdo_datum.strftime('%Y/%m/%d')}"
-    return q
+    #
+    # DÁTUMHATÁR: mindig van alsó korlát (lásd _legkorabbi_nap) - a kért
+    # kezdődátum csak SZŰKÍTHETI az időszakot, régebbre nem nyithatja ki.
+    # A Gmail "after:" a megadott nap 0:00-jától értendő, tehát maga a
+    # határnap még benne van.
+    legkorabbi = _legkorabbi_nap()
+    hatar = kezdo_datum if kezdo_datum and kezdo_datum > legkorabbi else legkorabbi
+    return f"to:{_cel_cim()} is:unread after:{hatar.strftime('%Y/%m/%d')}"
 
 
 def _uzenet_lista(svc, kezdo_datum: date | None, limit: int) -> list[str]:
@@ -191,6 +204,11 @@ def lehuzas(
         felado = _extract_header(fejlecek, "From") or ""
         targy = _extract_header(fejlecek, "Subject") or ""
         beerkezes = datetime.fromtimestamp(int(uzenet.get("internalDate", 0)) / 1000, tz=timezone.utc)
+        if beerkezes.date() < _legkorabbi_nap():
+            # Kettős védelem a Gmail-szűrő mellett: a dátumhatár előtti levél
+            # akkor sem jön be, ha a keresés valamiért visszaadta.
+            kihagyott_korabbi += 1
+            continue
         szoveg = _resz_szoveg(payload)
         csatolmanyok = _csatolmanyok(svc, uzenet_id, payload)
 

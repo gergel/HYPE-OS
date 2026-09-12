@@ -196,8 +196,11 @@ def email_allapot(
     """A levelezés-bekötés állapota + az utoljára látott levelek."""
     utolso = db.scalars(select(BejovoEmail).order_by(BejovoEmail.id.desc()).limit(20)).all()
     feladat = hatter_feladat.allapot(db, EMAIL_LEHUZAS_FELADAT)
+    from app.services.szamla_email_lehuzas import _legkorabbi_nap
+
     return {
         "cel_cim": settings.szamla_bejovo_cim,
+        "legkorabbi_nap": _legkorabbi_nap().isoformat(),
         "lehuzas_fut": bool(feladat and feladat.running),
         "utolso_lehuzas_log": (feladat.log or "")[-2000:] if feladat else "",
         "utolso_levelek": [
