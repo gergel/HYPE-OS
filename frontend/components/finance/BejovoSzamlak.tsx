@@ -98,6 +98,18 @@ export function BejovoSzamlak({
   const [rendezes, setRendezes] = useState<"beerkezes" | "osszeg" | "hatarido">("beerkezes");
   const [nyitottId, setNyitottId] = useState<number | null>(null);
   useEffect(() => setLista(kezdoLista), [kezdoLista]);
+  // Törlés/lehúzás/reset után a listát KÖZVETLENÜL a szerverről töltjük újra -
+  // nem csak a router.refresh()-re bízzuk, hogy a képernyő biztosan a valós
+  // állapotot mutassa.
+  const frissit = useCallback(async () => {
+    try {
+      const r = await authFetch("/api/v1/bejovo-szamlak");
+      if (r.ok) setLista(await r.json());
+    } catch {
+      // a router.refresh() lentebb így is megpróbálja
+    }
+    router.refresh();
+  }, [router]);
   useEffect(() => {
     const id = searchParams.get("id");
     if (id) setNyitottId(Number(id));
@@ -133,7 +145,7 @@ export function BejovoSzamlak({
 
   return (
     <div className="space-y-4">
-      <EmailSav canEdit={canEdit} canDelete={canDelete} onFrissul={() => router.refresh()} />
+      <EmailSav canEdit={canEdit} canDelete={canDelete} onFrissul={() => void frissit()} />
 
       <div className="flex flex-wrap items-center gap-1.5">
         {NEZETEK.map((n) => (
@@ -238,7 +250,7 @@ export function BejovoSzamlak({
           canDelete={canDelete}
           onZaras={() => {
             setNyitottId(null);
-            router.refresh();
+            void frissit();
           }}
         />
       )}
@@ -330,6 +342,34 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
     }
   }
 
+  async function osszesTorles() {
+    if (
+      !confirm(
+        "Törlöd az ÖSSZES beérkező számla-tételt?\n\n" +
+          "Minden piszkozat végleg törlődik a tárolt fájljával együtt (bármelyik állapotban). " +
+          "A jóváhagyáskor már rögzített kiadásokat/TIG-számlákat ez nem érinti, és a már " +
+          "egyszer átvett levelek egy újabb ellenőrzéskor sem jönnek vissza.",
+      )
+    )
+      return;
+    setBusy(true);
+    setUzenet(null);
+    try {
+      const res = await authFetch("/api/v1/bejovo-szamlak/osszes-torles", { method: "POST" });
+      const d = await res.json().catch(() => null);
+      if (!res.ok) {
+        setUzenet(`Sikertelen: ${d?.detail ?? res.status}`);
+        return;
+      }
+      setUzenet(`${d.torolt} tétel törölve - a lista üres.`);
+      onFrissul();
+    } catch (err) {
+      setUzenet(`Hálózati hiba: ${err}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[12.5px]">
       <div className="flex flex-wrap items-center gap-2">
@@ -358,15 +398,26 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
               Olvasatlan számlalevelek ellenőrzése
             </button>
             {canDelete && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={reset}
-                title="Az eddigi érkeztetési beérkezések kitakarítása - csak admin, kifejezett megerősítéssel"
-                className="rounded-[var(--radius)] border border-text-danger/40 px-2.5 py-1 text-[12px] text-text-danger hover:bg-text-danger/10 disabled:opacity-50"
-              >
-                Tiszta újraindítás
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={osszesTorles}
+                  title="Az összes beérkező tétel törlése egyben - a már rögzített kiadásokhoz nem nyúl (csak admin)"
+                  className="rounded-[var(--radius)] border border-text-danger/40 px-2.5 py-1 text-[12px] text-text-danger hover:bg-text-danger/10 disabled:opacity-50"
+                >
+                  Összes törlése
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={reset}
+                  title="Az eddigi érkeztetési beérkezések kitakarítása a jóváhagyás-hatások visszavonásával - csak admin, kifejezett megerősítéssel"
+                  className="rounded-[var(--radius)] border border-text-danger/40 px-2.5 py-1 text-[12px] text-text-danger hover:bg-text-danger/10 disabled:opacity-50"
+                >
+                  Tiszta újraindítás
+                </button>
+              </>
             )}
           </span>
         )}

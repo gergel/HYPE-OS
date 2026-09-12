@@ -24,7 +24,9 @@ from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -587,16 +589,86 @@ def torles(
     tehát a törölt levél egy újabb lehúzással nem jön vissza magától."""
     b = _lekeres(db, bejovo_id, zarolva=True)
     kulcs = b.storage_key
-    # A hozzá kapcsolt formátum-változat (pl. XML) kapcsolata magától oldódik
-    # (SET NULL) - a változat-sor megmarad, önállóan törölhető.
-    db.delete(b)
-    db.commit()
+    try:
+        # A rá mutató piszkozat-hivatkozásokat (formátum-változat, duplikátum-
+        # jelölés) kifejezetten leoldjuk - így a törlés akkor is lefut, ha az
+        # adatbázis-kényszer valamiért nem SET NULL-lal jött létre.
+        db.execute(
+            sa_update(BejovoSzamla)
+            .where(BejovoSzamla.valtozat_szamla_id == b.id)
+            .values(valtozat_szamla_id=None)
+        )
+        db.execute(
+            sa_update(BejovoSzamla)
+            .where(BejovoSzamla.duplikatum_bejovo_id == b.id)
+            .values(duplikatum_bejovo_id=None)
+        )
+        db.delete(b)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - a hívó lássa az okot, ne néma 500-at
+        db.rollback()
+        import logging
+
+        logging.getLogger(__name__).exception("Beérkező számla törlési hiba (#%s)", bejovo_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"A törlés nem sikerült: {type(exc).__name__}: {exc}",
+        ) from exc
     if kulcs:
         try:
             document_storage.delete_object(kulcs)
         except Exception:  # noqa: BLE001 - az árva objektum nem éri meg az 500-at
             pass
     return None
+
+
+@router.post("/osszes-torles")
+def osszes_torles(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    """Az ÖSSZES beérkező számla-piszkozat törlése egyben - CSAK ADMIN.
+
+    A tiszta újraindításnál egyszerűbb, garantáltan lefutó művelet: kizárólag
+    az érkeztető-piszkozatokat üríti ki (bármelyik állapotban), a jóváhagyáskor
+    MÁR LÉTREJÖTT rekordokhoz (kiadás, TIG-számla sor, csatolmány) nem nyúl.
+    A tárolt fájlok háttérben törlődnek az R2-ről. A bejovo_emailek napló
+    megmarad, ezért a már egyszer átvett levelek egy újabb ellenőrzéskor nem
+    jönnek vissza."""
+    from app.models.employee import van_szerepkore
+
+    if not van_szerepkore(current_user, SystemRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Az összes tétel törlését csak admin futtathatja.")
+    try:
+        sorok = db.scalars(select(BejovoSzamla)).all()
+        kulcsok = [s.storage_key for s in sorok if s.storage_key]
+        darab = len(sorok)
+        # A self-hivatkozásokat előbb leoldjuk, majd egyetlen SQL-törlés - így
+        # nincs olyan sorrend vagy kényszer, amin a művelet elakadhatna.
+        db.execute(sa_update(BejovoSzamla).values(valtozat_szamla_id=None, duplikatum_bejovo_id=None))
+        db.execute(sa_delete(BejovoSzamla))
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - a hívó lássa az okot, ne néma 500-at
+        db.rollback()
+        import logging
+
+        logging.getLogger(__name__).exception("Beérkező számlák tömeges törlési hibája")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Az összes tétel törlése nem futott le, semmi nem változott: {type(exc).__name__}: {exc}",
+        ) from exc
+    if kulcsok:
+        import threading
+
+        def _r2_takaritas(lista: list[str]) -> None:
+            for k in lista:
+                try:
+                    document_storage.delete_object(k)
+                except Exception:  # noqa: BLE001 - az árva objektum nem hiba
+                    pass
+
+        threading.Thread(target=_r2_takaritas, args=(list(kulcsok),), daemon=True).start()
+    return {"torolt": darab}
 
 
 class ResetIn(BaseModel):
