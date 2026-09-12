@@ -619,17 +619,30 @@ def tiszta_ujrainditas(
     így a kitakarított levelek nem jönnek vissza a következő lehúzáskor. Az
     eredeti postafiókhoz nem nyúlunk."""
     from app.models.employee import SystemRole, van_szerepkore
+    from app.services.hu_szoveg import ekezet_nelkul
 
     if not van_szerepkore(current_user, SystemRole.ADMIN):
         raise HTTPException(status_code=403, detail="A tiszta újraindítást csak admin futtathatja.")
-    if payload.megerosites.strip().upper() != "TISZTA INDULAS":
+    # Ékezettel és kisbetűvel is elfogadjuk ("Tiszta indulás") - a megerősítés
+    # a szándékról szól, nem gépelési vizsgáról.
+    if ekezet_nelkul(payload.megerosites.strip()).upper() != "TISZTA INDULAS":
         raise HTTPException(
             status_code=400,
-            detail='A megerősítéshez írd be pontosan: "TISZTA INDULAS".',
+            detail='A megerősítéshez írd be: "TISZTA INDULAS".',
         )
     from app.services import szamla_reset
 
-    return szamla_reset.teljes_reset(db, current_user)
+    try:
+        return szamla_reset.teljes_reset(db, current_user)
+    except Exception as exc:  # noqa: BLE001 - a hívó lássa az okot, ne néma 500-at
+        db.rollback()
+        import logging
+
+        logging.getLogger(__name__).exception("Tiszta újraindítás hiba")
+        raise HTTPException(
+            status_code=500,
+            detail=f"A tiszta újraindítás nem futott le, semmi nem változott: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 class LehuzasIn(BaseModel):

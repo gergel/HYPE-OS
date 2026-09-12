@@ -28,18 +28,23 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.bejovo_szamla import ALLAPOT_JOVAHAGYVA, BejovoEmail, BejovoSzamla
 from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense
-from app.models.internal_performance_certificate import InternalPerformanceCertificateInvoice
+from app.models.internal_performance_certificate import (
+    InternalPerformanceCertificate,
+    InternalPerformanceCertificateInvoice,
+)
 from app.models.kotelezettseg import KotelezettsegIdoszak
-from app.models.performance_certificate import PerformanceCertificateInvoice
+from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateInvoice
 from app.services import document_storage
 
 logger = logging.getLogger(__name__)
@@ -49,11 +54,12 @@ def _sor_mentese(obj) -> dict:
     adat = {}
     for oszlop in obj.__table__.columns:
         ertek = getattr(obj, oszlop.name)
-        adat[oszlop.name] = ertek.isoformat() if hasattr(ertek, "isoformat") else (
-            float(ertek) if oszlop.name in () else ertek
-        )
-        if hasattr(ertek, "quantize"):  # Decimal
+        if hasattr(ertek, "isoformat"):
+            adat[oszlop.name] = ertek.isoformat()
+        elif hasattr(ertek, "quantize"):  # Decimal
             adat[oszlop.name] = float(ertek)
+        else:
+            adat[oszlop.name] = ertek
     return adat
 
 
@@ -94,32 +100,72 @@ def teljes_reset(db: Session, vegrehajto: Employee) -> dict:
                     and exp.created_at is not None
                     and (exp.updated_at - exp.created_at).total_seconds() > 10
                 )
-                if exp.kesz or modositva or exp.kp_forgalmak:
-                    # Azóta kifizették / kézzel módosították / KP-tétel épült
+                # Az Utókövetés időközben TIG-piszkozatot köthetett ehhez a
+                # kiadáshoz (performance_certificates.expense_id, ondelete
+                # nélkül) - az ilyen kiadás törlése FK-hibát dobna, és üzleti
+                # kapcsolat is: rendezendő kivétel, nem törlés.
+                tig_hivatkozik = db.scalar(
+                    select(PerformanceCertificate.id).where(PerformanceCertificate.expense_id == exp.id)
+                )
+                belso_hivatkozik = db.scalar(
+                    select(InternalPerformanceCertificate.id).where(
+                        InternalPerformanceCertificate.expense_id == exp.id
+                    )
+                )
+                if exp.kesz or modositva or exp.kp_forgalmak or tig_hivatkozik or belso_hivatkozik:
+                    # Azóta kifizették / kézzel módosították / más rekord épült
                     # rá: NEM töröljük találgatásra - rendezendő kivétel.
                     jegyzek["kivetelek"].append(
                         {
                             "tipus": "expense",
                             "id": exp.id,
                             "megnevezes": exp.megnevezes,
-                            "ok": "kifizetett" if exp.kesz else ("KP-tétel hivatkozik rá" if exp.kp_forgalmak else "az import után kézzel módosították"),
+                            "ok": (
+                                "kifizetett"
+                                if exp.kesz
+                                else "KP-tétel hivatkozik rá"
+                                if exp.kp_forgalmak
+                                else f"az Utókövetés TIG-je hivatkozik rá (#{tig_hivatkozik or belso_hivatkozik})"
+                                if (tig_hivatkozik or belso_hivatkozik)
+                                else "az import után kézzel módosították"
+                            ),
                         }
                     )
                     continue
-                jegyzek["visszavont_kiadasok"].append(_sor_mentese(exp))
-                # A kiadás import által rátett számla-csatolmányai is mennek.
-                for att in db.scalars(
-                    select(DocumentAttachment).where(
-                        DocumentAttachment.entity_type == "expense",
-                        DocumentAttachment.entity_id == exp.id,
-                        DocumentAttachment.kategoria == "szamla",
+                # SAVEPOINT-os védőháló: ha bármilyen itt nem ismert rekord
+                # hivatkozik a kiadásra, csak EZ az egy visszavonás marad el
+                # (kivételként), nem az egész reset hasal el.
+                exp_mentes = _sor_mentese(exp)
+                att_mentesek: list[dict] = []
+                att_kulcsok: list[str] = []
+                try:
+                    with db.begin_nested():
+                        for att in db.scalars(
+                            select(DocumentAttachment).where(
+                                DocumentAttachment.entity_type == "expense",
+                                DocumentAttachment.entity_id == exp.id,
+                                DocumentAttachment.kategoria == "szamla",
+                            )
+                        ):
+                            att_mentesek.append(_sor_mentese(att))
+                            if att.storage_key:
+                                att_kulcsok.append(att.storage_key)
+                            db.delete(att)
+                        db.delete(exp)
+                        db.flush()
+                except IntegrityError as exc:
+                    jegyzek["kivetelek"].append(
+                        {
+                            "tipus": "expense",
+                            "id": exp_mentes["id"],
+                            "megnevezes": exp_mentes.get("megnevezes"),
+                            "ok": f"más rekord hivatkozik rá, nem törölhető ({type(exc.orig).__name__})",
+                        }
                     )
-                ):
-                    jegyzek["eltavolitott_kapcsolatok"].append(_sor_mentese(att))
-                    if att.storage_key:
-                        torlendo_r2.append(att.storage_key)
-                    db.delete(att)
-                db.delete(exp)
+                    continue
+                jegyzek["visszavont_kiadasok"].append(exp_mentes)
+                jegyzek["eltavolitott_kapcsolatok"].extend(att_mentesek)
+                torlendo_r2.extend(att_kulcsok)
 
             # 2) A meglévő rekordokhoz ADOTT kapcsolatok eltávolítása -
             # kizárólag a naplóban megnevezett azonosítók alapján.
@@ -194,13 +240,19 @@ def teljes_reset(db: Session, vegrehajto: Employee) -> dict:
 
     db.commit()
 
-    # 5) A tárhely-objektumok törlése a sikeres commit UTÁN - egy elhasalt
-    # commit ne hagyjon fájl nélküli sorokat.
-    for kulcs in torlendo_r2:
-        try:
-            document_storage.delete_object(kulcs)
-        except Exception:  # noqa: BLE001 - az árva objektum nem állítja meg a resetet
-            logger.warning("Reset: az R2 objektum törlése nem sikerült: %s", kulcs)
+    # 5) A tárhely-objektumok törlése a sikeres commit UTÁN, HÁTTÉRSZÁLON:
+    # több tucat objektum soros törlése a HTTP-kérésbe nem fér bele
+    # (proxy-időtúllépést okozott volna) - a takarítás best-effort, egy árva
+    # objektum nem hiba.
+    def _r2_takaritas(kulcsok: list[str]) -> None:
+        for kulcs in kulcsok:
+            try:
+                document_storage.delete_object(kulcs)
+            except Exception:  # noqa: BLE001
+                logger.warning("Reset: az R2 objektum törlése nem sikerült: %s", kulcs)
+
+    if torlendo_r2:
+        threading.Thread(target=_r2_takaritas, args=(list(torlendo_r2),), daemon=True).start()
 
     # 6) A visszaállítási jegyzék mentése a tárhelyre is (ha elérhető).
     jegyzek_kulcs = None
