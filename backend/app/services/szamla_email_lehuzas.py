@@ -7,11 +7,15 @@ olvasni, DNS/MX átállítás és új szolgáltató nélkül. A feltétel: a
 szamla@hypestab.hu címre érkező levél a hitelesített fiókban landoljon
 (alias vagy továbbítás - lásd az admin-teendőket a route docstringjében).
 
-IDEMPOTENCIA: minden látott Gmail-üzenet a `bejovo_emailek` táblába kerül a
-Gmail-azonosítójával; ami ott van, azt másodszor nem dolgozzuk fel -
-újraindulás, szolgáltatói újraküldés vagy párhuzamos lehúzás után sem (a
-tábla egyedi kulcsa véd). NEM az olvasott/olvasatlan jelzőn múlik, az eredeti
-levelet nem töröljük és nem is válaszolunk rá.
+CSAK KÉZI INDÍTÁSRA fut (a felhasználó kérése: automatikusan ne hozzon át
+semmit), és CSAK AZ OLVASATLAN leveleket nézi - amit a postafiókban már
+elolvastak, azt nem bolygatja.
+
+IDEMPOTENCIA: az olvasatlan-szűrő MELLETT minden látott Gmail-üzenet a
+`bejovo_emailek` táblába is bekerül a Gmail-azonosítójával; ami ott van, azt
+másodszor nem dolgozzuk fel - így az sem duplikál, ha egy behozott levél
+olvasatlan marad a fiókban és a lehúzást újra megnyomják. Az eredeti levelet
+nem töröljük, nem jelöljük olvasottnak és nem is válaszolunk rá.
 
 A csatolmányokból piszkozat készül (lásd services/szamla_erkeztetes.py):
 - a nyilvánvalóan nem-számla mellékletek (kis képek: logó, aláírás) kimaradnak;
@@ -47,9 +51,12 @@ def _cel_cim() -> str:
 
 
 def _query(kezdo_datum: date | None) -> str:
-    # Csak a cím-szűrő: a csatolmány-kérdést mi döntjük el üzenetenként (a
-    # melléklet nélküli, linkes levél is kapjon kezelhető piszkozatot).
-    q = f"to:{_cel_cim()}"
+    # CSAK AZ OLVASATLAN leveleket hozzuk be (a felhasználó kérése): amit a
+    # postafiókban már elolvastak/lerendeztek, azt a lehúzás békén hagyja. A
+    # kettős védelem megmarad: az olvasatlanok közül is csak az kerül be, ami
+    # a bejovo_emailek naplóban még nem szerepel. A csatolmány-kérdést
+    # üzenetenként döntjük el (a linkes levél is kapjon piszkozatot).
+    q = f"to:{_cel_cim()} is:unread"
     if kezdo_datum:
         q += f" after:{kezdo_datum.strftime('%Y/%m/%d')}"
     return q

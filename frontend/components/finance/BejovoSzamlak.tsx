@@ -43,11 +43,13 @@ export function BejovoSzamlak({
   valasztek,
   canEdit,
   canCreate,
+  canDelete,
 }: {
   kezdoLista: BejovoSzamla[];
   valasztek: Valasztek;
   canEdit: boolean;
   canCreate: boolean;
+  canDelete: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -157,6 +159,7 @@ export function BejovoSzamlak({
           valasztek={valasztek}
           canEdit={canEdit}
           canCreate={canCreate}
+          canDelete={canDelete}
           onZaras={() => {
             setNyitottId(null);
             router.refresh();
@@ -170,7 +173,7 @@ export function BejovoSzamlak({
 /** Az e-mailes bekötés sávja: célcím, automatikus figyelés, kézi lehúzás
  * kezdődátummal és előnézettel (régi levelek visszamenőleges feldolgozása). */
 function EmailSav({ canEdit, onFrissul }: { canEdit: boolean; onFrissul: () => void }) {
-  const [adat, setAdat] = useState<{ cel_cim: string; automatikus_figyeles: boolean } | null>(null);
+  const [adat, setAdat] = useState<{ cel_cim: string } | null>(null);
   const [kezdoDatum, setKezdoDatum] = useState("");
   const [busy, setBusy] = useState(false);
   const [uzenet, setUzenet] = useState<string | null>(null);
@@ -216,11 +219,9 @@ function EmailSav({ canEdit, onFrissul }: { canEdit: boolean; onFrissul: () => v
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-text-secondary">
           Bejövő cím: <b className="text-text-primary">{adat?.cel_cim ?? "…"}</b>
-          {adat && (
-            <span className={`ml-2 ${adat.automatikus_figyeles ? "text-text-success" : "text-text-muted"}`}>
-              {adat.automatikus_figyeles ? "· óránkénti automatikus lehúzás bekapcsolva" : "· automatikus lehúzás kikapcsolva (SZAMLA_EMAIL_FIGYELES)"}
-            </span>
-          )}
+          <span className="ml-2 text-text-muted">
+            · csak kézi lehúzás, és csak az OLVASATLAN leveleket hozza be - magától semmit nem hoz át
+          </span>
         </span>
         {canEdit && (
           <span className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -272,12 +273,14 @@ function Reszletes({
   valasztek,
   canEdit,
   canCreate,
+  canDelete,
   onZaras,
 }: {
   bejovoId: number;
   valasztek: Valasztek;
   canEdit: boolean;
   canCreate: boolean;
+  canDelete: boolean;
   onZaras: () => void;
 }) {
   const [adat, setAdat] = useState<BejovoSzamlaReszlet | null>(null);
@@ -711,6 +714,39 @@ function Reszletes({
                     )}
                   </>
                 )}
+              </div>
+            )}
+
+            {/* TÖRLÉS: bármelyik állapotban (a felhasználó kérése) - a
+                piszkozat és a tárolt fájl végleg eltűnik. A jóváhagyáskor már
+                létrejött kiadást/TIG-számlát NEM érinti: azok a saját
+                felületükön élnek tovább. */}
+            {canDelete && (
+              <div className={lezart ? "border-t border-border pt-3" : ""}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (!confirm(`Törlöd ezt a beérkező számlát (#${adat.id})? A piszkozat és a tárolt fájl végleg törlődik.${adat.allapot === "jovahagyva" ? " A már rögzített kiadást/TIG-számlát ez nem érinti." : ""}`)) return;
+                    setBusy(true);
+                    try {
+                      const res = await authFetch(`/api/v1/bejovo-szamlak/${adat.id}`, { method: "DELETE" });
+                      if (!res.ok) {
+                        const d = await res.json().catch(() => null);
+                        setHiba(d?.detail ?? `Sikertelen törlés (${res.status})`);
+                        return;
+                      }
+                      onZaras();
+                    } catch (err) {
+                      setHiba(`Hálózati hiba: ${err}`);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  className="rounded-[var(--radius)] border border-text-danger/50 px-3 py-1.5 text-[13px] text-text-danger hover:bg-text-danger/10 disabled:opacity-50"
+                >
+                  Törlés
+                </button>
               </div>
             )}
           </div>

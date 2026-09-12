@@ -93,47 +93,6 @@ def _regi_diszpo_pdfek_athozasa() -> None:
         logger.exception("A régi diszpó PDF-ek költöztetését nem sikerült elindítani.")
 
 
-@app.on_event("startup")
-def _szamla_email_figyeles() -> None:
-    """A szamla@ címre érkező számlák ÓRÁNKÉNTI automatikus lehúzása - akkor
-    is, ha senki nem tartja nyitva az oldalt (a felhasználó kérése).
-
-    Env-kapcsolós (SZAMLA_EMAIL_FIGYELES=1): kapcsoló nélkül csak a kézi
-    "Lehúzás most" gomb él. A tényleges futást a hatter_feladatok tábla zárja,
-    tehát több worker mellett is egyszerre csak egy lehúzás megy - és a
-    lehúzás maga idempotens (lásd services/szamla_email_lehuzas.py), így egy
-    újraindulás vagy dupla futás sem hoz létre újabb számlát."""
-    if settings.szamla_email_figyeles != "1":
-        return
-
-    import threading
-    import time
-
-    def _kor() -> None:
-        from app.core.database import SessionLocal
-        from app.services import hatter_feladat
-
-        def _munka(naplo) -> dict:
-            from app.api.routes.bejovo_szamlak import LehuzasIn, szamla_email_lehuzas_futtatasa
-
-            db = SessionLocal()
-            try:
-                return szamla_email_lehuzas_futtatasa(db, LehuzasIn(limit=100))
-            finally:
-                db.close()
-
-        # Először röviddel az indulás után, majd óránként.
-        time.sleep(90)
-        while True:
-            try:
-                hatter_feladat.inditas("szamla-email-lehuzas", _munka)
-            except Exception:  # noqa: BLE001 - a következő kör újrapróbálja
-                logger.exception("A számla-email lehúzást nem sikerült elindítani.")
-            time.sleep(3600)
-
-    threading.Thread(target=_kor, daemon=True).start()
-
-
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "environment": settings.environment}

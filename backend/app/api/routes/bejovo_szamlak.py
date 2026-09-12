@@ -11,8 +11,9 @@ ADMIN-TEENDŐK A LEVELEZÉS BEKÖTÉSÉHEZ (kód-oldali beállítás nincs több
    Workspace: Felhasználó → Alternatív e-mail címek), vagy a szamla@ postafiók
    ÁLLÍTSON BE TOVÁBBÍTÁST erre a fiókra. DNS/MX átállítás NEM kell, a
    meglévő levelezést nem érinti.
-2. Railway env: SZAMLA_BEJOVO_CIM (alapból szamla@hypestab.hu) és
-   SZAMLA_EMAIL_FIGYELES=1 az óránkénti automatikus lehúzáshoz.
+2. Railway env: SZAMLA_BEJOVO_CIM (alapból szamla@hypestab.hu). Automatikus
+   lehúzás SZÁNDÉKOSAN nincs (a felhasználó kérése): a leveleket a felület
+   "Lehúzás most" gombja hozza be, és csak az OLVASATLANOKAT.
 3. A meglévő GMAIL hitelesítésben a gmail.readonly scope már benne van
    (lásd services/google_email.GMAIL_SCOPES) - OAuth tokennél ellenőrizd,
    hogy a token ezzel a scope-pal készült; ha nem, egyszer újra kell kérni."""
@@ -45,7 +46,7 @@ from app.models.internal_performance_certificate import InternalPerformanceCerti
 from app.models.kotelezettseg import KotelezettsegIdoszak
 from app.models.performance_certificate import PerformanceCertificate
 from app.models.project_code import ProjectCode
-from app.services import hatter_feladat, szamla_erkeztetes
+from app.services import document_storage, hatter_feladat, szamla_erkeztetes
 from app.services.szamla_erkeztetes import ErkeztetesHiba
 
 router = APIRouter(prefix="/bejovo-szamlak", tags=["bejovo-szamlak"])
@@ -194,7 +195,6 @@ def email_allapot(
     feladat = hatter_feladat.allapot(db, EMAIL_LEHUZAS_FELADAT)
     return {
         "cel_cim": settings.szamla_bejovo_cim,
-        "automatikus_figyeles": settings.szamla_email_figyeles == "1",
         "lehuzas_fut": bool(feladat and feladat.running),
         "utolso_lehuzas_log": (feladat.log or "")[-2000:] if feladat else "",
         "utolso_levelek": [
@@ -407,6 +407,34 @@ def ujrafeldolgozas(
     db.commit()
     db.refresh(b)
     return _kimenet(db, b, reszletes=True)
+
+
+@router.delete("/{bejovo_id}", response_model=None)
+def torles(
+    bejovo_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    """Egy beérkező számla-piszkozat VÉGLEGES törlése - bármelyik állapotban
+    (a felhasználó kérése). A tárolt fájl is törlődik az R2-ről.
+
+    A jóváhagyáskor MÁR LÉTREJÖTT rekordokat (kiadás, TIG-számla sor,
+    csatolmány) a törlés NEM bántja: azok saját másolatban őrzik a fájlt, és
+    a maguk felületén kezelhetők - itt csak az érkeztető-piszkozat tűnik el.
+    Az eredeti e-mail a postafiókban marad; a bejovo_emailek napló is marad,
+    tehát a törölt levél egy újabb lehúzással nem jön vissza magától."""
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    kulcs = b.storage_key
+    # A hozzá kapcsolt formátum-változat (pl. XML) kapcsolata magától oldódik
+    # (SET NULL) - a változat-sor megmarad, önállóan törölhető.
+    db.delete(b)
+    db.commit()
+    if kulcs:
+        try:
+            document_storage.delete_object(kulcs)
+        except Exception:  # noqa: BLE001 - az árva objektum nem éri meg az 500-at
+            pass
+    return None
 
 
 class LehuzasIn(BaseModel):

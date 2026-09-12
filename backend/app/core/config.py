@@ -232,13 +232,12 @@ class Settings(BaseSettings):
     # ───────── Számla-érkeztetés (Beérkező számlák) ─────────
     # A bejövő számla-cím, amire a beszállítók küldenek. A lehúzás a meglévő
     # Gmail-hitelesítéssel (gmail.readonly scope) a hitelesített fiók
-    # leveleiben keresi a to:<cím> egyezést - a cím legyen a fiók aliasa,
-    # vagy legyen rá továbbítás beállítva (lásd routes/bejovo_szamlak.py).
+    # OLVASATLAN leveleiben keresi a to:<cím> egyezést - a cím legyen a fiók
+    # aliasa, vagy legyen rá továbbítás beállítva (lásd
+    # routes/bejovo_szamlak.py). Automatikus időzített lehúzás SZÁNDÉKOSAN
+    # nincs (a felhasználó kérése): csak a kézi "Lehúzás most" gomb hoz be
+    # leveleket.
     szamla_bejovo_cim: str = "szamla@hypestab.hu"
-    # Automatikus időzített lehúzás: "1" esetén az app óránként magától
-    # lehúzza az új leveleket (háttérszálon, DB-zárral - több worker esetén
-    # is csak egy fut). Kikapcsolva csak a kézi "Lehúzás most" gomb él.
-    szamla_email_figyeles: str = ""
 
     # ───────── Média Portál (ügyfél videó/kép átadó felület, /p/{slug}) ─────────
     # A Hype-repo-main (különálló client-portál projekt) 1:1 portolt funkciója -

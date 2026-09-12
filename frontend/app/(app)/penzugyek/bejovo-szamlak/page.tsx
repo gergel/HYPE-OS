@@ -19,6 +19,7 @@ export default async function BejovoSzamlakPage() {
   if (!canView) redirect("/nincs-jogosultsag");
   const canEdit = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
   const canCreate = pagePermissions === null || !!pagePermissions[PAGE]?.includes("create");
+  const canDelete = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
 
   const [lista, projektkodok, emberek, autok] = await Promise.all([
     getBejovoSzamlak(),
@@ -46,6 +47,7 @@ export default async function BejovoSzamlakPage() {
             }}
             canEdit={canEdit}
             canCreate={canCreate}
+            canDelete={canDelete}
           />
         </Card>
       </div>
