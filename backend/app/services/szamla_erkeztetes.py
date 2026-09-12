@@ -371,42 +371,54 @@ def _szamlaszam_utkozes(db: Session, bejovo: BejovoSzamla) -> str | None:
 def javasol(db: Session, bejovo: BejovoSzamla) -> None:
     """Besorolási javaslat + alternatívák + állapot (ellenorzendo/pontositas).
 
-    Újrafuttatható: a felhasználói utasítás módosítása után is ez fut le, a
-    már kinyert adatokon (nem olvas ki újra)."""
+    A DÖNTÉS SORRENDJE (a felhasználó előírása, a korábbi hiba javításával):
+
+    1. a számla azonosítása (kibocsátó, vevő, időszak, pénznem, hivatkozások);
+    2. duplikáció (a hívó már megnézte);
+    3. a PONTOS PROJEKTKÓD SZŰKÍT: ha a dokumentum/levél/utasítás kódot mond,
+       a TIG- és kiadás-keresés arra a kódra (és forgatásaira) szűkül - a
+       kóddal ELLENTÉTES tétel automatikusan sosem lehet kiválasztott cél,
+       legfeljebb megjelölt alternatíva;
+    4. a szűkített körben a "Ki számláz kiért" (számlázó fél) kapcsolatok;
+    5. csak EZUTÁN az összeg/pénznem/teljesítés összevetés;
+    6. új kiadást csak akkor javaslunk, ha nincs megfelelő meglévő tétel.
+
+    Partner + azonos összeg ÖNMAGÁBAN nem választ: ha több egyformán
+    valószínű jelölt van, nem az első rekordot vesszük, hanem pontosítást
+    kérünk, az összes jelölttel. Újrafuttatható: az utasítás módosítása után
+    is ez fut, a már kinyert adatokon."""
     figyelmeztetesek: list[str] = list((bejovo.kinyert or {}).get("osszeg_figyelmeztetesek") or [])
     utkozes = _szamlaszam_utkozes(db, bejovo)
     if utkozes:
         figyelmeztetesek.append(utkozes)
 
-    alternativak: list[dict] = []
     tipus: str | None = None
     indoklas = ""
 
     utasitas = _norm(bejovo.felhasznaloi_utasitas)
     mezok = (bejovo.kinyert or {}).get("mezok") or {}
-    szovegek = " ".join(
-        filter(
-            None,
-            [
-                bejovo.felhasznaloi_utasitas or "",
-                bejovo.email_targy or "",
-                bejovo.email_szoveg or "",
-                " ".join(mezok.get("projektkod_hivatkozasok") or []),
-                mezok.get("megjegyzes") or "",
-            ],
-        )
-    )
 
-    # 1-2) Projektkód: a felhasználó utasításából vagy a dokumentum/levél
-    # hivatkozásából - VALÓDI rekordra oldva.
-    kodok = list(dict.fromkeys(PROJEKTKOD_MINTA.findall(szovegek.upper())))
+    # ── 1) HIVATKOZÁSOK: kód a dokumentumban, a levélben és az utasításban -
+    # KÜLÖN gyűjtve, hogy az ellentmondás (a dokumentum mást mond, mint a
+    # levél/utasítás) látható legyen, ne csendben döntsünk.
+    dok_szoveg = " ".join(filter(None, [" ".join(mezok.get("projektkod_hivatkozasok") or []), mezok.get("megjegyzes") or ""]))
+    level_szoveg = " ".join(filter(None, [bejovo.email_targy or "", bejovo.email_szoveg or "", bejovo.felhasznaloi_utasitas or ""]))
+    dok_kodok = list(dict.fromkeys(PROJEKTKOD_MINTA.findall(dok_szoveg.upper())))
+    level_kodok = list(dict.fromkeys(PROJEKTKOD_MINTA.findall(level_szoveg.upper())))
+    kodok = list(dict.fromkeys(dok_kodok + level_kodok))
+    if dok_kodok and level_kodok and set(dok_kodok) != set(level_kodok):
+        figyelmeztetesek.append(
+            f"A dokumentum ({', '.join(dok_kodok)}) és a levél/utasítás ({', '.join(level_kodok)}) "
+            "eltérő projektkódot mond - ellenőrizd, melyik az igaz."
+        )
     projekt_kodok: list[ProjectCode] = []
     for kod in kodok[:5]:
         pc = db.scalar(select(ProjectCode).where(func.upper(ProjectCode.projektkod) == kod))
         if pc is not None:
             projekt_kodok.append(pc)
+    kod_idk = {pc.id for pc in projekt_kodok}
 
-    # 3-4) Számlázó fél: adószám a legerősebb, aztán cégnév/név.
+    # ── A számlázó fél: adószám a legerősebb, aztán cégnév/név.
     fel_employee = kiadas_kiolvasas.alvallalkozo_egyeztetes(
         db,
         {
@@ -427,60 +439,38 @@ def javasol(db: Session, bejovo: BejovoSzamla) -> None:
             select(Vallalkozas).where(func.lower(Vallalkozas.nev) == _norm(bejovo.kibocsato_nev))
         )
 
-    # 5) Meglévő, számlára váró tételek a félhez.
-    tig_jeloltek = _kulsos_tig_jeloltek(db, bejovo, fel_employee, fel_vallalkozas)
+    # ── Jelöltek RÉSZLETEKKEL (projekt, dátum, fél, összeg, mi egyezik/tér el).
+    tig_jeloltek = _kulsos_tig_jeloltek(db, bejovo, fel_employee, fel_vallalkozas, kod_idk)
     belsos_jelolt = _belsos_tig_jelolt(db, bejovo, fel_employee)
-    kiadas_jeloltek = _kiadas_jeloltek(db, bejovo, fel_employee)
+    kiadas_jeloltek = _kiadas_jeloltek(db, bejovo, fel_employee, kod_idk)
     erezsi_jelolt = _erezsi_jelolt(db, bejovo)
-    auto_jelolt = _auto_jelolt(db, szovegek)
+    auto_jelolt = _auto_jelolt(db, f"{dok_szoveg} {level_szoveg}")
 
-    for cert, ok in tig_jeloltek:
-        alternativak.append(
-            {
-                "tipus": "kulsos_tig",
-                "cel_id": cert.id,
-                "cimke": _tig_cimke(cert),
-                "indoklas": ok,
-            }
-        )
+    alternativak: list[dict] = []
+    for j in tig_jeloltek:
+        alternativak.append({"tipus": "kulsos_tig", "cel_id": j["cert"].id, "cimke": j["cimke"], "indoklas": j["indoklas"], "reszletek": j["reszletek"]})
     if belsos_jelolt is not None:
         cert, ok = belsos_jelolt
-        alternativak.append(
-            {"tipus": "belsos_tig", "cel_id": cert.id, "cimke": f"Belsős TIG {cert.ev}. {cert.honap}. hó", "indoklas": ok}
-        )
-    for exp, ok in kiadas_jeloltek:
-        alternativak.append(
-            {
-                "tipus": "kiadas_csatolas",
-                "cel_id": exp.id,
-                "cimke": f"Kiadás #{exp.id}: {exp.megnevezes} ({exp.kiadas_leiras or '-'})",
-                "indoklas": ok,
-            }
-        )
+        alternativak.append({"tipus": "belsos_tig", "cel_id": cert.id, "cimke": f"Belsős TIG {cert.ev}. {cert.honap:02d}. hó", "indoklas": ok})
+    for j in kiadas_jeloltek:
+        alternativak.append({"tipus": j["tipus"], "cel_id": j["cel_id"], "cimke": j["cimke"], "indoklas": j["indoklas"], "reszletek": j.get("reszletek")})
     if erezsi_jelolt is not None:
         idoszak, ok = erezsi_jelolt
-        alternativak.append(
-            {
-                "tipus": "erezsi",
-                "cel_id": idoszak.id,
-                "cimke": f"E-Rezsi: {idoszak.kotelezettseg.nev} - {idoszak.esedekesseg}",
-                "indoklas": ok,
-            }
-        )
+        alternativak.append({"tipus": "erezsi", "cel_id": idoszak.id, "cimke": f"E-Rezsi: {idoszak.kotelezettseg.nev} - {idoszak.esedekesseg}", "indoklas": ok})
     if auto_jelolt is not None:
         auto, ok = auto_jelolt
         alternativak.append({"tipus": "auto", "cel_id": auto.id, "cimke": f"Autó: {auto.rendszam}", "indoklas": ok})
     for pc in projekt_kodok:
-        alternativak.append(
-            {
-                "tipus": "kiadas_uj",
-                "cel_id": pc.id,
-                "cimke": f"Új kiadás a(z) {pc.projektkod} projektkódhoz",
-                "indoklas": "A projektkód szerepel a dokumentumban/levélben/utasításban.",
-            }
-        )
+        alternativak.append({"tipus": "kiadas_uj", "cel_id": pc.id, "cimke": f"Új kiadás a(z) {pc.projektkod} projektkódhoz", "indoklas": "A projektkód szerepel a dokumentumban/levélben/utasításban."})
 
-    # A JAVASLAT kiválasztása - a felhasználó szava az első.
+    # A kóddal KOMPATIBILIS jelöltek (kód nélkül minden az).
+    kod_tigek = [j for j in tig_jeloltek if not kod_idk or j["kod_egyezik"]] if kod_idk else tig_jeloltek
+    if kod_idk:
+        kod_tigek = [j for j in tig_jeloltek if j["kod_egyezik"]]
+    kod_kiadasok = [j for j in kiadas_jeloltek if not kod_idk or j.get("kod_egyezik")]
+
+    # ── DÖNTÉS. A felhasználó szava az első; kód a második; a puszta
+    # partner+összeg egyezés többes találatnál sosem dönt.
     if bejovo.dokumentum_tipus == "dijbekero":
         tipus = "egyeb"
         indoklas = "Díjbekérő (proforma) - nem rögzíthető végleges számlaként. Várd meg a számlát, vagy kezeld kézzel."
@@ -494,41 +484,90 @@ def javasol(db: Session, bejovo: BejovoSzamla) -> None:
     elif utasitas and ("általános" in utasitas or "altalanos" in utasitas or "működési" in utasitas or "mukodesi" in utasitas):
         tipus = "mukodesi"
         indoklas = "A felhasználó utasítása szerint általános működési költség (tudatosan projekt nélkül)."
-    elif utasitas and "tig" in utasitas and tig_jeloltek:
-        tipus = "kulsos_tig"
-        bejovo.cel_certificate_id = tig_jeloltek[0][0].id
-        indoklas = f"A felhasználó TIG-hez kérte; a legjobb egyezés: {_tig_cimke(tig_jeloltek[0][0])}."
     elif utasitas and ("belsős" in utasitas or "belsos" in utasitas) and belsos_jelolt is not None:
         tipus = "belsos_tig"
         bejovo.cel_internal_certificate_id = belsos_jelolt[0].id
-        indoklas = f"A felhasználó belsős TIG-hez kérte ({belsos_jelolt[0].ev}. {belsos_jelolt[0].honap}. hó)."
+        indoklas = f"A felhasználó belsős TIG-hez kérte ({belsos_jelolt[0].ev}. {belsos_jelolt[0].honap:02d}. hó - a számla teljesítési időszaka szerint)."
+    elif utasitas and "tig" in utasitas and kod_tigek:
+        tipus = "kulsos_tig"
+        bejovo.cel_certificate_id = kod_tigek[0]["cert"].id
+        indoklas = f"A felhasználó TIG-hez kérte; a kóddal/féllel egyező legjobb találat: {kod_tigek[0]['cimke']}."
     elif auto_jelolt is not None and utasitas and ("autó" in utasitas or "auto" in utasitas or "szerviz" in utasitas):
         tipus = "auto"
         bejovo.cel_auto_id = auto_jelolt[0].id
         indoklas = f"A felhasználó autóhoz kérte; az azonosított jármű: {auto_jelolt[0].rendszam}."
-    elif tig_jeloltek and tig_jeloltek[0][1].startswith("Összeg"):
-        # Erős TIG-egyezés (fél + összeg): a TIG-ben már elszámolt költség nem
-        # lehet még egyszer kiadás.
-        tipus = "kulsos_tig"
-        bejovo.cel_certificate_id = tig_jeloltek[0][0].id
-        indoklas = f"Számlára váró külsős TIG a félnél, egyező összeggel: {_tig_cimke(tig_jeloltek[0][0])}."
+    elif kod_idk:
+        # VAN PONTOS KÓD: azon belül keresünk. A kóddal ellentétes TIG-et
+        # akkor sem választjuk, ha az összege egyezik - az alternatívák közt
+        # marad, megjelölve.
+        for j in tig_jeloltek:
+            if not j["kod_egyezik"] and j["osszeg_egyezik"]:
+                figyelmeztetesek.append(
+                    f"A(z) {j['cimke']} összege egyezik, de MÁSIK projekthez tartozik, mint a megadott "
+                    f"kód ({', '.join(kodok)}) - ezért nem ez lett kiválasztva."
+                )
+        # A kód projektjén lévő, MÁS FÉLHEZ tartozó TIG nem automatikus cél -
+        # az alternatívák közt marad, az "Eltér: számlázó fél" jelöléssel.
+        sajat_kod_tigek = [j for j in kod_tigek if j["fel_egyezik"]]
+        eros_tigek = [j for j in sajat_kod_tigek if j["osszeg_egyezik"]] or sajat_kod_tigek
+        if len(eros_tigek) == 1:
+            tipus = "kulsos_tig"
+            bejovo.cel_certificate_id = eros_tigek[0]["cert"].id
+            indoklas = f"A megadott kód projektjén számlára váró külsős TIG: {eros_tigek[0]['cimke']}."
+        elif len(eros_tigek) > 1:
+            tipus = None
+            indoklas = (
+                f"A(z) {', '.join(kodok)} kódon több szóba jövő TIG/forgatás van - válaszd ki a listából, "
+                "melyikhez tartozik a számla."
+            )
+        elif len(kod_kiadasok) == 1:
+            tipus = kod_kiadasok[0]["tipus"]
+            if tipus == "kulsos_tig":
+                bejovo.cel_certificate_id = kod_kiadasok[0]["cel_id"]
+            else:
+                bejovo.cel_expense_id = kod_kiadasok[0]["cel_id"]
+            indoklas = f"A megadott kódon számlára váró meglévő tétel: {kod_kiadasok[0]['cimke']}."
+        elif len(projekt_kodok) == 1:
+            tipus = "kiadas_uj"
+            bejovo.cel_project_code_id = projekt_kodok[0].id
+            indoklas = (
+                f"A(z) {projekt_kodok[0].projektkod} kódon nincs számlára váró meglévő TIG/kiadás - "
+                "ÚJ kiadás készül hozzá (nem kifizetettként)."
+            )
+            if fel_employee is not None:
+                bejovo.cel_employee_id = fel_employee.id
+        else:
+            tipus = None
+            indoklas = "Több projektkód is szerepel - válaszd ki, melyikhez tartozik (vagy oszd fel az ellenőrzőben)."
     elif erezsi_jelolt is not None:
         tipus = "erezsi"
         bejovo.cel_kotelezettseg_idoszak_id = erezsi_jelolt[0].id
         indoklas = erezsi_jelolt[1]
-    elif len(projekt_kodok) == 1:
-        tipus = "kiadas_uj"
-        bejovo.cel_project_code_id = projekt_kodok[0].id
-        indoklas = f"A(z) {projekt_kodok[0].projektkod} projektkód egyértelműen szerepel - új kiadás készül hozzá (nem kifizetettként)."
-        if fel_employee is not None:
-            bejovo.cel_employee_id = fel_employee.id
-    elif len(projekt_kodok) > 1:
+    elif tig_jeloltek:
+        # NINCS KÓD: partner + összeg csak akkor dönt, ha PONTOSAN EGY
+        # egyformán valószínű jelölt van - több találatnál nem az elsőt
+        # választjuk, hanem pontosítást kérünk.
+        osszeg_egyezok = [j for j in tig_jeloltek if j["osszeg_egyezik"]]
+        if len(osszeg_egyezok) == 1 and len(tig_jeloltek) == 1:
+            tipus = "kulsos_tig"
+            bejovo.cel_certificate_id = osszeg_egyezok[0]["cert"].id
+            indoklas = f"Egyetlen számlára váró külsős TIG a félnél, egyező összeggel: {osszeg_egyezok[0]['cimke']}."
+        else:
+            tipus = None
+            indoklas = (
+                "A partner és az összeg önmagában nem elég a biztos párosításhoz "
+                f"({len(tig_jeloltek)} szóba jövő TIG) - válaszd ki a listából, vagy írd meg a projektkódot."
+            )
+    elif len(kiadas_jeloltek) == 1:
+        tipus = kiadas_jeloltek[0]["tipus"]
+        if tipus == "kulsos_tig":
+            bejovo.cel_certificate_id = kiadas_jeloltek[0]["cel_id"]
+        else:
+            bejovo.cel_expense_id = kiadas_jeloltek[0]["cel_id"]
+        indoklas = f"Meglévő, számlára váró tétel a félnél: {kiadas_jeloltek[0]['cimke']}"
+    elif len(kiadas_jeloltek) > 1:
         tipus = None
-        indoklas = "Több projektkód is szerepel - válaszd ki, melyikhez tartozik (vagy oszd fel az ellenőrzőben)."
-    elif kiadas_jeloltek:
-        tipus = "kiadas_csatolas"
-        bejovo.cel_expense_id = kiadas_jeloltek[0][0].id
-        indoklas = f"Meglévő, számlára váró kiadás a félnél: {kiadas_jeloltek[0][1]}"
+        indoklas = f"Több számlára váró kiadás is szóba jön ({len(kiadas_jeloltek)}) - válaszd ki a listából."
     else:
         tipus = None
         indoklas = (
@@ -553,48 +592,128 @@ def javasol(db: Session, bejovo: BejovoSzamla) -> None:
         )
 
 
-def _tig_cimke(cert: PerformanceCertificate) -> str:
-    fel = cert.employee.full_name if cert.employee else (cert.vallalkozas.nev if cert.vallalkozas else "?")
-    hova = ""
+def _cert_projektkod_id(cert: PerformanceCertificate) -> int | None:
+    """Melyik projektkódhoz tartozik a TIG - a forgatásán át vagy közvetlenül."""
+    if cert.project_code_id is not None:
+        return cert.project_code_id
     if cert.project is not None:
-        hova = cert.project.nev or ""
-    return f"Külsős TIG #{cert.id} - {fel}{f' ({hova})' if hova else ''} - {cert.netto_osszeg or '?'} Ft"
+        return cert.project.project_code_id
+    return None
+
+
+def _tig_reszletek(
+    db: Session, cert: PerformanceCertificate, bejovo: BejovoSzamla, kod_idk: set[int], fel_egyezik: bool
+) -> dict:
+    """Egy TIG-jelölt EMBERI részletei: projekt+kód, forgatás dátuma, számlázó
+    fél és a lefedett személyek, összeg, meglévő számlák - és hogy mi egyezik
+    / mi tér el a beérkezett számlához képest."""
+    fel = cert.employee.full_name if cert.employee else (cert.vallalkozas.nev if cert.vallalkozas else "?")
+    projekt_nev = cert.project.nev if cert.project else None
+    datum = cert.project.forgatas_datuma.isoformat() if cert.project and cert.project.forgatas_datuma else None
+    pc_id = _cert_projektkod_id(cert)
+    kod = None
+    if pc_id is not None:
+        pc = db.get(ProjectCode, pc_id)
+        kod = pc.projektkod if pc else None
+    fedettek = sorted({t.employee.full_name for t in cert.tetelek if t.employee is not None}) if cert.tetelek else []
+    kod_egyezik = bool(kod_idk) and pc_id in kod_idk
+    osszeg_egyezik = (
+        cert.netto_osszeg is not None
+        and bejovo.netto is not None
+        and abs(float(cert.netto_osszeg) - float(bejovo.netto)) < 1
+    )
+    egyezik: list[str] = ["számlázó fél"] if fel_egyezik else []
+    elter: list[str] = [] if fel_egyezik else ["számlázó fél (a számla kibocsátója más)"]
+    if kod_idk:
+        (egyezik if kod_egyezik else elter).append("projektkód")
+    if cert.netto_osszeg is not None and bejovo.netto is not None:
+        (egyezik if osszeg_egyezik else elter).append(
+            "összeg" if osszeg_egyezik else f"összeg (TIG: {float(cert.netto_osszeg):,.0f} Ft)".replace(",", " ")
+        )
+    cimke_reszek = [f"Külsős TIG - {fel}"]
+    if projekt_nev:
+        cimke_reszek.append(projekt_nev)
+    if kod:
+        cimke_reszek.append(kod)
+    if datum:
+        cimke_reszek.append(datum)
+    return {
+        "cert": cert,
+        "kod_egyezik": kod_egyezik,
+        "osszeg_egyezik": osszeg_egyezik,
+        "fel_egyezik": fel_egyezik,
+        "cimke": " – ".join(cimke_reszek),
+        "indoklas": ("Egyezik: " + ", ".join(egyezik)) + (" · Eltér: " + ", ".join(elter) if elter else ""),
+        "reszletek": {
+            "projekt_nev": projekt_nev,
+            "projektkod": kod,
+            "forgatas_datuma": datum,
+            "szamlazo_fel": fel,
+            "fedett_szemelyek": fedettek,
+            "netto": float(cert.netto_osszeg) if cert.netto_osszeg is not None else None,
+            "meglevo_szamlak": len(cert.invoices),
+            "egyezik": egyezik,
+            "elter": elter,
+        },
+    }
 
 
 def _kulsos_tig_jeloltek(
-    db: Session, bejovo: BejovoSzamla, emp: Employee | None, vall: Vallalkozas | None
-) -> list[tuple[PerformanceCertificate, str]]:
-    """Számlára váró külsős TIG-ek a felismerspecifikus félhez - az összeg-egyezés
-    a legerősebb jel (elöl áll)."""
-    if emp is None and vall is None:
-        return []
+    db: Session,
+    bejovo: BejovoSzamla,
+    emp: Employee | None,
+    vall: Vallalkozas | None,
+    kod_idk: set[int],
+) -> list[dict]:
+    """Számlára váró külsős TIG-jelöltek. Ha van PONTOS KÓD, a kód projektjein
+    lévő nyitott TIG-ek is jelöltek (akkor is, ha a fél nem ismert) - a kód
+    SZŰKÍT, nem mellékes. Rendezés: kód-egyezés > összeg-egyezés > frissebb."""
+    from sqlalchemy import or_
+
     felt = []
     if emp is not None:
         felt.append(PerformanceCertificate.employee_id == emp.id)
     if vall is not None:
         felt.append(PerformanceCertificate.vallalkozas_id == vall.id)
-    from sqlalchemy import or_
+    jeloltek: dict[int, PerformanceCertificate] = {}
+    fel_egyezok: set[int] = set()
+    if felt:
+        for cert in db.scalars(
+            select(PerformanceCertificate)
+            .where(or_(*felt), PerformanceCertificate.szamla_kifizetve.is_(False))
+            .order_by(PerformanceCertificate.id.desc())
+            .limit(15)
+        ):
+            jeloltek[cert.id] = cert
+            fel_egyezok.add(cert.id)
+    if kod_idk:
+        # A kód projektjeinek nyitott TIG-jei - fél-egyezés nélkül is.
+        from app.models.project import Project
 
-    certek = db.scalars(
-        select(PerformanceCertificate)
-        .where(or_(*felt), PerformanceCertificate.szamla_kifizetve.is_(False))
-        .order_by(PerformanceCertificate.id.desc())
-        .limit(10)
-    ).all()
-    eredmeny: list[tuple[PerformanceCertificate, str]] = []
-    for cert in certek:
-        if cert.netto_osszeg is not None and bejovo.netto is not None and abs(
-            float(cert.netto_osszeg) - float(bejovo.netto)
-        ) < 1:
-            eredmeny.insert(0, (cert, f"Összeg-egyezés ({cert.netto_osszeg} Ft) + a számlázó fél egyezik."))
-        elif not cert.invoices:
-            eredmeny.append((cert, "A számlázó fél egyezik, a TIG-hez még nincs számla feltöltve."))
-    return eredmeny[:5]
+        for cert in db.scalars(
+            select(PerformanceCertificate)
+            .outerjoin(Project, PerformanceCertificate.project_id == Project.id)
+            .where(
+                PerformanceCertificate.szamla_kifizetve.is_(False),
+                or_(
+                    PerformanceCertificate.project_code_id.in_(kod_idk),
+                    Project.project_code_id.in_(kod_idk),
+                ),
+            )
+            .order_by(PerformanceCertificate.id.desc())
+            .limit(15)
+        ):
+            jeloltek[cert.id] = cert
+    eredmeny = [_tig_reszletek(db, cert, bejovo, kod_idk, cert.id in fel_egyezok) for cert in jeloltek.values()]
+    eredmeny.sort(key=lambda j: (not j["kod_egyezik"], not j["fel_egyezik"], not j["osszeg_egyezik"], -j["cert"].id))
+    return eredmeny[:6]
 
 
 def _belsos_tig_jelolt(
     db: Session, bejovo: BejovoSzamla, emp: Employee | None
 ) -> tuple[InternalPerformanceCertificate, str] | None:
+    """A havi belsős TIG-et a SZÁMLA TELJESÍTÉSI IDŐSZAKA választja ki (annak
+    híján a kiállítás kelte) - SOSEM a levél beérkezési hónapja."""
     if emp is None or emp.tipus != EmployeeType.BELSOS:
         return None
     alap = bejovo.teljesites_datuma or bejovo.kiallitas_datuma
@@ -609,12 +728,19 @@ def _belsos_tig_jelolt(
     )
     if cert is None:
         return None
-    return cert, f"{emp.full_name} belsős TIG-je a számla időszakának hónapjára ({alap.year}.{alap.month:02d})."
+    return cert, (
+        f"{emp.full_name} belsős TIG-je a számla teljesítési időszakának hónapjára ({alap.year}.{alap.month:02d})."
+    )
 
 
-def _kiadas_jeloltek(db: Session, bejovo: BejovoSzamla, emp: Employee | None) -> list[tuple[Expense, str]]:
-    """Meglévő, számlára váró kiadások: a félhez kötött vagy név-egyező sorok,
-    amelyeknek még nincs számla-csatolmánya."""
+def _kiadas_jeloltek(db: Session, bejovo: BejovoSzamla, emp: Employee | None, kod_idk: set[int]) -> list[dict]:
+    """Meglévő, számlára váró kiadás-jelöltek.
+
+    Ha a kiadás egy TIG-ből jött létre (a TIG kifizetésekor keletkező sor,
+    PerformanceCertificate.expense_id köti), a jelölt maga a TIG lesz: a
+    számlát az EREDETI TIG-folyamaton át kapcsoljuk, hogy az Utókövetés, a
+    TIG és a Pénzügyek ugyanazt mutassa - a származtatott kiadássorra tett
+    fájl a TIG-et "számla hiányzik" állapotban hagyná."""
     from sqlalchemy import or_
 
     felt = []
@@ -625,16 +751,14 @@ def _kiadas_jeloltek(db: Session, bejovo: BejovoSzamla, emp: Employee | None) ->
     if not felt:
         return []
     hatar = date.today() - timedelta(days=180)
-    sorok = db.scalars(
-        select(Expense)
-        .where(
-            or_(*felt),
-            Expense.nincs_szamla.is_(False),
-            (Expense.kiadas_datuma.is_(None)) | (Expense.kiadas_datuma >= hatar),
-        )
-        .order_by(Expense.id.desc())
-        .limit(20)
-    ).all()
+    q = select(Expense).where(
+        or_(*felt),
+        Expense.nincs_szamla.is_(False),
+        (Expense.kiadas_datuma.is_(None)) | (Expense.kiadas_datuma >= hatar),
+    )
+    if kod_idk:
+        q = q.where(Expense.project_code_id.in_(kod_idk))
+    sorok = db.scalars(q.order_by(Expense.id.desc()).limit(20)).all()
     if not sorok:
         return []
     csatolt = {
@@ -647,14 +771,50 @@ def _kiadas_jeloltek(db: Session, bejovo: BejovoSzamla, emp: Employee | None) ->
             )
         )
     }
-    eredmeny: list[tuple[Expense, str]] = []
+    # A TIG-ből származó kiadássorok: a hozzájuk tartozó TIG az igazi cél.
+    tig_kotesek = {
+        cert.expense_id: cert
+        for cert in db.scalars(
+            select(PerformanceCertificate).where(
+                PerformanceCertificate.expense_id.in_([s.id for s in sorok])
+            )
+        )
+    }
+    eredmeny: list[dict] = []
     for s in sorok:
         if s.id in csatolt:
             continue
-        if s.netto is not None and bejovo.netto is not None and abs(float(s.netto) - float(bejovo.netto)) < 1:
-            eredmeny.insert(0, (s, f"#{s.id} - összeg-egyezés ({s.netto} Ft), számla még nincs hozzá."))
-        else:
-            eredmeny.append((s, f"#{s.id} - a partner egyezik, számla még nincs hozzá."))
+        osszeg_egyezik = s.netto is not None and bejovo.netto is not None and abs(float(s.netto) - float(bejovo.netto)) < 1
+        kod_egyezik = bool(kod_idk) and s.project_code_id in kod_idk
+        cert = tig_kotesek.get(s.id)
+        if cert is not None:
+            j = _tig_reszletek(db, cert, bejovo, kod_idk, True)
+            eredmeny.append({
+                "tipus": "kulsos_tig",
+                "cel_id": cert.id,
+                "cimke": j["cimke"] + " (a kiadássor ebből a TIG-ből származik)",
+                "indoklas": "A meglévő kiadás egy TIG-ből jött létre - a számla az eredeti TIG-hez kerül, hogy minden nézet ugyanazt mutassa.",
+                "kod_egyezik": j["kod_egyezik"],
+                "osszeg_egyezik": j["osszeg_egyezik"],
+                "reszletek": j["reszletek"],
+            })
+            continue
+        pc = db.get(ProjectCode, s.project_code_id) if s.project_code_id else None
+        eredmeny.append({
+            "tipus": "kiadas_csatolas",
+            "cel_id": s.id,
+            "cimke": f"Kiadás: {s.megnevezes} – {s.kiadas_leiras or '-'}" + (f" – {pc.projektkod}" if pc else ""),
+            "indoklas": ("Összeg-egyezés, " if osszeg_egyezik else "A partner egyezik, ") + "számla még nincs hozzá.",
+            "kod_egyezik": kod_egyezik,
+            "osszeg_egyezik": osszeg_egyezik,
+            "reszletek": {
+                "projektkod": pc.projektkod if pc else None,
+                "netto": float(s.netto) if s.netto is not None else None,
+                "egyezik": (["összeg"] if osszeg_egyezik else []) + (["projektkód"] if kod_egyezik else []),
+                "elter": [] if osszeg_egyezik else ([f"összeg (kiadás: {float(s.netto):,.0f} Ft)".replace(",", " ")] if s.netto is not None else []),
+            },
+        })
+    eredmeny.sort(key=lambda j: (not j.get("kod_egyezik"), not j.get("osszeg_egyezik")))
     return eredmeny[:5]
 
 
@@ -742,9 +902,33 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
         exp = db.get(Expense, dontes.get("cel_expense_id") or bejovo.cel_expense_id or 0)
         if exp is None:
             raise ErkeztetesHiba("A kiválasztott kiadás nem található.")
-        _csatol_fajl(db, "expense", exp.id, bejovo, fajl, naplo)
+        # Ha ez a kiadássor egy TIG-ből származik (a TIG kifizetésekor jött
+        # létre), a számla az EREDETI TIG-folyamatra kerül - különben a TIG
+        # "számla hiányzik" maradna, miközben a fájl a származtatott soron ül.
+        cert = db.scalar(select(PerformanceCertificate).where(PerformanceCertificate.expense_id == exp.id))
+        if cert is not None and fajl is not None:
+            sor = PerformanceCertificateInvoice(
+                certificate_id=cert.id,
+                filename=bejovo.fajl_nev or "szamla.pdf",
+                storage_key="",
+                url="",
+                content_type=bejovo.content_type,
+            )
+            db.add(sor)
+            db.flush()
+            kulcs = f"tig-szamla/{cert.id}/{sor.id}-{re.sub(r'[^A-Za-z0-9._-]+', '_', sor.filename)[:80]}"
+            sor.url = document_storage.upload_bytes(fajl, kulcs, bejovo.content_type or "application/pdf")
+            sor.storage_key = kulcs
+            bejovo.cel_certificate_id = cert.id
+            naplo["csatolt"].append({"tipus": "performanceCertificate", "id": cert.id, "szamla_sor": sor.id})
+            naplo.setdefault("megjegyzesek", []).append(
+                f"A kiválasztott kiadás a #{cert.id} TIG-ből származik - a számla az eredeti TIG-hez került, "
+                "így az Utókövetés, a TIG és a Pénzügyek ugyanazt mutatja."
+            )
+        else:
+            _csatol_fajl(db, "expense", exp.id, bejovo, fajl, naplo)
+            naplo["csatolt"].append({"tipus": "expense", "id": exp.id})
         bejovo.rogzitett_expense_id = exp.id
-        naplo["csatolt"].append({"tipus": "expense", "id": exp.id})
     elif cel_tipus == "kulsos_tig":
         cert = db.get(PerformanceCertificate, dontes.get("cel_certificate_id") or bejovo.cel_certificate_id or 0)
         if cert is None:
@@ -796,8 +980,16 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
         if idoszak is None:
             raise ErkeztetesHiba("A kiválasztott E-Rezsi időszak nem található.")
         # A TÉNYLEGES terhelés az időszakra kerül - a `fizetve` jelzőhöz nem
-        # nyúlunk (a számla megérkezése nem kifizetés).
+        # nyúlunk (a számla megérkezése nem kifizetés). Az ELŐZŐ értéket a
+        # naplóba tesszük, hogy egy visszavonás/reset bizonyítható alapról
+        # állíthasson vissza.
         if idoszak.osszeg is None and bejovo.netto is not None:
+            naplo.setdefault("elozo_ertekek", {})["kotelezettseg_idoszak"] = {
+                "id": idoszak.id,
+                "osszeg": None,
+                "plusz_afa": idoszak.plusz_afa,
+                "penznem": idoszak.penznem,
+            }
             idoszak.osszeg = bejovo.netto
             idoszak.plusz_afa = bool(bejovo.afa_osszeg)
             idoszak.penznem = bejovo.penznem

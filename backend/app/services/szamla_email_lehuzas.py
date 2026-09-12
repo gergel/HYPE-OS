@@ -176,9 +176,14 @@ def lehuzas(
     elonezet: list[dict] = []
     uj_szamlak = 0
     feldolgozott_level = 0
+    kihagyott_korabbi = 0
+    hibas_level = 0
 
     for uzenet_id in uzenet_idk:
         if uzenet_id in mar_lattuk:
+            # Korábban már átvett vagy a resetnél kizárt üzenet - akkor sem
+            # jön át újra, ha a postafiókban olvasatlan maradt.
+            kihagyott_korabbi += 1
             continue
         uzenet = svc.users().messages().get(userId="me", id=uzenet_id, format="full").execute()
         payload = uzenet.get("payload") or {}
@@ -259,11 +264,17 @@ def lehuzas(
                 )
             )
             db.commit()
+            hibas_level += 1
             naplo(f"HIBA: {targy[:60]} - {exc}")
 
     return {
+        # KÜLÖN számoljuk a leveleket és a belőlük készült számlákat (a
+        # felhasználó kérése): hány olvasatlan levelet vizsgáltunk, hányból
+        # lett új számla, hány korábbi/kizárt maradt ki, és mi hibázott.
         "talalt_level": len(uzenet_idk),
         "uj_level": feldolgozott_level,
         "uj_szamla": uj_szamlak,
+        "kihagyott_korabbi": kihagyott_korabbi,
+        "hibas_level": hibas_level,
         "elonezet": elonezet if csak_elonezet else None,
     }

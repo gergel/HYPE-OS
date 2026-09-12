@@ -82,6 +82,7 @@ class BejovoListItem(BaseModel):
     cel_cimke: str | None = None
     javaslat_indoklas: str | None = None
     jovahagyo_nev: str | None = None
+    jovahagyva_at: datetime | None = None
     rogzitett_expense_id: int | None = None
     hiba_uzenet: str | None = None
 
@@ -210,6 +211,140 @@ def email_allapot(
     }
 
 
+@router.get("/celok/{tipus}")
+def cel_valasztek(
+    tipus: str,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """KERESHETŐ cél-választék a részletes ellenőrzőnek: a megfelelő TIG,
+    kiadás, előfizetés-időszak vagy KP-tétel EMBERI címkével (projekt, kód,
+    dátum, fél, összeg) - nem belső id-kkal kell dolgozni. A szűrést a
+    frontend keresője végzi (KeresosSelect), itt a friss, nyitott tételek
+    jönnek."""
+    from sqlalchemy import select as sel
+
+    lista: list[dict] = []
+    if tipus == "kulsos_tig":
+        for cert in db.scalars(
+            select(PerformanceCertificate)
+            .where(PerformanceCertificate.szamla_kifizetve.is_(False))
+            .order_by(PerformanceCertificate.id.desc())
+            .limit(400)
+        ):
+            fel = cert.employee.full_name if cert.employee else (cert.vallalkozas.nev if cert.vallalkozas else "?")
+            reszek = [fel]
+            if cert.project is not None:
+                if cert.project.nev:
+                    reszek.append(cert.project.nev)
+                if cert.project.forgatas_datuma:
+                    reszek.append(cert.project.forgatas_datuma.isoformat())
+                pc = db.get(ProjectCode, cert.project.project_code_id) if cert.project.project_code_id else None
+                if pc:
+                    reszek.append(pc.projektkod)
+            elif cert.project_code_id:
+                pc = db.get(ProjectCode, cert.project_code_id)
+                if pc:
+                    reszek.append(pc.projektkod)
+            if cert.netto_osszeg is not None:
+                reszek.append(f"{float(cert.netto_osszeg):,.0f} Ft".replace(",", " "))
+            if cert.invoices:
+                reszek.append(f"{len(cert.invoices)} számla már van")
+            lista.append({"id": cert.id, "cimke": " – ".join(reszek)})
+    elif tipus == "belsos_tig":
+        for cert in db.scalars(
+            select(InternalPerformanceCertificate)
+            .order_by(InternalPerformanceCertificate.ev.desc(), InternalPerformanceCertificate.honap.desc())
+            .limit(300)
+        ):
+            emp = db.get(Employee, cert.employee_id)
+            lista.append({"id": cert.id, "cimke": f"{emp.full_name if emp else '?'} – {cert.ev}.{cert.honap:02d}"})
+    elif tipus == "kiadas_csatolas":
+        for exp in db.scalars(select(Expense).order_by(Expense.id.desc()).limit(400)):
+            pc = db.get(ProjectCode, exp.project_code_id) if exp.project_code_id else None
+            reszek = [exp.megnevezes]
+            if exp.kiadas_leiras:
+                reszek.append(exp.kiadas_leiras[:60])
+            if pc:
+                reszek.append(pc.projektkod)
+            if exp.netto is not None:
+                reszek.append(f"{float(exp.netto):,.0f} Ft".replace(",", " "))
+            if exp.kiadas_datuma:
+                reszek.append(exp.kiadas_datuma.isoformat())
+            lista.append({"id": exp.id, "cimke": " – ".join(reszek)})
+    elif tipus == "erezsi":
+        for idoszak in db.scalars(
+            sel(KotelezettsegIdoszak).order_by(KotelezettsegIdoszak.esedekesseg.desc()).limit(400)
+        ):
+            lista.append(
+                {
+                    "id": idoszak.id,
+                    "cimke": f"{idoszak.kotelezettseg.nev}"
+                    + (f" ({idoszak.kotelezettseg.csomag})" if idoszak.kotelezettseg.csomag else "")
+                    + f" – {idoszak.esedekesseg}"
+                    + (" – összeg már beírva" if idoszak.osszeg is not None else ""),
+                }
+            )
+    elif tipus == "kp":
+        from app.models.finance import KpForgalom
+
+        for kp in db.scalars(sel(KpForgalom).order_by(KpForgalom.id.desc()).limit(300)):
+            lista.append(
+                {
+                    "id": kp.id,
+                    "cimke": f"{kp.forgalom or '?'} – {float(kp.osszeg or 0):,.0f} {kp.penznem}".replace(",", " ")
+                    + (f" – {kp.kiadas_datuma}" if kp.kiadas_datuma else ""),
+                }
+            )
+    else:
+        raise HTTPException(status_code=400, detail=f"Ehhez a cél-típushoz nincs választék: {tipus}")
+    return {"tipus": tipus, "lista": lista}
+
+
+@router.post("/{bejovo_id}/fajl", response_model=BejovoReszlet)
+async def fajl_potlas(
+    bejovo_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A LETÖLTÖTT SZÁMLA CSATOLÁSA egy már meglévő (jellemzően csak letöltő-
+    linkes levélből nyitott) piszkozathoz - UGYANAZT a tételt folytatja, nem
+    kell új asszisztens-beérkezést csinálni. A fájl után a feldolgozás
+    (kiolvasás + duplikáció + javaslat) lefut ezen a piszkozaton."""
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    if b.allapot == ALLAPOT_JOVAHAGYVA:
+        raise HTTPException(status_code=409, detail="A már jóváhagyott tételhez nem cserélhető a fájl.")
+    adat = await file.read()
+    mime = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
+    from app.services.szamla_erkeztetes import ENGEDETT_MIME, XML_MIME
+
+    if mime not in ENGEDETT_MIME | XML_MIME:
+        raise HTTPException(status_code=400, detail=f"Nem támogatott fájltípus: {mime}.")
+    if not adat or len(adat) > szamla_erkeztetes.MAX_MERET:
+        raise HTTPException(status_code=400, detail="A fájl üres vagy túl nagy (max 20 MB).")
+    regi_kulcs = b.storage_key
+    b.fajl_nev = (file.filename or "szamla")[:255]
+    b.content_type = mime
+    b.meret_bajt = len(adat)
+    b.fajl_hash = szamla_erkeztetes._hash(adat)
+    db.flush()
+    import re as _re
+
+    kulcs = f"bejovo-szamla/{b.id}-{_re.sub(r'[^A-Za-z0-9._-]+', '_', b.fajl_nev)[:80]}"
+    b.url = document_storage.upload_bytes(adat, kulcs, mime)
+    b.storage_key = kulcs
+    szamla_erkeztetes.feldolgoz(db, b, adat=adat)
+    db.commit()
+    if regi_kulcs and regi_kulcs != kulcs:
+        try:
+            document_storage.delete_object(regi_kulcs)
+        except Exception:  # noqa: BLE001
+            pass
+    db.refresh(b)
+    return _kimenet(db, b, reszletes=True)
+
+
 @router.get("/{bejovo_id}", response_model=BejovoReszlet)
 def reszlet(
     bejovo_id: int,
@@ -290,6 +425,33 @@ def javitas(
     valtozasok = payload.model_dump(exclude_unset=True)
     if "cel_tipus" in valtozasok and valtozasok["cel_tipus"] is not None and valtozasok["cel_tipus"] not in CEL_TIPUSOK:
         raise HTTPException(status_code=400, detail=f"Ismeretlen cél-típus: {valtozasok['cel_tipus']}")
+    # CÉLTÍPUS-VÁLTÁSKOR a régi, az új típushoz nem tartozó rekord-kapcsolat
+    # törlődik a piszkozatból (a felhasználó kérése) - különben egy korábbi
+    # TIG-hivatkozás némán ott maradna egy "új kiadás" cél mögött.
+    if "cel_tipus" in valtozasok and valtozasok["cel_tipus"] != b.cel_tipus:
+        TIPUS_MEZOI = {
+            "kiadas_uj": {"cel_project_code_id", "cel_employee_id"},
+            "mukodesi": {"cel_employee_id"},
+            "auto": {"cel_auto_id", "cel_employee_id", "cel_project_code_id"},
+            "kiadas_csatolas": {"cel_expense_id"},
+            "kulsos_tig": {"cel_certificate_id"},
+            "belsos_tig": {"cel_internal_certificate_id"},
+            "erezsi": {"cel_kotelezettseg_idoszak_id"},
+            "kp": {"cel_kp_forgalom_id"},
+        }
+        megtartando = TIPUS_MEZOI.get(valtozasok["cel_tipus"] or "", set())
+        for mezo in (
+            "cel_project_code_id",
+            "cel_expense_id",
+            "cel_certificate_id",
+            "cel_internal_certificate_id",
+            "cel_kotelezettseg_idoszak_id",
+            "cel_auto_id",
+            "cel_kp_forgalom_id",
+            "cel_employee_id",
+        ):
+            if mezo not in megtartando and mezo not in valtozasok:
+                setattr(b, mezo, None)
     utasitas_valtozott = "felhasznaloi_utasitas" in valtozasok
     for mezo, ertek in valtozasok.items():
         setattr(b, mezo, ertek)
@@ -435,6 +597,39 @@ def torles(
         except Exception:  # noqa: BLE001 - az árva objektum nem éri meg az 500-at
             pass
     return None
+
+
+class ResetIn(BaseModel):
+    #: Kifejezett megerősítés - e nélkül a hívás nem fut le.
+    megerosites: str
+
+
+@router.post("/reset")
+def tiszta_ujrainditas(
+    payload: ResetIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    """TISZTA ÚJRAINDÍTÁS: az eddigi érkeztetési beérkezések kitakarítása
+    (lásd services/szamla_reset.py) - CSAK ADMIN, kifejezett megerősítéssel.
+
+    Mentés + tételes visszaállítási jegyzék készül; a jóváhagyott tételek
+    mellékhatásai bizonyítható eredet alapján vonódnak vissza (a nem
+    bizonyítható rendezendő kivételként jelölődik); a kizárási napló megmarad,
+    így a kitakarított levelek nem jönnek vissza a következő lehúzáskor. Az
+    eredeti postafiókhoz nem nyúlunk."""
+    from app.models.employee import SystemRole, van_szerepkore
+
+    if not van_szerepkore(current_user, SystemRole.ADMIN):
+        raise HTTPException(status_code=403, detail="A tiszta újraindítást csak admin futtathatja.")
+    if payload.megerosites.strip().upper() != "TISZTA INDULAS":
+        raise HTTPException(
+            status_code=400,
+            detail='A megerősítéshez írd be pontosan: "TISZTA INDULAS".',
+        )
+    from app.services import szamla_reset
+
+    return szamla_reset.teljes_reset(db, current_user)
 
 
 class LehuzasIn(BaseModel):

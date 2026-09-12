@@ -980,6 +980,7 @@ export type BejovoSzamla = {
   cel_cimke: string | null;
   javaslat_indoklas: string | null;
   jovahagyo_nev: string | null;
+  jovahagyva_at: string | null;
   rogzitett_expense_id: number | null;
   hiba_uzenet: string | null;
 };
