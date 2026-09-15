@@ -979,6 +979,8 @@ export type BejovoSzamla = {
   cel_tipus: string | null;
   cel_cimke: string | null;
   javaslat_indoklas: string | null;
+  /** biztos | tobb_lehetseges | ellentmondo | keves_info - a javaslat megalapozottsága. */
+  javaslat_erosseg: string | null;
   jovahagyo_nev: string | null;
   jovahagyva_at: string | null;
   rogzitett_expense_id: number | null;
@@ -997,6 +999,19 @@ export type BejovoSzamlaReszlet = BejovoSzamla & {
     indoklas: string;
     alternativak: { tipus: string; cel_id: number; cimke: string; indoklas: string }[];
     figyelmeztetesek: string[];
+    /** biztos | tobb_lehetseges | ellentmondo | keves_info */
+    erosseg?: string;
+    /** MIRE épül a javaslat - visszakereshető bizonyíték-sorok. */
+    bizonyitek?: string[];
+    /** Az Excel-részletezőből készített bontás-javaslat (több projekt egy számlán). */
+    bontas_javaslat?: {
+      forras_bejovo_id: number;
+      forras_fajl: string | null;
+      sorok: BontasSor[];
+      osszesen: number;
+      penznem: string | null;
+      figyelmeztetesek: string[];
+    };
   } | null;
   felhasznaloi_utasitas: string | null;
   kiallitas_datuma: string | null;
@@ -1018,6 +1033,22 @@ export type BejovoSzamlaReszlet = BejovoSzamla & {
   duplikatum_bejovo_id: number | null;
   duplikatum_megjegyzes: string | null;
   valtozat_szamla_id: number | null;
+  /** A mentett bontás-piszkozat sorai (több projekt egy számlán). */
+  bontas: BontasSor[] | null;
+};
+
+/** Egy bontás-sor: a számla egy része egy célra (több projekt egy számlán). */
+export type BontasSor = {
+  cel_tipus: string | null;
+  project_code_id?: number | null;
+  projektkod?: string | null;
+  projekt_nev?: string | null;
+  cel_id?: number | null;
+  netto: number;
+  brutto_e?: boolean | null;
+  megjegyzes?: string | null;
+  /** Honnan jött a sor (pl. "reszletezo.xlsx - 3. sor") - visszakereshető. */
+  forras?: string | null;
 };
 
 export async function getBejovoSzamlak(allapot?: string): Promise<BejovoSzamla[]> {

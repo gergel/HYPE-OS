@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 from app.models.auto import Auto
 from app.models.bejovo_szamla import (
     ALLAPOT_DUPLIKATUM,
+    ALLAPOT_EGYEB_DOKUMENTUM,
     ALLAPOT_ELLENORZENDO,
     ALLAPOT_HIBA,
     ALLAPOT_JOVAHAGYVA,
@@ -54,7 +55,7 @@ from app.models.kotelezettseg import Kotelezettseg, KotelezettsegIdoszak, Kotele
 from app.models.performance_certificate import PerformanceCertificate, PerformanceCertificateInvoice
 from app.models.project_code import ProjectCode
 from app.models.vallalkozas import Vallalkozas
-from app.services import attachments, document_storage, kiadas_kiolvasas, penznem
+from app.services import attachments, document_storage, excel_szoveg, kiadas_kiolvasas, penznem
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,7 @@ def letrehozas(
     )
     if adat is not None:
         mime = (content_type or "application/octet-stream").split(";")[0].strip().lower()
-        if mime not in ENGEDETT_MIME | XML_MIME:
+        if mime not in ENGEDETT_MIME | XML_MIME and not excel_szoveg.excelnek_tunik(mime, fajl_nev):
             raise ErkeztetesHiba(
                 f"Nem támogatott fájltípus: {mime}. PDF-et vagy jól olvasható számlafotót (JPG/PNG/WEBP/HEIC) tölts fel."
             )
@@ -172,6 +173,11 @@ def feldolgoz(db: Session, bejovo: BejovoSzamla, adat: bytes | None = None) -> N
             # megvan (azonos e-mail), különben pontosításra vár.
             _xml_parositas(db, bejovo)
             return
+        if excel_szoveg.excelnek_tunik(bejovo.content_type, bejovo.fajl_nev):
+            # Excel/CSV melléklet: költség-részletező (projektbontás), nem
+            # önálló számla - a társ-számlájához bontás-javaslatot készít.
+            _reszletezo_feldolgozas(db, bejovo, adat)
+            return
         if bejovo.storage_key is None and adat is None:
             # Fájl nélküli (pl. csak letöltő-linkes levélből nyitott) piszkozat.
             bejovo.allapot = ALLAPOT_PONTOSITAS
@@ -188,6 +194,33 @@ def feldolgoz(db: Session, bejovo: BejovoSzamla, adat: bytes | None = None) -> N
         kinyert = kiadas_kiolvasas.szamla_olvasd_ki(adat, bejovo.content_type or "application/pdf")
         _kinyert_mentese(bejovo, kinyert)
 
+        if bejovo.dokumentum_tipus == "ertesito":
+            # Számlaértesítő/fizetési emlékeztető: nem maga a számla. Ha a
+            # hivatkozott számla már beérkezett, ahhoz kapcsoljuk; különben
+            # a számlafájlra vár.
+            _ertesito_kezeles(db, bejovo)
+            return
+        if (
+            (bejovo.dokumentum_tipus or "egyeb") == "egyeb"
+            and not bejovo.szamlaszam
+            and bejovo.netto is None
+            and bejovo.brutto is None
+        ):
+            # Nem számla jellegű melléklet (aláíráskép, képernyőkép, egyéb
+            # dokumentum): külön listába kerül, nem az elbírálandók közé -
+            # de nem is vész el, kézzel visszaminősíthető (reset).
+            bejovo.allapot = ALLAPOT_EGYEB_DOKUMENTUM
+            bejovo.javaslat = {
+                "tipus": None,
+                "indoklas": (
+                    "Nem számla jellegű melléklet: nincs rajta számlaszám és összeg sem. "
+                    "Külön listába került - ha mégis számla, az újraindítással visszaminősítheted."
+                ),
+                "alternativak": [],
+                "figyelmeztetesek": [],
+            }
+            return
+
         duplikatum = _duplikacio(db, bejovo)
         if duplikatum is not None:
             bejovo.allapot = ALLAPOT_DUPLIKATUM
@@ -199,6 +232,10 @@ def feldolgoz(db: Session, bejovo: BejovoSzamla, adat: bytes | None = None) -> N
             return
 
         javasol(db, bejovo)
+        # Ha ugyanabban a levélben MÁR feldolgozott költség-részletező van
+        # (az Excel a számla előtt került sorra), a bontás-javaslata most
+        # kerül erre a számlára.
+        _tars_reszletezo_alkalmazasa(db, bejovo)
     except (ErkeztetesHiba, ValueError) as exc:
         bejovo.allapot = ALLAPOT_HIBA
         bejovo.hiba_uzenet = str(exc)
@@ -296,6 +333,213 @@ def _xml_parositas(db: Session, bejovo: BejovoSzamla) -> None:
         }
 
 
+def _reszletezo_feldolgozas(db: Session, bejovo: BejovoSzamla, adat: bytes | None) -> None:
+    """Excel/CSV KÖLTSÉG-RÉSZLETEZŐ feldolgozása: a cellák szöveggé, a sorok
+    kiolvasva, majd a bontás-javaslat az azonos levélben érkezett EGYETLEN
+    társ-számlára kerül. Több társ-számlánál (vagy ha a táblázat láthatóan
+    több számlát bont) NEM alkalmazzuk automatikusan - pontosításra vár."""
+    bejovo.dokumentum_tipus = "reszletezo"
+    if adat is None and bejovo.storage_key:
+        adat = document_storage.download_bytes(bejovo.storage_key)
+    if adat is None:
+        bejovo.allapot = ALLAPOT_PONTOSITAS
+        bejovo.javaslat = {
+            "tipus": None,
+            "indoklas": "A részletezőhöz nem tartozik fájl - kézi ellenőrzés kell.",
+            "alternativak": [],
+            "figyelmeztetesek": [],
+        }
+        return
+
+    szoveg = excel_szoveg.szovegge(adat, bejovo.fajl_nev)
+    kinyert = kiadas_kiolvasas.reszletezo_olvasd_ki(szoveg)
+    sorok = [s for s in (kinyert.get("sorok") or []) if isinstance(s, dict)]
+    bejovo.kinyert = {"reszletezo": kinyert}
+
+    tarsak: list[BejovoSzamla] = []
+    if bejovo.email_uzenet_id:
+        tarsak = list(
+            db.scalars(
+                select(BejovoSzamla)
+                .where(
+                    BejovoSzamla.email_uzenet_id == bejovo.email_uzenet_id,
+                    BejovoSzamla.id != bejovo.id,
+                    BejovoSzamla.content_type.in_(sorted(ENGEDETT_MIME)),
+                )
+                .order_by(BejovoSzamla.id)
+            ).all()
+        )
+
+    if not sorok:
+        bejovo.allapot = ALLAPOT_PONTOSITAS
+        bejovo.javaslat = {
+            "tipus": None,
+            "indoklas": "A táblázatból nem sikerült bontás-sorokat kiolvasni - nézd meg kézzel.",
+            "alternativak": [],
+            "figyelmeztetesek": [],
+        }
+        return
+    if kinyert.get("tobb_szamlat_reszletez") or len(tarsak) > 1:
+        bejovo.allapot = ALLAPOT_PONTOSITAS
+        bejovo.javaslat = {
+            "tipus": None,
+            "indoklas": (
+                "A részletező több számlához tartozhat "
+                f"({len(tarsak)} számla érkezett a levélben) - a bontást nem alkalmazzuk automatikusan, "
+                "nyisd meg az érintett számlát és ott vedd át a sorokat."
+            ),
+            "alternativak": [],
+            "figyelmeztetesek": ["Több számlás részletező - automatikus hozzárendelés nincs."],
+        }
+        return
+    if len(tarsak) == 1:
+        tars = tarsak[0]
+        bejovo.valtozat_szamla_id = tars.id
+        bejovo.allapot = ALLAPOT_JOVAHAGYVA  # a részletező nem önálló teendő
+        bejovo.javaslat = {
+            "tipus": None,
+            "indoklas": f"A #{tars.id} számla költség-részletezője - a bontás javaslata a számlán jelenik meg.",
+            "alternativak": [],
+            "figyelmeztetesek": [],
+        }
+        _bontas_javaslat_keszites(db, tars, bejovo, kinyert)
+        return
+    bejovo.allapot = ALLAPOT_PONTOSITAS
+    bejovo.javaslat = {
+        "tipus": None,
+        "indoklas": "Önállóan érkezett költség-részletező - a hozzá tartozó számla még nincs meg.",
+        "alternativak": [],
+        "figyelmeztetesek": [],
+    }
+
+
+def _bontas_javaslat_keszites(db: Session, szamla: BejovoSzamla, reszletezo: BejovoSzamla, kinyert: dict) -> None:
+    """A részletezőből BONTÁS-JAVASLAT a számlára: soronként projektkód-
+    feloldással és visszakereshető forrással (fájlnév + sorszám). Csak
+    javaslat - a bontást a felhasználó hagyja jóvá az ellenőrzőben."""
+    sorok_ki: list[dict] = []
+    figyelmeztetesek: list[str] = []
+    bizonytalan_brutto = False
+    for i, sor in enumerate([s for s in (kinyert.get("sorok") or []) if isinstance(s, dict)], start=1):
+        osszeg = _szam(sor.get("osszeg"))
+        if osszeg is None:
+            continue
+        kod = (sor.get("projektkod") or "").strip().upper()
+        pc = db.scalar(select(ProjectCode).where(func.upper(ProjectCode.projektkod) == kod)) if kod else None
+        if sor.get("brutto_e") is None:
+            bizonytalan_brutto = True
+        sorok_ki.append(
+            {
+                "cel_tipus": "kiadas_uj" if pc is not None else None,
+                "project_code_id": pc.id if pc is not None else None,
+                "projektkod": kod or None,
+                "projekt_nev": sor.get("projekt_nev"),
+                "netto": osszeg,
+                "brutto_e": sor.get("brutto_e"),
+                "megjegyzes": sor.get("megnevezes"),
+                "forras": f"{reszletezo.fajl_nev or 'részletező'} - {i}. sor",
+            }
+        )
+    if not sorok_ki:
+        return
+    if bizonytalan_brutto:
+        figyelmeztetesek.append(
+            "A részletezőből nem derül ki egyértelműen, hogy a sorösszegek nettók vagy bruttók - "
+            "ellenőrizd a rögzítés előtt."
+        )
+    osszesen = round(sum(float(s["netto"]) for s in sorok_ki), 2)
+    if szamla.netto is not None and abs(osszesen - float(szamla.netto)) > 1:
+        if szamla.brutto is not None and abs(osszesen - float(szamla.brutto)) <= 1:
+            figyelmeztetesek.append(
+                "A részletező sorai a számla BRUTTÓ összegét adják ki - a bontás rögzítése előtt nettósítsd a sorokat."
+            )
+        else:
+            figyelmeztetesek.append(
+                f"A részletező sorainak összege ({osszesen:,.0f}) nem egyezik a számla nettójával "
+                f"({float(szamla.netto):,.0f}) - ellenőrizd, mi hiányzik.".replace(",", " ")
+            )
+    szamla.javaslat = {
+        **(szamla.javaslat or {}),
+        "bontas_javaslat": {
+            "forras_bejovo_id": reszletezo.id,
+            "forras_fajl": reszletezo.fajl_nev,
+            "sorok": sorok_ki,
+            "osszesen": osszesen,
+            "penznem": kinyert.get("penznem"),
+            "figyelmeztetesek": figyelmeztetesek,
+        },
+    }
+
+
+def _tars_reszletezo_alkalmazasa(db: Session, bejovo: BejovoSzamla) -> None:
+    """Fordított sorrend: ha a részletező HAMARABB került feldolgozásra, mint
+    a számla (az Excel volt a levél első csatolmánya), a bontás-javaslatot a
+    most feldolgozott számla kapja meg - de csak ha ez az EGYETLEN számla a
+    levélben (több számlánál nincs automatikus hozzárendelés)."""
+    if not bejovo.email_uzenet_id or (bejovo.javaslat or {}).get("bontas_javaslat"):
+        return
+    reszletezok = list(
+        db.scalars(
+            select(BejovoSzamla)
+            .where(
+                BejovoSzamla.email_uzenet_id == bejovo.email_uzenet_id,
+                BejovoSzamla.id != bejovo.id,
+                BejovoSzamla.dokumentum_tipus == "reszletezo",
+            )
+            .order_by(BejovoSzamla.id)
+        ).all()
+    )
+    if len(reszletezok) != 1:
+        return
+    reszletezo = reszletezok[0]
+    kinyert = (reszletezo.kinyert or {}).get("reszletezo") or {}
+    if kinyert.get("tobb_szamlat_reszletez"):
+        return
+    masik_szamla = db.scalar(
+        select(BejovoSzamla.id).where(
+            BejovoSzamla.email_uzenet_id == bejovo.email_uzenet_id,
+            BejovoSzamla.id.notin_([bejovo.id, reszletezo.id]),
+            BejovoSzamla.content_type.in_(sorted(ENGEDETT_MIME)),
+        )
+    )
+    if masik_szamla is not None:
+        return
+    reszletezo.valtozat_szamla_id = bejovo.id
+    if reszletezo.allapot == ALLAPOT_PONTOSITAS:
+        reszletezo.allapot = ALLAPOT_JOVAHAGYVA
+        reszletezo.javaslat = {
+            **(reszletezo.javaslat or {}),
+            "indoklas": f"A #{bejovo.id} számla költség-részletezője - a bontás javaslata a számlán jelenik meg.",
+        }
+    _bontas_javaslat_keszites(db, bejovo, reszletezo, kinyert)
+
+
+def _ertesito_kezeles(db: Session, bejovo: BejovoSzamla) -> None:
+    """Számlaértesítő / fizetési emlékeztető: NEM maga a számla. Ha a
+    hivatkozott számla már beérkezett (számlaszám+kibocsátó+összeg vagy azonos
+    fájl), az értesítő ahhoz kapcsolódik duplikátum-mintára; különben a
+    számlafájlra vár - nem kerül az elbírálandó számlák közé."""
+    talalat = _duplikacio(db, bejovo)
+    if talalat is not None:
+        bejovo.allapot = ALLAPOT_DUPLIKATUM
+        bejovo.duplikatum_bejovo_id = talalat.id
+        bejovo.duplikatum_megjegyzes = (
+            f"Értesítő a #{talalat.id} beérkezett számláról "
+            f"({talalat.kibocsato_nev or '?'} / {talalat.szamlaszam or 'azonos fájl'}) - önálló teendő nincs."
+        )
+        return
+    bejovo.allapot = ALLAPOT_PONTOSITAS
+    bejovo.javaslat = {
+        "tipus": None,
+        "indoklas": (
+            "Számlaértesítő/fizetési emlékeztető - maga a számlafájl még nem érkezett meg. "
+            "Számlafájlra vár: ha a számla később beérkezik, a duplikáció-vizsgálat összekapcsolja őket."
+        ),
+        "alternativak": [],
+        "figyelmeztetesek": ["Értesítő számlafájl nélkül - végleges rögzítés előtt kell az igazi számla."],
+    }
+
+
 # ── DUPLIKÁCIÓ ───────────────────────────────────────────────────────────────
 
 
@@ -388,9 +632,13 @@ def javasol(db: Session, bejovo: BejovoSzamla) -> None:
     kérünk, az összes jelölttel. Újrafuttatható: az utasítás módosítása után
     is ez fut, a már kinyert adatokon."""
     figyelmeztetesek: list[str] = list((bejovo.kinyert or {}).get("osszeg_figyelmeztetesek") or [])
+    #: Egymásnak ELLENTMONDÓ jelek (kód vs. levél, számlaszám-ütközés, egyező
+    #: összeg másik projekten) - a javaslat-erősség ebből lesz "ellentmondo".
+    ellentmondas = False
     utkozes = _szamlaszam_utkozes(db, bejovo)
     if utkozes:
         figyelmeztetesek.append(utkozes)
+        ellentmondas = True
 
     tipus: str | None = None
     indoklas = ""
@@ -411,6 +659,7 @@ def javasol(db: Session, bejovo: BejovoSzamla) -> None:
             f"A dokumentum ({', '.join(dok_kodok)}) és a levél/utasítás ({', '.join(level_kodok)}) "
             "eltérő projektkódot mond - ellenőrizd, melyik az igaz."
         )
+        ellentmondas = True
     projekt_kodok: list[ProjectCode] = []
     for kod in kodok[:5]:
         pc = db.scalar(select(ProjectCode).where(func.upper(ProjectCode.projektkod) == kod))
@@ -506,6 +755,7 @@ def javasol(db: Session, bejovo: BejovoSzamla) -> None:
                     f"A(z) {j['cimke']} összege egyezik, de MÁSIK projekthez tartozik, mint a megadott "
                     f"kód ({', '.join(kodok)}) - ezért nem ez lett kiválasztva."
                 )
+                ellentmondas = True
         # A kód projektjén lévő, MÁS FÉLHEZ tartozó TIG nem automatikus cél -
         # az alternatívák közt marad, az "Eltér: számlázó fél" jelöléssel.
         sajat_kod_tigek = [j for j in kod_tigek if j["fel_egyezik"]]
@@ -575,12 +825,42 @@ def javasol(db: Session, bejovo: BejovoSzamla) -> None:
             "Válassz célt az ellenőrzőben."
         )
 
+    # ── JAVASLAT-ERŐSSÉG + BIZONYÍTÉK (a felhasználó kérése): a felület ne
+    # csak a javaslatot mutassa, hanem azt is, MIRE épül és mennyire biztos -
+    # "biztos" | "tobb_lehetseges" | "ellentmondo" | "keves_info".
+    bizonyitek: list[str] = []
+    if dok_kodok:
+        bizonyitek.append(f"Projektkód a dokumentumban: {', '.join(dok_kodok)}")
+    if level_kodok:
+        bizonyitek.append(f"Projektkód a levélben/utasításban: {', '.join(level_kodok)}")
+    if fel_employee is not None:
+        bizonyitek.append(
+            f"A kibocsátó azonosítva: {fel_employee.full_name} (adószám/név-egyezés a csapat-nyilvántartással)"
+        )
+    if fel_vallalkozas is not None:
+        bizonyitek.append(f"A kibocsátó azonosítva: {fel_vallalkozas.nev} (számlázó vállalkozás)")
+    if bejovo.felhasznaloi_utasitas:
+        bizonyitek.append(f"Felhasználói utasítás: {bejovo.felhasznaloi_utasitas[:200]}")
+    for j in tig_jeloltek:
+        if j["osszeg_egyezik"]:
+            bizonyitek.append(f"Összeg-egyezés: {j['cimke']}")
+    if ellentmondas:
+        erosseg = "ellentmondo"
+    elif tipus:
+        erosseg = "biztos"
+    elif alternativak:
+        erosseg = "tobb_lehetseges"
+    else:
+        erosseg = "keves_info"
+
     bejovo.cel_tipus = tipus
     bejovo.javaslat = {
         "tipus": tipus,
         "indoklas": indoklas,
         "alternativak": alternativak[:8],
         "figyelmeztetesek": figyelmeztetesek,
+        "erosseg": erosseg,
+        "bizonyitek": bizonyitek[:8],
     }
     bejovo.allapot = ALLAPOT_ELLENORZENDO if tipus else ALLAPOT_PONTOSITAS
     if bejovo.dokumentum_tipus in ("modosito", "storno") and not (bejovo.kinyert or {}).get("mezok", {}).get(
@@ -887,8 +1167,12 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
         raise ErkeztetesHiba(
             "Kimenő (általunk kiállított) számla nem rögzíthető kiadásként - a megrendelői folyamatban a helye."
         )
-    if bejovo.dokumentum_tipus == "dijbekero" and cel_tipus in ("kiadas_uj", "mukodesi", "auto"):
+    if bejovo.dokumentum_tipus == "dijbekero" and cel_tipus in ("kiadas_uj", "mukodesi", "auto", "bontas"):
         raise ErkeztetesHiba("Díjbekérő nem rögzíthető végleges kiadásként - várd meg a számlát.")
+    if bejovo.dokumentum_tipus == "ertesito" and cel_tipus in ("kiadas_uj", "mukodesi", "auto", "bontas"):
+        raise ErkeztetesHiba(
+            "Ez számlaértesítő/emlékeztető, nem maga a számla - várd meg a számlafájlt, abból rögzíthető kiadás."
+        )
 
     fajl = None
     if bejovo.storage_key:
@@ -898,6 +1182,8 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
 
     if cel_tipus in ("kiadas_uj", "mukodesi", "auto"):
         naplo = _rogzit_kiadaskent(db, bejovo, dontes, fajl, naplo, cel_tipus)
+    elif cel_tipus == "bontas":
+        naplo = _rogzit_bontaskent(db, bejovo, dontes, fajl, naplo)
     elif cel_tipus == "kiadas_csatolas":
         exp = db.get(Expense, dontes.get("cel_expense_id") or bejovo.cel_expense_id or 0)
         if exp is None:
@@ -1024,15 +1310,7 @@ def _rogzit_kiadaskent(
     )
     if netto is None:
         raise ErkeztetesHiba("Hiányzik a nettó összeg - add meg az ellenőrzőben (nem találunk ki értéket).")
-    plusz_afa = bool(bejovo.afa_osszeg) or bool((bejovo.kinyert or {}).get("mezok", {}).get("afa_kulcsok"))
-    afa_szazalek = None
-    kulcsok = (bejovo.kinyert or {}).get("mezok", {}).get("afa_kulcsok") or []
-    if len(kulcsok) == 1 and _szam(kulcsok[0]):
-        afa_szazalek = _szam(kulcsok[0])
-    elif len(kulcsok) > 1:
-        naplo.setdefault("megjegyzesek", []).append(
-            "Több áfakulcs szerepel a számlán - a bruttó a számláról jön, nem kulcsból számolt."
-        )
+    plusz_afa, afa_szazalek = _afa_adatok(bejovo, naplo)
 
     arfolyam = _szam(dontes.get("arfolyam"))
     if penznem.devizas(bejovo.penznem) and arfolyam is None:
@@ -1112,6 +1390,196 @@ def _rogzit_kiadaskent(
             naplo.setdefault("megjegyzesek", []).append(
                 f"A számla fájlja a(z) #{elso_expense.id} kiadásnál van - a többi felosztott sor erre hivatkozik."
             )
+    return naplo
+
+
+def _afa_adatok(bejovo: BejovoSzamla, naplo: dict) -> tuple[bool, float | None]:
+    """Van-e áfa a számlán és milyen kulccsal - a kiadás-rögzítés közös
+    bemenete (az egy-célú és a bontásos rögzítés is ezt használja)."""
+    plusz_afa = bool(bejovo.afa_osszeg) or bool((bejovo.kinyert or {}).get("mezok", {}).get("afa_kulcsok"))
+    afa_szazalek = None
+    kulcsok = (bejovo.kinyert or {}).get("mezok", {}).get("afa_kulcsok") or []
+    if len(kulcsok) == 1 and _szam(kulcsok[0]):
+        afa_szazalek = _szam(kulcsok[0])
+    elif len(kulcsok) > 1:
+        naplo.setdefault("megjegyzesek", []).append(
+            "Több áfakulcs szerepel a számlán - a bruttó a számláról jön, nem kulcsból számolt."
+        )
+    return plusz_afa, afa_szazalek
+
+
+#: A bontás-sorokban megengedett célok. Belsős TIG / E-Rezsi / KP szándékosan
+#: nincs köztük: azok jellemzően teljes számlát fednek - ha mégis bontani
+#: kellene rájuk, az egyedi eset, kézzel kezelendő.
+BONTAS_CEL_TIPUSOK = ("kiadas_uj", "mukodesi", "kulsos_tig", "kiadas_csatolas")
+
+
+def _rogzit_bontaskent(db: Session, bejovo: BejovoSzamla, dontes: dict, fajl: bytes | None, naplo: dict) -> dict:
+    """TÖBB PROJEKT EGY SZÁMLÁN: a bontás-sorok vegyesen hozhatnak létre új
+    kiadást (kesz=False), csatolhatnak meglévő kiadáshoz vagy külsős TIG-hez.
+
+    A számla EGY pénzügyi dokumentum marad: a sorok nettói pontosan a számla
+    nettóját adják ki (±1 Ft kerekítés az utolsó soron, LÁTHATÓ naplóbejegyzés-
+    sel); a meglévő célok (TIG, kiadás) összegét NEM írjuk át - ott a sor-összeg
+    a naplóba kerül. Hiányos bontással nem véglegesíthető."""
+    sorok = dontes.get("bontas") if dontes.get("bontas") is not None else bejovo.bontas
+    if isinstance(sorok, dict):
+        sorok = sorok.get("sorok")
+    sorok = [s for s in (sorok or []) if isinstance(s, dict)]
+    if not sorok:
+        raise ErkeztetesHiba("A bontáshoz legalább egy hozzárendelési sor kell - vedd fel a sorokat az ellenőrzőben.")
+
+    netto = _szam(dontes.get("netto")) if dontes.get("netto") is not None else (
+        float(bejovo.netto) if bejovo.netto is not None else None
+    )
+    if netto is None:
+        raise ErkeztetesHiba("Hiányzik a számla nettó összege - bontás csak ismert végösszegre véglegesíthető.")
+
+    reszek: list[dict] = []
+    for i, sor in enumerate(sorok, start=1):
+        ct = sor.get("cel_tipus")
+        if ct not in BONTAS_CEL_TIPUSOK:
+            raise ErkeztetesHiba(
+                f"A bontás {i}. sorának célja hiányzik vagy nem támogatott ({ct or 'üres'}) - "
+                "válassz projektet/tételt minden sorhoz."
+            )
+        resz_netto = _szam(sor.get("netto"))
+        if not resz_netto:
+            raise ErkeztetesHiba(f"A bontás {i}. sorából hiányzik az összeg.")
+        if ct == "kiadas_uj" and not sor.get("project_code_id"):
+            raise ErkeztetesHiba(
+                f"A bontás {i}. sora új kiadás, de nincs projektkódja - válaszd ki, vagy jelöld működésinek."
+            )
+        if ct in ("kulsos_tig", "kiadas_csatolas") and not sor.get("cel_id"):
+            raise ErkeztetesHiba(f"A bontás {i}. sorához nincs kiválasztva a meglévő tétel.")
+        reszek.append({**sor, "netto": float(resz_netto)})
+
+    osszesen = round(sum(r["netto"] for r in reszek), 2)
+    elteres = round(netto - osszesen, 2)
+    if abs(elteres) > 1:
+        raise ErkeztetesHiba(
+            f"A bontás sorai ({osszesen:,.2f}) nem adják ki a számla nettóját ({netto:,.2f}) - "
+            f"az eltérés {elteres:+,.2f}. Hiányos bontással a számla nem véglegesíthető.".replace(",", " ")
+        )
+    if elteres:
+        reszek[-1]["netto"] = round(reszek[-1]["netto"] + elteres, 2)
+        naplo.setdefault("megjegyzesek", []).append(
+            f"Kerekítési korrekció: az utolsó bontás-sor összege {elteres:+.2f} Ft-tal igazítva, "
+            f"hogy a sorok pontosan a számla nettóját ({netto:,.2f}) adják ki.".replace(",", " ")
+        )
+
+    plusz_afa, afa_szazalek = _afa_adatok(bejovo, naplo)
+    arfolyam = _szam(dontes.get("arfolyam"))
+    if penznem.devizas(bejovo.penznem) and arfolyam is None and any(
+        r["cel_tipus"] in ("kiadas_uj", "mukodesi") for r in reszek
+    ):
+        raise ErkeztetesHiba(
+            f"A számla {bejovo.penznem}-ben szól - add meg az árfolyamot (forrással/dátummal), "
+            "önkényes árfolyamot nem használunk."
+        )
+
+    elso_expense: Expense | None = None
+    uj_kiadas_sorszam = 0
+    uj_kiadasok_szama = sum(1 for r in reszek if r["cel_tipus"] in ("kiadas_uj", "mukodesi"))
+    for i, resz in enumerate(reszek, start=1):
+        ct = resz["cel_tipus"]
+        resz_netto = resz["netto"]
+        if ct in ("kiadas_uj", "mukodesi"):
+            uj_kiadas_sorszam += 1
+            huf_netto = resz_netto
+            eredeti_penznem = None
+            if penznem.devizas(bejovo.penznem):
+                eredeti_penznem = bejovo.penznem
+                huf_netto = penznem.forintra(resz_netto, arfolyam) or 0
+            brutto = round(huf_netto * (1 + (afa_szazalek or 27) / 100), 2) if plusz_afa else huf_netto
+            pc_id = resz.get("project_code_id")
+            if ct == "kiadas_uj" and pc_id is not None and db.get(ProjectCode, pc_id) is None:
+                raise ErkeztetesHiba(f"A bontás {i}. sorában megadott projektkód (#{pc_id}) nem található.")
+            exp = Expense(
+                megnevezes=(dontes.get("megnevezes") or bejovo.kibocsato_nev or "Ismeretlen partner")[:255],
+                kiadas_leiras=(
+                    str(resz.get("megjegyzes") or dontes.get("kiadas_leiras") or _alap_leiras(bejovo))[:200]
+                    + f" – bontott számla {uj_kiadas_sorszam}/{uj_kiadasok_szama}"
+                ),
+                netto=huf_netto,
+                brutto=brutto,
+                plusz_afa="igen" if plusz_afa else None,
+                afa_szazalek=afa_szazalek,
+                penznem="HUF",
+                eredeti_penznem=eredeti_penznem,
+                eredeti_netto=resz_netto if eredeti_penznem else None,
+                eredeti_brutto=(
+                    round(resz_netto * (1 + (afa_szazalek or 27) / 100), 2)
+                    if eredeti_penznem and plusz_afa
+                    else (resz_netto if eredeti_penznem else None)
+                ),
+                arfolyam=arfolyam,
+                kiadas_datuma=bejovo.teljesites_datuma or bejovo.kiallitas_datuma,
+                fizetes_hatarideje=bejovo.fizetesi_hatarido,
+                project_code_id=None if ct == "mukodesi" else pc_id,
+                employee_id=dontes.get("cel_employee_id") or bejovo.cel_employee_id,
+                tipus=dontes.get("tipus")
+                or ("kulsos" if (dontes.get("cel_employee_id") or bejovo.cel_employee_id) else "egyeb"),
+                kifizetes_modja=dontes.get("kifizetes_modja")
+                or ((bejovo.kinyert or {}).get("mezok", {}).get("fizetesi_mod") or None),
+                # A SZÁMLA MEGÉRKEZÉSE NEM KIFIZETÉS: a tétel nyitottként születik.
+                kesz=False,
+            )
+            db.add(exp)
+            db.flush()
+            naplo["letrejott"].append({"tipus": "expense", "id": exp.id, "netto": huf_netto, "bontas_sor": i})
+            if elso_expense is None:
+                elso_expense = exp
+        elif ct == "kulsos_tig":
+            cert = db.get(PerformanceCertificate, resz.get("cel_id") or 0)
+            if cert is None:
+                raise ErkeztetesHiba(f"A bontás {i}. sorában hivatkozott külsős TIG nem található.")
+            if fajl is None:
+                raise ErkeztetesHiba("A TIG-hez kapcsoláshoz kell a számla fájlja.")
+            inv = PerformanceCertificateInvoice(
+                certificate_id=cert.id,
+                filename=bejovo.fajl_nev or "szamla.pdf",
+                storage_key="",
+                url="",
+                content_type=bejovo.content_type,
+            )
+            db.add(inv)
+            db.flush()
+            kulcs = f"tig-szamla/{cert.id}/{inv.id}-{re.sub(r'[^A-Za-z0-9._-]+', '_', inv.filename)[:80]}"
+            inv.url = document_storage.upload_bytes(fajl, kulcs, bejovo.content_type or "application/pdf")
+            inv.storage_key = kulcs
+            naplo["csatolt"].append(
+                {"tipus": "performanceCertificate", "id": cert.id, "szamla_sor": inv.id, "bontas_netto": resz_netto}
+            )
+            # A TIG ÖSSZEGÉT NEM ÍRJUK ÁT - a bontás szerinti rész a naplóban.
+            naplo.setdefault("megjegyzesek", []).append(
+                f"A(z) #{cert.id} TIG-re a bontás szerint {resz_netto:,.0f} Ft esik - "
+                "a TIG összegét nem módosítottuk (a számla-sor a bizonyíték).".replace(",", " ")
+            )
+        elif ct == "kiadas_csatolas":
+            exp = db.get(Expense, resz.get("cel_id") or 0)
+            if exp is None:
+                raise ErkeztetesHiba(f"A bontás {i}. sorában hivatkozott kiadás nem található.")
+            _csatol_fajl(db, "expense", exp.id, bejovo, fajl, naplo)
+            naplo["csatolt"].append({"tipus": "expense", "id": exp.id, "bontas_netto": resz_netto})
+            # A MEGLÉVŐ kiadás összegéhez nem nyúlunk - a rész a naplóban.
+            naplo.setdefault("megjegyzesek", []).append(
+                f"A(z) #{exp.id} kiadásra a bontás szerint {resz_netto:,.0f} Ft esik - "
+                "a kiadás összegét nem módosítottuk.".replace(",", " ")
+            )
+
+    # A dokumentum EGY példányban: az első ÚJ kiadáshoz kerül csatolmányként
+    # (a TIG-sorok a saját számla-sorukat kapták); a többi sor a naplóban
+    # hivatkozik rá - a számla nem sokszorozódik.
+    if elso_expense is not None:
+        _csatol_fajl(db, "expense", elso_expense.id, bejovo, fajl, naplo)
+        bejovo.rogzitett_expense_id = elso_expense.id
+        if uj_kiadasok_szama > 1:
+            naplo.setdefault("megjegyzesek", []).append(
+                f"A számla fájlja a(z) #{elso_expense.id} kiadásnál van - a többi bontott sor erre hivatkozik."
+            )
+    bejovo.bontas = reszek
+    naplo["bontas"] = reszek
     return naplo
 
 

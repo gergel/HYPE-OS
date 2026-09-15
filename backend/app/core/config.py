@@ -242,6 +242,11 @@ class Settings(BaseSettings):
     # nézünk, akkor sem, ha valaki korábbi kezdődátumot ad meg - a rendszer
     # indulása előtti, kézzel már lerendezett számlák ne jöjjenek be.
     szamla_email_kezdet: str = "2026-09-01"
+    # AUTOMATIKUS érkeztetés: hány percenként nézze meg a háttérfolyamat a
+    # bejövő címre érkezett leveleket (a felhasználó kérése: akkor is jöjjenek
+    # be a számlák, ha senki nem nyitja meg az oldalt). 0 = kikapcsolva, csak
+    # a kézi "Ellenőrzés most" fut. Env: SZAMLA_AUTO_GYAKORISAG_PERC.
+    szamla_auto_gyakorisag_perc: int = 15
 
     # ───────── Média Portál (ügyfél videó/kép átadó felület, /p/{slug}) ─────────
     # A Hype-repo-main (különálló client-portál projekt) 1:1 portolt funkciója -

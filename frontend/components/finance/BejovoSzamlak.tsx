@@ -21,7 +21,17 @@ const ALLAPOTOK: Record<string, { cimke: string; tone: "success" | "warning" | "
   jovahagyva: { cimke: "Rögzítve", tone: "success" },
   duplikatum: { cimke: "Duplikátum", tone: "neutral" },
   nem_szamla: { cimke: "Nem számla / elutasítva", tone: "neutral" },
+  egyeb_dokumentum: { cimke: "Nem számla jellegű melléklet", tone: "neutral" },
   hiba: { cimke: "Feldolgozási hiba", tone: "danger" },
+};
+
+/** A besorolási javaslat MEGALAPOZOTTSÁGA (a felhasználó kérése): a lista és
+ * az ellenőrző ebből mutatja, mennyire lehet megbízni a javaslatban. */
+const EROSSEG: Record<string, { cimke: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
+  biztos: { cimke: "Biztos javaslat", tone: "success" },
+  tobb_lehetseges: { cimke: "Több lehetséges cél", tone: "warning" },
+  ellentmondo: { cimke: "Ellentmondó jelek", tone: "danger" },
+  keves_info: { cimke: "Kevés információ", tone: "neutral" },
 };
 
 /** A NÉZETEK: a napi munkát a teendők vezetik, a technikai állapot a
@@ -30,7 +40,7 @@ const NEZETEK: { kulcs: string; cimke: string; allapotok: string[] | null }[] = 
   { kulcs: "ellenorzes", cimke: "Ellenőrzésre vár", allapotok: ["ellenorzendo"] },
   { kulcs: "elakadt", cimke: "Elakadt", allapotok: ["pontositas", "hiba", "feldolgozas"] },
   { kulcs: "rogzitett", cimke: "Rögzített", allapotok: ["jovahagyva"] },
-  { kulcs: "felretett", cimke: "Félretett", allapotok: ["duplikatum", "nem_szamla"] },
+  { kulcs: "felretett", cimke: "Félretett", allapotok: ["duplikatum", "nem_szamla", "egyeb_dokumentum"] },
   { kulcs: "mind", cimke: "Mind", allapotok: null },
 ];
 
@@ -44,8 +54,17 @@ const CEL_CIMKEK: Record<string, string> = {
   kp: "KP-tétel bizonylat-pótlása",
   mukodesi: "Általános működési költség (tudatosan projekt nélkül)",
   kimeno: "Kimenő számla (megrendelői folyamat)",
+  bontas: "Bontás több cél között (több projekt egy számlán)",
   egyeb: "Tisztázandó / egyéb",
 };
+
+/** A bontás-sorokban választható célok (lásd backend BONTAS_CEL_TIPUSOK). */
+const BONTAS_CELOK: { kulcs: string; cimke: string }[] = [
+  { kulcs: "kiadas_uj", cimke: "Új kiadás projekthez" },
+  { kulcs: "mukodesi", cimke: "Működési (projekt nélkül)" },
+  { kulcs: "kulsos_tig", cimke: "Meglévő külsős TIG" },
+  { kulcs: "kiadas_csatolas", cimke: "Meglévő kiadás" },
+];
 
 //: Melyik cél-típus hoz létre ÚJ kiadást, és melyik csatol MEGLÉVŐHÖZ.
 const UJ_KOLTSEG = new Set(["kiadas_uj", "mukodesi", "auto"]);
@@ -178,8 +197,8 @@ export function BejovoSzamlak({
       {szurt.length === 0 ? (
         <p className="py-6 text-center text-[13px] text-text-secondary">
           <Inbox size={16} className="mr-1 inline" />
-          Nincs tétel ebben a nézetben. A szamla@ címre érkező olvasatlan levelek az „Olvasatlan számlalevelek
-          ellenőrzése" gombbal jönnek be - és az AI Assistantba is bedobhatsz számlát.
+          Nincs tétel ebben a nézetben. A szamla@ címre érkező levelek automatikusan bejönnek a háttérben (és az
+          „Ellenőrzés most" gombbal azonnal) - az AI Assistantba is bedobhatsz számlát.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -221,6 +240,9 @@ export function BejovoSzamlak({
                   <td className="py-2 pr-3 text-text-secondary">
                     <span className="flex items-center gap-1.5">
                       <StatusBadge label={ALLAPOTOK[b.allapot]?.cimke ?? b.allapot} tone={ALLAPOTOK[b.allapot]?.tone ?? "neutral"} />
+                      {b.javaslat_erosseg && ["ellenorzendo", "pontositas"].includes(b.allapot) && EROSSEG[b.javaslat_erosseg] && (
+                        <StatusBadge label={EROSSEG[b.javaslat_erosseg].cimke} tone={EROSSEG[b.javaslat_erosseg].tone} />
+                      )}
                       {b.allapot !== "jovahagyva" && <span className="hidden text-[11.5px] xl:inline">{kovetkezoTeendo(b)}</span>}
                     </span>
                   </td>
@@ -258,14 +280,24 @@ export function BejovoSzamlak({
   );
 }
 
-/** Az e-mailes bekötés sávja. Kizárólag KÉZI indítás, és kizárólag az
- * OLVASATLAN levelek jönnek be - ez a szerveren kikényszerített szabály
- * (lásd backend services/szamla_email_lehuzas.py), itt csak a gomb van. */
+/** Az e-mailes bekötés sávja. A háttérben AUTOMATIKUS érkeztetés fut
+ * (konfigurálható gyakorisággal, az olvasottság nem számít - lásd backend
+ * services/szamla_email_lehuzas.py); itt az állapota látszik, plusz a kézi
+ * „Ellenőrzés most" és a dátumtartományos visszatöltés. */
 function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDelete: boolean; onFrissul: () => void }) {
-  const [adat, setAdat] = useState<{ cel_cim: string; legkorabbi_nap?: string } | null>(null);
+  const [adat, setAdat] = useState<{
+    cel_cim: string;
+    legkorabbi_nap?: string;
+    auto_gyakorisag_perc?: number;
+    utolso_futas?: string | null;
+    lehuzas_fut?: boolean;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [uzenet, setUzenet] = useState<string | null>(null);
   const [elonezet, setElonezet] = useState<{ felado: string; targy: string; csatolmanyok: string[] }[] | null>(null);
+  const [visszatoltes, setVisszatoltes] = useState(false);
+  const [kezdoDatum, setKezdoDatum] = useState("");
+  const [vegDatum, setVegDatum] = useState("");
 
   useEffect(() => {
     authFetch("/api/v1/bejovo-szamlak/email-allapot")
@@ -279,9 +311,12 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
     setUzenet(null);
     setElonezet(null);
     try {
+      const body: Record<string, unknown> = { limit: 100, elonezet: csakElonezet };
+      if (visszatoltes && kezdoDatum) body.kezdo_datum = kezdoDatum;
+      if (visszatoltes && vegDatum) body.veg_datum = vegDatum;
       const res = await authFetch("/api/v1/bejovo-szamlak/email-lehuzas", {
         method: "POST",
-        body: JSON.stringify({ limit: 100, elonezet: csakElonezet }),
+        body: JSON.stringify(body),
       });
       const d = await res.json().catch(() => null);
       if (!res.ok) {
@@ -290,10 +325,10 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
       }
       if (csakElonezet) {
         setElonezet(d.elonezet ?? []);
-        setUzenet(`${d.talalt_level} olvasatlan levél a keresésben - lent az előnézet (semmi nem jött létre, az olvasottság nem változott).`);
+        setUzenet(`${d.talalt_level} levél a keresésben - lent az előnézet (semmi nem jött létre, a postafiókhoz nem nyúltunk).`);
       } else {
         setUzenet(
-          `${d.talalt_level} olvasatlan levelet vizsgáltunk: ${d.uj_level} új levélből ${d.uj_szamla} új számla készült` +
+          `${d.talalt_level} levelet vizsgáltunk: ${d.uj_level} új levélből ${d.uj_szamla} új tétel készült` +
             `${d.kihagyott_korabbi ? `, ${d.kihagyott_korabbi} korábban már átvett/kizárt levél kimaradt` : ""}` +
             `${d.hibas_level ? `, ${d.hibas_level} levél hibára futott (lásd a listát)` : ""}.`,
         );
@@ -376,7 +411,15 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
         <span className="text-text-secondary">
           Bejövő cím: <b className="text-text-primary">{adat?.cel_cim ?? "…"}</b>
           <span className="ml-2 text-text-muted">
-            · magától semmit nem hoz át; csak az olvasatlan{adat?.legkorabbi_nap ? `, ${huDatum(adat.legkorabbi_nap)} utáni` : ""} leveleket nézi
+            {adat?.auto_gyakorisag_perc
+              ? `· automatikus ellenőrzés ${adat.auto_gyakorisag_perc} percenként (az olvasottság nem számít)`
+              : "· automatikus ellenőrzés kikapcsolva - csak kézi indítás"}
+            {adat?.lehuzas_fut
+              ? " · ellenőrzés fut…"
+              : adat?.utolso_futas
+                ? ` · utolsó futás: ${huDatum(adat.utolso_futas.slice(0, 10))} ${adat.utolso_futas.slice(11, 16)}`
+                : ""}
+            {adat?.legkorabbi_nap ? ` · ${huDatum(adat.legkorabbi_nap)} előtti levelet sosem néz` : ""}
           </span>
         </span>
         {canEdit && (
@@ -384,8 +427,17 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
             <button
               type="button"
               disabled={busy}
+              onClick={() => setVisszatoltes((v) => !v)}
+              title="Régebbi levelek visszamenőleges feldolgozása megadott dátumtartományban - a már átvett levelek akkor sem duplikálódnak"
+              className={`rounded-[var(--radius)] border px-2.5 py-1 text-[12px] disabled:opacity-50 ${visszatoltes ? "border-text-accent text-text-accent" : "border-border text-text-secondary hover:bg-surface-2"}`}
+            >
+              Visszatöltés…
+            </button>
+            <button
+              type="button"
+              disabled={busy}
               onClick={() => lehuzas(true)}
-              title="Megmutatja, mit hozna be - semmit nem hoz létre, és a levelek olvasottságát sem változtatja"
+              title="Megmutatja, mit hozna be - semmit nem hoz létre, és a postafiókhoz sem nyúl"
               className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12px] text-text-secondary hover:bg-surface-2 disabled:opacity-50"
             >
               Előnézet
@@ -397,7 +449,7 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
               className="flex items-center gap-1 rounded-[var(--radius)] border border-border bg-bg-accent px-2.5 py-1 text-[12px] text-text-accent hover:opacity-90 disabled:opacity-50"
             >
               <RefreshCw size={12} className={busy ? "animate-spin" : ""} />
-              Olvasatlan számlalevelek ellenőrzése
+              Ellenőrzés most
             </button>
             {canDelete && (
               <>
@@ -424,6 +476,29 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
           </span>
         )}
       </div>
+      {visszatoltes && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-text-secondary">
+          <span>Visszamenőleges időszak:</span>
+          <input
+            type="date"
+            value={kezdoDatum}
+            min={adat?.legkorabbi_nap}
+            onChange={(e) => setKezdoDatum(e.target.value)}
+            className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-0.5 text-text-primary"
+          />
+          <span>–</span>
+          <input
+            type="date"
+            value={vegDatum}
+            onChange={(e) => setVegDatum(e.target.value)}
+            className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-0.5 text-text-primary"
+          />
+          <span className="text-text-muted">
+            Az „Ellenőrzés most" erre az időszakra fut; a már átvett levelek nem duplikálódnak
+            {adat?.legkorabbi_nap ? `, ${huDatum(adat.legkorabbi_nap)} előttre nem nyit` : ""}.
+          </span>
+        </div>
+      )}
       {uzenet && <p className="mt-1.5 text-[12px] text-text-secondary">{uzenet}</p>}
       {elonezet && elonezet.length > 0 && (
         <ul className="mt-1.5 max-h-[160px] space-y-0.5 overflow-y-auto text-[12px] text-text-secondary">
@@ -502,22 +577,71 @@ function ezTortenik(adat: BejovoSzamlaReszlet, mult: boolean): string {
   if (UJ_KOLTSEG.has(adat.cel_tipus ?? "")) {
     return `Új, NEM kifizetett kiadás ${mult ? "jött létre" : "jön létre"} (${osszeg})${adat.cel_tipus === "auto" ? " a kiválasztott autóhoz" : ""} - a kifizetés és a fedezet külön lépés marad.`;
   }
+  if (adat.cel_tipus === "bontas") {
+    return `A számla összege a bontás sorai szerint ${mult ? "oszlott meg" : "oszlik meg"} a célok között: az új-kiadás sorok NEM kifizetett kiadásként ${mult ? "jöttek" : "jönnek"} létre, a meglévő TIG-ek/kiadások összegét nem ${mult ? "írtuk" : "írjuk"} át. A számla EGY pénzügyi dokumentum marad (${osszeg}).`;
+  }
   return mult ? "A tétel rögzítésre került." : "Válassz célt a rögzítéshez.";
 }
 
+/** Egy SZERKESZTHETŐ bontás-sor (a beviteli mezők szövegként tartják az
+ * értékeket; küldés előtt a bontasKuldheto számmá alakítja). */
+type BontasRow = {
+  cel_tipus: string;
+  project_code_id: string;
+  cel_id: string;
+  netto: string;
+  megjegyzes: string;
+  forras: string | null;
+};
+
+function szamma(s: string): number {
+  return Number((s || "0").replace(/[  ]/g, "").replace(",", "."));
+}
+
+function bontasKuldheto(rows: BontasRow[]): Record<string, unknown>[] {
+  return rows.map((r) => ({
+    cel_tipus: r.cel_tipus || null,
+    project_code_id: r.project_code_id ? Number(r.project_code_id) : null,
+    cel_id: r.cel_id ? Number(r.cel_id) : null,
+    netto: szamma(r.netto),
+    megjegyzes: r.megjegyzes || null,
+    forras: r.forras,
+  }));
+}
+
 /** Mi HIÁNYZIK a jóváhagyáshoz - üres lista = mehet. */
-function hianyok(adat: BejovoSzamlaReszlet, arfolyam: string): string[] {
+function hianyok(adat: BejovoSzamlaReszlet, arfolyam: string, bontas: BontasRow[] | null): string[] {
   const h: string[] = [];
   if (!adat.cel_tipus) h.push("nincs kiválasztva cél");
   if (adat.cel_tipus === "kimeno") h.push("kimenő számla kiadásként nem rögzíthető");
   if (adat.cel_tipus === "egyeb") h.push("a „tisztázandó” nem rögzíthető - válassz konkrét célt");
-  if (adat.dokumentum_tipus === "dijbekero" && UJ_KOLTSEG.has(adat.cel_tipus ?? "")) h.push("díjbekérő nem rögzíthető végleges számlaként");
+  if (adat.dokumentum_tipus === "dijbekero" && (UJ_KOLTSEG.has(adat.cel_tipus ?? "") || adat.cel_tipus === "bontas"))
+    h.push("díjbekérő nem rögzíthető végleges számlaként");
+  if (adat.dokumentum_tipus === "ertesito" && (UJ_KOLTSEG.has(adat.cel_tipus ?? "") || adat.cel_tipus === "bontas"))
+    h.push("ez számlaértesítő - várd meg / töltsd fel a számlafájlt");
   if (UJ_KOLTSEG.has(adat.cel_tipus ?? "") && adat.netto == null) h.push("hiányzik a nettó összeg");
   if (UJ_KOLTSEG.has(adat.cel_tipus ?? "") && adat.penznem !== "HUF" && !arfolyam.trim()) h.push(`add meg a(z) ${adat.penznem}→HUF árfolyamot`);
   if (adat.cel_tipus === "auto" && !adat.cel_auto_id) h.push("válaszd ki az autót");
   const cm = CEL_MEZO[adat.cel_tipus ?? ""];
   if (cm && !(adat as unknown as Record<string, number | null>)[cm.mezo]) h.push("válaszd ki a cél-rekordot");
   if (CSATOLOS.has(adat.cel_tipus ?? "") && !adat.fajl_nev) h.push("nincs fájl - töltsd fel a számlát");
+  if (adat.cel_tipus === "bontas") {
+    if (!bontas || bontas.length === 0) h.push("vedd fel a bontás sorait");
+    else {
+      if (adat.netto == null) h.push("hiányzik a számla nettó összege");
+      if (bontas.some((r) => !r.cel_tipus)) h.push("minden bontás-sorhoz válassz célt");
+      if (bontas.some((r) => r.cel_tipus === "kiadas_uj" && !r.project_code_id)) h.push("az új-kiadás sorokhoz válassz projektkódot");
+      if (bontas.some((r) => (r.cel_tipus === "kulsos_tig" || r.cel_tipus === "kiadas_csatolas") && !r.cel_id))
+        h.push("a meglévő tételhez kapcsolt sorokhoz válaszd ki a tételt");
+      if (bontas.some((r) => !szamma(r.netto))) h.push("minden bontás-sorhoz kell összeg");
+      const osszesen = bontas.reduce((s, r) => s + szamma(r.netto), 0);
+      if (adat.netto != null && Math.abs(osszesen - adat.netto) > 1)
+        h.push(`a bontás összegei (${formatSzam(Math.round(osszesen * 100) / 100)}) nem adják ki a számla nettóját (${formatSzam(adat.netto)})`);
+      if (adat.penznem !== "HUF" && !arfolyam.trim() && bontas.some((r) => r.cel_tipus === "kiadas_uj" || r.cel_tipus === "mukodesi"))
+        h.push(`add meg a(z) ${adat.penznem}→HUF árfolyamot`);
+      if (!adat.fajl_nev && bontas.some((r) => r.cel_tipus === "kulsos_tig")) h.push("a TIG-hez kapcsoláshoz kell a számla fájlja");
+    }
+  }
   return h;
 }
 
@@ -527,6 +651,7 @@ function gombFelirat(adat: BejovoSzamlaReszlet): string {
   if (adat.cel_tipus === "erezsi") return "Rögzítés az előfizetés-időszakra";
   if (adat.cel_tipus === "kp") return "Bizonylat csatolása a KP-tételhez";
   if (UJ_KOLTSEG.has(adat.cel_tipus ?? "")) return "Új kiadás rögzítése";
+  if (adat.cel_tipus === "bontas") return "Bontás rögzítése";
   return "Jóváhagyás és rögzítés";
 }
 
@@ -554,6 +679,11 @@ function Reszletes({
   const [arfolyam, setArfolyam] = useState("");
   const [felosztas, setFelosztas] = useState<{ project_code_id: string; netto: string }[] | null>(null);
   const [celOpciok, setCelOpciok] = useState<{ value: string; label: string }[] | null>(null);
+  //: A bontás-szerkesztő sorai (több projekt egy számlán) - a szerverre a
+  //: PATCH `bontas` mezője viszi (piszkozat), a jóváhagyás pedig a
+  //: cel_tipus="bontas" + bontas párossal rögzít.
+  const [bontas, setBontas] = useState<BontasRow[] | null>(null);
+  const [bontasCelOpciok, setBontasCelOpciok] = useState<Record<string, { value: string; label: string }[]>>({});
   const [elonezetAllapot, setElonezetAllapot] = useState<"tolt" | "kesz" | "lassu">("tolt");
   const fajlPotloRef = useRef<HTMLInputElement>(null);
 
@@ -579,6 +709,24 @@ function Reszletes({
     return () => clearTimeout(t);
   }, [adat?.url]);
 
+  // A mentett bontás-piszkozat betöltése a szerkesztőbe (csak amíg a
+  // felhasználó helyben nem kezdett szerkeszteni).
+  useEffect(() => {
+    if (adat?.bontas?.length && bontas === null) {
+      setBontas(
+        adat.bontas.map((s) => ({
+          cel_tipus: s.cel_tipus ?? "",
+          project_code_id: s.project_code_id != null ? String(s.project_code_id) : "",
+          cel_id: s.cel_id != null ? String(s.cel_id) : "",
+          netto: s.netto != null ? String(s.netto) : "",
+          megjegyzes: s.megjegyzes ?? "",
+          forras: s.forras ?? null,
+        })),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adat?.id, adat?.bontas]);
+
   // A kereshető cél-választék betöltése a kiválasztott cél-típushoz.
   const celTipus = adat?.cel_tipus ?? "";
   useEffect(() => {
@@ -594,6 +742,24 @@ function Reszletes({
         if (!elve && d) setCelOpciok(d.lista.map((x: { id: number; cimke: string }) => ({ value: String(x.id), label: x.cimke })));
       })
       .catch(() => setCelOpciok([]));
+    return () => {
+      elve = true;
+    };
+  }, [celTipus]);
+
+  // A bontás-sorokhoz kellő cél-választékok (TIG-ek, kiadások) betöltése.
+  useEffect(() => {
+    if (celTipus !== "bontas") return;
+    let elve = false;
+    for (const t of ["kulsos_tig", "kiadas_csatolas"]) {
+      authFetch(`/api/v1/bejovo-szamlak/celok/${t}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!elve && d)
+            setBontasCelOpciok((p) => ({ ...p, [t]: d.lista.map((x: { id: number; cimke: string }) => ({ value: String(x.id), label: x.cimke })) }));
+        })
+        .catch(() => undefined);
+    }
     return () => {
       elve = true;
     };
@@ -630,8 +796,10 @@ function Reszletes({
   }
 
   async function piszkozatMentes(): Promise<boolean> {
-    if (Object.keys(draft).length === 0) return true;
-    return hivas("", mentendoMezok(), "PATCH");
+    const t = mentendoMezok();
+    if ((adat?.cel_tipus === "bontas" || draft.cel_tipus === "bontas") && bontas !== null) t.bontas = bontasKuldheto(bontas);
+    if (Object.keys(t).length === 0) return true;
+    return hivas("", t, "PATCH");
   }
 
   async function jovahagyas() {
@@ -644,6 +812,7 @@ function Reszletes({
         netto: Number((f.netto || "0").replace(/[  ]/g, "").replace(",", ".")),
       }));
     }
+    if (adat?.cel_tipus === "bontas" && bontas !== null) body.bontas = bontasKuldheto(bontas);
     await hivas("/jovahagyas", body);
   }
 
@@ -680,7 +849,7 @@ function Reszletes({
   const rogzitett = adat.allapot === "jovahagyva";
   const lezart = rogzitett || adat.allapot === "nem_szamla";
   const cel = (draft.cel_tipus as string) ?? adat.cel_tipus ?? "";
-  const hianyLista = hianyok(adat, arfolyam);
+  const hianyLista = hianyok(adat, arfolyam, bontas);
   const szolgaltatoLink = elsoLink(adat.email_szoveg);
   const kep = (adat.content_type ?? "").startsWith("image/");
   const cm = CEL_MEZO[cel];
@@ -741,6 +910,9 @@ function Reszletes({
           </h2>
           <StatusBadge label={ALLAPOTOK[adat.allapot]?.cimke ?? adat.allapot} tone={ALLAPOTOK[adat.allapot]?.tone ?? "neutral"} />
           {adat.dokumentum_tipus && adat.dokumentum_tipus !== "szamla" && <StatusBadge label={adat.dokumentum_tipus} tone="warning" />}
+          {!rogzitett && adat.javaslat?.erosseg && EROSSEG[adat.javaslat.erosseg] && (
+            <StatusBadge label={EROSSEG[adat.javaslat.erosseg].cimke} tone={EROSSEG[adat.javaslat.erosseg].tone} />
+          )}
           <button type="button" onClick={onZaras} className="ml-auto rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3">
             Bezárás
           </button>
@@ -900,6 +1072,18 @@ function Reszletes({
                 )}
                 {!rogzitett && adat.javaslat_indoklas && <p className="mt-1.5 text-[12px] text-text-muted">{adat.javaslat_indoklas}</p>}
 
+                {/* MIRE ÉPÜL a javaslat - visszakereshető bizonyíték-sorok. */}
+                {!rogzitett && (adat.javaslat?.bizonyitek?.length ?? 0) > 0 && (
+                  <details className="mt-1.5">
+                    <summary className="cursor-pointer text-[12px] text-text-accent">Mire épül a javaslat ({adat.javaslat!.bizonyitek!.length})</summary>
+                    <ul className="mt-1 list-inside list-disc space-y-0.5 text-[12px] text-text-secondary">
+                      {adat.javaslat!.bizonyitek!.map((b, i) => (
+                        <li key={i}>{b}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
                 {/* ALTERNATÍVÁK - részletekkel, egy kattintásra átvéve. */}
                 {!lezart && (adat.javaslat?.alternativak?.length ?? 0) > 0 && (
                   <details className="mt-2">
@@ -939,6 +1123,168 @@ function Reszletes({
                       })}
                     </ul>
                   </details>
+                )}
+
+                {/* KÖLTSÉG-RÉSZLETEZŐ ÉRKEZETT: egy kattintással bontássá tehető. */}
+                {!lezart && canEdit && adat.javaslat?.bontas_javaslat && cel !== "bontas" && (
+                  <div className="mt-2 rounded-[var(--radius)] border border-text-accent/40 bg-surface-3 px-3 py-2 text-[12.5px]">
+                    <p className="text-text-primary">
+                      Költség-részletező érkezett a számla mellé ({adat.javaslat.bontas_javaslat.forras_fajl ?? "táblázat"}):{" "}
+                      {adat.javaslat.bontas_javaslat.sorok.length} sor, összesen {formatSzam(adat.javaslat.bontas_javaslat.osszesen)}
+                      {adat.javaslat.bontas_javaslat.penznem ? ` ${adat.javaslat.bontas_javaslat.penznem}` : ""}.
+                    </p>
+                    {adat.javaslat.bontas_javaslat.figyelmeztetesek.map((f, i) => (
+                      <p key={i} className="mt-0.5 text-[12px] text-text-warning">
+                        {f}
+                      </p>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        const sorok = adat.javaslat!.bontas_javaslat!.sorok.map((s) => ({
+                          cel_tipus: s.cel_tipus ?? "",
+                          project_code_id: s.project_code_id != null ? String(s.project_code_id) : "",
+                          cel_id: s.cel_id != null ? String(s.cel_id) : "",
+                          netto: s.netto != null ? String(s.netto) : "",
+                          megjegyzes: s.megjegyzes ?? "",
+                          forras: s.forras ?? null,
+                        }));
+                        setBontas(sorok);
+                        void hivas("", { cel_tipus: "bontas", bontas: bontasKuldheto(sorok) }, "PATCH");
+                      }}
+                      className="mt-1 rounded-[var(--radius)] border border-border bg-bg-accent px-2.5 py-1 text-[12px] text-text-accent hover:opacity-90 disabled:opacity-50"
+                    >
+                      Bontás megnyitása a részletező soraival
+                    </button>
+                  </div>
+                )}
+
+                {/* BONTÁS-SZERKESZTŐ: több projekt egy számlán, vegyes célokkal. */}
+                {cel === "bontas" && !lezart && canEdit && (
+                  <div className="mt-2 space-y-1.5 rounded-[var(--radius)] border border-border p-2">
+                    {(() => {
+                      const sorok = bontas ?? [];
+                      const felosztva = sorok.reduce((s, r) => s + szamma(r.netto), 0);
+                      const hatra = adat.netto != null ? Math.round((adat.netto - felosztva) * 100) / 100 : null;
+                      return (
+                        <p className="text-[11.5px] text-text-muted">
+                          A számla EGY pénzügyi dokumentum marad - a sorok nettói pontosan a számla nettóját (
+                          {adat.netto != null ? formatSzam(adat.netto) : "?"} {adat.penznem}) adják ki.{" "}
+                          <b className={hatra !== null && Math.abs(hatra) > 1 ? "text-text-warning" : "text-text-success"}>
+                            Felosztva: {formatSzam(Math.round(felosztva * 100) / 100)}
+                            {hatra !== null ? ` · hátra: ${formatSzam(hatra)}` : ""}
+                          </b>
+                        </p>
+                      );
+                    })()}
+                    {(bontas ?? []).map((r, i) => (
+                      <div key={i} className="space-y-1 rounded-[var(--radius)] border border-border/70 p-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <select
+                            value={r.cel_tipus}
+                            onChange={(e) =>
+                              setBontas((p) => (p ?? []).map((x, j) => (j === i ? { ...x, cel_tipus: e.target.value, project_code_id: "", cel_id: "" } : x)))
+                            }
+                            className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary"
+                          >
+                            <option value="">– cél –</option>
+                            {BONTAS_CELOK.map((c) => (
+                              <option key={c.kulcs} value={c.kulcs}>
+                                {c.cimke}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            placeholder="nettó"
+                            value={r.netto}
+                            onChange={(e) => setBontas((p) => (p ?? []).map((x, j) => (j === i ? { ...x, netto: e.target.value } : x)))}
+                            className="w-28 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-right text-[12px] text-text-primary"
+                          />
+                          <input
+                            placeholder="megjegyzés"
+                            value={r.megjegyzes}
+                            onChange={(e) => setBontas((p) => (p ?? []).map((x, j) => (j === i ? { ...x, megjegyzes: e.target.value } : x)))}
+                            className="min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setBontas((p) => (p ?? []).filter((_, j) => j !== i))}
+                            title="Sor törlése"
+                            className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-muted hover:bg-surface-3"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        {r.cel_tipus === "kiadas_uj" && (
+                          <KeresosSelect
+                            value={r.project_code_id}
+                            options={[{ value: "", label: "– melyik projektkódhoz –" }, ...valasztek.projektkodok.map((p) => ({ value: String(p.id), label: p.kod }))]}
+                            onChange={(v) => setBontas((p) => (p ?? []).map((x, j) => (j === i ? { ...x, project_code_id: v } : x)))}
+                          />
+                        )}
+                        {(r.cel_tipus === "kulsos_tig" || r.cel_tipus === "kiadas_csatolas") && (
+                          <KeresosSelect
+                            value={r.cel_id}
+                            options={[
+                              { value: "", label: r.cel_tipus === "kulsos_tig" ? "– melyik külsős TIG-hez –" : "– melyik kiadáshoz –" },
+                              ...(bontasCelOpciok[r.cel_tipus] ?? []),
+                            ]}
+                            disabled={!bontasCelOpciok[r.cel_tipus]}
+                            onChange={(v) => setBontas((p) => (p ?? []).map((x, j) => (j === i ? { ...x, cel_id: v } : x)))}
+                          />
+                        )}
+                        {r.forras && <p className="text-[11px] text-text-muted">Forrás: {r.forras}</p>}
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap gap-2 text-[12px]">
+                      <button
+                        type="button"
+                        onClick={() => setBontas((p) => [...(p ?? []), { cel_tipus: "", project_code_id: "", cel_id: "", netto: "", megjegyzes: "", forras: null }])}
+                        className="text-text-accent hover:underline"
+                      >
+                        + sor
+                      </button>
+                      {adat.javaslat?.bontas_javaslat && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setBontas(
+                              adat.javaslat!.bontas_javaslat!.sorok.map((s) => ({
+                                cel_tipus: s.cel_tipus ?? "",
+                                project_code_id: s.project_code_id != null ? String(s.project_code_id) : "",
+                                cel_id: s.cel_id != null ? String(s.cel_id) : "",
+                                netto: s.netto != null ? String(s.netto) : "",
+                                megjegyzes: s.megjegyzes ?? "",
+                                forras: s.forras ?? null,
+                              })),
+                            )
+                          }
+                          className="text-text-accent hover:underline"
+                        >
+                          Részletező sorainak átvétele
+                        </button>
+                      )}
+                      <span className="text-text-muted">A „Piszkozat mentése" hiányosan is elment - véglegesíteni csak teljes bontással lehet.</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rögzített bontás megjelenítése. */}
+                {cel === "bontas" && rogzitett && (adat.bontas?.length ?? 0) > 0 && (
+                  <div className="mt-2 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[12.5px]">
+                    <p className="font-medium text-text-primary">A rögzített bontás sorai</p>
+                    <ul className="mt-1 space-y-0.5 text-text-secondary">
+                      {adat.bontas!.map((s, i) => (
+                        <li key={i}>
+                          {BONTAS_CELOK.find((c) => c.kulcs === s.cel_tipus)?.cimke ?? s.cel_tipus} · {formatSzam(s.netto)}
+                          {s.projektkod ? ` · ${s.projektkod}` : ""}
+                          {s.megjegyzes ? ` · ${s.megjegyzes}` : ""}
+                          {s.forras ? ` · (${s.forras})` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
 
                 {/* Felosztás több projekt közt. */}
@@ -991,7 +1337,7 @@ function Reszletes({
                     )}
                   </div>
                 )}
-                {UJ_KOLTSEG.has(cel) && (draft.penznem ?? adat.penznem) !== "HUF" && !lezart && (
+                {(UJ_KOLTSEG.has(cel) || cel === "bontas") && (draft.penznem ?? adat.penznem) !== "HUF" && !lezart && (
                   <div className="mt-2 flex items-center gap-2">
                     <label className="text-[12px] text-text-muted">Árfolyam ({adat.penznem}→HUF):</label>
                     <input value={arfolyam} onChange={(e) => setArfolyam(e.target.value)} placeholder="pl. 395,5" className="w-24 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12.5px] text-text-primary" />
@@ -1097,7 +1443,7 @@ function Reszletes({
                     )}
                     {canEdit && (
                       <>
-                        <button type="button" disabled={busy || Object.keys(draft).length === 0} onClick={() => void piszkozatMentes()} className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50">
+                        <button type="button" disabled={busy || (Object.keys(draft).length === 0 && !(cel === "bontas" && bontas !== null))} onClick={() => void piszkozatMentes()} className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50">
                           Piszkozat mentése
                         </button>
                         <button type="button" disabled={busy} onClick={() => void hivas("/duplikatum", {})} className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50">

@@ -107,7 +107,7 @@ _SZAMLA_UTASITAS = """A csatolt dokumentum egy (jellemzően magyar) SZÁMLA vagy
 
 Add vissza KIZÁRÓLAG ezt a JSON objektumot, más szöveg nélkül:
 {
-  "dokumentum_tipus": "szamla" | "elolegszamla" | "vegszamla" | "modosito" | "storno" | "dijbekero" | "egyeb",
+  "dokumentum_tipus": "szamla" | "elolegszamla" | "vegszamla" | "modosito" | "storno" | "dijbekero" | "ertesito" | "egyeb",
   "szamlaszam": a számla sorszáma, ahogy a dokumentumon áll; ha nincs, null,
   "kibocsato": {"nev": ..., "adoszam": ..., "cim": ..., "bankszamlaszam": ..., "email": ...} - a SZÁMLA KIÁLLÍTÓJA (aki a pénzt kapja); a nem szereplő mezők null,
   "vevo": {"nev": ..., "adoszam": ...} - a számla VEVŐJE (aki fizet); a nem szereplő mezők null,
@@ -132,6 +132,7 @@ Add vissza KIZÁRÓLAG ezt a JSON objektumot, más szöveg nélkül:
 Szabályok:
 - Amit nem találsz a dokumentumban, az legyen null (üres lista a listáknál). SOHA ne találj ki adatot.
 - A díjbekérő (proforma) NEM számla - a dokumentum_tipus legyen "dijbekero".
+- A számlaértesítő / fizetési emlékeztető / "számlája elkészült" levél NEM számla - a dokumentum_tipus legyen "ertesito" (a rajta hivatkozott számlaszámot és összeget azért olvasd ki, ha szerepel).
 - Az összegeket NE számold újra és NE kerekítsd: pontosan azt add vissza, ami a dokumentumon áll.
 - Többoldalas számlánál a VÉGÖSSZEG számít, nem az első oldal részösszege."""
 
@@ -170,6 +171,64 @@ def szamla_olvasd_ki(adat: bytes, mime_type: str) -> dict:
             "A dokumentumból nem sikerült értelmezhető adatokat kiolvasni. Próbáld újra - "
             "ha többször is ez jön, a dokumentum lehet, hogy rossz minőségű."
         )
+    return adatok
+
+
+_RESZLETEZO_UTASITAS = """Az alábbi szöveg egy magyar bejövő számla mellé küldött KÖLTSÉG-RÉSZLETEZŐ táblázat tartalma (a Hype Productions Kft. a vevő). A táblázat azt bontja le, hogy a számla összege milyen projektek/tételek között oszlik meg.
+
+Add vissza KIZÁRÓLAG ezt a JSON objektumot, más szöveg nélkül:
+{
+  "sorok": [
+    {
+      "megnevezes": a sor megnevezése/leírása röviden,
+      "projektkod": a sorhoz tartozó projektkód (pl. "HYPE26-0291"), ha szerepel vagy egyértelműen kikövetkeztethető a sorból; különben null,
+      "projekt_nev": a sorhoz tartozó projekt/munka neve szövegesen, ha szerepel; különben null,
+      "osszeg": a sor összege tiszta számként,
+      "brutto_e": true, ha a sor összege BRUTTÓ; false, ha egyértelműen NETTÓ; null, ha a táblázatból nem derül ki,
+      "szamlaszam": ha a táblázat több számlát részletez és a sorhoz számlaszám tartozik; különben null
+    }
+  ],
+  "penznem": "HUF" | "EUR" | "USD" | null,
+  "tobb_szamlat_reszletez": true, ha a táblázat láthatóan TÖBB különböző számlát bont fel; különben false,
+  "megjegyzes": rövid megjegyzés, ha valami fontos nem fért a fenti mezőkbe; különben null
+}
+
+Szabályok:
+- CSAK a tényleges tételsorokat add vissza. Az összesítő/summa/„összesen" sorokat HAGYD KI - azok a tételek összegét ismétlik.
+- Az összegeket NE számold újra és NE kerekítsd: pontosan azt add vissza, ami a táblázatban áll.
+- Ha nem derül ki, hogy nettó vagy bruttó az összeg, a "brutto_e" legyen null - NE találgass.
+- Amit nem találsz, az legyen null. SOHA ne találj ki adatot."""
+
+
+def reszletezo_olvasd_ki(szoveg: str) -> dict:
+    """Egy Excel/CSV KÖLTSÉG-RÉSZLETEZŐ kiolvasása a cellaértékekből
+    előállított szövegből (lásd services/excel_szoveg.szovegge) - a
+    projektbontás sorai, nettó/bruttó bizonytalanság-jelzéssel. A hívó
+    (szamla_erkeztetes._reszletezo_feldolgozas) párosítja a társ-számlához."""
+    if not settings.gemini_api_key:
+        raise ValueError(
+            "Az AI-kiolvasás nincs beállítva (hiányzik a GEMINI_API_KEY környezeti változó)."
+        )
+    client = genai.Client(api_key=settings.gemini_api_key)
+    try:
+        valasz = client.models.generate_content(
+            model=settings.gemini_model,
+            contents=[
+                types.Part(text=_RESZLETEZO_UTASITAS + "\n\nA TÁBLÁZAT TARTALMA:\n" + szoveg),
+            ],
+            # Lásd olvasd_ki: csak a JSON-kényszer - se token-keret, se
+            # thinking-beállítás.
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+    except Exception as exc:  # noqa: BLE001 - a hívó emberi hibaüzenetet vár
+        logger.exception("Részletező-kiolvasás: a Gemini-hívás elhasalt")
+        raise ValueError(f"A részletező kiolvasása nem sikerült: {exc}") from exc
+
+    valasz_szoveg = (valasz.text or "").strip()
+    adatok = _json_kiszedese(valasz_szoveg)
+    if adatok is None:
+        logger.warning("Részletező-kiolvasás: nem-JSON válasz: %r", valasz_szoveg[:1000])
+        raise ValueError("A részletezőből nem sikerült értelmezhető adatokat kiolvasni.")
     return adatok
 
 

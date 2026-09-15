@@ -7,15 +7,17 @@ olvasni, DNS/MX átállítás és új szolgáltató nélkül. A feltétel: a
 szamla@hypestab.hu címre érkező levél a hitelesített fiókban landoljon
 (alias vagy továbbítás - lásd az admin-teendőket a route docstringjében).
 
-CSAK KÉZI INDÍTÁSRA fut (a felhasználó kérése: automatikusan ne hozzon át
-semmit), és CSAK AZ OLVASATLAN leveleket nézi - amit a postafiókban már
-elolvastak, azt nem bolygatja.
+AUTOMATIKUSAN fut a háttérben (lásd main.py - a gyakoriság a
+SZAMLA_AUTO_GYAKORISAG_PERC env-ből állítható, 0 = csak kézi), és a kézi
+"Ellenőrzés most" gombról is ugyanez indul. AZ OLVASOTTSÁG NEM SZÁMÍT (a
+felhasználó előírása): ha valaki megnyitotta a levelet, a számlát attól még
+importálni kell.
 
-IDEMPOTENCIA: az olvasatlan-szűrő MELLETT minden látott Gmail-üzenet a
-`bejovo_emailek` táblába is bekerül a Gmail-azonosítójával; ami ott van, azt
-másodszor nem dolgozzuk fel - így az sem duplikál, ha egy behozott levél
-olvasatlan marad a fiókban és a lehúzást újra megnyomják. Az eredeti levelet
-nem töröljük, nem jelöljük olvasottnak és nem is válaszolunk rá.
+IDEMPOTENCIA: a SAJÁT importnyilvántartás dönt - minden látott Gmail-üzenet a
+`bejovo_emailek` táblába kerül a Gmail-azonosítójával; ami ott van, azt
+másodszor nem dolgozzuk fel, így az ismételt ellenőrzés és az újraindítás sem
+duplikál. Az eredeti levelet nem töröljük, nem mozgatjuk, az olvasottságát nem
+változtatjuk (readonly scope) és nem is válaszolunk rá.
 
 A csatolmányokból piszkozat készül (lásd services/szamla_erkeztetes.py):
 - a nyilvánvalóan nem-számla mellékletek (kis képek: logó, aláírás) kimaradnak;
@@ -27,15 +29,15 @@ from __future__ import annotations
 
 import base64
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.bejovo_szamla import BejovoEmail, BejovoSzamla
 from app.models.employee import Employee, SystemRole, van_szerepkore
-from app.services import notifications, szamla_erkeztetes
+from app.services import excel_szoveg, notifications, szamla_erkeztetes
 from app.services.google_email import _extract_header, _gmail_service
 
 logger = logging.getLogger(__name__)
@@ -43,7 +45,7 @@ logger = logging.getLogger(__name__)
 #: Ennél kisebb kép szinte biztosan logó/aláírás, nem számlafotó.
 MIN_KEP_MERET = 30 * 1024
 
-FELDOLGOZHATO_MIME = szamla_erkeztetes.ENGEDETT_MIME | szamla_erkeztetes.XML_MIME
+FELDOLGOZHATO_MIME = szamla_erkeztetes.ENGEDETT_MIME | szamla_erkeztetes.XML_MIME | excel_szoveg.EXCEL_MIME
 
 
 def _cel_cim() -> str:
@@ -59,30 +61,53 @@ def _legkorabbi_nap() -> date:
         return date(2026, 9, 1)
 
 
-def _query(kezdo_datum: date | None) -> str:
-    # CSAK AZ OLVASATLAN leveleket hozzuk be (a felhasználó kérése): amit a
-    # postafiókban már elolvastak/lerendeztek, azt a lehúzás békén hagyja. A
-    # kettős védelem megmarad: az olvasatlanok közül is csak az kerül be, ami
-    # a bejovo_emailek naplóban még nem szerepel. A csatolmány-kérdést
-    # üzenetenként döntjük el (a linkes levél is kapjon piszkozatot).
-    #
-    # DÁTUMHATÁR: mindig van alsó korlát (lásd _legkorabbi_nap) - a kért
-    # kezdődátum csak SZŰKÍTHETI az időszakot, régebbre nem nyithatja ki.
-    # A Gmail "after:" a megadott nap 0:00-jától értendő, tehát maga a
-    # határnap még benne van.
+def _query(kezdo_datum: date | None, veg_datum: date | None = None) -> str:
+    """A Gmail-keresés. AZ OLVASOTTSÁG NEM SZÁMÍT (a felhasználó előírása):
+    ha valaki megnyitotta a levelet, a számlát attól még importálni kell. A
+    duplikáció ellen a SAJÁT importnyilvántartás (bejovo_emailek) véd - az
+    egyszer már látott üzenet-azonosító nem jön be újra. A leveleket nem
+    töröljük, nem mozgatjuk, és az olvasottságukat sem változtatjuk
+    (readonly scope).
+
+    DÁTUMHATÁR: mindig van alsó korlát (lásd _legkorabbi_nap) - a kért
+    kezdődátum csak SZŰKÍTHETI az időszakot, régebbre nem nyithatja ki.
+    A Gmail "after:" a megadott nap 0:00-jától értendő, tehát maga a
+    határnap még benne van. A `veg_datum` a visszamenőleges, dátumtartományos
+    visszatöltéshez van (before: kizáró, ezért +1 nap)."""
     legkorabbi = _legkorabbi_nap()
     hatar = kezdo_datum if kezdo_datum and kezdo_datum > legkorabbi else legkorabbi
-    return f"to:{_cel_cim()} is:unread after:{hatar.strftime('%Y/%m/%d')}"
+    q = f"to:{_cel_cim()} after:{hatar.strftime('%Y/%m/%d')}"
+    if veg_datum is not None:
+        q += f" before:{(veg_datum + timedelta(days=1)).strftime('%Y/%m/%d')}"
+    return q
 
 
-def _uzenet_lista(svc, kezdo_datum: date | None, limit: int) -> list[str]:
+def _okos_kezdo_datum(db: Session, kezdo_datum: date | None) -> date | None:
+    """Az AUTOMATIKUS futásnak nem kell minden alkalommal a teljes időszakot
+    végignéznie: az importnyilvántartás legutóbbi beérkezése előtt pár nappal
+    kezdünk (átfedéssel, hogy a késve szinkronizálódó levél se maradjon ki) -
+    kifejezett kezdődátum ezt felülírja."""
+    if kezdo_datum is not None:
+        return kezdo_datum
+    utolso = db.scalar(select(func.max(BejovoEmail.beerkezes)))
+    if utolso is None:
+        return None
+    return (utolso.date() if hasattr(utolso, "date") else utolso) - timedelta(days=3)
+
+
+def _uzenet_lista(svc, kezdo_datum: date | None, limit: int, veg_datum: date | None = None) -> list[str]:
     idk: list[str] = []
     token = None
     while len(idk) < limit:
         valasz = (
             svc.users()
             .messages()
-            .list(userId="me", q=_query(kezdo_datum), maxResults=min(100, limit - len(idk)), pageToken=token)
+            .list(
+                userId="me",
+                q=_query(kezdo_datum, veg_datum),
+                maxResults=min(100, limit - len(idk)),
+                pageToken=token,
+            )
             .execute()
         )
         idk.extend(m["id"] for m in valasz.get("messages", []))
@@ -118,7 +143,9 @@ def _csatolmanyok(svc, uzenet_id: str, payload: dict) -> list[tuple[str, str, by
         fajlnev = p.get("filename") or ""
         mime = (p.get("mimeType") or "").split(";")[0].lower()
         body = p.get("body") or {}
-        if fajlnev and mime in FELDOLGOZHATO_MIME:
+        # A levelezők az Excel-mellékletet néha általános MIME-mal küldik
+        # (application/octet-stream) - ilyenkor a kiterjesztés dönt.
+        if fajlnev and (mime in FELDOLGOZHATO_MIME or excel_szoveg.excelnek_tunik(mime, fajlnev)):
             adat = None
             if body.get("attachmentId"):
                 letoltott = (
@@ -171,16 +198,20 @@ def lehuzas(
     db: Session,
     *,
     kezdo_datum: date | None = None,
+    veg_datum: date | None = None,
     limit: int = 50,
     csak_elonezet: bool = False,
     naplo=lambda s: None,
 ) -> dict:
-    """A célcímre érkezett levelek feldolgozása. `csak_elonezet`: nem hoz létre
-    semmit, csak megmutatja, MI TÖRTÉNNE (a régi levelek visszamenőleges
-    feldolgozása előtt ezt érdemes megnézni)."""
+    """A célcímre érkezett levelek feldolgozása - kézi gombról ÉS az
+    automatikus háttérfolyamatból is ez fut (lásd main.py). `csak_elonezet`:
+    nem hoz létre semmit, csak megmutatja, MI TÖRTÉNNE. A `kezdo_datum` +
+    `veg_datum` a régi levelek visszamenőleges, dátumtartományos
+    visszatöltéséhez van."""
     svc = _gmail_service()
-    uzenet_idk = _uzenet_lista(svc, kezdo_datum, limit)
-    naplo(f"{len(uzenet_idk)} levél a keresésben ({_query(kezdo_datum)})")
+    okos_kezdet = _okos_kezdo_datum(db, kezdo_datum) if veg_datum is None else kezdo_datum
+    uzenet_idk = _uzenet_lista(svc, okos_kezdet, limit, veg_datum)
+    naplo(f"{len(uzenet_idk)} levél a keresésben ({_query(okos_kezdet, veg_datum)})")
 
     mar_lattuk = {
         e.gmail_uzenet_id

@@ -93,6 +93,50 @@ def _regi_diszpo_pdfek_athozasa() -> None:
         logger.exception("A régi diszpó PDF-ek költöztetését nem sikerült elindítani.")
 
 
+@app.on_event("startup")
+def _szamla_auto_erkeztetes() -> None:
+    """AUTOMATIKUS számla-érkeztetés: a bejövő címre érkezett levelek
+    feldolgozása a háttérben, akkor is, ha senki nem nyitja meg az oldalt
+    (a felhasználó kérése). A gyakoriság env-ből állítható
+    (SZAMLA_AUTO_GYAKORISAG_PERC, 0 = kikapcsolva, csak kézi ellenőrzés).
+
+    Több uvicorn worker esetén a hatter_feladatok tábla zárja, hogy egy
+    ellenőrzés egyszerre csak egy példányban fusson - ugyanaz a zár, amit a
+    kézi "Ellenőrzés most" gomb is használ, tehát ütközés ott sincs. Egy
+    hibás futás nem állítja le az időzítőt: a következő kör újrapróbálja."""
+    gyakorisag = int(settings.szamla_auto_gyakorisag_perc or 0)
+    if gyakorisag <= 0:
+        logger.info("Automatikus számla-érkeztetés kikapcsolva (SZAMLA_AUTO_GYAKORISAG_PERC=0).")
+        return
+
+    import threading
+    import time as _time
+
+    def _kor() -> None:
+        from app.api.routes.bejovo_szamlak import EMAIL_LEHUZAS_FELADAT
+        from app.services import hatter_feladat, szamla_email_lehuzas
+
+        while True:
+            _time.sleep(gyakorisag * 60)
+            try:
+
+                def _munka(naplo):
+                    from app.core.database import SessionLocal
+
+                    db = SessionLocal()
+                    try:
+                        return szamla_email_lehuzas.lehuzas(db, limit=100, naplo=naplo)
+                    finally:
+                        db.close()
+
+                hatter_feladat.inditas(EMAIL_LEHUZAS_FELADAT, _munka)
+            except Exception:  # noqa: BLE001 - a következő kör újrapróbálja
+                logger.exception("Automatikus számla-érkeztetés: az ellenőrzés nem indult el.")
+
+    threading.Thread(target=_kor, daemon=True, name="szamla-auto-erkeztetes").start()
+    logger.info("Automatikus számla-érkeztetés bekapcsolva: %s percenként.", gyakorisag)
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "environment": settings.environment}

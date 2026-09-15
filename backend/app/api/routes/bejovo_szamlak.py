@@ -83,6 +83,9 @@ class BejovoListItem(BaseModel):
     cel_tipus: str | None
     cel_cimke: str | None = None
     javaslat_indoklas: str | None = None
+    #: "biztos" | "tobb_lehetseges" | "ellentmondo" | "keves_info" - a lista
+    #: jelvénye ebből mutatja, mennyire megalapozott a javaslat.
+    javaslat_erosseg: str | None = None
     jovahagyo_nev: str | None = None
     jovahagyva_at: datetime | None = None
     rogzitett_expense_id: int | None = None
@@ -114,6 +117,9 @@ class BejovoReszlet(BejovoListItem):
     duplikatum_bejovo_id: int | None
     duplikatum_megjegyzes: str | None
     valtozat_szamla_id: int | None
+    #: A mentett bontás-piszkozat (több projekt egy számlán) - lásd
+    #: models/bejovo_szamla.BejovoSzamla.bontas.
+    bontas: dict | list | None = None
 
 
 def _cel_cimke(db: Session, b: BejovoSzamla) -> str | None:
@@ -159,6 +165,7 @@ def _kimenet(db: Session, b: BejovoSzamla, reszletes: bool = False) -> BejovoLis
     adat = tipus.model_validate(b)
     adat.cel_cimke = _cel_cimke(db, b)
     adat.javaslat_indoklas = (b.javaslat or {}).get("indoklas")
+    adat.javaslat_erosseg = (b.javaslat or {}).get("erosseg")
     adat.jovahagyo_nev = b.jovahagyo.full_name if b.jovahagyo else None
     return adat
 
@@ -201,6 +208,11 @@ def email_allapot(
     return {
         "cel_cim": settings.szamla_bejovo_cim,
         "legkorabbi_nap": _legkorabbi_nap().isoformat(),
+        # Automatikus érkeztetés: gyakoriság + az utolsó futás eredménye - a
+        # felület ebből mutatja, mikor volt az utolsó sikeres ellenőrzés és
+        # volt-e hiba (a napló vége a hibaüzenetet is tartalmazza).
+        "auto_gyakorisag_perc": int(settings.szamla_auto_gyakorisag_perc or 0),
+        "utolso_futas": feladat.finished_at.isoformat() if feladat and feladat.finished_at else None,
         "lehuzas_fut": bool(feladat and feladat.running),
         "utolso_lehuzas_log": (feladat.log or "")[-2000:] if feladat else "",
         "utolso_levelek": [
@@ -415,6 +427,9 @@ class MezoJavitasIn(BaseModel):
     cel_kp_forgalom_id: int | None = None
     cel_employee_id: int | None = None
     felhasznaloi_utasitas: str | None = None
+    #: BONTÁS-PISZKOZAT mentése (több projekt egy számlán): a sorok listája -
+    #: hiányosan is menthető, a teljesség csak a jóváhagyásnál követelmény.
+    bontas: list[dict] | None = None
 
 
 @router.patch("/{bejovo_id}", response_model=BejovoReszlet)
@@ -462,7 +477,7 @@ def javitas(
         setattr(b, mezo, ertek)
         # A kézzel javított mező forrása mostantól a felhasználó - az
         # ellenőrző ebből mutatja, mi honnan származik.
-        if b.kinyert and mezo not in ("felhasznaloi_utasitas",) and not mezo.startswith("cel_"):
+        if b.kinyert and mezo not in ("felhasznaloi_utasitas", "bontas") and not mezo.startswith("cel_"):
             b.kinyert = {
                 **b.kinyert,
                 "mezo_forrasok": {**(b.kinyert.get("mezo_forrasok") or {}), mezo: "felhasznalo"},
@@ -496,6 +511,11 @@ class JovahagyasIn(BaseModel):
     #: Több projekt közti felosztás: [{"project_code_id": ..., "netto": ...}] -
     #: az összegeknek pontosan ki kell adniuk a számla nettóját.
     felosztas: list[dict] | None = None
+    #: VEGYES CÉLÚ BONTÁS (cel_tipus="bontas"): soronként {"cel_tipus":
+    #: "kiadas_uj"|"mukodesi"|"kulsos_tig"|"kiadas_csatolas", "project_code_id"?,
+    #: "cel_id"?, "netto", "megjegyzes"?} - ha nincs küldve, a mentett
+    #: piszkozat (BejovoSzamla.bontas) érvényes.
+    bontas: list[dict] | None = None
 
 
 @router.post("/{bejovo_id}/jovahagyas", response_model=BejovoReszlet)
@@ -721,8 +741,10 @@ def tiszta_ujrainditas(
 
 
 class LehuzasIn(BaseModel):
-    #: Régi levelek visszamenőleges feldolgozásához - választható kezdődátum.
+    #: Régi levelek visszamenőleges feldolgozásához - választható
+    #: DÁTUMTARTOMÁNY (a napi automatikus ellenőrzésnek nem kell).
     kezdo_datum: date | None = None
+    veg_datum: date | None = None
     limit: int = 50
     #: Előnézet: semmit nem hoz létre, csak megmutatja, mi történne.
     elonezet: bool = False
@@ -749,6 +771,7 @@ def szamla_email_lehuzas_futtatasa(db, payload: LehuzasIn) -> dict:
     return lehuzo.lehuzas(
         db,
         kezdo_datum=payload.kezdo_datum,
+        veg_datum=payload.veg_datum,
         limit=max(1, min(payload.limit, 200)),
         csak_elonezet=payload.elonezet,
     )

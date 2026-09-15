@@ -34,6 +34,11 @@ ALLAPOT_PONTOSITAS = "pontositas"
 ALLAPOT_JOVAHAGYVA = "jovahagyva"
 ALLAPOT_DUPLIKATUM = "duplikatum"
 ALLAPOT_NEM_SZAMLA = "nem_szamla"
+#: NEM SZÁMLA JELLEGŰ melléklet (képernyőkép, aláíráskép, egyéb dokumentum) -
+#: automatikus felismeréssel kerül ide, hogy ne terhelje a számla-elbírálási
+#: listát, de KÜLÖN felülvizsgálható marad (nem dobjuk el csendben: kézzel
+#: visszaminősíthető és feldolgozható).
+ALLAPOT_EGYEB_DOKUMENTUM = "egyeb_dokumentum"
 ALLAPOT_HIBA = "hiba"
 
 ALLAPOTOK = (
@@ -43,6 +48,7 @@ ALLAPOTOK = (
     ALLAPOT_JOVAHAGYVA,
     ALLAPOT_DUPLIKATUM,
     ALLAPOT_NEM_SZAMLA,
+    ALLAPOT_EGYEB_DOKUMENTUM,
     ALLAPOT_HIBA,
 )
 
@@ -59,6 +65,7 @@ CEL_TIPUSOK = (
     "kp",                 # meglévő KP-tétel bizonylat-pótlása
     "mukodesi",           # tudatosan projekt nélküli általános működési költség
     "kimeno",             # kimenő/megrendelői számla - NEM rögzíthető kiadásként
+    "bontas",             # TÖBB CÉL közötti megosztás (lásd BejovoSzamla.bontas)
     "egyeb",              # tisztázandó / nem támogatott
 )
 
@@ -139,6 +146,14 @@ class BejovoSzamla(TimestampMixin, Base):
     #: {"tipus": CEL_TIPUSOK egyike, "indoklas": "...", "alternativak":
     #: [{"tipus", "cimke", "cel_id", "indoklas"}...], "figyelmeztetesek": […]}
     javaslat: Mapped[dict | None] = mapped_column(JSON)
+    #: TÖBB PROJEKT EGY SZÁMLÁN: a hozzárendelési sorok (a felhasználó
+    #: előírása). Soronként: {"cel_tipus": "kiadas_uj"|"mukodesi"|
+    #: "kulsos_tig"|"kiadas_csatolas", "project_code_id"?, "cel_id"?,
+    #: "netto": float, "megjegyzes"?, "forras"?} - a számla EGY pénzügyi
+    #: dokumentum marad, a bontás nem sokszorozza az összegét. Piszkozatként
+    #: menthető; jóváhagyni csak hiánytalan (a számla nettóját kiadó)
+    #: bontással lehet (lásd szamla_erkeztetes._rogzit_bontaskent).
+    bontas: Mapped[dict | list | None] = mapped_column(JSON)
     #: A felhasználó kifejezett utasítása (chatből vagy az ellenőrzőből) -
     #: a besorolás első számú forrása, de jogosultságot és ellentmondó
     #: számlaadatot nem írhat felül némán.
