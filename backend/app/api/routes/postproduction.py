@@ -231,7 +231,38 @@ def _vagas_projektkodja(data: dict, db: Session) -> dict:
         talalat = projektkod_kotes.keresd(db, kod)
         if talalat is not None:
             data["project_code_id"] = talalat.id
+    # ÚJ VÁGÁS ALAPÁLLAPOTA (a felhasználó kérése): állapot nélkül felvett
+    # anyag automatikusan a "Beérkező" oszlopba kerül - nem lóg állapot
+    # nélkül a tábla mellett. A pontos írásmódot a beállított állapotok
+    # közül vesszük (ékezet-tűrően), hogy az élesben használt oszlopnévvel
+    # egyezzen.
+    if not (data.get("allapot") or "").strip():
+        data["allapot"] = _beerkezo_allapot(db)
     return data
+
+
+def _beerkezo_allapot(db: Session) -> str:
+    """A "Beérkező" utómunka-állapot PONTOS írásmódja - először a beállított
+    állapotok (a tábla oszlopai), aztán az adatokban már használt értékek
+    közül; ha sehol nincs ilyen, a "Beérkező" literál."""
+
+    def beerkezos(ertek: str | None) -> bool:
+        if not ertek:
+            return False
+        ekezet_nelkul = "".join(
+            c for c in unicodedata.normalize("NFD", ertek.strip().lower()) if unicodedata.category(c) != "Mn"
+        )
+        return ekezet_nelkul.startswith("beerkez")
+
+    for sor in db.scalars(
+        select(DeliverableStatusConfig).order_by(DeliverableStatusConfig.sorrend, DeliverableStatusConfig.id)
+    ):
+        if beerkezos(sor.allapot):
+            return sor.allapot
+    for (ertek,) in db.execute(select(Deliverable.allapot).distinct()):
+        if beerkezos(ertek):
+            return ertek
+    return "Beérkező"
 
 
 #: A frontend ebből a PONTOS szövegből ismeri fel ezt a konkrét hibát (lásd

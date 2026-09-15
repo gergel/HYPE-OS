@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Mic, Paperclip, Plus, Square, Trash2, X } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { formatSzam } from "@/lib/penz";
+import { Markdown } from "@/components/Markdown";
 
 /** A MŰVELETI ASSZISZTENS felülete (a felhasználó kérése): tartós,
  * folytatható beszélgetések; a kérésből az asszisztens megkeresi az adatokat,
@@ -24,39 +25,9 @@ type Uzenet = {
 };
 type NaploSor = { id: number; allapot: string; osszefoglalo: string | null; method: string; path: string; status: number | null };
 
-/** Egyszerű markdown-link renderelés: [cím](/utvonal) → kattintható link. */
-function Szoveg({ szoveg }: { szoveg: string }) {
-  const reszek = useMemo(() => {
-    const t: (string | { cim: string; href: string })[] = [];
-    let utolso = 0;
-    const minta = /\[([^\]]+)\]\(([^)\s]+)\)/g;
-    let m: RegExpExecArray | null;
-    while ((m = minta.exec(szoveg)) !== null) {
-      if (m.index > utolso) t.push(szoveg.slice(utolso, m.index));
-      t.push({ cim: m[1], href: m[2] });
-      utolso = m.index + m[0].length;
-    }
-    if (utolso < szoveg.length) t.push(szoveg.slice(utolso));
-    return t;
-  }, [szoveg]);
-  return (
-    <p className="whitespace-pre-line">
-      {reszek.map((r, i) =>
-        typeof r === "string" ? (
-          <span key={i}>{r}</span>
-        ) : r.href.startsWith("/") ? (
-          <Link key={i} href={r.href} className="text-text-accent hover:underline">
-            {r.cim}
-          </Link>
-        ) : (
-          <a key={i} href={r.href} target="_blank" rel="noreferrer" className="text-text-accent hover:underline">
-            {r.cim}
-          </a>
-        ),
-      )}
-    </p>
-  );
-}
+// A chat-üzenetek (a sajátjaid és az asszisztensé is) teljes markdown-
+// formázással jelennek meg - címsor, félkövér, felsorolás, kód, link (lásd
+// components/Markdown.tsx).
 
 export function AiAssistantChat() {
   const searchParams = useSearchParams();
@@ -127,8 +98,14 @@ export function AiAssistantChat() {
     }
   }, []);
 
+  //: A kezdeti beszélgetés-lista KÉSEI válasza ne írja felül a közben már
+  //: (pl. az „Új beszélgetés" gombbal) megnyitott szálat - a ref a state
+  //: zárvány-problémája nélkül mondja meg, van-e már aktív választás.
+  const aktivRef = useRef<number | null>(null);
+
   const beszelgetesValt = useCallback(
     async (bid: number) => {
+      aktivRef.current = bid;
       setAktiv(bid);
       setUzenetek([]);
       utolsoIdRef.current = 0;
@@ -161,7 +138,7 @@ export function AiAssistantChat() {
         /* privát mód */
       }
       const cel = lista.find((b) => b.id === mentett) ?? lista[0];
-      if (cel) void beszelgetesValt(cel.id);
+      if (cel && aktivRef.current === null) void beszelgetesValt(cel.id);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -538,10 +515,11 @@ export function AiAssistantChat() {
             value={szoveg}
             onChange={(e) => setSzoveg(e.target.value)}
             onKeyDown={handleKeyDown}
+            title="Formázhatsz: **félkövér**, *dőlt*, # címsor, - felsorolás, 1. számozott lista, `kód`"
             placeholder={
               fajlok.length > 0
                 ? "Írd le, mi legyen a fájlokkal… (pl. Ezt a számlát a HYPE26-0291-hez, XY utókövetési tételéhez)"
-                : "Írd le, mit szeretnél… (Enter a küldéshez, Shift+Enter új sor)"
+                : "Írd le, mit szeretnél… (Enter küld, Shift+Enter új sor · formázás: **félkövér**, - felsorolás, # címsor)"
             }
             className="flex-1 rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
           />
@@ -650,7 +628,7 @@ function UzenetSor({
       }`}
     >
       <p className="mb-1 text-[11px] font-medium text-text-muted">{u.szerep === "felhasznalo" ? "Te" : "AI Assistant"}</p>
-      <Szoveg szoveg={u.szoveg ?? ""} />
+      <Markdown szoveg={u.szoveg ?? ""} />
       {u.szerep === "felhasznalo" && Array.isArray(adat.fajlok) && adat.fajlok.length > 0 && (
         <p className="mt-1 text-[11.5px] text-text-muted">📎 {(adat.fajlok as string[]).join(", ")}</p>
       )}

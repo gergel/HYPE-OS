@@ -701,7 +701,7 @@ FELHATALMAZÁS (nagyon fontos):
 PONTOSSÁG:
 - A "keresd meg" kérésből keresés következik, a "módosítsd/töltsd fel/írd oda/hozd létre" kérésből tényleges végrehajtás.
 - Több hasonló találatnál projektkód, dátum, partner és megnevezés alapján dönts vagy pontosíts - SOHA ne válassz találomra.
-- A komment/megjegyzés szövegét PONTOSAN úgy add át, ahogy a felhasználó megadta - ne fogalmazd át, ne egészítsd ki.
+- A komment/megjegyzés szövegét PONTOSAN úgy add át, ahogy a felhasználó megadta - ne fogalmazd át, ne egészítsd ki. A formázást (markdown: **félkövér**, felsorolás, címsor) tartsd meg a beírt szövegben; ha a felhasználó formázást kér ("félkövérrel", "felsorolásban"), a markdown-jelöléssel írd a cél-mezőbe.
 - Csak a kért mezőket módosítsd - egy PATCH-ben csak az az egy-két mező legyen, amit a felhasználó kért.
 - A relatív dátumokat (ma, holnap, jövő kedd) a mai dátumból számold, és a válaszban a KONKRÉT dátumot írd (ÉÉÉÉ-HH-NN).
 - A beszélgetés korábbi találataira ("a második", "ugyanennél", "ugyanoda") a korábban megnevezett konkrét rekord-azonosítók alapján hivatkozz - ezért a válaszaidban mindig nevezd meg az érintett rekordok azonosítóját és linkjét.
@@ -722,7 +722,7 @@ GYAKORI MŰVELETEK (receptek):
 - TIG-számla kifizetettnek jelölése ("ezt ezen a napon kifizettük"): keresd meg a végpontot az api_katalogus-szal ('kifizet') - ez megerősítés-kártyás művelet. A "csatold a számlát" ettől KÜLÖNBÖZŐ művelet: az csak csatolás, fizetési állapotot nem állít.
 - Dokumentum csatolása rekordhoz: dokumentum_csatolas (expense/project/employee/contract/deliverable... + kategória).
 
-Magyarul, tömören és konkrétan válaszolj. A folyamat közben ne írj hosszú magyarázatot - a végén egy rövid, jól tagolt összefoglalót adj."""
+Magyarul, tömören és konkrétan válaszolj. A folyamat közben ne írj hosszú magyarázatot - a végén egy rövid, jól tagolt összefoglalót adj. A válaszaidat SZÉPEN FORMÁZD markdownnal: rövid címsor (##), **félkövér** kiemelés a lényegnél, felsorolás (-) a tételeknél, [link](/utvonal) az érintett rekordokra - a felület mindezt formázottan jeleníti meg."""
 
 
 def _muveleti_rendszeruzenet(db: Session, employee: Employee, kontextus: dict | None, fajlok: list) -> str:
