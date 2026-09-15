@@ -328,7 +328,8 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
         setUzenet(`${d.talalt_level} levél a keresésben - lent az előnézet (semmi nem jött létre, a postafiókhoz nem nyúltunk).`);
       } else {
         setUzenet(
-          `${d.talalt_level} levelet vizsgáltunk: ${d.uj_level} új levélből ${d.uj_szamla} új tétel készült` +
+          `${d.talalt_level} levelet vizsgáltunk: ${d.uj_level} levélből ${d.uj_szamla} új tétel készült` +
+            `${d.ujra_behozott ? ` (ebből ${d.ujra_behozott} újra behozott: törölt tételű, még olvasatlan levél)` : ""}` +
             `${d.kihagyott_korabbi ? `, ${d.kihagyott_korabbi} korábban már átvett/kizárt levél kimaradt` : ""}` +
             `${d.hibas_level ? `, ${d.hibas_level} levél hibára futott (lásd a listát)` : ""}.`,
         );
@@ -345,8 +346,9 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
     const szo = prompt(
       "TISZTA ÚJRAINDÍTÁS: az eddigi érkeztetési beérkezések kitakarítása.\n\n" +
         "Mentés és tételes visszaállítási jegyzék készül; a jóváhagyott tételek import-hatásai bizonyítható " +
-        "eredet alapján visszavonódnak (a nem bizonyítható rendezendő kivétel marad); a kitakarított levelek " +
-        "nem jönnek vissza a következő ellenőrzéskor. Az eredeti postafiókhoz nem nyúlunk.\n\n" +
+        "eredet alapján visszavonódnak (a nem bizonyítható rendezendő kivétel marad). A postafiókban még " +
+        "OLVASATLAN levelek a következő ellenőrzéskor újra bejönnek, a már olvasottak nem. Az eredeti " +
+        "postafiókhoz nem nyúlunk.\n\n" +
         'A megerősítéshez írd be: TISZTA INDULAS',
     );
     if (szo === null) return;
@@ -382,8 +384,8 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
       !confirm(
         "Törlöd az ÖSSZES beérkező számla-tételt?\n\n" +
           "Minden piszkozat végleg törlődik a tárolt fájljával együtt (bármelyik állapotban). " +
-          "A jóváhagyáskor már rögzített kiadásokat/TIG-számlákat ez nem érinti, és a már " +
-          "egyszer átvett levelek egy újabb ellenőrzéskor sem jönnek vissza.",
+          "A jóváhagyáskor már rögzített kiadásokat/TIG-számlákat ez nem érinti. A postafiókban " +
+          "MÉG OLVASATLAN levelek a következő ellenőrzéskor újra bejönnek - a már olvasottak nem.",
       )
     )
       return;

@@ -16,8 +16,12 @@ importálni kell.
 IDEMPOTENCIA: a SAJÁT importnyilvántartás dönt - minden látott Gmail-üzenet a
 `bejovo_emailek` táblába kerül a Gmail-azonosítójával; ami ott van, azt
 másodszor nem dolgozzuk fel, így az ismételt ellenőrzés és az újraindítás sem
-duplikál. Az eredeti levelet nem töröljük, nem mozgatjuk, az olvasottságát nem
-változtatjuk (readonly scope) és nem is válaszolunk rá.
+duplikál. EGY kivétel van (a felhasználó kérése): ha egy korábban látott levél
+tétele MÁR NINCS a rendszerben (pl. az "Összes törlése" vitte el), és a levél
+a postafiókban még OLVASATLAN, azt újra behozzuk - az elintézetlen számla ne
+ragadjon kint. Az olvasott levelet kézzel elintézettnek tekintjük, az nem jön
+vissza magától. Az eredeti levelet nem töröljük, nem mozgatjuk, az
+olvasottságát nem változtatjuk (readonly scope) és nem is válaszolunk rá.
 
 A csatolmányokból piszkozat készül (lásd services/szamla_erkeztetes.py):
 - a nyilvánvalóan nem-számla mellékletek (kis képek: logó, aláírás) kimaradnak;
@@ -86,13 +90,30 @@ def _okos_kezdo_datum(db: Session, kezdo_datum: date | None) -> date | None:
     """Az AUTOMATIKUS futásnak nem kell minden alkalommal a teljes időszakot
     végignéznie: az importnyilvántartás legutóbbi beérkezése előtt pár nappal
     kezdünk (átfedéssel, hogy a késve szinkronizálódó levél se maradjon ki) -
-    kifejezett kezdődátum ezt felülírja."""
+    kifejezett kezdődátum ezt felülírja.
+
+    KIVÉTEL: ha van ÁRVA nyilvántartás-sor (a levélből valaha készült tétel,
+    de már egy sincs a rendszerben - pl. az "Összes törlése" vitte el), a
+    keresés a legrégebbi ilyen levélig nyúlik vissza, hogy az olvasatlan
+    maradtakat újra be tudja hozni (lásd a fejlécet)."""
     if kezdo_datum is not None:
         return kezdo_datum
     utolso = db.scalar(select(func.max(BejovoEmail.beerkezes)))
     if utolso is None:
         return None
-    return (utolso.date() if hasattr(utolso, "date") else utolso) - timedelta(days=3)
+    kezdet = (utolso.date() if hasattr(utolso, "date") else utolso) - timedelta(days=3)
+    legregebbi_arva = db.scalar(
+        select(func.min(BejovoEmail.beerkezes)).where(
+            BejovoEmail.letrehozott_szamla_db > 0,
+            ~select(BejovoSzamla.id)
+            .where(BejovoSzamla.email_uzenet_id == BejovoEmail.gmail_uzenet_id)
+            .exists(),
+        )
+    )
+    if legregebbi_arva is not None:
+        arva_nap = legregebbi_arva.date() if hasattr(legregebbi_arva, "date") else legregebbi_arva
+        kezdet = min(kezdet, arva_nap)
+    return kezdet
 
 
 def _uzenet_lista(svc, kezdo_datum: date | None, limit: int, veg_datum: date | None = None) -> list[str]:
@@ -217,19 +238,38 @@ def lehuzas(
         e.gmail_uzenet_id
         for e in db.scalars(select(BejovoEmail).where(BejovoEmail.gmail_uzenet_id.in_(uzenet_idk)))
     }
+    # Melyik korábban látott levélnek van MÉG tétele a rendszerben - aminek
+    # nincs (törölték), az olvasatlanul újra behozható (lásd a fejlécet).
+    rendszerben = set(
+        db.scalars(
+            select(BejovoSzamla.email_uzenet_id).where(BejovoSzamla.email_uzenet_id.in_(uzenet_idk))
+        )
+    )
     elonezet: list[dict] = []
     uj_szamlak = 0
     feldolgozott_level = 0
     kihagyott_korabbi = 0
+    ujra_behozott = 0
     hibas_level = 0
 
     for uzenet_id in uzenet_idk:
+        ujra_behozas = False
         if uzenet_id in mar_lattuk:
-            # Korábban már átvett vagy a resetnél kizárt üzenet - akkor sem
-            # jön át újra, ha a postafiókban olvasatlan maradt.
+            if uzenet_id in rendszerben:
+                # Korábban átvett üzenet, aminek a tétele MEGVAN a rendszerben
+                # - nem jön át újra, az olvasottságtól függetlenül.
+                kihagyott_korabbi += 1
+                continue
+            # Korábban látott, de a tétele már nincs a rendszerben (pl. az
+            # "Összes törlése" vitte el) - csak akkor hozzuk be ÚJRA, ha a
+            # postafiókban még olvasatlan (az olvasott levelet kézzel
+            # elintézettnek tekintjük). Az olvasottságot lentebb, a letöltött
+            # üzenet címkéiből döntjük el.
+            ujra_behozas = True
+        uzenet = svc.users().messages().get(userId="me", id=uzenet_id, format="full").execute()
+        if ujra_behozas and "UNREAD" not in (uzenet.get("labelIds") or []):
             kihagyott_korabbi += 1
             continue
-        uzenet = svc.users().messages().get(userId="me", id=uzenet_id, format="full").execute()
         payload = uzenet.get("payload") or {}
         fejlecek = payload.get("headers") or []
         felado = _extract_header(fejlecek, "From") or ""
@@ -247,7 +287,7 @@ def lehuzas(
             elonezet.append(
                 {
                     "felado": felado,
-                    "targy": targy,
+                    "targy": targy + (" [újra behozható: törölt tétel, még olvasatlan]" if ujra_behozas else ""),
                     "beerkezes": beerkezes.isoformat(),
                     "csatolmanyok": [f"{nev} ({mime}, {len(adat) // 1024} kB)" for nev, mime, adat in csatolmanyok],
                 }
@@ -284,33 +324,37 @@ def lehuzas(
                 )
                 szamla_erkeztetes.feldolgoz(db, bejovo)
                 letrejott += 1
-            db.add(
-                BejovoEmail(
-                    gmail_uzenet_id=uzenet_id,
-                    felado=felado[:300],
-                    targy=targy[:500],
-                    beerkezes=beerkezes,
-                    allapot="feldolgozva" if csatolmanyok else "nincs_csatolmany",
-                    letrehozott_szamla_db=letrejott,
-                )
+            _nyilvantartas_mentes(
+                db,
+                uzenet_id,
+                felado=felado,
+                targy=targy,
+                beerkezes=beerkezes,
+                allapot="feldolgozva" if csatolmanyok else "nincs_csatolmany",
+                letrejott=letrejott,
+                megjegyzes="Újra behozva: a korábbi tétele törölve volt, a levél olvasatlan maradt." if ujra_behozas else None,
             )
             db.commit()
             uj_szamlak += letrejott
             feldolgozott_level += 1
-            naplo(f"Feldolgozva: {targy[:60]} ({letrejott} dokumentum)")
+            if ujra_behozas:
+                ujra_behozott += 1
+                naplo(f"Újra behozva (törölt tétel, olvasatlan): {targy[:60]} ({letrejott} dokumentum)")
+            else:
+                naplo(f"Feldolgozva: {targy[:60]} ({letrejott} dokumentum)")
             _ertesites(db, targy, letrejott)
         except Exception as exc:  # noqa: BLE001 - egy rossz levél ne állítsa meg a többit
             db.rollback()
             logger.exception("Számla-email feldolgozási hiba (%s)", uzenet_id)
-            db.add(
-                BejovoEmail(
-                    gmail_uzenet_id=uzenet_id,
-                    felado=felado[:300],
-                    targy=targy[:500],
-                    beerkezes=beerkezes,
-                    allapot="hiba",
-                    megjegyzes=str(exc)[:1000],
-                )
+            _nyilvantartas_mentes(
+                db,
+                uzenet_id,
+                felado=felado,
+                targy=targy,
+                beerkezes=beerkezes,
+                allapot="hiba",
+                letrejott=0,
+                megjegyzes=str(exc)[:1000],
             )
             db.commit()
             hibas_level += 1
@@ -324,6 +368,46 @@ def lehuzas(
         "uj_level": feldolgozott_level,
         "uj_szamla": uj_szamlak,
         "kihagyott_korabbi": kihagyott_korabbi,
+        #: Ebből hány volt ÚJRA behozott: korábban látott, de törölt tételű,
+        #: a postafiókban még olvasatlan levél (benne van az uj_level-ben is).
+        "ujra_behozott": ujra_behozott,
         "hibas_level": hibas_level,
         "elonezet": elonezet if csak_elonezet else None,
     }
+
+
+def _nyilvantartas_mentes(
+    db: Session,
+    uzenet_id: str,
+    *,
+    felado: str,
+    targy: str,
+    beerkezes: datetime,
+    allapot: str,
+    letrejott: int,
+    megjegyzes: str | None,
+) -> None:
+    """Az importnyilvántartás-sor felvétele VAGY frissítése. Az újra behozott
+    levélnek már van sora (uq_bejovo_email_uzenet) - azt írjuk át, nem
+    duplikálunk; a történet a megjegyzésben marad meg."""
+    meglevo = db.scalar(select(BejovoEmail).where(BejovoEmail.gmail_uzenet_id == uzenet_id))
+    if meglevo is not None:
+        meglevo.felado = felado[:300]
+        meglevo.targy = targy[:500]
+        meglevo.beerkezes = beerkezes
+        meglevo.allapot = allapot
+        meglevo.letrehozott_szamla_db = letrejott
+        if megjegyzes:
+            meglevo.megjegyzes = megjegyzes[:1000]
+        return
+    db.add(
+        BejovoEmail(
+            gmail_uzenet_id=uzenet_id,
+            felado=felado[:300],
+            targy=targy[:500],
+            beerkezes=beerkezes,
+            allapot=allapot,
+            letrehozott_szamla_db=letrejott,
+            megjegyzes=megjegyzes[:1000] if megjegyzes else None,
+        )
+    )
