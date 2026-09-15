@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, defer, selectinload
 
 from app.api.crud_router import build_crud_router
 from app.core.database import get_db
@@ -252,6 +252,58 @@ def _szamlak_elotoltese(sorok: list[ProjectCode], db: Session) -> None:
         pc.__dict__["_szamlak_cache"] = csoportok.get(pc.id, [])
 
 
+def _nagy_oszlopai(model, kivetelek: tuple[str, ...] = ()) -> list:
+    """A modell NAGY oszlopai (JSON / Text / hosszú String), a kivételek nélkül
+    - ezeket a lista-útvonal elhalasztva (defer) hagyja ki. Ha egy elhalasztott
+    oszlophoz mégis hozzányúlna a kód, az adat lustán akkor is betöltődik
+    (helyes marad az eredmény), csak lassabban - erre a lekérdezés-számláló
+    teszt figyel."""
+    import sqlalchemy as sa
+
+    return [
+        getattr(model, oszlop.name)
+        for oszlop in model.__table__.columns
+        if oszlop.name not in kivetelek
+        and (
+            isinstance(oszlop.type, (sa.JSON, sa.Text))
+            or (isinstance(oszlop.type, sa.String) and (oszlop.type.length or 0) >= 500)
+        )
+    ]
+
+
+def _nagy_oszlopok_nelkul(model, kivetelek: tuple[str, ...] = ()) -> list:
+    """defer()-opciók a FŐ entitás nagy oszlopaira."""
+    return [defer(attr) for attr in _nagy_oszlopai(model, kivetelek)]
+
+
+def _relacio_nagy_oszlopok_nelkul(betolto, model, kivetelek: tuple[str, ...] = ()):
+    """Ugyanez egy selectinload-dal betöltött KAPCSOLAT soraira."""
+    for attr in _nagy_oszlopai(model, kivetelek):
+        betolto = betolto.defer(attr)
+    return betolto
+
+
+#: A projektkód nagy oszlopai közül ezeket a lista TÉNYLEG használja (a
+#: lista-séma mezői + a papír-számítások bemenetei) - ezek betöltve maradnak.
+_PROJEKTKOD_LISTAN_HASZNALT = (
+    "megjegyzes",
+    "datum_megjegyzes",
+    "vallalasi_ar_magyarazat",
+    "papir_nelkul_indoka",
+    "bevetel_kihagyas_oka",
+    "szamla_kihagyas_oka",
+    "specialis_eset",
+    "szerzodes_specialis_eset",
+    "tig_specialis",
+    "teljesites",
+    "darabolva",
+)
+
+#: A munkatárs-sorokból a lista a típust, a nevet és a díjakat használja - a
+#: szerepkör-mező marad (jogosultság-ellenőrzések), a Notion-örökség nem kell.
+_EMBER_LISTAN_HASZNALT = ("tovabbi_szerepkorok",)
+
+
 router = build_crud_router(
     model=ProjectCode,
     create_schema=ProjectCodeCreate,
@@ -277,9 +329,22 @@ router = build_crud_router(
     # nélkül ez SORONKÉNT 3 külön lekérdezést jelentene: 200 projektkódnál
     # 600+ kör, ami a Pénzügyek oldalt másodpercekkel lassította.
     list_options=(
+        # GYORSÍTÁS (a felhasználó hibajelzése: az oldal lassan nyílik): a
+        # lista-útvonal a nagy (JSON/Text/hosszú szöveg) oszlopokat NEM tölti
+        # be (defer) - élesben a Notionből örökölt mezők és a forgatások
+        # diszpó-szövegei sorononként kilobájtokat nyomtak, pedig sem a
+        # lista-séma, sem a számított mezők nem nyúlnak hozzájuk (lásd
+        # _nagy_oszlopok_nelkul: a ténylegesen használtak a kivétel-listán
+        # maradnak). Az adatlap (GET /{id}) változatlan, minden mezőt ad.
+        *_nagy_oszlopok_nelkul(ProjectCode, _PROJEKTKOD_LISTAN_HASZNALT),
         # A kiadás mellé az EMBERE is kell: a külsős/egyéb bontás részben az ő
-        # típusából derül ki (lásd models/project_code.kulsos_koltseg).
-        selectinload(ProjectCode.expenses).selectinload(Expense.employee),
+        # típusából derül ki (lásd models/project_code.kulsos_koltseg). A
+        # kiadás-sor Notion-örökség JSON-jai viszont itt sem kellenek.
+        _relacio_nagy_oszlopok_nelkul(selectinload(ProjectCode.expenses), Expense),
+        _relacio_nagy_oszlopok_nelkul(
+            selectinload(ProjectCode.expenses).selectinload(Expense.employee), Employee, _EMBER_LISTAN_HASZNALT
+        ),
+        _relacio_nagy_oszlopok_nelkul(selectinload(ProjectCode.projects), Project),
         # A vágás ára a MÉRT munkaidőből jön (lásd
         # models/project_code.vagas_koltseg), ezért a mérések is kellenek -
         # enélkül soronként külön lekérdezés indulna értük.
@@ -296,6 +361,10 @@ router = build_crud_router(
         selectinload(ProjectCode.projects)
         .selectinload(Project.crew)
         .selectinload(Employee.belsos_idoszakok),
+        # A stábtag-sorok Notion-örökség mezői sem kellenek a listához.
+        _relacio_nagy_oszlopok_nelkul(
+            selectinload(ProjectCode.projects).selectinload(Project.crew), Employee, _EMBER_LISTAN_HASZNALT
+        ),
         selectinload(ProjectCode.projects)
         .selectinload(Project.performance_certificates)
         .selectinload(PerformanceCertificate.tetelek),
