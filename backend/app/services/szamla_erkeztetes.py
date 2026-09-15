@@ -191,6 +191,13 @@ def feldolgoz(db: Session, bejovo: BejovoSzamla, adat: bytes | None = None) -> N
         if adat is None:
             adat = document_storage.download_bytes(bejovo.storage_key)
 
+        # A kiolvasás (AI-hívás) másodpercekig-percekig tarthat - előtte
+        # lezárjuk a nyitott tranzakciót, hogy a piszkozat friss INSERT-je ne
+        # tartson zárat a hívás teljes ideje alatt: egy deploy közbeni
+        # ALTER TABLE (és az összes mögé beálló lekérdezés) pontosan ezen
+        # várt, és a migráció lock_timeout-tal elhasalva a deployt is
+        # elbuktatta.
+        db.commit()
         kinyert = kiadas_kiolvasas.szamla_olvasd_ki(adat, bejovo.content_type or "application/pdf")
         _kinyert_mentese(bejovo, kinyert)
 
@@ -352,6 +359,9 @@ def _reszletezo_feldolgozas(db: Session, bejovo: BejovoSzamla, adat: bytes | Non
         return
 
     szoveg = excel_szoveg.szovegge(adat, bejovo.fajl_nev)
+    # Lásd feldolgoz(): az AI-hívás előtt tranzakció-zárás, hogy a hívás
+    # alatt ne maradjon zár a bejovo_szamlak tábla sorain.
+    db.commit()
     kinyert = kiadas_kiolvasas.reszletezo_olvasd_ki(szoveg)
     sorok = [s for s in (kinyert.get("sorok") or []) if isinstance(s, dict)]
     bejovo.kinyert = {"reszletezo": kinyert}
