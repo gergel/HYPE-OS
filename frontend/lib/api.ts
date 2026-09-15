@@ -1061,6 +1061,11 @@ export type UtalasTetel = {
   } | null;
   utalas_datum: string | null;
   osszeg_elteres_elfogadva: boolean;
+  /** A HYPE/Krumpelló besorolást a felhasználó megerősítette. */
+  elszamolas_megerositve: boolean;
+  /** A besorolás (cél) jóváhagyva - a rögzítés csak ez után futhat. */
+  besorolas_jovahagyva: boolean;
+  jovahagyva_at: string | null;
   duplikatum_tetel_id: number | null;
   rogzitve_at: string | null;
   rogzites_naplo: Record<string, unknown> | null;
@@ -1084,6 +1089,10 @@ export type UtalasAdag = {
   created_at: string;
   tetel_darab: number;
   rogzitett_darab: number;
+  /** Hány tétel lezárt (rögzítve / már rögzítve / már kifizetve / Krumpelló /
+   * duplikátum), és kész-e ezzel az egész adag. */
+  lezart_darab: number;
+  lezart: boolean;
 };
 
 export type UtalasAdagReszlet = UtalasAdag & { tetelek: UtalasTetel[] };

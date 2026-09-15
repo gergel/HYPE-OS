@@ -22,7 +22,13 @@ from app.models.finance import Expense
 from app.models.internal_performance_certificate import InternalPerformanceCertificate
 from app.models.performance_certificate import PerformanceCertificate
 from app.models.project_code import ProjectCode
-from app.models.utalas_felvezetes import ELSZAMOLASOK, TETEL_ALLAPOTOK, UtalasAdag, UtalasTetel
+from app.models.utalas_felvezetes import (
+    ELSZAMOLASOK,
+    TETEL_ALLAPOTOK,
+    UtalasAdag,
+    UtalasTetel,
+)
+from app.models.utalas_felvezetes import LEZART_ALLAPOTOK as UTALAS_LEZART_ALLAPOTOK
 from app.services import hatter_feladat, utalas_felvezetes
 from app.services.utalas_felvezetes import UtalasHiba
 
@@ -67,6 +73,9 @@ class TetelOut(BaseModel):
     javaslat: dict | None
     utalas_datum: date | None
     osszeg_elteres_elfogadva: bool
+    elszamolas_megerositve: bool
+    besorolas_jovahagyva: bool
+    jovahagyva_at: datetime | None
     duplikatum_tetel_id: int | None
     rogzitve_at: datetime | None
     rogzites_naplo: dict | None
@@ -93,6 +102,10 @@ class AdagOut(BaseModel):
     created_at: datetime
     tetel_darab: int = 0
     rogzitett_darab: int = 0
+    #: Hány tétel LEZÁRT (rögzítve / már rögzítve / már kifizetve / megerősített
+    #: Krumpelló / duplikátum) - és kész-e ezzel az egész adag.
+    lezart_darab: int = 0
+    lezart: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -110,7 +123,7 @@ def _cel_reszletek(db: Session, t: UtalasTetel) -> tuple[str | None, str | None]
         pc = db.get(ProjectCode, exp.project_code_id) if exp.project_code_id else None
         return (
             f"Kiadás #{exp.id}: {exp.megnevezes}" + (f" – {pc.projektkod}" if pc else ""),
-            "/penzugyek/kiadas",
+            f"/penzugyek/kiadas/{exp.id}",
         )
     if t.cel_tipus == "kulsos_tig" and t.cel_certificate_id:
         cert = db.get(PerformanceCertificate, t.cel_certificate_id)
@@ -155,6 +168,8 @@ def _adag_out(db: Session, adag: UtalasAdag, reszletes: bool = False) -> AdagOut
     ki = tipus.model_validate(adag)
     ki.tetel_darab = len(adag.tetelek)
     ki.rogzitett_darab = sum(1 for t in adag.tetelek if t.allapot == "rogzitve")
+    ki.lezart_darab = sum(1 for t in adag.tetelek if t.allapot in UTALAS_LEZART_ALLAPOTOK)
+    ki.lezart = adag.allapot != "feldolgozas" and ki.tetel_darab > 0 and ki.lezart_darab == ki.tetel_darab
     if reszletes:
         ki.tetelek = [_tetel_out(db, t) for t in adag.tetelek]
     return ki
@@ -240,6 +255,19 @@ def adag_reszlet(
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
     adag = _adag_lekeres(db, adag_id)
+    # A NYITOTT tételek állapotát a cél AKTUÁLIS fizetési állapotához
+    # igazítjuk: amit időközben másutt kifizettek, az ne maradjon
+    # "jóváhagyásra vár" (a felhasználó hibajelzése: kifizetett célrekord
+    # sora is rögzíthetőnek látszott).
+    valtozott = False
+    for t in adag.tetelek:
+        if t.allapot in ("rogzitheto", "jovahagyva", "osszeg_elter", "mar_kifizetve"):
+            elozo = t.allapot
+            utalas_felvezetes.allapot_ujraertekeles(db, t)
+            if t.allapot != elozo:
+                valtozott = True
+    if valtozott:
+        db.commit()
     # Beragadt háttér-feldolgozás felismerése (deploy/újraindítás közben):
     # ha a job nem fut, de az adag "feldolgozas"-ban maradt, újraindítjuk.
     if adag.allapot == "feldolgozas":
@@ -302,6 +330,11 @@ class TetelPatch(BaseModel):
     cel_internal_certificate_id: int | None = None
     uj_kiadas: dict | None = None
     osszeg_elteres_elfogadva: bool | None = None
+    # ── A HIBÁSAN FELISMERT adatok kézi javítása (a felhasználó kérése) ──
+    szamlaszam: str | None = None
+    kibocsato_nev: str | None = None
+    netto: float | None = None
+    brutto: float | None = None
 
 
 @router.patch("/tetel/{tetel_id}", response_model=TetelOut)
@@ -318,6 +351,10 @@ def tetel_modositas(
         if payload.elszamolas not in ELSZAMOLASOK:
             raise HTTPException(status_code=400, detail=f"Ismeretlen elszámolás: {payload.elszamolas}")
         t.elszamolas = payload.elszamolas
+        # A kézi választás egyben MEGERŐSÍTÉS is (a felhasználó maga döntött);
+        # a "tisztázandó" viszont pont a döntés hiányát jelenti.
+        t.elszamolas_megerositve = payload.elszamolas != "tisztazando"
+        t.besorolas_jovahagyva = False
     if payload.utalas_datum is not None:
         if payload.utalas_datum.strip() == "":
             t.utalas_datum = None
@@ -359,6 +396,20 @@ def tetel_modositas(
         t.uj_kiadas = {**(t.uj_kiadas or {}), **payload.uj_kiadas}
     if payload.osszeg_elteres_elfogadva is not None:
         t.osszeg_elteres_elfogadva = payload.osszeg_elteres_elfogadva
+    # A hibásan felismert adatok kézi javítása - a javított érték felülírja a
+    # kiolvasottat (az eredeti a kinyert JSON-ban megmarad).
+    if payload.szamlaszam is not None:
+        t.szamlaszam = payload.szamlaszam.strip()[:100] or None
+    if payload.kibocsato_nev is not None:
+        t.kibocsato_nev = payload.kibocsato_nev.strip()[:300] or None
+    if payload.netto is not None:
+        t.netto = payload.netto
+    if payload.brutto is not None:
+        t.brutto = payload.brutto
+    # Bármilyen cél- vagy adat-módosítás után a korábbi jóváhagyás nem él: a
+    # 2. lépés (rögzítés) csak friss jóváhagyással futhat.
+    if any(k in mezok for k in ("cel_tipus", "cel_expense_id", "cel_certificate_id", "cel_internal_certificate_id", "uj_kiadas", "netto", "brutto", "elszamolas")):
+        t.besorolas_jovahagyva = False
     # A TIG-ből származó kiadássor itt is átirányul az eredeti TIG-re.
     utalas_felvezetes._tig_kiadas_atiranyitas(db, t)
     t.hiba_uzenet = None
@@ -392,6 +443,9 @@ def tetel_ujrafeldolgozas(
 class ElszamolasIn(BaseModel):
     tetel_idk: list[int]
     elszamolas: str
+    #: True: a kijelölés helyett az adag ÖSSZES még meg nem erősített, nyitott
+    #: tétele kapja a besorolást ("a fennmaradók megerősítése" gomb).
+    fennmaradok: bool = False
 
 
 @router.post("/{adag_id}/elszamolas")
@@ -401,17 +455,85 @@ def tomeges_elszamolas(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """Kijelölt sorokra alkalmazható tömeges HYPE/Krumpello választás."""
+    """Kijelölt sorokra alkalmazható tömeges HYPE/Krumpelló választás - a
+    kézi tömeges besorolás egyben MEGERŐSÍTÉS is. A `fennmaradok=True` a
+    kijelölés helyett az adag ÖSSZES még meg nem erősített, nem lezárt
+    tételét sorolja be (a felhasználó folyamata: "a fennmaradók HYPE-
+    besorolásának megerősítése" egy gombbal)."""
     if payload.elszamolas not in ELSZAMOLASOK:
         raise HTTPException(status_code=400, detail=f"Ismeretlen elszámolás: {payload.elszamolas}")
     adag = _adag_lekeres(db, adag_id)
     modositott = 0
+    kert = set(payload.tetel_idk)
     for t in adag.tetelek:
-        if t.id in set(payload.tetel_idk) and t.allapot != "rogzitve":
-            t.elszamolas = payload.elszamolas
-            modositott += 1
+        if t.allapot in ("rogzitve", "mar_rogzitve", "duplikatum", "nem_feldolgozhato"):
+            continue
+        cel = t.id in kert if not payload.fennmaradok else not t.elszamolas_megerositve
+        if not cel:
+            continue
+        t.elszamolas = payload.elszamolas
+        t.elszamolas_megerositve = payload.elszamolas != "tisztazando"
+        t.besorolas_jovahagyva = False
+        utalas_felvezetes.allapot_ujraertekeles(db, t)
+        modositott += 1
     db.commit()
     return {"modositott": modositott}
+
+
+# ── Besorolás jóváhagyása (az 1. emberi lépés) ──────────────────────────────
+
+
+class JovahagyasIn(BaseModel):
+    tetel_idk: list[int]
+
+
+@router.post("/{adag_id}/jovahagyas")
+def kijeloltek_jovahagyasa(
+    adag_id: int,
+    payload: JovahagyasIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A kijelölt tételek BESOROLÁSÁNAK jóváhagyása - a rögzítés (2. lépés)
+    csak jóváhagyott tételen futhat. Tételenként ellenőrzött és naplózott
+    (ki, mikor hagyta jóvá)."""
+    _adag_lekeres(db, adag_id)
+    eredmenyek: list[dict] = []
+    for tid in payload.tetel_idk:
+        try:
+            t = db.execute(
+                select(UtalasTetel).where(UtalasTetel.id == tid, UtalasTetel.adag_id == adag_id).with_for_update()
+            ).scalar_one_or_none()
+            if t is None:
+                eredmenyek.append({"tetel_id": tid, "siker": False, "hiba": "A tétel nem található."})
+                continue
+            utalas_felvezetes.tetel_jovahagyas(db, t, current_user)
+            db.commit()
+            eredmenyek.append({"tetel_id": tid, "siker": True})
+        except UtalasHiba as exc:
+            uj_allapot = None
+            t2 = db.get(UtalasTetel, tid)
+            if t2 is not None:
+                uj_allapot = t2.allapot
+            db.rollback()
+            t2 = db.get(UtalasTetel, tid)
+            if t2 is not None:
+                if uj_allapot and uj_allapot not in ("rogzitve",):
+                    t2.allapot = uj_allapot
+                t2.hiba_uzenet = str(exc)
+                db.commit()
+            eredmenyek.append({"tetel_id": tid, "siker": False, "hiba": str(exc)})
+        except Exception as exc:  # noqa: BLE001 - egy tétel hibája ne állítsa meg a többit
+            db.rollback()
+            import logging
+
+            logging.getLogger(__name__).exception("Utalás-jóváhagyási hiba (tétel #%s)", tid)
+            eredmenyek.append({"tetel_id": tid, "siker": False, "hiba": f"{type(exc).__name__}: {exc}"})
+    return {
+        "sikeres": sum(1 for e in eredmenyek if e["siker"]),
+        "sikertelen": sum(1 for e in eredmenyek if not e["siker"]),
+        "eredmenyek": eredmenyek,
+    }
 
 
 # ── Kifizetés rögzítése (kijelöltek) ─────────────────────────────────────────

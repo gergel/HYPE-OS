@@ -28,16 +28,23 @@ export default async function UtalasokPage() {
       <div className="flex-1 space-y-6 p-4 md:p-8">
         <Card title="Utalások felvezetése">
           <p className="mb-4 text-[12.5px] text-text-secondary">
-            Megtörtént utalások adminisztrálása: feltöltesz egy ZIP-et az elutalt számlákkal, megadod az adag
-            közös utalási dátumát, a rendszer párosítja a számlákat a meglévő tételekhez, te pedig ellenőrzöl és
-            rögzíted a kifizetéseket. Banki utalást nem indít, és a feltöltéstől még semmi nem válik fizetetté.
-            A számla vevője (jellemzően HYPE) nem dönti el az elszámolási helyet - a HYPE/Krumpello besorolás
-            tételenként választható; a Krumpellóhoz sorolt tételeket egyelőre csak listázzuk.
+            Megtörtént utalások adminisztrálása: feltöltesz egy ZIP-et az elutalt számlákkal, megadod a tényleges
+            utalási dátumot, besorolod a számlákat (HYPE / Krumpelló), a rendszer megkeresi a HYPE-számlák helyét,
+            te pedig jóváhagyod a besorolást, és a rögzítés hajtja végre a kifizetések felvezetését. Banki utalást
+            nem indít, és a feltöltéstől még semmi nem válik fizetetté. A számla vevője nem dönti el az elszámolási
+            helyet; a Krumpellóhoz sorolt tétel itt lezárt, máshol kézzel kezelendő - HYPE-rekordot nem érint.
           </p>
           <UtalasokFelvezetese
             kezdoAdagok={adagok}
             valasztek={{
-              projektkodok: projektkodok.map((p) => ({ id: p.id, kod: p.projektkod })),
+              // A kód mellett a projekt NEVE is kell az azonosításhoz (a
+              // felhasználó kérése) - egy kódról önmagában nem mindig ugrik
+              // be, melyik munka az.
+              projektkodok: projektkodok.map((p) => ({
+                id: p.id,
+                kod: p.projektkod,
+                nev: p.project_nev ?? null,
+              })),
               emberek: emberek.map((e) => ({ id: e.id, nev: e.full_name })),
             }}
             canEdit={canEdit}

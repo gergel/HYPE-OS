@@ -24,18 +24,30 @@ from app.models.base import TimestampMixin
 #: Az adag állapotai: a feldolgozás háttérben fut, utána ellenőrzés jön.
 ADAG_ALLAPOTOK = ("feldolgozas", "ellenorzes", "hiba")
 
-#: A tétel érthető állapotai (a felhasználó előírása szerint):
+#: A tétel érthető állapotai (a felhasználó előírása szerint). A folyamat KÉT
+#: elkülönülő emberi lépésre épül: 1) BESOROLÁS JÓVÁHAGYÁSA (elfogadom, hová
+#: tartozik a számla) → 2) RÖGZÍTÉS (a jóváhagyott művelet végrehajtása).
+#: Ezért a "rogzitheto" cimkéje "Jóváhagyásra vár": a cél megvan, de emberi
+#: megerősítés nélkül semmi nem hajtódik végre.
 TETEL_ALLAPOTOK = {
     "feldolgozas": "Feldolgozás alatt",
-    "rogzitheto": "Rögzíthető",
+    "rogzitheto": "Jóváhagyásra vár",
+    "jovahagyva": "Jóváhagyva – rögzíthető",
     "valasztas": "Választás szükséges",
     "nincs_talalat": "Nincs megtalált tétel",
     "mar_kifizetve": "Már kifizetve",
+    "mar_rogzitve": "Már rögzítve",
     "osszeg_elter": "Eltérő összeg / részfizetés",
     "duplikatum": "Duplikátum",
     "nem_feldolgozhato": "Nem feldolgozható",
     "rogzitve": "Rögzítve",
+    "krumpello": "Krumpelló – máshol kézzel kezelendő",
 }
+
+#: Ezekkel az állapotokkal a tétel LEZÁRT ebben az adagban: nincs több teendő
+#: rajta itt (a Krumpellónál a máshol történő kézi felvezetés természetesen
+#: még hátra lehet - az nem ennek az adagnak a dolga).
+LEZART_ALLAPOTOK = frozenset({"rogzitve", "mar_kifizetve", "mar_rogzitve", "krumpello", "duplikatum"})
 
 ELSZAMOLASOK = ("hype", "krumpello", "tisztazando")
 
@@ -112,6 +124,9 @@ class UtalasTetel(TimestampMixin, Base):
     hiba_uzenet: Mapped[str | None] = mapped_column(Text)
     #: HYPE / Krumpello / Tisztázandó - a számla VEVŐJÉT nem írja át.
     elszamolas: Mapped[str] = mapped_column(String(20), nullable=False, default="tisztazando")
+    #: A besorolást a FELHASZNÁLÓ erősítette meg (a felhasználó előírása: a
+    #: rendszer javasolhat, de minden számla besorolását ember hagyja jóvá).
+    elszamolas_megerositve: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # ── A megtalált / kiválasztott cél ──────────────────────────────────────
     cel_tipus: Mapped[str | None] = mapped_column(String(30))
@@ -135,6 +150,11 @@ class UtalasTetel(TimestampMixin, Base):
     osszeg_elteres_elfogadva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     duplikatum_tetel_id: Mapped[int | None] = mapped_column(ForeignKey("utalas_tetelek.id", ondelete="SET NULL"))
+
+    # ── Besorolás jóváhagyása (az 1. emberi lépés - a rögzítés a 2.) ────────
+    besorolas_jovahagyva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    jovahagyo_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
+    jovahagyva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # ── Rögzítés + visszavonás (napló) ──────────────────────────────────────
     rogzitve_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

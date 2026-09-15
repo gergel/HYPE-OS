@@ -325,12 +325,30 @@ def _cel_fizetesi_allapot(db: Session, tetel: UtalasTetel) -> dict | None:
 
 
 def allapot_ujraertekeles(db: Session, tetel: UtalasTetel) -> None:
-    """A tétel állapotának megállapítása a cél és annak fizetési állapota
-    alapján - a kézi cél-választás / mező-módosítás után is ez fut."""
-    if tetel.allapot in ("rogzitve", "nem_feldolgozhato", "duplikatum"):
+    """A tétel állapotának megállapítása a cél és annak AKTUÁLIS fizetési
+    állapota alapján - a kézi cél-választás / mező-módosítás után is ez fut,
+    és az adag megnyitásakor is (így egy időközben másutt kifizetett cél nem
+    marad "jóváhagyásra vár" állapotban - a felhasználó hibajelzése).
+
+    A folyamat két emberi lépése: a cél megléte önmagában csak "rogzitheto"
+    (= Jóváhagyásra vár); a "jovahagyva" állapotot a kifejezett jóváhagyás
+    (tetel_jovahagyas) adja, és rögzíteni csak azt lehet."""
+    if tetel.allapot in ("rogzitve", "nem_feldolgozhato", "duplikatum", "mar_rogzitve"):
+        return
+    # A MEGERŐSÍTETT Krumpelló-tétel ebben az adagban lezárt: HYPE-rekordot
+    # nem érint, a fájlja és a besorolása visszakereshető marad.
+    if tetel.elszamolas == "krumpello" and tetel.elszamolas_megerositve:
+        tetel.allapot = "krumpello"
         return
     if tetel.cel_tipus == "uj_kiadas":
-        tetel.allapot = "nincs_talalat"
+        adatok = tetel.uj_kiadas or {}
+        # ÜRES projektmező nem jelent működési kiadást: a terv addig hiányos,
+        # amíg vagy projektet nem választottak, vagy KIFEJEZETTEN működésinek
+        # nem jelölték (a felhasználó előírása).
+        if adatok.get("project_code_id") or adatok.get("mukodesi") is True:
+            tetel.allapot = "jovahagyva" if tetel.besorolas_jovahagyva else "rogzitheto"
+        else:
+            tetel.allapot = "nincs_talalat"
         return
     if tetel.cel_tipus is None:
         alternativak = (tetel.javaslat or {}).get("alternativak") or []
@@ -352,7 +370,7 @@ def allapot_ujraertekeles(db: Session, tetel: UtalasTetel) -> None:
     ):
         tetel.allapot = "osszeg_elter"
         return
-    tetel.allapot = "rogzitheto"
+    tetel.allapot = "jovahagyva" if tetel.besorolas_jovahagyva else "rogzitheto"
 
 
 def tetel_feldolgozas(db: Session, tetel: UtalasTetel, adat: bytes | None = None) -> None:
@@ -384,7 +402,9 @@ def tetel_feldolgozas(db: Session, tetel: UtalasTetel, adat: bytes | None = None
         if dup is not None:
             tetel.duplikatum_tetel_id = dup.id
             if dup.allapot == "rogzitve":
-                tetel.allapot = "mar_kifizetve"
+                # Ez a számla egy korábbi adagban MÁR HELYESEN rögzült - nem
+                # duplikátum-hiba és nem is teendő: "Már rögzítve".
+                tetel.allapot = "mar_rogzitve"
                 tetel.hiba_uzenet = (
                     f"Ugyanez a számla a(z) #{dup.adag_id} adagban már felvezetésre került (tétel #{dup.id})."
                 )
@@ -483,8 +503,11 @@ def _tig_kiadas_atiranyitas(db: Session, tetel: UtalasTetel) -> None:
         tetel.cel_tipus = "kulsos_tig"
         tetel.cel_certificate_id = cert.id
         tetel.cel_expense_id = None
+        # Az INDOKLÁST is átírjuk, ne csak a célt: a magyarázat és a művelet-
+        # előnézet nem mondhat mást (a felhasználó hibajelzése: a szöveg új
+        # kiadásról beszélt, az előnézet TIG-módosításról).
         javaslat = dict(tetel.javaslat or {})
-        javaslat.setdefault("figyelmeztetesek", []).append(
+        javaslat["indoklas"] = (
             f"A megtalált kiadássor a #{cert.id} TIG-ből származik - a kifizetés az eredeti TIG-re kerül, "
             "hogy az Utókövetés, a TIG és a Pénzügyek együtt frissüljön (nem lesz dupla költség)."
         )
@@ -564,6 +587,81 @@ def _fajl_letoltes(tetel: UtalasTetel) -> bytes | None:
         return None
 
 
+def _celutkozes(db: Session, tetel: UtalasTetel) -> UtalasTetel | None:
+    """Másik, még nyitott tétel, ami UGYANARRA a célrekordra mutat - két
+    különböző számla nem írhatja felül egymást ugyanazon a célon (a
+    felhasználó előírása): az ütközést kézzel kell tisztázni."""
+    felt = None
+    if tetel.cel_tipus == "kiadas" and tetel.cel_expense_id:
+        felt = UtalasTetel.cel_expense_id == tetel.cel_expense_id
+    elif tetel.cel_tipus == "kulsos_tig" and tetel.cel_certificate_id:
+        felt = UtalasTetel.cel_certificate_id == tetel.cel_certificate_id
+    elif tetel.cel_tipus == "belsos_tig" and tetel.cel_internal_certificate_id:
+        felt = UtalasTetel.cel_internal_certificate_id == tetel.cel_internal_certificate_id
+    if felt is None:
+        return None
+    # Csak a MÁR JÓVÁHAGYOTT vagy rögzített másik tétel ütközik: két
+    # jelölt ugyanarra a célra még nem baj (az ember dönt, melyik az igazi) -
+    # de amint az egyiket elfogadták, a másik nem hagyható jóvá ugyanoda.
+    from sqlalchemy import or_
+
+    return db.scalar(
+        select(UtalasTetel)
+        .where(
+            felt,
+            UtalasTetel.id != tetel.id,
+            UtalasTetel.allapot.notin_(["duplikatum", "nem_feldolgozhato", "krumpello", "mar_rogzitve"]),
+            or_(UtalasTetel.besorolas_jovahagyva.is_(True), UtalasTetel.allapot == "rogzitve"),
+        )
+        .order_by(UtalasTetel.id)
+    )
+
+
+def tetel_jovahagyas(db: Session, tetel: UtalasTetel, user: Employee) -> None:
+    """A BESOROLÁS JÓVÁHAGYÁSA (az 1. emberi lépés): a felhasználó elfogadja,
+    melyik meglévő tételhez tartozik a számla, vagy milyen új kiadás jöjjön
+    létre. A rögzítés (2. lépés) csak jóváhagyott tételen fut.
+
+    Szerveroldali ellenőrzések - a felület állapota elavulhatott:
+    - a cél létezik és nem kifizetett; összeg-eltérés csak kifejezett
+      elfogadással; új kiadásnál projekt VAGY kifejezett működési jelölés;
+    - másik nyitott tétel nem mutathat ugyanarra a célra (kézi tisztázás)."""
+    if tetel.allapot == "rogzitve":
+        raise UtalasHiba("Ez a tétel már felvezetésre került.")
+    if tetel.allapot in ("nem_feldolgozhato", "duplikatum", "mar_rogzitve"):
+        raise UtalasHiba(f"Ebből az állapotból nincs mit jóváhagyni: {tetel.allapot}.")
+    if tetel.elszamolas == "krumpello":
+        raise UtalasHiba("Krumpelló-tételt nem itt kell jóváhagyni - a besorolás megerősítése zárja le.")
+    if tetel.elszamolas != "hype":
+        raise UtalasHiba("Előbb sorold be (HYPE / Krumpelló) - tisztázandó tétel nem hagyható jóvá.")
+    # A jóváhagyás a besorolás megerősítését is jelenti.
+    tetel.elszamolas_megerositve = True
+    tetel.besorolas_jovahagyva = False
+    allapot_ujraertekeles(db, tetel)
+    if tetel.allapot == "mar_kifizetve":
+        raise UtalasHiba(
+            "A kiválasztott cél már kifizetett - ide nem vezethető fel újabb kifizetés. "
+            "Ha csak a dokumentum hiányzik róla, azt a Beérkező számlák felől csatold."
+        )
+    if tetel.allapot == "osszeg_elter":
+        raise UtalasHiba("A számla összege eltér a cél összegétől - előbb fogadd el kifejezetten az eltérést.")
+    if tetel.allapot == "nincs_talalat" and tetel.cel_tipus == "uj_kiadas":
+        raise UtalasHiba("Az új kiadás terve hiányos: válassz projektet, vagy jelöld kifejezetten működési kiadásnak.")
+    if tetel.allapot != "rogzitheto":
+        raise UtalasHiba("Nincs teljes cél - válaszd ki, hová tartozik a számla.")
+    utkozo = _celutkozes(db, tetel)
+    if utkozo is not None:
+        raise UtalasHiba(
+            f"A(z) #{utkozo.id} tétel (adag #{utkozo.adag_id}) is ugyanerre a célra mutat - két különböző számla "
+            "nem mehet ugyanarra a tételre. Tisztázd, melyik az igazi (a másikat jelöld duplikátumnak vagy válassz neki más célt)."
+        )
+    tetel.besorolas_jovahagyva = True
+    tetel.jovahagyo_employee_id = user.id
+    tetel.jovahagyva_at = datetime.now(timezone.utc)
+    tetel.allapot = "jovahagyva"
+    tetel.hiba_uzenet = None
+
+
 def tetel_rogzites(db: Session, tetel: UtalasTetel, user: Employee) -> dict:
     """EGY tétel kifizetésének végleges felvezetése. A hívó sorzárral olvasta
     a tételt és tételenként commitol.
@@ -580,13 +678,21 @@ def tetel_rogzites(db: Session, tetel: UtalasTetel, user: Employee) -> dict:
         )
     if tetel.elszamolas != "hype":
         raise UtalasHiba("Előbb válaszd ki az elszámolási helyet (HYPE / Krumpello).")
-    if tetel.allapot in ("nem_feldolgozhato", "duplikatum"):
+    if tetel.allapot in ("nem_feldolgozhato", "duplikatum", "mar_rogzitve"):
         raise UtalasHiba(f"Ebből az állapotból nem rögzíthető: {tetel.allapot}.")
+    # KÉT LÉPÉS: rögzíteni csak JÓVÁHAGYOTT besorolást lehet (a felhasználó
+    # előírása) - a jóváhagyás végzi az ütközés- és állapot-ellenőrzéseket.
+    if not tetel.besorolas_jovahagyva or tetel.allapot != "jovahagyva":
+        raise UtalasHiba("Előbb hagyd jóvá a tétel besorolását - rögzíteni csak jóváhagyott tételt lehet.")
 
     datum = tetel.utalas_datum or tetel.adag.utalas_datum
     naplo: dict = {
         "datum": datum.isoformat(),
         "cel_tipus": tetel.cel_tipus,
+        # Audit: ki hagyta jóvá a besorolást és ki rögzített (a rögzítőt a
+        # tétel rogzito_employee_id mezője őrzi).
+        "jovahagyo_employee_id": tetel.jovahagyo_employee_id,
+        "jovahagyva_at": tetel.jovahagyva_at.isoformat() if tetel.jovahagyva_at else None,
         "elozo_ertekek": {},
         "letrejott": [],
         "csatolt": [],
@@ -855,6 +961,10 @@ def _rogzit_uj_kiadaskent(db: Session, tetel: UtalasTetel, datum: date, naplo: d
     """ÚJ kiadás létrehozása + számla csatolása + kifizetés felvezetése EGY
     következetes műveletként - kizárólag emberi jóváhagyással jutunk ide."""
     adatok = dict(tetel.uj_kiadas or {})
+    # Az ÜRES projektmező nem jelent működési kiadást: a működési kifejezett
+    # választás (a felhasználó előírása).
+    if not adatok.get("project_code_id") and adatok.get("mukodesi") is not True:
+        raise UtalasHiba("Új kiadáshoz válassz projektkódot, vagy jelöld kifejezetten működési kiadásnak.")
     netto = float(tetel.netto) if tetel.netto is not None else None
     if netto is None:
         raise UtalasHiba("Hiányzik a nettó összeg - add meg a tételen (nem találunk ki értéket).")
@@ -1066,6 +1176,8 @@ def tetel_visszavonas(db: Session, tetel: UtalasTetel, user: Employee) -> dict:
 
 
 def allapot_ujraertekeles_alap(db: Session, tetel: UtalasTetel) -> None:
-    """Visszavonás után a tétel újra rögzíthető állapotba kerül."""
+    """Visszavonás után a tétel újra a jóváhagyás ELŐTTI állapotba kerül -
+    az ismételt rögzítéshez újra jóvá kell hagyni."""
+    tetel.besorolas_jovahagyva = False
     tetel.allapot = "rogzitheto" if tetel.cel_tipus else "valasztas"
     allapot_ujraertekeles(db, tetel)
