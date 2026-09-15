@@ -16,6 +16,10 @@ class TaskBase(BaseModel):
 
 class TaskCreate(TaskBase):
     felelos_employee_ids: list[int] = []
+    #: Melyik projekthez tartozik a feladat - eddig csak olvasni lehetett
+    #: (TaskRead), létrehozáskor nem: az AI-asszisztens „feladat ehhez a
+    #: projekthez" kérése hozta felszínre a hiányt.
+    project_id: int | None = None
 
 
 class TaskUpdate(BaseModel):
@@ -23,6 +27,7 @@ class TaskUpdate(BaseModel):
     checked: bool | None = None
     hatarido: date | None = None
     felelos_employee_ids: list[int] | None = None
+    project_id: int | None = None
 
 
 class TaskRead(TaskBase):

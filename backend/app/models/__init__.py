@@ -92,6 +92,7 @@ from app.models.vagoi_jatek import (
 )
 from app.models.vallalkozas import Vallalkozas, VallalkozasTag
 from app.models.visszavonas import ToroltRekord
+from app.models.ai_beszelgetes import AiBeszelgetes, AiFajl, AiMuvelet, AiUzenet
 
 __all__ = [
     "Base",

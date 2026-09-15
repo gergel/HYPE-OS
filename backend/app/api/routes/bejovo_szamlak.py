@@ -375,6 +375,11 @@ def reszlet(
 async def feltoltes(
     file: UploadFile = File(...),
     utasitas: str = Form(""),
+    #: Az EGYSZERRE feltöltött, összetartozó fájlok (számla + Excel-részletező)
+    #: közös azonosítója - ugyanazt a párosítást adja, mint az egy levélben
+    #: érkezett mellékleteknél az üzenet-azonosító (lásd szamla_erkeztetes.
+    #: _reszletezo_feldolgozas): a bontás-javaslat a társ-számlára kerül.
+    csoport: str = Form(""),
     db: Session = Depends(get_db),
     current_user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
@@ -392,6 +397,7 @@ async def feltoltes(
             content_type=file.content_type,
             utasitas=utasitas,
             letrehozo_id=current_user.id,
+            email_meta={"uzenet_id": csoport.strip()[:200]} if csoport.strip() else None,
         )
         szamla_erkeztetes.feldolgoz(db, bejovo, adat=adat)
     except ErkeztetesHiba as exc:

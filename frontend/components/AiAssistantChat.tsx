@@ -1,367 +1,502 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Paperclip, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Paperclip, Plus, Square, Trash2, X } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { formatSzam } from "@/lib/penz";
-import type { BejovoSzamlaReszlet } from "@/lib/api";
 
-type ChatMessage =
-  | { role: "user" | "assistant"; text: string }
-  | { role: "kartya"; adat: BejovoSzamlaReszlet };
+/** A MŰVELETI ASSZISZTENS felülete (a felhasználó kérése): tartós,
+ * folytatható beszélgetések; a kérésből az asszisztens megkeresi az adatokat,
+ * elvégzi a műveletet a rendszer saját folyamatain, ellenőrzi, és linkelt
+ * összefoglalót ad. A folyamat lépései élőben látszanak (polling), a
+ * megerősítendő műveletek (törlés, pénzügyi felvezetés) kártyán várják a
+ * jóváhagyást - a végrehajtás pontosan a kártyán mutatott, tárolt kéréssel
+ * történik. Oldalfrissítés után minden a szerverről áll vissza. */
 
-const CEL_CIMKEK: Record<string, string> = {
-  kiadas_uj: "Új kiadás",
-  kiadas_csatolas: "Számla meglévő kiadáshoz",
-  kulsos_tig: "Meglévő külsős TIG számlája",
-  belsos_tig: "Meglévő belsős TIG számlája",
-  erezsi: "E-Rezsi előfizetés számlája",
-  auto: "Autó költsége",
-  kp: "KP-bizonylat pótlása",
-  mukodesi: "Általános működési költség",
-  kimeno: "Kimenő számla",
-  egyeb: "Tisztázandó",
+type Beszelgetes = { id: number; cim: string | null; fut: boolean };
+type Uzenet = {
+  id: number;
+  szerep: "felhasznalo" | "asszisztens" | "esemeny";
+  szoveg: string | null;
+  adat: Record<string, unknown> | null;
 };
+type NaploSor = { id: number; allapot: string; osszefoglalo: string | null; method: string; path: string; status: number | null };
 
-/** Kérdés/válasz chat + SZÁMLA-BEDOBÁS (a felhasználó kérése): PDF-et vagy
- * fotót csatolva, a szöveggel együtt („ezt a HYPE26-0291-hez, catering") a
- * rendszer a KÖZÖS érkeztető-folyamaton kiolvassa, megkeresi a helyét, és
- * MENTETT piszkozatot készít - a chatben ellenőrzőkártya jelenik meg, a
- * folytató üzenetek („mégis a másik projekthez") ugyanazt a piszkozatot
- * módosítják. A tényleges rögzítés csak a Jóváhagyás gombbal történik, és
- * csak sikeres szerver-mentés után mondjuk, hogy megtörtént. */
+/** Egyszerű markdown-link renderelés: [cím](/utvonal) → kattintható link. */
+function Szoveg({ szoveg }: { szoveg: string }) {
+  const reszek = useMemo(() => {
+    const t: (string | { cim: string; href: string })[] = [];
+    let utolso = 0;
+    const minta = /\[([^\]]+)\]\(([^)\s]+)\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = minta.exec(szoveg)) !== null) {
+      if (m.index > utolso) t.push(szoveg.slice(utolso, m.index));
+      t.push({ cim: m[1], href: m[2] });
+      utolso = m.index + m[0].length;
+    }
+    if (utolso < szoveg.length) t.push(szoveg.slice(utolso));
+    return t;
+  }, [szoveg]);
+  return (
+    <p className="whitespace-pre-line">
+      {reszek.map((r, i) =>
+        typeof r === "string" ? (
+          <span key={i}>{r}</span>
+        ) : r.href.startsWith("/") ? (
+          <Link key={i} href={r.href} className="text-text-accent hover:underline">
+            {r.cim}
+          </Link>
+        ) : (
+          <a key={i} href={r.href} target="_blank" rel="noreferrer" className="text-text-accent hover:underline">
+            {r.cim}
+          </a>
+        ),
+      )}
+    </p>
+  );
+}
+
 export function AiAssistantChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [question, setQuestion] = useState("");
-  const [busy, setBusy] = useState(false);
+  const searchParams = useSearchParams();
+  const [beszelgetesek, setBeszelgetesek] = useState<Beszelgetes[]>([]);
+  const [aktiv, setAktiv] = useState<number | null>(null);
+  const [uzenetek, setUzenetek] = useState<Uzenet[]>([]);
+  const [naplo, setNaplo] = useState<Record<number, NaploSor>>({});
+  const [szoveg, setSzoveg] = useState("");
   const [fajlok, setFajlok] = useState<File[]>([]);
-  // A legutóbb létrejött/módosított piszkozat - a folytató üzenetek ezt
-  // pontosítják, amíg a felhasználó vissza nem vált kérdezésre.
-  const [aktivPiszkozat, setAktivPiszkozat] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [fut, setFut] = useState(false);
+  const [hiba, setHiba] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const utolsoIdRef = useRef(0);
+
+  // Oldal-kontextus, ha másik oldalról nyitották az asszisztenst
+  // (?entity=deliverable&rekord=123&cim=...): az „ez"/„ennél" erre mutat.
+  const kontextus = useMemo(() => {
+    const entity = searchParams.get("entity");
+    const rekord = searchParams.get("rekord");
+    const cim = searchParams.get("cim");
+    const utvonal = searchParams.get("honnan");
+    if (!entity && !rekord && !cim && !utvonal) return null;
+    return {
+      ...(utvonal ? { utvonal } : {}),
+      ...(cim ? { cim } : {}),
+      ...(entity ? { entity_type: entity } : {}),
+      ...(rekord ? { entity_id: Number(rekord) } : {}),
+    };
+  }, [searchParams]);
 
   function gorgetes() {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }
 
-  function kartyaCsere(adat: BejovoSzamlaReszlet) {
-    setMessages((prev) => {
-      const t = [...prev];
-      for (let i = t.length - 1; i >= 0; i--) {
-        const m = t[i];
-        if (m.role === "kartya" && m.adat.id === adat.id) {
-          t[i] = { role: "kartya", adat };
-          return t;
-        }
-      }
-      return [...t, { role: "kartya", adat }];
+  const uzenetBeolvaszt = useCallback((ujak: Uzenet[]) => {
+    if (ujak.length === 0) return;
+    setUzenetek((prev) => {
+      const megvan = new Set(prev.map((u) => u.id));
+      const hozzaad = ujak.filter((u) => !megvan.has(u.id));
+      if (hozzaad.length === 0) return prev;
+      const t = [...prev, ...hozzaad].sort((a, b) => a.id - b.id);
+      utolsoIdRef.current = t[t.length - 1]?.id ?? 0;
+      return t;
     });
+    gorgetes();
+  }, []);
+
+  const naploFrissit = useCallback(async (bid: number) => {
+    try {
+      const r = await authFetch(`/api/v1/ai-assistant/beszelgetesek/${bid}/naplo`);
+      if (r.ok) {
+        const sorok: NaploSor[] = await r.json();
+        setNaplo(Object.fromEntries(sorok.map((s) => [s.id, s])));
+      }
+    } catch {
+      /* nem kritikus */
+    }
+  }, []);
+
+  const beszelgetesValt = useCallback(
+    async (bid: number) => {
+      setAktiv(bid);
+      setUzenetek([]);
+      utolsoIdRef.current = 0;
+      try {
+        localStorage.setItem("ai_beszelgetes", String(bid));
+      } catch {
+        /* privát mód */
+      }
+      const r = await authFetch(`/api/v1/ai-assistant/beszelgetesek/${bid}/uzenetek`);
+      if (r.ok) {
+        const d = await r.json();
+        uzenetBeolvaszt(d.uzenetek);
+        setFut(Boolean(d.fut));
+      }
+      void naploFrissit(bid);
+    },
+    [uzenetBeolvaszt, naploFrissit],
+  );
+
+  useEffect(() => {
+    (async () => {
+      const r = await authFetch("/api/v1/ai-assistant/beszelgetesek");
+      if (!r.ok) return;
+      const lista: Beszelgetes[] = await r.json();
+      setBeszelgetesek(lista);
+      let mentett: number | null = null;
+      try {
+        mentett = Number(localStorage.getItem("ai_beszelgetes")) || null;
+      } catch {
+        /* privát mód */
+      }
+      const cel = lista.find((b) => b.id === mentett) ?? lista[0];
+      if (cel) void beszelgetesValt(cel.id);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // FOLYAMATJELZÉS: futó kör alatt 1,5 mp-enként lehúzzuk az új eseményeket -
+  // a lépések („Megkerestem a projektet…") élőben jelennek meg, és
+  // oldalfrissítés után is a valós állapot áll vissza.
+  useEffect(() => {
+    if (!aktiv || (!fut && !busy)) return;
+    const t = setInterval(async () => {
+      try {
+        const r = await authFetch(`/api/v1/ai-assistant/beszelgetesek/${aktiv}/uzenetek?utani=${utolsoIdRef.current}`);
+        if (r.ok) {
+          const d = await r.json();
+          uzenetBeolvaszt(d.uzenetek);
+          setFut(Boolean(d.fut));
+        }
+      } catch {
+        /* következő kör */
+      }
+    }, 1500);
+    return () => clearInterval(t);
+  }, [aktiv, fut, busy, uzenetBeolvaszt]);
+
+  async function ujBeszelgetes(): Promise<number | null> {
+    const r = await authFetch("/api/v1/ai-assistant/beszelgetesek", { method: "POST" });
+    if (!r.ok) return null;
+    const b: Beszelgetes = await r.json();
+    setBeszelgetesek((prev) => [b, ...prev]);
+    await beszelgetesValt(b.id);
+    return b.id;
   }
 
-  async function send() {
-    const trimmed = question.trim();
-    if ((!trimmed && fajlok.length === 0) || busy) return;
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: trimmed + (fajlok.length ? `\n📎 ${fajlok.map((f) => f.name).join(", ")}` : "") },
-    ]);
-    setQuestion("");
+  async function kuldes() {
+    const t = szoveg.trim();
+    if (!t || busy) return;
     setBusy(true);
+    setHiba(null);
     try {
-      if (fajlok.length > 0) {
-        // SZÁMLA-BEDOBÁS: minden fájlból közös érkeztető-piszkozat készül, a
-        // beírt szöveg a besorolási utasítás.
-        const kuldendo = [...fajlok];
-        setFajlok([]);
-        for (const fajl of kuldendo) {
-          const fd = new FormData();
-          fd.append("file", fajl);
-          fd.append("utasitas", trimmed);
-          const res = await authFetch("/api/v1/bejovo-szamlak/feltoltes", { method: "POST", body: fd });
-          if (!res.ok) {
-            const d = await res.json().catch(() => null);
-            setMessages((prev) => [
-              ...prev,
-              { role: "assistant", text: `Nem sikerült feldolgozni a(z) ${fajl.name} fájlt: ${d?.detail ?? res.status}` },
-            ]);
-            continue;
-          }
-          const adat: BejovoSzamlaReszlet = await res.json();
-          setMessages((prev) => [...prev, { role: "kartya", adat }]);
-          setAktivPiszkozat(adat.id);
-        }
-      } else if (aktivPiszkozat !== null) {
-        // FOLYTATÁS: a szöveg UGYANAZT a piszkozatot pontosítja - a szerver
-        // az utasítással újrajavasol, és a kártya frissül.
-        const res = await authFetch(`/api/v1/bejovo-szamlak/${aktivPiszkozat}`, {
-          method: "PATCH",
-          body: JSON.stringify({ felhasznaloi_utasitas: trimmed }),
-        });
-        if (!res.ok) {
-          const d = await res.json().catch(() => null);
-          setMessages((prev) => [...prev, { role: "assistant", text: `Nem sikerült módosítani a piszkozatot: ${d?.detail ?? res.status}` }]);
-        } else {
-          const adat: BejovoSzamlaReszlet = await res.json();
-          kartyaCsere(adat);
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", text: `Frissítettem a piszkozatot az utasításod szerint - nézd meg a kártyát fent. (${adat.javaslat?.indoklas ?? ""})` },
-          ]);
-        }
-      } else {
-        const res = await authFetch("/api/v1/ai-assistant/ask", {
-          method: "POST",
-          body: JSON.stringify({ question: trimmed }),
-        });
-        if (!res.ok) {
-          const detail = await res.json().catch(() => null);
-          setMessages((prev) => [...prev, { role: "assistant", text: `Hiba: ${detail?.detail ?? res.status}` }]);
-          return;
-        }
-        const data: { answer: string } = await res.json();
-        setMessages((prev) => [...prev, { role: "assistant", text: data.answer }]);
+      let bid = aktiv;
+      if (bid === null) bid = await ujBeszelgetes();
+      if (bid === null) {
+        setHiba("Nem sikerült beszélgetést nyitni.");
+        return;
       }
+      // Előbb a fájlok mennek fel a beszélgetéshez - az asszisztens fajl_id
+      // alapján használja őket (számla-érkeztetés, csatolás).
+      const kuldendo = [...fajlok];
+      setFajlok([]);
+      for (const f of kuldendo) {
+        const fd = new FormData();
+        fd.append("file", f);
+        const r = await authFetch(`/api/v1/ai-assistant/beszelgetesek/${bid}/fajl`, { method: "POST", body: fd });
+        if (!r.ok) {
+          const d = await r.json().catch(() => null);
+          setHiba(`A(z) ${f.name} feltöltése nem sikerült: ${d?.detail ?? r.status}`);
+        }
+      }
+      setSzoveg("");
+      const r = await authFetch(`/api/v1/ai-assistant/beszelgetesek/${bid}/uzenet`, {
+        method: "POST",
+        body: JSON.stringify({ szoveg: t, kontextus }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => null);
+        setHiba(`Sikertelen: ${d?.detail ?? r.status}`);
+        return;
+      }
+      const d = await r.json();
+      uzenetBeolvaszt(d.uzenetek);
+      setBeszelgetesek((prev) => prev.map((b) => (b.id === bid && !b.cim ? { ...b, cim: t.slice(0, 120) } : b)));
+      void naploFrissit(bid);
     } catch (err) {
-      setMessages((prev) => [...prev, { role: "assistant", text: `Hálózati hiba: ${err}` }]);
+      setHiba(`Hálózati hiba: ${err}`);
     } finally {
       setBusy(false);
+      setFut(false);
       gorgetes();
     }
   }
 
-  async function jovahagyas(id: number) {
+  async function leallitas() {
+    if (!aktiv) return;
+    await authFetch(`/api/v1/ai-assistant/beszelgetesek/${aktiv}/leallitas`, { method: "POST" }).catch(() => null);
+  }
+
+  async function dontes(muveletId: number, jovahagyva: boolean) {
+    if (!aktiv) return;
     setBusy(true);
     try {
-      const res = await authFetch(`/api/v1/bejovo-szamlak/${id}/jovahagyas`, { method: "POST", body: JSON.stringify({}) });
-      const d = await res.json().catch(() => null);
-      if (!res.ok) {
-        // NEM állítjuk, hogy mentettünk - a hibát mondjuk el.
-        setMessages((prev) => [...prev, { role: "assistant", text: `A rögzítés nem sikerült: ${d?.detail ?? res.status}` }]);
-        return;
-      }
-      const adat: BejovoSzamlaReszlet = d;
-      kartyaCsere(adat);
-      const letrejott = (adat.rogzites_naplo?.letrejott ?? []).map((l) => `#${l.id}`).join(", ");
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          text:
-            `Rögzítve. ${letrejott ? `Létrejött kiadás: ${letrejott} (nem kifizetettként). ` : "A számla a meglévő tételhez került. "}` +
-            `A tételt a Beérkező számlák oldalon és a megfelelő pénzügyi nézetben találod.`,
-        },
-      ]);
-      if (aktivPiszkozat === id) setAktivPiszkozat(null);
+      const r = await authFetch(`/api/v1/ai-assistant/muveletek/${muveletId}/dontes`, {
+        method: "POST",
+        body: JSON.stringify({ jovahagyva }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) setHiba(`A döntés nem sikerült: ${d?.detail ?? r.status}`);
+      // A determinista eredmény-üzenet a szerveren jött létre - lehúzzuk.
+      const ru = await authFetch(`/api/v1/ai-assistant/beszelgetesek/${aktiv}/uzenetek?utani=${utolsoIdRef.current}`);
+      if (ru.ok) uzenetBeolvaszt((await ru.json()).uzenetek);
+      void naploFrissit(aktiv);
     } finally {
       setBusy(false);
-      gorgetes();
+    }
+  }
+
+  async function beszelgetesTorles(bid: number) {
+    if (!confirm("Törlöd ezt a beszélgetést? A már elvégzett műveleteket ez nem vonja vissza.")) return;
+    await authFetch(`/api/v1/ai-assistant/beszelgetesek/${bid}`, { method: "DELETE" }).catch(() => null);
+    setBeszelgetesek((prev) => prev.filter((b) => b.id !== bid));
+    if (aktiv === bid) {
+      setAktiv(null);
+      setUzenetek([]);
     }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      send();
+      void kuldes();
     }
   }
 
   return (
-    <div
-      className="flex h-full flex-col"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault();
-        const ujak = Array.from(e.dataTransfer.files || []);
-        if (ujak.length) setFajlok((prev) => [...prev, ...ujak]);
-      }}
-    >
-      <div className="mb-4 flex-1 space-y-3 overflow-y-auto">
-        {messages.length === 0 && (
-          <p className="text-[13px] text-text-muted">
-            Kérdezz bármit a projektekről, ügyfelekről, csapatról, felszerelésről, feladatokról vagy
-            pénzügyekről - csak azokból az adatokból válaszol, amikhez neked hozzáférésed van. ÚJ: dobj be egy
-            számlát (PDF vagy fotó, húzd ide vagy 📎), írd mellé, hová tartozik (pl. „Ezt a HYPE26-0291-hez,
-            catering"), és előkészítem a rögzítést - neked csak jóváhagyni kell.
-          </p>
-        )}
-        {messages.map((m, i) =>
-          m.role === "kartya" ? (
-            <SzamlaKartya key={i} adat={m.adat} busy={busy} onJovahagyas={jovahagyas} />
-          ) : (
-            <div
-              key={i}
-              className={`rounded-[var(--radius)] p-3 text-[13px] ${
-                m.role === "user"
-                  ? "ml-auto max-w-[80%] bg-surface-3 text-text-primary"
-                  : "mr-auto max-w-[80%] bg-surface-1 text-text-primary"
-              }`}
-            >
-              <p className="mb-1 text-[11px] font-medium text-text-muted">{m.role === "user" ? "Te" : "AI Assistant"}</p>
-              <p className="whitespace-pre-line">{m.text}</p>
-            </div>
-          ),
-        )}
-        {busy && <p className="text-[13px] text-text-muted">AI Assistant dolgozik…</p>}
-        <div ref={bottomRef} />
+    <div className="flex h-full min-h-0 gap-3">
+      {/* Beszélgetés-lista */}
+      <div className="hidden w-[220px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-border pr-2 md:flex">
+        <button
+          type="button"
+          onClick={() => void ujBeszelgetes()}
+          className="flex items-center gap-1 rounded-[var(--radius)] border border-border px-2 py-1.5 text-[12.5px] text-text-accent hover:bg-surface-3"
+        >
+          <Plus size={13} /> Új beszélgetés
+        </button>
+        {beszelgetesek.map((b) => (
+          <div
+            key={b.id}
+            className={`group flex items-center gap-1 rounded-[var(--radius)] px-2 py-1.5 text-[12.5px] ${aktiv === b.id ? "bg-bg-accent text-text-accent" : "text-text-secondary hover:bg-surface-3"}`}
+          >
+            <button type="button" onClick={() => void beszelgetesValt(b.id)} className="min-w-0 flex-1 truncate text-left">
+              {b.cim ?? `Beszélgetés #${b.id}`}
+            </button>
+            <button type="button" title="Beszélgetés törlése" onClick={() => void beszelgetesTorles(b.id)} className="hidden text-text-muted hover:text-text-danger group-hover:block">
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
       </div>
 
-      {aktivPiszkozat !== null && (
-        <p className="mb-1.5 flex items-center gap-2 text-[12px] text-text-accent">
-          A következő üzenetek a #{aktivPiszkozat} számla-piszkozatot pontosítják.
-          <button type="button" onClick={() => setAktivPiszkozat(null)} className="text-text-muted hover:underline">
-            Vissza a kérdezéshez
-          </button>
-        </p>
-      )}
-      {fajlok.length > 0 && (
-        <div className="mb-1.5 flex flex-wrap gap-1.5">
-          {fajlok.map((f, i) => (
-            <span key={i} className="flex items-center gap-1 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-0.5 text-[12px] text-text-secondary">
-              📎 {f.name}
-              <button type="button" onClick={() => setFajlok(fajlok.filter((_, j) => j !== i))}>
-                <X size={11} />
-              </button>
-            </span>
+      {/* Chat */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {kontextus && (
+          <p className="mb-1.5 rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1 text-[12px] text-text-secondary">
+            Erre hivatkozol: <b className="text-text-primary">{String(kontextus.cim ?? kontextus.entity_type ?? kontextus.utvonal)}</b>
+            {kontextus.entity_id ? ` (#${kontextus.entity_id})` : ""} — az „ez"/„ennél" ezt jelenti.
+          </p>
+        )}
+        <div className="mb-3 flex-1 space-y-2 overflow-y-auto pr-1">
+          {uzenetek.length === 0 && (
+            <p className="text-[13px] text-text-muted">
+              Írd le, mit szeretnél a rendszerben - az asszisztens megkeresi az adatokat, elvégzi a műveletet a
+              megszokott folyamatokon, ellenőrzi, és linkelt összefoglalót ad. Példák: „Keresd meg XY szeptemberi
+              elszámolását az utókövetésben." · „Ehhez az utómunkához írd oda kommentben: …" · „Hozz létre egy
+              feladatot Martinnak ehhez a projekthez." · Számlát is bedobhatsz (📎 vagy húzd ide), írd mellé, hová
+              tartozik. A törlések és a pénzügyi felvezetések előbb jóváhagyás-kártyán jelennek meg.
+            </p>
+          )}
+          {uzenetek.map((u) => (
+            <UzenetSor key={u.id} u={u} naplo={naplo} busy={busy} onDontes={dontes} />
           ))}
+          {(busy || fut) && (
+            <p className="flex items-center gap-2 text-[12.5px] text-text-muted">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-text-accent" />
+              Az asszisztens dolgozik…
+              <button type="button" onClick={() => void leallitas()} className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11.5px] text-text-secondary hover:bg-surface-3">
+                <Square size={10} /> Leállítás
+              </button>
+            </p>
+          )}
+          <div ref={bottomRef} />
         </div>
-      )}
 
-      <div className="flex gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
-          className="hidden"
-          onChange={(e) => {
-            const ujak = Array.from(e.target.files || []);
+        {hiba && <p className="mb-1.5 text-[12.5px] text-text-danger">{hiba}</p>}
+        {fajlok.length > 0 && (
+          <div className="mb-1.5 flex flex-wrap gap-1.5">
+            {fajlok.map((f, i) => (
+              <span key={i} className="flex items-center gap-1 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-0.5 text-[12px] text-text-secondary">
+                📎 {f.name}
+                <button type="button" onClick={() => setFajlok(fajlok.filter((_, j) => j !== i))}>
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div
+          className="flex gap-2"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const ujak = Array.from(e.dataTransfer.files || []);
             if (ujak.length) setFajlok((prev) => [...prev, ...ujak]);
-            e.target.value = "";
           }}
-        />
-        <button
-          type="button"
-          title="Számla csatolása (PDF vagy fotó) - vagy húzd ide a fájlt"
-          onClick={() => fileInputRef.current?.click()}
-          className="rounded-[var(--radius)] border border-border px-2.5 text-text-secondary hover:bg-surface-3"
         >
-          <Paperclip size={15} />
-        </button>
-        <textarea
-          rows={2}
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            fajlok.length > 0
-              ? "Írd le, hová tartozik a számla… (pl. Ezt a HYPE26-0291-hez, catering)"
-              : aktivPiszkozat !== null
-                ? "Pontosítsd a piszkozatot… (pl. mégis a másik projekthez / ne hozz létre új kiadást)"
-                : "Kérdezz valamit… (Enter a küldéshez, Shift+Enter új sorhoz)"
-          }
-          className="flex-1 rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
-        />
-        <button
-          type="button"
-          disabled={busy || (!question.trim() && fajlok.length === 0)}
-          onClick={send}
-          className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
-        >
-          Küldés
-        </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const ujak = Array.from(e.target.files || []);
+              if (ujak.length) setFajlok((prev) => [...prev, ...ujak]);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            title="Fájl csatolása (számla, Excel-részletező, dokumentum) - vagy húzd ide"
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-[var(--radius)] border border-border px-2.5 text-text-secondary hover:bg-surface-3"
+          >
+            <Paperclip size={15} />
+          </button>
+          <textarea
+            rows={2}
+            value={szoveg}
+            onChange={(e) => setSzoveg(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              fajlok.length > 0
+                ? "Írd le, mi legyen a fájlokkal… (pl. Ezt a számlát a HYPE26-0291-hez, XY utókövetési tételéhez)"
+                : "Írd le, mit szeretnél… (Enter a küldéshez, Shift+Enter új sor)"
+            }
+            className="flex-1 rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+          />
+          <button
+            type="button"
+            disabled={busy || !szoveg.trim()}
+            onClick={() => void kuldes()}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+          >
+            Küldés
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-/** Az interaktív ELLENŐRZŐKÁRTYA: a felismert számla, a javasolt cél, a
- * hiányzó/bizonytalan adatok és a műveletek. */
-function SzamlaKartya({
-  adat,
+function UzenetSor({
+  u,
+  naplo,
   busy,
-  onJovahagyas,
+  onDontes,
 }: {
-  adat: BejovoSzamlaReszlet;
+  u: Uzenet;
+  naplo: Record<number, NaploSor>;
   busy: boolean;
-  onJovahagyas: (id: number) => void;
+  onDontes: (muveletId: number, jovahagyva: boolean) => void;
 }) {
-  const bizonytalan = adat.kinyert?.bizonytalan ?? [];
-  const figyelmeztetesek = adat.javaslat?.figyelmeztetesek ?? [];
-  const jovahagyva = adat.allapot === "jovahagyva";
-  const jovahagyhato = ["ellenorzendo", "pontositas"].includes(adat.allapot) && adat.cel_tipus && adat.cel_tipus !== "kimeno";
-
-  return (
-    <div className="mr-auto w-full max-w-[520px] rounded-[var(--radius)] border border-border bg-surface-1 p-3 text-[13px]">
-      <p className="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-text-muted">
-        SZÁMLA-PISZKOZAT #{adat.id}
-        <span
-          className={`rounded px-1.5 py-0.5 text-[10.5px] ${
-            jovahagyva ? "bg-bg-success text-text-success" : adat.allapot === "duplikatum" ? "bg-surface-3 text-text-secondary" : "bg-bg-warning text-text-warning"
-          }`}
-        >
-          {jovahagyva
-            ? "Rögzítve"
-            : adat.allapot === "duplikatum"
-              ? "Duplikátum"
-              : adat.allapot === "hiba"
-                ? "Feldolgozási hiba"
-                : adat.allapot === "pontositas"
-                  ? "Pontosítás szükséges"
-                  : "Ellenőrizendő"}
-        </span>
-      </p>
-      <p className="text-text-primary">
-        <b>{adat.kibocsato_nev ?? "Ismeretlen kibocsátó"}</b>
-        {adat.szamlaszam ? ` · ${adat.szamlaszam}` : ""}
-        {adat.dokumentum_tipus && adat.dokumentum_tipus !== "szamla" ? ` · ${adat.dokumentum_tipus.toUpperCase()}` : ""}
-      </p>
-      <p className="text-text-secondary">
-        {adat.netto != null ? `${formatSzam(adat.netto)} ${adat.penznem} nettó` : "összeg nélkül"}
-        {adat.brutto != null ? ` · ${formatSzam(adat.brutto)} ${adat.penznem} bruttó` : ""}
-        {adat.fizetesi_hatarido ? ` · határidő: ${adat.fizetesi_hatarido}` : ""}
-      </p>
-      <p className="mt-1 text-text-secondary">
-        Cél: <b className="text-text-primary">{adat.cel_cimke ?? (adat.cel_tipus ? CEL_CIMKEK[adat.cel_tipus] : "még nincs kiválasztva")}</b>
-        {adat.cel_tipus && ["kiadas_uj", "mukodesi", "auto"].includes(adat.cel_tipus) ? " (ÚJ tétel készül, nem kifizetettként)" : adat.cel_tipus ? " (meglévő tételhez csatolás)" : ""}
-      </p>
-      {adat.javaslat_indoklas && <p className="mt-1 text-[12px] text-text-muted">{adat.javaslat_indoklas}</p>}
-      {(adat.javaslat?.alternativak?.length ?? 0) > 0 && !jovahagyva && (
-        <p className="mt-1 text-[12px] text-text-muted">
-          További lehetőségek: {adat.javaslat!.alternativak.slice(0, 3).map((a) => a.cimke).join(" · ")} — írd meg,
-          melyik legyen, vagy nyisd meg az ellenőrzőt.
-        </p>
-      )}
-      {bizonytalan.length > 0 && (
-        <p className="mt-1 text-[12px] text-text-warning">Bizonytalan mezők: {bizonytalan.join(", ")} - ellenőrizd.</p>
-      )}
-      {figyelmeztetesek.map((f, i) => (
-        <p key={i} className="mt-1 text-[12px] text-text-warning">
-          ⚠ {f}
-        </p>
-      ))}
-      {adat.duplikatum_megjegyzes && <p className="mt-1 text-[12px] text-text-warning">{adat.duplikatum_megjegyzes}</p>}
-      {adat.hiba_uzenet && <p className="mt-1 text-[12px] text-text-danger">{adat.hiba_uzenet}</p>}
-
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {jovahagyhato && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onJovahagyas(adat.id)}
-            className="rounded-[var(--radius)] border border-border bg-bg-accent px-2.5 py-1 text-[12.5px] text-text-accent hover:opacity-90 disabled:opacity-50"
+  const adat = u.adat ?? {};
+  if (u.szerep === "esemeny") {
+    if (adat.tipus === "megerosites") {
+      const mid = Number(adat.muvelet_id);
+      const allapot = naplo[mid]?.allapot ?? "fuggo";
+      return (
+        <div className="mr-auto w-full max-w-[560px] rounded-[var(--radius)] border border-text-warning/50 bg-bg-warning/40 p-3 text-[13px]">
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-warning">Jóváhagyásra vár</p>
+          <p className="text-text-primary">{String(adat.osszefoglalo ?? "")}</p>
+          <p className="mt-0.5 text-[11.5px] text-text-muted">
+            {String(adat.method)} {String(adat.path)}
+          </p>
+          {adat.keres != null && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-[11.5px] text-text-accent">A művelet pontos tartalma</summary>
+              <pre className="mt-1 max-h-[140px] overflow-auto rounded bg-surface-2 p-2 text-[11px] text-text-secondary">
+                {JSON.stringify(adat.keres, null, 2)}
+              </pre>
+            </details>
+          )}
+          {allapot === "fuggo" ? (
+            <div className="mt-2 flex gap-1.5">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onDontes(mid, true)}
+                className="rounded-[var(--radius)] border border-border bg-bg-accent px-2.5 py-1 text-[12.5px] text-text-accent hover:opacity-90 disabled:opacity-50"
+              >
+                Jóváhagyás
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onDontes(mid, false)}
+                className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Elvetés
+              </button>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-[12px] text-text-secondary">
+              {allapot === "vegrehajtva" ? "✓ Jóváhagyva és végrehajtva." : allapot === "elutasitva" ? "Elvetve - nem történt módosítás." : `Állapot: ${allapot}`}
+            </p>
+          )}
+        </div>
+      );
+    }
+    if (adat.tipus === "bejovo_szamla") {
+      return (
+        <div className="mr-auto w-full max-w-[520px] rounded-[var(--radius)] border border-border bg-surface-1 p-3 text-[13px]">
+          <p className="mb-1 text-[11px] font-medium text-text-muted">SZÁMLA-PISZKOZAT #{String(adat.bejovo_id)}</p>
+          <p className="text-text-primary">
+            <b>{String(adat.kibocsato_nev ?? "Ismeretlen kibocsátó")}</b>
+            {adat.szamlaszam ? ` · ${adat.szamlaszam}` : ""}
+          </p>
+          <p className="text-text-secondary">
+            {adat.netto != null ? `${formatSzam(Number(adat.netto))} ${String(adat.penznem ?? "")} nettó · ` : ""}
+            állapot: {String(adat.allapot ?? "?")}
+            {adat.cel_cimke ? ` · cél: ${adat.cel_cimke}` : ""}
+          </p>
+          {adat.javaslat_indoklas ? <p className="mt-0.5 text-[12px] text-text-muted">{String(adat.javaslat_indoklas)}</p> : null}
+          <Link
+            href={`/penzugyek/bejovo-szamlak?id=${adat.bejovo_id}`}
+            className="mt-1.5 inline-block rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12px] text-text-accent hover:bg-surface-3"
           >
-            Jóváhagyás
-          </button>
-        )}
-        <Link
-          href={`/penzugyek/bejovo-szamlak?id=${adat.id}`}
-          className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3"
-        >
-          Megnyitás az ellenőrzőben
-        </Link>
-      </div>
+            Megnyitás az ellenőrzőben →
+          </Link>
+        </div>
+      );
+    }
+    if (!u.szoveg) return null;
+    return <p className="pl-1 text-[12px] text-text-muted">· {u.szoveg}</p>;
+  }
+  return (
+    <div
+      className={`rounded-[var(--radius)] p-3 text-[13px] ${
+        u.szerep === "felhasznalo" ? "ml-auto max-w-[80%] bg-surface-3 text-text-primary" : "mr-auto max-w-[85%] bg-surface-1 text-text-primary"
+      }`}
+    >
+      <p className="mb-1 text-[11px] font-medium text-text-muted">{u.szerep === "felhasznalo" ? "Te" : "AI Assistant"}</p>
+      <Szoveg szoveg={u.szoveg ?? ""} />
+      {u.szerep === "felhasznalo" && Array.isArray(adat.fajlok) && adat.fajlok.length > 0 && (
+        <p className="mt-1 text-[11.5px] text-text-muted">📎 {(adat.fajlok as string[]).join(", ")}</p>
+      )}
     </div>
   );
 }
