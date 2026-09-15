@@ -1143,6 +1143,29 @@ def _auto_jelolt(db: Session, szoveg: str) -> tuple[Auto, str] | None:
     return None
 
 
+def _hatarido_atvitel(cel, mezo_nev: str, bejovo: BejovoSzamla, naplo: dict, cimke: str) -> None:
+    """A SZÁMLA fizetési határidejének átvitele a célrekordra (a felhasználó
+    kérése: felvezetéskor a határidő is menjen oda, különösen az utókövetési
+    TIG-re). A számla a saját határidejének igazságforrása: kitöltjük az üres
+    mezőt, az eltérőt pedig a számla szerintire frissítjük - az előző érték a
+    naplóba kerül, hogy visszakereshető legyen."""
+    uj = bejovo.fizetesi_hatarido
+    if uj is None:
+        return
+    regi = getattr(cel, mezo_nev, None)
+    if regi == uj:
+        return
+    if regi is not None:
+        naplo.setdefault("elozo_ertekek", {}).setdefault("fizetesi_hataridok", []).append(
+            {"cel": cimke, "elozo": regi.isoformat(), "uj": uj.isoformat()}
+        )
+    setattr(cel, mezo_nev, uj)
+    naplo.setdefault("megjegyzesek", []).append(
+        f"{cimke} fizetési határideje a számláról: {uj.isoformat()}"
+        + (f" (előtte: {regi.isoformat()})" if regi is not None else "")
+    )
+
+
 # ── JÓVÁHAGYÁS (végleges rögzítés) ──────────────────────────────────────────
 
 
@@ -1206,6 +1229,7 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
             sor.url = document_storage.upload_bytes(fajl, kulcs, bejovo.content_type or "application/pdf")
             sor.storage_key = kulcs
             bejovo.cel_certificate_id = cert.id
+            _hatarido_atvitel(cert, "fizetesi_hatarido", bejovo, naplo, f"A(z) #{cert.id} külsős TIG")
             naplo["csatolt"].append({"tipus": "performanceCertificate", "id": cert.id, "szamla_sor": sor.id})
             naplo.setdefault("megjegyzesek", []).append(
                 f"A kiválasztott kiadás a #{cert.id} TIG-ből származik - a számla az eredeti TIG-hez került, "
@@ -1213,6 +1237,7 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
             )
         else:
             _csatol_fajl(db, "expense", exp.id, bejovo, fajl, naplo)
+            _hatarido_atvitel(exp, "fizetes_hatarideje", bejovo, naplo, f"A(z) #{exp.id} kiadás")
             naplo["csatolt"].append({"tipus": "expense", "id": exp.id})
         bejovo.rogzitett_expense_id = exp.id
     elif cel_tipus == "kulsos_tig":
@@ -1234,7 +1259,9 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
         sor.url = document_storage.upload_bytes(fajl, kulcs, bejovo.content_type or "application/pdf")
         sor.storage_key = kulcs
         # A TIG kifizetési állapotához NEM nyúlunk: a számla feltöltése nem
-        # kifizetés, és nem is aláírt TIG (a felhasználó előírása).
+        # kifizetés, és nem is aláírt TIG (a felhasználó előírása). A számla
+        # fizetési határideje viszont a TIG-re kerül (Utókövetés).
+        _hatarido_atvitel(cert, "fizetesi_hatarido", bejovo, naplo, f"A(z) #{cert.id} külsős TIG")
         naplo["csatolt"].append({"tipus": "performanceCertificate", "id": cert.id, "szamla_sor": sor.id})
     elif cel_tipus == "belsos_tig":
         cert = db.get(
@@ -1257,6 +1284,7 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
         kulcs = f"belsos-tig-szamla/{cert.employee_id}/{cert.ev}-{cert.honap:02d}-{sor.id}"
         sor.url = document_storage.upload_bytes(fajl, kulcs, bejovo.content_type or "application/pdf")
         sor.storage_key = kulcs
+        _hatarido_atvitel(cert, "fizetesi_hatarido", bejovo, naplo, f"A(z) {cert.ev}.{cert.honap:02d}. havi belsős TIG")
         naplo["csatolt"].append({"tipus": "internalPerformanceCertificate", "id": cert.id, "szamla_sor": sor.id})
     elif cel_tipus == "erezsi":
         idoszak = db.get(
@@ -1548,6 +1576,7 @@ def _rogzit_bontaskent(db: Session, bejovo: BejovoSzamla, dontes: dict, fajl: by
             kulcs = f"tig-szamla/{cert.id}/{inv.id}-{re.sub(r'[^A-Za-z0-9._-]+', '_', inv.filename)[:80]}"
             inv.url = document_storage.upload_bytes(fajl, kulcs, bejovo.content_type or "application/pdf")
             inv.storage_key = kulcs
+            _hatarido_atvitel(cert, "fizetesi_hatarido", bejovo, naplo, f"A(z) #{cert.id} külsős TIG")
             naplo["csatolt"].append(
                 {"tipus": "performanceCertificate", "id": cert.id, "szamla_sor": inv.id, "bontas_netto": resz_netto}
             )
@@ -1561,6 +1590,7 @@ def _rogzit_bontaskent(db: Session, bejovo: BejovoSzamla, dontes: dict, fajl: by
             if exp is None:
                 raise ErkeztetesHiba(f"A bontás {i}. sorában hivatkozott kiadás nem található.")
             _csatol_fajl(db, "expense", exp.id, bejovo, fajl, naplo)
+            _hatarido_atvitel(exp, "fizetes_hatarideje", bejovo, naplo, f"A(z) #{exp.id} kiadás")
             naplo["csatolt"].append({"tipus": "expense", "id": exp.id, "bontas_netto": resz_netto})
             # A MEGLÉVŐ kiadás összegéhez nem nyúlunk - a rész a naplóban.
             naplo.setdefault("megjegyzesek", []).append(

@@ -258,8 +258,21 @@ export function AiAssistantChat() {
     }
   }
 
+  // Kétfázisú törlés (nem böngésző-confirm, mert az némítható): az első
+  // kattintás élesít, a második töröl.
+  const [torlendo, setTorlendo] = useState<number | null>(null);
+  useEffect(() => {
+    if (torlendo === null) return;
+    const t = setTimeout(() => setTorlendo(null), 5000);
+    return () => clearTimeout(t);
+  }, [torlendo]);
+
   async function beszelgetesTorles(bid: number) {
-    if (!confirm("Törlöd ezt a beszélgetést? A már elvégzett műveleteket ez nem vonja vissza.")) return;
+    if (torlendo !== bid) {
+      setTorlendo(bid);
+      return;
+    }
+    setTorlendo(null);
     await authFetch(`/api/v1/ai-assistant/beszelgetesek/${bid}`, { method: "DELETE" }).catch(() => null);
     setBeszelgetesek((prev) => prev.filter((b) => b.id !== bid));
     if (aktiv === bid) {
@@ -294,7 +307,12 @@ export function AiAssistantChat() {
             <button type="button" onClick={() => void beszelgetesValt(b.id)} className="min-w-0 flex-1 truncate text-left">
               {b.cim ?? `Beszélgetés #${b.id}`}
             </button>
-            <button type="button" title="Beszélgetés törlése" onClick={() => void beszelgetesTorles(b.id)} className="hidden text-text-muted hover:text-text-danger group-hover:block">
+            <button
+              type="button"
+              title={torlendo === b.id ? "Még egy kattintás a végleges törléshez" : "Beszélgetés törlése (két kattintás)"}
+              onClick={() => void beszelgetesTorles(b.id)}
+              className={torlendo === b.id ? "block text-text-danger" : "hidden text-text-muted hover:text-text-danger group-hover:block"}
+            >
               <Trash2 size={12} />
             </button>
           </div>

@@ -298,6 +298,11 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
   const [visszatoltes, setVisszatoltes] = useState(false);
   const [kezdoDatum, setKezdoDatum] = useState("");
   const [vegDatum, setVegDatum] = useState("");
+  //: A veszélyes műveletek beépített (nem böngésző-dialógusos) megerősítése -
+  //: a confirm()/prompt() némítható a böngészőben, és akkor a gomb
+  //: látszólag nem csinál semmit.
+  const [megerosites, setMegerosites] = useState<null | "osszes" | "reset">(null);
+  const [resetSzo, setResetSzo] = useState("");
 
   useEffect(() => {
     authFetch("/api/v1/bejovo-szamlak/email-allapot")
@@ -343,21 +348,13 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
   }
 
   async function reset() {
-    const szo = prompt(
-      "TISZTA ÚJRAINDÍTÁS: az eddigi érkeztetési beérkezések kitakarítása.\n\n" +
-        "Mentés és tételes visszaállítási jegyzék készül; a jóváhagyott tételek import-hatásai bizonyítható " +
-        "eredet alapján visszavonódnak (a nem bizonyítható rendezendő kivétel marad). A postafiókban még " +
-        "OLVASATLAN levelek a következő ellenőrzéskor újra bejönnek, a már olvasottak nem. Az eredeti " +
-        "postafiókhoz nem nyúlunk.\n\n" +
-        'A megerősítéshez írd be: TISZTA INDULAS',
-    );
-    if (szo === null) return;
     setBusy(true);
     setUzenet(null);
+    setMegerosites(null);
     try {
       const res = await authFetch("/api/v1/bejovo-szamlak/reset", {
         method: "POST",
-        body: JSON.stringify({ megerosites: szo }),
+        body: JSON.stringify({ megerosites: resetSzo }),
       });
       const d = await res.json().catch(() => null);
       if (!res.ok) {
@@ -380,17 +377,9 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
   }
 
   async function osszesTorles() {
-    if (
-      !confirm(
-        "Törlöd az ÖSSZES beérkező számla-tételt?\n\n" +
-          "Minden piszkozat végleg törlődik a tárolt fájljával együtt (bármelyik állapotban). " +
-          "A jóváhagyáskor már rögzített kiadásokat/TIG-számlákat ez nem érinti. A postafiókban " +
-          "MÉG OLVASATLAN levelek a következő ellenőrzéskor újra bejönnek - a már olvasottak nem.",
-      )
-    )
-      return;
     setBusy(true);
     setUzenet(null);
+    setMegerosites(null);
     try {
       const res = await authFetch("/api/v1/bejovo-szamlak/osszes-torles", { method: "POST" });
       const d = await res.json().catch(() => null);
@@ -458,7 +447,7 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={osszesTorles}
+                  onClick={() => setMegerosites(megerosites === "osszes" ? null : "osszes")}
                   title="Az összes beérkező tétel törlése egyben - a már rögzített kiadásokhoz nem nyúl (csak admin)"
                   className="rounded-[var(--radius)] border border-text-danger/40 px-2.5 py-1 text-[12px] text-text-danger hover:bg-text-danger/10 disabled:opacity-50"
                 >
@@ -467,7 +456,7 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={reset}
+                  onClick={() => setMegerosites(megerosites === "reset" ? null : "reset")}
                   title="Az eddigi érkeztetési beérkezések kitakarítása a jóváhagyás-hatások visszavonásával - csak admin, kifejezett megerősítéssel"
                   className="rounded-[var(--radius)] border border-text-danger/40 px-2.5 py-1 text-[12px] text-text-danger hover:bg-text-danger/10 disabled:opacity-50"
                 >
@@ -499,6 +488,51 @@ function EmailSav({ canEdit, canDelete, onFrissul }: { canEdit: boolean; canDele
             Az „Ellenőrzés most" erre az időszakra fut; a már átvett levelek nem duplikálódnak
             {adat?.legkorabbi_nap ? `, ${huDatum(adat.legkorabbi_nap)} előttre nem nyit` : ""}.
           </span>
+        </div>
+      )}
+      {megerosites === "osszes" && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-text-danger/50 bg-text-danger/10 px-2.5 py-1.5 text-[12px] text-text-danger">
+          <span>
+            Törlöd az ÖSSZES beérkező tételt? Minden piszkozat végleg törlődik a fájljával együtt; a már
+            rögzített kiadásokat/TIG-számlákat nem érinti. A még olvasatlan levelek a következő ellenőrzéskor
+            újra bejönnek.
+          </span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void osszesTorles()}
+            className="rounded-[var(--radius)] border border-text-danger bg-text-danger/15 px-2.5 py-1 font-medium hover:bg-text-danger/25 disabled:opacity-50"
+          >
+            Igen, mindet törlöm
+          </button>
+          <button type="button" onClick={() => setMegerosites(null)} className="text-text-muted hover:underline">
+            mégse
+          </button>
+        </div>
+      )}
+      {megerosites === "reset" && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-text-danger/50 bg-text-danger/10 px-2.5 py-1.5 text-[12px] text-text-danger">
+          <span>
+            TISZTA ÚJRAINDÍTÁS: mentés és visszaállítási jegyzék készül, a jóváhagyott tételek import-hatásai
+            bizonyítható eredet alapján visszavonódnak. A megerősítéshez írd be: <b>TISZTA INDULAS</b>
+          </span>
+          <input
+            value={resetSzo}
+            onChange={(e) => setResetSzo(e.target.value)}
+            placeholder="TISZTA INDULAS"
+            className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-0.5 text-text-primary"
+          />
+          <button
+            type="button"
+            disabled={busy || resetSzo.trim() !== "TISZTA INDULAS"}
+            onClick={() => void reset()}
+            className="rounded-[var(--radius)] border border-text-danger bg-text-danger/15 px-2.5 py-1 font-medium hover:bg-text-danger/25 disabled:opacity-50"
+          >
+            Indítás
+          </button>
+          <button type="button" onClick={() => setMegerosites(null)} className="text-text-muted hover:underline">
+            mégse
+          </button>
         </div>
       )}
       {uzenet && <p className="mt-1.5 text-[12px] text-text-secondary">{uzenet}</p>}
@@ -1397,8 +1431,22 @@ function Reszletes({
                     <button type="button" disabled={busy} onClick={() => fajlPotloRef.current?.click()} className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-text-secondary hover:bg-surface-3 disabled:opacity-50">
                       {adat.fajl_nev ? "Fájl cseréje" : "Letöltött számla csatolása"}
                     </button>
+                    {/* HELY ÚJRAKERESÉSE (a felhasználó kérése): a már kinyert
+                        adatokon újra fut a párosítás - pl. miután felvetted a
+                        hiányzó TIG-et/kiadást/projektkódot. Gyors, nem olvassa
+                        ki újra a dokumentumot. */}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void hivas("/ujrafeldolgozas", { mod: "javaslat" })}
+                      title="Újra megpróbálja megtalálni a számla helyét a mostani adatok alapján (új TIG/kiadás/projektkód után) - a dokumentumot nem olvassa ki újra"
+                      className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                    >
+                      <RefreshCw size={11} className="mr-1 inline" />
+                      Hely újrakeresése
+                    </button>
                     {(adat.allapot === "hiba" || adat.allapot === "feldolgozas") && (
-                      <button type="button" disabled={busy} onClick={() => void hivas("/ujrafeldolgozas", {})} className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-text-secondary hover:bg-surface-3 disabled:opacity-50">
+                      <button type="button" disabled={busy} onClick={() => void hivas("/ujrafeldolgozas", { mod: "teljes" })} className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-text-secondary hover:bg-surface-3 disabled:opacity-50">
                         Feldolgozás újrapróbálása
                       </button>
                     )}
@@ -1475,6 +1523,10 @@ function Reszletes({
   );
 }
 
+/** KÉTFÁZISÚ törlés gomb - szándékosan NEM a böngésző confirm() ablakával:
+ * azt a böngésző el tudja némítani („további párbeszédablakok tiltása"),
+ * és onnantól a gomb látszólag nem csinál semmit (a felhasználó hibajelzése).
+ * Az első kattintás élesíti, a második töröl; pár másodperc után visszaáll. */
 function TorlesGomb({
   adat,
   busy,
@@ -1488,35 +1540,59 @@ function TorlesGomb({
   setHiba: (h: string | null) => void;
   onZaras: () => void;
 }) {
+  const [elesitve, setElesitve] = useState(false);
+  useEffect(() => {
+    if (!elesitve) return;
+    const t = setTimeout(() => setElesitve(false), 6000);
+    return () => clearTimeout(t);
+  }, [elesitve]);
+
+  async function torles() {
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/bejovo-szamlak/${adat.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        setHiba(d?.detail ?? `Sikertelen törlés (${res.status})`);
+        return;
+      }
+      onZaras();
+    } catch (err) {
+      setHiba(`Hálózati hiba: ${err}`);
+    } finally {
+      setBusy(false);
+      setElesitve(false);
+    }
+  }
+
+  if (!elesitve) {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setElesitve(true)}
+        className="rounded-[var(--radius)] border border-text-danger/50 px-3 py-1.5 text-[13px] text-text-danger hover:bg-text-danger/10 disabled:opacity-50"
+      >
+        Törlés
+      </button>
+    );
+  }
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={async () => {
-        if (
-          !confirm(
-            `Törlöd ezt a beérkező számlát? A piszkozat és a tárolt fájl végleg törlődik.${adat.allapot === "jovahagyva" ? " A már rögzített kiadást/TIG-számlát ez nem érinti." : ""}`,
-          )
-        )
-          return;
-        setBusy(true);
-        try {
-          const res = await authFetch(`/api/v1/bejovo-szamlak/${adat.id}`, { method: "DELETE" });
-          if (!res.ok) {
-            const d = await res.json().catch(() => null);
-            setHiba(d?.detail ?? `Sikertelen törlés (${res.status})`);
-            return;
-          }
-          onZaras();
-        } catch (err) {
-          setHiba(`Hálózati hiba: ${err}`);
-        } finally {
-          setBusy(false);
-        }
-      }}
-      className="rounded-[var(--radius)] border border-text-danger/50 px-3 py-1.5 text-[13px] text-text-danger hover:bg-text-danger/10 disabled:opacity-50"
-    >
-      Törlés
-    </button>
+    <span className="flex items-center gap-1.5">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void torles()}
+        className="rounded-[var(--radius)] border border-text-danger bg-text-danger/15 px-3 py-1.5 text-[13px] font-medium text-text-danger hover:bg-text-danger/25 disabled:opacity-50"
+      >
+        {busy ? "Törlés…" : "Biztos? Törlés végleg"}
+      </button>
+      <button type="button" onClick={() => setElesitve(false)} className="text-[12px] text-text-muted hover:underline">
+        mégse
+      </button>
+      <span className="text-[11.5px] text-text-muted">
+        A piszkozat és a fájl törlődik{adat.allapot === "jovahagyva" ? "; a már rögzített tételeket nem érinti" : ""}.
+      </span>
+    </span>
   );
 }

@@ -584,19 +584,59 @@ def nem_szamlanak_jelol(
     return _kimenet(db, b, reszletes=True)
 
 
+class UjrafeldolgozasIn(BaseModel):
+    #: "teljes": új kiolvasás + javaslat (hibás/elakadt tételhez);
+    #: "javaslat": CSAK a hely újrakeresése a már kinyert adatokon - gyors,
+    #: nem hív AI-kiolvasást (a felhasználó kérése: a betöltött számláknál
+    #: újra meg lehessen próbálni megtalálni a helyét, pl. miután felvett
+    #: egy hiányzó TIG-et/kiadást/projektkódot).
+    mod: str = "teljes"
+
+
 @router.post("/{bejovo_id}/ujrafeldolgozas", response_model=BejovoReszlet)
 def ujrafeldolgozas(
     bejovo_id: int,
+    payload: UjrafeldolgozasIn | None = None,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """Új kiolvasás + javaslat - hibás vagy elakadt tételhez (megszakítás utáni
-    folytatás). A jóváhagyott tételhez nem nyúl."""
+    """Újrafeldolgozás vagy hely-újrakeresés - a jóváhagyott tételhez nem nyúl."""
     b = _lekeres(db, bejovo_id, zarolva=True)
     if b.allapot == ALLAPOT_JOVAHAGYVA:
         raise HTTPException(status_code=409, detail="Jóváhagyott tétel nem dolgozható fel újra.")
     b.hiba_uzenet = None
-    szamla_erkeztetes.feldolgoz(db, b)
+    mod = (payload.mod if payload else "teljes") or "teljes"
+    # A korábbi cél-kijelölés tiszta lappal indul - a friss adatok (új TIG,
+    # új kiadás, új projektkód) így ténylegesen érvényesülnek. A felhasználói
+    # utasítás megmarad, az továbbra is az első számú forrás.
+    for mezo in (
+        "cel_tipus",
+        "cel_project_code_id",
+        "cel_project_id",
+        "cel_expense_id",
+        "cel_certificate_id",
+        "cel_internal_certificate_id",
+        "cel_kotelezettseg_idoszak_id",
+        "cel_auto_id",
+        "cel_kp_forgalom_id",
+        "cel_employee_id",
+    ):
+        setattr(b, mezo, None)
+    if mod == "javaslat" and (b.kinyert or {}).get("mezok"):
+        # Gyors út: a már kinyert adatokon csak a duplikáció-vizsgálat és a
+        # párosítás fut újra (AI-kiolvasás nélkül).
+        duplikatum = szamla_erkeztetes._duplikacio(db, b)
+        if duplikatum is not None:
+            b.allapot = ALLAPOT_DUPLIKATUM
+            b.duplikatum_bejovo_id = duplikatum.id
+            b.duplikatum_megjegyzes = (
+                f"Egyezik a #{duplikatum.id} beérkezett számlával "
+                f"({duplikatum.kibocsato_nev or '?'} / {duplikatum.szamlaszam or 'azonos fájl'})."
+            )
+        else:
+            szamla_erkeztetes.javasol(db, b)
+    else:
+        szamla_erkeztetes.feldolgoz(db, b)
     db.commit()
     db.refresh(b)
     return _kimenet(db, b, reszletes=True)
