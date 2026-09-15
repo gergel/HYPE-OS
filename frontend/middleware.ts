@@ -97,7 +97,14 @@ function loginraKuld(request: NextRequest, { tokentTorol }: { tokentTorol: boole
  * jelentkeznie. */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const statikus = pathname.startsWith("/_next") || pathname === "/favicon.ico";
+  // Az oldal ikonjai (app/favicon.ico, app/icon.svg, app/apple-icon.png)
+  // bejelentkezés nélkül is kellenek - a böngésző a login oldal fülére is
+  // ezeket kéri, és átirányítva sosem jelenne meg az ikon.
+  const statikus =
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/icon.svg" ||
+    pathname === "/apple-icon.png";
 
   // A portál domainjén CSAK a portál él. Ami nem oda tartozik, az nem
   // átirányítást kap (az elárulná az admin felület címét), hanem 404-et.
@@ -225,5 +232,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png).*)"],
 };
