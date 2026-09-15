@@ -68,6 +68,23 @@ function fizetesiJelzo(doc: DocumentAttachment): { label: string; tone: "success
   return null;
 }
 
+/** Egy MEZŐBEN tárolt (nem csatolmányként feltöltött) dokumentum - a régi
+ * tárolási forma: a Notionből importált és a rendszer által generált
+ * szerződések/TIG-ek a rekord saját URL-mezőiben élnek (pl.
+ * Contract.szerzodes_file_url, alairt_file_url). A fájlblokk ezeket IS
+ * mutatja, hogy a "Nincs feltöltött fájl" ne mondhasson ellent a rekordon
+ * látható linkeknek (a felhasználó hibajelzése: /szerzodesek/962). */
+export type OrokoltDokumentum = {
+  /** Emberi név, pl. "Elkészült szerződés" vagy "Aláírt példány". */
+  cimke: string;
+  url: string;
+  /** Típus-címke a sorban, pl. "Szerződés" / "Aláírt példány" / "Keretszerződés". */
+  tipus?: string;
+  /** Kiegészítő jelzés (pl. "Aláírva") - az aláírás állapota KÜLÖN kezelt a
+   * fájl elérhetőségétől. */
+  jelzes?: { label: string; tone: "success" | "warning" | "danger" | "neutral" } | null;
+};
+
 /** Egy rekordhoz (szerződéshez, projektkódhoz, kiadáshoz…) tartozó fájlok:
  * feltöltés, megnyitás, törlés. A fájl mindig az R2 tárhelyre kerül, nem a
  * szolgáltatás lemezére - lásd backend services/attachments.py.
@@ -78,6 +95,7 @@ export function DokumentumFeltoltes({
   entityType,
   entityId,
   attachments,
+  oroklott = [],
   kategoria = "egyeb",
   canEdit,
   canDelete,
@@ -90,6 +108,9 @@ export function DokumentumFeltoltes({
   entityType: string;
   entityId: number;
   attachments: DocumentAttachment[];
+  /** A rekord MEZŐIBEN tárolt dokumentumok (régi tárolási forma) - csak
+   * megnyitható sorok, feltöltés/törlés nem vonatkozik rájuk. */
+  oroklott?: OrokoltDokumentum[];
   kategoria?: DocumentAttachment["kategoria"];
   canEdit: boolean;
   canDelete: boolean;
@@ -284,10 +305,40 @@ export function DokumentumFeltoltes({
     }
   }
 
+  // Egy fájl több forrásból is látszódhatna: ha egy mező-dokumentum URL-je
+  // megegyezik egy csatolmányéval, csak a csatolmányt mutatjuk (megbízható
+  // azonosság = azonos URL; a puszta fájlnév-egyezés NEM vonna össze két
+  // különböző változatot).
+  const csatolmanyUrlek = new Set(attachments.map((a) => a.url));
+  const oroklottLathato = oroklott.filter((o) => o.url && !csatolmanyUrlek.has(o.url));
+
   return (
     <div className="space-y-2">
+      {oroklottLathato.length > 0 && (
+        <ul className="space-y-1.5">
+          {oroklottLathato.map((o, i) => (
+            <li key={`${o.url}-${i}`} className="text-[13px]">
+              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <Paperclip size={13} className="shrink-0 text-text-muted" />
+                <a
+                  href={o.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="truncate text-text-accent hover:underline"
+                >
+                  {o.cimke}
+                </a>
+                {o.tipus && <span className="shrink-0 text-[12px] text-text-muted">{o.tipus}</span>}
+                {o.jelzes && <StatusBadge label={o.jelzes.label} tone={o.jelzes.tone} />}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {attachments.length === 0 ? (
-        <p className="text-[13px] text-text-muted">{emptyText}</p>
+        oroklottLathato.length === 0 ? (
+          <p className="text-[13px] text-text-muted">{emptyText}</p>
+        ) : null
       ) : (
         <ul className="space-y-1.5">
           {attachments.map((doc) => {

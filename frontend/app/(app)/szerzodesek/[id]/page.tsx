@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { FileText } from "lucide-react";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
+import { StatusBadge } from "@/components/StatusBadge";
 import { DetailSections } from "@/components/DetailSections";
 import { DokumentumFeltoltes } from "@/components/DokumentumFeltoltes";
 import { TopBar } from "@/components/TopBar";
@@ -61,18 +62,70 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     fieldTypes,
     pagePermissions,
     sectionOrder,
-    alwaysHidden: ["employee_id", "client_id", "project_id"],
+    // A dokumentum-URL/tárhelykulcs mezők nyers linkként zavaróak voltak a
+    // mezőrácsban - ugyanezek a dokumentumok fent, a "Szerződés dokumentumai"
+    // blokkban jelennek meg, felismerhető fájl-sorként.
+    alwaysHidden: [
+      "employee_id",
+      "client_id",
+      "project_id",
+      "szerzodes_file_url",
+      "szerzodes_file_storage_key",
+      "alairt_file_url",
+      "alairt_file_storage_key",
+    ],
   });
 
   const title = String(contract.megbizas_targya || contract.nev || contract.ceg_neve || `Szerződés #${contract.id}`);
+
+  // A MEZŐKBEN tárolt dokumentumok (generált/Notion-örökség) - a csatolmányok
+  // mellett ezek is a fájlblokkban jelennek meg, hogy a rekordon látható
+  // linkek és a blokk ne mondhassanak ellent egymásnak (962-es hibajelzés).
+  const keret = contract.keretszerzodes === true;
+  const oroklottDokumentumok = [
+    ...(contract.szerzodes_file_url
+      ? [
+          {
+            cimke: keret ? "Keretszerződés dokumentuma" : "Elkészült szerződés",
+            url: String(contract.szerzodes_file_url),
+            tipus: "Szerződés",
+          },
+        ]
+      : []),
+    ...(contract.alairt_file_url
+      ? [
+          {
+            cimke: "Aláírt példány",
+            url: String(contract.alairt_file_url),
+            tipus: "Szerződés",
+            jelzes: { label: "Aláírva", tone: "success" as const },
+          },
+        ]
+      : []),
+  ];
+  // Aláírás állapota a fájltól KÜLÖN: lehet aláírva fájl nélkül (a papír
+  // máshol landolt), és lehet fájl kiküldve aláírás nélkül.
+  const alairasJelzes = contract.alairva
+    ? { label: "Aláírva", tone: "success" as const }
+    : { label: "Aláírásra vár", tone: "warning" as const };
+
+  // A visszalépés célja a szerződés TÍPUSÁT követi - a nem keretszerződés
+  // rekord korábban is "Keretszerződések"-re mutatott vissza (hibajelzés).
+  const vissza = keret
+    ? { href: "/penzugyek/keretszerzodesek", label: "Keretszerződések" }
+    : { href: "/penzugyek/eseti-szerzodesek", label: "Eseti szerződések" };
 
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 space-y-8 p-4 md:p-8">
         <div className="space-y-2">
-          <BackLink href="/penzugyek/keretszerzodesek" label="Keretszerződések" />
+          <BackLink href={vissza.href} label={vissza.label} />
           <h1 className="t-page">{title}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge label={keret ? "Keretszerződés" : "Eseti megbízási szerződés"} tone="neutral" />
+            <StatusBadge label={alairasJelzes.label} tone={alairasJelzes.tone} />
+          </div>
         </div>
         <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
           {employee && (
@@ -97,10 +150,11 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
             entityType="contract"
             entityId={contractId}
             attachments={attachments}
+            oroklott={oroklottDokumentumok}
             kategoria="szerzodes"
             canEdit={canDoAction(currentUser, pagePermissions, PAGE, "edit")}
             canDelete={canDoAction(currentUser, pagePermissions, PAGE, "delete")}
-            emptyText="Nincs feltöltött szerződés-fájl."
+            emptyText="Ehhez a szerződéshez nincs dokumentum - se csatolmány, se mezőben tárolt fájl."
           />
         </Card>
 

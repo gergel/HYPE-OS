@@ -110,26 +110,34 @@ def _tig_state(
     project_contracts: dict[tuple[int, str], Contract],
     felulirasok: dict[tuple[int, int], ProjectSzamlazo],
     tig_lookup: TigLookup,
-) -> tuple[bool, int, int]:
-    """(tig_ready, összes, függő) - a TIG populáció a keretszerződéseseket IS
-    tartalmazza (lásd performance_certificates.py _tig_candidates).
+) -> tuple[bool, int, int, int]:
+    """(tig_ready, összes, függő, szerződésre váró) - a TIG populáció a
+    keretszerződéseseket IS tartalmazza (lásd performance_certificates.py
+    _tig_candidates).
 
     A "kész" állapot FELENKÉNT dől el: amint egy félnek megvan a szerződése
     (vagy keretszerződés mentesíti), róla azonnal készíthető TIG - nem kell
     megvárni, hogy a projekt összes szereplőjének meglegyen a papírja. A
     `tig_fuggo` így csak azokat számolja, akikről MÁR lehetne TIG-et készíteni,
-    de még nincs; akinél a szerződés is hiányzik, az a szerződés-oszlopban vár."""
+    de még nincs; akinél a szerződés is hiányzik, az a NEGYEDIK számban
+    (szerződésre váró) jelenik meg KÜLÖN - korábban ez a szám sehol nem
+    látszott, és a felület "összes/összes kész"-t írhatott olyan projektre,
+    ahol a felek nagy része még a szerződésénél tartott (a felhasználó
+    hibajelzése: a 7247-es projekt "34/34 kész" címkéje)."""
     if not _tig_candidates(project, felulirasok):
-        return False, 0, 0
+        return False, 0, 0, 0
     csoportok = tig_csoportok(project, felulirasok)
     total = len(csoportok)
     keszitheto = tig_keszitheto_csoportok(project, felulirasok, keretszerzodesek, project_contracts)
+    keszitheto_kulcsok = {cs.kulcs for cs in keszitheto}
+    szerzodesre_varo = [cs for cs in csoportok if cs.kulcs not in keszitheto_kulcsok]
+    # Akinek a TIG-jét KIHAGYTUK, az egyik oszlopban sem függő: a kihagyás
+    # önálló lépés, nem kell hozzá szerződés (lásd
+    # routes/performance_certificates.skip_tig).
+    szerzodesre_var = len(_tig_pending_csoportok(project, szerzodesre_varo, tig_lookup))
     if not keszitheto:
-        # Mindenki szerződésre vár - de akinek a TIG-jét KIHAGYTUK, az nem
-        # függő: a kihagyás önálló lépés, nem kell hozzá szerződés (lásd
-        # routes/performance_certificates.skip_tig).
-        return False, total, len(_tig_pending_csoportok(project, csoportok, tig_lookup))
-    return True, total, len(_tig_pending_csoportok(project, keszitheto, tig_lookup))
+        return False, total, 0, szerzodesre_var
+    return True, total, len(_tig_pending_csoportok(project, keszitheto, tig_lookup)), szerzodesre_var
 
 
 def _kifizetes_state(
@@ -179,6 +187,10 @@ class ProjectOverviewSummary(BaseModel):
     tig_ready: bool
     tig_osszes: int
     tig_fuggo: int
+    #: Hány FÉLNÉL nem készíthető még TIG, mert a szerződése is hiányzik -
+    #: KÜLÖN a tig_fuggo-tól, hogy a felület ne mondhasson "mind kész"-t úgy,
+    #: hogy a felek a szerződésüknél tartanak (lásd _tig_state).
+    tig_szerzodesre_var: int = 0
     #: Hány kiküldött szerződést várunk még vissza ALÁÍRVA (lásd
     #: subcontractor_contracts.alairasra_varo_csoportok).
     alairas_varo: int
@@ -187,6 +199,10 @@ class ProjectOverviewSummary(BaseModel):
     # Akkor és csak akkor teljesen kész a projekt, ha az adminisztráció mindhárom
     # fázisa lezárult ÉS mindenki meg is kapta a pénzét (lásd _kifizetes_state).
     kesz: bool
+    #: Van-e egyáltalán papírozandó fél - e nélkül a "Kész" félrevezető: a
+    #: "nincs adminisztrációs teendő" nem ugyanaz, mint a "minden el lett
+    #: intézve" (a felhasználó kérése, hogy a kettő különüljön el).
+    van_papirozando: bool = True
     visszajelzes_darab: int
 
 
@@ -220,7 +236,7 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
         szerzodes_osszes, szerzodes_fuggo, _ = _szerzodes_candidates(
             p, keretszerzodesek, project_contracts, felulirasok
         )
-        tig_ready, tig_osszes, tig_fuggo = _tig_state(
+        tig_ready, tig_osszes, tig_fuggo, tig_szerzodesre_var = _tig_state(
             p, keretszerzodesek, project_contracts, felulirasok, tig_lookup
         )
         kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(p, felulirasok, tig_lookup)
@@ -237,6 +253,7 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
                 tig_ready=tig_ready,
                 tig_osszes=tig_osszes,
                 tig_fuggo=tig_fuggo,
+                tig_szerzodesre_var=tig_szerzodesre_var,
                 alairas_varo=alairas_varo,
                 kifizetes_osszes=kifizetes_osszes,
                 kifizetes_fuggo=kifizetes_fuggo,
@@ -246,6 +263,7 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
                 and tig_fuggo == 0
                 and kifizetes_fuggo == 0
                 and alairas_varo == 0,
+                van_papirozando=(szerzodes_osszes + tig_osszes + kifizetes_osszes) > 0,
                 visszajelzes_darab=len(p.post_shoot_feedbacks),
             )
         )
@@ -339,6 +357,16 @@ class ProjectOverviewDetail(BaseModel):
     kifizetes_osszes: int
     kifizetes_fuggo: int
     kesz: bool
+    # ── Fejléc-összegzők: UGYANAZOKBÓL a definíciókból, mint az admin lista
+    # (lásd _szerzodes_candidates / _tig_state) - így a projekt tetején lévő
+    # számok nem mondhatnak mást, mint a lista (a felhasználó kérése). Minden
+    # szám SZÁMLÁZÓ FELET számol, nem embert és nem dokumentumot.
+    szerzodes_osszes: int = 0
+    szerzodes_fuggo: int = 0
+    tig_osszes: int = 0
+    tig_fuggo: int = 0
+    tig_szerzodesre_var: int = 0
+    van_papirozando: bool = True
     visszajelzesek: list[PostShootFeedbackRead]
 
 
@@ -355,12 +383,15 @@ class ProjectCodeOverviewSummary(BaseModel):
     tig_ready: bool
     tig_osszes: int
     tig_fuggo: int
+    #: Lásd ProjectOverviewSummary.tig_szerzodesre_var.
+    tig_szerzodesre_var: int = 0
     #: Hány kiküldött szerződést várunk még vissza ALÁÍRVA (lásd
     #: subcontractor_contracts.alairasra_varo_csoportok_projektkodon).
     alairas_varo: int
     kifizetes_osszes: int
     kifizetes_fuggo: int
     kesz: bool
+    van_papirozando: bool = True
 
 
 @router.get("/projektkodok", response_model=list[ProjectCodeOverviewSummary])
@@ -380,7 +411,7 @@ def list_utokovetes_overview_projektkodok(db: Session = Depends(get_db), _user: 
         szerzodes_osszes, szerzodes_fuggo = _szerzodes_candidates_projektkodon(
             pk, keretszerzodesek, project_code_contracts
         )
-        tig_ready, tig_osszes, tig_fuggo = _tig_state_projektkodon(
+        tig_ready, tig_osszes, tig_fuggo, tig_szerzodesre_var = _tig_state_projektkodon(
             pk, keretszerzodesek, project_code_contracts, tig_lookup
         )
         kifizetes_osszes, kifizetes_fuggo = _kifizetes_state_projektkodon(pk, tig_lookup)
@@ -395,12 +426,14 @@ def list_utokovetes_overview_projektkodok(db: Session = Depends(get_db), _user: 
                 tig_ready=tig_ready,
                 tig_osszes=tig_osszes,
                 tig_fuggo=tig_fuggo,
+                tig_szerzodesre_var=tig_szerzodesre_var,
                 alairas_varo=alairas_varo,
                 kifizetes_osszes=kifizetes_osszes,
                 kifizetes_fuggo=kifizetes_fuggo,
                 # A kiküldött szerződés még nem lezárt ügy: amíg aláírva vissza
                 # nem érkezett, a projektkód sem kész.
                 kesz=szerzodes_fuggo == 0 and tig_fuggo == 0 and kifizetes_fuggo == 0 and alairas_varo == 0,
+                van_papirozando=(szerzodes_osszes + tig_osszes + kifizetes_osszes) > 0,
             )
         )
     return result
@@ -411,7 +444,7 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
     project = _get_project_or_404(db, project_id)
 
     keretszerzodesek, project_contracts, felulirasok = load_szerzodes_kornyezet(db, [project])
-    _, szerzodes_fuggo, pending_szerzodesek = _szerzodes_candidates(
+    szerzodes_osszes, szerzodes_fuggo, pending_szerzodesek = _szerzodes_candidates(
         project, keretszerzodesek, project_contracts, felulirasok
     )
     szerzodesek = [
@@ -464,7 +497,9 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
             )
         )
     kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(project, felulirasok, tig_lookup)
-    _, _, tig_fuggo = _tig_state(project, keretszerzodesek, project_contracts, felulirasok, tig_lookup)
+    _, tig_osszes, tig_fuggo, tig_szerzodesre_var = _tig_state(
+        project, keretszerzodesek, project_contracts, felulirasok, tig_lookup
+    )
     alairas_varo = len(alairasra_varo_csoportok(project, keretszerzodesek, project_contracts, felulirasok))
 
     feedbacks = (
@@ -487,6 +522,12 @@ def get_utokovetes_detail(project_id: int, db: Session = Depends(get_db), _user:
         kifizetes_osszes=kifizetes_osszes,
         kifizetes_fuggo=kifizetes_fuggo,
         kesz=szerzodes_done and tig_fuggo == 0 and kifizetes_fuggo == 0 and alairas_varo == 0,
+        szerzodes_osszes=szerzodes_osszes,
+        szerzodes_fuggo=szerzodes_fuggo,
+        tig_osszes=tig_osszes,
+        tig_fuggo=tig_fuggo,
+        tig_szerzodesre_var=tig_szerzodesre_var,
+        van_papirozando=(szerzodes_osszes + tig_osszes + kifizetes_osszes) > 0,
         visszajelzesek=[PostShootFeedbackRead.model_validate(f) for f in feedbacks],
     )
 
@@ -523,16 +564,19 @@ def _tig_state_projektkodon(
     keretszerzodesek: dict[str, list[Contract]],
     project_code_contracts: dict[tuple[int, str], Contract],
     tig_lookup: TigLookupProjektkod,
-) -> tuple[bool, int, int]:
+) -> tuple[bool, int, int, int]:
     """Lásd _tig_state (forgatás-alapú megfelelője)."""
     if not szerzodest_igenylo_emberek_projektkodon(projektkod):
-        return False, 0, 0
+        return False, 0, 0, 0
     csoportok = szamlazo_csoportok_projektkodon(projektkod)
     total = len(csoportok)
     keszitheto = tig_keszitheto_csoportok_projektkodon(projektkod, keretszerzodesek, project_code_contracts)
+    keszitheto_kulcsok = {cs.kulcs for cs in keszitheto}
+    szerzodesre_varo = [cs for cs in csoportok if cs.kulcs not in keszitheto_kulcsok]
+    szerzodesre_var = len(_tig_pending_csoportok_projektkodon(projektkod, szerzodesre_varo, tig_lookup))
     if not keszitheto:
-        return False, total, len(_tig_pending_csoportok_projektkodon(projektkod, csoportok, tig_lookup))
-    return True, total, len(_tig_pending_csoportok_projektkodon(projektkod, keszitheto, tig_lookup))
+        return False, total, 0, szerzodesre_var
+    return True, total, len(_tig_pending_csoportok_projektkodon(projektkod, keszitheto, tig_lookup)), szerzodesre_var
 
 def _kifizetes_state_projektkodon(
     projektkod: ProjectCode,

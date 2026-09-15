@@ -346,14 +346,40 @@ export default async function EmployeeDetailPage({
                 backend services/attachments.py). */}
             <div className="mt-6 border-t border-border pt-5">
               <p className="t-label mb-3">Keretszerződés és egyéb aláírt dokumentumok</p>
+              {/* A szerződés-rekordok MEZŐIBEN tárolt dokumentumok (generált /
+                  Notion-örökség fájlok) is itt jelennek meg - korábban csak a
+                  külön feltöltött csatolmányok látszottak, így a blokk "Nincs
+                  feltöltött keretszerződés"-t írt olyan munkatársnál is,
+                  akinek a keretszerződése fent lentebb linkkel szerepelt
+                  (a felhasználó hibajelzése: /csapat/225). */}
               <DokumentumFeltoltes
                 entityType="employee"
                 entityId={employee.id}
                 attachments={attachments.filter((a) => a.kategoria === "szerzodes")}
+                oroklott={contracts.flatMap((c) => {
+                  const nev = String(c.megbizas_targya || c.nev || c.ceg_neve || `Szerződés #${c.id}`);
+                  const keret = c.keretszerzodes === true && !c.project_id;
+                  const tipus = keret ? "Keretszerződés" : "Eseti szerződés";
+                  return [
+                    ...(c.szerzodes_file_url
+                      ? [{ cimke: `${nev} – dokumentum`, url: String(c.szerzodes_file_url), tipus }]
+                      : []),
+                    ...(c.alairt_file_url
+                      ? [
+                          {
+                            cimke: `${nev} – aláírt példány`,
+                            url: String(c.alairt_file_url),
+                            tipus,
+                            jelzes: { label: "Aláírva", tone: "success" as const },
+                          },
+                        ]
+                      : []),
+                  ];
+                })}
                 kategoria="szerzodes"
                 canEdit={szerkeszthet}
                 canDelete={torolhet}
-                emptyText="Nincs feltöltött keretszerződés."
+                emptyText="Nincs feltöltött keretszerződés, és a szerződés-rekordokban sincs tárolt dokumentum."
               />
             </div>
           </Card>

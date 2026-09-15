@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 import { useRouter } from "next/navigation";
 import { useModalVisszaVedelem } from "@/hooks/useModalVisszaVedelem";
@@ -33,6 +33,30 @@ export function UtokovetesDetailModal({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // Az ablakon BELÜLI navigáció követése: az /embed nézet minden útvonal-
+  // váltásnál postMessage-et küld (lásd components/EmbedNavigacio.tsx) - a
+  // cím és a "Megnyitás új oldalon" gomb így mindig az ÉPPEN LÁTOTT
+  // tartalomra mutat, nem ragad az elsőn (a felhasználó hibajelzése).
+  const [aktualis, setAktualis] = useState<{ utvonal: string; cim: string } | null>(null);
+
+  useEffect(() => {
+    function uzenet(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      const adat = e.data as { tipus?: string; utvonal?: string; cim?: string };
+      if (adat?.tipus === "embed-utvonal" && typeof adat.utvonal === "string") {
+        setAktualis({ utvonal: adat.utvonal, cim: adat.cim || "" });
+      }
+    }
+    window.addEventListener("message", uzenet);
+    return () => window.removeEventListener("message", uzenet);
+  }, []);
+
+  // Új rekord megnyitásakor tiszta lappal indulunk - az előző projekt címe
+  // és útvonala nem maradhat látható.
+  useEffect(() => {
+    setAktualis(null);
+  }, [projectId]);
 
   // Escape-re záródjon, és amíg nyitva van, a háttér ne görgethessen.
   useEffect(() => {
@@ -64,6 +88,11 @@ export function UtokovetesDetailModal({
   if (projectId === null) return null;
 
   const utvonal = projectId < 0 ? `/utokovetes/projektkodok/${-projectId}` : `/utokovetes/${projectId}`;
+  // A fejléc mindig az ÉPPEN LÁTOTT tartalomról beszél - az ablakon belüli
+  // továbbnavigálás (személy, szerződés) után is.
+  const lattottUtvonal = aktualis?.utvonal || utvonal;
+  const elnavigalt = lattottUtvonal !== utvonal;
+  const cim = aktualis?.cim ? `Utókövetés · ${aktualis.cim}` : "Utókövetés";
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" {...vedettOverlayZaras(close)}>
@@ -74,9 +103,18 @@ export function UtokovetesDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-          <span className="text-[13px] text-text-secondary">Utókövetés</span>
-          <div className="flex items-center gap-2">
-            <a href={utvonal} className="btn btn-ghost !text-[12px]">
+          <span className="truncate text-[13px] text-text-secondary">{cim}</span>
+          <div className="flex shrink-0 items-center gap-2">
+            {elnavigalt && (
+              <button
+                type="button"
+                onClick={() => iframeRef.current?.contentWindow?.history.back()}
+                className="btn btn-ghost !text-[12px]"
+              >
+                ← Vissza
+              </button>
+            )}
+            <a href={lattottUtvonal} target="_blank" rel="noopener noreferrer" className="btn btn-ghost !text-[12px]">
               Megnyitás új oldalon →
             </a>
             <button type="button" onClick={close} className="btn btn-ghost !text-[12px]">
@@ -85,9 +123,10 @@ export function UtokovetesDetailModal({
           </div>
         </div>
         <iframe
+          ref={iframeRef}
           key={projectId}
           src={`/embed${utvonal}`}
-          title="Utókövetés részletei"
+          title={cim}
           className="min-h-0 flex-1 border-0 bg-background"
         />
       </div>

@@ -36,6 +36,27 @@ import {
  *
  * A Belsős TIG itt nem jelenik meg - az havi, nem projektenkénti,
  * lásd /belsos-tig. */
+/** A KÖVETKEZŐ elvégezhető teendő emberi nyelven - a folyamat sorrendjében
+ * (szerződés → aláírás → TIG → kifizetés), az összes hátralévővel együtt. */
+function kovetkezoTeendo(detail: {
+  van_papirozando: boolean;
+  szerzodes_fuggo: number;
+  tig_fuggo: number;
+  tig_szerzodesre_var: number;
+  alairas_varo: number;
+  kifizetes_osszes: number;
+  kifizetes_fuggo: number;
+}): string {
+  if (!detail.van_papirozando) return "Ezen a projekten nincs szerződést/TIG-et igénylő számlázó fél.";
+  const reszek: string[] = [];
+  if (detail.szerzodes_fuggo > 0) reszek.push(`${detail.szerzodes_fuggo} félnek szerződés készítése`);
+  if (detail.tig_fuggo > 0) reszek.push(`${detail.tig_fuggo} félnek TIG készítése`);
+  if (detail.kifizetes_fuggo > 0) reszek.push(`${detail.kifizetes_fuggo} fél kifizetése`);
+  if (detail.alairas_varo > 0) reszek.push(`${detail.alairas_varo} aláírt példány bevárása`);
+  if (reszek.length === 0) return "Minden papír és kifizetés rendben - nincs több teendő.";
+  return `Következő teendő: ${reszek[0]}${reszek.length > 1 ? ` (utána: ${reszek.slice(1).join(", ")})` : ""}.`;
+}
+
 export default async function UtokovetesDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectId = Number(id);
@@ -82,18 +103,42 @@ export default async function UtokovetesDetailPage({ params }: { params: Promise
               utokovetes_admin.py _kifizetes_state). */}
           <div className="mb-3 flex flex-wrap items-center gap-3">
             {detail.kesz ? (
-              <StatusBadge label="Teljesen kész" tone="success" />
+              detail.van_papirozando ? (
+                <StatusBadge label="Teljesen kész" tone="success" />
+              ) : (
+                <StatusBadge label="Nincs papírozandó fél" tone="neutral" />
+              )
             ) : (
               <StatusBadge label="Folyamatban" tone="warning" />
             )}
-            <span className="text-[13px] text-text-secondary">
-              {detail.kifizetes_osszes === 0
-                ? "Nincs kifizetendő alvállalkozó ezen a projekten."
-                : detail.kifizetes_fuggo === 0
-                  ? `Mind a(z) ${detail.kifizetes_osszes} alvállalkozó ki van fizetve.`
-                  : `${detail.kifizetes_fuggo} / ${detail.kifizetes_osszes} alvállalkozó még nincs kifizetve.`}
-            </span>
+            <span className="text-[13px] text-text-secondary">{kovetkezoTeendo(detail)}</span>
           </div>
+          {/* FEJLÉC-ÖSSZEGZŐK: ugyanazokból a definíciókból, mint az admin
+              lista (lásd backend ProjectOverviewDetail) - minden szám
+              SZÁMLÁZÓ FELET számol, nem embert és nem dokumentumot. */}
+          {detail.van_papirozando && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              <StatusBadge
+                label={`Szerződés: ${detail.szerzodes_osszes - detail.szerzodes_fuggo}/${detail.szerzodes_osszes} fél`}
+                tone={detail.szerzodes_fuggo === 0 ? "success" : "warning"}
+              />
+              <StatusBadge
+                label={detail.alairas_varo === 0 ? "Aláírt példány: mind megvan" : `Aláírásra vár: ${detail.alairas_varo} fél`}
+                tone={detail.alairas_varo === 0 ? "success" : "warning"}
+              />
+              <StatusBadge
+                label={
+                  `TIG: ${detail.tig_osszes - detail.tig_fuggo - detail.tig_szerzodesre_var}/${detail.tig_osszes} fél` +
+                  (detail.tig_szerzodesre_var > 0 ? ` (${detail.tig_szerzodesre_var} szerződésre vár)` : "")
+                }
+                tone={detail.tig_fuggo === 0 && detail.tig_szerzodesre_var === 0 ? "success" : "warning"}
+              />
+              <StatusBadge
+                label={`Kifizetés: ${detail.kifizetes_osszes - detail.kifizetes_fuggo}/${detail.kifizetes_osszes} fél`}
+                tone={detail.kifizetes_fuggo === 0 ? "success" : "warning"}
+              />
+            </div>
+          )}
           <div className="flex flex-wrap gap-4 text-[13px] text-text-secondary">
             {detail.projektkod && <span>Projektkód: {detail.projektkod}</span>}
             <span>

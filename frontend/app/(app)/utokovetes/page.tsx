@@ -63,10 +63,12 @@ export default async function UtokovetesPage({
     tig_ready: pk.tig_ready,
     tig_osszes: pk.tig_osszes,
     tig_fuggo: pk.tig_fuggo,
+    tig_szerzodesre_var: pk.tig_szerzodesre_var,
     alairas_varo: pk.alairas_varo,
     kifizetes_osszes: pk.kifizetes_osszes,
     kifizetes_fuggo: pk.kifizetes_fuggo,
     kesz: pk.kesz,
+    van_papirozando: pk.van_papirozando,
     visszajelzes_darab: 0,
   }));
   const rows = [...projektSorok, ...kodSorok];

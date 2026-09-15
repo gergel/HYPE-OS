@@ -1581,6 +1581,10 @@ export type UtokovetesOverview = {
   tig_ready: boolean;
   tig_osszes: number;
   tig_fuggo: number;
+  /** Hány FÉLNÉL nem készíthető még TIG, mert a szerződése is hiányzik -
+   * külön a tig_fuggo-tól, hogy a "mind kész" címke ne mondhasson mást, mint
+   * a részletes lista (lásd backend utokovetes_admin._tig_state). */
+  tig_szerzodesre_var: number;
   /** Hány kiküldött szerződést várunk még vissza ALÁÍRVA - a kiküldés
    * önmagában nem zárja le az ügyet (lásd backend
    * subcontractor_contracts.alairasra_varo_csoportok). */
@@ -1593,6 +1597,9 @@ export type UtokovetesOverview = {
   /** Csak akkor igaz, ha a szerződések, az aláírt példányok, a TIG-ek ÉS a
    * kifizetések is mind rendben vannak - ekkor a projekt teljesen le van zárva. */
   kesz: boolean;
+  /** Van-e egyáltalán papírozandó fél: e nélkül a "Kész" a "nincs is teendő"
+   * esetet is eltakarná - a kettő külön jelölést kap. */
+  van_papirozando: boolean;
   visszajelzes_darab: number;
 };
 
@@ -1646,6 +1653,14 @@ export type UtokovetesDetail = {
   kifizetes_osszes: number;
   kifizetes_fuggo: number;
   kesz: boolean;
+  /** Fejléc-összegzők - UGYANAZOKBÓL a definíciókból, mint az admin lista
+   * (számlázó FELET számolnak, nem embert/dokumentumot). */
+  szerzodes_osszes: number;
+  szerzodes_fuggo: number;
+  tig_osszes: number;
+  tig_fuggo: number;
+  tig_szerzodesre_var: number;
+  van_papirozando: boolean;
   visszajelzesek: PostShootFeedback[];
 };
 
@@ -1671,10 +1686,12 @@ export type UtokovetesOverviewProjectCode = {
   tig_ready: boolean;
   tig_osszes: number;
   tig_fuggo: number;
+  tig_szerzodesre_var: number;
   alairas_varo: number;
   kifizetes_osszes: number;
   kifizetes_fuggo: number;
   kesz: boolean;
+  van_papirozando: boolean;
 };
 
 export async function getUtokovetesOverviewProjectCodes(): Promise<UtokovetesOverviewProjectCode[]> {

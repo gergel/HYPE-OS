@@ -12,16 +12,23 @@ import type { UtokovetesOverview } from "@/lib/api";
 import { datum } from "@/lib/utokovetes";
 
 function szerzodesBadge(osszes: number, fuggo: number) {
-  if (osszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
-  if (fuggo === 0) return <StatusBadge label={`${osszes}/${osszes} kész`} tone="success" />;
-  return <StatusBadge label={`${fuggo} függő`} tone="warning" />;
+  if (osszes === 0) return <StatusBadge label="Nincs érintett fél" tone="neutral" />;
+  if (fuggo === 0) return <StatusBadge label={`Mind a ${osszes} fél kész`} tone="success" />;
+  return <StatusBadge label={`${fuggo}/${osszes} félnél hiányzik`} tone="warning" />;
 }
 
-function tigBadge(ready: boolean, osszes: number, fuggo: number) {
-  if (osszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
-  if (!ready) return <StatusBadge label="Szerződésre vár" tone="neutral" />;
-  if (fuggo === 0) return <StatusBadge label={`${osszes}/${osszes} kész`} tone="success" />;
-  return <StatusBadge label={`${fuggo} függő`} tone="warning" />;
+/** A TIG-oszlop a TELJES fél-populációról beszél: a "kész" csak akkor
+ * mondható ki, ha a szerződésre váró feleknél sem hiányzik semmi - korábban
+ * ők egyik számban sem látszottak, és a címke "34/34 kész"-t írhatott olyan
+ * projektre, ahol a felek zöme még a szerződésénél tartott. */
+function tigBadge(ready: boolean, osszes: number, fuggo: number, szerzodesreVar: number) {
+  if (osszes === 0) return <StatusBadge label="Nincs érintett fél" tone="neutral" />;
+  if (fuggo === 0 && szerzodesreVar === 0)
+    return <StatusBadge label={`Mind a ${osszes} fél kész`} tone="success" />;
+  const reszek: string[] = [];
+  if (fuggo > 0) reszek.push(`${fuggo} félnél hiányzik`);
+  if (szerzodesreVar > 0) reszek.push(`${szerzodesreVar} fél szerződésre vár`);
+  return <StatusBadge label={reszek.join(" · ")} tone={fuggo > 0 ? "warning" : "neutral"} />;
 }
 
 /** A kiküldött szerződés még nem lezárt ügy: aláírva vissza is kell érkeznie.
@@ -80,8 +87,8 @@ export function UtokovetesLista({ rows }: { rows: UtokovetesOverview[] }) {
         },
         {
           header: "Teljesítési igazolások",
-          render: (r) => tigBadge(r.tig_ready, r.tig_osszes, r.tig_fuggo),
-          sortAccessor: (r) => r.tig_fuggo,
+          render: (r) => tigBadge(r.tig_ready, r.tig_osszes, r.tig_fuggo, r.tig_szerzodesre_var),
+          sortAccessor: (r) => r.tig_fuggo + r.tig_szerzodesre_var,
         },
         {
           header: "Aláírt szerződés",
@@ -102,8 +109,18 @@ export function UtokovetesLista({ rows }: { rows: UtokovetesOverview[] }) {
           // Állapot-oszlop ("Kész"/"Folyamatban") - a fejléc korábban "Kész"
           // volt, amiből a szűrőben nem derült ki, mire lehet szűrni.
           header: "Állapot",
+          // A "Kész" és a "nincs is papírozandó fél" nem ugyanaz - a kettő
+          // külön jelölést kap (a felhasználó kérése).
           render: (r) =>
-            r.kesz ? <StatusBadge label="Kész" tone="success" /> : <StatusBadge label="Folyamatban" tone="neutral" />,
+            r.kesz ? (
+              r.van_papirozando ? (
+                <StatusBadge label="Kész" tone="success" />
+              ) : (
+                <StatusBadge label="Nincs teendő" tone="neutral" />
+              )
+            ) : (
+              <StatusBadge label="Folyamatban" tone="neutral" />
+            ),
           // A kész projektek kerüljenek a lista végére rendezéskor.
           sortAccessor: (r) => (r.kesz ? 1 : 0),
         },

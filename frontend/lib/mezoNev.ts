@@ -44,6 +44,36 @@ const LABEL_OVERRIDES: Record<string, string> = {
   koltseg: "Költség",
   esemeny_neve: "Esemény neve",
   projektkod_szoveg: "Projektkód",
+  // Szerződés- és munkatárs-adatlapok: az angol/nyers oszlopnevek ("Full
+  // name", "Is active", "Szerzodes file url") zavaróak voltak a mezőrácsban
+  // (a felhasználó hibajelzése) - itt kapnak érthető magyar címkét.
+  full_name: "Teljes név",
+  is_active: "Aktív munkatárs",
+  nev: "Név",
+  ceg_neve: "Cég neve",
+  szekhely: "Székhely",
+  adoszam: "Adószám",
+  keltezes: "Keltezés",
+  alairva: "Aláírva visszaérkezett",
+  keretszerzodes: "Keretszerződés-e",
+  aktiv: "Aktív",
+  tipus: "Típus",
+  szerzodes_allapota: "Szerződés állapota",
+  szerzodes_megjegyzes: "Megjegyzés a szerződéshez",
+  szerzodes_file_url: "Szerződés dokumentuma (link)",
+  szerzodes_file_storage_key: "Szerződés tárhely-kulcsa (technikai)",
+  alairt_file_url: "Aláírt példány (link)",
+  alairt_file_storage_key: "Aláírt példány tárhely-kulcsa (technikai)",
+  teljesites_szoveg: "Teljesítés ideje",
+  teljesites_kezdete: "Teljesítés kezdete (régi adat)",
+  teljesites_vege: "Teljesítés vége (régi adat)",
+  netto_osszeg: "Nettó összeg",
+  vallalkozas_kepviseloje: "Vállalkozás képviselője",
+  vallalkozas_nyilvantartasi_szam: "Vállalkozás nyilvántartási száma",
+  keretszerzodes_kuld: "Keretszerződés kiküldendő",
+  created_at_notion: "Létrehozva (Notion, technikai)",
+  letrehozta_notion: "Létrehozta (Notion, technikai)",
+  kihagyas_indoka: "Kihagyás indoka",
 };
 
 export function humanizeKey(key: string): string {

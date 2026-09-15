@@ -40,20 +40,23 @@ export function fazisa(sor: UtokovetesOverview): Fazis {
   return "kesz";
 }
 
-/** Mi hiányzik pontosan - a kártyán egy sorban. */
+/** Mi hiányzik pontosan - a kártyán, az ÖSSZES egyidejű hiánnyal.
+ *
+ * Korábban csak a legkorábbi fázis hiányát írtuk ki, pedig egy projekten
+ * egyszerre több minden is állhat (a felhasználó kérése, hogy mind
+ * látszódjon). Minden szám SZÁMLÁZÓ FELET számol, nem embert/dokumentumot. */
 export function hianyzik(sor: UtokovetesOverview): string {
-  switch (fazisa(sor)) {
-    case "szerzodes":
-      return `${sor.szerzodes_fuggo} / ${sor.szerzodes_osszes} szerződés hiányzik`;
-    case "tig":
-      return `${sor.tig_fuggo} / ${sor.tig_osszes} TIG hiányzik`;
-    case "utalas":
-      return `${sor.kifizetes_fuggo} / ${sor.kifizetes_osszes} kifizetés hátravan`;
-    case "alairas":
-      return `${sor.alairas_varo} aláírt szerződés hiányzik`;
-    default:
-      return sor.kifizetes_osszes === 0 ? "Nincs kifizetendő alvállalkozó" : "Mindenki ki van fizetve";
-  }
+  const reszek: string[] = [];
+  if (sor.szerzodes_fuggo > 0) reszek.push(`${sor.szerzodes_fuggo} félnél szerződés`);
+  if (sor.tig_fuggo > 0) reszek.push(`${sor.tig_fuggo} félnél TIG`);
+  if (sor.kifizetes_fuggo > 0) reszek.push(`${sor.kifizetes_fuggo} félnél kifizetés`);
+  if (sor.alairas_varo > 0) reszek.push(`${sor.alairas_varo} aláírt példány`);
+  if (reszek.length > 0) return `Hiányzik: ${reszek.join(" · ")}`;
+  // Kész oszlop: a "tényleg minden el van intézve" és a "nincs is papírozandó
+  // fél" nem ugyanaz - a kettőt külön mondjuk ki.
+  return sor.van_papirozando === false || sor.kifizetes_osszes + sor.szerzodes_osszes + sor.tig_osszes === 0
+    ? "Nincs papírozandó fél ezen a projekten"
+    : "Minden papír és kifizetés rendben";
 }
 
 /** Hány tétel hiányzik összesen - erre is lehet rendezni ("hol van a legtöbb

@@ -1,4 +1,5 @@
 import { ConfirmProvider } from "@/components/ConfirmProvider";
+import { EmbedNavigacio } from "@/components/EmbedNavigacio";
 import { ToastProvider } from "@/components/ToastProvider";
 
 /** Az /embed/* útvonalak felugró ablakba (iframe-be) szánt, alkalmazás-keret
@@ -20,7 +21,12 @@ export default function EmbedLayout({ children }: Readonly<{ children: React.Rea
             rendes oldalak (így nem tudnak elcsúszni egymástól), és azok maguk
             renderelik a saját fejlécüket. Az osztály már a szerver-oldali
             HTML-ben ott van, tehát nincs felvillanás. */}
-        <div className="embed-root flex min-h-screen flex-col">{children}</div>
+        <div className="embed-root flex min-h-screen flex-col">
+          {/* Link-elfogás + a szülő ablak értesítése az aktuális tartalomról -
+              lásd components/EmbedNavigacio.tsx. */}
+          <EmbedNavigacio />
+          {children}
+        </div>
       </ConfirmProvider>
     </ToastProvider>
   );
