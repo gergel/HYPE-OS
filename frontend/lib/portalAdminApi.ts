@@ -55,6 +55,9 @@ export async function createPortalFromDeliverable(
      * utómunkához nincs forgatás kötve (a backend olyankor e nélkül 400-zal
      * utasítja el a létrehozást). */
     forgatasDatum?: string;
+    /** A Portál kifelé mutatott neve - az elnevezési útmutató szerinti,
+     * a létrehozó ablakban szerkesztett javaslat. */
+    title?: string;
   }
 ): Promise<PortalSummary> {
   return req<PortalSummary>(`/api/v1/portal-admin/from-deliverable/${deliverableId}`, {
@@ -62,8 +65,17 @@ export async function createPortalFromDeliverable(
     body: JSON.stringify({
       password: opts?.password || undefined,
       forgatas_datum: opts?.forgatasDatum || undefined,
+      title: opts?.title || undefined,
     }),
   });
+}
+
+/** Portál-névjavaslat az elnevezési útmutató szerint (lásd backend
+ * services/portal_nevjavaslat.py) - a létrehozó ablak előtöltéséhez. */
+export async function getPortalNevJavaslat(
+  deliverableId: number
+): Promise<{ javaslat: string; forras: "ai" | "szabaly"; indoklas: string | null }> {
+  return req(`/api/v1/portal-admin/from-deliverable/${deliverableId}/nev-javaslat`, { method: "GET" });
 }
 
 export async function deletePortal(id: number): Promise<void> {

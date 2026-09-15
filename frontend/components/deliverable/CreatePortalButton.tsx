@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Globe } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
-import { createPortalFromDeliverable } from "@/lib/portalAdminApi";
+import { createPortalFromDeliverable, getPortalNevJavaslat } from "@/lib/portalAdminApi";
 import { portalUrl } from "@/lib/portalUrl";
 
 /** Az Utómunka részletnézetén megjelenő "Portál létrehozása" gomb - egy Média
@@ -42,8 +42,14 @@ export function CreatePortalButton({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [datumKerdes, setDatumKerdes] = useState(false);
+  const [ablakNyitva, setAblakNyitva] = useState(false);
   const [datum, setDatum] = useState("");
+  //: A Portál KIFELÉ mutatott neve - az elnevezési útmutató szerinti
+  //: javaslattal töltődik elő (lásd backend services/portal_nevjavaslat.py),
+  //: és itt szabadon átírható; a Portálon utólag is szerkeszthető.
+  const [nev, setNev] = useState("");
+  const [nevInfo, setNevInfo] = useState<string | null>(null);
+  const [javaslatTolt, setJavaslatTolt] = useState(false);
 
   if (existingPortalId) {
     return (
@@ -79,6 +85,7 @@ export function CreatePortalButton({
       // a Portál admin dátum-mezőjébe - változtatás nélkül továbbítjuk.
       const portal = await createPortalFromDeliverable(deliverableId, {
         forgatasDatum: kezziDatum?.trim() || undefined,
+        title: nev.trim() || undefined,
       });
       const fullUrl = portalUrl(portal.slug);
       const res = await authFetch(`/api/v1/deliverables/${deliverableId}`, {
@@ -90,7 +97,7 @@ export function CreatePortalButton({
         setError(`A portál létrejött, de a "Kész anyag URL" mentése sikertelen: ${detail?.detail ?? res.status}`);
         return;
       }
-      setDatumKerdes(false);
+      setAblakNyitva(false);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -100,14 +107,25 @@ export function CreatePortalButton({
   }
 
   function onCreateClick() {
-    // Kötött forgatás nélkül a dátumot KÖTELEZŐ bekérni - a backend enélkül
-    // el sem fogadja a létrehozást.
-    if (!forgatasDatum) {
-      setError(null);
-      setDatumKerdes(true);
-      return;
-    }
-    void letrehozas();
+    // A létrehozás MINDIG a névjavaslatos ablakon át megy (a felhasználó
+    // kérése): a rendszer az elnevezési útmutató szerinti pontos nevet
+    // ajánl, ami itt átírható - és kötött forgatás nélkül a dátumot is itt
+    // kérjük be (a backend enélkül el sem fogadja a létrehozást).
+    setError(null);
+    setNevInfo(null);
+    setAblakNyitva(true);
+    setJavaslatTolt(true);
+    getPortalNevJavaslat(deliverableId)
+      .then((j) => {
+        setNev((elozo) => elozo || j.javaslat);
+        setNevInfo(
+          j.forras === "ai"
+            ? j.indoklas || "Javaslat az elnevezési útmutató alapján."
+            : "Javaslat a meglévő nevek tisztításából - ellenőrizd az útmutató szerint.",
+        );
+      })
+      .catch(() => setNevInfo("A javaslat nem készült el - írd be a nevet kézzel."))
+      .finally(() => setJavaslatTolt(false));
   }
 
   return (
@@ -124,34 +142,50 @@ export function CreatePortalButton({
         <Globe className="h-4 w-4" />
         {busy ? "Létrehozás…" : "Portál létrehozása"}
       </button>
-      {error && !datumKerdes && <p className="mt-2 text-[12px] text-text-danger">Sikertelen: {error}</p>}
+      {error && !ablakNyitva && <p className="mt-2 text-[12px] text-text-danger">Sikertelen: {error}</p>}
 
-      {datumKerdes && (
+      {ablakNyitva && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-[var(--radius)] border border-border bg-surface-1 p-5 shadow-xl">
-            <h3 className="mb-1 text-[15px] font-semibold text-text-primary">Mi volt a forgatás dátuma?</h3>
-            <p className="mb-4 text-[13px] text-text-secondary">
-              Ehhez az utómunkához nincs forgatás kötve, ezért a Portálon megjelenő forgatási dátumot itt kell
-              megadni - enélkül nem jön létre a Portál.
+          <div className="w-full max-w-md rounded-[var(--radius)] border border-border bg-surface-1 p-5 shadow-xl">
+            <h3 className="mb-1 text-[15px] font-semibold text-text-primary">Portál létrehozása</h3>
+            <p className="mb-3 text-[13px] text-text-secondary">
+              Ez a név jelenik meg az ügyfélnek. A javaslat az elnevezési útmutató szerint készül
+              („Ügyfél – Projekt vagy esemény”, belsős kódok nélkül) - szabadon átírhatod, és a Portálon
+              utólag is szerkeszthető.
             </p>
+            <label className="mb-1 block text-[12px] text-text-muted">A Portál neve</label>
             <input
               type="text"
-              value={datum}
-              onChange={(e) => setDatum(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && datum.trim() && !busy) void letrehozas(datum);
-              }}
-              placeholder="pl. 2026.08.15. vagy 2026.08.15-17."
+              value={javaslatTolt && !nev ? "" : nev}
+              onChange={(e) => setNev(e.target.value)}
+              placeholder={javaslatTolt ? "Javaslat készítése…" : "pl. Bols – Mixer akadémia – Fotó"}
               autoFocus
-              className="mb-4 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-border-strong"
+              className="mb-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-border-strong"
             />
+            {nevInfo && <p className="mb-2 text-[11.5px] text-text-muted">{nevInfo}</p>}
+
+            {!forgatasDatum && (
+              <>
+                <label className="mb-1 mt-2 block text-[12px] text-text-muted">
+                  A forgatás dátuma (nincs forgatás kötve, ezért kötelező)
+                </label>
+                <input
+                  type="text"
+                  value={datum}
+                  onChange={(e) => setDatum(e.target.value)}
+                  placeholder="pl. 2026.08.15. vagy 2026.08.15-17."
+                  className="mb-2 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-border-strong"
+                />
+              </>
+            )}
             {error && <p className="mb-3 text-[12px] text-text-danger">Sikertelen: {error}</p>}
-            <div className="flex justify-end gap-2">
+            <div className="mt-3 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
-                  setDatumKerdes(false);
+                  setAblakNyitva(false);
                   setDatum("");
+                  setNev("");
                   setError(null);
                 }}
                 disabled={busy}
@@ -161,8 +195,8 @@ export function CreatePortalButton({
               </button>
               <button
                 type="button"
-                onClick={() => void letrehozas(datum)}
-                disabled={busy || !datum.trim()}
+                onClick={() => void letrehozas(forgatasDatum ? undefined : datum)}
+                disabled={busy || !nev.trim() || (!forgatasDatum && !datum.trim())}
                 className="btn btn-primary"
               >
                 {busy ? "Létrehozás…" : "Portál létrehozása"}

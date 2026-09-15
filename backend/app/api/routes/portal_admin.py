@@ -45,7 +45,7 @@ from app.schemas.portal import (
     PortalVideoUpdate,
     ReorderPayload,
 )
-from app.services import portal_notion, portal_storage as storage
+from app.services import portal_nevjavaslat, portal_notion, portal_storage as storage
 from app.services.portal_resolve import resolve_client_name, resolve_project_date, resolve_title
 from app.workers.portal_tasks import process_video_task
 
@@ -245,6 +245,26 @@ class PortalFromDeliverableCreate(BaseModel):
     #: az utómunkához nincs forgatás (Project) kötve, ahonnan a dátum magától
     #: kiolvasható (a frontend ilyenkor felugró ablakban kéri be).
     forgatas_datum: str | None = None
+    #: A Portál KIFELÉ mutatott neve - a létrehozó ablak az elnevezési
+    #: útmutató szerinti javaslattal tölti elő (lásd services/
+    #: portal_nevjavaslat.py), a felhasználó átírhatja. Üresen a régi
+    #: viselkedés él (az utómunka neve).
+    title: str | None = None
+
+
+@router.get("/from-deliverable/{deliverable_id}/nev-javaslat")
+def portal_nev_javaslat(
+    deliverable_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """PORTÁL-NÉVJAVASLAT az elnevezési útmutató szerint (a felhasználó
+    kérése): "Ügyfél – Projekt vagy esemény [– Anyagtípus]", belsős kódok
+    nélkül. Csak javaslat - a létrehozó ablakban szerkeszthető."""
+    deliverable = db.get(Deliverable, deliverable_id)
+    if not deliverable:
+        raise HTTPException(status_code=404, detail="Utómunka nem található")
+    return portal_nevjavaslat.javasolj(db, deliverable)
 
 
 @router.post("/from-deliverable/{deliverable_id}", response_model=PortalSummary, status_code=201)
@@ -265,7 +285,9 @@ def create_portal_from_deliverable(
     if deliverable.portal is not None:
         raise HTTPException(status_code=400, detail="Ehhez az utómunkához már tartozik Portál")
 
-    title = deliverable.projekt_neve or f"Utómunka #{deliverable.id}"
+    # A nevet a létrehozó ablak adja (az elnevezési útmutató szerinti,
+    # szerkesztett javaslat) - üresen a régi viselkedés: az utómunka neve.
+    title = (payload.title or "").strip() or deliverable.projekt_neve or f"Utómunka #{deliverable.id}"
     # Az ügyfél mező SZÁNDÉKOSAN ÜRESEN indul (a felhasználó kérése): a
     # projektkód ügyfele sokszor csak import-gyűjtő ("Ismeretlen ügyfél"),
     # és az ügyfélnek kimenő oldalon rosszabb egy téves név, mint az üres -
