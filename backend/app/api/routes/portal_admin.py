@@ -21,6 +21,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from PIL import Image as PILImage
 from pydantic import BaseModel
 from slugify import slugify
+from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -793,8 +795,31 @@ def update_folder(
     folder = db.get(PortalFolder, folder_id)
     if not folder:
         raise HTTPException(status_code=404, detail="Nem található")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    mezok = payload.model_dump(exclude_unset=True)
+    for k, v in mezok.items():
         setattr(folder, k, v)
+    # A mappa elrejtése/láthatóvá tétele az ÖSSZES benne lévő fájlra (videó,
+    # kép) és almappára is átragad (a felhasználó kérése) - enélkül a rejtett
+    # ágba automatikusan rejtettként feltöltött fájlok a mappa visszakapcsolása
+    # után is egyenként rejtve maradnának.
+    if "rejtett" in mezok and mezok["rejtett"] is not None:
+        uj_ertek = bool(mezok["rejtett"])
+        mappa_idk = {folder.id}
+        sor = [folder.id]
+        osszes = db.scalars(select(PortalFolder).where(PortalFolder.portal_id == folder.portal_id)).all()
+        while sor:
+            szulo = sor.pop()
+            for f in osszes:
+                if f.parent_folder_id == szulo and f.id not in mappa_idk:
+                    mappa_idk.add(f.id)
+                    f.rejtett = uj_ertek
+                    sor.append(f.id)
+        db.execute(
+            sa_update(PortalVideo).where(PortalVideo.folder_id.in_(mappa_idk)).values(rejtett=uj_ertek)
+        )
+        db.execute(
+            sa_update(PortalImage).where(PortalImage.folder_id.in_(mappa_idk)).values(rejtett=uj_ertek)
+        )
     db.commit()
     return PortalFolderOut.model_validate(folder)
 
