@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { Logo } from "@/components/Logo";
 import { setToken } from "@/lib/authFetch";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -70,7 +71,9 @@ function LoginForm() {
         onSubmit={handleSubmit}
         className="fade-in w-full max-w-[380px] rounded-[var(--radius-xl)] border border-border bg-surface-2 p-8"
       >
-        <p className="mb-1.5 text-[19px] font-semibold tracking-[-0.02em] text-text-primary">HYPE OS</p>
+        {/* Ugyanaz a szöveges logó, mint az oldalsávban - a szín témát követ
+            (világoson fekete, sötéten fehér), lásd components/Logo.tsx. */}
+        <Logo className="mb-2 h-7" />
         <p className="mb-7 text-[13px] text-text-muted">Jelentkezz be a folytatáshoz</p>
 
         <label className="mb-4 block">

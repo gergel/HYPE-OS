@@ -1,29 +1,32 @@
-/** A "HYPE OS" logó-jelvény - a Sidebar ÉS a MobileNav fejlécében is
- * ugyanez, hogy a fiók megnyitva is a szokott felületnek hasson. */
-export function Logo() {
+/** A "HYPE OS" szöveges logó - a Sidebar ÉS a MobileNav fejlécében is
+ * ugyanez, hogy a fiók megnyitva is a szokott felületnek hasson.
+ *
+ * A logó a hivatalos kép vektoros újraépítése (vastag "HYPE" felirat +
+ * lekerekített keretben "OS"), betűkörvonalakká alakítva - így nem függ a
+ * betöltött betűtípusoktól, és nincs mögötte háttér. A színe currentColor:
+ * a szülő szövegszínét veszi fel, ezért világos témán feketén, sötét témán
+ * fehéren (invertálva) jelenik meg külön képváltozat nélkül. */
+export function Logo({ className = "h-6" }: { className?: string }) {
   return (
-    <div className="flex items-center gap-3">
-      {/* A logó-jel egy matt titánlapka: nem világít, nem színez - csak
-          jelöli, hol a rendszer eleje. */}
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] border border-border-strong bg-surface-4 text-text-secondary">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path
-            d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinejoin="round"
-            // currentColor, nem fix fehér: világos nézetben a fehér kitöltés
-            // eltűnne a világos lapkán (lásd globals.css data-theme="light").
-            fill="currentColor"
-            fillOpacity={0.08}
-          />
-          <path d="M3 7l9 5 9-5M12 12v10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-        </svg>
-      </div>
-      <div className="min-w-0">
-        <p className="text-[13px] font-semibold tracking-[-0.01em] text-text-primary">HYPE OS</p>
-        <p className="mt-0.5 text-[11px] text-text-muted">HYPE Brain</p>
-      </div>
-    </div>
+    <svg
+      viewBox="0 0 5467 1040"
+      fill="none"
+      className={`${className} w-auto text-text-primary`}
+      role="img"
+      aria-label="HYPE OS"
+    >
+      {/* HYPE */}
+      <path
+        fill="currentColor"
+        d="M590 864.0V603.0H347V864.0H126V176.0H347V427.0H590V176.0H811V864.0Z M1386 864.0H1165V597.0L892 176.0H1146L1278 405.0H1282L1414 176.0H1655L1386 597.0Z M2343 402.0V415.0Q2343 479.0 2315.0 531.0Q2287 583.0 2237.0 612.5Q2187 642.0 2123 642.0H1958V864.0H1737V176.0H2123Q2187 176.0 2237.0 205.5Q2287 235.0 2315.0 286.5Q2343 338.0 2343 402.0ZM1958 481.0H2049Q2084 481.0 2101.5 463.0Q2119 445.0 2119 414.0V406.0Q2119 374.0 2101.5 356.5Q2084 339.0 2049 339.0H1958Z M2459 176.0H3054V341.0H2680V436.0H3000V594.0H2680V699.0H3061V864.0H2459Z"
+      />
+      {/* Az "OS" kerete */}
+      <rect x="3394" y="78" width="1995" height="884" rx="150" stroke="currentColor" strokeWidth="52" />
+      {/* OS */}
+      <path
+        fill="currentColor"
+        d="M4402.0 520.0Q4402.0 694.0 4305.0 785.0Q4208.0 876.0 4030.0 876.0Q3852.0 876.0 3755.5 785.5Q3659.0 695.0 3659.0 520.0Q3659.0 345.0 3755.5 254.5Q3852.0 164.0 4030.0 164.0Q4208.0 164.0 4305.0 255.0Q4402.0 346.0 4402.0 520.0ZM3885.0 488.0V552.0Q3885.0 625.0 3922.0 668.0Q3959.0 711.0 4030.0 711.0Q4101.0 711.0 4138.5 668.0Q4176.0 625.0 4176.0 552.0V488.0Q4176.0 415.0 4138.5 372.0Q4101.0 329.0 4030.0 329.0Q3959.0 329.0 3922.0 372.0Q3885.0 415.0 3885.0 488.0Z M5114.0 376.0V388.0H4907.0V384.0Q4907.0 354.0 4885.0 334.0Q4863.0 314.0 4818.0 314.0Q4774.0 314.0 4750.5 327.0Q4727.0 340.0 4727.0 359.0Q4727.0 386.0 4759.0 399.0Q4791.0 412.0 4862.0 426.0Q4945.0 443.0 4998.5 461.5Q5052.0 480.0 5092.0 522.0Q5132.0 564.0 5133.0 636.0Q5133.0 758.0 5050.5 817.0Q4968.0 876.0 4830.0 876.0Q4669.0 876.0 4579.5 822.0Q4490.0 768.0 4490.0 631.0H4699.0Q4699.0 683.0 4726.0 700.5Q4753.0 718.0 4810.0 718.0Q4852.0 718.0 4879.5 709.0Q4907.0 700.0 4907.0 672.0Q4907.0 647.0 4876.5 634.5Q4846.0 622.0 4777.0 608.0Q4693.0 590.0 4638.0 570.5Q4583.0 551.0 4542.0 506.0Q4501.0 461.0 4501.0 384.0Q4501.0 271.0 4588.5 217.5Q4676.0 164.0 4810.0 164.0Q4942.0 164.0 5027.0 217.5Q5112.0 271.0 5114.0 376.0Z"
+      />
+    </svg>
   );
 }
