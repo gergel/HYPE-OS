@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Paperclip, Plus, Square, Trash2, X } from "lucide-react";
+import { Mic, Paperclip, Plus, Square, Trash2, X } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { formatSzam } from "@/lib/penz";
 
@@ -72,6 +72,15 @@ export function AiAssistantChat() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const utolsoIdRef = useRef(0);
+  //: DIKTÁLÁS (a felhasználó kérése: ne csak gépelni lehessen). Elsődlegesen
+  //: a böngésző beépített beszédfelismerése (Web Speech API, hu-HU) megy -
+  //: élőben írja a mezőbe; ahol az nincs, hangfelvétel készül és a szerver
+  //: írja át (Gemini). Az eredmény MINDIG csak a beviteli mezőbe kerül - a
+  //: küldés a felhasználó döntése marad.
+  const [diktalas, setDiktalas] = useState<"inaktiv" | "hallgat" | "felvesz" | "atir">("inaktiv");
+  const felismeroRef = useRef<{ stop: () => void } | null>(null);
+  const felvevoRef = useRef<MediaRecorder | null>(null);
+  const diktalasBazisRef = useRef("");
 
   // Oldal-kontextus, ha másik oldalról nyitották az asszisztenst
   // (?entity=deliverable&rekord=123&cim=...): az „ez"/„ennél" erre mutat.
@@ -225,8 +234,13 @@ export function AiAssistantChat() {
       uzenetBeolvaszt(d.uzenetek);
       setBeszelgetesek((prev) => prev.map((b) => (b.id === bid && !b.cim ? { ...b, cim: t.slice(0, 120) } : b)));
       void naploFrissit(bid);
-    } catch (err) {
-      setHiba(`Hálózati hiba: ${err}`);
+    } catch {
+      // HOSSZÚ futásnál (sok lépés) a kapcsolat megszakadhat, miközben a
+      // munka a szerveren rendben fut tovább - a polling hozza az
+      // eredményt, nem hibaként kezeljük. Ha valójában nem fut semmi, az
+      // első lekérdezés jelzi (fut=false), és a jelzés eltűnik.
+      setFut(true);
+      setHiba("A kapcsolat megszakadt - ha a munka a szerveren fut, a lépések és az eredmény itt jelennek meg.");
     } finally {
       setBusy(false);
       setFut(false);
@@ -285,6 +299,108 @@ export function AiAssistantChat() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void kuldes();
+    }
+  }
+
+  function diktalasLeallitas() {
+    felismeroRef.current?.stop();
+    felismeroRef.current = null;
+    if (felvevoRef.current && felvevoRef.current.state !== "inactive") felvevoRef.current.stop();
+  }
+
+  async function diktalasValt() {
+    if (diktalas !== "inaktiv") {
+      diktalasLeallitas();
+      return;
+    }
+    setHiba(null);
+    const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+    const FelismeroOsztaly = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
+      | (new () => {
+          lang: string;
+          continuous: boolean;
+          interimResults: boolean;
+          onresult: ((e: { resultIndex: number; results: { length: number; [i: number]: { isFinal: boolean; [j: number]: { transcript: string } } } }) => void) | null;
+          onerror: ((e: { error?: string }) => void) | null;
+          onend: (() => void) | null;
+          start: () => void;
+          stop: () => void;
+        })
+      | undefined;
+
+    if (FelismeroOsztaly) {
+      // ÉLŐ diktálás a böngésző beszédfelismerésével.
+      try {
+        const felismero = new FelismeroOsztaly();
+        felismero.lang = "hu-HU";
+        felismero.continuous = true;
+        felismero.interimResults = true;
+        diktalasBazisRef.current = szoveg ? szoveg.replace(/\s+$/, "") + " " : "";
+        felismero.onresult = (e) => {
+          let vegleges = "";
+          let koztes = "";
+          for (let i = 0; i < e.results.length; i++) {
+            const r = e.results[i];
+            if (r.isFinal) vegleges += r[0].transcript;
+            else koztes += r[0].transcript;
+          }
+          setSzoveg((diktalasBazisRef.current + vegleges + koztes).replace(/^\s+/, ""));
+        };
+        felismero.onerror = (e) => {
+          if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+            setHiba("A mikrofon-hozzáférés le van tiltva - engedélyezd a böngészőben a diktáláshoz.");
+          }
+        };
+        felismero.onend = () => {
+          felismeroRef.current = null;
+          setDiktalas("inaktiv");
+        };
+        felismeroRef.current = felismero;
+        felismero.start();
+        setDiktalas("hallgat");
+        return;
+      } catch {
+        // Nem sikerült elindítani - jön a felvétel + szerveri átírás.
+      }
+    }
+
+    // TARTALÉK: hangfelvétel, a szöveget a szerver írja le (Gemini).
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const felvevo = new MediaRecorder(stream);
+      const darabok: Blob[] = [];
+      felvevo.ondataavailable = (e) => {
+        if (e.data.size > 0) darabok.push(e.data);
+      };
+      felvevo.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        felvevoRef.current = null;
+        setDiktalas("atir");
+        try {
+          const blob = new Blob(darabok, { type: felvevo.mimeType || "audio/webm" });
+          const fd = new FormData();
+          fd.append("file", blob, "diktalas.webm");
+          const res = await authFetch("/api/v1/ai-assistant/atiras", { method: "POST", body: fd });
+          const d = await res.json().catch(() => null);
+          if (!res.ok) {
+            setHiba(`Az átírás nem sikerült: ${d?.detail ?? res.status}`);
+          } else if (d?.szoveg) {
+            setSzoveg((elozo) => (elozo ? elozo.replace(/\s+$/, "") + " " + d.szoveg : d.szoveg));
+          } else {
+            setHiba("A felvételen nem hallatszott beszéd.");
+          }
+        } catch (err) {
+          setHiba(`Hálózati hiba az átírásnál: ${err}`);
+        } finally {
+          setDiktalas("inaktiv");
+        }
+      };
+      felvevoRef.current = felvevo;
+      felvevo.start();
+      setDiktalas("felvesz");
+    } catch {
+      setHiba("A mikrofon nem érhető el - engedélyezd a böngészőben a diktáláshoz.");
+      setDiktalas("inaktiv");
     }
   }
 
@@ -353,6 +469,12 @@ export function AiAssistantChat() {
         </div>
 
         {hiba && <p className="mb-1.5 text-[12.5px] text-text-danger">{hiba}</p>}
+        {diktalas !== "inaktiv" && (
+          <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] text-text-danger">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-text-danger" />
+            {diktalas === "atir" ? "A felvételt írom le…" : "Diktálás folyamatban - kattints a mikrofonra a befejezéshez."}
+          </p>
+        )}
         {fajlok.length > 0 && (
           <div className="mb-1.5 flex flex-wrap gap-1.5">
             {fajlok.map((f, i) => (
@@ -393,6 +515,23 @@ export function AiAssistantChat() {
             className="rounded-[var(--radius)] border border-border px-2.5 text-text-secondary hover:bg-surface-3"
           >
             <Paperclip size={15} />
+          </button>
+          <button
+            type="button"
+            disabled={diktalas === "atir"}
+            title={
+              diktalas === "hallgat" || diktalas === "felvesz"
+                ? "Diktálás leállítása"
+                : "Diktálás - mondd el, mit szeretnél; a szöveg a mezőbe kerül, a küldés a tiéd"
+            }
+            onClick={() => void diktalasValt()}
+            className={`rounded-[var(--radius)] border px-2.5 disabled:opacity-50 ${
+              diktalas === "hallgat" || diktalas === "felvesz"
+                ? "border-text-danger bg-text-danger/15 text-text-danger"
+                : "border-border text-text-secondary hover:bg-surface-3"
+            }`}
+          >
+            <Mic size={15} className={diktalas === "hallgat" || diktalas === "felvesz" ? "animate-pulse" : ""} />
           </button>
           <textarea
             rows={2}

@@ -248,6 +248,12 @@ class Settings(BaseSettings):
     # a kézi "Ellenőrzés most" fut. Env: SZAMLA_AUTO_GYAKORISAG_PERC.
     szamla_auto_gyakorisag_perc: int = 15
 
+    # AI ASSZISZTENS: legfeljebb hány eszköz-kört futhat egy kérés (a
+    # felhasználó kérése: bárhány lépés mehessen - 0 = nincs kör-korlát, csak
+    # a beépített védőplafon él egy elszabadult hurok ellen; a futás a
+    # Leállítás gombbal bármikor megállítható). Env: AI_MAX_LEPES.
+    ai_max_lepes: int = 0
+
     # ───────── Média Portál (ügyfél videó/kép átadó felület, /p/{slug}) ─────────
     # A Hype-repo-main (különálló client-portál projekt) 1:1 portolt funkciója -
     # mind opcionális, hiányukban az adott képesség (fizetés/Notion sync) csak

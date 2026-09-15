@@ -640,11 +640,47 @@ def ask(db: Session, employee: Employee, question: str) -> str:
     return "Nem sikerült választ generálni (túl sok lépés)."
 
 
+def hang_atiras(adat: bytes, mime_type: str) -> str:
+    """DIKTÁLÁS: egy hangfelvétel szöveggé írása (a felhasználó kérése: az
+    asszisztensnek ne csak gépelni lehessen). Elsődlegesen a böngésző saját
+    beszédfelismerése megy - ez a tartalék út azokra a böngészőkre, ahol az
+    nincs: a hang a meglévő Gemini-integrációval íródik le, magyarul.
+
+    A visszaadott szöveg CSAK a beviteli mezőbe kerül - a felhasználó látja,
+    javíthatja, és ő küldi el: a diktálás önmagában semmit nem hajt végre."""
+    if not settings.gemini_api_key:
+        raise ValueError("A diktálás-átírás nincs beállítva (hiányzik a GEMINI_API_KEY).")
+    client = genai.Client(api_key=settings.gemini_api_key)
+    try:
+        valasz = client.models.generate_content(
+            model=settings.gemini_model,
+            contents=[
+                types.Part.from_bytes(data=adat, mime_type=mime_type),
+                types.Part(
+                    text=(
+                        "Írd le szó szerint, amit a felvételen mondanak (magyarul beszélnek, magyar "
+                        "helyesírással, írásjelekkel). KIZÁRÓLAG az elhangzott szöveget add vissza - "
+                        "se magyarázatot, se címkét, se idézőjelet ne tegyél köré. Ha a felvételen "
+                        "nem hallható beszéd, üres választ adj."
+                    )
+                ),
+            ],
+            # Lásd kiadas_kiolvasas.olvasd_ki: se token-keret, se thinking-
+            # beállítás - modell-generációnként más-más hibát okoztak.
+        )
+    except Exception as exc:  # noqa: BLE001 - a hívó emberi hibaüzenetet vár
+        raise ValueError(f"A hangfelvétel átírása nem sikerült: {exc}") from exc
+    return (valasz.text or "").strip()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MŰVELETI ASSZISZTENS - többlépéses végrehajtás tartós beszélgetésben
 # ═══════════════════════════════════════════════════════════════════════════
 
-MAX_MUVELETI_KOR = 16
+#: VÉDŐPLAFON egy elszabadult hurok ellen - nem munkakorlát: a tényleges
+#: kör-limit a settings.ai_max_lepes (0 = nincs, a felhasználó kérése szerint
+#: bárhány lépés mehet), a futás pedig a Leállítás gombbal bármikor megáll.
+ABSZOLUT_KOR_PLAFON = 500
 MAX_ELOZMENY_UZENET = 40
 
 _MUVELETI_PROMPT = """Te vagy a HYPE OS belső asszisztense. A HYPE Productions gyártásmenedzsment-rendszerében dolgozol: a felhasználó magyarul leírja, mit szeretne, te pedig megkeresed a szükséges adatokat, elvégzed a műveletet a rendszer saját eszközeivel, ellenőrzöd az eredményt, és röviden összefoglalod.
@@ -794,8 +830,12 @@ def futtat(db: Session, employee: Employee, beszelgetes, szoveg: str, kontextus:
     if not contents or contents[-1].role != "user":
         contents.append(types.Content(role="user", parts=[types.Part(text=szoveg)]))
 
+    kor_limit = int(settings.ai_max_lepes or 0)
+    if kor_limit <= 0 or kor_limit > ABSZOLUT_KOR_PLAFON:
+        kor_limit = ABSZOLUT_KOR_PLAFON
+
     try:
-        for _ in range(MAX_MUVELETI_KOR):
+        for _ in range(kor_limit):
             db.refresh(beszelgetes)
             if beszelgetes.leallitas_kert:
                 esemeny("Leállítva a kérésedre - az eddig elvégzett lépések érvényben maradtak.")
@@ -878,6 +918,7 @@ def futtat(db: Session, employee: Employee, beszelgetes, szoveg: str, kontextus:
         return
 
     valasz(
-        "Túl sok lépés után megálltam, hogy ne fussak feleslegesen. Az eddig elvégzett lépések a naplóban "
-        "látszanak - írd meg, folytassam-e, és honnan."
+        f"Elértem a lépés-korlátot ({kor_limit} kör) és megálltam, hogy egy elszabadult hurok ne fusson a "
+        "végtelenségig. Az eddig elvégzett lépések érvényben vannak és a naplóban látszanak - írd meg, "
+        "folytassam-e, és honnan."
     )

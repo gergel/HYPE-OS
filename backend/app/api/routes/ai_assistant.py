@@ -162,6 +162,27 @@ async def fajl_feltoltes(
     return {"fajl_id": f.id, "nev": f.fajl_nev, "tipus": f.content_type, "meret_bajt": f.meret_bajt}
 
 
+@router.post("/atiras")
+async def atiras(
+    file: UploadFile = File(...),
+    _user: Employee = Depends(get_current_user),
+):
+    """DIKTÁLÁS-átírás: hangfelvétel → szöveg. Tartalék út azokra a
+    böngészőkre, ahol nincs beépített beszédfelismerés - az eredmény a
+    beviteli mezőbe kerül, a felhasználó javíthatja és ő küldi el (az átírás
+    önmagában semmit nem hajt végre)."""
+    adat = await file.read()
+    if not adat:
+        raise HTTPException(status_code=400, detail="Üres hangfelvétel.")
+    if len(adat) > MAX_FAJL_MERET:
+        raise HTTPException(status_code=400, detail="A felvétel túl hosszú (25 MB felett).")
+    try:
+        szoveg = ai_assistant.hang_atiras(adat, (file.content_type or "audio/webm").split(";")[0])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"szoveg": szoveg}
+
+
 class UzenetIn(BaseModel):
     szoveg: str
     #: Az oldal, ahonnan a felhasználó az asszisztenst nyitotta (URL, cím,
