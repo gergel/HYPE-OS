@@ -33,7 +33,7 @@ function szamNyersre(beirt: string): string {
 type FieldSpec = {
   name: string;
   label: string;
-  type?: "text" | "date" | "number" | "password" | "select";
+  type?: "text" | "date" | "number" | "password" | "select" | "textarea";
   required?: boolean;
   /** "select" típusnál a legördülő opciói - pl. egy foreign key mezőhöz
    * (ügyfél/project code kiválasztása név szerint, ID begépelés helyett). */
@@ -389,7 +389,18 @@ export function QuickCreateForm({
             {f.label}
             {kotelezo(f, values) && " *"}
           </label>
-          {f.type === "select" ? (
+          {f.type === "textarea" ? (
+            // Hosszabb szövegnek (pl. leírás) többsoros mező - a sima input
+            // egy sora kevés, és a beírt szöveg vége el is tűnne belőle.
+            <textarea
+              required={kotelezo(f, values)}
+              placeholder={f.placeholder}
+              value={values[f.name] ?? ""}
+              onChange={(e) => mezoValtozas(f, e.target.value)}
+              rows={3}
+              className="field min-h-[70px] w-72 max-w-full"
+            />
+          ) : f.type === "select" ? (
             <KeresosSelect
               value={values[f.name] || null}
               options={[

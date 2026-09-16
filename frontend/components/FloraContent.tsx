@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/Card";
 import { DataTable } from "@/components/DataTable";
 import { EditableTableCell } from "@/components/EditableTableCell";
@@ -23,6 +23,7 @@ export function FloraContent({
   canCreate,
   canDelete,
   canEdit,
+  sajatId = null,
 }: {
   feladatok: FloraFeladat[];
   employees: Employee[];
@@ -30,10 +31,26 @@ export function FloraContent({
   canCreate: boolean;
   canDelete: boolean;
   canEdit: boolean;
+  /** A bejelentkezett munkatárs id-ja - az új tétel "felvezette" mezőjébe
+   * kerül automatikusan. */
+  sajatId?: number | null;
 }) {
   const [tab, setTab] = useState<"tabla" | "lista">("tabla");
   const [lista, setLista] = useState(feladatok);
+  // ITT VOLT A "ELTŰNŐ ÚJ TÉTEL" HIBA: a lista egyszer, mountkor másolódott
+  // state-be, és a létrehozás utáni router.refresh() friss szerver-adatát
+  // soha nem vette át - az új tétel létrejött ugyan, de újratöltésig nem
+  // látszott. A friss prop mostantól mindig felülírja a helyi másolatot (a
+  // helyi másolat csak a Kanban-húzás optimista frissítéséhez kell).
+  useEffect(() => {
+    setLista(feladatok);
+  }, [feladatok]);
   const employeeName = useMemo(() => new Map(employees.map((e) => [e.id, e.full_name])), [employees]);
+  // A meglévő címkék javaslatnak az új tétel űrlapjára (új címke is beírható).
+  const cimkeJavaslatok = useMemo(
+    () => Array.from(new Set(feladatok.map((f) => f.cimke).filter((c): c is string => !!c))).sort((a, b) => a.localeCompare(b, "hu")),
+    [feladatok],
+  );
 
   function toCard(f: FloraFeladat): BoardCard {
     const felelosNev = f.felelos_id ? employeeName.get(f.felelos_id) : null;
@@ -117,9 +134,28 @@ export function FloraContent({
             <QuickCreateForm
               postPath={FLORA_BASE_PATH}
               addLabel="+ Új tétel hozzáadása"
+              // A felvezető automatikusan a bejelentkezett ember.
+              presetFields={sajatId ? { felvezette_id: sajatId } : {}}
+              // Felvezetéskor minden fontos adat megadható (a felhasználó
+              // kérése): leírás, címke, állapot, felelős, határidő is.
               fields={[
                 { name: "megnevezes", label: "Megnevezés", required: true },
+                { name: "leiras", label: "Leírás", type: "textarea", placeholder: "Mi a kérés pontosan?" },
+                { name: "cimke", label: "Címke (ügyfél/projekt)", suggestions: cimkeJavaslatok },
+                {
+                  name: "allapot",
+                  label: "Állapot",
+                  type: "select",
+                  options: statusOptions.map((s) => ({ value: s, label: s })),
+                },
+                {
+                  name: "felelos_id",
+                  label: "Felelős",
+                  type: "select",
+                  options: employees.map((e) => ({ value: e.id, label: e.full_name })),
+                },
                 { name: "hatarido", label: "Határidő", type: "date" },
+                { name: "kesz_anyag_linkje", label: "Kész anyag linkje", placeholder: "https://…" },
               ]}
             />
           )}

@@ -1,4 +1,4 @@
-import { getEmployees, getFieldTypes, getFloraFeladatok, getMyPagePermissions } from "@/lib/api";
+import { getCurrentUser, getEmployees, getFieldTypes, getFloraFeladatok, getMyPagePermissions } from "@/lib/api";
 import { FloraContent } from "@/components/FloraContent";
 import { TopBar } from "@/components/TopBar";
 import { canDoPageAction } from "@/lib/permissions";
@@ -6,11 +6,12 @@ import { canDoPageAction } from "@/lib/permissions";
 const PAGE = "/flora";
 
 export default async function FloraPage() {
-  const [feladatok, fieldTypes, employees, pagePermissions] = await Promise.all([
+  const [feladatok, fieldTypes, employees, pagePermissions, currentUser] = await Promise.all([
     getFloraFeladatok(),
     getFieldTypes("floraFeladat"),
     getEmployees(),
     getMyPagePermissions(),
+    getCurrentUser(),
   ]);
   const statusOptions = fieldTypes.allapot?.options ?? [];
   // A szerepkör-kapu itt nem érvényes - kizárólag a page_permissions dönt,
@@ -30,6 +31,7 @@ export default async function FloraPage() {
           canCreate={canCreate}
           canDelete={canDelete}
           canEdit={canEdit}
+          sajatId={currentUser?.id ?? null}
         />
       </div>
     </div>
