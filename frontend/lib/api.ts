@@ -551,6 +551,15 @@ export async function getEmployees(limit = 5000): Promise<Employee[]> {
 /** Minden munkatárs profilképe egyben (id -> data-URL) - a hozzászólások
  * szerzőjénél és az utómunka kártyák "Kiosztva" soránál jelenik meg (a
  * felhasználó kérése). Akinek nincs képe, az nincs benne a térképben. */
+/** ANYAGBEKÉRÉSEK (admin) - lásd backend routes/anyagbekeres_admin.py. */
+export async function getAnyagbekeresek(): Promise<Record<string, unknown>[]> {
+  return (await apiGet<Record<string, unknown>[]>(`/api/v1/anyagbekeresek`)) ?? [];
+}
+
+export async function getAnyagbekeres(id: number): Promise<Record<string, unknown> | null> {
+  return await apiGet<Record<string, unknown>>(`/api/v1/anyagbekeresek/${id}`);
+}
+
 export async function getProfilkepek(): Promise<Record<number, string>> {
   return (await apiGet<Record<number, string>>(`/api/v1/profilkepek`)) ?? {};
 }

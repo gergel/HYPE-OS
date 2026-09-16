@@ -383,6 +383,27 @@ def fajl_befejez(token: str, fajl_id: int, db: Session = Depends(get_db)):
     return {"allapot": "kesz"}
 
 
+class FajlAthelyezesIn(BaseModel):
+    mappa_id: int | None = None
+
+
+@router.patch("/leadas/{token}/fajl/{fajl_id}")
+def fajl_athelyezes(token: str, fajl_id: int, payload: FajlAthelyezesIn, db: Session = Depends(get_db)):
+    """Fájl átrendezése másik mappába (None = gyökér) - a beküldő sajátja."""
+    leadas = _leadas_token_alapjan(db, token)
+    _szerkesztheto(leadas)
+    fajl = _sajat_folyamatban_levo_fajl(db, leadas, fajl_id)
+    mappa = None
+    if payload.mappa_id is not None:
+        mappa = db.get(AnyagMappa, payload.mappa_id)
+        if mappa is None or mappa.leadas_id != leadas.id:
+            raise HTTPException(status_code=404, detail="A mappa nem található.")
+    fajl.mappa_id = mappa.id if mappa else None
+    fajl.relativ_utvonal = f"{mappa.utvonal}/{fajl.eredeti_nev}" if mappa else fajl.eredeti_nev
+    db.commit()
+    return {"ok": True}
+
+
 @router.delete("/leadas/{token}/fajl/{fajl_id}")
 def fajl_torles(token: str, fajl_id: int, db: Session = Depends(get_db)):
     """Hibás/felesleges fájl eltávolítása a leadásból (a beküldő sajátja)."""
