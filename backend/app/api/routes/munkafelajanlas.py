@@ -288,6 +288,42 @@ def cimzett_lista_mentes(
     return _lista_out(lista)
 
 
+class CimzettListaModositasIn(BaseModel):
+    """Tagok hozzáadása/eltávolítása egy MEGLÉVŐ listán (a felhasználó
+    kérése) - a lista többi tagja érintetlen marad, szemben a POST-tal, ami
+    a teljes tagságot lecseréli."""
+
+    hozzaad: list[int] = []
+    eltavolit: list[int] = []
+
+
+@router.patch("/cimzett-listak/{lista_id}", response_model=CimzettListaOut)
+def cimzett_lista_modositas(
+    lista_id: int,
+    payload: CimzettListaModositasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    lista = db.get(CimzettLista, lista_id)
+    if lista is None:
+        raise HTTPException(status_code=404, detail="A lista nem található.")
+    hozzaad = list(dict.fromkeys(payload.hozzaad))
+    if hozzaad:
+        letezok = set(db.scalars(select(Employee.id).where(Employee.id.in_(hozzaad))).all())
+        hianyzo = [i for i in hozzaad if i not in letezok]
+        if hianyzo:
+            raise HTTPException(status_code=400, detail=f"Ismeretlen munkatárs-azonosító: {hianyzo}")
+    eltavolit = set(payload.eltavolit)
+    # A meglévő sorrend marad, az újak a végére kerülnek. Üresre fogyhat:
+    # a lista névvel együtt megmarad, később újra feltölthető.
+    tagok = [int(i) for i in (lista.employee_ids or []) if int(i) not in eltavolit]
+    tagok += [i for i in hozzaad if i not in tagok]
+    lista.employee_ids = tagok
+    db.commit()
+    db.refresh(lista)
+    return _lista_out(lista)
+
+
 @router.delete("/cimzett-listak/{lista_id}", status_code=204)
 def cimzett_lista_torles(
     lista_id: int,

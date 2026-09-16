@@ -61,6 +61,9 @@ function UjAjanlatkeres({
   const [listaNev, setListaNev] = useState("");
   const [listaMentesNyitva, setListaMentesNyitva] = useState(false);
   const [torlendoLista, setTorlendoLista] = useState<number | null>(null);
+  // Melyik mentett lista szerkesztője van lenyitva (a felhasználó kérése:
+  // tag eltávolítása a listából + a kijelöltek hozzáadása meglévő listához).
+  const [szerkesztettLista, setSzerkesztettLista] = useState<number | null>(null);
   const [mezok, setMezok] = useState({
     munkakor: "",
     leiras: "",
@@ -82,6 +85,8 @@ function UjAjanlatkeres({
         .sort((a, b) => a.full_name.localeCompare(b.full_name, "hu")),
     [employees, szuro],
   );
+
+  const nevSzerint = useMemo(() => new Map(employees.map((e) => [e.id, e.full_name])), [employees]);
 
   function m(nev: keyof typeof mezok, ertek: string) {
     setMezok((elozo) => ({ ...elozo, [nev]: ertek }));
@@ -116,6 +121,25 @@ function UjAjanlatkeres({
       setListaMentesNyitva(false);
     } catch (err) {
       setHiba(`A lista mentése nem sikerült (hálózati hiba): ${err}`);
+    }
+  }
+
+  /** Tag hozzáadása/eltávolítása egy MEGLÉVŐ listán (a felhasználó kérése) -
+   * a szerver a többi tagot érintetlenül hagyja (PATCH, nem teljes csere). */
+  async function listaModositas(id: number, valtozas: { hozzaad?: number[]; eltavolit?: number[] }) {
+    try {
+      const res = await authFetch(`${BASE}/cimzett-listak/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(valtozas),
+      });
+      const adat = await res.json().catch(() => null);
+      if (!res.ok) {
+        setHiba(`A lista módosítása nem sikerült: ${adat?.detail ?? res.status}`);
+        return;
+      }
+      setListak((elozo) => elozo.map((l) => (l.id === id ? (adat as CimzettLista) : l)));
+    } catch (err) {
+      setHiba(`A lista módosítása nem sikerült (hálózati hiba): ${err}`);
     }
   }
 
@@ -255,6 +279,15 @@ function UjAjanlatkeres({
               >
                 {l.nev} ({l.employee_ids.length})
               </button>
+              <button
+                type="button"
+                onClick={() => setSzerkesztettLista((elozo) => (elozo === l.id ? null : l.id))}
+                aria-label={`${l.nev} lista szerkesztése`}
+                title="Tagok szerkesztése (eltávolítás / kijelöltek hozzáadása)"
+                className={`border-l border-border px-1.5 py-1 hover:text-text-accent ${szerkesztettLista === l.id ? "text-text-accent" : "text-text-muted"}`}
+              >
+                ✎
+              </button>
               {torlendoLista === l.id ? (
                 <button
                   type="button"
@@ -302,6 +335,50 @@ function UjAjanlatkeres({
             </button>
           )}
         </div>
+        {/* LISTA-SZERKESZTŐ (a felhasználó kérése): tag eltávolítása ×-szel,
+            és a lent kijelöltek hozzáadása ehhez a meglévő listához. */}
+        {szerkesztettLista !== null && (() => {
+          const lista = listak.find((l) => l.id === szerkesztettLista);
+          if (!lista) return null;
+          const ujak = meghivottak.filter((id) => !lista.employee_ids.includes(id));
+          return (
+            <div className="mb-2 space-y-1.5 rounded-[var(--radius)] border border-border bg-surface-2 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[12px] font-medium text-text-primary">A(z) &bdquo;{lista.nev}&rdquo; lista tagjai ({lista.employee_ids.length})</p>
+                <button type="button" onClick={() => setSzerkesztettLista(null)} className="text-[12px] text-text-muted hover:text-text-primary">Bezárás</button>
+              </div>
+              {lista.employee_ids.length === 0 ? (
+                <p className="text-[12px] text-text-muted">A lista üres - jelölj ki lent embereket, és add hozzá őket.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {lista.employee_ids.map((id) => (
+                    <span key={id} className="inline-flex items-center gap-1 rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-0.5 text-[12px] text-text-secondary">
+                      {nevSzerint.get(id) ?? `#${id}`}
+                      <button
+                        type="button"
+                        onClick={() => void listaModositas(lista.id, { eltavolit: [id] })}
+                        aria-label={`${nevSzerint.get(id) ?? id} eltávolítása a listából`}
+                        title="Eltávolítás a listából"
+                        className="text-text-muted hover:text-text-danger"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={ujak.length === 0}
+                onClick={() => void listaModositas(lista.id, { hozzaad: ujak })}
+                title={ujak.length === 0 ? "Jelölj ki lent olyat, aki még nincs a listában" : `Hozzáadás: ${ujak.map((id) => nevSzerint.get(id) ?? id).join(", ")}`}
+                className="text-[12px] text-text-accent hover:underline disabled:opacity-40"
+              >
+                + Kijelöltek hozzáadása a listához ({ujak.length})
+              </button>
+            </div>
+          );
+        })()}
         <input value={szuro} onChange={(e) => setSzuro(e.target.value)} placeholder="Keresés név szerint…" className={`${beviteli} mb-1.5 max-w-xs`} />
         <div className="flex max-h-44 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-[var(--radius)] border border-border p-2">
           {valaszthato.map((e) => (
