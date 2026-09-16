@@ -147,8 +147,10 @@ class AnyagFajl(TimestampMixin, Base):
     #: ellenőrzés (complete + head) után áll be.
     allapot: Mapped[str] = mapped_column(String(20), nullable=False, default="feltoltes_alatt", index=True)
     #: R2 multipart azonosító + az eddig IGAZOLTAN feltöltött részek
-    #: ({"1": "etag", ...}) - oldalfrissítés utáni folytatáshoz.
-    upload_id: Mapped[str | None] = mapped_column(String(255))
+    #: ({"1": "etag", ...}) - oldalfrissítés utáni folytatáshoz. A Cloudflare
+    #: R2 UploadId-je hosszú base64-token (több száz karakter is lehet), ezért
+    #: bőven méretezett - egy szűk mező itt "value too long" hibát adott.
+    upload_id: Mapped[str | None] = mapped_column(String(1024))
     kesz_reszek: Mapped[dict | None] = mapped_column(JSON)
     kesz_at: Mapped[datetime | None] = mapped_column(DateTime)
 
