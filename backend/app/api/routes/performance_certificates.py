@@ -92,11 +92,6 @@ _TIG_EMAIL_HTML = """\
         <a href="mailto:martin.rahman@hypestab.hu" style="color: #888; text-decoration: underline;">martin.rahman@hypestab.hu</a><br>
         +36 30 898 7600
       </p>
-      <p style="margin: 0;">Barna Blanka – Back office manager</p>
-      <p style="margin: 0;">
-        <a href="mailto:blanka.barna@hypestab.hu" style="color: #888; text-decoration: underline;">blanka.barna@hypestab.hu</a><br>
-        +36 30 758 8751
-      </p>
     </td>
   </tr>
 </table>

@@ -379,11 +379,6 @@ HYPE_ALAIRAS_HTML = """\
         +36 30 898 7600
 
       <br>
-      <p style="margin: 0;">Barna Blanka – Back office manager</p>
-      <p style="margin: 0;">
-        <a href="mailto:blanka.barna@hypestab.hu" style="color: #888; text-decoration: underline;">blanka.barna@hypestab.hu</a><br>
-        +36 30 758 8751
- <br>
       <p style="margin: 0;">Zseni Boglárka – Gyártásvezető</p>
       <p style="margin: 0;">
         <a href="mailto:boglarka.zseni@hypestab.hu" style="color: #888; text-decoration: underline;">boglarka.zseni@hypestab.hu</a><br>
