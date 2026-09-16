@@ -45,10 +45,33 @@ def _ellenoriz(db: Session, entity_type: str, entity_id: int) -> None:
 # tudná feltölteni hozzá.
 OLDAL_JOG_ELEG = {"auto", "autoKiadas", "kotelezettseg", "kotelezettsegIdoszak"}
 
+#: KOMMENT-csatolmányok: aki az oldalt LÁTJA (tehát hozzászólhat), az fájlt is
+#: tölthet a hozzászólásához - se szerepkör-kapu, se edit-jog nem kell (a
+#: felhasználó kérése: az utómunkához hozzáférő külsős vágó is csatolhasson).
+#: A hozzászólás-írás maga is csak view-jogot kér (lásd routes/postproduction
+#: add_comment) - a fájl a hozzászólás része, ugyanaz a szabály jár neki.
+KOMMENT_ENTITASOK = {"deliverableComment"}
 
-def _jogosultsag(db: Session, user: Employee, entity_type: str, action: str) -> None:
-    from app.core.security import DEFAULT_WRITE_ROLES
 
+def _jogosultsag(
+    db: Session, user: Employee, entity_type: str, action: str, entity_id: int | None = None
+) -> None:
+    from app.core.security import DEFAULT_WRITE_ROLES, ellenorizd_anyag_hozzaferest
+
+    # KOMMENT-csatolmány FELTÖLTÉSE: pontosan a hozzászólás-írás szabálya jár
+    # (lásd postproduction post_comment): aki LÁTJA az anyagot, az
+    # kommentelhet, tehát fájlt is csatolhat - se szerepkör-kapu, se edit-jog
+    # (a felhasználó kérése). A láthatóságot viszont tartjuk: a korlátozott
+    # (csak a saját anyagát látó) külsős vágó másik anyag kommentjéhez nem
+    # tölthet, találgatott azonosítóval sem. A TÖRLÉS marad a szigorú ágon.
+    if entity_type in KOMMENT_ENTITASOK and action == "edit":
+        if entity_id is not None:
+            from app.models.deliverable_comment import DeliverableComment
+
+            komment = db.get(DeliverableComment, entity_id)
+            if komment is not None:
+                ellenorizd_anyag_hozzaferest(db, user, komment.deliverable_id)
+        return
     if entity_type not in OLDAL_JOG_ELEG and not van_szerepkore(user, *DEFAULT_WRITE_ROLES):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Nincs jogosultságod ehhez a művelethez")
     check_page_action(db, user, attachments.ENTITAS_OLDALAK[entity_type], action)
@@ -75,7 +98,7 @@ async def upload_attachment(
     user: Employee = Depends(get_current_user),
 ):
     _ellenoriz(db, entity_type, entity_id)
-    _jogosultsag(db, user, entity_type, "edit")
+    _jogosultsag(db, user, entity_type, "edit", entity_id)
     data = await file.read()
     try:
         rekord = attachments.save(

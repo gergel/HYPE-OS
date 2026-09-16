@@ -177,13 +177,18 @@ export async function middleware(request: NextRequest) {
   if (anyagKorlat !== null) {
     const anyagEgyezes = permissionPath.match(/^\/utomunka\/(\d+)/);
     const sajatAnyag = anyagEgyezes !== null && anyagKorlat.includes(Number(anyagEgyezes[1]));
-    if (topSegment !== "/dashboard" && !sajatAnyag) {
+    // A /profil ÖNKISZOLGÁLÓ oldal (a felhasználó kérése: mindenki érje el):
+    // a saját profilkép/szín beállítása senki másét nem érinti, a backend
+    // végpontja is a tokenből dolgozik - a korlátozott fióknak is jár.
+    if (topSegment !== "/dashboard" && topSegment !== "/profil" && !sajatAnyag) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   } else if (
     allowedPages &&
     allowedPages.length > 0 &&
     topSegment !== "/dashboard" &&
+    // Önkiszolgáló profil-oldal - oldal-jogosultságtól függetlenül jár.
+    topSegment !== "/profil" &&
     // A "nincs jogosultság" oldal saját magát muszáj kivennie a zár alól -
     // különben pont az irányítaná ide magát végtelen körben.
     topSegment !== "/nincs-jogosultsag" &&

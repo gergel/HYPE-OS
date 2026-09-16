@@ -389,7 +389,11 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
             deliverableId={deliverableId}
             initialComments={comments}
             mentionableEmployees={assignableEmployees}
-            canUpload={canEditPage}
+            // Aki az utómunkát LÁTJA (tehát ezt az oldalt megnyithatta), az
+            // fájlt is csatolhat a hozzászólásához - külön edit-jog nélkül
+            // (a felhasználó kérése; a backend is így engedi, lásd
+            // routes/attachments.KOMMENT_ENTITASOK).
+            canUpload
             // A saját hozzászólás küldés után is szerkeszthető - ehhez kell
             // tudni, melyik az övé (lásd CommentsSection).
             currentEmployeeId={currentUser ? Number(currentUser.id) : null}
