@@ -204,7 +204,7 @@ export default async function DashboardPage() {
             </Card>
           )}
           {isVisible("ai_javaslat") && (
-            <Card title="AI javaslat">
+            <Card title="AI javaslat" className="flex flex-col">
               <AiSuggestionCard />
             </Card>
           )}

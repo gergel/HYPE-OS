@@ -40,7 +40,7 @@ export function AiAssistantChat() {
   const [busy, setBusy] = useState(false);
   const [fut, setFut] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const utolsoIdRef = useRef(0);
   //: DIKTÁLÁS (a felhasználó kérése: ne csak gépelni lehessen). Elsődlegesen
@@ -69,8 +69,23 @@ export function AiAssistantChat() {
     };
   }, [searchParams]);
 
-  function gorgetes() {
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+  /** Az üzenetlista aljára görgetés - CSAK a lista dobozát mozgatja, sosem az
+   * egész oldalt (a felhasználó hibajelzése: az oldal "mindig letekert és
+   * ugrált"). Alapból csak akkor görget, ha az olvasó amúgy is az alján áll -
+   * aki feljebb tekert olvasni, azt egy közben érkező lépés-üzenet nem
+   * rángatja le. A `mindenkepp` a saját küldésnél / beszélgetés-váltásnál
+   * igaz: olyankor tényleg az alja kell. */
+  function gorgetes(mindenkepp = false) {
+    const doboz = listaRef.current;
+    if (!doboz) return;
+    // A mérés MOST történik (az új tartalom renderelése előtt): azt mondja
+    // meg, az olvasó eddig lent állt-e.
+    const lentVolt = doboz.scrollHeight - doboz.scrollTop - doboz.clientHeight < 160;
+    if (!mindenkepp && !lentVolt) return;
+    setTimeout(() => {
+      const d = listaRef.current;
+      if (d) d.scrollTop = d.scrollHeight;
+    }, 50);
   }
 
   const uzenetBeolvaszt = useCallback((ujak: Uzenet[]) => {
@@ -120,6 +135,8 @@ export function AiAssistantChat() {
         uzenetBeolvaszt(d.uzenetek);
         setFut(Boolean(d.fut));
       }
+      // Beszélgetés-váltásnál mindig az aljára ugrunk (ott a friss rész).
+      gorgetes(true);
       void naploFrissit(bid);
     },
     [uzenetBeolvaszt, naploFrissit],
@@ -221,7 +238,7 @@ export function AiAssistantChat() {
     } finally {
       setBusy(false);
       setFut(false);
-      gorgetes();
+      gorgetes(true);
     }
   }
 
@@ -298,13 +315,26 @@ export function AiAssistantChat() {
   /** TARTALÉK diktálás: hangfelvétel, a szöveget a szerver írja le (Gemini). */
   async function felvetelInditas() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Zajszűrés + visszhang-elnyomás + automatikus erősítés: telefonon ez
+      // érezhetően pontosabb átírást ad (a felhasználó hibajelzése: a
+      // diktálás hibázott); a mono sáv pedig kisebb fájl - gyorsabb feltöltés.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+      });
       // iOS/Safari nem tud webm-et rögzíteni, ott mp4 készül - a szerver a
       // valódi mime-típust kapja meg, a Gemini mindkettőt átírja.
       const tamogatott = ["audio/webm", "audio/mp4"].find(
         (t) => typeof MediaRecorder.isTypeSupported !== "function" || MediaRecorder.isTypeSupported(t),
       );
-      const felvevo = tamogatott ? new MediaRecorder(stream, { mimeType: tamogatott }) : new MediaRecorder(stream);
+      // 64 kbit/s beszédhez bőven elég - a kisebb felvétel hamarabb ér fel a
+      // szerverre, így hamarabb jön a szöveg (a felhasználó kérése: gyorsabban).
+      const opciok: MediaRecorderOptions = { audioBitsPerSecond: 64_000, ...(tamogatott ? { mimeType: tamogatott } : {}) };
+      let felvevo: MediaRecorder;
+      try {
+        felvevo = new MediaRecorder(stream, opciok);
+      } catch {
+        felvevo = new MediaRecorder(stream);
+      }
       const darabok: Blob[] = [];
       felvevo.ondataavailable = (e) => {
         if (e.data.size > 0) darabok.push(e.data);
@@ -429,7 +459,9 @@ export function AiAssistantChat() {
   }
 
   return (
-    <div className="flex h-full min-h-0 gap-3">
+    // flex-1 (nem h-full): a szülő Card flex-oszlop, benne a cím UTÁN maradó
+    // helyet kell kitölteni - a h-full a cím magasságával túllógott volna.
+    <div className="flex min-h-0 flex-1 gap-3">
       {/* Beszélgetés-lista */}
       <div className="hidden w-[220px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-border pr-2 md:flex">
         <button
@@ -460,14 +492,39 @@ export function AiAssistantChat() {
       </div>
 
       {/* Chat */}
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* MOBIL beszélgetés-váltó (a felhasználó hibajelzése: telefonon
+            szétesett az oldal, és váltani sem lehetett): a bal oldali lista
+            kis képernyőn el van rejtve, helyette legördülő + Új gomb. */}
+        <div className="mb-2 flex items-center gap-1.5 md:hidden">
+          <select
+            value={aktiv ?? ""}
+            onChange={(e) => e.target.value && void beszelgetesValt(Number(e.target.value))}
+            className="min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+          >
+            {beszelgetesek.length === 0 && <option value="">Még nincs beszélgetés</option>}
+            {beszelgetesek.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.cim ?? `Beszélgetés #${b.id}`}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void ujBeszelgetes()}
+            title="Új beszélgetés"
+            className="flex items-center gap-1 rounded-[var(--radius)] border border-border px-2.5 py-1.5 text-[12.5px] text-text-accent hover:bg-surface-3"
+          >
+            <Plus size={14} /> Új
+          </button>
+        </div>
         {kontextus && (
           <p className="mb-1.5 rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1 text-[12px] text-text-secondary">
             Erre hivatkozol: <b className="text-text-primary">{String(kontextus.cim ?? kontextus.entity_type ?? kontextus.utvonal)}</b>
             {kontextus.entity_id ? ` (#${kontextus.entity_id})` : ""} — az „ez"/„ennél" ezt jelenti.
           </p>
         )}
-        <div className="mb-3 flex-1 space-y-2 overflow-y-auto pr-1">
+        <div ref={listaRef} className="mb-3 flex-1 space-y-2 overflow-y-auto pr-1">
           {uzenetek.length === 0 && (
             <p className="text-[13px] text-text-muted">
               Írd le, mit szeretnél a rendszerben - az asszisztens megkeresi az adatokat, elvégzi a műveletet a
@@ -489,7 +546,6 @@ export function AiAssistantChat() {
               </button>
             </p>
           )}
-          <div ref={bottomRef} />
         </div>
 
         {hiba && <p className="mb-1.5 text-[12.5px] text-text-danger">{hiba}</p>}
@@ -568,7 +624,7 @@ export function AiAssistantChat() {
                 ? "Írd le, mi legyen a fájlokkal… (pl. Ezt a számlát a HYPE26-0291-hez, XY utókövetési tételéhez)"
                 : "Írd le, mit szeretnél… (Enter küld, Shift+Enter új sor · formázás: **félkövér**, - felsorolás, # címsor)"
             }
-            className="flex-1 rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+            className="min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
           />
           <button
             type="button"
@@ -670,7 +726,7 @@ function UzenetSor({
   }
   return (
     <div
-      className={`rounded-[var(--radius)] p-3 text-[13px] ${
+      className={`rounded-[var(--radius)] p-3 text-[13px] [overflow-wrap:anywhere] ${
         u.szerep === "felhasznalo" ? "ml-auto max-w-[80%] bg-surface-3 text-text-primary" : "mr-auto max-w-[85%] bg-surface-1 text-text-primary"
       }`}
     >

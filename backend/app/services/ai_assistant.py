@@ -651,25 +651,39 @@ def hang_atiras(adat: bytes, mime_type: str) -> str:
     if not settings.gemini_api_key:
         raise ValueError("A diktálás-átírás nincs beállítva (hiányzik a GEMINI_API_KEY).")
     client = genai.Client(api_key=settings.gemini_api_key)
+    contents = [
+        types.Part.from_bytes(data=adat, mime_type=mime_type),
+        types.Part(
+            text=(
+                "Írd le szó szerint, amit a felvételen mondanak (magyarul beszélnek, magyar "
+                "helyesírással, írásjelekkel). A beszélő egy magyar videógyártó cég munkatársa: "
+                "előfordulhatnak filmes szakszavak (forgatás, diszpó, vinyó, utómunka, deliverable), "
+                "angol kifejezések és projektkódok (pl. HYPE26-0123) - ezeket pontosan úgy írd le, "
+                "ahogy elhangzanak, ne magyarítsd és ne javítsd át őket. KIZÁRÓLAG az elhangzott "
+                "szöveget add vissza - se magyarázatot, se címkét, se idézőjelet ne tegyél köré. "
+                "Ha a felvételen nem hallható beszéd, üres választ adj."
+            )
+        ),
+    ]
+    # GYORSÍTÁS (a felhasználó kérése: a diktálás lassan íródott ki): a
+    # gondolkodási fázis kikapcsolva - egy szó szerinti átíráshoz nem kell,
+    # és másodperceket vesz el; a 0 hőmérséklet a találgatós elírásokat fogja
+    # vissza. Ha a beállítást a modell-generáció nem fogadja el, beállítások
+    # nélkül próbáljuk újra (lásd kiadas_kiolvasas.olvasd_ki tapasztalatát).
     try:
         valasz = client.models.generate_content(
             model=settings.gemini_model,
-            contents=[
-                types.Part.from_bytes(data=adat, mime_type=mime_type),
-                types.Part(
-                    text=(
-                        "Írd le szó szerint, amit a felvételen mondanak (magyarul beszélnek, magyar "
-                        "helyesírással, írásjelekkel). KIZÁRÓLAG az elhangzott szöveget add vissza - "
-                        "se magyarázatot, se címkét, se idézőjelet ne tegyél köré. Ha a felvételen "
-                        "nem hallható beszéd, üres választ adj."
-                    )
-                ),
-            ],
-            # Lásd kiadas_kiolvasas.olvasd_ki: se token-keret, se thinking-
-            # beállítás - modell-generációnként más-más hibát okoztak.
+            contents=contents,
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
         )
-    except Exception as exc:  # noqa: BLE001 - a hívó emberi hibaüzenetet vár
-        raise ValueError(f"A hangfelvétel átírása nem sikerült: {exc}") from exc
+    except Exception:  # noqa: BLE001 - tartalék út jön, a hibát ott kezeljük
+        try:
+            valasz = client.models.generate_content(model=settings.gemini_model, contents=contents)
+        except Exception as exc:  # noqa: BLE001 - a hívó emberi hibaüzenetet vár
+            raise ValueError(f"A hangfelvétel átírása nem sikerült: {exc}") from exc
     return (valasz.text or "").strip()
 
 

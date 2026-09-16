@@ -145,7 +145,10 @@ export function MyTasksCard({ myTasks }: { myTasks: MyTasksSummary }) {
 
 export function AiSuggestionCard() {
   return (
-    <div className="flex h-full flex-col justify-between gap-4">
+    // flex-1 (nem h-full): a kártya flex-oszlop, és a cím UTÁN maradó helyet
+    // kell kitölteni - a h-full a cím + belső margó magasságával túllógott,
+    // a gomb kicsúszott a kártya aljából (a felhasználó hibajelzése).
+    <div className="flex min-h-0 flex-1 flex-col justify-between gap-4">
       <p className="text-[13px] text-text-secondary">
         Kérdezd az AI Assistantot a mai forgatásokról, az ütemezésről vagy bármelyik projekt állapotáról.
       </p>
