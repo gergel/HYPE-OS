@@ -31,7 +31,7 @@ from app.models.utalas_felvezetes import UtalasAdag, UtalasTetel
 from app.models.arajanlat import Arajanlat, ArajanlatTetel
 from app.models.flora_feladat import FloraFeladat
 from app.models.flora_komment import FloraKomment
-from app.models.munkafelajanlas import Ajanlatkeres, AjanlatMeghivott, MunkaArajanlat
+from app.models.munkafelajanlas import Ajanlatkeres, AjanlatMeghivott, CimzettLista, MunkaArajanlat
 from app.models.google_oauth_token import GoogleOAuthToken
 from app.models.hatter_feladat import HatterFeladat
 from app.models.hype_todo import HypeTodoItem, hype_todo_felelosok

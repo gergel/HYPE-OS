@@ -11,7 +11,7 @@ ajánlják meg, és a döntést ember hozza, a határidő lejárta után."""
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -106,6 +106,21 @@ class AjanlatMeghivott(TimestampMixin, Base):
     ajanlat: Mapped["MunkaArajanlat | None"] = relationship(
         back_populates="meghivott", cascade="all, delete-orphan", uselist=False
     )
+
+
+class CimzettLista(TimestampMixin, Base):
+    """MENTETT, ELNEVEZETT CÍMZETT-LISTA (a felhasználó kérése): pl. az
+    "Operatőrök" lista egyszer összeáll, és onnantól egy kattintással
+    behívható a meghívottak közé egy új ajánlatkéréshez. A név egyedi - az
+    azonos névre mentés a meglévő listát írja felül (upsert)."""
+
+    __tablename__ = "ajanlat_cimzett_listak"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nev: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    #: Employee id-k listája (JSON) - a feloldás/megjelenítés a friss
+    #: munkatárs-adatokból megy, itt csak a tagság él.
+    employee_ids: Mapped[list | None] = mapped_column(JSON)
 
 
 class MunkaArajanlat(TimestampMixin, Base):

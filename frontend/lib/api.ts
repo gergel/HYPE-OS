@@ -2166,6 +2166,14 @@ export async function getMunkafelajanlasok(): Promise<Ajanlatkeres[]> {
   return (await apiGet<Ajanlatkeres[]>("/api/v1/munkafelajanlasok")) ?? [];
 }
 
+/** Mentett, elnevezett címzett-lista (pl. "Operatőrök") - egy kattintással
+ * behívható meghívotti kör az ajánlatkérésekhez. */
+export type CimzettLista = { id: number; nev: string; employee_ids: number[] };
+
+export async function getCimzettListak(): Promise<CimzettLista[]> {
+  return (await apiGet<CimzettLista[]>("/api/v1/munkafelajanlasok/cimzett-listak")) ?? [];
+}
+
 /** A bejelentkezett felhasználó saját adatai (TopBar üdvözlés/avatar,
  * kijelentkezés) - a tokenből derül ki (lásd auth/me, get_current_user). */
 export async function getCurrentUser(): Promise<CurrentUser | null> {

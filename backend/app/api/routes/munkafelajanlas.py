@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.core.security import Role, get_current_user, require_page_action
 from app.models.employee import Employee
-from app.models.munkafelajanlas import Ajanlatkeres, AjanlatMeghivott
+from app.models.munkafelajanlas import Ajanlatkeres, AjanlatMeghivott, CimzettLista
 from app.services import munkafelajanlas as szolg
 from fastapi import HTTPException
 
@@ -228,6 +228,81 @@ def _betolt(db: Session, ajanlatkeres_id: int) -> Ajanlatkeres:
     if ak is None:
         raise HTTPException(status_code=404, detail="Az ajánlatkérés nem található.")
     return ak
+
+
+# --- Mentett címzett-listák (a felhasználó kérése) ---------------------------
+# Pl. az "Operatőrök" lista egyszer összeáll, és onnantól egy kattintással
+# behívható a meghívottak közé. Azonos névre mentés a meglévőt írja felül.
+
+
+class CimzettListaIn(BaseModel):
+    nev: str
+    employee_ids: list[int]
+
+
+class CimzettListaOut(BaseModel):
+    id: int
+    nev: str
+    employee_ids: list[int]
+
+
+def _lista_out(lista: CimzettLista) -> CimzettListaOut:
+    return CimzettListaOut(
+        id=lista.id,
+        nev=lista.nev,
+        employee_ids=[int(i) for i in (lista.employee_ids or [])],
+    )
+
+
+@router.get("/cimzett-listak", response_model=list[CimzettListaOut])
+def cimzett_listak(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    sorok = db.scalars(select(CimzettLista).order_by(CimzettLista.nev)).all()
+    return [_lista_out(lista) for lista in sorok]
+
+
+@router.post("/cimzett-listak", response_model=CimzettListaOut)
+def cimzett_lista_mentes(
+    payload: CimzettListaIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Lista mentése NÉV szerint (upsert): az azonos nevű meglévő lista
+    tagsága frissül - így az "Operatőrök" újramenthető, ha bővül a kör."""
+    nev = payload.nev.strip()
+    if not nev:
+        raise HTTPException(status_code=400, detail="A lista neve nem lehet üres.")
+    kert = list(dict.fromkeys(payload.employee_ids))
+    if not kert:
+        raise HTTPException(status_code=400, detail="Üres listát nincs értelme menteni - jelölj ki embereket.")
+    letezok = set(db.scalars(select(Employee.id).where(Employee.id.in_(kert))).all())
+    hianyzo = [i for i in kert if i not in letezok]
+    if hianyzo:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen munkatárs-azonosító: {hianyzo}")
+    lista = db.scalar(select(CimzettLista).where(CimzettLista.nev == nev))
+    if lista is None:
+        lista = CimzettLista(nev=nev, employee_ids=kert)
+        db.add(lista)
+    else:
+        lista.employee_ids = kert
+    db.commit()
+    db.refresh(lista)
+    return _lista_out(lista)
+
+
+@router.delete("/cimzett-listak/{lista_id}", status_code=204)
+def cimzett_lista_torles(
+    lista_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    lista = db.get(CimzettLista, lista_id)
+    if lista is None:
+        raise HTTPException(status_code=404, detail="A lista nem található.")
+    db.delete(lista)
+    db.commit()
 
 
 # --- Belső végpontok ---------------------------------------------------------

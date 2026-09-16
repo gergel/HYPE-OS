@@ -7,7 +7,7 @@ import { Card } from "@/components/Card";
 import { KeresosSelect } from "@/components/KeresosSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
-import type { Ajanlatkeres, AjanlatkeresReszlet, Employee, MunkaMeghivott } from "@/lib/api";
+import type { Ajanlatkeres, AjanlatkeresReszlet, CimzettLista, Employee, MunkaMeghivott } from "@/lib/api";
 
 const BASE = "/api/v1/munkafelajanlasok";
 
@@ -30,16 +30,33 @@ function idopont(iso: string | null): string {
   return d.toLocaleString("hu-HU", { timeZone: "Europe/Budapest", dateStyle: "short", timeStyle: "short" });
 }
 
-export type ProjektOpcio = { id: number; nev: string; kod: string | null };
+export type ProjektOpcio = { id: number; nev: string; kod: string | null; datum: string | null };
 
 /** Az ÚJ ajánlatkérés űrlapja. Felajánlott díjat SZÁNDÉKOSAN nem lehet
  * megadni: az árat a meghívott külsősök ajánlják meg (a felhasználó kérése).
  * A projekt a MEGLÉVŐ projektek közül választandó - nem szabad szöveg. */
-function UjAjanlatkeres({ employees, projektek, onKesz }: { employees: Employee[]; projektek: ProjektOpcio[]; onKesz: () => void }) {
+function UjAjanlatkeres({
+  employees,
+  projektek,
+  kezdetiListak = [],
+  onKesz,
+}: {
+  employees: Employee[];
+  projektek: ProjektOpcio[];
+  /** Mentett címzett-listák (pl. "Operatőrök") - egy kattintással behívhatók. */
+  kezdetiListak?: CimzettLista[];
+  onKesz: () => void;
+}) {
   const [nyitva, setNyitva] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
+  // Mentett címzett-listák (a felhasználó kérése): behívás egy kattintással,
+  // az aktuális kijelölés mentése névvel, lista törlése (kétfázisú).
+  const [listak, setListak] = useState<CimzettLista[]>(kezdetiListak);
+  const [listaNev, setListaNev] = useState("");
+  const [listaMentesNyitva, setListaMentesNyitva] = useState(false);
+  const [torlendoLista, setTorlendoLista] = useState<number | null>(null);
   const [mezok, setMezok] = useState({
     munkakor: "",
     leiras: "",
@@ -63,6 +80,48 @@ function UjAjanlatkeres({ employees, projektek, onKesz }: { employees: Employee[
 
   function m(nev: keyof typeof mezok, ertek: string) {
     setMezok((elozo) => ({ ...elozo, [nev]: ertek }));
+  }
+
+  /** Egy mentett lista tagjainak BEHÍVÁSA a kijelölésbe (unió - a már
+   * kijelöltek megmaradnak). */
+  function listaBehivas(lista: CimzettLista) {
+    setMeghivottak((elozo) => Array.from(new Set([...elozo, ...lista.employee_ids])));
+  }
+
+  /** Az aktuális kijelölés mentése névvel - azonos névre mentve a meglévő
+   * lista frissül (a szerver upsertel). */
+  async function listaMentes() {
+    const nev = listaNev.trim();
+    if (!nev || meghivottak.length === 0) return;
+    try {
+      const res = await authFetch(`${BASE}/cimzett-listak`, {
+        method: "POST",
+        body: JSON.stringify({ nev, employee_ids: meghivottak }),
+      });
+      const adat = await res.json().catch(() => null);
+      if (!res.ok) {
+        setHiba(`A lista mentése nem sikerült: ${adat?.detail ?? res.status}`);
+        return;
+      }
+      setListak((elozo) => {
+        const nelkule = elozo.filter((l) => l.id !== adat.id);
+        return [...nelkule, adat as CimzettLista].sort((a, b) => a.nev.localeCompare(b.nev, "hu"));
+      });
+      setListaNev("");
+      setListaMentesNyitva(false);
+    } catch (err) {
+      setHiba(`A lista mentése nem sikerült (hálózati hiba): ${err}`);
+    }
+  }
+
+  async function listaTorles(id: number) {
+    try {
+      const res = await authFetch(`${BASE}/cimzett-listak/${id}`, { method: "DELETE" });
+      if (res.ok || res.status === 404) setListak((elozo) => elozo.filter((l) => l.id !== id));
+    } catch {
+      // a lista törlése kényelmi művelet - hibánál marad, újrapróbálható
+    }
+    setTorlendoLista(null);
   }
 
   async function mentes() {
@@ -130,7 +189,9 @@ function UjAjanlatkeres({ employees, projektek, onKesz }: { employees: Employee[
             options={projektek.map((p) => ({
               value: String(p.id),
               label: p.nev,
-              sublabel: p.kod ?? undefined,
+              // Projektkód + forgatási dátum az azonosításhoz (a felhasználó
+              // kérése: a dátum is látsszon a projekteknél).
+              sublabel: [p.kod, p.datum].filter(Boolean).join(" · ") || undefined,
             }))}
             onChange={(v) => setProjectId(v)}
             placeholder="Válassz projektet…"
@@ -167,6 +228,67 @@ function UjAjanlatkeres({ employees, projektek, onKesz }: { employees: Employee[
 
       <div>
         <p className="mb-1 text-[12px] text-text-muted">Meghívott külsősök ({meghivottak.length}) - mindenki külön, személyre szóló levelet és saját linket kap</p>
+        {/* MENTETT LISTÁK (a felhasználó kérése): pl. az "Operatőrök" egy
+            kattintással behívható; az aktuális kijelölés névvel menthető. */}
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          {listak.length > 0 && <span className="text-[12px] text-text-muted">Mentett listák:</span>}
+          {listak.map((l) => (
+            <span key={l.id} className="inline-flex items-center overflow-hidden rounded-[var(--radius)] border border-border bg-surface-2 text-[12px]">
+              <button
+                type="button"
+                onClick={() => listaBehivas(l)}
+                title={`A(z) "${l.nev}" lista tagjainak behívása a meghívottak közé`}
+                className="px-2 py-1 text-text-primary hover:bg-surface-3"
+              >
+                {l.nev} ({l.employee_ids.length})
+              </button>
+              {torlendoLista === l.id ? (
+                <button
+                  type="button"
+                  onClick={() => void listaTorles(l.id)}
+                  className="border-l border-border px-1.5 py-1 text-text-danger hover:bg-surface-3"
+                >
+                  Törlöd?
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setTorlendoLista(l.id)}
+                  aria-label={`${l.nev} lista törlése`}
+                  className="border-l border-border px-1.5 py-1 text-text-muted hover:text-text-danger"
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+          {listaMentesNyitva ? (
+            <span className="inline-flex items-center gap-1">
+              <input
+                value={listaNev}
+                onChange={(e) => setListaNev(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void listaMentes()}
+                placeholder='Lista neve (pl. "Operatőrök")'
+                autoFocus
+                className="w-48 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[12px] text-text-primary focus:outline-none"
+              />
+              <button type="button" disabled={!listaNev.trim() || meghivottak.length === 0} onClick={() => void listaMentes()} className="text-[12px] text-text-accent hover:underline disabled:opacity-40">
+                Mentés
+              </button>
+              <button type="button" onClick={() => setListaMentesNyitva(false)} className="text-[12px] text-text-muted">Mégse</button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={meghivottak.length === 0}
+              onClick={() => setListaMentesNyitva(true)}
+              title={meghivottak.length === 0 ? "Előbb jelölj ki embereket" : "A kijelöltek mentése névvel ellátott listaként"}
+              className="text-[12px] text-text-accent hover:underline disabled:opacity-40"
+            >
+              + Kijelöltek mentése listaként
+            </button>
+          )}
+        </div>
         <input value={szuro} onChange={(e) => setSzuro(e.target.value)} placeholder="Keresés név szerint…" className={`${beviteli} mb-1.5 max-w-xs`} />
         <div className="flex max-h-44 flex-wrap gap-x-4 gap-y-1 overflow-y-auto rounded-[var(--radius)] border border-border p-2">
           {valaszthato.map((e) => (
@@ -487,6 +609,7 @@ export function MunkafelajanlasContent({
   kezdeti,
   employees,
   projektek = [],
+  kezdetiListak = [],
   canCreate,
   canEdit,
   canDelete,
@@ -496,6 +619,8 @@ export function MunkafelajanlasContent({
   /** A választható projektek (a felhasználó kérése: a projekt a meglévők
    * közül választandó, nem szabad szöveg). */
   projektek?: ProjektOpcio[];
+  /** Mentett címzett-listák (pl. "Operatőrök"). */
+  kezdetiListak?: CimzettLista[];
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -542,7 +667,9 @@ export function MunkafelajanlasContent({
         határidő lejárta után → értesítések. Az árat a meghívott külsősök ajánlják meg; senki nem kapja meg
         automatikusan a munkát.
       </p>
-      {canCreate && <UjAjanlatkeres employees={employees} projektek={projektek} onKesz={() => void frissit()} />}
+      {canCreate && (
+        <UjAjanlatkeres employees={employees} projektek={projektek} kezdetiListak={kezdetiListak} onKesz={() => void frissit()} />
+      )}
       {lista.length === 0 && <p className="text-[13px] text-text-muted">Még nincs ajánlatkérés.</p>}
       <div className="space-y-2">
         {lista.map((ak) => {
