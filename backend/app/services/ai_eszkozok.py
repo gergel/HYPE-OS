@@ -63,6 +63,13 @@ MEGEROSITENDO_RESZLETEK = (
     "osszes-torles",
     "/user-access",
     "/felhasznalok",
+    # Munkafelajánlások: e-mailt kiküldő vagy döntést rögzítő lépések - az
+    # asszisztens ezekhez is kifejezett emberi megerősítést kér.
+    "/kikuldes",
+    "/ujrakuldes",
+    "/kivalasztas",
+    "lezaras-nyertes-nelkul",
+    "/visszavonas",
 )
 
 

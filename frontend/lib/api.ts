@@ -2102,6 +2102,67 @@ export type CurrentUser = {
   profilkep?: string | null;
 };
 
+/** MUNKAFELAJÁNLÁSOK (ajánlatkérések) - lásd backend routes/munkafelajanlas.py.
+ * A folyamat: feladat -> meghívottak -> árajánlatok a válaszadási határidőig ->
+ * belső kiválasztás a határidő UTÁN -> értesítések. Senki nem kapja meg
+ * automatikusan a munkát. */
+export type MunkaAjanlatInfo = {
+  osszeg: number;
+  penznem: string;
+  brutto: boolean;
+  megjegyzes: string | null;
+  vallalja: boolean;
+  bekuldve: string | null;
+  modositva: string | null;
+  visszavonva: boolean;
+  allapot: "bekuldve" | "visszavonva" | "elfogadva" | "elutasitva";
+};
+
+export type MunkaMeghivott = {
+  id: number;
+  employee_id: number;
+  nev: string;
+  email: string | null;
+  link: string;
+  meghivo_kikuldve: string | null;
+  meghivo_hiba: string | null;
+  eredmeny_kikuldve: string | null;
+  eredmeny_hiba: string | null;
+  nyertes: boolean;
+  ajanlat: MunkaAjanlatInfo | null;
+};
+
+export type Ajanlatkeres = {
+  id: number;
+  projekt_nev: string;
+  munkakor: string;
+  leiras: string | null;
+  helyszin: string | null;
+  munkavegzes_idopont: string | null;
+  teljesitesi_hatarido: string | null;
+  valaszadasi_hatarido: string | null;
+  valaszadasi_hatarido_szoveg: string;
+  lejart: boolean;
+  allapot: "piszkozat" | "ajanlatadas" | "dontesre_var" | "kiosztva" | "lezarva_nyertes_nelkul" | "visszavonva";
+  kapcsolattarto_id: number | null;
+  kapcsolattarto_nev: string | null;
+  nyertes_meghivott_id: number | null;
+  elfogadott_osszeg: number | null;
+  elfogadott_penznem: string | null;
+  elfogadott_brutto: boolean | null;
+  lezarva: string | null;
+  lezaras_megjegyzes: string | null;
+  meghivott_db: number;
+  ajanlat_db: number;
+  kuldes_hiba_db: number;
+};
+
+export type AjanlatkeresReszlet = Ajanlatkeres & { meghivottak: MunkaMeghivott[] };
+
+export async function getMunkafelajanlasok(): Promise<Ajanlatkeres[]> {
+  return (await apiGet<Ajanlatkeres[]>("/api/v1/munkafelajanlasok")) ?? [];
+}
+
 /** A bejelentkezett felhasználó saját adatai (TopBar üdvözlés/avatar,
  * kijelentkezés) - a tokenből derül ki (lásd auth/me, get_current_user). */
 export async function getCurrentUser(): Promise<CurrentUser | null> {

@@ -158,6 +158,9 @@ export const navGroups: NavGroup[] = [
       { label: "Külsős", href: "/csapat", icon: "UserRound" },
       { label: "Vágók", href: "/csapat/vagok", icon: "Scissors", permissionPage: "/csapat" },
       { label: "Belsősök", href: "/csapat/belsosok", icon: "UserCheck", permissionPage: "/csapat" },
+      // Ajánlatkérések külsősöknek: feladat -> meghívottak -> árajánlatok a
+      // határidőig -> belső kiválasztás -> értesítések (saját jogosultság).
+      { label: "Munkafelajánlások", href: "/munkafelajanlasok", icon: "Megaphone" },
     ],
   },
   {
