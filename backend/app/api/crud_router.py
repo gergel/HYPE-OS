@@ -68,6 +68,11 @@ def build_crud_router(
     #: create_item-ben; pl. routes/hype_todo.py "Aki felvezette" automatikus
     #: kitöltése). A meglévő kétparaméteres hookok változatlanul működnek.
     before_create: Callable[..., dict] | None = None,
+    #: (obj, data, db, current_user) -> None - a LÉTREHOZOTT (már commitolt)
+    #: rekordon fut, a válasz szerializálása előtt. Olyan mellékhatásokhoz,
+    #: amikhez maga a rekord kell (pl. m2m kiosztás beállítása - lásd
+    #: routes/postproduction._uj_vagas_auto_kiosztas).
+    after_create: Callable[[Any, dict, Session, Employee], None] | None = None,
     m2m_fields: dict[str, tuple[str, type]] | None = None,
     list_read_schema: type[BaseModel] | None = None,
     before_update: Callable[[Any, dict, Session, Employee], None] | None = None,
@@ -321,6 +326,9 @@ def build_crud_router(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Az érték már foglalt (egyedinek kell lennie)."
             ) from exc
         db.refresh(obj)
+        if after_create:
+            after_create(obj, data, db, _user)
+            db.refresh(obj)
         return _szurt_kimenet(_kimenet(obj, read_schema, db, sajat_mezokkel=True), db, _user)
 
     @router.patch("/{item_id}", response_model=None)

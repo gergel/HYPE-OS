@@ -105,6 +105,19 @@ def _kesz_kikuldve_allapot(allapot: str | None) -> bool:
     return "kesz" in egyszeru and "kikuld" in egyszeru
 
 
+def _ellenorre_szallo_allapot(allapot: str | None) -> bool:
+    """Beérkező / Javítás / Ellenőrzés-féle állapot-e - ezekben az anyag az
+    ELLENŐRNÉL van (a felhasználó kérése): ilyenkor mindenki más lekerül a
+    kiosztásból, és az ellenőr kerül rá. Névben-keresős elv, mint a
+    services/vagoi_jatek állapot-felismerőinél."""
+    if not allapot:
+        return False
+    egyszeru = "".join(
+        c for c in unicodedata.normalize("NFD", allapot.lower()) if unicodedata.category(c) != "Mn"
+    )
+    return "beerkez" in egyszeru or vagoi_jatek.javitas_allapot(allapot) or vagoi_jatek.ellenorzes_allapot(allapot)
+
+
 def _auto_kiosztas_allapotvaltaskor(db: Session, obj: Deliverable, data: dict, current_user: Employee) -> None:
     """Állapothoz kötött automatikus kiosztás.
 
@@ -127,6 +140,16 @@ def _auto_kiosztas_allapotvaltaskor(db: Session, obj: Deliverable, data: dict, c
         # auto-kiosztást, az a fenti ág szerint nyer.
         if _kesz_kikuldve_allapot(obj.allapot) and obj.kiosztottak:
             _kiosztottak_beallitasa(db, obj, [], current_user)
+            return
+        # Beérkező/Javítás/Ellenőrzés: az anyag az ELLENŐRNÉL van (a
+        # felhasználó kérése) - mindenki más lekerül, az ellenőr kerül rá.
+        # Az admin által az állapothoz beállított auto-kiosztás itt is a
+        # fenti ág szerint nyer; ellenőr nevű munkatárs híján nem csinál
+        # semmit.
+        if _ellenorre_szallo_allapot(obj.allapot):
+            ellenor = vagoi_jatek.ellenor_idk(db)
+            if ellenor and [e.id for e in obj.kiosztottak] != ellenor:
+                _kiosztottak_beallitasa(db, obj, ellenor, current_user)
         return
     # Csak a még létező munkatársak - egy időközben törölt ember miatt ne
     # hasaljon el maga az állapotváltás.
@@ -326,6 +349,19 @@ def _ellenorzeshez_kell_visszajelzes(obj: Deliverable, data: dict, db: Session, 
         )
 
 
+def _uj_vagas_auto_kiosztas(obj: Deliverable, data: dict, db: Session, current_user: Employee) -> None:
+    """FELVEZETÉSKOR is érvényes az ellenőr-szabály (a felhasználó kérése): az
+    új anyag alapból Beérkező állapotba kerül, és ott az ellenőré - kivéve, ha
+    a felvezető kifejezetten kiosztotta valakire."""
+    if not _ellenorre_szallo_allapot(obj.allapot):
+        return
+    if obj.kiosztottak or data.get("assigned_to_employee_id"):
+        return
+    ellenor = vagoi_jatek.ellenor_idk(db)
+    if ellenor:
+        _kiosztottak_beallitasa(db, obj, ellenor, current_user)
+
+
 def _kovesd_a_vagas_projektkodjat(obj: Deliverable, data: dict, db: Session, current_user: Employee) -> None:
     """A Deliverable PATCH-ének before_update ellenőrzései - csak EGY hívás
     kapcsolható a routerre, ezért ez fogja össze az önálló szabályokat.
@@ -367,6 +403,7 @@ deliverables_router = build_crud_router(
     page="/utomunka",
     write_roles=_MINDEN_SZEREPKOR,
     before_create=_vagas_projektkodja,
+    after_create=_uj_vagas_auto_kiosztas,
     before_update=_kovesd_a_vagas_projektkodjat,
     after_update=_after_deliverable_update,
     entity_type="deliverable",

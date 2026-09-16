@@ -47,12 +47,22 @@ def _ekezet_nelkul(szoveg: str) -> str:
     )
 
 
-#: Akik ELLENŐRKÉNT dolgoznak, azok a jóváhagyás-pontot (+JOVAHAGYAS_PONT) nem
-#: kapják meg (a felhasználó kérése): az ellenőr a saját videóját maga teszi
-#: rögtön kiküldésbe, így ez a pont neki automatikusan, verseny nélkül járna.
-#: A levonás (javítás) és a többi pontforrás (ellenőrzésbe tétel, vágott
-#: percek) nekik is változatlanul jár. Név szerint, ékezet-függetlenül.
-JOVAHAGYAS_PONT_NELKUL_NEVEK = ("bartha adrienn",)
+#: Akik ELLENŐRKÉNT dolgoznak - név szerint, ékezet-függetlenül. Két helyen
+#: számít (mindkettő a felhasználó kérése):
+#: - a jóváhagyás-pontot (+JOVAHAGYAS_PONT) nem kapják meg: az ellenőr a saját
+#:   videóját maga teszi rögtön kiküldésbe, így ez a pont neki automatikusan,
+#:   verseny nélkül járna. A levonás (javítás) és a többi pontforrás
+#:   (ellenőrzésbe tétel, vágott percek) nekik is változatlanul jár;
+#: - a Beérkező/Javítás/Ellenőrzés állapotba kerülő anyag automatikusan rájuk
+#:   osztódik ki (lásd routes/postproduction._auto_kiosztas_allapotvaltaskor).
+ELLENOR_NEVEK = ("bartha adrienn",)
+
+
+def ellenor_idk(db: Session) -> list[int]:
+    """Az aktív ellenőr(ök) munkatárs-azonosítói - üres, ha (még) nincs ilyen
+    nevű munkatárs a rendszerben."""
+    sorok = db.scalars(select(Employee).where(Employee.is_active.is_(True))).all()
+    return [e.id for e in sorok if _ekezet_nelkul(e.full_name) in ELLENOR_NEVEK]
 
 
 def jovahagyas_pont_jar(db: Session, employee_id: int) -> bool:
@@ -60,7 +70,7 @@ def jovahagyas_pont_jar(db: Session, employee_id: int) -> bool:
     emp = db.get(Employee, employee_id)
     if emp is None:
         return True
-    return _ekezet_nelkul(emp.full_name) not in JOVAHAGYAS_PONT_NELKUL_NEVEK
+    return _ekezet_nelkul(emp.full_name) not in ELLENOR_NEVEK
 
 
 def _jovahagyas_kizart_idk(db: Session, employee_idk: set[int]) -> set[int]:
@@ -68,7 +78,7 @@ def _jovahagyas_kizart_idk(db: Session, employee_idk: set[int]) -> set[int]:
     if not employee_idk:
         return set()
     sorok = db.scalars(select(Employee).where(Employee.id.in_(employee_idk))).all()
-    return {e.id for e in sorok if _ekezet_nelkul(e.full_name) in JOVAHAGYAS_PONT_NELKUL_NEVEK}
+    return {e.id for e in sorok if _ekezet_nelkul(e.full_name) in ELLENOR_NEVEK}
 
 
 def ellenorzes_allapot(allapot: str | None) -> bool:
