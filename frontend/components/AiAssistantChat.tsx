@@ -285,66 +285,26 @@ export function AiAssistantChat() {
     if (felvevoRef.current && felvevoRef.current.state !== "inactive") felvevoRef.current.stop();
   }
 
-  async function diktalasValt() {
-    if (diktalas !== "inaktiv") {
-      diktalasLeallitas();
-      return;
-    }
-    setHiba(null);
-    const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
-    const FelismeroOsztaly = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
-      | (new () => {
-          lang: string;
-          continuous: boolean;
-          interimResults: boolean;
-          onresult: ((e: { resultIndex: number; results: { length: number; [i: number]: { isFinal: boolean; [j: number]: { transcript: string } } } }) => void) | null;
-          onerror: ((e: { error?: string }) => void) | null;
-          onend: (() => void) | null;
-          start: () => void;
-          stop: () => void;
-        })
-      | undefined;
+  /** iPhone/iPad felismerése. iOS-en a webkitSpeechRecognition LÉTEZIK, de
+   * hibás: az indítása lefagyaszthatja az egész oldalt - főleg a
+   * kezdőképernyőre kitett, "appként" megnyitott felületen. Ott ezért eleve
+   * a felvétel + szerveri átírás megy, ami iOS-en megbízható. (Az újabb
+   * iPadek Macnek hazudják magukat, ezért a maxTouchPoints-ellenőrzés is.) */
+  function iosEszkoz(): boolean {
+    const ua = navigator.userAgent;
+    return /iPhone|iPad|iPod/.test(ua) || (ua.includes("Mac") && navigator.maxTouchPoints > 1);
+  }
 
-    if (FelismeroOsztaly) {
-      // ÉLŐ diktálás a böngésző beszédfelismerésével.
-      try {
-        const felismero = new FelismeroOsztaly();
-        felismero.lang = "hu-HU";
-        felismero.continuous = true;
-        felismero.interimResults = true;
-        diktalasBazisRef.current = szoveg ? szoveg.replace(/\s+$/, "") + " " : "";
-        felismero.onresult = (e) => {
-          let vegleges = "";
-          let koztes = "";
-          for (let i = 0; i < e.results.length; i++) {
-            const r = e.results[i];
-            if (r.isFinal) vegleges += r[0].transcript;
-            else koztes += r[0].transcript;
-          }
-          setSzoveg((diktalasBazisRef.current + vegleges + koztes).replace(/^\s+/, ""));
-        };
-        felismero.onerror = (e) => {
-          if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-            setHiba("A mikrofon-hozzáférés le van tiltva - engedélyezd a böngészőben a diktáláshoz.");
-          }
-        };
-        felismero.onend = () => {
-          felismeroRef.current = null;
-          setDiktalas("inaktiv");
-        };
-        felismeroRef.current = felismero;
-        felismero.start();
-        setDiktalas("hallgat");
-        return;
-      } catch {
-        // Nem sikerült elindítani - jön a felvétel + szerveri átírás.
-      }
-    }
-
-    // TARTALÉK: hangfelvétel, a szöveget a szerver írja le (Gemini).
+  /** TARTALÉK diktálás: hangfelvétel, a szöveget a szerver írja le (Gemini). */
+  async function felvetelInditas() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const felvevo = new MediaRecorder(stream);
+      // iOS/Safari nem tud webm-et rögzíteni, ott mp4 készül - a szerver a
+      // valódi mime-típust kapja meg, a Gemini mindkettőt átírja.
+      const tamogatott = ["audio/webm", "audio/mp4"].find(
+        (t) => typeof MediaRecorder.isTypeSupported !== "function" || MediaRecorder.isTypeSupported(t),
+      );
+      const felvevo = tamogatott ? new MediaRecorder(stream, { mimeType: tamogatott }) : new MediaRecorder(stream);
       const darabok: Blob[] = [];
       felvevo.ondataavailable = (e) => {
         if (e.data.size > 0) darabok.push(e.data);
@@ -354,9 +314,10 @@ export function AiAssistantChat() {
         felvevoRef.current = null;
         setDiktalas("atir");
         try {
-          const blob = new Blob(darabok, { type: felvevo.mimeType || "audio/webm" });
+          const tipus = felvevo.mimeType || tamogatott || "audio/webm";
+          const blob = new Blob(darabok, { type: tipus });
           const fd = new FormData();
-          fd.append("file", blob, "diktalas.webm");
+          fd.append("file", blob, tipus.includes("mp4") ? "diktalas.m4a" : "diktalas.webm");
           const res = await authFetch("/api/v1/ai-assistant/atiras", { method: "POST", body: fd });
           const d = await res.json().catch(() => null);
           if (!res.ok) {
@@ -379,6 +340,92 @@ export function AiAssistantChat() {
       setHiba("A mikrofon nem érhető el - engedélyezd a böngészőben a diktáláshoz.");
       setDiktalas("inaktiv");
     }
+  }
+
+  async function diktalasValt() {
+    if (diktalas !== "inaktiv") {
+      diktalasLeallitas();
+      return;
+    }
+    setHiba(null);
+    const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+    const FelismeroOsztaly = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
+      | (new () => {
+          lang: string;
+          continuous: boolean;
+          interimResults: boolean;
+          onstart: (() => void) | null;
+          onaudiostart: (() => void) | null;
+          onresult: ((e: { resultIndex: number; results: { length: number; [i: number]: { isFinal: boolean; [j: number]: { transcript: string } } } }) => void) | null;
+          onerror: ((e: { error?: string }) => void) | null;
+          onend: (() => void) | null;
+          start: () => void;
+          stop: () => void;
+          abort?: () => void;
+        })
+      | undefined;
+
+    if (FelismeroOsztaly && !iosEszkoz()) {
+      // ÉLŐ diktálás a böngésző beszédfelismerésével.
+      try {
+        const felismero = new FelismeroOsztaly();
+        felismero.lang = "hu-HU";
+        felismero.continuous = true;
+        felismero.interimResults = true;
+        diktalasBazisRef.current = szoveg ? szoveg.replace(/\s+$/, "") + " " : "";
+        // ŐRIDŐ: néhány böngésző (pl. Brave, régebbi Edge) kirakja az
+        // osztályt, de a felismerés sosem indul el - hibajelzés sem jön,
+        // csak "hallgat" állapotban ragadna a gomb. Ha pár másodpercen
+        // belül nincs életjel, csendben átváltunk a felvétel-útra.
+        let eletjel = false;
+        const jelez = () => {
+          eletjel = true;
+        };
+        const ora = window.setTimeout(() => {
+          if (eletjel || felismeroRef.current !== felismero) return;
+          felismero.onend = null;
+          felismeroRef.current = null;
+          try {
+            (felismero.abort ?? felismero.stop).call(felismero);
+          } catch {
+            // az elakadt felismerő leállítása is dobhat - nem érdekes
+          }
+          void felvetelInditas();
+        }, 4000);
+        felismero.onstart = jelez;
+        felismero.onaudiostart = jelez;
+        felismero.onresult = (e) => {
+          jelez();
+          let vegleges = "";
+          let koztes = "";
+          for (let i = 0; i < e.results.length; i++) {
+            const r = e.results[i];
+            if (r.isFinal) vegleges += r[0].transcript;
+            else koztes += r[0].transcript;
+          }
+          setSzoveg((diktalasBazisRef.current + vegleges + koztes).replace(/^\s+/, ""));
+        };
+        felismero.onerror = (e) => {
+          jelez();
+          if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+            setHiba("A mikrofon-hozzáférés le van tiltva - engedélyezd a böngészőben a diktáláshoz.");
+          }
+        };
+        felismero.onend = () => {
+          window.clearTimeout(ora);
+          felismeroRef.current = null;
+          setDiktalas("inaktiv");
+        };
+        felismeroRef.current = felismero;
+        felismero.start();
+        setDiktalas("hallgat");
+        return;
+      } catch {
+        // Nem sikerült elindítani - jön a felvétel + szerveri átírás.
+      }
+    }
+
+    await felvetelInditas();
   }
 
   return (
