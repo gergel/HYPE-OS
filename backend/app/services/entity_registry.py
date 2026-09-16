@@ -36,6 +36,7 @@ from app.models.equipment import Assignment, Equipment
 from app.models.feedback import Feedback
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.flora_feladat import FloraFeladat
+from app.models.flora_komment import FloraKomment
 from app.models.hype_todo import HypeTodoItem
 from app.services import fizetesi_mod
 from app.models.kotelezettseg import Kotelezettseg, KotelezettsegIdoszak
@@ -68,6 +69,10 @@ ENTITY_MODELS: dict[str, type] = {
     # hogy egy hozzászóláshoz konkrét anyagot lehessen mellékelni (lásd
     # frontend components/deliverable/CommentsSection.tsx).
     "deliverableComment": DeliverableComment,
+    # FLÓRA-hozzászólás csatolmánya - ugyanaz a minta, mint a
+    # deliverableComment (a felhasználó kérése: a Flóra oldalon is lehessen
+    # fájlt tölteni a hozzászólásokba).
+    "floraComment": FloraKomment,
     # Ezeknek nincs saját részletnézet-oldaluk, a generikus /rekord/... adatlap
     # nyitja meg őket (lásd frontend lib/recordEntities.ts) - a mezőtípusok
     # (dátum/szám/select) ide is ugyanúgy kellenek a szerkesztéshez.

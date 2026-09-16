@@ -49,6 +49,9 @@ ENTITAS_OLDALAK: dict[str, str] = {
     "deliverable": "/utomunka",
     # Egy hozzászólás az Utómunka oldal alján - lásd entity_registry.py.
     "deliverableComment": "/utomunka",
+    # Egy hozzászólás egy FLÓRA feladat oldalán - a feltöltéshez elég az
+    # oldal láthatósága (lásd routes/attachments.KOMMENT_ENTITASOK).
+    "floraComment": "/flora",
     "task": "/feladatok",
     "hypeTodo": "/hype-todo-lista",
     "floraFeladat": "/flora",

@@ -49,8 +49,9 @@ OLDAL_JOG_ELEG = {"auto", "autoKiadas", "kotelezettseg", "kotelezettsegIdoszak"}
 #: tölthet a hozzászólásához - se szerepkör-kapu, se edit-jog nem kell (a
 #: felhasználó kérése: az utómunkához hozzáférő külsős vágó is csatolhasson).
 #: A hozzászólás-írás maga is csak view-jogot kér (lásd routes/postproduction
-#: add_comment) - a fájl a hozzászólás része, ugyanaz a szabály jár neki.
-KOMMENT_ENTITASOK = {"deliverableComment"}
+#: add_comment és routes/flora post_comment) - a fájl a hozzászólás része,
+#: ugyanaz a szabály jár neki.
+KOMMENT_ENTITASOK = {"deliverableComment", "floraComment"}
 
 
 def _jogosultsag(
@@ -65,12 +66,16 @@ def _jogosultsag(
     # (csak a saját anyagát látó) külsős vágó másik anyag kommentjéhez nem
     # tölthet, találgatott azonosítóval sem. A TÖRLÉS marad a szigorú ágon.
     if entity_type in KOMMENT_ENTITASOK and action == "edit":
-        if entity_id is not None:
+        if entity_type == "deliverableComment" and entity_id is not None:
             from app.models.deliverable_comment import DeliverableComment
 
             komment = db.get(DeliverableComment, entity_id)
             if komment is not None:
                 ellenorizd_anyag_hozzaferest(db, user, komment.deliverable_id)
+        elif entity_type == "floraComment":
+            # A FLÓRA hozzászólás-írása az oldal LÁTHATÓSÁGÁT kéri (lásd
+            # routes/flora post_comment) - a csatoláshoz is ez elég.
+            check_page_action(db, user, attachments.ENTITAS_OLDALAK[entity_type], "view")
         return
     if entity_type not in OLDAL_JOG_ELEG and not van_szerepkore(user, *DEFAULT_WRITE_ROLES):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Nincs jogosultságod ehhez a művelethez")

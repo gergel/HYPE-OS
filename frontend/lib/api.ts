@@ -599,6 +599,9 @@ export type FloraKomment = {
   employee_name: string;
   body: string;
   created_at: string;
+  /** A hozzászóláshoz mellékelt fájlok (a felhasználó kérése) - lásd backend
+   * services/attachments.py ("floraComment" entity_type). */
+  attachments: DocumentAttachment[];
 };
 
 export async function getFloraKommentek(floraId: number): Promise<FloraKomment[]> {

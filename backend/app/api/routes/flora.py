@@ -11,8 +11,9 @@ from app.core.security import Role, require_page_action
 from app.models.employee import Employee
 from app.models.flora_feladat import FloraFeladat
 from app.models.flora_komment import FloraKomment
+from app.schemas.document_attachment import DocumentAttachmentRead
 from app.schemas.flora_feladat import FloraFeladatCreate, FloraFeladatRead, FloraFeladatUpdate
-from app.services import notifications
+from app.services import attachments, notifications
 
 PAGE = "/flora"
 
@@ -52,9 +53,12 @@ class FloraKommentRead(BaseModel):
     employee_name: str
     body: str
     created_at: datetime
+    #: A hozzászóláshoz mellékelt fájlok (a felhasználó kérése) - lásd
+    #: services/attachments.py ("floraComment" entity_type).
+    attachments: list[DocumentAttachmentRead] = []
 
 
-def _komment_read(c: FloraKomment) -> FloraKommentRead:
+def _komment_read(c: FloraKomment, csatolmanyok: list | None = None) -> FloraKommentRead:
     return FloraKommentRead(
         id=c.id,
         flora_feladat_id=c.flora_feladat_id,
@@ -62,6 +66,7 @@ def _komment_read(c: FloraKomment) -> FloraKommentRead:
         employee_name=c.employee.full_name,
         body=c.body,
         created_at=c.created_at,
+        attachments=[DocumentAttachmentRead.model_validate(a, from_attributes=True) for a in (csatolmanyok or [])],
     )
 
 
@@ -76,7 +81,9 @@ def get_comments(
     rows = db.scalars(
         select(FloraKomment).where(FloraKomment.flora_feladat_id == flora_id).order_by(FloraKomment.created_at)
     ).all()
-    return [_komment_read(c) for c in rows]
+    # A hozzászólások csatolmányai EGY lekérdezéssel (lásd list_for_many).
+    csatolmanyok = attachments.list_for_many(db, "floraComment", [c.id for c in rows])
+    return [_komment_read(c, csatolmanyok.get(c.id, [])) for c in rows]
 
 
 @router.post("/{flora_id}/comments", response_model=FloraKommentRead, status_code=201)
