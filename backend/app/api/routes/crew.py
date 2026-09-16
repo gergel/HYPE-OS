@@ -1,8 +1,9 @@
 import os
 from datetime import date, datetime, timezone
 
-from fastapi import Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
@@ -98,6 +99,26 @@ router = build_crud_router(
     before_delete=_vedett_fiok_torlese,
     entity_type="employee",
 )
+
+
+# KÜLÖN router, nem a /crew alatt: a crud-router /{item_id} útvonala minden
+# nem-szám szegmensre 422-t adna, így a /crew/profilkepek sosem jutna szóhoz.
+profilkep_router = APIRouter(prefix="/profilkepek", tags=["crew"])
+
+
+@profilkep_router.get("", response_model=dict[int, str])
+def profilkepek(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Minden munkatárs profilképe egyben (id -> data-URL) - a felhasználó
+    kérése: a kép a hozzászólásoknál és az utómunka kártyák "Kiosztva"
+    soránál is látszódjon, ne csak a saját fejlécben. Bármelyik bejelentkezett
+    munkatárs lekérheti (a kép szándékosan mindenki számára látható, mint a
+    név vagy a saját szín). A képek a profilon 256px-re kicsinyítve kerülnek
+    mentésre, így a teljes térkép is csak pár száz kB."""
+    sorok = db.execute(select(Employee.id, Employee.profilkep).where(Employee.profilkep.is_not(None))).all()
+    return {emp_id: kep for emp_id, kep in sorok if kep}
 
 
 class SetPasswordPayload(BaseModel):

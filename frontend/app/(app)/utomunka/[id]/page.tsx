@@ -31,6 +31,7 @@ import {
   getDetailTabs,
   getFieldTypes,
   getMyPagePermissions,
+  getProfilkepek,
   getRecord,
   getRelated,
   getTimerState,
@@ -108,6 +109,7 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     contactOptions,
     vagoiVisszajelzesek,
     clients,
+    profilkepek,
   ] = await Promise.all([
     deliverable.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(deliverable.project_code_id)) : null,
     deliverable.project_id ? getRecord(ENTITY_PATHS.project, Number(deliverable.project_id)) : null,
@@ -140,6 +142,8 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     // Az ügyfelek az ÚJ kontakt helyben-felvételéhez kellenek (a felhasználó
     // kérése) - lásd ContactsManager ujKontakt űrlapja.
     getClients(),
+    // Profilképek a hozzászólások szerzőihez (a felhasználó kérése).
+    getProfilkepek(),
   ]);
 
   const clientId = projectCode ? Number(projectCode.client_id) : null;
@@ -397,6 +401,8 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
             // A saját hozzászólás küldés után is szerkeszthető - ehhez kell
             // tudni, melyik az övé (lásd CommentsSection).
             currentEmployeeId={currentUser ? Number(currentUser.id) : null}
+            // Mindenki profilképe a saját hozzászólásánál (a felhasználó kérése).
+            profilkepek={profilkepek}
           />
         </Card>
       </div>

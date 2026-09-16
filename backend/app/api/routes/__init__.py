@@ -16,7 +16,7 @@ from app.api.routes.callsheets import router as callsheets_router
 from app.api.routes.campaigns import router as campaigns_router
 from app.api.routes.clients import contacts_router, router as clients_router
 from app.api.routes.contracts import router as contracts_router
-from app.api.routes.crew import rates_router, router as crew_router
+from app.api.routes.crew import profilkep_router, rates_router, router as crew_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.detail_tabs import router as detail_tabs_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
@@ -81,6 +81,7 @@ api_router.include_router(projects_router)
 api_router.include_router(projekt_szamlazok_router)
 # 6. Crew (Employee + Rate)
 api_router.include_router(crew_router)
+api_router.include_router(profilkep_router)
 api_router.include_router(rates_router)
 # 7. Equipment
 api_router.include_router(equipment_router)

@@ -23,8 +23,10 @@ export type BoardCard = {
   /** Kikre van kiosztva az anyag - a felhasználó kérése, hogy ez MINDIG
    * látsszon a kártyán, a "Nézet beállítása" választástól függetlenül. A
    * szin a munkatárs SAJÁT színe (a profil oldalán állítja): a neve ezen
-   * jelenik meg; null-nál marad a semleges szövegszín. */
-  kiosztva?: { nev: string; szin?: string | null }[];
+   * jelenik meg; null-nál marad a semleges szövegszín. A kep a profilkép
+   * (data-URL) - a név mellett kis avatárként jelenik meg (a felhasználó
+   * kérése); kép híján csak a név látszik. */
+  kiosztva?: { nev: string; szin?: string | null; kep?: string | null }[];
   /** Akiknek épp FUT az időmérője ezen az anyagon - élő jelzés a kártyán. */
   timerek?: string[];
 };
@@ -123,6 +125,16 @@ function BoardCardView({
           {card.kiosztva.map((ember, i) => (
             <span key={ember.nev + i}>
               {i > 0 && ", "}
+              {/* A profilkép kis avatárként a név előtt (a felhasználó
+                  kérése) - csak akinek van képe. */}
+              {ember.kep && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={ember.kep}
+                  alt=""
+                  className="mr-1 inline-block h-4 w-4 rounded-full border border-border object-cover align-[-3px]"
+                />
+              )}
               {/* A név a munkatárs SAJÁT színén (a felhasználó kérése) - a
                   font-medium a halvány színeket is olvashatóvá teszi. */}
               <span

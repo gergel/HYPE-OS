@@ -8,6 +8,7 @@ import {
   getFieldTypes,
   getKartyaMezok,
   getMyPagePermissions,
+  getProfilkepek,
   getProjects,
   getVinyoOptionsReszletes,
 } from "@/lib/api";
@@ -44,6 +45,7 @@ export default async function UtomunkaPage({
     kartyaMezok,
     pagePermissions,
     currentUser,
+    profilkepek,
   ] = await Promise.all([
     getDeliverables(INITIAL_BATCH),
     getEmployees(),
@@ -56,6 +58,8 @@ export default async function UtomunkaPage({
     getKartyaMezok(),
     getMyPagePermissions(),
     getCurrentUser(),
+    // Profilképek a kártyák "Kiosztva" sorához (a felhasználó kérése).
+    getProfilkepek(),
   ]);
 
   const statusOptions = fieldTypes.allapot?.options ?? [];
@@ -101,6 +105,9 @@ export default async function UtomunkaPage({
           // A "Teendőim" csíkhoz (a felhasználó kérése): a rám kiosztott
           // anyagok az oldal tetején is látszódjanak.
           sajatId={currentUser?.id ?? null}
+          // A profilkép a kártyán a kiosztott munkatárs neve mellett (a
+          // felhasználó kérése).
+          profilkepek={profilkepek}
           // A vinyó-nézet kártyáin helyben állítható az archiválás (a
           // felhasználó kérése) - ezek a választható értékei.
           archivalasOptions={fieldTypes.archivalas?.options ?? []}

@@ -77,6 +77,7 @@ export function UtomunkaContent({
   vinyoKezelheto = false,
   isAdmin = false,
   sajatId = null,
+  profilkepek = {},
 }: {
   /** Igaz esetén az oldal a LEJÁRT határidejű anyagokra szűrve nyílik (a
    * dashboard figyelmeztetéséről jövet, ?szures=lejart) - a felületen
@@ -110,6 +111,9 @@ export function UtomunkaContent({
   vinyoKezelheto?: boolean;
   /** Admin a vinyó-kezelésben a jogosultság-kiosztást is látja. */
   isAdmin?: boolean;
+  /** Munkatárs-id -> profilkép data-URL: a kártyák "Kiosztva" sorában a név
+   * mellett kis avatárként jelenik meg (a felhasználó kérése). */
+  profilkepek?: Record<number, string>;
 }) {
   const [deliverables, setDeliverables] = useState(initialDeliverables);
   const [projects, setProjects] = useState(initialProjects);
@@ -208,6 +212,17 @@ export function UtomunkaContent({
     return terkep;
   }, [employees]);
 
+  // {munkatárs neve -> profilkép} - a kártyák "Kiosztva" sorában a név mellé
+  // (a felhasználó kérése). Név szerint kulcsolva, ugyanazért, mint a nevSzin.
+  const nevKep = useMemo(() => {
+    const terkep = new Map<string, string>();
+    for (const e of employees) {
+      const kep = profilkepek[e.id];
+      if (kep) terkep.set(e.full_name, kep);
+    }
+    return terkep;
+  }, [employees, profilkepek]);
+
   // {anyag id -> akiknek épp fut rajta az időmérője}.
   const timerNevek = useMemo(() => {
     const nevek = new Map<number, string[]>();
@@ -280,7 +295,7 @@ export function UtomunkaContent({
         : d.assigned_to_employee_id
           ? [employeeName.get(d.assigned_to_employee_id) ?? "?"]
           : [];
-    const kiosztva = kiosztottNevek.map((nev) => ({ nev, szin: nevSzin.get(nev) ?? null }));
+    const kiosztva = kiosztottNevek.map((nev) => ({ nev, szin: nevSzin.get(nev) ?? null, kep: nevKep.get(nev) ?? null }));
     return {
       id: d.id,
       href: `/utomunka/${d.id}`,
@@ -388,7 +403,7 @@ export function UtomunkaContent({
         : []),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lathatoAnyagok, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, nevSzin, timerNevek, allapotKereses]);
+  }, [lathatoAnyagok, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, nevSzin, nevKep, timerNevek, allapotKereses]);
 
   const vinyoColumns: BoardColumn[] = useMemo(() => {
     const keresett = vinyoKereses.trim().toLocaleLowerCase("hu-HU");
@@ -441,7 +456,7 @@ export function UtomunkaContent({
         ),
       }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lathatoAnyagok, vinyoOptions, vinyoSzinek, vinyoKereses, vinyoRendezes, kartyaMezok, employeeName, nevSzin, timerNevek, canEdit, archivalasOptions, allapotBeallitasok]);
+  }, [lathatoAnyagok, vinyoOptions, vinyoSzinek, vinyoKereses, vinyoRendezes, kartyaMezok, employeeName, nevSzin, nevKep, timerNevek, canEdit, archivalasOptions, allapotBeallitasok]);
 
   /** Az anyag ÁLLAPOTÁNAK tényleges átírása - ezt hívja mind a Kanban-húzás
    * (kartyaAthelyezes, a celOszlop -> allapot fordítás után), mind a lista

@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useLiveTopic } from "@/lib/live";
 import type { DeliverableComment, DocumentAttachment } from "@/lib/api";
 import { Markdown } from "@/components/Markdown";
+import { ProfilAvatar } from "@/components/ProfilAvatar";
 
 const MENTION_PATTERN = /@[^\s@]*$/;
 
@@ -37,6 +38,7 @@ export function CommentsSection({
   mentionableEmployees,
   canUpload,
   currentEmployeeId = null,
+  profilkepek = {},
 }: {
   deliverableId: number;
   initialComments: DeliverableComment[];
@@ -48,6 +50,9 @@ export function CommentsSection({
   /** A bejelentkezett munkatárs id-je - a SAJÁT hozzászólás küldés után is
    * szerkeszthető (a felhasználó kérése), ehhez kell tudni, melyik az övé. */
   currentEmployeeId?: number | null;
+  /** Munkatárs-id -> profilkép data-URL (a felhasználó kérése: mindenki
+   * profilképe látszódjon a saját hozzászólásánál). Kép híján monogram. */
+  profilkepek?: Record<number, string>;
 }) {
   // A FÉLBEHAGYOTT hozzászólás megőrzése (a felhasználó kérése): a piszkozat
   // a böngészőben marad, oldalváltás után visszatérve folytatható és
@@ -258,6 +263,8 @@ export function CommentsSection({
         {comments.map((c) => (
           <div key={c.id} className="rounded-[var(--radius)] bg-surface-1 p-3">
             <div className="mb-1 flex items-center gap-2">
+              {/* A szerző profilképe (a felhasználó kérése) - kép híján monogram. */}
+              <ProfilAvatar nev={c.employee_name} kep={profilkepek[c.employee_id] ?? null} meret={22} />
               <span className="text-[13px] font-medium text-text-primary">{c.employee_name}</span>
               <span className="text-[11px] text-text-muted">{formatTimestamp(c.created_at)}</span>
               {/* Az átírt hozzászólás jelölve van - a többiek lássák, hogy nem

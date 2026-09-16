@@ -548,6 +548,13 @@ export async function getEmployees(limit = 5000): Promise<Employee[]> {
   return (await apiGet<Employee[]>(`/api/v1/crew?limit=${limit}`)) ?? [];
 }
 
+/** Minden munkatárs profilképe egyben (id -> data-URL) - a hozzászólások
+ * szerzőjénél és az utómunka kártyák "Kiosztva" soránál jelenik meg (a
+ * felhasználó kérése). Akinek nincs képe, az nincs benne a térképben. */
+export async function getProfilkepek(): Promise<Record<number, string>> {
+  return (await apiGet<Record<number, string>>(`/api/v1/profilkepek`)) ?? {};
+}
+
 export async function getEmployeeDocuments(employeeId: number): Promise<EmployeeDocument[]> {
   return (await apiGet<EmployeeDocument[]>(`/api/v1/crew/${employeeId}/munkaszerzodesek`)) ?? [];
 }
