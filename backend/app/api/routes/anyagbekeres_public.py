@@ -310,12 +310,17 @@ def fajl_init(token: str, payload: FajlInitIn, db: Session = Depends(get_db)):
     fajl.storage_key = szolg.fajl_kulcs(b.id, leadas.id, fajl.id, nev)
     try:
         fajl.upload_id = storage.create_multipart(fajl.storage_key, payload.content_type or "application/octet-stream")
+        db.commit()
     except R2NotConfiguredError as exc:
         db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 - a beküldő PONTOS hibát kapjon, ne "váratlan szerverhibát"
+        # A tároló (R2 multipart nyitás) VAGY a rá következő adatbázis-írás
+        # bukott el. Mindkettőt itt fogjuk el, hogy a beküldő beszédes hibát
+        # kapjon, a tényleges kivétel (típus + üzenet eleje) pedig a Railway
+        # logba is bekerüljön - a néma "Váratlan szerverhiba" helyett.
         db.rollback()
-        log.exception("Anyagbekérés fájl-init: a tároló nem fogadta (%s, %s bájt)", nev, payload.meret_bajt)
+        log.exception("Anyagbekérés fájl-init: a feltöltés indítása megbukott (%s, %s bájt)", nev, payload.meret_bajt)
         raise HTTPException(
             status_code=502,
             detail=(
@@ -324,7 +329,6 @@ def fajl_init(token: str, payload: FajlInitIn, db: Session = Depends(get_db)):
                 "szólj a HYPE kapcsolattartódnak."
             ),
         ) from exc
-    db.commit()
     return {"fajl_id": fajl.id, "mappa_id": fajl.mappa_id, "resz_meret": szolg.RESZ_MERET}
 
 
