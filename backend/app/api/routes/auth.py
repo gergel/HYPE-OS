@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
@@ -13,7 +15,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.employee import Employee, SystemRole
-from app.schemas.auth import TEMAK, TemaIn, Token, UserOut
+from app.schemas.auth import TEMAK, ProfilIn, TemaIn, Token, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -136,6 +138,50 @@ def set_tema(
             detail=f"Ismeretlen téma. Választható: {', '.join(TEMAK)}",
         )
     current_user.tema = payload.tema
+    db.commit()
+    db.refresh(current_user)
+    return _kimenet(current_user)
+
+
+#: A saját szín elfogadott alakja ("#rrggbb" - a felület color-pickere ilyet ad).
+_SZIN_MINTA = re.compile(r"^#[0-9a-fA-F]{6}$")
+#: A profilkép data-URL felső mérete. A böngésző ~256px-re kicsinyítve küldi
+#: (lásd frontend app/profil), az jóval ez alatt marad - a korlát csak azt
+#: fogja meg, ha valaki kézzel egy teljes fotót POST-olna be.
+_PROFILKEP_MAX_HOSSZ = 400_000
+
+
+@router.put("/me/profil", response_model=UserOut)
+def set_profil(
+    payload: ProfilIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """A SAJÁT profil beállításai (a felhasználó kérése): saját szín (a név
+    ezen jelenik meg pl. az utómunka kártyákon) és profilkép. Önkiszolgáló,
+    mint a téma: mindenki csak a sajátját írja (a rekord a tokenből jön),
+    ezért nincs hozzá oldal-jogosultság. Csak az elküldött mező változik;
+    None = az adott érték törlése."""
+    mezok = payload.model_dump(exclude_unset=True)
+    if "szin" in mezok:
+        szin = mezok["szin"]
+        if szin is not None and not _SZIN_MINTA.match(szin):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='A szín formátuma "#rrggbb" legyen.')
+        current_user.szin = szin
+    if "profilkep" in mezok:
+        kep = mezok["profilkep"]
+        if kep is not None:
+            if not kep.startswith("data:image/"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A profilkép data-URL-ként érkezzen (data:image/...).",
+                )
+            if len(kep) > _PROFILKEP_MAX_HOSSZ:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A profilkép túl nagy - válassz kisebb képet.",
+                )
+        current_user.profilkep = kep
     db.commit()
     db.refresh(current_user)
     return _kimenet(current_user)

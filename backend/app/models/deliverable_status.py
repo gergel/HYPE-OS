@@ -64,3 +64,8 @@ class DeliverableBoardConfig(TimestampMixin, Base):
     #: adminon kívül - employee id-k listája, admin adja (a felhasználó
     #: kérése: ez KÜLÖN jogosultság, nem jár az /utomunka edit joggal).
     vinyo_kezelo_employee_ids: Mapped[list[int] | None] = mapped_column(JSON)
+    #: A vinyók színei: {vinyó név -> "#rrggbb"} (a felhasználó kérése). A
+    #: vinyó-nézeten az oszlop fejléce ÉS az alatta lévő teljes kártyasor ezt
+    #: a színt kapja halványan (lásd frontend DeliverableBoard). Átnevezéskor
+    #: a szín a névvel együtt költözik, törléskor lekerül.
+    vinyo_szinek: Mapped[dict | None] = mapped_column(JSON)

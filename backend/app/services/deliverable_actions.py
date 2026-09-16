@@ -3,6 +3,7 @@ van kiosztva, vinyó-lista, Start/Stop időmérés, megrendelői kontaktok +
 levezetett email-lista, "Visszajelzés küldése" gomb (a felhasználó által
 küldött Notion automatizmus screenshot alapján) és a chat-szerű kommentek."""
 
+import re
 from collections.abc import Iterable
 from datetime import datetime, timezone
 
@@ -92,7 +93,14 @@ def get_vinyo_options(db: Session) -> VinyoOptions:
             for v in raw:
                 if isinstance(v, str) and v not in declared_set and v not in extras:
                     extras[v] = None
-    return VinyoOptions(options=declared + sorted(extras.keys()))
+    options = declared + sorted(extras.keys())
+    # A vinyók színei (a felhasználó kérése) - csak a ténylegesen létező
+    # nevekre, hogy egy rég törölt vinyó színe ne utazzon feleslegesen.
+    szinek: dict[str, str] = {}
+    if config is not None and isinstance(config.vinyo_szinek, dict):
+        opcio_halmaz = set(options)
+        szinek = {str(k): str(v) for k, v in config.vinyo_szinek.items() if str(k) in opcio_halmaz and v}
+    return VinyoOptions(options=options, szinek=szinek)
 
 
 def _recompute_email_list(deliverable: Deliverable) -> None:
@@ -640,6 +648,12 @@ def rename_vinyo_nev(db: Session, regi: str, uj: str) -> list[str]:
     if uj != regi and uj in lista:
         raise HTTPException(status_code=400, detail="Már van ilyen nevű vinyó.")
     config.vinyo_opciok = [uj if v == regi else v for v in lista]
+    # A szín a névvel együtt költözik (a felhasználó kérése óta a vinyónak
+    # színe is lehet) - különben átnevezés után "elveszne" a színezés.
+    if isinstance(config.vinyo_szinek, dict) and regi in config.vinyo_szinek:
+        szinek = dict(config.vinyo_szinek)
+        szinek[uj] = szinek.pop(regi)
+        config.vinyo_szinek = szinek
     _vinyo_atiras_az_anyagokon(db, regi, uj)
     db.commit()
     return get_vinyo_options(db).options
@@ -650,8 +664,50 @@ def delete_vinyo_nev(db: Session, nev: str) -> list[str]:
     if nev not in lista:
         raise HTTPException(status_code=404, detail="Nincs ilyen nevű vinyó.")
     config.vinyo_opciok = [v for v in lista if v != nev]
+    if isinstance(config.vinyo_szinek, dict) and nev in config.vinyo_szinek:
+        szinek = dict(config.vinyo_szinek)
+        szinek.pop(nev)
+        config.vinyo_szinek = szinek
     # Az anyagokról is lekerül - különben a "historikus érték" ágon (lásd
     # get_vinyo_options) azonnal visszakerülne a választhatók közé.
     _vinyo_atiras_az_anyagokon(db, nev, None)
     db.commit()
     return get_vinyo_options(db).options
+
+
+#: Elfogadott szín-alak: "#rrggbb" (a felület color-pickere ilyet ad).
+_SZIN_MINTA = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def reorder_vinyo_nevek(db: Session, sorrend: list[str]) -> list[str]:
+    """A vinyók SORRENDJÉNEK átrendezése (a felhasználó kérése): a kapott
+    lista ugyanazokat a neveket kell tartalmazza, mint a jelenlegi - csak a
+    sorrend változhat, név nem veszhet el és nem születhet itt."""
+    config, _ = _vinyo_lista_szerkesztesre(db)
+    jelenlegi = get_vinyo_options(db).options
+    if sorted(sorrend) != sorted(jelenlegi):
+        raise HTTPException(
+            status_code=400,
+            detail="A sorrend-lista nem ugyanazokat a vinyókat tartalmazza, mint a jelenlegi - frissítsd az oldalt.",
+        )
+    config.vinyo_opciok = list(sorrend)
+    db.commit()
+    return get_vinyo_options(db).options
+
+
+def set_vinyo_szin(db: Session, nev: str, szin: str | None) -> dict[str, str]:
+    """Egy vinyó színének beállítása/levétele (szin=None)."""
+    if szin is not None and not _SZIN_MINTA.match(szin):
+        raise HTTPException(status_code=400, detail='A szín formátuma "#rrggbb" legyen.')
+    config, lista = _vinyo_lista_szerkesztesre(db)
+    letezok = set(lista) | set(get_vinyo_options(db).options)
+    if nev not in letezok:
+        raise HTTPException(status_code=404, detail="Nincs ilyen nevű vinyó.")
+    szinek = dict(config.vinyo_szinek) if isinstance(config.vinyo_szinek, dict) else {}
+    if szin is None:
+        szinek.pop(nev, None)
+    else:
+        szinek[nev] = szin
+    config.vinyo_szinek = szinek
+    db.commit()
+    return get_vinyo_options(db).szinek

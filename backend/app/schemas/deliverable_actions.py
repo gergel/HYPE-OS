@@ -16,6 +16,9 @@ class VinyoOptions(BaseModel):
     #: vagy akinek admin külön megadta (lásd models/deliverable_status.
     #: vinyo_kezelo_employee_ids).
     kezelheto: bool = False
+    #: A vinyók színei: {név -> "#rrggbb"} (a felhasználó kérése) - a vinyó-
+    #: nézet oszlopa és a teljes kártyasora ezt kapja halványan.
+    szinek: dict[str, str] = {}
 
 
 class ContactOption(BaseModel):

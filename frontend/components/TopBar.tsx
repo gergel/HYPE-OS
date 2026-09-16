@@ -95,7 +95,12 @@ export async function TopBar() {
             csak az első festés gyorsítótára, lásd lib/tema.ts. */}
         <TemaKapcsolo kezdeti={user?.tema ?? null} />
         <NotificationBell initial={notifications} />
-        <UserMenu name={name || "Ismeretlen"} email={user?.email ?? null} initials={initials} />
+        <UserMenu
+          name={name || "Ismeretlen"}
+          email={user?.email ?? null}
+          initials={initials}
+          profilkep={user?.profilkep ?? null}
+        />
       </div>
     </div>
   );

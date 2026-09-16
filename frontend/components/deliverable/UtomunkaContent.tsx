@@ -69,12 +69,14 @@ export function UtomunkaContent({
   allapotBeallitasok,
   kartyaMezok,
   vinyoOptions,
+  vinyoSzinek = {},
   archivalasOptions = [],
   canCreate,
   canDelete,
   canEdit,
   vinyoKezelheto = false,
   isAdmin = false,
+  sajatId = null,
 }: {
   /** Igaz esetén az oldal a LEJÁRT határidejű anyagokra szűrve nyílik (a
    * dashboard figyelmeztetéséről jövet, ?szures=lejart) - a felületen
@@ -91,12 +93,18 @@ export function UtomunkaContent({
   /** Mely mezők látszódjanak a tábla kártyáin (üres = alapértelmezés). */
   kartyaMezok: string[];
   vinyoOptions: string[];
+  /** A vinyók színei ({név -> "#rrggbb"}, a felhasználó kérése): a vinyó-
+   * nézet oszlopa ÉS a teljes kártyasora ezt kapja halványan. */
+  vinyoSzinek?: Record<string, string>;
   /** Az archiválás mező választható értékei (fieldTypes.archivalas) - a
    * vinyó-nézet kártyáin helyben állítható (a felhasználó kérése). */
   archivalasOptions?: string[];
   canCreate: boolean;
   canDelete: boolean;
   canEdit: boolean;
+  /** A bejelentkezett munkatárs id-ja - a "Teendőim" csíkhoz (a felhasználó
+   * kérése: a rá kiosztott anyagok az oldal tetején is látszódjanak). */
+  sajatId?: number | null;
   /** Kezelheti-e a vinyó-neveket (új/átnevezés/törlés) - admin, vagy akinek
    * admin külön megadta (lásd backend postproduction._vinyo_kezelheto). */
   vinyoKezelheto?: boolean;
@@ -190,6 +198,16 @@ export function UtomunkaContent({
 
   const employeeName = useMemo(() => new Map(employees.map((e) => [e.id, e.full_name])), [employees]);
 
+  // {munkatárs neve -> saját színe} - a kártyákon a nevek ezen a színen
+  // jelennek meg (a felhasználó kérése; a színt mindenki a profil oldalán
+  // állítja be magának). Név szerint kulcsolva, mert a kártyára már a
+  // feloldott nevek kerülnek (kiosztott_nevek).
+  const nevSzin = useMemo(() => {
+    const terkep = new Map<string, string>();
+    for (const e of employees) if (e.szin) terkep.set(e.full_name, e.szin);
+    return terkep;
+  }, [employees]);
+
   // {anyag id -> akiknek épp fut rajta az időmérője}.
   const timerNevek = useMemo(() => {
     const nevek = new Map<number, string[]>();
@@ -254,13 +272,15 @@ export function UtomunkaContent({
           .map((kulcs) => ({ cimke: humanizeKey(kulcs), ertek: mezoErteke(d, kulcs) }))
           .filter((m): m is { cimke: string; ertek: string } => m.ertek !== null);
     // Kikre van kiosztva: az új több-emberes lista; régi (még egyértékű)
-    // adatnál az assigned_to mezőből oldjuk fel a nevet.
-    const kiosztva =
+    // adatnál az assigned_to mezőből oldjuk fel a nevet. A név mellé a
+    // munkatárs saját színe is megy (a felhasználó kérése).
+    const kiosztottNevek =
       d.kiosztott_nevek && d.kiosztott_nevek.length > 0
         ? d.kiosztott_nevek
         : d.assigned_to_employee_id
           ? [employeeName.get(d.assigned_to_employee_id) ?? "?"]
           : [];
+    const kiosztva = kiosztottNevek.map((nev) => ({ nev, szin: nevSzin.get(nev) ?? null }));
     return {
       id: d.id,
       href: `/utomunka/${d.id}`,
@@ -368,7 +388,7 @@ export function UtomunkaContent({
         : []),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lathatoAnyagok, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, timerNevek, allapotKereses]);
+  }, [lathatoAnyagok, statusOptions, allapotBeallitasok, kartyaMezok, canEdit, employeeName, nevSzin, timerNevek, allapotKereses]);
 
   const vinyoColumns: BoardColumn[] = useMemo(() => {
     const keresett = vinyoKereses.trim().toLocaleLowerCase("hu-HU");
@@ -402,6 +422,9 @@ export function UtomunkaContent({
       .map((v) => ({
         key: v,
         label: v,
+        // A vinyó színe (a felhasználó kérése): az oszlop ÉS a teljes
+        // kártyasora ezt kapja halványan (lásd DeliverableBoard).
+        szin: vinyoSzinek[v] ?? null,
         cards: rendezve(byVinyo.get(v)!).map((d) =>
           canEdit && archivalasOptions.length > 0
             ? toCard(
@@ -418,7 +441,7 @@ export function UtomunkaContent({
         ),
       }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lathatoAnyagok, vinyoOptions, vinyoKereses, vinyoRendezes, kartyaMezok, employeeName, timerNevek, canEdit, archivalasOptions, allapotBeallitasok]);
+  }, [lathatoAnyagok, vinyoOptions, vinyoSzinek, vinyoKereses, vinyoRendezes, kartyaMezok, employeeName, nevSzin, timerNevek, canEdit, archivalasOptions, allapotBeallitasok]);
 
   /** Az anyag ÁLLAPOTÁNAK tényleges átírása - ezt hívja mind a Kanban-húzás
    * (kartyaAthelyezes, a celOszlop -> allapot fordítás után), mind a lista
@@ -480,6 +503,24 @@ export function UtomunkaContent({
 
   const calendarProjects = useMemo(() => projects.filter((p) => p.forgatas_datuma !== null), [projects]);
 
+  // TEENDŐIM (a felhasználó kérése): a rám kiosztott, még le nem zárt anyagok
+  // az oldal tetején, egy vékony csíkban - ugyanaz a kör, amit egy korlátozott
+  // vágó-fiók a dashboardján lát, csak itt mindenkinek, kompakt formában.
+  const teendoim = useMemo(() => {
+    if (!sajatId) return [];
+    return deliverables.filter(
+      (d) =>
+        (d.kiosztott_employee_ids?.includes(sajatId) || d.assigned_to_employee_id === sajatId) &&
+        !d.anyag_kikuldve &&
+        !lezaroAllapot(d.allapot),
+    );
+  }, [deliverables, sajatId, lezaroAllapot]);
+
+  const maNap = useMemo(() => {
+    const ma = new Date();
+    return `${ma.getFullYear()}-${String(ma.getMonth() + 1).padStart(2, "0")}-${String(ma.getDate()).padStart(2, "0")}`;
+  }, []);
+
   // DUPLIKÁLT anyagok (a felhasználó kérése): ugyanaz az anyagnév több
   // vinyón is szerepel - név szerint összevonva (akár egy anyag több vinyóval,
   // akár több azonos nevű anyag külön vinyókkal), hogy takarításkor látszódjon,
@@ -530,6 +571,38 @@ export function UtomunkaContent({
           </button>
         </div>
       )}
+      {/* TEENDŐIM csík (a felhasználó kérése): a rám kiosztott, nyitott
+          anyagok felül, VÉKONY sávban - egy sor, vízszintesen görgethető
+          lapkákkal; a lapka felugró ablakban nyitja az anyagot. Ha nincs
+          teendőm, a csík el sem foglalja a helyet. */}
+      {teendoim.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 overflow-x-auto rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-1.5">
+          <span className="shrink-0 text-[12px] font-medium uppercase tracking-wide text-text-muted">
+            Teendőim ({teendoim.length})
+          </span>
+          {teendoim.map((d) => {
+            const lejart = d.hatarido !== null && d.hatarido.slice(0, 10) < maNap;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setModalHref(`/utomunka/${d.id}`)}
+                title={d.hatarido ? `Határidő: ${formatDate(d.hatarido)}` : undefined}
+                className={`flex shrink-0 items-center gap-1.5 rounded-[var(--radius)] border px-2 py-1 text-[12px] hover:bg-surface-3 ${
+                  d.prioritas && !lezaroAllapot(d.allapot) ? "border-red-600/60" : "border-border"
+                }`}
+              >
+                <span className="max-w-[220px] truncate text-text-primary">{d.projekt_neve}</span>
+                {d.hatarido && (
+                  <span className={lejart ? "font-medium text-text-danger" : "text-text-muted"}>
+                    {formatDate(d.hatarido)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <UtomunkaViewTabs
         board={
           <div className="space-y-6">
@@ -576,6 +649,7 @@ export function UtomunkaContent({
                 vinyoKezelheto ? (
                   <VinyoKezeles
                     kezdetiOpciok={vinyoOptions}
+                    kezdetiSzinek={vinyoSzinek}
                     isAdmin={isAdmin}
                     emberek={employees.map((e) => ({ id: e.id, nev: e.full_name }))}
                   />

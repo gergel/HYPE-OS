@@ -65,6 +65,11 @@ class EmployeeRead(EmployeeBase):
     role: SystemRole
     tovabbi_szerepkorok: list[str] | None = None
     is_active: bool
+    #: A munkatárs SAJÁT SZÍNE ("#rrggbb") - a neve ezen jelenik meg pl. az
+    #: utómunka kártyákon (a profil oldalán állítja be maga). A profilkép
+    #: szándékosan NINCS itt: az csak a saját /auth/me válaszban utazik, a
+    #: listákat felduzzasztaná.
+    szin: str | None = None
     # a nyers jelszó-hash sosem kerül ki a válaszban (exclude=True) - csak azt
     # a bool jelzőt adjuk vissza, hogy van-e egyáltalán beállítva (lásd
     # Beállítások oldal munkatárs-keresője: alapból csak azokat listázza, akiknek

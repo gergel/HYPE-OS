@@ -2,21 +2,30 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { ModalReteg } from "@/components/ModalReteg";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { authFetch } from "@/lib/authFetch";
 
-/** VINYÓK KEZELÉSE (a felhasználó kérése): új vinyó név felvétele, átnevezés
- * és törlés - felugró ablakban, az Utómunka "Vinyók szerint" kártyájáról.
+/** Alapszínek egy kattintásra - a színválasztóval bármi más is beállítható.
+ * Ugyanazok a telített árnyalatok, mint az állapot-oszlopoknál (lásd
+ * AllapotBeallitasok): a halványítást a tábla végzi (DeliverableBoard). */
+const SZIN_MINTAK = ["#6d8f72", "#c98b5a", "#7f8ec4", "#b06a8f", "#5f9ea0", "#a8a05a", "#8a8a8a"];
+
+/** VINYÓK KEZELÉSE (a felhasználó kérése): új vinyó név felvétele, átnevezés,
+ * törlés, SORREND (nyilakkal) és SZÍN (a vinyó-nézet oszlopa + a teljes
+ * kártyasora ezt kapja halványan) - felugró ablakban, az Utómunka "Vinyók
+ * szerint" kártyájáról.
  *
  * KÜLÖN jogosultsághoz kötött: admin mindig kezelheti, más csak akkor, ha
  * admin megadta neki (lásd backend postproduction._vinyo_kezelheto) - a gomb
  * ezért csak annak látszik, akinél a vinyo-options válasz kezelheto=true.
  * Az átnevezés/törlés az ÖSSZES anyag vinyó-listáján átfut, nem csak a
  * választható opciókon. */
-export function VinyoKezeles({ kezdetiOpciok, isAdmin, emberek }: {
+export function VinyoKezeles({ kezdetiOpciok, kezdetiSzinek = {}, isAdmin, emberek }: {
   kezdetiOpciok: string[];
+  /** A vinyók színei ({név -> "#rrggbb"}) - lásd backend vinyo_szinek. */
+  kezdetiSzinek?: Record<string, string>;
   /** Admin látja a jogosultság-kiosztást is (ki kezelheti a vinyókat). */
   isAdmin: boolean;
   emberek: { id: number; nev: string }[];
@@ -25,6 +34,7 @@ export function VinyoKezeles({ kezdetiOpciok, isAdmin, emberek }: {
   const confirm = useConfirm();
   const [nyitva, setNyitva] = useState(false);
   const [opciok, setOpciok] = useState(kezdetiOpciok);
+  const [szinek, setSzinek] = useState<Record<string, string>>(kezdetiSzinek);
   const [ujNev, setUjNev] = useState("");
   const [atnevezes, setAtnevezes] = useState<{ regi: string; uj: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,6 +59,7 @@ export function VinyoKezeles({ kezdetiOpciok, isAdmin, emberek }: {
         return false;
       }
       if (Array.isArray(adat?.options)) setOpciok(adat.options);
+      if (adat?.szinek && typeof adat.szinek === "object") setSzinek(adat.szinek as Record<string, string>);
       router.refresh();
       return true;
     } catch (err) {
@@ -62,6 +73,31 @@ export function VinyoKezeles({ kezdetiOpciok, isAdmin, emberek }: {
   async function ujVinyo() {
     if (!ujNev.trim()) return;
     if (await hivas("/api/v1/deliverables/vinyo-nevek", { nev: ujNev.trim() })) setUjNev("");
+  }
+
+  /** SORREND (a felhasználó kérése): egy hellyel feljebb/lejjebb - azonnal
+   * mentve, a vinyó-nézet oszlopai ezt a sorrendet követik. Optimista: a
+   * lista rögtön átrendeződik, hibánál a szerver válasza visszaigazítja. */
+  async function mozgat(index: number, irany: -1 | 1) {
+    const cel = index + irany;
+    if (cel < 0 || cel >= opciok.length) return;
+    const uj = [...opciok];
+    [uj[index], uj[cel]] = [uj[cel], uj[index]];
+    setOpciok(uj);
+    if (!(await hivas("/api/v1/deliverables/vinyo-nevek/sorrend", { options: uj }))) setOpciok(opciok);
+  }
+
+  /** SZÍN (a felhasználó kérése): a vinyó-nézet oszlopa és a teljes alatta
+   * lévő kártyasor ezt kapja halványan. null = a szín levétele. */
+  async function szinAllitas(nev: string, szin: string | null) {
+    const elozo = szinek;
+    setSzinek((s) => {
+      const uj = { ...s };
+      if (szin === null) delete uj[nev];
+      else uj[nev] = szin;
+      return uj;
+    });
+    if (!(await hivas("/api/v1/deliverables/vinyo-nevek/szin", { nev, szin }))) setSzinek(elozo);
   }
 
   async function atnevez() {
@@ -117,7 +153,7 @@ export function VinyoKezeles({ kezdetiOpciok, isAdmin, emberek }: {
       {nyitva && (
         <ModalReteg onClose={busy ? undefined : () => setNyitva(false)}>
           <div
-            className="my-auto flex max-h-[86vh] w-full max-w-lg flex-col rounded-[var(--radius)] border border-border bg-surface-2 p-6"
+            className="my-auto flex max-h-[86vh] w-full max-w-2xl flex-col rounded-[var(--radius)] border border-border bg-surface-2 p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="mb-1 text-[15px] font-medium text-text-primary">Vinyók kezelése</h3>
@@ -126,8 +162,29 @@ export function VinyoKezeles({ kezdetiOpciok, isAdmin, emberek }: {
             </p>
 
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-              {opciok.map((nev) => (
+              {opciok.map((nev, index) => (
                 <div key={nev} className="flex items-center gap-2 rounded-[var(--radius)] bg-surface-3 px-2.5 py-1.5">
+                  {/* SORREND-nyilak (a felhasználó kérése) - azonnal mentődik. */}
+                  <span className="flex shrink-0 gap-0.5">
+                    <button
+                      type="button"
+                      disabled={busy || index === 0}
+                      onClick={() => void mozgat(index, -1)}
+                      aria-label={`${nev} feljebb`}
+                      className="rounded-[var(--radius)] border border-border p-0.5 text-text-secondary hover:bg-surface-2 disabled:opacity-30"
+                    >
+                      <ArrowUp size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || index === opciok.length - 1}
+                      onClick={() => void mozgat(index, 1)}
+                      aria-label={`${nev} lejjebb`}
+                      className="rounded-[var(--radius)] border border-border p-0.5 text-text-secondary hover:bg-surface-2 disabled:opacity-30"
+                    >
+                      <ArrowDown size={12} />
+                    </button>
+                  </span>
                   {atnevezes?.regi === nev ? (
                     <>
                       <input
@@ -160,6 +217,41 @@ export function VinyoKezeles({ kezdetiOpciok, isAdmin, emberek }: {
                   ) : (
                     <>
                       <span className="flex-1 text-[13px] text-text-primary [overflow-wrap:anywhere]">{nev}</span>
+                      {/* SZÍN (a felhasználó kérése): RGB-választó + gyors
+                          minták. A színválasztó a helyi állapotot írja
+                          csúszkázás közben, és a bezárásakor (blur) ment. */}
+                      <input
+                        type="color"
+                        value={szinek[nev] ?? "#8a8a8a"}
+                        onChange={(e) => setSzinek((s) => ({ ...s, [nev]: e.target.value }))}
+                        onBlur={(e) => void szinAllitas(nev, e.target.value)}
+                        aria-label={`${nev} színe`}
+                        title="A vinyó színe - az oszlop és a kártyasora ezt kapja"
+                        className="h-5 w-7 shrink-0 cursor-pointer rounded border border-border bg-transparent"
+                      />
+                      <span className="flex shrink-0 gap-1">
+                        {SZIN_MINTAK.map((minta) => (
+                          <button
+                            key={minta}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void szinAllitas(nev, minta)}
+                            aria-label={`${nev}: ${minta}`}
+                            style={{ background: minta }}
+                            className="h-3.5 w-3.5 rounded-full border border-border"
+                          />
+                        ))}
+                        {szinek[nev] && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void szinAllitas(nev, null)}
+                            className="text-[11.5px] text-text-secondary hover:text-text-primary hover:underline"
+                          >
+                            nincs
+                          </button>
+                        )}
+                      </span>
                       <button
                         type="button"
                         disabled={busy}

@@ -21,8 +21,10 @@ export type BoardCard = {
    * melyik mezők, azt a "Nézet beállítása" panelen lehet megadni. */
   mezok?: { cimke: string; ertek: string }[];
   /** Kikre van kiosztva az anyag - a felhasználó kérése, hogy ez MINDIG
-   * látsszon a kártyán, a "Nézet beállítása" választástól függetlenül. */
-  kiosztva?: string[];
+   * látsszon a kártyán, a "Nézet beállítása" választástól függetlenül. A
+   * szin a munkatárs SAJÁT színe (a profil oldalán állítja): a neve ezen
+   * jelenik meg; null-nál marad a semleges szövegszín. */
+  kiosztva?: { nev: string; szin?: string | null }[];
   /** Akiknek épp FUT az időmérője ezen az anyagon - élő jelzés a kártyán. */
   timerek?: string[];
 };
@@ -117,7 +119,20 @@ function BoardCardView({
       {card.subtitle && <p className="mt-0.5 text-[12px] text-text-muted [overflow-wrap:anywhere]">{card.subtitle}</p>}
       {card.kiosztva && card.kiosztva.length > 0 && (
         <p className="mt-0.5 text-[12px] text-text-muted [overflow-wrap:anywhere]">
-          Kiosztva: <span className="text-text-secondary">{card.kiosztva.join(", ")}</span>
+          Kiosztva:{" "}
+          {card.kiosztva.map((ember, i) => (
+            <span key={ember.nev + i}>
+              {i > 0 && ", "}
+              {/* A név a munkatárs SAJÁT színén (a felhasználó kérése) - a
+                  font-medium a halvány színeket is olvashatóvá teszi. */}
+              <span
+                style={ember.szin ? { color: ember.szin } : undefined}
+                className={ember.szin ? "font-medium" : "text-text-secondary"}
+              >
+                {ember.nev}
+              </span>
+            </span>
+          ))}
         </p>
       )}
       {card.timerek && card.timerek.length > 0 && (

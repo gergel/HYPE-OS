@@ -152,6 +152,17 @@ class Employee(TimestampMixin, Base):
     #: és egy közös gépen a következő belépő az előző ízlését örökölné.
     tema: Mapped[str | None] = mapped_column(String(10), comment="Felület témája: sotet / vilagos")
 
+    #: A munkatárs SAJÁT SZÍNE ("#rrggbb") - a profil oldalán állítja be, és a
+    #: neve ezen a színen jelenik meg pl. az utómunka kártyákon (a felhasználó
+    #: kérése). NULL = nincs színe, marad a semleges szövegszín.
+    szin: Mapped[str | None] = mapped_column(String(9), comment="Saját szín (#rrggbb) - a név színe a felületen")
+    #: PROFILKÉP data-URL-ként (a böngésző küldi, már lekicsinyítve ~256px-re,
+    #: lásd frontend app/profil). Szándékosan az adatbázisban és nem az R2-n:
+    #: pár tíz kB emberenként, cserébe a profilkép ott is működik, ahol az R2
+    #: nincs beállítva - de CSAK a saját /auth/me válaszban utazik, a
+    #: munkatárs-listákban nem (azokat felduzzasztaná).
+    profilkep: Mapped[str | None] = mapped_column(Text, comment="Profilkép (data-URL, kicsinyítve)")
+
     # --- a 'Külsős és belsős' Notion tábla maradék mezői ---
     technikai_ismeret: Mapped[str | None] = mapped_column(Text, comment="TECHNIKAI ISMERET")
     vallalkozas_kepviselo: Mapped[str | None] = mapped_column(String(255), comment="Vállalkozás képviselő")

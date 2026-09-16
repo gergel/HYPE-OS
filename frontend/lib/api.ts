@@ -182,6 +182,9 @@ export type Employee = {
   email: string | null;
   telefon: string | null;
   is_active: boolean;
+  /** A munkatárs SAJÁT SZÍNE ("#rrggbb") - a neve ezen jelenik meg pl. az
+   * utómunka kártyákon (a profil oldalán állítja be maga). */
+  szin?: string | null;
   /** Az elsődleges szerepkör; a továbbiak a tovabbi_szerepkorok listában. */
   role: string;
   tovabbi_szerepkorok?: string[] | null;
@@ -2092,6 +2095,11 @@ export type CurrentUser = {
    * minden gombot mutasson, és hogy a Beállítások oldalon ne kínálja fel a
    * korlátozását. */
   vedett_admin?: boolean;
+  /** A SAJÁT SZÍN ("#rrggbb") - a név ezen jelenik meg pl. az utómunka
+   * kártyákon. A profil oldalon állítható (lásd app/profil). */
+  szin?: string | null;
+  /** Profilkép data-URL-ként (kicsinyítve) - csak a saját adatban utazik. */
+  profilkep?: string | null;
 };
 
 /** A bejelentkezett felhasználó saját adatai (TopBar üdvözlés/avatar,
@@ -2264,10 +2272,17 @@ export async function getVinyoOptions(): Promise<string[]> {
 }
 
 /** A vinyó-lista + hogy a bejelentkezett ember kezelheti-e a neveket
- * (új/átnevezés/törlés) - lásd backend postproduction._vinyo_kezelheto. */
-export async function getVinyoOptionsReszletes(): Promise<{ options: string[]; kezelheto: boolean }> {
-  const res = await apiGet<{ options: string[]; kezelheto: boolean }>("/api/v1/deliverables/vinyo-options");
-  return { options: res?.options ?? [], kezelheto: !!res?.kezelheto };
+ * (új/átnevezés/törlés/sorrend/szín) - lásd backend
+ * postproduction._vinyo_kezelheto. A szinek: {vinyó név -> "#rrggbb"}. */
+export async function getVinyoOptionsReszletes(): Promise<{
+  options: string[];
+  kezelheto: boolean;
+  szinek: Record<string, string>;
+}> {
+  const res = await apiGet<{ options: string[]; kezelheto: boolean; szinek?: Record<string, string> }>(
+    "/api/v1/deliverables/vinyo-options",
+  );
+  return { options: res?.options ?? [], kezelheto: !!res?.kezelheto, szinek: res?.szinek ?? {} };
 }
 
 export type DeliverableContact = { id: number; full_name: string; email: string | null };

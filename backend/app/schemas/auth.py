@@ -27,6 +27,12 @@ class UserOut(BaseModel):
     #: felület ebből tudja, hogy ennek a fióknak minden gombot mutasson, és
     #: hogy a saját sorát ne engedje inaktívra/korlátozásra állítani.
     vedett_admin: bool = False
+    #: A munkatárs SAJÁT SZÍNE ("#rrggbb") - a neve ezen jelenik meg pl. az
+    #: utómunka kártyákon. A profil oldalon állítható (lásd /auth/me/profil).
+    szin: str | None = None
+    #: Profilkép data-URL-ként (kicsinyítve) - csak a SAJÁT válaszban utazik,
+    #: a munkatárs-listákban nem.
+    profilkep: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -39,3 +45,12 @@ TEMAK: tuple[str, ...] = ("sotet", "vilagos")
 
 class TemaIn(BaseModel):
     tema: str
+
+
+class ProfilIn(BaseModel):
+    """A saját profil önkiszolgáló mezői (lásd /auth/me/profil): csak az
+    explicit elküldött mező változik (exclude_unset), a None az adott érték
+    törlését jelenti."""
+
+    szin: str | None = None
+    profilkep: str | None = None

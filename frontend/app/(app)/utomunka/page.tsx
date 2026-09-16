@@ -95,6 +95,12 @@ export default async function UtomunkaPage({
           allapotBeallitasok={allapotBeallitasok}
           kartyaMezok={kartyaMezok}
           vinyoOptions={vinyoReszletes.options}
+          // A vinyók színei (a felhasználó kérése): az oszlop és a teljes
+          // kártyasora ezt kapja halványan a vinyó-nézeten.
+          vinyoSzinek={vinyoReszletes.szinek}
+          // A "Teendőim" csíkhoz (a felhasználó kérése): a rám kiosztott
+          // anyagok az oldal tetején is látszódjanak.
+          sajatId={currentUser?.id ?? null}
           // A vinyó-nézet kártyáin helyben állítható az archiválás (a
           // felhasználó kérése) - ezek a választható értékei.
           archivalasOptions={fieldTypes.archivalas?.options ?? []}

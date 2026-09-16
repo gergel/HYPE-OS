@@ -639,6 +639,27 @@ class VinyoAtnevezesIn(BaseModel):
     uj: str
 
 
+class VinyoSorrendIn(BaseModel):
+    """A vinyók teljes listája az ÚJ sorrendben (csak átrendezés, név nem
+    veszhet el és nem születhet itt - lásd deliverable_actions.reorder_vinyo_nevek)."""
+
+    options: list[str]
+
+
+class VinyoSzinIn(BaseModel):
+    nev: str
+    #: "#rrggbb", vagy None = a szín levétele.
+    szin: str | None = None
+
+
+def _teljes_vinyo_valasz(db: Session) -> VinyoOptions:
+    """A módosítás utáni friss lista + színek, kezelheto=True (ide csak
+    jogosultsággal lehetett eljutni)."""
+    valasz = deliverable_actions.get_vinyo_options(db)
+    valasz.kezelheto = True
+    return valasz
+
+
 @deliverable_actions_router.post("/vinyo-nevek", response_model=VinyoOptions)
 def add_vinyo_nev(
     payload: VinyoNevIn, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
@@ -646,7 +667,8 @@ def add_vinyo_nev(
     """Új vinyó név felvétele (a felhasználó kérése) - külön jogosultsághoz
     kötve, lásd _vinyo_kezeles_jog."""
     _vinyo_kezeles_jog(db, current_user)
-    return VinyoOptions(options=deliverable_actions.add_vinyo_nev(db, payload.nev), kezelheto=True)
+    deliverable_actions.add_vinyo_nev(db, payload.nev)
+    return _teljes_vinyo_valasz(db)
 
 
 @deliverable_actions_router.post("/vinyo-nevek/atnevezes", response_model=VinyoOptions)
@@ -655,7 +677,8 @@ def rename_vinyo_nev(
 ):
     """Vinyó átnevezése - az összes anyag vinyó-listájában is átíródik."""
     _vinyo_kezeles_jog(db, current_user)
-    return VinyoOptions(options=deliverable_actions.rename_vinyo_nev(db, payload.regi, payload.uj), kezelheto=True)
+    deliverable_actions.rename_vinyo_nev(db, payload.regi, payload.uj)
+    return _teljes_vinyo_valasz(db)
 
 
 @deliverable_actions_router.post("/vinyo-nevek/torles", response_model=VinyoOptions)
@@ -665,7 +688,30 @@ def delete_vinyo_nev(
     """Vinyó törlése - az anyagokról is lekerül (a rajtuk lévő TÖBBI vinyó
     marad). POST és nem DELETE: a név az útvonalban per-jelet is tartalmazhatna."""
     _vinyo_kezeles_jog(db, current_user)
-    return VinyoOptions(options=deliverable_actions.delete_vinyo_nev(db, payload.nev), kezelheto=True)
+    deliverable_actions.delete_vinyo_nev(db, payload.nev)
+    return _teljes_vinyo_valasz(db)
+
+
+@deliverable_actions_router.post("/vinyo-nevek/sorrend", response_model=VinyoOptions)
+def reorder_vinyo_nevek(
+    payload: VinyoSorrendIn, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
+):
+    """A vinyók sorrendjének átrendezése (a felhasználó kérése) - a vinyó-
+    nézet oszlopai ebben a sorrendben követik egymást."""
+    _vinyo_kezeles_jog(db, current_user)
+    deliverable_actions.reorder_vinyo_nevek(db, payload.options)
+    return _teljes_vinyo_valasz(db)
+
+
+@deliverable_actions_router.post("/vinyo-nevek/szin", response_model=VinyoOptions)
+def set_vinyo_szin(
+    payload: VinyoSzinIn, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
+):
+    """Egy vinyó színének beállítása/levétele (a felhasználó kérése): a vinyó-
+    nézeten az oszlop ÉS az alatta lévő teljes kártyasor ezt kapja halványan."""
+    _vinyo_kezeles_jog(db, current_user)
+    deliverable_actions.set_vinyo_szin(db, payload.nev, payload.szin)
+    return _teljes_vinyo_valasz(db)
 
 
 class VinyoKezelok(BaseModel):
