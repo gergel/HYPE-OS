@@ -11,6 +11,7 @@ A fájlok KÖZVETLENÜL az R2-be mennek darabolt (multipart) feltöltéssel,
 rövid élettartamú aláírt URL-ekkel - az alkalmazásszerveren csak a pár
 bájtos vezérlő-hívások (init/sign/complete) mennek át, a médiatartalom nem."""
 
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,6 +28,7 @@ from app.services import portal_storage as storage
 from app.services.portal_storage import R2NotConfiguredError
 
 router = APIRouter(prefix="/public/anyagbekeres", tags=["anyagbekeres-public"])
+log = logging.getLogger(__name__)
 
 
 def _bekeres_token_alapjan(db: Session, token: str) -> Anyagbekeres:
@@ -309,7 +311,19 @@ def fajl_init(token: str, payload: FajlInitIn, db: Session = Depends(get_db)):
     try:
         fajl.upload_id = storage.create_multipart(fajl.storage_key, payload.content_type or "application/octet-stream")
     except R2NotConfiguredError as exc:
+        db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - a beküldő PONTOS hibát kapjon, ne "váratlan szerverhibát"
+        db.rollback()
+        log.exception("Anyagbekérés fájl-init: a tároló nem fogadta (%s, %s bájt)", nev, payload.meret_bajt)
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "A tárhely nem fogadta a feltöltés indítását "
+                f"({type(exc).__name__}: {str(exc)[:180]}). Próbáld újra - ha ismétlődik, "
+                "szólj a HYPE kapcsolattartódnak."
+            ),
+        ) from exc
     db.commit()
     return {"fajl_id": fajl.id, "mappa_id": fajl.mappa_id, "resz_meret": szolg.RESZ_MERET}
 
@@ -369,9 +383,13 @@ def fajl_befejez(token: str, fajl_id: int, db: Session = Depends(get_db)):
         storage.complete_multipart(fajl.storage_key, fajl.upload_id, parts)
         tenyleges = storage.head_size(fajl.storage_key)
     except Exception as exc:  # noqa: BLE001 - a hívó emberi hibát vár
+        log.exception("Anyagbekérés fájl-befejezés sikertelen (fajl_id=%s)", fajl.id)
         fajl.allapot = "hibas"
         db.commit()
-        raise HTTPException(status_code=400, detail="A feltöltés lezárása nem sikerült - próbáld újra a fájlt.") from exc
+        raise HTTPException(
+            status_code=400,
+            detail=f"A feltöltés lezárása nem sikerült ({type(exc).__name__}) - próbáld újra a fájlt.",
+        ) from exc
     if tenyleges != fajl.meret_bajt:
         fajl.allapot = "hibas"
         db.commit()

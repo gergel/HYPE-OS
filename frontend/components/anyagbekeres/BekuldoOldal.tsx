@@ -687,9 +687,9 @@ export function BekuldoOldal({ bekeresToken }: { bekeresToken: string }) {
     : null;
 
   const fej = (
-    <div className="mb-6">
-      <Logo className="h-7" />
-      <h1 className="mt-4 text-[22px] font-semibold text-text-primary">{bekeres.nev}</h1>
+    <div className="mb-5 md:mb-6">
+      <Logo className="h-6 md:h-7" />
+      <h1 className="mt-3 text-[19px] font-semibold text-text-primary md:mt-4 md:text-[22px]">{bekeres.nev}</h1>
       {bekeres.udvozlo_szoveg && <p className="mt-2 max-w-2xl whitespace-pre-line text-[14px] text-text-secondary">{bekeres.udvozlo_szoveg}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-text-muted">
         {hataridoSzoveg && <span>Leadási határidő: <b className="text-text-secondary">{hataridoSzoveg}</b></span>}
@@ -781,7 +781,7 @@ export function BekuldoOldal({ bekeresToken }: { bekeresToken: string }) {
     <button
       type="button"
       onClick={() => setLepes(n)}
-      className={`rounded-[var(--radius)] px-3 py-1.5 text-[13px] ${lepes === n ? "bg-bg-accent font-medium text-text-accent" : "text-text-secondary hover:bg-surface-3"}`}
+      className={`shrink-0 rounded-[var(--radius)] px-2.5 py-1.5 text-[12.5px] md:px-3 md:text-[13px] ${lepes === n ? "bg-bg-accent font-medium text-text-accent" : "text-text-secondary hover:bg-surface-3"}`}
     >
       {n}. {cim}
     </button>
@@ -790,10 +790,11 @@ export function BekuldoOldal({ bekeresToken }: { bekeresToken: string }) {
   return (
     <Keret szeles>
       {fej}
-      {/* Mentési és feltöltési állapot mindig látható sávban */}
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px]">
-        <div className="flex gap-1">{lepesGomb(1, "Anyagok feltöltése")}{bekeres.kell_brief && lepesGomb(2, "Milyen videók készüljenek?")}{lepesGomb(3, "Ellenőrzés és leadás")}</div>
-        <span className="ml-auto flex items-center gap-3 text-text-muted">
+      {/* Mentési és feltöltési állapot mindig látható sávban - telefonon a
+          lépések vízszintesen görgethetők, semmi nem törik több sorba. */}
+      <div className="mb-4 flex flex-col gap-1.5 text-[12.5px] md:flex-row md:flex-wrap md:items-center md:gap-x-4">
+        <div className="-mx-1 flex gap-1 overflow-x-auto px-1">{lepesGomb(1, "Feltöltés")}{bekeres.kell_brief && lepesGomb(2, "Milyen videók?")}{lepesGomb(3, "Leadás")}</div>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-text-muted md:ml-auto">
           {toltodik && (
             <span className="text-text-secondary">
               Feltöltés: {meretSzoveg(osszesites.betoltott)} / {meretSzoveg(osszesites.teljes)}
@@ -949,8 +950,9 @@ function ElsoLepes(props: {
   const fajlNev = (f: FajlT) => f.relativ_utvonal || f.nev;
 
   return (
-    <div className="grid gap-4">
-      {/* Feltöltési terület */}
+    <div className="grid gap-3 md:gap-4">
+      {/* FELTÖLTÉS - telefonon egyetlen nagy gomb a főszereplő, a húzós
+          terület és a mappa-feltöltés csak asztali gépen jelenik meg. */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -962,67 +964,61 @@ function ElsoLepes(props: {
           setHuzas(false);
           void props.fajlokFelvetele(await dropFajlok(e.dataTransfer));
         }}
-        className={`rounded-[var(--radius-lg)] border-2 border-dashed p-8 text-center transition-colors ${huzas ? "border-text-accent bg-bg-accent/20" : "border-border bg-surface-2"}`}
+        className={`rounded-[var(--radius-lg)] border-2 border-dashed p-4 transition-colors md:p-8 md:text-center ${huzas ? "border-text-accent bg-bg-accent/20" : "border-border bg-surface-2"}`}
       >
-        <p className="text-[15px] font-medium text-text-primary">Húzd ide a fájlokat vagy mappákat</p>
-        <p className="mt-1 text-[13px] text-text-muted">A mappák és almappák eredeti szerkezete megmarad. Egyszerre több fájl és több mappa is jöhet.</p>
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          <button type="button" onClick={() => fajlInput.current?.click()} className={gombMasodlagos}>
+        <p className="hidden text-[15px] font-medium text-text-primary md:block">Húzd ide a fájlokat vagy mappákat</p>
+        <p className="hidden text-[13px] text-text-muted md:mt-1 md:block">A mappák és almappák eredeti szerkezete megmarad.</p>
+        <div className="flex flex-col gap-2 md:mt-4 md:flex-row md:items-center md:justify-center">
+          <button
+            type="button"
+            onClick={() => fajlInput.current?.click()}
+            className="w-full rounded-[var(--radius)] bg-bg-accent px-4 py-3 text-[15px] font-medium text-text-accent hover:opacity-90 md:w-auto md:py-2 md:text-[14px]"
+          >
             Fájlok kiválasztása
           </button>
-          {mappaTamogatott ? (
-            <button type="button" onClick={() => mappaInput.current?.click()} className={gombMasodlagos}>
+          {mappaTamogatott && (
+            <button type="button" onClick={() => mappaInput.current?.click()} className={`hidden md:inline-block ${gombMasodlagos}`}>
               Mappa feltöltése
             </button>
-          ) : (
-            <span className="text-[12.5px] text-text-muted">Ezen az eszközön mappát nem lehet kiválasztani - a fájlok feltöltése után rendezd őket mappákba lent.</span>
           )}
         </div>
-        <input ref={fajlInput} type="file" multiple className="hidden" onChange={(e) => { kivalasztott(e.target.files, false); e.target.value = ""; }} />
-        {/* @ts-expect-error - a webkitdirectory nem szabványos, de minden asztali böngésző ismeri */}
-        <input ref={mappaInput} type="file" multiple webkitdirectory="" className="hidden" onChange={(e) => { kivalasztott(e.target.files, true); e.target.value = ""; }} />
-      </div>
-
-      {/* Cél mappa + új mappa */}
-      <div className={doboz}>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="text-[12.5px] text-text-muted">A kiválasztott fájlok célmappája
+        {/* Cél mappa - közvetlenül a gomb alatt, hogy telefonon egy mozdulat legyen. */}
+        {mappak.length > 0 && (
+          <label className="mt-3 block text-left text-[12.5px] text-text-muted md:mx-auto md:max-w-sm">
+            Hova kerüljenek a fájlok?
             <select
-              className={`${input} mt-0.5 w-64`}
+              className={`${input} mt-1`}
               value={props.celMappa}
               onChange={(e) => props.setCelMappa(e.target.value === "" ? "" : Number(e.target.value))}
             >
-              <option value="">(gyökér - mappa nélkül)</option>
+              <option value="">Mappa nélkül</option>
               {mappak.map((m) => (
                 <option key={m.id} value={m.id}>{m.utvonal}</option>
               ))}
             </select>
           </label>
-          <label className="text-[12.5px] text-text-muted">Új mappa
-            <div className="mt-0.5 flex gap-2">
-              <input className={`${input} w-56`} placeholder='pl. "Interjúk"' value={props.ujMappaNev} onChange={(e) => props.setUjMappaNev(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void props.mappaLetrehozas()} />
-              <button type="button" onClick={() => void props.mappaLetrehozas()} disabled={!props.ujMappaNev.trim()} className={gombMasodlagos}>Létrehozás</button>
-            </div>
-          </label>
-        </div>
+        )}
+        <input ref={fajlInput} type="file" multiple className="hidden" onChange={(e) => { kivalasztott(e.target.files, false); e.target.value = ""; }} />
+        {/* @ts-expect-error - a webkitdirectory nem szabványos, de minden asztali böngésző ismeri */}
+        <input ref={mappaInput} type="file" multiple webkitdirectory="" className="hidden" onChange={(e) => { kivalasztott(e.target.files, true); e.target.value = ""; }} />
       </div>
 
-      {/* Mappák leírással */}
-      {mappak.length > 0 && (
-        <div className={doboz}>
-          <p className="mb-2 text-[14px] font-medium text-text-primary">Mappák ({mappak.length})</p>
-          <div className="grid gap-2">
+      {/* Mappák leírással + új mappa - egy kártyában, kevesebb szöveggel. */}
+      <div className={doboz}>
+        <p className="mb-2 text-[14px] font-medium text-text-primary">Mappák{mappak.length > 0 ? ` (${mappak.length})` : ""}</p>
+        {mappak.length > 0 && (
+          <div className="mb-3 grid gap-2">
             {mappak.map((m) => {
               const db = fajlok.filter((f) => f.mappa_id === m.id).length;
               return (
                 <div key={m.id} className="rounded-[var(--radius)] border border-border bg-surface-1 px-3 py-2">
                   <div className="flex items-center gap-2 text-[13.5px]">
-                    <span className="font-medium text-text-primary">{m.utvonal}</span>
-                    <span className="text-text-muted">({db} fájl)</span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-text-primary">{m.utvonal}</span>
+                    <span className="shrink-0 text-text-muted">{db} fájl</span>
                   </div>
                   <input
                     className="mt-1 w-full bg-transparent text-[13px] text-text-secondary placeholder:text-text-muted focus:outline-none"
-                    placeholder='Rövid leírás - pl. "A kamera – színpadi totál"'
+                    placeholder="Rövid leírás (nem kötelező)"
                     value={m.leiras ?? ""}
                     onChange={(e) => props.mappaLeiras(m.id, e.target.value)}
                   />
@@ -1030,8 +1026,20 @@ function ElsoLepes(props: {
               );
             })}
           </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            className={`${input} min-w-0 flex-1 md:max-w-xs`}
+            placeholder='Új mappa neve (pl. "Interjúk")'
+            value={props.ujMappaNev}
+            onChange={(e) => props.setUjMappaNev(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void props.mappaLetrehozas()}
+          />
+          <button type="button" onClick={() => void props.mappaLetrehozas()} disabled={!props.ujMappaNev.trim()} className={`shrink-0 ${gombMasodlagos}`}>
+            + Mappa
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Fájllista */}
       {fajlok.length > 0 && (
