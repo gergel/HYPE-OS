@@ -2134,6 +2134,9 @@ export type MunkaMeghivott = {
 
 export type Ajanlatkeres = {
   id: number;
+  /** A meglévő Projektek közül választva (a felhasználó kérése) - a
+   * projekt_nev ennek pillanatképe. */
+  project_id: number | null;
   projekt_nev: string;
   munkakor: string;
   leiras: string | null;

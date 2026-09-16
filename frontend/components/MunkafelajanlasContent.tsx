@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { Card } from "@/components/Card";
+import { KeresosSelect } from "@/components/KeresosSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import type { Ajanlatkeres, AjanlatkeresReszlet, Employee, MunkaMeghivott } from "@/lib/api";
@@ -29,14 +30,17 @@ function idopont(iso: string | null): string {
   return d.toLocaleString("hu-HU", { timeZone: "Europe/Budapest", dateStyle: "short", timeStyle: "short" });
 }
 
+export type ProjektOpcio = { id: number; nev: string; kod: string | null };
+
 /** Az ÚJ ajánlatkérés űrlapja. Felajánlott díjat SZÁNDÉKOSAN nem lehet
- * megadni: az árat a meghívott külsősök ajánlják meg (a felhasználó kérése). */
-function UjAjanlatkeres({ employees, onKesz }: { employees: Employee[]; onKesz: () => void }) {
+ * megadni: az árat a meghívott külsősök ajánlják meg (a felhasználó kérése).
+ * A projekt a MEGLÉVŐ projektek közül választandó - nem szabad szöveg. */
+function UjAjanlatkeres({ employees, projektek, onKesz }: { employees: Employee[]; projektek: ProjektOpcio[]; onKesz: () => void }) {
   const [nyitva, setNyitva] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [mezok, setMezok] = useState({
-    projekt_nev: "",
     munkakor: "",
     leiras: "",
     helyszin: "",
@@ -63,8 +67,12 @@ function UjAjanlatkeres({ employees, onKesz }: { employees: Employee[]; onKesz: 
 
   async function mentes() {
     setHiba(null);
-    if (!mezok.projekt_nev.trim() || !mezok.munkakor.trim()) {
-      setHiba("A projekt és a munkakör megadása kötelező.");
+    if (!projectId) {
+      setHiba("Válaszd ki a projektet a meglévő projektek közül.");
+      return;
+    }
+    if (!mezok.munkakor.trim()) {
+      setHiba("A munkakör megadása kötelező.");
       return;
     }
     if (!mezok.valaszadasi_hatarido) {
@@ -77,6 +85,7 @@ function UjAjanlatkeres({ employees, onKesz }: { employees: Employee[]; onKesz: 
         method: "POST",
         body: JSON.stringify({
           ...mezok,
+          project_id: Number(projectId),
           kapcsolattarto_id: mezok.kapcsolattarto_id ? Number(mezok.kapcsolattarto_id) : null,
           meghivott_employee_ids: meghivottak,
         }),
@@ -87,8 +96,9 @@ function UjAjanlatkeres({ employees, onKesz }: { employees: Employee[]; onKesz: 
         return;
       }
       setNyitva(false);
+      setProjectId(null);
       setMezok({
-        projekt_nev: "", munkakor: "", leiras: "", helyszin: "",
+        munkakor: "", leiras: "", helyszin: "",
         munkavegzes_idopont: "", teljesitesi_hatarido: "", valaszadasi_hatarido: "", kapcsolattarto_id: "",
       });
       setMeghivottak([]);
@@ -114,9 +124,19 @@ function UjAjanlatkeres({ employees, onKesz }: { employees: Employee[]; onKesz: 
     <div className="fade-in mb-4 space-y-3 rounded-[var(--radius-lg)] border border-border bg-surface-3 p-4">
       <p className="text-[13px] font-medium text-text-primary">Új ajánlatkérés (piszkozatként jön létre - a kiküldés külön lépés)</p>
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="block text-[12px] text-text-muted">Projekt *
-          <input value={mezok.projekt_nev} onChange={(e) => m("projekt_nev", e.target.value)} className={beviteli} />
-        </label>
+        <div className="block text-[12px] text-text-muted">Projekt * <span className="normal-case">(a meglévő projektek közül)</span>
+          <KeresosSelect
+            value={projectId}
+            options={projektek.map((p) => ({
+              value: String(p.id),
+              label: p.nev,
+              sublabel: p.kod ?? undefined,
+            }))}
+            onChange={(v) => setProjectId(v)}
+            placeholder="Válassz projektet…"
+            className="mt-0.5"
+          />
+        </div>
         <label className="block text-[12px] text-text-muted">Munkakör * <span className="normal-case">(külön munkakör = külön ajánlatkérés)</span>
           <input value={mezok.munkakor} onChange={(e) => m("munkakor", e.target.value)} placeholder="pl. Operatőr" className={beviteli} />
         </label>
@@ -466,12 +486,16 @@ function Reszletek({
 export function MunkafelajanlasContent({
   kezdeti,
   employees,
+  projektek = [],
   canCreate,
   canEdit,
   canDelete,
 }: {
   kezdeti: Ajanlatkeres[];
   employees: Employee[];
+  /** A választható projektek (a felhasználó kérése: a projekt a meglévők
+   * közül választandó, nem szabad szöveg). */
+  projektek?: ProjektOpcio[];
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -518,7 +542,7 @@ export function MunkafelajanlasContent({
         határidő lejárta után → értesítések. Az árat a meghívott külsősök ajánlják meg; senki nem kapja meg
         automatikusan a munkát.
       </p>
-      {canCreate && <UjAjanlatkeres employees={employees} onKesz={() => void frissit()} />}
+      {canCreate && <UjAjanlatkeres employees={employees} projektek={projektek} onKesz={() => void frissit()} />}
       {lista.length === 0 && <p className="text-[13px] text-text-muted">Még nincs ajánlatkérés.</p>}
       <div className="space-y-2">
         {lista.map((ak) => {

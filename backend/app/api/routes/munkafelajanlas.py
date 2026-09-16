@@ -32,7 +32,10 @@ public_router = APIRouter(prefix="/public/ajanlat", tags=["munkafelajanlasok-pub
 
 
 class AjanlatkeresIn(BaseModel):
-    projekt_nev: str
+    #: A MEGLÉVŐ projektek közül választva (a felhasználó kérése) - a
+    #: felület ezt küldi; a projekt_nev csak tartalék (pl. API-hívónak).
+    project_id: int | None = None
+    projekt_nev: str = ""
     munkakor: str
     leiras: str | None = None
     helyszin: str | None = None
@@ -87,6 +90,7 @@ class MeghivottInfo(BaseModel):
 
 class AjanlatkeresOut(BaseModel):
     id: int
+    project_id: int | None
     projekt_nev: str
     munkakor: str
     leiras: str | None
@@ -165,6 +169,7 @@ def _kimenet(ak: Ajanlatkeres) -> AjanlatkeresOut:
     kuldes_hibak = sum(1 for m in ak.meghivottak if m.meghivo_hiba or m.eredmeny_hiba)
     return AjanlatkeresOut(
         id=ak.id,
+        project_id=ak.project_id,
         projekt_nev=ak.projekt_nev,
         munkakor=ak.munkakor,
         leiras=ak.leiras,
@@ -195,6 +200,23 @@ def _reszlet(ak: Ajanlatkeres) -> AjanlatkeresReszlet:
         **alap.model_dump(),
         meghivottak=[_meghivott_info(ak, m) for m in ak.meghivottak],
     )
+
+
+def _projekt_nev_feloldas(db: Session, payload: AjanlatkeresIn) -> str:
+    """A projekt a MEGLÉVŐ projektek közül választandó (a felhasználó
+    kérése): a project_id-ból vesszük a nevet. A szabad szöveges projekt_nev
+    csak tartalék (pl. AI-asszisztens vagy API-hívó), project_id nélkül."""
+    if payload.project_id is not None:
+        from app.models.project import Project
+
+        projekt = db.get(Project, payload.project_id)
+        if projekt is None:
+            raise HTTPException(status_code=400, detail="A kiválasztott projekt nem található.")
+        return projekt.nev
+    nev = (payload.projekt_nev or "").strip()
+    if not nev:
+        raise HTTPException(status_code=400, detail="Válaszd ki a projektet a meglévő projektek közül.")
+    return nev
 
 
 def _betolt(db: Session, ajanlatkeres_id: int) -> Ajanlatkeres:
@@ -232,11 +254,15 @@ def letrehozas(
 ):
     """Új ajánlatkérés PISZKOZATKÉNT - a kiküldés külön, szándékos lépés.
     Felajánlott díjat szándékosan nem lehet megadni: az árat a meghívott
-    külsősök ajánlják meg (a felhasználó kérése)."""
-    if not payload.projekt_nev.strip() or not payload.munkakor.strip():
-        raise HTTPException(status_code=400, detail="A projekt és a munkakör megadása kötelező.")
+    külsősök ajánlják meg (a felhasználó kérése). A projekt a MEGLÉVŐ
+    projektek közül választandó (project_id) - a neve pillanatképként
+    másolódik át."""
+    projekt_nev = _projekt_nev_feloldas(db, payload)
+    if not payload.munkakor.strip():
+        raise HTTPException(status_code=400, detail="A munkakör megadása kötelező.")
     ak = Ajanlatkeres(
-        projekt_nev=payload.projekt_nev.strip(),
+        project_id=payload.project_id,
+        projekt_nev=projekt_nev,
         munkakor=payload.munkakor.strip(),
         leiras=(payload.leiras or "").strip() or None,
         helyszin=(payload.helyszin or "").strip() or None,
@@ -278,7 +304,9 @@ def modositas(
     alattuk)."""
     ak = _betolt(db, ajanlatkeres_id)
     if ak.allapot == "piszkozat":
-        ak.projekt_nev = payload.projekt_nev.strip() or ak.projekt_nev
+        if payload.project_id is not None or (payload.projekt_nev or "").strip():
+            ak.projekt_nev = _projekt_nev_feloldas(db, payload)
+            ak.project_id = payload.project_id
         ak.munkakor = payload.munkakor.strip() or ak.munkakor
         ak.leiras = (payload.leiras or "").strip() or None
         ak.helyszin = (payload.helyszin or "").strip() or None

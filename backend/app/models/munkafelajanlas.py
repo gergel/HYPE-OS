@@ -34,6 +34,10 @@ class Ajanlatkeres(TimestampMixin, Base):
     __tablename__ = "ajanlatkeresek"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    #: A MEGLÉVŐ projektek közül választva (a felhasználó kérése) - a
+    #: projekt_nev ennek a pillanatképe, hogy a levelek és a lista akkor is
+    #: pontosak maradjanak, ha a projektet később átnevezik/törlik.
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"))
     projekt_nev: Mapped[str] = mapped_column(String(255), nullable=False)
     munkakor: Mapped[str] = mapped_column(String(255), nullable=False)
     leiras: Mapped[str | None] = mapped_column(Text, comment="Rövid feladatleírás")

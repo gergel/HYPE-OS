@@ -1,6 +1,6 @@
 import { TopBar } from "@/components/TopBar";
 import { MunkafelajanlasContent } from "@/components/MunkafelajanlasContent";
-import { getEmployees, getMunkafelajanlasok, getMyPagePermissions } from "@/lib/api";
+import { getEmployees, getMunkafelajanlasok, getMyPagePermissions, getProjects } from "@/lib/api";
 import { canDoPageAction } from "@/lib/permissions";
 
 const PAGE = "/munkafelajanlasok";
@@ -11,9 +11,10 @@ const PAGE = "/munkafelajanlasok";
  * Senki nem kapja meg automatikusan a munkát (lásd backend
  * models/munkafelajanlas.py). */
 export default async function MunkafelajanlasokPage() {
-  const [ajanlatkeresek, employees, pagePermissions] = await Promise.all([
+  const [ajanlatkeresek, employees, projects, pagePermissions] = await Promise.all([
     getMunkafelajanlasok(),
     getEmployees(),
+    getProjects(),
     getMyPagePermissions(),
   ]);
 
@@ -24,6 +25,9 @@ export default async function MunkafelajanlasokPage() {
         <MunkafelajanlasContent
           kezdeti={ajanlatkeresek}
           employees={employees}
+          // A projekt a MEGLÉVŐ projektek közül választható (a felhasználó
+          // kérése) - a kereső a projektkódot is mutatja az azonosításhoz.
+          projektek={projects.map((p) => ({ id: p.id, nev: p.nev, kod: p.projektkod_szoveg ?? null }))}
           canCreate={canDoPageAction(pagePermissions, PAGE, "create")}
           canEdit={canDoPageAction(pagePermissions, PAGE, "edit")}
           canDelete={canDoPageAction(pagePermissions, PAGE, "delete")}
