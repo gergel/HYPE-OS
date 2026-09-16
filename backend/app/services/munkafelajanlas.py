@@ -108,12 +108,6 @@ def effektiv_allapot(ak: Ajanlatkeres, mostani: datetime | None = None) -> str:
     return ak.allapot
 
 
-def keresztnev(teljes_nev: str) -> str:
-    """Magyar névsorrend: az utolsó szó a keresztnév ("Forgató Feri" -> "Feri")."""
-    darabok = (teljes_nev or "").split()
-    return darabok[-1] if darabok else ""
-
-
 def ajanlati_link(token: str) -> str:
     alap = (settings.frontend_base_url or "").rstrip("/")
     return f"{alap}/ajanlat/{token}"
@@ -130,6 +124,10 @@ def uj_token() -> str:
 
 _STILUS = 'style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.55"'
 
+#: Egységes levélzárás (a felhasználó kérése): "Köszönettel," + ugyanaz a
+#: HYPE-aláírás, mint a diszpó-leveleknél.
+ZARAS = "<p>Köszönettel,</p>" + google_email.HYPE_ALAIRAS_HTML
+
 
 def _sor(cimke: str, ertek: str | None) -> str:
     if not ertek:
@@ -139,13 +137,13 @@ def _sor(cimke: str, ertek: str | None) -> str:
 
 def meghivo_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
     """(tárgy, html) - a személyre szóló ajánlatkérő levél."""
-    nev = keresztnev(m.employee.full_name)
+    nev = (m.employee.full_name or "").strip()
     hatarido = budapest_szoveg(ak.valaszadasi_hatarido)
     hatra = hatralevo_szoveg(ak.valaszadasi_hatarido) if ak.valaszadasi_hatarido else "–"
     link = ajanlati_link(m.token)
     targy = f"Munkafelajánlás – {ak.projekt_nev} / {ak.munkakor}"
     html = f"""<div {_STILUS}>
-<p>Szia {nev}!</p>
+<p>Kedves {nev}!</p>
 <p>Szeretnénk megkérdezni, érdekel-e az alábbi feladat, és ráérsz-e:</p>
 {_sor("Projekt", ak.projekt_nev)}
 {_sor("Munkakör", ak.munkakor)}
@@ -160,24 +158,25 @@ def meghivo_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
   <a href="{link}" style="background:#111;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Érdekel, jelentkezem</a>
 </p>
 <p style="border:1px solid #ddd;border-radius:6px;padding:10px 12px;background:#f7f7f7"><strong>{TAJEKOZTATO}</strong></p>
-<p>Üdv,<br/>A HYPE csapata</p>
+{ZARAS}
 </div>"""
     return targy, html
 
 
 def nyertes_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
-    nev = keresztnev(m.employee.full_name)
+    nev = (m.employee.full_name or "").strip()
     kapcsolattarto = ak.kapcsolattarto.full_name if ak.kapcsolattarto else "a HYPE csapata"
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
     targy = f"Számítunk rád! – {ak.projekt_nev} / {ak.munkakor}"
     html = f"""<div {_STILUS}>
-<p>Szia {nev}!</p>
+<p>Kedves {nev}!</p>
 <p>Köszönjük a jelentkezésedet! Örömmel jelezzük, hogy a(z) <strong>{feladat_nev}</strong> feladatra téged választottunk.</p>
 {_sor("Időpont", ak.munkavegzes_idopont)}
 {_sor("Helyszín", ak.helyszin)}
 {_sor("Feladat", ak.leiras)}
 <p>A munka a tiéd, számítunk rád! A további részletekkel kapcsolatban {kapcsolattarto} segít.</p>
-<p>Köszönjük, hogy velünk dolgozol!<br/>A HYPE csapata</p>
+<p>Köszönjük, hogy velünk dolgozol!</p>
+{ZARAS}
 </div>"""
     return targy, html
 
@@ -185,15 +184,15 @@ def nyertes_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
 def vesztes_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
     """Annak, aki JELENTKEZETT, de nem őt választottuk ("ezt most más vitte
     el" - a felhasználó kérése)."""
-    nev = keresztnev(m.employee.full_name)
+    nev = (m.employee.full_name or "").strip()
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
     targy = f"Visszajelzés a jelentkezésedre – {ak.projekt_nev}"
     html = f"""<div {_STILUS}>
-<p>Szia {nev}!</p>
+<p>Kedves {nev}!</p>
 <p>Köszönjük, hogy jelezted: érdekel a(z) <strong>{feladat_nev}</strong> feladat, és ráérsz.</p>
 <p>Sajnos ezt a munkát most egy másik partnerünk vitte el. Nagyon köszönjük az érdeklődésedet;
 örülünk, ha a következő lehetőségnél is számíthatunk rád!</p>
-<p>Üdv,<br/>A HYPE csapata</p>
+{ZARAS}
 </div>"""
     return targy, html
 
@@ -201,21 +200,21 @@ def vesztes_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
 def nem_adott_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
     """RÖVID lezáró annak, aki meghívót kapott, de nem jelentkezett -
     kifejezetten NEM köszön meg nem létező jelentkezést (a felhasználó kérése)."""
-    nev = keresztnev(m.employee.full_name)
+    nev = (m.employee.full_name or "").strip()
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
     targy = f"Lezárult a munkafelajánlás – {ak.projekt_nev}"
     html = f"""<div {_STILUS}>
-<p>Szia {nev}!</p>
+<p>Kedves {nev}!</p>
 <p>A(z) <strong>{feladat_nev}</strong> feladatra kiírt megkeresésünk lezárult, a pozíciót betöltöttük.</p>
 <p>Reméljük, egy következő lehetőségnél együtt tudunk dolgozni!</p>
-<p>Üdv,<br/>A HYPE csapata</p>
+{ZARAS}
 </div>"""
     return targy, html
 
 
 def nyertes_nelkul_email(ak: Ajanlatkeres, m: AjanlatMeghivott, adott_ajanlatot: bool) -> tuple[str, str]:
     """Nyertes nélküli lezárás - ennek megfelelő, külön szöveg."""
-    nev = keresztnev(m.employee.full_name)
+    nev = (m.employee.full_name or "").strip()
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
     targy = f"Lezárult a munkafelajánlás – {ak.projekt_nev}"
     if adott_ajanlatot:
@@ -231,23 +230,23 @@ def nyertes_nelkul_email(ak: Ajanlatkeres, m: AjanlatMeghivott, adott_ajanlatot:
             "<p>Reméljük, egy következő lehetőségnél együtt tudunk dolgozni!</p>"
         )
     html = f"""<div {_STILUS}>
-<p>Szia {nev}!</p>
+<p>Kedves {nev}!</p>
 {torzs}
-<p>Üdv,<br/>A HYPE csapata</p>
+{ZARAS}
 </div>"""
     return targy, html
 
 
 def visszavonas_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
-    nev = keresztnev(m.employee.full_name)
+    nev = (m.employee.full_name or "").strip()
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
     targy = f"Visszavont munkafelajánlás – {ak.projekt_nev}"
     html = f"""<div {_STILUS}>
-<p>Szia {nev}!</p>
+<p>Kedves {nev}!</p>
 <p>A(z) <strong>{feladat_nev}</strong> feladatra kiírt megkeresésünket visszavontuk - a feladatra
 most nem keresünk partnert.</p>
 <p>Köszönjük a megértésedet, és reméljük, hamarosan együtt dolgozhatunk!</p>
-<p>Üdv,<br/>A HYPE csapata</p>
+{ZARAS}
 </div>"""
     return targy, html
 

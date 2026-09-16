@@ -541,17 +541,9 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
     }
   }
 
-  /** Videó/kép ÁTHELYEZÉSE másik mappába (a felhasználó kérése) - null =
-   * mappán kívülre. */
-  async function onMoveVideo(videoId: number, folderId: number | null) {
-    try {
-      await setVideoFolder(videoId, folderId);
-      refresh();
-    } catch (err) {
-      alert(`Sikertelen áthelyezés: ${err instanceof Error ? err.message : err}`);
-    }
-  }
-
+  /** Kép ÁTHELYEZÉSE másik mappába (a felhasználó kérése) - null = mappán
+   * kívülre. Videónál nincs soronkénti áthelyezés (a felhasználó kérése: a
+   * helyet a teljes cím kapja) - ott a kijelölés + onMoveSelected az út. */
   async function onMoveImage(imageId: number, folderId: number | null) {
     try {
       await setImageFolder(imageId, folderId);
@@ -1230,8 +1222,10 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 truncate text-[13px] text-text-primary">
-                      <span className="truncate">{v.title}</span>
+                    {/* A TELJES cím látszik (a felhasználó kérése): nem
+                        vágjuk le, hosszú fájlnévnél sorba törik. */}
+                    <p className="flex items-start gap-1.5 text-[13px] text-text-primary">
+                      <span className="[overflow-wrap:anywhere]">{v.title}</span>
                       {v.rejtett && (
                         <span className="shrink-0 rounded bg-bg-warning px-1.5 py-0.5 text-[10.5px] font-medium text-text-warning">
                           Rejtett
@@ -1250,14 +1244,10 @@ export default function MediaPortalDetail({ initial }: { initial: PortalDetailDa
                       flex-wrap a li-n), hogy a cím sora teljes szélességű
                       maradjon; sm-től a megszokott egysoros elrendezés. */}
                   <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:gap-3">
-                  {/* A videó áthelyezése másik mappába (a felhasználó kérése). */}
-                  <MappaValaszto
-                    gyokerCimke="Mappán kívülre"
-                    opciok={mappakUjElol
-                      .filter((cel) => cel.id !== (v.folder_id ?? null))
-                      .map((cel) => ({ id: cel.id, nev: mappaUtvonal(cel) }))}
-                    onValaszt={(celId) => void onMoveVideo(v.id, celId)}
-                  />
+                  {/* A soronkénti "Áthelyezés…" legördülő SZÁNDÉKOSAN nincs
+                      itt (a felhasználó kérése): a helyet a teljes cím kapja
+                      - áthelyezni a videó kijelölésével lehet, a felugró
+                      "Kijelöltek áthelyezése" választóval. */}
                   {/* Rejtés/megjelenítés: a rejtett videót az ügyfél nem
                       látja a portálon (csak belső ellenőrzésre). */}
                   <button

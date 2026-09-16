@@ -36,7 +36,7 @@ from app.models.employee import Employee
 from app.models.project import Project
 from app.services import attachments, document_storage, projektkod_kotes
 from app.services.gdoc_template import gdoc_fill_and_export_pdf, pdf_feltoltes
-from app.services.google_email import send_message
+from app.services.google_email import HYPE_ALAIRAS_HTML, send_message
 
 logger = logging.getLogger("hype_os")
 
@@ -62,49 +62,9 @@ Helyszín: {helyszin}</p>
 """
 
 # A felhasználó által megadott, rögzített HYPE aláírás - minden diszpó emailhez
-# (előzetes és teljes is) hozzáfűzzük. Külön konstansként, NEM a fenti .format()-olt
-# sablonok részeként, hogy a benne szereplő HTML sose ütközzön a .format() placeholder
-# szintaxisával (nincs benne {kulcs}, de így akkor sem lenne gond, ha később kapna).
-_SIGNATURE_HTML = """\
-<table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
-  <tr>
-    <td style="vertical-align: middle; width: 150px;">
-      <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
-    </td>
-    <td style="padding-left: 20px; vertical-align: middle;">
-      <p style="margin: 0; font-size: 12px; font-weight: bold;">
-        HYPE PRODUCTIONS - GYÁRTÁS
-      </p>
-      <p style="margin: 0; color: #888; font-size: 12px;">
-        Hype Productions Kft.
-      </p>
-    </td>
-    <td style="padding-left: 40px; vertical-align: top; color: #888; font-size: 12px;">
-      <p style="margin: 0;">Rahman Martin – cégvezető</p>
-      <p style="margin: 0;">
-        <a href="mailto:martin.rahman@hypestab.hu" style="color: #888; text-decoration: underline;">martin.rahman@hypestab.hu</a><br>
-        +36 30 898 7600
-
-      <br>
-      <p style="margin: 0;">Barna Blanka – Back office manager</p>
-      <p style="margin: 0;">
-        <a href="mailto:blanka.barna@hypestab.hu" style="color: #888; text-decoration: underline;">blanka.barna@hypestab.hu</a><br>
-        +36 30 758 8751
- <br>
-      <p style="margin: 0;">Zseni Boglárka – Gyártásvezető</p>
-      <p style="margin: 0;">
-        <a href="mailto:boglarka.zseni@hypestab.hu" style="color: #888; text-decoration: underline;">boglarka.zseni@hypestab.hu</a><br>
-        +36 30 241 9643
- <br>
-      <p style="margin: 0;">Vidor Gergely – Operatív vezető</p>
-      <p style="margin: 0;">
-        <a href="mailto:gergely.vidor@hypestab.hu" style="color: #888; text-decoration: underline;">gergely.vidor@hypestab.hu</a><br>
-        +36 20 560 9623
-      </p>
-    </td>
-  </tr>
-</table>
-"""
+# (előzetes és teljes is) hozzáfűzzük. A közös konstansból jön (google_email.
+# HYPE_ALAIRAS_HTML), mert a munkafelajánlás-levelek is ugyanezzel záródnak.
+_SIGNATURE_HTML = HYPE_ALAIRAS_HTML
 
 
 def _format_hu_date_range(project: Project) -> str:

@@ -354,3 +354,47 @@ def search_thread_by_subject(subject: str) -> str | None:
     res = svc.users().threads().list(userId="me", q=f'subject:"{subject}"', maxResults=1).execute()
     threads = res.get("threads") or []
     return threads[0].get("id") if threads else None
+
+#: A rögzített HYPE-aláírás (a felhasználó adta meg a diszpó-kiküldéshez) -
+#: KÖZÖS konstans: a diszpó-levelek ÉS a munkafelajánlás-levelek is ezzel
+#: záródnak (a felhasználó kérése: "ugyanaz az aláírás, mint a diszpóknál").
+HYPE_ALAIRAS_HTML = """\
+<table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
+  <tr>
+    <td style="vertical-align: middle; width: 150px;">
+      <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
+    </td>
+    <td style="padding-left: 20px; vertical-align: middle;">
+      <p style="margin: 0; font-size: 12px; font-weight: bold;">
+        HYPE PRODUCTIONS - GYÁRTÁS
+      </p>
+      <p style="margin: 0; color: #888; font-size: 12px;">
+        Hype Productions Kft.
+      </p>
+    </td>
+    <td style="padding-left: 40px; vertical-align: top; color: #888; font-size: 12px;">
+      <p style="margin: 0;">Rahman Martin – cégvezető</p>
+      <p style="margin: 0;">
+        <a href="mailto:martin.rahman@hypestab.hu" style="color: #888; text-decoration: underline;">martin.rahman@hypestab.hu</a><br>
+        +36 30 898 7600
+
+      <br>
+      <p style="margin: 0;">Barna Blanka – Back office manager</p>
+      <p style="margin: 0;">
+        <a href="mailto:blanka.barna@hypestab.hu" style="color: #888; text-decoration: underline;">blanka.barna@hypestab.hu</a><br>
+        +36 30 758 8751
+ <br>
+      <p style="margin: 0;">Zseni Boglárka – Gyártásvezető</p>
+      <p style="margin: 0;">
+        <a href="mailto:boglarka.zseni@hypestab.hu" style="color: #888; text-decoration: underline;">boglarka.zseni@hypestab.hu</a><br>
+        +36 30 241 9643
+ <br>
+      <p style="margin: 0;">Vidor Gergely – Operatív vezető</p>
+      <p style="margin: 0;">
+        <a href="mailto:gergely.vidor@hypestab.hu" style="color: #888; text-decoration: underline;">gergely.vidor@hypestab.hu</a><br>
+        +36 20 560 9623
+      </p>
+    </td>
+  </tr>
+</table>
+"""
