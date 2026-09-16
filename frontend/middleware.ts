@@ -104,7 +104,12 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     pathname === "/icon.svg" ||
-    pathname === "/apple-icon.png";
+    pathname === "/apple-icon.png" ||
+    // iOS a kezdőképernyőre tűzéskor sokszor NEM a <link>-et követi, hanem
+    // vakon ezeket a szabvány útvonalakat kéri (public/ alatt fekszenek) -
+    // átirányítva a login-oldalt kapná, és képernyőkép lenne az ikon helyett.
+    pathname === "/apple-touch-icon.png" ||
+    pathname === "/apple-touch-icon-precomposed.png";
 
   // A portál domainjén CSAK a portál él. Ami nem oda tartozik, az nem
   // átirányítást kap (az elárulná az admin felület címét), hanem 404-et.
@@ -237,5 +242,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|apple-touch-icon.png|apple-touch-icon-precomposed.png).*)"],
 };
