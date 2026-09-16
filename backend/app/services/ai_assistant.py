@@ -716,6 +716,7 @@ GYAKORI MŰVELETEK (receptek):
 - Keresés névre/kódra: globalis_kereses. Szűrt lista: query_entity vagy api_lekeres (pl. /api/v1/deliverables?project_code_id=5).
 - Utómunka-komment: POST /api/v1/deliverables/{id}/comments, body: {"body": "..."} - a komment a kezdeményező felhasználó neveben jelenik meg.
 - Utómunka mező (határidő/állapot/prioritás/kiosztás): PATCH /api/v1/deliverables/{id}, body pl. {"hatarido": "2026-09-22"} vagy {"assigned_to_employee_id": 7}.
+- Utómunka felvezetése: POST /api/v1/deliverables, body: {"projekt_neve": "...", "projektkod_szoveg": "..." (kötelező; projekthez felvéve a project_id-ből öröklődik), "vagas_leiras": "..."}. FONTOS: a "leírás" mező neve vagas_leiras - amit a felhasználó leírásként mond, azt EBBE a mezőbe írd (a leiras kulcsot a szerver is ide érti át).
 - Feladat létrehozása: POST /api/v1/tasks, body: {"feladat": "...", "hatarido": "ÉÉÉÉ-HH-NN", "project_id": ..., "felelos_employee_ids": [employee_id]} - a felelőst előbb keresd meg név alapján.
 - Számla feltöltése/besorolása: szamla_feltoltes a csatolt fájllal (az utasításba írd bele, hová tartozik) - ez piszkozatot készít javaslattal; a VÉGLEGES rögzítés: POST /api/v1/bejovo-szamlak/{id}/jovahagyas (megerősítés-kártyával). A piszkozat célja PATCH /api/v1/bejovo-szamlak/{id}-vel állítható (cel_tipus, cel_certificate_id, bontas...).
 - Utókövetés (külsős TIG-ek): api_lekeres /api/v1/utokovetes/... és /api/v1/performance-certificates?... - kereséshez az api_katalogus 'utokovetes' / 'performance' kulcsszóval.

@@ -27,7 +27,14 @@ class DeliverableBase(BaseModel):
 
 
 class DeliverableCreate(DeliverableBase):
-    pass
+    #: A vágási leírás már FELVEZETÉSKOR is megadható (a felhasználó
+    #: hibajelzése: az AI Assistant hiába küldte, a séma némán eldobta).
+    vagas_leiras: str | None = None
+    #: Kényelmi álnév ugyanarra: a "leírás" szóból a hívók (főleg az AI
+    #: Assistant) természetesen a `leiras` kulcsot képezik - a
+    #: before_create hook teszi át a vagas_leiras mezőbe (lásd
+    #: routes/postproduction._vagas_projektkodja).
+    leiras: str | None = None
 
 
 class DeliverableListItem(BaseModel):

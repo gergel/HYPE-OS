@@ -47,6 +47,30 @@ def _ekezet_nelkul(szoveg: str) -> str:
     )
 
 
+#: Akik ELLENŐRKÉNT dolgoznak, azok a jóváhagyás-pontot (+JOVAHAGYAS_PONT) nem
+#: kapják meg (a felhasználó kérése): az ellenőr a saját videóját maga teszi
+#: rögtön kiküldésbe, így ez a pont neki automatikusan, verseny nélkül járna.
+#: A levonás (javítás) és a többi pontforrás (ellenőrzésbe tétel, vágott
+#: percek) nekik is változatlanul jár. Név szerint, ékezet-függetlenül.
+JOVAHAGYAS_PONT_NELKUL_NEVEK = ("bartha adrienn",)
+
+
+def jovahagyas_pont_jar(db: Session, employee_id: int) -> bool:
+    """Jár-e ennek a munkatársnak jóváhagyás-pont - az ellenőr(ök)nek nem."""
+    emp = db.get(Employee, employee_id)
+    if emp is None:
+        return True
+    return _ekezet_nelkul(emp.full_name) not in JOVAHAGYAS_PONT_NELKUL_NEVEK
+
+
+def _jovahagyas_kizart_idk(db: Session, employee_idk: set[int]) -> set[int]:
+    """A megadott munkatársak közül azok, akiknek NEM jár jóváhagyás-pont."""
+    if not employee_idk:
+        return set()
+    sorok = db.scalars(select(Employee).where(Employee.id.in_(employee_idk))).all()
+    return {e.id for e in sorok if _ekezet_nelkul(e.full_name) in JOVAHAGYAS_PONT_NELKUL_NEVEK}
+
+
 def ellenorzes_allapot(allapot: str | None) -> bool:
     """Ellenőrzésnek számít-e ez az állapot?
 
@@ -155,6 +179,10 @@ def rogzitsd_kimenetet(db: Session, deliverable: Deliverable, regi_allapot: str 
     elif kimenet == "jovahagyva" and deliverable.assigned_to_employee_id:
         employee_id = deliverable.assigned_to_employee_id
     else:
+        return False
+    # Az ellenőr a jóváhagyás-pontot nem kapja meg (a felhasználó kérése):
+    # a saját videója az ő döntésével kerül rögtön kiküldésbe, ez nem érdem.
+    if kimenet == "jovahagyva" and not jovahagyas_pont_jar(db, employee_id):
         return False
     db.add(
         VagoEllenorzesKimenet(
@@ -275,6 +303,12 @@ def honap_allasa(db: Session, ev: int, honap: int) -> list[Allas]:
             VagoEllenorzesKimenet.idopont >= kezdet, VagoEllenorzesKimenet.idopont < veg
         )
     ).all()
+    # Az ellenőr(ök) korábban rögzített jóváhagyás-pontjai is kimaradnak az
+    # állásból (a felhasználó kérése) - így a szabály visszamenőleg is érvényes,
+    # a történeti sorok törlése nélkül. A levonásaik (javítás) maradnak.
+    kizart = _jovahagyas_kizart_idk(db, {k.employee_id for k in kimenetek})
+    if kizart:
+        kimenetek = [k for k in kimenetek if not (k.kimenet == "jovahagyva" and k.employee_id in kizart)]
     percek = _percek_honapra(db, kezdet, veg)
     napok = {
         n.employee_id: n

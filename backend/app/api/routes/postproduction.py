@@ -238,7 +238,21 @@ def _vagas_projektkodja(data: dict, db: Session) -> dict:
     # egyezzen.
     if not (data.get("allapot") or "").strip():
         data["allapot"] = _beerkezo_allapot(db)
+    _leiras_mezo_atnevezes(data)
     return data
+
+
+def _leiras_mezo_atnevezes(data: dict) -> None:
+    """A `leiras` kulcs átemelése a valódi `vagas_leiras` oszlopba.
+
+    A felhasználó hibajelzése: az AI Assistantnek azt mondta, "a leírásba írd",
+    az asszisztens pedig `leiras` kulccsal küldte - amit a rendszer némán
+    eldobott, mert a Deliverable oszlopa `vagas_leiras`. A kifejezetten küldött
+    vagas_leiras az erősebb; a leiras kulcs mindig kikerül, hogy ne jusson el
+    az oszlop-illesztésig."""
+    leiras = data.pop("leiras", None)
+    if leiras and not data.get("vagas_leiras"):
+        data["vagas_leiras"] = leiras
 
 
 def _beerkezo_allapot(db: Session) -> str:
@@ -325,6 +339,9 @@ def _kovesd_a_vagas_projektkodjat(obj: Deliverable, data: dict, db: Session, cur
     # váltáskor szabad futnia (lásd _auto_kiosztas_allapotvaltaskor).
     if "allapot" in data:
         obj._regi_allapot = obj.allapot
+    # A `leiras` kulcs itt is a vagas_leiras oszlopot jelenti (lásd
+    # _leiras_mezo_atnevezes) - PATCH-nél is, ne csak létrehozáskor.
+    _leiras_mezo_atnevezes(data)
     _ellenorzeshez_kell_visszajelzes(obj, data, db, current_user)
     if "projektkod_szoveg" not in data:
         return
