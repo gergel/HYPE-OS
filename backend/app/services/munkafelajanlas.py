@@ -157,6 +157,7 @@ def meghivo_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
 <p style="margin:18px 0">
   <a href="{link}" style="background:#111;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Érdekel, jelentkezem</a>
 </p>
+<p style="margin:2px 0;color:#555">Ha nem érsz rá, kérjük, azt is jelezd az oldalon - azzal is sokat segítesz.</p>
 <p style="border:1px solid #ddd;border-radius:6px;padding:10px 12px;background:#f7f7f7"><strong>{TAJEKOZTATO}</strong></p>
 {ZARAS}
 </div>"""
@@ -308,7 +309,13 @@ def eredmenyek_kikuldese(db: Session, ak: Ajanlatkeres, csak_hibasak: bool = Fal
             m.eredmeny_hiba = "Nincs e-mail cím a munkatárs adatlapján."
             hibak.append(f"{m.employee.full_name}: nincs e-mail cím")
             continue
-        adott = m.ajanlat is not None and m.ajanlat.visszavonva is None
+        adott = m.ajanlat is not None and m.ajanlat.visszavonva is None and m.ajanlat.vallalja
+        # Aki kifejezetten jelezte, hogy NEM ÉR RÁ, annak nem küldünk
+        # eredmény-levelet: ő már lemondta, se "más vitte el", se rövid
+        # lezáró nem jár neki (a felhasználó kérése szerinti gombhoz).
+        lemondta = m.ajanlat is not None and m.ajanlat.visszavonva is None and not m.ajanlat.vallalja
+        if lemondta and ak.allapot in ("kiosztva", "lezarva_nyertes_nelkul"):
+            continue
         if ak.allapot == "kiosztva":
             if m.id == ak.nyertes_meghivott_id:
                 targy, html = nyertes_email(ak, m)
@@ -371,8 +378,8 @@ def kivalasztas(db: Session, ajanlatkeres_id: int, meghivott_id: int) -> Ajanlat
     if meghivott is None:
         raise HTTPException(status_code=404, detail="A meghívott nem tartozik ehhez az ajánlatkéréshez.")
     ajanlat = meghivott.ajanlat
-    if ajanlat is None or ajanlat.visszavonva is not None:
-        raise HTTPException(status_code=400, detail="Ez a meghívott nem jelentkezett (vagy visszavonta).")
+    if ajanlat is None or ajanlat.visszavonva is not None or not ajanlat.vallalja:
+        raise HTTPException(status_code=400, detail="Ez a meghívott nem jelentkezett (vagy nem ér rá).")
 
     # Díjazást a rendszer NEM tart nyilván (a felhasználó kérése): az árban a
     # kiválasztottal a rendszeren kívül egyeznek meg.
@@ -461,6 +468,34 @@ def ajanlat_bekuldes(
         if a.visszavonva is not None:
             a.visszavonva = None
             a.bekuldve = a.bekuldve or mostani
+    db.commit()
+    db.refresh(m)
+    return m.ajanlat
+
+
+def nem_er_ra_bekuldes(db: Session, token: str, megjegyzes: str | None) -> MunkaArajanlat:
+    """"SAJNOS NEM ÉREK RÁ" válasz (a felhasználó kérése): a meghívott
+    kifejezetten jelzi, hogy nem vállalja - ez más, mint a nem-válaszolás.
+    A határidőig ez is meggondolható (újra lehet jelentkezni)."""
+    m = token_alapjan(db, token)
+    ak = m.ajanlatkeres
+    if ak.allapot != "ajanlatadas":
+        raise HTTPException(status_code=410, detail="Ez a munkafelajánlás már nem fogad választ.")
+    if lejart(ak):
+        raise HTTPException(status_code=410, detail="A válaszadás lezárult.")
+    mostani = most_utc()
+    if m.ajanlat is None:
+        m.ajanlat = MunkaArajanlat(
+            megjegyzes=(megjegyzes or "").strip() or None,
+            vallalja=False,
+            bekuldve=mostani,
+        )
+    else:
+        a = m.ajanlat
+        a.vallalja = False
+        a.megjegyzes = (megjegyzes or "").strip() or None
+        a.modositva = mostani
+        a.visszavonva = None
     db.commit()
     db.refresh(m)
     return m.ajanlat

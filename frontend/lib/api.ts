@@ -2114,7 +2114,7 @@ export type MunkaAjanlatInfo = {
   bekuldve: string | null;
   modositva: string | null;
   visszavonva: boolean;
-  allapot: "bekuldve" | "visszavonva" | "elfogadva" | "elutasitva";
+  allapot: "bekuldve" | "nem_er_ra" | "visszavonva" | "elfogadva" | "elutasitva";
 };
 
 export type MunkaMeghivott = {

@@ -71,7 +71,7 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
     setAdat(d);
     lejaratRef.current = Date.now() + d.hatralevo_mp * 1000;
     setHatralevoMp(d.hatralevo_mp);
-    if (d.sajat_ajanlat && !d.sajat_ajanlat.visszavonva) {
+    if (d.sajat_ajanlat && !d.sajat_ajanlat.visszavonva && d.sajat_ajanlat.vallalja) {
       setMegjegyzes(d.sajat_ajanlat.megjegyzes ?? "");
       setVallalja(true);
     }
@@ -132,6 +132,36 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
     }
   }
 
+  /** "Sajnos nem érek rá" (a felhasználó kérése): kifejezett lemondás - a
+   * határidőig meggondolható, és az eredményről már nem jön külön levél. */
+  async function nemErekRa() {
+    setBusy(true);
+    setUzenet(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/public/ajanlat/${token}/nem-erek-ra`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ megjegyzes: megjegyzes.trim() || null }),
+      });
+      const d = await res.json().catch(() => null);
+      if (!res.ok) {
+        setUzenet({ hiba: true, szoveg: d?.detail ?? `Hiba (${res.status})` });
+        return;
+      }
+      feldolgoz(d as Adatok);
+      setSzerkesztes(false);
+      setVallalja(false);
+      setUzenet({
+        hiba: false,
+        szoveg: "Köszönjük a visszajelzést! Jelezted, hogy most nem érsz rá. Ha meggondolod magad, a határidőig még jelentkezhetsz.",
+      });
+    } catch (err) {
+      setUzenet({ hiba: true, szoveg: `Hálózati hiba: ${err}` });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function visszavonas() {
     setBusy(true);
     setUzenet(null);
@@ -171,7 +201,9 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
   }
 
   const lejart = adat.lejart || (hatralevoMp !== null && hatralevoMp <= 0);
-  const elozo = adat.sajat_ajanlat && !adat.sajat_ajanlat.visszavonva ? adat.sajat_ajanlat : null;
+  const elo = adat.sajat_ajanlat && !adat.sajat_ajanlat.visszavonva ? adat.sajat_ajanlat : null;
+  const elozo = elo && elo.vallalja ? elo : null;
+  const lemondta = elo !== null && !elo.vallalja;
   const beviteli =
     "w-full rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary focus:outline-none focus:ring-1 focus:ring-border-strong";
 
@@ -246,8 +278,25 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
           </div>
         )}
 
+        {/* "Sajnos nem érek rá" - a lemondott állapot */}
+        {lemondta && !szerkesztes && !adat.lezarult && (
+          <div className="mt-5 rounded-[var(--radius)] border border-border bg-surface-2 p-4">
+            <p className="text-[13px] font-medium text-text-primary">Jelezted: sajnos nem érsz rá erre a feladatra.</p>
+            {elo?.megjegyzes && <p className="mt-1 text-[13px] text-text-secondary">Megjegyzésed: {elo.megjegyzes}</p>}
+            {!lejart && (
+              <button
+                type="button"
+                onClick={() => { setSzerkesztes(true); setUzenet(null); }}
+                className="btn btn-primary mt-3"
+              >
+                Mégis jelentkezem
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Jelentkezési űrlap - ár nélkül */}
-        {!adat.lezarult && !lejart && (szerkesztes || !elozo) && (
+        {!adat.lezarult && !lejart && (szerkesztes || (!elozo && !lemondta)) && (
           <div className="mt-5 space-y-4">
             <label className="block text-[12.5px] text-text-muted">
               Megjegyzés (nem kötelező - pl. mikor vagy elérhető, mire figyeljünk)
@@ -257,9 +306,19 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
               <input type="checkbox" checked={vallalja} onChange={(e) => setVallalja(e.target.checked)} className="mt-0.5" />
               Megerősítem, hogy érdekel a feladat, és a megadott időpontban ráérek.
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button type="button" disabled={busy} onClick={() => void bekuldes()} className="btn btn-primary disabled:opacity-50">
                 {busy ? "Küldés…" : "Jelentkezem"}
+              </button>
+              {/* Kifejezett lemondás (a felhasználó kérése) - ehhez nem kell
+                  a megerősítő pipa, hiszen épp azt jelzi, hogy NEM vállalja. */}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void nemErekRa()}
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Sajnos nem érek rá
               </button>
               {szerkesztes && (
                 <button type="button" onClick={() => setSzerkesztes(false)} className="text-[13px] text-text-muted hover:text-text-primary">

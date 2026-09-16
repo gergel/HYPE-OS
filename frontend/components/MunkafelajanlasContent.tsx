@@ -28,6 +28,14 @@ function idopont(iso: string | null): string {
 
 export type ProjektOpcio = { id: number; nev: string; kod: string | null; datum: string | null };
 
+/** Alapértelmezett válaszadási határidő: MOST + 48 óra (a felhasználó
+ * kérése), datetime-local formában - az űrlapon szabadon átírható. */
+function alap48OraMulva(): string {
+  const d = new Date(Date.now() + 48 * 3600 * 1000);
+  const sz = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${sz(d.getMonth() + 1)}-${sz(d.getDate())}T${sz(d.getHours())}:${sz(d.getMinutes())}`;
+}
+
 /** Az ÚJ ajánlatkérés űrlapja. Felajánlott díjat SZÁNDÉKOSAN nem lehet
  * megadni: az árat a meghívott külsősök ajánlják meg (a felhasználó kérése).
  * A projekt a MEGLÉVŐ projektek közül választandó - nem szabad szöveg. */
@@ -59,7 +67,8 @@ function UjAjanlatkeres({
     helyszin: "",
     munkavegzes_idopont: "",
     teljesitesi_hatarido: "",
-    valaszadasi_hatarido: "",
+    // Alapból 48 óra van a válaszadásra (a felhasználó kérése) - átírható.
+    valaszadasi_hatarido: alap48OraMulva(),
     kapcsolattarto_id: "",
   });
   const [meghivottak, setMeghivottak] = useState<number[]>([]);
@@ -154,7 +163,7 @@ function UjAjanlatkeres({
       setProjectId(null);
       setMezok({
         munkakor: "", leiras: "", helyszin: "",
-        munkavegzes_idopont: "", teljesitesi_hatarido: "", valaszadasi_hatarido: "", kapcsolattarto_id: "",
+        munkavegzes_idopont: "", teljesitesi_hatarido: "", valaszadasi_hatarido: alap48OraMulva(), kapcsolattarto_id: "",
       });
       setMeghivottak([]);
       onKesz();
@@ -189,7 +198,15 @@ function UjAjanlatkeres({
               // kérése: a dátum is látsszon a projekteknél).
               sublabel: [p.kod, p.datum].filter(Boolean).join(" · ") || undefined,
             }))}
-            onChange={(v) => setProjectId(v)}
+            onChange={(v) => {
+              setProjectId(v);
+              // A forgatás dátuma automatikusan átjön a projektből (a
+              // felhasználó kérése) - a mező utána szabadon átírható.
+              const valasztott = projektek.find((pr) => String(pr.id) === v);
+              if (valasztott?.datum) {
+                setMezok((elozo) => ({ ...elozo, munkavegzes_idopont: valasztott.datum ?? "" }));
+              }
+            }}
             placeholder="Válassz projektet…"
             className="mt-0.5"
           />
@@ -209,7 +226,7 @@ function UjAjanlatkeres({
         <label className="block text-[12px] text-text-muted">Teljesítési határidő (ha van)
           <input value={mezok.teljesitesi_hatarido} onChange={(e) => m("teljesitesi_hatarido", e.target.value)} placeholder="pl. 2026. október 20." className={beviteli} />
         </label>
-        <label className="block text-[12px] text-text-muted">Válaszadási határidő * (magyar idő szerint)
+        <label className="block text-[12px] text-text-muted">Válaszadási határidő * (magyar idő szerint - alapból 48 óra, átírható)
           <input type="datetime-local" value={mezok.valaszadasi_hatarido} onChange={(e) => m("valaszadasi_hatarido", e.target.value)} className={beviteli} />
         </label>
         <label className="block text-[12px] text-text-muted">Kapcsolattartó
@@ -297,12 +314,46 @@ function UjAjanlatkeres({
                 }
               />
               {e.full_name}
-              {!e.email && <span className="text-[11px] text-text-danger">(nincs e-mail!)</span>}
+              {/* Az e-mail cím is látszik (a felhasználó kérése): rögtön
+                  ellenőrizhető, hova menne a meghívó. */}
+              {e.email ? (
+                <span className="text-[11px] text-text-muted">({e.email})</span>
+              ) : (
+                <span className="text-[11px] text-text-danger">(nincs e-mail!)</span>
+              )}
             </label>
           ))}
         </div>
       </div>
 
+      {/* KIKNEK MEGY AZ E-MAIL (a felhasználó kérése): a kiválasztottak neve
+          és címe egyben - kiküldés előtt itt ellenőrizhető a kör. */}
+      {meghivottak.length > 0 && (
+        <div className="rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2">
+          <p className="mb-1 text-[12px] font-medium text-text-primary">Nekik megy majd az e-mail ({meghivottak.length}):</p>
+          <div className="flex flex-wrap gap-1.5">
+            {meghivottak
+              .map((id) => employees.find((e) => e.id === id))
+              .filter((e): e is Employee => !!e)
+              .map((e) => (
+                <span key={e.id} className="inline-flex items-center gap-1 rounded-[var(--radius)] bg-surface-3 px-2 py-0.5 text-[12px]">
+                  <span className="text-text-primary">{e.full_name}</span>
+                  <span className={e.email ? "text-text-muted" : "text-text-danger"}>
+                    {e.email ?? "nincs e-mail!"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMeghivottak((elozo) => elozo.filter((i) => i !== e.id))}
+                    aria-label={`${e.full_name} levétele`}
+                    className="text-text-muted hover:text-text-danger"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+          </div>
+        </div>
+      )}
       {hiba && <p className="text-[12.5px] text-text-danger">{hiba}</p>}
       <div className="flex gap-2">
         <button type="button" disabled={busy} onClick={() => void mentes()} className="btn btn-primary disabled:opacity-50">
@@ -426,8 +477,8 @@ function Reszletek({
                   <td className="py-2 pr-3">
                     {mh.ajanlat ? (
                       <StatusBadge
-                        label={{ bekuldve: "Jelentkezett, ráér", visszavonva: "Visszavonta", elfogadva: "Kiválasztva", elutasitva: "Más vitte el" }[mh.ajanlat.allapot]}
-                        tone={{ bekuldve: "blue" as const, visszavonva: "neutral" as const, elfogadva: "success" as const, elutasitva: "neutral" as const }[mh.ajanlat.allapot]}
+                        label={{ bekuldve: "Jelentkezett, ráér", nem_er_ra: "Nem ér rá", visszavonva: "Visszavonta", elfogadva: "Kiválasztva", elutasitva: "Más vitte el" }[mh.ajanlat.allapot]}
+                        tone={{ bekuldve: "blue" as const, nem_er_ra: "orange" as const, visszavonva: "neutral" as const, elfogadva: "success" as const, elutasitva: "neutral" as const }[mh.ajanlat.allapot]}
                       />
                     ) : (
                       <StatusBadge label="Nem jelentkezett" tone="neutral" />
@@ -442,7 +493,7 @@ function Reszletek({
                     >
                       <Copy size={13} />
                     </button>
-                    {canEdit && ak.allapot === "dontesre_var" && mh.ajanlat && !mh.ajanlat.visszavonva && (
+                    {canEdit && ak.allapot === "dontesre_var" && mh.ajanlat && mh.ajanlat.allapot === "bekuldve" && (
                       <button
                         type="button"
                         disabled={busy}

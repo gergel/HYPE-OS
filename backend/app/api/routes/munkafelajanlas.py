@@ -69,8 +69,8 @@ class AjanlatInfo(BaseModel):
     bekuldve: str | None
     modositva: str | None
     visszavonva: bool
-    #: bekuldve / visszavonva / elfogadva / elutasitva - a belső tábla
-    #: "jelentkezés állapota" oszlopa.
+    #: bekuldve / nem_er_ra / visszavonva / elfogadva / elutasitva - a belső
+    #: tábla "jelentkezés állapota" oszlopa.
     allapot: str
 
 
@@ -128,6 +128,9 @@ def _ajanlat_info(ak: Ajanlatkeres, m: AjanlatMeghivott) -> AjanlatInfo | None:
         return None
     if a.visszavonva is not None:
         allapot = "visszavonva"
+    elif not a.vallalja:
+        # Kifejezetten jelezte: sajnos nem ér rá (a felhasználó kérése).
+        allapot = "nem_er_ra"
     elif ak.allapot == "kiosztva":
         allapot = "elfogadva" if m.id == ak.nyertes_meghivott_id else "elutasitva"
     else:
@@ -159,7 +162,9 @@ def _meghivott_info(ak: Ajanlatkeres, m: AjanlatMeghivott) -> MeghivottInfo:
 
 
 def _kimenet(ak: Ajanlatkeres) -> AjanlatkeresOut:
-    elo_ajanlatok = [m for m in ak.meghivottak if m.ajanlat is not None and m.ajanlat.visszavonva is None]
+    elo_ajanlatok = [
+        m for m in ak.meghivottak if m.ajanlat is not None and m.ajanlat.visszavonva is None and m.ajanlat.vallalja
+    ]
     kuldes_hibak = sum(1 for m in ak.meghivottak if m.meghivo_hiba or m.eredmeny_hiba)
     return AjanlatkeresOut(
         id=ak.id,
@@ -594,6 +599,19 @@ def publikus_bekuldes(token: str, payload: PublikusAjanlatIn, db: Session = Depe
     """Jelentkezés beküldése/módosítása. A határidőt a SZERVER ellenőrzi:
     lejárat után egy korábban megnyitott űrlap sem tud jelentkezni (410)."""
     szolg.ajanlat_bekuldes(db, token, megjegyzes=payload.megjegyzes, vallalja=payload.vallalja)
+    return _publikus_valasz(szolg.token_alapjan(db, token))
+
+
+class NemErekRaIn(BaseModel):
+    megjegyzes: str | None = None
+
+
+@public_router.post("/{token}/nem-erek-ra", response_model=PublikusValasz)
+def publikus_nem_erek_ra(token: str, payload: NemErekRaIn, db: Session = Depends(get_db)):
+    """"Sajnos nem érek rá" (a felhasználó kérése): kifejezett lemondás - más,
+    mint a nem-válaszolás. A határidőig meggondolható (újra lehet jelentkezni),
+    és aki lemondott, az eredményről nem kap külön levelet."""
+    szolg.nem_er_ra_bekuldes(db, token, payload.megjegyzes)
     return _publikus_valasz(szolg.token_alapjan(db, token))
 
 
