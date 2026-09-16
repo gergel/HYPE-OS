@@ -124,9 +124,9 @@ class CimzettLista(TimestampMixin, Base):
 
 
 class MunkaArajanlat(TimestampMixin, Base):
-    """Egy meghívott beküldött árajánlata. A határidőig módosítható és
-    visszavonható (a visszavonást jelezzük, nem töröljük a sort - a belső
-    összehasonlító táblán látszania kell, mi történt)."""
+    """Egy meghívott JELENTKEZÉSE ("érdekel és ráérek"). A határidőig
+    módosítható és visszavonható (a visszavonást jelezzük, nem töröljük a
+    sort - a belső táblán látszania kell, mi történt)."""
 
     __tablename__ = "munka_arajanlatok"
 
@@ -134,8 +134,11 @@ class MunkaArajanlat(TimestampMixin, Base):
     meghivott_id: Mapped[int] = mapped_column(
         ForeignKey("ajanlat_meghivottak.id", ondelete="CASCADE"), unique=True, nullable=False
     )
-    #: A TELJES feladatra ajánlott vállalási összeg.
-    osszeg: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    #: KORÁBBAN ár-mező volt - a felhasználó kérésére az árazás kikerült a
+    #: modulból (a díjazásról a kiválasztottal a rendszeren kívül egyeznek
+    #: meg), a jelentkezés nem tartalmaz összeget. Az oszlop a régi sorok
+    #: miatt maradt, új sorba nem íródik.
+    osszeg: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     penznem: Mapped[str] = mapped_column(String(10), nullable=False, default="HUF", server_default="HUF")
     #: Az összeg bruttó-e (False = nettó) - a felületen kötelező, egyértelmű jelölés.
     brutto: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

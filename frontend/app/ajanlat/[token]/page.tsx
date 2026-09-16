@@ -1,23 +1,21 @@
 "use client";
 
-/** A KÜLSŐS SZEMÉLYES AJÁNLATI OLDALA - a meghívó e-mail "Árajánlatot adok"
- * gombja ide hoz (publikus, tokenes útvonal: bejelentkezés nélkül működik,
- * lásd middleware PUBLIC_PATHS).
+/** A KÜLSŐS SZEMÉLYES JELENTKEZÉSI OLDALA - a meghívó e-mail "Érdekel,
+ * jelentkezem" gombja ide hoz (publikus, tokenes útvonal: bejelentkezés
+ * nélkül működik, lásd middleware PUBLIC_PATHS).
  *
- * A külsős a feladat minden lényeges adatát látja, ÉLŐ visszaszámlálóval a
- * válaszadási határidőig; beküldheti, a határidőig módosíthatja és
- * visszavonhatja az ajánlatát. Mások nevét, ajánlatát vagy a jelentkezők
- * számát nem látja. A határidőt a SZERVER ellenőrzi - a lejárat után egy itt
- * nyitva felejtett űrlap sem tud beküldeni (410). */
+ * ÁRAT NEM KÉRÜNK (a felhasználó kérése): a külsős csak azt jelzi, hogy
+ * érdekli a feladat és ráér - a díjazásról a kiválasztottal a rendszeren
+ * kívül egyeznek meg. A külsős látja a feladat adatait, ÉLŐ visszaszámlálót
+ * a határidőig; a jelentkezését a határidőig módosíthatja és visszavonhatja.
+ * Mások nevét vagy a jelentkezők számát nem látja. A határidőt a SZERVER
+ * ellenőrzi - lejárat után egy nyitva felejtett űrlap sem tud beküldeni. */
 
 import { use, useEffect, useRef, useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-type SajatAjanlat = {
-  osszeg: number;
-  penznem: string;
-  brutto: boolean;
+type SajatJelentkezes = {
   megjegyzes: string | null;
   vallalja: boolean;
   bekuldve: string | null;
@@ -36,7 +34,7 @@ type Adatok = {
   hatralevo_mp: number;
   lejart: boolean;
   lezarult: boolean;
-  sajat_ajanlat: SajatAjanlat | null;
+  sajat_ajanlat: SajatJelentkezes | null;
 };
 
 function hatralevoSzoveg(mp: number): string {
@@ -62,9 +60,6 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
   const lejaratRef = useRef<number | null>(null);
   const [hatralevoMp, setHatralevoMp] = useState<number | null>(null);
 
-  const [osszeg, setOsszeg] = useState("");
-  const [penznem, setPenznem] = useState("HUF");
-  const [brutto, setBrutto] = useState<"netto" | "brutto">("netto");
   const [megjegyzes, setMegjegyzes] = useState("");
   const [vallalja, setVallalja] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -77,9 +72,6 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
     lejaratRef.current = Date.now() + d.hatralevo_mp * 1000;
     setHatralevoMp(d.hatralevo_mp);
     if (d.sajat_ajanlat && !d.sajat_ajanlat.visszavonva) {
-      setOsszeg(String(d.sajat_ajanlat.osszeg));
-      setPenznem(d.sajat_ajanlat.penznem);
-      setBrutto(d.sajat_ajanlat.brutto ? "brutto" : "netto");
       setMegjegyzes(d.sajat_ajanlat.megjegyzes ?? "");
       setVallalja(true);
     }
@@ -90,7 +82,7 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
       .then(async (res) => {
         if (!res.ok) {
           const d = await res.json().catch(() => null);
-          throw new Error(d?.detail ?? "Ez az ajánlati link nem érvényes.");
+          throw new Error(d?.detail ?? "Ez a jelentkezési link nem érvényes.");
         }
         return res.json();
       })
@@ -109,13 +101,8 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
 
   async function bekuldes() {
     setUzenet(null);
-    const szam = Number(osszeg.replace(/[\s  ]/g, "").replace(",", "."));
-    if (!Number.isFinite(szam) || szam <= 0) {
-      setUzenet({ hiba: true, szoveg: "Add meg a teljes feladatra ajánlott vállalási összeget." });
-      return;
-    }
     if (!vallalja) {
-      setUzenet({ hiba: true, szoveg: "A beküldéshez erősítsd meg, hogy a megadott időpont és feladat vállalható." });
+      setUzenet({ hiba: true, szoveg: "A jelentkezéshez erősítsd meg, hogy érdekel a feladat, és a megadott időpontban ráérsz." });
       return;
     }
     setBusy(true);
@@ -123,13 +110,7 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
       const res = await fetch(`${API_BASE}/api/v1/public/ajanlat/${token}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          osszeg: szam,
-          penznem,
-          brutto: brutto === "brutto",
-          megjegyzes: megjegyzes.trim() || null,
-          vallalja: true,
-        }),
+        body: JSON.stringify({ megjegyzes: megjegyzes.trim() || null, vallalja: true }),
       });
       const d = await res.json().catch(() => null);
       if (!res.ok) {
@@ -142,7 +123,7 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
       setUzenet({
         hiba: false,
         szoveg:
-          "Köszönjük, megkaptuk az ajánlatodat! A válaszadási határidő lejárta után választunk, és e-mailben értesítünk az eredményről.",
+          "Köszönjük, megkaptuk a jelentkezésedet! A határidő lejárta után választunk, és e-mailben értesítünk az eredményről.",
       });
     } catch (err) {
       setUzenet({ hiba: true, szoveg: `Hálózati hiba: ${err}` });
@@ -164,10 +145,9 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
       feldolgoz(d as Adatok);
       setVisszavonasKerdes(false);
       setSzerkesztes(false);
-      setOsszeg("");
       setMegjegyzes("");
       setVallalja(false);
-      setUzenet({ hiba: false, szoveg: "Az ajánlatodat visszavontad. A határidőig bármikor beküldhetsz újat." });
+      setUzenet({ hiba: false, szoveg: "A jelentkezésedet visszavontad. A határidőig bármikor jelentkezhetsz újra." });
     } catch (err) {
       setUzenet({ hiba: true, szoveg: `Hálózati hiba: ${err}` });
     } finally {
@@ -191,14 +171,14 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
   }
 
   const lejart = adat.lejart || (hatralevoMp !== null && hatralevoMp <= 0);
-  const elozoAjanlat = adat.sajat_ajanlat && !adat.sajat_ajanlat.visszavonva ? adat.sajat_ajanlat : null;
+  const elozo = adat.sajat_ajanlat && !adat.sajat_ajanlat.visszavonva ? adat.sajat_ajanlat : null;
   const beviteli =
     "w-full rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[14px] text-text-primary focus:outline-none focus:ring-1 focus:ring-border-strong";
 
   return (
     <div className="mx-auto max-w-2xl p-4 md:p-8">
       <div className="rounded-[var(--radius-xl)] border border-border bg-surface-1 p-6 md:p-8">
-        <p className="text-[12px] font-medium uppercase tracking-wide text-text-muted">Árajánlat-kérés</p>
+        <p className="text-[12px] font-medium uppercase tracking-wide text-text-muted">Munkafelajánlás</p>
         <h1 className="mt-1 text-[20px] font-semibold text-text-primary">
           {adat.projekt_nev} <span className="text-text-secondary">/ {adat.munkakor}</span>
         </h1>
@@ -208,25 +188,26 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
           {adat.munkavegzes_idopont && <p><span className="text-text-muted">A munkavégzés várható időpontja:</span> <span className="text-text-secondary">{adat.munkavegzes_idopont}</span></p>}
           {adat.helyszin && <p><span className="text-text-muted">Helyszín:</span> <span className="text-text-secondary">{adat.helyszin}</span></p>}
           {adat.teljesitesi_hatarido && <p><span className="text-text-muted">Teljesítési határidő:</span> <span className="text-text-secondary">{adat.teljesitesi_hatarido}</span></p>}
-          <p><span className="text-text-muted">Válaszadási határidő:</span> <span className="font-medium text-text-primary">{adat.valaszadasi_hatarido_szoveg}</span> <span className="text-text-muted">(magyar idő szerint)</span></p>
+          <p><span className="text-text-muted">Jelentkezési határidő:</span> <span className="font-medium text-text-primary">{adat.valaszadasi_hatarido_szoveg}</span> <span className="text-text-muted">(magyar idő szerint)</span></p>
         </div>
 
         {/* Élő visszaszámláló / lezárt állapot */}
         {adat.lezarult ? (
           <p className="mt-4 rounded-[var(--radius)] bg-surface-3 px-3 py-2.5 text-[13.5px] text-text-secondary">
-            Ez az ajánlatkérés lezárult. Ha adtál be ajánlatot, az eredményről e-mailben értesítünk.
+            Ez a munkafelajánlás lezárult. Ha jelentkeztél, az eredményről e-mailben értesítünk.
           </p>
         ) : lejart ? (
           <p className="mt-4 rounded-[var(--radius)] bg-surface-3 px-3 py-2.5 text-[13.5px] text-text-secondary">
-            Az ajánlatadás lezárult. A kiválasztás folyamatban van, az eredményről külön értesítünk.
+            A jelentkezés lezárult. A kiválasztás folyamatban van, az eredményről külön értesítünk.
           </p>
         ) : (
           <div className="mt-4 rounded-[var(--radius)] bg-bg-accent px-3 py-2.5">
             <p className="text-[14px] font-medium text-text-accent">
-              Még {hatralevoSzoveg(hatralevoMp ?? adat.hatralevo_mp)} van az ajánlatadásra.
+              Még {hatralevoSzoveg(hatralevoMp ?? adat.hatralevo_mp)} van a jelentkezésre.
             </p>
             <p className="mt-0.5 text-[12.5px] text-text-secondary">
-              A kiválasztás a válaszadási határidő lejárta után történik. Az eredményről e-mailben értesítünk.
+              A kiválasztás a jelentkezési határidő lejárta után történik. Az eredményről e-mailben értesítünk -
+              a jelentkezés még nem jelent megbízást.
             </p>
           </div>
         )}
@@ -237,19 +218,16 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
           </p>
         )}
 
-        {/* A saját beküldött ajánlat */}
-        {elozoAjanlat && !szerkesztes && !adat.lezarult && (
+        {/* A saját jelentkezés */}
+        {elozo && !szerkesztes && !adat.lezarult && (
           <div className="mt-5 rounded-[var(--radius)] border border-border bg-surface-2 p-4">
-            <p className="text-[13px] font-medium text-text-primary">A beküldött ajánlatod</p>
-            <p className="mt-1 text-[15px] font-semibold text-text-primary">
-              {elozoAjanlat.osszeg.toLocaleString("hu-HU")} {elozoAjanlat.penznem}{" "}
-              <span className="text-[13px] font-normal text-text-secondary">({elozoAjanlat.brutto ? "bruttó" : "nettó"})</span>
-            </p>
-            {elozoAjanlat.megjegyzes && <p className="mt-1 text-[13px] text-text-secondary">{elozoAjanlat.megjegyzes}</p>}
+            <p className="text-[13px] font-medium text-text-primary">Jelentkeztél erre a feladatra</p>
+            <p className="mt-1 text-[13.5px] text-text-success">Jelezted, hogy érdekel és ráérsz. ✓</p>
+            {elozo.megjegyzes && <p className="mt-1 text-[13px] text-text-secondary">Megjegyzésed: {elozo.megjegyzes}</p>}
             {!lejart && (
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" onClick={() => { setSzerkesztes(true); setUzenet(null); }} className="btn btn-primary">
-                  Ajánlat módosítása
+                  Megjegyzés módosítása
                 </button>
                 {visszavonasKerdes ? (
                   <>
@@ -260,7 +238,7 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
                   </>
                 ) : (
                   <button type="button" onClick={() => setVisszavonasKerdes(true)} className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:text-text-danger">
-                    Ajánlat visszavonása
+                    Jelentkezés visszavonása
                   </button>
                 )}
               </div>
@@ -268,51 +246,20 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
           </div>
         )}
 
-        {/* Ajánlati űrlap */}
-        {!adat.lezarult && !lejart && (szerkesztes || !elozoAjanlat) && (
+        {/* Jelentkezési űrlap - ár nélkül */}
+        {!adat.lezarult && !lejart && (szerkesztes || !elozo) && (
           <div className="mt-5 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
-              <label className="block text-[12.5px] text-text-muted">
-                A teljes feladatra ajánlott vállalási összeg *
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={osszeg}
-                  onChange={(e) => setOsszeg(e.target.value)}
-                  placeholder="pl. 150 000"
-                  className={beviteli}
-                />
-              </label>
-              <label className="block text-[12.5px] text-text-muted">
-                Pénznem
-                <select value={penznem} onChange={(e) => setPenznem(e.target.value)} className={beviteli}>
-                  <option value="HUF">HUF</option>
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                </select>
-              </label>
-            </div>
-            <div className="flex gap-4 text-[13.5px] text-text-secondary">
-              <label className="flex cursor-pointer items-center gap-1.5">
-                <input type="radio" name="brutto" checked={brutto === "netto"} onChange={() => setBrutto("netto")} />
-                Nettó összeg
-              </label>
-              <label className="flex cursor-pointer items-center gap-1.5">
-                <input type="radio" name="brutto" checked={brutto === "brutto"} onChange={() => setBrutto("brutto")} />
-                Bruttó összeg
-              </label>
-            </div>
             <label className="block text-[12.5px] text-text-muted">
-              Megjegyzés vagy vállalási feltétel (nem kötelező)
+              Megjegyzés (nem kötelező - pl. mikor vagy elérhető, mire figyeljünk)
               <textarea value={megjegyzes} onChange={(e) => setMegjegyzes(e.target.value)} rows={3} className={beviteli} />
             </label>
             <label className="flex cursor-pointer items-start gap-2 text-[13.5px] text-text-secondary">
               <input type="checkbox" checked={vallalja} onChange={(e) => setVallalja(e.target.checked)} className="mt-0.5" />
-              Megerősítem, hogy a megadott időpont és feladat számomra vállalható.
+              Megerősítem, hogy érdekel a feladat, és a megadott időpontban ráérek.
             </label>
             <div className="flex gap-2">
               <button type="button" disabled={busy} onClick={() => void bekuldes()} className="btn btn-primary disabled:opacity-50">
-                {busy ? "Beküldés…" : "Árajánlat beküldése"}
+                {busy ? "Küldés…" : "Jelentkezem"}
               </button>
               {szerkesztes && (
                 <button type="button" onClick={() => setSzerkesztes(false)} className="text-[13px] text-text-muted hover:text-text-primary">
@@ -323,7 +270,7 @@ export default function AjanlatOldal({ params }: { params: Promise<{ token: stri
           </div>
         )}
       </div>
-      <p className="mt-4 text-center text-[11.5px] text-text-muted">HYPE OS – személyre szóló ajánlati oldal</p>
+      <p className="mt-4 text-center text-[11.5px] text-text-muted">HYPE OS – személyre szóló jelentkezési oldal</p>
     </div>
   );
 }

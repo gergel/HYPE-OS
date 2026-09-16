@@ -61,16 +61,16 @@ class LezarasIn(BaseModel):
 
 
 class AjanlatInfo(BaseModel):
-    osszeg: float
-    penznem: str
-    brutto: bool
+    """Egy JELENTKEZÉS ("érdekel és ráérek") - árat nem tartalmaz: a
+    díjazásról a kiválasztottal a rendszeren kívül egyeznek meg."""
+
     megjegyzes: str | None
     vallalja: bool
     bekuldve: str | None
     modositva: str | None
     visszavonva: bool
     #: bekuldve / visszavonva / elfogadva / elutasitva - a belső tábla
-    #: "ajánlat állapota" oszlopa.
+    #: "jelentkezés állapota" oszlopa.
     allapot: str
 
 
@@ -104,9 +104,6 @@ class AjanlatkeresOut(BaseModel):
     kapcsolattarto_id: int | None
     kapcsolattarto_nev: str | None
     nyertes_meghivott_id: int | None
-    elfogadott_osszeg: float | None
-    elfogadott_penznem: str | None
-    elfogadott_brutto: bool | None
     lezarva: str | None
     lezaras_megjegyzes: str | None
     meghivott_db: int
@@ -136,9 +133,6 @@ def _ajanlat_info(ak: Ajanlatkeres, m: AjanlatMeghivott) -> AjanlatInfo | None:
     else:
         allapot = "bekuldve"
     return AjanlatInfo(
-        osszeg=float(a.osszeg),
-        penznem=a.penznem,
-        brutto=a.brutto,
         megjegyzes=a.megjegyzes,
         vallalja=a.vallalja,
         bekuldve=_iso(a.bekuldve),
@@ -183,9 +177,6 @@ def _kimenet(ak: Ajanlatkeres) -> AjanlatkeresOut:
         kapcsolattarto_id=ak.kapcsolattarto_id,
         kapcsolattarto_nev=ak.kapcsolattarto.full_name if ak.kapcsolattarto else None,
         nyertes_meghivott_id=ak.nyertes_meghivott_id,
-        elfogadott_osszeg=float(ak.elfogadott_osszeg) if ak.elfogadott_osszeg is not None else None,
-        elfogadott_penznem=ak.elfogadott_penznem,
-        elfogadott_brutto=ak.elfogadott_brutto,
         lezarva=_iso(ak.lezarva),
         lezaras_megjegyzes=ak.lezaras_megjegyzes,
         meghivott_db=len(ak.meghivottak),
@@ -527,9 +518,8 @@ def visszavonas(
 
 
 class PublikusAjanlat(BaseModel):
-    osszeg: float
-    penznem: str
-    brutto: bool
+    """A meghívott SAJÁT jelentkezése - ár nélkül."""
+
     megjegyzes: str | None
     vallalja: bool
     bekuldve: str | None
@@ -555,9 +545,8 @@ class PublikusValasz(BaseModel):
 
 
 class PublikusAjanlatIn(BaseModel):
-    osszeg: float
-    penznem: str = "HUF"
-    brutto: bool = False
+    """Jelentkezés: "érdekel és ráérek" + opcionális megjegyzés."""
+
     megjegyzes: str | None = None
     vallalja: bool = False
 
@@ -581,9 +570,6 @@ def _publikus_valasz(m: AjanlatMeghivott) -> PublikusValasz:
         lezarult=ak.allapot in ("kiosztva", "lezarva_nyertes_nelkul", "visszavonva"),
         sajat_ajanlat=(
             PublikusAjanlat(
-                osszeg=float(a.osszeg),
-                penznem=a.penznem,
-                brutto=a.brutto,
                 megjegyzes=a.megjegyzes,
                 vallalja=a.vallalja,
                 bekuldve=a.bekuldve.isoformat() + "Z" if a.bekuldve else None,
@@ -605,17 +591,9 @@ def publikus_adatok(token: str, db: Session = Depends(get_db)):
 
 @public_router.put("/{token}", response_model=PublikusValasz)
 def publikus_bekuldes(token: str, payload: PublikusAjanlatIn, db: Session = Depends(get_db)):
-    """Ajánlat beküldése/módosítása. A határidőt a SZERVER ellenőrzi: lejárat
-    után egy korábban megnyitott űrlap sem adhat be ajánlatot (410)."""
-    szolg.ajanlat_bekuldes(
-        db,
-        token,
-        osszeg=payload.osszeg,
-        penznem=payload.penznem,
-        brutto=payload.brutto,
-        megjegyzes=payload.megjegyzes,
-        vallalja=payload.vallalja,
-    )
+    """Jelentkezés beküldése/módosítása. A határidőt a SZERVER ellenőrzi:
+    lejárat után egy korábban megnyitott űrlap sem tud jelentkezni (410)."""
+    szolg.ajanlat_bekuldes(db, token, megjegyzes=payload.megjegyzes, vallalja=payload.vallalja)
     return _publikus_valasz(szolg.token_alapjan(db, token))
 
 

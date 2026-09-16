@@ -30,9 +30,9 @@ BUDAPEST = ZoneInfo("Europe/Budapest")
 
 #: A meghívóban kötelező, jól látható tájékoztatás (a felhasználó pontos szövege).
 TAJEKOZTATO = (
-    "Kérjük, a megadott határidőig küldd el árajánlatodat. A beérkezett ajánlatok közül "
-    "a válaszadási határidő lejárta után választunk, és az eredményről külön értesítünk. "
-    "Az ajánlat beküldése még nem jelent megbízást."
+    "Kérjük, a megadott határidőig jelezd, ha érdekel a feladat és ráérsz. A jelentkezők "
+    "közül a határidő lejárta után választunk, és az eredményről külön értesítünk. "
+    "A jelentkezés még nem jelent megbízást."
 )
 
 HONAPOK = (
@@ -123,14 +123,6 @@ def uj_token() -> str:
     return secrets.token_urlsafe(24)
 
 
-def osszeg_szoveg(osszeg, penznem: str, brutto: bool) -> str:
-    try:
-        formazott = f"{float(osszeg):,.0f}".replace(",", " ")
-    except (TypeError, ValueError):
-        formazott = str(osszeg)
-    return f"{formazott} {penznem} ({'bruttó' if brutto else 'nettó'})"
-
-
 # ---------------------------------------------------------------------------
 # E-mail sablonok (a felhasználó által megadott minták szerint). Egyik levél
 # sem tartalmazza más résztvevő nevét vagy ajánlati összegét.
@@ -151,10 +143,10 @@ def meghivo_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
     hatarido = budapest_szoveg(ak.valaszadasi_hatarido)
     hatra = hatralevo_szoveg(ak.valaszadasi_hatarido) if ak.valaszadasi_hatarido else "–"
     link = ajanlati_link(m.token)
-    targy = f"Árajánlat-kérés – {ak.projekt_nev} / {ak.munkakor}"
+    targy = f"Munkafelajánlás – {ak.projekt_nev} / {ak.munkakor}"
     html = f"""<div {_STILUS}>
 <p>Szia {nev}!</p>
-<p>Szeretnénk árajánlatot kérni tőled az alábbi feladatra:</p>
+<p>Szeretnénk megkérdezni, érdekel-e az alábbi feladat, és ráérsz-e:</p>
 {_sor("Projekt", ak.projekt_nev)}
 {_sor("Munkakör", ak.munkakor)}
 {_sor("Feladat", ak.leiras)}
@@ -163,9 +155,9 @@ def meghivo_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
 {_sor("Teljesítési határidő", ak.teljesitesi_hatarido)}
 <p style="margin:14px 0 2px 0"><strong>Válaszadási határidő: {hatarido} (magyar idő szerint)</strong></p>
 <p style="margin:2px 0;color:#555">A levél kiküldésekor ennyi idő volt hátra: {hatra}. Ez az érték itt nem frissül
-- az ajánlati oldalon élő visszaszámlálót találsz.</p>
+- a jelentkezési oldalon élő visszaszámlálót találsz.</p>
 <p style="margin:18px 0">
-  <a href="{link}" style="background:#111;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Árajánlatot adok</a>
+  <a href="{link}" style="background:#111;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Érdekel, jelentkezem</a>
 </p>
 <p style="border:1px solid #ddd;border-radius:6px;padding:10px 12px;background:#f7f7f7"><strong>{TAJEKOZTATO}</strong></p>
 <p>Üdv,<br/>A HYPE csapata</p>
@@ -176,13 +168,11 @@ def meghivo_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
 def nyertes_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
     nev = keresztnev(m.employee.full_name)
     kapcsolattarto = ak.kapcsolattarto.full_name if ak.kapcsolattarto else "a HYPE csapata"
-    osszeg = osszeg_szoveg(ak.elfogadott_osszeg, ak.elfogadott_penznem or "HUF", bool(ak.elfogadott_brutto))
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
     targy = f"Számítunk rád! – {ak.projekt_nev} / {ak.munkakor}"
     html = f"""<div {_STILUS}>
 <p>Szia {nev}!</p>
-<p>Köszönjük az ajánlatodat! Örömmel jelezzük, hogy a(z) <strong>{feladat_nev}</strong> feladatra téged választottunk.</p>
-<p>Az ajánlatodban szereplő <strong>{osszeg}</strong> díjazást elfogadtuk.</p>
+<p>Köszönjük a jelentkezésedet! Örömmel jelezzük, hogy a(z) <strong>{feladat_nev}</strong> feladatra téged választottunk.</p>
 {_sor("Időpont", ak.munkavegzes_idopont)}
 {_sor("Helyszín", ak.helyszin)}
 {_sor("Feladat", ak.leiras)}
@@ -193,15 +183,15 @@ def nyertes_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
 
 
 def vesztes_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
-    """Annak, aki ADOTT ajánlatot, de nem őt választottuk."""
+    """Annak, aki JELENTKEZETT, de nem őt választottuk ("ezt most más vitte
+    el" - a felhasználó kérése)."""
     nev = keresztnev(m.employee.full_name)
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
-    targy = f"Visszajelzés az ajánlatodra – {ak.projekt_nev}"
+    targy = f"Visszajelzés a jelentkezésedre – {ak.projekt_nev}"
     html = f"""<div {_STILUS}>
 <p>Szia {nev}!</p>
-<p>Köszönjük, hogy időt szántál az ajánlatadásra, és jelezted, hogy szívesen dolgoznál velünk a(z)
-<strong>{feladat_nev}</strong> feladaton.</p>
-<p>Erre a munkára most egy másik partnerünket választottuk. Nagyon köszönjük az érdeklődésedet;
+<p>Köszönjük, hogy jelezted: érdekel a(z) <strong>{feladat_nev}</strong> feladat, és ráérsz.</p>
+<p>Sajnos ezt a munkát most egy másik partnerünk vitte el. Nagyon köszönjük az érdeklődésedet;
 örülünk, ha a következő lehetőségnél is számíthatunk rád!</p>
 <p>Üdv,<br/>A HYPE csapata</p>
 </div>"""
@@ -209,14 +199,14 @@ def vesztes_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
 
 
 def nem_adott_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
-    """RÖVID lezáró annak, aki meghívót kapott, de nem adott ajánlatot -
-    kifejezetten NEM köszön meg nem létező ajánlatot (a felhasználó kérése)."""
+    """RÖVID lezáró annak, aki meghívót kapott, de nem jelentkezett -
+    kifejezetten NEM köszön meg nem létező jelentkezést (a felhasználó kérése)."""
     nev = keresztnev(m.employee.full_name)
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
-    targy = f"Lezárult az ajánlatkérés – {ak.projekt_nev}"
+    targy = f"Lezárult a munkafelajánlás – {ak.projekt_nev}"
     html = f"""<div {_STILUS}>
 <p>Szia {nev}!</p>
-<p>A(z) <strong>{feladat_nev}</strong> feladatra kiírt ajánlatkérésünk lezárult, a pozíciót betöltöttük.</p>
+<p>A(z) <strong>{feladat_nev}</strong> feladatra kiírt megkeresésünk lezárult, a pozíciót betöltöttük.</p>
 <p>Reméljük, egy következő lehetőségnél együtt tudunk dolgozni!</p>
 <p>Üdv,<br/>A HYPE csapata</p>
 </div>"""
@@ -227,18 +217,17 @@ def nyertes_nelkul_email(ak: Ajanlatkeres, m: AjanlatMeghivott, adott_ajanlatot:
     """Nyertes nélküli lezárás - ennek megfelelő, külön szöveg."""
     nev = keresztnev(m.employee.full_name)
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
-    targy = f"Lezárult az ajánlatkérés – {ak.projekt_nev}"
+    targy = f"Lezárult a munkafelajánlás – {ak.projekt_nev}"
     if adott_ajanlatot:
         torzs = (
-            f"<p>Köszönjük az ajánlatodat a(z) <strong>{feladat_nev}</strong> feladatra. "
-            "Az ajánlatkérést most nyertes kihirdetése nélkül zártuk le - a feladat kiosztására "
-            "ezúttal nem került sor.</p>"
+            f"<p>Köszönjük a jelentkezésedet a(z) <strong>{feladat_nev}</strong> feladatra. "
+            "A megkeresést most a feladat kiosztása nélkül zártuk le.</p>"
             "<p>Nagyon köszönjük az érdeklődésedet; örülünk, ha a következő lehetőségnél is számíthatunk rád!</p>"
         )
     else:
         torzs = (
-            f"<p>A(z) <strong>{feladat_nev}</strong> feladatra kiírt ajánlatkérésünket nyertes "
-            "kihirdetése nélkül lezártuk.</p>"
+            f"<p>A(z) <strong>{feladat_nev}</strong> feladatra kiírt megkeresésünket a feladat "
+            "kiosztása nélkül lezártuk.</p>"
             "<p>Reméljük, egy következő lehetőségnél együtt tudunk dolgozni!</p>"
         )
     html = f"""<div {_STILUS}>
@@ -252,10 +241,10 @@ def nyertes_nelkul_email(ak: Ajanlatkeres, m: AjanlatMeghivott, adott_ajanlatot:
 def visszavonas_email(ak: Ajanlatkeres, m: AjanlatMeghivott) -> tuple[str, str]:
     nev = keresztnev(m.employee.full_name)
     feladat_nev = f"{ak.projekt_nev} – {ak.munkakor}"
-    targy = f"Visszavont ajánlatkérés – {ak.projekt_nev}"
+    targy = f"Visszavont munkafelajánlás – {ak.projekt_nev}"
     html = f"""<div {_STILUS}>
 <p>Szia {nev}!</p>
-<p>A(z) <strong>{feladat_nev}</strong> feladatra kiírt ajánlatkérésünket visszavontuk - a feladatra
+<p>A(z) <strong>{feladat_nev}</strong> feladatra kiírt megkeresésünket visszavontuk - a feladatra
 most nem keresünk partnert.</p>
 <p>Köszönjük a megértésedet, és reméljük, hamarosan együtt dolgozhatunk!</p>
 <p>Üdv,<br/>A HYPE csapata</p>
@@ -384,12 +373,11 @@ def kivalasztas(db: Session, ajanlatkeres_id: int, meghivott_id: int) -> Ajanlat
         raise HTTPException(status_code=404, detail="A meghívott nem tartozik ehhez az ajánlatkéréshez.")
     ajanlat = meghivott.ajanlat
     if ajanlat is None or ajanlat.visszavonva is not None:
-        raise HTTPException(status_code=400, detail="Ennek a meghívottnak nincs élő árajánlata.")
+        raise HTTPException(status_code=400, detail="Ez a meghívott nem jelentkezett (vagy visszavonta).")
 
+    # Díjazást a rendszer NEM tart nyilván (a felhasználó kérése): az árban a
+    # kiválasztottal a rendszeren kívül egyeznek meg.
     ak.nyertes_meghivott_id = meghivott.id
-    ak.elfogadott_osszeg = ajanlat.osszeg
-    ak.elfogadott_penznem = ajanlat.penznem
-    ak.elfogadott_brutto = ajanlat.brutto
     ak.allapot = "kiosztva"
     ak.lezarva = most_utc()
     # A DÖNTÉS ITT VÉGLEGESEN RÖGZÜL - az értesítők küldése ez UTÁN, külön
@@ -436,52 +424,41 @@ def ajanlat_bekuldes(
     db: Session,
     token: str,
     *,
-    osszeg: float,
-    penznem: str,
-    brutto: bool,
     megjegyzes: str | None,
     vallalja: bool,
 ) -> MunkaArajanlat:
-    """Ajánlat beküldése/módosítása a személyes linkről. A határidőt ITT, a
-    szerveren ellenőrizzük (a felhasználó kérése): lejárat után egy korábban
-    megnyitott űrlap sem adhat be ajánlatot - a visszaszámláló és a gomb
-    letiltása csak kényelem."""
+    """JELENTKEZÉS beküldése/módosítása a személyes linkről ("érdekel és
+    ráérek") - árat nem kérünk és nem tárolunk (a felhasználó kérése: a
+    díjazásról a kiválasztottal a rendszeren kívül egyeznek meg). A határidőt
+    ITT, a szerveren ellenőrizzük: lejárat után egy korábban megnyitott űrlap
+    sem tud jelentkezni - a visszaszámláló és a gomb letiltása csak kényelem."""
     m = token_alapjan(db, token)
     ak = m.ajanlatkeres
     if ak.allapot != "ajanlatadas":
-        raise HTTPException(status_code=410, detail="Ez az ajánlatkérés már nem fogad ajánlatot.")
+        raise HTTPException(status_code=410, detail="Ez a munkafelajánlás már nem fogad jelentkezést.")
     if lejart(ak):
         raise HTTPException(
             status_code=410,
-            detail="Az ajánlatadás lezárult. A kiválasztás folyamatban van, az eredményről külön értesítünk.",
+            detail="A jelentkezés lezárult. A kiválasztás folyamatban van, az eredményről külön értesítünk.",
         )
-    if osszeg is None or float(osszeg) <= 0:
-        raise HTTPException(status_code=400, detail="Az ajánlott összeg kötelező, és nullánál nagyobb kell legyen.")
     if not vallalja:
         raise HTTPException(
             status_code=400,
-            detail="Az ajánlat beküldéséhez erősítsd meg, hogy a megadott időpont és feladat vállalható.",
+            detail="A jelentkezéshez erősítsd meg, hogy érdekel a feladat, és a megadott időpontban ráérsz.",
         )
-    penznem = (penznem or "HUF").strip().upper()[:10]
     mostani = most_utc()
     if m.ajanlat is None:
         m.ajanlat = MunkaArajanlat(
-            osszeg=osszeg,
-            penznem=penznem,
-            brutto=brutto,
             megjegyzes=(megjegyzes or "").strip() or None,
             vallalja=True,
             bekuldve=mostani,
         )
     else:
         a = m.ajanlat
-        a.osszeg = osszeg
-        a.penznem = penznem
-        a.brutto = brutto
         a.megjegyzes = (megjegyzes or "").strip() or None
         a.vallalja = True
         a.modositva = mostani
-        # Visszavont ajánlat újra beküldve: újra él.
+        # Visszavont jelentkezés újra beküldve: újra él.
         if a.visszavonva is not None:
             a.visszavonva = None
             a.bekuldve = a.bekuldve or mostani
@@ -494,9 +471,9 @@ def ajanlat_visszavonas(db: Session, token: str) -> None:
     m = token_alapjan(db, token)
     ak = m.ajanlatkeres
     if ak.allapot != "ajanlatadas" or lejart(ak):
-        raise HTTPException(status_code=410, detail="Az ajánlatadás lezárult - az ajánlat már nem vonható vissza.")
+        raise HTTPException(status_code=410, detail="A jelentkezés lezárult - már nem vonható vissza.")
     if m.ajanlat is None or m.ajanlat.visszavonva is not None:
-        raise HTTPException(status_code=400, detail="Nincs visszavonható ajánlat.")
+        raise HTTPException(status_code=400, detail="Nincs visszavonható jelentkezés.")
     m.ajanlat.visszavonva = most_utc()
     db.commit()
 

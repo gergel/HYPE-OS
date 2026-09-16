@@ -2106,10 +2106,9 @@ export type CurrentUser = {
  * A folyamat: feladat -> meghívottak -> árajánlatok a válaszadási határidőig ->
  * belső kiválasztás a határidő UTÁN -> értesítések. Senki nem kapja meg
  * automatikusan a munkát. */
+/** Egy JELENTKEZÉS ("érdekel és ráérek") - árat nem tartalmaz: a díjazásról
+ * a kiválasztottal a rendszeren kívül egyeznek meg. */
 export type MunkaAjanlatInfo = {
-  osszeg: number;
-  penznem: string;
-  brutto: boolean;
   megjegyzes: string | null;
   vallalja: boolean;
   bekuldve: string | null;
@@ -2150,9 +2149,6 @@ export type Ajanlatkeres = {
   kapcsolattarto_id: number | null;
   kapcsolattarto_nev: string | null;
   nyertes_meghivott_id: number | null;
-  elfogadott_osszeg: number | null;
-  elfogadott_penznem: string | null;
-  elfogadott_brutto: boolean | null;
   lezarva: string | null;
   lezaras_megjegyzes: string | null;
   meghivott_db: number;

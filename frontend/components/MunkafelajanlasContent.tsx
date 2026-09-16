@@ -13,16 +13,12 @@ const BASE = "/api/v1/munkafelajanlasok";
 
 const ALLAPOT_CIMKE: Record<string, { label: string; tone: "neutral" | "blue" | "warning" | "success" | "danger" }> = {
   piszkozat: { label: "Piszkozat", tone: "neutral" },
-  ajanlatadas: { label: "Ajánlatadás folyamatban", tone: "blue" },
+  ajanlatadas: { label: "Jelentkezés folyamatban", tone: "blue" },
   dontesre_var: { label: "Döntésre vár", tone: "warning" },
   kiosztva: { label: "Kiosztva", tone: "success" },
   lezarva_nyertes_nelkul: { label: "Lezárva nyertes nélkül", tone: "neutral" },
   visszavonva: { label: "Visszavonva", tone: "danger" },
 };
-
-function osszegSzoveg(osszeg: number, penznem: string, brutto: boolean): string {
-  return `${osszeg.toLocaleString("hu-HU")} ${penznem} (${brutto ? "bruttó" : "nettó"})`;
-}
 
 function idopont(iso: string | null): string {
   if (!iso) return "–";
@@ -379,13 +375,6 @@ function Reszletek({
         {ak.munkavegzes_idopont && <p><span className="text-text-muted">Munkavégzés:</span> <span className="text-text-secondary">{ak.munkavegzes_idopont}</span></p>}
         {ak.teljesitesi_hatarido && <p><span className="text-text-muted">Teljesítési határidő:</span> <span className="text-text-secondary">{ak.teljesitesi_hatarido}</span></p>}
         {ak.kapcsolattarto_nev && <p><span className="text-text-muted">Kapcsolattartó:</span> <span className="text-text-secondary">{ak.kapcsolattarto_nev}</span></p>}
-        {ak.allapot === "kiosztva" && ak.elfogadott_osszeg !== null && (
-          <p><span className="text-text-muted">Elfogadott feltételek:</span>{" "}
-            <span className="font-medium text-text-success">
-              {osszegSzoveg(ak.elfogadott_osszeg, ak.elfogadott_penznem ?? "HUF", !!ak.elfogadott_brutto)}
-            </span>
-          </p>
-        )}
         {ak.lezaras_megjegyzes && <p><span className="text-text-muted">Lezárás indoka:</span> <span className="text-text-secondary">{ak.lezaras_megjegyzes}</span></p>}
       </div>
 
@@ -399,10 +388,9 @@ function Reszletek({
               <tr className="border-b border-border text-left text-text-muted">
                 <th className="py-1.5 pr-3 font-medium">Külsős</th>
                 <th className="py-1.5 pr-3 font-medium">Meghívó</th>
-                <th className="py-1.5 pr-3 font-medium">Ajánlott összeg</th>
-                <th className="py-1.5 pr-3 font-medium">Megjegyzés / feltétel</th>
-                <th className="py-1.5 pr-3 font-medium">Beküldve / módosítva</th>
-                <th className="py-1.5 pr-3 font-medium">Ajánlat állapota</th>
+                <th className="py-1.5 pr-3 font-medium">Megjegyzés</th>
+                <th className="py-1.5 pr-3 font-medium">Jelentkezett / módosítva</th>
+                <th className="py-1.5 pr-3 font-medium">Jelentkezés</th>
                 <th className="py-1.5 font-medium" />
               </tr>
             </thead>
@@ -426,9 +414,6 @@ function Reszletek({
                     )}
                     {mh.eredmeny_kikuldve && <p className="mt-0.5 text-[11px] text-text-muted">eredmény kiküldve</p>}
                   </td>
-                  <td className="py-2 pr-3 text-text-primary">
-                    {mh.ajanlat ? osszegSzoveg(mh.ajanlat.osszeg, mh.ajanlat.penznem, mh.ajanlat.brutto) : <span className="text-text-muted">–</span>}
-                  </td>
                   <td className="max-w-[220px] py-2 pr-3 text-text-secondary [overflow-wrap:anywhere]">{mh.ajanlat?.megjegyzes ?? "–"}</td>
                   <td className="py-2 pr-3 text-text-secondary">
                     {mh.ajanlat ? (
@@ -441,11 +426,11 @@ function Reszletek({
                   <td className="py-2 pr-3">
                     {mh.ajanlat ? (
                       <StatusBadge
-                        label={{ bekuldve: "Beküldve", visszavonva: "Visszavonva", elfogadva: "Elfogadva", elutasitva: "Elutasítva" }[mh.ajanlat.allapot]}
+                        label={{ bekuldve: "Jelentkezett, ráér", visszavonva: "Visszavonta", elfogadva: "Kiválasztva", elutasitva: "Más vitte el" }[mh.ajanlat.allapot]}
                         tone={{ bekuldve: "blue" as const, visszavonva: "neutral" as const, elfogadva: "success" as const, elutasitva: "neutral" as const }[mh.ajanlat.allapot]}
                       />
                     ) : (
-                      <StatusBadge label="Nem adott ajánlatot" tone="neutral" />
+                      <StatusBadge label="Nem jelentkezett" tone="neutral" />
                     )}
                   </td>
                   <td className="py-2 text-right">
@@ -475,7 +460,7 @@ function Reszletek({
           {/* ÜRES állapot (a felhasználó kérése): lejárt, de egyetlen ajánlat sem jött. */}
           {ak.allapot === "dontesre_var" && !vanElo && (
             <p className="mt-2 rounded-[var(--radius)] bg-bg-warning px-3 py-2 text-[12.5px] text-text-warning">
-              Nem érkezett ajánlat a határidőig. Az ajánlatkérés lezárható nyertes nélkül.
+              Nem érkezett jelentkezés a határidőig. A felajánlás lezárható kiválasztott nélkül.
             </p>
           )}
         </div>
@@ -487,12 +472,15 @@ function Reszletek({
           <p className="font-medium text-text-primary">A kiválasztás megerősítése</p>
           <p className="mt-1 text-text-secondary">
             Feladat: <strong>{ak.projekt_nev} – {ak.munkakor}</strong><br />
-            Vállalkozó: <strong>{megerosites.meghivott.nev}</strong><br />
-            Elfogadott ajánlat: <strong>{osszegSzoveg(megerosites.meghivott.ajanlat.osszeg, megerosites.meghivott.ajanlat.penznem, megerosites.meghivott.ajanlat.brutto)}</strong>
+            Kiválasztott: <strong>{megerosites.meghivott.nev}</strong>
+            {megerosites.meghivott.ajanlat.megjegyzes && (
+              <><br />Megjegyzése: <span className="text-text-muted">{megerosites.meghivott.ajanlat.megjegyzes}</span></>
+            )}
           </p>
           <p className="mt-1 text-[12px] text-text-muted">
-            A megerősítés rögzíti a megbízott személyét és az elfogadott feltételeket, majd mindenki megkapja a
-            személyre szabott értesítést. Egy pozícióhoz csak egy nyertes tartozhat.
+            A díjazásról vele a rendszeren kívül egyeztek meg - itt nem kell felvezetni. A megerősítés után ő
+            &quot;Számítunk rád!&quot; levelet kap, a többi jelentkező pedig értesítést, hogy ezt a munkát most más
+            vitte el. Egy pozícióhoz csak egy kiválasztott tartozhat.
           </p>
           <div className="mt-2 flex gap-2">
             <button type="button" disabled={busy} onClick={() => void hivas(`${BASE}/${ak.id}/kivalasztas`, "POST", { meghivott_id: megerosites.meghivott.id })} className="btn btn-primary disabled:opacity-50">
@@ -576,8 +564,8 @@ function Reszletek({
           {ak.allapot === "ajanlatadas" && (
             <>
               <p className="w-full text-[12.5px] text-text-muted">
-                Az ajánlatok a határidő előtt is megtekinthetők, de a végleges kiválasztás csak a határidő lejárta
-                után lesz elérhető. A rendszer nem választ automatikusan sem a leggyorsabb, sem a legolcsóbb ajánlat alapján.
+                A jelentkezők a határidő előtt is láthatók, de a végleges kiválasztás csak a határidő lejárta után
+                lesz elérhető. A rendszer nem választ automatikusan - a ráérők közül ti döntitek el, kivel egyeztek meg.
               </p>
               <button type="button" disabled={busy} onClick={() => setMegerosites({ tipus: "visszavonas" })} className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:text-text-danger disabled:opacity-50">
                 Ajánlatkérés visszavonása
@@ -663,9 +651,9 @@ export function MunkafelajanlasContent({
   return (
     <Card title={`Munkafelajánlások (${lista.length})`}>
       <p className="mb-3 text-[12.5px] text-text-muted">
-        Feladat létrehozása → külsősök meghívása → árajánlatok a válaszadási határidőig → belső kiválasztás a
-        határidő lejárta után → értesítések. Az árat a meghívott külsősök ajánlják meg; senki nem kapja meg
-        automatikusan a munkát.
+        Feladat létrehozása → külsősök meghívása → jelentkezések (&quot;érdekel és ráérek&quot;) a válaszadási
+        határidőig → belső kiválasztás a határidő lejárta után → értesítések. Árat a rendszer nem kezel: a
+        díjazásról a kiválasztottal a rendszeren kívül egyeztek meg. Senki nem kapja meg automatikusan a munkát.
       </p>
       {canCreate && (
         <UjAjanlatkeres employees={employees} projektek={projektek} kezdetiListak={kezdetiListak} onKesz={() => void frissit()} />
@@ -684,7 +672,7 @@ export function MunkafelajanlasContent({
                 <StatusBadge label={cimke.label} tone={cimke.tone} />
                 {ak.kuldes_hiba_db > 0 && <StatusBadge label={`${ak.kuldes_hiba_db} küldési hiba`} tone="danger" />}
                 <span className="ml-auto text-[12px] text-text-muted">
-                  {ak.meghivott_db} meghívott · {ak.ajanlat_db} ajánlat · határidő: {ak.valaszadasi_hatarido_szoveg}
+                  {ak.meghivott_db} meghívott · {ak.ajanlat_db} jelentkező · határidő: {ak.valaszadasi_hatarido_szoveg}
                 </span>
               </button>
               {nyitott === ak.id && (
