@@ -13,6 +13,7 @@ export default async function AnyagbekeresOldal({ params }: { params: Promise<{ 
   ]);
   if (!adat) notFound();
   const canEdit = pagePermissions === null || !!pagePermissions["/media-portal"]?.includes("edit");
+  const canDelete = pagePermissions === null || !!pagePermissions["/media-portal"]?.includes("delete");
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
@@ -21,6 +22,7 @@ export default async function AnyagbekeresOldal({ params }: { params: Promise<{ 
         kezdeti={adat as any}
         munkatarsak={munkatarsak.filter((m) => m.is_active).map((m) => ({ id: m.id, nev: m.full_name }))}
         canEdit={canEdit}
+        canDelete={canDelete}
       />
     </div>
   );

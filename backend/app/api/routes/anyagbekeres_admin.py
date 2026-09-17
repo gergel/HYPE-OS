@@ -3,6 +3,7 @@
 portal_admin). Itt jön létre a bekérés és a megosztható link, itt látszanak
 a beérkezett leadások, innen megy a letöltés és a feldolgozás."""
 
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,6 +30,7 @@ from app.services import anyagbekeres as szolg
 from app.services import portal_storage as storage
 
 router = APIRouter(prefix="/anyagbekeresek", tags=["anyagbekeres-admin"])
+log = logging.getLogger(__name__)
 
 PAGE = "/media-portal"
 _MINDEN_SZEREPKOR = tuple(Role)
@@ -207,6 +209,37 @@ def token_ujragereralas(
     szolg.esemeny(db, b.id, "link_ujragereralva", employee_id=user.id)
     db.commit()
     return {"link": _link(b), "token": b.token}
+
+
+@router.delete("/{bekeres_id}")
+def bekeres_torles(
+    bekeres_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    """A teljes anyagbekérés VÉGLEGES törlése: minden leadás, mappa, fájl,
+    videóigény, esemény és export is törlődik (adatbázis-cascade), és a
+    feltöltött tartalom is kikerül a tárhelyről (R2). Visszavonhatatlan."""
+    b = db.get(Anyagbekeres, bekeres_id)
+    if b is None:
+        raise HTTPException(status_code=404, detail="Az anyagbekérés nem található.")
+    # A tárhely-takarítást a DB-törlés ELŐTT végezzük, amíg a kulcsok elérhetők.
+    # Az összes fájl az anyagbekeres/{id}/ prefix alatt van (lásd szolg.fajl_kulcs),
+    # az elkészült export-ZIP-ek pedig külön, egyedi kulcson - azokat egyenként.
+    export_keyek = db.scalars(
+        select(AnyagLeadasExport.object_key)
+        .join(AnyagLeadas, AnyagLeadas.id == AnyagLeadasExport.leadas_id)
+        .where(AnyagLeadas.anyagbekeres_id == bekeres_id, AnyagLeadasExport.object_key.is_not(None))
+    ).all()
+    try:
+        storage.delete_prefix(f"anyagbekeres/{bekeres_id}/")
+    except Exception:  # noqa: BLE001 - a tárhely-hiba ne akadályozza a törlést
+        log.exception("Anyagbekérés törlése: a tárhely-takarítás megbukott (bekeres_id=%s)", bekeres_id)
+    for key in export_keyek:
+        szolg._biztonsagos_torles(key)
+    db.delete(b)
+    db.commit()
+    return {"ok": True}
 
 
 def _leadas_sor(l: AnyagLeadas) -> dict:
@@ -407,6 +440,29 @@ def export_inditas(
     szolg.esemeny(db, bekeres_id, "export", leadas_id=l.id, adat={"job": job.id}, employee_id=user.id)
     db.commit()
     return szolg.export_allapot(job)
+
+
+@router.delete("/{bekeres_id}/leadas/{leadas_id}/igeny/{igeny_id}")
+def igeny_torles(
+    bekeres_id: int,
+    leadas_id: int,
+    igeny_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    """Egy kért videó (videóigény) törlése a leadásból - a hozzá kötött
+    forrás-hivatkozások (mappa/fájl) is törlődnek, a fájlok maguk nem."""
+    l = db.scalar(
+        select(AnyagLeadas).where(AnyagLeadas.id == leadas_id, AnyagLeadas.anyagbekeres_id == bekeres_id)
+    )
+    if l is None:
+        raise HTTPException(status_code=404, detail="A leadás nem található.")
+    ig = db.get(VideoIgeny, igeny_id)
+    if ig is None or ig.leadas_id != leadas_id:
+        raise HTTPException(status_code=404, detail="A kért videó nem található.")
+    db.delete(ig)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/export/{job_id}")

@@ -88,10 +88,12 @@ export function AnyagbekeresReszletek({
   kezdeti,
   munkatarsak,
   canEdit,
+  canDelete,
 }: {
   kezdeti: Reszletek;
   munkatarsak: Valaszto[];
   canEdit: boolean;
+  canDelete: boolean;
 }) {
   const [adat, setAdat] = useState(kezdeti);
   const [nyitottLeadas, setNyitottLeadas] = useState<LeadasReszlet | null>(null);
@@ -143,6 +145,38 @@ export function AnyagbekeresReszletek({
     if (nyitottLeadas?.id === leadasId) {
       setNyitottLeadas((elozo) => (elozo ? { ...elozo, ...valtozas } : elozo));
     }
+  }
+
+  async function igenyTorles(leadasId: number, igeny: IgenyT) {
+    if (!window.confirm(`Biztosan törlöd a(z) "${igeny.nev || "névtelen"}" kért videót? A művelet nem visszavonható.`)) return;
+    setHiba(null);
+    const r = await authFetch(`${BASE}/${adat.id}/leadas/${leadasId}/igeny/${igeny.id}`, { method: "DELETE" });
+    if (!r.ok) {
+      setHiba((await r.json().catch(() => null))?.detail ?? `Hiba (${r.status})`);
+      return;
+    }
+    // Frissítjük a nyitott leadás igényeit és a lista számlálóját.
+    setNyittottLeadasIgenyFrissites(leadasId, igeny.id);
+    await frissites();
+  }
+
+  function setNyittottLeadasIgenyFrissites(leadasId: number, igenyId: number) {
+    setNyitottLeadas((elozo) =>
+      elozo && elozo.id === leadasId
+        ? { ...elozo, igenyek: elozo.igenyek.filter((x) => x.id !== igenyId) }
+        : elozo,
+    );
+  }
+
+  async function bekeresTorles() {
+    const uzenet = `Biztosan törlöd a(z) "${adat.nev}" anyagbekérést?\n\nEzzel minden leadás, feltöltött fájl és kért videó véglegesen törlődik. A művelet nem visszavonható.`;
+    if (!window.confirm(uzenet)) return;
+    const r = await authFetch(`${BASE}/${adat.id}`, { method: "DELETE" });
+    if (!r.ok) {
+      setHiba((await r.json().catch(() => null))?.detail ?? `Hiba (${r.status})`);
+      return;
+    }
+    window.location.href = "/media-portal/anyagbekeresek";
   }
 
   async function fajlLetoltes(leadasId: number, fajlId: number) {
@@ -239,6 +273,15 @@ export function AnyagbekeresReszletek({
                 Link visszavonása + új link
               </button>
             </>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              className="rounded-[var(--radius)] border border-text-danger/40 px-2.5 py-1 text-[12.5px] text-text-danger hover:bg-bg-danger/15"
+              onClick={() => void bekeresTorles()}
+            >
+              Bekérés törlése
+            </button>
           )}
         </div>
       </div>
@@ -447,7 +490,19 @@ export function AnyagbekeresReszletek({
             <div className="grid gap-3 lg:grid-cols-2">
               {nyitottLeadas.igenyek.map((i) => (
                 <div key={i.id} className="rounded-[var(--radius)] border border-border bg-surface-1 p-3 text-[13px]">
-                  <p className="text-[14px] font-medium text-text-primary">{i.nev}</p>
+                  <div className="flex items-start gap-2">
+                    <p className="min-w-0 flex-1 text-[14px] font-medium text-text-primary">{i.nev}</p>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => void igenyTorles(nyitottLeadas.id, i)}
+                        className="shrink-0 rounded-[var(--radius)] px-2 py-0.5 text-[12px] text-text-danger hover:bg-bg-danger/15"
+                        title="Kért videó törlése"
+                      >
+                        Törlés
+                      </button>
+                    )}
+                  </div>
                   <p className="mt-0.5 text-text-muted">
                     {[i.keparany, i.hossz, i.felulet, i.hatarido ? `határidő: ${i.hatarido.slice(0, 10)}` : null].filter(Boolean).join(" · ") || "–"}
                   </p>

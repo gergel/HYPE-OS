@@ -12,6 +12,7 @@ export default async function AnyagbekeresekOldal() {
     getMyPagePermissions(),
   ]);
   const canCreate = pagePermissions === null || !!pagePermissions["/media-portal"]?.includes("create");
+  const canDelete = pagePermissions === null || !!pagePermissions["/media-portal"]?.includes("delete");
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
@@ -21,6 +22,7 @@ export default async function AnyagbekeresekOldal() {
         ugyfelek={ugyfelek.map((u) => ({ id: u.id, nev: u.nev }))}
         munkatarsak={munkatarsak.filter((m) => m.is_active).map((m) => ({ id: m.id, nev: m.full_name }))}
         canCreate={canCreate}
+        canDelete={canDelete}
       />
     </div>
   );

@@ -65,12 +65,14 @@ export function AnyagbekeresekPanel({
   ugyfelek,
   munkatarsak,
   canCreate,
+  canDelete,
 }: {
   kezdeti: BekeresSor[];
   projektek: Valaszto[];
   ugyfelek: Valaszto[];
   munkatarsak: Valaszto[];
   canCreate: boolean;
+  canDelete: boolean;
 }) {
   const [sorok, setSorok] = useState(kezdeti);
   const [kereses, setKereses] = useState("");
@@ -148,6 +150,21 @@ export function AnyagbekeresekPanel({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function torles(s: BekeresSor) {
+    const uzenet =
+      s.leadasok_szama + s.piszkozatok_szama > 0
+        ? `Biztosan törlöd a(z) "${s.nev}" anyagbekérést?\n\nEzzel a benne lévő ${s.leadasok_szama} leadás, minden feltöltött fájl és a kért videók is véglegesen törlődnek. A művelet nem visszavonható.`
+        : `Biztosan törlöd a(z) "${s.nev}" anyagbekérést? A művelet nem visszavonható.`;
+    if (!window.confirm(uzenet)) return;
+    const res = await authFetch(`${BASE}/${s.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const adat = await res.json().catch(() => null);
+      setHiba(`Sikertelen törlés: ${adat?.detail ?? res.status}`);
+      return;
+    }
+    setSorok((elozo) => elozo.filter((x) => x.id !== s.id));
   }
 
   const input = "w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none";
@@ -256,6 +273,7 @@ export function AnyagbekeresekPanel({
                 <th className="px-3 py-2 text-right">Méret</th>
                 <th className="px-3 py-2">Utolsó aktivitás</th>
                 <th className="px-3 py-2">Felelős</th>
+                {canDelete && <th className="px-3 py-2 text-right">Törlés</th>}
               </tr>
             </thead>
             <tbody>
@@ -274,6 +292,18 @@ export function AnyagbekeresekPanel({
                     <td className="px-3 py-2 text-right text-text-secondary">{meretSzoveg(s.ossz_meret_bajt)}</td>
                     <td className="px-3 py-2 text-text-muted">{datumSzoveg(s.utolso_aktivitas)}</td>
                     <td className="px-3 py-2 text-text-secondary">{munkatarsNev.get(s.felelos_id ?? -1) ?? "–"}</td>
+                    {canDelete && (
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => void torles(s)}
+                          className="rounded-[var(--radius)] px-2 py-1 text-[12.5px] text-text-danger hover:bg-bg-danger/15"
+                          title="Anyagbekérés törlése"
+                        >
+                          Törlés
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

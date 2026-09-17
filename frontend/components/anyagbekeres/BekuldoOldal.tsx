@@ -276,6 +276,41 @@ export function BekuldoOldal({ bekeresToken }: { bekeresToken: string }) {
     }
   }
 
+  /** Újabb, KÜLÖN leadás indítása ugyanezen a linken (a véglegesítés utáni
+   * "kész" képernyőről). Ugyanaz az ember többször is feltölthet: minden
+   * feltöltés önálló leadás lesz. A saját adatok kényelemből előre kitöltve. */
+  function ujFeltoltesInditasa() {
+    try {
+      localStorage.removeItem(taroloKulcs);
+    } catch {
+      /* privát mód */
+    }
+    // A ?leadas=... param eltávolítása, hogy frissítéskor ne térjen vissza a
+    // most leadott piszkozathoz.
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("leadas")) {
+        url.searchParams.delete("leadas");
+        window.history.replaceState({}, "", url.toString());
+      }
+    } catch {
+      /* nem baj */
+    }
+    setNyito({ nev: leadas?.bekuldo_nev ?? "", email: leadas?.bekuldo_email ?? "", ceg: leadas?.bekuldo_ceg ?? "", jelszo: "" });
+    helyiRef.current.clear();
+    sorRef.current = [];
+    aktivRef.current = 0;
+    setKesz(null);
+    setLeadasToken(null);
+    setLeadas(null);
+    setMappak([]);
+    setFajlok([]);
+    setIgenyek([]);
+    setCelMappa("");
+    setLepes(1);
+    setHiba(null);
+  }
+
   // ── Feltöltés-motor ───────────────────────────────────────────────────────
 
   const PARHUZAMOS = 2;
@@ -728,6 +763,12 @@ export function BekuldoOldal({ bekeresToken }: { bekeresToken: string }) {
             {bekeres.kell_brief && <p>{igenyek.filter((i) => i.nev.trim()).length} kért videó</p>}
           </div>
           <p className="mt-4 text-[12.5px] text-text-muted">Köszönjük! A csapatunk hamarosan feldolgozza a leadást, és jelentkezünk, ha bármi kérdés van.</p>
+          {/* Ugyanaz az ember többször is feltölthet: minden kör külön leadás. */}
+          {bekeres.fogadokepes && (
+            <button type="button" onClick={ujFeltoltesInditasa} className={`${gombElsodleges} mt-5`}>
+              Újabb anyag feltöltése
+            </button>
+          )}
         </div>
       </Keret>
     );
