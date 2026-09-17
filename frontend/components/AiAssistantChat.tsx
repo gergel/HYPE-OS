@@ -289,13 +289,6 @@ export function AiAssistantChat() {
     }
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void kuldes();
-    }
-  }
-
   function diktalasLeallitas() {
     felismeroRef.current?.stop();
     felismeroRef.current = null;
@@ -617,12 +610,11 @@ export function AiAssistantChat() {
             rows={2}
             value={szoveg}
             onChange={(e) => setSzoveg(e.target.value)}
-            onKeyDown={handleKeyDown}
             title="Formázhatsz: **félkövér**, *dőlt*, # címsor, - felsorolás, 1. számozott lista, `kód`"
             placeholder={
               fajlok.length > 0
                 ? "Írd le, mi legyen a fájlokkal… (pl. Ezt a számlát a HYPE26-0291-hez, XY utókövetési tételéhez)"
-                : "Írd le, mit szeretnél… (Enter küld, Shift+Enter új sor · formázás: **félkövér**, - felsorolás, # címsor)"
+                : "Írd le, mit szeretnél… (a Küldés gombbal küldöd el · formázás: **félkövér**, - felsorolás, # címsor)"
             }
             className="min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
           />
