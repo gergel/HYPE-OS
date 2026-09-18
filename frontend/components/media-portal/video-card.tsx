@@ -79,7 +79,7 @@ export function VideoCard({
       </button>
       <div className="flex items-center justify-between gap-3 px-5 py-4">
         <div className="min-w-0">
-          <h3 className="truncate font-display text-lg text-bone">{video.title}</h3>
+          <h3 className="font-display text-lg text-bone [overflow-wrap:anywhere]" title={video.title}>{video.title}</h3>
           <p className="mt-0.5 font-mono text-[11px] uppercase tracking-eyebrow text-mist">
             {video.resolution_label}
             {video.aspect_ratio_label ? ` · ${video.aspect_ratio_label}` : ""}

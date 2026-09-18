@@ -108,7 +108,7 @@ export function VideoPlayer({
           )}
           <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
             <div className="min-w-0">
-              <h3 className="truncate font-display text-lg text-bone">{video.title}</h3>
+              <h3 className="font-display text-lg text-bone [overflow-wrap:anywhere]" title={video.title}>{video.title}</h3>
               <span className="font-mono text-xs uppercase tracking-eyebrow text-mist">{video.resolution_label}</span>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2.5">
