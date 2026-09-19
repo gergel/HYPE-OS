@@ -707,7 +707,12 @@ def megosztas(token: str, db: Session = Depends(get_db)):
             project_date=resolve_project_date(portal),
             expires_at=portal.expires_at,
             payment_mode="contact",
-            videos=[PortalVideoOut.model_validate(video)],
+            # A megosztott link csak EZT az egy videót mutatja, mappa-kontextus
+            # nélkül (folders=[]). Ha a videó egy mappában van, a folder_id-t
+            # None-ra tesszük, különben a nézet sem a "mappa nélküli" videók
+            # közé (mert van folder_id-je), sem egy mappába (mert nincs mappa a
+            # listában) nem sorolná - így "van videó", de nem látszana.
+            videos=[PortalVideoOut.model_validate(video).model_copy(update={"folder_id": None})],
             folders=[],
             images=[],
         )
