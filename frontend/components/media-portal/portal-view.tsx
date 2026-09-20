@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
+  Check,
   Link as LinkIcon,
 } from "lucide-react";
 import { PublicPortal, PortalVideo as VideoT, PortalImage as ImageType, startPayment, mintReszletLink } from "@/lib/portalApi";
@@ -597,32 +598,98 @@ function FolderSection({
 }
 
 function ImageGrid({ images, onOpen }: { images: ImageType[]; onOpen: (images: ImageType[], index: number) => void }) {
+  // Kijelölő mód (a felhasználó kérése: lehessen csak a kiválasztott képeket
+  // letölteni). Ki-be kapcsolható; kikapcsolt módban a kattintás a nagyítót
+  // nyitja, mint eddig.
+  const [kijeloloMod, setKijeloloMod] = useState(false);
+  const [kivalasztott, setKivalasztott] = useState<Set<number>>(new Set());
+  const kivalasztottKepek = images.filter((i) => kivalasztott.has(i.id));
+
+  function valt(id: number) {
+    setKivalasztott((elozo) => {
+      const uj = new Set(elozo);
+      if (uj.has(id)) uj.delete(id);
+      else uj.add(id);
+      return uj;
+    });
+  }
+  function kilepAKijelolesbol() {
+    setKijeloloMod(false);
+    setKivalasztott(new Set());
+  }
+
+  const vezerloGomb = "rounded-full border border-ink-line px-4 py-2 text-sm text-bone transition hover:border-ember/60";
+
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      {images.map((img, i) => (
-        <button
-          key={img.id}
-          onClick={() => onOpen(images, i)}
-          className="group relative aspect-square overflow-hidden rounded-2xl border border-ink-line bg-ink-card"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={img.thumbnail_url || img.url}
-            alt={img.title}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/20" />
-          {/* Rejtett kép (csak a belsős néző kapja meg egyáltalán): feltűnő
-              jelölés, hogy az ügyfél ezt a képet nem látja. */}
-          {img.rejtett && (
-            <span className="absolute left-2 top-2 rounded-full bg-red-600/90 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
-              Rejtett – az ügyfél nem látja
-            </span>
-          )}
-        </button>
-      ))}
+    <div>
+      {/* Kijelölés-vezérlő sáv */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {!kijeloloMod ? (
+          <button onClick={() => setKijeloloMod(true)} className={vezerloGomb}>
+            Képek kijelölése letöltéshez
+          </button>
+        ) : (
+          <>
+            <span className="text-sm text-mist">{kivalasztottKepek.length} kijelölve</span>
+            <button onClick={() => setKivalasztott(new Set(images.map((i) => i.id)))} className={vezerloGomb}>
+              Mind ({images.length})
+            </button>
+            <button onClick={() => setKivalasztott(new Set())} className={vezerloGomb}>
+              Egyik se
+            </button>
+            <ImagesDownloadButton
+              images={kivalasztottKepek}
+              label={`Kijelöltek letöltése (${kivalasztottKepek.length})`}
+              disabled={kivalasztottKepek.length === 0}
+            />
+            <button onClick={kilepAKijelolesbol} className={vezerloGomb}>
+              Mégse
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {images.map((img, i) => {
+          const ki = kivalasztott.has(img.id);
+          return (
+            <button
+              key={img.id}
+              onClick={() => (kijeloloMod ? valt(img.id) : onOpen(images, i))}
+              className={`group relative aspect-square overflow-hidden rounded-2xl border bg-ink-card ${
+                kijeloloMod && ki ? "border-ember ring-2 ring-ember" : "border-ink-line"
+              }`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={img.thumbnail_url || img.url}
+                alt={img.title}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <div className={`absolute inset-0 transition ${kijeloloMod && ki ? "bg-black/40" : "bg-black/0 group-hover:bg-black/20"}`} />
+              {/* Kijelölő módban minden képen egy jelölőnégyzet a jobb felső sarokban. */}
+              {kijeloloMod && (
+                <span
+                  className={`absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border-2 ${
+                    ki ? "border-ember bg-ember text-white" : "border-white/80 bg-black/30 text-transparent"
+                  }`}
+                >
+                  <Check className="h-4 w-4" strokeWidth={3} />
+                </span>
+              )}
+              {/* Rejtett kép (csak a belsős néző kapja meg egyáltalán): feltűnő
+                  jelölés, hogy az ügyfél ezt a képet nem látja. */}
+              {img.rejtett && (
+                <span className="absolute left-2 top-2 rounded-full bg-red-600/90 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+                  Rejtett – az ügyfél nem látja
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -896,7 +963,7 @@ function FolderDownloadButton({ folderName, videos, images }: { folderName: stri
   );
 }
 
-function ImagesDownloadButton({ images, label }: { images: ImageType[]; label: string }) {
+function ImagesDownloadButton({ images, label, disabled }: { images: ImageType[]; label: string; disabled?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const startedAt = useRef<number>(0);
@@ -907,6 +974,7 @@ function ImagesDownloadButton({ images, label }: { images: ImageType[]; label: s
       abortRef.current?.abort();
       return;
     }
+    if (disabled || images.length === 0) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setBusy(true);
@@ -938,7 +1006,8 @@ function ImagesDownloadButton({ images, label }: { images: ImageType[]; label: s
   return (
     <button
       onClick={handleClick}
-      className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-bone px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-white disabled:opacity-60"
+      disabled={!busy && (disabled || images.length === 0)}
+      className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-bone px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-white disabled:opacity-40"
     >
       {busy ? <X className="h-4 w-4" /> : <Download className="h-4 w-4" />}
       {busy ? `${progressLabel()} · Bezárás` : label}
