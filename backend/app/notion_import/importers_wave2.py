@@ -1102,13 +1102,14 @@ def _expense_notion_fields(props: dict) -> dict:
         "szamla": _text(props.get("Számla")),
         "kiadas_megnevezese_projekt_kod": _text(props.get("Kiadás megnevezése/Project kód")),
         "netto_forintban_notion": _numeric_or_none(props.get("Nettó forintban")),
-        "fizetes_datuma": as_date(props.get("Fizetés dátuma")),
+        # A kiadás egyetlen dátuma (összevont mező): a "Fizetés dátuma" a
+        # mérvadó, ha nincs, a "Kiadás dátuma" (keltezés/teljesítés).
+        "fizetes_datuma": as_date(props.get("Fizetés dátuma")) or as_date(props.get("Kiadás dátuma")),
         "mikor_fizetett": _text(props.get("Mikor fizetett")),
         "szamla_pdf_urls": props.get("Számla pdf"),
         "plusz_afa": _text(props.get("+ÁFA")),
         "hozzaadas_a_kiadasokhoz": props.get("Hozzá adás a kiadásokhoz"),
         "forintban_notion": _numeric_or_none(props.get("Forintban")),
-        "kiadas_datuma": as_date(props.get("Kiadás dátuma")),
         "projekt_kiadasok_notion_ids": props.get("Projekt kiadások"),
         "kiadasok_notion_ids": props.get("Kiadások"),
         "szamla_statusza": _text(props.get("Számla státusza")),

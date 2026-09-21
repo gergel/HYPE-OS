@@ -189,7 +189,7 @@ export default async function PenzugyekPage() {
 
         {/* A listázott kiadások: a dátum nélküli, még ki nem fizetett
             (csak a projektkódon élő) tételek nélkül - lásd lent a rows-nál. */}
-        <Card title={`Kiadások (${expenses.filter((e) => e.kesz || e.kiadas_datuma !== null).length})`}>
+        <Card title={`Kiadások (${expenses.filter((e) => e.kesz || e.fizetes_datuma !== null).length})`}>
           {canCreate && (
             <QuickCreateForm
               postPath={ENTITY_PATHS.expense}
@@ -214,7 +214,7 @@ export default async function PenzugyekPage() {
                 // KÖTELEZŐ dátum (a felhasználó kérése): a kiadás e nélkül
                 // nem köthető hónaphoz - az összesítők és a számla-csomag is
                 // ebből dolgozik.
-                { name: "kiadas_datuma", label: "Kiadás dátuma", type: "date", required: true },
+                { name: "fizetes_datuma", label: "Fizetés dátuma", type: "date", required: true },
                 { name: "netto", label: "Nettó összeg", type: "number" },
                 // "+ÁFA" jelölés + százalék: a bruttót a szerver számolja
                 // belőlük (lásd backend routes/finance._afa_brutto).
@@ -316,7 +316,7 @@ export default async function PenzugyekPage() {
             // A DÁTUM NÉLKÜLI, még ki nem fizetett tételek NEM szerepelnek (a
             // felhasználó kérése): azok csak a projektkódjukon élnek, és a
             // Fizetés gomb + fizetés-dátum megadása után kerülnek ide.
-            rows={[...expenses].filter((e) => e.kesz || e.kiadas_datuma !== null).sort((a, b) => b.id - a.id)}
+            rows={[...expenses].filter((e) => e.kesz || e.fizetes_datuma !== null).sort((a, b) => b.id - a.id)}
             emptyText="Még nincs felvett kiadás - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(e) => `/penzugyek/kiadas/${e.id}`}
             deleteHref={canDelete ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}

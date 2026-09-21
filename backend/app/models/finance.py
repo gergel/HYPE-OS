@@ -88,7 +88,11 @@ class Expense(TimestampMixin, Base):
     plusz_afa: Mapped[str | None] = mapped_column(String(50), comment="+ÁFA")
     hozzaadas_a_kiadasokhoz: Mapped[bool | None] = mapped_column(Boolean, comment="Hozzá adás a kiadásokhoz")
     forintban_notion: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Forintban")
-    kiadas_datuma: Mapped[date | None] = mapped_column(Date)
+    #: A kiadás dátuma és a fizetés dátuma ÖSSZEVONVA egyetlen mezőbe (a
+    #: felhasználó kérése): a `fizetes_datuma` a kiadás egyetlen dátuma - a
+    #: kifizetéskor a tényleges utalási dátum, egyébként a keltezés/teljesítés.
+    #: A kimutatásokba egy kiadás CSAK kifizetve (`kesz`) számít bele, nem a
+    #: dátum megléte alapján. (A régi `kiadas_datuma` oszlop megszűnt.)
     #: NINCS SZÁMLA (a felhasználó kérése): ehhez a tételhez nem is lesz
     #: számla/blokk (pl. borravaló, magánszemélyes tétel) - a felületek ne
     #: hiányzó számlaként mutassák.

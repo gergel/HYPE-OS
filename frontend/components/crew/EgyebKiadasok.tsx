@@ -8,7 +8,7 @@ import { formatHuf } from "@/lib/penz";
  * jelenti; ha az még nincs meg, a kiadás napja, végül a határidő a
  * legjobb elérhető közelítés. */
 function levonasDatuma(kiadas: JsonRecord): string | null {
-  for (const kulcs of ["fizetes_datuma", "kiadas_datuma", "fizetes_hatarideje"]) {
+  for (const kulcs of ["fizetes_datuma", "fizetes_hatarideje"]) {
     const ertek = kiadas[kulcs];
     if (typeof ertek === "string" && ertek) return ertek;
   }

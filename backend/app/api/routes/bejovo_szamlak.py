@@ -286,8 +286,8 @@ def cel_valasztek(
                 reszek.append(pc.projektkod)
             if exp.netto is not None:
                 reszek.append(f"{float(exp.netto):,.0f} Ft".replace(",", " "))
-            if exp.kiadas_datuma:
-                reszek.append(exp.kiadas_datuma.isoformat())
+            if exp.fizetes_datuma:
+                reszek.append(exp.fizetes_datuma.isoformat())
             lista.append({"id": exp.id, "cimke": " – ".join(reszek)})
     elif tipus == "erezsi":
         for idoszak in db.scalars(

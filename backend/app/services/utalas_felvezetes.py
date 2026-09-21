@@ -765,14 +765,11 @@ def _rogzit_kiadasra(db: Session, tetel: UtalasTetel, datum: date, naplo: dict) 
         "kesz": exp.kesz,
         "fizetes_datuma": exp.fizetes_datuma.isoformat() if exp.fizetes_datuma else None,
         "kifizetes_modja": exp.kifizetes_modja,
-        "kiadas_datuma": exp.kiadas_datuma.isoformat() if exp.kiadas_datuma else None,
     }
     exp.kesz = True
     exp.fizetes_datuma = datum
     if not exp.kifizetes_modja:
         exp.kifizetes_modja = "Átutalás"
-    if exp.kiadas_datuma is None:
-        exp.kiadas_datuma = datum
     if not _szamla_mar_csatolva(db, tetel, "expense", exp.id):
         _csatolas(db, tetel, "expense", exp.id, naplo)
     else:
@@ -865,8 +862,6 @@ def _rogzit_kulsos_tigre(db: Session, tetel: UtalasTetel, datum: date, naplo: di
     expense.fizetes_datuma = datum
     if not expense.kifizetes_modja:
         expense.kifizetes_modja = "Átutalás"
-    if expense.kiadas_datuma is None:
-        expense.kiadas_datuma = datum
     if expense.fizetes_hatarideje is None and cert.fizetesi_hatarido is not None:
         expense.fizetes_hatarideje = cert.fizetesi_hatarido
     cert.szamla_kifizetve = True
@@ -995,7 +990,6 @@ def _rogzit_uj_kiadaskent(db: Session, tetel: UtalasTetel, datum: date, naplo: d
         eredeti_netto=netto if eredeti_penznem else None,
         eredeti_brutto=float(tetel.brutto) if (eredeti_penznem and tetel.brutto is not None) else None,
         arfolyam=float(arfolyam) if arfolyam else None,
-        kiadas_datuma=tetel.teljesites_datuma or tetel.kiallitas_datuma or datum,
         fizetes_hatarideje=tetel.fizetesi_hatarido,
         project_code_id=None if adatok.get("mukodesi") else pc_id,
         employee_id=adatok.get("employee_id"),
@@ -1124,8 +1118,6 @@ def tetel_visszavonas(db: Session, tetel: UtalasTetel, user: Employee) -> dict:
                 exp.kesz = bool(e.get("kesz"))
                 exp.fizetes_datuma = date.fromisoformat(e["fizetes_datuma"]) if e.get("fizetes_datuma") else None
                 exp.kifizetes_modja = e.get("kifizetes_modja")
-                if "kiadas_datuma" in e:
-                    exp.kiadas_datuma = date.fromisoformat(e["kiadas_datuma"]) if e.get("kiadas_datuma") else None
                 eredmeny["visszaallitott"].append({"tipus": "expense", "id": exp.id})
             else:
                 eredmeny["kivetel"].append(

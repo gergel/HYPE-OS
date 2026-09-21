@@ -1044,7 +1044,7 @@ def _kiadas_jeloltek(db: Session, bejovo: BejovoSzamla, emp: Employee | None, ko
     q = select(Expense).where(
         or_(*felt),
         Expense.nincs_szamla.is_(False),
-        (Expense.kiadas_datuma.is_(None)) | (Expense.kiadas_datuma >= hatar),
+        (Expense.fizetes_datuma.is_(None)) | (Expense.fizetes_datuma >= hatar),
     )
     if kod_idk:
         q = q.where(Expense.project_code_id.in_(kod_idk))
@@ -1402,7 +1402,7 @@ def _rogzit_kiadaskent(
                 round(resz_netto * (1 + (afa_szazalek or 27) / 100), 2) if eredeti_penznem and plusz_afa else (resz_netto if eredeti_penznem else None)
             ),
             arfolyam=arfolyam,
-            kiadas_datuma=bejovo.teljesites_datuma or bejovo.kiallitas_datuma,
+            fizetes_datuma=bejovo.teljesites_datuma or bejovo.kiallitas_datuma,
             fizetes_hatarideje=bejovo.fizetesi_hatarido,
             project_code_id=None if cel_tipus == "mukodesi" else pc_id,
             employee_id=dontes.get("cel_employee_id") or bejovo.cel_employee_id,
@@ -1552,7 +1552,7 @@ def _rogzit_bontaskent(db: Session, bejovo: BejovoSzamla, dontes: dict, fajl: by
                     else (resz_netto if eredeti_penznem else None)
                 ),
                 arfolyam=arfolyam,
-                kiadas_datuma=bejovo.teljesites_datuma or bejovo.kiallitas_datuma,
+                fizetes_datuma=bejovo.teljesites_datuma or bejovo.kiallitas_datuma,
                 fizetes_hatarideje=bejovo.fizetesi_hatarido,
                 project_code_id=None if ct == "mukodesi" else pc_id,
                 employee_id=dontes.get("cel_employee_id") or bejovo.cel_employee_id,

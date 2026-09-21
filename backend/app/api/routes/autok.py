@@ -147,7 +147,7 @@ def _kiadas_kimenet(e: Expense, dokumentumok: dict[int, int] | None = None) -> A
     return AutoKiadasRead(
         id=e.id,
         megnevezes=e.megnevezes,
-        datum=e.kiadas_datuma or e.fizetes_datuma,
+        datum=e.fizetes_datuma,
         netto=float(e.netto) if e.netto is not None else None,
         # A "+ÁFA" jelölést a kiadás szöveges mezője hordozza (a Notionból
         # örökölt alak) - a felületnek viszont igen/nem kell.
@@ -194,7 +194,7 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
 
     kiadasok = sorted(
         auto.kiadasok,
-        key=lambda e: (e.kiadas_datuma or e.fizetes_datuma or date.min),
+        key=lambda e: (e.fizetes_datuma or date.min),
         reverse=True,
     )
     # NETTÓBAN, ahogy mindenütt máshol is az elszámolásban (lásd
@@ -418,8 +418,9 @@ def create_auto_kiadas(
         plusz_afa="Igen" if payload.plusz_afa else None,
         penznem=payload.penznem or "HUF",
         kifizetes_modja=payload.fizetesi_mod,
-        kiadas_datuma=datum,
-        fizetes_datuma=datum if payload.kifizetve else None,
+        # Egyetlen dátummező: a felvitt nap; a kifizetés tényét a `kesz` jelzi,
+        # a kimutatásba csak akkor számít bele.
+        fizetes_datuma=datum,
         kesz=payload.kifizetve,
         hozzaadas_a_kiadasokhoz=True,
         megjegyzes=payload.megjegyzes,

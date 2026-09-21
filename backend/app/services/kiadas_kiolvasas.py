@@ -33,7 +33,7 @@ Add vissza KIZÁRÓLAG ezt a JSON objektumot, más szöveg nélkül:
   "plusz_afa": "igen", ha az összegre ÁFA jön rá (pl. "+ÁFA", "nettó ... + ÁFA", ÁFA-s számla), különben "",
   "afa_szazalek": az ÁFA százaléka számként (ha csak "+ÁFA" szerepel konkrét százalék nélkül, akkor 27); ha nincs ÁFA, akkor null,
   "penznem": "HUF" vagy "EUR" vagy "USD",
-  "kiadas_datuma": a teljesítés/esemény dátuma "YYYY-MM-DD" alakban; ha nincs, a keltezés dátuma; ha az sincs, null,
+  "fizetes_datuma": a teljesítés/esemény dátuma "YYYY-MM-DD" alakban; ha nincs, a keltezés dátuma; ha az sincs, null,
   "adoszam": a partner adószáma, ha kiolvasható, különben null,
   "szekhely": a partner székhelye, ha kiolvasható, különben null,
   "kepviselo": a partner képviselője (természetes személy neve), ha kiolvasható, különben null,

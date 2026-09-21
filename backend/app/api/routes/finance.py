@@ -299,7 +299,6 @@ def _kp_felvetel_kiadas_sorral(adat: dict, db: Session) -> None:
         netto=osszeg,
         brutto=osszeg,
         kifizetes_modja="Bankkártya",
-        kiadas_datuma=adat.get("kiadas_datuma"),
         fizetes_datuma=adat.get("kiadas_datuma"),
         project_code_id=adat.get("project_code_id"),
         hozzaadas_a_kiadasokhoz=False,
@@ -457,7 +456,11 @@ class FinanceSummary(BaseModel):
 # sorok esnek ki. A projektkód-szintű költség (ProjectCode.osszes_koltseg)
 # ettől függetlenül MINDIG az adott projekt teljes, valós költségét mutatja -
 # ez a gate csak a globális Pénzügy nézetet szűri.
-_EXPENSE_COUNTS_TOWARD_TOTALS = Expense.hozzaadas_a_kiadasokhoz.is_not(False)
+# Egy kiadás CSAK kifizetve (kesz) számít bele a kimutatásokba (a felhasználó
+# kérése a kiadas_datuma/fizetes_datuma összevonásakor): a dátum megléte
+# önmagában nem jelent kifizetést, mert a beérkezett, még ki nem fizetett
+# számlák is kapnak (megjelenítési) dátumot a fizetes_datuma mezőbe.
+_EXPENSE_COUNTS_TOWARD_TOTALS = Expense.hozzaadas_a_kiadasokhoz.is_not(False) & Expense.kesz.is_(True)
 
 # A bevétel-oldali párja: nem minden bevétel-sor pénz, ami ezen az úton folyt
 # be. A "nem volt tranzakció" formájú és a számla-lépésnél kifejezetten
@@ -1014,7 +1017,7 @@ def _csatolt_szamlak(db: Session, ev: int, honap: int) -> tuple[list[tuple[str, 
         if csatolmany.entity_type == "expense":
             kiadas = kiadasok.get(csatolmany.entity_id)
             if kiadas is not None:
-                datum = kiadas.fizetes_datuma or kiadas.kiadas_datuma or kiadas.fizetes_hatarideje or feltoltve
+                datum = kiadas.fizetes_datuma or kiadas.fizetes_hatarideje or feltoltve
                 forras = f"Kiadás #{kiadas.id} – {kiadas.megnevezes}"
         elif csatolmany.entity_type == "revenue":
             bevetel = bevetelek.get(csatolmany.entity_id)

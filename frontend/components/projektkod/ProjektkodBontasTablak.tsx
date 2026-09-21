@@ -201,8 +201,8 @@ export function ProjektkodBontasTablak({
               // átállításakor kérdezzük meg a fizetés dátumát (lásd
               // KifizetveDatummal) - úgy kerül dátummal a kiadások közé.
               {
-                name: "kiadas_datuma",
-                label: "Kiadás dátuma (üresen hagyható)",
+                name: "fizetes_datuma",
+                label: "Fizetés dátuma (üresen hagyható)",
                 type: "date",
               },
               { name: "netto", label: "Nettó összeg", type: "number", required: true },
@@ -401,7 +401,6 @@ export function ProjektkodBontasTablak({
                   <KifizetveDatummal
                     patchPath={`${ENTITY_PATHS.expense}/${k.id}`}
                     kifizetve={k.kifizetve}
-                    vanDatum={k.datum != null}
                   />
                 ) : (
                   <StatusBadge label={k.kifizetve ? "Kifizetve" : "Nyitott"} tone={k.kifizetve ? "success" : "warning"} />

@@ -14,12 +14,9 @@ import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
 export function KifizetveDatummal({
   patchPath,
   kifizetve,
-  vanDatum,
 }: {
   patchPath: string;
   kifizetve: boolean;
-  /** Van-e már dátuma a tételnek - ha nincs, a kifizetéshez bekérdezzük. */
-  vanDatum: boolean;
 }) {
   const router = useRouter();
   const [ertek, setErtek] = useState(kifizetve);
@@ -134,12 +131,7 @@ export function KifizetveDatummal({
                   // A fizetes_datuma az összesítők alapja; a kiadás dátumát
                   // csak akkor írjuk, ha eddig üres volt (nem írunk felül
                   // kézzel megadott költés-dátumot).
-                  void ment(
-                    vanDatum
-                      ? { kesz: true, fizetes_datuma: datum }
-                      : { kesz: true, fizetes_datuma: datum, kiadas_datuma: datum },
-                    true,
-                  );
+                  void ment({ kesz: true, fizetes_datuma: datum }, true);
                 }}
                 className="rounded-[var(--radius)] bg-[var(--accent-solid)] px-4 py-1.5 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-60"
               >

@@ -21,11 +21,12 @@ class ExpenseBase(BaseModel):
     #: (lásd models/finance.py Expense.alvallalkozo_project_id).
     alvallalkozo_project_id: int | None = None
     tipus: str | None = None
-    #: Mikor történt a kiadás - a felviteli űrlapok kötelezően kérik, és a
-    #: listák Dátum oszlopa ezt mutatja. Korábban csak az olvasó sémában volt:
-    #: a létrehozáskor beküldött dátumot a szerver némán eldobta, és a lista
-    #: üres dátummal mutatta az épp felvitt tételt.
-    kiadas_datuma: date | None = None
+    #: A kiadás EGYETLEN dátuma (a felhasználó kérésére a régi kiadás dátuma és
+    #: fizetés dátuma össze lett vonva): kifizetéskor a tényleges utalás napja,
+    #: egyébként a keltezés/teljesítés. A listák Dátum oszlopa ezt mutatja, és a
+    #: felviteli űrlapok is ezt kérik. A kimutatásba csak kifizetve (`kesz`)
+    #: számít bele, nem a dátum megléte alapján.
+    fizetes_datuma: date | None = None
     #: NINCS SZÁMLA: ehhez a tételhez nem is lesz számla/blokk (a felhasználó
     #: kérése) - a felületek ne hiányzóként mutassák.
     nincs_szamla: bool = False
@@ -47,6 +48,9 @@ class ExpenseCreate(ExpenseBase):
 
 class ExpenseUpdate(BaseModel):
     kesz: bool | None = None
+    #: A kiadás egyetlen dátuma (lásd ExpenseBase.fizetes_datuma) - a listában
+    #: és az adatlapon is ez szerkeszthető.
+    fizetes_datuma: date | None = None
     kifizetes_modja: str | None = None
     fizetes_hatarideje: date | None = None
     #: A pénznem újbóli megadása ÚJRASZÁMOLTATJA a forint összeget (lásd
@@ -62,21 +66,22 @@ class ExpenseRead(ExpenseBase):
     id: int
 
     @model_validator(mode="after")
-    def _kiadas_datum_potlas(self):
+    def _datum_potlas(self):
         """A "Dátum" oszlop a régi, Notionból jött soroknál is mutasson napot.
 
         A Notion Kiadások tábláiban a dátum sokszor a nyers "Dátum" mezőben
-        érkezett (datum_notion), a tipizált kiadas_datuma üresen maradt - a
-        lista dátum-oszlopa ilyenkor a nyers mezőből pótolja a MEGJELENÍTETT
-        értéket. Csak a kimenetet érinti: az adatbázisban semmi nem változik,
-        és amint valaki kézzel beírja a kiadas_datuma-t, az az erősebb."""
-        if self.kiadas_datuma is None and self.datum_notion:
+        érkezett (datum_notion), a tipizált dátum üresen maradt - a lista
+        dátum-oszlopa ilyenkor a nyers mezőből pótolja a MEGJELENÍTETT értéket
+        (a fizetes_datuma az egyetlen dátummező, lásd ExpenseBase). Csak a
+        kimenetet érinti: az adatbázisban semmi nem változik, és amint valaki
+        kézzel beírja a dátumot, az az erősebb."""
+        if self.fizetes_datuma is None and self.datum_notion:
             nyers = self.datum_notion
             if isinstance(nyers, dict):
                 nyers = nyers.get("start")
             if isinstance(nyers, str) and len(nyers) >= 10:
                 try:
-                    self.kiadas_datuma = date.fromisoformat(nyers[:10])
+                    self.fizetes_datuma = date.fromisoformat(nyers[:10])
                 except ValueError:
                     pass
         return self
@@ -92,12 +97,11 @@ class ExpenseRead(ExpenseBase):
     szamla: str | None = None
     kiadas_megnevezese_projekt_kod: str | None = None
     netto_forintban_notion: float | None = None
-    fizetes_datuma: date | None = None
     mikor_fizetett: str | None = None
     szamla_pdf_urls: JsonScalar = None
     hozzaadas_a_kiadasokhoz: bool | None = None
     forintban_notion: float | None = None
-    # (a kiadas_datuma az ExpenseBase-ből öröklődik - létrehozáskor is megy)
+    # (a fizetes_datuma - a kiadás egyetlen dátuma - az ExpenseBase-ből öröklődik)
     projekt_kiadasok_notion_ids: JsonScalar = None
     kiadasok_notion_ids: JsonScalar = None
     szamla_statusza: str | None = None

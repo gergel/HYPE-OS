@@ -128,7 +128,7 @@ export function KiadasSzamlak({
         "plusz_afa",
         "afa_szazalek",
         "penznem",
-        "kiadas_datuma",
+        "fizetes_datuma",
         "employee_id",
       ]) {
         const uj = adatok[kulcs];
