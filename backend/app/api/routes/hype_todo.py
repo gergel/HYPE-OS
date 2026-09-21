@@ -53,6 +53,18 @@ def _ellenorzo_rogzitese(obj: HypeTodoItem, data: dict, _db: Session, current_us
         data["aki_ellenorizte_id"] = current_user.id
 
 
+def _notify_assignment(obj, data, changes, db, current_user):
+    for employee_id in changes.get("felelosok", {}).get("added", set()):
+        notifications.create_notification(db, employee_id=employee_id, kind="assignment",
+            message=f"{current_user.full_name} rád osztott egy feladatot: {obj.feladat}",
+            link=f"/hype-todo-lista/{obj.id}", actor_id=current_user.id)
+    db.commit()
+
+
+def _notify_created_assignment(obj, data, db, current_user):
+    _notify_assignment(obj, data, {"felelosok": {"added": {person.id for person in obj.felelosok}}}, db, current_user)
+
+
 router = build_crud_router(
     model=HypeTodoItem,
     create_schema=HypeTodoCreate,
@@ -66,6 +78,8 @@ router = build_crud_router(
     before_update=_ellenorzo_rogzitese,
     m2m_fields={"felelos_employee_ids": ("felelosok", Employee)},
     entity_type="hypeTodo",
+    after_create=_notify_created_assignment,
+    after_update=_notify_assignment,
 )
 
 

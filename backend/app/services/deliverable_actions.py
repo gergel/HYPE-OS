@@ -565,7 +565,12 @@ def edit_comment(db: Session, comment_id: int, current_user: Employee, body: str
         raise HTTPException(status_code=404, detail="Nincs ilyen hozzászólás.")
     if comment.employee_id != current_user.id:
         raise HTTPException(status_code=403, detail="Csak a saját hozzászólásodat szerkesztheted.")
+    newly_mentioned = notifications.extract_mentioned_employee_ids(body, db) - notifications.extract_mentioned_employee_ids(comment.body, db)
     comment.body = body
+    for employee_id in newly_mentioned:
+        notifications.create_notification(db, employee_id=employee_id, kind="mention",
+            message=f"{current_user.full_name} megjelölt egy hozzászólásban",
+            link=f"{UTOMUNKA_PAGE}/{comment.deliverable_id}", actor_id=current_user.id)
     db.commit()
     db.refresh(comment)
     csatolmanyok = attachments.list_for_many(db, "deliverableComment", [comment.id])

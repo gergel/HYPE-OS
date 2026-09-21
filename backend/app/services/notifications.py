@@ -14,7 +14,10 @@ def create_notification(db: Session, *, employee_id: int, kind: str, message: st
     """Sosem értesíti önmagát a felhasználó (actor_id == employee_id esetén nem hoz létre semmit)."""
     if actor_id is not None and employee_id == actor_id:
         return
-    db.add(Notification(employee_id=employee_id, kind=kind, message=message, link=link))
+    notification = Notification(employee_id=employee_id, kind=kind, message=message[:500], link=link[:300])
+    db.add(notification)
+    from app.services.push_delivery import enqueue
+    enqueue(db, notification)
 
 
 def extract_mentioned_employee_ids(body: str, db: Session) -> set[int]:
