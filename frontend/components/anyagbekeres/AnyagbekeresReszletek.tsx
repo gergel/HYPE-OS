@@ -189,6 +189,20 @@ export function AnyagbekeresReszletek({
     window.open(d.url, "_blank");
   }
 
+  /** Az adott fájlra mutató, megosztható (7 napig élő) letöltő link a
+   * vágólapra - a felhasználó kérése, hogy egy konkrét anyaghoz linket
+   * lehessen küldeni. */
+  async function fajlLinkMasolas(leadasId: number, fajlId: number) {
+    setHiba(null);
+    const r = await authFetch(`${BASE}/${adat.id}/leadas/${leadasId}/fajl/${fajlId}/letoltes?megosztas=true`);
+    const d = await r.json().catch(() => null);
+    if (!r.ok) {
+      setHiba(d?.detail ?? "A megosztó link nem készült el.");
+      return;
+    }
+    masol(d.url, `fajl-${fajlId}`);
+  }
+
   async function exportInditas(leadasId: number, mappaId: number | null) {
     setHiba(null);
     const r = await authFetch(`${BASE}/${adat.id}/leadas/${leadasId}/export`, {
@@ -421,9 +435,14 @@ export function AnyagbekeresReszletek({
                       <span className="text-text-muted">{meretSzoveg(f.meret_bajt)}</span>
                       {f.allapot !== "kesz" && <span className="text-text-warning">{f.allapot === "hibas" ? "hibás" : "folyamatban"}</span>}
                       {f.allapot === "kesz" && (
-                        <button type="button" className="text-[12.5px] text-text-accent hover:underline" onClick={() => void fajlLetoltes(nyitottLeadas.id, f.id)}>
-                          Letöltés
-                        </button>
+                        <>
+                          <button type="button" className="text-[12.5px] text-text-accent hover:underline" onClick={() => void fajlLetoltes(nyitottLeadas.id, f.id)}>
+                            Letöltés
+                          </button>
+                          <button type="button" className="text-[12.5px] text-text-secondary hover:underline" onClick={() => void fajlLinkMasolas(nyitottLeadas.id, f.id)}>
+                            {masolva === `fajl-${f.id}` ? "Kimásolva ✓" : "Link"}
+                          </button>
+                        </>
                       )}
                     </div>
                   ))}

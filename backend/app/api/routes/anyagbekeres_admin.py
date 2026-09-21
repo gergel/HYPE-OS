@@ -6,7 +6,7 @@ a beérkezett leadások, innen megy a letöltés és a feldolgozás."""
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -392,6 +392,10 @@ def fajl_letoltes(
     bekeres_id: int,
     leadas_id: int,
     fajl_id: int,
+    # Megosztható link: a beküldött fájlra mutató, aláírt letöltő URL. Sima
+    # letöltésnél 1 óra elég; a "Link kimásolása" gomb hosszabb (max 7 napos)
+    # linket kér, amit a kolléga később is meg tud nyitni.
+    megosztas: bool = Query(default=False),
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
@@ -403,7 +407,9 @@ def fajl_letoltes(
         raise HTTPException(status_code=404, detail="A leadás nem található.")
     if f.allapot != "kesz":
         raise HTTPException(status_code=400, detail="Ez a fájl még nincs (sikeresen) feltöltve.")
-    return {"url": storage.presigned_download(f.storage_key, f.eredeti_nev, expires=3600)}
+    # 7 nap = az aláírt (SigV4) URL maximuma.
+    expires = 7 * 24 * 3600 if megosztas else 3600
+    return {"url": storage.presigned_download(f.storage_key, f.eredeti_nev, expires=expires)}
 
 
 class ExportIn(BaseModel):
