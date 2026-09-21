@@ -23,6 +23,28 @@ PAGE = "/flora"
 #: mint az Utómunkánál, lásd routes/postproduction.py _MINDEN_SZEREPKOR).
 _MINDEN_SZEREPKOR = tuple(Role)
 
+
+def _notify_flora_assignment(obj, db, actor):
+    if obj.felelos_id:
+        notifications.create_notification(db, employee_id=obj.felelos_id, kind="assignment",
+            message=f"{actor.full_name} rád osztott egy feladatot: {obj.megnevezes}",
+            link=f"/flora/{obj.id}", actor_id=actor.id)
+        db.commit()
+
+
+def _flora_created(obj, data, db, actor):
+    _notify_flora_assignment(obj, db, actor)
+
+
+def _flora_before_update(obj, data, db, actor):
+    obj._push_previous_assignee = obj.felelos_id
+
+
+def _flora_updated(obj, data, changes, db, actor):
+    if obj.felelos_id != getattr(obj, "_push_previous_assignee", obj.felelos_id):
+        _notify_flora_assignment(obj, db, actor)
+
+
 router = build_crud_router(
     model=FloraFeladat,
     create_schema=FloraFeladatCreate,
@@ -33,6 +55,9 @@ router = build_crud_router(
     page=PAGE,
     write_roles=_MINDEN_SZEREPKOR,
     entity_type="floraFeladat",
+    after_create=_flora_created,
+    before_update=_flora_before_update,
+    after_update=_flora_updated,
 )
 
 

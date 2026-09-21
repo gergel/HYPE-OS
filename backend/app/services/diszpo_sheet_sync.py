@@ -192,7 +192,8 @@ def munkalap_atvetele(db: Session, ws, sorrend: int, vegrehajt: bool) -> dict:
     fejlec_sorok = fejlec_sorok_szama(ws, max_sor)
     ketsoros = ws.title in KETSOROS_FEJLECU
 
-    meglevo = db.scalar(select(DiszpoMunkalap).where(DiszpoMunkalap.nev == ws.title))
+    query = select(DiszpoMunkalap).where(DiszpoMunkalap.nev == ws.title)
+    meglevo = db.scalar(query.with_for_update() if vegrehajt else query)
     regi_cellak = (
         db.scalar(select(DiszpoCella.id).where(DiszpoCella.munkalap_id == meglevo.id).limit(1)) is not None
         if meglevo

@@ -108,8 +108,9 @@ def list_munkalapok(db: Session = Depends(get_db), _user: Employee = Depends(get
     ]
 
 
-def _munkalap_vagy_404(db: Session, munkalap_id: int) -> DiszpoMunkalap:
-    m = db.get(DiszpoMunkalap, munkalap_id)
+def _munkalap_vagy_404(db: Session, munkalap_id: int, *, lock: bool = False) -> DiszpoMunkalap:
+    query = select(DiszpoMunkalap).where(DiszpoMunkalap.id == munkalap_id)
+    m = db.scalar(query.with_for_update() if lock else query)
     if m is None:
         raise HTTPException(status_code=404, detail="Ez a munkalap nem található.")
     return m
@@ -169,6 +170,9 @@ class CellaIn(BaseModel):
     #: cella szövegét (a felület a színpalettáról nem küld szöveget).
     ertek_valtozik: bool = False
     szin_valtozik: bool = False
+    check_previous: bool = False
+    expected_ertek: str | None = None
+    expected_szin: str | None = None
 
 
 def _egy_cella(db: Session, m: DiszpoMunkalap, adat: CellaIn) -> None:
@@ -179,6 +183,11 @@ def _egy_cella(db: Session, m: DiszpoMunkalap, adat: CellaIn) -> None:
             DiszpoCella.oszlop_idx == adat.oszlop_idx,
         )
     )
+    if adat.check_previous and (
+        (cella.ertek if cella else None) != adat.expected_ertek
+        or (cella.szin if cella else None) != adat.expected_szin
+    ):
+        raise HTTPException(status_code=409, detail="A cellát valaki közben módosította. Frissítsd a táblát.")
     if cella is None:
         cella = DiszpoCella(munkalap_id=m.id, sor_idx=adat.sor_idx, oszlop_idx=adat.oszlop_idx)
         db.add(cella)
@@ -206,7 +215,7 @@ def set_cella(
 ):
     """Egy cella szerkesztése. Üres cellához nem tartozik sor - ha mindkét
     mezője kiürül, a sort töröljük."""
-    m = _munkalap_vagy_404(db, munkalap_id)
+    m = _munkalap_vagy_404(db, munkalap_id, lock=True)
     _ellenoriz_cellat(m, payload)
     _egy_cella(db, m, payload)
     # A szín MUNKANAP-ADAT: a következő önköltség-számítás már ezt lássa.
@@ -221,6 +230,8 @@ class CellakIn(BaseModel):
     Egy hét napjait egyesével színezni öt kör-utat jelentene; így egy."""
 
     cellak: list[CellaIn]
+    expected_rows: list[SorOut] | None = None
+    expected_columns: list[OszlopOut] | None = None
 
 
 @router.put("/{munkalap_id}/cellak", response_model=None)
@@ -230,9 +241,17 @@ def set_cellak(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    m = _munkalap_vagy_404(db, munkalap_id)
+    m = _munkalap_vagy_404(db, munkalap_id, lock=True)
     if len(payload.cellak) > 5000:
         raise HTTPException(status_code=400, detail="Egyszerre legfeljebb 5000 cella módosítható.")
+    if payload.expected_rows is not None or payload.expected_columns is not None:
+        current = get_munkalap(munkalap_id, db, _user)
+        if ((payload.expected_rows is not None and payload.expected_rows != current.sorok)
+                or (payload.expected_columns is not None and payload.expected_columns != current.oszlopok)):
+            raise HTTPException(status_code=409, detail="A tábla szerkezete megváltozott. Frissítsd a táblát.")
+    addresses = [(item.sor_idx, item.oszlop_idx) for item in payload.cellak]
+    if len(set(addresses)) != len(addresses):
+        raise HTTPException(status_code=400, detail="Egy cella csak egyszer szerepelhet a mentésben.")
     for adat in payload.cellak:
         _ellenoriz_cellat(m, adat)
         _egy_cella(db, m, adat)
@@ -291,7 +310,7 @@ def sor_beszurasa(
     a benne felvett szín kiesne a munkanap-számolásból. Ezért a fölötte
     maradó sortól örököljük a dátumot (elválasztó sortól nem - az nem egy
     nap, attól kezdve nincs mit örökölni)."""
-    m = _munkalap_vagy_404(db, munkalap_id)
+    m = _munkalap_vagy_404(db, munkalap_id, lock=True)
     hova = payload.idx + (1 if payload.ala else 0)
     if not 0 <= hova <= m.sor_szam:
         raise HTTPException(status_code=400, detail="A sor a munkalapon kívülre esne.")
@@ -314,7 +333,7 @@ def sor_torlese(
     _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     """Egy sor törlése a tartalmával együtt - a többi sor feljebb csúszik."""
-    m = _munkalap_vagy_404(db, munkalap_id)
+    m = _munkalap_vagy_404(db, munkalap_id, lock=True)
     if not 0 <= idx < m.sor_szam:
         raise HTTPException(status_code=400, detail="Ez a sor nem létezik.")
     db.query(DiszpoCella).filter(DiszpoCella.munkalap_id == m.id, DiszpoCella.sor_idx == idx).delete(
@@ -340,7 +359,7 @@ def oszlop_beszurasa(
 ):
     """Új, üres oszlop beszúrása. A csoportot (szekciót) a bal szomszédtól
     örökli - a Sheetben is oda tartozik, ahova beszúrták."""
-    m = _munkalap_vagy_404(db, munkalap_id)
+    m = _munkalap_vagy_404(db, munkalap_id, lock=True)
     hova = payload.idx + (1 if payload.ala else 0)
     if not 0 <= hova <= m.oszlop_szam:
         raise HTTPException(status_code=400, detail="Az oszlop a munkalapon kívülre esne.")
@@ -364,7 +383,7 @@ def oszlop_torlese(
     _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
     """Egy oszlop törlése a tartalmával együtt."""
-    m = _munkalap_vagy_404(db, munkalap_id)
+    m = _munkalap_vagy_404(db, munkalap_id, lock=True)
     if not 0 <= idx < m.oszlop_szam:
         raise HTTPException(status_code=400, detail="Ez az oszlop nem létezik.")
     db.query(DiszpoCella).filter(DiszpoCella.munkalap_id == m.id, DiszpoCella.oszlop_idx == idx).delete(
@@ -401,7 +420,7 @@ def sor_adat(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    m = _munkalap_vagy_404(db, munkalap_id)
+    m = _munkalap_vagy_404(db, munkalap_id, lock=True)
     sor = db.scalar(select(DiszpoSor).where(DiszpoSor.munkalap_id == m.id, DiszpoSor.idx == idx))
     if sor is None:
         raise HTTPException(status_code=404, detail="Ez a sor nem található.")
@@ -442,7 +461,7 @@ def set_oszlop_kotes(
     Enélkül az oszlop színei nem számítanak bele a munkanap-számlálásba: a
     "GERI" felirat nekünk nem azonosít senkit. Az import csak akkor köt, ha a
     név EGYÉRTELMŰ - a többit itt lehet megadni."""
-    _munkalap_vagy_404(db, munkalap_id)
+    _munkalap_vagy_404(db, munkalap_id, lock=True)
     oszlop = db.scalar(
         select(DiszpoOszlop).where(DiszpoOszlop.munkalap_id == munkalap_id, DiszpoOszlop.idx == idx)
     )
@@ -577,7 +596,7 @@ def get_nezet(
     db: Session = Depends(get_db),
     user: Employee = Depends(get_current_user),
 ):
-    _munkalap_vagy_404(db, munkalap_id)
+    _munkalap_vagy_404(db, munkalap_id, lock=True)
     nezet = db.scalar(
         select(DiszpoNezet).where(DiszpoNezet.munkalap_id == munkalap_id, DiszpoNezet.employee_id == user.id)
     )
@@ -600,7 +619,7 @@ def set_nezet(
 
     Szándékosan nem kell hozzá szerkesztési jog: a nézet nem adat, csak a
     saját képernyő rendezése - aki látja a táblát, rendezheti magának."""
-    m = _munkalap_vagy_404(db, munkalap_id)
+    m = _munkalap_vagy_404(db, munkalap_id, lock=True)
     # Csak LÉTEZŐ oszlop-id-k maradnak: egy közben törölt oszlop hivatkozása
     # ne gyűljön a nézetben a végtelenségig.
     letezo = {

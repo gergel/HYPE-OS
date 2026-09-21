@@ -353,9 +353,13 @@ def _uj_vagas_auto_kiosztas(obj: Deliverable, data: dict, db: Session, current_u
     """FELVEZETÉSKOR is érvényes az ellenőr-szabály (a felhasználó kérése): az
     új anyag alapból Beérkező állapotba kerül, és ott az ellenőré - kivéve, ha
     a felvezető kifejezetten kiosztotta valakire."""
-    if not _ellenorre_szallo_allapot(obj.allapot):
+    explicit = {person.id for person in obj.kiosztottak}
+    if data.get("assigned_to_employee_id"):
+        explicit.add(int(data["assigned_to_employee_id"]))
+    if explicit:
+        _kiosztas_ertesites(db, obj, sorted(explicit), current_user)
         return
-    if obj.kiosztottak or data.get("assigned_to_employee_id"):
+    if not _ellenorre_szallo_allapot(obj.allapot):
         return
     ellenor = vagoi_jatek.ellenor_idk(db)
     if ellenor:

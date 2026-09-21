@@ -140,3 +140,23 @@ def _szamla_auto_erkeztetes() -> None:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "environment": settings.environment}
+
+
+# Durable outbox consumption; SKIP LOCKED coordinates multiple API workers.
+import threading
+_push_stop = threading.Event()
+_push_thread = None
+
+@app.on_event("startup")
+def _start_apple_push():
+    global _push_thread
+    from app.services.push_delivery import start_worker
+    _push_stop.clear()
+    _push_thread = threading.Thread(target=start_worker, args=(_push_stop,), daemon=True, name="apple-push")
+    _push_thread.start()
+
+@app.on_event("shutdown")
+def _stop_apple_push():
+    _push_stop.set()
+    if _push_thread is not None:
+        _push_thread.join(timeout=12)

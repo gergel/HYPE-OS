@@ -465,6 +465,15 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
         except Exception:  # noqa: BLE001 - a kiküldést ez nem buktathatja meg
             logger.exception("Nem sikerült feltölteni a diszpó PDF-et az R2-re project_id=%s", project.id)
     _schedule_utokovetes_email(project)
+    from app.services import notifications
+    recipients = {address.strip().casefold() for address in to_list}
+    for employee in project.crew:
+        if employee.email and employee.email.strip().casefold() in recipients:
+            notifications.create_notification(
+                db, employee_id=employee.id, kind="call_sheet",
+                message=f"Új diszpód érkezett: {project.nev or 'Forgatás'}",
+                link=f"/diszpoim?project_id={project.id}",
+            )
     db.commit()
     db.refresh(project)
     return {
