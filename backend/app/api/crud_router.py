@@ -25,6 +25,7 @@ from app.core.security import (
 )
 from app.models.employee import Employee
 from app.services import entity_fields, notion_mapping, visszavonas
+from app.services.offline_sync import PATCH_PREFIXES, check_precondition
 from app.services.detail_tabs import OTHER_TAB_KEY, get_field_tab_map
 
 # Soha nem PATCH-elhető mezők, még akkor sem, ha valódi oszlopok - a "minden
@@ -154,6 +155,7 @@ def build_crud_router(
     (lásd core/security.lathato_anyagok). Ha nincs megadva, mindenki minden
     sort lát (a korábbi viselkedés)."""
     router = APIRouter(prefix=prefix, tags=tags)
+    PATCH_PREFIXES.add(prefix.strip("/"))
     role_dependency = require_roles(*write_roles) if write_roles else get_current_user
     m2m_fields = m2m_fields or {}
     list_read_schema = list_read_schema or read_schema
@@ -344,9 +346,23 @@ def build_crud_router(
         EditableDetailGrid a frontenden), anélkül hogy minden entitáshoz kézzel
         karban kellene tartani egy külön Update sémát a ~50-140 mezőhöz."""
         obj = _lathato_vagy_404(db, item_id, current_user)
+        # Every PATCH serializes on the record, including ordinary online edits.
+        db.refresh(obj, with_for_update=True)
         data = await request.json()
         if not isinstance(data, dict):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A kérés törzsének JSON objektumnak kell lennie")
+
+        offline = data.pop("_offline", None)
+        if offline is not None:
+            if set(data) & _PATCH_DENYLIST:
+                raise HTTPException(status_code=422, detail="Védett mező nem szinkronizálható.")
+            if entity_type:
+                tabs = get_field_tab_map(db, entity_type)
+                for field in data:
+                    check_tab_action(db, current_user, page, tabs.get(field, OTHER_TAB_KEY), "edit")
+            current = _szurt_kimenet(_kimenet(obj, read_schema, db, sajat_mezokkel=True), db, current_user)
+            if check_precondition(offline, data, current):
+                return current
 
         m2m_changes: dict[str, dict[str, set[int]]] = {}
         for payload_key in list(m2m_fields):
