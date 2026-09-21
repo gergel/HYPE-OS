@@ -160,3 +160,17 @@ def _stop_apple_push():
     _push_stop.set()
     if _push_thread is not None:
         _push_thread.join(timeout=12)
+
+
+# Capability negotiation prevents old servers from silently ignoring offline guards.
+from fastapi import Depends
+from app.core.security import get_current_user
+from app.models.employee import Employee
+
+@app.get("/api/v1/offline/capabilities")
+def offline_capabilities(user: Employee = Depends(get_current_user)):
+    from app.services.offline_sync import PATCH_PREFIXES
+    from fastapi import HTTPException
+    if user.is_active is False and not getattr(user, "vedett_admin", False):
+        raise HTTPException(status_code=403, detail="Inaktív fiók")
+    return {"version": 1, "grid": True, "patch_prefixes": sorted(PATCH_PREFIXES)}
