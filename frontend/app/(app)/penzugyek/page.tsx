@@ -364,21 +364,22 @@ export default async function PenzugyekPage() {
                 sortAccessor: (e) => bevetelForrasa.get(e.project_code_id ?? -1)?.projektkod ?? "",
               },
               {
-                // MIKOR történt a kiadás (a felhasználó kérése) - itt, a
-                // listában is látszódjon és szerkeszthető legyen.
-                header: "Dátum",
+                // A listában a FIZETÉS (kifizetés) dátuma látszik (a felhasználó
+                // kérése), nem a kiadás/teljesítés dátuma. A kifizetéskor
+                // (utalás felvezetése) töltődik; itt kézzel is javítható.
+                header: "Fizetés dátuma",
                 render: (e) =>
                   canEdit ? (
                     <EditableTableCell
                       patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
-                      field="kiadas_datuma"
-                      value={e.kiadas_datuma}
+                      field="fizetes_datuma"
+                      value={e.fizetes_datuma}
                       type="date"
                     />
                   ) : (
-                    e.kiadas_datuma ?? "–"
+                    e.fizetes_datuma ?? "–"
                   ),
-                sortAccessor: (e) => e.kiadas_datuma,
+                sortAccessor: (e) => e.fizetes_datuma,
               },
               {
                 header: "Nettó",

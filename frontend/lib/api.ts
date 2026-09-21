@@ -346,8 +346,11 @@ export type Expense = {
   plusz_afa: string | null;
   afa_szazalek: number | null;
   tipus: string | null;
-  /** Mikor történt a kiadás - a listában is látszik és szerkeszthető. */
+  /** Mikor történt a kiadás (teljesítés/keltezés). */
   kiadas_datuma: string | null;
+  /** A tényleges KIFIZETÉS dátuma - a listában ez a "Fizetés dátuma" oszlop
+   * (a kifizetéskor / utalás felvezetésekor töltődik, kézzel is javítható). */
+  fizetes_datuma: string | null;
   netto: number | null;
   brutto: number | null;
   penznem: string;
