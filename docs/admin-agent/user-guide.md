@@ -41,6 +41,32 @@ A bal oldali menüben az **Admin-Ágens** csoport. Hét aloldal:
    műveletet. A gomb pontosan azt csinálja, amit ír.
 4. **Elutasítás.** Ha nem jó, elutasítod — ez is tanulási jel.
 
+## Tervezetet kérsz az ügynöktől (TIG, szerződés, e-mail)
+
+1. Projektkód-adatlap vagy Utókövetés → **„Admin-Ágens teendők"** → **„+ Feladat"**
+   (TIG vagy szerződés) — vagy nyiss meg egy meglévő feladatot.
+2. A feladat oldalán **„Tervezet készítése (ügynök)"**. Az ügynök végigmegy a
+   projektkód projektjein, és minden félhez, akinek még kell TIG/szerződés,
+   előtölti, amit a rendszer tud. Minden mező mellett látod a **forrást**
+   (mentett piszkozat, partnertörzs, projekt dátumai, tételek összege, vagy
+   „ügynök (korábbi esetek alapján)"). A hiányzó mező kiemelve látszik.
+3. Ha kell, **„Javaslat szerkesztése"** → javítsd → **„Mentés új javaslatként"**.
+   Amit módosítasz, javításként rögzül — **ebből tanul** a legtöbbet.
+4. Jóváhagyás után (L1-től) a piszkozatok **„Készítés alatt"** állapotban
+   megjelennek a meglévő TIG/szerződés felületen. **A PDF-generálás és a kiküldés
+   továbbra is a te lépésed** a megszokott helyen.
+5. E-mailnél a címzett csak ismert címből lehet (a megrendelő kontaktjai, a
+   függő felek). Más címet az ügynök nem írhat be.
+
+**Összeget az ügynök nem talál ki:** csak akkor tölti ki, ha az igazolt forrásban
+(piszkozat, szerződés, tételek, jóváhagyott korábbi eset) pontosan szerepel.
+Ha nincs ilyen, üresen hagyja és jelzi.
+
+**Modell-kulcs:** a kiegészítéshez és az e-mail megírásához a szerveren be kell
+állítani a `GEMINI_API_KEY` értéket. Enélkül a tervezet a rendszer ismert
+adataiból készül („A modell nincs beállítva" üzenet), e-mail-tervezet pedig
+nem készül.
+
 ## Így indítod el a tanulást — és így látod, hogy tanul
 
 Minden lépés kattintással megy:
@@ -53,7 +79,11 @@ Minden lépés kattintással megy:
    visszatekintés (90 nap)**". Ez feldolgozza a közelmúlt munkáját.
 3. **Nézd meg, mit tanult:** Admin-Ágens → **Tudástár** → „Jóváhagyásra váró
    példák". Minden lezárt emberi munkából (pl. kiküldött TIG, kifizetett számla)
-   egy példa-jelölt lesz. Ami jó: **Jóváhagyás**; ami nem: **Elvetés**.
+   egy példa-jelölt lesz, a projektkóddal és a projekttel együtt. Ami jó:
+   **Jóváhagyás**; ami nem: **Elvetés**. Sok példánál szűrj típusra, pipáld ki
+   az átnézetteket, és **„Kijelöltek jóváhagyása"**. (Ha régebbi jelöltek még
+   „projektkód nélkül" szöveggel állnak, futtasd újra a „Kezdeti visszatekintés
+   (90 nap)" gombot — a szövegük frissül.)
 4. **Adj neki munkát:**
    - Beérkező számlák (Pénzügyek) → sor végén **„Admin-Ágens"** gomb → az ügynök
      elemzi, és megnyílik a feladat.

@@ -36,6 +36,8 @@ export function AdminTudastarKezelo({
   const [hiba, setHiba] = useState<string | null>(null);
   const [uzenet, setUzenet] = useState<string | null>(null);
   const [folyamatban, setFolyamatban] = useState<string | null>(null);
+  const [szuro, setSzuro] = useState<string>("");
+  const [kijelolt, setKijelolt] = useState<Set<number>>(new Set());
 
   async function hibaSzoveg(res: Response, alap: string) {
     try {
@@ -91,9 +93,60 @@ export function AdminTudastarKezelo({
     }
   }
 
+  async function tomeges(muvelet: "jovahagy" | "elvet") {
+    const ids = jeloltPelda.filter((m) => kijelolt.has(m.id)).map((m) => m.id).slice(0, 500);
+    if (ids.length === 0) return;
+    setHiba(null);
+    setUzenet(null);
+    setFolyamatban("tomeges");
+    try {
+      const res = await authFetch(`/api/v1/admin-agent/memory/bulk`, {
+        method: "POST",
+        body: JSON.stringify({ ids, muvelet }),
+      });
+      if (!res.ok) {
+        setHiba(await hibaSzoveg(res, "A kijelölt példák módosítása nem sikerült."));
+        return;
+      }
+      const d = (await res.json()) as { modositva: number; kihagyva: number };
+      const idSet = new Set(ids);
+      setPeldak((p) =>
+        p.map((x) =>
+          idSet.has(x.id) && !(muvelet === "jovahagy" && x.visszavont)
+            ? muvelet === "jovahagy"
+              ? { ...x, ervenyes: true }
+              : { ...x, ervenyes: false, visszavont: true }
+            : x,
+        ),
+      );
+      setKijelolt(new Set());
+      setUzenet(
+        `${d.modositva} példa ${muvelet === "jovahagy" ? "jóváhagyva" : "elvetve"}` +
+          (d.kihagyva ? ` (${d.kihagyva} kihagyva, mert korábban elvetették)` : "") +
+          ".",
+      );
+      router.refresh();
+    } finally {
+      setFolyamatban(null);
+    }
+  }
+
+  function kijel(id: number) {
+    setKijelolt((p) => {
+      const uj = new Set(p);
+      if (uj.has(id)) uj.delete(id);
+      else uj.add(id);
+      return uj;
+    });
+  }
+
   const aktivSzabaly = szabalyok.filter((r) => r.allapot === "active");
   const jeloltSzabaly = szabalyok.filter((r) => r.allapot === "pending" || r.allapot === "draft");
-  const jeloltPelda = peldak.filter((m) => !m.ervenyes && !m.visszavont);
+  const osszesJelolt = peldak.filter((m) => !m.ervenyes && !m.visszavont);
+  const hatokorok = Array.from(new Set(osszesJelolt.map((m) => m.hatokor))).sort();
+  const jeloltPelda = szuro ? osszesJelolt.filter((m) => m.hatokor === szuro) : osszesJelolt;
+  const kijeloltDb = jeloltPelda.filter((m) => kijelolt.has(m.id)).length;
+  const mindKijelolve = jeloltPelda.length > 0 && kijeloltDb === jeloltPelda.length;
   const jovahagyottPelda = peldak.filter((m) => m.ervenyes && !m.visszavont);
 
   const gomb =
@@ -105,14 +158,70 @@ export function AdminTudastarKezelo({
       {uzenet && <div className="rounded-[var(--radius)] bg-bg-success px-3 py-2 text-[13px] text-text-success">{uzenet}</div>}
 
       <Szekcio
-        cim={`Jóváhagyásra váró példák (${jeloltPelda.length})`}
-        leiras="A megfigyelésből (projektkódok, utókövetés) és a javításokból született példák. Jóváhagyás után az ügynök ezekből tanul a hasonló eseteknél."
+        cim={`Jóváhagyásra váró példák (${osszesJelolt.length})`}
+        leiras="A megfigyelésből (projektkódok, utókövetés) és a javításokból született példák. Jóváhagyás után az ügynök ezekből tanul a hasonló eseteknél. Többet is kipipálhatsz — de csak azt hagyd jóvá, amit át is néztél."
       >
+        {osszesJelolt.length > 0 && (
+          <li className="flex flex-wrap items-center gap-2 pb-1">
+            <select
+              value={szuro}
+              onChange={(e) => {
+                setSzuro(e.target.value);
+                setKijelolt(new Set());
+              }}
+              className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary"
+            >
+              <option value="">Minden típus ({osszesJelolt.length})</option>
+              {hatokorok.map((h) => (
+                <option key={h} value={h}>
+                  {TIPUS_CIMKE[h] ?? h} ({osszesJelolt.filter((m) => m.hatokor === h).length})
+                </option>
+              ))}
+            </select>
+            {canEdit && (
+              <>
+                <label className="flex items-center gap-1.5 text-[12px] text-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={mindKijelolve}
+                    onChange={() =>
+                      setKijelolt(mindKijelolve ? new Set() : new Set(jeloltPelda.slice(0, 500).map((m) => m.id)))
+                    }
+                  />
+                  A listázottak kijelölése
+                </label>
+                <button
+                  type="button"
+                  disabled={kijeloltDb === 0 || folyamatban === "tomeges"}
+                  onClick={() => tomeges("jovahagy")}
+                  className={`${gomb} bg-bg-success text-text-success`}
+                >
+                  Kijelöltek jóváhagyása ({kijeloltDb})
+                </button>
+                <button
+                  type="button"
+                  disabled={kijeloltDb === 0 || folyamatban === "tomeges"}
+                  onClick={() => tomeges("elvet")}
+                  className={`${gomb} border border-border text-text-secondary hover:bg-surface-4`}
+                >
+                  Kijelöltek elvetése ({kijeloltDb})
+                </button>
+              </>
+            )}
+          </li>
+        )}
         {jeloltPelda.length === 0 ? (
           <Ures szoveg="Nincs jóváhagyásra váró példa. Futtasd a Tanulás oldalon a „Megfigyelés” lépést." />
         ) : (
           jeloltPelda.map((m) => (
-            <Sor key={m.id} cimke={TIPUS_CIMKE[m.hatokor] ?? m.hatokor} szoveg={m.tartalom} forras={m.forras}>
+            <Sor
+              key={m.id}
+              cimke={TIPUS_CIMKE[m.hatokor] ?? m.hatokor}
+              szoveg={m.tartalom}
+              forras={m.forras}
+              kijelolve={canEdit ? kijelolt.has(m.id) : undefined}
+              onKijel={() => kijel(m.id)}
+            >
               {canEdit && (
                 <>
                   <button
@@ -226,15 +335,22 @@ function Sor({
   cimke,
   szoveg,
   forras,
+  kijelolve,
+  onKijel,
   children,
 }: {
   cimke: string;
   szoveg: string;
   forras?: string | null;
+  kijelolve?: boolean;
+  onKijel?: () => void;
   children?: React.ReactNode;
 }) {
   return (
     <li className="flex flex-wrap items-start justify-between gap-3 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5">
+      {kijelolve !== undefined && (
+        <input type="checkbox" checked={kijelolve} onChange={onKijel} className="mt-1" aria-label="Kijelölés" />
+      )}
       <div className="min-w-0 flex-1">
         <span className="mb-0.5 inline-block rounded-[var(--radius)] bg-surface-2 px-2 py-0.5 text-[11px] text-text-secondary">
           {cimke}

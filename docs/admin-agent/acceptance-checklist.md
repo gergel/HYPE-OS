@@ -27,7 +27,7 @@ Frontend: `tsc + eslint + next build` zöld. Migráció le/fel próbálva.
 | 13 | Emberi javításból correction + JELÖLT szabály, nem csendben aktív | ✅ | `test_admin_agent_learning` (küszöb, pending, nem aktív) |
 | 14 | Sikertelen eval / hiányos minta megakadályozza a szintlépést/kiadást | ✅ | `test_...learning` (safety-eval); release/rule aktiválás eval-hez kötve (HTTP 409) |
 | 15 | Memóriaforrás törlése/visszavonása után a modell nem kapja meg | ✅ | `test_...learning` (retrieval csak érvényes/nem visszavont/jóváhagyott) |
-| 16 | Hibás modell-JSON / 429 / timeout / kerettúllépés → kontrollált hiba | 🟡 | Executor fail-closed hibakezelés + FAILED rekord; a modell-adapter (LLM) determinista helyettesítve, valós modellhívás explicit konfigurációval jön |
+| 16 | Hibás modell-JSON / 429 / timeout / kerettúllépés → kontrollált hiba | ✅ | `test_admin_agent_llm` (séma-ellenőrzés, egy javító újrapróba, 429/timeout → ModellHiba, kulcs nélkül „beállítás szükséges"); modellhiba esetén a determinista út fut. Valós Gemini-hívás: nem ellenőrzött (nincs kulcs a tesztkörnyezetben) |
 | 17 | Projektkód több projektet fog össze; kiadások pontosan egyszer összesülnek | ✅ | Az ágens a MEGLÉVŐ `szamla_erkeztetes.jovahagy`-on át rögzít (nem duplikál); invariáns a pénzügyi szolgáltatásban |
 | 18 | Több deviza/áfa/kerekítés/stornó helyesen vagy emberhez | 🟡 | A meglévő érkeztető kezeli ezeket; az ágens a `felosztas`/összeg-egyezést a szolgáltatásra bízza, hiánynál NEEDS_INFO |
 | 19 | TIG/szerződés nem lesz auto-elfogadott/aláírt; banki utalás nem futtatható | ✅ | Nincs banki végrehajtó eszköz (`test_admin_agent_email`); TIG/szerződés = előkészítés, emberi véglegesítés |
@@ -39,9 +39,12 @@ Frontend: `tsc + eslint + next build` zöld. Migráció le/fel próbálva.
 
 ## Ami külön, explicit konfigurációval fut / hátra
 
-- **Valós modellhívás (Gemini):** jelenleg a számla-elemzés a meglévő érkeztető-
-  javaslatból determinista módon származik (nem hamis LLM-siker). Az LLM-alapú
-  tervező bekötése explicit `GEMINI_API_KEY` mellett, elkülönített teszttel.
+- **Valós modellhívás (Gemini):** a kód bekötve (számla-átnézés, TIG/szerződés-
+  kiegészítés, e-mail-tervezet), hamis adapterrel tesztelve
+  (`test_admin_agent_llm`, `test_admin_agent_tervezo`). A VALÓS hívás nem
+  ellenőrzött: `GEMINI_API_KEY` beállítása után egy számla „Admin-Ágens" gombbal
+  és egy TIG-feladat „Tervezet készítése" gombbal ellenőrizendő — „Az ügynök
+  értékelése" dobozban a modell neve látszik.
 - **Gmail-küldés éles teszt:** csak beállított OAuth mellett; enélkül az eszköz
   „Beállítás szükséges" állapotban, tiltva marad (nem hamis siker).
 - **Teljes worker crash-recovery és külső-timeout reconcile** end-to-end teszt.

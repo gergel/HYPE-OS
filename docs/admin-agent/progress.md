@@ -174,6 +174,49 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   kör (kapcsoló → megfigyelés → példa jóváhagyás → projektkód-feladat → 2 javítás →
   szabály-jelölt → eval 7/7 → élesítés) valós adaton lefutott, utána visszaállítva.
 
+### J. Modell-alapú elemzés és tervezetek (Gemini) + Tudástár-javítás ✅ (valós Gemini-hívás: ⚠️ nem ellenőrzött)
+- **Tudástár-javítás:** a megfigyelt példák tévesen „projektkód nélkül" címkét
+  kaptak — a TIG/szerződés a projekten át (`project_id → projects.project_code_id`)
+  kötődik a projektkódhoz. Új szöveg pl.: „HYPE26-0001 · Projekt — TIG: Név,
+  állapot: Kiküldve, nettó 135 000 Ft." A meglévő jelöltek szövege a „Kezdeti
+  visszatekintés (90 nap)" újrafuttatásakor frissül (jóváhagyott példa új
+  rekord-verziónál újra jelölt lesz).
+- **Modelladapter** (`app/admin_agent/llm.py`): Gemini (`google-genai`),
+  strukturált JSON-séma, egy javító újrapróba, utána fail-closed; 429/timeout →
+  kontrollált hiba; kulcs nélkül „beállítás szükséges" (a determinista út fut).
+  A bemenet (e-mail, PDF, példák) ADAT, nem utasítás — a rendszerprompt rögzíti.
+- **Számla-átnézés a megtanult tudással** (`pipeline_szamla._modell_atnezes`):
+  a modell üres célt/projektkódot CSAK létező értékkel tölthet; ha eltér az
+  érkeztetőtől → konfliktus, emberhez (needs_info, bizonytalanság 1.0); összeget
+  NEM írhat át; kitalált projektkód elutasítva. Új elemzés leváltja a korábbi
+  javaslatot (a függő jóváhagyás lejár).
+- **TIG/szerződés tervezet** (`app/admin_agent/tervezo.py`): a projektkód
+  projektjein a MEGLÉVŐ `get_pending_for_project` adja a teendőket; előtöltés
+  forrással (mentett piszkozat / eseti szerződés / partnertörzs / projekt dátumai /
+  tételek összege); a modell csak a hiányzó mezőt egészíti ki; összeg csak IGAZOLT
+  forrásból (±0,5 Ft), különben elutasítva + figyelmeztetés. Új R1 eszközök:
+  `tig.piszkozat_mentes`, `szerzodes.piszkozat_mentes` — a meglévő piszkozat-
+  mentésen át, egy SAVEPOINT-ban, „Készítés alatt" állapotba; PDF és kiküldés
+  NINCS (emberi lépés marad).
+- **E-mail tervezet:** címzett CSAK igazolt címből (megrendelő kontaktjai, függő
+  felek); ismeretlen cím elutasítva; címzett nélkül a javaslat hiányos.
+- **Szerkesztés = tanulás:** `POST /tasks/{id}/proposals/{pid}/edit` — a
+  különbség mezőszintű javításként rögzül, új javaslat készül (a régi leváltva).
+- **Tudástár tömeges kijelölés:** típusszűrő + pipálás + „Kijelöltek
+  jóváhagyása/elvetése" (`POST /memory/bulk`, max 500; nincs „mindent jóváhagy").
+- **Felület:** a feladat oldalán „Tervezet készítése (ügynök)", „Az ügynök
+  értékelése" doboz (összefoglaló, bizonytalanság, konfliktus, hiányok,
+  figyelmeztetések, felhasznált tudás), tételtábla forrásokkal, „Javaslat
+  szerkesztése".
+- **Tesztek:** `test_admin_agent_llm.py` (9), `test_admin_agent_tervezo.py` (12,
+  köztük valós piszkozat-mentés dev-adaton, rollback — ez egy valós hibát fogott:
+  a szerződés állapotmezője `szerzodes_allapota`). Teljes backend: 114 zöld,
+  1 kihagyott; tsc + eslint + `next build` zöld. Élő API-kör (rollback-ben):
+  tervezet → szerkesztés → L1 jóváhagyás → 5 szerződés-piszkozat „Készítés
+  alatt"; alapállásban (modul KI / L0) blokkolt, jóváhagyás sem keletkezik.
+- **Nem ellenőrzött:** a valós Gemini-hívás (a sandboxban nincs `GEMINI_API_KEY`) —
+  hamis adapterrel tesztelve; élesben a kulcs beállítása után ellenőrizendő.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).
@@ -182,7 +225,7 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
 
 ## Módosított/új fájlok (kivonat)
 - Backend: `app/admin_agent/{enums,policy,settings_service,pipeline_szamla,
-  executor,proposals,integrations,learning,memory,evals}.py`,
+  executor,proposals,integrations,learning,memory,evals,observer,llm,tervezo}.py`,
   `app/models/admin_agent.py`, két migráció (`g0a7x18u5v49`, `h1b8y29v6w50`),
   `app/api/routes/admin_agent.py`, `app/workers/admin_agent_tasks.py`,
   `tests/test_admin_agent_{policy,szamla_pipeline,executor,email,learning}.py`.
@@ -192,7 +235,6 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
 - Dokumentáció: `docs/admin-agent/*`, `backend/.env.example`.
 
 ## Következő lépés
-- H fázis maradéka: valós Gemini-elemzés bekötése (explicit konfig + teszt),
-  worker crash-recovery / reconcile end-to-end, frontend E2E, teljes backend
-  regressziós suite. Az éles autonómia továbbra is emberi engedélyhez + méréshez
+- Valós Gemini-hívás ellenőrzése éles kulccsal (a kód kész, hamis adapterrel
+  tesztelt); worker crash-recovery / reconcile end-to-end; frontend E2E. Az éles autonómia továbbra is emberi engedélyhez + méréshez
   kötött.

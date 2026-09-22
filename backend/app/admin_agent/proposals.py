@@ -50,6 +50,25 @@ def _hash(payload: dict) -> str:
     ).hexdigest()
 
 
+def _korabbiak_levaltasa(db: Session, task: AdminTask) -> int:
+    """Az új javaslat LEVÁLTJA a feladat korábbi, még fel nem használt javaslatait,
+    és a hozzájuk tartozó függő jóváhagyások lejárnak — régi jóváhagyással így nem
+    lehet az új (vagy a régi) tartalmat végrehajtani."""
+    from sqlalchemy import select
+
+    regiek = db.scalars(
+        select(ActionProposal).where(
+            ActionProposal.task_id == task.id,
+            ActionProposal.allapot.in_([ProposalState.READY.value, ProposalState.DRAFT.value]),
+        )
+    ).all()
+    for p in regiek:
+        p.allapot = ProposalState.SUPERSEDED.value
+        for a in db.scalars(select(Approval).where(Approval.proposal_id == p.id, Approval.allapot == ApprovalState.PENDING.value)).all():
+            a.allapot = ApprovalState.EXPIRED.value
+    return len(regiek)
+
+
 def keszit_javaslat(
     db: Session,
     task: AdminTask,
@@ -57,20 +76,29 @@ def keszit_javaslat(
     eszkoz: str,
     payload: dict,
     trigger: str = "manual",
+    provider: str = "kezi",
+    modell: str | None = None,
+    extra_ellenorzesek: dict | None = None,
+    extra_hianyok: list[str] | None = None,
 ) -> tuple[ActionProposal, DecisionResult]:
     """Javaslat készítése egy feladathoz egy regisztrált eszközre. A hívó
     commitál. Determinista validálás + integráció-ellenőrzés → a hiányos vagy
     nem konfigurált javaslat DRAFT és nem hajtható végre; a valid javaslat READY,
-    és a policy szerint (NEEDS_APPROVAL) jóváhagyás is készül hozzá."""
+    és a policy szerint (NEEDS_APPROVAL) jóváhagyás is készül hozzá. A feladat
+    korábbi, fel nem használt javaslatait leváltja."""
     spec = TOOL_REGISTRY.get(eszkoz)
     if spec is None:
         raise JavaslatHiba(f"Ismeretlen/nem regisztrált eszköz: {eszkoz}")
+
+    _korabbiak_levaltasa(db, task)
 
     run = AgentRun(
         task_id=task.id,
         trigger=trigger,
         allapot=AgentRunState.RUNNING.value,
-        provider="kezi",  # a payloadot ember/kliens adta; az érték-hozzáadás a guard-lánc
+        # "kezi": a payloadot ember adta; "gemini"/"szabaly": az ügynök készítette.
+        provider=provider,
+        modell=modell,
         kezdes_at=_most(),
         terv={"lepes": "keszit_javaslat", "eszkoz": eszkoz},
     )
@@ -78,6 +106,7 @@ def keszit_javaslat(
     db.flush()
 
     hianyok = list(spec.validate(payload)) if spec.validate else []
+    hianyok.extend(extra_hianyok or [])
     elerheto, indok = eszkoz_elerheto(eszkoz)
     if not elerheto and indok:
         hianyok.append(indok)  # „Beállítás szükséges" — a javaslat nem véglegesíthető
@@ -90,6 +119,8 @@ def keszit_javaslat(
         # A megtanult, jóváhagyott tudás, amit ehhez a javaslathoz felhasznál.
         "kapcsolodo_tudas": kapcsolodo_tudas(db, hatokor=spec.tipus, partner=task.partner_nev or partner),
     }
+    if extra_ellenorzesek:
+        ellenorzesek.update(extra_ellenorzesek)
 
     db.add(
         ActionTrace(

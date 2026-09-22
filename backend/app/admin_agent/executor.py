@@ -185,6 +185,31 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
         validate=_validate_email_valasz,
     ),
 }
+
+# TIG / szerződés PISZKOZAT mentése a meglévő úton ("Készítés alatt", PDF és
+# kiküldés NÉLKÜL). R1: belső, visszafordítható írás — a kiküldés/aláírás
+# továbbra is emberi lépés a meglévő felületen.
+from app.admin_agent.tervezo import piszkozat_mentes_futtato, validate_tervezet  # noqa: E402
+
+TOOL_REGISTRY["tig.piszkozat_mentes"] = ToolSpec(
+    eszkoz="tig.piszkozat_mentes",
+    cim="TIG-piszkozat(ok) mentése (kiküldés nélkül)",
+    risk=RiskClass.R1,
+    tipus="tig",
+    run=piszkozat_mentes_futtato("tig"),
+    side_effect=True,
+    validate=validate_tervezet("tig"),
+)
+TOOL_REGISTRY["szerzodes.piszkozat_mentes"] = ToolSpec(
+    eszkoz="szerzodes.piszkozat_mentes",
+    cim="Szerződés-piszkozat(ok) mentése (kiküldés nélkül)",
+    risk=RiskClass.R1,
+    tipus="szerzodes",
+    run=piszkozat_mentes_futtato("szerzodes"),
+    side_effect=True,
+    validate=validate_tervezet("szerzodes"),
+)
+
 # FONTOS: banki utalást INDÍTÓ/aláíró/végrehajtó eszköz SZÁNDÉKOSAN NINCS
 # regisztrálva (master prompt 10./8.: R3, tiltott). Az utalás-ELŐKÉSZÍTÉS csak
 # belső export-tervezetet állít elő (a javaslat payloadja), külső hatás nélkül.

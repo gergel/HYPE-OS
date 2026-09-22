@@ -14,22 +14,28 @@ const KORREKCIO_TIPUSOK: { ertek: string; cimke: string }[] = [
   { ertek: "uj_uzleti_adat", cimke: "Új üzleti adat (nem hiba)" },
 ];
 
-/** ADMIN-ÁGENS — feladat-műveletek (kliens): javítás rögzítése + újraelemzés +
- * megszakítás. A javítás a tanulás nyersanyaga (→ `aa_corrections`), amit a
- * háttér-tanuló dolgoz fel; NEM aktivál szabályt magától. */
+/** Azok a feladattípusok, amelyekhez az ügynök tervezetet tud készíteni. */
+const TERVEZHETO = new Set(["tig", "szerzodes", "email"]);
+
+/** ADMIN-ÁGENS — feladat-műveletek (kliens): tervezet készítése, javítás
+ * rögzítése, újraelemzés, megszakítás. A javítás a tanulás nyersanyaga
+ * (→ `aa_corrections`), amit a háttér-tanuló dolgoz fel; NEM aktivál szabályt. */
+
 export function AdminTaskActions({
   taskId,
+  tipus,
   proposals,
   canEdit,
 }: {
   taskId: number;
+  tipus: string;
   proposals: ProposalRef[];
   canEdit: boolean;
 }) {
   const router = useRouter();
   const [nyitva, setNyitva] = useState(false);
   const [proposalId, setProposalId] = useState<string>(proposals[0] ? String(proposals[0].id) : "");
-  const [tipus, setTipus] = useState("tenyszeru_hiba");
+  const [korrTipus, setKorrTipus] = useState("tenyszeru_hiba");
   const [magyarazat, setMagyarazat] = useState("");
   const [mezok, setMezok] = useState<{ mezo: string; ertek: string }[]>([{ mezo: "", ertek: "" }]);
   const [hiba, setHiba] = useState<string | null>(null);
@@ -66,7 +72,7 @@ export function AdminTaskActions({
         body: JSON.stringify({
           proposal_id: proposalId ? Number(proposalId) : null,
           javitott,
-          tipus,
+          tipus: korrTipus,
           magyarazat: magyarazat.trim() || null,
         }),
       });
@@ -78,6 +84,34 @@ export function AdminTaskActions({
       setMezok([{ mezo: "", ertek: "" }]);
       setMagyarazat("");
       setNyitva(false);
+      router.refresh();
+    } finally {
+      setFolyamatban(false);
+    }
+  }
+
+  async function tervezet() {
+    setHiba(null);
+    setUzenet(null);
+    setFolyamatban(true);
+    try {
+      const res = await authFetch(`/api/v1/admin-agent/tasks/${taskId}/tervezet`, { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as { detail?: string; modell?: string; allapot?: string };
+      if (!res.ok) {
+        setHiba(typeof d.detail === "string" ? d.detail : "A tervezet elkészítése nem sikerült.");
+        return;
+      }
+      const modellSzoveg =
+        d.modell === "kesz"
+          ? "Az ügynök a megtanult példák alapján kiegészítette."
+          : d.modell === "beallitas_szukseges"
+            ? "A modell nincs beállítva (GEMINI_API_KEY) — a rendszer ismert adataiból előtöltöttem."
+            : d.modell === "hiba"
+              ? "A modell most nem válaszolt — a rendszer ismert adataiból előtöltöttem."
+              : "";
+      setUzenet(
+        `Tervezet elkészült${d.allapot === "draft" ? " (hiányos — a „Javaslat szerkesztése” gombbal pótold)" : ""}. ${modellSzoveg}`,
+      );
       router.refresh();
     } finally {
       setFolyamatban(false);
@@ -109,6 +143,16 @@ export function AdminTaskActions({
       )}
 
       <div className="mb-3 flex flex-wrap gap-2">
+        {TERVEZHETO.has(tipus) && (
+          <button
+            type="button"
+            disabled={folyamatban}
+            onClick={tervezet}
+            className="rounded-[var(--radius)] bg-bg-success px-3 py-1.5 text-[13px] font-medium text-text-success disabled:opacity-50"
+          >
+            {folyamatban ? "Dolgozom…" : "Tervezet készítése (ügynök)"}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setNyitva((v) => !v)}
@@ -116,14 +160,16 @@ export function AdminTaskActions({
         >
           {nyitva ? "Mégse" : "Javítás rögzítése"}
         </button>
-        <button
-          type="button"
-          disabled={folyamatban}
-          onClick={() => muvelet("analyze")}
-          className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[13px] font-medium text-text-primary hover:bg-surface-4 disabled:opacity-50"
-        >
-          Újraelemzés
-        </button>
+        {tipus === "szamla" && (
+          <button
+            type="button"
+            disabled={folyamatban}
+            onClick={() => muvelet("analyze")}
+            className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[13px] font-medium text-text-primary hover:bg-surface-4 disabled:opacity-50"
+          >
+            Újraelemzés
+          </button>
+        )}
         <button
           type="button"
           disabled={folyamatban}
@@ -160,8 +206,8 @@ export function AdminTaskActions({
             <label className="flex flex-col gap-1 text-[12px] text-text-muted">
               Javítás típusa
               <select
-                value={tipus}
-                onChange={(e) => setTipus(e.target.value)}
+                value={korrTipus}
+                onChange={(e) => setKorrTipus(e.target.value)}
                 className="rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary"
               >
                 {KORREKCIO_TIPUSOK.map((k) => (

@@ -587,6 +587,121 @@ def task_propose(
     }
 
 
+@router.post("/tasks/{task_id}/tervezet")
+def task_tervezet(
+    task_id: int,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Az ügynök elkészíti a feladat tervezetét: TIG / szerződés esetén a
+    projektkód függő feleinek piszkozatait (előtöltés + modell-kiegészítés a
+    megtanult tudásból, összeg csak igazolt forrásból), e-mailnél a levél
+    tervezetét (címzett csak igazolt címből). Javaslatként jön létre; végrehajtás
+    a jóváhagyás után, a guard-láncon — a kiküldés továbbra is emberi lépés."""
+    from app.admin_agent.tervezo import TervezetHiba, email_tervezet, tig_szerzodes_tervezet
+
+    t = db.get(AdminTask, task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="A feladat nem található.")
+    try:
+        if t.tipus in ("tig", "szerzodes"):
+            ter = tig_szerzodes_tervezet(db, t, user)
+            extra_hiany: list[str] = []
+        elif t.tipus == "email":
+            ter = email_tervezet(db, t, user)
+            extra_hiany = ter.get("extra_hianyok", [])
+        else:
+            raise TervezetHiba("Tervezet TIG, szerződés és e-mail feladathoz készíthető.")
+        modell = ter.get("modell") or {}
+        proposal, dontes = keszit_javaslat(
+            db,
+            t,
+            eszkoz=ter["eszkoz"],
+            payload=ter["payload"],
+            trigger="tervezet",
+            provider="gemini" if modell.get("hasznalt") else "szabaly",
+            modell=modell.get("modell"),
+            extra_ellenorzesek={"modell": modell, "kapcsolodo_tudas": ter.get("kapcsolodo_tudas")},
+            extra_hianyok=extra_hiany,
+        )
+    except (TervezetHiba, JavaslatHiba) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return {
+        "proposal_id": proposal.id,
+        "allapot": proposal.allapot,
+        "decision": dontes.decision.value,
+        "reason": dontes.reason,
+        "modell": modell.get("allapot"),
+        "task": _task_sor(t),
+    }
+
+
+def _lapos(ertek: object, elotag: str = "") -> dict:
+    """Beágyazott payload lapítása mezőszintű diffhez (pl. tetelek[0].mezok.netto_osszeg)."""
+    ki: dict = {}
+    if isinstance(ertek, dict):
+        for k, v in ertek.items():
+            ki.update(_lapos(v, f"{elotag}.{k}" if elotag else str(k)))
+    elif isinstance(ertek, list) and ertek and all(isinstance(x, dict) for x in ertek):
+        for i, v in enumerate(ertek):
+            ki.update(_lapos(v, f"{elotag}[{i}]"))
+    else:
+        ki[elotag] = ertek
+    return ki
+
+
+class ProposalEditIn(BaseModel):
+    payload: dict
+    magyarazat: str | None = None
+    #: tenyszeru_hiba (alap) / stilus / egyszeri_kivetel / uj_uzleti_adat / besorolando
+    tipus: str | None = None
+
+
+@router.post("/tasks/{task_id}/proposals/{proposal_id}/edit")
+def javaslat_szerkesztes(
+    task_id: int,
+    proposal_id: int,
+    body: ProposalEditIn,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A javaslat emberi szerkesztése: a különbség JAVÍTÁSKÉNT rögzül (tanulási
+    jel), és új javaslat készül ugyanarra az eszközre — a régi leváltódik, a függő
+    jóváhagyása lejár. Az új javaslat ugyanazon a validáláson és policy-n megy át."""
+    t = db.get(AdminTask, task_id)
+    p = db.get(ActionProposal, proposal_id)
+    if t is None or p is None or p.task_id != task_id:
+        raise HTTPException(status_code=404, detail="A javaslat nem ehhez a feladathoz tartozik.")
+    if p.allapot not in ("ready", "draft"):
+        raise HTTPException(status_code=409, detail="Ez a javaslat már nem szerkeszthető (leváltva vagy felhasználva).")
+    regi = _lapos(p.payload)
+    uj = _lapos(body.payload)
+    diff = {k: {"elozo": regi.get(k), "uj": uj.get(k)} for k in set(regi) | set(uj) if regi.get(k) != uj.get(k)}
+    if not diff:
+        raise HTTPException(status_code=400, detail="Nincs változás a javaslatban.")
+    tipus = body.tipus if body.tipus in {c.value for c in CorrectionType} else CorrectionType.TENYSZERU_HIBA.value
+    db.add(
+        Correction(
+            task_id=task_id,
+            proposal_id=p.id,
+            eredeti=dict(p.payload),
+            javitott=body.payload,
+            mezo_diff=diff,
+            javito_employee_id=user.id,
+            magyarazat=(body.magyarazat or "").strip() or None,
+            tipus=tipus,
+            feldolgozas_allapot="uj",
+        )
+    )
+    try:
+        uj_p, dontes = keszit_javaslat(db, t, eszkoz=p.eszkoz, payload=body.payload, trigger="emberi_szerkesztes")
+    except JavaslatHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return {"proposal_id": uj_p.id, "allapot": uj_p.allapot, "decision": dontes.decision.value, "valtozott_mezok": sorted(diff)}
+
+
 @router.get("/tools")
 def eszkoz_katalogus(
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
@@ -1047,6 +1162,44 @@ class MemoryPatchIn(BaseModel):
     ervenyes: bool | None = None
     #: True = elvetés/visszavonás (többé nem használható).
     visszavont: bool | None = None
+
+
+class MemoryBulkIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+    #: "jovahagy" vagy "elvet"
+    muvelet: str
+
+
+@router.post("/memory/bulk")
+def memory_tomeges(
+    body: MemoryBulkIn,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """KIJELÖLT példák jóváhagyása / elvetése (a felhasználó egyenként pipálja
+    ki őket — nincs „mindent jóváhagy”). A jóváhagyás tudás-aktiválási joghoz
+    (delete) kötött; elvetett példa nem hagyható jóvá."""
+    if body.muvelet not in ("jovahagy", "elvet"):
+        raise HTTPException(status_code=400, detail="Ismeretlen művelet.")
+    if body.muvelet == "jovahagy":
+        check_page_action(db, user, PAGE, "delete")
+    sorok = db.scalars(select(MemoryChunk).where(MemoryChunk.id.in_(body.ids))).all()
+    kesz = 0
+    kihagyott = 0
+    for m in sorok:
+        if body.muvelet == "jovahagy":
+            if m.visszavont:
+                kihagyott += 1
+                continue
+            m.ervenyes = True
+            m.minosites = "jovahagyott"
+        else:
+            m.visszavont = True
+            m.ervenyes = False
+            m.minosites = "elvetett"
+        kesz += 1
+    db.commit()
+    return {"modositva": kesz, "kihagyva": kihagyott}
 
 
 @router.patch("/memory/{memory_id}")
