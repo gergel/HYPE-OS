@@ -402,7 +402,12 @@ export function QuickCreateForm({
             />
           ) : f.type === "select" ? (
             <KeresosSelect
-              value={values[f.name] || null}
+              // ?? (nem ||): az ÜRES STRING is érvényes választás lehet - pl. az
+              // ÁFA legördülő "Nincs ÁFA" opciója value="" (a felhasználó
+              // kérése: ilyenkor a "Nincs ÁFA" felirat látsszon, ne a
+              // "Válassz…" placeholder). Ha nincs ilyen opció, a KeresosSelect
+              // úgyis a placeholderre esik vissza.
+              value={values[f.name] ?? null}
               options={[
                 ...(f.options ?? []).map((opt) => ({ value: String(opt.value), label: opt.label })),
                 // A most felvett emberek: a szerver-lista frissüléséig innen
