@@ -567,8 +567,22 @@ export async function getAdminTasks(query = ""): Promise<{ osszesen: number; ele
   return apiGet<{ osszesen: number; elemek: AdminTaskSor[] }>(`/api/v1/admin-agent/tasks${query}`);
 }
 
-export async function getAdminAgentApprovals(): Promise<{ elemek: Record<string, unknown>[] } | null> {
-  return apiGet<{ elemek: Record<string, unknown>[] }>("/api/v1/admin-agent/approvals");
+export type AdminApprovalSor = {
+  approval_id: number;
+  proposal_id: number;
+  task_id: number;
+  tipus: string;
+  eszkoz: string;
+  kockazat: string | null;
+  cim: string;
+  payload: Record<string, unknown>;
+  payload_hash: string;
+  partner_nev: string | null;
+  letrehozva: string | null;
+};
+
+export async function getAdminAgentApprovals(): Promise<{ elemek: AdminApprovalSor[] } | null> {
+  return apiGet<{ elemek: AdminApprovalSor[] }>("/api/v1/admin-agent/approvals");
 }
 
 export async function getAdminAgentSettings(): Promise<AdminAgentSettings | null> {

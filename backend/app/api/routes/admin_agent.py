@@ -384,6 +384,9 @@ def approvals_lista(
                 "eszkoz": p.eszkoz,
                 "kockazat": p.kockazat,
                 "cim": t.cim,
+                "payload": p.payload,
+                "payload_hash": p.payload_hash,
+                "partner_nev": t.partner_nev,
                 "letrehozva": a.created_at.isoformat() if a.created_at else None,
             }
             for (a, p, t) in sorok

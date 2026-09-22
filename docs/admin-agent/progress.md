@@ -89,10 +89,15 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
 - Tesztek: `tests/test_admin_agent_executor.py` (5 elfogadási teszt: alapállás
   blokkol + 0 Expense, vészleállítás, eltérő hash, consumed jóváhagyás,
   idempotencia). 15 admin-ágens teszt zöld; HTTP-smoke minden új végponton OK.
+- **Jóváhagyások felület bekötve:** a Jóváhagyások aloldal a valós listát
+  mutatja (javaslat payload + kockázat), „Jóváhagyás és végrehajtás" / „Elutasítás"
+  gombokkal; a jóváhagyás a payload-hash-hez kötött (409 eltérésnél), a
+  visszajelzés jelzi, ha a végrehajtás blokkolt (alapállás). HTTP-teszt:
+  lista→hash, rossz hash→409, helyes→végrehajtva (valós Expense), újra→409.
 - **Hátra:** háttér-ingesztálás (Celery beat, az érkeztető inboxából),
   `execution_unknown` egyeztetés (reconcile) a külső időtúllépésre, LLM-alapú
   elemzés (jelenleg determinista leképezés a meglévő javaslatból), a finance-oldali
-  „árnyék-elemzés" gomb, és a Jóváhagyások felület gombjainak bekötése.
+  „árnyék-elemzés" gomb, és a detail-nézet művelet-gombjai (analyze/cancel/correction).
 ### E. E-mail, TIG, szerződés, utalás-előkészítés (korlátokkal) ⛔
 ### F. Memória, szabálykezelés, háttér-tanuló, eval, verziózott kiadások ⛔
 ### G. Trust-szintek, L2 (szűk), dashboard, értesítések, üzemeltetés ⛔
