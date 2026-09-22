@@ -176,3 +176,5 @@ api_router.include_router(realtime_router)
 api_router.include_router(search_router)
 from app.api.routes.portal_exports import router as portal_exports_router
 api_router.include_router(portal_exports_router)
+from app.api.routes.admin_agent import router as admin_agent_router
+api_router.include_router(admin_agent_router)

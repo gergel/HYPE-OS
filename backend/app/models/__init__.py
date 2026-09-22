@@ -1,6 +1,19 @@
 """Minden SQLAlchemy modell importja - ez adja a Base.metadata-t az Alembic autogenerate-hez."""
 
 from app.core.database import Base
+from app.models.admin_agent import (
+    ActionExecution,
+    ActionProposal,
+    ActionTrace,
+    AdminAgentSetting,
+    AdminTask,
+    AgentRun,
+    Approval,
+    Correction,
+    PlaybookRule,
+    SourceEvent,
+    TrustPolicy,
+)
 from app.models.agi_todo import AgiTodoItem
 from app.models.belsos_idoszak import BelsosIdoszak
 from app.models.callsheet import Callsheet
