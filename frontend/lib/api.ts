@@ -566,6 +566,7 @@ export type AdminAgentSettings = {
   kill_switch_indok: string | null;
   engedett_forrasok: Record<string, unknown>;
   limitek: Record<string, unknown>;
+  integraciok?: AdminAgentIntegracio[];
 };
 
 export async function getAdminAgentOverview(): Promise<AdminAgentOverview | null> {
@@ -639,6 +640,78 @@ export type AdminTaskTimeline = {
 
 export async function getAdminTaskTimeline(taskId: number): Promise<AdminTaskTimeline | null> {
   return apiGet<AdminTaskTimeline>(`/api/v1/admin-agent/tasks/${taskId}/timeline`);
+}
+
+export type AdminRule = {
+  id: number;
+  hatokor: string;
+  cim: string;
+  tartalom: string;
+  prioritas: number;
+  verzio: number;
+  allapot: string;
+  forras_esetek: Record<string, unknown> | null;
+  letrehozva: string | null;
+};
+
+export type AdminLearningRun = {
+  id: number;
+  trigger: string;
+  allapot: string;
+  feldolgozott_korrekciok: number;
+  uj_szabaly_jeloltek: number;
+  uj_pelda_jeloltek: number;
+  sop_keresek: number;
+  veg_at: string | null;
+};
+
+export type AdminEvalRun = {
+  id: number;
+  allapot: string;
+  osszes: number;
+  sikeres: number;
+  kritikus_hiba: number;
+  atment: boolean;
+  arany: number | null;
+  veg_at: string | null;
+};
+
+export type AdminAuditSor = {
+  id: number;
+  task_id: number | null;
+  szereplo: string;
+  muvelet: string;
+  eroforras: string | null;
+  eredmeny: string | null;
+  tortent_at: string | null;
+};
+
+export type AdminTrustPolicy = {
+  id: number;
+  tipus: string;
+  altipus: string | null;
+  szint: string;
+  auto_engedett_altipusok: string[];
+};
+
+export async function getAdminRules(query = ""): Promise<{ elemek: AdminRule[] } | null> {
+  return apiGet<{ elemek: AdminRule[] }>(`/api/v1/admin-agent/rules${query}`);
+}
+
+export async function getAdminLearningRuns(): Promise<{ elemek: AdminLearningRun[] } | null> {
+  return apiGet<{ elemek: AdminLearningRun[] }>("/api/v1/admin-agent/learning-runs");
+}
+
+export async function getAdminEvaluations(): Promise<{ elemek: AdminEvalRun[] } | null> {
+  return apiGet<{ elemek: AdminEvalRun[] }>("/api/v1/admin-agent/evaluations");
+}
+
+export async function getAdminAudit(query = ""): Promise<{ osszesen: number; elemek: AdminAuditSor[] } | null> {
+  return apiGet<{ osszesen: number; elemek: AdminAuditSor[] }>(`/api/v1/admin-agent/audit${query}`);
+}
+
+export async function getAdminTrustPolicies(): Promise<{ elemek: AdminTrustPolicy[] } | null> {
+  return apiGet<{ elemek: AdminTrustPolicy[] }>("/api/v1/admin-agent/trust-policies");
 }
 
 export async function getDashboardSummary(): Promise<DashboardSummary | null> {

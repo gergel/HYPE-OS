@@ -7,6 +7,9 @@ const FULEK = [
   { href: "/admin-agent", label: "Áttekintés" },
   { href: "/admin-agent/munkasor", label: "Munkasor" },
   { href: "/admin-agent/jovahagyasok", label: "Jóváhagyások" },
+  { href: "/admin-agent/tudastar", label: "Tudástár" },
+  { href: "/admin-agent/tanulas", label: "Tanulás és minőség" },
+  { href: "/admin-agent/naplo", label: "Napló" },
   { href: "/admin-agent/beallitasok", label: "Beállítások" },
 ];
 
@@ -16,7 +19,7 @@ export function AdminAgentTabs() {
   return (
     <nav className="-mx-1 mb-4 flex gap-1 overflow-x-auto px-1">
       {FULEK.map((f) => {
-        const aktiv = path === f.href;
+        const aktiv = f.href === "/admin-agent" ? path === f.href : path === f.href || path.startsWith(f.href + "/");
         return (
           <Link
             key={f.href}

@@ -3,7 +3,10 @@
 import {
   BadgeCheck,
   Banknote,
+  BookOpen,
   Bot,
+  GraduationCap,
+  ScrollText,
   Calculator,
   Car,
   CheckSquare,
@@ -89,6 +92,9 @@ const ICONS: Record<string, LucideIcon> = {
   Bot,
   ListTodo,
   SlidersHorizontal,
+  BookOpen,
+  GraduationCap,
+  ScrollText,
 };
 
 /** A nav-elemek listája - a Sidebar (asztali oldalsáv) ÉS a MobileNav

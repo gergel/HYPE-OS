@@ -22,7 +22,7 @@ from app.admin_agent.enums import (
     TaskState,
     TaskType,
 )
-from app.admin_agent.enums import RuleState
+from app.admin_agent.enums import RuleState, TrustLevel
 from app.admin_agent.evals import run_eval, safety_esetek_magveto
 from app.admin_agent.executor import TOOL_REGISTRY, execute_approved
 from app.admin_agent.integrations import integracio_allapotok
@@ -46,6 +46,7 @@ from app.models.admin_agent import (
     LearningRun,
     MemoryChunk,
     PlaybookRule,
+    TrustPolicy,
 )
 from app.models.bejovo_szamla import BejovoSzamla
 from app.models.employee import Employee
@@ -961,6 +962,64 @@ def release_aktivalas(
     r.aktivalva_at = _most()
     db.commit()
     return {"id": r.id, "allapot": r.allapot, "eval_run_id": r.eval_run_id}
+
+
+# ── Bizalmi szintek (trust policies) ──────────────────────────────────────────
+
+
+@router.get("/trust-policies")
+def trust_policies_lista(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    sorok = db.scalars(select(TrustPolicy).order_by(TrustPolicy.tipus, TrustPolicy.altipus)).all()
+    return {
+        "elemek": [
+            {
+                "id": p.id,
+                "tipus": p.tipus,
+                "altipus": p.altipus,
+                "szint": p.szint,
+                "auto_engedett_altipusok": p.auto_engedett_altipusok or [],
+            }
+            for p in sorok
+        ]
+    }
+
+
+class TrustPatchIn(BaseModel):
+    szint: str | None = None
+    auto_engedett_altipusok: list[str] | None = None
+
+
+@router.patch("/trust-policies/{policy_id}")
+def trust_policy_modositas(
+    policy_id: int,
+    payload: TrustPatchIn,
+    db: Session = Depends(get_db),
+    # A bizalmi szint módosítása a legerősebb (delete = trust_change) joghoz
+    # kötött. A MODELL a saját trust policyját nem módosíthatja — csak jogosult
+    # ember, API-n át. R3-tiltást a magasabb szint sem old fel (policy engine).
+    user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    p = db.get(TrustPolicy, policy_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="A bizalmi szabály nem található.")
+    if payload.szint is not None:
+        if payload.szint not in {t.value for t in TrustLevel}:
+            raise HTTPException(status_code=400, detail="Ismeretlen bizalmi szint.")
+        p.szint = payload.szint
+    if payload.auto_engedett_altipusok is not None:
+        p.auto_engedett_altipusok = payload.auto_engedett_altipusok
+    p.modositotta_employee_id = user.id
+    db.commit()
+    return {
+        "id": p.id,
+        "tipus": p.tipus,
+        "altipus": p.altipus,
+        "szint": p.szint,
+        "auto_engedett_altipusok": p.auto_engedett_altipusok or [],
+    }
 
 
 # ── Napló (audit) ─────────────────────────────────────────────────────────────
