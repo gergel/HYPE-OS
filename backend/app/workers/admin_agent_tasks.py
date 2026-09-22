@@ -35,20 +35,46 @@ celery_app.conf.beat_schedule = {
         # Hétfő 03:00.
         "schedule": crontab(hour=3, minute=0, day_of_week=1),
     },
+    "admin-agent-observer": {
+        "task": "admin_agent.observer",
+        # Félóránként — csak ha a „Tanulás és megfigyelés" forrás be van kapcsolva.
+        "schedule": crontab(minute="*/30"),
+    },
 }
+
+
+@celery_app.task(name="admin_agent.observer")
+def observer_task() -> dict | None:
+    """A projektkód/utókövetés megfigyelő ütemezett futása. Csak bekapcsolt
+    forrással dolgozik (a megfigyeles modul maga ellenőrzi)."""
+    from app.admin_agent.observer import megfigyeles
+
+    db = SessionLocal()
+    try:
+        eredmeny = megfigyeles(db)
+        db.commit()
+        return eredmeny
+    except Exception:
+        db.rollback()
+        logger.exception("Admin-Ágens megfigyelő futás sikertelen.")
+        raise
+    finally:
+        db.close()
 
 
 @celery_app.task(name="admin_agent.nightly_distill")
 def nightly_distill_task() -> dict | None:
-    """A háttér-tanuló futtatása. Csak akkor dolgozik, ha a modul engedélyezett
-    (a biztonságos alapállásban kihagyja — nem gyűjt/alakít semmit)."""
+    """A háttér-tanuló futtatása. Akkor dolgozik, ha a tanulás engedélyezett: a
+    modul be van kapcsolva VAGY a „Tanulás és megfigyelés" forrás aktív (L0-ban
+    is tanulhat — a tanulás csak jelölteket készít, mellékhatás nélkül)."""
     from app.admin_agent.learning import distill
+    from app.admin_agent.observer import engedelyezve
     from app.admin_agent.settings_service import get_settings
 
     db = SessionLocal()
     try:
-        if not get_settings(db).module_enabled:
-            logger.debug("Admin-Ágens distill kihagyva: a modul ki van kapcsolva.")
+        if not (get_settings(db).module_enabled or engedelyezve(db)):
+            logger.debug("Admin-Ágens distill kihagyva: sem a modul, sem a tanulási forrás nincs bekapcsolva.")
             return None
         lr = distill(db, trigger="nightly")
         db.commit()

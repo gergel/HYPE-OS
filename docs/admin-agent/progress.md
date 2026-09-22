@@ -151,6 +151,29 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   worker crash-recovery + külső-timeout reconcile end-to-end, frontend E2E
   (Playwright), teljes backend regressziós suite futtatása.
 
+### I. Teljes kattinthatóság + projektkód/utókövetés megfigyelés ✅
+- **Kattintható belépési pontok:** Beérkező számlák sorain „Admin-Ágens" gomb
+  (árnyék-elemzés → feladat); a feladat oldalán „Javítás rögzítése" űrlap +
+  „Újraelemzés" / „Megszakítás"; a Tanulás oldalon Megfigyelés / Kezdeti
+  visszatekintés / Háttér-tanuló / Értékelés gombok; a Tudástárban példák
+  jóváhagyása/elvetése és szabályok élesítése/visszavonása.
+- **Projektkód + Utókövetés bekötés:** „Admin-Ágens teendők" blokk a
+  projektkód-adatlapon és az utókövetés projektkód-oldalán (feladatlista +
+  új szerződés/TIG/számla/utalás feladat a projektkódhoz kötve; jog nélkül rejtve).
+- **Megfigyelő** (`app/admin_agent/observer.py`): a szerződések, TIG-ek, belsős
+  TIG-ek és kiadások változásait olvassa (`updated_at`), NEM akaszkodik a mentési
+  útvonalra. Idempotens forrásesemény + emberi nyomvonal; a lezárt emberi
+  munkából példa-JELÖLT (ervenyes=False). Engedélyhez kötött (`engedett_forrasok.
+  megfigyeles`, Beállítások kapcsoló); ütemezve félóránként; a kézi indítás
+  jogosult döntés. Első futás korlátozott visszatekintéssel.
+- API: `POST /observations`, `GET /memory`, `PATCH /memory/{id}` (jóváhagyás =
+  delete jog; elvetett nem hagyható jóvá); overview `tanulas` blokk.
+- Az éjszakai tanuló mostantól akkor is fut, ha a tanulási forrás be van
+  kapcsolva (L0-ban is tanul, mellékhatás nélkül).
+- Tesztek: `test_admin_agent_observer.py` (4). Backend: 92 zöld. Élő E2E: a teljes
+  kör (kapcsoló → megfigyelés → példa jóváhagyás → projektkód-feladat → 2 javítás →
+  szabály-jelölt → eval 7/7 → élesítés) valós adaton lefutott, utána visszaállítva.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

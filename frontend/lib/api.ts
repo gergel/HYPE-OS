@@ -552,6 +552,15 @@ export type AdminAgentOverview = {
   varakozo_jovahagyas: number;
   allapot_bontas: Record<string, number>;
   integraciok?: AdminAgentIntegracio[];
+  tanulas?: {
+    megfigyeles_bekapcsolva: boolean;
+    megfigyelt_lepesek: number;
+    javitasok: number;
+    szabaly_jeloltek: number;
+    aktiv_szabalyok: number;
+    pelda_jeloltek: number;
+    jovahagyott_peldak: number;
+  };
   ember_nelkul_lezart: number | null;
   elfogadasi_arany: number | null;
   kritikus_hibak: number | null;
@@ -712,6 +721,21 @@ export async function getAdminAudit(query = ""): Promise<{ osszesen: number; ele
 
 export async function getAdminTrustPolicies(): Promise<{ elemek: AdminTrustPolicy[] } | null> {
   return apiGet<{ elemek: AdminTrustPolicy[] }>("/api/v1/admin-agent/trust-policies");
+}
+
+export type AdminMemory = {
+  id: number;
+  hatokor: string;
+  tartalom: string;
+  forras: string | null;
+  minosites: string;
+  ervenyes: boolean;
+  visszavont: boolean;
+  letrehozva: string | null;
+};
+
+export async function getAdminMemory(): Promise<{ elemek: AdminMemory[] } | null> {
+  return apiGet<{ elemek: AdminMemory[] }>("/api/v1/admin-agent/memory?limit=200");
 }
 
 export async function getDashboardSummary(): Promise<DashboardSummary | null> {

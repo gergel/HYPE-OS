@@ -248,13 +248,29 @@ export function BejovoSzamlak({
                   </td>
                   <td className="py-2 pr-3 text-text-secondary">{huDatum((b.email_beerkezes ?? b.created_at).slice(0, 10))}</td>
                   <td className="py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setNyitottId(b.id)}
-                      className="rounded-[var(--radius)] border border-border bg-bg-accent px-2.5 py-1 text-[12px] text-text-accent hover:opacity-90"
-                    >
-                      Megnyitás
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        title="Admin-Ágens árnyék-elemzés indítása erre a számlára (nem hajt végre semmit)"
+                        onClick={async () => {
+                          const res = await authFetch(`/api/v1/admin-agent/tasks/from-bejovo/${b.id}`, { method: "POST" });
+                          if (res.ok) {
+                            const t = (await res.json()) as { id: number };
+                            router.push(`/admin-agent/munkasor/${t.id}`);
+                          }
+                        }}
+                        className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12px] text-text-secondary hover:bg-surface-3"
+                      >
+                        Admin-Ágens
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNyitottId(b.id)}
+                        className="rounded-[var(--radius)] border border-border bg-bg-accent px-2.5 py-1 text-[12px] text-text-accent hover:opacity-90"
+                      >
+                        Megnyitás
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

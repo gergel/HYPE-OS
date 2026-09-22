@@ -41,6 +41,34 @@ A bal oldali menüben az **Admin-Ágens** csoport. Hét aloldal:
    műveletet. A gomb pontosan azt csinálja, amit ír.
 4. **Elutasítás.** Ha nem jó, elutasítod — ez is tanulási jel.
 
+## Így indítod el a tanulást — és így látod, hogy tanul
+
+Minden lépés kattintással megy:
+
+1. **Kapcsold be a tanulást:** Admin-Ágens → **Beállítások** → „**Tanulás és
+   megfigyelés (L0)**" kapcsoló. Ettől az ügynök félóránként megnézi a
+   projektkódokon és az utókövetésben történt szerződés-, TIG- és
+   számla/kiadás-lépéseket, és éjszaka tanul. Csak olvas — üzleti adatot nem módosít.
+2. **Első betanítás:** Admin-Ágens → **Tanulás és minőség** → „**Kezdeti
+   visszatekintés (90 nap)**". Ez feldolgozza a közelmúlt munkáját.
+3. **Nézd meg, mit tanult:** Admin-Ágens → **Tudástár** → „Jóváhagyásra váró
+   példák". Minden lezárt emberi munkából (pl. kiküldött TIG, kifizetett számla)
+   egy példa-jelölt lesz. Ami jó: **Jóváhagyás**; ami nem: **Elvetés**.
+4. **Adj neki munkát:**
+   - Beérkező számlák (Pénzügyek) → sor végén **„Admin-Ágens"** gomb → az ügynök
+     elemzi, és megnyílik a feladat.
+   - Projektkód-adatlap vagy Utókövetés → projektkód → **„Admin-Ágens teendők"**
+     blokk → **„+ Feladat"** (szerződés / TIG / számla / utalás).
+5. **Javítsd, ha téved:** a feladat oldalán **„Javítás rögzítése"** → írd be a
+   helyes értéket. Ez a legerősebb tanulási jel.
+6. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
+   megvárod az éjszakai futást). Két hasonló javításból **szabály-jelölt** lesz.
+7. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →
+   szabály-jelölt → **„Élesítés"**.
+8. **Kövesd:** az **Áttekintés** „Tanulás állapota" kártyáján látod a számokat
+   (megfigyelt lépés, javítás, példa-/szabály-jelölt, jóváhagyott példa, aktív
+   szabály), a **Napló**ban pedig minden egyes megfigyelést.
+
 ## Bizalmi szintek (Beállítások)
 
 Feladattípusonként állítható, mennyi önállóságot engedsz:

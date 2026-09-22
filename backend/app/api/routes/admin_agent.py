@@ -27,6 +27,7 @@ from app.admin_agent.evals import run_eval, safety_esetek_magveto
 from app.admin_agent.executor import TOOL_REGISTRY, execute_approved
 from app.admin_agent.integrations import integracio_allapotok
 from app.admin_agent.learning import distill
+from app.admin_agent.observer import megfigyeles
 from app.admin_agent.pipeline_szamla import arnyek_elemzes
 from app.admin_agent.proposals import JavaslatHiba, keszit_javaslat
 from app.admin_agent.settings_service import get_settings
@@ -46,6 +47,7 @@ from app.models.admin_agent import (
     LearningRun,
     MemoryChunk,
     PlaybookRule,
+    SourceEvent,
     TrustPolicy,
 )
 from app.models.bejovo_szamla import BejovoSzamla
@@ -131,6 +133,34 @@ def overview(
         "varakozo_jovahagyas": varakozo_jovahagyas,
         "allapot_bontas": allapot_bontas,
         "integraciok": integracio_allapotok(),
+        # A tanulás látható állapota: mennyit figyelt meg / tanult / mi vár jóváhagyásra.
+        "tanulas": {
+            "megfigyeles_bekapcsolva": bool((s.engedett_forrasok or {}).get("megfigyeles")),
+            "megfigyelt_lepesek": db.scalar(
+                select(func.count(SourceEvent.id)).where(SourceEvent.forras == "megfigyeles")
+            ) or 0,
+            "javitasok": db.scalar(select(func.count(Correction.id))) or 0,
+            "szabaly_jeloltek": db.scalar(
+                select(func.count(PlaybookRule.id)).where(PlaybookRule.allapot.in_(["pending", "draft"]))
+            ) or 0,
+            "aktiv_szabalyok": db.scalar(
+                select(func.count(PlaybookRule.id)).where(PlaybookRule.allapot == "active")
+            ) or 0,
+            "pelda_jeloltek": db.scalar(
+                select(func.count(MemoryChunk.id)).where(
+                    MemoryChunk.tanulasi_halmaz == "jovahagyott",
+                    MemoryChunk.ervenyes.is_(False),
+                    MemoryChunk.visszavont.is_(False),
+                )
+            ) or 0,
+            "jovahagyott_peldak": db.scalar(
+                select(func.count(MemoryChunk.id)).where(
+                    MemoryChunk.tanulasi_halmaz == "jovahagyott",
+                    MemoryChunk.ervenyes.is_(True),
+                    MemoryChunk.visszavont.is_(False),
+                )
+            ) or 0,
+        },
         # Mért mutatók: még nincs elég adat (a mérőrendszer a Tanulás/eval fázis).
         "ember_nelkul_lezart": None,
         "elfogadasi_arany": None,
@@ -962,6 +992,91 @@ def release_aktivalas(
     r.aktivalva_at = _most()
     db.commit()
     return {"id": r.id, "allapot": r.allapot, "eval_run_id": r.eval_run_id}
+
+
+# ── Megfigyelés (projektkód / utókövetés) + tudás-példák (memória) ────────────
+
+
+@router.post("/observations")
+def megfigyeles_inditas(
+    visszatekintes_nap: int | None = Query(default=None, ge=1, le=365),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A megfigyelő kézi futtatása: a projektkódokon / az utókövetésben nemrég
+    változott szerződéseket, TIG-eket és kiadásokat rögzíti megfigyelésként, a
+    lezárt emberi munkából példa-JELÖLTET készít. Csak olvas + az ágens saját
+    tábláiba ír; üzleti rekord nem változik. A kézi indítás jogosult felhasználó
+    kifejezett döntése, ezért a forrás-kapcsolótól függetlenül fut (az ütemezett
+    futás viszont csak bekapcsolt forrással)."""
+    eredmeny = megfigyeles(db, visszatekintes_nap=visszatekintes_nap, kenyszeritett=True)
+    db.commit()
+    return eredmeny
+
+
+def _memory_sor(m: MemoryChunk) -> dict:
+    return {
+        "id": m.id,
+        "hatokor": m.hatokor,
+        "tartalom": m.tartalom,
+        "forras": m.forras,
+        "minosites": m.minosites,
+        "ervenyes": m.ervenyes,
+        "visszavont": m.visszavont,
+        "letrehozva": m.created_at.isoformat() if m.created_at else None,
+    }
+
+
+@router.get("/memory")
+def memory_lista(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+    hatokor: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    """A tudás-példák (jelöltek + jóváhagyottak). A holdout sosem jelenik meg itt."""
+    felt = [MemoryChunk.tanulasi_halmaz == "jovahagyott"]
+    if hatokor:
+        felt.append(MemoryChunk.hatokor == hatokor)
+    sorok = db.scalars(select(MemoryChunk).where(*felt).order_by(MemoryChunk.id.desc()).limit(limit)).all()
+    return {"elemek": [_memory_sor(m) for m in sorok]}
+
+
+class MemoryPatchIn(BaseModel):
+    #: True = jóváhagyás (éles döntésben használható), False = vissza jelöltre.
+    ervenyes: bool | None = None
+    #: True = elvetés/visszavonás (többé nem használható).
+    visszavont: bool | None = None
+
+
+@router.patch("/memory/{memory_id}")
+def memory_modositas(
+    memory_id: int,
+    payload: MemoryPatchIn,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Példa jóváhagyása / elvetése. A JÓVÁHAGYÁS (éles döntésbe engedés) a
+    tudás-aktiválási joghoz (delete) kötött — egy példa nem kerülhet észrevétlenül
+    az éles döntési környezetbe."""
+    m = db.get(MemoryChunk, memory_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="A példa nem található.")
+    if payload.ervenyes is True:
+        check_page_action(db, user, PAGE, "delete")
+        if m.visszavont:
+            raise HTTPException(status_code=409, detail="Elvetett példa nem hagyható jóvá.")
+        m.ervenyes = True
+        m.minosites = "jovahagyott"
+    elif payload.ervenyes is False:
+        m.ervenyes = False
+        m.minosites = "jelolt"
+    if payload.visszavont is True:
+        m.visszavont = True
+        m.ervenyes = False
+        m.minosites = "elvetett"
+    db.commit()
+    return _memory_sor(m)
 
 
 # ── Bizalmi szintek (trust policies) ──────────────────────────────────────────

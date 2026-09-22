@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { AdminAgentTeendok } from "@/components/admin-agent/AdminAgentTeendok";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { ElkeszultSzerzodesek } from "@/components/ElkeszultSzerzodesek";
@@ -109,6 +110,11 @@ export default async function UtokovetesProjektkodDetailPage({ params }: { param
             canEdit={canEdit}
           />
         </Card>
+
+        {/* ADMIN-ÁGENS TEENDŐK - az utókövetésben itt keletkeznek a szerződések,
+            TIG-ek és számlás lépések; az ügynök ezekhez is ad feladatot és tanul
+            belőlük (self-hiding, ha nincs /admin-agent jog). */}
+        <AdminAgentTeendok projectCodeId={projectCodeId} />
       </div>
     </div>
   );

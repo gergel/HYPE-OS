@@ -7,6 +7,7 @@ import { KeretKotes } from "@/components/megrendeloi/KeretKotes";
 import { MegrendeloiPapirKezelo } from "@/components/megrendeloi/MegrendeloiPapirKezelo";
 import { MegrendeloiSzamla } from "@/components/megrendeloi/MegrendeloiSzamla";
 import { PapirKapcsolok } from "@/components/megrendeloi/PapirKapcsolok";
+import { AdminAgentTeendok } from "@/components/admin-agent/AdminAgentTeendok";
 import { CommentsSection } from "@/components/projektkod/CommentsSection";
 import { AlvallalkozoiPapirokAttekintes } from "@/components/projektkod/AlvallalkozoiPapirokAttekintes";
 import { ProjektkodBontasTablak } from "@/components/projektkod/ProjektkodBontasTablak";
@@ -492,6 +493,11 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
             <p className="text-[13px] text-text-secondary">A bontás most nem érhető el.</p>
           </Card>
         ))}
+
+        {/* ADMIN-ÁGENS TEENDŐK - a projektkódhoz kötött szerződés/TIG/számla/utalás
+            feladatok; itt is ellátja és tanulja az adminmunkát (self-hiding, ha
+            nincs /admin-agent jog). */}
+        <AdminAgentTeendok projectCodeId={projectCodeId} />
 
         {/* HOZZÁSZÓLÁSOK - ugyanaz a chat-szerű minta, mint az Utómunkánál. */}
         <Card title="Hozzászólások">

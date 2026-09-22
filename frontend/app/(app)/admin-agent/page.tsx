@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
@@ -47,6 +48,24 @@ export default async function AdminAgentAttekintesPage() {
               />
               <StatKartya cimke="Jóváhagyásra vár" ertek={overview.varakozo_jovahagyas} />
             </div>
+
+            {overview.tanulas && (
+              <Card title="Tanulás állapota" className="mb-6">
+                <p className="mb-3 text-[12px] text-text-muted">
+                  {overview.tanulas.megfigyeles_bekapcsolva
+                    ? "A megfigyelés be van kapcsolva: az ügynök félóránként figyeli a projektkódokat és az utókövetést, éjszaka tanul."
+                    : "A megfigyelés ki van kapcsolva (Beállítások → „Tanulás és megfigyelés”). Kézzel a Tanulás és minőség oldalról indítható."}
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                  <TanulasSzam cimke="Megfigyelt lépés" ertek={overview.tanulas.megfigyelt_lepesek} href="/admin-agent/naplo" />
+                  <TanulasSzam cimke="Emberi javítás" ertek={overview.tanulas.javitasok} href="/admin-agent/tanulas" />
+                  <TanulasSzam cimke="Példa-jelölt" ertek={overview.tanulas.pelda_jeloltek} href="/admin-agent/tudastar" kiemel />
+                  <TanulasSzam cimke="Szabály-jelölt" ertek={overview.tanulas.szabaly_jeloltek} href="/admin-agent/tudastar" kiemel />
+                  <TanulasSzam cimke="Jóváhagyott példa" ertek={overview.tanulas.jovahagyott_peldak} href="/admin-agent/tudastar" />
+                  <TanulasSzam cimke="Aktív szabály" ertek={overview.tanulas.aktiv_szabalyok} href="/admin-agent/tudastar" />
+                </div>
+              </Card>
+            )}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Card title="Feladatok állapot szerint">
@@ -135,6 +154,30 @@ function StatKartya({
         {ertek}
       </p>
     </div>
+  );
+}
+
+function TanulasSzam({
+  cimke,
+  ertek,
+  href,
+  kiemel,
+}: {
+  cimke: string;
+  ertek: number;
+  href: string;
+  kiemel?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className="rounded-[var(--radius)] bg-surface-3 px-3 py-2.5 transition-colors hover:bg-surface-4"
+    >
+      <p className="text-[11.5px] text-text-muted">{cimke}</p>
+      <p className={`mt-0.5 text-[18px] font-semibold ${kiemel && ertek > 0 ? "text-text-accent" : "text-text-primary"}`}>
+        {ertek}
+      </p>
+    </Link>
   );
 }
 

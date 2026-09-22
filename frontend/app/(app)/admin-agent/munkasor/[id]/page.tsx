@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
+import { AdminTaskActions } from "@/components/admin-agent/AdminTaskActions";
 import { ALLAPOT_CIMKE, TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
 import { getAdminTaskTimeline, getMyPagePermissions } from "@/lib/api";
 
@@ -23,6 +24,7 @@ export default async function AdminAgentTaskReszletPage({
   const [{ id }, pagePermissions] = await Promise.all([params, getMyPagePermissions()]);
   const canView = pagePermissions === null || !!pagePermissions[PAGE]?.includes("view");
   if (!canView) redirect("/nincs-jogosultsag");
+  const canEdit = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
 
   const taskId = Number(id);
   const adat = Number.isFinite(taskId) ? await getAdminTaskTimeline(taskId) : null;
@@ -56,6 +58,14 @@ export default async function AdminAgentTaskReszletPage({
                   {adat.task.blokkolo_ok}
                 </div>
               )}
+            </Card>
+
+            <Card title="Műveletek">
+              <AdminTaskActions
+                taskId={adat.task.id}
+                proposals={adat.proposals.map((p) => ({ id: p.id, eszkoz: p.eszkoz }))}
+                canEdit={canEdit}
+              />
             </Card>
 
             <Card title="Javaslatok">

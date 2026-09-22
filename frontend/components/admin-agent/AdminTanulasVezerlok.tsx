@@ -15,18 +15,26 @@ export function AdminTanulasVezerlok({ canRun }: { canRun: boolean }) {
   const [hiba, setHiba] = useState<string | null>(null);
   const [folyamatban, setFolyamatban] = useState<string | null>(null);
 
-  async function futtat(mit: "learning-runs" | "evaluations") {
+  async function futtat(mit: "observations" | "observations-backfill" | "learning-runs" | "evaluations") {
     setUzenet(null);
     setHiba(null);
     setFolyamatban(mit);
     try {
-      const res = await authFetch(`/api/v1/admin-agent/${mit}`, { method: "POST" });
+      const ut =
+        mit === "observations-backfill"
+          ? "/api/v1/admin-agent/observations?visszatekintes_nap=90"
+          : `/api/v1/admin-agent/${mit}`;
+      const res = await authFetch(ut, { method: "POST" });
       if (!res.ok) {
         setHiba("A futtatás nem sikerült.");
         return;
       }
       const d = (await res.json()) as Record<string, unknown>;
-      if (mit === "learning-runs") {
+      if (mit === "observations" || mit === "observations-backfill") {
+        setUzenet(
+          `Megfigyelés kész: ${d.uj_megfigyeles} új lépés rögzítve a projektkódokról/utókövetésből, ${d.uj_pelda} új példa-jelölt (Tudástár → Példák), ${d.frissitett_pelda} frissítve.`,
+        );
+      } else if (mit === "learning-runs") {
         setUzenet(
           `Tanulás kész: ${d.feldolgozott_korrekciok} javítás feldolgozva, ${d.uj_szabaly_jeloltek} szabály-jelölt, ${d.sop_keresek} SOP-kérés.`,
         );
@@ -55,10 +63,27 @@ export function AdminTanulasVezerlok({ canRun }: { canRun: boolean }) {
         <button
           type="button"
           disabled={folyamatban !== null}
+          onClick={() => futtat("observations")}
+          className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[13px] font-medium text-text-accent disabled:opacity-50"
+        >
+          {folyamatban === "observations" ? "Megfigyelés fut…" : "1. Megfigyelés (projektkód / utókövetés)"}
+        </button>
+        <button
+          type="button"
+          disabled={folyamatban !== null}
+          onClick={() => futtat("observations-backfill")}
+          title="Az elmúlt 90 nap változásait is feldolgozza (első betanításhoz)"
+          className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[13px] font-medium text-text-secondary hover:bg-surface-4 disabled:opacity-50"
+        >
+          {folyamatban === "observations-backfill" ? "Visszatekintés fut…" : "Kezdeti visszatekintés (90 nap)"}
+        </button>
+        <button
+          type="button"
+          disabled={folyamatban !== null}
           onClick={() => futtat("learning-runs")}
           className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[13px] font-medium text-text-primary hover:bg-surface-4 disabled:opacity-50"
         >
-          {folyamatban === "learning-runs" ? "Tanulás fut…" : "Háttér-tanuló futtatása"}
+          {folyamatban === "learning-runs" ? "Tanulás fut…" : "2. Háttér-tanuló (javításokból)"}
         </button>
         <button
           type="button"
@@ -66,7 +91,7 @@ export function AdminTanulasVezerlok({ canRun }: { canRun: boolean }) {
           onClick={() => futtat("evaluations")}
           className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[13px] font-medium text-text-primary hover:bg-surface-4 disabled:opacity-50"
         >
-          {folyamatban === "evaluations" ? "Értékelés fut…" : "Értékelés (eval) futtatása"}
+          {folyamatban === "evaluations" ? "Értékelés fut…" : "3. Értékelés (eval)"}
         </button>
       </div>
     </div>

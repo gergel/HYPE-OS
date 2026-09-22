@@ -25,7 +25,13 @@ export function AdminBeallitasok({
   const [folyamatban, setFolyamatban] = useState(false);
   const [leallitasIndok, setLeallitasIndok] = useState("");
 
-  async function mentSettings(valtozas: { module_enabled?: boolean; side_effects_enabled?: boolean }) {
+  const megfigyelesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.megfigyeles);
+
+  async function mentSettings(valtozas: {
+    module_enabled?: boolean;
+    side_effects_enabled?: boolean;
+    engedett_forrasok?: Record<string, unknown>;
+  }) {
     if (!canManage) return;
     setHiba(null);
     setFolyamatban(true);
@@ -83,6 +89,18 @@ export function AdminBeallitasok({
           Csak megtekintés — a kapcsolók módosításához külön jogosultság szükséges.
         </div>
       )}
+
+      <Kapcsolo
+        cim="Tanulás és megfigyelés (L0)"
+        leiras="Bekapcsolva az ügynök félóránként megnézi a projektkódokon és az utókövetésben történt szerződés-, TIG- és számla/kiadás-lépéseket, és éjszakánként tanul a javításokból. Csak olvas és jelölteket készít — üzleti rekordot nem módosít, ezért a modul kikapcsolt állapotában is biztonságos."
+        aktiv={megfigyelesBe}
+        tiltva={!canManage || folyamatban}
+        onValt={(v) =>
+          mentSettings({
+            engedett_forrasok: { ...((b.engedett_forrasok as Record<string, unknown>) ?? {}), megfigyeles: v },
+          })
+        }
+      />
 
       <Kapcsolo
         cim="Modul engedélyezése"
