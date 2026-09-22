@@ -38,6 +38,7 @@ from app.admin_agent.enums import (
     TaskState,
     TaskType,
 )
+from app.admin_agent.memory import kapcsolodo_tudas
 from app.admin_agent.policy import Decision
 from app.admin_agent.settings_service import resolve_decision
 from app.models.admin_agent import (
@@ -210,6 +211,9 @@ def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual"
 
     payload = _javaslat_payload(bejovo, cel_tipus)
     ellenorzesek = _ellenorzesek(bejovo, cel_tipus, payload)
+    # A megtanult, JÓVÁHAGYOTT tudás (aktív szabályok + hasonló esetek ugyanattól a
+    # partnertől) a javaslat mellé kerül — a feladat oldalán látszik, mit használt.
+    ellenorzesek["kapcsolodo_tudas"] = kapcsolodo_tudas(db, hatokor="szamla", partner=bejovo.kibocsato_nev)
 
     db.add(
         ActionTrace(

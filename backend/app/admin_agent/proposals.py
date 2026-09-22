@@ -24,6 +24,7 @@ from app.admin_agent.enums import (
 )
 from app.admin_agent.executor import TOOL_REGISTRY
 from app.admin_agent.integrations import eszkoz_elerheto
+from app.admin_agent.memory import kapcsolodo_tudas
 from app.admin_agent.policy import Decision, DecisionResult
 from app.admin_agent.settings_service import resolve_decision
 from app.models.admin_agent import (
@@ -80,7 +81,15 @@ def keszit_javaslat(
     elerheto, indok = eszkoz_elerheto(eszkoz)
     if not elerheto and indok:
         hianyok.append(indok)  # „Beállítás szükséges" — a javaslat nem véglegesíthető
-    ellenorzesek = {"rendben": not hianyok, "hianyok": hianyok, "integracio_ok": elerheto}
+    partner = payload.get("to")
+    partner = partner[0] if isinstance(partner, list) and partner else (partner if isinstance(partner, str) else task.partner_nev)
+    ellenorzesek = {
+        "rendben": not hianyok,
+        "hianyok": hianyok,
+        "integracio_ok": elerheto,
+        # A megtanult, jóváhagyott tudás, amit ehhez a javaslathoz felhasznál.
+        "kapcsolodo_tudas": kapcsolodo_tudas(db, hatokor=spec.tipus, partner=task.partner_nev or partner),
+    }
 
     db.add(
         ActionTrace(

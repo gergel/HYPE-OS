@@ -113,3 +113,34 @@ def test_pelda_jovahagyas_es_elvetes_api(db):
     finally:
         db.query(MemoryChunk).filter(MemoryChunk.id == mid).delete(synchronize_session=False)
         db.commit()
+
+
+def test_megtanult_tudas_visszahat_az_elemzesre(db):
+    """A JÓVÁHAGYOTT tudás (aktív szabály + ugyanazon partner jóváhagyott korábbi
+    esete) bekerül egy új elemzés mellé; a jóvá NEM hagyott jelölt és a más
+    partnerhez tartozó eset NEM (nincs irreleváns kitöltés). Rollback a végén."""
+    from app.admin_agent.pipeline_szamla import arnyek_elemzes
+    from app.models.admin_agent import ActionProposal, PlaybookRule
+    from app.models.bejovo_szamla import ALLAPOT_ELLENORZENDO, BejovoSzamla
+
+    db.add(PlaybookRule(hatokor="szamla", cim="Visszacsatolás teszt-szabály", tartalom="x", allapot="active", verzio=1))
+    db.add(MemoryChunk(hatokor="szamla", tartalom="HYPE-T: „Visszacsatolás Kft.” kifizetve", ervenyes=True, minosites="jovahagyott"))
+    db.add(MemoryChunk(hatokor="szamla", tartalom="HYPE-T: „Visszacsatolás Kft.” jelölt", ervenyes=False, minosites="jelolt"))
+    db.add(MemoryChunk(hatokor="szamla", tartalom="HYPE-T: „Másik Partner Bt.” kifizetve", ervenyes=True, minosites="jovahagyott"))
+    b = BejovoSzamla(
+        allapot=ALLAPOT_ELLENORZENDO, kibocsato_nev="Visszacsatolás Kft.", szamlaszam="VCS-1",
+        netto=1000, brutto=1270, penznem="HUF", cel_tipus="mukodesi", javaslat={"cel_tipus": "mukodesi"},
+    )
+    db.add(b)
+    db.flush()
+
+    t = arnyek_elemzes(db, b, trigger="manual")
+    db.flush()
+    p = db.scalars(select(ActionProposal).where(ActionProposal.task_id == t.id)).first()
+    tudas = p.ellenorzesek["kapcsolodo_tudas"]
+
+    assert any(s["cim"] == "Visszacsatolás teszt-szabály" for s in tudas["szabalyok"])
+    esetek = [e["tartalom"] for e in tudas["hasonlo_esetek"]]
+    assert any("Visszacsatolás Kft.” kifizetve" in e for e in esetek)
+    assert not any("jelölt" in e for e in esetek)  # nem jóváhagyott → nem kerül bele
+    assert not any("Másik Partner" in e for e in esetek)  # más partner → nem releváns

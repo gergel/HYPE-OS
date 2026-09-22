@@ -35,6 +35,23 @@ def pgvector_elerheto_e(_cache_key: int = 0) -> bool:
         db.close()
 
 
+def kapcsolodo_tudas(db: Session, *, hatokor: str, partner: str | None = None) -> dict:
+    """A javaslathoz csatolt, TÖMÖR tudás-hivatkozás: az adott feladattípus aktív
+    szabályai + a UGYANAZON partnerhez tartozó jóváhagyott korábbi esetek.
+
+    Hasonló eset csak akkor kerül mellé, ha a partner neve egyezik — kevés
+    releváns találatnál NEM egészítjük ki irreleváns példákkal (master prompt 11.)."""
+    r = retrieve(db, hatokor=hatokor, limit=5)
+    peldak: list[dict] = []
+    if partner and partner.strip():
+        peldak = retrieve(db, hatokor=hatokor, query=partner.strip(), limit=5)["peldak"]
+    return {
+        "modszer": r["modszer"],
+        "szabalyok": [{"id": s["id"], "cim": s["cim"], "tartalom": s["tartalom"]} for s in r["szabalyok"]],
+        "hasonlo_esetek": [{"id": p["id"], "tartalom": p["tartalom"]} for p in peldak],
+    }
+
+
 def retrieve(
     db: Session,
     *,

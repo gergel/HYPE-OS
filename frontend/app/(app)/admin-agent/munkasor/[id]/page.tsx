@@ -74,7 +74,17 @@ export default async function AdminAgentTaskReszletPage({
               ) : (
                 <ul className="flex flex-col gap-3">
                   {adat.proposals.map((p) => {
-                    const ell = (p.ellenorzesek ?? {}) as { rendben?: boolean; hianyok?: string[] };
+                    const ell = (p.ellenorzesek ?? {}) as {
+                      rendben?: boolean;
+                      hianyok?: string[];
+                      kapcsolodo_tudas?: {
+                        szabalyok?: { id: number; cim: string; tartalom: string }[];
+                        hasonlo_esetek?: { id: number; tartalom: string }[];
+                      };
+                    };
+                    const tudas = ell.kapcsolodo_tudas;
+                    const szabalyok = tudas?.szabalyok ?? [];
+                    const esetek = tudas?.hasonlo_esetek ?? [];
                     return (
                       <li key={p.id} className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -97,6 +107,29 @@ export default async function AdminAgentTaskReszletPage({
                               <li key={i}>{h}</li>
                             ))}
                           </ul>
+                        )}
+                        {tudas && (
+                          <div className="mb-2 rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-2">
+                            <p className="mb-1 text-[12px] font-medium text-text-primary">Felhasznált megtanult tudás</p>
+                            {szabalyok.length === 0 && esetek.length === 0 ? (
+                              <p className="text-[12px] text-text-muted">
+                                Ehhez a típushoz / partnerhez még nincs jóváhagyott szabály vagy korábbi eset (Tudástár).
+                              </p>
+                            ) : (
+                              <ul className="flex flex-col gap-1 text-[12px] text-text-secondary">
+                                {szabalyok.map((s) => (
+                                  <li key={`s${s.id}`}>
+                                    <span className="text-text-muted">Szabály:</span> {s.cim}
+                                  </li>
+                                ))}
+                                {esetek.map((e) => (
+                                  <li key={`e${e.id}`}>
+                                    <span className="text-text-muted">Hasonló eset:</span> {e.tartalom}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
                         )}
                         <pre className="overflow-x-auto rounded-[var(--radius)] bg-surface-2 p-2.5 text-[11.5px] text-text-secondary">
                           {JSON.stringify(p.payload, null, 2)}
