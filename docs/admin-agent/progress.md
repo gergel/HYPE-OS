@@ -72,10 +72,27 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
 - Tesztek: `tests/test_admin_agent_szamla_pipeline.py` (Postgres-integráció,
   self-skip DB nélkül) — bizonyítja: 0 Expense-változás, idempotencia,
   BLOCKED (árnyék), hiányos→NEEDS_INFO. Éles smoke + API-teszt OK.
-- **Hátra:** háttér-ingesztálás (Celery beat, az érkeztető inboxából automatikusan),
-  L1 (jóváhagyás-köteles) végrehajtó adapter a `jovahagy`-ra idempotencia-kulccsal
-  és fencing tokennel, korrekció-rögzítés a taskrészlet-nézetből, LLM-alapú
-  elemzés (jelenleg determinista leképezés a meglévő javaslatból).
+- **L1 végrehajtó réteg KÉSZ** (`app/admin_agent/executor.py`): a teljes
+  guard-lánc (master prompt 8.) — jóváhagyás-hash kötés, javaslat-frissesség,
+  regisztrált eszköz (`TOOL_REGISTRY`, szűk hatókör: nincs általános SQL/shell/
+  URL), a policy engine ÚJRA a végrehajtás pillanatában, idempotens lefoglalás
+  (javaslatonként egy `aa_action_executions` az egyedi kulccsal), fencing token,
+  majd a valós eszközhívás. A számla eszköz a MEGLÉVŐ `szamla_erkeztetes.jovahagy`-ot
+  hívja. Éles smoke: L1 + mellékhatás BE → jóváhagyás → 1 valós Expense; ismételt
+  végrehajtás → ugyanaz a rekord, továbbra is 1 Expense (idempotens, 7. forgatókönyv
+  valós mellékhatással); utána a biztonságos alapállás visszaállítva.
+- **Jóváhagyás + feladat-műveletek API:** `POST /approvals/{id}/approve`
+  (payload-hash kötés, 409 eltérésnél; a végrehajtást guardolt úton kísérli meg),
+  `/approvals/{id}/reject`, `/tasks/{id}/analyze` (újraelemzés), `/corrections`
+  (emberi javítás → `aa_corrections`, `uj` állapot, NEM aktivál szabályt),
+  `/assign`, `/cancel`, `GET /executions/{id}`.
+- Tesztek: `tests/test_admin_agent_executor.py` (5 elfogadási teszt: alapállás
+  blokkol + 0 Expense, vészleállítás, eltérő hash, consumed jóváhagyás,
+  idempotencia). 15 admin-ágens teszt zöld; HTTP-smoke minden új végponton OK.
+- **Hátra:** háttér-ingesztálás (Celery beat, az érkeztető inboxából),
+  `execution_unknown` egyeztetés (reconcile) a külső időtúllépésre, LLM-alapú
+  elemzés (jelenleg determinista leképezés a meglévő javaslatból), a finance-oldali
+  „árnyék-elemzés" gomb, és a Jóváhagyások felület gombjainak bekötése.
 ### E. E-mail, TIG, szerződés, utalás-előkészítés (korlátokkal) ⛔
 ### F. Memória, szabálykezelés, háttér-tanuló, eval, verziózott kiadások ⛔
 ### G. Trust-szintek, L2 (szűk), dashboard, értesítések, üzemeltetés ⛔

@@ -15,12 +15,27 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.admin_agent.enums import LEZART_TASK_STATES, TaskState, TaskType
+from app.admin_agent.enums import (
+    LEZART_TASK_STATES,
+    ApprovalState,
+    CorrectionType,
+    TaskState,
+    TaskType,
+)
+from app.admin_agent.executor import execute_approved
 from app.admin_agent.pipeline_szamla import arnyek_elemzes
 from app.admin_agent.settings_service import get_settings
 from app.core.database import get_db
 from app.core.security import Role, require_page_action
-from app.models.admin_agent import ActionProposal, ActionTrace, AdminTask, AgentRun, Approval
+from app.models.admin_agent import (
+    ActionExecution,
+    ActionProposal,
+    ActionTrace,
+    AdminTask,
+    AgentRun,
+    Approval,
+    Correction,
+)
 from app.models.bejovo_szamla import BejovoSzamla
 from app.models.employee import Employee
 
@@ -374,6 +389,229 @@ def approvals_lista(
             for (a, p, t) in sorok
         ]
     }
+
+
+def _execution_sor(ex: ActionExecution) -> dict:
+    return {
+        "id": ex.id,
+        "proposal_id": ex.proposal_id,
+        "approval_id": ex.approval_id,
+        "allapot": ex.allapot,
+        "probalkozasok": ex.probalkozasok,
+        "kulso_azonosito": ex.kulso_azonosito,
+        "eredmeny": ex.eredmeny,
+        "egyeztetes_allapot": ex.egyeztetes_allapot,
+    }
+
+
+class ApproveIn(BaseModel):
+    #: A kliens által látott javaslat-hash — a jóváhagyás EHHEZ kötődik. Ha a
+    #: javaslat időközben megváltozott, a kötés nem jön létre (409).
+    payload_hash: str
+    indok: str | None = None
+
+
+@router.post("/approvals/{approval_id}/approve")
+def approval_jovahagy(
+    approval_id: int,
+    payload: ApproveIn,
+    db: Session = Depends(get_db),
+    # A jóváhagyás a "edit" joghoz kötött; a finomabb pénzügyi/jogi jóváhagyási
+    # permissionök (financial_approve/legal_approve) a G fázisban jönnek.
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Egy javaslat jóváhagyása ÉS a guarded végrehajtás megkísérlése. A
+    jóváhagyás a beküldött payload-hash-hez kötődik; ha a javaslat időközben
+    megváltozott, 409. A tényleges mellékhatás csak akkor fut, ha a policy és a
+    globális kapcsolók engedik — egyébként a végrehajtási rekord `blocked`."""
+    a = db.get(Approval, approval_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="A jóváhagyás nem található.")
+    if a.allapot != ApprovalState.PENDING.value:
+        raise HTTPException(status_code=409, detail=f"A jóváhagyás már nem függőben van ({a.allapot}).")
+    proposal = db.get(ActionProposal, a.proposal_id)
+    if proposal is None:
+        raise HTTPException(status_code=404, detail="A javaslat nem található.")
+    if payload.payload_hash != proposal.payload_hash:
+        raise HTTPException(
+            status_code=409,
+            detail="A javaslat időközben megváltozott — töltsd újra és nézd át az új javaslatot.",
+        )
+    # Jóváhagyás rögzítése, majd a guard-láncon át a végrehajtás megkísérlése.
+    a.allapot = ApprovalState.APPROVED.value
+    a.donto_employee_id = user.id
+    a.indok = (payload.indok or "").strip() or None
+    a.dontes_at = _most()
+    db.flush()
+    ex = execute_approved(db, a, approver=user)
+    db.commit()
+    return {"approval_allapot": a.allapot, "execution": _execution_sor(ex)}
+
+
+class RejectIn(BaseModel):
+    indok: str | None = None
+
+
+@router.post("/approvals/{approval_id}/reject")
+def approval_elutasit(
+    approval_id: int,
+    payload: RejectIn,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Javaslat elutasítása. Az elutasítás is tanulási jel (a correction/tanuló
+    fázis dolgozza fel)."""
+    a = db.get(Approval, approval_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="A jóváhagyás nem található.")
+    if a.allapot != ApprovalState.PENDING.value:
+        raise HTTPException(status_code=409, detail=f"A jóváhagyás már nem függőben van ({a.allapot}).")
+    a.allapot = ApprovalState.REJECTED.value
+    a.donto_employee_id = user.id
+    a.indok = (payload.indok or "").strip() or None
+    a.dontes_at = _most()
+    proposal = db.get(ActionProposal, a.proposal_id)
+    if proposal is not None:
+        t = db.get(AdminTask, proposal.task_id)
+        if t is not None and t.allapot not in {x.value for x in LEZART_TASK_STATES}:
+            t.allapot = TaskState.REJECTED.value
+            t.befejezve_at = _most()
+            t.row_version += 1
+    db.commit()
+    return {"approval_allapot": a.allapot}
+
+
+# ── Feladat-műveletek (analyze / corrections / assign / cancel) ───────────────
+
+
+@router.post("/tasks/{task_id}/analyze")
+def task_ujraelemez(
+    task_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A feladat újraelemzése az ágenssel (L0-biztos: nincs mellékhatás). Jelenleg
+    a beérkező-számla forráshoz kötött feladatokra fut."""
+    t = db.get(AdminTask, task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="A feladat nem található.")
+    ref = (t.forras_referenciak or {}).get("bejovo_szamla_id")
+    if ref is None:
+        raise HTTPException(status_code=400, detail="Ehhez a feladathoz nincs újraelemezhető forrás.")
+    bejovo = db.get(BejovoSzamla, int(ref))
+    if bejovo is None:
+        raise HTTPException(status_code=404, detail="A forrás (beérkező számla) nem található.")
+    t = arnyek_elemzes(db, bejovo, trigger="manual_reanalyze")
+    db.commit()
+    return _task_sor(t)
+
+
+class CorrectionIn(BaseModel):
+    proposal_id: int | None = None
+    javitott: dict
+    magyarazat: str | None = None
+    #: besorolando / egyszeri_kivetel / stilus / tenyszeru_hiba / uj_uzleti_adat
+    tipus: str | None = None
+
+
+@router.post("/tasks/{task_id}/corrections")
+def task_correction(
+    task_id: int,
+    payload: CorrectionIn,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Emberi javítás rögzítése (tanulási jel). NEM aktivál szabályt — csak
+    `correction`-t hoz létre `uj` feldolgozási állapotban, amit a háttér-tanuló
+    (F fázis) dolgoz fel emberi jóváhagyás mellett."""
+    t = db.get(AdminTask, task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="A feladat nem található.")
+    eredeti = None
+    if payload.proposal_id is not None:
+        p = db.get(ActionProposal, payload.proposal_id)
+        if p is None or p.task_id != task_id:
+            raise HTTPException(status_code=404, detail="A javaslat nem ehhez a feladathoz tartozik.")
+        eredeti = dict(p.payload)
+    tipus = payload.tipus if payload.tipus in {c.value for c in CorrectionType} else CorrectionType.BESOROLANDO.value
+    mezo_diff = _mezo_diff(eredeti or {}, payload.javitott)
+    c = Correction(
+        task_id=task_id,
+        proposal_id=payload.proposal_id,
+        eredeti=eredeti,
+        javitott=payload.javitott,
+        mezo_diff=mezo_diff,
+        javito_employee_id=user.id,
+        magyarazat=(payload.magyarazat or "").strip() or None,
+        tipus=tipus,
+        feldolgozas_allapot="uj",
+    )
+    db.add(c)
+    db.commit()
+    return {"correction_id": c.id, "tipus": c.tipus, "mezo_diff": mezo_diff}
+
+
+def _mezo_diff(eredeti: dict, javitott: dict) -> dict:
+    """Mezőszintű különbség (csak a ténylegesen eltérő kulcsok)."""
+    diff: dict = {}
+    for kulcs in set(eredeti) | set(javitott):
+        regi = eredeti.get(kulcs)
+        uj = javitott.get(kulcs)
+        if regi != uj:
+            diff[kulcs] = {"elozo": regi, "uj": uj}
+    return diff
+
+
+class AssignIn(BaseModel):
+    felelos_id: int | None = None
+
+
+@router.post("/tasks/{task_id}/assign")
+def task_felelos(
+    task_id: int,
+    payload: AssignIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    t = db.get(AdminTask, task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="A feladat nem található.")
+    if payload.felelos_id is not None and db.get(Employee, payload.felelos_id) is None:
+        raise HTTPException(status_code=400, detail="A kiválasztott felelős nem található.")
+    t.felelos_id = payload.felelos_id
+    t.row_version += 1
+    db.commit()
+    return _task_sor(t)
+
+
+@router.post("/tasks/{task_id}/cancel")
+def task_megszakit(
+    task_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    t = db.get(AdminTask, task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="A feladat nem található.")
+    if t.allapot in {x.value for x in LEZART_TASK_STATES}:
+        raise HTTPException(status_code=409, detail="A feladat már lezárt.")
+    t.allapot = TaskState.CANCELLED.value
+    t.befejezve_at = _most()
+    t.row_version += 1
+    db.commit()
+    return _task_sor(t)
+
+
+@router.get("/executions/{execution_id}")
+def execution_reszlet(
+    execution_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    ex = db.get(ActionExecution, execution_id)
+    if ex is None:
+        raise HTTPException(status_code=404, detail="A végrehajtás nem található.")
+    return _execution_sor(ex)
 
 
 # ── Beállítások + vészleállítás ──────────────────────────────────────────────
