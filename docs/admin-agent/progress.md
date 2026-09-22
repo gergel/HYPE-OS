@@ -122,27 +122,54 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   létrehozása" gomb a meglévő e-mail-nézetből (nincs általános e-mail-inbox UI a
   repóban → dokumentálva); LLM-alapú fogalmazás.
 
-### F. Memória, szabálykezelés, háttér-tanuló, eval, verziózott kiadások ⛔
-### G. Trust-szintek, L2 (szűk), dashboard, értesítések, üzemeltetés ⛔
-### H. Teljes tesztelés, migrációpróba, build, biztonsági ellenőrzés, docs ⛔
+### F. Memória, szabálykezelés, háttér-tanuló, eval, verziózott kiadások ✅
+- 2. migráció (`h1b8y29v6w50`, additív, reverzibilis): memory_chunks, eval_cases,
+  eval_runs, learning_runs, agent_releases, outbox.
+- `learning.distill` (küszöb + idempotens + jelölt-only), `memory.retrieve`
+  (aktív/érvényes/jóváhagyott; pgvector opcionális → fallback), `evals`
+  (kód-invariáns safety-eval, 7 beépített eset). API: rules/learning-runs/
+  evaluations/releases/audit. Celery beat: éjszakai distill + heti eval.
+- Tesztek: `test_admin_agent_learning.py`. Lásd `learning-and-evals.md`.
+
+### G. Trust-szintek, L2 (szűk), dashboard, értesítések, üzemeltetés ✅
+- Bizalmi szint kezelés (GET/PATCH `/trust-policies`, trust_change=delete).
+  L2 auto-képesség a policy engine-ben (R1 L2+, R2 L3+ allowlisttel).
+- A hét aloldal teljes: Tudástár, Tanulás és minőség, Napló + a Beállításokban
+  bizalmi szint szerkesztő és forráskapcsolat-állapot. Áttekintésen
+  forráskapcsolati állapot.
+- Megjegyzés: a külön értesítés-becsatlakozás (jóváhagyás/elakadás/határidő a
+  meglévő notifications rendszerbe) még hátra — a napló + overview jelzi az
+  állapotot.
+
+### H. Teljes tesztelés, migrációpróba, build, biztonsági ellenőrzés, docs 🟡
+- 25 admin-ágens teszt zöld (`pytest tests/test_admin_agent_*.py`); tsc + eslint
+  + `next build` zöld; migráció le/fel próbálva.
+- Dokumentáció kész: `architecture.md`, `operations.md`, `permissions-and-risk.md`,
+  `learning-and-evals.md`, `acceptance-checklist.md`, `user-guide.md`, `progress.md`,
+  `.env.example` admin-ágens szekció.
+- Hátra: valós modell (Gemini) elemzés explicit konfiggal + elkülönített teszt,
+  worker crash-recovery + külső-timeout reconcile end-to-end, frontend E2E
+  (Playwright), teljes backend regressziós suite futtatása.
 
 ## Biztonsági alapállás (induláskor)
-- Modul: KIKAPCSOLVA (`ADMIN_AGENT_ENABLED=false`).
-- Mellékhatás: TILTVA (`ADMIN_AGENT_SIDE_EFFECTS_ENABLED=false`).
-- Minden feladattípus: L0 (árnyék).
-- Éles autonómia nincs; a mellékhatásos eszközök nincsenek regisztrálva/aktívak.
+- Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
+- Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).
+- Minden feladattípus: L0 (árnyék); a trust szintek a Beállításokból állíthatók.
+- Banki utalást végrehajtó eszköz nincs regisztrálva. Éles autonómia nincs.
 
-## Módosított/új fájlok
-- Backend: `app/admin_agent/{enums,policy,settings_service}.py`,
-  `app/models/admin_agent.py`, `alembic/versions/g0a7x18u5v49_admin_agent_core.py`,
-  `app/api/routes/admin_agent.py`, `tests/test_admin_agent_policy.py`.
-- Frontend: `app/(app)/admin-agent/{page,munkasor,jovahagyasok,beallitasok}.tsx`,
-  `components/admin-agent/{AdminAgentTabs,AdminAgentSafetyBanner,AdminMunkasor,
-  AdminBeallitasok,allapotok}.tsx`, `lib/{nav,api}.ts`, `components/NavList.tsx`.
+## Módosított/új fájlok (kivonat)
+- Backend: `app/admin_agent/{enums,policy,settings_service,pipeline_szamla,
+  executor,proposals,integrations,learning,memory,evals}.py`,
+  `app/models/admin_agent.py`, két migráció (`g0a7x18u5v49`, `h1b8y29v6w50`),
+  `app/api/routes/admin_agent.py`, `app/workers/admin_agent_tasks.py`,
+  `tests/test_admin_agent_{policy,szamla_pipeline,executor,email,learning}.py`.
+- Frontend: `app/(app)/admin-agent/{page,munkasor,munkasor/[id],jovahagyasok,
+  tudastar,tanulas,naplo,beallitasok}`, `components/admin-agent/*`,
+  `lib/{nav,api}.ts`, `components/NavList.tsx`.
+- Dokumentáció: `docs/admin-agent/*`, `backend/.env.example`.
 
 ## Következő lépés
-- Taskrészlet-nézet (agent_run/action_trace/proposal idővonal) az `/admin-agent`
-  alatt, majd a D fázis: számlafolyamat végig L0/L1-ben a valós pénzügyi
-  szolgáltatásra kötve (érkeztető/utalás-előkészítés meglévő service-ei), a
-  policy engine-en át generált javaslatokkal és a jóváhagyási felülettel
-  összekötve. Csak ezután E (e-mail/TIG/szerződés) és F (memória/tanulás).
+- H fázis maradéka: valós Gemini-elemzés bekötése (explicit konfig + teszt),
+  worker crash-recovery / reconcile end-to-end, frontend E2E, teljes backend
+  regressziós suite. Az éles autonómia továbbra is emberi engedélyhez + méréshez
+  kötött.
