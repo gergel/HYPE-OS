@@ -16,10 +16,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.admin_agent.enums import LEZART_TASK_STATES, TaskState, TaskType
+from app.admin_agent.pipeline_szamla import arnyek_elemzes
 from app.admin_agent.settings_service import get_settings
 from app.core.database import get_db
 from app.core.security import Role, require_page_action
 from app.models.admin_agent import AdminTask, Approval, ActionProposal
+from app.models.bejovo_szamla import BejovoSzamla
 from app.models.employee import Employee
 
 router = APIRouter(prefix="/admin-agent", tags=["admin-agent"])
@@ -189,6 +191,25 @@ def task_letrehozas(
         trust_level="L0",
     )
     db.add(t)
+    db.commit()
+    return _task_sor(t)
+
+
+@router.post("/tasks/from-bejovo/{bejovo_id}")
+def task_bejovo_szamlabol(
+    bejovo_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """L0 ÁRNYÉK-ELEMZÉS egy beérkező számlára. Nem hajt végre üzleti/külső
+    műveletet: az ágens csak elemez és javaslatot rögzít a policy engine
+    döntésével. A tényleges rögzítés továbbra is a meglévő érkeztető-folyamaton,
+    emberi jóváhagyással történik (lásd services/szamla_erkeztetes.jovahagy).
+    Idempotens: ugyanarra a számlára ugyanabban az állapotban nem duplikál."""
+    bejovo = db.get(BejovoSzamla, bejovo_id)
+    if bejovo is None:
+        raise HTTPException(status_code=404, detail="A beérkező számla nem található.")
+    t = arnyek_elemzes(db, bejovo, trigger="manual")
     db.commit()
     return _task_sor(t)
 

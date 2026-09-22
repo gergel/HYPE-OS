@@ -54,7 +54,24 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   jóváhagyás jóváhagyás/elvetés gombjai (a javaslat/végrehajtó réteggel, D/E),
   és a meglévő oldalakba (Pénzügyek, Projektek) való „Admin-Ágens javaslat"
   becsatlakozás. Tudástár/Tanulás/Napló aloldalak: F/G fázis.
-### D. Számlafolyamat végig L0/L1-ben, valós szolgáltatásokra kötve ⛔
+### D. Számlafolyamat végig L0/L1-ben, valós szolgáltatásokra kötve 🟡
+- **L0 árnyék-elemzés kész** (`app/admin_agent/pipeline_szamla.py`): egy beérkező
+  számlából (BejovoSzamla) forrásesemény → feladat → ügynökfutás → nyomvonal →
+  művelet-javaslat, a policy engine döntésével. A javaslat payloadja pontosan a
+  meglévő `services/szamla_erkeztetes.jovahagy` `dontes`-alakját írja le (az
+  ágens a MEGLÉVŐ pénzügyi szolgáltatáson át dolgozna), de L0-ban VÉGRE NEM
+  HAJTJUK. Determinista, szerver-oldali ellenőrzések (hiányzó cél/összeg/díjbekérő)
+  → hiányos javaslat NEEDS_INFO. Kockázat szerver-oldalon R2 (belső pénzügyi
+  rekord írása). Idempotens (forrásesemény: forras+azonosító+állapot; feladat:
+  egy bejovó = egy feladat a forras_referenciak alapján).
+- API: `POST /admin-agent/tasks/from-bejovo/{id}` (create jog, L0-biztos).
+- Tesztek: `tests/test_admin_agent_szamla_pipeline.py` (Postgres-integráció,
+  self-skip DB nélkül) — bizonyítja: 0 Expense-változás, idempotencia,
+  BLOCKED (árnyék), hiányos→NEEDS_INFO. Éles smoke + API-teszt OK.
+- **Hátra:** háttér-ingesztálás (Celery beat, az érkeztető inboxából automatikusan),
+  L1 (jóváhagyás-köteles) végrehajtó adapter a `jovahagy`-ra idempotencia-kulccsal
+  és fencing tokennel, korrekció-rögzítés a taskrészlet-nézetből, LLM-alapú
+  elemzés (jelenleg determinista leképezés a meglévő javaslatból).
 ### E. E-mail, TIG, szerződés, utalás-előkészítés (korlátokkal) ⛔
 ### F. Memória, szabálykezelés, háttér-tanuló, eval, verziózott kiadások ⛔
 ### G. Trust-szintek, L2 (szűk), dashboard, értesítések, üzemeltetés ⛔
