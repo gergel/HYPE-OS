@@ -22,8 +22,10 @@ from app.admin_agent.enums import (
     TaskState,
     TaskType,
 )
-from app.admin_agent.executor import execute_approved
+from app.admin_agent.executor import TOOL_REGISTRY, execute_approved
+from app.admin_agent.integrations import integracio_allapotok
 from app.admin_agent.pipeline_szamla import arnyek_elemzes
+from app.admin_agent.proposals import JavaslatHiba, keszit_javaslat
 from app.admin_agent.settings_service import get_settings
 from app.core.database import get_db
 from app.core.security import Role, require_page_action
@@ -118,6 +120,7 @@ def overview(
         "lejart": lejart,
         "varakozo_jovahagyas": varakozo_jovahagyas,
         "allapot_bontas": allapot_bontas,
+        "integraciok": integracio_allapotok(),
         # Mért mutatók: még nincs elég adat (a mérőrendszer a Tanulás/eval fázis).
         "ember_nelkul_lezart": None,
         "elfogadasi_arany": None,
@@ -509,6 +512,61 @@ def task_ujraelemez(
     return _task_sor(t)
 
 
+class ProposeIn(BaseModel):
+    eszkoz: str
+    payload: dict
+
+
+@router.post("/tasks/{task_id}/propose")
+def task_propose(
+    task_id: int,
+    body: ProposeIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Javaslat készítése egy feladathoz egy regisztrált eszközre (pl.
+    e-mail-válasz). Determinista validálás + integráció-ellenőrzés + policy; a
+    valid javaslathoz a policy szerint jóváhagyás is készül. Semmit nem hajt
+    végre — a végrehajtás a jóváhagyás után, a guard-láncon megy."""
+    t = db.get(AdminTask, task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="A feladat nem található.")
+    try:
+        proposal, dontes = keszit_javaslat(db, t, eszkoz=body.eszkoz, payload=body.payload)
+    except JavaslatHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return {
+        "proposal_id": proposal.id,
+        "allapot": proposal.allapot,
+        "kockazat": proposal.kockazat,
+        "ellenorzesek": proposal.ellenorzesek,
+        "decision": dontes.decision.value,
+        "reason": dontes.reason,
+        "task": _task_sor(t),
+    }
+
+
+@router.get("/tools")
+def eszkoz_katalogus(
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """A regisztrált eszközök katalógusa (deklarált kockázat, feladattípus,
+    mellékhatás). Banki utalást indító/végrehajtó eszköz szándékosan nincs."""
+    return {
+        "eszkozok": [
+            {
+                "eszkoz": s.eszkoz,
+                "cim": s.cim,
+                "kockazat": s.risk.value,
+                "tipus": s.tipus,
+                "mellekhatas": s.side_effect,
+            }
+            for s in TOOL_REGISTRY.values()
+        ]
+    }
+
+
 class CorrectionIn(BaseModel):
     proposal_id: int | None = None
     javitott: dict
@@ -634,6 +692,7 @@ def settings_lekeres(
         "kill_switch_indok": s.kill_switch_indok,
         "engedett_forrasok": s.engedett_forrasok or {},
         "limitek": s.limitek or {},
+        "integraciok": integracio_allapotok(),
     }
 
 
@@ -670,6 +729,7 @@ def settings_modositas(
         "kill_switch_indok": s.kill_switch_indok,
         "engedett_forrasok": s.engedett_forrasok or {},
         "limitek": s.limitek or {},
+        "integraciok": integracio_allapotok(),
     }
 
 

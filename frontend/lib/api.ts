@@ -537,12 +537,21 @@ export type AdminTaskSor = {
   befejezve_at: string | null;
 };
 
+export type AdminAgentIntegracio = {
+  kulcs: string;
+  nev: string;
+  allapot: string;
+  eszkozok: string[];
+  uzenet: string | null;
+};
+
 export type AdminAgentOverview = {
   modul: { engedelyezve: boolean; mellekhatas_engedelyezve: boolean; veszleallitas: boolean };
   nyitott: number;
   lejart: number;
   varakozo_jovahagyas: number;
   allapot_bontas: Record<string, number>;
+  integraciok?: AdminAgentIntegracio[];
   ember_nelkul_lezart: number | null;
   elfogadasi_arany: number | null;
   kritikus_hibak: number | null;

@@ -53,6 +53,33 @@ export default async function AdminAgentAttekintesPage() {
                 <AllapotBontas bontas={overview.allapot_bontas} />
               </Card>
 
+              <Card title="Forráskapcsolatok">
+                {overview.integraciok && overview.integraciok.length > 0 ? (
+                  <ul className="flex flex-col gap-2">
+                    {overview.integraciok.map((i) => {
+                      const kesz = i.allapot === "kesz";
+                      return (
+                        <li key={i.kulcs} className="flex items-start justify-between gap-3 text-[13px]">
+                          <div>
+                            <p className="text-text-primary">{i.nev}</p>
+                            {!kesz && i.uzenet && <p className="text-[12px] text-text-muted">{i.uzenet}</p>}
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-[var(--radius)] px-2 py-0.5 text-[12px] font-medium ${
+                              kesz ? "bg-bg-success text-text-success" : "bg-bg-warning text-text-warning"
+                            }`}
+                          >
+                            {kesz ? "Kész" : "Beállítás szükséges"}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="text-[13px] text-text-secondary">Nincs információ a forráskapcsolatokról.</p>
+                )}
+              </Card>
+
               <Card title="Mért mutatók">
                 {overview.eleg_adat ? (
                   <div className="grid grid-cols-2 gap-3">

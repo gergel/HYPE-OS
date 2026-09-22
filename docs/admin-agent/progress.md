@@ -98,7 +98,30 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   `execution_unknown` egyeztetés (reconcile) a külső időtúllépésre, LLM-alapú
   elemzés (jelenleg determinista leképezés a meglévő javaslatból), a finance-oldali
   „árnyék-elemzés" gomb, és a detail-nézet művelet-gombjai (analyze/cancel/correction).
-### E. E-mail, TIG, szerződés, utalás-előkészítés (korlátokkal) ⛔
+### E. E-mail, TIG, szerződés, utalás-előkészítés (korlátokkal) 🟡
+- **E-mail-válasz KÉSZ (L0/L1):** `email.valasz_kuldes` eszköz (R2, mellékhatás)
+  a MEGLÉVŐ `google_email.send_message`-re kötve. Determinista, szerver-oldali
+  validálás: automata/nem-válaszolható címzett (no-reply, mailer-daemon, bounce,
+  postmaster…) TILTOTT → nincs körkörös levelezési hurok (10./21.); hiányzó
+  címzett/tárgy/szöveg → nem küldhető. Gmail nélkül a küldés beszédes „Beállítás
+  szükséges" hibát ad (NEM hamis siker).
+- **Általános javaslatkészítő** (`proposals.keszit_javaslat`) + `POST
+  /tasks/{id}/propose {eszkoz, payload}`: bármely regisztrált eszközre javaslat,
+  a policy engine-en át, jóváhagyással; a végrehajtás az `executor` guard-láncán.
+- **Eszköztár** (`GET /tools`): deklarált kockázat/feladattípus/mellékhatás.
+  BANKI utalást INDÍTÓ/aláíró/végrehajtó eszköz SZÁNDÉKOSAN NINCS regisztrálva
+  (R3, tiltott). Az utalás-ELŐKÉSZÍTÉS export-tervezet a javaslat payloadjában,
+  külső hatás nélkül.
+- **Integráció-állapot** (`integrations.py`): valós config-ellenőrzés (Gmail,
+  modell, dokumentumtár) — az Áttekintésen és a Beállításokban „Kész / Beállítás
+  szükséges" (a titkok értéke sosem kerül a böngészőbe).
+- Tesztek: `tests/test_admin_agent_email.py` (validáció/automata-hurok, nincs
+  banki eszköz, „Beállítás szükséges" DRAFT+NEEDS_INFO). 21 admin-ágens teszt zöld.
+- **Hátra:** TIG/szerződés-előkészítés a meglévő papír-generátorra (a draft a
+  javaslat, ember véglegesít a meglévő felületen — L1); „Admin-feladat
+  létrehozása" gomb a meglévő e-mail-nézetből (nincs általános e-mail-inbox UI a
+  repóban → dokumentálva); LLM-alapú fogalmazás.
+
 ### F. Memória, szabálykezelés, háttér-tanuló, eval, verziózott kiadások ⛔
 ### G. Trust-szintek, L2 (szűk), dashboard, értesítések, üzemeltetés ⛔
 ### H. Teljes tesztelés, migrációpróba, build, biztonsági ellenőrzés, docs ⛔

@@ -60,12 +60,20 @@ class VegrehajtasHiba(Exception):
 @dataclass(frozen=True)
 class ToolSpec:
     """Egy regisztrált, szűk hatókörű eszköz. A `run` VÉGZI a tényleges
-    mellékhatást — csak akkor hívjuk, ha a policy és a kapcsolók engedik."""
+    mellékhatást — csak akkor hívjuk, ha a policy és a kapcsolók engedik.
+
+    A `validate` determinista, szerver-oldali ellenőrzés (a modell NEM válthatja
+    ki): a hiányosságok listáját adja vissza; nem üres → a javaslat nem
+    hajtható végre (jóváhagyás mellett sem). A `side_effect` jelzi, hogy a `run`
+    üzleti/külső mellékhatással jár (audit + kockázati kommunikáció miatt)."""
 
     eszkoz: str
+    cim: str
     risk: RiskClass
     tipus: str
     run: Callable[[Session, ActionProposal, AdminTask, Employee], dict]
+    side_effect: bool = True
+    validate: Callable[[dict], list[str]] | None = None
 
 
 def _most() -> datetime:
@@ -92,14 +100,94 @@ def _run_szamla_jovahagy(db: Session, proposal: ActionProposal, task: AdminTask,
     return {"rogzites_naplo": naplo, "rogzitett_expense_id": bejovo.rogzitett_expense_id}
 
 
+# Automatikus / nem válaszolható feladók — ezekre SOHA nem küldünk választ
+# (körkörös automata-hurok, bounce, out-of-office elleni védelem, master prompt 10.).
+_AUTOMATA_MINTAK = (
+    "no-reply",
+    "noreply",
+    "no_reply",
+    "do-not-reply",
+    "donotreply",
+    "mailer-daemon",
+    "mailerdaemon",
+    "postmaster",
+    "bounce",
+    "notifications@",
+    "automated",
+)
+
+
+def _email_automatikus_cimzett(cim: str) -> bool:
+    c = (cim or "").strip().lower()
+    return any(minta in c for minta in _AUTOMATA_MINTAK)
+
+
+def _validate_email_valasz(payload: dict) -> list[str]:
+    """Determinista, szerver-oldali ellenőrzés az e-mail-küldés előtt. A
+    hiányosságok/tiltások listája; nem üres → nem küldhető."""
+    hibak: list[str] = []
+    cimzettek = payload.get("to") or []
+    if isinstance(cimzettek, str):
+        cimzettek = [cimzettek]
+    if not cimzettek:
+        hibak.append("Nincs címzett.")
+    for c in cimzettek:
+        if not isinstance(c, str) or "@" not in c:
+            hibak.append(f"Érvénytelen címzett: {c!r}.")
+        elif _email_automatikus_cimzett(c):
+            # Körkörös automata-hurok elleni védelem: automata feladóra nem
+            # válaszolunk (master prompt 10./21.).
+            hibak.append(f"Automatikus/nem válaszolható címre nem küldünk levelet: {c}.")
+    if not (payload.get("subject") or "").strip():
+        hibak.append("Hiányzik a tárgy.")
+    if not (payload.get("html_body") or payload.get("body") or "").strip():
+        hibak.append("Hiányzik a levél szövege.")
+    return hibak
+
+
+def _run_email_valasz_kuldes(db: Session, proposal: ActionProposal, task: AdminTask, user: Employee) -> dict:
+    """E-mail (válasz) kiküldése a MEGLÉVŐ google_email szolgáltatáson át. Ha a
+    Gmail nincs beállítva, a szolgáltatás beszédes hibát dob → a végrehajtás
+    FAILED lesz „Beállítás szükséges" indokkal (NEM hamis siker)."""
+    from app.services import google_email
+
+    p = proposal.payload
+    cimzettek = p.get("to") or []
+    if isinstance(cimzettek, str):
+        cimzettek = [cimzettek]
+    thread_id, message_id, rfc822 = google_email.send_message(
+        list(cimzettek),
+        str(p.get("subject") or ""),
+        str(p.get("html_body") or p.get("body") or ""),
+        thread_id=p.get("thread_id"),
+        in_reply_to=p.get("in_reply_to"),
+        extra_cc=p.get("cc"),
+    )
+    return {"gmail_thread_id": thread_id, "gmail_message_id": message_id, "rfc822_message_id": rfc822}
+
+
 TOOL_REGISTRY: dict[str, ToolSpec] = {
     "szamla_erkeztetes.jovahagy": ToolSpec(
         eszkoz="szamla_erkeztetes.jovahagy",
+        cim="Számla felvezetése kiadásként",
         risk=RiskClass.R2,
         tipus="szamla",
         run=_run_szamla_jovahagy,
+        side_effect=True,
+    ),
+    "email.valasz_kuldes": ToolSpec(
+        eszkoz="email.valasz_kuldes",
+        cim="E-mail válasz kiküldése",
+        risk=RiskClass.R2,
+        tipus="email",
+        run=_run_email_valasz_kuldes,
+        side_effect=True,
+        validate=_validate_email_valasz,
     ),
 }
+# FONTOS: banki utalást INDÍTÓ/aláíró/végrehajtó eszköz SZÁNDÉKOSAN NINCS
+# regisztrálva (master prompt 10./8.: R3, tiltott). Az utalás-ELŐKÉSZÍTÉS csak
+# belső export-tervezetet állít elő (a javaslat payloadja), külső hatás nélkül.
 
 
 def _idempotencia_kulcs(proposal: ActionProposal) -> str:
@@ -168,6 +256,13 @@ def execute_approved(
     spec = TOOL_REGISTRY.get(proposal.eszkoz)
     if spec is None:
         return _blokk(f"Ismeretlen/nem regisztrált eszköz: {proposal.eszkoz}.")
+
+    # 3b) Determinista validálás ÚJRA a végrehajtás előtt (a payload időközben
+    #     nem változott, de a szabály lehet, hogy szigorodott — fail-closed).
+    if spec.validate is not None:
+        hianyok = spec.validate(dict(proposal.payload))
+        if hianyok:
+            return _blokk("A javaslat nem valid: " + "; ".join(hianyok))
 
     # 4) Policy ÚJRA, a végrehajtás pillanatában (modul/mellékhatás/kill/trust).
     dontes = resolve_decision(db, risk=spec.risk, tipus=spec.tipus, altipus=(task.altipus if task else None))
