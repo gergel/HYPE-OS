@@ -575,6 +575,49 @@ export async function getAdminAgentSettings(): Promise<AdminAgentSettings | null
   return apiGet<AdminAgentSettings>("/api/v1/admin-agent/settings");
 }
 
+export type AdminTaskTimeline = {
+  task: AdminTaskSor & {
+    project_id?: number | null;
+    client_id?: number | null;
+    utolso_hiba?: string | null;
+    osszefoglalo?: string | null;
+  };
+  runs: {
+    id: number;
+    trigger: string;
+    allapot: string;
+    provider: string | null;
+    modell: string | null;
+    kezdes_at: string | null;
+    veg_at: string | null;
+    hibakod: string | null;
+  }[];
+  traces: {
+    id: number;
+    szereplo: string;
+    muvelet: string;
+    eroforras: string | null;
+    eredmeny: string | null;
+    diff: Record<string, unknown> | null;
+    tortent_at: string | null;
+  }[];
+  proposals: {
+    id: number;
+    eszkoz: string;
+    kockazat: string;
+    allapot: string;
+    payload: Record<string, unknown>;
+    ellenorzesek: Record<string, unknown> | null;
+    payload_hash: string;
+    jovahagyas_allapot: string | null;
+    letrehozva: string | null;
+  }[];
+};
+
+export async function getAdminTaskTimeline(taskId: number): Promise<AdminTaskTimeline | null> {
+  return apiGet<AdminTaskTimeline>(`/api/v1/admin-agent/tasks/${taskId}/timeline`);
+}
+
 export async function getDashboardSummary(): Promise<DashboardSummary | null> {
   return apiGet<DashboardSummary>("/api/v1/dashboard/summary");
 }

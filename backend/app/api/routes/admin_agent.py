@@ -20,7 +20,7 @@ from app.admin_agent.pipeline_szamla import arnyek_elemzes
 from app.admin_agent.settings_service import get_settings
 from app.core.database import get_db
 from app.core.security import Role, require_page_action
-from app.models.admin_agent import AdminTask, Approval, ActionProposal
+from app.models.admin_agent import ActionProposal, ActionTrace, AdminTask, AgentRun, Approval
 from app.models.bejovo_szamla import BejovoSzamla
 from app.models.employee import Employee
 
@@ -224,6 +224,74 @@ def task_reszletek(
     if t is None:
         raise HTTPException(status_code=404, detail="A feladat nem található.")
     return _task_sor(t)
+
+
+@router.get("/tasks/{task_id}/timeline")
+def task_idovonal(
+    task_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """A feladat teljes, olvasható idővonala: ügynökfutások, nyomvonal-
+    bejegyzések (ki mit tett, milyen eredménnyel) és a művelet-javaslatok a
+    payloaddal. Kizárólag olvasás — semmit nem hajt végre."""
+    t = db.get(AdminTask, task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="A feladat nem található.")
+    runs = db.scalars(select(AgentRun).where(AgentRun.task_id == task_id).order_by(AgentRun.id)).all()
+    traces = db.scalars(
+        select(ActionTrace).where(ActionTrace.task_id == task_id).order_by(ActionTrace.tortent_at, ActionTrace.id)
+    ).all()
+    proposals = db.scalars(
+        select(ActionProposal).where(ActionProposal.task_id == task_id).order_by(ActionProposal.id.desc())
+    ).all()
+    prop_ids = [p.id for p in proposals]
+    approvals = (
+        db.scalars(select(Approval).where(Approval.proposal_id.in_(prop_ids))).all() if prop_ids else []
+    )
+    approval_allapot = {a.proposal_id: a.allapot for a in approvals}
+    return {
+        "task": _task_sor(t),
+        "runs": [
+            {
+                "id": r.id,
+                "trigger": r.trigger,
+                "allapot": r.allapot,
+                "provider": r.provider,
+                "modell": r.modell,
+                "kezdes_at": r.kezdes_at.isoformat() if r.kezdes_at else None,
+                "veg_at": r.veg_at.isoformat() if r.veg_at else None,
+                "hibakod": r.hibakod,
+            }
+            for r in runs
+        ],
+        "traces": [
+            {
+                "id": tr.id,
+                "szereplo": tr.szereplo,
+                "muvelet": tr.muvelet,
+                "eroforras": tr.eroforras,
+                "eredmeny": tr.eredmeny,
+                "diff": tr.diff,
+                "tortent_at": tr.tortent_at.isoformat() if tr.tortent_at else None,
+            }
+            for tr in traces
+        ],
+        "proposals": [
+            {
+                "id": p.id,
+                "eszkoz": p.eszkoz,
+                "kockazat": p.kockazat,
+                "allapot": p.allapot,
+                "payload": p.payload,
+                "ellenorzesek": p.ellenorzesek,
+                "payload_hash": p.payload_hash,
+                "jovahagyas_allapot": approval_allapot.get(p.id),
+                "letrehozva": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in proposals
+        ],
+    }
 
 
 class TaskPatchIn(BaseModel):

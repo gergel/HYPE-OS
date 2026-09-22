@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import type { AdminTaskSor } from "@/lib/api";
@@ -189,7 +190,12 @@ export function AdminMunkasor({
               {szurtElemek.map((t) => (
                 <tr key={t.id} className="border-b border-border last:border-0">
                   <td className="px-3 py-2.5">
-                    <p className="font-medium text-text-primary">{t.cim}</p>
+                    <Link
+                      href={`/admin-agent/munkasor/${t.id}`}
+                      className="font-medium text-text-primary hover:text-text-accent hover:underline"
+                    >
+                      {t.cim}
+                    </Link>
                     {t.partner_nev && <p className="text-[12px] text-text-muted">{t.partner_nev}</p>}
                     {t.blokkolo_ok && <p className="mt-0.5 text-[12px] text-text-warning">{t.blokkolo_ok}</p>}
                   </td>

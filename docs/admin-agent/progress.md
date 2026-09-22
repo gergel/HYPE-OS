@@ -50,10 +50,14 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   végrehajtó réteg megérkezéséig), **Beállítások** (modul/mellékhatás
   kapcsolók + vészleállítás, a `delete` joghoz kötve). Navigáció bekötve
   (`lib/nav.ts`, `NavList.tsx`). tsc+eslint+`next build` zöld.
-- **Hátra:** taskrészlet-nézet (agent_run/trace/proposal idővonal), a
-  jóváhagyás jóváhagyás/elvetés gombjai (a javaslat/végrehajtó réteggel, D/E),
-  és a meglévő oldalakba (Pénzügyek, Projektek) való „Admin-Ágens javaslat"
-  becsatlakozás. Tudástár/Tanulás/Napló aloldalak: F/G fázis.
+- **Taskrészlet / idővonal KÉSZ:** `/admin-agent/munkasor/[id]` — a feladat
+  adatai, a művelet-javaslatok (payload + ellenőrzések + payload-ujjlenyomat,
+  „Árnyék (L0): nem hajtódott végre" jelzéssel) és az idővonal (ki mit tett,
+  milyen policy-döntéssel). Backend: `GET /admin-agent/tasks/{id}/timeline`
+  (csak olvasás). A munkasor sorai ide linkelnek.
+- **Hátra:** a jóváhagyás jóváhagyás/elvetés gombjai (a végrehajtó réteggel,
+  D/E), és a meglévő oldalakba (Pénzügyek beérkező számlák) való „Admin-Ágens
+  árnyék-elemzés" gomb. Tudástár/Tanulás/Napló aloldalak: F/G fázis.
 ### D. Számlafolyamat végig L0/L1-ben, valós szolgáltatásokra kötve 🟡
 - **L0 árnyék-elemzés kész** (`app/admin_agent/pipeline_szamla.py`): egy beérkező
   számlából (BejovoSzamla) forrásesemény → feladat → ügynökfutás → nyomvonal →
