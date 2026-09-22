@@ -514,6 +514,67 @@ export async function apiGet<T>(path: string): Promise<T | null> {
   }
 }
 
+// ── ADMIN-ÁGENS (lásd backend routes/admin_agent.py) ────────────────────────
+
+export type AdminTaskSor = {
+  id: number;
+  tipus: string;
+  altipus: string | null;
+  cim: string;
+  osszefoglalo: string | null;
+  allapot: string;
+  prioritas: number;
+  kockazat: string | null;
+  uncertainty: number | null;
+  trust_level: string;
+  felelos_id: number | null;
+  hatarido: string | null;
+  project_code_id: number | null;
+  partner_nev: string | null;
+  blokkolo_ok: string | null;
+  row_version: number;
+  letrehozva: string | null;
+  befejezve_at: string | null;
+};
+
+export type AdminAgentOverview = {
+  modul: { engedelyezve: boolean; mellekhatas_engedelyezve: boolean; veszleallitas: boolean };
+  nyitott: number;
+  lejart: number;
+  varakozo_jovahagyas: number;
+  allapot_bontas: Record<string, number>;
+  ember_nelkul_lezart: number | null;
+  elfogadasi_arany: number | null;
+  kritikus_hibak: number | null;
+  modell_koltseg_mikro: number | null;
+  eleg_adat: boolean;
+};
+
+export type AdminAgentSettings = {
+  module_enabled: boolean;
+  side_effects_enabled: boolean;
+  kill_switch: boolean;
+  kill_switch_indok: string | null;
+  engedett_forrasok: Record<string, unknown>;
+  limitek: Record<string, unknown>;
+};
+
+export async function getAdminAgentOverview(): Promise<AdminAgentOverview | null> {
+  return apiGet<AdminAgentOverview>("/api/v1/admin-agent/overview");
+}
+
+export async function getAdminTasks(query = ""): Promise<{ osszesen: number; elemek: AdminTaskSor[] } | null> {
+  return apiGet<{ osszesen: number; elemek: AdminTaskSor[] }>(`/api/v1/admin-agent/tasks${query}`);
+}
+
+export async function getAdminAgentApprovals(): Promise<{ elemek: Record<string, unknown>[] } | null> {
+  return apiGet<{ elemek: Record<string, unknown>[] }>("/api/v1/admin-agent/approvals");
+}
+
+export async function getAdminAgentSettings(): Promise<AdminAgentSettings | null> {
+  return apiGet<AdminAgentSettings>("/api/v1/admin-agent/settings");
+}
+
 export async function getDashboardSummary(): Promise<DashboardSummary | null> {
   return apiGet<DashboardSummary>("/api/v1/dashboard/summary");
 }

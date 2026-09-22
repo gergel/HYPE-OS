@@ -3,9 +3,12 @@
 import {
   BadgeCheck,
   Banknote,
+  Bot,
   Calculator,
   Car,
   CheckSquare,
+  ListTodo,
+  SlidersHorizontal,
   Clapperboard,
   ClipboardList,
   PackageOpen,
@@ -83,6 +86,9 @@ const ICONS: Record<string, LucideIcon> = {
   ListChecks,
   Palette,
   Sparkle,
+  Bot,
+  ListTodo,
+  SlidersHorizontal,
 };
 
 /** A nav-elemek listája - a Sidebar (asztali oldalsáv) ÉS a MobileNav

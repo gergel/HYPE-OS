@@ -1,0 +1,154 @@
+import { redirect } from "next/navigation";
+import { Card } from "@/components/Card";
+import { TopBar } from "@/components/TopBar";
+import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
+import { AdminAgentSafetyBanner } from "@/components/admin-agent/AdminAgentSafetyBanner";
+import { ALLAPOT_CIMKE } from "@/components/admin-agent/allapotok";
+import { getAdminAgentOverview, getMyPagePermissions } from "@/lib/api";
+
+const PAGE = "/admin-agent";
+
+/** ADMIN-ÁGENS — ÁTTEKINTÉS.
+ *
+ * Az adminisztrációs munkát (számla-felvezetés, e-mail-válasz, TIG- és
+ * szerződés-előkészítés, utalás-előkészítés) önállóan kezelő ágens vezérlő-
+ * pultja. Biztonságos alapállás: a modul KI, a mellékhatások TILTVA, minden
+ * feladat L0 (árnyék) — lásd backend admin_agent/policy.py. Banki utalás
+ * végrehajtása nem része a modulnak. */
+export default async function AdminAgentAttekintesPage() {
+  const pagePermissions = await getMyPagePermissions();
+  const canView = pagePermissions === null || !!pagePermissions[PAGE]?.includes("view");
+  if (!canView) redirect("/nincs-jogosultsag");
+
+  const overview = await getAdminAgentOverview();
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <TopBar />
+      <div className="flex-1 p-4 md:p-8">
+        <AdminAgentTabs />
+
+        {overview === null ? (
+          <Card title="Áttekintés">
+            <p className="text-[13px] text-text-secondary">
+              Az áttekintő adatok most nem érhetők el. Töltsd újra az oldalt egy kicsit később.
+            </p>
+          </Card>
+        ) : (
+          <>
+            <AdminAgentSafetyBanner modul={overview.modul} />
+
+            <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <StatKartya cimke="Nyitott feladat" ertek={overview.nyitott} />
+              <StatKartya
+                cimke="Lejárt határidő"
+                ertek={overview.lejart}
+                hangsuly={overview.lejart > 0 ? "danger" : undefined}
+              />
+              <StatKartya cimke="Jóváhagyásra vár" ertek={overview.varakozo_jovahagyas} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Card title="Feladatok állapot szerint">
+                <AllapotBontas bontas={overview.allapot_bontas} />
+              </Card>
+
+              <Card title="Mért mutatók">
+                {overview.eleg_adat ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <MertMutato cimke="Ember nélkül lezárt" ertek={overview.ember_nelkul_lezart} />
+                    <MertMutato
+                      cimke="Elfogadási arány"
+                      ertek={overview.elfogadasi_arany}
+                      formatum="szazalek"
+                    />
+                    <MertMutato cimke="Kritikus hiba" ertek={overview.kritikus_hibak} />
+                    <MertMutato
+                      cimke="Modellköltség"
+                      ertek={overview.modell_koltseg_mikro}
+                      formatum="mikro_penz"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-[var(--radius)] border border-dashed border-border px-4 py-6 text-center">
+                    <p className="text-[13px] text-text-secondary">Még nincs elég adat</p>
+                    <p className="mt-1 text-[12px] text-text-muted">
+                      A minőségi mutatók (ember nélkül lezárt arány, elfogadási arány, kritikus hibák, modellköltség)
+                      akkor jelennek meg, amikor az ágens éles feladatokat kezdett feldolgozni és a mérőrendszer
+                      elegendő eseményt gyűjtött.
+                    </p>
+                  </div>
+                )}
+              </Card>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatKartya({
+  cimke,
+  ertek,
+  hangsuly,
+}: {
+  cimke: string;
+  ertek: number;
+  hangsuly?: "danger";
+}) {
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-border bg-surface-2 px-4 py-3.5">
+      <p className="text-[12px] text-text-muted">{cimke}</p>
+      <p
+        className={`mt-1 text-[24px] font-semibold leading-none ${
+          hangsuly === "danger" ? "text-text-danger" : "text-text-primary"
+        }`}
+      >
+        {ertek}
+      </p>
+    </div>
+  );
+}
+
+function AllapotBontas({ bontas }: { bontas: Record<string, number> }) {
+  const sorok = Object.entries(bontas)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1]);
+  if (sorok.length === 0) {
+    return <p className="text-[13px] text-text-secondary">Még nincs egyetlen feladat sem.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {sorok.map(([allapot, n]) => (
+        <li key={allapot} className="flex items-center justify-between text-[13px]">
+          <span className="text-text-secondary">{ALLAPOT_CIMKE[allapot] ?? allapot}</span>
+          <span className="font-medium text-text-primary">{n}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function MertMutato({
+  cimke,
+  ertek,
+  formatum,
+}: {
+  cimke: string;
+  ertek: number | null;
+  formatum?: "szazalek" | "mikro_penz";
+}) {
+  let megjelenit = "—";
+  if (ertek !== null) {
+    if (formatum === "szazalek") megjelenit = `${Math.round(ertek * 100)}%`;
+    else if (formatum === "mikro_penz") megjelenit = `${Math.round(ertek / 1_000_000).toLocaleString("hu-HU")} Ft`;
+    else megjelenit = ertek.toLocaleString("hu-HU");
+  }
+  return (
+    <div className="rounded-[var(--radius)] bg-surface-3 px-3 py-2.5">
+      <p className="text-[11.5px] text-text-muted">{cimke}</p>
+      <p className="mt-0.5 text-[16px] font-semibold text-text-primary">{megjelenit}</p>
+    </div>
+  );
+}

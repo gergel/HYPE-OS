@@ -250,6 +250,19 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: "Admin-Ágens",
+    items: [
+      // Az adminisztrációs ágens munkafelülete. Minden aloldal ugyanazt a
+      // /admin-agent backend jogosultságot használja (lásd backend
+      // routes/admin_agent.py PAGE). Induláskor L0/kikapcsolva - lásd
+      // docs/admin-agent/.
+      { label: "Áttekintés", href: "/admin-agent", icon: "Bot" },
+      { label: "Munkasor", href: "/admin-agent/munkasor", icon: "ListTodo", permissionPage: "/admin-agent" },
+      { label: "Jóváhagyások", href: "/admin-agent/jovahagyasok", icon: "CheckSquare", permissionPage: "/admin-agent" },
+      { label: "Beállítások", href: "/admin-agent/beallitasok", icon: "SlidersHorizontal", permissionPage: "/admin-agent" },
+    ],
+  },
+  {
     label: null,
     items: [
       // Az "Alvállalkozók szerződése" és a "Teljesítési igazolások" külön
