@@ -22,21 +22,30 @@ from app.admin_agent.enums import (
     TaskState,
     TaskType,
 )
+from app.admin_agent.enums import RuleState
+from app.admin_agent.evals import run_eval, safety_esetek_magveto
 from app.admin_agent.executor import TOOL_REGISTRY, execute_approved
 from app.admin_agent.integrations import integracio_allapotok
+from app.admin_agent.learning import distill
 from app.admin_agent.pipeline_szamla import arnyek_elemzes
 from app.admin_agent.proposals import JavaslatHiba, keszit_javaslat
 from app.admin_agent.settings_service import get_settings
 from app.core.database import get_db
-from app.core.security import Role, require_page_action
+from app.core.security import Role, check_page_action, require_page_action
 from app.models.admin_agent import (
     ActionExecution,
     ActionProposal,
     ActionTrace,
     AdminTask,
+    AgentRelease,
     AgentRun,
     Approval,
     Correction,
+    EvalCase,
+    EvalRun,
+    LearningRun,
+    MemoryChunk,
+    PlaybookRule,
 )
 from app.models.bejovo_szamla import BejovoSzamla
 from app.models.employee import Employee
@@ -673,6 +682,328 @@ def execution_reszlet(
     if ex is None:
         raise HTTPException(status_code=404, detail="A végrehajtás nem található.")
     return _execution_sor(ex)
+
+
+# ── Tudástár (szabályok) ─────────────────────────────────────────────────────
+
+
+def _rule_sor(r: PlaybookRule) -> dict:
+    return {
+        "id": r.id,
+        "hatokor": r.hatokor,
+        "cim": r.cim,
+        "feltetelek": r.feltetelek,
+        "tartalom": r.tartalom,
+        "prioritas": r.prioritas,
+        "verzio": r.verzio,
+        "allapot": r.allapot,
+        "forras_esetek": r.forras_esetek,
+        "letrehozva": r.created_at.isoformat() if r.created_at else None,
+    }
+
+
+@router.get("/rules")
+def rules_lista(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+    hatokor: str | None = Query(default=None),
+    allapot: str | None = Query(default=None),
+):
+    felt = []
+    if hatokor:
+        felt.append(PlaybookRule.hatokor == hatokor)
+    if allapot:
+        felt.append(PlaybookRule.allapot == allapot)
+    sorok = db.scalars(select(PlaybookRule).where(*felt).order_by(PlaybookRule.id.desc())).all()
+    return {"elemek": [_rule_sor(r) for r in sorok]}
+
+
+class RuleCreateIn(BaseModel):
+    hatokor: str
+    cim: str
+    tartalom: str
+    feltetelek: dict | None = None
+    prioritas: int = 0
+
+
+@router.post("/rules")
+def rule_letrehozas(
+    payload: RuleCreateIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Kézi szabály felvétele DRAFT állapotban. Aktívvá csak külön aktiválással
+    válik (a gépi jelölt sem aktiválhatja magát)."""
+    r = PlaybookRule(
+        hatokor=payload.hatokor.strip(),
+        cim=payload.cim.strip(),
+        tartalom=payload.tartalom,
+        feltetelek=payload.feltetelek,
+        prioritas=payload.prioritas,
+        verzio=1,
+        allapot=RuleState.DRAFT.value,
+    )
+    db.add(r)
+    db.commit()
+    return _rule_sor(r)
+
+
+class RulePatchIn(BaseModel):
+    cim: str | None = None
+    tartalom: str | None = None
+    prioritas: int | None = None
+    #: Állapotátmenet: draft/pending/active/retired.
+    allapot: str | None = None
+
+
+@router.patch("/rules/{rule_id}")
+def rule_modositas(
+    rule_id: int,
+    payload: RulePatchIn,
+    db: Session = Depends(get_db),
+    # Az AKTIVÁLÁS a legerősebb (delete = szabályaktiválás) joghoz kötött; a
+    # tartalmi szerkesztés "edit" alatt is mehet. A finomabb rule_activate
+    # permission a G fázis.
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    r = db.get(PlaybookRule, rule_id)
+    if r is None:
+        raise HTTPException(status_code=404, detail="A szabály nem található.")
+    if payload.cim is not None:
+        r.cim = payload.cim.strip()
+    if payload.tartalom is not None:
+        r.tartalom = payload.tartalom
+    if payload.prioritas is not None:
+        r.prioritas = payload.prioritas
+    if payload.allapot is not None:
+        if payload.allapot not in {s.value for s in RuleState}:
+            raise HTTPException(status_code=400, detail="Ismeretlen szabályállapot.")
+        if payload.allapot == RuleState.ACTIVE.value:
+            # Aktiválás: külön (erős) jog + legyen sikeres eval. A modell/jelölt
+            # nem aktiválhatja magát — csak jogosult ember, API-n át.
+            check_page_action(db, user, PAGE, "delete")
+            utolso = db.scalar(select(EvalRun).order_by(EvalRun.id.desc()))
+            if utolso is None or not utolso.atment:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Aktiválás előtt sikeres értékelés (eval) szükséges — futtass evaluációt.",
+                )
+        r.allapot = payload.allapot
+    db.commit()
+    return _rule_sor(r)
+
+
+@router.post("/rules/{rule_id}/evaluate")
+def rule_probal(
+    rule_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """„Próba korábbi eseteken": a szabály forrásesetei + a hatókörébe eső
+    korrekciók száma (mennyi javítást fedne le)."""
+    r = db.get(PlaybookRule, rule_id)
+    if r is None:
+        raise HTTPException(status_code=404, detail="A szabály nem található.")
+    illeszkedo = db.scalar(
+        select(func.count(Correction.id))
+        .join(AdminTask, AdminTask.id == Correction.task_id)
+        .where(AdminTask.tipus == r.hatokor)
+    ) or 0
+    return {"rule_id": r.id, "forras_esetek": r.forras_esetek, "hatokorbe_eso_korrekciok": illeszkedo}
+
+
+# ── Tanulás és minőség (learning-runs, evaluations, releases) ─────────────────
+
+
+@router.get("/learning-runs")
+def learning_runs_lista(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    sorok = db.scalars(select(LearningRun).order_by(LearningRun.id.desc()).limit(50)).all()
+    return {
+        "elemek": [
+            {
+                "id": lr.id,
+                "trigger": lr.trigger,
+                "allapot": lr.allapot,
+                "feldolgozott_korrekciok": lr.feldolgozott_korrekciok,
+                "uj_szabaly_jeloltek": lr.uj_szabaly_jeloltek,
+                "uj_pelda_jeloltek": lr.uj_pelda_jeloltek,
+                "sop_keresek": lr.sop_keresek,
+                "veg_at": lr.veg_at.isoformat() if lr.veg_at else None,
+            }
+            for lr in sorok
+        ]
+    }
+
+
+@router.post("/learning-runs")
+def learning_run_inditas(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A háttér-tanuló (distill) kézi indítása. Idempotens: csak az új
+    korrekciókat dolgozza fel. Nem aktivál szabályt, csak jelölteket készít."""
+    lr = distill(db, trigger="manual")
+    db.commit()
+    return {
+        "id": lr.id,
+        "feldolgozott_korrekciok": lr.feldolgozott_korrekciok,
+        "uj_szabaly_jeloltek": lr.uj_szabaly_jeloltek,
+        "uj_pelda_jeloltek": lr.uj_pelda_jeloltek,
+        "sop_keresek": lr.sop_keresek,
+    }
+
+
+@router.get("/evaluations")
+def evaluations_lista(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    sorok = db.scalars(select(EvalRun).order_by(EvalRun.id.desc()).limit(50)).all()
+    return {
+        "elemek": [
+            {
+                "id": e.id,
+                "allapot": e.allapot,
+                "osszes": e.osszes,
+                "sikeres": e.sikeres,
+                "kritikus_hiba": e.kritikus_hiba,
+                "atment": e.atment,
+                "arany": (e.eredmeny or {}).get("arany"),
+                "veg_at": e.veg_at.isoformat() if e.veg_at else None,
+            }
+            for e in sorok
+        ]
+    }
+
+
+@router.post("/evaluations")
+def evaluation_inditas(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Értékelő futtatás. Először beveti a beépített biztonsági eseteket (ha még
+    nincsenek), majd végigfut minden érvényes eseten. Sikertelen futás nem
+    aktiválhat kiadást."""
+    safety_esetek_magveto(db)
+    run = run_eval(db)
+    db.commit()
+    return {
+        "id": run.id,
+        "osszes": run.osszes,
+        "sikeres": run.sikeres,
+        "kritikus_hiba": run.kritikus_hiba,
+        "atment": run.atment,
+        "eredmeny": run.eredmeny,
+    }
+
+
+class ReleaseCreateIn(BaseModel):
+    verzio: str
+    tipus: str = "rules"
+    leiras: str | None = None
+    config: dict | None = None
+
+
+@router.get("/releases")
+def releases_lista(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    sorok = db.scalars(select(AgentRelease).order_by(AgentRelease.id.desc()).limit(50)).all()
+    return {
+        "elemek": [
+            {"id": r.id, "verzio": r.verzio, "tipus": r.tipus, "allapot": r.allapot, "leiras": r.leiras}
+            for r in sorok
+        ]
+    }
+
+
+@router.post("/releases")
+def release_letrehozas(
+    payload: ReleaseCreateIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    r = AgentRelease(
+        verzio=payload.verzio.strip(),
+        tipus=payload.tipus,
+        leiras=payload.leiras,
+        config=payload.config,
+        allapot="jelolt",
+    )
+    db.add(r)
+    db.commit()
+    return {"id": r.id, "verzio": r.verzio, "allapot": r.allapot}
+
+
+@router.post("/releases/{release_id}/activate")
+def release_aktivalas(
+    release_id: int,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    """Kiadás aktiválása. Csak sikeres (atment) értékelés után; a jelölt nem
+    aktiválhatja magát. Az előző aktív kiadás visszavontra kerül."""
+    r = db.get(AgentRelease, release_id)
+    if r is None:
+        raise HTTPException(status_code=404, detail="A kiadás nem található.")
+    utolso = db.scalar(select(EvalRun).order_by(EvalRun.id.desc()))
+    if utolso is None or not utolso.atment:
+        raise HTTPException(status_code=409, detail="Aktiválás előtt sikeres értékelés (eval) szükséges.")
+    for elozo in db.scalars(select(AgentRelease).where(AgentRelease.allapot == "aktiv")).all():
+        elozo.allapot = "visszavont"
+    r.allapot = "aktiv"
+    r.eval_run_id = utolso.id
+    r.aktivalta_employee_id = user.id
+    r.aktivalva_at = _most()
+    db.commit()
+    return {"id": r.id, "allapot": r.allapot, "eval_run_id": r.eval_run_id}
+
+
+# ── Napló (audit) ─────────────────────────────────────────────────────────────
+
+
+@router.get("/audit")
+def audit_lista(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+    task_id: int | None = Query(default=None),
+    eroforras: str | None = Query(default=None),
+    eredmeny: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    """Auditnyomvonal (append-only). Az alkalmazásszerepkör nem törölheti — csak
+    olvasható. Szűrés task/erőforrás/eredmény szerint."""
+    felt = []
+    if task_id is not None:
+        felt.append(ActionTrace.task_id == task_id)
+    if eroforras:
+        felt.append(ActionTrace.eroforras == eroforras)
+    if eredmeny:
+        felt.append(ActionTrace.eredmeny == eredmeny)
+    ossz = db.scalar(select(func.count(ActionTrace.id)).where(*felt)) or 0
+    sorok = db.scalars(
+        select(ActionTrace).where(*felt).order_by(ActionTrace.id.desc()).limit(limit).offset(offset)
+    ).all()
+    return {
+        "osszesen": ossz,
+        "elemek": [
+            {
+                "id": tr.id,
+                "task_id": tr.task_id,
+                "szereplo": tr.szereplo,
+                "muvelet": tr.muvelet,
+                "eroforras": tr.eroforras,
+                "eredmeny": tr.eredmeny,
+                "tortent_at": tr.tortent_at.isoformat() if tr.tortent_at else None,
+            }
+            for tr in sorok
+        ],
+    }
 
 
 # ── Beállítások + vészleállítás ──────────────────────────────────────────────

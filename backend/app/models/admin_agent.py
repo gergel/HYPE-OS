@@ -294,3 +294,124 @@ class AdminAgentSetting(TimestampMixin, Base):
     #: Futás-/költséglimitek (tervezési lépés, eszközhívás, token, költség).
     limitek: Mapped[dict | None] = mapped_column(JSONB)
     modositotta_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
+
+
+# ── F fázis: memória, tanulás, értékelés, verziózott kiadások ────────────────
+
+
+class MemoryChunk(TimestampMixin, Base):
+    """Visszakereshető tudás-darab (tisztított tartalom + forrás). A pgvector
+    OPCIONÁLIS: ha nincs telepítve, az `embedding` üres marad, és a keresés
+    pontos/szöveges fallbackre vált (lásd admin_agent/memory.py). Csak a
+    JÓVÁHAGYOTT tanulási halmazból származó, érvényes, nem visszavont darab
+    használható éles döntésben."""
+
+    __tablename__ = "aa_memory_chunks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    hatokor: Mapped[str] = mapped_column(String(60), nullable=False, index=True)  # pl. "szamla", "email"
+    tartalom: Mapped[str] = mapped_column(Text, nullable=False)
+    forras: Mapped[str | None] = mapped_column(String(120))
+    forras_verzio: Mapped[str | None] = mapped_column(String(120))
+    minosites: Mapped[str] = mapped_column(String(20), nullable=False, default="jovahagyott")
+    #: A tanulási halmaz: "jovahagyott" (retrievalhez), "holdout" SOHA nem ide kerül.
+    tanulasi_halmaz: Mapped[str] = mapped_column(String(20), nullable=False, default="jovahagyott", index=True)
+    embedding: Mapped[list | None] = mapped_column(JSONB)  # pgvector hiányában JSON-lista vagy None
+    embedding_modell: Mapped[str | None] = mapped_column(String(120))
+    embedding_dim: Mapped[int | None] = mapped_column(Integer)
+    ervenyes: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    visszavont: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class EvalCase(TimestampMixin, Base):
+    """Értékelő eset (holdout vagy szintetikus). A holdout-válaszok NEM
+    elérhetők a distill/retrieval számára; visszajátszáskor a döntés
+    időpontjában ismert adatpillanatképet (`bemenet`) használjuk."""
+
+    __tablename__ = "aa_eval_cases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nev: Mapped[str] = mapped_column(String(200), nullable=False)
+    tipus: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    altipus: Mapped[str | None] = mapped_column(String(60))
+    #: A döntés időpontjában ismert bemenet (pl. beérkező számla kinyert mezői).
+    bemenet: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    #: Elvárt kimenet/invariáns (pl. {"cel_tipus": "mukodesi"} vagy {"blokkolt": true}).
+    elvart: Mapped[dict | None] = mapped_column(JSONB)
+    #: "holdout" (valós, anonimizált) vagy "szintetikus".
+    halmaz: Mapped[str] = mapped_column(String(20), nullable=False, default="szintetikus", index=True)
+    forras: Mapped[str | None] = mapped_column(String(120))
+    ervenyes: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class EvalRun(TimestampMixin, Base):
+    """Egy értékelő futás eredménye. Sikertelen futás (kritikus hiba vagy
+    küszöb alatti arány) NEM aktiválhat kiadást."""
+
+    __tablename__ = "aa_eval_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    release_id: Mapped[int | None] = mapped_column(ForeignKey("aa_agent_releases.id", ondelete="SET NULL"))
+    allapot: Mapped[str] = mapped_column(String(20), nullable=False, default="futott")
+    osszes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sikeres: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    kritikus_hiba: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    atment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    eredmeny: Mapped[dict | None] = mapped_column(JSONB)  # esetenkénti részletek
+    kezdes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    veg_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LearningRun(TimestampMixin, Base):
+    """Egy háttér-tanuló (distill) futás. A `kurzor` a legutóbb feldolgozott
+    korrekció után áll — újraindításkor nem dolgozza fel kétszer ugyanazt."""
+
+    __tablename__ = "aa_learning_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trigger: Mapped[str] = mapped_column(String(40), nullable=False, default="manual")
+    allapot: Mapped[str] = mapped_column(String(20), nullable=False, default="futott")
+    feldolgozott_korrekciok: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    uj_szabaly_jeloltek: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    uj_pelda_jeloltek: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sop_keresek: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    kurzor: Mapped[str | None] = mapped_column(String(60))
+    osszefoglalo: Mapped[dict | None] = mapped_column(JSONB)
+    kezdes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    veg_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AgentRelease(TimestampMixin, Base):
+    """Verziózott tudás-/konfigurációkiadás. A jelölt NEM aktiválhatja magát;
+    aktiválás csak sikeres eval után, jogosult ember által."""
+
+    __tablename__ = "aa_agent_releases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    verzio: Mapped[str] = mapped_column(String(40), nullable=False)
+    #: Mi változott: "rules" / "prompt" / "policy" / "model" / "retrieval".
+    tipus: Mapped[str] = mapped_column(String(20), nullable=False, default="rules")
+    leiras: Mapped[str | None] = mapped_column(Text)
+    config: Mapped[dict | None] = mapped_column(JSONB)  # rögzített verziók/pinnek
+    allapot: Mapped[str] = mapped_column(String(20), nullable=False, default="jelolt", index=True)
+    eval_run_id: Mapped[int | None] = mapped_column(ForeignKey("aa_eval_runs.id", ondelete="SET NULL"))
+    aktivalta_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
+    aktivalva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Outbox(TimestampMixin, Base):
+    """Tranzakciós outbox: a belső állapotváltozás és a feldolgozási/értesítési
+    esemény egy tranzakcióban íródik; a kézbesítő külön, idempotensen dolgozza
+    fel. Korlátos retry + karantén."""
+
+    __tablename__ = "aa_outbox"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    esemeny_tipus: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    allapot: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    probalkozasok: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    kovetkezo_probalkozas_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    kulso_azonosito: Mapped[str | None] = mapped_column(String(255))
+    hiba: Mapped[str | None] = mapped_column(Text)
+    feldolgozva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
