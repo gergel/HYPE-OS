@@ -114,7 +114,8 @@ type Blokk =
   | { t: "h"; szint: number; s: string }
   | { t: "ul" | "ol"; elemek: string[] }
   | { t: "kod"; s: string }
-  | { t: "hr" };
+  | { t: "hr" }
+  | { t: "ures" };
 
 function blokkok(szoveg: string): Blokk[] {
   const ki: Blokk[] = [];
@@ -172,6 +173,9 @@ function blokkok(szoveg: string): Blokk[] {
       continue;
     }
     if (sor.trim() === "") {
+      // Az ÜRES SOR-t megtartjuk tagolásként (a felhasználó kérése) - a lista
+      // elejéről/végéről lévő üres sorokat lentebb levágjuk.
+      ki.push({ t: "ures" });
       i++;
       continue;
     }
@@ -191,6 +195,11 @@ function blokkok(szoveg: string): Blokk[] {
     }
     ki.push({ t: "p", sorok: bek });
   }
+  // Az üres sorokat csak TAGOLÁSKÉNT (blokkok között) tartjuk meg: a lista
+  // elejéről és végéről levágjuk őket (a felhasználó kérése: az eleji/végi
+  // üres sor ne maradjon).
+  while (ki.length && ki[0].t === "ures") ki.shift();
+  while (ki.length && ki[ki.length - 1].t === "ures") ki.pop();
   return ki;
 }
 
@@ -245,6 +254,8 @@ export function Markdown({ szoveg, mentions = false }: { szoveg: string; mention
             </blockquote>
           );
         if (b.t === "hr") return <hr key={i} className="my-2 border-border" />;
+        // Tagoló üres sor: egy sornyi függőleges hézag (a felhasználó kérése).
+        if (b.t === "ures") return <div key={i} aria-hidden className="h-[0.9em]" />;
         if (b.t === "p")
           return (
             <p key={i} className="my-0.5 whitespace-pre-line">
