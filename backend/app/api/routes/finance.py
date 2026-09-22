@@ -147,6 +147,14 @@ def _afa_brutto(adat: dict, *, netto=None, plusz_afa=None, afa_szazalek=None) ->
 
 
 def _expense_before_create(adat: dict, db: Session) -> dict:
+    # EGYÉB (nem külsős) kiadás megadott dátummal: ezek mindig már KIFIZETETT
+    # tételek (a felhasználó kérése), ezért rögtön kifizetettként (kesz=True)
+    # vezetjük fel - így a megadott fizetés dátumával automatikusan bekerülnek
+    # a kiadások közé. A külsős tételek ezt NEM kapják: azok az utalás-
+    # felvezetésen mennek át, ott áll be a kifizetés.
+    tipus = (adat.get("tipus") or "").strip().lower()
+    if tipus == "egyeb" and adat.get("fizetes_datuma") and not adat.get("kesz"):
+        adat["kesz"] = True
     # Az ÁFA-számítás a deviza-átváltás ELŐTT fut: a bruttó még az eredeti
     # pénznemben számolódik ki, és az átváltás azt is forintosítja.
     _afa_brutto(adat)
