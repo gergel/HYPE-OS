@@ -238,11 +238,27 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
         g["tipus"] = "szamla_besorolas"
     for g in papir_csoport.values():
         g["tipus"] = "papir"
-    osszes_csoport = {**csoport, **papir_csoport}
+    # Bővített önellenőrzés: a teljes projektkód-papírozás (megrendelői szerződés
+    # és TIG, projektkód-döntések), a bevétel (kimenő számla), a belsős TIG, az
+    # elvárás-ellenőrzés a projektkód egészén és a rendszer-fogalmak (lásd
+    # onellenorzes_bovitett.py). Egy hibája nem állítja meg a régi részeket.
+    from app.admin_agent.onellenorzes_bovitett import bovitett_ellenorzes, kerdes_szoveg
+
+    try:
+        with db.begin_nested():
+            bov_teruletek, bov_csoport = bovitett_ellenorzes(db, kezdet)
+    except Exception:  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("Lara bővített önellenőrzése hibára futott.")
+        bov_teruletek, bov_csoport = {}, {}
+    osszes_csoport = {**csoport, **papir_csoport, **bov_csoport}
 
     def _szoveg(g: dict) -> str:
         if g["tipus"] == "papir":
             return papir_kerdes_szoveg(g)
+        if g["tipus"] in ("admin_dontes", "rendszer_elteres", "rendszer_fogalom"):
+            return kerdes_szoveg(g)
         return _kerdes_szoveg(db, g["partner"], g["esetek"], g["valosag"])
 
     def _azon(e: dict) -> str:
@@ -299,9 +315,16 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
             "talalati_arany": round(c["egyezik"] / n, 3) if n else None,
         }
 
-    teruletek = {"szamla": _terulet(stat, True), **{t: _terulet(c, False) for t, c in papir_stat.items()}}
+    teruletek = {
+        "szamla": _terulet(stat, True),
+        **{t: _terulet(c, False) for t, c in papir_stat.items()},
+        **bov_teruletek,
+    }
     ossz = Counter()
-    for t in teruletek.values():
+    # A fogalom-kérdés megértés, nem jóslat: a találati arányba nem számít bele.
+    for nev, t in teruletek.items():
+        if nev == "fogalom":
+            continue
         for mezo in ("ellenorzott", "egyezik", "elter", "nem_tudta", "megmagyarazva"):
             ossz[mezo] += t[mezo]
     ellenorzott = ossz["ellenorzott"]
@@ -366,6 +389,11 @@ def valaszol(db: Session, k: LaraKerdes, *, valasz_tipus: str, magyarazat: str |
 
     if k.tipus == "papir":
         _papir_valasz(db, k, valasz_tipus, szoveg, elesithet, eredmeny)
+        return _lezar(db, k, valasz_tipus, szoveg, user_id, eredmeny)
+    if k.tipus in ("admin_dontes", "rendszer_elteres", "rendszer_fogalom"):
+        from app.admin_agent.onellenorzes_bovitett import valasz as bovitett_valasz
+
+        bovitett_valasz(db, k, valasz_tipus, szoveg, eredmeny)
         return _lezar(db, k, valasz_tipus, szoveg, user_id, eredmeny)
 
     celszoveg = _cel_szoveg(db, v.get("tipus"), v.get("kod_idk"))

@@ -121,6 +121,19 @@ Minden lépés kattintással megy:
    TIG-ekről megtanult, azt a következő tervezetnél használja: a hiányzó
    megbízási tárgyat és ÁFA-jelzőt „Lara tudása" forrással előtölti, és szól,
    ha egy félnél a papír vagy a számla szokás szerint kihagyható.
+   **Bővítve — a teljes admin és a rendszer:** Lara ugyanígy teszteli magát a
+   **projektkódok** papír- és számladöntésein („papír nélkül", „számla
+   kihagyva", „bevételbe ne kerüljön"), a **teljes Utókövetésen** (megrendelői
+   szerződés és TIG: kihagyva-e, +ÁFA-e; belsős TIG: változott-e a havi összeg,
+   +ÁFA-e) és a **bevételeken** (a megrendelő a szokásához képest késve
+   fizetett-e). A projektkód egészén azt is nézi, ami **nem úgy áll, ahogy
+   várná** (a megrendelő fizetett, de nincs papír; a TIG 30 napja kiment, de
+   nincs bevétel; alvállalkozót kifizettünk szerződés és TIG nélkül), és a
+   rendszer **állapotait** is próbálja megérteni (pl. mit jelent az utómunkában a
+   „Javításra vár", jár-e vele admin-teendő) — ezekből futásonként legfeljebb
+   hármat kérdez. Ezeknél a kérdéseknél a „Nála mostantól így van" / „Rendben,
+   így szokás" válasz tudás lesz (a korábbi eseteket nem írja át), a **„Hiba —
+   javítani kell"** pedig javítási feladatot készít a felelősnek a Munkasorba.
 7. **Tanul a levelezésből is:** Lara félóránként végigolvassa a
    **szamla@hypestab.hu** postafiók a tanulás kezdete óta érkezett és onnan
    küldött leveleit — a levelek szövegét, a ti válaszaitokat és a csatolmányok

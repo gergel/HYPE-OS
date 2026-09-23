@@ -557,6 +557,36 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   állítja meg), és a kézi futtatás hibánál érthető üzenetet ad. Regressziós
   teszt: `test_idozona_nelkuli_tabla_nem_dont_el`.
 
+### W. Folyamatos önteszt a teljes adminon és a rendszeren — kérdésekkel ✅ (éles adaton: ⚠️ nem ellenőrzött)
+Kérés: Lara, ahogy átnézi az egészet és az adminisztrációt, folyamatosan
+tesztelje magát, és kérdezzen, ha nem érti, miért van valami úgy — a teljes
+projektkód-, TIG-, szerződés- és számla-részen és a teljes Utókövetésen.
+- Új modul: `app/admin_agent/onellenorzes_bovitett.py`, az önellenőrzés
+  (`onellenorzes.py`, kétóránként + kézzel) része, saját savepointban (egy
+  hibája nem állítja meg a régi részeket). Csak olvas; csak `aa_` táblába ír.
+- **Vak jóslat** (`tipus="admin_dontes"`): megrendelői szerződés és TIG
+  (kihagyva-e, +ÁFA), projektkód-döntések (papír nélkül, számla kihagyva,
+  bevételbe ne), bevétel (késés a partner mediánjához képest, 15 nap tűrés),
+  belsős TIG (havi összeg az előző hónaphoz, +ÁFA). Partnerenként a többi
+  eset (≥2, ≥80% egyetértés) vagy alapértelmezés alapján.
+- **Elvárás-ellenőrzés** (`tipus="rendszer_elteres"`): fizetett, de nincs
+  papír; TIG 30+ napja lezárva, de nincs bevétel; alvállalkozó kifizetve
+  szerződés/TIG nélkül.
+- **Fogalom-kérdések** (`tipus="rendszer_fogalom"`): a figyelt táblák
+  állapot-mezőinek ≥3 tételes értékei; futásonként ≤3 új, egyszerre ≤8 nyitott;
+  a válaszhoz szöveg kötelező. A találati arányba nem számít bele.
+- Válasz: „mindig / magyarázat" → tudás (`MemoryChunk`, `forras=kerdes:<id>`),
+  és csak a megválaszolt esetnél ÚJABB esetekre vonatkozik (a múltat nem
+  teszi hibássá); „kivétel" → csak az eset; „hiba" → `AdminTask` (egyéb,
+  „Javítandó (Lara kérdéséből)…") Lara felelősének.
+- Felület: Kérdések oldal új szűrők (Projektkódok, Bevételek, Eltérések,
+  Rendszer), típusonkénti válaszlehetőségek és esettábla; Tanulás oldal
+  önellenőrzés-kártyáján az új területek.
+- Tesztek: `test_admin_agent_onellenorzes_bovitett.py` (7). Teljes backend:
+  188 passed, 1 skipped. tsc, eslint, `next build` rendben. Dev szerveren
+  kipróbálva demóadattal (kérdések megjelenése, „Hiba" → feladat), utána a
+  demósorok törölve (időbélyeg-ellenőrzéssel).
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

@@ -746,8 +746,9 @@ export type LaraKerdesEset = {
   rekord_id?: number;
   projektkod?: string | null;
   projekt?: string | null;
-  netto: string | null;
-  datum: string | null;
+  project_code_id?: number | null;
+  netto?: string | null;
+  datum?: string | null;
   vegso_szoveg?: string;
   valosag_szoveg?: string;
   lara_szoveg?: string | null;
@@ -757,7 +758,7 @@ export type LaraKerdesEset = {
 /** Lara kérdése: az önellenőrzés során talált, számára megmagyarázatlan eltérés. */
 export type LaraKerdes = {
   id: number;
-  /** szamla_besorolas | papir */
+  /** szamla_besorolas | papir | admin_dontes | rendszer_elteres | rendszer_fogalom */
   tipus?: string;
   /** nyitott | megvalaszolt | elvetve */
   allapot: string;
@@ -766,9 +767,20 @@ export type LaraKerdes = {
   kontextus: {
     partner?: string;
     partner_kulcs?: string;
-    /** Papírnál: szerzodes | tig, és a vizsgált döntés. */
+    /** Papírnál: szerzodes | tig; admin_dontes-nél: megrendeloi_szerzodes |
+     * megrendeloi_tig | projektkod | bevetel | belsos_tig — és a vizsgált döntés. */
     terulet?: string;
     dimenzio?: string;
+    /** A bővített kérdések rövid címkéje (pl. „Projektkód · papír nélkül"). */
+    cimke?: string;
+    /** rendszer_elteres: melyik elvárás-ellenőrzés. */
+    ellenorzes?: string;
+    /** rendszer_fogalom: melyik modul / tábla / mező / érték, hány tétellel. */
+    modul?: string;
+    tabla?: string;
+    oszlop?: string;
+    ertek?: string;
+    darab?: number;
     valosag?: { tipus?: string; kod_idk?: number[]; ertek?: unknown; szoveg?: string };
     esetek?: LaraKerdesEset[];
   } | null;
