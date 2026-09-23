@@ -40,7 +40,7 @@ TEMA_CIMKE = {
     "szerzodes": "Szerződések",
     "email": "E-mailek",
     "asszisztens": "AI asszisztens",
-    "projekt": "Projektek, ajánlatok",
+    "projekt": "Projektek, rendszer",
 }
 #: A megfigyelő táblái → témakör. A bevétel (megrendelői fizetés) és az
 #: utalás-felvezetés pénzügyi tanulság, ezért a Számlák témához tartozik; a
@@ -67,6 +67,8 @@ S_MEGFIGYELES = 0.1  # lezáratlan munka: csak „látta", még nem tanulság
 S_JAVITAS = 0.6
 S_AKTIV_SZABALY = 3.0
 S_SZABALY_JELOLT = 0.5
+#: A rendszer-figyelés ténye (projektkód-életút): valós, de nem döntés.
+S_RENDSZER = 0.5
 REGI_SZORZO = 0.4
 
 MAX_PARTNER = 220
@@ -221,7 +223,31 @@ def tudashalo(db: Session) -> dict:
             )
         ).all()
     }
-    kodok = {pc.id: pc.projektkod for pc in db.scalars(select(ProjectCode)).all()}
+    kod_sorok = db.scalars(select(ProjectCode)).all()
+    kodok = {pc.id: pc.projektkod for pc in kod_sorok}
+    megrendelok = {pc.id: pc.megrendelo_neve for pc in kod_sorok}
+
+    # 0) A teljes rendszer figyelése: projektkód-életutak (TÉNY — a rendszer
+    #    állapota; lásd admin_agent/rendszer.py). Megrendelő ↔ projektkód a
+    #    „Projektek, rendszer" témában — a háló a rendszer ismeretével is nő.
+    for m in db.scalars(
+        select(MemoryChunk).where(MemoryChunk.forras.like("rendszer:projektkod:%"), MemoryChunk.visszavont.is_(False))
+    ).all():
+        azon = (m.forras or "").rsplit(":", 1)[-1]
+        if not azon.isdigit():
+            continue
+        kod_id = int(azon)
+        e.tudas(
+            tema="projekt",
+            partner=megrendelok.get(kod_id),
+            kod_id=kod_id,
+            kod_cimke=kodok.get(kod_id),
+            cel=None,
+            suly=S_RENDSZER * (REGI_SZORZO if m.regi_korszak else 1.0),
+            t=m.created_at,
+            fajta="jovahagyott",
+            szoveg=None,
+        )
 
     # 1) Megfigyelt emberi munka (rekordonként a legutóbbi esemény).
     utolso: dict[str, SourceEvent] = {}

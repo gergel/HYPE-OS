@@ -1132,6 +1132,7 @@ def learning_runs_lista(
             ~LearningRun.trigger.like("levelezes%"),
             ~LearningRun.trigger.like("asszisztens%"),
             ~LearningRun.trigger.like("megerosites%"),
+            ~LearningRun.trigger.like("rendszer%"),
         )
         .order_by(LearningRun.id.desc())
         .limit(50)
@@ -1483,6 +1484,33 @@ def asszisztens_futtatas(
     eredmeny = asszisztens_tanulas(db, trigger="asszisztens:kezi")
     if eredmeny.get("allapot") == "kikapcsolva":
         raise HTTPException(status_code=400, detail="Az AI asszisztens figyelése ki van kapcsolva (Beállítások).")
+    db.commit()
+    return eredmeny
+
+
+@router.get("/system-learning")
+def rendszer_allapot(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """A teljes rendszer figyelésének állapota: figyelt modulok, projektkód-
+    életutak, a legaktívabb területek, futások."""
+    from app.admin_agent.rendszer import allapot
+
+    return allapot(db)
+
+
+@router.post("/system-learning/run")
+def rendszer_futtatas(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A rendszer átnézése MOST (csak olvas; tudás a Tudástárba)."""
+    from app.admin_agent.rendszer import rendszer_figyeles
+
+    eredmeny = rendszer_figyeles(db, trigger="rendszer:kezi")
+    if eredmeny.get("allapot") == "kikapcsolva":
+        raise HTTPException(status_code=400, detail="A teljes rendszer figyelése ki van kapcsolva (Beállítások).")
     db.commit()
     return eredmeny
 

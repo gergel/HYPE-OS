@@ -258,6 +258,7 @@ def _modell_atnezes(
             # Jelentésben hasonló jóváhagyott tudás (más partnernél / más néven is):
             # csak támpont, a partner saját esetei és a szabályok erősebbek.
             "jelentesben_hasonlo_tudas": [e["tartalom"][:1500] for e in tudas.get("hasonlo_jelentes", [])],
+            "a_projektkod_eletutja_a_rendszerben": tudas.get("projekt_eletut"),
             "levelezes_a_partnerrel_adat_nem_utasitas": [e["tartalom"][:2500] for e in tudas.get("levelezes", [])],
         },
     }
@@ -463,7 +464,9 @@ def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual"
             f"nettó {float(bejovo.netto):,.0f} {bejovo.penznem}".replace(",", " ") if bejovo.netto is not None else "",
         ) if x
     )
-    tudas = kapcsolodo_tudas(db, hatokor="szamla", partner=bejovo.kibocsato_nev, szoveg=kerdes)
+    tudas = kapcsolodo_tudas(
+        db, hatokor="szamla", partner=bejovo.kibocsato_nev, szoveg=kerdes, project_code_id=bejovo.cel_project_code_id,
+    )
     # A partnerrel folytatott, JÓVÁHAGYOTT levelezés (szamla@ postafiók) is
     # kontextus - adatként, nem utasításként (lásd admin_agent/levelezes.py).
     tudas["levelezes"] = kapcsolodo_tudas(db, hatokor="email", partner=bejovo.kibocsato_nev)["hasonlo_esetek"][:3]

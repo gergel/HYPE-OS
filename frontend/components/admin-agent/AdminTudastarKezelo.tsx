@@ -498,6 +498,9 @@ function Sor({
 function peldaCimke(m: { hatokor: string; forras?: string | null }): string {
   if (m.forras?.startsWith("levelezes:")) return "Levelezés";
   if (m.forras?.startsWith("asszisztens:")) return `AI asszisztens · ${TIPUS_CIMKE[m.hatokor] ?? m.hatokor}`;
+  // A teljes rendszer figyelése: TÉNY a rendszer állapotáról (nem döntés).
+  if (m.forras?.startsWith("rendszer:modul:")) return "Rendszerismeret · modul (tény)";
+  if (m.forras?.startsWith("rendszer:projektkod:")) return "Projektkód-életút (tény)";
   if (m.forras?.startsWith("megfigyeles:")) {
     const kulcs = m.forras.split(":")[1];
     // Az alap négy forrásnál a feladattípus a beszédesebb; az újaknál a forrás.

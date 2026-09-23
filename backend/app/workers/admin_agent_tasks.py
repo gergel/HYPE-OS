@@ -80,6 +80,11 @@ celery_app.conf.beat_schedule = {
         # Félóránként (:25 és :55) — a tudás-darabok jelentés szerinti kereséséhez.
         "schedule": crontab(minute="25,55"),
     },
+    "admin-agent-rendszer": {
+        "task": "admin_agent.rendszer",
+        # Óránként (:40) — a teljes rendszer figyelése (csak olvas, csak tanul).
+        "schedule": crontab(minute=40),
+    },
     "admin-agent-napi-osszesito": {
         "task": "admin_agent.napi_osszesito",
         # Munkanapokon reggel (UTC 05:30 ≈ budapesti 07:30 nyáron, 06:30 télen).
@@ -285,6 +290,30 @@ def napi_osszesito_task() -> dict | None:
     except Exception:
         db.rollback()
         logger.exception("Lara napi összesítője sikertelen.")
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="admin_agent.rendszer")
+def rendszer_task() -> dict | None:
+    """A teljes rendszer figyelése: modulonkénti rendszerismeret és projektkód-
+    életút (lásd admin_agent/rendszer.py). Csak olvas; csak bekapcsolt „Teljes
+    rendszer figyelése" forrással fut."""
+    if _leallitva("rendszer"):
+        return {"leallitva": True}
+    from app.admin_agent.rendszer import engedelyezve, rendszer_figyeles
+
+    db = SessionLocal()
+    try:
+        if not engedelyezve(db):
+            return None
+        eredmeny = rendszer_figyeles(db, trigger="rendszer:utemezett")
+        db.commit()
+        return eredmeny
+    except Exception:
+        db.rollback()
+        logger.exception("Lara rendszer-figyelése sikertelen.")
         raise
     finally:
         db.close()

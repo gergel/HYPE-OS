@@ -64,15 +64,34 @@ def pgvector_elerheto_e(_cache_key: int = 0) -> bool:
 #: A jelentés szerinti keresésnél a feladattípushoz ezek a tudás-körök is
 #: számítanak (pl. egy számlánál a projektkód-kommentek és a fizetési szokás).
 ROKON_HATOKOROK: dict[str, tuple[str, ...]] = {
-    "szamla": ("szamla", "projektkod", "kintlevoseg", "email"),
-    "tig": ("tig", "szerzodes", "projektkod"),
-    "szerzodes": ("szerzodes", "tig", "projektkod", "arajanlat"),
-    "email": ("email", "szamla", "kintlevoseg", "projektkod"),
+    "szamla": ("szamla", "projektkod", "kintlevoseg", "email", "rendszer"),
+    "tig": ("tig", "szerzodes", "projektkod", "rendszer"),
+    "szerzodes": ("szerzodes", "tig", "projektkod", "arajanlat", "rendszer"),
+    "email": ("email", "szamla", "kintlevoseg", "projektkod", "rendszer"),
 }
 _HATOKOR_SZO = {"szamla": "számla", "tig": "teljesítésigazolás (TIG)", "szerzodes": "szerződés", "email": "e-mail"}
 
 
-def kapcsolodo_tudas(db: Session, *, hatokor: str, partner: str | None = None, szoveg: str | None = None) -> dict:
+def projekt_eletut(db: Session, project_code_id: int | None) -> str | None:
+    """A projektkód életútja a TELJES rendszerben (diszpó, forgatás, utómunka,
+    portál, papírok, pénzügy…) — a rendszer-figyelés ténye (lásd
+    admin_agent/rendszer.py). Csak olvasott tudás; None, ha még nincs."""
+    if not project_code_id:
+        return None
+    m = db.scalar(
+        select(MemoryChunk).where(
+            MemoryChunk.forras == f"rendszer:projektkod:{project_code_id}",
+            MemoryChunk.ervenyes.is_(True),
+            MemoryChunk.visszavont.is_(False),
+        )
+    )
+    return m.tartalom if m is not None else None
+
+
+def kapcsolodo_tudas(
+    db: Session, *, hatokor: str, partner: str | None = None, szoveg: str | None = None,
+    project_code_id: int | None = None,
+) -> dict:
     """A javaslathoz csatolt, TÖMÖR tudás-hivatkozás: az adott feladattípus aktív
     szabályai + a UGYANAZON partnerhez tartozó jóváhagyott korábbi esetek +
     (ha be van kapcsolva) a JELENTÉSBEN hasonló jóváhagyott tudás.
@@ -96,6 +115,9 @@ def kapcsolodo_tudas(db: Session, *, hatokor: str, partner: str | None = None, s
             kiveve={p["id"] for p in peldak},
         )
     return {
+        # A projektkód életútja a teljes rendszerben (ha ismert) — pl. TIG-nél
+        # látszik, hogy az utómunka leadva, a portál kiküldve.
+        "projekt_eletut": projekt_eletut(db, project_code_id),
         "modszer": "jelentes_szerinti" if jelentes else r["modszer"],
         "hasonlo_jelentes": [
             {

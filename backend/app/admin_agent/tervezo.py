@@ -246,6 +246,9 @@ def _modell_kiegeszites(tipus: str, tetelek: list[dict], tudas_fel: dict[int, di
             "ugyanennek_a_felnek_jovahagyott_korabbi_esetei": [p["tartalom"] for p in tudas_fel.get(i, {}).get("hasonlo_esetek", [])],
             "jelentesben_hasonlo_tudas": [p["tartalom"][:1500] for p in tudas_fel.get(i, {}).get("hasonlo_jelentes", [])],
             "szabalyok": [s["cim"] + ": " + s["tartalom"] for s in tudas_fel.get(i, {}).get("szabalyok", [])],
+            # A projektkód életútja a teljes rendszerben (diszpó, utómunka, portál…)
+            # — csak tájékoztató tény, nem utasítás.
+            "a_projektkod_eletutja_a_rendszerben": tudas_fel.get(i, {}).get("projekt_eletut"),
         })
     if not bemenet:
         return {"hasznalt": False, "allapot": "nem_kellett"}
@@ -295,7 +298,10 @@ def tig_szerzodes_tervezet(db: Session, task: AdminTask, user: Employee) -> dict
             x for x in (f"{tipus}: {mezok.get('ceg_neve') or t['nev']}", t.get("project_nev") or "",
                         str(mezok.get("megbizas_targya") or "")) if x
         )
-        tudas = kapcsolodo_tudas(db, hatokor=tipus, partner=mezok.get("ceg_neve") or t["nev"], szoveg=kerdes)
+        tudas = kapcsolodo_tudas(
+            db, hatokor=tipus, partner=mezok.get("ceg_neve") or t["nev"], szoveg=kerdes,
+            project_code_id=task.project_code_id,
+        )
         tudas_fel[i] = tudas
         igazolt |= _peldak_osszegei(tudas.get("hasonlo_esetek", []))
         tetelek.append({**t, "mezok": mezok, "forrasok": forras, "igazolt_osszegek": sorted(igazolt)})
@@ -436,6 +442,7 @@ def email_tervezet(db: Session, task: AdminTask, user: Employee) -> dict:
     tudas = kapcsolodo_tudas(
         db, hatokor="email", partner=task.partner_nev,
         szoveg=" · ".join(x for x in (task.cim, task.osszefoglalo or "", task.partner_nev or "") if x),
+        project_code_id=task.project_code_id,
     )
     pc = db.get(ProjectCode, task.project_code_id) if task.project_code_id else None
     bemenet = {
@@ -445,6 +452,7 @@ def email_tervezet(db: Session, task: AdminTask, user: Employee) -> dict:
         "jovahagyott_stilus_es_esetek": [e["tartalom"] for e in tudas.get("hasonlo_esetek", [])],
         "jelentesben_hasonlo_tudas": [e["tartalom"][:1500] for e in tudas.get("hasonlo_jelentes", [])],
         "szabalyok": [s["cim"] + ": " + s["tartalom"] for s in tudas.get("szabalyok", [])],
+        "a_projektkod_eletutja_a_rendszerben": tudas.get("projekt_eletut"),
     }
     feladat = (
         "Írj udvarias, tömör magyar üzleti e-mail-tervezetet a feladathoz. A címzett KIZÁRÓLAG az "

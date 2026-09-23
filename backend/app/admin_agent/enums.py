@@ -24,6 +24,15 @@ class TaskType(str, Enum):
     EGYEB = "egyeb"
 
 
+#: LARA HATÁSKÖRE (a felhasználó döntése): Lara az EGÉSZ rendszert figyelheti
+#: és tanulhat belőle (lásd admin_agent/rendszer.py), de feladatot — tervezetet,
+#: javaslatot, végrehajtást — KIZÁRÓLAG adminisztrációs területen végezhet:
+#: számla, adminisztrációs e-mail, TIG, szerződés (és az ezekhez tartozó egyéb
+#: papírmunka). A végrehajtó minden eszköznél ellenőrzi, és az eszköz-regiszter
+#: betöltéskor is (egy nem adminisztratív eszköz fel sem vehető).
+ADMIN_FELADATTIPUSOK: frozenset[str] = frozenset(t.value for t in TaskType)
+
+
 class TaskState(str, Enum):
     """A feladat szerveroldali állapotgépe (master prompt 7. pont)."""
 

@@ -34,6 +34,7 @@ export function AdminBeallitasok({
   const megfigyelesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.megfigyeles);
   const levelezesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.levelezes);
   const asszisztensBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.asszisztens);
+  const rendszerBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.rendszer);
   const limitek = (b.limitek as Record<string, unknown> | null) ?? {};
   // A gyorsított tanulás kapcsolói alapból BEKAPCSOLTAK (hiányzó kulcs = be).
   const limitBe = (kulcs: string) => limitek[kulcs] !== false;
@@ -199,6 +200,18 @@ export function AdminBeallitasok({
         onValt={(v) =>
           mentSettings({
             engedett_forrasok: { ...((b.engedett_forrasok as Record<string, unknown>) ?? {}), asszisztens: v },
+          })
+        }
+      />
+
+      <Kapcsolo
+        cim="Teljes rendszer figyelése (csak tanulás)"
+        leiras="Bekapcsolva Lara óránként átnézi az EGÉSZ HYPE OS-t (diszpó, forgatások, utómunka, portál, anyagbekérés, eszközök, papírok, pénzügy…): modulonként rendszerismeretet és projektkódonként életutat tanul — pl. egy TIG-nél látja, hogy az utómunka leadva, a portál kiküldve. Csak olvas; személyes és titkos adatot (jelszó, token, bankszámla, e-mail, telefon, munkatársi adatlap) nem néz. Feladatot továbbra is KIZÁRÓLAG adminisztrációs területen végez (számla, TIG, szerződés, adminisztrációs e-mail) — más területhez nem nyúlhat."
+        aktiv={rendszerBe}
+        tiltva={!canManage || folyamatban || b.kill_switch}
+        onValt={(v) =>
+          mentSettings({
+            engedett_forrasok: { ...((b.engedett_forrasok as Record<string, unknown>) ?? {}), rendszer: v },
           })
         }
       />

@@ -32,6 +32,8 @@ export const TIPUS_CIMKE: Record<string, string> = {
   projektkod: "Projektkód",
   kintlevoseg: "Kintlevőség / bevétel",
   arajanlat: "Árajánlat",
+  // A teljes rendszer figyeléséből (csak tanulás): modul-ismeret, projektkód-életút.
+  rendszer: "Rendszerismeret",
 };
 
 /** A megfigyelt forrás (Tudástár „forrás: megfigyeles:<kulcs>:<id>") címkéje —

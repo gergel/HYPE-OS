@@ -156,6 +156,13 @@ Minden lépés kattintással megy:
    projektkód-kommenteket, a bevételeket (ki mikor fizetett), az utalások
    felvezetését, a kiadott árajánlatokat és a véglegesen törölt rekordokat is
    nézi.
+   **A teljes rendszert is figyeli (csak tanul):** óránként átnézi a HYPE OS
+   minden részét (diszpó, forgatások, utómunka, portál, anyagbekérés, eszközök,
+   papírok, pénzügy), és projektkódonként megtanulja, hol tart a munka — pl.
+   egy TIG-nél látja, hogy az utómunka leadva. Feladatot továbbra is csak
+   adminisztrációs területen végez (számla, TIG, szerződés, adminisztrációs
+   e-mail); más területhez nem nyúlhat. Állapota: Tanulás és minőség → „A
+   teljes rendszer figyelése"; kikapcsolni a Beállításokban lehet.
 10. **Javítsd, ha téved:** a feladat oldalán **„Javítás / magyarázat Larának"**
    → elég röviden leírni, **mit hova kellett volna tennie és miért** — mezőket
    nem kell kitölteni. A magyarázat azonnal Lara tudásába kerül, és a hasonló

@@ -30,6 +30,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.admin_agent.enums import (
+    ADMIN_FELADATTIPUSOK,
     ActorKind,
     ApprovalState,
     ExecutionState,
@@ -282,6 +283,10 @@ def execute_approved(
     spec = TOOL_REGISTRY.get(proposal.eszkoz)
     if spec is None:
         return _blokk(f"Ismeretlen/nem regisztrált eszköz: {proposal.eszkoz}.")
+    # 3a) HATÁSKÖR: Lara csak adminisztrációs feladatot végezhet (a rendszer
+    #     többi részét csak figyeli és tanul belőle).
+    if spec.tipus not in ADMIN_FELADATTIPUSOK or (task is not None and task.tipus not in ADMIN_FELADATTIPUSOK):
+        return _blokk("Lara csak adminisztrációs feladatot végezhet (számla, TIG, szerződés, adminisztrációs e-mail).")
 
     # 3b) Determinista validálás ÚJRA a végrehajtás előtt (a payload időközben
     #     nem változott, de a szabály lehet, hogy szigorodott — fail-closed).
@@ -389,3 +394,14 @@ def _execution_lefoglal(
             raise
         return meglevo
     return ex
+
+
+def _hataskor_ellenorzes() -> None:
+    """Betöltéskor: az eszköz-regiszterben csak adminisztrációs eszköz lehet —
+    egy más területre ható eszköz felvétele már az indításnál hibát ad."""
+    rossz = [e for e, spec in TOOL_REGISTRY.items() if spec.tipus not in ADMIN_FELADATTIPUSOK]
+    if rossz:
+        raise RuntimeError(f"Lara csak adminisztrációs eszközt kaphat; nem az: {', '.join(rossz)}")
+
+
+_hataskor_ellenorzes()

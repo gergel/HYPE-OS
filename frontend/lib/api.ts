@@ -905,6 +905,36 @@ export type GyorsitasAllapot = {
   legertekesebb: AdminMemory[];
 };
 
+/** A teljes rendszer figyelése (backend admin_agent/rendszer.py). */
+export type RendszerFutas = {
+  id: number;
+  trigger: string;
+  veg_at: string | null;
+  figyelt_tabla?: number;
+  projektkod?: number;
+  uj?: number;
+  frissitett?: number;
+  mozgas_30nap?: number;
+};
+
+export type RendszerAllapot = {
+  engedelyezve: boolean;
+  leallitva: boolean;
+  modul_tudas: number;
+  projektkod_tudas: number;
+  utolso: {
+    figyelt_tabla?: number;
+    kizart_tabla?: number;
+    mozgas_30nap?: number;
+    legaktivabb?: { modul: string; tabla: string; mozgas: number }[];
+  } | null;
+  futasok: RendszerFutas[];
+};
+
+export async function getRendszerAllapot(): Promise<RendszerAllapot | null> {
+  return apiGet<RendszerAllapot>("/api/v1/admin-agent/system-learning");
+}
+
 export async function getGyorsitasAllapot(): Promise<GyorsitasAllapot | null> {
   return apiGet<GyorsitasAllapot>("/api/v1/admin-agent/learning-boost");
 }

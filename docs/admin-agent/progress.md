@@ -518,6 +518,37 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   „Értesítés Lara javaslatairól" kapcsoló; figyelmeztetés, ha nincs felelős.
 - Tesztek: `test_admin_agent_felelos.py` (6). Teljes backend: 175 passed.
 
+### V. A teljes rendszer figyelése (csak tanulás) + hatáskör: csak adminisztráció ✅
+- `app/admin_agent/rendszer.py`: Lara óránként (`admin_agent.rendszer`, :40)
+  átnézi az EGÉSZ HYPE OS-t (az adatbázisban létező, nem kizárt táblák — most
+  97 terület), és két fajta TÉNY-tudást ír (`hatokor="rendszer"`,
+  `minosites="rendszer_teny"`, azonnal használható, a Tudástárban elvethető,
+  elvetett tényt nem ír vissza):
+  1. **Rendszerismeret modulonként** (`rendszer:modul:<tábla>`): a modell
+     leírása, tételszám, 30 napos mozgás, állapot-eloszlás, kötődések;
+  2. **Projektkód-életút** (`rendszer:projektkod:<id>`): a projektkódhoz a
+     rendszer minden részében kötődő tételek darabszámmal és állapottal.
+- Csak olvas; csak `aa_memory_chunks` / `aa_learning_runs` írás (teszt
+  ellenőrzi). Kizárva: Lara és az AI asszisztens táblái, hitelesítés /
+  értesítés / push, felület-beállítások, munkatársi adatlap és dokumentumok;
+  minden jelszó-, token-, kulcs-, bankszámla-, adóazonosító-, e-mail-,
+  telefon-, lakcím-jellegű mező. Szabad szöveget nem másol, csak számlál.
+  Egy hibás / még nem migrált tábla nem állítja meg (savepoint táblánként).
+- A projektkód-életút bekerül a számla-elemzés, a TIG/szerződés- és az e-mail-
+  tervezet modell-bemenetébe (`a_projektkod_eletutja_a_rendszerben`); a
+  jelentés szerinti keresés rokon köreibe a „rendszer" is. Tudásháló: a
+  „Projektek, rendszer" témában megrendelő ↔ projektkód élek.
+- Forrás-kapcsoló `engedett_forrasok.rendszer` (migráció `o8i5f96c3d07`
+  bekapcsolja), API `GET /system-learning`, `POST /system-learning/run`,
+  Tanulás oldal kártya, Beállítások kapcsoló, Tudástár címke.
+- **Hatáskör**: `enums.ADMIN_FELADATTIPUSOK` (számla, e-mail, TIG,
+  szerződés, egyéb papírmunka). A végrehajtó minden eszköznél ellenőrzi
+  (nem adminisztratív feladat/eszköz → blokk), az eszköz-regiszter betöltéskor
+  is (nem adminisztratív eszköz fel sem vehető), a heti értékelés 3 új
+  kritikus hatáskör-esetet futtat (diszpó / utómunka / portál módosítása
+  tiltott), és a modell rendszerpromptja is kimondja.
+- Tesztek: `test_admin_agent_rendszer.py` (5). Teljes backend: 180 passed.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

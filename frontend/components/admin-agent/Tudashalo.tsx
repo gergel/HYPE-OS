@@ -36,7 +36,7 @@ const TEMA_CIMKE: Record<string, string> = {
   szerzodes: "Szerződések",
   email: "E-mailek",
   asszisztens: "AI asszisztens",
-  projekt: "Projektek, ajánlatok",
+  projekt: "Projektek, rendszer",
 };
 const FAJTA_CIMKE: Record<string, string> = {
   core: "Mag",

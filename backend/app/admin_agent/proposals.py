@@ -117,7 +117,9 @@ def keszit_javaslat(
         "hianyok": hianyok,
         "integracio_ok": elerheto,
         # A megtanult, jóváhagyott tudás, amit ehhez a javaslathoz felhasznál.
-        "kapcsolodo_tudas": kapcsolodo_tudas(db, hatokor=spec.tipus, partner=task.partner_nev or partner),
+        "kapcsolodo_tudas": kapcsolodo_tudas(
+            db, hatokor=spec.tipus, partner=task.partner_nev or partner, project_code_id=task.project_code_id,
+        ),
     }
     if extra_ellenorzesek:
         ellenorzesek.update(extra_ellenorzesek)
