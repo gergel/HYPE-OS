@@ -75,6 +75,16 @@ celery_app.conf.beat_schedule = {
         # Félóránként — csak ha a „Tanulás és megfigyelés" forrás be van kapcsolva.
         "schedule": crontab(minute="*/30"),
     },
+    "admin-agent-beagyazas": {
+        "task": "admin_agent.beagyazas",
+        # Félóránként (:25 és :55) — a tudás-darabok jelentés szerinti kereséséhez.
+        "schedule": crontab(minute="25,55"),
+    },
+    "admin-agent-napi-osszesito": {
+        "task": "admin_agent.napi_osszesito",
+        # Munkanapokon reggel (UTC 05:30 ≈ budapesti 07:30 nyáron, 06:30 télen).
+        "schedule": crontab(hour=5, minute=30, day_of_week="1-5"),
+    },
 }
 
 
@@ -117,7 +127,16 @@ def nightly_distill_task() -> dict | None:
             return None
         lr = distill(db, trigger="nightly")
         db.commit()
-        return {"learning_run_id": lr.id, "feldolgozott": lr.feldolgozott_korrekciok}
+        from app.admin_agent.megerosites import futtat
+
+        m = futtat(db, trigger="megerosites:ejszakai")
+        db.commit()
+        return {
+            "learning_run_id": lr.id,
+            "feldolgozott": lr.feldolgozott_korrekciok,
+            "auto_jovahagyott": m["auto_jovahagyott"],
+            "uj_szabalyjavaslat": m["uj_szabalyjavaslat"],
+        }
     except Exception:
         db.rollback()
         logger.exception("Lara éjszakai distill sikertelen.")
@@ -167,6 +186,14 @@ def self_check_task() -> dict | None:
         visszajatszas(db)
         eredmeny = onellenorzes(db, trigger="onellenorzes:utemezett")
         db.commit()
+        # A valóság által igazolt példák automatikus jóváhagyása + szabályjavaslat
+        # (lásd admin_agent/megerosites.py) — a friss visszajátszás után.
+        from app.admin_agent.megerosites import futtat
+
+        eredmeny["megerosites"] = {
+            k: v for k, v in futtat(db, trigger="megerosites:utemezett").items() if k != "reszletek"
+        }
+        db.commit()
         return eredmeny
     except Exception:
         db.rollback()
@@ -214,6 +241,50 @@ def asszisztens_task() -> dict | None:
     except Exception:
         db.rollback()
         logger.exception("Lara AI-asszisztens-figyelése sikertelen.")
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="admin_agent.beagyazas")
+def beagyazas_task() -> dict | None:
+    """A tudás-darabok beágyazása a jelentés szerinti kereséshez (lásd
+    admin_agent/embedding.py). Kikapcsolt keresésnél / kulcs nélkül nem fut."""
+    if _leallitva("beagyazas"):
+        return {"leallitva": True}
+    from app.admin_agent.embedding import bekapcsolva, elerheto, feltolt
+
+    db = SessionLocal()
+    try:
+        if not elerheto() or not bekapcsolva(db):
+            return None
+        eredmeny = feltolt(db, max_db=400, max_mp=100)
+        db.commit()
+        return eredmeny
+    except Exception:
+        db.rollback()
+        logger.exception("Lara beágyazása sikertelen.")
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="admin_agent.napi_osszesito")
+def napi_osszesito_task() -> dict | None:
+    """Reggeli értesítés: hány tudás-jelölt vár jóváhagyásra, és melyik a
+    legértékesebb (lásd admin_agent/osszesito.py)."""
+    if _leallitva("napi_osszesito"):
+        return {"leallitva": True}
+    from app.admin_agent.osszesito import napi_osszesito
+
+    db = SessionLocal()
+    try:
+        eredmeny = napi_osszesito(db)
+        db.commit()
+        return eredmeny
+    except Exception:
+        db.rollback()
+        logger.exception("Lara napi összesítője sikertelen.")
         raise
     finally:
         db.close()

@@ -80,7 +80,7 @@ def test_tudashalo_valos_tudasbol(db):
     assert tuple(sorted((szabaly["id"], "partner:haloteszt partner"))) in elek
     assert tuple(sorted((szabaly["id"], "cel:kiadas_uj"))) in elek
     # Váz: a mag mind az öt témakörhöz (számla, TIG, szerződés, e-mail, AI asszisztens).
-    assert sum(1 for e in g["elek"] if e.get("vaz")) == 5  # utalás nincs, AI asszisztens van
+    assert sum(1 for e in g["elek"] if e.get("vaz")) == 6  # utalás nincs; AI asszisztens és Projektek van
     assert g["osszesites"]["kapcsolatok"] >= 4
 
 

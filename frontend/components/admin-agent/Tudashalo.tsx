@@ -23,14 +23,18 @@ const TEMA_SZIN: Record<string, string> = {
   szerzodes: "#944ec1",
   email: "#73a434",
   asszisztens: "#d9668e",
+  // 6. szín: minden ellenőrzés PASS; a kontraszt WARN-t a feliratok + a
+  // jelmagyarázat kezelik (a témát sosem csak a szín jelöli).
+  projekt: "#5d10f8",
 };
-const TEMA_SORREND = ["szamla", "tig", "szerzodes", "email", "asszisztens"] as const;
+const TEMA_SORREND = ["szamla", "tig", "szerzodes", "email", "asszisztens", "projekt"] as const;
 const TEMA_CIMKE: Record<string, string> = {
   szamla: "Számlák",
   tig: "TIG-ek",
   szerzodes: "Szerződések",
   email: "E-mailek",
   asszisztens: "AI asszisztens",
+  projekt: "Projektek, ajánlatok",
 };
 const FAJTA_CIMKE: Record<string, string> = {
   core: "Mag",

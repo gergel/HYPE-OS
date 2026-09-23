@@ -135,17 +135,38 @@ Minden lépés kattintással megy:
    tudás-jelölt lesz a Tudástárban („AI asszisztens" címkével). Az elutasított
    művelet külön tanulság: azt nem kellett volna. Állapota: Tanulás és minőség
    → **„AI asszisztens"** kártya; kikapcsolni a Beállításokban lehet.
-9. **Javítsd, ha téved:** a feladat oldalán **„Javítás / magyarázat Larának"**
+9. **Gyorsított tanulás (magától megy):**
+   - Ha ugyanannál a partnernél legalább 3-szor ugyanúgy döntöttetek, Lara ezeket
+     a példákat **magától jóváhagyja** („magától jóváhagyva" címke a Tudástárban;
+     egy kattintással visszavehető, és akkor többé nem hagyja jóvá magától).
+     Kommentet, árajánlatot, törlést mindig nektek kell jóváhagynotok.
+   - Az egybehangzó esetekből **szabályjavaslatot** készít (Tudástár →
+     Szabály-jelöltek, „Lara javaslata egybehangzó esetekből") — élesíteni
+     csak ti tudjátok.
+   - A tudását a **jelentése alapján** is megtalálja (pl. ugyanaz a cég más
+     néven), nem csak ha a partner neve egyezik.
+   - Munkanapokon reggel **összesítőt** kaptok: hány jelölt vár, és melyik a
+     legértékesebb. A Tudástárban „**Legértékesebb elöl**" rendezéssel ezek
+     állnak elöl, mellettük, hogy miért érdemes.
+   - Ha Lara **kérdez**, értesítést (és push-t) kap, aki az adott számlát
+     rögzítette.
+   Állapot: Tanulás és minőség → **„Gyorsított tanulás"** kártya; minden
+   kapcsoló a Beállítások → „Gyorsított tanulás" alatt.
+   A megfigyelés mostantól a megrendelői szerződéseket és TIG-eket, a
+   projektkód-kommenteket, a bevételeket (ki mikor fizetett), az utalások
+   felvezetését, a kiadott árajánlatokat és a véglegesen törölt rekordokat is
+   nézi.
+10. **Javítsd, ha téved:** a feladat oldalán **„Javítás / magyarázat Larának"**
    → elég röviden leírni, **mit hova kellett volna tennie és miért** — mezőket
    nem kell kitölteni. A magyarázat azonnal Lara tudásába kerül, és a hasonló
    eseteknél (ugyanannál a partnernél, ilyen típusú feladatnál) ebből dolgozik.
    Ha pontosan tudod, melyik mező helyes értéke mi, a „Mezőszintű javítás"
    résznél azt is megadhatod — abból a háttér-tanuló készít jelöltet.
-10. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
+11. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
    megvárod az éjszakai futást). Két hasonló javításból **szabály-jelölt** lesz.
-11. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →
+12. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →
    szabály-jelölt → **„Élesítés"**.
-12. **Kövesd:** az **Áttekintés** „Tanulás állapota" kártyáján látod a számokat
+13. **Kövesd:** az **Áttekintés** „Tanulás állapota" kártyáján látod a számokat
    (megfigyelt lépés, javítás, példa-/szabály-jelölt, jóváhagyott példa, aktív
    szabály), a **Napló**ban pedig minden egyes megfigyelést.
 

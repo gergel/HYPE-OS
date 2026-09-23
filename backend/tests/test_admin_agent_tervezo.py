@@ -44,7 +44,7 @@ def _teendo(**kw):
     return alap
 
 
-def _nincs_tudas(db, *, hatokor, partner):
+def _nincs_tudas(db, *, hatokor, partner, **_):
     return {"szabalyok": [], "hasonlo_esetek": []}
 
 
@@ -97,7 +97,7 @@ def test_modell_igazolt_osszeget_elfogad(monkeypatch):
     monkeypatch.setattr(tervezo, "teendok", lambda db, tipus, pc, user: [_teendo()])
     monkeypatch.setattr(
         tervezo, "kapcsolodo_tudas",
-        lambda db, *, hatokor, partner: {"szabalyok": [], "hasonlo_esetek": [
+        lambda db, *, hatokor, partner, **_: {"szabalyok": [], "hasonlo_esetek": [
             {"tartalom": "HYPE26-0002 · Előző — TIG: Forgató Feri, állapot: Kiküldve, nettó 70 000 Ft."}]},
     )
     llm.teszt_adapter(_modell({"megbizas_targya": "Forgatási asszisztencia", "netto_osszeg": 70000,

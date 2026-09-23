@@ -441,6 +441,57 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
 - Tesztek: `test_admin_agent_asszisztens.py` (3). Élő próba demó-beszélgetésen
   (utána törölve).
 
+### S. Gyorsított tanulás ✅ (valós Gemini-beágyazás: ⚠️ nem ellenőrzött — kulcs nélkül „Beállítás szükséges")
+- **Új megfigyelt források** (`observer.FIGYELT`, ugyanazon a biztonságos,
+  csak olvasó, idempotens úton): megrendelői szerződés és TIG (`szerzodes`/`tig`),
+  projektkód-komment (`projektkod`, csak ≥25 karakter), bevétel — a megrendelő
+  mikor fizetett a határidőhöz képest (`kintlevoseg`), utalások felvezetése — a
+  már elutalt számla hová lett rögzítve, milyen elszámolással (`szamla`; Lara
+  nem utal), kiadott árajánlat + ügyfélnév és időpont alapján VALÓSZÍNŰ
+  projektkód-lánc (`arajanlat`; a sablon nem), végleges törlés (2 óra után,
+  vissza nem állítva — negatív jel, a tábla szerinti tudás-körben). Tudásháló:
+  új „Projektek, ajánlatok" téma (6. szín `#5d10f8`, validátor: minden PASS,
+  kontraszt-WARN → feliratok + jelmagyarázat), váz-él teszt 6-ra frissítve.
+- **Automatikus megerősítés** (`admin_agent/megerosites.py`): ha ugyanannál a
+  partnernél ≥ `auto_jovahagyas_min` (alap 3) eset egybehangzó (≥80%) és egyiket
+  sem vetették el, a PÉLDÁK maguktól jóváhagyottak (`minosites=auto_jovahagyott`,
+  nyomvonal `aa_action_traces.muvelet=auto_jovahagyas`). Szabad szöveg
+  (komment, árajánlat) és törlés sosem; a bevétel tény → magától. Ember által
+  visszavett auto-példa `kezi_jelolt` lesz, többé nem hagyja jóvá magától.
+- **Szabályjavaslat a csoportokból**: ≥5 jóváhagyott, ≥90%-ban egybehangzó
+  eset → `pending` szabály (`feltetelek.forras=megerosites`, `minta_kulcs`
+  deduplikál); számlánál az önellenőrzés formátumában (`cel_tipus`), papírnál
+  `mezo/ertek`; bevételből fizetési szokás (átlagos késés). SOHA nem élesedik
+  magától. Fut: kétóránként az önellenőrzés után, éjszaka a distill után, kézzel.
+- **Jelentés szerinti keresés** (`admin_agent/embedding.py`): a tudás-darabok
+  Gemini-beágyazása (`GEMINI_EMBEDDING_MODEL`, alap `gemini-embedding-001`,
+  768 dim) a meglévő `aa_memory_chunks.embedding` JSONB oszlopba — pgvector nem
+  kell; koszinusz Pythonban, küszöb 0,62, csak jóváhagyott darab. A
+  `kapcsolodo_tudas` új `hasonlo_jelentes` mezője a számla-elemzés, a
+  TIG/szerződés- és az e-mail-tervezet modell-bemenetébe is bekerül (rokon
+  tudás-körökkel). Fail-closed (kulcs/hiba → a régi, név szerinti út). A szöveg
+  változása törli a vektort (ORM-esemény). Félóránkénti Celery
+  (`admin_agent.beagyazas`) + kézi gomb.
+- **Értékrangsor + napi összesítő** (`admin_agent/osszesito.py`): a várakozó
+  jelöltek pontszáma (forrás, esetszám a partnernél, „egy esetre a
+  megerősítéstől", elutasított asszisztens-művelet, frissesség); Tudástár
+  „Legértékesebb elöl" (`/memory?rendezes=ertek`, okokkal); munkanap reggel
+  értesítés + push a jóváhagyásra jogosultaknak (`lara_osszesito`).
+- **Kérdés-értesítés**: új Lara-kérdésnél értesítés + push (`lara_kerdes`) a
+  számla jóváhagyójának, egyébként a Lara-felelősöknek; több kérdés → egy
+  összefoglaló címzettenként. A push-beállításokban mindkét típus kapcsolható.
+- Kapcsolók (`aa_settings.limitek`, hiányzó kulcs = be): `auto_jovahagyas`,
+  `auto_jovahagyas_min`, `szemantikus_kereses`, `napi_osszesito`,
+  `kerdes_ertesites` — Beállítások → „Gyorsított tanulás". Új végpontok:
+  `GET /learning-boost`, `POST /learning-boost/confirm`, `POST /learning-boost/embed`.
+  Tanulás oldal: „Gyorsított tanulás" kártya.
+- Tesztek: `test_admin_agent_gyorsitas.py` (8): új források, auto-jóváhagyás
+  (küszöb, elvetett blokkol, visszavétel tartós, kikapcsolás), szabályjavaslat
+  pending + dedup + bevétel-szabály, jelentés szerinti találat más partnernévnél
+  + kikapcsolva/hibánál üres, vektor-érvénytelenítés, rangsor + összesítő,
+  kérdés-értesítés összevonása, API. Teljes backend: 163 passed, 1 skipped.
+  Élő próba demó-adaton (11 auto-jóváhagyás, 2 szabályjavaslat; utána törölve).
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

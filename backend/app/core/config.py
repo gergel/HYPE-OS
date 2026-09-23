@@ -228,6 +228,9 @@ class Settings(BaseSettings):
     # (pl. "gemini-2.5-pro").
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
+    # Lara jelentés szerinti kereséséhez (lásd admin_agent/embedding.py): a
+    # tudás-darabok beágyazó modellje. Ugyanazzal a gemini_api_key-jel megy.
+    gemini_embedding_model: str = "gemini-embedding-001"
 
     # ───────── Számla-érkeztetés (Beérkező számlák) ─────────
     # A bejövő számla-cím, amire a beszállítók küldenek. A lehúzás a meglévő

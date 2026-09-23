@@ -5,6 +5,7 @@ import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
 import { AdminTanulasVezerlok } from "@/components/admin-agent/AdminTanulasVezerlok";
 import { AdminVisszajatszas } from "@/components/admin-agent/AdminVisszajatszas";
 import { LaraAsszisztens } from "@/components/admin-agent/LaraAsszisztens";
+import { LaraGyorsitas } from "@/components/admin-agent/LaraGyorsitas";
 import { LaraLevelezes } from "@/components/admin-agent/LaraLevelezes";
 import { LaraOnellenorzes } from "@/components/admin-agent/LaraOnellenorzes";
 import {
@@ -12,6 +13,7 @@ import {
   getAdminLearningRuns,
   getAdminReplaySummary,
   getAsszisztensAllapot,
+  getGyorsitasAllapot,
   getLevelezesAllapot,
   getMyPagePermissions,
   getOnellenorzesFutasok,
@@ -30,13 +32,14 @@ export default async function AdminAgentTanulasPage() {
   if (!canView) redirect("/nincs-jogosultsag");
   const canRun = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
 
-  const [tanulasok, evalok, visszajatszas, onellenorzes, levelezes, asszisztens] = await Promise.all([
+  const [tanulasok, evalok, visszajatszas, onellenorzes, levelezes, asszisztens, gyorsitas] = await Promise.all([
     getAdminLearningRuns(),
     getAdminEvaluations(),
     getAdminReplaySummary(),
     getOnellenorzesFutasok(),
     getLevelezesAllapot(),
     getAsszisztensAllapot(),
+    getGyorsitasAllapot(),
   ]);
 
   return (
@@ -47,6 +50,10 @@ export default async function AdminAgentTanulasPage() {
         <div className="flex flex-col gap-4">
           <Card title="Vezérlés">
             <AdminTanulasVezerlok canRun={canRun} />
+          </Card>
+
+          <Card title="Gyorsított tanulás — amit a valóság már igazolt">
+            <LaraGyorsitas kezdo={gyorsitas} canRun={canRun} />
           </Card>
 
           <Card title="Lara önellenőrzése — folyamatos tanulás">

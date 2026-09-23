@@ -250,6 +250,7 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
 
     nyitott = {k.kulcs: k for k in db.scalars(select(LaraKerdes).where(LaraKerdes.allapot == "nyitott")).all()}
     uj = bovitett = 0
+    uj_kerdesek: list[LaraKerdes] = []
     for ck, g in osszes_csoport.items():
         if ck in nyitott:
             k = nyitott[ck]
@@ -266,17 +267,26 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
             stat["kerdes_varolistan"] += 1
             continue
         tipus = g.pop("tipus")
-        db.add(
-            LaraKerdes(
-                tipus=tipus,
-                allapot="nyitott",
-                kulcs=ck,
-                partner_nev=(g["partner"] or "")[:300],
-                kerdes=_szoveg({**g, "tipus": tipus}),
-                kontextus=g,
-            )
+        kerdes = LaraKerdes(
+            tipus=tipus,
+            allapot="nyitott",
+            kulcs=ck,
+            partner_nev=(g["partner"] or "")[:300],
+            kerdes=_szoveg({**g, "tipus": tipus}),
+            kontextus=g,
         )
+        db.add(kerdes)
+        uj_kerdesek.append(kerdes)
         uj += 1
+
+    # Az új kérdésről értesítés (push is) annak, aki az esetet rögzítette —
+    # így a válasz órák helyett percek alatt jöhet (lásd admin_agent/osszesito.py).
+    ertesitve = 0
+    if uj_kerdesek:
+        from app.admin_agent.osszesito import kerdes_ertesites
+
+        db.flush()
+        ertesitve = kerdes_ertesites(db, uj_kerdesek)
 
     def _terulet(c: Counter, nem_tudta: bool) -> dict:
         n = c["egyezik"] + c["elter"] + (c["nem_tudta"] if nem_tudta else 0)
@@ -305,6 +315,7 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
         "teruletek": teruletek,
         "uj_kerdes": uj,
         "bovitett_kerdes": bovitett,
+        "ertesitett": ertesitve,
         "varolistan": stat["kerdes_varolistan"],
         "szabalyok": sum(len(v) for v in tudas.szabalyok.values()) + _papir_szabalyok(db),
         "tanult_partnerek": len(tudas.esetek),

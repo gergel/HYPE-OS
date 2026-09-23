@@ -1094,6 +1094,7 @@ def learning_runs_lista(
             ~LearningRun.trigger.like("onellenorzes%"),
             ~LearningRun.trigger.like("levelezes%"),
             ~LearningRun.trigger.like("asszisztens%"),
+            ~LearningRun.trigger.like("megerosites%"),
         )
         .order_by(LearningRun.id.desc())
         .limit(50)
@@ -1293,10 +1294,92 @@ def onellenorzes_inditas(
     from app.admin_agent.onellenorzes import onellenorzes
     from app.admin_agent.visszajatszas import visszajatszas
 
+    from app.admin_agent.megerosites import futtat
+
     vj = visszajatszas(db)
     eredmeny = onellenorzes(db, trigger="onellenorzes:kezi")
     db.commit()
-    return {**eredmeny, "visszajatszas": {k: vj[k] for k in ("uj_szamla", "uj_pelda", "uj_szabaly_jelolt")}}
+    m = futtat(db, trigger="megerosites:onellenorzes")
+    db.commit()
+    return {
+        **eredmeny,
+        "visszajatszas": {k: vj[k] for k in ("uj_szamla", "uj_pelda", "uj_szabaly_jelolt")},
+        "megerosites": {k: m[k] for k in ("auto_jovahagyott", "uj_szabalyjavaslat")},
+    }
+
+
+# ── Gyorsított tanulás: megerősítés, jelentés szerinti keresés, összesítő ────
+
+
+def _gyorsitas_beallitasok(db: Session) -> dict:
+    lim = get_settings(db).limitek or {}
+    from app.admin_agent.megerosites import beallitas
+
+    auto, min_eset = beallitas(db)
+    return {
+        "auto_jovahagyas": auto,
+        "auto_jovahagyas_min": min_eset,
+        "szemantikus_kereses": lim.get("szemantikus_kereses") is not False,
+        "napi_osszesito": lim.get("napi_osszesito") is not False,
+        "kerdes_ertesites": lim.get("kerdes_ertesites") is not False,
+    }
+
+
+def _rangsor_sor(pont: float, m: MemoryChunk, okok: list[str]) -> dict:
+    return {**_memory_sor(m), "ertek": pont, "ertek_okok": okok}
+
+
+@router.get("/learning-boost")
+def gyorsitas_allapot(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """A gyorsított tanulás állapota: automatikus jóváhagyások, szabályjavaslatok,
+    a jelentés szerinti keresés lefedettsége és a legértékesebb várakozó jelöltek."""
+    from app.admin_agent.embedding import lefedettseg
+    from app.admin_agent.megerosites import allapot
+    from app.admin_agent.osszesito import ertek_rangsor
+
+    rangsor = ertek_rangsor(db)
+    return {
+        "beallitasok": _gyorsitas_beallitasok(db),
+        "megerosites": allapot(db),
+        "beagyazas": lefedettseg(db),
+        "varakozo": len(rangsor),
+        "legertekesebb": [_rangsor_sor(p, m, o) for p, m, o in rangsor[:8]],
+    }
+
+
+@router.post("/learning-boost/confirm")
+def gyorsitas_megerosites(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Megerősítés MOST: a valóság által igazolt példák automatikus jóváhagyása
+    és szabályjavaslat a jóváhagyott csoportokból (szabály sosem élesedik magától)."""
+    from app.admin_agent.megerosites import futtat
+
+    eredmeny = futtat(db, trigger="megerosites:kezi")
+    db.commit()
+    return eredmeny
+
+
+@router.post("/learning-boost/embed")
+def gyorsitas_beagyazas(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A még vektor nélküli tudás-darabok beágyazása MOST (~40 mp egy kérésben;
+    a többit a félóránkénti futás folytatja)."""
+    from app.admin_agent.embedding import bekapcsolva, elerheto, feltolt, lefedettseg
+
+    if not elerheto():
+        raise HTTPException(status_code=400, detail="Beállítás szükséges: nincs Gemini-kulcs a beágyazáshoz.")
+    if not bekapcsolva(db):
+        raise HTTPException(status_code=400, detail="A jelentés szerinti keresés ki van kapcsolva (Beállítások).")
+    eredmeny = feltolt(db, max_db=400, max_mp=40)
+    db.commit()
+    return {**eredmeny, "lefedettseg": lefedettseg(db)}
 
 
 @router.get("/mail-learning")
@@ -1495,6 +1578,8 @@ def memory_lista(
     limit: int = Query(default=100, ge=1, le=1000),
     #: A régi korszakból félretett jelölteket is kéri (alapból nem).
     felretett: bool = Query(default=False),
+    #: "ertek": a várakozó jelöltek érték szerint elöl (lásd admin_agent/osszesito.py).
+    rendezes: str | None = Query(default=None),
 ):
     """A tudás-példák (jelöltek + jóváhagyottak). A holdout sosem jelenik meg itt.
     A régi korszak (a tanulás kezdete előtti / Notionből importált) félretett
@@ -1510,8 +1595,17 @@ def memory_lista(
             MemoryChunk.minosites == FELRETEVE, MemoryChunk.ervenyes.is_(False), MemoryChunk.visszavont.is_(False)
         )
     ) or 0
+    elemek = [_memory_sor(m) for m in sorok]
+    if rendezes == "ertek":
+        from app.admin_agent.osszesito import ertek_rangsor
+
+        rang = {m.id: (p, o) for p, m, o in ertek_rangsor(db)}
+        for e in elemek:
+            if e["id"] in rang:
+                e["ertek"], e["ertek_okok"] = rang[e["id"]]
+        elemek.sort(key=lambda e: (e.get("ertek") is None, -(e.get("ertek") or 0), -e["id"]))
     return {
-        "elemek": [_memory_sor(m) for m in sorok],
+        "elemek": elemek,
         "felretett_regi": felretett_db,
         "tanulas_kezdete": tanulas_kezdete_datum(db).isoformat(),
     }
@@ -1583,7 +1677,9 @@ def memory_modositas(
         m.minosites = "jovahagyott"
     elif payload.ervenyes is False:
         m.ervenyes = False
-        m.minosites = "jelolt"
+        # Ha Lara hagyta jóvá magától, és ember vette vissza, a megerősítés
+        # többé nem hagyhatja jóvá újra (lásd admin_agent/megerosites.py).
+        m.minosites = "kezi_jelolt" if m.minosites == "auto_jovahagyott" else "jelolt"
     if payload.visszavont is True:
         m.visszavont = True
         m.ervenyes = False

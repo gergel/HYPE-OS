@@ -11,14 +11,22 @@ const PAGE = "/admin-agent";
  *
  * Lara tudása: szabályok és példák. A gépi JELÖLT (javításokból, illetve a
  * projektkód/utókövetés megfigyeléséből) egyértelműen elkülönítve jelenik meg,
- * és csak emberi jóváhagyással kerül éles használatba. */
-export default async function AdminAgentTudastarPage() {
+ * és csak emberi jóváhagyással kerül éles használatba — kivéve a valóság által
+ * már igazolt példát, amit Lara magától jóváhagy (lásd backend
+ * admin_agent/megerosites.py); ez „magától jóváhagyva" címkét kap. */
+export default async function AdminAgentTudastarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ rendezes?: string }>;
+}) {
+  const { rendezes } = await searchParams;
+  const ertekSzerint = rendezes === "ertek";
   const pagePermissions = await getMyPagePermissions();
   const canView = pagePermissions === null || !!pagePermissions[PAGE]?.includes("view");
   if (!canView) redirect("/nincs-jogosultsag");
   const canEdit = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
 
-  const [szabalyok, peldak] = await Promise.all([getAdminRules(), getAdminMemory()]);
+  const [szabalyok, peldak] = await Promise.all([getAdminRules(), getAdminMemory(ertekSzerint ? "ertek" : undefined)]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -36,6 +44,7 @@ export default async function AdminAgentTudastarPage() {
             felretettRegi={peldak.felretett_regi ?? 0}
             tanulasKezdete={peldak.tanulas_kezdete ?? null}
             canEdit={canEdit}
+            ertekSzerint={ertekSzerint}
           />
         )}
       </div>

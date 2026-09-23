@@ -61,18 +61,52 @@ def pgvector_elerheto_e(_cache_key: int = 0) -> bool:
         db.close()
 
 
-def kapcsolodo_tudas(db: Session, *, hatokor: str, partner: str | None = None) -> dict:
-    """A javaslathoz csatolt, TÖMÖR tudás-hivatkozás: az adott feladattípus aktív
-    szabályai + a UGYANAZON partnerhez tartozó jóváhagyott korábbi esetek.
+#: A jelentés szerinti keresésnél a feladattípushoz ezek a tudás-körök is
+#: számítanak (pl. egy számlánál a projektkód-kommentek és a fizetési szokás).
+ROKON_HATOKOROK: dict[str, tuple[str, ...]] = {
+    "szamla": ("szamla", "projektkod", "kintlevoseg", "email"),
+    "tig": ("tig", "szerzodes", "projektkod"),
+    "szerzodes": ("szerzodes", "tig", "projektkod", "arajanlat"),
+    "email": ("email", "szamla", "kintlevoseg", "projektkod"),
+}
+_HATOKOR_SZO = {"szamla": "számla", "tig": "teljesítésigazolás (TIG)", "szerzodes": "szerződés", "email": "e-mail"}
 
-    Hasonló eset csak akkor kerül mellé, ha a partner neve egyezik — kevés
-    releváns találatnál NEM egészítjük ki irreleváns példákkal (master prompt 11.)."""
+
+def kapcsolodo_tudas(db: Session, *, hatokor: str, partner: str | None = None, szoveg: str | None = None) -> dict:
+    """A javaslathoz csatolt, TÖMÖR tudás-hivatkozás: az adott feladattípus aktív
+    szabályai + a UGYANAZON partnerhez tartozó jóváhagyott korábbi esetek +
+    (ha be van kapcsolva) a JELENTÉSBEN hasonló jóváhagyott tudás.
+
+    A partner-egyezéses eset csak akkor kerül mellé, ha a partner neve egyezik;
+    a jelentés szerinti találat csak egy küszöb fölött — kevés releváns
+    találatnál NEM egészítjük ki irreleváns példákkal (master prompt 11.)."""
     r = retrieve(db, hatokor=hatokor, partner=partner, limit=5)
     peldak: list[dict] = []
     if partner and partner.strip():
         peldak = retrieve(db, hatokor=hatokor, query=partner.strip(), limit=5)["peldak"]
+    kerdes = (szoveg or "").strip() or (
+        f"{_HATOKOR_SZO.get(hatokor, hatokor)} — partner: {partner.strip()}" if partner and partner.strip() else ""
+    )
+    jelentes: list[dict] = []
+    if kerdes:
+        from app.admin_agent.embedding import hasonlo
+
+        jelentes = hasonlo(
+            db, kerdes, hatokorok=ROKON_HATOKOROK.get(hatokor, (hatokor,)), limit=3,
+            kiveve={p["id"] for p in peldak},
+        )
     return {
-        "modszer": r["modszer"],
+        "modszer": "jelentes_szerinti" if jelentes else r["modszer"],
+        "hasonlo_jelentes": [
+            {
+                "id": j["id"],
+                "hatokor": j["hatokor"],
+                "hasonlosag": j["hasonlosag"],
+                "tartalom": (REGI_ELOTAG if j["regi"] else "") + j["tartalom"],
+                "regi": j["regi"],
+            }
+            for j in jelentes
+        ],
         "szabalyok": [{"id": s["id"], "cim": s["cim"], "tartalom": s["tartalom"]} for s in r["szabalyok"]],
         "hasonlo_esetek": [
             {

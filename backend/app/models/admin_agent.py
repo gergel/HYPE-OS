@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -327,6 +328,17 @@ class MemoryChunk(TimestampMixin, Base):
     #: (lásd admin_agent/observer.py `korszak_rendezes`). Ilyenből nem lesz új
     #: jelölt; a már jóváhagyott csak az újak után, kisebb súllyal kerül elő.
     regi_korszak: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+
+
+@event.listens_for(MemoryChunk.tartalom, "set")
+def _tartalom_valtozott(target: MemoryChunk, value, oldvalue, _initiator) -> None:
+    """Ha egy tudás-darab szövege megváltozik (pl. a megfigyelő frissíti a
+    jelöltet), a régi szövegre számolt beágyazó vektor érvénytelen — a
+    következő beágyazó futás újraszámolja (lásd admin_agent/embedding.py)."""
+    if isinstance(oldvalue, str) and value != oldvalue:
+        target.embedding = None
+        target.embedding_modell = None
+        target.embedding_dim = None
 
 
 class EvalCase(TimestampMixin, Base):

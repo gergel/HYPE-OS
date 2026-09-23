@@ -866,6 +866,42 @@ export type AsszisztensAllapot = {
   futasok: AsszisztensFutas[];
 };
 
+/** Gyorsított tanulás (lásd backend admin_agent/megerosites.py, embedding.py,
+ * osszesito.py). */
+export type GyorsitasBeallitasok = {
+  auto_jovahagyas: boolean;
+  auto_jovahagyas_min: number;
+  szemantikus_kereses: boolean;
+  napi_osszesito: boolean;
+  kerdes_ertesites: boolean;
+};
+
+export type GyorsitasAllapot = {
+  beallitasok: GyorsitasBeallitasok;
+  megerosites: {
+    bekapcsolva: boolean;
+    min_eset: number;
+    auto_jovahagyott: number;
+    auto_elvetve: number;
+    szabalyjavaslat: number;
+    futasok: {
+      id: number;
+      trigger: string;
+      veg_at: string | null;
+      auto_jovahagyott?: number;
+      uj_szabalyjavaslat?: number;
+      vizsgalt_pelda?: number;
+    }[];
+  };
+  beagyazas: { osszes: number; beagyazva: number; modell: string; elerheto: boolean };
+  varakozo: number;
+  legertekesebb: AdminMemory[];
+};
+
+export async function getGyorsitasAllapot(): Promise<GyorsitasAllapot | null> {
+  return apiGet<GyorsitasAllapot>("/api/v1/admin-agent/learning-boost");
+}
+
 export async function getAsszisztensAllapot(): Promise<AsszisztensAllapot | null> {
   return apiGet<AsszisztensAllapot>("/api/v1/admin-agent/assistant-learning");
 }
@@ -967,6 +1003,9 @@ export type AdminMemory = {
   regi_korszak?: boolean;
   forras_keletkezes?: string | null;
   letrehozva: string | null;
+  /** Érték szerinti rendezésnél: mennyit segít a jóváhagyása, és miért. */
+  ertek?: number;
+  ertek_okok?: string[];
 };
 
 export type AdminMemoryLista = {
@@ -976,8 +1015,10 @@ export type AdminMemoryLista = {
   tanulas_kezdete?: string;
 };
 
-export async function getAdminMemory(): Promise<AdminMemoryLista | null> {
-  return apiGet<AdminMemoryLista>("/api/v1/admin-agent/memory?limit=1000");
+export async function getAdminMemory(rendezes?: "ertek"): Promise<AdminMemoryLista | null> {
+  return apiGet<AdminMemoryLista>(
+    `/api/v1/admin-agent/memory?limit=1000${rendezes === "ertek" ? "&rendezes=ertek" : ""}`,
+  );
 }
 
 export async function getDashboardSummary(): Promise<DashboardSummary | null> {

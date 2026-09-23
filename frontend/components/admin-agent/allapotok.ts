@@ -28,6 +28,26 @@ export const TIPUS_CIMKE: Record<string, string> = {
   egyeb: "Egyéb",
   // Nem feladattípus, hanem tudás-hatókör: az AI asszisztens kérés-körei.
   asszisztens: "AI asszisztens",
+  // Tudás-hatókörök a bővített megfigyelésből.
+  projektkod: "Projektkód",
+  kintlevoseg: "Kintlevőség / bevétel",
+  arajanlat: "Árajánlat",
+};
+
+/** A megfigyelt forrás (Tudástár „forrás: megfigyeles:<kulcs>:<id>") címkéje —
+ * a backend observer.FIGYELT kulcsai. */
+export const MEGFIGYELT_FORRAS_CIMKE: Record<string, string> = {
+  szerzodes: "Szerződés",
+  tig: "TIG",
+  belsos_tig: "Belsős TIG",
+  kiadas: "Kiadás",
+  megrendeloi_szerzodes: "Megrendelői szerződés",
+  megrendeloi_tig: "Megrendelői TIG",
+  projektkod_komment: "Projektkód-komment",
+  bevetel: "Bevétel (megrendelői fizetés)",
+  utalas: "Utalás felvezetése",
+  arajanlat: "Árajánlat",
+  torles: "Törölt rekord",
 };
 
 /** A felületről kézzel beállítható, MELLÉKHATÁS-MENTES állapotok (a backend

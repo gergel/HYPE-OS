@@ -31,11 +31,17 @@ export function AdminBeallitasok({
   const megfigyelesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.megfigyeles);
   const levelezesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.levelezes);
   const asszisztensBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.asszisztens);
+  const limitek = (b.limitek as Record<string, unknown> | null) ?? {};
+  // A gyorsított tanulás kapcsolói alapból BEKAPCSOLTAK (hiányzó kulcs = be).
+  const limitBe = (kulcs: string) => limitek[kulcs] !== false;
+  const minEset = Number(limitek.auto_jovahagyas_min ?? 3) || 3;
+  const limitMent = (valtozas: Record<string, unknown>) => mentSettings({ limitek: { ...limitek, ...valtozas } });
 
   async function mentSettings(valtozas: {
     module_enabled?: boolean;
     side_effects_enabled?: boolean;
     engedett_forrasok?: Record<string, unknown>;
+    limitek?: Record<string, unknown>;
     tanulas_kezdete?: string;
   }) {
     if (!canManage) return;
@@ -107,7 +113,7 @@ export function AdminBeallitasok({
 
       <Kapcsolo
         cim="Tanulás és megfigyelés (L0)"
-        leiras="Bekapcsolva Lara félóránként megnézi a projektkódokon és az utókövetésben történt szerződés-, TIG- és számla/kiadás-lépéseket, és éjszakánként tanul a javításokból. Csak olvas és jelölteket készít — üzleti rekordot nem módosít, ezért a modul kikapcsolt állapotában is biztonságos."
+        leiras="Bekapcsolva Lara félóránként megnézi a projektkódokon és az utókövetésben történt szerződés-, TIG- és számla/kiadás-lépéseket, a megrendelői szerződéseket és TIG-eket, a projektkód-kommenteket, a bevételeket (ki mikor fizetett), az utalások felvezetését, a kiadott árajánlatokat és a véglegesen törölt rekordokat, és éjszakánként tanul a javításokból. Csak olvas és jelölteket készít — üzleti rekordot nem módosít, ezért a modul kikapcsolt állapotában is biztonságos."
         aktiv={megfigyelesBe}
         tiltva={!canManage || folyamatban || b.kill_switch}
         onValt={(v) =>
@@ -140,6 +146,59 @@ export function AdminBeallitasok({
           })
         }
       />
+
+      <div className="rounded-[var(--radius)] border border-border px-4 py-3.5">
+        <p className="text-[13px] font-medium text-text-primary">Gyorsított tanulás</p>
+        <p className="mt-0.5 text-[12px] text-text-muted">
+          Ezek gyorsítják, hogy az összegyűjtött tudásból használt tudás legyen. Mind csak Lara saját tudását és az
+          értesítéseket érinti — üzleti rekordot nem módosít, és szabályt magától sosem élesít.
+        </p>
+        <div className="mt-3 flex flex-col gap-3">
+          <Kapcsolo
+            cim="Automatikus jóváhagyás, ha a valóság igazolta"
+            leiras={`Ha ugyanannál a partnernél legalább ${minEset} eset egybehangzóan ugyanúgy alakult (és egyiket sem vetettétek el), Lara magától jóváhagyja ezeket a PÉLDÁKAT. A kommentek, árajánlatok és törlések mindig kézi jóváhagyásra várnak; a befolyt fizetés tény, az magától bekerül. Szabályból csak javaslat lesz.`}
+            aktiv={limitBe("auto_jovahagyas")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ auto_jovahagyas: v })}
+          />
+          <div className="flex flex-wrap items-center gap-2 pl-1 text-[12px] text-text-secondary">
+            Ennyi egybehangzó eset kell hozzá:
+            <select
+              value={minEset}
+              disabled={!canManage || folyamatban || b.kill_switch || !limitBe("auto_jovahagyas")}
+              onChange={(e) => limitMent({ auto_jovahagyas_min: Number(e.target.value) })}
+              className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[12.5px] text-text-primary disabled:opacity-50"
+            >
+              {[2, 3, 4, 5, 7, 10].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Kapcsolo
+            cim="Jelentés szerinti keresés"
+            leiras="A jóváhagyott tudást a jelentése alapján is megtalálja (pl. ugyanaz a cég más néven, vagy hasonló eset egy másik partnernél), nem csak ha a partner neve egyezik. A már beállított Gemini-kulcsot használja; hiba esetén a régi, név szerinti keresésre marad."
+            aktiv={limitBe("szemantikus_kereses")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ szemantikus_kereses: v })}
+          />
+          <Kapcsolo
+            cim="Napi összesítő"
+            leiras="Munkanapokon reggel értesítés (és bekapcsolt telefonon push) a jóváhagyásra jogosultaknak: hány tudás-jelölt vár, és melyek a legértékesebbek — ezek a Tudástárban „érték szerint” rendezve elöl állnak."
+            aktiv={limitBe("napi_osszesito")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ napi_osszesito: v })}
+          />
+          <Kapcsolo
+            cim="Értesítés Lara kérdéseiről"
+            leiras="Új kérdésnél értesítés (és push) annak, aki az adott számlát rögzítette — ő tudja, miért így döntött —, egyébként a Lara-felelősöknek. Több új kérdésnél egy összefoglaló értesítés megy."
+            aktiv={limitBe("kerdes_ertesites")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ kerdes_ertesites: v })}
+          />
+        </div>
+      </div>
 
       <div className="rounded-[var(--radius)] border border-border bg-surface-3 px-4 py-3.5">
         <p className="text-[13px] font-medium text-text-primary">Tanulás kezdete</p>

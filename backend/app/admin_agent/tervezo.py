@@ -244,6 +244,7 @@ def _modell_kiegeszites(tipus: str, tetelek: list[dict], tudas_fel: dict[int, di
             "hianyzo_mezok": hiany,
             "tetelek": t["tetelek"],
             "ugyanennek_a_felnek_jovahagyott_korabbi_esetei": [p["tartalom"] for p in tudas_fel.get(i, {}).get("hasonlo_esetek", [])],
+            "jelentesben_hasonlo_tudas": [p["tartalom"][:1500] for p in tudas_fel.get(i, {}).get("hasonlo_jelentes", [])],
             "szabalyok": [s["cim"] + ": " + s["tartalom"] for s in tudas_fel.get(i, {}).get("szabalyok", [])],
         })
     if not bemenet:
@@ -290,7 +291,11 @@ def tig_szerzodes_tervezet(db: Session, task: AdminTask, user: Employee) -> dict
     for i, t in enumerate(lista):
         mezok, forras, igazolt = _elotoltes(tipus, t)
         lara_figy += _papir_tudas_alkalmazasa(papir_tudas, tipus, t, mezok, forras)
-        tudas = kapcsolodo_tudas(db, hatokor=tipus, partner=mezok.get("ceg_neve") or t["nev"])
+        kerdes = " · ".join(
+            x for x in (f"{tipus}: {mezok.get('ceg_neve') or t['nev']}", t.get("project_nev") or "",
+                        str(mezok.get("megbizas_targya") or "")) if x
+        )
+        tudas = kapcsolodo_tudas(db, hatokor=tipus, partner=mezok.get("ceg_neve") or t["nev"], szoveg=kerdes)
         tudas_fel[i] = tudas
         igazolt |= _peldak_osszegei(tudas.get("hasonlo_esetek", []))
         tetelek.append({**t, "mezok": mezok, "forrasok": forras, "igazolt_osszegek": sorted(igazolt)})
@@ -428,13 +433,17 @@ def email_tervezet(db: Session, task: AdminTask, user: Employee) -> dict:
     from app.admin_agent import llm
 
     cimek = ismert_cimek(db, task, user)
-    tudas = kapcsolodo_tudas(db, hatokor="email", partner=task.partner_nev)
+    tudas = kapcsolodo_tudas(
+        db, hatokor="email", partner=task.partner_nev,
+        szoveg=" · ".join(x for x in (task.cim, task.osszefoglalo or "", task.partner_nev or "") if x),
+    )
     pc = db.get(ProjectCode, task.project_code_id) if task.project_code_id else None
     bemenet = {
         "feladat": {"cim": task.cim, "osszefoglalo": task.osszefoglalo, "partner": task.partner_nev},
         "projektkod": pc.projektkod if pc else None,
         "ismert_cimzettek": cimek,
         "jovahagyott_stilus_es_esetek": [e["tartalom"] for e in tudas.get("hasonlo_esetek", [])],
+        "jelentesben_hasonlo_tudas": [e["tartalom"][:1500] for e in tudas.get("hasonlo_jelentes", [])],
         "szabalyok": [s["cim"] + ": " + s["tartalom"] for s in tudas.get("szabalyok", [])],
     }
     feladat = (

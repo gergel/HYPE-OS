@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import type { AdminMemory, AdminRule } from "@/lib/api";
-import { TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
+import { MEGFIGYELT_FORRAS_CIMKE, TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
 import { AdminSzabalyUrlap } from "@/components/admin-agent/AdminSzabalyUrlap";
 
 /** A szabály feltételeinek rövid, emberi címkéje (partner / cél). */
@@ -14,6 +14,7 @@ function feltetelCimke(r: AdminRule): string {
   if (f.partner) reszek.push(`partner: ${String(f.partner_nev ?? f.partner)}`);
   if (f.forras === "visszajatszas") reszek.push("visszajátszásból");
   if (f.forras === "kezi") reszek.push("kézi");
+  if (f.forras === "megerosites") reszek.push("Lara javaslata egybehangzó esetekből");
   return reszek.length ? ` · ${reszek.join(" · ")}` : "";
 }
 
@@ -38,6 +39,7 @@ export function AdminTudastarKezelo({
   felretettRegi = 0,
   tanulasKezdete = null,
   canEdit,
+  ertekSzerint = false,
 }: {
   kezdoSzabalyok: AdminRule[];
   kezdoPeldak: AdminMemory[];
@@ -45,6 +47,8 @@ export function AdminTudastarKezelo({
   felretettRegi?: number;
   tanulasKezdete?: string | null;
   canEdit: boolean;
+  /** A várakozó jelöltek érték szerint (a legtöbbet segítő elöl). */
+  ertekSzerint?: boolean;
 }) {
   const router = useRouter();
   const [szabalyok, setSzabalyok] = useState(kezdoSzabalyok);
@@ -203,6 +207,15 @@ export function AdminTudastarKezelo({
         {osszesJelolt.length > 0 && (
           <li className="flex flex-wrap items-center gap-2 pb-1">
             <select
+              value={ertekSzerint ? "ertek" : "uj"}
+              onChange={(e) => router.push(e.target.value === "ertek" ? "?rendezes=ertek" : "?")}
+              aria-label="Rendezés"
+              className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12px] text-text-primary"
+            >
+              <option value="uj">Legújabb elöl</option>
+              <option value="ertek">Legértékesebb elöl</option>
+            </select>
+            <select
               value={szuro}
               onChange={(e) => {
                 setSzuro(e.target.value);
@@ -255,9 +268,10 @@ export function AdminTudastarKezelo({
           jeloltPelda.map((m) => (
             <Sor
               key={m.id}
-              cimke={peldaCimke(m)}
+              cimke={`${peldaCimke(m)}${m.minosites === "kezi_jelolt" ? " · visszavéve a magától jóváhagyottak közül" : ""}`}
               szoveg={m.tartalom}
               forras={m.forras}
+              megjegyzes={m.ertek_okok?.length ? `Miért érdemes: ${m.ertek_okok.join(" · ")}` : undefined}
               kijelolve={canEdit ? kijelolt.has(m.id) : undefined}
               onKijel={() => kijel(m.id)}
             >
@@ -340,7 +354,7 @@ export function AdminTudastarKezelo({
 
       <Szekcio
         cim={`Szabály-jelöltek (${jeloltSzabaly.length})`}
-        leiras="Gépi javaslatok (ismétlődő javításokból és a visszajátszásból) és a kézzel felvett vázlatok. Élesítés csak sikeres értékelés (Tanulás → 3. Értékelés) után lehetséges."
+        leiras="Gépi javaslatok (ismétlődő javításokból, a visszajátszásból és a jóváhagyott, egybehangzó esetek csoportjaiból) és a kézzel felvett vázlatok. Lara szabályt magától sosem élesít. Élesítés csak sikeres értékelés (Tanulás → 3. Értékelés) után lehetséges."
       >
         {canEdit && (
           <AdminSzabalyUrlap
@@ -410,7 +424,9 @@ export function AdminTudastarKezelo({
             {jovahagyottPelda.map((m) => (
               <Sor
                 key={`m${m.id}`}
-                cimke={`Példa · ${peldaCimke(m)}${m.regi_korszak ? " · régi (kisebb súllyal)" : ""}`}
+                cimke={`Példa · ${peldaCimke(m)}${m.regi_korszak ? " · régi (kisebb súllyal)" : ""}${
+                  m.minosites === "auto_jovahagyott" ? " · magától jóváhagyva (a valóság igazolta)" : ""
+                }`}
                 szoveg={m.tartalom}
                 forras={m.forras}
               >
@@ -447,6 +463,7 @@ function Sor({
   cimke,
   szoveg,
   forras,
+  megjegyzes,
   kijelolve,
   onKijel,
   children,
@@ -454,6 +471,7 @@ function Sor({
   cimke: string;
   szoveg: string;
   forras?: string | null;
+  megjegyzes?: string;
   kijelolve?: boolean;
   onKijel?: () => void;
   children?: React.ReactNode;
@@ -468,6 +486,7 @@ function Sor({
           {cimke}
         </span>
         <SorSzoveg szoveg={szoveg} />
+        {megjegyzes && <p className="text-[11.5px] text-text-accent">{megjegyzes}</p>}
         {forras && <p className="text-[11px] text-text-muted">forrás: {forras}</p>}
       </div>
       {children && <div className="flex shrink-0 gap-1.5">{children}</div>}
@@ -479,6 +498,13 @@ function Sor({
 function peldaCimke(m: { hatokor: string; forras?: string | null }): string {
   if (m.forras?.startsWith("levelezes:")) return "Levelezés";
   if (m.forras?.startsWith("asszisztens:")) return `AI asszisztens · ${TIPUS_CIMKE[m.hatokor] ?? m.hatokor}`;
+  if (m.forras?.startsWith("megfigyeles:")) {
+    const kulcs = m.forras.split(":")[1];
+    // Az alap négy forrásnál a feladattípus a beszédesebb; az újaknál a forrás.
+    if (kulcs && !["szerzodes", "tig", "belsos_tig", "kiadas"].includes(kulcs) && MEGFIGYELT_FORRAS_CIMKE[kulcs]) {
+      return MEGFIGYELT_FORRAS_CIMKE[kulcs];
+    }
+  }
   return TIPUS_CIMKE[m.hatokor] ?? m.hatokor;
 }
 

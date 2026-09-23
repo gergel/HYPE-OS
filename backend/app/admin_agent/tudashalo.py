@@ -33,16 +33,32 @@ from app.admin_agent.visszajatszas import CEL_CIMKE
 from app.models.admin_agent import AdminTask, Correction, MemoryChunk, PlaybookRule, SourceEvent
 from app.models.project_code import ProjectCode
 
-TEMAK = ("szamla", "tig", "szerzodes", "email", "asszisztens")
+TEMAK = ("szamla", "tig", "szerzodes", "email", "asszisztens", "projekt")
 TEMA_CIMKE = {
     "szamla": "Számlák",
     "tig": "TIG-ek",
     "szerzodes": "Szerződések",
     "email": "E-mailek",
     "asszisztens": "AI asszisztens",
+    "projekt": "Projektek, ajánlatok",
 }
-#: A megfigyelő táblái → témakör.
-_TABLA_TEMA = {"szerzodes": "szerzodes", "tig": "tig", "belsos_tig": "tig", "kiadas": "szamla"}
+#: A megfigyelő táblái → témakör. A bevétel (megrendelői fizetés) és az
+#: utalás-felvezetés pénzügyi tanulság, ezért a Számlák témához tartozik; a
+#: projektkód-komment és az árajánlat a Projektek témához.
+_TABLA_TEMA = {
+    "szerzodes": "szerzodes",
+    "tig": "tig",
+    "belsos_tig": "tig",
+    "kiadas": "szamla",
+    "megrendeloi_szerzodes": "szerzodes",
+    "megrendeloi_tig": "tig",
+    "bevetel": "szamla",
+    "utalas": "szamla",
+    "projektkod_komment": "projekt",
+    "arajanlat": "projekt",
+}
+#: A törölt rekord feladattípusa (lásd observer.TOROLT_TABLAK) → témakör.
+_HATOKOR_TEMA = {"szamla": "szamla", "kintlevoseg": "szamla", "tig": "tig", "szerzodes": "szerzodes", "projektkod": "projekt"}
 
 #: Bizonyíték-súlyok.
 S_JOVAHAGYOTT = 1.0
@@ -215,7 +231,8 @@ def tudashalo(db: Session) -> dict:
         utolso[se.forras_azonosito] = se
     for azon, se in utolso.items():
         m = se.metaadat or {}
-        tema = _TABLA_TEMA.get(m.get("tabla") or azon.split(":")[0])
+        tabla = m.get("tabla") or azon.split(":")[0]
+        tema = _HATOKOR_TEMA.get(m.get("tema_kulcs") or "") if tabla == "torles" else _TABLA_TEMA.get(tabla)
         allapot = _pelda_allapot(peldak.get(f"megfigyeles:{azon}"))
         if tema is None or allapot is None:
             continue
