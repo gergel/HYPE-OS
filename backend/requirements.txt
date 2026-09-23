@@ -46,6 +46,9 @@ openpyxl==3.1.5
 # Eddig csak közvetett függőségként szerepelt, pedig a kódunk KÖZVETLENÜL
 # hívja (google_oauth.py, diszpo_tabla_import.py).
 requests==2.34.2
+# Lara levelezés-olvasása: a PDF-csatolmányok szövegkivonata (tiszta Python,
+# lásd admin_agent/levelezes.py).
+pypdf==6.18.0
 
 # --- Közvetett függőségek (a fentiek húzzák be) ---
 # Ezeket is rögzítjük, mert a build szempontjából ugyanúgy kockázatot jelentenek:

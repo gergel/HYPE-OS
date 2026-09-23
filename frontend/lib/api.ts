@@ -804,6 +804,40 @@ export type OnellenorzesTerulet = {
   talalati_arany: number | null;
 };
 
+/** Egy levelezés-olvasó futás (lásd backend admin_agent/levelezes.py). */
+export type LevelezesFutas = {
+  id: number;
+  trigger: string;
+  veg_at: string | null;
+  /** kesz | leallitva | kikapcsolva | beallitas_szukseges */
+  allapot?: string;
+  talalt_szal?: number;
+  feldolgozando?: number;
+  hatravan?: number | null;
+  uj?: number;
+  frissitett?: number;
+  valtozatlan?: number;
+  automatikus?: number;
+  hiba?: number;
+  uzenet?: string;
+};
+
+export type LevelezesAllapot = {
+  engedelyezve: boolean;
+  leallitva: boolean;
+  gmail_konfiguralt: boolean;
+  postafiok: string;
+  kezdet: string;
+  feldolgozott_szalak: number;
+  jelolt: number;
+  jovahagyott: number;
+  futasok: LevelezesFutas[];
+};
+
+export async function getLevelezesAllapot(): Promise<LevelezesAllapot | null> {
+  return apiGet<LevelezesAllapot>("/api/v1/admin-agent/mail-learning");
+}
+
 export async function getOnellenorzesFutasok(): Promise<{ elemek: OnellenorzesFutas[] } | null> {
   return apiGet<{ elemek: OnellenorzesFutas[] }>("/api/v1/admin-agent/self-check/runs");
 }

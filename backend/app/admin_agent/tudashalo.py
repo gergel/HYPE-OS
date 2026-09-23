@@ -33,13 +33,12 @@ from app.admin_agent.visszajatszas import CEL_CIMKE
 from app.models.admin_agent import AdminTask, Correction, MemoryChunk, PlaybookRule, SourceEvent
 from app.models.project_code import ProjectCode
 
-TEMAK = ("szamla", "tig", "szerzodes", "email", "utalas")
+TEMAK = ("szamla", "tig", "szerzodes", "email")
 TEMA_CIMKE = {
     "szamla": "Számlák",
     "tig": "TIG-ek",
     "szerzodes": "Szerződések",
     "email": "E-mailek",
-    "utalas": "Utalások",
 }
 #: A megfigyelő táblái → témakör.
 _TABLA_TEMA = {"szerzodes": "szerzodes", "tig": "tig", "belsos_tig": "tig", "kiadas": "szamla"}
@@ -198,7 +197,9 @@ def tudashalo(db: Session) -> dict:
         m.forras: m
         for m in db.scalars(
             select(MemoryChunk).where(
-                MemoryChunk.forras.like("megfigyeles:%") | MemoryChunk.forras.like("visszajatszas:%")
+                MemoryChunk.forras.like("megfigyeles:%")
+                | MemoryChunk.forras.like("visszajatszas:%")
+                | MemoryChunk.forras.like("levelezes:%")
             )
         ).all()
     }
@@ -256,6 +257,30 @@ def tudashalo(db: Session) -> dict:
                 fajta=allapot[1],
                 szoveg=pelda.tartalom if pelda is not None else None,
             )
+
+    # 2b) Levelezés (szamla@ postafiók): szálanként a partner → e-mail téma.
+    lv: dict[str, SourceEvent] = {}
+    for se in db.scalars(
+        select(SourceEvent).where(SourceEvent.forras == "levelezes").order_by(SourceEvent.id)
+    ).all():
+        lv[se.forras_azonosito] = se
+    for azon, se in lv.items():
+        m = se.metaadat or {}
+        pelda = peldak.get(f"levelezes:{azon.split(':', 1)[-1]}")
+        allapot = _pelda_allapot(pelda) if pelda is not None else None
+        if allapot is None or m.get("automatikus"):
+            continue
+        e.tudas(
+            tema="email",
+            partner=m.get("partner"),
+            kod_id=None,
+            kod_cimke=None,
+            cel=None,
+            suly=allapot[0],
+            t=_pelda_ido(pelda, se.created_at),
+            fajta=allapot[1],
+            szoveg=pelda.tartalom if pelda is not None else None,
+        )
 
     # 3) Emberi javítások (a feladat partnerével / projektkódjával).
     for c, t in db.execute(select(Correction, AdminTask).join(AdminTask, AdminTask.id == Correction.task_id)).all():

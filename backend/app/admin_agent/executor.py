@@ -211,8 +211,9 @@ TOOL_REGISTRY["szerzodes.piszkozat_mentes"] = ToolSpec(
 )
 
 # FONTOS: banki utalást INDÍTÓ/aláíró/végrehajtó eszköz SZÁNDÉKOSAN NINCS
-# regisztrálva (master prompt 10./8.: R3, tiltott). Az utalás-ELŐKÉSZÍTÉS csak
-# belső export-tervezetet állít elő (a javaslat payloadja), külső hatás nélkül.
+# regisztrálva (master prompt 10./8.: R3, tiltott), és utalás-előkészítés sincs:
+# az utalással Lara nem foglalkozik - a kifizetendőket a Pénzügyek „Utalásra
+# váró számlák" listája mutatja.
 
 
 def _idempotencia_kulcs(proposal: ActionProposal) -> str:

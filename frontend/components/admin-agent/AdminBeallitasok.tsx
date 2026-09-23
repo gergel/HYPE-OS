@@ -9,7 +9,8 @@ import type { AdminAgentSettings } from "@/lib/api";
  *
  * A biztonságos alapállás kapcsolói. A modul és a mellékhatások KÜLÖN
  * engedélyezendők (a modul bekapcsolása önmagában még nem enged külső hatást),
- * és a vészleállítás azonnal letiltja Lara minden mellékhatásos lépését.
+ * a vészleállítás pedig TELJESEN leállítja Larát minden szálon (a tudása és a
+ * kapcsolók állása megmarad, és visszakapcsolható).
  * A tényleges kikényszerítés a szerver-oldali policy engine dolga — ez a
  * felület csak beállítja a kapcsolókat. */
 export function AdminBeallitasok({
@@ -28,6 +29,7 @@ export function AdminBeallitasok({
   const [kezdetUzenet, setKezdetUzenet] = useState<string | null>(null);
 
   const megfigyelesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.megfigyeles);
+  const levelezesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.levelezes);
 
   async function mentSettings(valtozas: {
     module_enabled?: boolean;
@@ -106,10 +108,22 @@ export function AdminBeallitasok({
         cim="Tanulás és megfigyelés (L0)"
         leiras="Bekapcsolva Lara félóránként megnézi a projektkódokon és az utókövetésben történt szerződés-, TIG- és számla/kiadás-lépéseket, és éjszakánként tanul a javításokból. Csak olvas és jelölteket készít — üzleti rekordot nem módosít, ezért a modul kikapcsolt állapotában is biztonságos."
         aktiv={megfigyelesBe}
-        tiltva={!canManage || folyamatban}
+        tiltva={!canManage || folyamatban || b.kill_switch}
         onValt={(v) =>
           mentSettings({
             engedett_forrasok: { ...((b.engedett_forrasok as Record<string, unknown>) ?? {}), megfigyeles: v },
+          })
+        }
+      />
+
+      <Kapcsolo
+        cim="Levelezés olvasása — szamla@hypestab.hu"
+        leiras="Bekapcsolva Lara félóránként végigolvassa a postafiók a tanulás kezdete óta érkezett és onnan küldött leveleit (szöveg, válaszaitok, csatolmányok), és szálanként tudás-jelöltet készít — ezek a Tudástárban jóváhagyás után kerülnek a tudásába. Csak olvas: nem jelöl olvasottnak, nem mozgat, nem válaszol."
+        aktiv={levelezesBe}
+        tiltva={!canManage || folyamatban || b.kill_switch}
+        onValt={(v) =>
+          mentSettings({
+            engedett_forrasok: { ...((b.engedett_forrasok as Record<string, unknown>) ?? {}), levelezes: v },
           })
         }
       />
@@ -132,7 +146,7 @@ export function AdminBeallitasok({
           />
           <button
             type="button"
-            disabled={!canManage || folyamatban || !kezdet || kezdet === b.tanulas_kezdete}
+            disabled={!canManage || folyamatban || b.kill_switch || !kezdet || kezdet === b.tanulas_kezdete}
             onClick={() => mentSettings({ tanulas_kezdete: kezdet })}
             className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[13px] font-medium text-text-accent disabled:opacity-50"
           >
@@ -164,11 +178,12 @@ export function AdminBeallitasok({
         }`}
       >
         <p className={`text-[13px] font-medium ${b.kill_switch ? "text-text-danger" : "text-text-primary"}`}>
-          Vészleállítás
+          {b.kill_switch ? "Lara le van állítva" : "Vészleállítás — Lara teljes leállítása"}
         </p>
         <p className={`mt-0.5 text-[12px] ${b.kill_switch ? "text-text-danger/80" : "text-text-muted"}`}>
-          Azonnal letiltja Lara minden mellékhatásos lépését. A már elindult, nem megszakítható külső műveleteket
-          nem vonja vissza.
+          {b.kill_switch
+            ? "Minden szál áll: ütemezett megfigyelés, tanulás, önellenőrzés, levelezés-olvasás és értékelés sem fut, és semmilyen elemzés, tervezet vagy végrehajtás nem indítható. A tudása (szabályok, példák, kérdések) és a kapcsolók állása megmaradt — visszakapcsolás után pontosan innen folytatja."
+            : "Azonnal és teljesen leállítja Larát minden szálon: az ütemezett feladatok nem futnak, a futók a következő ellenőrzési ponton megállnak, és semmi nem indítható. A tudása NEM vész el, és bármikor visszakapcsolható. A már elindult, nem megszakítható külső műveleteket nem vonja vissza."}
         </p>
         {b.kill_switch ? (
           <div className="mt-3">
@@ -181,7 +196,7 @@ export function AdminBeallitasok({
               onClick={() => veszleallitas(false)}
               className="rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-1.5 text-[13px] font-medium text-text-primary hover:bg-surface-4 disabled:opacity-50"
             >
-              Feloldás
+              Lara visszakapcsolása
             </button>
           </div>
         ) : (
@@ -199,7 +214,7 @@ export function AdminBeallitasok({
               onClick={() => veszleallitas(true)}
               className="rounded-[var(--radius)] bg-bg-danger px-3 py-1.5 text-[13px] font-medium text-text-danger disabled:opacity-50"
             >
-              Vészleállítás
+              Lara leállítása
             </button>
           </div>
         )}

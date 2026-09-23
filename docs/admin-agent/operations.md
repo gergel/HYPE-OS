@@ -53,11 +53,35 @@ pontos kezeléséhez a beat `timezone` beállítását kell ehhez igazítani.
 
 ## Vészleállítás (kill switch)
 
-- A felületről: **Beállítások → Vészleállítás**, vagy `POST /api/v1/admin-agent/pause`.
-- Feloldás: `POST /api/v1/admin-agent/resume`.
-- A vészleállítást a policy engine MINDEN mellékhatásos lépés előtt ellenőrzi
-  (nem csak a futás elején). A már elindult, nem megszakítható külső műveleteket
-  ez NEM vonja vissza — ezeket a napló és a végrehajtási rekord mutatja.
+- A felületről: **Beállítások → „Lara leállítása"**, vagy `POST /api/v1/admin-agent/pause`.
+- Visszakapcsolás: **„Lara visszakapcsolása"**, vagy `POST /api/v1/admin-agent/resume`.
+- A vészleállítás TELJES leállás, minden szálon:
+  - minden Lara Celery-feladat (megfigyelés, éjszakai tanuló, heti értékelés,
+    önellenőrzés, levelezés-olvasás) az induláskor kilép (`settings_service.leallitva`);
+  - a futó levelezés-olvasás szálanként ellenőrzi, és megáll;
+  - az API minden nem-olvasó kérése (elemzés, tervezet, jóváhagyás,
+    végrehajtás, tanulás, beállítás) `423`-at ad — kivéve `/pause` és `/resume`;
+  - a policy engine továbbra is minden mellékhatásos lépés előtt ellenőrzi.
+- A tudás (szabályok, példák, kérdések, napló) és a kapcsolók állása NEM
+  változik; a visszakapcsolás pontosan oda tér vissza. Mindkét lépés a
+  Naplóba kerül (`eroforras = lara`). A már elindult, nem megszakítható külső
+  műveleteket a leállítás NEM vonja vissza.
+
+## Levelezés-olvasás (szamla@hypestab.hu)
+
+- Forrás-kapcsoló: `aa_settings.engedett_forrasok.levelezes` (Beállítások →
+  „Levelezés olvasása"). A `l5f2c63z0a74` migráció bekapcsolja.
+- Hitelesítés: ugyanaz a Gmail-hozzáférés, mint a számla-érkeztetőé
+  (`GMAIL_*` env, `gmail.readonly` scope). A keresés:
+  `{to:X from:X cc:X deliveredto:X} after:<tanulás kezdete>`, ahol X =
+  `SZAMLA_BEJOVO_CIM`. **Feltétel:** a szamla@ címre érkező levelek a
+  hitelesített fiókban legyenek (alias / továbbítás). A MI válaszaink csak
+  akkor látszanak, ha a szamla@ címről (aliasként) ugyanebből a fiókból mentek;
+  másik fiókból küldött válasz a szálban nem jelenik meg.
+- Ütemezés: `admin_agent.levelezes` félóránként (:05, :35), futásonként
+  legfeljebb 150 szál; kézzel a Tanulás oldalról (100 szál / kérés). A
+  visszamenőleges feldolgozás több futásban halad.
+- PDF-kivonathoz a `pypdf` csomag kell (requirements.txt).
 
 ## Egészség és felügyelet
 

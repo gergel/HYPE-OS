@@ -12,10 +12,10 @@ const PAGE = "/admin-agent";
 /** Lara — ÁTTEKINTÉS.
  *
  * Az adminisztrációs munkát (számla-felvezetés, e-mail-válasz, TIG- és
- * szerződés-előkészítés, utalás-előkészítés) önállóan kezelő Lara vezérlő-
+ * szerződés-előkészítés) önállóan kezelő Lara vezérlő-
  * pultja. Biztonságos alapállás: a modul KI, a mellékhatások TILTVA, minden
- * feladat L0 (árnyék) — lásd backend admin_agent/policy.py. Banki utalás
- * végrehajtása nem része a modulnak. */
+ * feladat L0 (árnyék) — lásd backend admin_agent/policy.py. Utalással Lara
+ * nem foglalkozik (se végrehajtás, se előkészítés) — az a Pénzügyek dolga. */
 export default async function AdminAgentAttekintesPage() {
   const pagePermissions = await getMyPagePermissions();
   const canView = pagePermissions === null || !!pagePermissions[PAGE]?.includes("view");

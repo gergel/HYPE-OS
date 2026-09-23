@@ -7,7 +7,7 @@ nem hajt végre magától.
 
 ## Hol találom?
 
-A bal oldali menüben az **Lara** csoport. Kilenc aloldal:
+A bal oldali menü **Lara** csoportja. Kilenc aloldal:
 
 - **Áttekintés** — mennyi a nyitott / lejárt munka, mi vár jóváhagyásra, milyen
   állapotban vannak a forráskapcsolatok (Gmail, modell, tároló).
@@ -98,7 +98,7 @@ Minden lépés kattintással megy:
    - Beérkező számlák (Pénzügyek) → sor végén **„Lara"** gomb → Lara
      elemzi, és megnyílik a feladat.
    - Projektkód-adatlap vagy Utókövetés → projektkód → **„Lara teendők"**
-     blokk → **„+ Feladat"** (szerződés / TIG / számla / utalás).
+     blokk → **„+ Feladat"** (szerződés / TIG / számla).
 5. **Tanítsd a meglévő munkából (kevés új adatnál is):** Tanulás és minőség →
    „**Visszajátszás a rögzített számlákon**". A szeptember 1. óta rögzített
    számláknál összeveti, mit javasolt az érkeztető és mit döntöttetek; minden
@@ -121,13 +121,21 @@ Minden lépés kattintással megy:
    TIG-ekről megtanult, azt a következő tervezetnél használja: a hiányzó
    megbízási tárgyat és ÁFA-jelzőt „Lara tudása" forrással előtölti, és szól,
    ha egy félnél a papír vagy a számla szokás szerint kihagyható.
-7. **Javítsd, ha téved:** a feladat oldalán **„Javítás rögzítése"** → írd be a
+7. **Tanul a levelezésből is:** Lara félóránként végigolvassa a
+   **szamla@hypestab.hu** postafiók a tanulás kezdete óta érkezett és onnan
+   küldött leveleit — a levelek szövegét, a ti válaszaitokat és a csatolmányok
+   szövegét (PDF, e-számla XML, Excel). Minden levélszálból tudás-jelölt lesz a
+   **Tudástárban** („Levelezés" címkével); jóváhagyás után ebből dolgozik az
+   e-mail-válaszoknál és a számlák elemzésénél. A gépi (no-reply, hírlevél)
+   szálakat kihagyja. Állapota: Tanulás és minőség → **„Levelezés"** kártya;
+   kikapcsolni a Beállításokban lehet. A postafiókot csak olvassa.
+8. **Javítsd, ha téved:** a feladat oldalán **„Javítás rögzítése"** → írd be a
    helyes értéket. Ez a legerősebb tanulási jel.
-8. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
+9. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
    megvárod az éjszakai futást). Két hasonló javításból **szabály-jelölt** lesz.
-9. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →
+10. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →
    szabály-jelölt → **„Élesítés"**.
-10. **Kövesd:** az **Áttekintés** „Tanulás állapota" kártyáján látod a számokat
+11. **Kövesd:** az **Áttekintés** „Tanulás állapota" kártyáján látod a számokat
    (megfigyelt lépés, javítás, példa-/szabály-jelölt, jóváhagyott példa, aktív
    szabály), a **Napló**ban pedig minden egyes megfigyelést.
 
@@ -145,14 +153,19 @@ pénzt/jogi dokumentumot érintő lépés emberhez kötött marad.
 
 ## Vészleállítás
 
-A Beállításokban a **Vészleállítás** gomb azonnal letiltja Lara minden
-mellékhatásos lépését. A már elindult, nem visszavonható külső műveleteket ez nem
-vonja vissza — ezt a Napló mutatja. Feloldani a „Feloldás" gombbal lehet.
+A Beállításokban a **„Lara leállítása"** gomb azonnal és **teljesen** leállítja
+Larát, minden szálon: nem figyel, nem tanul, nem olvas levelet, nem elemez, nem
+készít tervezetet és nem hajt végre semmit — és közben semmi nem is indítható
+el. Minden Lara-oldalon piros csík jelzi. **A tudása nem vész el** (szabályok,
+példák, kérdések, napló), és a kapcsolók állása is megmarad: a **„Lara
+visszakapcsolása"** gomb után pontosan onnan folytatja. A már elindult, nem
+visszavonható külső műveleteket a leállítás nem vonja vissza — ezt a Napló
+mutatja.
 
 ## Fontos korlátok
 
-- **Banki utalást Lara nem indít.** Az utalásnál csak előkészítést készít
-  (kit, mennyit, mikorra), a tényleges utalás emberi feladat marad.
+- **Utalással Lara nem foglalkozik** — se végrehajtás, se előkészítés. Hogy mi
+  utalható, azt a Pénzügyek „Utalásra váró számlák" listája mutatja.
 - **Új vagy megváltozott bankszámla** esetén Lara megáll és emberi
   ellenőrzést kér.
 - **E-mail**: automatikus feladóra (pl. no-reply) nem válaszol; a te

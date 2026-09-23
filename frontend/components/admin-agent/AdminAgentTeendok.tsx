@@ -17,14 +17,13 @@ const TIPUS_OPCIOK = [
   { ertek: "szerzodes", cimke: "Szerződés-előkészítés" },
   { ertek: "tig", cimke: "TIG-előkészítés" },
   { ertek: "szamla", cimke: "Számla-felvezetés" },
-  { ertek: "utalas", cimke: "Utalás-előkészítés" },
   { ertek: "egyeb", cimke: "Egyéb" },
 ];
 
 /** LARA TEENDŐK blokk egy projektkódhoz (projektkód-adatlap, utókövetés).
  *
  * Megmutatja az adott projektkódhoz tartozó Lara feladatokat, és enged
- * újat felvenni (szerződés/TIG/számla/utalás), a projektkódhoz kötve. Így
+ * újat felvenni (szerződés/TIG/számla), a projektkódhoz kötve. Így
  * Lara munkafelülete ezekre az oldalakra is elér, és a rajtuk rögzített
  * javításokból tanul. Ha a felhasználónak nincs /admin-agent joga, a blokk
  * csendben elrejti magát. */
@@ -137,8 +136,8 @@ export function AdminAgentTeendok({ projectCodeId }: { projectCodeId: number }) 
         <p className="text-[13px] text-text-secondary">Betöltés…</p>
       ) : sorok.length === 0 ? (
         <p className="text-[13px] text-text-secondary">
-          Ehhez a projektkódhoz még nincs Lara-feladat. A „+ Feladat” gombbal vehetsz fel szerződés-, TIG-,
-          számla- vagy utalás-előkészítést; Lara ezekből is tanul.
+          Ehhez a projektkódhoz még nincs Lara-feladat. A „+ Feladat” gombbal vehetsz fel szerződés-, TIG- vagy
+          számla-feladatot; Lara ezekből is tanul.
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">

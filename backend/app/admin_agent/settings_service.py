@@ -23,6 +23,36 @@ def get_settings(db: Session) -> AdminAgentSetting:
     return s
 
 
+#: A vészleállítás üzenete: minden felületen és válaszban ugyanez.
+LEALLITVA_UZENET = (
+    "Lara le van állítva (vészleállítás). A tudása megmaradt; "
+    "a Beállítások → „Lara visszakapcsolása” gombbal indítható újra."
+)
+
+
+def leallitva(db: Session | None = None) -> bool:
+    """Le van-e állítva Lara (vészleállítás)?
+
+    A vészleállítás TELJES leállás: se ütemezett feladat (megfigyelés, tanulás,
+    önellenőrzés, levelezés-olvasás, értékelés), se kézi indítás, se elemzés,
+    se végrehajtás. A tudás (szabályok, példák, kérdések) NEM törlődik, és a
+    kapcsolók (modul, mellékhatás, források) állása is megmarad - a
+    visszakapcsolás pontosan oda tér vissza.
+
+    `db` nélkül (vagy hosszú futás közben) FRISS munkamenetből olvas, hogy egy
+    másik folyamatban közben bekapcsolt vészleállítást is azonnal lássa."""
+    if db is not None:
+        s = db.get(AdminAgentSetting, 1)
+        return bool(s and s.kill_switch)
+    from app.core.database import SessionLocal
+
+    friss = SessionLocal()
+    try:
+        return bool(friss.scalar(select(AdminAgentSetting.kill_switch).where(AdminAgentSetting.id == 1)))
+    finally:
+        friss.close()
+
+
 def get_trust(db: Session, tipus: str, altipus: str | None) -> tuple[TrustLevel, frozenset[str]]:
     """Az adott feladattípus×altípus bizalmi szintje és az L3+-hoz auto-ra
     engedélyezett R2 altípusok. Először pontos (tipus, altipus), majd a

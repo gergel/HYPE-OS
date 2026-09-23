@@ -79,8 +79,8 @@ def test_tudashalo_valos_tudasbol(db):
     szabaly = next(p for p in g["pontok"] if p["fajta"] == "szabaly" and p["cimke"] == "Hálóteszt szabály")
     assert tuple(sorted((szabaly["id"], "partner:haloteszt partner"))) in elek
     assert tuple(sorted((szabaly["id"], "cel:kiadas_uj"))) in elek
-    # Váz: a mag mind az öt témakörhöz.
-    assert sum(1 for e in g["elek"] if e.get("vaz")) == 5
+    # Váz: a mag mind a négy témakörhöz.
+    assert sum(1 for e in g["elek"] if e.get("vaz")) == 4  # a négy témakör vázéle (utalás nincs)
     assert g["osszesites"]["kapcsolatok"] >= 4
 
 

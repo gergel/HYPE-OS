@@ -10,16 +10,8 @@ export function AdminAgentSafetyBanner({
 }: {
   modul: { engedelyezve: boolean; mellekhatas_engedelyezve: boolean; veszleallitas: boolean };
 }) {
-  if (modul.veszleallitas) {
-    return (
-      <div className="mb-5 rounded-[var(--radius)] bg-bg-danger px-4 py-3 text-[13px] text-text-danger">
-        <p className="font-medium">Vészleállítás aktív</p>
-        <p className="mt-0.5 text-text-danger/80">
-          Lara minden mellékhatásos lépése le van tiltva. A Beállításokban lehet feloldani.
-        </p>
-      </div>
-    );
-  }
+  // Vészleállításnál a piros csíkot az AdminAgentTabs mutatja minden aloldalon.
+  if (modul.veszleallitas) return null;
   if (!modul.engedelyezve) {
     return (
       <div className="mb-5 rounded-[var(--radius)] bg-surface-3 px-4 py-3 text-[13px] text-text-secondary">

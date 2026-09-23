@@ -22,15 +22,13 @@ const TEMA_SZIN: Record<string, string> = {
   tig: "#1795fa",
   szerzodes: "#944ec1",
   email: "#73a434",
-  utalas: "#d9668e",
 };
-const TEMA_SORREND = ["szamla", "tig", "szerzodes", "email", "utalas"] as const;
+const TEMA_SORREND = ["szamla", "tig", "szerzodes", "email"] as const;
 const TEMA_CIMKE: Record<string, string> = {
   szamla: "Számlák",
   tig: "TIG-ek",
   szerzodes: "Szerződések",
   email: "E-mailek",
-  utalas: "Utalások",
 };
 const FAJTA_CIMKE: Record<string, string> = {
   core: "Mag",

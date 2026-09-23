@@ -357,6 +357,43 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
 - Nem ellenőrzött: valós (nem demó) szerződés-adaton, mert a fejlesztői DB-ben
   nincs szeptember 1. utáni lezárt eseti szerződés.
 
+### P. Utalás nélkül + teljes vészleállítás + tanulás a szamla@ levelezésből ✅ (valós Gmail-olvasás: ⚠️ nem ellenőrzött)
+- **Utalás kivéve** (a felhasználó döntése: Lara utalni sosem fog, a kifizethetők
+  a Pénzügyek dolga): `TaskType.UTALAS` törölve, a Tudásháló „Utalások" témája,
+  a „+ Feladat" opció és a felületi szövegek kikerültek. Migráció
+  `k4e1b52y9z63`: az `utalas` bizalmi-szint sor törlődik, a nyitott
+  utalás-feladatok indokkal visszavontak (nem törlődnek). Utalás-feladat
+  létrehozása 400.
+- **Vészleállítás = teljes leállás** (`settings_service.leallitva`): minden
+  Celery-feladat induláskor kilép (megfigyelés, distill, eval, önellenőrzés,
+  levelezés); a levelezés-olvasó futás közben is figyeli (friss munkamenetből);
+  az API minden nem-olvasó kérése 423 (router-szintű függőség), kivéve
+  `/pause` és `/resume`. A tudás és a kapcsolók nem változnak; a
+  visszakapcsolás oda tér vissza. Leállítás/visszakapcsolás a Naplóba kerül
+  (`eroforras = lara`). Felület: minden Lara-oldalon piros csík, a
+  Beállításokban „Lara leállítása" / „Lara visszakapcsolása".
+- **Levelezés-olvasás** (`app/admin_agent/levelezes.py`): a szamla@ postafiók
+  szálai a tanulás kezdete óta (bejövő és küldött), szálanként egy
+  `email` hatókörű tudás-JELÖLT: partner, tárgy, levelek időrendben (idézett
+  részek levágva), a mi válaszaink, csatolmány-kivonat (PDF `pypdf`, XML,
+  Excel/CSV, szöveg), és ha a szálból számla érkeztetődött, ahogy rögzítettétek.
+  Idempotens (`historyId` verzió); új levélnél a jelölt frissül (a jóváhagyott
+  újra jelölt). Gépi (no-reply) szál kimarad. Csak olvas. Jóváhagyás után:
+  e-mail-tervezetnél (`kapcsolodo_tudas(hatokor="email")`) és számla-elemzésnél
+  (a modell adatként kapja) használja; Tudásháló „E-mailek" téma.
+  Félóránkénti Celery (`admin_agent.levelezes`), kézi futtatás a Tanulás
+  oldalon, forrás-kapcsoló a Beállításokban (`l5f2c63z0a74` bekapcsolja).
+- Tesztek: `test_admin_agent_levelezes.py` (6, hamis Gmail-szolgáltatással):
+  jelölt idézet nélkül + csatolmány-kivonat; változatlan szál nem töltődik le
+  újra, új levélnél frissít; gépi szál kimarad; jóváhagyás után partner szerint
+  előkerül; vészleállítás futás közben, API 423, ütemezett feladatok; utalás
+  nem feladattípus. Élő próba (demószál, utána törölve): Tanulás-kártya,
+  Tudástár „Levelezés" jelölt, leállítás → piros csík → visszakapcsolás.
+- **Külső beállítás kell:** a szamla@ levelek a hitelesített Gmail-fiókban
+  legyenek (alias/továbbítás); a válaszaink csak akkor látszanak, ha ugyanebből
+  a fiókból, a szamla@ címről mentek. A sandboxban nincs Gmail-hozzáférés, ezért
+  valós postafiókon nem futott.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

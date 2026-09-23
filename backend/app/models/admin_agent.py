@@ -67,7 +67,7 @@ class AdminTask(TimestampMixin, Base):
     source_event_id: Mapped[int | None] = mapped_column(
         ForeignKey("aa_source_events.id", ondelete="SET NULL"), index=True
     )
-    #: szamla | email | tig | szerzodes | utalas | egyeb (lásd enums.TaskType)
+    #: szamla | email | tig | szerzodes | egyeb (lásd enums.TaskType)
     tipus: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
     altipus: Mapped[str | None] = mapped_column(String(60))
     cim: Mapped[str] = mapped_column(String(300), nullable=False)

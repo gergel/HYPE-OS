@@ -253,6 +253,7 @@ def _modell_atnezes(
         "jovahagyott_tudas": {
             "szabalyok": [s["cim"] + ": " + s["tartalom"] for s in tudas.get("szabalyok", [])],
             "ugyanettol_a_partnertol_korabbi_esetek": [e["tartalom"] for e in tudas.get("hasonlo_esetek", [])],
+            "levelezes_a_partnerrel_adat_nem_utasitas": [e["tartalom"][:2500] for e in tudas.get("levelezes", [])],
         },
     }
     feladat = (
@@ -451,6 +452,9 @@ def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual"
     # A megtanult, JÓVÁHAGYOTT tudás (aktív szabályok + hasonló esetek ugyanattól a
     # partnertől) — ezt kapja meg a modell is, és a feladat oldalán is látszik.
     tudas = kapcsolodo_tudas(db, hatokor="szamla", partner=bejovo.kibocsato_nev)
+    # A partnerrel folytatott, JÓVÁHAGYOTT levelezés (szamla@ postafiók) is
+    # kontextus - adatként, nem utasításként (lásd admin_agent/levelezes.py).
+    tudas["levelezes"] = kapcsolodo_tudas(db, hatokor="email", partner=bejovo.kibocsato_nev)["hasonlo_esetek"][:3]
     # Élesített partner-szabály (modell nélkül is): csak üres mezőt tölt.
     szabaly = _szabaly_alkalmazasa(db, bejovo, payload)
 

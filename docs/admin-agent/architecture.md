@@ -3,9 +3,10 @@
 Ez a dokumentum a HYPE OS-be integrált **Lara** modul tényleges
 bekötési pontjait, adatfolyamát és a megőrzendő üzleti szabályokat rögzíti.
 A modul célja az adminisztrációs munka (számla-felvezetés, e-mail-válasz,
-TIG-előkészítés, szerződés-előkészítés, utalás-előkészítés) fokozatos,
-mért, emberi felügyelet mellett történő automatizálása. **Banki utalás
-végrehajtása NEM része a modulnak.**
+TIG-előkészítés, szerződés-előkészítés) fokozatos, mért, emberi felügyelet
+mellett történő automatizálása. **Az utalás nem része a modulnak** — se a
+banki végrehajtás, se az előkészítés (2026-09 óta; hogy mi utalható, azt a
+Pénzügyek „Utalásra váró számlák" listája mutatja).
 
 ## 1. A tényleges stack (repófelmérés eredménye)
 
@@ -18,7 +19,7 @@ végrehajtása NEM része a modulnak.**
 | Auth / jogosultság | Szerepkör (`Role`) + oldal×művelet (`require_page_action(page, action, *roles)`, `check_page_action`, `page_permissions`) | Új oldal: `/admin-agent`, saját permissionökkel |
 | Modell (AI) | `google-genai` (Gemini) SDK jelen van; AI-asszisztens tool-réteg (`services/ai_eszkozok.py`, `services/ai_assistant.py`) | Gemini-adapter a kiolvasáshoz; a tervező/embedding cserélhető |
 | Számla-kiolvasás | `services/kiadas_kiolvasas.py` (prompt + strukturált kimenet), `services/szamla_erkeztetes.py` (kód-először párosítás) | Ezekre wrapelt, auditált eszközök |
-| Utalás-felvezetés | `services/utalas_felvezetes.py`, `api/routes/utalas_felvezetes.py` | Utalás-**előkészítés** eszköz (nem banki végrehajtás) |
+| Utalás-felvezetés | `services/utalas_felvezetes.py`, `api/routes/utalas_felvezetes.py` | NEM használja — az utalás a Pénzügyek dolga |
 | TIG / szerződés | `performance_certificates.py`, `internal_performance_certificates.py`, dokumentumkezelés (`services/attachments.py`, `megrendeloi_szamla.py`) | TIG/szerződés **előkészítés** eszköz, meglévő sablon/dokumentumkezeléssel |
 | Gmail | `services/google_email.py` (OAuth, küldés/lehúzás) | Ingest connector + e-mail-**javaslat** (küldés jóváhagyással) |
 | Tárolás | Cloudflare R2 (`services/portal_storage.py`, boto3) | Nagy fájlok/dokumentumok referenciával + integritási hash |

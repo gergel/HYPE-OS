@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ from app.admin_agent.learning import distill
 from app.admin_agent.observer import FELRETEVE, korszak_rendezes, megfigyeles, tanulas_kezdete_datum
 from app.admin_agent.pipeline_szamla import arnyek_elemzes
 from app.admin_agent.proposals import JavaslatHiba, keszit_javaslat
-from app.admin_agent.settings_service import get_settings
+from app.admin_agent.settings_service import LEALLITVA_UZENET, get_settings, leallitva
 from app.core.database import get_db
 from app.core.security import Role, check_page_action, require_page_action
 from app.models.admin_agent import (
@@ -54,7 +54,20 @@ from app.models.admin_agent import (
 from app.models.bejovo_szamla import BejovoSzamla
 from app.models.employee import Employee
 
-router = APIRouter(prefix="/admin-agent", tags=["admin-agent"])
+def _nem_leallitva(request: Request, db: Session = Depends(get_db)) -> None:
+    """VÉSZLEÁLLÍTÁS: leállított Laránál semmilyen módosító/futtató kérés nem
+    megy át (elemzés, tervezet, jóváhagyás, végrehajtás, tanulás, önellenőrzés,
+    levelezés, beállítás) - csak a leállítás és a visszakapcsolás. Olvasni
+    (tudás, napló, beállítások) továbbra is lehet: a tudás megmarad."""
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    if request.url.path.rstrip("/").endswith(("/pause", "/resume")):
+        return
+    if leallitva(db):
+        raise HTTPException(status_code=423, detail=LEALLITVA_UZENET)
+
+
+router = APIRouter(prefix="/admin-agent", tags=["admin-agent"], dependencies=[Depends(_nem_leallitva)])
 
 PAGE = "/admin-agent"
 _MINDEN_SZEREPKOR = tuple(Role)
@@ -1014,10 +1027,11 @@ def learning_runs_lista(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
-    # Az önellenőrző futásoknak saját listájuk van (GET /self-check/runs).
+    # Az önellenőrző és a levelezés-olvasó futásoknak saját listájuk van
+    # (GET /self-check/runs, GET /mail-learning).
     sorok = db.scalars(
         select(LearningRun)
-        .where(~LearningRun.trigger.like("onellenorzes%"))
+        .where(~LearningRun.trigger.like("onellenorzes%"), ~LearningRun.trigger.like("levelezes%"))
         .order_by(LearningRun.id.desc())
         .limit(50)
     ).all()
@@ -1220,6 +1234,35 @@ def onellenorzes_inditas(
     eredmeny = onellenorzes(db, trigger="onellenorzes:kezi")
     db.commit()
     return {**eredmeny, "visszajatszas": {k: vj[k] for k in ("uj_szamla", "uj_pelda", "uj_szabaly_jelolt")}}
+
+
+@router.get("/mail-learning")
+def levelezes_allapot(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """A szamla@ levelezésből tanulás állapota: kapcsoló, Gmail-hitelesítés,
+    feldolgozott szálak, jelöltek, futások."""
+    from app.admin_agent.levelezes import allapot
+
+    return allapot(db)
+
+
+@router.post("/mail-learning/run")
+def levelezes_futtatas(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A levelezés feldolgozása MOST (legfeljebb 100 szál egy kérésben; a többit
+    a következő futás - kézi vagy félóránkénti - folytatja). Csak olvas; a
+    szálakból tudás-jelölt lesz, ami jóváhagyás után kerül Lara tudásába."""
+    from app.admin_agent.levelezes import levelezes_tanulas
+
+    eredmeny = levelezes_tanulas(db, trigger="levelezes:kezi", max_szal=100)
+    if eredmeny.get("allapot") == "kikapcsolva":
+        raise HTTPException(status_code=400, detail="A levelezés olvasása ki van kapcsolva (Beállítások).")
+    db.commit()
+    return eredmeny
 
 
 @router.get("/self-check/runs")
@@ -1629,15 +1672,35 @@ def veszleallitas_be(
     db: Session = Depends(get_db),
     user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
-    """Globális vészleállítás BE. Ezt a policy engine minden mellékhatásos
-    lépés előtt ellenőrzi. A már elindult, nem megszakítható külső műveleteket
-    ez NEM vonja vissza."""
+    """Globális vészleállítás BE: Lara TELJESEN leáll minden szálon - az
+    ütemezett feladatok (megfigyelés, tanulás, önellenőrzés, levelezés,
+    értékelés) nem futnak, a futók a következő ellenőrzési ponton megállnak,
+    és az API minden futtató/módosító kérése 423-at ad. A tudás és a
+    kapcsolók állása megmarad; a /resume pontosan oda tér vissza. A már
+    elindult, nem megszakítható külső műveleteket ez NEM vonja vissza."""
     s = get_settings(db)
     s.kill_switch = True
     s.kill_switch_indok = (payload.indok or "").strip() or None
     s.modositotta_employee_id = user.id
+    _kapcsolas_naplo(db, user, "veszleallitas", "leallitva", {"indok": s.kill_switch_indok})
     db.commit()
     return {"kill_switch": True, "indok": s.kill_switch_indok}
+
+
+def _kapcsolas_naplo(db: Session, user: Employee, muvelet: str, eredmeny: str, diff: dict) -> None:
+    """A leállítás / visszakapcsolás nyoma a Naplóban (ki, mikor, miért)."""
+    db.add(
+        ActionTrace(
+            task_id=None,
+            szereplo="human",
+            szereplo_employee_id=user.id,
+            muvelet=muvelet,
+            eroforras="lara",
+            diff=diff,
+            eredmeny=eredmeny,
+            tortent_at=_most(),
+        )
+    )
 
 
 @router.post("/resume")
@@ -1645,9 +1708,14 @@ def veszleallitas_ki(
     db: Session = Depends(get_db),
     user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
 ):
+    """Lara VISSZAKAPCSOLÁSA a vészleállítás után. A tudás és a kapcsolók
+    (modul, mellékhatás, források) a leállítás előtti állapotban vannak; az
+    ütemezett feladatok a következő időpontjukban újra futnak."""
     s = get_settings(db)
+    elozo_indok = s.kill_switch_indok
     s.kill_switch = False
     s.kill_switch_indok = None
     s.modositotta_employee_id = user.id
+    _kapcsolas_naplo(db, user, "visszakapcsolas", "visszakapcsolva", {"leallitas_indoka": elozo_indok})
     db.commit()
     return {"kill_switch": False}

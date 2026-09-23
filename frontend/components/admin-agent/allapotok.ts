@@ -22,7 +22,9 @@ export const TIPUS_CIMKE: Record<string, string> = {
   email: "E-mail-válasz",
   tig: "TIG-előkészítés",
   szerzodes: "Szerződés-előkészítés",
-  utalas: "Utalás-előkészítés",
+  // Megszűnt típus (Lara utalással nem foglalkozik) — csak a régi, visszavont
+  // feladatok felirata miatt marad.
+  utalas: "Utalás (megszűnt)",
   egyeb: "Egyéb",
 };
 

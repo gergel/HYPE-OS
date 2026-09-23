@@ -255,7 +255,7 @@ export function AdminTudastarKezelo({
           jeloltPelda.map((m) => (
             <Sor
               key={m.id}
-              cimke={TIPUS_CIMKE[m.hatokor] ?? m.hatokor}
+              cimke={peldaCimke(m)}
               szoveg={m.tartalom}
               forras={m.forras}
               kijelolve={canEdit ? kijelolt.has(m.id) : undefined}
@@ -410,7 +410,7 @@ export function AdminTudastarKezelo({
             {jovahagyottPelda.map((m) => (
               <Sor
                 key={`m${m.id}`}
-                cimke={`Példa · ${TIPUS_CIMKE[m.hatokor] ?? m.hatokor}${m.regi_korszak ? " · régi (kisebb súllyal)" : ""}`}
+                cimke={`Példa · ${peldaCimke(m)}${m.regi_korszak ? " · régi (kisebb súllyal)" : ""}`}
                 szoveg={m.tartalom}
                 forras={m.forras}
               >
@@ -467,11 +467,36 @@ function Sor({
         <span className="mb-0.5 inline-block rounded-[var(--radius)] bg-surface-2 px-2 py-0.5 text-[11px] text-text-secondary">
           {cimke}
         </span>
-        <p className="text-[13px] text-text-primary">{szoveg}</p>
+        <SorSzoveg szoveg={szoveg} />
         {forras && <p className="text-[11px] text-text-muted">forrás: {forras}</p>}
       </div>
       {children && <div className="flex shrink-0 gap-1.5">{children}</div>}
     </li>
+  );
+}
+
+/** A példa típus-címkéje; a szamla@ levelezésből jött szál „Levelezés". */
+function peldaCimke(m: { hatokor: string; forras?: string | null }): string {
+  if (m.forras?.startsWith("levelezes:")) return "Levelezés";
+  return TIPUS_CIMKE[m.hatokor] ?? m.hatokor;
+}
+
+/** A tudás-darab szövege. A hosszú (pl. levelezés-szál) tartalom soronként
+ * tagolva, röviden látszik, és lenyitható. */
+function SorSzoveg({ szoveg }: { szoveg: string }) {
+  const rovidHossz = 420;
+  if (szoveg.length <= rovidHossz && !szoveg.includes("\n")) {
+    return <p className="text-[13px] text-text-primary">{szoveg}</p>;
+  }
+  const elso = szoveg.split("\n")[0];
+  return (
+    <div className="text-[13px] text-text-primary">
+      <p>{elso.length > rovidHossz ? `${elso.slice(0, rovidHossz)}…` : elso}</p>
+      <details className="mt-1">
+        <summary className="cursor-pointer text-[12px] text-text-accent">Teljes szöveg</summary>
+        <p className="mt-1 whitespace-pre-line break-words text-[12.5px] text-text-secondary">{szoveg}</p>
+      </details>
+    </div>
   );
 }
 

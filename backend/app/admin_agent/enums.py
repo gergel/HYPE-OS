@@ -11,13 +11,16 @@ from enum import Enum
 
 
 class TaskType(str, Enum):
-    """A modul öt üzleti feladattípusa + egy általános/egyéb."""
+    """A modul üzleti feladattípusai + egy általános/egyéb.
+
+    UTALÁS NINCS (a felhasználó döntése): Lara utalni soha nem fog, és az
+    utalás-előkészítés sem az ő dolga - hogy mi utalható, azt a Pénzügyek
+    „Utalásra váró számlák" listája mutatja."""
 
     SZAMLA = "szamla"  # számla-felvezetés
     EMAIL = "email"  # e-mail-válasz
     TIG = "tig"  # teljesítésigazolás előkészítés
     SZERZODES = "szerzodes"  # szerződés előkészítés
-    UTALAS = "utalas"  # utalás-ELŐKÉSZÍTÉS (nem banki végrehajtás)
     EGYEB = "egyeb"
 
 
