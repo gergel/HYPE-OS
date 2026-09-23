@@ -37,11 +37,16 @@ export function LaraLevelezes({ kezdo, canRun }: { kezdo: LevelezesAllapot | nul
         setHiba(`A Gmail-hozzáférés nincs beállítva a szerveren. ${d.uzenet ?? ""}`);
         return;
       }
+      if (d.allapot === "gmail_hiba") {
+        setHiba(d.uzenet ?? "A Gmail most nem válaszolt — próbáld újra később.");
+        return;
+      }
       setFutasok((p) => [{ ...d, id: Date.now(), trigger: "levelezes:kezi", veg_at: new Date().toISOString() }, ...p]);
       setUzenet(
         `Kész: ${d.talalt_szal ?? 0} szál a postafiókban, ebből ${d.uj ?? 0} új és ${d.frissitett ?? 0} frissült tudás-jelölt` +
           (d.automatikus ? `, ${d.automatikus} gépi (no-reply) szál kihagyva` : "") +
-          (d.hatravan ? `. Még ${d.hatravan} szál van hátra — a következő futás folytatja.` : "."),
+          (d.hatravan ? `. Még ${d.hatravan} szál van hátra — nyomd meg újra, vagy a félóránkénti futás folytatja.` : ".") +
+          (d.hiba ? ` ${d.hiba} szálat nem sikerült feldolgozni${d.hibak?.length ? ` (${d.hibak[0]})` : ""}.` : ""),
       );
       router.refresh();
     } finally {

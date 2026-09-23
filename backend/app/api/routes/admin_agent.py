@@ -1312,12 +1312,23 @@ def levelezes_futtatas(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """A levelezés feldolgozása MOST (legfeljebb 100 szál egy kérésben; a többit
-    a következő futás - kézi vagy félóránkénti - folytatja). Csak olvas; a
+    """A levelezés feldolgozása MOST (legfeljebb 100 szál és ~40 mp egy
+    kérésben, hogy ne fusson időtúllépésbe; a többit a következő futás - kézi
+    vagy félóránkénti - folytatja). Csak olvas; a
     szálakból tudás-jelölt lesz, ami jóváhagyás után kerül Lara tudásába."""
-    from app.admin_agent.levelezes import levelezes_tanulas
+    import logging
 
-    eredmeny = levelezes_tanulas(db, trigger="levelezes:kezi", max_szal=100)
+    from app.admin_agent.levelezes import MAX_MP_KEZI, levelezes_tanulas
+
+    try:
+        eredmeny = levelezes_tanulas(db, trigger="levelezes:kezi", max_szal=100, max_mp=MAX_MP_KEZI)
+    except Exception as exc:  # noqa: BLE001 - érthető hiba a felületnek a néma 500 helyett
+        db.rollback()
+        logging.getLogger(__name__).exception("Levelezés kézi feldolgozása sikertelen.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"A levelezés feldolgozása hibára futott ({type(exc).__name__}: {str(exc)[:200]}).",
+        ) from exc
     if eredmeny.get("allapot") == "kikapcsolva":
         raise HTTPException(status_code=400, detail="A levelezés olvasása ki van kapcsolva (Beállítások).")
     db.commit()

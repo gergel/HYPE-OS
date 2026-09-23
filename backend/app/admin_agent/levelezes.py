@@ -39,6 +39,7 @@ import html
 import io
 import logging
 import re
+import time
 from datetime import date, datetime, timezone
 from email.utils import getaddresses, parseaddr
 
@@ -59,6 +60,11 @@ TRIGGER = "levelezes"
 #: Egy futásban legfeljebb ennyi szál (a visszamenőleges feldolgozás több
 #: futásban halad; a Celery félóránként folytatja).
 MAX_SZAL = 150
+#: Időkeret másodpercben: a kézi (HTTP-kérésből indított) futás ennél tovább
+#: nem dolgozik, hogy a kérés ne fusson időtúllépésbe - a maradékot a
+#: következő futás viszi tovább.
+MAX_MP_KEZI = 40
+MAX_MP_UTEMEZETT = 600
 MAX_LISTA = 5000
 MAX_TORZS = 1500
 MAX_CSATOLMANY_SZOVEG = 700
@@ -97,6 +103,40 @@ def _most() -> datetime:
     return datetime.now(timezone.utc)
 
 
+#: A PostgreSQL szöveg- és JSON-mezője nem tárolhat NUL (0x00) bájtot - a
+#: levelek és főleg a PDF-kivonatok viszont tartalmazhatnak ilyet (és más
+#: vezérlőkaraktert). A tabulátor és a sortörés marad.
+_VEZERLO = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def tiszta(szoveg: str | None) -> str:
+    return _VEZERLO.sub("", szoveg or "")
+
+
+def _tiszta_meta(ertek):
+    if isinstance(ertek, str):
+        return tiszta(ertek)
+    if isinstance(ertek, list):
+        return [_tiszta_meta(x) for x in ertek]
+    if isinstance(ertek, dict):
+        return {k: _tiszta_meta(v) for k, v in ertek.items()}
+    return ertek
+
+
+def gmail_hiba_szoveg(exc: Exception) -> str:
+    """Érthető magyar üzenet a Gmail API hibájából (a felületnek)."""
+    szoveg = str(exc)
+    statusz = getattr(getattr(exc, "resp", None), "status", None)
+    if "insufficient authentication scopes" in szoveg or statusz == 403:
+        return ("A Gmail-hozzáférésnek nincs olvasási joga ehhez a postafiókhoz (gmail.readonly). "
+                "A hitelesítést olvasási joggal újra kell adni.")
+    if "invalid_grant" in szoveg or statusz == 401:
+        return "A Gmail-hozzáférés lejárt vagy visszavonták — újra kell hitelesíteni."
+    if statusz == 429 or "rateLimitExceeded" in szoveg:
+        return "A Gmail most túl sok kérést kapott — a következő futás folytatja."
+    return f"A Gmail most nem válaszolt ({type(exc).__name__}) — a következő futás újrapróbálja."
+
+
 # ── Szöveg-kinyerés ──────────────────────────────────────────────────────────
 
 
@@ -124,6 +164,7 @@ def torzs(payload: dict) -> str:
                 szoveg = _b64(data).decode("utf-8", "replace")
             except Exception:  # noqa: BLE001
                 szoveg = ""
+            szoveg = tiszta(szoveg)
             if mime == "text/plain":
                 sima.append(szoveg)
             elif mime == "text/html":
@@ -170,7 +211,7 @@ def csatolmany_szoveg(fajlnev: str, mime: str, adat: bytes) -> str | None:
     except Exception:  # noqa: BLE001 - egy sérült melléklet nem állíthatja meg a futást
         logger.info("Csatolmány nem olvasható: %s", fajlnev)
         return None
-    szoveg = re.sub(r"\s+", " ", html.unescape(szoveg or "")).strip()
+    szoveg = re.sub(r"\s+", " ", tiszta(html.unescape(szoveg or ""))).strip()
     return szoveg[:MAX_CSATOLMANY_SZOVEG] or None
 
 
@@ -198,7 +239,7 @@ def _csatolmanyok(svc, uzenet_id: str, payload: dict) -> list[dict]:
                     adat = None
                 if adat:
                     kivonat = csatolmany_szoveg(fajlnev, mime, adat)
-            ki.append({"nev": fajlnev, "mime": mime, "meret": meret, "kivonat": kivonat})
+            ki.append({"nev": tiszta(fajlnev), "mime": mime, "meret": meret, "kivonat": kivonat})
         for gy in p.get("parts") or []:
             jar(gy)
 
@@ -212,7 +253,7 @@ def _csatolmanyok(svc, uzenet_id: str, payload: dict) -> list[dict]:
 def _fejlec(uzenet: dict, nev: str) -> str:
     for h in (uzenet.get("payload") or {}).get("headers") or []:
         if (h.get("name") or "").lower() == nev.lower():
-            return h.get("value") or ""
+            return tiszta(h.get("value") or "")
     return ""
 
 
@@ -314,7 +355,7 @@ def tartalom(partner: str | None, cim: str | None, levelek: list[dict], szamlak:
         )
     if szamlak:
         reszek.append("Érkeztetett számla ebből a szálból: " + "; ".join(szamlak))
-    szoveg = "\n".join(reszek)
+    szoveg = tiszta("\n".join(reszek))
     return szoveg[:MAX_TARTALOM]
 
 
@@ -348,7 +389,7 @@ def szal_feldolgozasa(db: Session, szal: dict, levelek: list[dict], *, verzio: s
                     forras_azonosito=azonosito,
                     forras_verzio=verzio,
                     allapot="feldolgozva",
-                    metaadat=meta,
+                    metaadat=_tiszta_meta(meta),
                     feldolgozva_at=_most(),
                 )
             )
@@ -401,9 +442,18 @@ def _feldolgozott_verziok(db: Session) -> dict[str, str]:
     return ki
 
 
-def levelezes_tanulas(db: Session, *, trigger: str = TRIGGER, max_szal: int = MAX_SZAL, svc=None) -> dict:
+def levelezes_tanulas(
+    db: Session, *, trigger: str = TRIGGER, max_szal: int = MAX_SZAL, max_mp: float = MAX_MP_UTEMEZETT, svc=None
+) -> dict:
     """Egy levelezés-olvasó futás. A hívó commitál. Csak bekapcsolt forrással és
-    nem leállított Larával dolgozik."""
+    nem leállított Larával dolgozik.
+
+    HIBATŰRÉS: a Gmail-hiba (jogosultság, lejárt hozzáférés, túlterhelés)
+    érthető üzenetként jön vissza, nem 500-as hibaként; egy hibás szál (pl.
+    olvashatatlan melléklet, adatbázis-hiba) SAJÁT mentési pontban fut, így
+    nem rontja el a többit; az időkeret (`max_mp`) után megáll, és a
+    maradékot a következő futás viszi tovább."""
+    kezdo_ido = time.monotonic()
     if leallitva(db):
         return {"allapot": "leallitva"}
     if not engedelyezve(db):
@@ -420,30 +470,47 @@ def levelezes_tanulas(db: Session, *, trigger: str = TRIGGER, max_szal: int = MA
     q = query(kezdet)
     szalak: list[dict] = []
     token = None
-    while len(szalak) < MAX_LISTA:
-        v = svc.users().threads().list(userId="me", q=q, maxResults=100, pageToken=token).execute()
-        szalak.extend(v.get("threads") or [])
-        token = v.get("nextPageToken")
-        if not token:
-            break
+    try:
+        while len(szalak) < MAX_LISTA:
+            v = svc.users().threads().list(userId="me", q=q, maxResults=100, pageToken=token).execute()
+            szalak.extend(v.get("threads") or [])
+            token = v.get("nextPageToken")
+            if not token:
+                break
+    except Exception as exc:  # noqa: BLE001 - a Gmail-hiba érthető üzenet, nem 500
+        logger.warning("Levelezés: a Gmail-lista lekérése sikertelen: %s", exc)
+        return {"allapot": "gmail_hiba", "uzenet": gmail_hiba_szoveg(exc), "postafiok": postafiok()}
 
     ismert = _feldolgozott_verziok(db)
     teendo = [s for s in szalak if ismert.get(f"szal:{s['id']}") != str(s.get("historyId") or "")]
     stat = {"uj": 0, "frissitett": 0, "valtozatlan": 0, "automatikus": 0, "ures": 0, "hiba": 0}
+    hibak: list[str] = []
     allapot = "kesz"
+    feldolgozott = 0
     for i, s in enumerate(teendo[:max_szal]):
         # Vészleállítás futás közben is: FRISS munkamenetből olvasva.
         if i % 10 == 0 and i and leallitva():
             allapot = "leallitva"
             break
+        if time.monotonic() - kezdo_ido > max_mp:
+            break  # időkeret: a maradékot a következő futás viszi tovább
         try:
             teljes = svc.users().threads().get(userId="me", id=s["id"], format="full").execute()
             levelek = uzenetek(svc, teljes)
-            eredmeny = szal_feldolgozasa(db, teljes, levelek, verzio=str(teljes.get("historyId") or s.get("historyId") or ""))
-        except Exception:  # noqa: BLE001 - egy hibás szál nem állítja meg a többit
+            # Saját mentési pont szálanként: egy hibás szál adatbázis-hibája
+            # sem rontja el a munkamenetet (a többi szál és az összesítő menthető).
+            with db.begin_nested():
+                eredmeny = szal_feldolgozasa(
+                    db, teljes, levelek, verzio=str(teljes.get("historyId") or s.get("historyId") or "")
+                )
+                db.flush()
+        except Exception as exc:  # noqa: BLE001 - egy hibás szál nem állítja meg a többit
             logger.exception("Levelezés-szál feldolgozása sikertelen: %s", s.get("id"))
             eredmeny = "hiba"
+            if len(hibak) < 3:
+                hibak.append(gmail_hiba_szoveg(exc) if "HttpError" in type(exc).__name__ else f"{type(exc).__name__}: {str(exc)[:160]}")
         stat[eredmeny] = stat.get(eredmeny, 0) + 1
+        feldolgozott += 1
     db.flush()
     osszefoglalo = {
         "allapot": allapot,
@@ -451,8 +518,9 @@ def levelezes_tanulas(db: Session, *, trigger: str = TRIGGER, max_szal: int = MA
         "kezdet": kezdet.isoformat(),
         "talalt_szal": len(szalak),
         "feldolgozando": len(teendo),
-        "hatravan": max(0, len(teendo) - max_szal) if allapot == "kesz" else None,
+        "hatravan": max(0, len(teendo) - feldolgozott) if allapot == "kesz" else None,
         **stat,
+        "hibak": hibak,
     }
     most = _most()
     db.add(LearningRun(trigger=trigger, allapot="kesz" if allapot == "kesz" else "megszakitva",

@@ -394,6 +394,18 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   a fiókból, a szamla@ címről mentek. A sandboxban nincs Gmail-hozzáférés, ezért
   valós postafiókon nem futott.
 
+### P2. Levelezés-olvasás: éles „Váratlan szerverhiba" javítva ✅
+- Két reprodukált 500-as ok: (1) NUL (0x00) bájt a levélben / PDF-kivonatban —
+  a PostgreSQL szövegmezője nem tárolhatja → most minden szöveg és metaadat
+  vezérlőkarakter-szűrőn megy át; (2) a Gmail-lista hibája (pl. hiányzó
+  olvasási jog, lejárt hozzáférés) nem volt elkapva → most érthető
+  `gmail_hiba` üzenet. Emellett: szálanként saját mentési pont (egy hibás szál
+  nem rontja el a többit, az oka a futás `hibak` listájában), a kézi futás
+  ~40 mp-es időkerettel (nincs időtúllépés; a maradékot a következő futás
+  viszi), és a végpont bármi más hibánál konkrét okot ad vissza.
+- Nem ellenőrzött: az éles postafiókon (a sandboxban nincs Gmail) — az éles
+  napló nélkül nem biztos, melyik ok volt; mindkettő javítva, tesztelve.
+
 ### Q. Magyarázat a feladat ellenőrzésénél (mezők nélkül) ✅
 - `POST /tasks/{id}/corrections`: a `javitott` elhagyható; ha csak összefoglaló
   magyarázat jön (mit hova kellett volna tenni és miért), `Correction`

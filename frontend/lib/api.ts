@@ -809,7 +809,7 @@ export type LevelezesFutas = {
   id: number;
   trigger: string;
   veg_at: string | null;
-  /** kesz | leallitva | kikapcsolva | beallitas_szukseges */
+  /** kesz | leallitva | kikapcsolva | beallitas_szukseges | gmail_hiba */
   allapot?: string;
   talalt_szal?: number;
   feldolgozando?: number;
@@ -819,6 +819,8 @@ export type LevelezesFutas = {
   valtozatlan?: number;
   automatikus?: number;
   hiba?: number;
+  /** Az első néhány hibás szál oka (érthető szöveg). */
+  hibak?: string[];
   uzenet?: string;
 };
 

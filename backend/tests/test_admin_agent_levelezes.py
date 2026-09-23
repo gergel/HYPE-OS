@@ -300,3 +300,50 @@ def test_utalas_nem_feladattipus_es_nem_tema():
 
     assert "utalas" not in {t.value for t in TaskType}
     assert "utalas" not in TEMAK
+
+
+def test_nul_bajt_gmail_hiba_es_idokeret_nem_500(db, monkeypatch):
+    """Éles hiba regressziója („Váratlan szerverhiba"): a NUL bájtos levél /
+    melléklet, a Gmail-jogosultsági hiba és a hosszú futás sem okozhat 500-at."""
+    from googleapiclient.errors import HttpError
+    from httplib2 import Response
+
+    from app.admin_agent import levelezes
+
+    _bekapcsol(db)
+    sz = _partner_szal()
+    sz["messages"][0]["payload"]["parts"][0]["body"]["data"] = _b("szöveg\x00NUL bájttal")
+    sz["messages"][0]["payload"]["parts"][1]["body"]["data"] = _b("<a>\x00150000</a>")
+    e = levelezes.levelezes_tanulas(db, svc=HamisGmail({"lvteszt-szal-1": sz}))
+    assert e["allapot"] == "kesz" and e["uj"] == 1 and e["hiba"] == 0
+    assert "\x00" not in _chunk(db).tartalom and "NUL bájttal" in _chunk(db).tartalom
+
+    class Jogosultsaghiany(HamisGmail):
+        def list(self, **kw):
+            raise HttpError(Response({"status": 403}), b'{"error": {"message": "Request had insufficient authentication scopes."}}')
+
+    e = levelezes.levelezes_tanulas(db, svc=Jogosultsaghiany({}))
+    assert e["allapot"] == "gmail_hiba" and "olvasási joga" in e["uzenet"]
+
+    # Egy szál hibája nem rontja el a többit (saját mentési pont).
+    masik = _partner_szal(hist="9")
+    masik["id"] = "lvteszt-szal-2"
+    eredeti = levelezes.szal_feldolgozasa
+
+    def hibas(db_, szal, levelek, *, verzio):
+        if szal["id"] == "lvteszt-szal-2":
+            raise ValueError("teszt-hiba")
+        return eredeti(db_, szal, levelek, verzio=verzio)
+
+    monkeypatch.setattr(levelezes, "szal_feldolgozasa", hibas)
+    harmadik = _partner_szal(hist="11")
+    harmadik["id"] = "lvteszt-szal-3"
+    e = levelezes.levelezes_tanulas(db, svc=HamisGmail({"lvteszt-szal-2": masik, "lvteszt-szal-3": harmadik}))
+    assert e["hiba"] == 1 and e["uj"] == 1 and "teszt-hiba" in e["hibak"][0]
+    monkeypatch.setattr(levelezes, "szal_feldolgozasa", eredeti)
+
+    # Időkeret: 0 mp → semmit nem dolgoz fel, minden marad a következő futásra.
+    negyedik = _partner_szal(hist="13")
+    negyedik["id"] = "lvteszt-szal-4"
+    e = levelezes.levelezes_tanulas(db, svc=HamisGmail({"lvteszt-szal-4": negyedik}), max_mp=0)
+    assert e["allapot"] == "kesz" and e["uj"] == 0 and e["hatravan"] == 1
