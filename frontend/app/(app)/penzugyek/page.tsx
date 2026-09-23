@@ -20,7 +20,8 @@ import { DataTable } from "@/components/DataTable";
 import { EditableBooleanCell } from "@/components/EditableBooleanCell";
 import { EditableStatusBadge } from "@/components/EditableStatusBadge";
 import { EditableTableCell } from "@/components/EditableTableCell";
-import { FinanceMonthlyChart, KasszaWidget, OutstandingProjectsTable } from "@/components/finance/FinanceSummaryWidgets";
+import { FinanceMonthlyChart, KasszaWidget } from "@/components/finance/FinanceSummaryWidgets";
+import { ProjektKintlevosegek } from "@/components/finance/ProjektKintlevosegek";
 import { SzamlaCsomagLetoltes } from "@/components/finance/SzamlaCsomagLetoltes";
 import { UtalasraVaroSzamlak } from "@/components/finance/UtalasraVaroSzamlak";
 import { KiadasProjektkodCella } from "@/components/finance/KiadasProjektkodCella";
@@ -139,10 +140,21 @@ export default async function PenzugyekPage() {
               <StatCard
                 label={`Kintlévőség (${summary.kintlevo_projektek_szama} projekt, nettó)`}
                 value={formatHuf(summary.osszes_kintlevoseg)}
+                megjegyzes={`Számlázandó: ${summary.szamlazando_db} · kint lévő számla: ${summary.szamla_kint_db}${
+                  summary.lejart_db ? ` (${summary.lejart_db} lejárt)` : ""
+                }`}
                 icon={AlertCircle}
                 tone={summary.osszes_kintlevoseg > 0 ? "pink" : "blue"}
               />
             </div>
+
+            {/* PROJEKT-KINTLÉVŐSÉGEK: MINDEN projektkód, amiért még nem jött
+                meg a pénz (számlával vagy anélkül) - a pénzügyes innen látja,
+                hová kell még számlát kiállítani, és mi van kint kifizetetlenül
+                (lásd backend services/kintlevoseg.py). */}
+            <Card title="Projekt kintlévőségek">
+              <ProjektKintlevosegek summary={summary} />
+            </Card>
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <Card title="Bevétel / kiadás - utolsó 12 hónap (nettó)">
@@ -153,9 +165,6 @@ export default async function PenzugyekPage() {
                   services/fizetesi_mod.py). */}
               <Card title="Készpénz a kasszában">
                 <KasszaWidget kassza={summary.kassza} />
-              </Card>
-              <Card title="Kintlévőségek projektenként">
-                <OutstandingProjectsTable projects={summary.kintlevo_projektek} />
               </Card>
 
             {summary.ytd_kiadas_fizetesi_mod_szerint.length > 0 && (

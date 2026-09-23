@@ -1,5 +1,4 @@
-import { StatusBadge } from "@/components/StatusBadge";
-import { formatDate, formatHuf, FinanceSummary } from "@/lib/api";
+import { formatHuf, FinanceSummary } from "@/lib/api";
 
 const MONTH_SHORT = ["jan", "feb", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
 
@@ -47,53 +46,6 @@ export function FinanceMonthlyChart({ trend }: { trend: FinanceSummary["havi_tre
           );
         })}
       </div>
-    </div>
-  );
-}
-
-/** Kintlévőségek: kifizetetlen bevétel-sorok project code-onként összesítve
- * (lásd backend finance.py finance_summary) - a legnagyobb összeggel elöl,
- * lejárt határidejű piros jelzéssel. */
-export function OutstandingProjectsTable({ projects }: { projects: FinanceSummary["kintlevo_projektek"] }) {
-  if (projects.length === 0) {
-    return <p className="text-[13px] text-text-secondary">Nincs nyitott kintlévőség - minden bevétel kifizetve.</p>;
-  }
-  return (
-    <div className="overflow-x-auto">
-    <table className="os-table min-w-full border-collapse text-[13px]">
-      <thead>
-        <tr className="border-b border-border">
-          <th className="py-1.5 text-left font-medium text-text-secondary">Projektkód</th>
-          {/* A munka NEVE, nem az ügyfélé: a régi, Notionból importált
-              kódoknál az ügyfél többnyire "Ismeretlen ügyfél (Notion
-              import)" volt, tehát ez az oszlop nem mondott semmit arról,
-              MI ez a tétel. */}
-          <th className="py-1.5 text-left font-medium text-text-secondary">Projekt</th>
-          <th className="py-1.5 text-right font-medium text-text-secondary">Kintlévő</th>
-          <th className="py-1.5 text-right font-medium text-text-secondary">Határidő</th>
-        </tr>
-      </thead>
-      <tbody>
-        {projects.map((p) => (
-          <tr key={p.project_code_id} className="border-b border-border last:border-0">
-            <td className="py-2 pr-4">
-              <a href={`/projektek/project-kodok/${p.project_code_id}`} className="text-text-accent hover:underline">
-                {p.projektkod}
-              </a>
-            </td>
-            <td className="py-2 pr-4 text-text-secondary">{p.projekt_nev ?? "–"}</td>
-            <td className="py-2 text-right font-medium text-text-primary">{formatHuf(p.kintlevo_osszeg)}</td>
-            <td className="py-2 text-right">
-              {p.legkorabbi_hatarido ? (
-                <StatusBadge label={formatDate(p.legkorabbi_hatarido)} tone={p.lejart ? "danger" : "warning"} />
-              ) : (
-                "–"
-              )}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
     </div>
   );
 }

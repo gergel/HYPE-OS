@@ -37,6 +37,28 @@ Néhány dolog a listákon szándékosan van így:
   oszlop ugyanazt a semmit ismételte minden soron. Ugyanezért mutat a
   kintlévőség-táblázat is projektnevet.
 
+### Projekt kintlévőségek
+
+A Pénzügyek oldal "Projekt kintlévőségek" blokkja **minden** projektkódot
+hoz, amiért még nem jött meg a pénz - akár van már számla, akár nincs
+(`services/kintlevoseg.py`). Három fülön:
+
+- **Számlázandó** - még nincs számla (se feltöltött számla-fájl, se a
+  Notionból örökölt számla-link, se kiállítási dátum/fájl a bevétel-soron):
+  ide kell kiállítani. A régen lezajlott munka elöl, a még meg nem tartott
+  események a lista végén, halványan. A papír-oszlop mutatja, kész-e a TIG.
+- **Kiállítva, nem fizetve** - kint a számla, a pénz még nem érkezett meg; a
+  lejárt határidejű elöl, a határidő nélküli számla külön jelölve.
+- **Számla nélkül, nincs lezárva** - kimondtuk, hogy számla nem lesz, de azt
+  nem, hogy a pénz megjött vagy tranzakció nélkül rendeződött.
+
+Összeg nélkül is bekerül (ott a vállalási ár hiányzik - az is teendő).
+**Csak az marad ki, amiről ki van mondva, hogy rendezve van:** kifizetve
+(bevétel-sorok / feltöltött számlák / Notion "kifizetve" állapot),
+tranzakció nélkül lezárva, "kifizetve, de nem kerül a bevételek közé",
+elmaradt esemény, megindokolt 0 Ft-os vállalási ár, illetve a papírozásból
+kivett HYPE24-es sorozat. A lista nincs levágva (korábban 15 sor volt).
+
 ### Mi számít bele az ÉVES bevételbe
 
 Nem minden bevétel-sor pénz, ami ezen az úton folyt be hozzánk. Kétféle van,

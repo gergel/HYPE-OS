@@ -2165,14 +2165,35 @@ export async function getRates(limit = 5000): Promise<Rate[]> {
 
 export type MonthlyFinance = { month: string; bevetel: number; kiadas: number };
 
+export type OutstandingInvoice = {
+  nev: string;
+  url: string | null;
+  netto: number | null;
+  fizetesi_hatarido: string | null;
+};
+
+/** Egy ki nem fizetett projektkód (lásd backend services/kintlevoseg.py). */
 export type OutstandingProject = {
   project_code_id: number;
   projektkod: string;
   /** A MUNKA neve (nem az ügyfélé) - lásd backend routes/finance.py. */
   projekt_nev: string | null;
-  kintlevo_osszeg: number;
+  megrendelo: string | null;
+  /** szamlazando | szamla_kint | szamla_nelkul */
+  allapot: string;
+  /** Nettó, forintban; null = nincs megadva a vállalási ár. */
+  kintlevo_osszeg: number | null;
+  esemeny_datuma: string | null;
+  esemeny_jovobeli: boolean;
+  /** nem_kell | tig_kesz | tig_hianyzik | szerzodes_hianyzik */
+  papir: string | null;
+  szamlak: OutstandingInvoice[];
+  regi_szamla_url: string | null;
   legkorabbi_hatarido: string | null;
+  hatarido_napok: number | null;
   lejart: boolean;
+  hatarido_hianyzik: boolean;
+  megjegyzes: string | null;
 };
 
 export type PaymentMethodBreakdown = { kifizetes_modja: string | null; osszeg: number };
@@ -2187,6 +2208,15 @@ export type FinanceSummary = {
   ytd_kiadas_brutto: number;
   osszes_kintlevoseg: number;
   kintlevo_projektek_szama: number;
+  szamlazando_db: number;
+  szamlazando_osszeg: number;
+  szamla_kint_db: number;
+  szamla_kint_osszeg: number;
+  szamla_nelkul_db: number;
+  szamla_nelkul_osszeg: number;
+  lejart_db: number;
+  lejart_osszeg: number;
+  osszeg_nelkul_db: number;
   havi_trend: MonthlyFinance[];
   kintlevo_projektek: OutstandingProject[];
   ytd_kiadas_fizetesi_mod_szerint: PaymentMethodBreakdown[];

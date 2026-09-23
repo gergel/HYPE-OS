@@ -31,8 +31,9 @@ from app.models.portal import Payment
 from app.models.project import Project
 from app.models.project_code import KIFIZETETT_STATUSZ_MINTA, ProjectCode
 from app.schemas.document_attachment import DocumentAttachmentRead
-from app.services import attachments, bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok, papirozas_hatokor
+from app.services import attachments, bizonylat, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
 from app.services import kassza as kassza_szolg
+from app.services import kintlevoseg as kintlevoseg_szolg
 from app.services import penznem as penznem_szolg
 from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
 from app.services.portal_storage import R2NotConfiguredError
@@ -372,16 +373,39 @@ class MonthlyFinance(BaseModel):
     kiadas: float
 
 
+class OutstandingInvoice(BaseModel):
+    nev: str
+    url: str | None
+    netto: float | None
+    fizetesi_hatarido: date | None
+
+
 class OutstandingProject(BaseModel):
+    """Egy ki nem fizetett projektkód - lásd services/kintlevoseg.py."""
+
     project_code_id: int
     projektkod: str
     #: A munka NEVE (nem az ügyfélé). A régi, Notionból importált kódok
     #: többségénél az ügyfél "Ismeretlen ügyfél (Notion import)" - abból a
     #: listából nem derült ki, MI az a tétel; a projekt nevéből igen.
     projekt_nev: str | None
-    kintlevo_osszeg: float
+    megrendelo: str | None = None
+    #: szamlazando (még nincs számla) | szamla_kint (kiállítva, nem fizették)
+    #: | szamla_nelkul (számla nem lesz, de a rendezés nincs lezárva)
+    allapot: str
+    #: Nettó, forintban. None: nincs megadva a vállalási ár (az is teendő).
+    kintlevo_osszeg: float | None
+    esemeny_datuma: date | None = None
+    esemeny_jovobeli: bool = False
+    #: nem_kell | tig_kesz | tig_hianyzik | szerzodes_hianyzik
+    papir: str | None = None
+    szamlak: list[OutstandingInvoice] = []
+    regi_szamla_url: str | None = None
     legkorabbi_hatarido: date | None
+    hatarido_napok: int | None = None
     lejart: bool
+    hatarido_hianyzik: bool = False
+    megjegyzes: str | None = None
 
 
 class PaymentMethodBreakdown(BaseModel):
@@ -446,6 +470,16 @@ class FinanceSummary(BaseModel):
     ytd_kiadas_brutto: float
     osszes_kintlevoseg: float
     kintlevo_projektek_szama: int
+    #: A kintlévőségek bontása: hová kell még számla, és hol van kint.
+    szamlazando_db: int = 0
+    szamlazando_osszeg: float = 0
+    szamla_kint_db: int = 0
+    szamla_kint_osszeg: float = 0
+    szamla_nelkul_db: int = 0
+    szamla_nelkul_osszeg: float = 0
+    lejart_db: int = 0
+    lejart_osszeg: float = 0
+    osszeg_nelkul_db: int = 0
     havi_trend: list[MonthlyFinance]
     kintlevo_projektek: list[OutstandingProject]
     ytd_kiadas_fizetesi_mod_szerint: list[PaymentMethodBreakdown]
@@ -880,44 +914,14 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         for y, m in months
     ]
 
-    # A KINTLÉVŐSÉG FORRÁSA A PROJEKTKÓD (a felhasználó kérése): ott van
-    # felvezetve, mi nincs valójában kifizetve (bevetel_kifizetve + a
-    # feltöltött számlák fizetési állapota). A korábbi számítás a nyers
-    # bevétel-sorok üres fizetés-dátumából indult ki - ez főleg a Notionból
-    # örökölt soroknál hamis kintlévőket mutatott (a pénz rég megjött, csak a
-    # sorban nincs dátum).
-    kintlevo_projektek: list[OutstandingProject] = []
-    for pc in db.scalars(select(ProjectCode).options(selectinload(ProjectCode.revenues))).all():
-        # A papírozásból kivett sorozatok (HYPE24) és az elmaradt események
-        # nem kintlévők; ahol számlát sem várunk, ott pénzt sem.
-        if papirozas_hatokor.projektkod_kivett(pc.projektkod) or pc.elmaradt or not pc.szamla_kell:
-            continue
-        if pc.bevetel_kifizetve:
-            continue
-        # A még be nem jött rész: a projekt bevétele mínusz ami (dátummal
-        # igazoltan) már megjött - osztott számlázásnál csak a maradék kintlévő.
-        fizetett = float(
-            sum(elszamolas.osszeg(r) for r in pc.revenues if r.fizetes_datuma is not None)
-        )
-        osszeg = float(pc.bevetel) - fizetett
-        if osszeg <= 0:
-            continue
-        allas = pc.hatarido_allas
-        nyitott_hatarido = allas if allas and allas.get("allapot") in ("var", "lejart", "ma_jar_le") else None
-        kintlevo_projektek.append(
-            OutstandingProject(
-                project_code_id=pc.id,
-                projektkod=pc.projektkod,
-                projekt_nev=pc.project_nev or None,
-                kintlevo_osszeg=osszeg,
-                legkorabbi_hatarido=(
-                    date.fromisoformat(nyitott_hatarido["hatarido"]) if nyitott_hatarido else None
-                ),
-                lejart=bool(nyitott_hatarido and nyitott_hatarido.get("allapot") == "lejart"),
-            )
-        )
-    kintlevo_projektek.sort(key=lambda p: p.kintlevo_osszeg, reverse=True)
-    osszes_kintlevoseg = sum(p.kintlevo_osszeg for p in kintlevo_projektek)
+    # A KINTLÉVŐSÉG FORRÁSA A PROJEKTKÓD: MINDEN projektkód, amiért még nem
+    # jött meg a pénz - számlával vagy anélkül -, hacsak nincs kimondva, hogy
+    # rendezve van (lásd services/kintlevoseg.py). A pénzügyes innen látja,
+    # hová kell még számlát kiállítani, és mi van kint kifizetetlenül.
+    kintlevo_sorok = kintlevoseg_szolg.projekt_kintlevosegek(db, ma=today)
+    kintlevo_projektek = [OutstandingProject(**sor) for sor in kintlevo_sorok]
+    bontas = kintlevoseg_szolg.osszesito(kintlevo_sorok)
+    osszes_kintlevoseg = float(sum(p.kintlevo_osszeg or 0 for p in kintlevo_projektek))
 
     return FinanceSummary(
         ytd_bevetel=float(ytd_bevetel),
@@ -928,7 +932,8 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         osszes_kintlevoseg=osszes_kintlevoseg,
         kintlevo_projektek_szama=len(kintlevo_projektek),
         havi_trend=havi_trend,
-        kintlevo_projektek=kintlevo_projektek[:15],
+        kintlevo_projektek=kintlevo_projektek,
+        **bontas,
         ytd_kiadas_fizetesi_mod_szerint=ytd_kiadas_fizetesi_mod_szerint,
         kassza=_kassza(db, today, months),
     )
