@@ -11,7 +11,9 @@ import type { Tudashalo as TudashaloAdat, TudashaloEl, TudashaloPont } from "@/l
  *   • szín = témakör (validált, színtévesztés-biztos paletta a sötét felületen),
  *   • forma = a pont fajtája (partner ●, projektkód ■, számla-cél ▲, szabály ◆),
  *   • méret = a kapcsolatok súlya, vonalvastagság/fényerő = bizonyosság,
- *   • szaggatott vonal = még csak jelölt (nincs mögötte jóváhagyott tudás).
+ *   • szaggatott vonal = még csak jelölt (nincs mögötte jóváhagyott tudás),
+ *   • a HÁLÓ ÁTMÉRŐJE és Lara magjának mérete a tudás mennyiségével nő
+ *     (lásd `haloArany`).
  * A „Növekedés lejátszása" az első megjelenések szerint építi fel a hálót.
  * ────────────────────────────────────────────────────────────────────────── */
 
@@ -52,6 +54,18 @@ const TINTA_2 = "#9aa4ae";
 const HUD = "#a06604";
 
 const LEJATSZAS_MS = 14000;
+
+/** A HÁLÓ MÉRETE a tudással nő: kevés tudásnál kicsi, középen összehúzódó
+ * háló (és kisebb Lara-mag), sok tudásnál kitölti a vásznat. Logaritmikus, hogy
+ * az első tudás-darabok látványosan növeljék, a későbbiek egyre finomabban.
+ * `HALO_TELJES` „tudás-egységnél" (pont + kapcsolat + 2× jóváhagyott
+ * kapcsolat) éri el a teljes átmérőt. Lejátszás közben ez is nő. */
+const HALO_MIN = 0.34;
+const HALO_TELJES = 2500;
+function haloArany(pontSzam: number, kapcsolat: number, jovahagyott: number): number {
+  const n = pontSzam + kapcsolat + 2 * jovahagyott;
+  return Math.min(1, HALO_MIN + (1 - HALO_MIN) * (Math.log1p(n) / Math.log1p(HALO_TELJES)));
+}
 const NAP = 86400000;
 
 type Pont = TudashaloPont & {
@@ -323,19 +337,25 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
       if (e.jovahagyott > 0) jovahagyott++;
     });
     const pontSzam = pontok.filter((p, i) => pontLathato[i] && p.fajta !== "core" && p.fajta !== "tema").length;
-    return { fok, elLathato, pontLathato, kapcsolat, eros, jovahagyott, atlag: kapcsolat ? bizSum / kapcsolat : null, pontSzam };
+    const arany = haloArany(pontSzam, kapcsolat, jovahagyott);
+    return { fok, elLathato, pontLathato, kapcsolat, eros, jovahagyott, atlag: kapcsolat ? bizSum / kapcsolat : null, pontSzam, arany };
   }, [pontok, elek, ido, rejtett]);
   const lathatoRef = useRef(lathato);
   useLayoutEffect(() => {
     lathatoRef.current = lathato;
   }, [lathato]);
+  // A háló AKTUÁLIS (animált) mérete: a rajzoló hurok vezeti a cél (arany) felé,
+  // így betöltéskor és új tudásnál a háló láthatóan „kinő". A találatvizsgálat
+  // is ezt olvassa, hogy a kattintás ott találjon, ahol a pont látszik.
+  const haloRef = useRef(HALO_MIN * 0.8);
 
   const sugar = useCallback(
     (i: number, S: number) => {
       const p = pontok[i];
       const f = Math.sqrt(lathatoRef.current.fok[i]);
       const k = S / 420;
-      if (p.fajta === "core") return 15 * k;
+      // Lara magja is a tudással nő (kicsi mag → erős, nagy mag).
+      if (p.fajta === "core") return (8 + 13 * haloRef.current) * k;
       if (p.fajta === "tema") return (8 + Math.min(10, f * 0.9)) * k;
       if (p.fajta === "partner") return (2.4 + Math.min(15, f * 2.3)) * k;
       if (p.fajta === "kod") return (2.2 + Math.min(11, f * 1.9)) * k;
@@ -377,7 +397,9 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
     const csendes = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const cx = meret.w / 2;
     const cy = meret.h / 2;
-    const S = Math.min(meret.w, meret.h) / 2 - 28;
+    const Steljes = Math.min(meret.w, meret.h) / 2 - 28;
+    // S: a háló pillanatnyi sugara (a tudással nő) — minden rajzolás ehhez méretez.
+    let S = Steljes * haloRef.current;
     const px = (p: Pont) => cx + p.x * S;
     const py = (p: Pont) => cy + p.y * S;
     type Reszecske = { el: number; k: number; seb: number };
@@ -415,6 +437,8 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
       const L = lathatoRef.current;
       const A = allapotRef.current;
       const T = idoRef.current;
+      haloRef.current = csendes ? L.arany : haloRef.current + (L.arany - haloRef.current) * 0.05;
+      S = Steljes * haloRef.current;
       ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = HATTER;
       ctx.fillRect(0, 0, meret.w, meret.h);
@@ -536,7 +560,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
         if (!L.pontLathato[i]) return;
         const x = px(p);
         const y = py(p);
-        let r = sugar(i, S);
+        let r = sugar(i, Steljes);
         if (p.fajta === "core") r *= 1 + (csendes ? 0 : Math.sin(fazis * 2) * 0.06);
         const halvany = vanKijeloles && !A.szomszedok!.has(i);
         const alfa = halvany ? 0.18 : 1;
@@ -629,14 +653,15 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
   // ── Egér: hover-tooltip és kijelölés (a találati terület nagyobb a pontnál) ──
   const talalat = useCallback(
     (ex: number, ey: number): number => {
-      const S = Math.min(meret.w, meret.h) / 2 - 28;
+      const Steljes = Math.min(meret.w, meret.h) / 2 - 28;
+      const S = Steljes * haloRef.current;
       const [cx, cy] = [meret.w / 2, meret.h / 2];
       let legjobb = -1;
       let tav = Infinity;
       pontok.forEach((p, i) => {
         if (!lathato.pontLathato[i]) return;
         const d = Math.hypot(cx + p.x * S - ex, cy + p.y * S - ey);
-        const r = sugar(i, S) + 7;
+        const r = sugar(i, Steljes) + 7;
         if (d < r && d < tav) {
           tav = d;
           legjobb = i;
@@ -794,6 +819,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
                   <HudSzam cimke="Jóváhagyott kapcs." ertek={lathato.jovahagyott} />
                   <HudSzam cimke="Átl. bizonyosság" ertek={lathato.atlag === null ? "—" : szazalek(lathato.atlag)} />
                   <HudSzam cimke="Aktív szabály" ertek={adat.osszesites.aktiv_szabalyok} />
+                  <HudSzam cimke="Háló átmérő" ertek={szazalek(lathato.arany)} />
                 </div>
               </div>
               {nincsTudas && (

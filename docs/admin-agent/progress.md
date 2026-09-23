@@ -492,6 +492,15 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   kérdés-értesítés összevonása, API. Teljes backend: 163 passed, 1 skipped.
   Élő próba demó-adaton (11 auto-jóváhagyás, 2 szabályjavaslat; utána törölve).
 
+### T. A Tudásháló mérete a tudással nő ✅
+- `components/admin-agent/Tudashalo.tsx`: a háló ÁTMÉRŐJE és Lara magjának
+  mérete a látható tudás mennyiségével (pont + kapcsolat + 2× jóváhagyott
+  kapcsolat) logaritmikusan nő: üres tudásnál 34%, kb. 2500 tudás-egységnél
+  tölti ki a vásznat. Finoman animálva „kinő" (betöltéskor, új tudásnál és a
+  Növekedés lejátszása közben is); a HUD „Háló átmérő" százalékot mutat. A
+  pontok mérete nem zsugorodik, a kattintás-találat a pillanatnyi mérethez
+  igazodik. Élő próba demó-tudással: 34% → 85% (utána törölve).
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

@@ -21,6 +21,7 @@ const LABEL_OVERRIDES: Record<string, string> = {
   // a kiadas_leiras pedig a "mire ment" - lásd backend models/finance.Expense.
   kiadas_leiras: "Megnevezés (mire ment)",
   afa_szazalek: "ÁFA %",
+  egyeni_afa_osszege: "Egyéni ÁFA összege",
   munkaszerzodes_url: "Munkaszerződés",
   email: "Email cím",
   vagas_leallitva: "Vágás leállítva",

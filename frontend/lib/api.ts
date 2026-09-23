@@ -345,6 +345,9 @@ export type Expense = {
    * számolja belőlük (lásd backend routes/finance._afa_brutto). */
   plusz_afa: string | null;
   afa_szazalek: number | null;
+  /** Egyéni ÁFA-összeg (a számlán szereplő konkrét ÁFA, nem százalék): ha
+   * ki van töltve, bruttó = nettó + ez; az `afa_szazalek` csak tájékoztató. */
+  egyeni_afa_osszege?: number | null;
   tipus: string | null;
   /** A kiadás EGYETLEN dátuma (a régi kiadás dátuma + fizetés dátuma össze
    * lett vonva): kifizetéskor a tényleges utalás napja, egyébként a

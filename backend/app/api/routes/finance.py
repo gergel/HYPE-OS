@@ -124,15 +124,44 @@ def _plusz_afa_jelolt(ertek) -> bool:
     return str(ertek or "").strip().lower() in ("igen", "true", "+afa", "+áfa")
 
 
-def _afa_brutto(adat: dict, *, netto=None, plusz_afa=None, afa_szazalek=None) -> None:
+#: A felület ÁFA-választójának „Egyéni ÁFA összeg" értéke: nem százalékot ad
+#: meg a felhasználó, hanem a számlán szereplő ÁFA konkrét összegét.
+EGYENI_AFA = "egyeni"
+
+
+def _afa_brutto(
+    adat: dict, *, netto=None, plusz_afa=None, afa_szazalek=None, egyeni_afa=None
+) -> None:
     """Bruttó a nettóból: "+ÁFA" jelöléssel netto * (1 + százalék/100), ÁFA
     nélkül a bruttó maga a nettó (a kettő ilyenkor ugyanaz az összeg).
+
+    EGYÉNI ÁFA-ÖSSZEG (a felhasználó kérése): az ÁFA-választó „Egyéni ÁFA
+    összeg" értékénél (`plusz_afa="egyeni"`) a felhasználó a számlán szereplő
+    ÁFA konkrét összegét adja meg (`egyeni_afa_osszege`), nem százalékot - pl.
+    vegyes kulcsú vagy kerekítéssel eltérő számlánál. Ilyenkor bruttó = nettó +
+    az ÁFA összege, pontosan. A sor "+ÁFA"-ként ("igen") tárolódik, hogy minden
+    más kimutatás ugyanúgy ÁFÁ-snak lássa, a százalék pedig tájékoztató (az
+    összegből visszaszámolva). Ha később valaki százalékot ad meg, vagy "Nincs
+    ÁFA"-ra vált, az egyéni összeg törlődik - különben csendben felülírná.
 
     Csak akkor számolunk, ha a kérés NEM hozott kifejezett bruttót - egy
     kézzel beírt bruttó (pl. a táblázat cellájából) mindig nyer. Százalék
     nélkül 27-tel számolunk (az általános kulcs). A hívó a PATCH-nél a meglévő
     rekord értékeit adja át alapnak, hogy egy önmagában érkező nettó-javítás
     is újraszámolja a bruttót."""
+    if str(adat.get("plusz_afa") or "").strip().lower() == EGYENI_AFA:
+        if adat.get("egyeni_afa_osszege") is None and egyeni_afa is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Egyéni ÁFA-nál add meg az ÁFA összegét.",
+            )
+        if adat.get("egyeni_afa_osszege") is not None and float(adat["egyeni_afa_osszege"]) < 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Az ÁFA összege nem lehet negatív.")
+        adat["plusz_afa"] = "igen"
+    elif "plusz_afa" in adat and not _plusz_afa_jelolt(adat["plusz_afa"]):
+        adat["egyeni_afa_osszege"] = None  # "Nincs ÁFA"
+    elif "afa_szazalek" in adat and "egyeni_afa_osszege" not in adat:
+        adat["egyeni_afa_osszege"] = None  # százalékos ÁFA-ra váltott
     if adat.get("brutto") is not None:
         return
     netto = adat.get("netto", netto)
@@ -141,6 +170,13 @@ def _afa_brutto(adat: dict, *, netto=None, plusz_afa=None, afa_szazalek=None) ->
         return
     if not _plusz_afa_jelolt(plusz_afa):
         adat["brutto"] = round(float(netto), 2)
+        return
+    egyeni = adat.get("egyeni_afa_osszege", egyeni_afa)
+    if egyeni is not None:
+        adat["brutto"] = round(float(netto) + float(egyeni), 2)
+        # Tájékoztató százalék (a mező 5,2 pontosságú - irreális aránynál üres).
+        arany = float(egyeni) / float(netto) * 100 if float(netto) else None
+        adat["afa_szazalek"] = round(arany, 2) if arany is not None and arany < 1000 else None
         return
     szazalek = adat.get("afa_szazalek", afa_szazalek)
     szazalek = float(szazalek) if szazalek is not None else 27.0
@@ -160,16 +196,29 @@ def _expense_before_create(adat: dict, db: Session) -> dict:
     # pénznemben számolódik ki, és az átváltás azt is forintosítja.
     _afa_brutto(adat)
     adat = _devizat_forintra(adat, db)
+    _egyeni_afa_forintra(adat)
     return _alvallalkozo_forgatas_kitoltese(adat, db)
+
+
+def _egyeni_afa_forintra(adat: dict) -> None:
+    """Devizás felvezetésnél az egyéni ÁFA-összeg is az eredeti pénznemben jött
+    - a sor összegei forintban tárolódnak, ezért ezt is átváltjuk (a bruttót a
+    nettóval együtt már a deviza-átváltás forintosította)."""
+    if adat.get("eredeti_penznem") and adat.get("egyeni_afa_osszege") is not None and adat.get("arfolyam"):
+        adat["egyeni_afa_osszege"] = penznem_szolg.forintra(adat["egyeni_afa_osszege"], adat["arfolyam"])
 
 
 def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee) -> None:
     """PATCH-nél a hiányzó alapokat a meglévő rekordból vesszük: egy
     önmagában érkező nettó- vagy százalék-javítás is újraszámolja a bruttót,
     ha a soron "+ÁFA" van jelölve."""
-    if any(mezo in adat for mezo in ("netto", "plusz_afa", "afa_szazalek")):
-        _afa_brutto(adat, netto=obj.netto, plusz_afa=obj.plusz_afa, afa_szazalek=obj.afa_szazalek)
+    if any(mezo in adat for mezo in ("netto", "plusz_afa", "afa_szazalek", "egyeni_afa_osszege")):
+        _afa_brutto(
+            adat, netto=obj.netto, plusz_afa=obj.plusz_afa, afa_szazalek=obj.afa_szazalek,
+            egyeni_afa=obj.egyeni_afa_osszege,
+        )
     _devizat_forintra_frissiteskor(obj, adat, db, _current_user)
+    _egyeni_afa_forintra(adat)
     # UTÓLAG alvállalkozóivá váló kiadás (a felhasználó hibajelzése nyomán):
     # ha egy meglévő soron kap embert vagy vált "külsős" besorolásra, ugyanaz
     # a forgatás-hozzárendelés jár neki, mint felvitelkor - enélkül a

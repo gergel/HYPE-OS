@@ -235,6 +235,9 @@ export default async function PenzugyekPage() {
                   options: [
                     { value: "", label: "Nincs ÁFA" },
                     { value: "igen", label: "Plusz ÁFA" },
+                    // A számlán szereplő ÁFA konkrét ÖSSZEGE (nem százalék) -
+                    // pl. vegyes kulcsnál; bruttó = nettó + ez az összeg.
+                    { value: "egyeni", label: "Egyéni ÁFA összeg" },
                   ],
                 },
                 {
@@ -243,6 +246,14 @@ export default async function PenzugyekPage() {
                   type: "number",
                   defaultValue: "27",
                   showIf: { field: "plusz_afa", oneOf: ["igen"] },
+                },
+                {
+                  name: "egyeni_afa_osszege",
+                  label: "ÁFA összege",
+                  type: "number",
+                  placeholder: "A számlán szereplő ÁFA",
+                  required: true,
+                  showIf: { field: "plusz_afa", oneOf: ["egyeni"] },
                 },
                 {
                   name: "kifizetes_modja",

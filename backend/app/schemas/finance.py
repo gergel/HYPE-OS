@@ -14,6 +14,10 @@ class ExpenseBase(BaseModel):
     #: számolja a szerver a bruttót (lásd routes/finance._afa_brutto).
     plusz_afa: str | None = None
     afa_szazalek: float | None = None
+    #: EGYÉNI ÁFA-ÖSSZEG: a felület ÁFA-választójának „Egyéni ÁFA összeg"
+    #: értékénél (`plusz_afa="egyeni"`) a számlán szereplő ÁFA konkrét összege -
+    #: ilyenkor bruttó = nettó + ez (lásd routes/finance._afa_brutto).
+    egyeni_afa_osszege: float | None = None
     project_code_id: int | None = None
     employee_id: int | None = None
     #: ALVÁLLALKOZÓI kiadás: ha ki van töltve, az `employee_id` embertől
@@ -114,7 +118,6 @@ class ExpenseRead(ExpenseBase):
     egyeb_kiadas: JsonScalar = None
     tulora_orabere: float | None = None
     tulora_szama: float | None = None
-    egyeni_afa_osszege: float | None = None
     megjegyzes: str | None = None
     plusz_napok_ara: float | None = None
     plusz_napok_szama: float | None = None
