@@ -46,7 +46,7 @@ export function ProjektKintlevosegek({ summary }: { summary: FinanceSummary }) {
   const sorok = summary.kintlevo_projektek.filter(
     (p) =>
       p.allapot === csoport &&
-      (!q || normalizal(`${p.projektkod} ${p.projekt_nev ?? ""} ${p.megrendelo ?? ""}`).includes(q)),
+      (!q || normalizal(`${p.projektkod} ${p.projekt_nev ?? ""}`).includes(q)),
   );
 
   return (
@@ -85,7 +85,7 @@ export function ProjektKintlevosegek({ summary }: { summary: FinanceSummary }) {
           type="search"
           value={kereses}
           onChange={(e) => setKereses(e.target.value)}
-          placeholder="Keresés: kód, projekt, megrendelő"
+          placeholder="Keresés: projektkód, projekt"
           aria-label="Keresés a kintlévőségek között"
           className="w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted sm:w-72"
         />
@@ -101,7 +101,6 @@ export function ProjektKintlevosegek({ summary }: { summary: FinanceSummary }) {
             <thead>
               <tr className="border-b border-border text-left text-text-secondary">
                 <th className="py-1.5 pr-4 font-medium">Projektkód</th>
-                <th className="py-1.5 pr-4 font-medium">Megrendelő</th>
                 {csoport === "szamla_kint" ? (
                   <>
                     <th className="py-1.5 pr-4 font-medium">Számla</th>
@@ -137,7 +136,6 @@ function Sor({ p, csoport }: { p: OutstandingProject; csoport: Csoport }) {
         </a>
         {p.projekt_nev && <span className="block text-[12px] text-text-muted">{p.projekt_nev}</span>}
       </td>
-      <td className="py-2 pr-4 text-text-secondary">{p.megrendelo ?? "–"}</td>
       {csoport === "szamla_kint" ? (
         <>
           <td className="py-2 pr-4">
