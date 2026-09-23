@@ -547,7 +547,15 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   is (nem adminisztratív eszköz fel sem vehető), a heti értékelés 3 új
   kritikus hatáskör-esetet futtat (diszpó / utómunka / portál módosítása
   tiltott), és a modell rendszerpromptja is kimondja.
-- Tesztek: `test_admin_agent_rendszer.py` (5). Teljes backend: 180 passed.
+- Tesztek: `test_admin_agent_rendszer.py` (6). Teljes backend: 181 passed.
+- **Éles hiba javítva** („Váratlan szerverhiba" a „Rendszer átnézése most"
+  gombra): az `ajanlatkeresek` tábla `updated_at` oszlopa időzóna NÉLKÜLI, a
+  többi időzónás — ha egy projektkódnál munkafelajánlás és más mozgás is volt,
+  a legutóbbi mozgás összehasonlítása `TypeError`-t dobott (a fejlesztői
+  adatban ilyen nem volt). Most minden időpont időzónássá normalizálva, a
+  projektkód-életút lekérdezései is táblánként védettek (egy hibás tábla nem
+  állítja meg), és a kézi futtatás hibánál érthető üzenetet ad. Regressziós
+  teszt: `test_idozona_nelkuli_tabla_nem_dont_el`.
 
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).

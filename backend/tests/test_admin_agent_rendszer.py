@@ -154,3 +154,24 @@ def test_hataskor_csak_adminisztracio(db):
     run = run_eval(db)
     hataskor = [e for e in run.eredmeny["esetek"] if e["nev"].startswith("Hatáskör")]
     assert len(hataskor) == 3 and all(e["sikeres"] and not e["kritikus"] for e in hataskor)
+
+
+def test_idozona_nelkuli_tabla_nem_dont_el(db):
+    """Éles hiba („Váratlan szerverhiba"): az `ajanlatkeresek` updated_at
+    oszlopa időzóna NÉLKÜLI, a többi időzónás — egy projektkódnál mindkettő
+    mozgása az összehasonlításnál TypeError-t dobott. Most normalizálva."""
+    from app.models.munkafelajanlas import Ajanlatkeres
+    from app.models.project import Project
+
+    pc = _projekt(db)
+    proj = db.scalar(select(Project).where(Project.project_code_id == pc.id))
+    from datetime import datetime
+
+    # Módosított sor: az oszlop időzóna nélküli, az érték naiv (UTC).
+    db.add(Ajanlatkeres(project_id=proj.id, projekt_nev="Rendszerteszt forgatás", munkakor="Operatőr",
+                        updated_at=datetime.utcnow()))
+    db.flush()
+    r = rendszer_figyeles(db, kenyszeritett=True)
+    assert r["projektkod"] >= 1
+    m = db.scalar(select(MemoryChunk).where(MemoryChunk.forras == f"rendszer:projektkod:{pc.id}"))
+    assert "Ajánlatkérések: 1" in m.tartalom

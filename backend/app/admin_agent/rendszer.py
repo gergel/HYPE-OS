@@ -232,24 +232,45 @@ def _projektkod_eletut(db: Session, tablak: dict[str, Any], tol: datetime, stat:
     utolso: dict[int, datetime] = {}
 
     def _jelol(pc_id, ido):
-        if pc_id and ido and (pc_id not in utolso or ido > utolso[pc_id]):
+        if not pc_id or ido is None:
+            return
+        # Néhány tábla (pl. ajanlatkeresek) időzóna NÉLKÜLI oszlopban tárol
+        # (UTC-t): összehasonlítás előtt egységesen időzónássá tesszük —
+        # különben „can't compare offset-naive and offset-aware" hiba.
+        if ido.tzinfo is None:
+            ido = ido.replace(tzinfo=timezone.utc)
+        if pc_id not in utolso or ido > utolso[pc_id]:
             utolso[pc_id] = ido
+
+    def _biztonsagos(fn) -> None:
+        """Egy tábla hibája (pl. el nem végzett migráció) ne állítsa meg."""
+        try:
+            with db.begin_nested():
+                fn()
+        except Exception:  # noqa: BLE001
+            stat["hibas_tabla"] += 1
 
     for pc_id, ido in db.execute(select(ProjectCode.id, ProjectCode.updated_at).where(ProjectCode.updated_at >= tol)).all():
         _jelol(pc_id, ido)
+    def _kod_mozgas(t) -> None:
+        for pc_id, ido in db.execute(
+            select(t.c.project_code_id, func.max(t.c.updated_at)).where(t.c.updated_at >= tol)
+            .group_by(t.c.project_code_id)
+        ).all():
+            _jelol(pc_id, ido)
+
+    def _proj_mozgas(t) -> None:
+        for p_id, ido in db.execute(
+            select(t.c.project_id, func.max(t.c.updated_at)).where(t.c.updated_at >= tol).group_by(t.c.project_id)
+        ).all():
+            _jelol(proj_kod.get(p_id), ido)
+
     for t in kod_tablak.values():
         if "updated_at" in t.c:
-            for pc_id, ido in db.execute(
-                select(t.c.project_code_id, func.max(t.c.updated_at)).where(t.c.updated_at >= tol)
-                .group_by(t.c.project_code_id)
-            ).all():
-                _jelol(pc_id, ido)
+            _biztonsagos(lambda t=t: _kod_mozgas(t))
     for t in proj_tablak.values():
         if "updated_at" in t.c:
-            for p_id, ido in db.execute(
-                select(t.c.project_id, func.max(t.c.updated_at)).where(t.c.updated_at >= tol).group_by(t.c.project_id)
-            ).all():
-                _jelol(proj_kod.get(p_id), ido)
+            _biztonsagos(lambda t=t: _proj_mozgas(t))
     if not utolso:
         return 0
     idk = [pc for pc, _ in sorted(utolso.items(), key=lambda x: x[1], reverse=True)[:MAX_PROJEKTKOD]]
@@ -257,7 +278,7 @@ def _projektkod_eletut(db: Session, tablak: dict[str, Any], tol: datetime, stat:
     # Tételszám + állapot-eloszlás táblánként, a kiválasztott kódokra.
     darab: dict[int, dict[str, int]] = defaultdict(dict)
     allapot: dict[int, dict[str, Counter]] = defaultdict(lambda: defaultdict(Counter))
-    for nev, t in kod_tablak.items():
+    def _kod_darab(nev, t) -> None:
         oszlop = next(iter(_allapot_oszlopok(t)), None)
         cols = [t.c.project_code_id] + ([oszlop] if oszlop is not None else [])
         for sor in db.execute(select(*cols, func.count()).where(t.c.project_code_id.in_(idk)).group_by(*cols)).all():
@@ -265,22 +286,28 @@ def _projektkod_eletut(db: Session, tablak: dict[str, Any], tol: datetime, stat:
             darab[pc_id][nev] = darab[pc_id].get(nev, 0) + n
             if oszlop is not None and sor[1] not in (None, ""):
                 allapot[pc_id][nev][str(sor[1])[:30]] += n
+
+    for nev, t in kod_tablak.items():
+        _biztonsagos(lambda nev=nev, t=t: _kod_darab(nev, t))
     kod_proj: dict[int, list[int]] = defaultdict(list)
     for p_id, pc_id in proj_kod.items():
         if pc_id in utolso:
             kod_proj[pc_id].append(p_id)
     osszes_proj = [p for pc in idk for p in kod_proj.get(pc, [])]
+    def _proj_darab(nev, t) -> None:
+        oszlop = next(iter(_allapot_oszlopok(t)), None)
+        cols = [t.c.project_id] + ([oszlop] if oszlop is not None else [])
+        for sor in db.execute(select(*cols, func.count()).where(t.c.project_id.in_(osszes_proj)).group_by(*cols)).all():
+            pc_id, n = proj_kod.get(sor[0]), int(sor[-1])
+            if pc_id is None:
+                continue
+            darab[pc_id][nev] = darab[pc_id].get(nev, 0) + n
+            if oszlop is not None and sor[1] not in (None, ""):
+                allapot[pc_id][nev][str(sor[1])[:30]] += n
+
     if osszes_proj:
         for nev, t in proj_tablak.items():
-            oszlop = next(iter(_allapot_oszlopok(t)), None)
-            cols = [t.c.project_id] + ([oszlop] if oszlop is not None else [])
-            for sor in db.execute(select(*cols, func.count()).where(t.c.project_id.in_(osszes_proj)).group_by(*cols)).all():
-                pc_id, n = proj_kod.get(sor[0]), int(sor[-1])
-                if pc_id is None:
-                    continue
-                darab[pc_id][nev] = darab[pc_id].get(nev, 0) + n
-                if oszlop is not None and sor[1] not in (None, ""):
-                    allapot[pc_id][nev][str(sor[1])[:30]] += n
+            _biztonsagos(lambda nev=nev, t=t: _proj_darab(nev, t))
 
     kezdet = tanulas_kezdete(db)
     for pc in db.scalars(select(ProjectCode).where(ProjectCode.id.in_(idk))).all():
@@ -338,6 +365,7 @@ def rendszer_figyeles(db: Session, *, trigger: str = "rendszer:kezi", kenyszerit
         "projektkod": kodok,
         "uj": stat["uj"],
         "frissitett": stat["frissitve"],
+        "hibas_tabla": stat["hibas_tabla"],
         "mozgas_30nap": sum(a["uj_30"] + a["modositott_30"] for a in aktivitas),
         "legaktivabb": [
             {"modul": a["modul"], "tabla": a["tabla"], "mozgas": a["uj_30"] + a["modositott_30"]}

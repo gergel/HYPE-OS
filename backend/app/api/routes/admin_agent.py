@@ -1506,9 +1506,19 @@ def rendszer_futtatas(
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """A rendszer átnézése MOST (csak olvas; tudás a Tudástárba)."""
+    import logging
+
     from app.admin_agent.rendszer import rendszer_figyeles
 
-    eredmeny = rendszer_figyeles(db, trigger="rendszer:kezi")
+    try:
+        eredmeny = rendszer_figyeles(db, trigger="rendszer:kezi")
+    except Exception as exc:  # noqa: BLE001 — érthető hiba a felületnek a néma 500 helyett
+        db.rollback()
+        logging.getLogger(__name__).exception("A rendszer kézi átnézése sikertelen.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"A rendszer átnézése hibára futott ({type(exc).__name__}: {str(exc)[:200]}).",
+        ) from exc
     if eredmeny.get("allapot") == "kikapcsolva":
         raise HTTPException(status_code=400, detail="A teljes rendszer figyelése ki van kapcsolva (Beállítások).")
     db.commit()
