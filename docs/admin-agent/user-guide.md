@@ -7,7 +7,7 @@ nem hajt végre magától.
 
 ## Hol találom?
 
-A bal oldali menüben az **Admin-Ágens** csoport. Hét aloldal:
+A bal oldali menüben az **Admin-Ágens** csoport. Nyolc aloldal:
 
 - **Áttekintés** — mennyi a nyitott / lejárt munka, mi vár jóváhagyásra, milyen
   állapotban vannak a forráskapcsolatok (Gmail, modell, tároló).
@@ -16,6 +16,9 @@ A bal oldali menüben az **Admin-Ágens** csoport. Hét aloldal:
 - **Jóváhagyások** — amit az ágens előkészített, és emberi döntést vár.
 - **Tudástár** — a szabályok és jóváhagyott minták. A gépi javaslat mindig külön
   van jelölve az élesben használt szabálytól.
+- **Tudásháló** — az ügynök tudása egy színes kapcsolati „glóriaként": minden
+  pont egy partner, projektkód, cél vagy szabály, a vonal vastagsága azt mutatja,
+  mennyire biztos a kapcsolat. A „Növekedés lejátszása" megmutatja, hogyan épült fel.
 - **Tanulás és minőség** — mit dolgozott fel a háttér-tanuló, és hogy áll a
   minőség-értékelés.
 - **Napló** — mi történt: minden elemzés, döntés és végrehajtás nyoma.

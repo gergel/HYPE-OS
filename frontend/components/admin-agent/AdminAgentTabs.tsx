@@ -8,6 +8,7 @@ const FULEK = [
   { href: "/admin-agent/munkasor", label: "Munkasor" },
   { href: "/admin-agent/jovahagyasok", label: "Jóváhagyások" },
   { href: "/admin-agent/tudastar", label: "Tudástár" },
+  { href: "/admin-agent/tudashalo", label: "Tudásháló" },
   { href: "/admin-agent/tanulas", label: "Tanulás és minőség" },
   { href: "/admin-agent/naplo", label: "Napló" },
   { href: "/admin-agent/beallitasok", label: "Beállítások" },

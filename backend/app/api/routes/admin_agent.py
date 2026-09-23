@@ -1175,6 +1175,18 @@ def megfigyeles_inditas(
     return eredmeny
 
 
+@router.get("/knowledge-graph")
+def tudashalo_lekeres(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """A Tudásháló: a megtanult tudás kapcsolati gráfja (pontok, kapcsolatok
+    bizonyossággal és első megjelenéssel). Csak olvas."""
+    from app.admin_agent.tudashalo import tudashalo
+
+    return tudashalo(db)
+
+
 @router.post("/replays")
 def visszajatszas_inditas(
     db: Session = Depends(get_db),

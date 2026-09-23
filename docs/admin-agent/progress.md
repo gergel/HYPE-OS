@@ -265,6 +265,26 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   1 kihagyott; tsc + eslint + `next build` zöld. Dev-adaton nincs szept. 1. utáni
   rögzített számla — a valós számok élesben látszanak.
 
+### M. Tudásháló (a tudás kapcsolati „glóriája") ✅
+- Backend `app/admin_agent/tudashalo.py` + `GET /knowledge-graph`: pontok
+  (mag, 5 témakör, partner, projektkód, számla-cél, szabály) és kapcsolatok
+  KIZÁRÓLAG valós tudásból (megfigyelt munka, visszajátszás, szabályok,
+  javítások). Bizonyosság = 1 − e^(−súly/2); súlyok: jóváhagyott példa 1,
+  jelölt 0,25, élesített szabály 3, szabály-jelölt 0,5, javítás 0,6, régi korszak
+  ×0,4; elvetett/félretett nem számít. Minden kapcsolatnak első megjelenése van.
+  Méretkorlát: 220 partner, 140 projektkód (a legerősebbek).
+- Felület `/admin-agent/tudashalo` (Tudásháló fül + oldalmenü): canvas-alapú,
+  J.A.R.V.I.S.-szerű HUD — forgó gyűrűk, skála, fényimpulzusok. Szín = témakör
+  (validált sötét paletta, all-pairs CVD ΔE 9,6, normál ΔE 17,0), forma = fajta,
+  pontméret = kapcsolatsúly, vonalvastagság/fény = bizonyosság, szaggatott =
+  csak jelölt. Témaszektorok a tartalom arányában. „Növekedés lejátszása" +
+  idősáv (a HUD-számok az adott napig), hover-tooltip, kattintásra részletpanel
+  (kapcsolatok bizonyosság szerint, jóváhagyott tudás), témaszűrők, táblázat-
+  nézet, mobil elrendezés, prefers-reduced-motion.
+- Tesztek: `test_admin_agent_tudashalo.py` (2). Teljes backend: 126 zöld,
+  1 kihagyott; tsc + eslint + `next build` zöld. Vizuális ellenőrzés Playwright-
+  képernyőképekkel (ideiglenes, jelölt demóadaton — utána törölve).
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

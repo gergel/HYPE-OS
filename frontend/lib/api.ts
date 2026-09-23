@@ -729,6 +729,57 @@ export async function getAdminTrustPolicies(): Promise<{ elemek: AdminTrustPolic
   return apiGet<{ elemek: AdminTrustPolicy[] }>("/api/v1/admin-agent/trust-policies");
 }
 
+export type TudashaloPont = {
+  id: string;
+  /** core | tema | partner | kod | cel | szabaly */
+  fajta: string;
+  cimke: string;
+  tema: string | null;
+  suly: number;
+  /** Első megjelenés (ISO) — a növekedés lejátszásához. */
+  t: string | null;
+  peldak: string[];
+  allapot: string | null;
+  /** A ponthoz tartozó bizonyítékok (egy tétel egyszer számít). */
+  jovahagyott: number;
+  jelolt: number;
+};
+
+export type TudashaloEl = {
+  a: string;
+  b: string;
+  suly: number;
+  /** 0..1 — a mögötte álló bizonyítékokból. */
+  bizonyossag: number;
+  jovahagyott: number;
+  jelolt: number;
+  egyeb: number;
+  t: string | null;
+  /** Szerkezeti vázkapcsolat (mag ↔ témakör). */
+  vaz?: boolean;
+};
+
+export type Tudashalo = {
+  pontok: TudashaloPont[];
+  elek: TudashaloEl[];
+  tanulas_kezdete: string;
+  elso_ido: string | null;
+  utolso_ido: string | null;
+  osszesites: {
+    pontok: number;
+    kapcsolatok: number;
+    eros_kapcsolatok: number;
+    jovahagyott_kapcsolatok: number;
+    csak_jelolt_kapcsolatok: number;
+    aktiv_szabalyok: number;
+    atlag_bizonyossag: number | null;
+  };
+};
+
+export async function getAdminKnowledgeGraph(): Promise<Tudashalo | null> {
+  return apiGet<Tudashalo>("/api/v1/admin-agent/knowledge-graph");
+}
+
 export type AdminReplayHet = {
   het: string;
   szamlak: number;

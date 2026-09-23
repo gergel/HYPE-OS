@@ -6,6 +6,7 @@ import {
   BookOpen,
   Bot,
   GraduationCap,
+  Orbit,
   ScrollText,
   Calculator,
   Car,
@@ -94,6 +95,7 @@ const ICONS: Record<string, LucideIcon> = {
   SlidersHorizontal,
   BookOpen,
   GraduationCap,
+  Orbit,
   ScrollText,
 };
 
