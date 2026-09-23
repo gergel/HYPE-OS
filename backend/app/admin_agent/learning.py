@@ -1,4 +1,4 @@
-"""Admin-Ágens — háttér-tanuló (distill).
+"""HYRON — háttér-tanuló (distill).
 
 A tanulás első változata: retrieval + verziózott playbook. NINCS automatikus
 fine-tuning, sem forráskód/prompt/jogosultság csendes átírása. A folyamat a

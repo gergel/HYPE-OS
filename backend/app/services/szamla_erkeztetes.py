@@ -873,7 +873,7 @@ def javasol(db: Session, bejovo: BejovoSzamla) -> None:
         "bizonyitek": bizonyitek[:8],
         # Pillanatkép a JAVASOLT célról: a felhasználó később átírhatja a
         # cel_* mezőket, így utólag is összevethető, mit javasolt a rendszer
-        # és mit döntött az ember (Admin-Ágens visszajátszás / találati arány).
+        # és mit döntött az ember (HYRON visszajátszás / találati arány).
         "javasolt_cel": {
             mezo: getattr(bejovo, mezo)
             for mezo in (

@@ -1,4 +1,4 @@
-"""Admin-Ágens adatmodell (a modul magtáblái).
+"""HYRON adatmodell (a modul magtáblái).
 
 A modul minden adminisztrációs munkát egy tartós `admin_task` köré szervez;
 minden javaslatnak van forrása, minden végrehajtásnak auditnyoma, minden
@@ -59,7 +59,7 @@ class SourceEvent(TimestampMixin, Base):
 
 
 class AdminTask(TimestampMixin, Base):
-    """Egy adminisztrációs munkaelem - az ágens és az ember ugyanezt látja."""
+    """Egy adminisztrációs munkaelem - HYRON és az ember ugyanezt látja."""
 
     __tablename__ = "aa_tasks"
 
@@ -105,7 +105,7 @@ class AdminTask(TimestampMixin, Base):
 
 
 class AgentRun(TimestampMixin, Base):
-    """Egy ágens-futás egy taskhoz: terv, eszközök, modell/verzió, költség.
+    """Egy HYRON-futás egy taskhoz: terv, eszközök, modell/verzió, költség.
 
     NEM tárolunk rejtett modell-gondolatmenetet; ellenőrizhető döntési
     összefoglaló elegendő."""
@@ -131,7 +131,7 @@ class AgentRun(TimestampMixin, Base):
 
 
 class ActionTrace(TimestampMixin, Base):
-    """Audit-nyom: emberi VAGY ágens-művelet, minimális előtte/utána diffel."""
+    """Audit-nyom: emberi VAGY HYRON-művelet, minimális előtte/utána diffel."""
 
     __tablename__ = "aa_action_traces"
 
@@ -150,7 +150,7 @@ class ActionTrace(TimestampMixin, Base):
 
 
 class Correction(TimestampMixin, Base):
-    """Emberi javítás az ágens javaslatán - a tanulás legerősebb jele.
+    """Emberi javítás HYRON javaslatán - a tanulás legerősebb jele.
 
     A későbbi emberi változtatás nem feltétlenül korrekció (lehet új üzleti
     adat); a `tipus` (enums.CorrectionType) különbözteti meg, kétes esetben

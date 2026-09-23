@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { Tudashalo as TudashaloAdat, TudashaloEl, TudashaloPont } from "@/lib/api";
 
 /* ─────────────────────────────────────────────────────────────────────────────
- * ADMIN-ÁGENS — TUDÁSHÁLÓ (kliens, canvas).
+ * HYRON — TUDÁSHÁLÓ (kliens, canvas).
  *
  * A megtanult tudás „glóriája" (J.A.R.V.I.S.-szerű HUD): középen a mag, körülötte
  * a témakörök, kifelé a partnerek, a legkülső gyűrűn a projektkódok.
@@ -781,7 +781,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
               />
               {/* HUD: a látható tudás számai (lejátszás közben nőnek). Mobilon a vászon alatt. */}
               <div className="pointer-events-none static px-3 pb-3 font-mono sm:absolute sm:left-3 sm:top-3 sm:p-0 text-[10.5px] uppercase tracking-[0.12em]" style={{ color: TINTA_2 }}>
-                <p style={{ color: "#ffd49a" }}>Tudásháló // Admin-Ágens</p>
+                <p style={{ color: "#ffd49a" }}>Tudásháló // HYRON</p>
                 <p className="mt-0.5">{datum(ido)}</p>
                 <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
                   <HudSzam cimke="Pont" ertek={lathato.pontSzam} />

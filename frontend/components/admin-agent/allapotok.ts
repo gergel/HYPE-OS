@@ -1,4 +1,4 @@
-/** Az Admin-Ágens feladat-állapotok magyar címkéi (a backend TaskState
+/** A HYRON feladat-állapotok magyar címkéi (a backend TaskState
  * értékeihez — lásd admin_agent/enums.py). Egy helyen, hogy a Munkasor és az
  * Áttekintés ugyanazt a szót mutassa. */
 export const ALLAPOT_CIMKE: Record<string, string> = {

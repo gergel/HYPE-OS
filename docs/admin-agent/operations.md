@@ -1,6 +1,6 @@
-# Admin-Ágens — üzemeltetés (operations)
+# HYRON — üzemeltetés (operations)
 
-Ez a dokumentum az Admin-Ágens modul futtatását, indítását és felügyeletét írja
+Ez a dokumentum a HYRON modul futtatását, indítását és felügyeletét írja
 le a HYPE OS meglévő infrastruktúráján. Nincs benne kitalált telepítés: csak a
 repóban ténylegesen meglévő szolgáltatásokra és parancsokra épít.
 
@@ -13,14 +13,14 @@ repóban ténylegesen meglévő szolgáltatásokra és parancsokra épít.
 | Adatbázis | PostgreSQL, Alembic migrációk | `alembic upgrade head` |
 | Redis | Celery broker/result backend | meglévő env (`REDIS_URL` / `CELERY_*`) |
 
-Az Admin-Ágens NEM igényel külön Railway service-t: a meglévő worker betölti az
+A HYRON NEM igényel külön Railway service-t: a meglévő worker betölti az
 `app/workers/admin_agent_tasks.py`-t (lásd a `portal_tasks.py` alján az importot),
 így az éjszakai tanulás és a heti eval a meglévő beaten fut.
 
 ## Indító parancsok (a tényleges repó alapján)
 
 ```bash
-# Migráció (additív; a második admin-ágens migráció: h1b8y29v6w50)
+# Migráció (additív; a második HYRON migráció: h1b8y29v6w50)
 cd backend && alembic upgrade head
 
 # API (fejlesztés)
@@ -29,7 +29,7 @@ cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
 # Worker + embedded beat (éjszakai distill 02:00, heti eval hétfő 03:00)
 cd backend && celery -A app.workers.portal_tasks worker -B --loglevel=info
 
-# Tesztek (az admin-ágens rész)
+# Tesztek (a HYRON rész)
 cd backend && python -m pytest tests/test_admin_agent_*.py -q
 
 # Frontend build
@@ -72,7 +72,7 @@ pontos kezeléséhez a beat `timezone` beállítását kell ehhez igazítani.
 
 ## Migráció és visszaállás
 
-- A változtatások additívak; a downgrade a két admin-ágens migrációt fordított
+- A változtatások additívak; a downgrade a két HYRON migrációt fordított
   sorrendben bontja (kézzel: `alembic downgrade -1`). Éles adaton destruktív
   downgrade-et NE futtass automatikusan — előbb mentés.
 - Alkalmazásverzió-visszalépés a kódot állítja vissza; a MÁR MEGTÖRTÉNT külső

@@ -1,4 +1,4 @@
-# Admin-Ágens – haladás (élő folytatási pont)
+# HYRON – haladás (élő folytatási pont)
 
 Ez a fájl a kontextusváltás-biztos folytatási pont: mi készült el (és
 tesztelt-e), mi van hátra, mik a blokkolók. NEM az implementáció
@@ -56,14 +56,14 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   milyen policy-döntéssel). Backend: `GET /admin-agent/tasks/{id}/timeline`
   (csak olvasás). A munkasor sorai ide linkelnek.
 - **Hátra:** a jóváhagyás jóváhagyás/elvetés gombjai (a végrehajtó réteggel,
-  D/E), és a meglévő oldalakba (Pénzügyek beérkező számlák) való „Admin-Ágens
+  D/E), és a meglévő oldalakba (Pénzügyek beérkező számlák) való „HYRON
   árnyék-elemzés" gomb. Tudástár/Tanulás/Napló aloldalak: F/G fázis.
 ### D. Számlafolyamat végig L0/L1-ben, valós szolgáltatásokra kötve 🟡
 - **L0 árnyék-elemzés kész** (`app/admin_agent/pipeline_szamla.py`): egy beérkező
-  számlából (BejovoSzamla) forrásesemény → feladat → ügynökfutás → nyomvonal →
+  számlából (BejovoSzamla) forrásesemény → feladat → HYRON-futás → nyomvonal →
   művelet-javaslat, a policy engine döntésével. A javaslat payloadja pontosan a
   meglévő `services/szamla_erkeztetes.jovahagy` `dontes`-alakját írja le (az
-  ágens a MEGLÉVŐ pénzügyi szolgáltatáson át dolgozna), de L0-ban VÉGRE NEM
+  HYRON a MEGLÉVŐ pénzügyi szolgáltatáson át dolgozna), de L0-ban VÉGRE NEM
   HAJTJUK. Determinista, szerver-oldali ellenőrzések (hiányzó cél/összeg/díjbekérő)
   → hiányos javaslat NEEDS_INFO. Kockázat szerver-oldalon R2 (belső pénzügyi
   rekord írása). Idempotens (forrásesemény: forras+azonosító+állapot; feladat:
@@ -88,7 +88,7 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   `/assign`, `/cancel`, `GET /executions/{id}`.
 - Tesztek: `tests/test_admin_agent_executor.py` (5 elfogadási teszt: alapállás
   blokkol + 0 Expense, vészleállítás, eltérő hash, consumed jóváhagyás,
-  idempotencia). 15 admin-ágens teszt zöld; HTTP-smoke minden új végponton OK.
+  idempotencia). 15 HYRON teszt zöld; HTTP-smoke minden új végponton OK.
 - **Jóváhagyások felület bekötve:** a Jóváhagyások aloldal a valós listát
   mutatja (javaslat payload + kockázat), „Jóváhagyás és végrehajtás" / „Elutasítás"
   gombokkal; a jóváhagyás a payload-hash-hez kötött (409 eltérésnél), a
@@ -116,7 +116,7 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   modell, dokumentumtár) — az Áttekintésen és a Beállításokban „Kész / Beállítás
   szükséges" (a titkok értéke sosem kerül a böngészőbe).
 - Tesztek: `tests/test_admin_agent_email.py` (validáció/automata-hurok, nincs
-  banki eszköz, „Beállítás szükséges" DRAFT+NEEDS_INFO). 21 admin-ágens teszt zöld.
+  banki eszköz, „Beállítás szükséges" DRAFT+NEEDS_INFO). 21 HYRON teszt zöld.
 - **Hátra:** TIG/szerződés-előkészítés a meglévő papír-generátorra (a draft a
   javaslat, ember véglegesít a meglévő felületen — L1); „Admin-feladat
   létrehozása" gomb a meglévő e-mail-nézetből (nincs általános e-mail-inbox UI a
@@ -142,22 +142,22 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   állapotot.
 
 ### H. Teljes tesztelés, migrációpróba, build, biztonsági ellenőrzés, docs 🟡
-- 25 admin-ágens teszt zöld (`pytest tests/test_admin_agent_*.py`); tsc + eslint
+- 25 HYRON teszt zöld (`pytest tests/test_admin_agent_*.py`); tsc + eslint
   + `next build` zöld; migráció le/fel próbálva.
 - Dokumentáció kész: `architecture.md`, `operations.md`, `permissions-and-risk.md`,
   `learning-and-evals.md`, `acceptance-checklist.md`, `user-guide.md`, `progress.md`,
-  `.env.example` admin-ágens szekció.
+  `.env.example` HYRON szekció.
 - Hátra: valós modell (Gemini) elemzés explicit konfiggal + elkülönített teszt,
   worker crash-recovery + külső-timeout reconcile end-to-end, frontend E2E
   (Playwright), teljes backend regressziós suite futtatása.
 
 ### I. Teljes kattinthatóság + projektkód/utókövetés megfigyelés ✅
-- **Kattintható belépési pontok:** Beérkező számlák sorain „Admin-Ágens" gomb
+- **Kattintható belépési pontok:** Beérkező számlák sorain „HYRON" gomb
   (árnyék-elemzés → feladat); a feladat oldalán „Javítás rögzítése" űrlap +
   „Újraelemzés" / „Megszakítás"; a Tanulás oldalon Megfigyelés / Kezdeti
   visszatekintés / Háttér-tanuló / Értékelés gombok; a Tudástárban példák
   jóváhagyása/elvetése és szabályok élesítése/visszavonása.
-- **Projektkód + Utókövetés bekötés:** „Admin-Ágens teendők" blokk a
+- **Projektkód + Utókövetés bekötés:** „HYRON teendők" blokk a
   projektkód-adatlapon és az utókövetés projektkód-oldalán (feladatlista +
   új szerződés/TIG/számla/utalás feladat a projektkódhoz kötve; jog nélkül rejtve).
 - **Megfigyelő** (`app/admin_agent/observer.py`): a szerződések, TIG-ek, belsős
@@ -204,7 +204,7 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   különbség mezőszintű javításként rögzül, új javaslat készül (a régi leváltva).
 - **Tudástár tömeges kijelölés:** típusszűrő + pipálás + „Kijelöltek
   jóváhagyása/elvetése" (`POST /memory/bulk`, max 500; nincs „mindent jóváhagy").
-- **Felület:** a feladat oldalán „Tervezet készítése (ügynök)", „Az ügynök
+- **Felület:** a feladat oldalán „Tervezet készítése (HYRON)", „HYRON
   értékelése" doboz (összefoglaló, bizonytalanság, konfliktus, hiányok,
   figyelmeztetések, felhasznált tudás), tételtábla forrásokkal, „Javaslat
   szerkesztése".
@@ -250,7 +250,7 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   (`feltetelek.partner/cel_tipus/projektkod_idk`, pending). Idempotens
   (forrásesemény `visszajatszas`), üzleti rekord nem változik.
 - Találati arány (`GET /replays/summary`): érkeztető és — ha a döntés előtt
-  elemezte — az ügynök egyezése, összesen és hetente. `POST /replays` futtat.
+  elemezte — HYRON egyezése, összesen és hetente. `POST /replays` futtat.
 - Az érkeztető mostantól pillanatképet tesz a javaslatba a javasolt célról
   (`javaslat.javasolt_cel`, additív kulcs) — a pontos utólagos összevetéshez.
 - Partner-egyezés normalizált névvel (`memory.partner_kulcs`: ékezet, kisbetű,

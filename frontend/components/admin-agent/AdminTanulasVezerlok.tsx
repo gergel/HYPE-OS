@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 
-/** ADMIN-ÁGENS — Tanulás vezérlők (kliens).
+/** HYRON — Tanulás vezérlők (kliens).
  *
  * A háttér-tanuló (distill) és az értékelés (eval) kézi indítása. A distill
  * csak jelölteket készít (nem aktivál), az eval a biztonsági invariánsokat

@@ -14,10 +14,10 @@ const KORREKCIO_TIPUSOK: { ertek: string; cimke: string }[] = [
   { ertek: "uj_uzleti_adat", cimke: "Új üzleti adat (nem hiba)" },
 ];
 
-/** Azok a feladattípusok, amelyekhez az ügynök tervezetet tud készíteni. */
+/** Azok a feladattípusok, amelyekhez HYRON tervezetet tud készíteni. */
 const TERVEZHETO = new Set(["tig", "szerzodes", "email"]);
 
-/** ADMIN-ÁGENS — feladat-műveletek (kliens): tervezet készítése, javítás
+/** HYRON — feladat-műveletek (kliens): tervezet készítése, javítás
  * rögzítése, újraelemzés, megszakítás. A javítás a tanulás nyersanyaga
  * (→ `aa_corrections`), amit a háttér-tanuló dolgoz fel; NEM aktivál szabályt. */
 
@@ -103,7 +103,7 @@ export function AdminTaskActions({
       }
       const modellSzoveg =
         d.modell === "kesz"
-          ? "Az ügynök a megtanult példák alapján kiegészítette."
+          ? "HYRON a megtanult példák alapján kiegészítette."
           : d.modell === "beallitas_szukseges"
             ? "A modell nincs beállítva (GEMINI_API_KEY) — a rendszer ismert adataiból előtöltöttem."
             : d.modell === "hiba"
@@ -150,7 +150,7 @@ export function AdminTaskActions({
             onClick={tervezet}
             className="rounded-[var(--radius)] bg-bg-success px-3 py-1.5 text-[13px] font-medium text-text-success disabled:opacity-50"
           >
-            {folyamatban ? "Dolgozom…" : "Tervezet készítése (ügynök)"}
+            {folyamatban ? "Dolgozom…" : "Tervezet készítése (HYRON)"}
           </button>
         )}
         <button
@@ -183,7 +183,7 @@ export function AdminTaskActions({
       {nyitva && (
         <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-4">
           <p className="mb-2 text-[12px] text-text-muted">
-            Írd be, mit kellett volna az ügynöknek eltalálnia (mezőnév + helyes érték). Ebből tanul — de egyetlen
+            Írd be, mit kellett volna HYRON-nak eltalálnia (mezőnév + helyes érték). Ebből tanul — de egyetlen
             javításból nem lesz automatikus szabály.
           </p>
           <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">

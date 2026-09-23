@@ -10,11 +10,11 @@ import { type AdminTaskTimeline, getAdminTaskTimeline, getMyPagePermissions } fr
 
 const PAGE = "/admin-agent";
 
-const SZEREPLO_CIMKE: Record<string, string> = { agent: "Ágens", human: "Ember", system: "Rendszer" };
+const SZEREPLO_CIMKE: Record<string, string> = { agent: "HYRON", human: "Ember", system: "Rendszer" };
 
-/** ADMIN-ÁGENS — FELADAT RÉSZLETEK / IDŐVONAL.
+/** HYRON — FELADAT RÉSZLETEK / IDŐVONAL.
  *
- * Egy feladat teljes, olvasható története: mit elemzett az ágens, milyen
+ * Egy feladat teljes, olvasható története: mit elemzett HYRON, milyen
  * policy-döntés született, és milyen műveletet JAVASOLNA. Árnyék (L0) módban a
  * javaslat nem hajtódik végre — ezt a lap egyértelműen jelzi. */
 export default async function AdminAgentTaskReszletPage({
@@ -77,7 +77,7 @@ export default async function AdminAgentTaskReszletPage({
                 <p className="text-[13px] text-text-secondary">
                   Ehhez a feladathoz még nincs javaslat.
                   {["tig", "szerzodes", "email"].includes(adat.task.tipus) &&
-                    " A „Tervezet készítése (ügynök)” gombbal kérhetsz egyet."}
+                    " A „Tervezet készítése (HYRON)” gombbal kérhetsz egyet."}
                 </p>
               ) : (
                 <ul className="flex flex-col gap-3">
@@ -115,7 +115,7 @@ export default async function AdminAgentTaskReszletPage({
               )}
               {adat.runs.length > 0 && (
                 <p className="mt-3 text-[11.5px] text-text-muted">
-                  {adat.runs.length} ügynökfutás · legutóbbi:{" "}
+                  {adat.runs.length} HYRON-futás · legutóbbi:{" "}
                   {adat.runs[adat.runs.length - 1].provider ?? "—"} ({adat.runs[adat.runs.length - 1].allapot})
                 </p>
               )}
@@ -215,7 +215,7 @@ function JavaslatKartya({ p, taskId, canEdit }: { p: Javaslat; taskId: number; c
 
       {m && (m.hasznalt || m.allapot) && (
         <div className="mb-2 rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-2 text-[12px]">
-          <p className="mb-1 font-medium text-text-primary">Az ügynök értékelése</p>
+          <p className="mb-1 font-medium text-text-primary">HYRON értékelése</p>
           {m.hasznalt ? (
             <div className="flex flex-col gap-1 text-text-secondary">
               {m.osszefoglalo && <p>{m.osszefoglalo}</p>}

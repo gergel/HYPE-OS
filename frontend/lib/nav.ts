@@ -250,9 +250,9 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Admin-Ágens",
+    label: "HYRON",
     items: [
-      // Az adminisztrációs ágens munkafelülete. Minden aloldal ugyanazt a
+      // Az adminisztrációs HYRON munkafelülete. Minden aloldal ugyanazt a
       // /admin-agent backend jogosultságot használja (lásd backend
       // routes/admin_agent.py PAGE). Induláskor L0/kikapcsolva - lásd
       // docs/admin-agent/.

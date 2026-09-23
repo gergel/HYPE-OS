@@ -14,7 +14,7 @@ const FULEK = [
   { href: "/admin-agent/beallitasok", label: "Beállítások" },
 ];
 
-/** Az Admin-Ágens aloldalak közti navigáció (a meglévő sötét design tokenekkel). */
+/** A HYRON aloldalak közti navigáció (a meglévő sötét design tokenekkel). */
 export function AdminAgentTabs() {
   const path = usePathname();
   return (

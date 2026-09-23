@@ -1,4 +1,4 @@
-"""Admin-Ágens — általános javaslatkészítő (bármely regisztrált eszközre).
+"""HYRON — általános javaslatkészítő (bármely regisztrált eszközre).
 
 A `pipeline_szamla` a beérkező számlából származtatja a payloadot; ez az általános
 út akkor kell, amikor a payload már adott (pl. e-mail-válasz, amit ember vagy
@@ -96,7 +96,7 @@ def keszit_javaslat(
         task_id=task.id,
         trigger=trigger,
         allapot=AgentRunState.RUNNING.value,
-        # "kezi": a payloadot ember adta; "gemini"/"szabaly": az ügynök készítette.
+        # "kezi": a payloadot ember adta; "gemini"/"szabaly": HYRON készítette.
         provider=provider,
         modell=modell,
         kezdes_at=_most(),

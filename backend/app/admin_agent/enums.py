@@ -1,4 +1,4 @@
-"""Admin-Ágens: állapotgépek, kockázati és bizalmi szintek.
+"""HYRON: állapotgépek, kockázati és bizalmi szintek.
 
 Szöveges (str) enumok, hogy az adatbázisban és az API-ban is olvashatók
 legyenek, és a meglévő HYPE OS mintát kövessék (a state mezők String-ek).

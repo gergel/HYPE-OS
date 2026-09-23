@@ -1,12 +1,12 @@
-"""Admin-Ágens — megfigyelő (projektkód / utókövetés).
+"""HYRON — megfigyelő (projektkód / utókövetés).
 
 A projektkódokon és az utókövetésben történik a szerződések, TIG-ek és a
-számlás/kiadási lépések emberi munkája. Ez a modul EZT figyeli, hogy az ügynök
+számlás/kiadási lépések emberi munkája. Ez a modul EZT figyeli, hogy HYRON
 tanulni tudjon belőle — biztonságosan:
 
 * NEM akaszkodik rá a mentési útvonalra (nincs flush-hook): egy külön,
   ütemezett/kézi FUTÁS olvassa a nemrég változott rekordokat (`updated_at`).
-* Csak OLVAS és az ágens saját táblái írnak: forrásesemény
+* Csak OLVAS és HYRON saját táblái írnak: forrásesemény
   (`aa_source_events`, forras="megfigyeles"), emberi nyomvonal
   (`aa_action_traces`, szereplo="human") és példa-JELÖLT (`aa_memory_chunks`,
   ervenyes=False). Üzleti rekord nem változik.
@@ -122,7 +122,7 @@ class _Kontextus:
 class Figyelt:
     kulcs: str  # a forrásazonosító előtagja
     model: Any
-    tipus: str  # az ágens feladattípusa, amihez a tanulság tartozik
+    tipus: str  # HYRON feladattípusa, amihez a tanulság tartozik
     cimke: str  # emberi olvasásra
     leiro: Callable[[_Kontextus, Any], dict]  # a rekord kontextusa (projektkód, partner, tárgy...)
     lezart: Callable[[Any], bool]
@@ -245,7 +245,7 @@ def _penz(v: Any) -> str | None:
 
 
 def leiras(f: Figyelt, meta: dict) -> str:
-    """Emberileg olvasható, tömör leírás a példához (ebből tanul az ügynök)."""
+    """Emberileg olvasható, tömör leírás a példához (ebből tanul HYRON)."""
     if meta.get("projektkod"):
         hely = meta["projektkod"] + (f" · {meta['projekt']}" if meta.get("projekt") else "")
     elif f.kulcs == "belsos_tig":

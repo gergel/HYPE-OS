@@ -19,11 +19,11 @@ function hataridoLejart(t: AdminTaskSor): boolean {
   return new Date(t.hatarido).getTime() < Date.now();
 }
 
-/** ADMIN-ÁGENS — MUNKASOR (kliens).
+/** HYRON — MUNKASOR (kliens).
  *
  * A feladatok belső munkaszervezése: létrehozás, felelős-kiosztás és
  * MELLÉKHATÁS-MENTES állapotváltás (a backend csak a _KEZI_ALLAPOTOK átmeneteit
- * engedi — routes/admin_agent.py). A javaslat/végrehajtás állapotokat az ágens
+ * engedi — routes/admin_agent.py). A javaslat/végrehajtás állapotokat HYRON
  * és a jóváhagyási folyamat állítja, kézzel nem. */
 export function AdminMunkasor({
   kezdoElemek,

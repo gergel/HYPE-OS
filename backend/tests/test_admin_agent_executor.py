@@ -1,4 +1,4 @@
-"""Admin-Ágens — végrehajtó guard-lánc elfogadási tesztjei (master prompt 16.).
+"""HYRON — végrehajtó guard-lánc elfogadási tesztjei (master prompt 16.).
 
 Postgres-integráció (JSONB), DB nélkül self-skip. A biztonságos alapállásban
 (modul KI, mellékhatás TILT) a végrehajtás mindig blokkolt: SEMMILYEN üzleti

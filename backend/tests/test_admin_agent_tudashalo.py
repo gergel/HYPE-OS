@@ -1,4 +1,4 @@
-"""Admin-Ágens — tudásháló (a megtanult tudás kapcsolati gráfja).
+"""HYRON — tudásháló (a megtanult tudás kapcsolati gráfja).
 
 Postgres-integráció (DB nélkül self-skip), egy tranzakcióban, rollback.
 Fedi: a gráf CSAK valós tudásból épül; a jóváhagyott példa erősebb kapcsolat,

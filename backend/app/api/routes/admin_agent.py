@@ -1,4 +1,4 @@
-"""Admin-Ágens API (Fázis B/C alap). Az `/admin-agent` oldal jogosultságával.
+"""HYRON API (Fázis B/C alap). Az `/admin-agent` oldal jogosultságával.
 
 BIZTONSÁGOS ALAPÁLLÁS: ezek a végpontok NEM hajtanak végre üzleti/külső
 mellékhatást (L0). A task-létrehozás és -szerkesztés belső munkaszervezés; a
@@ -269,7 +269,7 @@ def task_bejovo_szamlabol(
     _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     """L0 ÁRNYÉK-ELEMZÉS egy beérkező számlára. Nem hajt végre üzleti/külső
-    műveletet: az ágens csak elemez és javaslatot rögzít a policy engine
+    műveletet: HYRON csak elemez és javaslatot rögzít a policy engine
     döntésével. A tényleges rögzítés továbbra is a meglévő érkeztető-folyamaton,
     emberi jóváhagyással történik (lásd services/szamla_erkeztetes.jovahagy).
     Idempotens: ugyanarra a számlára ugyanabban az állapotban nem duplikál."""
@@ -299,7 +299,7 @@ def task_idovonal(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
-    """A feladat teljes, olvasható idővonala: ügynökfutások, nyomvonal-
+    """A feladat teljes, olvasható idővonala: HYRON-futások, nyomvonal-
     bejegyzések (ki mit tett, milyen eredménnyel) és a művelet-javaslatok a
     payloaddal. Kizárólag olvasás — semmit nem hajt végre."""
     t = db.get(AdminTask, task_id)
@@ -545,7 +545,7 @@ def task_ujraelemez(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """A feladat újraelemzése az ágenssel (L0-biztos: nincs mellékhatás). Jelenleg
+    """A feladat újraelemzése HYRON-nal (L0-biztos: nincs mellékhatás). Jelenleg
     a beérkező-számla forráshoz kötött feladatokra fut."""
     t = db.get(AdminTask, task_id)
     if t is None:
@@ -602,7 +602,7 @@ def task_tervezet(
     db: Session = Depends(get_db),
     user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """Az ügynök elkészíti a feladat tervezetét: TIG / szerződés esetén a
+    """HYRON elkészíti a feladat tervezetét: TIG / szerződés esetén a
     projektkód függő feleinek piszkozatait (előtöltés + modell-kiegészítés a
     megtanult tudásból, összeg csak igazolt forrásból), e-mailnél a levél
     tervezetét (címzett csak igazolt címből). Javaslatként jön létre; végrehajtás
@@ -1166,7 +1166,7 @@ def megfigyeles_inditas(
 ):
     """A megfigyelő kézi futtatása: a projektkódokon / az utókövetésben nemrég
     változott szerződéseket, TIG-eket és kiadásokat rögzíti megfigyelésként, a
-    lezárt emberi munkából példa-JELÖLTET készít. Csak olvas + az ágens saját
+    lezárt emberi munkából példa-JELÖLTET készít. Csak olvas + HYRON saját
     tábláiba ír; üzleti rekord nem változik. A kézi indítás jogosult felhasználó
     kifejezett döntése, ezért a forrás-kapcsolótól függetlenül fut (az ütemezett
     futás viszont csak bekapcsolt forrással)."""
@@ -1208,7 +1208,7 @@ def visszajatszas_osszesites(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
-    """Találati arány: az érkeztető (és ahol volt, az ügynök) javaslata hányszor
+    """Találati arány: az érkeztető (és ahol volt, HYRON) javaslata hányszor
     egyezett a végső emberi döntéssel — összesen és hetente."""
     from app.admin_agent.visszajatszas import osszesites
 
@@ -1463,7 +1463,7 @@ class SettingsPatchIn(BaseModel):
     side_effects_enabled: bool | None = None
     engedett_forrasok: dict | None = None
     limitek: dict | None = None
-    #: A tanulás kezdete: ettől a naptól keletkezett rekordokból tanul az ügynök.
+    #: A tanulás kezdete: ettől a naptól keletkezett rekordokból tanul HYRON.
     tanulas_kezdete: date | None = None
 
 

@@ -514,7 +514,7 @@ export async function apiGet<T>(path: string): Promise<T | null> {
   }
 }
 
-// ── ADMIN-ÁGENS (lásd backend routes/admin_agent.py) ────────────────────────
+// ── HYRON (lásd backend routes/admin_agent.py) ────────────────────────
 
 export type AdminTaskSor = {
   id: number;
@@ -577,7 +577,7 @@ export type AdminAgentSettings = {
   kill_switch_indok: string | null;
   engedett_forrasok: Record<string, unknown>;
   limitek: Record<string, unknown>;
-  /** Ettől a naptól keletkezett rekordokból tanul az ügynök (ISO dátum). */
+  /** Ettől a naptól keletkezett rekordokból tanul HYRON (ISO dátum). */
   tanulas_kezdete?: string;
   integraciok?: AdminAgentIntegracio[];
 };
@@ -789,7 +789,7 @@ export type AdminReplayHet = {
   arany: number | null;
 };
 
-/** Visszajátszás: az érkeztető (és az ügynök) javaslata vs a végső emberi döntés. */
+/** Visszajátszás: az érkeztető (és HYRON) javaslata vs a végső emberi döntés. */
 export type AdminReplaySummary = {
   szamlak: number;
   egyezik: number;

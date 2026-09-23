@@ -9,10 +9,10 @@ function szazalek(v: number | null | undefined): string {
   return v === null || v === undefined ? "—" : `${Math.round(v * 100)}%`;
 }
 
-/** ADMIN-ÁGENS — Visszajátszás és találati arány (kliens).
+/** HYRON — Visszajátszás és találati arány (kliens).
  *
  * A tanulás kezdete óta rögzített számláknál összeveti, mit javasolt eredetileg
- * az érkeztető (és ha már elemezte, az ügynök), és mit döntött végül az ember.
+ * az érkeztető (és ha már elemezte, HYRON), és mit döntött végül az ember.
  * Ebből példa- és szabály-JELÖLTEK születnek (a Tudástárban jóváhagyandók), és
  * ez a mérőszám mutatja hétről hétre, javul-e a találati arány. */
 export function AdminVisszajatszas({
@@ -96,7 +96,7 @@ export function AdminVisszajatszas({
             />
             <Szam cimke="Érkeztető nem javasolt" ertek={String(o.nem_javasolt)} al="ember döntött egyedül" />
             <Szam
-              cimke="Ügynök találati aránya"
+              cimke="HYRON találati aránya"
               ertek={szazalek(o.ugynok_arany)}
               al={
                 o.ugynok_egyezik + o.ugynok_elter
@@ -133,7 +133,7 @@ export function AdminVisszajatszas({
           </div>
           <p className="mt-2 text-[11.5px] text-text-muted">
             Találati arány = egyezett / (egyezett + eltért); ahol az érkeztető nem adott javaslatot, az nem számít bele.
-            Az „Ügynök” oszlop azokat a számlákat méri, amelyeket az Admin-Ágens a döntés előtt elemzett.
+            A „HYRON találati aránya” azokat a számlákat méri, amelyeket HYRON a döntés előtt elemzett.
           </p>
         </>
       )}

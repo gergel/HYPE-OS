@@ -1,4 +1,4 @@
-"""Admin-Ágens tanulási/értékelési táblák (Fázis F): memory_chunks, eval_cases,
+"""HYRON tanulási/értékelési táblák (Fázis F): memory_chunks, eval_cases,
 eval_runs, learning_runs, agent_releases, outbox. Additív; nem bánt meglévő
 táblát. Az embedding pgvector NÉLKÜL is működik (JSONB), a keresés fallbackje
 pontos/szöveges (lásd admin_agent/memory.py).

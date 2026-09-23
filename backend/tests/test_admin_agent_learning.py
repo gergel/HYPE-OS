@@ -1,4 +1,4 @@
-"""Admin-Ágens — F fázis (tanulás, eval, retrieval, kiadás) tesztjei.
+"""HYRON — F fázis (tanulás, eval, retrieval, kiadás) tesztjei.
 
 Fedi a 13., 14., 15., 22. forgatókönyvet: emberi javításból JELÖLT (nem csendben
 aktív) szabály; sikertelen/hiányos eval megakadályozza az aktiválást; visszavont

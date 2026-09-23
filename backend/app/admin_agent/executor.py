@@ -1,4 +1,4 @@
-"""Admin-Ágens — auditált végrehajtó réteg (jóváhagyott javaslat → művelet).
+"""HYRON — auditált végrehajtó réteg (jóváhagyott javaslat → művelet).
 
 A végrehajtás EGYETLEN útja. A sorrend (master prompt 8.): javaslat →
 (már megtörtént determinista validálás) → policy-ellenőrzés → jóváhagyás

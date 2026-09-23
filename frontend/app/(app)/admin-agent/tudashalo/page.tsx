@@ -6,10 +6,10 @@ import { getAdminKnowledgeGraph, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
-/** ADMIN-ÁGENS — TUDÁSHÁLÓ.
+/** HYRON — TUDÁSHÁLÓ.
  *
- * A megtanult tudás kapcsolati „glóriája": minden pont egy dolog, amiről az
- * ügynök tud (partner, projektkód, számla-cél, szabály, témakör), minden vonal
+ * A megtanult tudás kapcsolati „glóriája": minden pont egy dolog, amiről
+ * HYRON tud (partner, projektkód, számla-cél, szabály, témakör), minden vonal
  * egy kapcsolat. A pont annál nagyobb, minél több kapcsolata van; a vonal annál
  * vastagabb, minél biztosabb a kapcsolat. Lejátszható, hogyan nőtt a tudás. */
 export default async function AdminAgentTudashaloPage() {

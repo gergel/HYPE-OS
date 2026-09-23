@@ -8,7 +8,7 @@ import { getAdminAgentSettings, getAdminTrustPolicies, getMyPagePermissions } fr
 
 const PAGE = "/admin-agent";
 
-/** ADMIN-ÁGENS — BEÁLLÍTÁSOK.
+/** HYRON — BEÁLLÍTÁSOK.
  *
  * A biztonságos alapállás kapcsolói (modul, mellékhatások, vészleállítás). A
  * magas kockázatú kapcsolók módosításához a legerősebb (delete) művelet-jog

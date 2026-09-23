@@ -9,10 +9,10 @@ import { getAdminAgentOverview, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
-/** ADMIN-ÁGENS — ÁTTEKINTÉS.
+/** HYRON — ÁTTEKINTÉS.
  *
  * Az adminisztrációs munkát (számla-felvezetés, e-mail-válasz, TIG- és
- * szerződés-előkészítés, utalás-előkészítés) önállóan kezelő ágens vezérlő-
+ * szerződés-előkészítés, utalás-előkészítés) önállóan kezelő HYRON vezérlő-
  * pultja. Biztonságos alapállás: a modul KI, a mellékhatások TILTVA, minden
  * feladat L0 (árnyék) — lásd backend admin_agent/policy.py. Banki utalás
  * végrehajtása nem része a modulnak. */
@@ -53,7 +53,7 @@ export default async function AdminAgentAttekintesPage() {
               <Card title="Tanulás állapota" className="mb-6">
                 <p className="mb-3 text-[12px] text-text-muted">
                   {overview.tanulas.megfigyeles_bekapcsolva
-                    ? "A megfigyelés be van kapcsolva: az ügynök félóránként figyeli a projektkódokat és az utókövetést, éjszaka tanul."
+                    ? "A megfigyelés be van kapcsolva: HYRON félóránként figyeli a projektkódokat és az utókövetést, éjszaka tanul."
                     : "A megfigyelés ki van kapcsolva (Beállítások → „Tanulás és megfigyelés”). Kézzel a Tanulás és minőség oldalról indítható."}
                   {overview.tanulas.tanulas_kezdete &&
                     ` Tanulás kezdete: ${overview.tanulas.tanulas_kezdete.replaceAll("-", ". ")}. — csak az azóta a HYPE OS-ben keletkezett munkából tanul.`}
@@ -124,7 +124,7 @@ export default async function AdminAgentAttekintesPage() {
                     <p className="text-[13px] text-text-secondary">Még nincs elég adat</p>
                     <p className="mt-1 text-[12px] text-text-muted">
                       A minőségi mutatók (ember nélkül lezárt arány, elfogadási arány, kritikus hibák, modellköltség)
-                      akkor jelennek meg, amikor az ágens éles feladatokat kezdett feldolgozni és a mérőrendszer
+                      akkor jelennek meg, amikor HYRON éles feladatokat kezdett feldolgozni és a mérőrendszer
                       elegendő eseményt gyűjtött.
                     </p>
                   </div>

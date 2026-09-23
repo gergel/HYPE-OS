@@ -1,11 +1,11 @@
-"""Admin-Ágens — számla-felvezetés L0 árnyék-elemzés.
+"""HYRON — számla-felvezetés L0 árnyék-elemzés.
 
 Ez a modul köti a beérkező számla (BejovoSzamla) meglévő érkeztető-folyamatát
-az ágens-gerinchez: forrásesemény → feladat → ügynökfutás → nyomvonal →
+az HYRON-gerinchez: forrásesemény → feladat → HYRON-futás → nyomvonal →
 művelet-javaslat, a szerver-oldali policy engine-en át. FONTOS invariánsok:
 
 * L0 (árnyék): itt SEMMILYEN üzleti rekord nem jön létre, és külső hívás sem
-  történik — csak az ágens saját `aa_` táblái íródnak. A tényleges rögzítés
+  történik — csak HYRON saját `aa_` táblái íródnak. A tényleges rögzítés
   továbbra is a meglévő pénzügyi szolgáltatáson (``szamla_erkeztetes.jovahagy``)
   keresztül, emberi jóváhagyással történik; a javaslat payloadja pontosan azt a
   ``dontes`` alakot írja le, amit az a szolgáltatás vár — de VÉGRE NEM HAJTJUK.
@@ -296,7 +296,7 @@ def _modell_atnezes(
     if javasolt_cel:
         if payload.get("cel_tipus") and payload["cel_tipus"] != javasolt_cel:
             konfliktus = (
-                f"Céltípus-eltérés: az érkeztető „{payload['cel_tipus']}”, az ügynök „{javasolt_cel}” — "
+                f"Céltípus-eltérés: az érkeztető „{payload['cel_tipus']}”, HYRON „{javasolt_cel}” — "
                 "emberi döntés kell."
             )
         elif not payload.get("cel_tipus"):
@@ -305,7 +305,7 @@ def _modell_atnezes(
     if kod_id:
         if payload.get("cel_project_code_id") and payload["cel_project_code_id"] != kod_id:
             konfliktus = (
-                f"Projektkód-eltérés: az érkeztető {erk_kod}, az ügynök {kod_szoveg} — emberi döntés kell."
+                f"Projektkód-eltérés: az érkeztető {erk_kod}, HYRON {kod_szoveg} — emberi döntés kell."
             )
         elif not payload.get("cel_project_code_id"):
             payload["cel_project_code_id"] = kod_id
@@ -433,7 +433,7 @@ def _nyom(db: Session, t: AdminTask, run: AgentRun, muvelet: str, eredmeny: str,
 def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual") -> AdminTask:
     """Egy beérkező számla L0 árnyék-elemzése. A hívó commitál.
 
-    Létrehozza (idempotensen) a forráseseményt, a feladatot, egy ügynökfutást,
+    Létrehozza (idempotensen) a forráseseményt, a feladatot, egy HYRON-futást,
     a nyomvonalat és a művelet-javaslatot, a döntést a policy engine adja. L0-ban
     a döntés BLOCKED (árnyék): a javaslat rögzül, de nem hajtódik végre, és
     jóváhagyás sem jön létre. Semmilyen üzleti rekord nem változik.

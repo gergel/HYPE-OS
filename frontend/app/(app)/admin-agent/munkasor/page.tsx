@@ -7,9 +7,9 @@ import { getAdminTasks, getEmployees, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
-/** ADMIN-ÁGENS — MUNKASOR.
+/** HYRON — MUNKASOR.
  *
- * Az ágens és az emberek közös feladatlistája. Belső munkaszervezés: itt a
+ * HYRON és az emberek közös feladatlistája. Belső munkaszervezés: itt a
  * feladat-létrehozás, felelős-kiosztás és a mellékhatás-mentes állapotváltás
  * történik. A javaslat-generálás és a végrehajtás a következő fázisokban
  * kapcsolódik be — addig minden feladat L0 (árnyék). */

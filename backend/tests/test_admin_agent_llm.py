@@ -1,4 +1,4 @@
-"""Admin-Ágens — modelladapter és a modell-alapú számla-átnézés tesztjei.
+"""HYRON — modelladapter és a modell-alapú számla-átnézés tesztjei.
 
 VALÓDI MODELLHÍVÁS NINCS: izolált hamis adapter (`llm.teszt_adapter`) adja a
 válaszokat, hibát is szimulálva. A valódi Gemini-teszt külön, explicit

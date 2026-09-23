@@ -8,7 +8,7 @@ import { getAdminEvaluations, getAdminLearningRuns, getAdminReplaySummary, getMy
 
 const PAGE = "/admin-agent";
 
-/** ADMIN-ÁGENS — TANULÁS ÉS MINŐSÉG.
+/** HYRON — TANULÁS ÉS MINŐSÉG.
  *
  * A háttér-tanuló futásai (feldolgozott javítások, szabály-/példa-jelöltek,
  * SOP-kérések) és az értékelő futások (biztonsági/pénzügyi invariánsok kóddal).
@@ -77,7 +77,7 @@ export default async function AdminAgentTanulasPage() {
           <Card title="Értékelő futások (eval)">
             <p className="mb-3 text-[12px] text-text-muted">
               A beépített biztonsági esetek (pl. banki utalás mindig tiltott, L0-ban nincs végrehajtás): azt igazolja,
-              hogy a tanulás nem lazította a korlátokat — ezért kell átmennie élesítés előtt. Azt, hogy az ügynök
+              hogy a tanulás nem lazította a korlátokat — ezért kell átmennie élesítés előtt. Azt, hogy HYRON
               mennyire talál, a fenti „Találati arány” méri.
             </p>
             {!evalok || evalok.elemek.length === 0 ? (

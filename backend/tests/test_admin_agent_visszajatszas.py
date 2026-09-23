@@ -1,4 +1,4 @@
-"""Admin-Ágens — visszajátszás a rögzített számlákon, partner-szabályok, kézi
+"""HYRON — visszajátszás a rögzített számlákon, partner-szabályok, kézi
 szabályfelvétel.
 
 Postgres-integráció (DB nélkül self-skip), egy tranzakcióban, a végén rollback.

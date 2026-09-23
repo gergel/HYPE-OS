@@ -1,6 +1,6 @@
-# Admin-Ágens – architektúra és bekötési térkép
+# HYRON – architektúra és bekötési térkép
 
-Ez a dokumentum a HYPE OS-be integrált **Admin-Ágens** modul tényleges
+Ez a dokumentum a HYPE OS-be integrált **HYRON** modul tényleges
 bekötési pontjait, adatfolyamát és a megőrzendő üzleti szabályokat rögzíti.
 A modul célja az adminisztrációs munka (számla-felvezetés, e-mail-válasz,
 TIG-előkészítés, szerződés-előkészítés, utalás-előkészítés) fokozatos,
@@ -9,7 +9,7 @@ végrehajtása NEM része a modulnak.**
 
 ## 1. A tényleges stack (repófelmérés eredménye)
 
-| Terület | Ami a repóban VAN | Az Admin-Ágens ezt használja |
+| Terület | Ami a repóban VAN | A HYRON ezt használja |
 |---|---|---|
 | Backend | FastAPI, SQLAlchemy 2 (`mapped_column`), Alembic (kézi revíziók) | Additív migrációk, új `app/admin_agent/` csomag + `app/api/routes/admin_agent.py` |
 | Adatbázis | PostgreSQL (psycopg) | Új táblák a meglévő konvenciókkal (`TimestampMixin`, JSONB) |
@@ -27,7 +27,7 @@ végrehajtása NEM része a modulnak.**
 ## 2. Fontos tech-megfeleltetések (logikai név → tényleges)
 
 - **Multi-tenancy / `org_id`:** a HYPE OS **egyszervezetes** — nincs `org_id`
-  a modellekben, nincs több-tenant elkülönítés. Ezért az Admin-Ágens sem vezet
+  a modellekben, nincs több-tenant elkülönítés. Ezért a HYRON sem vezet
   be `org_id`-t; a hozzáférést a **meglévő RBAC** (szerepkör + oldal-jog +
   rekordszintű szűkítés, pl. `lathato_anyagok`) érvényesíti minden úton
   (API, worker, tool, keresés, dokumentumletöltés). A prompt „szervezeti
@@ -52,13 +52,13 @@ végrehajtása NEM része a modulnak.**
    tartozik; a **kiadás projekten** van és **projektkód-szinten összesül**.
    Nincs projektszintű bevételi logika. Ugyanazt a kiadást ne számold el
    külön a projekten és még egyszer a projektkódon.
-2. Az ágens **mindig a meglévő pénzügyi szolgáltatáson keresztül** dolgozzon
+2. HYRON **mindig a meglévő pénzügyi szolgáltatáson keresztül** dolgozzon
    (pl. `Expense` létrehozás a `_expense_before_create` hookkal, nem nyers
    INSERT), így az áfa/deviza/összesítés-szabályok érvényesülnek.
 3. **Kiadás akkor számít „elköltöttnek"** a kimutatásba, ha ki van fizetve
-   (`kesz`) – lásd a `fizetes_datuma`/`kiadas_datuma` összevonást. Az ágens
+   (`kesz`) – lásd a `fizetes_datuma`/`kiadas_datuma` összevonást. HYRON
    ezt nem kerülheti meg.
-4. Az ágens **nem** végez könyvelési feladást, kifizetettre állítást
+4. HYRON **nem** végez könyvelési feladást, kifizetettre állítást
    automatikusan (a számlafolyamat csak belső kiadás-rögzítésig mehet L2-ben),
    nem módosít partnertörzset/bankszámlát, és **nem indít banki utalást**.
 
@@ -106,7 +106,7 @@ Forrás (Gmail / feltöltött PDF / appon belüli esemény)
 ## 7. Az implementáció helye a repóban
 
 - `backend/app/admin_agent/` – enumok, policy engine, settings-szolgáltatás,
-  (később) ágensmag, ingest, tanulás.
+  (később) HYRON-mag, ingest, tanulás.
 - `backend/app/models/admin_agent.py` – a modul táblái.
 - `backend/app/api/routes/admin_agent.py` – az `/admin-agent` API.
 - `backend/app/workers/admin_agent_tasks.py` – (később) Celery taskok + beat.

@@ -59,9 +59,9 @@ function vissza(kulcs: string, s: string, eredeti: unknown): unknown {
   return t;
 }
 
-/** ADMIN-ÁGENS — javaslat szerkesztése (kliens).
+/** HYRON — javaslat szerkesztése (kliens).
  *
- * Amit itt módosítasz, az JAVÍTÁSKÉNT rögzül (ebből tanul az ügynök), és új
+ * Amit itt módosítasz, az JAVÍTÁSKÉNT rögzül (ebből tanul HYRON), és új
  * javaslat készül — a régi leváltódik, a függő jóváhagyása lejár. Az új
  * javaslat ugyanazon az ellenőrzésen és szabályrendszeren megy át. */
 export function AdminJavaslatSzerkeszto({
@@ -144,7 +144,7 @@ export function AdminJavaslatSzerkeszto({
   return (
     <div className="mt-2 rounded-[var(--radius)] border border-border bg-surface-2 p-3">
       <p className="mb-2 text-[12px] text-text-muted">
-        A módosításod javításként rögzül (ebből tanul az ügynök), és új javaslat készül a régi helyett.
+        A módosításod javításként rögzül (ebből tanul HYRON), és új javaslat készül a régi helyett.
       </p>
       {hiba && <div className="mb-2 rounded-[var(--radius)] bg-bg-danger px-2 py-1.5 text-[12px] text-text-danger">{hiba}</div>}
 

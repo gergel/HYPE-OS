@@ -1,4 +1,4 @@
-"""Admin-Ágens — értékelés (eval).
+"""HYRON — értékelés (eval).
 
 A biztonsági/pénzügyi invariánsokat KÓDDAL ellenőrizzük, nem a modellel. Az
 eval a policy engine determinista döntéseit játssza vissza az eset döntési

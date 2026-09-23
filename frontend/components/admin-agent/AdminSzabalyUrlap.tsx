@@ -18,11 +18,11 @@ const CEL_CIMKE: Record<string, string> = {
   kimeno: "Kimenő számla",
 };
 
-/** ADMIN-ÁGENS — szabály kézi felvétele (kliens).
+/** HYRON — szabály kézi felvétele (kliens).
  *
  * A fejekben lévő szokások közvetlen beírása. A szabály VÁZLATKÉNT jön létre,
  * és csak értékelés után, élesítéssel lesz aktív. Ha partnerhez kötöd, csak
- * annál a partnernél jön elő; ha számlánál céltípust is megadsz, az ügynök
+ * annál a partnernél jön elő; ha számlánál céltípust is megadsz, HYRON
  * modell nélkül is kitölti vele az üres célt (az érkeztető javaslatát nem írja
  * felül). */
 export function AdminSzabalyUrlap({ onLetrehozva }: { onLetrehozva: (r: AdminRule) => void }) {
@@ -142,7 +142,7 @@ export function AdminSzabalyUrlap({ onLetrehozva }: { onLetrehozva: (r: AdminRul
       <p className="mt-2 text-[11.5px] text-text-muted">
         Vázlatként mentődik. Élesíteni a Szabály-jelöltek közül lehet, sikeres értékelés (Tanulás → 3. Értékelés) után.
         {hatokor === "szamla" && celTipus
-          ? " Élesítés után az ügynök ennél a partnernél modell nélkül is ezt a célt javasolja, ha az érkeztető nem döntött."
+          ? " Élesítés után HYRON ennél a partnernél modell nélkül is ezt a célt javasolja, ha az érkeztető nem döntött."
           : ""}
       </p>
       <div className="mt-2 flex gap-2">

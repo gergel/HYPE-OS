@@ -1,4 +1,4 @@
-"""Admin-Ágens háttérfeladatok (Celery Beat a megosztott celery_app-on).
+"""HYRON háttérfeladatok (Celery Beat a megosztott celery_app-on).
 
 * Éjszakai (02:00, szervezeti időzóna) háttér-tanuló (distill) — a korrekciókból
   szabály-/példa-JELÖLTEK; nem aktivál semmit.
@@ -56,7 +56,7 @@ def observer_task() -> dict | None:
         return eredmeny
     except Exception:
         db.rollback()
-        logger.exception("Admin-Ágens megfigyelő futás sikertelen.")
+        logger.exception("HYRON megfigyelő futás sikertelen.")
         raise
     finally:
         db.close()
@@ -74,14 +74,14 @@ def nightly_distill_task() -> dict | None:
     db = SessionLocal()
     try:
         if not (get_settings(db).module_enabled or engedelyezve(db)):
-            logger.debug("Admin-Ágens distill kihagyva: sem a modul, sem a tanulási forrás nincs bekapcsolva.")
+            logger.debug("HYRON distill kihagyva: sem a modul, sem a tanulási forrás nincs bekapcsolva.")
             return None
         lr = distill(db, trigger="nightly")
         db.commit()
         return {"learning_run_id": lr.id, "feldolgozott": lr.feldolgozott_korrekciok}
     except Exception:
         db.rollback()
-        logger.exception("Admin-Ágens éjszakai distill sikertelen.")
+        logger.exception("HYRON éjszakai distill sikertelen.")
         raise
     finally:
         db.close()
@@ -101,7 +101,7 @@ def weekly_eval_task() -> dict | None:
         return {"eval_run_id": run.id, "atment": run.atment, "kritikus_hiba": run.kritikus_hiba}
     except Exception:
         db.rollback()
-        logger.exception("Admin-Ágens heti eval sikertelen.")
+        logger.exception("HYRON heti eval sikertelen.")
         raise
     finally:
         db.close()

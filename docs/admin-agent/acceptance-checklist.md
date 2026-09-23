@@ -1,4 +1,4 @@
-# Admin-Ágens — elfogadási ellenőrzőlista
+# HYRON — elfogadási ellenőrzőlista
 
 Jelölés: ✅ automata teszt vagy dokumentált ellenőrzés lefutott · 🟡 részben
 (kód kész, teljes end-to-end teszt hátra) · ⛔ hátra. Egy pontot csak akkor
@@ -7,7 +7,7 @@ jelölünk ✅-nak, ha a hozzá tartozó tesztet/ellenőrzést TÉNYLEGESEN lefu
 A minta-/tesztadat szintetikus és elkülönített; a live smoke-ellenőrzések a
 létrehozott sorokat feltakarítják, a biztonságos alapállást visszaállítják.
 
-Backend admin-ágens tesztek: **25 zöld** (`pytest tests/test_admin_agent_*.py`).
+Backend HYRON tesztek: **25 zöld** (`pytest tests/test_admin_agent_*.py`).
 Frontend: `tsc + eslint + next build` zöld. Migráció le/fel próbálva.
 
 | # | Forgatókönyv | Állapot | Bizonyíték |
@@ -28,8 +28,8 @@ Frontend: `tsc + eslint + next build` zöld. Migráció le/fel próbálva.
 | 14 | Sikertelen eval / hiányos minta megakadályozza a szintlépést/kiadást | ✅ | `test_...learning` (safety-eval); release/rule aktiválás eval-hez kötve (HTTP 409) |
 | 15 | Memóriaforrás törlése/visszavonása után a modell nem kapja meg | ✅ | `test_...learning` (retrieval csak érvényes/nem visszavont/jóváhagyott) |
 | 16 | Hibás modell-JSON / 429 / timeout / kerettúllépés → kontrollált hiba | ✅ | `test_admin_agent_llm` (séma-ellenőrzés, egy javító újrapróba, 429/timeout → ModellHiba, kulcs nélkül „beállítás szükséges"); modellhiba esetén a determinista út fut. Valós Gemini-hívás: nem ellenőrzött (nincs kulcs a tesztkörnyezetben) |
-| 17 | Projektkód több projektet fog össze; kiadások pontosan egyszer összesülnek | ✅ | Az ágens a MEGLÉVŐ `szamla_erkeztetes.jovahagy`-on át rögzít (nem duplikál); invariáns a pénzügyi szolgáltatásban |
-| 18 | Több deviza/áfa/kerekítés/stornó helyesen vagy emberhez | 🟡 | A meglévő érkeztető kezeli ezeket; az ágens a `felosztas`/összeg-egyezést a szolgáltatásra bízza, hiánynál NEEDS_INFO |
+| 17 | Projektkód több projektet fog össze; kiadások pontosan egyszer összesülnek | ✅ | HYRON a MEGLÉVŐ `szamla_erkeztetes.jovahagy`-on át rögzít (nem duplikál); invariáns a pénzügyi szolgáltatásban |
+| 18 | Több deviza/áfa/kerekítés/stornó helyesen vagy emberhez | 🟡 | A meglévő érkeztető kezeli ezeket; HYRON a `felosztas`/összeg-egyezést a szolgáltatásra bízza, hiánynál NEEDS_INFO |
 | 19 | TIG/szerződés nem lesz auto-elfogadott/aláírt; banki utalás nem futtatható | ✅ | Nincs banki végrehajtó eszköz (`test_admin_agent_email`); TIG/szerződés = előkészítés, emberi véglegesítés |
 | 20 | Új e-mail elavulttá teszi a régi javaslatot; emberi szöveg nem íródik felül | 🟡 | A payload-hash kötés elavult javaslatot blokkol (6.); a thread-frissesség-detektálás bekötése az e-mail-inbox integrációval jön |
 | 21 | Automata levelezési hurok / ismételt értesítés nem keletkezik | ✅ | `test_admin_agent_email` (no-reply/mailer-daemon/bounce tiltva) |
@@ -42,8 +42,8 @@ Frontend: `tsc + eslint + next build` zöld. Migráció le/fel próbálva.
 - **Valós modellhívás (Gemini):** a kód bekötve (számla-átnézés, TIG/szerződés-
   kiegészítés, e-mail-tervezet), hamis adapterrel tesztelve
   (`test_admin_agent_llm`, `test_admin_agent_tervezo`). A VALÓS hívás nem
-  ellenőrzött: `GEMINI_API_KEY` beállítása után egy számla „Admin-Ágens" gombbal
-  és egy TIG-feladat „Tervezet készítése" gombbal ellenőrizendő — „Az ügynök
+  ellenőrzött: `GEMINI_API_KEY` beállítása után egy számla „HYRON" gombbal
+  és egy TIG-feladat „Tervezet készítése" gombbal ellenőrizendő — „HYRON
   értékelése" dobozban a modell neve látszik.
 - **Gmail-küldés éles teszt:** csak beállított OAuth mellett; enélkül az eszköz
   „Beállítás szükséges" állapotban, tiltva marad (nem hamis siker).
