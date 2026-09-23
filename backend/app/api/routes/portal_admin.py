@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import re
 import tempfile
 import uuid
 from datetime import date, datetime, timedelta
@@ -402,16 +403,35 @@ def delete_portal(
     tasks.add_task(_r2_prefixek_torlese, prefixek)
 
 
+def _borito_kulcs(url: str | None, portal_id: int) -> str | None:
+    """A (saját R2-be feltöltött) borítókép tárhely-kulcsa az URL-ből - None,
+    ha külső (pl. Notionból örökölt) kép, amit nem mi tárolunk."""
+    if not url:
+        return None
+    jel = f"covers/{portal_id}/"
+    i = url.find(jel)
+    return url[i:].split("?", 1)[0] if i >= 0 else None
+
+
 @router.post("/{portal_id}/cover")
 async def upload_cover(
     portal_id: int,
+    tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
+    """Új borítókép. MINDEN feltöltés EGYEDI kulcsot kap (a felhasználó
+    hibajelzése: új kép feltöltése után is a régi látszott). Korábban a kulcs
+    fix volt (`covers/<id>/cover.jpg`), így az URL sem változott, és a
+    böngésző / a tárhely (CDN) gyorsítótára a régi képet adta vissza. A régi
+    fájl a válasz után törlődik - csak az, nem az egész mappa."""
     portal = _get_portal_or_404(db, portal_id)
-    ext = os.path.splitext(file.filename or "cover.jpg")[1] or ".jpg"
-    key = f"covers/{portal_id}/cover{ext}"
+    regi_kulcs = _borito_kulcs(portal.cover_image_url, portal_id)
+    ext = os.path.splitext(file.filename or "cover.jpg")[1].lower() or ".jpg"
+    if not re.fullmatch(r"\.[a-z0-9]{1,5}", ext):
+        ext = ".jpg"
+    key = f"covers/{portal_id}/cover-{uuid.uuid4().hex[:12]}{ext}"
     content_type = file.content_type or "image/jpeg"
     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
         tmp.write(await file.read())
@@ -420,6 +440,8 @@ async def upload_cover(
     os.unlink(tmp_path)
     portal.cover_image_url = url
     db.commit()
+    if regi_kulcs and regi_kulcs != key:
+        tasks.add_task(_r2_prefixek_torlese, [regi_kulcs])
     return {"cover_image_url": url}
 
 
@@ -430,10 +452,15 @@ def delete_cover(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
+    """Borítókép törlése - a portál ezután az alap (HYPE / ContentBee)
+    hátteret mutatja. Csak a TÖRÖLT fájl megy a tárhelyről: korábban a teljes
+    `covers/<id>` mappa, ami egy közben feltöltött új borítót is elvihetett."""
     portal = _get_portal_or_404(db, portal_id)
+    regi_kulcs = _borito_kulcs(portal.cover_image_url, portal_id)
     portal.cover_image_url = ""
     db.commit()
-    tasks.add_task(_r2_prefixek_torlese, [f"covers/{portal_id}"])
+    if regi_kulcs:
+        tasks.add_task(_r2_prefixek_torlese, [regi_kulcs])
     return {"cover_image_url": ""}
 
 

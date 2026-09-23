@@ -5,17 +5,25 @@ import { Lock } from "lucide-react";
 import { Button } from "@/components/media-portal/ui/button";
 import { unlockProject } from "@/lib/portalApi";
 
+/** A jelszavas portál belépő oldala. Háttérnek a borítókép halványítva megy -
+ * ha nincs (vagy törölték), az alap márka-háttér, ugyanaz, mint a portál
+ * hero-jában (a felhasználó hibajelzése: borító törlése után üres maradt). */
 export function PasswordGate({
   slug,
   title,
   cover,
+  brand,
   onUnlock,
 }: {
   slug: string;
   title?: string;
   cover?: string;
+  brand?: string;
   onUnlock: (token: string) => void;
 }) {
+  const isContentBee = brand === "contentbee";
+  const alapMobil = isContentBee ? "/contentbee-mobile.png" : "/default-cover-mobile.PNG";
+  const alapAsztali = isContentBee ? "/contentbee-desktop.png" : "/default-cover-desktop.png";
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,13 +44,20 @@ export function PasswordGate({
 
   return (
     <main className="relative flex min-h-screen items-center justify-center px-6">
-      {cover && (
-        <div className="absolute inset-0 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+      <div className="absolute inset-0 overflow-hidden">
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={cover} alt="" className="h-full w-full object-cover opacity-25 blur-sm" />
-          <div className="absolute inset-0 bg-ink/80" />
-        </div>
-      )}
+        ) : (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={alapMobil} alt="" className="h-full w-full object-cover opacity-25 blur-sm sm:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={alapAsztali} alt="" className="hidden h-full w-full object-cover opacity-25 blur-sm sm:block" />
+          </>
+        )}
+        <div className="absolute inset-0 bg-ink/80" />
+      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}

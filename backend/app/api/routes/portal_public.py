@@ -173,13 +173,13 @@ def get_public_portal(
 
     if portal.password_hash:
         if not authorization:
-            return {"locked": True, "title": resolve_title(portal), "cover_image_url": portal.cover_image_url or ""}
+            return {"locked": True, "title": resolve_title(portal), "cover_image_url": portal.cover_image_url or "", "brand": portal.brand}
         try:
             data = _decode_unlock_token(authorization)
             if data.get("scope") != f"portal:{portal.id}":
                 raise ValueError
         except (JWTError, ValueError):
-            return {"locked": True, "title": resolve_title(portal), "cover_image_url": portal.cover_image_url or ""}
+            return {"locked": True, "title": resolve_title(portal), "cover_image_url": portal.cover_image_url or "", "brand": portal.brand}
 
     return {"locked": False, "project": _serialize(portal, belsos=_belsos_nezo(db, belsos_token)).model_dump()}
 

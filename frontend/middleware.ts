@@ -109,7 +109,14 @@ export async function middleware(request: NextRequest) {
     // vakon ezeket a szabvány útvonalakat kéri (public/ alatt fekszenek) -
     // átirányítva a login-oldalt kapná, és képernyőkép lenne az ikon helyett.
     pathname === "/apple-touch-icon.png" ||
-    pathname === "/apple-touch-icon-precomposed.png";
+    pathname === "/apple-touch-icon-precomposed.png" ||
+    // A public/ gyökerében fekvő képek (a portál alap borítóképe, a
+    // ContentBee háttér, a fizetési logók) a KIJELENTKEZETT ügyfélnek
+    // szólnak. Enélkül a portál domainjén 404-et, egy domainen a login-oldalt
+    // kapta a böngésző kép helyett - ezért nem jelent meg az alap HYPE OS
+    // háttér, ha a portálnak nem volt saját borítóképe. Oldal-útvonal nem
+    // végződik képkiterjesztésre, így ez nem nyit ki semmilyen felületet.
+    /^\/[A-Za-z0-9_-]+\.(png|jpe?g|webp|gif|svg)$/i.test(pathname);
 
   // A portál domainjén CSAK a portál él. Ami nem oda tartozik, az nem
   // átirányítást kap (az elárulná az admin felület címét), hanem 404-et.

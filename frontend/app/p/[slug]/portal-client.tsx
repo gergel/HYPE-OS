@@ -55,7 +55,7 @@ function PortalContent() {
   }, [search]);
 
   const [locked, setLocked] = useState(false);
-  const [lockMeta, setLockMeta] = useState<{ title?: string; cover?: string }>({});
+  const [lockMeta, setLockMeta] = useState<{ title?: string; cover?: string; brand?: string }>({});
   const [expired, setExpired] = useState<{
     title: string;
     brand: string;
@@ -101,7 +101,7 @@ function PortalContent() {
           setProject(null);
         } else if (data.locked) {
           setLocked(true);
-          setLockMeta({ title: data.title, cover: data.cover_image_url });
+          setLockMeta({ title: data.title, cover: data.cover_image_url, brand: data.brand });
           setExpired(null);
         } else if (data.project) {
           setProject(data.project);
@@ -137,7 +137,15 @@ function PortalContent() {
     );
   }
   if (locked) {
-    return <PasswordGate slug={slug} title={lockMeta.title} cover={lockMeta.cover} onUnlock={(t) => load(t)} />;
+    return (
+      <PasswordGate
+        slug={slug}
+        title={lockMeta.title}
+        cover={lockMeta.cover}
+        brand={lockMeta.brand}
+        onUnlock={(t) => load(t)}
+      />
+    );
   }
 
   if (expired) {
