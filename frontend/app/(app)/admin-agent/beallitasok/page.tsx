@@ -4,7 +4,7 @@ import { TopBar } from "@/components/TopBar";
 import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
 import { AdminBeallitasok } from "@/components/admin-agent/AdminBeallitasok";
 import { AdminTrustPolicies } from "@/components/admin-agent/AdminTrustPolicies";
-import { getAdminAgentSettings, getAdminTrustPolicies, getMyPagePermissions } from "@/lib/api";
+import { getAdminAgentSettings, getAdminTrustPolicies, getEmployees, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
@@ -21,7 +21,11 @@ export default async function AdminAgentBeallitasokPage() {
   // ellenőrzést végez — routes/admin_agent.py settings/pause/resume).
   const canManage = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
 
-  const [beallitasok, trustPolicies] = await Promise.all([getAdminAgentSettings(), getAdminTrustPolicies()]);
+  const [beallitasok, trustPolicies, emberek] = await Promise.all([
+    getAdminAgentSettings(),
+    getAdminTrustPolicies(),
+    getEmployees(),
+  ]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -35,7 +39,14 @@ export default async function AdminAgentBeallitasokPage() {
                 A beállítások most nem érhetők el. Töltsd újra az oldalt egy kicsit később.
               </p>
             ) : (
-              <AdminBeallitasok kezdo={beallitasok} canManage={canManage} />
+              <AdminBeallitasok
+                kezdo={beallitasok}
+                canManage={canManage}
+                emberek={emberek
+                  .filter((e) => e.is_active !== false)
+                  .map((e) => ({ id: e.id, nev: e.full_name }))
+                  .sort((a, b) => a.nev.localeCompare(b.nev, "hu"))}
+              />
             )}
           </Card>
 

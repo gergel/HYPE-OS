@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.admin_agent.memory import partner_kulcs
 from app.admin_agent.observer import FELRETEVE
-from app.admin_agent.settings_service import get_settings
+from app.admin_agent.settings_service import csak_felelosnek, get_settings, lara_felelos
 from app.core.security import check_page_action
 from app.models.admin_agent import LaraKerdes, MemoryChunk, SourceEvent
 from app.models.bejovo_szamla import BejovoSzamla
@@ -39,6 +39,7 @@ from app.services import notifications
 PAGE = "/admin-agent"
 KIND_OSSZESITO = "lara_osszesito"
 KIND_KERDES = "lara_kerdes"
+KIND_FELADAT = "lara_feladat"
 #: Az összesítőben ennyi legértékesebb jelölt szerepel név szerint.
 TOP = 3
 
@@ -63,8 +64,13 @@ def _most() -> datetime:
 
 
 def lara_felelosok(db: Session, *, muvelet: str = "view") -> list[Employee]:
-    """Aktív admin / adminisztráció, akinek a Lara-oldalon megvan a kért joga
-    (a jóváhagyáshoz: "delete" — a tudás-aktiválási jog)."""
+    """Kinek szól Lara. „Csak a felelősnek" módban (alap) KIZÁRÓLAG Lara
+    felelősének (Vidor Gergely, lásd settings_service.lara_felelos) — ha ő nincs
+    meg, senkinek. Egyébként: aktív admin / adminisztráció, akinek a Lara-oldalon
+    megvan a kért joga (a jóváhagyáshoz: "delete" — a tudás-aktiválási jog)."""
+    if csak_felelosnek(db):
+        f = lara_felelos(db)
+        return [f] if f is not None else []
     ki = []
     for e in db.scalars(select(Employee).where(Employee.is_active.is_(True))).all():
         if not (van_szerepkore(e, SystemRole.ADMIN) or van_szerepkore(e, SystemRole.ADMINISZTRACIO)):
@@ -202,8 +208,10 @@ def kerdes_ertesites(db: Session, kerdesek: list[LaraKerdes]) -> int:
         return 0
     felelosok: list[Employee] | None = None
     cimzettenkent: dict[int, list[LaraKerdes]] = {}
+    csak_o = csak_felelosnek(db)
     for k in kerdesek:
-        rogzito = _rogzito(db, k)
+        # „Csak a felelősnek" módban a rögzítő sem kap — minden a felelősé.
+        rogzito = None if csak_o else _rogzito(db, k)
         aktiv = db.get(Employee, rogzito) if rogzito else None
         if aktiv is not None and aktiv.is_active:
             idk = [aktiv.id]
@@ -226,3 +234,36 @@ def kerdes_ertesites(db: Session, kerdesek: list[LaraKerdes]) -> int:
         )
     db.flush()
     return len(cimzettenkent)
+
+
+# ── Feladat-értesítés: ellenőrzésre / jóváhagyásra vár ───────────────────────
+
+_FELADAT_SZOVEG = {
+    "awaiting_approval": "jóváhagyásra vár",
+    "proposal_ready": "javaslata ellenőrzésre vár",
+    "needs_info": "adatot kér",
+}
+
+
+def feladat_ertesites(db: Session, task, regi_allapot: str | None) -> int:
+    """Ha Lara egy feladatnál javaslatot tett (ellenőrzésre / jóváhagyásra vár)
+    vagy adatot kér, értesítés (és push) a felelősnek. Csak ÁLLAPOTVÁLTÁSKOR —
+    egy újraelemzés ugyanabban az állapotban nem küld újra. Kikapcsolható:
+    `limitek.feladat_ertesites` (alap: be)."""
+    if task.allapot == regi_allapot or task.allapot not in _FELADAT_SZOVEG:
+        return 0
+    if not _kapcsolo(db, "feladat_ertesites"):
+        return 0
+    cimzettek = lara_felelosok(db)
+    if not csak_felelosnek(db) and task.felelos_id:
+        # Nem kizárólagos módban a feladat saját felelőse kapja (ha van).
+        f = db.get(Employee, task.felelos_id)
+        cimzettek = [f] if f is not None and f.is_active else cimzettek
+    for e in cimzettek:
+        notifications.create_notification(
+            db, employee_id=e.id, kind=KIND_FELADAT,
+            message=f"Lara {_FELADAT_SZOVEG[task.allapot]}: {task.cim}"[:500],
+            link=f"/admin-agent/munkasor/{task.id}",
+        )
+    db.flush()
+    return len(cimzettek)

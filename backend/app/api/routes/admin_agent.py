@@ -30,7 +30,13 @@ from app.admin_agent.learning import distill
 from app.admin_agent.observer import FELRETEVE, korszak_rendezes, megfigyeles, tanulas_kezdete_datum
 from app.admin_agent.pipeline_szamla import arnyek_elemzes
 from app.admin_agent.proposals import JavaslatHiba, keszit_javaslat
-from app.admin_agent.settings_service import LEALLITVA_UZENET, get_settings, leallitva
+from app.admin_agent.settings_service import (
+    LEALLITVA_UZENET,
+    csak_felelosnek,
+    get_settings,
+    lara_felelos,
+    leallitva,
+)
 from app.core.database import get_db
 from app.core.security import Role, check_page_action, require_page_action
 from app.models.admin_agent import (
@@ -247,6 +253,14 @@ class TaskCreateIn(BaseModel):
     partner_nev: str | None = None
 
 
+def _uj_feladat_felelose(db: Session, kert: int | None) -> int | None:
+    if csak_felelosnek(db):
+        f = lara_felelos(db)
+        if f is not None:
+            return f.id
+    return kert
+
+
 @router.post("/tasks")
 def task_letrehozas(
     payload: TaskCreateIn,
@@ -268,7 +282,8 @@ def task_letrehozas(
         osszefoglalo=payload.osszefoglalo,
         allapot=TaskState.NEW.value,
         prioritas=payload.prioritas,
-        felelos_id=payload.felelos_id,
+        # „Csak a felelősnek" módban minden Lara-feladat felelőse Lara felelőse.
+        felelos_id=_uj_feladat_felelose(db, payload.felelos_id),
         hatarido=hatarido,
         project_code_id=payload.project_code_id,
         partner_nev=(payload.partner_nev or "").strip() or None,
@@ -483,6 +498,26 @@ class ApproveIn(BaseModel):
     indok: str | None = None
 
 
+def _csak_a_felelos_donthet(db: Session, user: Employee) -> None:
+    """„Csak a felelősnek" módban (alap) Lara javaslatairól KIZÁRÓLAG Lara
+    felelőse (Vidor Gergely) dönthet — a felhasználó kérése: minden hozzá fut be
+    jóváhagyásra. Ha a felelős nincs beállítva / nem található, senki nem
+    dönthet, amíg a Beállításokban ki nem választják."""
+    if not csak_felelosnek(db):
+        return
+    f = lara_felelos(db)
+    if f is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Lara felelőse nincs beállítva — a Beállításokban válaszd ki, ki hagyja jóvá Lara javaslatait.",
+        )
+    if f.id != user.id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Lara javaslatairól jelenleg csak a felelőse ({f.full_name}) dönthet.",
+        )
+
+
 @router.post("/approvals/{approval_id}/approve")
 def approval_jovahagy(
     approval_id: int,
@@ -499,6 +534,7 @@ def approval_jovahagy(
     a = db.get(Approval, approval_id)
     if a is None:
         raise HTTPException(status_code=404, detail="A jóváhagyás nem található.")
+    _csak_a_felelos_donthet(db, user)
     if a.allapot != ApprovalState.PENDING.value:
         raise HTTPException(status_code=409, detail=f"A jóváhagyás már nem függőben van ({a.allapot}).")
     proposal = db.get(ActionProposal, a.proposal_id)
@@ -536,6 +572,7 @@ def approval_elutasit(
     a = db.get(Approval, approval_id)
     if a is None:
         raise HTTPException(status_code=404, detail="A jóváhagyás nem található.")
+    _csak_a_felelos_donthet(db, user)
     if a.allapot != ApprovalState.PENDING.value:
         raise HTTPException(status_code=409, detail=f"A jóváhagyás már nem függőben van ({a.allapot}).")
     a.allapot = ApprovalState.REJECTED.value
@@ -1808,7 +1845,37 @@ def settings_lekeres(
         "limitek": s.limitek or {},
         "tanulas_kezdete": tanulas_kezdete_datum(db).isoformat(),
         "integraciok": integracio_allapotok(),
+        **_felelos_allapot(db),
     }
+
+
+def _felelos_allapot(db: Session) -> dict:
+    f = lara_felelos(db)
+    return {
+        "felelos": {"id": f.id, "nev": f.full_name} if f is not None else None,
+        "csak_felelosnek": csak_felelosnek(db),
+    }
+
+
+_LEZART_FELADAT = ("completed", "rejected", "cancelled")
+
+
+def _nyitott_feladatok_a_felelosre(db: Session) -> int:
+    """„Csak a felelősnek" módban minden NYITOTT Lara-feladat a felelősé."""
+    if not csak_felelosnek(db):
+        return 0
+    f = lara_felelos(db)
+    if f is None:
+        return 0
+    sorok = db.scalars(
+        select(AdminTask).where(
+            AdminTask.allapot.not_in(_LEZART_FELADAT),
+            AdminTask.felelos_id.is_distinct_from(f.id),
+        )
+    ).all()
+    for t in sorok:
+        t.felelos_id = f.id
+    return len(sorok)
 
 
 class SettingsPatchIn(BaseModel):
@@ -1845,9 +1912,16 @@ def settings_modositas(
         db.flush()
         # A meglévő példák újrabesorolása az új kezdőnap szerint.
         korszak = korszak_rendezes(db)
+    if payload.limitek is not None and isinstance(payload.limitek.get("felelos_employee_id"), int):
+        if db.get(Employee, payload.limitek["felelos_employee_id"]) is None:
+            raise HTTPException(status_code=400, detail="A kiválasztott felelős nem található.")
     s.modositotta_employee_id = user.id
+    db.flush()
+    atvezetve = _nyitott_feladatok_a_felelosre(db)
     db.commit()
     return {
+        "atvezetett_feladat": atvezetve,
+        **_felelos_allapot(db),
         "korszak": korszak,
         "tanulas_kezdete": tanulas_kezdete_datum(db).isoformat(),
         "module_enabled": s.module_enabled,

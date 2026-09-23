@@ -164,6 +164,7 @@ def keszit_javaslat(
     )
 
     # Feladatállapot + (szükség szerint) jóváhagyás.
+    regi_allapot = task.allapot
     if hianyok:
         task.allapot = TaskState.NEEDS_INFO.value
         task.blokkolo_ok = "; ".join(hianyok)
@@ -186,6 +187,10 @@ def keszit_javaslat(
 
     task.kockazat = spec.risk.value
     task.row_version += 1
+    # A felelős értesítése: ellenőrzésre / jóváhagyásra vár (lásd osszesito.py).
+    from app.admin_agent.osszesito import feladat_ertesites
+
+    feladat_ertesites(db, task, regi_allapot)
     run.allapot = AgentRunState.SUCCEEDED.value
     run.veg_at = _most()
     return proposal, dontes

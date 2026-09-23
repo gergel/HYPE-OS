@@ -584,6 +584,10 @@ export type AdminAgentSettings = {
   /** Ettől a naptól keletkezett rekordokból tanul Lara (ISO dátum). */
   tanulas_kezdete?: string;
   integraciok?: AdminAgentIntegracio[];
+  /** Lara felelőse (egyetlen címzett, lásd backend settings_service.lara_felelos). */
+  felelos?: { id: number; nev: string } | null;
+  /** Minden Lara-értesítés / -jóváhagyás csak a felelősé. */
+  csak_felelosnek?: boolean;
 };
 
 export async function getAdminAgentOverview(): Promise<AdminAgentOverview | null> {

@@ -501,6 +501,23 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   pontok mérete nem zsugorodik, a kattintás-találat a pillanatnyi mérethez
   igazodik. Élő próba demó-tudással: 34% → 85% (utána törölve).
 
+### U. Egyetlen felelős: Vidor Gergely — másnak Lara nem küld ✅
+- `settings_service.lara_felelos`: a Beállításokban kiválasztott
+  (`limitek.felelos_employee_id`), vagy név szerint a „Vidor Gergely" nevű
+  aktív munkatárs; `csak_felelosnek` (alap: be) mód.
+- Migráció `n7h4e85b2c96`: bekapcsolja a módot, név szerint beállítja a
+  felelőst (ha megtalálja), és a nyitott Lara-feladatokat hozzá rendeli.
+- Minden Lara-értesítés (kérdés, napi összesítő, ÚJ: `lara_feladat` —
+  ellenőrzésre / jóváhagyásra vár, adatot kér; állapotváltáskor egyszer)
+  KIZÁRÓLAG a felelősnek; ha nincs felelős, senkinek.
+- Új Lara-feladat felelőse mindig ő (kézi létrehozásnál is); a felelős
+  átállításakor a nyitott feladatok átkerülnek.
+- Jóváhagyás/elutasítás csak a felelősnek (API 403, végrehajtó-őr is);
+  kimenő levél csak a felelős saját címére (végrehajtó-őr).
+- Beállítások → „Lara felelőse": választó, „Minden csak a felelőshöz" és
+  „Értesítés Lara javaslatairól" kapcsoló; figyelmeztetés, ha nincs felelős.
+- Tesztek: `test_admin_agent_felelos.py` (6). Teljes backend: 175 passed.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

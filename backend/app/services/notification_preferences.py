@@ -13,6 +13,7 @@ KINDS = {
     "vagoi_jatek_nyeremeny": "Vágói játék nyereménye",
     "lara_kerdes": "Lara kérdései",
     "lara_osszesito": "Lara napi összesítője",
+    "lara_feladat": "Lara javaslatai (ellenőrzés, jóváhagyás)",
 }
 
 def enabled(db, employee_id, kind):

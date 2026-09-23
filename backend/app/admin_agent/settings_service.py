@@ -90,3 +90,46 @@ def resolve_decision(db: Session, *, risk: RiskClass, tipus: str, altipus: str |
             auto_allowed_subtypes=auto_altipusok,
         )
     )
+
+
+# ── Lara felelőse (egyetlen címzett) ─────────────────────────────────────────
+#
+# A felhasználó kérése: Laránál MINDENÉRT egy ember, Vidor Gergely a felelős -
+# minden feladat hozzá tartozik, minden ellenőrzés/jóváhagyás/kérdés/összesítő
+# hozzá fut be, és egyelőre MÁSNAK Lara semmit nem küld. A felelős a
+# Beállításokban átállítható (`limitek.felelos_employee_id`); ha nincs
+# beállítva, név szerint keressük meg. A „csak a felelősnek" mód
+# (`limitek.csak_felelosnek`, alap: be) kapcsolja ki a többi címzettet.
+
+#: Alapértelmezett felelős — név szerint (ékezet/sorrend nem számít).
+ALAP_FELELOS_NEV = "Vidor Gergely"
+
+
+def _nev_kulcs(nev: str | None) -> frozenset[str]:
+    import unicodedata
+
+    s = unicodedata.normalize("NFKD", (nev or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return frozenset(t for t in "".join(c if c.isalnum() else " " for c in s).split() if t)
+
+
+def csak_felelosnek(db: Session) -> bool:
+    """Minden Lara-értesítés/jóváhagyás csak a felelősé (alap: igen)."""
+    return (get_settings(db).limitek or {}).get("csak_felelosnek") is not False
+
+
+def lara_felelos(db: Session):
+    """Lara felelőse (aktív munkatárs) — a beállított, vagy név szerint az
+    alapértelmezett. None, ha nem található (ilyenkor Lara NEM küld senkinek)."""
+    from app.models.employee import Employee
+
+    fid = (get_settings(db).limitek or {}).get("felelos_employee_id")
+    if isinstance(fid, int):
+        e = db.get(Employee, fid)
+        if e is not None and e.is_active:
+            return e
+    kulcs = _nev_kulcs(ALAP_FELELOS_NEV)
+    for e in db.scalars(select(Employee).where(Employee.is_active.is_(True))).all():
+        if _nev_kulcs(e.full_name) == kulcs:
+            return e
+    return None

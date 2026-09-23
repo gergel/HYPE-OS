@@ -297,6 +297,29 @@ def execute_approved(
         return _blokk(dontes.reason)
     # NEEDS_APPROVAL: a most kötött, érvényes jóváhagyás elégíti ki. AUTO: mehet.
 
+    # 4b) „Csak a felelősnek" mód (a felhasználó kérése: egyelőre Lara MÁSNAK
+    #     semmit nem küld): kimenő levél csak a felelős saját címére mehet, és
+    #     javaslatot csak a felelős hagyhat jóvá.
+    from app.admin_agent.settings_service import csak_felelosnek, lara_felelos
+
+    if csak_felelosnek(db):
+        felelos = lara_felelos(db)
+        if felelos is None or approver.id != felelos.id:
+            return _blokk("Lara javaslatairól jelenleg csak a felelőse dönthet.")
+        if spec.tipus == "email":
+            p = dict(proposal.payload)
+            cimek = []
+            for mezo in ("to", "cc", "bcc"):
+                v = p.get(mezo) or []
+                cimek += [v] if isinstance(v, str) else list(v)
+            sajat = (felelos.email or "").strip().lower()
+            idegen = [c for c in cimek if str(c).strip().lower() != sajat]
+            if idegen or not sajat:
+                return _blokk(
+                    "Lara jelenleg csak a felelősének küldhet levelet — más címzett ("
+                    + ", ".join(map(str, idegen or cimek)) + ") nem engedélyezett."
+                )
+
     # 5) Idempotens lefoglalás.
     ex = _execution_lefoglal(db, proposal, approval, kulcs, fencing_token)
     if ex.allapot == ExecutionState.SUCCEEDED.value:

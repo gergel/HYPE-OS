@@ -16,9 +16,12 @@ import type { AdminAgentSettings } from "@/lib/api";
 export function AdminBeallitasok({
   kezdo,
   canManage,
+  emberek = [],
 }: {
   kezdo: AdminAgentSettings;
   canManage: boolean;
+  /** A választható felelősök (aktív munkatársak). */
+  emberek?: { id: number; nev: string }[];
 }) {
   const router = useRouter();
   const [b, setB] = useState<AdminAgentSettings>(kezdo);
@@ -59,8 +62,12 @@ export function AdminBeallitasok({
       }
       const uj = (await res.json()) as AdminAgentSettings & {
         korszak?: { felreteve: number; visszahozva: number; regi_jovahagyott: number } | null;
+        atvezetett_feladat?: number;
       };
-      setB(uj);
+      setB((elozo) => ({ ...elozo, ...uj }));
+      if (uj.atvezetett_feladat) {
+        setKezdetUzenet(`${uj.atvezetett_feladat} nyitott Lara-feladat került a felelőshöz.`);
+      }
       if (uj.korszak) {
         setKezdetUzenet(
           `Mentve. ${uj.korszak.felreteve} régi jelölt félretéve, ${uj.korszak.visszahozva} visszahozva; ${uj.korszak.regi_jovahagyott} jóváhagyott régi példát Lara kisebb súllyal használ.`,
@@ -110,6 +117,55 @@ export function AdminBeallitasok({
           Csak megtekintés — a kapcsolók módosításához külön jogosultság szükséges.
         </div>
       )}
+
+      <div
+        className={`rounded-[var(--radius)] border px-4 py-3.5 ${
+          b.csak_felelosnek !== false && !b.felelos ? "border-transparent bg-bg-danger" : "border-border bg-surface-3"
+        }`}
+      >
+        <p className="text-[13px] font-medium text-text-primary">Lara felelőse</p>
+        <p className="mt-0.5 text-[12px] text-text-muted">
+          Laránál mindenért ő felel: minden Lara-feladat hozzá tartozik, minden ellenőrzésre / jóváhagyásra váró
+          javaslat, kérdés és a napi összesítő hozzá fut be értesítésként (és bekapcsolt telefonon push-ként).
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select
+            value={b.felelos?.id ?? ""}
+            disabled={!canManage || folyamatban || b.kill_switch}
+            onChange={(e) => e.target.value && limitMent({ felelos_employee_id: Number(e.target.value) })}
+            className="min-w-[220px] rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary disabled:opacity-50"
+            aria-label="Lara felelőse"
+          >
+            {!b.felelos && <option value="">— válaszd ki —</option>}
+            {emberek.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nev}
+              </option>
+            ))}
+          </select>
+          {b.csak_felelosnek !== false && !b.felelos && (
+            <span className="text-[12px] text-text-danger">
+              Nincs kiválasztva — addig Lara senkinek nem küld semmit, és javaslatot sem lehet jóváhagyni.
+            </span>
+          )}
+        </div>
+        <div className="mt-3 flex flex-col gap-3">
+          <Kapcsolo
+            cim="Minden csak a felelőshöz"
+            leiras="Bekapcsolva Lara MÁSNAK SEMMIT nem küld: minden értesítés csak a felelőshöz megy, Lara javaslatait csak ő hagyhatja jóvá vagy utasíthatja el, és kimenő levelet Lara csak az ő saját címére küldhet. Kikapcsolva a jogosultság szerinti régi működés érvényes."
+            aktiv={b.csak_felelosnek !== false}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ csak_felelosnek: v })}
+          />
+          <Kapcsolo
+            cim="Értesítés Lara javaslatairól"
+            leiras="Ha Lara egy feladatnál javaslatot tett (ellenőrzésre vagy jóváhagyásra vár) vagy adatot kér, a felelős értesítést kap, benne a feladat linkjével."
+            aktiv={limitBe("feladat_ertesites")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ feladat_ertesites: v })}
+          />
+        </div>
+      </div>
 
       <Kapcsolo
         cim="Tanulás és megfigyelés (L0)"
@@ -185,14 +241,14 @@ export function AdminBeallitasok({
           />
           <Kapcsolo
             cim="Napi összesítő"
-            leiras="Munkanapokon reggel értesítés (és bekapcsolt telefonon push) a jóváhagyásra jogosultaknak: hány tudás-jelölt vár, és melyek a legértékesebbek — ezek a Tudástárban „érték szerint” rendezve elöl állnak."
+            leiras="Munkanapokon reggel értesítés (és bekapcsolt telefonon push) a felelősnek: hány tudás-jelölt vár, és melyek a legértékesebbek — ezek a Tudástárban „érték szerint” rendezve elöl állnak."
             aktiv={limitBe("napi_osszesito")}
             tiltva={!canManage || folyamatban || b.kill_switch}
             onValt={(v) => limitMent({ napi_osszesito: v })}
           />
           <Kapcsolo
             cim="Értesítés Lara kérdéseiről"
-            leiras="Új kérdésnél értesítés (és push) annak, aki az adott számlát rögzítette — ő tudja, miért így döntött —, egyébként a Lara-felelősöknek. Több új kérdésnél egy összefoglaló értesítés megy."
+            leiras="Lara új kérdéseiről értesítés (és push) megy — „Minden csak a felelőshöz” módban a felelősnek, egyébként annak, aki az adott számlát rögzítette. Több új kérdésnél egy összefoglaló értesítés megy."
             aktiv={limitBe("kerdes_ertesites")}
             tiltva={!canManage || folyamatban || b.kill_switch}
             onValt={(v) => limitMent({ kerdes_ertesites: v })}

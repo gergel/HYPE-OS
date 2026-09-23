@@ -40,7 +40,7 @@ from app.admin_agent.enums import (
 )
 from app.admin_agent.memory import kapcsolodo_tudas
 from app.admin_agent.policy import Decision
-from app.admin_agent.settings_service import resolve_decision
+from app.admin_agent.settings_service import lara_felelos, resolve_decision
 from app.models.admin_agent import (
     ActionProposal,
     ActionTrace,
@@ -179,6 +179,8 @@ def _feladat(db: Session, bejovo: BejovoSzamla, se: SourceEvent) -> AdminTask:
         project_code_id=bejovo.cel_project_code_id,
         partner_nev=(bejovo.kibocsato_nev or "").strip()[:255] or None,
         forras_referenciak={"bejovo_szamla_id": bejovo.id},
+        # Minden Lara-feladat felelőse Lara felelőse (lásd settings_service).
+        felelos_id=getattr(lara_felelos(db), "id", None),
     )
     db.add(t)
     db.flush()
@@ -539,6 +541,7 @@ def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual"
 
     # A feladat állapota a döntés + az ellenőrzések szerint. L0-ban a döntés
     # BLOCKED → a javaslat kész, de árnyék (nem hajtódik végre).
+    regi_allapot = t.allapot
     if not ellenorzesek["rendben"]:
         t.allapot = TaskState.NEEDS_INFO.value
         t.blokkolo_ok = "; ".join(ellenorzesek["hianyok"])
@@ -562,6 +565,10 @@ def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual"
 
     t.kockazat = SZAMLA_KOCKAZAT.value
     t.row_version += 1
+    # A felelős értesítése: ellenőrzésre / jóváhagyásra vár (lásd osszesito.py).
+    from app.admin_agent.osszesito import feladat_ertesites
+
+    feladat_ertesites(db, t, regi_allapot)
 
     run.allapot = AgentRunState.SUCCEEDED.value
     run.veg_at = _most()
