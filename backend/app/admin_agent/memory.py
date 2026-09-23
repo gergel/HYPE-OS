@@ -10,6 +10,8 @@ visszakeresésbe (csak `tanulasi_halmaz="jovahagyott"`). Egyszervezetes rendszer
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from functools import lru_cache
 
 from sqlalchemy import select, text
@@ -19,6 +21,27 @@ from app.admin_agent.enums import RuleState
 from app.models.admin_agent import MemoryChunk, PlaybookRule
 
 MAX_TALALAT = 8
+#: A partner-szűrésnél ennyi legutóbbi jóváhagyott példát nézünk végig.
+_PELDA_ABLAK = 2000
+#: Cégforma-/vállalkozói utótagok: a „Zseni Boglárka EV" és a „Zseni Boglárka"
+#: ugyanaz a partner.
+_CEGFORMA = re.compile(r"\b(kft|bt|zrt|nyrt|kkt|ev|e v|egyeni vallalkozo|egyeni vallalkozas|ltd|gmbh|inc)\b")
+
+
+def partner_kulcs(nev: str | None) -> str:
+    """Összevetésre normalizált partnernév: kisbetű, ékezet nélkül, cégforma és
+    írásjelek nélkül (pl. „Turcsik Márk EV" → "turcsik mark")."""
+    if not nev:
+        return ""
+    s = unicodedata.normalize("NFKD", nev.lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = re.sub(r"[^a-z0-9 ]+", " ", s)
+    s = _CEGFORMA.sub(" ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _partner_egyezik(kulcs: str, szoveg: str | None) -> bool:
+    return len(kulcs) >= 3 and kulcs in partner_kulcs(szoveg)
 #: A régi (a tanulás kezdete előtti / Notion-korszakbeli) példák jelölése a
 #: modell felé: kisebb súllyal veendő, az újabb gyakorlat felülírja.
 REGI_ELOTAG = "[RÉGI, a HYPE OS előtti (Notion-korszakbeli) eset — kisebb súllyal] "
@@ -44,7 +67,7 @@ def kapcsolodo_tudas(db: Session, *, hatokor: str, partner: str | None = None) -
 
     Hasonló eset csak akkor kerül mellé, ha a partner neve egyezik — kevés
     releváns találatnál NEM egészítjük ki irreleváns példákkal (master prompt 11.)."""
-    r = retrieve(db, hatokor=hatokor, limit=5)
+    r = retrieve(db, hatokor=hatokor, partner=partner, limit=5)
     peldak: list[dict] = []
     if partner and partner.strip():
         peldak = retrieve(db, hatokor=hatokor, query=partner.strip(), limit=5)["peldak"]
@@ -69,18 +92,28 @@ def retrieve(
     hatokor: str,
     query: str | None = None,
     limit: int = MAX_TALALAT,
+    partner: str | None = None,
 ) -> dict:
     """Aktív szabályok + jóváhagyott példák az adott hatókörhöz. A `query` a
-    szöveges szűrésre szolgál (pontos/szöveges fallback). Kevés releváns találat
-    esetén NEM egészítjük ki irreleváns elemekkel."""
+    partnerre szűr (normalizált névvel: cégforma, ékezet, kisbetű nem számít).
+    A PARTNERHEZ KÖTÖTT szabály (`feltetelek.partner`) csak az adott partnernél
+    jön elő, az általános szabály mindig. Kevés releváns találat esetén NEM
+    egészítjük ki irreleváns elemekkel."""
     limit = max(1, min(limit, 10))
 
-    szabalyok = db.scalars(
+    aktiv = db.scalars(
         select(PlaybookRule)
         .where(PlaybookRule.hatokor == hatokor, PlaybookRule.allapot == RuleState.ACTIVE.value)
         .order_by(PlaybookRule.prioritas.desc(), PlaybookRule.id.desc())
-        .limit(limit)
     ).all()
+    p_kulcs = partner_kulcs(partner)
+    sajat = [
+        r for r in aktiv
+        if (r.feltetelek or {}).get("partner") and p_kulcs
+        and ((r.feltetelek or {})["partner"] == p_kulcs or _partner_egyezik((r.feltetelek or {})["partner"], p_kulcs))
+    ]
+    altalanos = [r for r in aktiv if not (r.feltetelek or {}).get("partner")]
+    szabalyok = (sajat + altalanos)[:limit]
 
     felt = [
         MemoryChunk.hatokor == hatokor,
@@ -88,16 +121,19 @@ def retrieve(
         MemoryChunk.ervenyes.is_(True),
         MemoryChunk.visszavont.is_(False),
     ]
-    if query and query.strip():
-        felt.append(MemoryChunk.tartalom.ilike(f"%{query.strip()}%"))
     # A tanulás kezdete óta (a HYPE OS felületén) keletkezett példák ELŐBB;
     # a régi (Notion-korszakbeli) jóváhagyott példa csak utánuk, ha van hely.
-    peldak = db.scalars(
-        select(MemoryChunk)
-        .where(*felt)
-        .order_by(MemoryChunk.regi_korszak.asc(), MemoryChunk.id.desc())
-        .limit(limit)
-    ).all()
+    rendezes = (MemoryChunk.regi_korszak.asc(), MemoryChunk.id.desc())
+    if query and query.strip():
+        q_kulcs = partner_kulcs(query)
+        if len(q_kulcs) >= 3:
+            jeloltek = db.scalars(select(MemoryChunk).where(*felt).order_by(*rendezes).limit(_PELDA_ABLAK)).all()
+            peldak = [m for m in jeloltek if _partner_egyezik(q_kulcs, m.tartalom)][:limit]
+        else:
+            felt.append(MemoryChunk.tartalom.ilike(f"%{query.strip()}%"))
+            peldak = db.scalars(select(MemoryChunk).where(*felt).order_by(*rendezes).limit(limit)).all()
+    else:
+        peldak = db.scalars(select(MemoryChunk).where(*felt).order_by(*rendezes).limit(limit)).all()
 
     return {
         "modszer": "pgvector" if pgvector_elerheto_e() else "pontos_szoveges_fallback",

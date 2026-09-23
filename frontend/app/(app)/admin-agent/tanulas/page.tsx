@@ -3,7 +3,8 @@ import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
 import { AdminTanulasVezerlok } from "@/components/admin-agent/AdminTanulasVezerlok";
-import { getAdminEvaluations, getAdminLearningRuns, getMyPagePermissions } from "@/lib/api";
+import { AdminVisszajatszas } from "@/components/admin-agent/AdminVisszajatszas";
+import { getAdminEvaluations, getAdminLearningRuns, getAdminReplaySummary, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
@@ -18,7 +19,11 @@ export default async function AdminAgentTanulasPage() {
   if (!canView) redirect("/nincs-jogosultsag");
   const canRun = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
 
-  const [tanulasok, evalok] = await Promise.all([getAdminLearningRuns(), getAdminEvaluations()]);
+  const [tanulasok, evalok, visszajatszas] = await Promise.all([
+    getAdminLearningRuns(),
+    getAdminEvaluations(),
+    getAdminReplaySummary(),
+  ]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -28,6 +33,10 @@ export default async function AdminAgentTanulasPage() {
         <div className="flex flex-col gap-4">
           <Card title="Vezérlés">
             <AdminTanulasVezerlok canRun={canRun} />
+          </Card>
+
+          <Card title="Visszajátszás és találati arány">
+            <AdminVisszajatszas kezdo={visszajatszas} canRun={canRun} />
           </Card>
 
           <Card title="Háttér-tanuló futások">
@@ -66,6 +75,11 @@ export default async function AdminAgentTanulasPage() {
           </Card>
 
           <Card title="Értékelő futások (eval)">
+            <p className="mb-3 text-[12px] text-text-muted">
+              A beépített biztonsági esetek (pl. banki utalás mindig tiltott, L0-ban nincs végrehajtás): azt igazolja,
+              hogy a tanulás nem lazította a korlátokat — ezért kell átmennie élesítés előtt. Azt, hogy az ügynök
+              mennyire talál, a fenti „Találati arány” méri.
+            </p>
             {!evalok || evalok.elemek.length === 0 ? (
               <p className="text-[13px] text-text-secondary">Még nem futott értékelés.</p>
             ) : (

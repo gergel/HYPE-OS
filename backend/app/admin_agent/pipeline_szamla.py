@@ -35,6 +35,7 @@ from app.admin_agent.enums import (
     ApprovalState,
     ProposalState,
     RiskClass,
+    RuleState,
     TaskState,
     TaskType,
 )
@@ -47,9 +48,11 @@ from app.models.admin_agent import (
     AdminTask,
     AgentRun,
     Approval,
+    PlaybookRule,
     SourceEvent,
 )
-from app.models.bejovo_szamla import BejovoSzamla
+from app.models.bejovo_szamla import CEL_TIPUSOK, BejovoSzamla
+from app.models.project_code import ProjectCode
 
 #: A számla-felvezetés (belső pénzügyi rekord írása) kockázati osztálya.
 #: Szerver-oldali, a modell nem csökkentheti.
@@ -343,12 +346,66 @@ def _modell_atnezes(
     return eredmeny
 
 
+def _szabaly_alkalmazasa(db: Session, bejovo: BejovoSzamla, payload: dict) -> dict | None:
+    """Az ÉLESÍTETT, partnerhez kötött szabály (visszajátszásból vagy kézzel
+    felvéve, `feltetelek.partner` + `cel_tipus`) determinisztikus alkalmazása —
+    modell-kulcs nélkül is. Csak ÜRES mezőt tölt: ha az érkeztető már javasolt
+    mást, nem írja felül, csak figyelmeztet (ember dönt). A projektkódot csak
+    akkor tölti, ha a szabályban pontosan egy (létező) kód van."""
+    from app.admin_agent.memory import partner_kulcs
+
+    kulcs = partner_kulcs(bejovo.kibocsato_nev)
+    if len(kulcs) < 3:
+        return None
+    szabalyok = [
+        r for r in db.scalars(
+            select(PlaybookRule)
+            .where(PlaybookRule.hatokor == "szamla", PlaybookRule.allapot == RuleState.ACTIVE.value)
+            .order_by(PlaybookRule.prioritas.desc(), PlaybookRule.id.desc())
+        ).all()
+        if (r.feltetelek or {}).get("partner") == kulcs and (r.feltetelek or {}).get("cel_tipus") in CEL_TIPUSOK
+    ]
+    if not szabalyok:
+        return None
+    tipusok = {r.feltetelek["cel_tipus"] for r in szabalyok}
+    if len(tipusok) > 1:
+        return {"szabaly_idk": [r.id for r in szabalyok], "alkalmazva": {},
+                "figyelmeztetes": "Több, egymásnak ellentmondó aktív szabály vonatkozik erre a partnerre — ember dönt."}
+    r = szabalyok[0]
+    tipus = r.feltetelek["cel_tipus"]
+    alkalmazva: dict = {}
+    figyelmeztetes = None
+    if not payload.get("cel_tipus"):
+        payload["cel_tipus"] = tipus
+        alkalmazva["cel_tipus"] = tipus
+    elif payload["cel_tipus"] != tipus:
+        figyelmeztetes = (
+            f"Az aktív szabály („{r.cim}”) szerint {tipus}, az érkeztető {payload['cel_tipus']}-t javasolt — ellenőrizd."
+        )
+    kodok = r.feltetelek.get("projektkod_idk") or []
+    if (
+        payload.get("cel_tipus") == tipus
+        and tipus in ("kiadas_uj", "auto")
+        and not payload.get("cel_project_code_id")
+        and len(kodok) == 1
+        and db.get(ProjectCode, int(kodok[0])) is not None
+    ):
+        payload["cel_project_code_id"] = int(kodok[0])
+        alkalmazva["cel_project_code_id"] = int(kodok[0])
+    return {"szabaly_id": r.id, "cim": r.cim, "alkalmazva": alkalmazva, "figyelmeztetes": figyelmeztetes}
+
+
 def _bizonytalansag(modell: dict, ellenorzesek: dict) -> float | None:
     """0 = biztos, 1 = bizonytalan. Ismeretlen (nincs modell) → None: emberi
     ellenőrzés, nem hamis nulla."""
     if modell.get("konfliktus"):
         return 1.0
     if not modell.get("hasznalt"):
+        # Modell nélkül: ha élesített szabály töltötte ki a célt, az alacsony
+        # (de nem nulla) bizonytalanság; egyébként ismeretlen.
+        szabaly = ellenorzesek.get("szabaly") or {}
+        if szabaly.get("alkalmazva"):
+            return 0.5 if not ellenorzesek.get("rendben") else 0.3
         return None
     b = modell.get("bizonytalansag")
     if b is None:
@@ -402,6 +459,8 @@ def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual"
     # A megtanult, JÓVÁHAGYOTT tudás (aktív szabályok + hasonló esetek ugyanattól a
     # partnertől) — ezt kapja meg a modell is, és a feladat oldalán is látszik.
     tudas = kapcsolodo_tudas(db, hatokor="szamla", partner=bejovo.kibocsato_nev)
+    # Élesített partner-szabály (modell nélkül is): csak üres mezőt tölt.
+    szabaly = _szabaly_alkalmazasa(db, bejovo, payload)
 
     # Modell-átnézés (Gemini): a kinyert adatok + érkeztető-javaslat + tudás
     # alapján céltípust/projektkódot javasol. A szerver dönt a befogadásról.
@@ -415,6 +474,10 @@ def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual"
         ellenorzesek["rendben"] = False
     ellenorzesek["kapcsolodo_tudas"] = tudas
     ellenorzesek["modell"] = modell
+    if szabaly:
+        ellenorzesek["szabaly"] = szabaly
+        if szabaly.get("figyelmeztetes"):
+            ellenorzesek.setdefault("figyelmeztetesek", []).append(szabaly["figyelmeztetes"])
     t.uncertainty = _bizonytalansag(modell, ellenorzesek)
     if modell.get("osszefoglalo"):
         t.osszefoglalo = modell["osszefoglalo"]

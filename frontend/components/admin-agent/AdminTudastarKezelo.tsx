@@ -5,6 +5,17 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import type { AdminMemory, AdminRule } from "@/lib/api";
 import { TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
+import { AdminSzabalyUrlap } from "@/components/admin-agent/AdminSzabalyUrlap";
+
+/** A szabály feltételeinek rövid, emberi címkéje (partner / cél). */
+function feltetelCimke(r: AdminRule): string {
+  const f = (r.feltetelek ?? {}) as Record<string, unknown>;
+  const reszek: string[] = [];
+  if (f.partner) reszek.push(`partner: ${String(f.partner_nev ?? f.partner)}`);
+  if (f.forras === "visszajatszas") reszek.push("visszajátszásból");
+  if (f.forras === "kezi") reszek.push("kézi");
+  return reszek.length ? ` · ${reszek.join(" · ")}` : "";
+}
 
 const RULE_ALLAPOT: Record<string, string> = {
   draft: "Vázlat",
@@ -329,13 +340,25 @@ export function AdminTudastarKezelo({
 
       <Szekcio
         cim={`Szabály-jelöltek (${jeloltSzabaly.length})`}
-        leiras="Gépi javaslatok ismétlődő javításokból. Élesítés csak sikeres értékelés (Tanulás → 3. Értékelés) után lehetséges."
+        leiras="Gépi javaslatok (ismétlődő javításokból és a visszajátszásból) és a kézzel felvett vázlatok. Élesítés csak sikeres értékelés (Tanulás → 3. Értékelés) után lehetséges."
       >
+        {canEdit && (
+          <AdminSzabalyUrlap
+            onLetrehozva={(r) => {
+              setSzabalyok((p) => [r, ...p]);
+              setUzenet("Szabály vázlatként mentve — a Szabály-jelöltek között élesítheted (sikeres értékelés után).");
+            }}
+          />
+        )}
         {jeloltSzabaly.length === 0 ? (
-          <Ures szoveg="Nincs szabály-jelölt. Legalább két hasonló javításból születik egy." />
+          <Ures szoveg="Nincs szabály-jelölt. Ismétlődő javításokból, a visszajátszásból (Tanulás oldal) vagy kézzel születik." />
         ) : (
           jeloltSzabaly.map((r) => (
-            <Sor key={r.id} cimke={`${r.hatokor} · ${RULE_ALLAPOT[r.allapot] ?? r.allapot}`} szoveg={`${r.cim} — ${r.tartalom}`}>
+            <Sor
+              key={r.id}
+              cimke={`${TIPUS_CIMKE[r.hatokor] ?? r.hatokor} · ${RULE_ALLAPOT[r.allapot] ?? r.allapot}${feltetelCimke(r)}`}
+              szoveg={`${r.cim} — ${r.tartalom}`}
+            >
               {canEdit && (
                 <>
                   <button
@@ -367,7 +390,11 @@ export function AdminTudastarKezelo({
         ) : (
           <>
             {aktivSzabaly.map((r) => (
-              <Sor key={`r${r.id}`} cimke={`Szabály · ${r.hatokor}`} szoveg={`${r.cim} — ${r.tartalom}`}>
+              <Sor
+                key={`r${r.id}`}
+                cimke={`Szabály · ${TIPUS_CIMKE[r.hatokor] ?? r.hatokor}${feltetelCimke(r)}`}
+                szoveg={`${r.cim} — ${r.tartalom}`}
+              >
                 {canEdit && (
                   <button
                     type="button"

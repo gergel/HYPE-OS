@@ -875,10 +875,17 @@ def rules_lista(
 
 class RuleCreateIn(BaseModel):
     hatokor: str
-    cim: str
-    tartalom: str
+    cim: str = Field(min_length=3, max_length=200)
+    tartalom: str = Field(min_length=3, max_length=4000)
     feltetelek: dict | None = None
     prioritas: int = 0
+    #: Opcionális: a szabály CSAK ennél a partnernél érvényes (normalizált névvel).
+    partner: str | None = None
+    #: Opcionális (számlánál): a partner számláinak céltípusa — ezzel a szabály
+    #: gépileg is alkalmazható (modell nélkül is kitölti az üres célt).
+    cel_tipus: str | None = None
+    #: Opcionális: projektkód (pl. HYPE26-0012) — csak létező kód fogadható el.
+    projektkod: str | None = None
 
 
 @router.post("/rules")
@@ -887,14 +894,42 @@ def rule_letrehozas(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """Kézi szabály felvétele DRAFT állapotban. Aktívvá csak külön aktiválással
-    válik (a gépi jelölt sem aktiválhatja magát)."""
+    """Kézi szabály felvétele DRAFT állapotban (a Tudástárból: a fejekben lévő
+    szokások). Aktívvá csak értékelés után, külön élesítéssel válik (a gépi
+    jelölt sem aktiválhatja magát). Partnerhez kötve csak annál a partnernél
+    jön elő; céltípussal számlánál gépileg is alkalmazható."""
+    from app.admin_agent.memory import partner_kulcs
+    from app.models.bejovo_szamla import CEL_TIPUSOK
+    from app.models.project_code import ProjectCode
+
+    hatokor = payload.hatokor.strip()
+    if hatokor not in _TIPUS_ERTEKEK:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen feladattípus: {hatokor}")
+    feltetelek = dict(payload.feltetelek or {})
+    prioritas = payload.prioritas
+    if payload.partner and payload.partner.strip():
+        kulcs = partner_kulcs(payload.partner)
+        if len(kulcs) < 3:
+            raise HTTPException(status_code=400, detail="A partner neve túl rövid az azonosításhoz.")
+        feltetelek.update({"partner": kulcs, "partner_nev": payload.partner.strip(), "forras": "kezi"})
+        prioritas = max(prioritas, 10)  # partnerre szabott: az általános előtt
+    if payload.cel_tipus:
+        if hatokor != "szamla" or payload.cel_tipus not in CEL_TIPUSOK:
+            raise HTTPException(status_code=400, detail="Céltípus csak számla-szabálynál, a megengedett értékekből adható meg.")
+        if not feltetelek.get("partner"):
+            raise HTTPException(status_code=400, detail="Céltípushoz partner is kell (különben minden számlára vonatkozna).")
+        feltetelek["cel_tipus"] = payload.cel_tipus
+    if payload.projektkod and payload.projektkod.strip():
+        pc = db.scalar(select(ProjectCode).where(ProjectCode.projektkod.ilike(payload.projektkod.strip())))
+        if pc is None:
+            raise HTTPException(status_code=400, detail=f"Nincs ilyen projektkód: {payload.projektkod.strip()}")
+        feltetelek["projektkod_idk"] = [pc.id]
     r = PlaybookRule(
-        hatokor=payload.hatokor.strip(),
+        hatokor=hatokor,
         cim=payload.cim.strip(),
-        tartalom=payload.tartalom,
-        feltetelek=payload.feltetelek,
-        prioritas=payload.prioritas,
+        tartalom=payload.tartalom.strip(),
+        feltetelek=feltetelek or None,
+        prioritas=prioritas,
         verzio=1,
         allapot=RuleState.DRAFT.value,
     )
@@ -1138,6 +1173,34 @@ def megfigyeles_inditas(
     eredmeny = megfigyeles(db, visszatekintes_nap=visszatekintes_nap, kenyszeritett=True, kezdettol=kezdettol)
     db.commit()
     return eredmeny
+
+
+@router.post("/replays")
+def visszajatszas_inditas(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Visszajátszás: a tanulás kezdete óta rögzített számláknál összeveti az
+    érkeztető eredeti javaslatát a végső emberi döntéssel. Példa-JELÖLTEK és
+    partnerenkénti szabály-JELÖLTEK születnek (emberi jóváhagyásig nem élesek),
+    és kiszámolja a találati arányt. Üzleti rekord nem változik."""
+    from app.admin_agent.visszajatszas import visszajatszas
+
+    eredmeny = visszajatszas(db)
+    db.commit()
+    return eredmeny
+
+
+@router.get("/replays/summary")
+def visszajatszas_osszesites(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Találati arány: az érkeztető (és ahol volt, az ügynök) javaslata hányszor
+    egyezett a végső emberi döntéssel — összesen és hetente."""
+    from app.admin_agent.visszajatszas import osszesites
+
+    return osszesites(db)
 
 
 def _memory_sor(m: MemoryChunk) -> dict:

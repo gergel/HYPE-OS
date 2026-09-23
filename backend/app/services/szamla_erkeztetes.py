@@ -871,6 +871,23 @@ def javasol(db: Session, bejovo: BejovoSzamla) -> None:
         "figyelmeztetesek": figyelmeztetesek,
         "erosseg": erosseg,
         "bizonyitek": bizonyitek[:8],
+        # Pillanatkép a JAVASOLT célról: a felhasználó később átírhatja a
+        # cel_* mezőket, így utólag is összevethető, mit javasolt a rendszer
+        # és mit döntött az ember (Admin-Ágens visszajátszás / találati arány).
+        "javasolt_cel": {
+            mezo: getattr(bejovo, mezo)
+            for mezo in (
+                "cel_project_code_id",
+                "cel_project_id",
+                "cel_expense_id",
+                "cel_certificate_id",
+                "cel_internal_certificate_id",
+                "cel_kotelezettseg_idoszak_id",
+                "cel_auto_id",
+                "cel_kp_forgalom_id",
+            )
+            if getattr(bejovo, mezo, None) is not None
+        },
     }
     bejovo.allapot = ALLAPOT_ELLENORZENDO if tipus else ALLAPOT_PONTOSITAS
     if bejovo.dokumentum_tipus in ("modosito", "storno") and not (bejovo.kinyert or {}).get("mezok", {}).get(

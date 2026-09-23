@@ -659,6 +659,8 @@ export type AdminRule = {
   id: number;
   hatokor: string;
   cim: string;
+  /** partner (normalizált), partner_nev, cel_tipus, projektkod_idk, forras. */
+  feltetelek?: Record<string, unknown> | null;
   tartalom: string;
   prioritas: number;
   verzio: number;
@@ -725,6 +727,32 @@ export async function getAdminAudit(query = ""): Promise<{ osszesen: number; ele
 
 export async function getAdminTrustPolicies(): Promise<{ elemek: AdminTrustPolicy[] } | null> {
   return apiGet<{ elemek: AdminTrustPolicy[] }>("/api/v1/admin-agent/trust-policies");
+}
+
+export type AdminReplayHet = {
+  het: string;
+  szamlak: number;
+  egyezik: number;
+  elter: number;
+  nem_javasolt: number;
+  arany: number | null;
+};
+
+/** Visszajátszás: az érkeztető (és az ügynök) javaslata vs a végső emberi döntés. */
+export type AdminReplaySummary = {
+  szamlak: number;
+  egyezik: number;
+  elter: number;
+  nem_javasolt: number;
+  erkezteto_arany: number | null;
+  ugynok_egyezik: number;
+  ugynok_elter: number;
+  ugynok_arany: number | null;
+  hetente: AdminReplayHet[];
+};
+
+export async function getAdminReplaySummary(): Promise<AdminReplaySummary | null> {
+  return apiGet<AdminReplaySummary>("/api/v1/admin-agent/replays/summary");
 }
 
 export type AdminMemory = {

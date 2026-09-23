@@ -241,6 +241,30 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   jövőbeli kezdőnap elutasítva. Teljes backend: 119 zöld, 1 kihagyott; tsc +
   eslint + `next build` zöld; migráció le/fel próbálva.
 
+### L. Visszajátszás + találati arány + kézi szabály ✅
+- `app/admin_agent/visszajatszas.py`: a tanulás kezdete óta rögzített számláknál
+  az érkeztető eredeti javaslata (`BejovoSzamla.javaslat`) vs a végső emberi döntés
+  (cél, célrekord, projektkód; bontásnál a sorok kódjai) → egyezik / eltér / nem
+  javasolt. Számlánként konkrét példa-JELÖLT („a HELYES besorolás …, az érkeztető
+  tévesen …"); partnerenként ≥2 egybehangzó (≥80%) döntésből szabály-JELÖLT
+  (`feltetelek.partner/cel_tipus/projektkod_idk`, pending). Idempotens
+  (forrásesemény `visszajatszas`), üzleti rekord nem változik.
+- Találati arány (`GET /replays/summary`): érkeztető és — ha a döntés előtt
+  elemezte — az ügynök egyezése, összesen és hetente. `POST /replays` futtat.
+- Az érkeztető mostantól pillanatképet tesz a javaslatba a javasolt célról
+  (`javaslat.javasolt_cel`, additív kulcs) — a pontos utólagos összevetéshez.
+- Partner-egyezés normalizált névvel (`memory.partner_kulcs`: ékezet, kisbetű,
+  cégforma nélkül); a partnerhez kötött szabály csak annál a partnernél jön elő.
+- ÉLESÍTETT partner-szabály a számla-elemzésben MODELL NÉLKÜL is alkalmazódik:
+  csak üres célt/kódot tölt (érkeztetőt nem ír felül, eltérésnél figyelmeztet),
+  bizonytalanság 0,3.
+- Kézi szabály (`POST /rules` bővítve: partner, cel_tipus, projektkod, validálás;
+  vázlat → értékelés → élesítés). Felület: Tudástár „+ Új szabály kézzel",
+  Tanulás „Visszajátszás és találati arány" kártya, eval-magyarázat.
+- Tesztek: `test_admin_agent_visszajatszas.py` (5). Teljes backend: 124 zöld,
+  1 kihagyott; tsc + eslint + `next build` zöld. Dev-adaton nincs szept. 1. utáni
+  rögzített számla — a valós számok élesben látszanak.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

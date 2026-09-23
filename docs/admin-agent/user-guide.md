@@ -94,13 +94,21 @@ Minden lépés kattintással megy:
      elemzi, és megnyílik a feladat.
    - Projektkód-adatlap vagy Utókövetés → projektkód → **„Admin-Ágens teendők"**
      blokk → **„+ Feladat"** (szerződés / TIG / számla / utalás).
-5. **Javítsd, ha téved:** a feladat oldalán **„Javítás rögzítése"** → írd be a
+5. **Tanítsd a meglévő munkából (kevés új adatnál is):** Tanulás és minőség →
+   „**Visszajátszás a rögzített számlákon**". A szeptember 1. óta rögzített
+   számláknál összeveti, mit javasolt az érkeztető és mit döntöttetek; minden
+   számlából példa-jelölt, a partnerenként egybehangzó döntésekből szabály-jelölt
+   lesz (Tudástár). Ugyanitt a **Találati arány** mutatja hétről hétre, javul-e.
+   A fejetekben lévő szokásokat a Tudástárban **„+ Új szabály kézzel"** írhatod be
+   (partnerhez és — számlánál — célhoz kötve). Élesítés után az ügynök ennél a
+   partnernél modell nélkül is ezt javasolja, ha az érkeztető nem döntött.
+6. **Javítsd, ha téved:** a feladat oldalán **„Javítás rögzítése"** → írd be a
    helyes értéket. Ez a legerősebb tanulási jel.
-6. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
+7. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
    megvárod az éjszakai futást). Két hasonló javításból **szabály-jelölt** lesz.
-7. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →
+8. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →
    szabály-jelölt → **„Élesítés"**.
-8. **Kövesd:** az **Áttekintés** „Tanulás állapota" kártyáján látod a számokat
+9. **Kövesd:** az **Áttekintés** „Tanulás állapota" kártyáján látod a számokat
    (megfigyelt lépés, javítás, példa-/szabály-jelölt, jóváhagyott példa, aktív
    szabály), a **Napló**ban pedig minden egyes megfigyelést.
 
