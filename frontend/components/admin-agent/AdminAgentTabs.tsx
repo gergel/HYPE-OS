@@ -9,12 +9,13 @@ const FULEK = [
   { href: "/admin-agent/jovahagyasok", label: "Jóváhagyások" },
   { href: "/admin-agent/tudastar", label: "Tudástár" },
   { href: "/admin-agent/tudashalo", label: "Tudásháló" },
+  { href: "/admin-agent/kerdesek", label: "Kérdések" },
   { href: "/admin-agent/tanulas", label: "Tanulás és minőség" },
   { href: "/admin-agent/naplo", label: "Napló" },
   { href: "/admin-agent/beallitasok", label: "Beállítások" },
 ];
 
-/** A HYRON aloldalak közti navigáció (a meglévő sötét design tokenekkel). */
+/** Lara aloldalak közti navigáció (a meglévő sötét design tokenekkel). */
 export function AdminAgentTabs() {
   const path = usePathname();
   return (

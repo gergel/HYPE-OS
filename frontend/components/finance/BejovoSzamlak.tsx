@@ -251,7 +251,7 @@ export function BejovoSzamlak({
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         type="button"
-                        title="HYRON árnyék-elemzés indítása erre a számlára (nem hajt végre semmit)"
+                        title="Lara árnyék-elemzés indítása erre a számlára (nem hajt végre semmit)"
                         onClick={async () => {
                           const res = await authFetch(`/api/v1/admin-agent/tasks/from-bejovo/${b.id}`, { method: "POST" });
                           if (res.ok) {
@@ -261,7 +261,7 @@ export function BejovoSzamlak({
                         }}
                         className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12px] text-text-secondary hover:bg-surface-3"
                       >
-                        HYRON
+                        Lara
                       </button>
                       <button
                         type="button"

@@ -6,9 +6,9 @@ import { getAdminAudit, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
-const SZEREPLO_CIMKE: Record<string, string> = { agent: "HYRON", human: "Ember", system: "Rendszer" };
+const SZEREPLO_CIMKE: Record<string, string> = { agent: "Lara", human: "Ember", system: "Rendszer" };
 
-/** HYRON — NAPLÓ (auditnyomvonal).
+/** Lara — NAPLÓ (auditnyomvonal).
  *
  * Append-only: az alkalmazásszerepkör nem törölheti, csak olvasható. Minden
  * elemzés, policy-döntés és végrehajtás nyoma itt látszik. */

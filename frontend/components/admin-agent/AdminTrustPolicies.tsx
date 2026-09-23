@@ -15,7 +15,7 @@ const SZINT_LEIRAS: Record<string, string> = {
   L4: "Csak külön engedélyezett, szűk körben",
 };
 
-/** HYRON — bizalmi szintek (kliens).
+/** Lara — bizalmi szintek (kliens).
  *
  * Feladattípusonként állítható a bizalmi szint. A magasabb szint SEM oldja fel
  * az R3-tiltást (a policy engine dönt); a modell a saját szintjét nem

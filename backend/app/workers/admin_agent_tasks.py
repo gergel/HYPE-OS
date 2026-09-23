@@ -1,8 +1,10 @@
-"""HYRON háttérfeladatok (Celery Beat a megosztott celery_app-on).
+"""Lara háttérfeladatok (Celery Beat a megosztott celery_app-on).
 
 * Éjszakai (02:00, szervezeti időzóna) háttér-tanuló (distill) — a korrekciókból
   szabály-/példa-JELÖLTEK; nem aktivál semmit.
 * Heti értékelés (eval) — a biztonsági/pénzügyi invariánsok regressziós őre.
+* Kétóránkénti önellenőrzés — Lara a rögzített munkán ellenőrzi a tudását, és
+  kérdez, ahol nem érti az eltérést (lásd admin_agent/onellenorzes.py).
 
 A beat itt regisztrálódik a meglévő workerre (lásd calendar_tasks.py), külön
 Railway service nélkül (a worker "-B" flaggel embedded beatet is futtat). A
@@ -35,6 +37,11 @@ celery_app.conf.beat_schedule = {
         # Hétfő 03:00.
         "schedule": crontab(hour=3, minute=0, day_of_week=1),
     },
+    "admin-agent-self-check": {
+        "task": "admin_agent.self_check",
+        # Kétóránként (:15-kor) — csak bekapcsolt „Tanulás és megfigyelés" forrással.
+        "schedule": crontab(minute=15, hour="*/2"),
+    },
     "admin-agent-observer": {
         "task": "admin_agent.observer",
         # Félóránként — csak ha a „Tanulás és megfigyelés" forrás be van kapcsolva.
@@ -56,7 +63,7 @@ def observer_task() -> dict | None:
         return eredmeny
     except Exception:
         db.rollback()
-        logger.exception("HYRON megfigyelő futás sikertelen.")
+        logger.exception("Lara megfigyelő futás sikertelen.")
         raise
     finally:
         db.close()
@@ -74,14 +81,14 @@ def nightly_distill_task() -> dict | None:
     db = SessionLocal()
     try:
         if not (get_settings(db).module_enabled or engedelyezve(db)):
-            logger.debug("HYRON distill kihagyva: sem a modul, sem a tanulási forrás nincs bekapcsolva.")
+            logger.debug("Lara distill kihagyva: sem a modul, sem a tanulási forrás nincs bekapcsolva.")
             return None
         lr = distill(db, trigger="nightly")
         db.commit()
         return {"learning_run_id": lr.id, "feldolgozott": lr.feldolgozott_korrekciok}
     except Exception:
         db.rollback()
-        logger.exception("HYRON éjszakai distill sikertelen.")
+        logger.exception("Lara éjszakai distill sikertelen.")
         raise
     finally:
         db.close()
@@ -101,7 +108,33 @@ def weekly_eval_task() -> dict | None:
         return {"eval_run_id": run.id, "atment": run.atment, "kritikus_hiba": run.kritikus_hiba}
     except Exception:
         db.rollback()
-        logger.exception("HYRON heti eval sikertelen.")
+        logger.exception("Lara heti eval sikertelen.")
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="admin_agent.self_check")
+def self_check_task() -> dict | None:
+    """Lara folyamatos önellenőrzése: a friss rögzítések visszajátszása, majd a
+    jelenlegi tudással „vak" jóslat a rögzített számlákra, összevetés a
+    valósággal, és kérdés ott, ahol nem érti az eltérést. Csak bekapcsolt
+    „Tanulás és megfigyelés" forrással fut; üzleti rekordot nem módosít."""
+    from app.admin_agent.observer import engedelyezve
+    from app.admin_agent.onellenorzes import onellenorzes
+    from app.admin_agent.visszajatszas import visszajatszas
+
+    db = SessionLocal()
+    try:
+        if not engedelyezve(db):
+            return None
+        visszajatszas(db)
+        eredmeny = onellenorzes(db, trigger="onellenorzes:utemezett")
+        db.commit()
+        return eredmeny
+    except Exception:
+        db.rollback()
+        logger.exception("Lara önellenőrzése sikertelen.")
         raise
     finally:
         db.close()

@@ -1,4 +1,4 @@
-"""HYRON — visszakeresés (retrieval).
+"""Lara — visszakeresés (retrieval).
 
 Feladatonként legfeljebb néhány (5–10) RELEVÁNS, ÉRVÉNYES, JÓVÁHAGYOTT szabályt
 és példát ad vissza. A pgvector OPCIONÁLIS: elérhetőségét futásidőben nézzük, és

@@ -1,4 +1,4 @@
-"""HYRON beállítások és bizalmi szint feloldása, plus a policy-döntés
+"""Lara beállítások és bizalmi szint feloldása, plus a policy-döntés
 összeállítása. Ez a modul köti össze az adatbázis-beli kapcsolókat és
 trust-policy sorokat a policy engine-nel (policy.decide)."""
 

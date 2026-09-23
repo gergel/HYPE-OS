@@ -1,4 +1,4 @@
-"""HYRON: tanulási korszak a példákon.
+"""Lara: tanulási korszak a példákon.
 
 A cég 2026. szeptember 1. óta a HYPE OS felületén dolgozik (előtte Notionben).
 A megfigyelt példák mellé eltesszük a forrásrekord keletkezését és azt, hogy

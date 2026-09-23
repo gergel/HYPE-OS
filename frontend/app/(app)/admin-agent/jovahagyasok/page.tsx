@@ -7,9 +7,9 @@ import { getAdminAgentApprovals, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
-/** HYRON — JÓVÁHAGYÁSOK.
+/** Lara — JÓVÁHAGYÁSOK.
  *
- * HYRON által előkészített, ember jóváhagyására váró műveletek. A döntés a
+ * Lara által előkészített, ember jóváhagyására váró műveletek. A döntés a
  * konkrét javaslathoz (payload-hash) kötött; a végrehajtás a szerver-oldali
  * guard-láncon (policy, kapcsolók, idempotencia) megy át. */
 export default async function AdminAgentJovahagyasokPage() {

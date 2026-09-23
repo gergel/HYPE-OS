@@ -1,4 +1,4 @@
-"""HYRON — TIG/szerződés/e-mail tervezet tesztjei.
+"""Lara — TIG/szerződés/e-mail tervezet tesztjei.
 
 VALÓDI MODELLHÍVÁS NINCS: a hamis adapter (`llm.teszt_adapter`) adja a választ.
 A teendő-listát és a tudást monkeypatch-csel adjuk, így a tervező logikája
@@ -105,8 +105,8 @@ def test_modell_igazolt_osszeget_elfogad(monkeypatch):
     k = tervezo.tig_szerzodes_tervezet(None, _feladat(), None)
     t = k["payload"]["tetelek"][0]
     assert t["mezok"]["netto_osszeg"] == 70000
-    assert t["forrasok"]["netto_osszeg"] == "HYRON (igazolt korábbi összeg)"
-    assert t["forrasok"]["megbizas_targya"] == "HYRON (korábbi esetek alapján)"
+    assert t["forrasok"]["netto_osszeg"] == "Lara (igazolt korábbi összeg)"
+    assert t["forrasok"]["megbizas_targya"] == "Lara (korábbi esetek alapján)"
     assert k["modell"]["allapot"] == "kesz"
     assert k["eszkoz"] == "tig.piszkozat_mentes"
 

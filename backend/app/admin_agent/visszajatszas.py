@@ -1,4 +1,4 @@
-"""HYRON — visszajátszás a rögzített számlákon + találati arány.
+"""Lara — visszajátszás a rögzített számlákon + találati arány.
 
 Amikor kevés az új adat, a MÁR ELVÉGZETT munkából is lehet tanulni: a tanulás
 kezdete óta rögzített (jóváhagyott) beérkező számláknál összevetjük, mit
@@ -9,14 +9,14 @@ Minden számlából:
 * PÉLDA-JELÖLT a végső emberi döntéssel (konkrétan: partner → cél, projektkód),
   megjelölve, hogy az érkeztető eltalálta-e — emberi jóváhagyásig NEM éles;
 * forrásesemény az összevetés eredményével (ebből a TALÁLATI ARÁNY);
-* ha a HYRON már elemezte a számlát a döntés ELŐTT, az ő javaslatát is
-  összevetjük (HYRON saját találati aránya).
+* ha Lara már elemezte a számlát a döntés ELŐTT, az ő javaslatát is
+  összevetjük (Lara saját találati aránya).
 
 Partnerenként, ha legalább két eset egybehangzóan ugyanoda került, SZABÁLY-
 JELÖLT születik (pl. „Turcsik Márk számlái: új kiadás a HYPE26-0012 kódon").
 A szabály csak értékelés után, emberi élesítéssel lesz aktív.
 
-Csak olvas + HYRON saját tábláiba ír; üzleti rekord nem változik.
+Csak olvas + Lara saját tábláiba ír; üzleti rekord nem változik.
 Idempotens: egy számla egy jóváhagyása egyszer kerül feldolgozásra.
 """
 
@@ -185,7 +185,7 @@ def osszevet(javasolt: Cel, vegso: Cel) -> str:
 
 
 def _ugynok_javaslata(db: Session, b: BejovoSzamla) -> Cel | None:
-    """A HYRON utolsó, a jóváhagyás ELŐTT készült javaslata (ha volt)."""
+    """Lara utolsó, a jóváhagyás ELŐTT készült javaslata (ha volt)."""
     task = db.scalar(
         select(AdminTask).where(AdminTask.forras_referenciak["bejovo_szamla_id"].astext == str(b.id)).limit(1)
     )
@@ -408,7 +408,7 @@ def szabaly_jeloltek(db: Session) -> dict:
 
 
 def osszesites(db: Session) -> dict:
-    """Találati arány: az érkeztető (és ahol volt, HYRON) javaslata hányszor
+    """Találati arány: az érkeztető (és ahol volt, Lara) javaslata hányszor
     egyezett a végső emberi döntéssel — összesen és hetente."""
     esetek = _esemenyek(db)
     szam = Counter(e["eredmeny"] for e in esetek)

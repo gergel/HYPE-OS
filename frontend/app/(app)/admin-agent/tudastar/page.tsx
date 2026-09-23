@@ -7,9 +7,9 @@ import { getAdminMemory, getAdminRules, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
-/** HYRON — TUDÁSTÁR.
+/** Lara — TUDÁSTÁR.
  *
- * HYRON tudása: szabályok és példák. A gépi JELÖLT (javításokból, illetve a
+ * Lara tudása: szabályok és példák. A gépi JELÖLT (javításokból, illetve a
  * projektkód/utókövetés megfigyeléséből) egyértelműen elkülönítve jelenik meg,
  * és csak emberi jóváhagyással kerül éles használatba. */
 export default async function AdminAgentTudastarPage() {

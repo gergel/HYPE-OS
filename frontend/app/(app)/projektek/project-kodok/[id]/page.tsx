@@ -494,7 +494,7 @@ export default async function ProjectCodeDetailPage({ params }: { params: Promis
           </Card>
         ))}
 
-        {/* HYRON TEENDŐK - a projektkódhoz kötött szerződés/TIG/számla/utalás
+        {/* LARA TEENDŐK - a projektkódhoz kötött szerződés/TIG/számla/utalás
             feladatok; itt is ellátja és tanulja az adminmunkát (self-hiding, ha
             nincs /admin-agent jog). */}
         <AdminAgentTeendok projectCodeId={projectCodeId} />

@@ -1,4 +1,4 @@
-"""HYRON — visszajátszás a rögzített számlákon, partner-szabályok, kézi
+"""Lara — visszajátszás a rögzített számlákon, partner-szabályok, kézi
 szabályfelvétel.
 
 Postgres-integráció (DB nélkül self-skip), egy tranzakcióban, a végén rollback.
@@ -164,7 +164,7 @@ def test_partner_szabaly_nem_irja_felul_az_erkeztetot(db):
     db.flush()
     p = db.scalars(select(ActionProposal).where(ActionProposal.task_id == t.id)).first()
     assert p.payload["cel_tipus"] == "mukodesi"
-    assert any("aktív szabály" in f for f in p.ellenorzesek.get("figyelmeztetesek", []))
+    assert any("Lara tudása" in f for f in p.ellenorzesek.get("figyelmeztetesek", []))
 
 
 def test_partner_egyezes_cegformatol_fuggetlen_es_szabaly_csak_a_partnernel(db):

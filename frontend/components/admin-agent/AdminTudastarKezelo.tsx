@@ -24,9 +24,9 @@ const RULE_ALLAPOT: Record<string, string> = {
   retired: "Visszavonva",
 };
 
-/** HYRON — Tudástár kezelő (kliens).
+/** Lara — Tudástár kezelő (kliens).
  *
- * Itt dönt az ember arról, mi kerül HYRON éles tudásába:
+ * Itt dönt az ember arról, mi kerül Lara éles tudásába:
  * - Szabályok: a gépi JELÖLT „Élesítés” gombbal lesz aktív — csak sikeres
  *   értékelés (eval) után és tudás-aktiválási joggal; visszavonható.
  * - Példák: a megfigyelésből (projektkód/utókövetés) és a javításokból született
@@ -125,7 +125,7 @@ export function AdminTudastarKezelo({
         setFelretett((f) => (f ? f.filter((x) => x.id !== uj.id) : f));
         setFelretettDb((n) => Math.max(0, n - 1));
       }
-      setUzenet(jovahagy ? "Példa jóváhagyva — HYRON mostantól használhatja." : "Példa elvetve.");
+      setUzenet(jovahagy ? "Példa jóváhagyva — Lara mostantól használhatja." : "Példa elvetve.");
       router.refresh();
     } finally {
       setFolyamatban(null);
@@ -198,7 +198,7 @@ export function AdminTudastarKezelo({
 
       <Szekcio
         cim={`Jóváhagyásra váró példák (${osszesJelolt.length})`}
-        leiras={`A megfigyelésből (projektkódok, utókövetés) és a javításokból született példák. Jóváhagyás után HYRON ezekből tanul a hasonló eseteknél. Csak a tanulás kezdete (${kezdetSzoveg}) óta a HYPE OS-ben keletkezett munkából készül jelölt — a Notion-korszak rekordjaiból nem. Többet is kipipálhatsz — de csak azt hagyd jóvá, amit át is néztél.`}
+        leiras={`A megfigyelésből (projektkódok, utókövetés) és a javításokból született példák. Jóváhagyás után Lara ezekből tanul a hasonló eseteknél. Csak a tanulás kezdete (${kezdetSzoveg}) óta a HYPE OS-ben keletkezett munkából készül jelölt — a Notion-korszak rekordjaiból nem. Többet is kipipálhatsz — de csak azt hagyd jóvá, amit át is néztél.`}
       >
         {osszesJelolt.length > 0 && (
           <li className="flex flex-wrap items-center gap-2 pb-1">
@@ -289,7 +289,7 @@ export function AdminTudastarKezelo({
       {felretettDb > 0 && (
         <Szekcio
           cim={`Félretett régi jelöltek (${felretettDb})`}
-          leiras={`A tanulás kezdete (${kezdetSzoveg}) előtti, illetve a Notionből hozott rekordokból korábban készült jelöltek. Nem törlődtek, de HYRON nem kér rájuk döntést. Ha egy régi eset mégis jó minta, itt egyenként jóváhagyhatod — a jóváhagyott régi példát HYRON csak az újabbak után, kisebb súllyal használja.`}
+          leiras={`A tanulás kezdete (${kezdetSzoveg}) előtti, illetve a Notionből hozott rekordokból korábban készült jelöltek. Nem törlődtek, de Lara nem kér rájuk döntést. Ha egy régi eset mégis jó minta, itt egyenként jóváhagyhatod — a jóváhagyott régi példát Lara csak az újabbak után, kisebb súllyal használja.`}
         >
           {felretett === null ? (
             <li>

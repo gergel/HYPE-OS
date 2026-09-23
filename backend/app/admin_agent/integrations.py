@@ -1,4 +1,4 @@
-"""HYRON — integráció-állapot (forráskapcsolatok).
+"""Lara — integráció-állapot (forráskapcsolatok).
 
 VALÓS állapotot ad vissza (nem mock): a szükséges kulcsok/konfiguráció
 tényleges meglétét nézi a beállításokból. Hiányzó konfiguráció esetén az
@@ -42,7 +42,7 @@ def _tarolo_konfiguralt() -> bool:
 
 def integracio_allapotok() -> list[dict]:
     """Az egyes forráskapcsolatok állapota a felülethez. Az `eszkozok` mező
-    mondja meg, mely HYRON eszközök függenek az adott integrációtól."""
+    mondja meg, mely Lara eszközök függenek az adott integrációtól."""
     gmail = _gmail_konfiguralt()
     modell = _modell_konfiguralt()
     tarolo = _tarolo_konfiguralt()
@@ -74,7 +74,7 @@ def integracio_allapotok() -> list[dict]:
 
 
 def eszkoz_elerheto(eszkoz: str) -> tuple[bool, str | None]:
-    """Egy HYRON eszköz elérhető-e (a függő integráció konfigurált-e).
+    """Egy Lara eszköz elérhető-e (a függő integráció konfigurált-e).
     Vissza: (elérhető?, indok ha nem)."""
     for i in integracio_allapotok():
         if eszkoz in i["eszkozok"] and i["allapot"] != KESZ:

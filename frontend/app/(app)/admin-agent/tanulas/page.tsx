@@ -4,11 +4,12 @@ import { TopBar } from "@/components/TopBar";
 import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
 import { AdminTanulasVezerlok } from "@/components/admin-agent/AdminTanulasVezerlok";
 import { AdminVisszajatszas } from "@/components/admin-agent/AdminVisszajatszas";
-import { getAdminEvaluations, getAdminLearningRuns, getAdminReplaySummary, getMyPagePermissions } from "@/lib/api";
+import { LaraOnellenorzes } from "@/components/admin-agent/LaraOnellenorzes";
+import { getAdminEvaluations, getAdminLearningRuns, getAdminReplaySummary, getMyPagePermissions, getOnellenorzesFutasok } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
-/** HYRON — TANULÁS ÉS MINŐSÉG.
+/** Lara — TANULÁS ÉS MINŐSÉG.
  *
  * A háttér-tanuló futásai (feldolgozott javítások, szabály-/példa-jelöltek,
  * SOP-kérések) és az értékelő futások (biztonsági/pénzügyi invariánsok kóddal).
@@ -19,10 +20,11 @@ export default async function AdminAgentTanulasPage() {
   if (!canView) redirect("/nincs-jogosultsag");
   const canRun = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
 
-  const [tanulasok, evalok, visszajatszas] = await Promise.all([
+  const [tanulasok, evalok, visszajatszas, onellenorzes] = await Promise.all([
     getAdminLearningRuns(),
     getAdminEvaluations(),
     getAdminReplaySummary(),
+    getOnellenorzesFutasok(),
   ]);
 
   return (
@@ -33,6 +35,10 @@ export default async function AdminAgentTanulasPage() {
         <div className="flex flex-col gap-4">
           <Card title="Vezérlés">
             <AdminTanulasVezerlok canRun={canRun} />
+          </Card>
+
+          <Card title="Lara önellenőrzése — folyamatos tanulás">
+            <LaraOnellenorzes kezdo={onellenorzes?.elemek ?? []} canRun={canRun} />
           </Card>
 
           <Card title="Visszajátszás és találati arány">
@@ -77,7 +83,7 @@ export default async function AdminAgentTanulasPage() {
           <Card title="Értékelő futások (eval)">
             <p className="mb-3 text-[12px] text-text-muted">
               A beépített biztonsági esetek (pl. banki utalás mindig tiltott, L0-ban nincs végrehajtás): azt igazolja,
-              hogy a tanulás nem lazította a korlátokat — ezért kell átmennie élesítés előtt. Azt, hogy HYRON
+              hogy a tanulás nem lazította a korlátokat — ezért kell átmennie élesítés előtt. Azt, hogy Lara
               mennyire talál, a fenti „Találati arány” méri.
             </p>
             {!evalok || evalok.elemek.length === 0 ? (

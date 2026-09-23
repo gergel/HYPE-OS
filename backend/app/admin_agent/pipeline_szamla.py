@@ -1,11 +1,11 @@
-"""HYRON — számla-felvezetés L0 árnyék-elemzés.
+"""Lara — számla-felvezetés L0 árnyék-elemzés.
 
 Ez a modul köti a beérkező számla (BejovoSzamla) meglévő érkeztető-folyamatát
-az HYRON-gerinchez: forrásesemény → feladat → HYRON-futás → nyomvonal →
+Lara-gerinchez: forrásesemény → feladat → Lara-futás → nyomvonal →
 művelet-javaslat, a szerver-oldali policy engine-en át. FONTOS invariánsok:
 
 * L0 (árnyék): itt SEMMILYEN üzleti rekord nem jön létre, és külső hívás sem
-  történik — csak HYRON saját `aa_` táblái íródnak. A tényleges rögzítés
+  történik — csak Lara saját `aa_` táblái íródnak. A tényleges rögzítés
   továbbra is a meglévő pénzügyi szolgáltatáson (``szamla_erkeztetes.jovahagy``)
   keresztül, emberi jóváhagyással történik; a javaslat payloadja pontosan azt a
   ``dontes`` alakot írja le, amit az a szolgáltatás vár — de VÉGRE NEM HAJTJUK.
@@ -35,7 +35,6 @@ from app.admin_agent.enums import (
     ApprovalState,
     ProposalState,
     RiskClass,
-    RuleState,
     TaskState,
     TaskType,
 )
@@ -48,7 +47,6 @@ from app.models.admin_agent import (
     AdminTask,
     AgentRun,
     Approval,
-    PlaybookRule,
     SourceEvent,
 )
 from app.models.bejovo_szamla import CEL_TIPUSOK, BejovoSzamla
@@ -296,7 +294,7 @@ def _modell_atnezes(
     if javasolt_cel:
         if payload.get("cel_tipus") and payload["cel_tipus"] != javasolt_cel:
             konfliktus = (
-                f"Céltípus-eltérés: az érkeztető „{payload['cel_tipus']}”, HYRON „{javasolt_cel}” — "
+                f"Céltípus-eltérés: az érkeztető „{payload['cel_tipus']}”, Lara „{javasolt_cel}” — "
                 "emberi döntés kell."
             )
         elif not payload.get("cel_tipus"):
@@ -305,7 +303,7 @@ def _modell_atnezes(
     if kod_id:
         if payload.get("cel_project_code_id") and payload["cel_project_code_id"] != kod_id:
             konfliktus = (
-                f"Projektkód-eltérés: az érkeztető {erk_kod}, HYRON {kod_szoveg} — emberi döntés kell."
+                f"Projektkód-eltérés: az érkeztető {erk_kod}, Lara {kod_szoveg} — emberi döntés kell."
             )
         elif not payload.get("cel_project_code_id"):
             payload["cel_project_code_id"] = kod_id
@@ -347,32 +345,23 @@ def _modell_atnezes(
 
 
 def _szabaly_alkalmazasa(db: Session, bejovo: BejovoSzamla, payload: dict) -> dict | None:
-    """Az ÉLESÍTETT, partnerhez kötött szabály (visszajátszásból vagy kézzel
-    felvéve, `feltetelek.partner` + `cel_tipus`) determinisztikus alkalmazása —
-    modell-kulcs nélkül is. Csak ÜRES mezőt tölt: ha az érkeztető már javasolt
-    mást, nem írja felül, csak figyelmeztet (ember dönt). A projektkódot csak
-    akkor tölti, ha a szabályban pontosan egy (létező) kód van."""
+    """Lara tanult tudásának determinisztikus alkalmazása — modell-kulcs nélkül
+    is (lásd onellenorzes.Tudas): elsőként az ÉLESÍTETT, partnerhez kötött
+    szabály, ennek hiányában a partner jóváhagyott, egybehangzó korábbi esetei és
+    a Lara kérdéseire adott magyarázatok. Csak ÜRES mezőt tölt: ha az érkeztető
+    már javasolt mást, nem írja felül, csak figyelmeztet (ember dönt). A
+    projektkódot csak akkor tölti, ha a tudásban pontosan egy (létező) kód van."""
     from app.admin_agent.memory import partner_kulcs
+    from app.admin_agent.onellenorzes import Tudas
 
     kulcs = partner_kulcs(bejovo.kibocsato_nev)
-    if len(kulcs) < 3:
+    t = Tudas(db).cel(kulcs, kiveve=bejovo.id)
+    if t is None:
         return None
-    szabalyok = [
-        r for r in db.scalars(
-            select(PlaybookRule)
-            .where(PlaybookRule.hatokor == "szamla", PlaybookRule.allapot == RuleState.ACTIVE.value)
-            .order_by(PlaybookRule.prioritas.desc(), PlaybookRule.id.desc())
-        ).all()
-        if (r.feltetelek or {}).get("partner") == kulcs and (r.feltetelek or {}).get("cel_tipus") in CEL_TIPUSOK
-    ]
-    if not szabalyok:
-        return None
-    tipusok = {r.feltetelek["cel_tipus"] for r in szabalyok}
-    if len(tipusok) > 1:
-        return {"szabaly_idk": [r.id for r in szabalyok], "alkalmazva": {},
+    if t["ellentmondo"]:
+        return {"szabaly_id": t["szabaly_id"], "alkalmazva": {}, "forras": t["forras"], "fajta": t["fajta"],
                 "figyelmeztetes": "Több, egymásnak ellentmondó aktív szabály vonatkozik erre a partnerre — ember dönt."}
-    r = szabalyok[0]
-    tipus = r.feltetelek["cel_tipus"]
+    tipus = t["tipus"]
     alkalmazva: dict = {}
     figyelmeztetes = None
     if not payload.get("cel_tipus"):
@@ -380,9 +369,9 @@ def _szabaly_alkalmazasa(db: Session, bejovo: BejovoSzamla, payload: dict) -> di
         alkalmazva["cel_tipus"] = tipus
     elif payload["cel_tipus"] != tipus:
         figyelmeztetes = (
-            f"Az aktív szabály („{r.cim}”) szerint {tipus}, az érkeztető {payload['cel_tipus']}-t javasolt — ellenőrizd."
+            f"Lara tudása ({t['forras']}) szerint {tipus}, az érkeztető {payload['cel_tipus']}-t javasolt — ellenőrizd."
         )
-    kodok = r.feltetelek.get("projektkod_idk") or []
+    kodok = t["kod_idk"]
     if (
         payload.get("cel_tipus") == tipus
         and tipus in ("kiadas_uj", "auto")
@@ -392,7 +381,8 @@ def _szabaly_alkalmazasa(db: Session, bejovo: BejovoSzamla, payload: dict) -> di
     ):
         payload["cel_project_code_id"] = int(kodok[0])
         alkalmazva["cel_project_code_id"] = int(kodok[0])
-    return {"szabaly_id": r.id, "cim": r.cim, "alkalmazva": alkalmazva, "figyelmeztetes": figyelmeztetes}
+    return {"szabaly_id": t["szabaly_id"], "cim": t["forras"], "forras": t["forras"], "fajta": t["fajta"],
+            "alkalmazva": alkalmazva, "figyelmeztetes": figyelmeztetes}
 
 
 def _bizonytalansag(modell: dict, ellenorzesek: dict) -> float | None:
@@ -405,7 +395,9 @@ def _bizonytalansag(modell: dict, ellenorzesek: dict) -> float | None:
         # (de nem nulla) bizonytalanság; egyébként ismeretlen.
         szabaly = ellenorzesek.get("szabaly") or {}
         if szabaly.get("alkalmazva"):
-            return 0.5 if not ellenorzesek.get("rendben") else 0.3
+            # Élesített szabály: 0,3; csak korábbi esetekből tanult: 0,45.
+            alap = 0.3 if szabaly.get("fajta") == "szabaly" else 0.45
+            return max(alap, 0.5) if not ellenorzesek.get("rendben") else alap
         return None
     b = modell.get("bizonytalansag")
     if b is None:
@@ -433,7 +425,7 @@ def _nyom(db: Session, t: AdminTask, run: AgentRun, muvelet: str, eredmeny: str,
 def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual") -> AdminTask:
     """Egy beérkező számla L0 árnyék-elemzése. A hívó commitál.
 
-    Létrehozza (idempotensen) a forráseseményt, a feladatot, egy HYRON-futást,
+    Létrehozza (idempotensen) a forráseseményt, a feladatot, egy Lara-futást,
     a nyomvonalat és a művelet-javaslatot, a döntést a policy engine adja. L0-ban
     a döntés BLOCKED (árnyék): a javaslat rögzül, de nem hajtódik végre, és
     jóváhagyás sem jön létre. Semmilyen üzleti rekord nem változik.

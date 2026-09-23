@@ -9,10 +9,10 @@ import { getAdminAgentOverview, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
 
-/** HYRON — ÁTTEKINTÉS.
+/** Lara — ÁTTEKINTÉS.
  *
  * Az adminisztrációs munkát (számla-felvezetés, e-mail-válasz, TIG- és
- * szerződés-előkészítés, utalás-előkészítés) önállóan kezelő HYRON vezérlő-
+ * szerződés-előkészítés, utalás-előkészítés) önállóan kezelő Lara vezérlő-
  * pultja. Biztonságos alapállás: a modul KI, a mellékhatások TILTVA, minden
  * feladat L0 (árnyék) — lásd backend admin_agent/policy.py. Banki utalás
  * végrehajtása nem része a modulnak. */
@@ -53,20 +53,26 @@ export default async function AdminAgentAttekintesPage() {
               <Card title="Tanulás állapota" className="mb-6">
                 <p className="mb-3 text-[12px] text-text-muted">
                   {overview.tanulas.megfigyeles_bekapcsolva
-                    ? "A megfigyelés be van kapcsolva: HYRON félóránként figyeli a projektkódokat és az utókövetést, éjszaka tanul."
+                    ? "A megfigyelés be van kapcsolva: Lara félóránként figyeli a projektkódokat és az utókövetést, éjszaka tanul."
                     : "A megfigyelés ki van kapcsolva (Beállítások → „Tanulás és megfigyelés”). Kézzel a Tanulás és minőség oldalról indítható."}
                   {overview.tanulas.tanulas_kezdete &&
                     ` Tanulás kezdete: ${overview.tanulas.tanulas_kezdete.replaceAll("-", ". ")}. — csak az azóta a HYPE OS-ben keletkezett munkából tanul.`}
                   {!!overview.tanulas.felretett_regi_jeloltek &&
                     ` ${overview.tanulas.felretett_regi_jeloltek} régi (Notion-korszakbeli) jelölt félretéve.`}
                 </p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
                   <TanulasSzam cimke="Megfigyelt lépés" ertek={overview.tanulas.megfigyelt_lepesek} href="/admin-agent/naplo" />
                   <TanulasSzam cimke="Emberi javítás" ertek={overview.tanulas.javitasok} href="/admin-agent/tanulas" />
                   <TanulasSzam cimke="Példa-jelölt" ertek={overview.tanulas.pelda_jeloltek} href="/admin-agent/tudastar" kiemel />
                   <TanulasSzam cimke="Szabály-jelölt" ertek={overview.tanulas.szabaly_jeloltek} href="/admin-agent/tudastar" kiemel />
                   <TanulasSzam cimke="Jóváhagyott példa" ertek={overview.tanulas.jovahagyott_peldak} href="/admin-agent/tudastar" />
                   <TanulasSzam cimke="Aktív szabály" ertek={overview.tanulas.aktiv_szabalyok} href="/admin-agent/tudastar" />
+                  <TanulasSzam
+                    cimke="Lara kérdései"
+                    ertek={overview.tanulas.nyitott_kerdesek ?? 0}
+                    href="/admin-agent/kerdesek"
+                    kiemel
+                  />
                 </div>
               </Card>
             )}
@@ -124,7 +130,7 @@ export default async function AdminAgentAttekintesPage() {
                     <p className="text-[13px] text-text-secondary">Még nincs elég adat</p>
                     <p className="mt-1 text-[12px] text-text-muted">
                       A minőségi mutatók (ember nélkül lezárt arány, elfogadási arány, kritikus hibák, modellköltség)
-                      akkor jelennek meg, amikor HYRON éles feladatokat kezdett feldolgozni és a mérőrendszer
+                      akkor jelennek meg, amikor Lara éles feladatokat kezdett feldolgozni és a mérőrendszer
                       elegendő eseményt gyűjtött.
                     </p>
                   </div>

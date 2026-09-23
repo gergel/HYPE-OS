@@ -6,7 +6,7 @@ import { authFetch } from "@/lib/authFetch";
 import type { AdminApprovalSor } from "@/lib/api";
 import { TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
 
-/** HYRON — JÓVÁHAGYÁSOK (kliens).
+/** Lara — JÓVÁHAGYÁSOK (kliens).
  *
  * A jóváhagyás a KONKRÉT javaslat payload-hash-éhez kötődik: a szerver a
  * beküldött hash-t egyezteti, és a végrehajtást a guard-láncon (policy,
@@ -74,7 +74,7 @@ export function AdminJovahagyasok({
         <div className="rounded-[var(--radius)] border border-dashed border-border px-4 py-8 text-center">
           <p className="text-[13px] text-text-secondary">Nincs jóváhagyásra váró művelet.</p>
           <p className="mx-auto mt-1 max-w-xl text-[12px] text-text-muted">
-            Amikor HYRON éles feladatokon dolgozik, az emberi döntést igénylő műveletek itt jelennek meg. A
+            Amikor Lara éles feladatokon dolgozik, az emberi döntést igénylő műveletek itt jelennek meg. A
             jóváhagyás a konkrét művelethez kötött; a végrehajtás a szerver-oldali szabályrendszeren megy át.
           </p>
         </div>

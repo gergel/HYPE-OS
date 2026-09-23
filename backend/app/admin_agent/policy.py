@@ -1,4 +1,4 @@
-"""HYRON policy engine: a végrehajtási döntés EGYETLEN, szerveroldali
+"""Lara policy engine: a végrehajtási döntés EGYETLEN, szerveroldali
 helye. Minden hívási útnak (worker, közvetlen API, újrapróbálás) ezen kell
 átmennie egy mellékhatásos lépés előtt.
 
@@ -57,7 +57,7 @@ def decide(inp: PolicyInputs) -> DecisionResult:
     if inp.kill_switch_active:
         return DecisionResult(Decision.BLOCKED, "Vészleállítás aktív.")
     if not inp.module_enabled:
-        return DecisionResult(Decision.BLOCKED, "A HYRON modul ki van kapcsolva.")
+        return DecisionResult(Decision.BLOCKED, "Lara modul ki van kapcsolva.")
     if not inp.side_effects_enabled:
         return DecisionResult(Decision.BLOCKED, "A mellékhatásos végrehajtás globálisan tiltva.")
 

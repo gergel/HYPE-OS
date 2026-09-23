@@ -1,4 +1,4 @@
-# HYRON — jogosultság és kockázat
+# Lara — jogosultság és kockázat
 
 ## Kockázati osztályok (szerver-oldali besorolás)
 
@@ -72,7 +72,7 @@ egy következő lépésben vezethetők be, ha az üzemeltetés igényli — a ho
 tartozó ellenőrzési pontok (jóváhagyás, aktiválás, trust-váltás) már külön
 végpontokon vannak.
 
-**A fejlesztéshez használt hozzáférés és az éles HYRON jogosultságai külön
+**A fejlesztéshez használt hozzáférés és az éles Lara jogosultságai külön
 fogalmak.** A fejlesztői engedély nem éles üzleti végrehajtási engedély.
 
 ## Prompt injection és adatbiztonság

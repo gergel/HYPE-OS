@@ -1,4 +1,4 @@
-"""HYRON — auditált végrehajtó réteg (jóváhagyott javaslat → művelet).
+"""Lara — auditált végrehajtó réteg (jóváhagyott javaslat → művelet).
 
 A végrehajtás EGYETLEN útja. A sorrend (master prompt 8.): javaslat →
 (már megtörtént determinista validálás) → policy-ellenőrzés → jóváhagyás

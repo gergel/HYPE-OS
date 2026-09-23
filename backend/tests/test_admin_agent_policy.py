@@ -1,4 +1,4 @@
-"""HYRON policy engine (biztonságkritikus döntéslogika) egységtesztjei.
+"""Lara policy engine (biztonságkritikus döntéslogika) egységtesztjei.
 
 Tiszta függvények, külső függőség nélkül futtatható. A mátrix rögzíti a
 biztonságos alapállás és a bizalmi rámpa invariánsait (master prompt 8., 12.).

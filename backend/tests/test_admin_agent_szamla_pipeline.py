@@ -1,4 +1,4 @@
-"""HYRON — számla-felvezetés L0 árnyék-elemzés integrációs tesztje.
+"""Lara — számla-felvezetés L0 árnyék-elemzés integrációs tesztje.
 
 A pipeline JSONB-t és JSONB-lekérdezést használ (a feladat idempotenciája a
 ``forras_referenciak`` mezőre épül), ezért ez VALÓS Postgres ellen fut (nem

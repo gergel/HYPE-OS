@@ -1,4 +1,4 @@
-"""HYRON — megfigyelő (projektkód/utókövetés) és tudás-példa jóváhagyás.
+"""Lara — megfigyelő (projektkód/utókövetés) és tudás-példa jóváhagyás.
 
 Postgres-integráció, DB nélkül self-skip. A megfigyelő-tesztek EGY tranzakcióban
 futnak és a végén rollback — semmi nem marad az adatbázisban.

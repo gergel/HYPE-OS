@@ -21,11 +21,11 @@ const TIPUS_OPCIOK = [
   { ertek: "egyeb", cimke: "Egyéb" },
 ];
 
-/** HYRON TEENDŐK blokk egy projektkódhoz (projektkód-adatlap, utókövetés).
+/** LARA TEENDŐK blokk egy projektkódhoz (projektkód-adatlap, utókövetés).
  *
- * Megmutatja az adott projektkódhoz tartozó HYRON feladatokat, és enged
+ * Megmutatja az adott projektkódhoz tartozó Lara feladatokat, és enged
  * újat felvenni (szerződés/TIG/számla/utalás), a projektkódhoz kötve. Így
- * HYRON munkafelülete ezekre az oldalakra is elér, és a rajtuk rögzített
+ * Lara munkafelülete ezekre az oldalakra is elér, és a rajtuk rögzített
  * javításokból tanul. Ha a felhasználónak nincs /admin-agent joga, a blokk
  * csendben elrejti magát. */
 export function AdminAgentTeendok({ projectCodeId }: { projectCodeId: number }) {
@@ -71,7 +71,7 @@ export function AdminAgentTeendok({ projectCodeId }: { projectCodeId: number }) 
         body: JSON.stringify({ tipus, cim: cim.trim(), project_code_id: projectCodeId }),
       });
       if (res.status === 403) {
-        setHiba("Nincs jogosultságod HYRON-feladat létrehozásához.");
+        setHiba("Nincs jogosultságod Lara-feladat létrehozásához.");
         return;
       }
       if (!res.ok) {
@@ -91,7 +91,7 @@ export function AdminAgentTeendok({ projectCodeId }: { projectCodeId: number }) 
   return (
     <div className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="t-card">HYRON teendők</p>
+        <p className="t-card">Lara teendők</p>
         <button
           type="button"
           onClick={() => setNyitva((v) => !v)}
@@ -137,8 +137,8 @@ export function AdminAgentTeendok({ projectCodeId }: { projectCodeId: number }) 
         <p className="text-[13px] text-text-secondary">Betöltés…</p>
       ) : sorok.length === 0 ? (
         <p className="text-[13px] text-text-secondary">
-          Ehhez a projektkódhoz még nincs HYRON-feladat. A „+ Feladat” gombbal vehetsz fel szerződés-, TIG-,
-          számla- vagy utalás-előkészítést; HYRON ezekből is tanul.
+          Ehhez a projektkódhoz még nincs Lara-feladat. A „+ Feladat” gombbal vehetsz fel szerződés-, TIG-,
+          számla- vagy utalás-előkészítést; Lara ezekből is tanul.
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">

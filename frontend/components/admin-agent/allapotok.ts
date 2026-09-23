@@ -1,4 +1,4 @@
-/** A HYRON feladat-állapotok magyar címkéi (a backend TaskState
+/** Lara feladat-állapotok magyar címkéi (a backend TaskState
  * értékeihez — lásd admin_agent/enums.py). Egy helyen, hogy a Munkasor és az
  * Áttekintés ugyanazt a szót mutassa. */
 export const ALLAPOT_CIMKE: Record<string, string> = {
@@ -29,3 +29,16 @@ export const TIPUS_CIMKE: Record<string, string> = {
 /** A felületről kézzel beállítható, MELLÉKHATÁS-MENTES állapotok (a backend
  * _KEZI_ALLAPOTOK párja — routes/admin_agent.py). Csak ezeket ajánljuk fel. */
 export const KEZI_ALLAPOTOK = ["new", "needs_info", "blocked", "rejected", "cancelled"] as const;
+
+/** A számla-célok (backend: bejovo_szamla.CEL_TIPUSOK) magyar címkéi. */
+export const CEL_CIMKE: Record<string, string> = {
+  kiadas_uj: "Új kiadás (projekthez)",
+  kiadas_csatolas: "Csatolás meglévő kiadáshoz",
+  kulsos_tig: "Meglévő külsős TIG",
+  belsos_tig: "Meglévő belsős TIG",
+  erezsi: "E-Rezsi",
+  auto: "Autóköltség",
+  kp: "KP-tétel bizonylata",
+  mukodesi: "Általános működési költség (projekt nélkül)",
+  kimeno: "Kimenő számla",
+};

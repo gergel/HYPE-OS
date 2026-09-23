@@ -1,4 +1,4 @@
-"""HYRON API (Fázis B/C alap). Az `/admin-agent` oldal jogosultságával.
+"""Lara API (Fázis B/C alap). Az `/admin-agent` oldal jogosultságával.
 
 BIZTONSÁGOS ALAPÁLLÁS: ezek a végpontok NEM hajtanak végre üzleti/külső
 mellékhatást (L0). A task-létrehozás és -szerkesztés belső munkaszervezés; a
@@ -44,6 +44,7 @@ from app.models.admin_agent import (
     Correction,
     EvalCase,
     EvalRun,
+    LaraKerdes,
     LearningRun,
     MemoryChunk,
     PlaybookRule,
@@ -162,6 +163,9 @@ def overview(
                 )
             ) or 0,
             "tanulas_kezdete": tanulas_kezdete_datum(db).isoformat(),
+            "nyitott_kerdesek": db.scalar(
+                select(func.count(LaraKerdes.id)).where(LaraKerdes.allapot == "nyitott")
+            ) or 0,
             "jovahagyott_peldak": db.scalar(
                 select(func.count(MemoryChunk.id)).where(
                     MemoryChunk.tanulasi_halmaz == "jovahagyott",
@@ -269,7 +273,7 @@ def task_bejovo_szamlabol(
     _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
 ):
     """L0 ÁRNYÉK-ELEMZÉS egy beérkező számlára. Nem hajt végre üzleti/külső
-    műveletet: HYRON csak elemez és javaslatot rögzít a policy engine
+    műveletet: Lara csak elemez és javaslatot rögzít a policy engine
     döntésével. A tényleges rögzítés továbbra is a meglévő érkeztető-folyamaton,
     emberi jóváhagyással történik (lásd services/szamla_erkeztetes.jovahagy).
     Idempotens: ugyanarra a számlára ugyanabban az állapotban nem duplikál."""
@@ -299,7 +303,7 @@ def task_idovonal(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
-    """A feladat teljes, olvasható idővonala: HYRON-futások, nyomvonal-
+    """A feladat teljes, olvasható idővonala: Lara-futások, nyomvonal-
     bejegyzések (ki mit tett, milyen eredménnyel) és a művelet-javaslatok a
     payloaddal. Kizárólag olvasás — semmit nem hajt végre."""
     t = db.get(AdminTask, task_id)
@@ -545,7 +549,7 @@ def task_ujraelemez(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """A feladat újraelemzése HYRON-nal (L0-biztos: nincs mellékhatás). Jelenleg
+    """A feladat újraelemzése Larával (L0-biztos: nincs mellékhatás). Jelenleg
     a beérkező-számla forráshoz kötött feladatokra fut."""
     t = db.get(AdminTask, task_id)
     if t is None:
@@ -602,7 +606,7 @@ def task_tervezet(
     db: Session = Depends(get_db),
     user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """HYRON elkészíti a feladat tervezetét: TIG / szerződés esetén a
+    """Lara elkészíti a feladat tervezetét: TIG / szerződés esetén a
     projektkód függő feleinek piszkozatait (előtöltés + modell-kiegészítés a
     megtanult tudásból, összeg csak igazolt forrásból), e-mailnél a levél
     tervezetét (címzett csak igazolt címből). Javaslatként jön létre; végrehajtás
@@ -1010,7 +1014,13 @@ def learning_runs_lista(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
-    sorok = db.scalars(select(LearningRun).order_by(LearningRun.id.desc()).limit(50)).all()
+    # Az önellenőrző futásoknak saját listájuk van (GET /self-check/runs).
+    sorok = db.scalars(
+        select(LearningRun)
+        .where(~LearningRun.trigger.like("onellenorzes%"))
+        .order_by(LearningRun.id.desc())
+        .limit(50)
+    ).all()
     return {
         "elemek": [
             {
@@ -1166,13 +1176,113 @@ def megfigyeles_inditas(
 ):
     """A megfigyelő kézi futtatása: a projektkódokon / az utókövetésben nemrég
     változott szerződéseket, TIG-eket és kiadásokat rögzíti megfigyelésként, a
-    lezárt emberi munkából példa-JELÖLTET készít. Csak olvas + HYRON saját
+    lezárt emberi munkából példa-JELÖLTET készít. Csak olvas + Lara saját
     tábláiba ír; üzleti rekord nem változik. A kézi indítás jogosult felhasználó
     kifejezett döntése, ezért a forrás-kapcsolótól függetlenül fut (az ütemezett
     futás viszont csak bekapcsolt forrással)."""
     eredmeny = megfigyeles(db, visszatekintes_nap=visszatekintes_nap, kenyszeritett=True, kezdettol=kezdettol)
     db.commit()
     return eredmeny
+
+
+# ── Lara önellenőrzése és kérdései ─────────────────────────────────────────────
+
+
+def _kerdes_sor(k: LaraKerdes) -> dict:
+    return {
+        "id": k.id,
+        "allapot": k.allapot,
+        "partner_nev": k.partner_nev,
+        "kerdes": k.kerdes,
+        "kontextus": k.kontextus,
+        "valasz_tipus": k.valasz_tipus,
+        "valasz_szoveg": k.valasz_szoveg,
+        "megvalaszolva_at": k.megvalaszolva_at.isoformat() if k.megvalaszolva_at else None,
+        "szabaly_id": k.szabaly_id,
+        "letrehozva": k.created_at.isoformat() if k.created_at else None,
+    }
+
+
+@router.post("/self-check")
+def onellenorzes_inditas(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Lara önellenőrzése most: előbb a friss rögzítések visszajátszása, majd a
+    jelenlegi tudással „vak" jóslat minden rögzített számlára, összevetés a
+    valósággal; ahol nem érti az eltérést, kérdez. Üzleti rekord nem változik."""
+    from app.admin_agent.onellenorzes import onellenorzes
+    from app.admin_agent.visszajatszas import visszajatszas
+
+    vj = visszajatszas(db)
+    eredmeny = onellenorzes(db, trigger="onellenorzes:kezi")
+    db.commit()
+    return {**eredmeny, "visszajatszas": {k: vj[k] for k in ("uj_szamla", "uj_pelda", "uj_szabaly_jelolt")}}
+
+
+@router.get("/self-check/runs")
+def onellenorzes_futasok(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Az önellenőrző futások (legújabb elöl): ebből látszik, hogyan nő Lara
+    találati aránya a tudásával."""
+    from app.admin_agent.onellenorzes import futasok
+
+    return {"elemek": futasok(db)}
+
+
+@router.get("/questions")
+def kerdesek_lista(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+    allapot: str = Query(default="nyitott"),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    felt = [] if allapot == "mind" else [LaraKerdes.allapot == allapot]
+    sorok = db.scalars(select(LaraKerdes).where(*felt).order_by(LaraKerdes.id.desc()).limit(limit)).all()
+    return {"elemek": [_kerdes_sor(k) for k in sorok]}
+
+
+class ValaszIn(BaseModel):
+    #: mindig | kivetel | magyarazat | hibas | elvet
+    valasz_tipus: str
+    magyarazat: str | None = Field(default=None, max_length=2000)
+    #: „mindig így" esetén: élesítse-e azonnal a szabályt (joggal + sikeres eval mellett).
+    elesit: bool = True
+
+
+@router.post("/questions/{kerdes_id}/answer")
+def kerdes_valasz(
+    kerdes_id: int,
+    body: ValaszIn,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Válasz Lara kérdésére — a válasz tudássá válik (szabály / magyarázat /
+    kivétel), a „hibás rögzítés" nem tanít. A „mindig így" szabály csak akkor
+    élesedik azonnal, ha a válaszolónak van élesítési joga és az utolsó értékelés
+    átment; különben jelöltként a Tudástárba kerül."""
+    from app.admin_agent.onellenorzes import ValaszHiba, valaszol
+
+    k = db.get(LaraKerdes, kerdes_id)
+    if k is None:
+        raise HTTPException(status_code=404, detail="A kérdés nem található.")
+    elesithet = False
+    if body.valasz_tipus == "mindig" and body.elesit:
+        try:
+            check_page_action(db, user, PAGE, "delete")
+            utolso = db.scalar(select(EvalRun).order_by(EvalRun.id.desc()))
+            elesithet = bool(utolso is not None and utolso.atment)
+        except HTTPException:
+            elesithet = False
+    try:
+        eredmeny = valaszol(db, k, valasz_tipus=body.valasz_tipus, magyarazat=body.magyarazat,
+                            user_id=user.id, elesithet=elesithet)
+    except ValaszHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return {"kerdes": _kerdes_sor(k), **eredmeny}
 
 
 @router.get("/knowledge-graph")
@@ -1208,7 +1318,7 @@ def visszajatszas_osszesites(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
-    """Találati arány: az érkeztető (és ahol volt, HYRON) javaslata hányszor
+    """Találati arány: az érkeztető (és ahol volt, Lara) javaslata hányszor
     egyezett a végső emberi döntéssel — összesen és hetente."""
     from app.admin_agent.visszajatszas import osszesites
 
@@ -1463,7 +1573,7 @@ class SettingsPatchIn(BaseModel):
     side_effects_enabled: bool | None = None
     engedett_forrasok: dict | None = None
     limitek: dict | None = None
-    #: A tanulás kezdete: ettől a naptól keletkezett rekordokból tanul HYRON.
+    #: A tanulás kezdete: ettől a naptól keletkezett rekordokból tanul Lara.
     tanulas_kezdete: date | None = None
 
 

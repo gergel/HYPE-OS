@@ -1,4 +1,4 @@
-"""HYRON adatmodell (a modul magtáblái).
+"""Lara adatmodell (a modul magtáblái).
 
 A modul minden adminisztrációs munkát egy tartós `admin_task` köré szervez;
 minden javaslatnak van forrása, minden végrehajtásnak auditnyoma, minden
@@ -59,7 +59,7 @@ class SourceEvent(TimestampMixin, Base):
 
 
 class AdminTask(TimestampMixin, Base):
-    """Egy adminisztrációs munkaelem - HYRON és az ember ugyanezt látja."""
+    """Egy adminisztrációs munkaelem - Lara és az ember ugyanezt látja."""
 
     __tablename__ = "aa_tasks"
 
@@ -105,7 +105,7 @@ class AdminTask(TimestampMixin, Base):
 
 
 class AgentRun(TimestampMixin, Base):
-    """Egy HYRON-futás egy taskhoz: terv, eszközök, modell/verzió, költség.
+    """Egy Lara-futás egy taskhoz: terv, eszközök, modell/verzió, költség.
 
     NEM tárolunk rejtett modell-gondolatmenetet; ellenőrizhető döntési
     összefoglaló elegendő."""
@@ -131,7 +131,7 @@ class AgentRun(TimestampMixin, Base):
 
 
 class ActionTrace(TimestampMixin, Base):
-    """Audit-nyom: emberi VAGY HYRON-művelet, minimális előtte/utána diffel."""
+    """Audit-nyom: emberi VAGY Lara-művelet, minimális előtte/utána diffel."""
 
     __tablename__ = "aa_action_traces"
 
@@ -150,7 +150,7 @@ class ActionTrace(TimestampMixin, Base):
 
 
 class Correction(TimestampMixin, Base):
-    """Emberi javítás HYRON javaslatán - a tanulás legerősebb jele.
+    """Emberi javítás Lara javaslatán - a tanulás legerősebb jele.
 
     A későbbi emberi változtatás nem feltétlenül korrekció (lehet új üzleti
     adat); a `tipus` (enums.CorrectionType) különbözteti meg, kétes esetben
@@ -421,3 +421,29 @@ class Outbox(TimestampMixin, Base):
     kulso_azonosito: Mapped[str | None] = mapped_column(String(255))
     hiba: Mapped[str | None] = mapped_column(Text)
     feldolgozva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LaraKerdes(TimestampMixin, Base):
+    """Lara kérdése: az önellenőrzés során talált, számára MEGMAGYARÁZATLAN
+    eltérés (amit javasolt volna ≠ amit az ember rögzített). A válasz tudássá
+    válik (lásd admin_agent/onellenorzes.py). Partnerenként és végső céltípusonként
+    egy nyitott kérdés gyűjti az érintett eseteket (`kulcs`)."""
+
+    __tablename__ = "aa_questions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tipus: Mapped[str] = mapped_column(String(40), nullable=False, default="szamla_besorolas")
+    #: nyitott | megvalaszolt | elvetve
+    allapot: Mapped[str] = mapped_column(String(20), nullable=False, default="nyitott", index=True)
+    #: Csoportosító kulcs: "<partner_kulcs>|<végső céltípus>".
+    kulcs: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    partner_nev: Mapped[str | None] = mapped_column(String(300))
+    kerdes: Mapped[str] = mapped_column(Text, nullable=False)
+    #: {"esetek": [...], "lara_javaslata": {...}, "valosag": {...}, "alap": ...}
+    kontextus: Mapped[dict | None] = mapped_column(JSONB)
+    #: mindig | kivetel | magyarazat | hibas | elvet
+    valasz_tipus: Mapped[str | None] = mapped_column(String(20))
+    valasz_szoveg: Mapped[str | None] = mapped_column(Text)
+    megvalaszolta_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
+    megvalaszolva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    szabaly_id: Mapped[int | None] = mapped_column(ForeignKey("aa_playbook_rules.id", ondelete="SET NULL"))

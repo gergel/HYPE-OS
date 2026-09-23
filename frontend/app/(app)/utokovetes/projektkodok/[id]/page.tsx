@@ -111,8 +111,8 @@ export default async function UtokovetesProjektkodDetailPage({ params }: { param
           />
         </Card>
 
-        {/* HYRON TEENDŐK - az utókövetésben itt keletkeznek a szerződések,
-            TIG-ek és számlás lépések; HYRON ezekhez is ad feladatot és tanul
+        {/* LARA TEENDŐK - az utókövetésben itt keletkeznek a szerződések,
+            TIG-ek és számlás lépések; Lara ezekhez is ad feladatot és tanul
             belőlük (self-hiding, ha nincs /admin-agent jog). */}
         <AdminAgentTeendok projectCodeId={projectCodeId} />
       </div>

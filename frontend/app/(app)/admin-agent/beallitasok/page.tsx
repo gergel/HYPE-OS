@@ -8,7 +8,7 @@ import { getAdminAgentSettings, getAdminTrustPolicies, getMyPagePermissions } fr
 
 const PAGE = "/admin-agent";
 
-/** HYRON — BEÁLLÍTÁSOK.
+/** Lara — BEÁLLÍTÁSOK.
  *
  * A biztonságos alapállás kapcsolói (modul, mellékhatások, vészleállítás). A
  * magas kockázatú kapcsolók módosításához a legerősebb (delete) művelet-jog

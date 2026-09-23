@@ -1,4 +1,4 @@
-"""HYRON — E fázis (e-mail-előkészítés) és eszköztár-invariánsok tesztjei.
+"""Lara — E fázis (e-mail-előkészítés) és eszköztár-invariánsok tesztjei.
 
 Fedi: automata-hurok elleni védelem (10./21.), a „Beállítás szükséges" valós
 állapot integráció hiányában, és hogy banki utalást VÉGREHAJTÓ eszköz nincs

@@ -1,7 +1,7 @@
-"""HYRON — tudásháló: a megtanult tudás kapcsolati gráfja.
+"""Lara — tudásháló: a megtanult tudás kapcsolati gráfja.
 
 A Tudásháló oldal ebből rajzolja a „glóriát": minden pont egy dolog, amiről
-HYRON tud (partner, projektkód, számla-cél, szabály, témakör), minden vonal egy
+Lara tud (partner, projektkód, számla-cél, szabály, témakör), minden vonal egy
 kapcsolat közöttük. A gráf KIZÁRÓLAG valós, rögzített tudásból épül:
 
 * megfigyelt emberi munka (szerződés, TIG, kiadás — a megfigyelő forrásai),
@@ -190,7 +190,7 @@ def _pelda_ido(m: MemoryChunk | None, alap: datetime | None) -> datetime | None:
 
 def tudashalo(db: Session) -> dict:
     e = _Epito()
-    e.pont("core", "core", "HYRON")
+    e.pont("core", "core", "Lara")
     for t in TEMAK:
         e.pont(f"tema:{t}", "tema", TEMA_CIMKE[t], t)
 

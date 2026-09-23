@@ -3,26 +3,13 @@
 import { useState } from "react";
 import { authFetch } from "@/lib/authFetch";
 import type { AdminRule } from "@/lib/api";
-import { TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
+import { CEL_CIMKE, TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
 
-/** A számla-célok (backend: bejovo_szamla.CEL_TIPUSOK) magyar címkéi. */
-const CEL_CIMKE: Record<string, string> = {
-  kiadas_uj: "Új kiadás (projekthez)",
-  kiadas_csatolas: "Csatolás meglévő kiadáshoz",
-  kulsos_tig: "Meglévő külsős TIG",
-  belsos_tig: "Meglévő belsős TIG",
-  erezsi: "E-Rezsi",
-  auto: "Autóköltség",
-  kp: "KP-tétel bizonylata",
-  mukodesi: "Általános működési költség (projekt nélkül)",
-  kimeno: "Kimenő számla",
-};
-
-/** HYRON — szabály kézi felvétele (kliens).
+/** Lara — szabály kézi felvétele (kliens).
  *
  * A fejekben lévő szokások közvetlen beírása. A szabály VÁZLATKÉNT jön létre,
  * és csak értékelés után, élesítéssel lesz aktív. Ha partnerhez kötöd, csak
- * annál a partnernél jön elő; ha számlánál céltípust is megadsz, HYRON
+ * annál a partnernél jön elő; ha számlánál céltípust is megadsz, Lara
  * modell nélkül is kitölti vele az üres célt (az érkeztető javaslatát nem írja
  * felül). */
 export function AdminSzabalyUrlap({ onLetrehozva }: { onLetrehozva: (r: AdminRule) => void }) {
@@ -142,7 +129,7 @@ export function AdminSzabalyUrlap({ onLetrehozva }: { onLetrehozva: (r: AdminRul
       <p className="mt-2 text-[11.5px] text-text-muted">
         Vázlatként mentődik. Élesíteni a Szabály-jelöltek közül lehet, sikeres értékelés (Tanulás → 3. Értékelés) után.
         {hatokor === "szamla" && celTipus
-          ? " Élesítés után HYRON ennél a partnernél modell nélkül is ezt a célt javasolja, ha az érkeztető nem döntött."
+          ? " Élesítés után Lara ennél a partnernél modell nélkül is ezt a célt javasolja, ha az érkeztető nem döntött."
           : ""}
       </p>
       <div className="mt-2 flex gap-2">

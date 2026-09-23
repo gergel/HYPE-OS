@@ -1,4 +1,4 @@
-"""HYRON — tervezetek (TIG, szerződés, e-mail) HYRON-tól.
+"""Lara — tervezetek (TIG, szerződés, e-mail) Larától.
 
 A projektkódon és az utókövetésben az ember eddig kézzel töltötte ki a TIG- és
 szerződés-piszkozatokat. Ez a modul ezt az előkészítést végzi el:
@@ -266,12 +266,12 @@ def tig_szerzodes_tervezet(db: Session, task: AdminTask, user: Employee) -> dict
             ertek = (jav.get(mezo) or "").strip()
             if ertek and mezo not in t["mezok"]:
                 t["mezok"][mezo] = ertek[:255]
-                t["forrasok"][mezo] = "HYRON (korábbi esetek alapján)"
+                t["forrasok"][mezo] = "Lara (korábbi esetek alapján)"
         osszeg = jav.get("netto_osszeg")
         if "netto_osszeg" not in t["mezok"] and isinstance(osszeg, (int, float)) and osszeg >= 0:
             if any(abs(float(osszeg) - x) < 0.5 for x in t["igazolt_osszegek"]):
                 t["mezok"]["netto_osszeg"] = float(osszeg)
-                t["forrasok"]["netto_osszeg"] = "HYRON (igazolt korábbi összeg)"
+                t["forrasok"]["netto_osszeg"] = "Lara (igazolt korábbi összeg)"
             else:
                 figy.append(
                     f"{t['nev']}: a modell által javasolt összeg ({osszeg:,.0f} Ft) nincs igazolt forrásban — elutasítva.".replace(",", " ")

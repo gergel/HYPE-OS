@@ -514,7 +514,7 @@ export async function apiGet<T>(path: string): Promise<T | null> {
   }
 }
 
-// ── HYRON (lásd backend routes/admin_agent.py) ────────────────────────
+// ── Lara (lásd backend routes/admin_agent.py) ────────────────────────
 
 export type AdminTaskSor = {
   id: number;
@@ -561,6 +561,7 @@ export type AdminAgentOverview = {
     pelda_jeloltek: number;
     jovahagyott_peldak: number;
     felretett_regi_jeloltek?: number;
+    nyitott_kerdesek?: number;
     tanulas_kezdete?: string;
   };
   ember_nelkul_lezart: number | null;
@@ -577,7 +578,7 @@ export type AdminAgentSettings = {
   kill_switch_indok: string | null;
   engedett_forrasok: Record<string, unknown>;
   limitek: Record<string, unknown>;
-  /** Ettől a naptól keletkezett rekordokból tanul HYRON (ISO dátum). */
+  /** Ettől a naptól keletkezett rekordokból tanul Lara (ISO dátum). */
   tanulas_kezdete?: string;
   integraciok?: AdminAgentIntegracio[];
 };
@@ -729,6 +730,61 @@ export async function getAdminTrustPolicies(): Promise<{ elemek: AdminTrustPolic
   return apiGet<{ elemek: AdminTrustPolicy[] }>("/api/v1/admin-agent/trust-policies");
 }
 
+export type LaraKerdesEset = {
+  bejovo_id: number;
+  szamlaszam: string | null;
+  netto: string | null;
+  datum: string | null;
+  vegso_szoveg?: string;
+  lara_szoveg?: string | null;
+  lara_alap?: string | null;
+};
+
+/** Lara kérdése: az önellenőrzés során talált, számára megmagyarázatlan eltérés. */
+export type LaraKerdes = {
+  id: number;
+  /** nyitott | megvalaszolt | elvetve */
+  allapot: string;
+  partner_nev: string | null;
+  kerdes: string;
+  kontextus: {
+    partner?: string;
+    partner_kulcs?: string;
+    valosag?: { tipus: string; kod_idk: number[]; szoveg?: string };
+    esetek?: LaraKerdesEset[];
+  } | null;
+  valasz_tipus: string | null;
+  valasz_szoveg: string | null;
+  megvalaszolva_at: string | null;
+  szabaly_id: number | null;
+  letrehozva: string | null;
+};
+
+export async function getLaraKerdesek(allapot = "nyitott"): Promise<{ elemek: LaraKerdes[] } | null> {
+  return apiGet<{ elemek: LaraKerdes[] }>(`/api/v1/admin-agent/questions?allapot=${allapot}`);
+}
+
+/** Egy önellenőrző futás: Lara jóslata a rögzített munkára vs a valóság. */
+export type OnellenorzesFutas = {
+  id: number;
+  trigger: string;
+  veg_at: string | null;
+  ellenorzott?: number;
+  egyezik?: number;
+  elter?: number;
+  nem_tudta?: number;
+  megmagyarazva?: number;
+  talalati_arany?: number | null;
+  uj_kerdes?: number;
+  bovitett_kerdes?: number;
+  szabalyok?: number;
+  tanult_partnerek?: number;
+};
+
+export async function getOnellenorzesFutasok(): Promise<{ elemek: OnellenorzesFutas[] } | null> {
+  return apiGet<{ elemek: OnellenorzesFutas[] }>("/api/v1/admin-agent/self-check/runs");
+}
+
 export type TudashaloPont = {
   id: string;
   /** core | tema | partner | kod | cel | szabaly */
@@ -789,7 +845,7 @@ export type AdminReplayHet = {
   arany: number | null;
 };
 
-/** Visszajátszás: az érkeztető (és HYRON) javaslata vs a végső emberi döntés. */
+/** Visszajátszás: az érkeztető (és Lara) javaslata vs a végső emberi döntés. */
 export type AdminReplaySummary = {
   szamlak: number;
   egyezik: number;

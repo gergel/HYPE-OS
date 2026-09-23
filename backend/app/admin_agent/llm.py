@@ -1,7 +1,7 @@
-"""HYRON — modelladapter (Gemini, cserélhető).
+"""Lara — modelladapter (Gemini, cserélhető).
 
 A meglévő AI Assistant mintáját követi (google-genai `Client.models.generate_content`),
-de HYRON-hoz szigorúbban:
+de Larához szigorúbban:
 
 * STRUKTURÁLT kimenet: JSON-séma (`response_mime_type="application/json"` +
   `response_json_schema`), a választ a szerver is ellenőrzi (kötelező mezők,
@@ -26,7 +26,7 @@ from typing import Any, Callable
 from app.core.config import settings
 
 RENDSZER_ALAP = (
-    "HYRON vagy: egy magyar videógyártó cég (HYPE Productions) adminisztrációs ügynöke. "
+    "Lara vagy: egy magyar videógyártó cég (HYPE Productions) adminisztrációs ügynöke. "
     "A feladatod adminisztratív tervezetek és javaslatok előkészítése, amit ember hagy jóvá. "
     "SZABÁLYOK: (1) Csak a megadott adatokból dolgozz; hiányzó adatot (összeg, partner, projektkód, "
     "dátum, címzett) SOHA ne találj ki — tedd a 'hianyzo_adatok' listába. (2) Minden kitöltött mezőhöz "

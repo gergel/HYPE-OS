@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import type { AdminAgentSettings } from "@/lib/api";
 
-/** HYRON — BEÁLLÍTÁSOK (kliens).
+/** Lara — BEÁLLÍTÁSOK (kliens).
  *
  * A biztonságos alapállás kapcsolói. A modul és a mellékhatások KÜLÖN
  * engedélyezendők (a modul bekapcsolása önmagában még nem enged külső hatást),
- * és a vészleállítás azonnal letiltja HYRON minden mellékhatásos lépését.
+ * és a vészleállítás azonnal letiltja Lara minden mellékhatásos lépését.
  * A tényleges kikényszerítés a szerver-oldali policy engine dolga — ez a
  * felület csak beállítja a kapcsolókat. */
 export function AdminBeallitasok({
@@ -54,7 +54,7 @@ export function AdminBeallitasok({
       setB(uj);
       if (uj.korszak) {
         setKezdetUzenet(
-          `Mentve. ${uj.korszak.felreteve} régi jelölt félretéve, ${uj.korszak.visszahozva} visszahozva; ${uj.korszak.regi_jovahagyott} jóváhagyott régi példát HYRON kisebb súllyal használ.`,
+          `Mentve. ${uj.korszak.felreteve} régi jelölt félretéve, ${uj.korszak.visszahozva} visszahozva; ${uj.korszak.regi_jovahagyott} jóváhagyott régi példát Lara kisebb súllyal használ.`,
         );
       }
       router.refresh();
@@ -104,7 +104,7 @@ export function AdminBeallitasok({
 
       <Kapcsolo
         cim="Tanulás és megfigyelés (L0)"
-        leiras="Bekapcsolva HYRON félóránként megnézi a projektkódokon és az utókövetésben történt szerződés-, TIG- és számla/kiadás-lépéseket, és éjszakánként tanul a javításokból. Csak olvas és jelölteket készít — üzleti rekordot nem módosít, ezért a modul kikapcsolt állapotában is biztonságos."
+        leiras="Bekapcsolva Lara félóránként megnézi a projektkódokon és az utókövetésben történt szerződés-, TIG- és számla/kiadás-lépéseket, és éjszakánként tanul a javításokból. Csak olvas és jelölteket készít — üzleti rekordot nem módosít, ezért a modul kikapcsolt állapotában is biztonságos."
         aktiv={megfigyelesBe}
         tiltva={!canManage || folyamatban}
         onValt={(v) =>
@@ -117,7 +117,7 @@ export function AdminBeallitasok({
       <div className="rounded-[var(--radius)] border border-border bg-surface-3 px-4 py-3.5">
         <p className="text-[13px] font-medium text-text-primary">Tanulás kezdete</p>
         <p className="mt-0.5 text-[12px] text-text-muted">
-          HYRON csak az ettől a naptól a HYPE OS-ben keletkezett munkából készít példa-jelöltet (a Notion-korszak
+          Lara csak az ettől a naptól a HYPE OS-ben keletkezett munkából készít példa-jelöltet (a Notion-korszak
           és a Notionből hozott rekordok kimaradnak). A régebbi, már jóváhagyott példákat csak az újak után, kisebb
           súllyal használja; a régi, el nem bírált jelöltek félre lesznek téve (nem törlődnek).
         </p>
@@ -144,7 +144,7 @@ export function AdminBeallitasok({
 
       <Kapcsolo
         cim="Modul engedélyezése"
-        leiras="Bekapcsolva HYRON elemez és javaslatokat készít. A mellékhatások (rekordírás, e-mail) ettől még külön engedély nélkül tiltottak maradnak."
+        leiras="Bekapcsolva Lara elemez és javaslatokat készít. A mellékhatások (rekordírás, e-mail) ettől még külön engedély nélkül tiltottak maradnak."
         aktiv={b.module_enabled}
         tiltva={!canManage || folyamatban || b.kill_switch}
         onValt={(v) => mentSettings({ module_enabled: v })}
@@ -167,7 +167,7 @@ export function AdminBeallitasok({
           Vészleállítás
         </p>
         <p className={`mt-0.5 text-[12px] ${b.kill_switch ? "text-text-danger/80" : "text-text-muted"}`}>
-          Azonnal letiltja HYRON minden mellékhatásos lépését. A már elindult, nem megszakítható külső műveleteket
+          Azonnal letiltja Lara minden mellékhatásos lépését. A már elindult, nem megszakítható külső műveleteket
           nem vonja vissza.
         </p>
         {b.kill_switch ? (

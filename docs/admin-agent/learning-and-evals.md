@@ -1,4 +1,4 @@
-# HYRON — tanulás és értékelés
+# Lara — tanulás és értékelés
 
 ## Tanulás (retrieval + verziózott playbook)
 
@@ -7,7 +7,7 @@ fine-tuning és NEM a forráskód/prompt/jogosultság csendes átírása. Az elf
 tudás a saját adatbázisban marad, visszakereshető forrással.
 
 ### Capture (rögzítés)
-- Az emberi és HYRON-műveletek szerver-oldali nyoma: `aa_action_traces`, a
+- Az emberi és Lara-műveletek szerver-oldali nyoma: `aa_action_traces`, a
   javaslat (`aa_action_proposals`) és a végleges eredmény (`aa_action_executions`)
   külön tárolva.
 - Emberi javítás → `aa_corrections` (mezőszintű diff, típus, magyarázat). A

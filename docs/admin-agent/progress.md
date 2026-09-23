@@ -1,4 +1,4 @@
-# HYRON – haladás (élő folytatási pont)
+# Lara – haladás (élő folytatási pont)
 
 Ez a fájl a kontextusváltás-biztos folytatási pont: mi készült el (és
 tesztelt-e), mi van hátra, mik a blokkolók. NEM az implementáció
@@ -56,14 +56,14 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   milyen policy-döntéssel). Backend: `GET /admin-agent/tasks/{id}/timeline`
   (csak olvasás). A munkasor sorai ide linkelnek.
 - **Hátra:** a jóváhagyás jóváhagyás/elvetés gombjai (a végrehajtó réteggel,
-  D/E), és a meglévő oldalakba (Pénzügyek beérkező számlák) való „HYRON
+  D/E), és a meglévő oldalakba (Pénzügyek beérkező számlák) való „Lara
   árnyék-elemzés" gomb. Tudástár/Tanulás/Napló aloldalak: F/G fázis.
 ### D. Számlafolyamat végig L0/L1-ben, valós szolgáltatásokra kötve 🟡
 - **L0 árnyék-elemzés kész** (`app/admin_agent/pipeline_szamla.py`): egy beérkező
-  számlából (BejovoSzamla) forrásesemény → feladat → HYRON-futás → nyomvonal →
+  számlából (BejovoSzamla) forrásesemény → feladat → Lara-futás → nyomvonal →
   művelet-javaslat, a policy engine döntésével. A javaslat payloadja pontosan a
   meglévő `services/szamla_erkeztetes.jovahagy` `dontes`-alakját írja le (az
-  HYRON a MEGLÉVŐ pénzügyi szolgáltatáson át dolgozna), de L0-ban VÉGRE NEM
+  Lara a MEGLÉVŐ pénzügyi szolgáltatáson át dolgozna), de L0-ban VÉGRE NEM
   HAJTJUK. Determinista, szerver-oldali ellenőrzések (hiányzó cél/összeg/díjbekérő)
   → hiányos javaslat NEEDS_INFO. Kockázat szerver-oldalon R2 (belső pénzügyi
   rekord írása). Idempotens (forrásesemény: forras+azonosító+állapot; feladat:
@@ -88,7 +88,7 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   `/assign`, `/cancel`, `GET /executions/{id}`.
 - Tesztek: `tests/test_admin_agent_executor.py` (5 elfogadási teszt: alapállás
   blokkol + 0 Expense, vészleállítás, eltérő hash, consumed jóváhagyás,
-  idempotencia). 15 HYRON teszt zöld; HTTP-smoke minden új végponton OK.
+  idempotencia). 15 Lara teszt zöld; HTTP-smoke minden új végponton OK.
 - **Jóváhagyások felület bekötve:** a Jóváhagyások aloldal a valós listát
   mutatja (javaslat payload + kockázat), „Jóváhagyás és végrehajtás" / „Elutasítás"
   gombokkal; a jóváhagyás a payload-hash-hez kötött (409 eltérésnél), a
@@ -116,7 +116,7 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   modell, dokumentumtár) — az Áttekintésen és a Beállításokban „Kész / Beállítás
   szükséges" (a titkok értéke sosem kerül a böngészőbe).
 - Tesztek: `tests/test_admin_agent_email.py` (validáció/automata-hurok, nincs
-  banki eszköz, „Beállítás szükséges" DRAFT+NEEDS_INFO). 21 HYRON teszt zöld.
+  banki eszköz, „Beállítás szükséges" DRAFT+NEEDS_INFO). 21 Lara teszt zöld.
 - **Hátra:** TIG/szerződés-előkészítés a meglévő papír-generátorra (a draft a
   javaslat, ember véglegesít a meglévő felületen — L1); „Admin-feladat
   létrehozása" gomb a meglévő e-mail-nézetből (nincs általános e-mail-inbox UI a
@@ -142,22 +142,22 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   állapotot.
 
 ### H. Teljes tesztelés, migrációpróba, build, biztonsági ellenőrzés, docs 🟡
-- 25 HYRON teszt zöld (`pytest tests/test_admin_agent_*.py`); tsc + eslint
+- 25 Lara teszt zöld (`pytest tests/test_admin_agent_*.py`); tsc + eslint
   + `next build` zöld; migráció le/fel próbálva.
 - Dokumentáció kész: `architecture.md`, `operations.md`, `permissions-and-risk.md`,
   `learning-and-evals.md`, `acceptance-checklist.md`, `user-guide.md`, `progress.md`,
-  `.env.example` HYRON szekció.
+  `.env.example` Lara szekció.
 - Hátra: valós modell (Gemini) elemzés explicit konfiggal + elkülönített teszt,
   worker crash-recovery + külső-timeout reconcile end-to-end, frontend E2E
   (Playwright), teljes backend regressziós suite futtatása.
 
 ### I. Teljes kattinthatóság + projektkód/utókövetés megfigyelés ✅
-- **Kattintható belépési pontok:** Beérkező számlák sorain „HYRON" gomb
+- **Kattintható belépési pontok:** Beérkező számlák sorain „Lara" gomb
   (árnyék-elemzés → feladat); a feladat oldalán „Javítás rögzítése" űrlap +
   „Újraelemzés" / „Megszakítás"; a Tanulás oldalon Megfigyelés / Kezdeti
   visszatekintés / Háttér-tanuló / Értékelés gombok; a Tudástárban példák
   jóváhagyása/elvetése és szabályok élesítése/visszavonása.
-- **Projektkód + Utókövetés bekötés:** „HYRON teendők" blokk a
+- **Projektkód + Utókövetés bekötés:** „Lara teendők" blokk a
   projektkód-adatlapon és az utókövetés projektkód-oldalán (feladatlista +
   új szerződés/TIG/számla/utalás feladat a projektkódhoz kötve; jog nélkül rejtve).
 - **Megfigyelő** (`app/admin_agent/observer.py`): a szerződések, TIG-ek, belsős
@@ -204,7 +204,7 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   különbség mezőszintű javításként rögzül, új javaslat készül (a régi leváltva).
 - **Tudástár tömeges kijelölés:** típusszűrő + pipálás + „Kijelöltek
   jóváhagyása/elvetése" (`POST /memory/bulk`, max 500; nincs „mindent jóváhagy").
-- **Felület:** a feladat oldalán „Tervezet készítése (HYRON)", „HYRON
+- **Felület:** a feladat oldalán „Tervezet készítése (Lara)", „Lara
   értékelése" doboz (összefoglaló, bizonytalanság, konfliktus, hiányok,
   figyelmeztetések, felhasznált tudás), tételtábla forrásokkal, „Javaslat
   szerkesztése".
@@ -250,7 +250,7 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   (`feltetelek.partner/cel_tipus/projektkod_idk`, pending). Idempotens
   (forrásesemény `visszajatszas`), üzleti rekord nem változik.
 - Találati arány (`GET /replays/summary`): érkeztető és — ha a döntés előtt
-  elemezte — HYRON egyezése, összesen és hetente. `POST /replays` futtat.
+  elemezte — Lara egyezése, összesen és hetente. `POST /replays` futtat.
 - Az érkeztető mostantól pillanatképet tesz a javaslatba a javasolt célról
   (`javaslat.javasolt_cel`, additív kulcs) — a pontos utólagos összevetéshez.
 - Partner-egyezés normalizált névvel (`memory.partner_kulcs`: ékezet, kisbetű,
@@ -284,6 +284,41 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
 - Tesztek: `test_admin_agent_tudashalo.py` (2). Teljes backend: 126 zöld,
   1 kihagyott; tsc + eslint + `next build` zöld. Vizuális ellenőrzés Playwright-
   képernyőképekkel (ideiglenes, jelölt demóadaton — utána törölve).
+
+### N. Átnevezés Larára + önellenőrző, folyamatos tanulás (kérdésekkel) ✅
+- Név: **Lara** (korábban Admin-Ágens / HYRON) minden felhasználói szövegben,
+  a docsban és a modell rendszerpromptjában; szabály: `CLAUDE.md`. Technikai
+  azonosítók (útvonal, API, csomag, táblák) változatlanok.
+- `app/admin_agent/onellenorzes.py`: Lara a tanulás kezdete óta rögzített
+  számlákra „vakon" (az adott számla saját tanulsága nélkül) megmondja, mit
+  javasolt volna a JELENLEGI tudásával (`Tudas`: élesített partner-szabály →
+  ≥2 egybehangzó jóváhagyott eset / megválaszolt kérdés → különben az érkeztető
+  javaslata), és összeveti a valósággal. Eltérésnél / tudáshiánynál KÉRDEZ
+  (új tábla `aa_questions`, migráció `j3d0a41x8y52`; partnerenként és végső
+  céltípusonként egy kérdés, max. 25 nyitott, ismételt futásnál bővül, nem duplikál).
+- Válaszok → tudás: „mindig így" = partner-szabály (élesítési joggal + sikeres
+  eval mellett azonnal aktív, különben jelölt); „magyarázat" = jóváhagyott tudás
+  a magyarázattal (a `Tudas` esetként is számolja); „egyszeri kivétel" =
+  feljegyzés általánosítás nélkül; „hibás rögzítés" = nem tanít; „nem releváns".
+- Az éles számla-elemzés ugyanazt a `Tudas`-t használja (szabály 0,3,
+  esetekből 0,45 bizonytalanság; csak üres mezőt tölt, érkeztetőt nem ír felül).
+- Futásonként találati arány (`aa_learning_runs`, trigger `onellenorzes:*`):
+  ebből látszik a tanulás. Ütemezés: Celery beat kétóránként (:15), bekapcsolt
+  „Tanulás és megfigyelés" mellett, előtte visszajátszással.
+- API: `POST /self-check`, `GET /self-check/runs`, `GET /questions`,
+  `POST /questions/{id}/answer`; overview `nyitott_kerdesek`; a háttér-tanuló
+  listája az önellenőrző futásokat nem mutatja.
+- Felület: „Kérdések" fül + „Lara kérdései" menü (kérdéskártya: Lara javaslata
+  vs. a rögzítés, válaszlehetőségek), Tanulás oldalon „Lara önellenőrzése"
+  kártya (találati arány, futások), Áttekintésen nyitott kérdések száma.
+- Tesztek: `test_admin_agent_onellenorzes.py` (6) — a teljes kör: nem érti →
+  kérdez → „mindig így" → a következő futáson eltalálja; magyarázat → éles
+  elemzés is használja; hibás rögzítés nem tanít; vak jóslat nem „puskáz".
+  Teljes backend: 132 zöld, 1 kihagyott; tsc + eslint + `next build` zöld.
+  Élő próba (jelölt demóadaton, utána törölve): 7 számla, 3 kérdés; egy
+  „mindig így" válasz után a találati arány 29% → 57%.
+- Korlát: az önellenőrzés most a számlák besorolására fut (ez a fő tanulható
+  döntés); a TIG/szerződés-mezőkre kiterjeszthető.
 
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).

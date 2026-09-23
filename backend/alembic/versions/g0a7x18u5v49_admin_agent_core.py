@@ -1,4 +1,4 @@
-"""HYRON magtáblák (Fázis B): source_events, tasks, agent_runs,
+"""Lara magtáblák (Fázis B): source_events, tasks, agent_runs,
 action_traces, corrections, action_proposals, approvals, action_executions,
 playbook_rules, trust_policies, settings. Additív; nem bánt meglévő táblát.
 
