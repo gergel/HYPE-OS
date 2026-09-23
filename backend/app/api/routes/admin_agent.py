@@ -1191,6 +1191,7 @@ def megfigyeles_inditas(
 def _kerdes_sor(k: LaraKerdes) -> dict:
     return {
         "id": k.id,
+        "tipus": k.tipus,
         "allapot": k.allapot,
         "partner_nev": k.partner_nev,
         "kerdes": k.kerdes,
@@ -1209,8 +1210,9 @@ def onellenorzes_inditas(
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
     """Lara önellenőrzése most: előbb a friss rögzítések visszajátszása, majd a
-    jelenlegi tudással „vak" jóslat minden rögzített számlára, összevetés a
-    valósággal; ahol nem érti az eltérést, kérdez. Üzleti rekord nem változik."""
+    jelenlegi tudással „vak" jóslat minden rögzített számlára és lezárt eseti
+    szerződés/TIG döntésre (Utókövetés), összevetés a valósággal; ahol nem érti
+    az eltérést, kérdez. Üzleti rekord nem változik."""
     from app.admin_agent.onellenorzes import onellenorzes
     from app.admin_agent.visszajatszas import visszajatszas
 

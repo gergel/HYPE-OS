@@ -183,9 +183,14 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
     kezdet = tanulas_kezdete(db)
     tudas = Tudas(db)
     megvalaszolt: set[int] = set()
+    megvalaszolt_papir: set[tuple[str, str]] = set()
     for k in db.scalars(select(LaraKerdes).where(LaraKerdes.allapot != "nyitott")).all():
-        for e in (k.kontextus or {}).get("esetek") or []:
-            megvalaszolt.add(int(e.get("bejovo_id") or 0))
+        c = k.kontextus or {}
+        for e in c.get("esetek") or []:
+            if k.tipus == "papir":
+                megvalaszolt_papir.add((e.get("rekord") or "", c.get("dimenzio") or ""))
+            else:
+                megvalaszolt.add(int(e.get("bejovo_id") or 0))
 
     stat = Counter()
     csoport: dict[str, dict] = {}
@@ -225,53 +230,102 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
             }
         )
 
+    # Papírozás (eseti szerződések, TIG-ek — a Utókövetés döntései).
+    from app.admin_agent.onellenorzes_papir import papir_ellenorzes, papir_kerdes_szoveg
+
+    papir_stat, papir_csoport = papir_ellenorzes(db, kezdet, megvalaszolt_papir)
+    for g in csoport.values():
+        g["tipus"] = "szamla_besorolas"
+    for g in papir_csoport.values():
+        g["tipus"] = "papir"
+    osszes_csoport = {**csoport, **papir_csoport}
+
+    def _szoveg(g: dict) -> str:
+        if g["tipus"] == "papir":
+            return papir_kerdes_szoveg(g)
+        return _kerdes_szoveg(db, g["partner"], g["esetek"], g["valosag"])
+
+    def _azon(e: dict) -> str:
+        return str(e.get("rekord") or e.get("bejovo_id"))
+
     nyitott = {k.kulcs: k for k in db.scalars(select(LaraKerdes).where(LaraKerdes.allapot == "nyitott")).all()}
     uj = bovitett = 0
-    for ck, g in csoport.items():
+    for ck, g in osszes_csoport.items():
         if ck in nyitott:
             k = nyitott[ck]
-            regi = {e["bejovo_id"] for e in (k.kontextus or {}).get("esetek") or []}
-            friss = [e for e in g["esetek"] if e["bejovo_id"] not in regi]
+            regi = {_azon(e) for e in (k.kontextus or {}).get("esetek") or []}
+            friss = [e for e in g["esetek"] if _azon(e) not in regi]
             if friss:
                 ktx = dict(k.kontextus or {})
                 ktx["esetek"] = list(ktx.get("esetek") or []) + friss
                 k.kontextus = ktx
-                k.kerdes = _kerdes_szoveg(db, g["partner"], ktx["esetek"], g["valosag"])
+                k.kerdes = _szoveg({**g, "esetek": ktx["esetek"]})
                 bovitett += 1
             continue
         if len(nyitott) + uj >= MAX_NYITOTT:
             stat["kerdes_varolistan"] += 1
             continue
+        tipus = g.pop("tipus")
         db.add(
             LaraKerdes(
-                tipus="szamla_besorolas",
+                tipus=tipus,
                 allapot="nyitott",
                 kulcs=ck,
                 partner_nev=(g["partner"] or "")[:300],
-                kerdes=_kerdes_szoveg(db, g["partner"], g["esetek"], g["valosag"]),
+                kerdes=_szoveg({**g, "tipus": tipus}),
                 kontextus=g,
             )
         )
         uj += 1
 
-    ellenorzott = stat["egyezik"] + stat["elter"] + stat["nem_tudta"]
+    def _terulet(c: Counter, nem_tudta: bool) -> dict:
+        n = c["egyezik"] + c["elter"] + (c["nem_tudta"] if nem_tudta else 0)
+        return {
+            "ellenorzott": n,
+            "egyezik": c["egyezik"],
+            "elter": c["elter"],
+            "nem_tudta": c["nem_tudta"] if nem_tudta else 0,
+            "megmagyarazva": c["megmagyarazva"],
+            "talalati_arany": round(c["egyezik"] / n, 3) if n else None,
+        }
+
+    teruletek = {"szamla": _terulet(stat, True), **{t: _terulet(c, False) for t, c in papir_stat.items()}}
+    ossz = Counter()
+    for t in teruletek.values():
+        for mezo in ("ellenorzott", "egyezik", "elter", "nem_tudta", "megmagyarazva"):
+            ossz[mezo] += t[mezo]
+    ellenorzott = ossz["ellenorzott"]
     osszefoglalo = {
         "ellenorzott": ellenorzott,
-        "egyezik": stat["egyezik"],
-        "elter": stat["elter"],
-        "nem_tudta": stat["nem_tudta"],
-        "megmagyarazva": stat["megmagyarazva"],
-        "talalati_arany": round(stat["egyezik"] / ellenorzott, 3) if ellenorzott else None,
+        "egyezik": ossz["egyezik"],
+        "elter": ossz["elter"],
+        "nem_tudta": ossz["nem_tudta"],
+        "megmagyarazva": ossz["megmagyarazva"],
+        "talalati_arany": round(ossz["egyezik"] / ellenorzott, 3) if ellenorzott else None,
+        "teruletek": teruletek,
         "uj_kerdes": uj,
         "bovitett_kerdes": bovitett,
         "varolistan": stat["kerdes_varolistan"],
-        "szabalyok": sum(len(v) for v in tudas.szabalyok.values()),
+        "szabalyok": sum(len(v) for v in tudas.szabalyok.values()) + _papir_szabalyok(db),
         "tanult_partnerek": len(tudas.esetek),
     }
     most = _most()
     db.add(LearningRun(trigger=trigger, allapot="kesz", kezdes_at=most, veg_at=most, osszefoglalo=osszefoglalo))
     db.flush()
     return osszefoglalo
+
+
+def _papir_szabalyok(db: Session) -> int:
+    """Élesített, partnerre szabott papír-szabályok (szerződés/TIG) száma."""
+    from app.admin_agent.onellenorzes_papir import TERULETEK
+
+    return sum(
+        1
+        for r in db.scalars(
+            select(PlaybookRule).where(PlaybookRule.hatokor.in_(TERULETEK), PlaybookRule.allapot == RuleState.ACTIVE.value)
+        ).all()
+        if (r.feltetelek or {}).get("mezo") and (r.feltetelek or {}).get("partner")
+    )
 
 
 # ── Válasz a kérdésre → tudás ─────────────────────────────────────────────────
@@ -297,9 +351,14 @@ def valaszol(db: Session, k: LaraKerdes, *, valasz_tipus: str, magyarazat: str |
     ktx = k.kontextus or {}
     v = ktx.get("valosag") or {}
     partner = k.partner_nev or ktx.get("partner_kulcs") or "?"
+    eredmeny: dict = {"szabaly_id": None, "szabaly_allapot": None, "pelda_id": None}
+
+    if k.tipus == "papir":
+        _papir_valasz(db, k, valasz_tipus, szoveg, elesithet, eredmeny)
+        return _lezar(db, k, valasz_tipus, szoveg, user_id, eredmeny)
+
     celszoveg = _cel_szoveg(db, v.get("tipus"), v.get("kod_idk"))
     n = len(ktx.get("esetek") or [])
-    eredmeny: dict = {"szabaly_id": None, "szabaly_allapot": None, "pelda_id": None}
 
     if valasz_tipus in ("mindig", "magyarazat", "kivetel"):
         if valasz_tipus == "kivetel":
@@ -352,6 +411,41 @@ def valaszol(db: Session, k: LaraKerdes, *, valasz_tipus: str, magyarazat: str |
         eredmeny["szabaly_id"] = r.id
         eredmeny["szabaly_allapot"] = r.allapot
 
+    return _lezar(db, k, valasz_tipus, szoveg, user_id, eredmeny)
+
+
+def _papir_valasz(db: Session, k: LaraKerdes, valasz_tipus: str, szoveg: str | None, elesithet: bool,
+                  eredmeny: dict) -> None:
+    """Papír-kérdés (szerződés/TIG döntés) válasza → tudás / szabály."""
+    from app.admin_agent.onellenorzes_papir import papir_szabaly, papir_tudas_tartalom
+
+    ktx = k.kontextus or {}
+    if valasz_tipus in ("mindig", "magyarazat", "kivetel"):
+        tartalom = papir_tudas_tartalom(k, valasz_tipus)
+        if szoveg:
+            tartalom += f" Magyarázat (ember): {szoveg}"
+        m = MemoryChunk(
+            hatokor=ktx.get("terulet") or "szerzodes",
+            tartalom=tartalom,
+            forras=f"kerdes:{k.id}",
+            minosites="jovahagyott",
+            tanulasi_halmaz="jovahagyott",
+            ervenyes=True,
+            regi_korszak=False,
+        )
+        db.add(m)
+        db.flush()
+        eredmeny["pelda_id"] = m.id
+    if valasz_tipus == "mindig" and ktx.get("partner_kulcs") and ktx.get("dimenzio"):
+        r = papir_szabaly(k, szoveg, elesithet)
+        db.add(r)
+        db.flush()
+        k.szabaly_id = r.id
+        eredmeny["szabaly_id"] = r.id
+        eredmeny["szabaly_allapot"] = r.allapot
+
+
+def _lezar(db: Session, k: LaraKerdes, valasz_tipus: str, szoveg: str | None, user_id: int, eredmeny: dict) -> dict:
     k.allapot = "elvetve" if valasz_tipus == "elvet" else "megvalaszolt"
     k.valasz_tipus = valasz_tipus
     k.valasz_szoveg = szoveg

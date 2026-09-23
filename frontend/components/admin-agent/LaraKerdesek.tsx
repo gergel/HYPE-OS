@@ -9,7 +9,7 @@ const VALASZOK: { ertek: string; cim: string; leiras: string }[] = [
   {
     ertek: "mindig",
     cim: "Mindig így kell — tanuld meg szabályként",
-    leiras: "Ennél a partnernél mindig ide kerül a számla. Lara partnerre szabott szabályt tanul belőle.",
+    leiras: "Ennél a partnernél mindig így kell. Lara partnerre szabott szabályt tanul belőle.",
   },
   {
     ertek: "magyarazat",
@@ -24,9 +24,27 @@ const VALASZOK: { ertek: string; cim: string; leiras: string }[] = [
   {
     ertek: "hibas",
     cim: "Rosszul rögzítettük — Lara javaslata volt a jó",
-    leiras: "Nem tanul belőle. A rögzítést a Pénzügyek / Beérkező számlák oldalon javítsd.",
+    leiras: "Nem tanul belőle. A rögzítést javítsd (Beérkező számlák, illetve Utókövetés).",
   },
 ];
+
+const TERULETEK: { kulcs: string; cim: string }[] = [
+  { kulcs: "szamla", cim: "Számlák" },
+  { kulcs: "szerzodes", cim: "Szerződések" },
+  { kulcs: "tig", cim: "TIG-ek" },
+];
+const TERULET_EGYES: Record<string, string> = { szamla: "Számla", szerzodes: "Szerződés", tig: "TIG" };
+const DIMENZIO: Record<string, string> = {
+  kihagyas: "kell-e a papír",
+  osszeg: "nettó összeg",
+  afa: "+ÁFA",
+  targy: "megbízás tárgya",
+  szamla_kihagyas: "kell-e számla",
+};
+
+function terulet(k: LaraKerdes): string {
+  return k.tipus === "papir" ? (k.kontextus?.terulet ?? "szerzodes") : "szamla";
+}
 
 const VALASZ_CIMKE: Record<string, string> = {
   mindig: "Mindig így — szabály",
@@ -54,21 +72,47 @@ export function LaraKerdesek({
   const [lista, setLista] = useState(nyitottak);
   const [kesz, setKesz] = useState(megvalaszoltak);
   const [uzenet, setUzenet] = useState<string | null>(null);
+  const [szuro, setSzuro] = useState("mind");
+  const lathato = szuro === "mind" ? lista : lista.filter((k) => terulet(k) === szuro);
+  const szurok = [
+    { kulcs: "mind", cim: "Mind", n: lista.length },
+    ...TERULETEK.map((t) => ({ ...t, n: lista.filter((k) => terulet(k) === t.kulcs).length })),
+  ];
 
   return (
     <div className="flex flex-col gap-4">
       {uzenet && <div className="rounded-[var(--radius)] bg-bg-success px-3 py-2 text-[13px] text-text-success">{uzenet}</div>}
 
+      {lista.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Terület szerinti szűrés">
+          {szurok.map((s) => (
+            <button
+              key={s.kulcs}
+              type="button"
+              aria-pressed={szuro === s.kulcs}
+              onClick={() => setSzuro(s.kulcs)}
+              className={`rounded-full border px-3 py-1 text-[12.5px] ${
+                szuro === s.kulcs
+                  ? "border-text-accent bg-surface-3 text-text-primary"
+                  : "border-border text-text-secondary hover:bg-surface-3"
+              }`}
+            >
+              {s.cim} <span className="tabular-nums text-text-muted">{s.n}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {lista.length === 0 ? (
         <div className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6">
           <p className="t-card mb-1">Most nincs kérdése Larának</p>
           <p className="text-[13px] text-text-secondary">
-            Lara kétóránként (és a Tanulás oldalon kézzel indítva) összeveti, mit javasolt volna a rögzített számlákra,
-            és mi lett a valóság. Ha valamit nem ért, itt kérdez.
+            Lara kétóránként (és a Tanulás oldalon kézzel indítva) összeveti, mit javasolt volna a rögzített számlákra
+            és az Utókövetés lezárt szerződés- és TIG-döntéseire, és mi lett a valóság. Ha valamit nem ért, itt kérdez.
           </p>
         </div>
       ) : (
-        lista.map((k) => (
+        lathato.map((k) => (
           <KerdesKartya
             key={k.id}
             k={k}
@@ -121,6 +165,7 @@ function KerdesKartya({
   const [hiba, setHiba] = useState<string | null>(null);
   const [folyamatban, setFolyamatban] = useState(false);
   const esetek = k.kontextus?.esetek ?? [];
+  const papir = k.tipus === "papir";
 
   async function kuld(tipus: string) {
     setHiba(null);
@@ -153,7 +198,9 @@ function KerdesKartya({
             : tipus === "kivetel"
               ? "Rendben, feljegyeztem egyszeri kivételként — nem általánosítok belőle."
               : tipus === "hibas"
-                ? "Rendben, ebből nem tanulok. A rögzítést a Beérkező számlák oldalon javítsd."
+                ? k.tipus === "papir"
+                  ? "Rendben, ebből nem tanulok. Ha kell, az Utókövetés oldalon javítsd."
+                  : "Rendben, ebből nem tanulok. A rögzítést a Beérkező számlák oldalon javítsd."
                 : "A kérdést lezártam.";
       onKesz(d.kerdes, uzenet);
     } finally {
@@ -163,13 +210,50 @@ function KerdesKartya({
 
   return (
     <article className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-      <p className="mb-1 text-[11.5px] uppercase tracking-[0.08em] text-text-muted">
+      <p className="mb-1 flex flex-wrap items-center gap-x-1.5 text-[11.5px] uppercase tracking-[0.08em] text-text-muted">
+        <span className="rounded-full border border-border px-2 py-px normal-case tracking-normal text-text-secondary">
+          {TERULET_EGYES[terulet(k)]}
+          {papir && k.kontextus?.dimenzio ? ` · ${DIMENZIO[k.kontextus.dimenzio] ?? k.kontextus.dimenzio}` : ""}
+        </span>
         Lara kérdése · {k.partner_nev}
         {k.letrehozva ? ` · ${new Date(k.letrehozva).toLocaleDateString("hu-HU")}` : ""}
       </p>
       <p className="mb-3 text-[15px] leading-snug text-text-primary">{k.kerdes}</p>
 
-      {esetek.length > 0 && (
+      {papir && esetek.length > 0 && (
+        <div className="mb-4 overflow-x-auto rounded-[var(--radius)] border border-border">
+          <table className="w-full border-collapse text-[12.5px]">
+            <thead>
+              <tr className="border-b border-border bg-surface-3 text-left text-text-muted">
+                <th className="px-2.5 py-1.5 font-medium">{TERULET_EGYES[terulet(k)]}</th>
+                <th className="px-2.5 py-1.5 font-medium">Nettó</th>
+                <th className="px-2.5 py-1.5 font-medium">Lezárva</th>
+                <th className="px-2.5 py-1.5 font-medium">Lara ezt várta</th>
+                <th className="px-2.5 py-1.5 font-medium">Ahogy döntöttetek</th>
+              </tr>
+            </thead>
+            <tbody>
+              {esetek.map((e) => (
+                <tr key={e.rekord ?? e.rekord_id} className="border-b border-border last:border-0">
+                  <td className="px-2.5 py-1.5 text-text-primary">
+                    {e.projektkod ?? "—"}
+                    {e.projekt && <span className="block text-[11px] text-text-muted">{e.projekt}</span>}
+                  </td>
+                  <td className="px-2.5 py-1.5 tabular-nums text-text-secondary">{e.netto ?? "—"}</td>
+                  <td className="px-2.5 py-1.5 text-text-secondary">{e.datum ?? "—"}</td>
+                  <td className="px-2.5 py-1.5 text-text-secondary">
+                    {e.lara_szoveg ?? "—"}
+                    {e.lara_alap && <span className="block text-[11px] text-text-muted">{e.lara_alap}</span>}
+                  </td>
+                  <td className="px-2.5 py-1.5 text-text-primary">{e.valosag_szoveg ?? k.kontextus?.valosag?.szoveg}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!papir && esetek.length > 0 && (
         <div className="mb-4 overflow-x-auto rounded-[var(--radius)] border border-border">
           <table className="w-full border-collapse text-[12.5px]">
             <thead>
@@ -183,7 +267,7 @@ function KerdesKartya({
             </thead>
             <tbody>
               {esetek.map((e) => (
-                <tr key={e.bejovo_id} className="border-b border-border last:border-0">
+                <tr key={e.bejovo_id ?? e.szamlaszam} className="border-b border-border last:border-0">
                   <td className="px-2.5 py-1.5 text-text-primary">{e.szamlaszam ?? `#${e.bejovo_id}`}</td>
                   <td className="px-2.5 py-1.5 tabular-nums text-text-secondary">{e.netto ?? "—"}</td>
                   <td className="px-2.5 py-1.5 text-text-secondary">{e.datum ?? "—"}</td>
@@ -233,7 +317,9 @@ function KerdesKartya({
             onChange={(e) => setSzoveg(e.target.value)}
             placeholder={
               valasz === "magyarazat"
-                ? "Miért így van? (kötelező) — pl. „Ő a forgatásokon a gaffer, a számlája mindig a forgatás projektkódjára megy.”"
+                ? papir
+                  ? "Miért így van? (kötelező) — pl. „Havidíjas partner, a keretszerződése lefedi, eseti papír nem kell.”"
+                  : "Miért így van? (kötelező) — pl. „Ő a forgatásokon a gaffer, a számlája mindig a forgatás projektkódjára megy.”"
                 : "Magyarázat (opcionális, de segít Larának)"
             }
             className="mt-2 w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted"

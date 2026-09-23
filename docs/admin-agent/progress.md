@@ -318,7 +318,44 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   Élő próba (jelölt demóadaton, utána törölve): 7 számla, 3 kérdés; egy
   „mindig így" válasz után a találati arány 29% → 57%.
 - Korlát: az önellenőrzés most a számlák besorolására fut (ez a fő tanulható
-  döntés); a TIG/szerződés-mezőkre kiterjeszthető.
+  döntés); a TIG/szerződés-mezőkre kiterjeszthető. → Kiterjesztve: lásd O.
+
+### O. Önellenőrzés a papírozáson: eseti szerződések, TIG-ek (Utókövetés) ✅
+- `app/admin_agent/onellenorzes_papir.py` (új): Lara a tanulás kezdete óta
+  LEZÁRT eseti (alvállalkozói, nem keret-) szerződések (`Kiküldve` /
+  `Kihagyva` / `Van már szerződés`) és TIG-ek (`Kiküldve` / `Kihagyva`)
+  döntéseire is „vakon" jósol (a rekord saját tanulsága nélkül; Notion-import
+  és régi korszak kizárva). Vizsgált döntések partnerenként: **kell-e a papír**
+  (kihagyás + indok), **nettó összeg** (eltér-e a lefedett tételek összegétől),
+  **+ÁFA**, **megbízás tárgya** (normalizált szöveg-hasonlóság), TIG-nél
+  **kell-e számla**.
+- Tudás (`PapirTudas`): élesített papír-szabály (`hatokor` = szerzodes/tig,
+  `feltetelek.mezo`/`ertek`/`partner`) → ≥2 egybehangzó (≥80%) jóváhagyott
+  megfigyelt eset / magyarázat → alapértelmezés (papír kell, összeg = tételek
+  összege, számla kell; ÁFA-ra és tárgyra tudás nélkül NEM jósol).
+- Kérdések: `aa_questions.tipus = "papir"`, kulcs
+  `papir:{terulet}:{dimenzio}:{partner}` — partnerenként és döntésenként egy
+  kérdés, új esetek hozzáfűzve. Válasz: „mindig így" → partnerre szabott
+  papír-szabály (élesítési jog + sikeres eval nélkül jelölt); magyarázat /
+  kivétel → tudás-darab; hibás → nem tanít. Számla-kérdések változatlanok.
+- Futás-összegzés: `teruletek` bontás (szamla / szerzodes / tig) találati
+  aránnyal; a „szabalyok" a papír-szabályokat is számolja.
+- Tervező (`tervezo._papir_tudas_alkalmazasa`): TIG/szerződés-tervezetnél a
+  HIÁNYZÓ megbízási tárgyat és ÁFA-jelzőt Lara tudásából tölti („Lara tudása
+  (…)" forrással); a szokásos kihagyást, eltérő összeget, számla nélküli TIG-et
+  figyelmeztetésként jelzi. Összeget NEM ír, meglévő mezőt nem ír felül.
+- Felület: Kérdések — terület-szűrő (Mind / Számlák / Szerződések / TIG-ek),
+  papír-kérdésnél terület + döntés címke, esettábla (projektkód · projekt,
+  nettó, lezárva, Lara ezt várta, ahogy döntöttetek). Tanulás — területenkénti
+  találati arány kártyák.
+- Tesztek: `test_admin_agent_onellenorzes_papir.py` (4) — kihagyott TIG →
+  kérdés → „mindig így" → a következő futáson eltalálja; összeg-eltérés →
+  kérdés → jelölt szabály; hibás válasz nem tanít; vak jóslat + tervező
+  előtöltés. Teljes backend: 136 zöld, 1 kihagyott; tsc + eslint + `next build`
+  zöld. Élő próba (jelölt demóadaton, utána minden táblából törölve): 4 TIG,
+  3 papír-kérdés; egy „mindig így" válasz után a TIG-találati arány 56% → 78%.
+- Nem ellenőrzött: valós (nem demó) szerződés-adaton, mert a fejlesztői DB-ben
+  nincs szeptember 1. utáni lezárt eseti szerződés.
 
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).

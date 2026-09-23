@@ -108,12 +108,19 @@ Minden lépés kattintással megy:
    (partnerhez és — számlánál — célhoz kötve). Élesítés után Lara ennél a
    partnernél modell nélkül is ezt javasolja, ha az érkeztető nem döntött.
 6. **Válaszolj Lara kérdéseire:** Lara kétóránként magától végignézi a rögzített
-   számlákat: megmondja, mit javasolt volna a mostani tudásával, és összeveti
-   azzal, amit rögzítettetek. Ahol nem érti az eltérést, **kérdez** (Lara →
-   **Kérdések**). Válaszlehetőségek: **„Mindig így kell"** (szabályt tanul),
+   számlákat és az Utókövetésben lezárt eseti szerződéseket és TIG-eket:
+   megmondja, mit javasolt volna a mostani tudásával, és összeveti azzal, amit
+   döntöttetek (számlánál a célt; szerződésnél/TIG-nél, hogy kellett-e, a nettó
+   összeget a tételekhez képest, az ÁFÁ-t, a megbízás tárgyát, TIG-nél a
+   számlát). Ahol nem érti az eltérést, **kérdez** (Lara → **Kérdések**, fent
+   területre szűrhető). Válaszlehetőségek: **„Mindig így kell"** (szabályt tanul),
    **„Megmagyarázom"** (a magyarázat a tudásába kerül), **„Egyszeri kivétel"**,
    **„Rosszul rögzítettük"** (ebből nem tanul — a rögzítést javítsd). A Tanulás
-   oldalon a **„Lara önellenőrzése"** kártya mutatja, hogyan nő a találati aránya.
+   oldalon a **„Lara önellenőrzése"** kártya mutatja, hogyan nő a találati aránya
+   — külön a számlákon, a szerződéseken és a TIG-eken. Amit a szerződésekről /
+   TIG-ekről megtanult, azt a következő tervezetnél használja: a hiányzó
+   megbízási tárgyat és ÁFA-jelzőt „Lara tudása" forrással előtölti, és szól,
+   ha egy félnél a papír vagy a számla szokás szerint kihagyható.
 7. **Javítsd, ha téved:** a feladat oldalán **„Javítás rögzítése"** → írd be a
    helyes értéket. Ez a legerősebb tanulási jel.
 8. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy

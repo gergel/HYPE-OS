@@ -6,13 +6,20 @@ import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
 import type { OnellenorzesFutas } from "@/lib/api";
 
+const TERULETEK: { kulcs: string; cim: string; egyseg: string }[] = [
+  { kulcs: "szamla", cim: "Számlák", egyseg: "rögzített számla" },
+  { kulcs: "szerzodes", cim: "Eseti szerződések", egyseg: "szerződés-döntés" },
+  { kulcs: "tig", cim: "TIG-ek", egyseg: "TIG-döntés" },
+];
+
 function szazalek(v: number | null | undefined): string {
   return v === null || v === undefined ? "—" : `${Math.round(v * 100)}%`;
 }
 
 /** Lara ÖNELLENŐRZÉSE (kliens).
  *
- * Lara a rögzített számlákra „vakon" (az adott számla saját tanulsága nélkül)
+ * Lara a rögzített számlákra és az Utókövetés lezárt szerződés-/TIG-döntéseire
+ * „vakon" (az adott rekord saját tanulsága nélkül)
  * megmondja, mit javasolt volna a jelenlegi tudásával, és összeveti a
  * valósággal. A futásonkénti találati arány mutatja, hogyan tanul; ahol nem érti
  * az eltérést, kérdez (Kérdések oldal). Kétóránként magától is lefut. */
@@ -37,7 +44,7 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
       const d = (await res.json()) as OnellenorzesFutas;
       setFutasok((p) => [{ ...d, id: Date.now(), trigger: "onellenorzes:kezi", veg_at: new Date().toISOString() }, ...p]);
       setUzenet(
-        `Kész: ${d.ellenorzott ?? 0} rögzített számlát ellenőriztem — ${d.egyezik ?? 0} eltaláltam, ${d.elter ?? 0} eltért, ` +
+        `Kész: ${d.ellenorzott ?? 0} döntést ellenőriztem (számlák, szerződések, TIG-ek) — ${d.egyezik ?? 0} eltaláltam, ${d.elter ?? 0} eltért, ` +
           `${d.nem_tudta ?? 0} esetben nem tudtam javasolni. ${d.uj_kerdes ?? 0} új kérdésem van` +
           (d.bovitett_kerdes ? `, ${d.bovitett_kerdes} meglévő kérdéshez új eset került` : "") +
           ".",
@@ -51,8 +58,10 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
   return (
     <div>
       <p className="mb-3 text-[12px] text-text-muted">
-        Lara a tanulás kezdete óta rögzített számlákra megmondja, mit javasolt volna a mostani tudásával (az adott
-        számla saját tanulsága nélkül), és összeveti azzal, amit rögzítettetek. Ahol nem érti az eltérést,{" "}
+        Lara a tanulás kezdete óta rögzített számlákra és az Utókövetés lezárt eseti szerződéseire és TIG-jeire
+        megmondja, mit javasolt volna a mostani tudásával (az adott rekord saját tanulsága nélkül), és összeveti azzal,
+        amit döntöttetek: számlánál a célt, papírnál hogy kellett-e, a nettó összeget, az ÁFÁ-t, a megbízás tárgyát
+        és (TIG-nél) a számlát. Ahol nem érti az eltérést,{" "}
         <Link href="/admin-agent/kerdesek" className="text-text-accent hover:underline">
           kérdez
         </Link>
@@ -78,7 +87,7 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
         <>
           <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Szam cimke="Lara találati aránya" ertek={szazalek(utolso.talalati_arany)} al="eltalált / összes ellenőrzött" />
-            <Szam cimke="Ellenőrzött számla" ertek={String(utolso.ellenorzott ?? 0)} />
+            <Szam cimke="Ellenőrzött döntés" ertek={String(utolso.ellenorzott ?? 0)} al="számla, szerződés, TIG" />
             <Szam
               cimke="Nem tudta / eltért"
               ertek={`${utolso.nem_tudta ?? 0} / ${utolso.elter ?? 0}`}
@@ -86,6 +95,26 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
             />
             <Szam cimke="Tudása" ertek={String(utolso.szabalyok ?? 0)} al={`élesített szabály · ${utolso.tanult_partnerek ?? 0} tanult partner`} />
           </div>
+          {utolso.teruletek && (
+            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+              {TERULETEK.map((t) => {
+                const d = utolso.teruletek?.[t.kulcs];
+                return (
+                  <div key={t.kulcs} className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5">
+                    <p className="text-[11.5px] text-text-muted">{t.cim}</p>
+                    <p className="text-[18px] font-medium tabular-nums text-text-primary">{szazalek(d?.talalati_arany)}</p>
+                    <p className="text-[11.5px] text-text-muted">
+                      {d && d.ellenorzott
+                        ? `${d.egyezik}/${d.ellenorzott} ${t.egyseg} eltalálva · ${d.elter} eltért` +
+                          (d.nem_tudta ? ` · ${d.nem_tudta} nem tudta` : "") +
+                          (d.megmagyarazva ? ` · ${d.megmagyarazva} megmagyarázva` : "")
+                        : "még nincs lezárt eset a tanulás kezdete óta"}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <div className="overflow-x-auto rounded-[var(--radius)] border border-border">
             <table className="w-full border-collapse text-[13px]">
               <thead>

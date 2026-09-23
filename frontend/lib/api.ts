@@ -730,12 +730,19 @@ export async function getAdminTrustPolicies(): Promise<{ elemek: AdminTrustPolic
   return apiGet<{ elemek: AdminTrustPolicy[] }>("/api/v1/admin-agent/trust-policies");
 }
 
+/** Egy eset a kérdésben: számlánál `bejovo_id`/`szamlaszam`, papírnál
+ * (szerződés/TIG) `rekord`/`projektkod`/`projekt`. */
 export type LaraKerdesEset = {
-  bejovo_id: number;
-  szamlaszam: string | null;
+  bejovo_id?: number;
+  szamlaszam?: string | null;
+  rekord?: string;
+  rekord_id?: number;
+  projektkod?: string | null;
+  projekt?: string | null;
   netto: string | null;
   datum: string | null;
   vegso_szoveg?: string;
+  valosag_szoveg?: string;
   lara_szoveg?: string | null;
   lara_alap?: string | null;
 };
@@ -743,6 +750,8 @@ export type LaraKerdesEset = {
 /** Lara kérdése: az önellenőrzés során talált, számára megmagyarázatlan eltérés. */
 export type LaraKerdes = {
   id: number;
+  /** szamla_besorolas | papir */
+  tipus?: string;
   /** nyitott | megvalaszolt | elvetve */
   allapot: string;
   partner_nev: string | null;
@@ -750,7 +759,10 @@ export type LaraKerdes = {
   kontextus: {
     partner?: string;
     partner_kulcs?: string;
-    valosag?: { tipus: string; kod_idk: number[]; szoveg?: string };
+    /** Papírnál: szerzodes | tig, és a vizsgált döntés. */
+    terulet?: string;
+    dimenzio?: string;
+    valosag?: { tipus?: string; kod_idk?: number[]; ertek?: unknown; szoveg?: string };
     esetek?: LaraKerdesEset[];
   } | null;
   valasz_tipus: string | null;
@@ -775,10 +787,21 @@ export type OnellenorzesFutas = {
   nem_tudta?: number;
   megmagyarazva?: number;
   talalati_arany?: number | null;
+  /** Területenkénti bontás: szamla | szerzodes | tig. */
+  teruletek?: Record<string, OnellenorzesTerulet>;
   uj_kerdes?: number;
   bovitett_kerdes?: number;
   szabalyok?: number;
   tanult_partnerek?: number;
+};
+
+export type OnellenorzesTerulet = {
+  ellenorzott: number;
+  egyezik: number;
+  elter: number;
+  nem_tudta: number;
+  megmagyarazva: number;
+  talalati_arany: number | null;
 };
 
 export async function getOnellenorzesFutasok(): Promise<{ elemek: OnellenorzesFutas[] } | null> {

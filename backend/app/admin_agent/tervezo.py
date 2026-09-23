@@ -168,6 +168,40 @@ def _elotoltes(tipus: str, t: dict) -> tuple[dict, dict, set[float]]:
     return mezok, forras, igazolt
 
 
+def _papir_tudas_alkalmazasa(tudas, tipus: str, t: dict, mezok: dict, forras: dict) -> list[str]:
+    """Lara papír-tudása (élesített szabály / ≥2 egybehangzó jóváhagyott eset):
+    a HIÁNYZÓ tárgyat és ÁFA-jelzőt előtölti, a szokásos kihagyást / eltérő
+    összeget / számla nélküli TIG-et figyelmeztetésként jelzi. Összeget nem ír."""
+    from app.admin_agent.memory import partner_kulcs
+    from app.admin_agent.onellenorzes_papir import PAPIR_CIMKE
+
+    kulcs = partner_kulcs(mezok.get("ceg_neve") or t.get("nev"))
+    if tudas is None or len(kulcs) < 3:
+        return []
+    nev = t.get("nev") or mezok.get("ceg_neve")
+
+    def tud(dim: str):
+        return tudas.josol(tipus, kulcs, dim, alapertelmezes=False)
+
+    for mezo, dim in (("megbizas_targya", "targy"), ("plusz_afa", "afa")):
+        j = tud(dim)
+        if j is not None and mezo in MEZOK[tipus] and mezok.get(mezo) in (None, "") and j[0] not in (None, ""):
+            mezok[mezo] = j[0][:255] if isinstance(j[0], str) else j[0]
+            forras[mezo] = f"Lara tudása ({j[1]})"
+    figy: list[str] = []
+    j = tud("kihagyas")
+    if j is not None and j[0]:
+        figy.append(f"{nev}: Lara tudása szerint ennél a félnél a {PAPIR_CIMKE[tipus]} általában kihagyható ({j[1]}). Kell most?")
+    j = tud("osszeg")
+    if j is not None and j[0]:
+        figy.append(f"{nev}: ennél a félnél a nettó összeg rendszerint eltér a tételek összegétől ({j[1]}) — ellenőrizd.")
+    if tipus == "tig":
+        j = tud("szamla_kihagyas")
+        if j is not None and j[0]:
+            figy.append(f"{nev}: Lara tudása szerint ennél a félnél a TIG-hez általában nem kell számla ({j[1]}).")
+    return figy
+
+
 _TERV_SEMA = {
     "type": "object",
     "required": ["tetelek"],
@@ -247,17 +281,22 @@ def tig_szerzodes_tervezet(db: Session, task: AdminTask, user: Employee) -> dict
     if not lista:
         raise TervezetHiba(f"Ezen a projektkódon most nincs elkészítendő {CIMKE[tipus]}.")
 
+    from app.admin_agent.onellenorzes_papir import PapirTudas
+
+    papir_tudas = PapirTudas(db) if db is not None else None
+    lara_figy: list[str] = []
     tetelek: list[dict] = []
     tudas_fel: dict[int, dict] = {}
     for i, t in enumerate(lista):
         mezok, forras, igazolt = _elotoltes(tipus, t)
+        lara_figy += _papir_tudas_alkalmazasa(papir_tudas, tipus, t, mezok, forras)
         tudas = kapcsolodo_tudas(db, hatokor=tipus, partner=mezok.get("ceg_neve") or t["nev"])
         tudas_fel[i] = tudas
         igazolt |= _peldak_osszegei(tudas.get("hasonlo_esetek", []))
         tetelek.append({**t, "mezok": mezok, "forrasok": forras, "igazolt_osszegek": sorted(igazolt)})
 
     modell = _modell_kiegeszites(tipus, tetelek, tudas_fel)
-    figy = list(modell.get("figyelmeztetesek") or [])
+    figy = lara_figy + list(modell.get("figyelmeztetesek") or [])
     for i, t in enumerate(tetelek):
         jav = (modell.get("tetelek") or {}).get(i)
         if not jav:
