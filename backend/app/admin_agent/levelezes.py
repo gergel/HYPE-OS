@@ -47,7 +47,6 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.admin_agent.memory import partner_kulcs
 from app.admin_agent.observer import tanulas_kezdete
 from app.admin_agent.settings_service import get_settings, leallitva
 from app.core.config import settings
