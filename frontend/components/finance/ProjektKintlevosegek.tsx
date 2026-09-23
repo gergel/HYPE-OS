@@ -75,7 +75,7 @@ export function ProjektKintlevosegek({ summary }: { summary: FinanceSummary }) {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[12px] text-text-muted">
           {csoport === "szamlazando"
-            ? "Ezekre a munkákra még nem ment ki számla. A régen lezajlott elöl, a még meg nem tartott események a lista végén."
+            ? "Ezekre a munkákra még nem ment ki számla. A régen lezajlott elöl, a még meg nem tartott projektek a lista végén."
             : csoport === "szamla_kint"
               ? "Kint van a számla, a pénz még nem érkezett meg. A lejárt határidejűek elöl."
               : "Kimondtuk, hogy számla nem lesz, de azt nem, hogy a pénz megjött vagy tranzakció nélkül rendeződött. A projektkódon zárd le indokkal."}
@@ -108,7 +108,7 @@ export function ProjektKintlevosegek({ summary }: { summary: FinanceSummary }) {
                   </>
                 ) : (
                   <>
-                    <th className="py-1.5 pr-4 font-medium">Esemény</th>
+                    <th className="py-1.5 pr-4 font-medium">Projekt</th>
                     <th className="py-1.5 pr-4 font-medium">{csoport === "szamlazando" ? "Papír" : "Indok"}</th>
                   </>
                 )}
@@ -134,7 +134,10 @@ function Sor({ p, csoport }: { p: OutstandingProject; csoport: Csoport }) {
         <a href={`/projektek/project-kodok/${p.project_code_id}`} className="text-text-accent hover:underline">
           {p.projektkod}
         </a>
-        {p.projekt_nev && <span className="block text-[12px] text-text-muted">{p.projekt_nev}</span>}
+        {/* Ahol külön Projekt oszlop van, ott a név oda kerül (a projekt maga az esemény). */}
+        {csoport === "szamla_kint" && p.projekt_nev && (
+          <span className="block text-[12px] text-text-muted">{p.projekt_nev}</span>
+        )}
       </td>
       {csoport === "szamla_kint" ? (
         <>
@@ -184,8 +187,8 @@ function Sor({ p, csoport }: { p: OutstandingProject; csoport: Csoport }) {
         </>
       ) : (
         <>
-          <td className="py-2 pr-4 text-text-secondary">
-            {huDatum(p.esemeny_datuma)}
+          <td className="py-2 pr-4 text-text-primary">
+            {p.projekt_nev ?? <span className="text-text-muted">–</span>}
             {p.esemeny_jovobeli && <span className="block text-[11.5px] text-text-muted">még nem volt</span>}
           </td>
           <td className="py-2 pr-4">

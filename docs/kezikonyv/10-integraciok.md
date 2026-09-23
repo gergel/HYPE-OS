@@ -285,7 +285,11 @@ Env: `BARION_POS_KEY`, `BARION_ENV` (`test`|`prod`), `BARION_PAYEE`,
 
 ## AI Assistant (Google Gemini)
 
-`/api/v1/ai-assistant/ask`, oldal: `/ai-assistant`.
+`/api/v1/ai-assistant/ask`, oldal: `/ai-assistant`. Minden oldalon elérhető a
+fejlécben is, a kereső mellett (`components/AiAssistantGomb.tsx`): jobb oldali
+panelben nyílik, oldalváltás nélkül, és az éppen nyitott oldalt kapja
+kontextusként (útvonal + a menü szerinti oldalnév). A panel bezárás után is
+megtartja a beszélgetést; jogosultság nélkül (`/ai-assistant`) nem jelenik meg.
 `services/ai_assistant.py`, frontend `components/AiAssistantChat.tsx`.
 
 Gemini **function calling** a végleges Postgres felett. A lényeges rész: az

@@ -29,7 +29,17 @@ type NaploSor = { id: number; allapot: string; osszefoglalo: string | null; meth
 // formázással jelennek meg - címsor, félkövér, felsorolás, kód, link (lásd
 // components/Markdown.tsx).
 
-export function AiAssistantChat() {
+/** `kompakt`: keskeny panelben (TopBar-ról nyitott oldalsáv) - a
+ * beszélgetés-lista helyett mindig a legördülő váltó látszik.
+ * `oldalKontextus`: a panelt nyitó oldal (útvonal + cím) - ilyenkor ez a
+ * kontextus az URL-paraméterek helyett. */
+export function AiAssistantChat({
+  kompakt = false,
+  oldalKontextus = null,
+}: {
+  kompakt?: boolean;
+  oldalKontextus?: { utvonal: string; cim?: string } | null;
+} = {}) {
   const searchParams = useSearchParams();
   const [beszelgetesek, setBeszelgetesek] = useState<Beszelgetes[]>([]);
   const [aktiv, setAktiv] = useState<number | null>(null);
@@ -56,6 +66,7 @@ export function AiAssistantChat() {
   // Oldal-kontextus, ha másik oldalról nyitották az asszisztenst
   // (?entity=deliverable&rekord=123&cim=...): az „ez"/„ennél" erre mutat.
   const kontextus = useMemo(() => {
+    if (oldalKontextus) return { utvonal: oldalKontextus.utvonal, ...(oldalKontextus.cim ? { cim: oldalKontextus.cim } : {}) };
     const entity = searchParams.get("entity");
     const rekord = searchParams.get("rekord");
     const cim = searchParams.get("cim");
@@ -67,7 +78,7 @@ export function AiAssistantChat() {
       ...(entity ? { entity_type: entity } : {}),
       ...(rekord ? { entity_id: Number(rekord) } : {}),
     };
-  }, [searchParams]);
+  }, [searchParams, oldalKontextus]);
 
   /** Az üzenetlista aljára görgetés - CSAK a lista dobozát mozgatja, sosem az
    * egész oldalt (a felhasználó hibajelzése: az oldal "mindig letekert és
@@ -456,7 +467,7 @@ export function AiAssistantChat() {
     // helyet kell kitölteni - a h-full a cím magasságával túllógott volna.
     <div className="flex min-h-0 flex-1 gap-3">
       {/* Beszélgetés-lista */}
-      <div className="hidden w-[220px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-border pr-2 md:flex">
+      <div className={`hidden w-[220px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-border pr-2 ${kompakt ? "" : "md:flex"}`}>
         <button
           type="button"
           onClick={() => void ujBeszelgetes()}
@@ -489,7 +500,7 @@ export function AiAssistantChat() {
         {/* MOBIL beszélgetés-váltó (a felhasználó hibajelzése: telefonon
             szétesett az oldal, és váltani sem lehetett): a bal oldali lista
             kis képernyőn el van rejtve, helyette legördülő + Új gomb. */}
-        <div className="mb-2 flex items-center gap-1.5 md:hidden">
+        <div className={`mb-2 flex items-center gap-1.5 ${kompakt ? "" : "md:hidden"}`}>
           <select
             value={aktiv ?? ""}
             onChange={(e) => e.target.value && void beszelgetesValt(Number(e.target.value))}

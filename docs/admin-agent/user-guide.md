@@ -129,8 +129,12 @@ Minden lépés kattintással megy:
    e-mail-válaszoknál és a számlák elemzésénél. A gépi (no-reply, hírlevél)
    szálakat kihagyja. Állapota: Tanulás és minőség → **„Levelezés"** kártya;
    kikapcsolni a Beállításokban lehet. A postafiókot csak olvassa.
-8. **Javítsd, ha téved:** a feladat oldalán **„Javítás rögzítése"** → írd be a
-   helyes értéket. Ez a legerősebb tanulási jel.
+8. **Javítsd, ha téved:** a feladat oldalán **„Javítás / magyarázat Larának"**
+   → elég röviden leírni, **mit hova kellett volna tennie és miért** — mezőket
+   nem kell kitölteni. A magyarázat azonnal Lara tudásába kerül, és a hasonló
+   eseteknél (ugyanannál a partnernél, ilyen típusú feladatnál) ebből dolgozik.
+   Ha pontosan tudod, melyik mező helyes értéke mi, a „Mezőszintű javítás"
+   résznél azt is megadhatod — abból a háttér-tanuló készít jelöltet.
 9. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
    megvárod az éjszakai futást). Két hasonló javításból **szabály-jelölt** lesz.
 10. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →

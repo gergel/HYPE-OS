@@ -1,4 +1,5 @@
 import { getCurrentUser, getMyAccess, getNotifications } from "@/lib/api";
+import { AiAssistantGomb } from "@/components/AiAssistantGomb";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { KrumpelloKapcsolo } from "@/components/KrumpelloKapcsolo";
 import { MobileNav } from "@/components/MobileNav";
@@ -91,6 +92,9 @@ export async function TopBar() {
         {/* Átlépés a Krumpello pénzügyre - csak jogosultsággal látszik. */}
         <KrumpelloKapcsolo />
         <GlobalSearch />
+        {/* Az AI asszisztens mindenhol elérhető, a kereső mellett (jobb oldali
+            panel, oldalváltás nélkül) - ha van hozzá jogosultság. */}
+        {(!access.allowedPages || access.allowedPages.includes("/ai-assistant")) && <AiAssistantGomb />}
         {/* A mentett beállítás a SZERVERRŐL jön (employees.tema) - a süti
             csak az első festés gyorsítótára, lásd lib/tema.ts. */}
         <TemaKapcsolo kezdeti={user?.tema ?? null} />

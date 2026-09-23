@@ -394,6 +394,19 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
   a fiókból, a szamla@ címről mentek. A sandboxban nincs Gmail-hozzáférés, ezért
   valós postafiókon nem futott.
 
+### Q. Magyarázat a feladat ellenőrzésénél (mezők nélkül) ✅
+- `POST /tasks/{id}/corrections`: a `javitott` elhagyható; ha csak összefoglaló
+  magyarázat jön (mit hova kellett volna tenni és miért), `Correction`
+  `tipus=magyarazat` (feldolgozva) + AZONNAL jóváhagyott tudás-darab a feladat
+  típusához (partnernév + Lara javaslatának kivonata + a magyarázat) — ugyanúgy,
+  mint a Kérdésekre adott magyarázat. Partner szerint előkerül
+  (`kapcsolodo_tudas`), így a számla-elemzés / tervezet modellje megkapja. Üres
+  küldés 400. A mezőszintű javítás útja változatlan.
+- Felület: „Javítás / magyarázat Larának" — elöl a szabad szöveges magyarázat,
+  a mezőszintű javítás lenyitható, opcionális rész.
+- Tesztek: `test_admin_agent_magyarazat.py` (2). Élő próba demó-feladaton
+  (utána törölve).
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

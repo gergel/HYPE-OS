@@ -94,6 +94,9 @@ class CorrectionType(str, Enum):
     TENYSZERU_HIBA = "tenyszeru_hiba"  # tárgyi tévedés (ez a legerősebb jel)
     UJ_UZLETI_ADAT = "uj_uzleti_adat"  # nem korrekció: új tény
     BESOROLANDO = "besorolando"  # kétes: emberi besorolásra vár
+    #: Szabad szöveges összefoglaló magyarázat (mit hova kellett volna tenni és
+    #: miért) mezőszintű javítás nélkül - azonnal Lara tudásába kerül.
+    MAGYARAZAT = "magyarazat"
 
 
 class RuleState(str, Enum):

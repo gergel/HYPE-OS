@@ -45,8 +45,10 @@ hoz, amiért még nem jött meg a pénz - akár van már számla, akár nincs
 
 - **Számlázandó** - még nincs számla (se feltöltött számla-fájl, se a
   Notionból örökölt számla-link, se kiállítási dátum/fájl a bevétel-soron):
-  ide kell kiállítani. A régen lezajlott munka elöl, a még meg nem tartott
-  események a lista végén, halványan. A papír-oszlop mutatja, kész-e a TIG.
+  ide kell kiállítani. A Projekt oszlop a projekt (az esemény) nevét mutatja;
+  a régen lezajlott munka elöl, a még meg nem tartott projektek a lista végén,
+  halványan („még nem volt"). A papír-oszlop mutatja, kész-e a TIG. Megrendelő
+  oszlop nincs (a felhasználó kérése).
 - **Kiállítva, nem fizetve** - kint a számla, a pénz még nem érkezett meg; a
   lejárt határidejű elöl, a határidő nélküli számla külön jelölve.
 - **Számla nélkül, nincs lezárva** - kimondtuk, hogy számla nem lesz, de azt

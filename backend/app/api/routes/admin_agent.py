@@ -750,9 +750,10 @@ def eszkoz_katalogus(
 
 class CorrectionIn(BaseModel):
     proposal_id: int | None = None
-    javitott: dict
-    magyarazat: str | None = None
-    #: besorolando / egyszeri_kivetel / stilus / tenyszeru_hiba / uj_uzleti_adat
+    #: Mezőszintű javítás - ELHAGYHATÓ: elég egy összefoglaló magyarázat is.
+    javitott: dict = Field(default_factory=dict)
+    magyarazat: str | None = Field(default=None, max_length=4000)
+    #: besorolando / egyszeri_kivetel / stilus / tenyszeru_hiba / uj_uzleti_adat / magyarazat
     tipus: str | None = None
 
 
@@ -763,34 +764,92 @@ def task_correction(
     db: Session = Depends(get_db),
     user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
-    """Emberi javítás rögzítése (tanulási jel). NEM aktivál szabályt — csak
-    `correction`-t hoz létre `uj` feldolgozási állapotban, amit a háttér-tanuló
-    (F fázis) dolgoz fel emberi jóváhagyás mellett."""
+    """Emberi javítás rögzítése (tanulási jel). NEM aktivál szabályt.
+
+    Két módon lehet:
+    - MEZŐSZINTŰ javítás (`javitott`): `correction` `uj` állapotban, amit a
+      háttér-tanuló dolgoz fel jelöltté;
+    - csak ÖSSZEFOGLALÓ MAGYARÁZAT (mit hova kellett volna tenni és miért,
+      mezők nélkül): ez emberi kifejezett tanítás, ezért azonnal Lara
+      tudásába kerül (jóváhagyott tudás-darab a feladat típusához és
+      partneréhez) - ugyanúgy, mint a Kérdésekre adott magyarázat."""
     t = db.get(AdminTask, task_id)
     if t is None:
         raise HTTPException(status_code=404, detail="A feladat nem található.")
+    magyarazat = (payload.magyarazat or "").strip() or None
+    if not payload.javitott and not magyarazat:
+        raise HTTPException(
+            status_code=400,
+            detail="Írd le röviden, mit hova kellett volna tennie és miért — vagy adj meg egy javított mezőt.",
+        )
     eredeti = None
     if payload.proposal_id is not None:
         p = db.get(ActionProposal, payload.proposal_id)
         if p is None or p.task_id != task_id:
             raise HTTPException(status_code=404, detail="A javaslat nem ehhez a feladathoz tartozik.")
         eredeti = dict(p.payload)
-    tipus = payload.tipus if payload.tipus in {c.value for c in CorrectionType} else CorrectionType.BESOROLANDO.value
-    mezo_diff = _mezo_diff(eredeti or {}, payload.javitott)
+    csak_magyarazat = not payload.javitott
+    if csak_magyarazat:
+        tipus = CorrectionType.MAGYARAZAT.value
+    else:
+        tipus = payload.tipus if payload.tipus in {c.value for c in CorrectionType} else CorrectionType.BESOROLANDO.value
+    mezo_diff = _mezo_diff(eredeti or {}, payload.javitott) if payload.javitott else {}
     c = Correction(
         task_id=task_id,
         proposal_id=payload.proposal_id,
         eredeti=eredeti,
-        javitott=payload.javitott,
+        javitott=payload.javitott or None,
         mezo_diff=mezo_diff,
         javito_employee_id=user.id,
-        magyarazat=(payload.magyarazat or "").strip() or None,
+        magyarazat=magyarazat,
         tipus=tipus,
-        feldolgozas_allapot="uj",
+        # A csak-magyarázat itt azonnal tudássá válik - a háttér-tanulónak
+        # nincs vele dolga.
+        feldolgozas_allapot="feldolgozva" if csak_magyarazat else "uj",
     )
     db.add(c)
+    db.flush()
+    pelda_id = None
+    if csak_magyarazat:
+        m = MemoryChunk(
+            hatokor=t.tipus,
+            tartalom=_magyarazat_tudas(t, eredeti, magyarazat or ""),
+            forras=f"correction:{c.id}",
+            minosites="jovahagyott",
+            tanulasi_halmaz="jovahagyott",
+            ervenyes=True,  # ember magyarázta — kifejezett tanítás
+            regi_korszak=False,
+        )
+        db.add(m)
+        db.flush()
+        pelda_id = m.id
     db.commit()
-    return {"correction_id": c.id, "tipus": c.tipus, "mezo_diff": mezo_diff}
+    return {"correction_id": c.id, "tipus": c.tipus, "mezo_diff": mezo_diff, "pelda_id": pelda_id}
+
+
+def _magyarazat_tudas(t: AdminTask, eredeti: dict | None, magyarazat: str) -> str:
+    """A feladathoz adott összefoglaló magyarázat tudás-darabként: a partner
+    neve elöl (a partner szerinti visszakeresés ebből talál), mit javasolt
+    Lara, és mit mondott az ember."""
+    fej = f"„{t.partner_nev}” — " if t.partner_nev else ""
+    sor = f"{fej}{t.cim}"
+    javaslat = _javaslat_kivonat(eredeti)
+    if javaslat:
+        sor += f". Lara javaslata ez volt: {javaslat}"
+    return f"{sor}. Ember magyarázata (mit hova kellett volna tenni és miért): {magyarazat}"
+
+
+def _javaslat_kivonat(payload: dict | None, max_hossz: int = 400) -> str:
+    """A javaslat payloadjának rövid, olvasható kivonata (csak az egyszerű mezők)."""
+    if not payload:
+        return ""
+    reszek = [
+        f"{k}: {v}"
+        for k, v in payload.items()
+        if isinstance(v, (str, int, float, bool)) and v not in ("", None) and not k.startswith("_")
+    ]
+    szoveg = "; ".join(reszek)
+    return szoveg[:max_hossz] + ("…" if len(szoveg) > max_hossz else "")
 
 
 def _mezo_diff(eredeti: dict, javitott: dict) -> dict:

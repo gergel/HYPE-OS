@@ -17,9 +17,11 @@ const KORREKCIO_TIPUSOK: { ertek: string; cimke: string }[] = [
 /** Azok a feladattípusok, amelyekhez Lara tervezetet tud készíteni. */
 const TERVEZHETO = new Set(["tig", "szerzodes", "email"]);
 
-/** Lara — feladat-műveletek (kliens): tervezet készítése, javítás
- * rögzítése, újraelemzés, megszakítás. A javítás a tanulás nyersanyaga
- * (→ `aa_corrections`), amit a háttér-tanuló dolgoz fel; NEM aktivál szabályt. */
+/** Lara — feladat-műveletek (kliens): tervezet készítése, javítás /
+ * magyarázat, újraelemzés, megszakítás. Elég egy összefoglaló magyarázat
+ * (mit hova kellett volna tennie és miért) — az azonnal Lara tudásába kerül;
+ * a mezőszintű javítás opcionális (→ `aa_corrections`, a háttér-tanuló
+ * dolgozza fel). Egyik sem aktivál szabályt. */
 
 export function AdminTaskActions({
   taskId,
@@ -61,8 +63,9 @@ export function AdminTaskActions({
     for (const { mezo, ertek } of mezok) {
       if (mezo.trim()) javitott[mezo.trim()] = ertekParse(ertek);
     }
-    if (Object.keys(javitott).length === 0) {
-      setHiba("Adj meg legalább egy javított mezőt.");
+    const vanMezo = Object.keys(javitott).length > 0;
+    if (!vanMezo && !magyarazat.trim()) {
+      setHiba("Írd le röviden, mit hova kellett volna tennie és miért.");
       return;
     }
     setFolyamatban(true);
@@ -77,10 +80,15 @@ export function AdminTaskActions({
         }),
       });
       if (!res.ok) {
-        setHiba("A javítás rögzítése nem sikerült.");
+        const d = (await res.json().catch(() => ({}))) as { detail?: unknown };
+        setHiba(typeof d.detail === "string" ? d.detail : "A javítás rögzítése nem sikerült.");
         return;
       }
-      setUzenet("Javítás rögzítve — a háttér-tanuló ebből dolgozik (Tanulás és minőség oldal).");
+      setUzenet(
+        vanMezo
+          ? "Javítás rögzítve — a háttér-tanuló ebből dolgozik (Tanulás és minőség oldal)."
+          : "Köszönöm, megtanultam — a magyarázatod bekerült a tudásomba, a hasonló eseteknél ebből dolgozom.",
+      );
       setMezok([{ mezo: "", ertek: "" }]);
       setMagyarazat("");
       setNyitva(false);
@@ -158,7 +166,7 @@ export function AdminTaskActions({
           onClick={() => setNyitva((v) => !v)}
           className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[13px] font-medium text-text-accent"
         >
-          {nyitva ? "Mégse" : "Javítás rögzítése"}
+          {nyitva ? "Mégse" : "Javítás / magyarázat Larának"}
         </button>
         {tipus === "szamla" && (
           <button
@@ -182,10 +190,30 @@ export function AdminTaskActions({
 
       {nyitva && (
         <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-4">
+          <label className="mb-1 block text-[13px] font-medium text-text-primary" htmlFor={`magyarazat-${taskId}`}>
+            Mit hova kellett volna tennie, és miért?
+          </label>
           <p className="mb-2 text-[12px] text-text-muted">
-            Írd be, mit kellett volna Larának eltalálnia (mezőnév + helyes érték). Ebből tanul — de egyetlen
-            javításból nem lesz automatikus szabály.
+            Elég egy rövid, összefoglaló magyarázat — mezőket nem kell kitöltened. A magyarázatod azonnal Lara
+            tudásába kerül, és a hasonló eseteknél (ugyanennél a partnernél, ilyen típusú feladatnál) ebből dolgozik.
           </p>
+          <textarea
+            id={`magyarazat-${taskId}`}
+            value={magyarazat}
+            onChange={(e) => setMagyarazat(e.target.value)}
+            placeholder="pl. „Ez nem működési költség: a DEMO26-P014 forgatás technikai bérlése, ezért annak a projektkódnak a kiadásai közé kellett volna tenni. Ennél a bérlőcégnél mindig a forgatás kódjára megy.”"
+            rows={4}
+            className="mb-3 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted"
+          />
+
+          <details className="mb-3 rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2">
+            <summary className="cursor-pointer text-[12.5px] text-text-secondary">
+              Mezőszintű javítás (opcionális, haladó)
+            </summary>
+            <p className="mb-2 mt-2 text-[12px] text-text-muted">
+              Ha pontosan tudod, melyik mező helyes értéke mi volt, itt megadhatod. Ebből a háttér-tanuló dolgozik —
+              egyetlen javításból nem lesz automatikus szabály.
+            </p>
           <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {proposals.length > 0 && (
               <label className="flex flex-col gap-1 text-[12px] text-text-muted">
@@ -244,21 +272,15 @@ export function AdminTaskActions({
               + további mező
             </button>
           </div>
+          </details>
 
-          <textarea
-            value={magyarazat}
-            onChange={(e) => setMagyarazat(e.target.value)}
-            placeholder="Magyarázat (opcionális) — miért volt rossz"
-            rows={2}
-            className="mb-3 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted"
-          />
           <button
             type="button"
             disabled={folyamatban}
             onClick={rogzitJavitas}
             className="rounded-[var(--radius)] bg-bg-accent px-3.5 py-1.5 text-[13px] font-medium text-text-accent disabled:opacity-50"
           >
-            {folyamatban ? "Mentés…" : "Javítás mentése"}
+            {folyamatban ? "Mentés…" : "Elküldöm Larának"}
           </button>
         </div>
       )}
