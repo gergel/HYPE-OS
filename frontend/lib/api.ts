@@ -836,6 +836,40 @@ export type LevelezesAllapot = {
   futasok: LevelezesFutas[];
 };
 
+/** Lara: az AI asszisztens munkájának figyelése (lásd backend admin_agent/asszisztens.py). */
+export type AsszisztensFutas = {
+  id: number;
+  trigger: string;
+  veg_at: string | null;
+  allapot?: string;
+  feldolgozott_kor?: number;
+  uj?: number;
+  frissitett?: number;
+  vegrehajtott_muvelet?: number;
+  elutasitott_muvelet?: number;
+  folyamatban?: number;
+  hatravan?: number;
+  hiba?: number;
+};
+
+export type AsszisztensAllapot = {
+  engedelyezve: boolean;
+  leallitva: boolean;
+  kerdesek: number;
+  vegrehajtott_muvelet: number;
+  elutasitott_muvelet: number;
+  hibas_muvelet: number;
+  /** Téma-címke → kérések száma (csökkenő). */
+  temak: Record<string, number>;
+  jelolt: number;
+  jovahagyott: number;
+  futasok: AsszisztensFutas[];
+};
+
+export async function getAsszisztensAllapot(): Promise<AsszisztensAllapot | null> {
+  return apiGet<AsszisztensAllapot>("/api/v1/admin-agent/assistant-learning");
+}
+
 export async function getLevelezesAllapot(): Promise<LevelezesAllapot | null> {
   return apiGet<LevelezesAllapot>("/api/v1/admin-agent/mail-learning");
 }

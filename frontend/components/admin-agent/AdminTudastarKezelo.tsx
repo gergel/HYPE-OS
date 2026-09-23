@@ -478,6 +478,7 @@ function Sor({
 /** A példa típus-címkéje; a szamla@ levelezésből jött szál „Levelezés". */
 function peldaCimke(m: { hatokor: string; forras?: string | null }): string {
   if (m.forras?.startsWith("levelezes:")) return "Levelezés";
+  if (m.forras?.startsWith("asszisztens:")) return `AI asszisztens · ${TIPUS_CIMKE[m.hatokor] ?? m.hatokor}`;
   return TIPUS_CIMKE[m.hatokor] ?? m.hatokor;
 }
 

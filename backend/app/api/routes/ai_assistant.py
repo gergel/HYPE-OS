@@ -211,11 +211,18 @@ def uzenet(
         f.fajl_nev
         for f in db.scalars(select(AiFajl).where(AiFajl.beszelgetes_id == b.id, AiFajl.felhasznalva.is_(None)))
     ]
+    # Az oldal-kontextus is az üzenetre kerül: ebből látja Lara (lásd
+    # admin_agent/asszisztens.py), melyik oldalról kérdeztek.
+    adat: dict = {}
+    if fajl_nevek:
+        adat["fajlok"] = fajl_nevek
+    if isinstance(payload.kontextus, dict) and payload.kontextus:
+        adat["kontextus"] = {k: v for k, v in payload.kontextus.items() if isinstance(v, (str, int, float, bool))}
     felhasznaloi = AiUzenet(
         beszelgetes_id=b.id,
         szerep="felhasznalo",
         szoveg=szoveg,
-        adat={"fajlok": fajl_nevek} if fajl_nevek else None,
+        adat=adat or None,
     )
     db.add(felhasznaloi)
     if not b.cim:

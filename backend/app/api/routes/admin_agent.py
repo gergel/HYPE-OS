@@ -1090,7 +1090,11 @@ def learning_runs_lista(
     # (GET /self-check/runs, GET /mail-learning).
     sorok = db.scalars(
         select(LearningRun)
-        .where(~LearningRun.trigger.like("onellenorzes%"), ~LearningRun.trigger.like("levelezes%"))
+        .where(
+            ~LearningRun.trigger.like("onellenorzes%"),
+            ~LearningRun.trigger.like("levelezes%"),
+            ~LearningRun.trigger.like("asszisztens%"),
+        )
         .order_by(LearningRun.id.desc())
         .limit(50)
     ).all()
@@ -1331,6 +1335,34 @@ def levelezes_futtatas(
         ) from exc
     if eredmeny.get("allapot") == "kikapcsolva":
         raise HTTPException(status_code=400, detail="A levelezés olvasása ki van kapcsolva (Beállítások).")
+    db.commit()
+    return eredmeny
+
+
+@router.get("/assistant-learning")
+def asszisztens_allapot(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Mit figyelt meg Lara az AI asszisztens munkájából: kérések, végrehajtott /
+    elutasított műveletek, témák, jelöltek, futások."""
+    from app.admin_agent.asszisztens import allapot
+
+    return allapot(db)
+
+
+@router.post("/assistant-learning/run")
+def asszisztens_futtatas(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Az AI asszisztens lezárt kérés-köreinek feldolgozása MOST (csak olvas;
+    körönként tudás-jelölt, jóváhagyás után kerül Lara tudásába)."""
+    from app.admin_agent.asszisztens import asszisztens_tanulas
+
+    eredmeny = asszisztens_tanulas(db, trigger="asszisztens:kezi")
+    if eredmeny.get("allapot") == "kikapcsolva":
+        raise HTTPException(status_code=400, detail="Az AI asszisztens figyelése ki van kapcsolva (Beállítások).")
     db.commit()
     return eredmeny
 

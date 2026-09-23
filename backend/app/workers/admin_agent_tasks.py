@@ -5,6 +5,8 @@
 * Heti értékelés (eval) — a biztonsági/pénzügyi invariánsok regressziós őre.
 * Félóránkénti levelezés-olvasás — a szamla@ postafiók szálaiból tudás-jelölt
   (lásd admin_agent/levelezes.py).
+* Félóránkénti AI-asszisztens-figyelés — a lezárt kérés-körökből tudás-jelölt
+  (lásd admin_agent/asszisztens.py).
 * Kétóránkénti önellenőrzés — Lara a rögzített munkán ellenőrzi a tudását, és
   kérdez, ahol nem érti az eltérést (lásd admin_agent/onellenorzes.py).
 
@@ -62,6 +64,11 @@ celery_app.conf.beat_schedule = {
         "task": "admin_agent.levelezes",
         # Félóránként (:05 és :35) — csak bekapcsolt „Levelezés olvasása" forrással.
         "schedule": crontab(minute="5,35"),
+    },
+    "admin-agent-asszisztens": {
+        "task": "admin_agent.asszisztens",
+        # Félóránként (:20 és :50) — csak bekapcsolt „AI asszisztens figyelése" forrással.
+        "schedule": crontab(minute="20,50"),
     },
     "admin-agent-observer": {
         "task": "admin_agent.observer",
@@ -186,6 +193,27 @@ def levelezes_task() -> dict | None:
     except Exception:
         db.rollback()
         logger.exception("Lara levelezés-olvasása sikertelen.")
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="admin_agent.asszisztens")
+def asszisztens_task() -> dict | None:
+    """Az AI asszisztens lezárt kérés-köreinek figyelése (körönként tudás-jelölt).
+    Csak bekapcsolt „AI asszisztens figyelése" forrással fut."""
+    if _leallitva("asszisztens"):
+        return {"leallitva": True}
+    from app.admin_agent.asszisztens import asszisztens_tanulas
+
+    db = SessionLocal()
+    try:
+        eredmeny = asszisztens_tanulas(db, trigger="asszisztens:utemezett")
+        db.commit()
+        return eredmeny
+    except Exception:
+        db.rollback()
+        logger.exception("Lara AI-asszisztens-figyelése sikertelen.")
         raise
     finally:
         db.close()

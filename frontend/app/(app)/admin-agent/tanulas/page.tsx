@@ -4,12 +4,14 @@ import { TopBar } from "@/components/TopBar";
 import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
 import { AdminTanulasVezerlok } from "@/components/admin-agent/AdminTanulasVezerlok";
 import { AdminVisszajatszas } from "@/components/admin-agent/AdminVisszajatszas";
+import { LaraAsszisztens } from "@/components/admin-agent/LaraAsszisztens";
 import { LaraLevelezes } from "@/components/admin-agent/LaraLevelezes";
 import { LaraOnellenorzes } from "@/components/admin-agent/LaraOnellenorzes";
 import {
   getAdminEvaluations,
   getAdminLearningRuns,
   getAdminReplaySummary,
+  getAsszisztensAllapot,
   getLevelezesAllapot,
   getMyPagePermissions,
   getOnellenorzesFutasok,
@@ -28,12 +30,13 @@ export default async function AdminAgentTanulasPage() {
   if (!canView) redirect("/nincs-jogosultsag");
   const canRun = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
 
-  const [tanulasok, evalok, visszajatszas, onellenorzes, levelezes] = await Promise.all([
+  const [tanulasok, evalok, visszajatszas, onellenorzes, levelezes, asszisztens] = await Promise.all([
     getAdminLearningRuns(),
     getAdminEvaluations(),
     getAdminReplaySummary(),
     getOnellenorzesFutasok(),
     getLevelezesAllapot(),
+    getAsszisztensAllapot(),
   ]);
 
   return (
@@ -52,6 +55,10 @@ export default async function AdminAgentTanulasPage() {
 
           <Card title={`Levelezés — ${levelezes?.postafiok ?? "szamla@hypestab.hu"}`}>
             <LaraLevelezes kezdo={levelezes} canRun={canRun} />
+          </Card>
+
+          <Card title="AI asszisztens — amit kérdeznek és amit megcsinál">
+            <LaraAsszisztens kezdo={asszisztens} canRun={canRun} />
           </Card>
 
           <Card title="Visszajátszás és találati arány">

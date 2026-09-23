@@ -129,17 +129,23 @@ Minden lépés kattintással megy:
    e-mail-válaszoknál és a számlák elemzésénél. A gépi (no-reply, hírlevél)
    szálakat kihagyja. Állapota: Tanulás és minőség → **„Levelezés"** kártya;
    kikapcsolni a Beállításokban lehet. A postafiókot csak olvassa.
-8. **Javítsd, ha téved:** a feladat oldalán **„Javítás / magyarázat Larának"**
+8. **Tanul az AI asszisztens munkájából is:** Lara félóránként megnézi, mit
+   kérdeztetek az AI asszisztenstől, és mit csinált meg: minden lezárt kérésből
+   (kérdés, válasz, végrehajtott / általatok elutasított / hibás műveletek)
+   tudás-jelölt lesz a Tudástárban („AI asszisztens" címkével). Az elutasított
+   művelet külön tanulság: azt nem kellett volna. Állapota: Tanulás és minőség
+   → **„AI asszisztens"** kártya; kikapcsolni a Beállításokban lehet.
+9. **Javítsd, ha téved:** a feladat oldalán **„Javítás / magyarázat Larának"**
    → elég röviden leírni, **mit hova kellett volna tennie és miért** — mezőket
    nem kell kitölteni. A magyarázat azonnal Lara tudásába kerül, és a hasonló
    eseteknél (ugyanannál a partnernél, ilyen típusú feladatnál) ebből dolgozik.
    Ha pontosan tudod, melyik mező helyes értéke mi, a „Mezőszintű javítás"
    résznél azt is megadhatod — abból a háttér-tanuló készít jelöltet.
-9. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
+10. **Futtasd a tanulót:** Tanulás és minőség → **„2. Háttér-tanuló"** (vagy
    megvárod az éjszakai futást). Két hasonló javításból **szabály-jelölt** lesz.
-10. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →
+11. **Élesítsd a jót:** Tanulás és minőség → **„3. Értékelés"**, majd Tudástár →
    szabály-jelölt → **„Élesítés"**.
-11. **Kövesd:** az **Áttekintés** „Tanulás állapota" kártyáján látod a számokat
+12. **Kövesd:** az **Áttekintés** „Tanulás állapota" kártyáján látod a számokat
    (megfigyelt lépés, javítás, példa-/szabály-jelölt, jóváhagyott példa, aktív
    szabály), a **Napló**ban pedig minden egyes megfigyelést.
 

@@ -419,6 +419,28 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
 - Tesztek: `test_admin_agent_magyarazat.py` (2). Élő próba demó-feladaton
   (utána törölve).
 
+### R. Tanulás az AI asszisztens munkájából ✅
+- `app/admin_agent/asszisztens.py`: Lara az AI asszisztens beszélgetéseit
+  KÉRÉS-KÖRÖNKÉNT figyeli (felhasználói kérdés + válasz + a közben indított
+  írási műveletek az `ai_muveletek` naplóból). Minden LEZÁRT kör (nem fut, nincs
+  jóváhagyásra váró művelete) tudás-JELÖLT: ki, mikor, melyik oldalról
+  kérdezett, a kérdés, a válasz, és a műveletek állapottal (végrehajtva /
+  a felhasználó ELUTASÍTOTTA / hiba) + a kérés kulcsadataival (partnernév,
+  összeg…). A téma a művelet útvonalából (számla / TIG / szerződés / e-mail /
+  általános), ez a jelölt hatóköre — jóváhagyás után partner szerint előkerül
+  a számla-elemzésnél és a tervezeteknél. Idempotens (körönként forrásesemény,
+  a kör ujjlenyomata a verzió); csak a tanulás kezdete óta; vészleállításnál
+  nem fut; csak olvas.
+- Az asszisztens felhasználói üzenete mostantól az oldal-kontextust is tárolja
+  (`ai_uzenetek.adat.kontextus`) — Lara ebből látja, melyik oldalról kérdeztek.
+- Forrás-kapcsoló `engedett_forrasok.asszisztens` (migráció `m6g3d74a1b85`
+  bekapcsolja), félóránkénti Celery (`admin_agent.asszisztens`), kézi futtatás
+  és statisztika a Tanulás oldalon (kérések, végrehajtott / elutasított
+  műveletek, témák), Tudásháló „AI asszisztens" téma, Tudástár „AI asszisztens"
+  címke.
+- Tesztek: `test_admin_agent_asszisztens.py` (3). Élő próba demó-beszélgetésen
+  (utána törölve).
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

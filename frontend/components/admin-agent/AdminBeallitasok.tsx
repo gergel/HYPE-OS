@@ -30,6 +30,7 @@ export function AdminBeallitasok({
 
   const megfigyelesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.megfigyeles);
   const levelezesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.levelezes);
+  const asszisztensBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.asszisztens);
 
   async function mentSettings(valtozas: {
     module_enabled?: boolean;
@@ -124,6 +125,18 @@ export function AdminBeallitasok({
         onValt={(v) =>
           mentSettings({
             engedett_forrasok: { ...((b.engedett_forrasok as Record<string, unknown>) ?? {}), levelezes: v },
+          })
+        }
+      />
+
+      <Kapcsolo
+        cim="AI asszisztens figyelése"
+        leiras="Bekapcsolva Lara félóránként megnézi, mit kérdeztek az AI asszisztenstől és mit csinált meg (a végrehajtott, a felhasználó által elutasított és a hibás műveleteket is), és minden lezárt kérésből tudás-jelöltet készít — ezek a Tudástárban jóváhagyás után kerülnek a tudásába. Csak olvas."
+        aktiv={asszisztensBe}
+        tiltva={!canManage || folyamatban || b.kill_switch}
+        onValt={(v) =>
+          mentSettings({
+            engedett_forrasok: { ...((b.engedett_forrasok as Record<string, unknown>) ?? {}), asszisztens: v },
           })
         }
       />

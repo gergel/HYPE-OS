@@ -290,6 +290,11 @@ fejlécben is, a kereső mellett (`components/AiAssistantGomb.tsx`): jobb oldali
 panelben nyílik, oldalváltás nélkül, és az éppen nyitott oldalt kapja
 kontextusként (útvonal + a menü szerinti oldalnév). A panel bezárás után is
 megtartja a beszélgetést; jogosultság nélkül (`/ai-assistant`) nem jelenik meg.
+
+Lara (az adminisztrációs modul) figyeli az asszisztens munkáját: a lezárt
+kérés-körökből (kérdés, válasz, `ai_muveletek` állapottal) tudás-jelöltet
+készít — lásd `docs/admin-agent/progress.md` R. A felhasználói üzenet ehhez az
+oldal-kontextust is tárolja (`ai_uzenetek.adat.kontextus`).
 `services/ai_assistant.py`, frontend `components/AiAssistantChat.tsx`.
 
 Gemini **function calling** a végleges Postgres felett. A lényeges rész: az

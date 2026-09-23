@@ -26,6 +26,8 @@ export const TIPUS_CIMKE: Record<string, string> = {
   // feladatok felirata miatt marad.
   utalas: "Utalás (megszűnt)",
   egyeb: "Egyéb",
+  // Nem feladattípus, hanem tudás-hatókör: az AI asszisztens kérés-körei.
+  asszisztens: "AI asszisztens",
 };
 
 /** A felületről kézzel beállítható, MELLÉKHATÁS-MENTES állapotok (a backend

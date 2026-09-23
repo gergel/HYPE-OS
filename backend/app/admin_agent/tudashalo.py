@@ -33,12 +33,13 @@ from app.admin_agent.visszajatszas import CEL_CIMKE
 from app.models.admin_agent import AdminTask, Correction, MemoryChunk, PlaybookRule, SourceEvent
 from app.models.project_code import ProjectCode
 
-TEMAK = ("szamla", "tig", "szerzodes", "email")
+TEMAK = ("szamla", "tig", "szerzodes", "email", "asszisztens")
 TEMA_CIMKE = {
     "szamla": "Számlák",
     "tig": "TIG-ek",
     "szerzodes": "Szerződések",
     "email": "E-mailek",
+    "asszisztens": "AI asszisztens",
 }
 #: A megfigyelő táblái → témakör.
 _TABLA_TEMA = {"szerzodes": "szerzodes", "tig": "tig", "belsos_tig": "tig", "kiadas": "szamla"}
@@ -200,6 +201,7 @@ def tudashalo(db: Session) -> dict:
                 MemoryChunk.forras.like("megfigyeles:%")
                 | MemoryChunk.forras.like("visszajatszas:%")
                 | MemoryChunk.forras.like("levelezes:%")
+                | MemoryChunk.forras.like("asszisztens:%")
             )
         ).all()
     }
@@ -273,6 +275,31 @@ def tudashalo(db: Session) -> dict:
         e.tudas(
             tema="email",
             partner=m.get("partner"),
+            kod_id=None,
+            kod_cimke=None,
+            cel=None,
+            suly=allapot[0],
+            t=_pelda_ido(pelda, se.created_at),
+            fajta=allapot[1],
+            szoveg=pelda.tartalom if pelda is not None else None,
+        )
+
+    # 2c) AI asszisztens: a lezárt kérés-körök a témájukhoz (partner nélkül —
+    # a kérés maga a tudás; a partner a jelölt szövegéből kereshető).
+    ak: dict[str, SourceEvent] = {}
+    for se in db.scalars(
+        select(SourceEvent).where(SourceEvent.forras == "asszisztens").order_by(SourceEvent.id)
+    ).all():
+        ak[se.forras_azonosito] = se
+    for azon, se in ak.items():
+        m = se.metaadat or {}
+        pelda = peldak.get(f"asszisztens:{azon.split(':', 1)[-1]}")
+        allapot = _pelda_allapot(pelda) if pelda is not None else None
+        if allapot is None:
+            continue
+        e.tudas(
+            tema=m.get("tema") if m.get("tema") in TEMAK else "asszisztens",
+            partner=None,
             kod_id=None,
             kod_cimke=None,
             cel=None,
