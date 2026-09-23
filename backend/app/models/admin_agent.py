@@ -321,6 +321,12 @@ class MemoryChunk(TimestampMixin, Base):
     embedding_dim: Mapped[int | None] = mapped_column(Integer)
     ervenyes: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     visszavont: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: A forrásrekord (TIG/szerződés/kiadás) keletkezése — megfigyelt példánál.
+    forras_keletkezes: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: A tanulás kezdete ELŐTTI vagy Notionből importált rekordból származik
+    #: (lásd admin_agent/observer.py `korszak_rendezes`). Ilyenből nem lesz új
+    #: jelölt; a már jóváhagyott csak az újak után, kisebb súllyal kerül elő.
+    regi_korszak: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class EvalCase(TimestampMixin, Base):

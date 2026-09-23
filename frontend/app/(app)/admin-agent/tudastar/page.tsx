@@ -30,7 +30,13 @@ export default async function AdminAgentTudastarPage() {
             <p className="text-[13px] text-text-secondary">A tudástár most nem érhető el.</p>
           </Card>
         ) : (
-          <AdminTudastarKezelo kezdoSzabalyok={szabalyok.elemek} kezdoPeldak={peldak.elemek} canEdit={canEdit} />
+          <AdminTudastarKezelo
+            kezdoSzabalyok={szabalyok.elemek}
+            kezdoPeldak={peldak.elemek}
+            felretettRegi={peldak.felretett_regi ?? 0}
+            tanulasKezdete={peldak.tanulas_kezdete ?? null}
+            canEdit={canEdit}
+          />
         )}
       </div>
     </div>

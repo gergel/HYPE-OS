@@ -560,6 +560,8 @@ export type AdminAgentOverview = {
     aktiv_szabalyok: number;
     pelda_jeloltek: number;
     jovahagyott_peldak: number;
+    felretett_regi_jeloltek?: number;
+    tanulas_kezdete?: string;
   };
   ember_nelkul_lezart: number | null;
   elfogadasi_arany: number | null;
@@ -575,6 +577,8 @@ export type AdminAgentSettings = {
   kill_switch_indok: string | null;
   engedett_forrasok: Record<string, unknown>;
   limitek: Record<string, unknown>;
+  /** Ettől a naptól keletkezett rekordokból tanul az ügynök (ISO dátum). */
+  tanulas_kezdete?: string;
   integraciok?: AdminAgentIntegracio[];
 };
 
@@ -731,11 +735,21 @@ export type AdminMemory = {
   minosites: string;
   ervenyes: boolean;
   visszavont: boolean;
+  /** A tanulás kezdete előtti / Notionből importált rekordból származik. */
+  regi_korszak?: boolean;
+  forras_keletkezes?: string | null;
   letrehozva: string | null;
 };
 
-export async function getAdminMemory(): Promise<{ elemek: AdminMemory[] } | null> {
-  return apiGet<{ elemek: AdminMemory[] }>("/api/v1/admin-agent/memory?limit=200");
+export type AdminMemoryLista = {
+  elemek: AdminMemory[];
+  /** A régi korszakból félretett (el nem bírált) jelöltek száma. */
+  felretett_regi?: number;
+  tanulas_kezdete?: string;
+};
+
+export async function getAdminMemory(): Promise<AdminMemoryLista | null> {
+  return apiGet<AdminMemoryLista>("/api/v1/admin-agent/memory?limit=1000");
 }
 
 export async function getDashboardSummary(): Promise<DashboardSummary | null> {

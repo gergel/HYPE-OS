@@ -16,6 +16,12 @@ tanulni tudjon belőle — biztonságosan:
 * Engedélyhez kötött: csak ha az admin bekapcsolta a „Tanulás és megfigyelés"
   forrást (`engedett_forrasok.megfigyeles`). Első futáskor korlátozott
   visszatekintés.
+* TANULÁSI KORSZAK: a cég 2026. szeptember 1. óta a HYPE OS felületén dolgozik
+  (előtte Notionben). Csak az ettől a naptól itt KELETKEZETT (és nem Notionből
+  importált) rekordból lesz példa-jelölt. A régi korszak már meglévő jelöltjei
+  félre lesznek téve (nem törlődnek, egyenként jóváhagyhatók), a már jóváhagyott
+  régi példák pedig csak az újak után, kisebb súllyal kerülnek elő. A kezdőnap
+  a Beállításokban (`limitek.tanulas_kezdete`) állítható.
 
 A PROJEKTKÓD feloldása: a TIG/szerződés jellemzően a PROJEKTEN át kötődik a
 projektkódhoz (project_id → projects.project_code_id), nem közvetlenül — ezt is
@@ -25,7 +31,7 @@ követjük, különben tévesen „projektkód nélküli" lenne a leírás.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
 
 from sqlalchemy import select
@@ -39,6 +45,7 @@ from app.models.contract import Contract
 from app.models.employee import Employee
 from app.models.finance import Expense
 from app.models.internal_performance_certificate import InternalPerformanceCertificate
+from app.models.notion_import import NotionImportMap
 from app.models.performance_certificate import PerformanceCertificate
 from app.models.project import Project
 from app.models.project_code import ProjectCode
@@ -48,6 +55,12 @@ FORRAS = "megfigyeles"
 ALAP_VISSZATEKINTES_NAP = 7
 #: Egy futás legfeljebb ennyi rekordot dolgoz fel típusonként.
 MAX_REKORD = 2000
+
+#: A tanulás alapértelmezett kezdete: ettől a naptól dolgozik a cég a HYPE OS
+#: felületén. A Beállításokban (`aa_settings.limitek.tanulas_kezdete`) állítható.
+ALAP_TANULAS_KEZDETE = date(2026, 9, 1)
+#: A régi korszakból származó, még el nem bírált jelölt minősítése.
+FELRETEVE = "felreteve"
 
 #: Az emberi munka „lezárt" állapotai (PONTOS egyezés, kisbetűsítve —
 #: a „Készítés alatt" NEM lezárt, pedig tartalmazza a „kész" szót).
@@ -115,6 +128,28 @@ class Figyelt:
     lezart: Callable[[Any], bool]
 
 
+def tanulas_kezdete_datum(db: Session) -> date:
+    ertek = (get_settings(db).limitek or {}).get("tanulas_kezdete")
+    if isinstance(ertek, str):
+        try:
+            return date.fromisoformat(ertek[:10])
+        except ValueError:
+            pass
+    return ALAP_TANULAS_KEZDETE
+
+
+def tanulas_kezdete(db: Session) -> datetime:
+    """A tanulás kezdete időpontként (budapesti éjfél)."""
+    try:
+        from zoneinfo import ZoneInfo
+
+        zona = ZoneInfo("Europe/Budapest")
+    except Exception:  # noqa: BLE001 — tzdata nélkül UTC
+        zona = timezone.utc
+    d = tanulas_kezdete_datum(db)
+    return datetime(d.year, d.month, d.day, tzinfo=zona)
+
+
 def _allapot_lezart(v: Any) -> bool:
     return isinstance(v, str) and v.strip().lower() in LEZART_ALLAPOTOK
 
@@ -179,6 +214,14 @@ def _kiadas(k: _Kontextus, r: Expense) -> dict:
     }
 
 
+#: A Notion-import térkép entitásnevei (notion_import_map.entity_type).
+_NOTION_ENTITAS = {
+    "szerzodes": "Contract",
+    "tig": "PerformanceCertificate",
+    "belsos_tig": "InternalPerformanceCertificate",
+    "kiadas": "Expense",
+}
+
 FIGYELT: tuple[Figyelt, ...] = (
     Figyelt("szerzodes", Contract, "szerzodes", "szerződés", _szerzodes, lambda r: _allapot_lezart(r.szerzodes_allapota)),
     Figyelt("tig", PerformanceCertificate, "tig", "TIG", _tig, lambda r: _allapot_lezart(r.allapot)),
@@ -224,6 +267,80 @@ def leiras(f: Figyelt, meta: dict) -> str:
     return ", ".join(reszek) + "."
 
 
+def _notion_rekordok(db: Session, f: Figyelt, ids: list[int]) -> set[int]:
+    """Az adott rekordok közül melyik jött Notion-importból."""
+    ki: set[int] = set()
+    for i in range(0, len(ids), 1000):
+        resz = ids[i : i + 1000]
+        ki.update(
+            db.scalars(
+                select(NotionImportMap.entity_id).where(
+                    NotionImportMap.entity_type == _NOTION_ENTITAS[f.kulcs], NotionImportMap.entity_id.in_(resz)
+                )
+            ).all()
+        )
+    return ki
+
+
+def _regi(keletkezes: datetime | None, notionbol: bool, kezdet: datetime) -> bool:
+    """Régi korszak: Notionből importált, vagy a tanulás kezdete előtt keletkezett."""
+    return notionbol or keletkezes is None or keletkezes < kezdet
+
+
+def korszak_rendezes(db: Session) -> dict:
+    """A megfigyelt példák besorolása a tanulási korszak szerint (idempotens).
+
+    - a forrásrekord keletkezése + a régi-korszak jelző a példára kerül;
+    - a régi korszak még el nem bírált jelöltje FÉLRE lesz téve (nem törlődik,
+      egyenként jóváhagyható); ha a kezdőnap korábbra kerül, visszajön jelöltnek;
+    - a jóváhagyott és az elvetett példa állapota nem változik (csak a jelző)."""
+    kezdet = tanulas_kezdete(db)
+    peldak = db.scalars(select(MemoryChunk).where(MemoryChunk.forras.like(f"{FORRAS}:%"))).all()
+    tablankent: dict[str, dict[int, list[MemoryChunk]]] = {}
+    for m in peldak:
+        reszek = (m.forras or "").split(":")
+        if len(reszek) != 3 or not reszek[2].isdigit():
+            continue
+        tablankent.setdefault(reszek[1], {}).setdefault(int(reszek[2]), []).append(m)
+
+    felreteve = visszahozva = regi_jovahagyott = 0
+    for f in FIGYELT:
+        csoport = tablankent.get(f.kulcs)
+        if not csoport:
+            continue
+        ids = list(csoport)
+        keletkezes: dict[int, datetime | None] = {}
+        for i in range(0, len(ids), 1000):
+            for rid, created in db.execute(
+                select(f.model.id, f.model.created_at).where(f.model.id.in_(ids[i : i + 1000]))
+            ).all():
+                keletkezes[rid] = created
+        notion = _notion_rekordok(db, f, ids)
+        for rid, lista in csoport.items():
+            if rid not in keletkezes:
+                continue  # a forrásrekord azóta törölve — nem nyúlunk hozzá
+            regi = _regi(keletkezes[rid], rid in notion, kezdet)
+            for m in lista:
+                m.forras_keletkezes = keletkezes[rid]
+                m.regi_korszak = regi
+                if m.visszavont:
+                    continue
+                if m.ervenyes:
+                    regi_jovahagyott += int(regi)
+                elif regi and m.minosites != FELRETEVE:
+                    m.minosites = FELRETEVE
+                    felreteve += 1
+                elif not regi and m.minosites == FELRETEVE:
+                    m.minosites = "jelolt"
+                    visszahozva += 1
+    return {
+        "tanulas_kezdete": kezdet.date().isoformat(),
+        "felreteve": felreteve,
+        "visszahozva": visszahozva,
+        "regi_jovahagyott": regi_jovahagyott,
+    }
+
+
 def _utolso_ido(db: Session) -> datetime | None:
     se = db.scalar(
         select(SourceEvent).where(SourceEvent.forras == FORRAS).order_by(SourceEvent.id.desc()).limit(1)
@@ -236,7 +353,13 @@ def _utolso_ido(db: Session) -> datetime | None:
         return None
 
 
-def megfigyeles(db: Session, *, visszatekintes_nap: int | None = None, kenyszeritett: bool = False) -> dict:
+def megfigyeles(
+    db: Session,
+    *,
+    visszatekintes_nap: int | None = None,
+    kenyszeritett: bool = False,
+    kezdettol: bool = False,
+) -> dict:
     """Egy megfigyelő futás. A hívó commitál. Ha a forrás nincs engedélyezve és
     nem kényszerített (kézi) a futás, nem csinál semmit."""
     if not kenyszeritett and not engedelyezve(db):
@@ -249,11 +372,16 @@ def megfigyeles(db: Session, *, visszatekintes_nap: int | None = None, kenyszeri
         tol = utolso - timedelta(hours=1)  # átfedés; a dedup az egyedi kulcson
     else:
         tol = _most() - timedelta(days=ALAP_VISSZATEKINTES_NAP)
+    # A tanulás kezdete előtt keletkezett rekord úgysem lehet új példa —
+    # régebbre nem nézünk vissza. (`kezdettol`: pontosan a kezdőnaptól.)
+    kezdet = tanulas_kezdete(db)
+    tol = kezdet if kezdettol else max(tol, kezdet)
 
     k = _Kontextus(db)
     uj_megfigyeles = 0
     uj_pelda = 0
     frissitett_pelda = 0
+    kihagyott_regi = 0
     tipusonkent: dict[str, int] = {}
 
     for f in FIGYELT:
@@ -263,6 +391,7 @@ def megfigyeles(db: Session, *, visszatekintes_nap: int | None = None, kenyszeri
             .order_by(f.model.updated_at)
             .limit(MAX_REKORD)
         ).all()
+        notion = _notion_rekordok(db, f, [r.id for r in rekordok])
         for r in rekordok:
             frissitve = r.updated_at
             azonosito = f"{f.kulcs}:{r.id}"
@@ -305,6 +434,11 @@ def megfigyeles(db: Session, *, visszatekintes_nap: int | None = None, kenyszeri
 
             if not f.lezart(r):
                 continue
+            if _regi(r.created_at, r.id in notion, kezdet):
+                # Régi korszak (Notion / a tanulás kezdete előtt): nem lesz
+                # belőle új példa; a meglévő jelöltjét a korszak_rendezes teszi félre.
+                kihagyott_regi += 1
+                continue
             # Lezárt emberi munkából példa-JELÖLT (egy rekord = egy jelölt).
             tartalom = leiras(f, meta)
             forras_ref = f"{FORRAS}:{azonosito}"
@@ -319,6 +453,8 @@ def megfigyeles(db: Session, *, visszatekintes_nap: int | None = None, kenyszeri
                         minosites="jelolt",
                         tanulasi_halmaz="jovahagyott",
                         ervenyes=False,  # emberi jóváhagyásig NEM használható
+                        forras_keletkezes=r.created_at,
+                        regi_korszak=False,
                     )
                 )
                 uj_pelda += 1
@@ -335,11 +471,15 @@ def megfigyeles(db: Session, *, visszatekintes_nap: int | None = None, kenyszeri
                 pelda.forras_verzio = verzio
                 frissitett_pelda += 1
 
+    db.flush()
+    korszak = korszak_rendezes(db)
     return {
         "engedelyezve": True,
         "tol": tol.isoformat(),
         "uj_megfigyeles": uj_megfigyeles,
         "uj_pelda": uj_pelda,
         "frissitett_pelda": frissitett_pelda,
+        "kihagyott_regi": kihagyott_regi,
         "tipusonkent": tipusonkent,
+        "korszak": korszak,
     }

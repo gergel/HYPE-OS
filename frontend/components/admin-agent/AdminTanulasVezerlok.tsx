@@ -22,7 +22,7 @@ export function AdminTanulasVezerlok({ canRun }: { canRun: boolean }) {
     try {
       const ut =
         mit === "observations-backfill"
-          ? "/api/v1/admin-agent/observations?visszatekintes_nap=90"
+          ? "/api/v1/admin-agent/observations?kezdettol=true"
           : `/api/v1/admin-agent/${mit}`;
       const res = await authFetch(ut, { method: "POST" });
       if (!res.ok) {
@@ -31,8 +31,12 @@ export function AdminTanulasVezerlok({ canRun }: { canRun: boolean }) {
       }
       const d = (await res.json()) as Record<string, unknown>;
       if (mit === "observations" || mit === "observations-backfill") {
+        const k = (d.korszak ?? {}) as { felreteve?: number; tanulas_kezdete?: string };
         setUzenet(
-          `Megfigyelés kész: ${d.uj_megfigyeles} új lépés rögzítve a projektkódokról/utókövetésből, ${d.uj_pelda} új példa-jelölt (Tudástár → Példák), ${d.frissitett_pelda} frissítve.`,
+          `Megfigyelés kész: ${d.uj_megfigyeles} új lépés rögzítve a projektkódokról/utókövetésből, ${d.uj_pelda} új példa-jelölt (Tudástár → Példák), ${d.frissitett_pelda} frissítve.` +
+            (Number(d.kihagyott_regi) || k.felreteve
+              ? ` A tanulás kezdete (${k.tanulas_kezdete ?? "szept. 1."}) előtti / Notion-korszakbeli lezárt rekordokból nem lett jelölt${k.felreteve ? `; ${k.felreteve} régi jelölt félretéve` : ""}.`
+              : ""),
         );
       } else if (mit === "learning-runs") {
         setUzenet(
@@ -72,10 +76,10 @@ export function AdminTanulasVezerlok({ canRun }: { canRun: boolean }) {
           type="button"
           disabled={folyamatban !== null}
           onClick={() => futtat("observations-backfill")}
-          title="Az elmúlt 90 nap változásait is feldolgozza (első betanításhoz)"
+          title="A tanulás kezdete (Beállítások; alap: 2026. szeptember 1.) óta itt keletkezett munkát dolgozza fel"
           className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[13px] font-medium text-text-secondary hover:bg-surface-4 disabled:opacity-50"
         >
-          {folyamatban === "observations-backfill" ? "Visszatekintés fut…" : "Kezdeti visszatekintés (90 nap)"}
+          {folyamatban === "observations-backfill" ? "Visszatekintés fut…" : "Visszatekintés a tanulás kezdetéig"}
         </button>
         <button
           type="button"

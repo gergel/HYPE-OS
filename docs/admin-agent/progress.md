@@ -217,6 +217,30 @@ helyettesítője. A fázisok a master prompt 17. pontjának sorrendjét követik
 - **Nem ellenőrzött:** a valós Gemini-hívás (a sandboxban nincs `GEMINI_API_KEY`) —
   hamis adapterrel tesztelve; élesben a kulcs beállítása után ellenőrizendő.
 
+### K. Tanulási korszak: csak 2026. szeptember 1. óta ✅
+- Ok: a cég szept. 1. óta a HYPE OS felületén dolgozik, előtte Notionben — a
+  régi rekordok (pl. a Notion „Kiadások" tábla projektkód nélküli sorai) félre-
+  vezető mintát adnának.
+- Migráció `i2c9z30w7x51`: `aa_memory_chunks.forras_keletkezes`, `regi_korszak`.
+- Megfigyelő: példa-jelölt CSAK a tanulás kezdete óta keletkezett, nem Notionből
+  importált (`notion_import_map`) rekordból; a visszatekintés sem megy a
+  kezdőnap elé. `korszak_rendezes`: a régi korszak el nem bírált jelöltjei
+  `minosites="felreteve"` (nem törlődnek, egyenként jóváhagyhatók; ha a
+  kezdőnap korábbra kerül, visszajönnek); a jóváhagyott régi példa megmarad.
+- Visszakeresés: az új korszak példái előbb, a régi utána, „[RÉGI…] kisebb
+  súllyal" jelöléssel a modell felé; számlánál ha a projektkódot csak régi eset
+  támasztja alá, bizonytalanság ≥ 0,4.
+- Beállítás: `PATCH /settings {tanulas_kezdete}` (jövőbeli dátum → 400; mentéskor
+  újrabesorolás), Beállítások → „Tanulás kezdete"; `POST /observations?kezdettol=true`;
+  `GET /memory` alapból a félretetteket kihagyja (`felretett=true`-val kérhetők).
+- Felület: Tudástár „Félretett régi jelöltek" szekció, „régi (kisebb súllyal)"
+  címke; Tanulás: „Visszatekintés a tanulás kezdetéig"; Áttekintés: kezdőnap +
+  félretett darabszám.
+- Tesztek: +5 (`test_admin_agent_observer.py`): régi rekordból nincs jelölt,
+  Notion-import régi, félretétel + visszahozás, régi példa hátrébb és jelölve,
+  jövőbeli kezdőnap elutasítva. Teljes backend: 119 zöld, 1 kihagyott; tsc +
+  eslint + `next build` zöld; migráció le/fel próbálva.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

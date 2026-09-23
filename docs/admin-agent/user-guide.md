@@ -75,15 +75,20 @@ Minden lépés kattintással megy:
    megfigyelés (L0)**" kapcsoló. Ettől az ügynök félóránként megnézi a
    projektkódokon és az utókövetésben történt szerződés-, TIG- és
    számla/kiadás-lépéseket, és éjszaka tanul. Csak olvas — üzleti adatot nem módosít.
-2. **Első betanítás:** Admin-Ágens → **Tanulás és minőség** → „**Kezdeti
-   visszatekintés (90 nap)**". Ez feldolgozza a közelmúlt munkáját.
+2. **Első betanítás:** Admin-Ágens → **Tanulás és minőség** → „**Visszatekintés
+   a tanulás kezdetéig**". Ez feldolgozza a tanulás kezdete óta végzett munkát.
+   **A tanulás kezdete alapból 2026. szeptember 1.** — azóta dolgozunk a HYPE OS
+   felületén (előtte Notionben). Az ennél régebbi, illetve a Notionből hozott
+   rekordokból nem készül példa-jelölt; a régi korszak korábbi jelöltjei a
+   Tudástárban „Félretett régi jelöltek" alá kerülnek (nem törlődnek, egyenként
+   jóváhagyhatók), a már jóváhagyott régi példákat pedig az ügynök csak az újabbak
+   után, kisebb súllyal használja. A dátum a **Beállítások → Tanulás kezdete**
+   mezőben módosítható.
 3. **Nézd meg, mit tanult:** Admin-Ágens → **Tudástár** → „Jóváhagyásra váró
    példák". Minden lezárt emberi munkából (pl. kiküldött TIG, kifizetett számla)
    egy példa-jelölt lesz, a projektkóddal és a projekttel együtt. Ami jó:
    **Jóváhagyás**; ami nem: **Elvetés**. Sok példánál szűrj típusra, pipáld ki
-   az átnézetteket, és **„Kijelöltek jóváhagyása"**. (Ha régebbi jelöltek még
-   „projektkód nélkül" szöveggel állnak, futtasd újra a „Kezdeti visszatekintés
-   (90 nap)" gombot — a szövegük frissül.)
+   az átnézetteket, és **„Kijelöltek jóváhagyása"**.
 4. **Adj neki munkát:**
    - Beérkező számlák (Pénzügyek) → sor végén **„Admin-Ágens"** gomb → az ügynök
      elemzi, és megnyílik a feladat.

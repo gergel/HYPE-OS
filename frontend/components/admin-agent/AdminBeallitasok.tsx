@@ -24,6 +24,8 @@ export function AdminBeallitasok({
   const [hiba, setHiba] = useState<string | null>(null);
   const [folyamatban, setFolyamatban] = useState(false);
   const [leallitasIndok, setLeallitasIndok] = useState("");
+  const [kezdet, setKezdet] = useState(kezdo.tanulas_kezdete ?? "2026-09-01");
+  const [kezdetUzenet, setKezdetUzenet] = useState<string | null>(null);
 
   const megfigyelesBe = Boolean((b.engedett_forrasok as Record<string, unknown> | null)?.megfigyeles);
 
@@ -31,9 +33,11 @@ export function AdminBeallitasok({
     module_enabled?: boolean;
     side_effects_enabled?: boolean;
     engedett_forrasok?: Record<string, unknown>;
+    tanulas_kezdete?: string;
   }) {
     if (!canManage) return;
     setHiba(null);
+    setKezdetUzenet(null);
     setFolyamatban(true);
     try {
       const res = await authFetch("/api/v1/admin-agent/settings", {
@@ -44,7 +48,15 @@ export function AdminBeallitasok({
         setHiba(await hibaSzoveg(res, "A módosítás nem sikerült."));
         return;
       }
-      setB((await res.json()) as AdminAgentSettings);
+      const uj = (await res.json()) as AdminAgentSettings & {
+        korszak?: { felreteve: number; visszahozva: number; regi_jovahagyott: number } | null;
+      };
+      setB(uj);
+      if (uj.korszak) {
+        setKezdetUzenet(
+          `Mentve. ${uj.korszak.felreteve} régi jelölt félretéve, ${uj.korszak.visszahozva} visszahozva; ${uj.korszak.regi_jovahagyott} jóváhagyott régi példát az ügynök kisebb súllyal használ.`,
+        );
+      }
       router.refresh();
     } finally {
       setFolyamatban(false);
@@ -101,6 +113,34 @@ export function AdminBeallitasok({
           })
         }
       />
+
+      <div className="rounded-[var(--radius)] border border-border bg-surface-3 px-4 py-3.5">
+        <p className="text-[13px] font-medium text-text-primary">Tanulás kezdete</p>
+        <p className="mt-0.5 text-[12px] text-text-muted">
+          Az ügynök csak az ettől a naptól a HYPE OS-ben keletkezett munkából készít példa-jelöltet (a Notion-korszak
+          és a Notionből hozott rekordok kimaradnak). A régebbi, már jóváhagyott példákat csak az újak után, kisebb
+          súllyal használja; a régi, el nem bírált jelöltek félre lesznek téve (nem törlődnek).
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={kezdet}
+            max={new Date().toISOString().slice(0, 10)}
+            disabled={!canManage || folyamatban}
+            onChange={(e) => setKezdet(e.target.value)}
+            className="rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary disabled:opacity-50"
+          />
+          <button
+            type="button"
+            disabled={!canManage || folyamatban || !kezdet || kezdet === b.tanulas_kezdete}
+            onClick={() => mentSettings({ tanulas_kezdete: kezdet })}
+            className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[13px] font-medium text-text-accent disabled:opacity-50"
+          >
+            Mentés
+          </button>
+        </div>
+        {kezdetUzenet && <p className="mt-2 text-[12px] text-text-success">{kezdetUzenet}</p>}
+      </div>
 
       <Kapcsolo
         cim="Modul engedélyezése"

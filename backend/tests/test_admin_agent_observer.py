@@ -144,3 +144,123 @@ def test_megtanult_tudas_visszahat_az_elemzesre(db):
     assert any("Visszacsatolás Kft.” kifizetve" in e for e in esetek)
     assert not any("jelölt" in e for e in esetek)  # nem jóváhagyott → nem kerül bele
     assert not any("Másik Partner" in e for e in esetek)  # más partner → nem releváns
+
+
+# ── Tanulási korszak: csak a tanulás kezdete (alap: 2026-09-01) óta ──────────
+
+
+def _regi_kiadas(db, nev, **kw):
+    """Kifizetett kiadás, ami a tanulás kezdete ELŐTT keletkezett (Notion-korszak)."""
+    from datetime import datetime, timezone
+
+    alap = dict(megnevezes=nev, netto=20000, brutto=25400, kesz=True,
+                created_at=datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc),
+                updated_at=datetime.now(timezone.utc))
+    alap.update(kw)
+    exp = Expense(**alap)
+    db.add(exp)
+    db.flush()
+    return exp
+
+
+def _kezdet(db, nap: str | None):
+    from app.admin_agent.settings_service import get_settings
+
+    s = get_settings(db)
+    limitek = dict(s.limitek or {})
+    limitek.pop("tanulas_kezdete", None)
+    if nap:
+        limitek["tanulas_kezdete"] = nap
+    s.limitek = limitek
+    db.flush()
+
+
+def test_regi_rekordbol_nem_lesz_uj_jelolt(db):
+    """A tanulás kezdete előtt keletkezett (utóbb módosított) rekord megfigyelés
+    marad, de NEM lesz belőle példa-jelölt; az új rekordból igen."""
+    _kezdet(db, "2026-09-01")
+    regi = _regi_kiadas(db, "Régi Korszak Kft.")
+    uj = Expense(megnevezes="Új Korszak Kft.", netto=1000, brutto=1270, kesz=True)
+    db.add(uj)
+    db.flush()
+
+    r = megfigyeles(db, kenyszeritett=True, visszatekintes_nap=1)
+    db.flush()
+    assert r["kihagyott_regi"] >= 1
+    assert db.scalar(select(MemoryChunk).where(MemoryChunk.forras == f"megfigyeles:kiadas:{regi.id}")) is None
+    uj_pelda = db.scalar(select(MemoryChunk).where(MemoryChunk.forras == f"megfigyeles:kiadas:{uj.id}"))
+    assert uj_pelda is not None and uj_pelda.regi_korszak is False and uj_pelda.forras_keletkezes is not None
+
+
+def test_notionbol_importalt_rekord_regi_korszak(db):
+    """A Notionből importált rekord akkor is régi korszak, ha a kezdőnap után jött be."""
+    from app.models.notion_import import NotionImportMap
+
+    _kezdet(db, "2026-09-01")
+    exp = Expense(megnevezes="Notion Import Kft.", netto=1000, brutto=1270, kesz=True)
+    db.add(exp)
+    db.flush()
+    db.add(NotionImportMap(notion_page_id=f"teszt-notion-{exp.id}", entity_type="Expense", entity_id=exp.id))
+    db.flush()
+    megfigyeles(db, kenyszeritett=True, visszatekintes_nap=1)
+    db.flush()
+    assert db.scalar(select(MemoryChunk).where(MemoryChunk.forras == f"megfigyeles:kiadas:{exp.id}")) is None
+
+
+def test_meglevo_regi_jelolt_felreteve_es_visszahozhato(db):
+    """A régi korszak már meglévő jelöltje félre lesz téve (nem törlődik); a
+    jóváhagyott régi példa jóváhagyott marad (csak jelölve); ha a kezdőnap
+    korábbra kerül, a félretett jelölt visszajön."""
+    from app.admin_agent.observer import FELRETEVE, korszak_rendezes
+
+    _kezdet(db, "2026-09-01")
+    a = _regi_kiadas(db, "Félretett Kft.")
+    b = _regi_kiadas(db, "Jóváhagyott Régi Kft.")
+    jelolt = MemoryChunk(hatokor="szamla", tartalom="régi jelölt", forras=f"megfigyeles:kiadas:{a.id}",
+                         ervenyes=False, minosites="jelolt")
+    jovahagyott = MemoryChunk(hatokor="szamla", tartalom="régi jóváhagyott", forras=f"megfigyeles:kiadas:{b.id}",
+                              ervenyes=True, minosites="jovahagyott")
+    db.add_all([jelolt, jovahagyott])
+    db.flush()
+
+    r = korszak_rendezes(db)
+    assert r["felreteve"] >= 1 and r["regi_jovahagyott"] >= 1
+    assert jelolt.minosites == FELRETEVE and jelolt.regi_korszak is True and jelolt.visszavont is False
+    assert jovahagyott.ervenyes is True and jovahagyott.regi_korszak is True
+
+    _kezdet(db, "2026-08-01")
+    r = korszak_rendezes(db)
+    assert r["visszahozva"] >= 1
+    assert jelolt.minosites == "jelolt" and jelolt.regi_korszak is False
+
+
+def test_regi_pelda_kisebb_sullyal(db):
+    """Ugyanannál a partnernél az új korszak példája ELŐBB jön, a régi utána,
+    megjelölve (a modell is kisebb súllyal kezeli)."""
+    from app.admin_agent.memory import REGI_ELOTAG, kapcsolodo_tudas
+
+    db.add(MemoryChunk(hatokor="szamla", tartalom="Súlyteszt Kft. régi eset", ervenyes=True,
+                       minosites="jovahagyott", regi_korszak=True))
+    db.flush()
+    db.add(MemoryChunk(hatokor="szamla", tartalom="Súlyteszt Kft. új eset", ervenyes=True,
+                       minosites="jovahagyott", regi_korszak=False))
+    db.flush()
+    esetek = kapcsolodo_tudas(db, hatokor="szamla", partner="Súlyteszt Kft.")["hasonlo_esetek"]
+    assert [e["regi"] for e in esetek] == [False, True]
+    assert esetek[1]["tartalom"].startswith(REGI_ELOTAG)
+    assert not esetek[0]["tartalom"].startswith(REGI_ELOTAG)
+
+
+def test_tanulas_kezdete_jovobeli_datum_elutasitva():
+    from fastapi.testclient import TestClient
+
+    from app.core.security import create_access_token
+    from app.main import app
+
+    try:
+        c = TestClient(app)
+        h = {"Authorization": f"Bearer {create_access_token('2', 'admin')}"}
+        r = c.patch("/api/v1/admin-agent/settings", headers=h, json={"tanulas_kezdete": "2999-01-01"})
+    except OperationalError:
+        pytest.skip("Postgres nem elérhető.")
+    assert r.status_code == 400

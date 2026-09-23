@@ -55,6 +55,10 @@ export default async function AdminAgentAttekintesPage() {
                   {overview.tanulas.megfigyeles_bekapcsolva
                     ? "A megfigyelés be van kapcsolva: az ügynök félóránként figyeli a projektkódokat és az utókövetést, éjszaka tanul."
                     : "A megfigyelés ki van kapcsolva (Beállítások → „Tanulás és megfigyelés”). Kézzel a Tanulás és minőség oldalról indítható."}
+                  {overview.tanulas.tanulas_kezdete &&
+                    ` Tanulás kezdete: ${overview.tanulas.tanulas_kezdete.replaceAll("-", ". ")}. — csak az azóta a HYPE OS-ben keletkezett munkából tanul.`}
+                  {!!overview.tanulas.felretett_regi_jeloltek &&
+                    ` ${overview.tanulas.felretett_regi_jeloltek} régi (Notion-korszakbeli) jelölt félretéve.`}
                 </p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                   <TanulasSzam cimke="Megfigyelt lépés" ertek={overview.tanulas.megfigyelt_lepesek} href="/admin-agent/naplo" />

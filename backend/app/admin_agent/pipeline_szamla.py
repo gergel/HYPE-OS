@@ -314,9 +314,14 @@ def _modell_atnezes(
         bizonytalansag = None
     # Ha a modell projektkódot töltött ki, de nincs jóváhagyott korábbi eset,
     # ami alátámasztaná: legalább közepes bizonytalanság.
-    if "cel_project_code_id" in valtozas and not tudas.get("hasonlo_esetek"):
+    esetek = tudas.get("hasonlo_esetek") or []
+    if "cel_project_code_id" in valtozas and not esetek:
         bizonytalansag = max(bizonytalansag or 0.0, 0.6)
         figy.append("A projektkódot nem támasztja alá jóváhagyott korábbi eset — ellenőrizd.")
+    elif "cel_project_code_id" in valtozas and all(e.get("regi") for e in esetek):
+        # Csak a régi (Notion-korszakbeli) gyakorlat támasztja alá: kisebb súly.
+        bizonytalansag = max(bizonytalansag or 0.0, 0.4)
+        figy.append("A projektkódot csak régi (szept. 1. előtti) eset támasztja alá — ellenőrizd.")
 
     eredmeny.update(
         {

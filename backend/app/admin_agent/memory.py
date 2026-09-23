@@ -19,6 +19,9 @@ from app.admin_agent.enums import RuleState
 from app.models.admin_agent import MemoryChunk, PlaybookRule
 
 MAX_TALALAT = 8
+#: A régi (a tanulás kezdete előtti / Notion-korszakbeli) példák jelölése a
+#: modell felé: kisebb súllyal veendő, az újabb gyakorlat felülírja.
+REGI_ELOTAG = "[RÉGI, a HYPE OS előtti (Notion-korszakbeli) eset — kisebb súllyal] "
 
 
 @lru_cache(maxsize=1)
@@ -48,7 +51,15 @@ def kapcsolodo_tudas(db: Session, *, hatokor: str, partner: str | None = None) -
     return {
         "modszer": r["modszer"],
         "szabalyok": [{"id": s["id"], "cim": s["cim"], "tartalom": s["tartalom"]} for s in r["szabalyok"]],
-        "hasonlo_esetek": [{"id": p["id"], "tartalom": p["tartalom"]} for p in peldak],
+        "hasonlo_esetek": [
+            {
+                "id": p["id"],
+                # A régi korszak példáját a modell is kisebb súllyal kezelje.
+                "tartalom": (REGI_ELOTAG if p.get("regi") else "") + p["tartalom"],
+                "regi": bool(p.get("regi")),
+            }
+            for p in peldak
+        ],
     }
 
 
@@ -79,8 +90,13 @@ def retrieve(
     ]
     if query and query.strip():
         felt.append(MemoryChunk.tartalom.ilike(f"%{query.strip()}%"))
+    # A tanulás kezdete óta (a HYPE OS felületén) keletkezett példák ELŐBB;
+    # a régi (Notion-korszakbeli) jóváhagyott példa csak utánuk, ha van hely.
     peldak = db.scalars(
-        select(MemoryChunk).where(*felt).order_by(MemoryChunk.id.desc()).limit(limit)
+        select(MemoryChunk)
+        .where(*felt)
+        .order_by(MemoryChunk.regi_korszak.asc(), MemoryChunk.id.desc())
+        .limit(limit)
     ).all()
 
     return {
@@ -89,5 +105,7 @@ def retrieve(
             {"id": r.id, "cim": r.cim, "tartalom": r.tartalom, "prioritas": r.prioritas, "verzio": r.verzio}
             for r in szabalyok
         ],
-        "peldak": [{"id": m.id, "tartalom": m.tartalom, "forras": m.forras} for m in peldak],
+        "peldak": [
+            {"id": m.id, "tartalom": m.tartalom, "forras": m.forras, "regi": bool(m.regi_korszak)} for m in peldak
+        ],
     }

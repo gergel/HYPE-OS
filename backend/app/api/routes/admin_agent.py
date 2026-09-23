@@ -8,7 +8,7 @@ mellékhatásos végrehajtás a policy engine-en (admin_agent.policy) fog átmen
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -27,7 +27,7 @@ from app.admin_agent.evals import run_eval, safety_esetek_magveto
 from app.admin_agent.executor import TOOL_REGISTRY, execute_approved
 from app.admin_agent.integrations import integracio_allapotok
 from app.admin_agent.learning import distill
-from app.admin_agent.observer import megfigyeles
+from app.admin_agent.observer import FELRETEVE, korszak_rendezes, megfigyeles, tanulas_kezdete_datum
 from app.admin_agent.pipeline_szamla import arnyek_elemzes
 from app.admin_agent.proposals import JavaslatHiba, keszit_javaslat
 from app.admin_agent.settings_service import get_settings
@@ -151,8 +151,17 @@ def overview(
                     MemoryChunk.tanulasi_halmaz == "jovahagyott",
                     MemoryChunk.ervenyes.is_(False),
                     MemoryChunk.visszavont.is_(False),
+                    MemoryChunk.minosites != FELRETEVE,
                 )
             ) or 0,
+            "felretett_regi_jeloltek": db.scalar(
+                select(func.count(MemoryChunk.id)).where(
+                    MemoryChunk.ervenyes.is_(False),
+                    MemoryChunk.visszavont.is_(False),
+                    MemoryChunk.minosites == FELRETEVE,
+                )
+            ) or 0,
+            "tanulas_kezdete": tanulas_kezdete_datum(db).isoformat(),
             "jovahagyott_peldak": db.scalar(
                 select(func.count(MemoryChunk.id)).where(
                     MemoryChunk.tanulasi_halmaz == "jovahagyott",
@@ -1115,6 +1124,8 @@ def release_aktivalas(
 @router.post("/observations")
 def megfigyeles_inditas(
     visszatekintes_nap: int | None = Query(default=None, ge=1, le=365),
+    #: Visszatekintés pontosan a tanulás kezdetétől (Beállítások; alap: 2026-09-01).
+    kezdettol: bool = Query(default=False),
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
@@ -1124,7 +1135,7 @@ def megfigyeles_inditas(
     tábláiba ír; üzleti rekord nem változik. A kézi indítás jogosult felhasználó
     kifejezett döntése, ezért a forrás-kapcsolótól függetlenül fut (az ütemezett
     futás viszont csak bekapcsolt forrással)."""
-    eredmeny = megfigyeles(db, visszatekintes_nap=visszatekintes_nap, kenyszeritett=True)
+    eredmeny = megfigyeles(db, visszatekintes_nap=visszatekintes_nap, kenyszeritett=True, kezdettol=kezdettol)
     db.commit()
     return eredmeny
 
@@ -1138,6 +1149,8 @@ def _memory_sor(m: MemoryChunk) -> dict:
         "minosites": m.minosites,
         "ervenyes": m.ervenyes,
         "visszavont": m.visszavont,
+        "regi_korszak": m.regi_korszak,
+        "forras_keletkezes": m.forras_keletkezes.isoformat() if m.forras_keletkezes else None,
         "letrehozva": m.created_at.isoformat() if m.created_at else None,
     }
 
@@ -1147,14 +1160,29 @@ def memory_lista(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
     hatokor: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=1000),
+    #: A régi korszakból félretett jelölteket is kéri (alapból nem).
+    felretett: bool = Query(default=False),
 ):
-    """A tudás-példák (jelöltek + jóváhagyottak). A holdout sosem jelenik meg itt."""
+    """A tudás-példák (jelöltek + jóváhagyottak). A holdout sosem jelenik meg itt.
+    A régi korszak (a tanulás kezdete előtti / Notionből importált) félretett
+    jelöltjei alapból nem jönnek — csak a számuk."""
     felt = [MemoryChunk.tanulasi_halmaz == "jovahagyott"]
     if hatokor:
         felt.append(MemoryChunk.hatokor == hatokor)
+    if not felretett:
+        felt.append(MemoryChunk.minosites != FELRETEVE)
     sorok = db.scalars(select(MemoryChunk).where(*felt).order_by(MemoryChunk.id.desc()).limit(limit)).all()
-    return {"elemek": [_memory_sor(m) for m in sorok]}
+    felretett_db = db.scalar(
+        select(func.count(MemoryChunk.id)).where(
+            MemoryChunk.minosites == FELRETEVE, MemoryChunk.ervenyes.is_(False), MemoryChunk.visszavont.is_(False)
+        )
+    ) or 0
+    return {
+        "elemek": [_memory_sor(m) for m in sorok],
+        "felretett_regi": felretett_db,
+        "tanulas_kezdete": tanulas_kezdete_datum(db).isoformat(),
+    }
 
 
 class MemoryPatchIn(BaseModel):
@@ -1350,6 +1378,7 @@ def settings_lekeres(
         "kill_switch_indok": s.kill_switch_indok,
         "engedett_forrasok": s.engedett_forrasok or {},
         "limitek": s.limitek or {},
+        "tanulas_kezdete": tanulas_kezdete_datum(db).isoformat(),
         "integraciok": integracio_allapotok(),
     }
 
@@ -1359,6 +1388,8 @@ class SettingsPatchIn(BaseModel):
     side_effects_enabled: bool | None = None
     engedett_forrasok: dict | None = None
     limitek: dict | None = None
+    #: A tanulás kezdete: ettől a naptól keletkezett rekordokból tanul az ügynök.
+    tanulas_kezdete: date | None = None
 
 
 @router.patch("/settings")
@@ -1378,9 +1409,19 @@ def settings_modositas(
         s.engedett_forrasok = payload.engedett_forrasok
     if payload.limitek is not None:
         s.limitek = payload.limitek
+    korszak = None
+    if payload.tanulas_kezdete is not None:
+        if payload.tanulas_kezdete > date.today():
+            raise HTTPException(status_code=400, detail="A tanulás kezdete nem lehet a jövőben.")
+        s.limitek = {**(s.limitek or {}), "tanulas_kezdete": payload.tanulas_kezdete.isoformat()}
+        db.flush()
+        # A meglévő példák újrabesorolása az új kezdőnap szerint.
+        korszak = korszak_rendezes(db)
     s.modositotta_employee_id = user.id
     db.commit()
     return {
+        "korszak": korszak,
+        "tanulas_kezdete": tanulas_kezdete_datum(db).isoformat(),
         "module_enabled": s.module_enabled,
         "side_effects_enabled": s.side_effects_enabled,
         "kill_switch": s.kill_switch,

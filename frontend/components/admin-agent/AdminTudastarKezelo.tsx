@@ -24,10 +24,15 @@ const RULE_ALLAPOT: Record<string, string> = {
 export function AdminTudastarKezelo({
   kezdoSzabalyok,
   kezdoPeldak,
+  felretettRegi = 0,
+  tanulasKezdete = null,
   canEdit,
 }: {
   kezdoSzabalyok: AdminRule[];
   kezdoPeldak: AdminMemory[];
+  /** A régi korszakból (a tanulás kezdete előtti / Notion) félretett jelöltek száma. */
+  felretettRegi?: number;
+  tanulasKezdete?: string | null;
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -38,6 +43,25 @@ export function AdminTudastarKezelo({
   const [folyamatban, setFolyamatban] = useState<string | null>(null);
   const [szuro, setSzuro] = useState<string>("");
   const [kijelolt, setKijelolt] = useState<Set<number>>(new Set());
+  const [felretett, setFelretett] = useState<AdminMemory[] | null>(null);
+  const [felretettDb, setFelretettDb] = useState(felretettRegi);
+  const kezdetSzoveg = tanulasKezdete ? tanulasKezdete.replaceAll("-", ". ") + "." : "2026. 09. 01.";
+
+  async function felretettBetolt() {
+    setHiba(null);
+    setFolyamatban("felretett");
+    try {
+      const res = await authFetch("/api/v1/admin-agent/memory?felretett=true&limit=1000");
+      if (!res.ok) {
+        setHiba(await hibaSzoveg(res, "A félretett jelöltek betöltése nem sikerült."));
+        return;
+      }
+      const d = (await res.json()) as { elemek: AdminMemory[] };
+      setFelretett(d.elemek.filter((m) => m.minosites === "felreteve" && !m.ervenyes && !m.visszavont));
+    } finally {
+      setFolyamatban(null);
+    }
+  }
 
   async function hibaSzoveg(res: Response, alap: string) {
     try {
@@ -85,7 +109,11 @@ export function AdminTudastarKezelo({
         return;
       }
       const uj = (await res.json()) as AdminMemory;
-      setPeldak((p) => p.map((x) => (x.id === uj.id ? uj : x)));
+      setPeldak((p) => (p.some((x) => x.id === uj.id) ? p.map((x) => (x.id === uj.id ? uj : x)) : [uj, ...p]));
+      if (felretett?.some((x) => x.id === uj.id)) {
+        setFelretett((f) => (f ? f.filter((x) => x.id !== uj.id) : f));
+        setFelretettDb((n) => Math.max(0, n - 1));
+      }
       setUzenet(jovahagy ? "Példa jóváhagyva — az ügynök mostantól használhatja." : "Példa elvetve.");
       router.refresh();
     } finally {
@@ -142,7 +170,7 @@ export function AdminTudastarKezelo({
 
   const aktivSzabaly = szabalyok.filter((r) => r.allapot === "active");
   const jeloltSzabaly = szabalyok.filter((r) => r.allapot === "pending" || r.allapot === "draft");
-  const osszesJelolt = peldak.filter((m) => !m.ervenyes && !m.visszavont);
+  const osszesJelolt = peldak.filter((m) => !m.ervenyes && !m.visszavont && m.minosites !== "felreteve");
   const hatokorok = Array.from(new Set(osszesJelolt.map((m) => m.hatokor))).sort();
   const jeloltPelda = szuro ? osszesJelolt.filter((m) => m.hatokor === szuro) : osszesJelolt;
   const kijeloltDb = jeloltPelda.filter((m) => kijelolt.has(m.id)).length;
@@ -159,7 +187,7 @@ export function AdminTudastarKezelo({
 
       <Szekcio
         cim={`Jóváhagyásra váró példák (${osszesJelolt.length})`}
-        leiras="A megfigyelésből (projektkódok, utókövetés) és a javításokból született példák. Jóváhagyás után az ügynök ezekből tanul a hasonló eseteknél. Többet is kipipálhatsz — de csak azt hagyd jóvá, amit át is néztél."
+        leiras={`A megfigyelésből (projektkódok, utókövetés) és a javításokból született példák. Jóváhagyás után az ügynök ezekből tanul a hasonló eseteknél. Csak a tanulás kezdete (${kezdetSzoveg}) óta a HYPE OS-ben keletkezett munkából készül jelölt — a Notion-korszak rekordjaiból nem. Többet is kipipálhatsz — de csak azt hagyd jóvá, amit át is néztél.`}
       >
         {osszesJelolt.length > 0 && (
           <li className="flex flex-wrap items-center gap-2 pb-1">
@@ -247,6 +275,58 @@ export function AdminTudastarKezelo({
         )}
       </Szekcio>
 
+      {felretettDb > 0 && (
+        <Szekcio
+          cim={`Félretett régi jelöltek (${felretettDb})`}
+          leiras={`A tanulás kezdete (${kezdetSzoveg}) előtti, illetve a Notionből hozott rekordokból korábban készült jelöltek. Nem törlődtek, de az ügynök nem kér rájuk döntést. Ha egy régi eset mégis jó minta, itt egyenként jóváhagyhatod — a jóváhagyott régi példát az ügynök csak az újabbak után, kisebb súllyal használja.`}
+        >
+          {felretett === null ? (
+            <li>
+              <button
+                type="button"
+                disabled={folyamatban === "felretett"}
+                onClick={felretettBetolt}
+                className={`${gomb} border border-border text-text-secondary hover:bg-surface-4`}
+              >
+                {folyamatban === "felretett" ? "Betöltés…" : "Megjelenítés"}
+              </button>
+            </li>
+          ) : felretett.length === 0 ? (
+            <Ures szoveg="Nincs félretett régi jelölt." />
+          ) : (
+            felretett.map((m) => (
+              <Sor
+                key={m.id}
+                cimke={`${TIPUS_CIMKE[m.hatokor] ?? m.hatokor} · régi`}
+                szoveg={m.tartalom}
+                forras={m.forras}
+              >
+                {canEdit && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={folyamatban === `m${m.id}`}
+                      onClick={() => peldaDontes(m, true)}
+                      className={`${gomb} bg-bg-success text-text-success`}
+                    >
+                      Jóváhagyás
+                    </button>
+                    <button
+                      type="button"
+                      disabled={folyamatban === `m${m.id}`}
+                      onClick={() => peldaDontes(m, false)}
+                      className={`${gomb} border border-border text-text-secondary hover:bg-surface-4`}
+                    >
+                      Elvetés
+                    </button>
+                  </>
+                )}
+              </Sor>
+            ))
+          )}
+        </Szekcio>
+      )}
+
       <Szekcio
         cim={`Szabály-jelöltek (${jeloltSzabaly.length})`}
         leiras="Gépi javaslatok ismétlődő javításokból. Élesítés csak sikeres értékelés (Tanulás → 3. Értékelés) után lehetséges."
@@ -301,7 +381,12 @@ export function AdminTudastarKezelo({
               </Sor>
             ))}
             {jovahagyottPelda.map((m) => (
-              <Sor key={`m${m.id}`} cimke={`Példa · ${TIPUS_CIMKE[m.hatokor] ?? m.hatokor}`} szoveg={m.tartalom} forras={m.forras}>
+              <Sor
+                key={`m${m.id}`}
+                cimke={`Példa · ${TIPUS_CIMKE[m.hatokor] ?? m.hatokor}${m.regi_korszak ? " · régi (kisebb súllyal)" : ""}`}
+                szoveg={m.tartalom}
+                forras={m.forras}
+              >
                 {canEdit && (
                   <button
                     type="button"
