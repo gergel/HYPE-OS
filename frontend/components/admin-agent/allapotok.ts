@@ -64,7 +64,7 @@ export const CEL_CIMKE: Record<string, string> = {
   belsos_tig: "Meglévő belsős TIG",
   erezsi: "E-Rezsi",
   auto: "Autóköltség",
-  kp: "KP-tétel bizonylata",
+  kp: "Házipénztár-tétel bizonylata",
   mukodesi: "Általános működési költség (projekt nélkül)",
   kimeno: "Kimenő számla",
 };

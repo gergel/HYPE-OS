@@ -6,7 +6,6 @@ import { DispoResponsiblesManager } from "@/components/DispoResponsiblesManager"
 import { DiszpoMasolatManager } from "@/components/DiszpoMasolatManager";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
 import { EntityFieldManager } from "@/components/EntityFieldManager";
-import { KpForgalomUjraszinkron } from "@/components/KpForgalomUjraszinkron";
 import { NotionImportPanel } from "@/components/NotionImportPanel";
 import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
 import { TorlesNaplo } from "@/components/TorlesNaplo";
@@ -201,7 +200,6 @@ export default async function BeallitasokPage() {
               félbe.
             </p>
             <NotionImportPanel />
-            <KpForgalomUjraszinkron />
           </Card>
         )}
 

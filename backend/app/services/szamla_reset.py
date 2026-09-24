@@ -123,7 +123,7 @@ def teljes_reset(db: Session, vegrehajto: Employee) -> dict:
                             "ok": (
                                 "kifizetett"
                                 if exp.kesz
-                                else "KP-tétel hivatkozik rá"
+                                else "házipénztár-tétel hivatkozik rá"
                                 if exp.kp_forgalmak
                                 else f"az Utókövetés TIG-je hivatkozik rá (#{tig_hivatkozik or belso_hivatkozik})"
                                 if (tig_hivatkozik or belso_hivatkozik)

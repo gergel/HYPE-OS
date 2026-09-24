@@ -51,7 +51,7 @@ const CEL_CIMKEK: Record<string, string> = {
   belsos_tig: "Meglévő belsős TIG számlája",
   erezsi: "E-Rezsi előfizetés számlája",
   auto: "Autó költsége (új kiadás)",
-  kp: "KP-tétel bizonylat-pótlása",
+  kp: "Házipénztár-tétel bizonylat-pótlása",
   mukodesi: "Általános működési költség (tudatosan projekt nélkül)",
   kimeno: "Kimenő számla (megrendelői folyamat)",
   bontas: "Bontás több cél között (több projekt egy számlán)",
@@ -76,7 +76,7 @@ const CEL_MEZO: Record<string, { mezo: string; valasztek: string | null; cimke: 
   kulsos_tig: { mezo: "cel_certificate_id", valasztek: "kulsos_tig", cimke: "Melyik külsős TIG-hez" },
   belsos_tig: { mezo: "cel_internal_certificate_id", valasztek: "belsos_tig", cimke: "Melyik belsős TIG-hez" },
   erezsi: { mezo: "cel_kotelezettseg_idoszak_id", valasztek: "erezsi", cimke: "Melyik előfizetés-időszakhoz" },
-  kp: { mezo: "cel_kp_forgalom_id", valasztek: "kp", cimke: "Melyik KP-tételhez" },
+  kp: { mezo: "cel_kp_forgalom_id", valasztek: "kp", cimke: "Melyik házipénztár-tételhez" },
 };
 
 type Valasztek = { projektkodok: { id: number; kod: string }[]; emberek: { id: number; nev: string }[]; autok: { id: number; nev: string }[] };
@@ -590,7 +590,7 @@ function celLink(adat: BejovoSzamlaReszlet): { href: string; cimke: string } | n
   if (adat.cel_tipus === "kulsos_tig") return { href: "/utokovetes", cimke: "Megnyitás az Utókövetésben" };
   if (adat.cel_tipus === "belsos_tig") return { href: "/belsos-tig", cimke: "Megnyitás a Belsős TIG-nél" };
   if (adat.cel_tipus === "erezsi") return { href: "/e-rezsi", cimke: "Megnyitás az E-Rezsinél" };
-  if (adat.cel_tipus === "kp") return { href: "/penzugyek/kp-forgalom", cimke: "Megnyitás a KP forgalomnál" };
+  if (adat.cel_tipus === "kp") return { href: "/penzugyek/kp-forgalom", cimke: "Megnyitás a Házipénztárban" };
   if (adat.cel_tipus === "kiadas_csatolas") return { href: "/penzugyek", cimke: "Megnyitás a Pénzügyekben" };
   return null;
 }
@@ -621,7 +621,7 @@ function ezTortenik(adat: BejovoSzamlaReszlet, mult: boolean): string {
     return `A számla tényleges összege ${mult ? "az előfizetés időszakára került" : "az előfizetés időszakára kerül"}; a fizetve-jelölés nem ${mult ? "változott" : "változik"}.`;
   }
   if (adat.cel_tipus === "kp") {
-    return `A bizonylat ${mult ? "a KP-tételhez került" : "a KP-tételhez kerül"} - új pénzmozgás nem ${mult ? "keletkezett" : "keletkezik"}.`;
+    return `A bizonylat ${mult ? "a házipénztár-tételhez került" : "a házipénztár-tételhez kerül"} - új pénzmozgás nem ${mult ? "keletkezett" : "keletkezik"}.`;
   }
   if (adat.cel_tipus === "mukodesi") {
     return `Új, NEM kifizetett általános működési kiadás ${mult ? "jött létre" : "jön létre"} (${osszeg}), tudatosan projekt nélkül.`;
@@ -701,7 +701,7 @@ function gombFelirat(adat: BejovoSzamlaReszlet): string {
   if (adat.cel_tipus === "kulsos_tig" || adat.cel_tipus === "belsos_tig") return "Csatolás ehhez a TIG-hez";
   if (adat.cel_tipus === "kiadas_csatolas") return "Csatolás ehhez a kiadáshoz";
   if (adat.cel_tipus === "erezsi") return "Rögzítés az előfizetés-időszakra";
-  if (adat.cel_tipus === "kp") return "Bizonylat csatolása a KP-tételhez";
+  if (adat.cel_tipus === "kp") return "Bizonylat csatolása a házipénztár-tételhez";
   if (UJ_KOLTSEG.has(adat.cel_tipus ?? "")) return "Új kiadás rögzítése";
   if (adat.cel_tipus === "bontas") return "Bontás rögzítése";
   return "Jóváhagyás és rögzítés";

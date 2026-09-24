@@ -138,7 +138,7 @@ export default async function PenzugyekPage() {
               <StatCard
                 label="KP egyenleg"
                 value={formatHuf(summary.kp_egyenleg)}
-                megjegyzes="Kassza, 2026.01.01 óta (bruttó)"
+                megjegyzes="Házipénztár (bruttó)"
                 icon={Coins}
                 href="/penzugyek/kp-forgalom"
                 tone={summary.kp_egyenleg >= 0 ? "accent" : "danger"}
@@ -178,7 +178,7 @@ export default async function PenzugyekPage() {
               {/* MENNYI KÉSZPÉNZ VAN A KASSZÁBAN - a készpénzesnek jelölt
                   bevételek és kiadások különbsége (lásd backend
                   services/fizetesi_mod.py). */}
-              <Card title="Készpénz a kasszában">
+              <Card title="Házipénztár">
                 <KasszaWidget kassza={summary.kassza} />
               </Card>
 

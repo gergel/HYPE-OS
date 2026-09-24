@@ -1,43 +1,32 @@
-"""A KASSZA teljes képe - egy helyen, egy szabály szerint.
+"""A HÁZIPÉNZTÁR (kassza) teljes képe - egy helyen, egy szabály szerint.
 
 A készpénz két felületen jelenik meg: a Pénzügyek összesítő kártyáján (mennyi
-van a dobozban) és a KP forgalom naplóban (miből jött össze). A kettő ugyanabból
+van a dobozban) és a Házipénztár oldalon (miből jött össze). A kettő ugyanabból
 a számításból dolgozik, mert két külön implementáció előbb-utóbb két külön
-egyenleget adna - és a kasszánál pont az a kérdés, hogy egyezik-e a szám a
-valósággal.
+egyenleget adna.
 
-LEGÁLIS ÉS FEKETE. A készpénz-mozgásoknál nem csak az számít, mennyi mozdult,
-hanem az is, van-e mögötte SZÁMLA (lásd services/bizonylat.py):
+MI MOZGATJA A HÁZIPÉNZTÁRAT? (a felhasználó 2026-09-24-i döntése, a pénztár
+nulláról újraindításával együtt) Pontosan négyféle tétel:
 
-- a **számlás** kiadás elszámolható költség - ez a legális oldal;
-- a **számla nélküli** kiadást nem lehet elszámolni: ez az, amit a cég
-  szempontjából "feketének" hívunk;
-- a **számla nélküli BEVÉTEL** viszont épp ezt fedezi: az a készpénz, ami
-  számla nélkül jött be, számla nélkül is költhető el.
+1. **BEVÉTEL** - kizárólag KÉSZPÉNZES projektkód-kifizetés: a projektkód
+   számla-lépésénél „Kifizetve / Készpénz”-ként rögzített bevétel-sor (lásd
+   services/megrendeloi_szamla.py). Ugyanaz a sor a Bevételek között is
+   látszik - külön házipénztár-sor NEM készül hozzá, mert az duplázna.
+2. **ÁTVEZETÉS** - ATM-ből felvett készpénz (a `kp_forgalmak` tábla sorai). A
+   házipénztár nő, a bankszámla egyenlege ugyanennyivel csökken, de KIADÁS
+   NEM keletkezik: ez a saját pénzünk átrakása egyik helyről a másikra.
+3. **SIMA KIADÁS** - készpénzben kifizetett kiadás, amihez van számla, vagy
+   legalább lesz (nincs rajta a „nem lesz számla” jelölés).
+4. **FEKETE KIADÁS** - készpénzben kifizetett kiadás, amire rányomták, hogy
+   SOHA nem lesz számlája (`Expense.nincs_szamla`).
 
-Ebből jön a **fekete egyenleg**:
+    egyenleg = bevétel + átvezetés - sima kiadás - fekete kiadás
 
-    fekete egyenleg = számla nélküli KIADÁS - számla nélküli BEVÉTEL
+Minden összeg BRUTTÓ: egy doboz pénz nem tud nettó lenni.
 
-Ha ez pozitív, annyi számla nélküli költés nincs lefedve. A KASSZA egyenlege
-ettől független, az a teljes forgalom különbsége:
-
-    kassza = MINDEN készpénzes bevétel - MINDEN készpénzes kiadás
-
-MI SZÁMÍT BELE? KIZÁRÓLAG a KP forgalom tábla sorai (a felhasználó
-2026-08-30-i döntése): a KP rész pontosan azt mutatja, ami a Notion
-"KP forgalom" táblájában van (az import egy-az-egyben tükör, lásd
-notion_import/importers_wave2.import_kp_forgalom), plusz amit a felületen
-kézzel ide vesznek fel. A készpénzes Bevételek/Kiadások NEM számítanak bele
-külön ágon - korábban beleszámítottak, de ettől a napló sosem egyezett a
-Notionnal (a kiürített KP tábla mellett is "bent ragadt" 119 tétel). Egy
-készpénz-mozgás akkor és csak akkor látszik itt, ha KP forgalom sora van.
-
-KEZDŐNAP: 2026.01.01 (a felhasználó 2026-09-24-i döntése). Az ennél régebbi
-KP forgalom sorokat úgy kezeljük, mintha nem léteznének: nem látszanak a
-naplóban és a táblában, és nem számítanak bele sehova (egyenleg, havi
-bontás, számla-párosítás célpontjai). A dátum nélküli sor megmarad - az nem
-"régebbi", csak még nincs kitöltve, és eltüntetve senki nem pótolná.
+KEZDŐNAP: 2026.01.01. Az ennél régebbi tételeket úgy kezeljük, mintha nem
+léteznének. A dátum nélküli sor megmarad - az nem "régebbi", csak még nincs
+kitöltve, és eltüntetve senki nem pótolná.
 """
 
 from __future__ import annotations
@@ -49,17 +38,24 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.finance import KpForgalom
+from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.project_code import ProjectCode  # noqa: F401  (a selectinload-hoz)
-from app.services import attachments
+from app.services import attachments, elszamolas
+from app.services import fizetesi_mod as fizetesi_mod_szolg
 from app.services.hu_szoveg import ekezet_nelkul
 
 #: A KP forgalom sor iránya. A Notionben szabad szöveg ("bevetel"/"kiadas"),
 #: ezért előtag szerint nézzük.
 _KIADAS_ELOTAG = "kiad"
 
-#: A KP forgalom kezdőnapja - ami ennél régebbi, az nem létezik (lásd fent).
+#: A házipénztár kezdőnapja - ami ennél régebbi, az nem létezik (lásd fent).
 KP_KEZDET = date(2026, 1, 1)
+
+#: A tétel FAJTÁJA - a négy közül (lásd a modul leírását).
+BEVETEL = "bevetel"
+ATVEZETES = "atvezetes"
+SIMA_KIADAS = "kiadas"
+FEKETE_KIADAS = "fekete_kiadas"
 
 
 def kp_ervenyes_sql():
@@ -69,136 +65,101 @@ def kp_ervenyes_sql():
     return or_(KpForgalom.kiadas_datuma.is_(None), KpForgalom.kiadas_datuma >= KP_KEZDET)
 
 
+def _kezdonap_ota_sql(oszlop):
+    return or_(oszlop.is_(None), oszlop >= KP_KEZDET)
+
+
 @dataclass
 class KasszaSor:
     """Egy készpénz-mozgás. Vagy `be`, vagy `ki` - a másik nulla."""
 
+    #: A FORRÁS rekord azonosítója - a `forras` mezővel együtt azonosít.
     id: int
-    #: kiadas | bevetel | kp_forgalom
+    #: bevetel (Revenue) | kiadas (Expense) | kp_forgalom (átvezetés)
     forras: str
+    #: bevetel | atvezetes | kiadas | fekete_kiadas - lásd fent.
+    tipus: str
     datum: date | None
     megnevezes: str
     projektkod: str | None = None
     be: float = 0.0
     ki: float = 0.0
-    #: Van-e mögötte számla. Ez dönti el, melyik oldalra kerül a legális/fekete
-    #: bontásban (lásd a modul leírását).
+    #: Van-e feltöltött számla (csak kiadásnál/bevételnél értelmes).
     van_szamla: bool = False
-    #: ÁTVEZETÉS: nem bevétel és nem költés, hanem a saját pénzünk mozgatása a
-    #: bankszámla és a kassza között (ATM-felvétel). A kassza egyenlegébe
-    #: beleszámít - a doboz tényleg ennyivel lett vastagabb -, de sem a legális,
-    #: sem a fekete oldalra nem kerül: van róla banki kivonat, tehát nem
-    #: "számla nélküli bevétel", és nem is költés.
-    atvezetes: bool = False
-    #: A kassza egyenlege EZ UTÁN a sor után - időrendben számolva.
+    #: A házipénztár egyenlege EZ UTÁN a sor után - időrendben számolva.
     egyenleg: float = 0.0
     #: Hova visz a sor a felületen.
     href: str | None = None
-    #: A NYERS irány-mező - csak "kp_forgalom" forrásnál van értéke
-    #: ("bevetel" / "kiadas" / "fedezet"), a Kiadás/Bevétel saját táblájának
-    #: nincs ilyen mezője. Azért kell IDE is (nem elég a be/ki-ből
-    #: visszafejteni), mert a "fedezet" jelölés a be/ki irányán NEM változtat -
-    #: enélkül a felület nem tudná megkülönböztetni egy sima bevételtől.
-    forgalom: str | None = None
-    #: Feltöltött bizonylat(ok) - csak "kp_forgalom" forrásnál töltjük ki
-    #: (lásd kep() lent): a Kiadásnak/Bevételnek saját, régről örökölt
-    #: bizonylat-felülete van, ennek eddig nem volt.
+    #: Feltöltött bizonylat(ok) - az átvezetés (KP forgalom) sorain.
     csatolmanyok: list[Any] = field(default_factory=list)
-    #: A "Projekt kiadás" mező NYERS azonosítója - csak "kp_forgalom"
-    #: forrásnál van értéke (lásd models/finance.KpForgalom.project_code_id).
-    #: A `projektkod` (fent) már a MEGJELENÍTETT kód, ez a szerkesztéshez kell.
+    #: A projektkód NYERS azonosítója (a szerkesztéshez).
     project_code_id: int | None = None
-    #: Devizás felvezetés nyoma - csak "kp_forgalom" forrásnál lehet, hogy a
-    #: felület megmutassa, MIBŐL lett a forint összeg (lásd services/penznem.py).
+    #: Devizás felvezetés nyoma - csak átvezetésnél (lásd services/penznem.py).
     penznem: str | None = None
     arfolyam: float | None = None
     eredeti_penznem: str | None = None
     eredeti_osszeg: float | None = None
 
+    @property
+    def atvezetes(self) -> bool:
+        return self.tipus == ATVEZETES
+
 
 @dataclass
 class Osszesites:
-    """Egy időszak készpénz-képe - a négy sarok, amiből minden más kijön."""
+    """Egy időszak házipénztár-képe - a négy fajta, amiből minden kijön."""
 
-    be_szamlaval: float = 0.0
-    be_szamla_nelkul: float = 0.0
-    ki_szamlaval: float = 0.0
-    ki_szamla_nelkul: float = 0.0
-    be_szamlaval_db: int = 0
-    be_szamla_nelkul_db: int = 0
-    ki_szamlaval_db: int = 0
-    ki_szamla_nelkul_db: int = 0
-    #: ÁTVEZETÉS: a bankszámla és a kassza közti mozgás (ATM-felvétel). A
-    #: `be`/`ki` végösszegbe BELESZÁMÍT - a dobozban tényleg ott a pénz -, de a
-    #: legális/fekete bontásban külön áll: se nem bevétel, se nem költés.
-    be_atvezetes: float = 0.0
-    ki_atvezetes: float = 0.0
-    be_atvezetes_db: int = 0
-    ki_atvezetes_db: int = 0
+    bevetel: float = 0.0
+    bevetel_db: int = 0
+    #: ÁTVEZETÉS: a bankszámla és a házipénztár közti mozgás (ATM-felvétel;
+    #: ha valaha készpénzt tennénk vissza a bankba, az `atvezetes_ki`).
+    atvezetes_be: float = 0.0
+    atvezetes_ki: float = 0.0
+    atvezetes_db: int = 0
+    sima_kiadas: float = 0.0
+    sima_kiadas_db: int = 0
+    fekete_kiadas: float = 0.0
+    fekete_kiadas_db: int = 0
+
+    @property
+    def atvezetes(self) -> float:
+        """Az átvezetés NETTÓ hatása a házipénztárra (be - ki)."""
+        return self.atvezetes_be - self.atvezetes_ki
 
     @property
     def be(self) -> float:
-        return self.be_szamlaval + self.be_szamla_nelkul + self.be_atvezetes
+        return self.bevetel + self.atvezetes_be
 
     @property
     def ki(self) -> float:
-        return self.ki_szamlaval + self.ki_szamla_nelkul + self.ki_atvezetes
+        return self.sima_kiadas + self.fekete_kiadas + self.atvezetes_ki
 
     @property
     def egyenleg(self) -> float:
         return self.be - self.ki
 
-    @property
-    def fekete_egyenleg(self) -> float:
-        """Amennyi számla nélküli költés NINCS lefedve számla nélküli
-        bevétellel. Negatív érték: több a számla nélküli bevétel, mint a
-        költés - az nem hiány, hanem tartalék."""
-        return self.ki_szamla_nelkul - self.be_szamla_nelkul
-
     def vedd_hozza(self, sor: KasszaSor) -> None:
-        if sor.atvezetes:
-            # Se a legális, se a fekete oldalra nem kerül - de a kassza
-            # egyenlegét mozgatja, ezért a be/ki végösszegben benne van.
-            if sor.be:
-                self.be_atvezetes += sor.be
-                self.be_atvezetes_db += 1
-            if sor.ki:
-                self.ki_atvezetes += sor.ki
-                self.ki_atvezetes_db += 1
-            return
-        if sor.be:
-            if sor.van_szamla:
-                self.be_szamlaval += sor.be
-                self.be_szamlaval_db += 1
-            else:
-                self.be_szamla_nelkul += sor.be
-                self.be_szamla_nelkul_db += 1
-        if sor.ki:
-            if sor.van_szamla:
-                self.ki_szamlaval += sor.ki
-                self.ki_szamlaval_db += 1
-            else:
-                self.ki_szamla_nelkul += sor.ki
-                self.ki_szamla_nelkul_db += 1
+        if sor.tipus == ATVEZETES:
+            self.atvezetes_be += sor.be
+            self.atvezetes_ki += sor.ki
+            self.atvezetes_db += 1
+        elif sor.tipus == BEVETEL:
+            self.bevetel += sor.be
+            self.bevetel_db += 1
+        elif sor.tipus == FEKETE_KIADAS:
+            self.fekete_kiadas += sor.ki
+            self.fekete_kiadas_db += 1
+        else:
+            self.sima_kiadas += sor.ki
+            self.sima_kiadas_db += 1
 
 
 @dataclass
 class KasszaKep:
     sorok: list[KasszaSor] = field(default_factory=list)
-    #: Az EGÉSZ idő alatti kép, és külön az idei év.
+    #: Az EGÉSZ idő alatti kép (a kezdőnap óta), és külön az idei év.
     osszes: Osszesites = field(default_factory=Osszesites)
     idei: Osszesites = field(default_factory=Osszesites)
-    #: Hány olyan KIFIZETETT tétel van, amin nincs megjelölve a fizetési mód.
-    #: Amíg ez nem nulla, az egyenleg csak közelítés.
-    jeloletlen_kiadas: int = 0
-    jeloletlen_bevetel: int = 0
-    #: Hány KP forgalom sor maradt ki, mert egy kiadáshoz kötődik (azt már a
-    #: kiadás soraként számoltuk).
-    kp_forgalom_kiadashoz_kotve: int = 0
-    #: Hány készpénzes Bevétel/Kiadás maradt ki, mert Notionből importált (lásd
-    #: kep() lent): azoknak a valóságban már megvan a saját, kézzel felvitt
-    #: sora a Notion "KP forgalom" táblájában, tehát a hozzáadásuk duplázna.
-    notion_eredetu_kimaradt: int = 0
 
     @property
     def egyenleg(self) -> float:
@@ -209,18 +170,13 @@ class KasszaKep:
 KESZPENZFELVETEL_JELEK: tuple[str, ...] = ("kp felvetel", "keszpenzfelvetel", "keszpenz felvetel", "atm")
 
 #: Egy "KP felvétel"-szerű sor, ami ÁDÁMOT említi (pl. "KP felvétel ATM-ből
-#: (Ádám)") NEM a szokásos ATM-felvétel: ez Ádám SAJÁT kivétele a kasszából -
-#: tehát valódi KIADÁS, nem a bankszámla és a kassza közti önmagunknak-
-#: átvezetés, mint a sima "KP felvétel". Ezért ELŐBB ezt nézzük, és ha illik,
-#: a sor MÁR NEM esik bele az általános "kp felvetel" mintába (lásd
-#: keszpenzfelvetel lent).
+#: (Ádám)") NEM a szokásos ATM-felvétel: ez Ádám SAJÁT kivétele a kasszából.
 ADAM_SAJAT_FELVETEL_JEL = "adam"
 
 
 def keszpenzfelvetel(megnevezes: Any) -> bool:
     """ATM-ből felvett pénz-e ez a sor (a megnevezése szerint) - az Ádámot
-    említő sorok kivételek: azok Ádám saját, valódi kiadása, nem bank->kassza
-    átvezetés (pl. "KP felvétel ATM-ből (Ádám)")."""
+    említő sorok kivételek (pl. "KP felvétel ATM-ből (Ádám)")."""
     if not megnevezes:
         return False
     tiszta = ekezet_nelkul(str(megnevezes))
@@ -230,25 +186,13 @@ def keszpenzfelvetel(megnevezes: Any) -> bool:
 
 
 def kp_forgalom_iranya(f: KpForgalom) -> tuple[float, bool]:
-    """(összeg forintban, kiadás-e) - egy KP forgalom sorból.
+    """(összeg forintban, kivétel-e) - egy átvezetés-sorból.
 
-    A szabály ebben a sorrendben:
-
-    1. **KÉSZPÉNZFELVÉTEL (ATM) → BEVÉTEL.** Ez erősebb az előjelnél, mert a
-       kettő két különböző dobozról beszél: az ATM-ből felvett pénz a
-       BANKSZÁMLÁRÓL megy ki (a Notion formulája ezért negatív), de a KASSZÁBA
-       ÉRKEZIK - itt pedig a kassza a téma. Ez a néhány sor a legnagyobb
-       tételek közt van (több százezres felvételek), tehát rossz irányban
-       kétszeres hibát okozna az egyenlegben.
-    2. **Az ELŐJEL**: a Notion "Forintban" formulája negatív a kiadásokra
-       (lásd models/finance.KpForgalom.forintban). Ez azért kell, mert az
-       "Összeg" oszlop előjel nélküli - abból nem derül ki, hogy egy 600 000
-       Ft-os sor kivétel volt-e a kasszából vagy betétel.
-    3. Ahol a formula-mező nem jött át, a **"Forgalom"** szöveges mező dönt -
-       ide esnek a kézzel javított sorok is (lásd
-       routes/finance._kp_forgalom_kezi_javitas).
-    4. Ha egyik sincs: BEVÉTEL - a tábla erre való, a kiadásoknak amúgy is
-       saját táblájuk van."""
+    A `kp_forgalmak` tábla sorai mind ÁTVEZETÉSEK (lásd a modul leírását): az
+    alapeset az ATM-felvétel, ami a házipénztárba ÉRKEZIK. Kivétel (a
+    házipénztárból a bankba tett pénz) csak akkor, ha a sor kifejezetten így
+    van jelölve: negatív előjel vagy "kiad…" irány - és akkor sem, ha a
+    megnevezése ATM-felvételre utal."""
     ertek = f.forintban
     osszeg = abs(float(ertek or 0))
     if keszpenzfelvetel(f.megnevezes):
@@ -258,51 +202,26 @@ def kp_forgalom_iranya(f: KpForgalom) -> tuple[float, bool]:
     return osszeg, (f.forgalom or "").strip().casefold().startswith(_KIADAS_ELOTAG)
 
 
-def kep(db: Session, ma: date | None = None) -> KasszaKep:
-    """A teljes készpénz-kép: minden mozgás időrendben + az összesítések.
-
-    A napló és az egyenleg KIZÁRÓLAG a KP forgalom táblából számol (a
-    felhasználó 2026-08-30-i döntése): a KP rész pontosan azt mutassa, ami a
-    Notion "KP forgalom" táblájában van (lásd
-    notion_import/importers_wave2.import_kp_forgalom - egy-az-egyben tükör),
-    plusz amit a felületen kézzel ide vesznek fel. Korábban a készpénzes
-    Bevételek/Kiadások is beleszámítottak, de ettől a napló sosem egyezett a
-    Notionnal - a törölt KP tábla mellett is "bent ragadt" 119 tétel a másik
-    két forrásból. Egy készpénz-mozgás mostantól akkor és csak akkor látszik
-    itt, ha KP forgalom sora van."""
-    ma = ma or date.today()
-    sorok: list[KasszaSor] = []
-
-    # A kiadáshoz kötött (`expense_id`) sor is BELESZÁMÍT: a kötés csak címke
-    # ("melyik kiadás papírjához tartozik"), a pénzmozgás egyetlen helyen - itt
-    # - szerepel, tehát nincs mivel duplázódnia.
-    kp_forgalom_sorok = db.scalars(
+def _atvezetesek(db: Session) -> list[KasszaSor]:
+    sorok = db.scalars(
         select(KpForgalom).where(kp_ervenyes_sql()).options(selectinload(KpForgalom.project_code))
     ).all()
-    kp_forgalom_csatolmanyok = attachments.list_for_many(db, "kpForgalom", [f.id for f in kp_forgalom_sorok])
-    for f in kp_forgalom_sorok:
-        osszeg, kiadas_e = kp_forgalom_iranya(f)
+    csatolmanyok = attachments.list_for_many(db, "kpForgalom", [f.id for f in sorok])
+    ki: list[KasszaSor] = []
+    for f in sorok:
+        osszeg, kivetel = kp_forgalom_iranya(f)
         pk = f.project_code
-        sorok.append(
+        ki.append(
             KasszaSor(
                 id=f.id,
                 forras="kp_forgalom",
+                tipus=ATVEZETES,
                 datum=f.kiadas_datuma,
-                megnevezes=f.megnevezes or "KP forgalom",
+                megnevezes=f.megnevezes or "Átvezetés (ATM-felvétel)",
                 projektkod=pk.projektkod if pk else None,
-                be=0.0 if kiadas_e else osszeg,
-                ki=osszeg if kiadas_e else 0.0,
-                # Kézzel állított mező (legördülő a felületen) - NEM a
-                # feltöltött csatolmányból derül ki (lásd
-                # models/finance.KpForgalom.van_szamla).
-                van_szamla=f.van_szamla,
-                # …az ATM-felvétel viszont ÁTVEZETÉS: van róla banki kivonat,
-                # és nem is bevétel, csak a saját pénzünk került át a
-                # bankszámláról a kasszába.
-                atvezetes=keszpenzfelvetel(f.megnevezes),
-                forgalom=f.forgalom,
-                csatolmanyok=kp_forgalom_csatolmanyok.get(f.id, []),
-                href=f"/projektek/project-kodok/{f.project_code_id}" if f.project_code_id else None,
+                be=0.0 if kivetel else osszeg,
+                ki=osszeg if kivetel else 0.0,
+                csatolmanyok=csatolmanyok.get(f.id, []),
                 project_code_id=f.project_code_id,
                 penznem=f.penznem,
                 arfolyam=f.arfolyam,
@@ -310,13 +229,85 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
                 eredeti_osszeg=f.eredeti_osszeg,
             )
         )
+    return ki
+
+
+def _bevetelek(db: Session) -> list[KasszaSor]:
+    """A készpénzes projektkód-kifizetések. Csak a MEGTÖRTÉNT (fizetési
+    dátummal bíró) és az éves bevételbe számító sor - a "nem ezen az úton jött"
+    jelölésű nem pénz, ami a dobozba került (lásd services/elszamolas.py)."""
+    sorok = db.scalars(
+        select(Revenue)
+        .where(
+            fizetesi_mod_szolg.keszpenz_sql(Revenue.fizetes_modja),
+            Revenue.fizetes_datuma.is_not(None),
+            Revenue.fizetes_datuma >= KP_KEZDET,
+            elszamolas.bevetel_beleszamit_sql(Revenue),
+        )
+        .options(selectinload(Revenue.project_code))
+    ).all()
+    szamlas = _szamlas_ids(db, "revenue")
+    return [
+        KasszaSor(
+            id=r.id,
+            forras="bevetel",
+            tipus=BEVETEL,
+            datum=r.fizetes_datuma,
+            megnevezes=r.nev or (f"{r.project_code.projektkod} kifizetése" if r.project_code else "Készpénzes bevétel"),
+            projektkod=r.project_code.projektkod if r.project_code else None,
+            be=elszamolas.brutto_osszeg(r),
+            van_szamla=r.id in szamlas,
+            href=f"/projektek/project-kodok/{r.project_code_id}" if r.project_code_id else None,
+            project_code_id=r.project_code_id,
+        )
+        for r in sorok
+    ]
+
+
+def _kiadasok(db: Session) -> list[KasszaSor]:
+    """A készpénzben KIFIZETETT kiadások - sima vagy fekete a „nem lesz
+    számla” jelölés szerint. Az "összesítőbe nem számít" jelölés itt nem
+    szűr: a pénz attól még kiment a dobozból."""
+    sorok = db.scalars(
+        select(Expense)
+        .where(
+            fizetesi_mod_szolg.keszpenz_sql(Expense.kifizetes_modja),
+            Expense.kesz.is_(True),
+            _kezdonap_ota_sql(Expense.fizetes_datuma),
+        )
+        .options(selectinload(Expense.project_code))
+    ).all()
+    szamlas = _szamlas_ids(db, "expense")
+    return [
+        KasszaSor(
+            id=e.id,
+            forras="kiadas",
+            tipus=FEKETE_KIADAS if e.nincs_szamla else SIMA_KIADAS,
+            datum=e.fizetes_datuma,
+            megnevezes=e.megnevezes or "Készpénzes kiadás",
+            projektkod=e.project_code.projektkod if e.project_code else None,
+            ki=elszamolas.brutto_osszeg(e),
+            van_szamla=e.id in szamlas or bool(e.szamla_pdf_urls),
+            href=f"/penzugyek/kiadas/{e.id}",
+            project_code_id=e.project_code_id,
+        )
+        for e in sorok
+    ]
+
+
+def _szamlas_ids(db: Session, entity_type: str) -> set[int]:
+    from app.services import bizonylat
+
+    return bizonylat._szamlas_ids(db, entity_type)
+
+
+def kep(db: Session, ma: date | None = None) -> KasszaKep:
+    """A teljes házipénztár-kép: minden mozgás időrendben + az összesítések."""
+    ma = ma or date.today()
+    sorok = _bevetelek(db) + _atvezetesek(db) + _kiadasok(db)
 
     # Időrendben (a dátum nélküli a végére): a futó egyenleg csak így értelmes.
     sorok.sort(key=lambda s: (s.datum is None, s.datum or date.min, s.forras, s.id))
-    # A régi, több-forrásos számítás kísérő számlálói (kiadáshoz kötve /
-    # Notion-eredetű kimaradt / jelöletlen fizetési mód) az egy-forrásos
-    # modellben tárgytalanok - nullán maradnak, amitől a felület figyelmeztető
-    # sávjai maguktól eltűnnek (lásd frontend kp-forgalom/page.tsx).
     eredmeny = KasszaKep(sorok=sorok)
     fut = 0.0
     for s in sorok:

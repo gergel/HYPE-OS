@@ -1344,7 +1344,7 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
         if kp is not None and kp.kiadas_datuma is not None and kp.kiadas_datuma < KP_KEZDET:
             kp = None
         if kp is None:
-            raise ErkeztetesHiba("A kiválasztott KP-tétel nem található.")
+            raise ErkeztetesHiba("A kiválasztott házipénztár-tétel nem található.")
         # Bizonylat-pótlás: NEM új pénzmozgás - csak a papír kerül a tételhez.
         _csatol_fajl(db, "kpForgalom", kp.id, bejovo, fajl, naplo)
         naplo["csatolt"].append({"tipus": "kpForgalom", "id": kp.id})

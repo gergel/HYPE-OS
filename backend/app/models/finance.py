@@ -297,9 +297,7 @@ class KpForgalom(TimestampMixin, Base):
 
     @property
     def atvezetes_e(self) -> bool:
-        """ATM-felvétel-e: a bankszámláról a kasszába tett SAJÁT pénz. A kassza
-        egyenlegét mozgatja, de se a legális, se a fekete oldalra nem kerül
-        (lásd services/kassza.py)."""
-        from app.services.kassza import keszpenzfelvetel
-
-        return keszpenzfelvetel(self.megnevezes)
+        """Átvezetés-e: a házipénztár `kp_forgalmak` sorai MIND átvezetések
+        (ATM-felvétel a bankszámláról) - bevétel és kiadás máshonnan jön (lásd
+        services/kassza.py)."""
+        return True

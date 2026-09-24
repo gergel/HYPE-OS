@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -1141,6 +1142,20 @@ def _kiadas_szamlai(db: Session, props: dict, kiadas, result: ImportResult) -> N
         kiadas.szamla_pdf_urls = ujak["Számla pdf"]
 
 
+def _keszpenzes_notion_sor(fizetesi_mod: Any) -> bool:
+    """KÉSZPÉNZES-e a Notion-sor (a fizetési mód / forma mezője szerint).
+
+    A készpénzes kiadás és bevétel SOSEM jön át a Notionből (a felhasználó
+    2026-09-24-i döntése): a Házipénztár nulláról indult, és a HYPE OS-ben
+    vezetik (lásd services/hazipenztar_nullazas.py) - egy újrafuttatott
+    import különben a törölt sorokat mind visszahozná (az árva leképezést a
+    motor újra létrehozza, lásd engine.upsert)."""
+    from app.services.fizetesi_mod import KESZPENZ, kikovetkeztetett_mod
+
+    szoveg = _text(fizetesi_mod)
+    return bool(szoveg) and kikovetkeztetett_mod(szoveg) == KESZPENZ
+
+
 def import_expenses(client: NotionClient, db: Session) -> ImportResult:
     """Expense <- 'Kiadások' + 'Projekt kiadások' + 'Belsős extra kiadások'."""
     result = ImportResult(entity_type="Expense")
@@ -1149,6 +1164,10 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
         props = extract_properties(page, client)
         megnevezes = _text(props.get("Kedvezményezett"))
         if not megnevezes:
+            result.skipped += 1
+            continue
+
+        if _keszpenzes_notion_sor(props.get("Kifizetés módja")):
             result.skipped += 1
             continue
 
@@ -1188,6 +1207,10 @@ def import_expenses(client: NotionClient, db: Session) -> ImportResult:
         props = extract_properties(page, client)
         megnevezes = _text(props.get("Kiadás megnevezése"))
         if not megnevezes:
+            result.skipped += 1
+            continue
+
+        if _keszpenzes_notion_sor(props.get("Kiadás formája")):
             result.skipped += 1
             continue
 
@@ -1251,6 +1274,9 @@ def import_revenues(client: NotionClient, db: Session) -> ImportResult:
         props = extract_properties(page, client)
         project_code_id = resolve_relation_id(db, "ProjectCode", props.get("HYPE ADMIN projektkódok") or [])
         if project_code_id is None:
+            result.skipped += 1
+            continue
+        if _keszpenzes_notion_sor(props.get("Bevétel formája")):
             result.skipped += 1
             continue
 

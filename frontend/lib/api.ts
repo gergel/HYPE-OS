@@ -2484,7 +2484,7 @@ export type FinanceSummary = {
   ytd_bevetel: number;
   ytd_kiadas: number;
   /** A régi "Profit (idén)" helyett két egyenleg (lásd backend
-   * routes/finance.FinanceSummary): a kassza (KP forgalom, 2026.01.01 óta)
+   * routes/finance.FinanceSummary): a házipénztár
    * (bruttó) és a bankszámla idei mozgásának egyenlege (nettó). */
   kp_egyenleg: number;
   szamla_egyenleg: number;
@@ -2514,103 +2514,94 @@ export type FinanceSummary = {
 /** Egy hónap készpénz-mozgása és a hónap végi egyenleg. */
 export type KasszaHavi = { month: string; be: number; ki: number; egyenleg: number };
 
-/** Mennyi készpénz van a kasszában - BRUTTÓBAN, mert egy doboz pénz nem tud
- * nettó lenni (lásd backend services/fizetesi_mod.py). */
+/** Mennyi készpénz van a HÁZIPÉNZTÁRBAN - BRUTTÓBAN, mert egy doboz pénz nem
+ * tud nettó lenni (lásd backend services/kassza.py). */
 export type Kassza = {
   egyenleg: number;
   osszes_be: number;
   osszes_ki: number;
   idei_be: number;
   idei_ki: number;
-  /** Az idei készpénzes kiadás kettéosztva: van-e mögötte SZÁMLA (lásd backend
-   * services/bizonylat.py). A számla nélküli készpénzes kiadás a könyvelésben
-   * nem elszámolható költség - az a szám teendő, nem statisztika. */
-  idei_ki_szamlaval: number;
-  idei_ki_szamla_nelkul: number;
-  idei_ki_szamlaval_db: number;
-  idei_ki_szamla_nelkul_db: number;
+  /** Az idei mozgás a négy fajta szerint: KP projektkód-bevétel,
+   * ATM-átvezetés, sima (számlás / lesz számlája) és fekete (sosem lesz
+   * számlája) kiadás. */
+  idei_bevetel: number;
+  idei_bevetel_db: number;
+  idei_atvezetes: number;
+  idei_atvezetes_db: number;
+  idei_sima_kiadas: number;
+  idei_sima_kiadas_db: number;
+  idei_fekete_kiadas: number;
+  idei_fekete_kiadas_db: number;
   havi: KasszaHavi[];
-  /** Hány KIFIZETETT tételen nincs megjelölve a fizetési mód - amíg ez nem
-   * nulla, az egyenleg csak közelítés. */
-  jeloletlen_kiadas: number;
-  jeloletlen_bevetel: number;
 };
 
 export async function getFinanceSummary(): Promise<FinanceSummary | null> {
   return apiGet<FinanceSummary>("/api/v1/finance/summary");
 }
 
-/** Egy készpénz-mozgás a KP forgalom naplóban (lásd backend
- * services/kassza.py). */
+/** A házipénztár-tétel FAJTÁJA (lásd backend services/kassza.py). */
+export type HazipenztarTipus = "bevetel" | "atvezetes" | "kiadas" | "fekete_kiadas";
+
+/** Egy mozgás a Házipénztár naplójában. */
 export type KpNaploSor = {
   /** A FORRÁS rekord azonosítója - a `forras` mezővel együtt azonosít. */
   id: number;
-  /** kiadas | bevetel | kp_forgalom */
-  forras: string;
+  /** bevetel (Revenue) | kiadas (Expense) | kp_forgalom (átvezetés) */
+  forras: "bevetel" | "kiadas" | "kp_forgalom";
+  tipus: HazipenztarTipus;
   datum: string | null;
   megnevezes: string;
   projektkod: string | null;
   be: number;
   ki: number;
-  /** A kassza egyenlege EZ UTÁN a sor után, időrendben számolva. */
+  /** A házipénztár egyenlege EZ UTÁN a sor után, időrendben számolva. */
   egyenleg: number;
-  /** Van-e mögötte SZÁMLA - ez dönti el, a legális vagy a fekete oldalra
-   * kerül-e. */
+  /** Van-e feltöltött számla (kiadásnál/bevételnél). */
   van_szamla: boolean;
-  /** ÁTVEZETÉS: a saját pénzünk mozgatása bankszámla és kassza közt
-   * (ATM-felvétel). A kassza egyenlegébe beleszámít, a legális/fekete
-   * bontásba nem. */
   atvezetes: boolean;
   href: string | null;
-  /** A NYERS irány-mező - csak "kp_forgalom" forrásnál van értéke (bevetel /
-   * kiadas / fedezet). */
-  forgalom: string | null;
-  /** Feltöltött bizonylat(ok) - csak "kp_forgalom" forrásnál lehet. */
+  /** Feltöltött bizonylat(ok) - az átvezetés-soroknál. */
   csatolmanyok: DocumentAttachment[];
-  /** A "Projekt kiadás" mező NYERS azonosítója - csak "kp_forgalom"
-   * forrásnál van értéke. */
   project_code_id: number | null;
-  /** Devizás felvezetés nyoma - csak "kp_forgalom" forrásnál lehet. */
   penznem: string | null;
   arfolyam: number | null;
   eredeti_penznem: string | null;
   eredeti_osszeg: number | null;
 };
 
-/** Egy időszak készpénz-képe: a négy sarok, amiből minden más kijön. */
+/** Egy időszak házipénztár-képe a négy fajta szerint. */
 export type KpOsszesites = {
-  be_szamlaval: number;
-  be_szamla_nelkul: number;
-  ki_szamlaval: number;
-  ki_szamla_nelkul: number;
-  be_szamlaval_db: number;
-  be_szamla_nelkul_db: number;
-  ki_szamlaval_db: number;
-  ki_szamla_nelkul_db: number;
-  /** ÁTVEZETÉS (ATM-felvétel): a be/ki végösszegben benne van, a
-   * legális/fekete bontásban külön áll. */
-  be_atvezetes: number;
-  ki_atvezetes: number;
-  be_atvezetes_db: number;
-  ki_atvezetes_db: number;
+  bevetel: number;
+  bevetel_db: number;
+  atvezetes: number;
+  atvezetes_db: number;
+  sima_kiadas: number;
+  sima_kiadas_db: number;
+  fekete_kiadas: number;
+  fekete_kiadas_db: number;
   be: number;
   ki: number;
   egyenleg: number;
-  /** Amennyi számla nélküli költés NINCS lefedve számla nélküli bevétellel. */
-  fekete_egyenleg: number;
 };
 
 export type KpNaplo = {
   sorok: KpNaploSor[];
   osszes: KpOsszesites;
   idei: KpOsszesites;
-  /** Hány KP forgalom sor maradt ki, mert egy kiadáshoz kötődik. */
-  kp_forgalom_kiadashoz_kotve: number;
-  /** Hány készpénzes Bevétel/Kiadás maradt ki, mert Notionből importált (már
-   * megvan a saját, kézzel felvitt KP forgalom párja). */
-  notion_eredetu_kimaradt: number;
-  jeloletlen_kiadas: number;
-  jeloletlen_bevetel: number;
+};
+
+/** A házipénztár nullázásának előnézete (lásd backend
+ * services/hazipenztar_nullazas.py). */
+export type HazipenztarNullazasElonezet = {
+  kp_forgalom_db: number;
+  kp_forgalom_osszeg: number;
+  kiadas_db: number;
+  kiadas_osszeg: number;
+  bevetel_db: number;
+  bevetel_osszeg: number;
+  kifizetes_visszaallitas_db: number;
+  megerosites: string;
 };
 
 export async function getKpNaplo(): Promise<KpNaplo | null> {
@@ -4320,8 +4311,8 @@ export type MegrendeloiSzamlaAllas = {
   netto_forintban: number | null;
   brutto_forintban: number | null;
   /** HOGYAN érkezett a pénz ("Átutalás" / "Készpénz"). Készpénznél a bevétel a
-   * KASSZÁBA is bekerül: a KP forgalom oldalon ugyanez a sor látszik, külön
-   * felvezetés nélkül. */
+   * HÁZIPÉNZTÁRBA is bekerül: ott ugyanez a sor látszik, külön felvezetés
+   * nélkül. */
   fizetes_modja: string | null;
   keszpenzes: boolean;
   /** Készpénzes bevételnél ettől függ, hogy sima legális bevétel-e, vagy

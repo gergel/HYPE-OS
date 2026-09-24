@@ -154,7 +154,7 @@ def _cel_cimke(db: Session, b: BejovoSzamla) -> str | None:
         if idoszak:
             return f"E-Rezsi: {idoszak.kotelezettseg.nev} ({idoszak.esedekesseg})"
     if b.cel_tipus == "kp":
-        return "KP-tétel bizonylat"
+        return "Házipénztár-tétel bizonylata"
     if b.cel_tipus == "kimeno":
         return "Kimenő számla (megrendelői folyamat)"
     return None

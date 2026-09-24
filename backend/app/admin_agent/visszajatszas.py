@@ -53,7 +53,7 @@ CEL_CIMKE = {
     "belsos_tig": "meglévő belsős TIG",
     "erezsi": "E-Rezsi időszak",
     "auto": "autóköltség",
-    "kp": "KP-tétel bizonylata",
+    "kp": "Házipénztár-tétel bizonylata",
     "mukodesi": "általános működési költség (projekt nélkül)",
     "kimeno": "kimenő számla",
     "bontas": "bontás több cél között",

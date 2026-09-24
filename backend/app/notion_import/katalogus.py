@@ -218,15 +218,10 @@ KATALOGUS: tuple[ImporterInfo, ...] = (
         fn=importers_wave2.import_revenues,
         fuggosegek=("ProjectCode",),
     ),
-    ImporterInfo(
-        nev="KpForgalom",
-        cimke="KP forgalom",
-        kor=2,
-        forrasok=("KP forgalom",),
-        leiras="Készpénzes forgalom - teljes, egy-az-egyben tükör (a Notionban törölt sor innen is törlődik).",
-        fn=importers_wave2.import_kp_forgalom,
-        fuggosegek=("Expense", "ProjectCode"),
-    ),
+    # A "KP forgalom" importer SZÁNDÉKOSAN nincs a katalógusban (a
+    # felhasználó 2026-09-24-i döntése): a Házipénztár nulláról indult, és a
+    # HYPE OS-ben vezetik - egy Notion-tükör minden régi sort visszahozna
+    # (lásd services/hazipenztar_nullazas.py).
     ImporterInfo(
         nev="Feedback",
         cimke="Visszajelzések",

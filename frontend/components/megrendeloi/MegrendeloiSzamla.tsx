@@ -177,21 +177,17 @@ export function MegrendeloiSzamla({
           {allas.bevetel_kihagyas_oka && (
             <p className="whitespace-pre-line text-[12.5px] text-text-muted">{allas.bevetel_kihagyas_oka}</p>
           )}
-          {/* HOGYAN érkezett a pénz. Készpénznél ki is mondjuk, mi lesz belőle
-              a kasszában: számlával sima legális bevétel, számla nélkül
-              FEDEZET a számla nélküli kiadásokhoz (lásd backend
-              services/megrendeloi_szamla.py). */}
+          {/* HOGYAN érkezett a pénz. Készpénznél ki is mondjuk, hogy a
+              Házipénztárba is bekerül bevételként (lásd backend
+              services/kassza.py). */}
           {allas.fizetes_modja && !allas.tranzakcio_nelkul_lezarva && (
             <p className="text-[13px] text-text-secondary">
               {allas.fizetes_modja}
               {allas.keszpenzes && (
                 <span className="text-text-muted">
                   {" "}
-                  · a <a href="/penzugyek/kp-forgalom" className="text-text-accent hover:underline">KP forgalomban</a> is
-                  szerepel,{" "}
-                  {allas.van_szamla_a_bevetelen
-                    ? "számlával – legális bevétel"
-                    : "számla nélkül – fedezet a számla nélküli kiadásokhoz"}
+                  · a <a href="/penzugyek/kp-forgalom" className="text-text-accent hover:underline">Házipénztárban</a> is
+                  szerepel bevételként
                 </span>
               )}
             </p>
@@ -407,7 +403,7 @@ function KifizetesDialog({
               <p className="mt-1 text-[12px] text-text-muted">
                 {mod === "Készpénz" ? (
                   <>
-                    A bevételek közé is bekerül, <b>és a kasszába is</b> – a KP forgalomban ugyanez a sor jelenik meg.{" "}
+                    A bevételek közé is bekerül, <b>és a házipénztárba is</b> – a Házipénztárban ugyanez a sor jelenik meg.{" "}
                     {vanSzamla
                       ? "Van mögötte számla, tehát legális bevétel."
                       : "Nincs mögötte számla, tehát fedezet: a számla nélküli kiadásokat csökkenti."}

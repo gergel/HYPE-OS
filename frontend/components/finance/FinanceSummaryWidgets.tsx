@@ -50,11 +50,11 @@ export function FinanceMonthlyChart({ trend }: { trend: FinanceSummary["havi_tre
   );
 }
 
-/** MENNYI KÉSZPÉNZ VAN A KASSZÁBAN - és hogyan alakult.
+/** MENNYI KÉSZPÉNZ VAN A HÁZIPÉNZTÁRBAN - és hogyan alakult.
  *
- * A kassza egy fizikai doboz: az egyenlege a készpénzes bevételek és kiadások
- * különbsége, BRUTTÓBAN (egy doboz pénz nem tud nettó lenni - lásd backend
- * services/fizetesi_mod.py).
+ * A házipénztár egy fizikai doboz: KP projektkód-bevétel + ATM-átvezetés -
+ * sima és fekete készpénzes kiadás, BRUTTÓBAN (lásd backend
+ * services/kassza.py).
  *
  * A diagram két dolgot mond egyszerre: a havi be/ki mozgást (oszlopok,
  * ugyanazon a forint-tengelyen) és a hónap végi EGYENLEGET (a szám az oszlopok
@@ -63,20 +63,15 @@ export function FinanceMonthlyChart({ trend }: { trend: FinanceSummary["havi_tre
  * amennyit mutat. */
 export function KasszaWidget({ kassza }: { kassza: FinanceSummary["kassza"] }) {
   const max = Math.max(1, ...kassza.havi.flatMap((h) => [h.be, h.ki]));
-  const jeloletlen = kassza.jeloletlen_kiadas + kassza.jeloletlen_bevetel;
   return (
     <div>
-      {/* HÁROM külön kérdés, három szám - ahogy a Notionben is külön
-          widgetekben álltak:
-            1. mennyi készpénznek KELL nálunk lennie most,
-            2. mennyi idei készpénzes kiadás mögött VAN számla,
-            3. és mennyi mögött NINCS.
-          A harmadik a lényeg: számla nélkül a készpénzes kiadás a
-          könyvelésben nem elszámolható költség, tehát az a szám egy teendő,
-          nem statisztika (lásd backend services/bizonylat.py). */}
+      {/* A HÁZIPÉNZTÁR négy fajta tétele (lásd backend services/kassza.py):
+          az egyenleg, és mellette, miből állt össze idén. A FEKETE kiadás
+          (sosem lesz számlája) külön kiemelve: az a könyvelésben nem
+          elszámolható költség. */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
-          <p className="text-[12px] text-text-secondary">KP a kasszában (2026.01.01 óta)</p>
+          <p className="text-[12px] text-text-secondary">Házipénztár egyenlege</p>
           <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
             {formatHuf(kassza.egyenleg)}
           </p>
@@ -86,39 +81,31 @@ export function KasszaWidget({ kassza }: { kassza: FinanceSummary["kassza"] }) {
           </p>
         </div>
         <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
-          <p className="text-[12px] text-text-secondary">Idei KP kiadás – van számla</p>
+          <p className="text-[12px] text-text-secondary">Idei bevétel és átvezetés</p>
           <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
-            {formatHuf(kassza.idei_ki_szamlaval)}
+            {formatHuf(kassza.idei_bevetel + kassza.idei_atvezetes)}
           </p>
-          <p className="mt-1 text-[11.5px] text-text-muted">{kassza.idei_ki_szamlaval_db} tétel</p>
+          <p className="mt-1 text-[11.5px] text-text-muted">
+            KP projektkód-kifizetés {formatHuf(kassza.idei_bevetel)} · ATM {formatHuf(kassza.idei_atvezetes)}
+          </p>
         </div>
         <div
           className={`rounded-[var(--radius)] border p-3 ${
-            kassza.idei_ki_szamla_nelkul_db > 0 ? "border-border-strong bg-bg-warning" : "border-border bg-surface-3"
+            kassza.idei_fekete_kiadas_db > 0 ? "border-border-strong bg-bg-warning" : "border-border bg-surface-3"
           }`}
         >
-          <p className="text-[12px] text-text-secondary">Idei KP kiadás – nincs számla</p>
-          <p
-            className={`mt-1 text-[22px] font-semibold tracking-[-0.02em] tabular-nums ${
-              kassza.idei_ki_szamla_nelkul_db > 0 ? "text-text-warning" : "text-text-primary"
-            }`}
-          >
-            {formatHuf(kassza.idei_ki_szamla_nelkul)}
+          <p className="text-[12px] text-text-secondary">Idei kiadás – sima / fekete</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
+            {formatHuf(kassza.idei_sima_kiadas + kassza.idei_fekete_kiadas)}
           </p>
           <p className="mt-1 text-[11.5px] text-text-muted">
-            {kassza.idei_ki_szamla_nelkul_db} tétel – ezekhez hiányzik a bizonylat
+            sima {formatHuf(kassza.idei_sima_kiadas)} ·{" "}
+            <span className={kassza.idei_fekete_kiadas_db > 0 ? "text-text-warning" : undefined}>
+              fekete {formatHuf(kassza.idei_fekete_kiadas)} ({kassza.idei_fekete_kiadas_db} tétel)
+            </span>
           </p>
         </div>
       </div>
-
-      {/* Amíg van megjelöletlen tétel, az egyenleg csak közelítés - ezt ki kell
-          mondani, különben egy hiányos szám tűnik pontosnak. */}
-      {jeloletlen > 0 && (
-        <p className="mb-3 text-[12px] text-text-warning">
-          {jeloletlen} kifizetett tételen nincs megjelölve a fizetési mód ({kassza.jeloletlen_kiadas} kiadás,{" "}
-          {kassza.jeloletlen_bevetel} bevétel) – amíg ez így van, az egyenleg csak közelítés.
-        </p>
-      )}
 
       <div className="mb-3 flex items-center gap-4 text-[12px] text-text-secondary">
         <span className="flex items-center gap-1.5">

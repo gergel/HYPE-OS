@@ -46,7 +46,7 @@ torzítsa (lásd lent: A NETTÓ a mérvadó):
 
 | Kártya | Mit mutat |
 |---|---|
-| **KP egyenleg** | A kassza egyenlege a KP forgalomból, **2026.01.01 óta** (lásd lent: Kassza). Kattintva a KP forgalom oldalra visz. |
+| **KP egyenleg** | A Házipénztár egyenlege (lásd lent: Házipénztár). Kattintva a Házipénztár oldalra visz. |
 | **Számla egyenleg (idén, nettó)** | Az idei, bankszámlán mozgott pénz, nettóban: a nem készpénzes bevétel mínusz a nem készpénzes kiadás, mínusz az ATM-ről a kasszába átvezetett készpénz. A „Nincs pénzmozgás” tételek kimaradnak, a megjelöletlen fizetési módú tétel a számlához számít. |
 
 A Számla egyenleg **nyitó egyenleg nélküli** mérleg: az idei mozgás összege,
@@ -292,7 +292,48 @@ kifizetettsége.
 Frontend: `components/finance/`, `RevenueInvoiceStatus.tsx`,
 `TigInvoiceManager.tsx`, `TigAllapotSelect.tsx`.
 
-### Kassza: mennyi készpénz van épp
+### Házipénztár (2026-09-24-től)
+
+A régi „KP forgalom” oldal neve **Házipénztár** (útvonal: `/penzugyek/kp-forgalom`,
+a technikai azonosítók maradtak). Pontosan **négyféle tétel** mozgatja - bruttóban,
+mert egy doboz pénz nem tud nettó lenni:
+
+| Fajta | Honnan jön | Hatás |
+|---|---|---|
+| **Bevétel** | KIZÁRÓLAG készpénzes projektkód-kifizetés: projektkód → Számla → Kifizetve, fizetési mód **Készpénz**. A bevétel-sor a Bevételek között is ott van - külön házipénztár-sor nem kell. | + |
+| **Átvezetés** | ATM-ből felvett készpénz („+ Átvezetés (ATM-felvétel)” a Házipénztár oldalon, `kp_forgalmak` sor). **Kiadás NEM keletkezik**: a házipénztár nő, a **Számla egyenleg** ugyanennyivel csökken. | + |
+| **Kiadás** | Készpénzben kifizetett kiadás, amihez van számla, vagy lesz („+ Készpénzes kiadás”, vagy a Kiadások között fizetési mód: Készpénz). | − |
+| **Fekete kiadás** | Ugyanez, de rányomták, hogy **sosem lesz számlája** (`Expense.nincs_szamla`, a táblában „Sosem lesz számla” pipa). | − |
+
+    egyenleg = bevétel + átvezetés − kiadás − fekete kiadás
+
+A dátummal felvett készpénzes kiadás automatikusan kifizetett (`kesz`): a pénz
+abban a pillanatban kiment a dobozból. A régi „fedezet” (számla nélküli
+bevétel) és a legális/fekete egyenleg megszűnt.
+
+**Nullázás.** A Házipénztár oldal alján (törlési jog kell): minden készpénzes
+tétel törlése - a `kp_forgalmak` összes sora, minden készpénzes kiadás és
+bevétel, és a régi ATM-felvételekhez gyártott „Bankkártya” kiadás-sorok -, hogy
+a pénztár nulláról induljon. Menete: előnézet → **mentés letöltése (JSON)** →
+a `NULLÁZÁS` szó beírása → végrehajtás. A mentés a tárhelyre is feltöltődik
+(`mentesek/hazipenztar-nullazas-*.json`), a feltöltött számlafájlok a tárhelyen
+maradnak. Mellékhatások, ugyanúgy, mint kézi törlésnél: a készpénzes kiadást
+létrehozó TIG újra „nincs kifizetve”, a megrendelői számla „Kifizetve” jelölése
+visszaáll (a projektkód újra kintlévőség, amíg a készpénzes kifizetést újra
+rögzítik). Kód: `services/hazipenztar_nullazas.py`, végpontok:
+`GET/POST /api/v1/finance/hazipenztar/nullazas`, `GET …/nullazas/mentes`.
+
+**Notion.** A készpénzes sorok SOSEM jönnek át a Notionből: a „KP forgalom”
+importer kikerült a katalógusból, a kiadás- és bevétel-import pedig kihagyja a
+készpénzes sorokat - egy újrafuttatott import különben a törölt sorokat mind
+visszahozná. A Beállítások „KP forgalom törlése és újraimportálása” gombja
+megszűnt.
+
+> Az alábbi, „Kassza” kezdetű rész a 2026-09-24 előtti működést írja le
+> (legális/fekete, fedezet, Notion-tükör) - ahol ellentmond a fentinek, a
+> fenti érvényes.
+
+### Kassza: mennyi készpénz van épp (régi leírás)
 
 > **Kezdőnap: 2026.01.01.** A KP forgalom ennél régebbi sorait a rendszer úgy
 > kezeli, mintha nem léteznének: nem látszanak a naplóban és a táblában,

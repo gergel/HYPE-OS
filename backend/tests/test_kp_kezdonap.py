@@ -107,6 +107,6 @@ def test_kp_es_szamla_egyenleg(db):
     assert utana.szamla_atvezetes - elotte.szamla_atvezetes == pytest.approx(20_000)
     assert utana.szamla_ki - elotte.szamla_ki == pytest.approx(24_000 + 20_000)
     assert utana.szamla_egyenleg - elotte.szamla_egyenleg == pytest.approx(80_000 - 24_000 - 20_000)
-    # A KP egyenleg a kassza egyenlege (a KP forgalomból).
+    # A KP egyenleg a házipénztár egyenlege: KP bevétel + ATM - KP kiadás.
     assert utana.kp_egyenleg == utana.kassza.egyenleg
-    assert utana.kp_egyenleg - elotte.kp_egyenleg == pytest.approx(20_000)
+    assert utana.kp_egyenleg - elotte.kp_egyenleg == pytest.approx(50_000 + 20_000 - 9_000)
