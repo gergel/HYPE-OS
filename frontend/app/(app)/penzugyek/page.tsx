@@ -132,8 +132,9 @@ export default async function PenzugyekPage() {
               />
               {/* A régi "Profit (idén)" helyén KÉT egyenleg: a kassza (KP
                   forgalom, 2026.01.01 óta - a régebbi sorok nem számítanak)
-                  és a bankszámla idei mozgása. Mindkettő BRUTTÓ: egy doboz
-                  pénz és egy bankszámla sem tud nettó lenni. */}
+                  és a bankszámla idei mozgása. A KP BRUTTÓ (egy doboz pénz
+                  nem tud nettó lenni), a számla NETTÓ - mint az éves
+                  bevétel/kiadás, hogy az ÁFA ne torzítsa. */}
               <StatCard
                 label="KP egyenleg"
                 value={formatHuf(summary.kp_egyenleg)}
@@ -143,7 +144,7 @@ export default async function PenzugyekPage() {
                 tone={summary.kp_egyenleg >= 0 ? "accent" : "danger"}
               />
               <StatCard
-                label="Számla egyenleg (idén, bruttó)"
+                label="Számla egyenleg (idén, nettó)"
                 value={formatHuf(summary.szamla_egyenleg)}
                 megjegyzes={`Be: ${formatHuf(summary.szamla_be)} · ki: ${formatHuf(summary.szamla_ki)}${
                   summary.szamla_atvezetes ? ` (ebből kasszába: ${formatHuf(summary.szamla_atvezetes)})` : ""

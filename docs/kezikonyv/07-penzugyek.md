@@ -40,13 +40,14 @@ Néhány dolog a listákon szándékosan van így:
 ### KP egyenleg és Számla egyenleg (a régi „Profit (idén)” helyett)
 
 A felső kártyasorban a „Profit (idén, nettó)” megszűnt, a helyén két egyenleg
-áll - mindkettő **bruttó**, mert egy doboz pénz és egy bankszámla sem tud
-nettó lenni:
+áll. A KP egyenleg **bruttó** (egy doboz pénz nem tud nettó lenni), a Számla
+egyenleg **nettó** - ugyanúgy, mint az éves bevétel/kiadás, hogy az ÁFA ne
+torzítsa (lásd lent: A NETTÓ a mérvadó):
 
 | Kártya | Mit mutat |
 |---|---|
 | **KP egyenleg** | A kassza egyenlege a KP forgalomból, **2026.01.01 óta** (lásd lent: Kassza). Kattintva a KP forgalom oldalra visz. |
-| **Számla egyenleg (idén, bruttó)** | Az idei, bankszámlán mozgott pénz: a nem készpénzes bevétel mínusz a nem készpénzes kiadás, mínusz az ATM-ről a kasszába átvezetett készpénz. A „Nincs pénzmozgás” tételek kimaradnak, a megjelöletlen fizetési módú tétel a számlához számít. |
+| **Számla egyenleg (idén, nettó)** | Az idei, bankszámlán mozgott pénz, nettóban: a nem készpénzes bevétel mínusz a nem készpénzes kiadás, mínusz az ATM-ről a kasszába átvezetett készpénz. A „Nincs pénzmozgás” tételek kimaradnak, a megjelöletlen fizetési módú tétel a számlához számít. |
 
 A Számla egyenleg **nyitó egyenleg nélküli** mérleg: az idei mozgás összege,
 nem a banki kivonat záró egyenlege. Ugyanazok a kapuk érvényesek rá, mint az

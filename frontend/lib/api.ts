@@ -2485,7 +2485,7 @@ export type FinanceSummary = {
   ytd_kiadas: number;
   /** A régi "Profit (idén)" helyett két egyenleg (lásd backend
    * routes/finance.FinanceSummary): a kassza (KP forgalom, 2026.01.01 óta)
-   * és a bankszámla idei mozgásának egyenlege, bruttóban. */
+   * (bruttó) és a bankszámla idei mozgásának egyenlege (nettó). */
   kp_egyenleg: number;
   szamla_egyenleg: number;
   szamla_be: number;

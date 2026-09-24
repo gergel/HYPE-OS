@@ -102,10 +102,11 @@ def test_kp_es_szamla_egyenleg(db):
     _kp(db, ma, 20_000, megnevezes="KP felvétel ATM (demó)")
 
     utana = finance_summary(db=db, _user=None)
-    assert utana.szamla_be - elotte.szamla_be == pytest.approx(100_000)
+    # A számla egyenleg NETTÓBAN számol (a bruttó 100 000 / 30 000 nem).
+    assert utana.szamla_be - elotte.szamla_be == pytest.approx(80_000)
     assert utana.szamla_atvezetes - elotte.szamla_atvezetes == pytest.approx(20_000)
-    assert utana.szamla_ki - elotte.szamla_ki == pytest.approx(30_000 + 20_000)
-    assert utana.szamla_egyenleg - elotte.szamla_egyenleg == pytest.approx(100_000 - 30_000 - 20_000)
+    assert utana.szamla_ki - elotte.szamla_ki == pytest.approx(24_000 + 20_000)
+    assert utana.szamla_egyenleg - elotte.szamla_egyenleg == pytest.approx(80_000 - 24_000 - 20_000)
     # A KP egyenleg a kassza egyenlege (a KP forgalomból).
     assert utana.kp_egyenleg == utana.kassza.egyenleg
     assert utana.kp_egyenleg - elotte.kp_egyenleg == pytest.approx(20_000)

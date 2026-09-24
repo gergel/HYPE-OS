@@ -525,8 +525,9 @@ class FinanceSummary(BaseModel):
     #: A régi "Profit (idén)" helyett KÉT egyenleg (a felhasználó kérése):
     #: - KP egyenleg: a kassza egyenlege a KP forgalomból (lásd
     #:   services/kassza.py, 2026.01.01 óta) - ugyanaz, mint `kassza.egyenleg`;
-    #: - SZÁMLA egyenleg: az idei, BANKSZÁMLÁN mozgott pénz egyenlege, bruttóban
-    #:   (a számlán a bruttó mozog): a nem készpénzes bevétel mínusz a nem
+    #: - SZÁMLA egyenleg: az idei, BANKSZÁMLÁN mozgott pénz egyenlege, NETTÓBAN
+    #:   (a felhasználó kérése - ugyanúgy, mint az éves bevétel/kiadás, hogy
+    #:   az ÁFA ne torzítsa): a nem készpénzes bevétel mínusz a nem
     #:   készpénzes kiadás, mínusz az ATM-ről a kasszába átvezetett készpénz.
     #:   Nyitó egyenleg nélkül - az idei mozgás mérlege, nem a banki kivonat.
     kp_egyenleg: float
@@ -934,12 +935,12 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         or 0
     )
 
-    # SZÁMLA EGYENLEG: az idei, bankszámlán mozgott pénz, bruttóban (lásd
+    # SZÁMLA EGYENLEG: az idei, bankszámlán mozgott pénz, NETTÓBAN (lásd
     # FinanceSummary.szamla_egyenleg). Ugyanazok a kapuk, mint az éves
     # összesítőnél - csak a fizetés útja szerint szűrve.
     szamla_be = float(
         db.scalar(
-            select(func.coalesce(func.sum(elszamolas.brutto_sql(Revenue)), 0)).where(
+            select(func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0)).where(
                 Revenue.fizetes_datuma.is_not(None),
                 Revenue.fizetes_datuma >= year_start,
                 _REVENUE_COUNTS_TOWARD_TOTALS,
@@ -950,7 +951,7 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     )
     szamla_kiadas = float(
         db.scalar(
-            select(func.coalesce(func.sum(elszamolas.brutto_sql(Expense)), 0)).where(
+            select(func.coalesce(func.sum(elszamolas.netto_sql(Expense)), 0)).where(
                 Expense.fizetes_datuma.is_not(None),
                 Expense.fizetes_datuma >= year_start,
                 _EXPENSE_COUNTS_TOWARD_TOTALS,
