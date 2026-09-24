@@ -775,6 +775,30 @@ is meg tudja adni a választ.
 - Fájl: `backend/app/admin_agent/rendszer.py` (`_figyelt_tablak`). Teszt:
   `tests/test_kp_kezdonap.py::test_lara_sem_latja_a_regi_kp_sort`.
 
+### AE. 2026-09 bővítés: Kérdezz Larától, tanítás, tudáspróba, tanulás-javítás ✅ (tesztelve, modell nélkül)
+- Részletes átadó: `docs/admin-agent/lara-fejlesztes-2026-09.md`.
+- Fázisok:
+  - P: verziózott személyiség-réteg és a 20 kommunikációs teszt;
+  - Q: „Kérdezz Larától” felület;
+  - A: futásnapló + forrásállapot + tudás-nyomvonal;
+  - B: verziózott rendszerkézikönyv;
+  - C: „Tanítsd Larát”;
+  - D: üzleti ügy + vizsgakészlet;
+  - E: gyors visszacsatolás + csak-javaslatos automatikus számla-elemzés;
+  - F: kategorizált visszakeresés, öt minőségmérő szám, szakmai
+    szabálytesztek.
+- Migráció: `q0k7h18e5f29` (csak additív).
+- Új kapcsolók (`gyors_visszacsatolas`, `auto_szamla_elemzes`,
+  `vizsgakeszlet`): mind alapból KI.
+- A modul-, mellékhatás- és vészleállítás-kapcsolók, valamint a bizalmi
+  szintek nem változtak.
+- Tesztek: teljes backend-csomag átment. Frontend: `tsc`, `eslint`, `build`
+  rendben. Élő bejárás demóadattal, utána takarítva.
+- NEM ELLENŐRZÖTT: valódi Gemini (beszélgetés, tanítás-előnézet, 20
+  kommunikációs forgatókönyv), élő Celery-worker.
+- Az ügyfél-profil előkészítve, KIKAPCSOLVA: Lara ügyfelekkel nem
+  kommunikál.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

@@ -232,6 +232,10 @@ Minden kör csak olvas, és csak Lara saját `aa_` tábláiba ír. Minden kör
 - Ha **ugyanannál a partnernél** legalább **3 eset** (`auto_jovahagyas_min`)
   **≥80%-ban egybehangzó**, és egyiket sem vetették el, a példák maguktól
   jóváhagyottak (`auto_jovahagyott`, naplózva).
+- 2026-09 óta az „eset” **üzleti ügyet** jelent, nem rekordot: ugyanannak a
+  partnernek ugyanarra a projektkódra eső több számlája EGY eset; projektkód
+  nélkül minden dokumentum külön ügy (lásd `ugyek.py`, 14. fejezet). Ugyanez
+  érvényes az önellenőrzés tudására és a tapasztalásra.
 - Kivétel:
   - projektkód-komment, árajánlat és törlés soha nem hagyódik jóvá magától;
   - a bevétel tény, az magától jóváhagyott.
@@ -336,6 +340,9 @@ múltat nem teszi hibássá.
   releváns” kimarad.
 - **Nyitott eltérés**: amire még nincs válasz.
 - Mindhárom összesítve és területenként is látható.
+- 2026-09 óta mellettük öt KÜLÖN mérőszám látszik, mintaszámmal
+  (`minoseg.py`, 14. fejezet): tudás megtalálása, helyesség új eseteken
+  (Tudáspróba), emberi javítás igénye, indokolt kérdezés, tanulási késés.
 
 ---
 
@@ -399,7 +406,11 @@ esetek, érkeztető) ilyenkor is fut.
 
 ---
 
-## 11. A Tudásháló és a „bizonyosság %”
+## 11. A Tudásháló és a „bizonyíték-erősség %”
+
+(A felület 2026-09 előtt „bizonyosság”-nak nevezte. A szám a kapcsolat
+mögötti BIZONYÍTÉK erőssége, nem Lara feladat-pontossága — azt a Tanulás és
+minőség oldal méri, külön.)
 
 Minden kapcsolatnak (pl. partner ↔ projektkód) van egy **súlya**. Ez a
 mögötte álló bizonyítékok összege:
@@ -469,7 +480,59 @@ szándékosan nem „hangolható”: csak valódi, ellenőrzött bizonyíték n�
   leveleknek a hitelesített Gmail-fiókban kell lenniük.
 - **Éles adat**: a fejlesztői adatbázisban szinte nincs adat, ezért a
   bizonyosság tényleges emelkedése csak élesben mérhető.
-- **Automatikus számla-elemzés nincs**: az elemzés a „Lara” gombra indul.
+- **Automatikus számla-elemzés**: alapból nincs, az elemzés a „Lara” gombra
+  indul. 2026-09 óta bekapcsolható (`auto_szamla_elemzes`), de akkor is csak
+  javaslatot készít (lásd 14.).
 - **Autonómia**: amíg a modul ki van kapcsolva, a mellékhatás tiltva, és a
   típusok L0-n vannak, Lara semmit nem hajt végre, csak javasol. Magasabb
   szint beállítása emberi döntés a Beállításokban.
+
+---
+
+## 14. 2026. szeptemberi bővítés — beszélgetés, tanítás, tudáspróba
+
+A részletes átadó (fájlok, migráció, tesztek, kézi ellenőrzés, visszaállítás):
+`lara-fejlesztes-2026-09.md`. Röviden:
+
+- **Kérdezz Larától** (`/admin-agent/beszelgetes`).
+  - Lara CSAK OLVASVA válaszol: a jóváhagyott tudásából (szabály / kivétel /
+    rendszerkézikönyv / hasonló eset, külön rovatban) és a rendszer
+    csak-olvasó eszközeivel, a kérdező jogosultságával.
+  - Minden válasznál „Honnan tudom”.
+  - Modell nélkül tényszerűen csak a talált tudást idézi.
+- **Személyiség.**
+  - Közös, verziózott réteg (`szemelyiseg.py`, `lara_v1.md`).
+  - Sorrend: biztonság > feladat > hiteles kontextus > személyiség.
+  - A stílusőr törli az emojit; jelzi, ha Lara végrehajtást állítana.
+  - Az ügyfél-profil elő van készítve, de **ki van kapcsolva**: Lara
+    ügyfelekkel nem kommunikál.
+- **Tanítsd Larát.**
+  - Előnézet: fajta, állítás, hatókör, kivételek, érvényesség, tisztázó
+    kérdés.
+  - A mentés után lesz belőle tudás; általános szabályból csak
+    szabály-PISZKOZAT.
+- **Tudáspróba.**
+  - Vak jóslat a vizsgaügyeken (számla).
+  - Saját kérdés elvárt válasszal.
+  - „Szennyezett” jelölés, ha a vizsgakészlet nincs elkülönítve.
+- **Rendszerkézikönyv.**
+  - Gépi technikai tervezet a kódból és a `docs/kezikonyv` fájlokból.
+  - Üzleti eljárást csak ember ír.
+  - Jóváhagyásig egyik sem használható; verziózott.
+- **Üzleti ügy.** Egy ügy = egy eset (lásd 7.2).
+- **Hipotézis.** A Gemini profilja és tanulsága „hipotézis” jelölést kap.
+- **Új kapcsolók**, mind alapból KI:
+  - gyors visszacsatolás (tartós sor, percenként);
+  - automatikus, csak-javaslatos számla-elemzés;
+  - elkülönített vizsgakészlet.
+- **Tanulási folyamat.**
+  - Forrásonkénti állapot (nincs adat / kikapcsolva / nincs jogosultság /
+    feldolgozási hiba / jóváhagyásra vár) és futásnapló minden ütemezett
+    feladatra.
+  - Egy tudás-darab teljes útja lekérdezhető.
+- **Szakmai szabálytesztek.** Szabályverzióhoz kötött pozitív / ellenpélda /
+  hiányos esetek. Ha vannak, az élesítéshez mindnek át kell mennie.
+- **Nem ellenőrzött.** Valódi Gemini-modellel sem a beszélgetést, sem a
+  tanítás-előnézetet, sem a 20 kommunikációs forgatókönyvet nem futtattam:
+  a fejlesztői környezetben nincs kulcs. Automata tesztek hamis modellel
+  futnak.
