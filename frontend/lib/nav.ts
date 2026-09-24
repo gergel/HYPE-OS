@@ -104,6 +104,9 @@ export const navGroups: NavGroup[] = [
       // Mindenki a SAJÁT diszpóit látja itt (csak PDF) - jogosultság nélkül
       // jár, mint a Dashboard (lásd NavList.isAllowed).
       { label: "Diszpóim", href: "/diszpoim", icon: "FileText" },
+      // A gyártási szoba TV-je: élő, teljes képernyős áttekintő (heti
+      // forgatások, ki mit vág, kiküldhető, gyártásra vár) - menü nélkül nyílik.
+      { label: "Gyártás (TV)", href: "/gyartas", icon: "Tv" },
     ],
   },
   {

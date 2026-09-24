@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Tv,
   BadgeCheck,
   Banknote,
   BookOpen,
@@ -54,6 +55,7 @@ import { NavItem, navGroups } from "@/lib/nav";
 import { oldalMuveletei } from "@/lib/permissions";
 
 const ICONS: Record<string, LucideIcon> = {
+  Tv,
   Calculator,
   Banknote,
   LayoutDashboard,

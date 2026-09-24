@@ -18,6 +18,7 @@ from app.api.routes.clients import contacts_router, router as clients_router
 from app.api.routes.contracts import router as contracts_router
 from app.api.routes.crew import profilkep_router, rates_router, router as crew_router
 from app.api.routes.dashboard import router as dashboard_router
+from app.api.routes.gyartas import router as gyartas_router
 from app.api.routes.detail_tabs import router as detail_tabs_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
 from app.api.routes.eseti_szerzodesek import router as eseti_szerzodesek_router
@@ -70,6 +71,7 @@ api_router = APIRouter()
 api_router.include_router(auth_router)
 # 2. Dashboard
 api_router.include_router(dashboard_router)
+api_router.include_router(gyartas_router)
 api_router.include_router(diszpo_tabla_router)
 # 3. Ügyfelek
 api_router.include_router(clients_router)

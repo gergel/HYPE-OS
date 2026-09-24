@@ -213,6 +213,21 @@ export function AllapotBeallitasok({
               />
               Elkészült
             </label>
+            <label className="flex items-center gap-1.5 text-text-secondary" title="A gyártási szoba TV-jén (Gyártás oldal) melyik oszlopban jelenjen meg">
+              Gyártás-TV:
+              <select
+                value={sor.tv_csoport ?? ""}
+                onChange={(e) => modosit(index, { tv_csoport: e.target.value || null })}
+                className="rounded-[var(--radius)] border border-border bg-surface-2 px-1.5 py-0.5 text-[12px] text-text-primary"
+              >
+                <option value="">automatikus (név szerint)</option>
+                <option value="vagas">Épp vágják</option>
+                <option value="ellenorzes">Ellenőrzésen</option>
+                <option value="kikuldheto">Kiküldhető</option>
+                <option value="gyartasra_var">Gyártásra vár</option>
+                <option value="rejtett">Ne jelenjen meg</option>
+              </select>
+            </label>
             <button
               type="button"
               onClick={() => allapotTorol(index)}

@@ -39,6 +39,10 @@ class DeliverableStatusConfig(TimestampMixin, Base):
     #: paneljén szerkeszthető (lásd routes/postproduction.set_allapot_beallitasok,
     #: a váltást a _after_deliverable_update hajtja végre).
     auto_kiosztott_employee_ids: Mapped[list | None] = mapped_column(JSON)
+    #: GYÁRTÁS-TV: melyik oszlopban jelenjen meg az ilyen állapotú anyag
+    #: (vagas / ellenorzes / kikuldheto / gyartasra_var / rejtett). Üres =
+    #: automatikus, az állapot neve alapján (lásd services/gyartas_tv.py).
+    tv_csoport: Mapped[str | None] = mapped_column(String(20))
 
 
 class DeliverableBoardConfig(TimestampMixin, Base):

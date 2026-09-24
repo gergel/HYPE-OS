@@ -3028,6 +3028,8 @@ export type AllapotBeallitas = {
   /** AUTOMATIKUS KIOSZTÁS: az ebbe az állapotba kerülő anyag ezekre az
    * emberekre osztódik ki (üres/null = nincs szabály). */
   auto_kiosztott_employee_ids?: number[] | null;
+  /** Gyártás-TV oszlop: vagas | ellenorzes | kikuldheto | gyartasra_var | rejtett; üres = automatikus. */
+  tv_csoport?: string | null;
 };
 
 export async function getAllapotBeallitasok(): Promise<AllapotBeallitas[]> {
@@ -4511,4 +4513,48 @@ export type SajatDiszpo = {
 
 export async function getSajatDiszpok(): Promise<SajatDiszpo[]> {
   return (await apiGet<SajatDiszpo[]>("/api/v1/dashboard/sajat-diszpok")) ?? [];
+}
+
+/** Gyártás-TV (lásd backend services/gyartas_tv.py). */
+export type TvEmber = { id: number; nev: string; szin: string | null };
+export type TvForgatas = {
+  id: number;
+  nev: string;
+  datum: string | null;
+  datum_vege: string | null;
+  kezdes: string | null;
+  veg: string | null;
+  helyszin: string | null;
+  projektkod: string | null;
+  megrendelo: string | null;
+  allapot: string | null;
+  meeting: boolean;
+  stab: TvEmber[];
+};
+export type TvVagas = {
+  id: number;
+  projekt: string;
+  projektkod: string | null;
+  allapot: string | null;
+  szin: string | null;
+  emberek: TvEmber[];
+  fut: TvEmber[];
+  hatarido: string | null;
+  kesik: boolean;
+  prioritas: boolean;
+  leiras: string | null;
+  ota: string | null;
+};
+export type GyartasTv = {
+  most: string;
+  het: { tol: string; ig: string };
+  napok: { datum: string; nev: string; ma: boolean; multbeli: boolean; forgatasok: TvForgatas[] }[];
+  ma_forgat: TvEmber[];
+  most_vag: (TvEmber & { projekt: string })[];
+  vagasok: { vagas: TvVagas[]; ellenorzes: TvVagas[]; kikuldheto: TvVagas[]; gyartasra_var: TvVagas[] };
+  osszesito: Record<string, number>;
+};
+
+export async function getGyartasTv(): Promise<GyartasTv | null> {
+  return apiGet<GyartasTv>("/api/v1/gyartas/tv");
 }

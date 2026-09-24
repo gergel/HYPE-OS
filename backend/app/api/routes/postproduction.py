@@ -477,6 +477,8 @@ class AllapotBeallitas(BaseModel):
     #: AUTOMATIKUS KIOSZTÁS: az ide kerülő anyag ezekre az emberekre osztódik
     #: ki (üres = nincs szabály) - lásd models/deliverable_status.py.
     auto_kiosztott_employee_ids: list[int] | None = None
+    #: Gyártás-TV oszlop (üres = automatikus, lásd services/gyartas_tv.py).
+    tv_csoport: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -605,6 +607,9 @@ def set_allapot_beallitasok(
         )
         szurt_idk = [i for i in kert_idk if i in letezok]
         sor.auto_kiosztott_employee_ids = szurt_idk or None
+        from app.services.gyartas_tv import TV_CSOPORTOK
+
+        sor.tv_csoport = elem.tv_csoport if elem.tv_csoport in TV_CSOPORTOK else None
     # Amit a felület nem küldött vissza, az már nem választható állapot -
     # a beállítása is elévült.
     for allapot, sor in meglevo.items():
