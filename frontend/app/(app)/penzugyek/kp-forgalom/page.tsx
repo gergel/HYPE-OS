@@ -393,7 +393,8 @@ export default async function KpForgalomPage() {
               <StatCard label="Összes készpénz ki" value={formatHuf(osszes.ki)} icon={ArrowUpRight} tone="orange" />
             </div>
             <p className="mt-3 text-[12px] text-text-muted">
-              Minden készpénzes bevétel mínusz minden készpénzes kiadás, bruttóban – ennek kell megegyeznie
+              Minden készpénzes bevétel mínusz minden készpénzes kiadás, bruttóban, <b>2026.01.01 óta</b> – az
+              ennél régebbi KP forgalom sorok nem látszanak és sehova nem számítanak bele. Ennek kell megegyeznie
               azzal, ami fizikailag a dobozban van. Csak a MEGTÖRTÉNT mozgás számít: aminek nincs fizetési
               dátuma, az még nem hiányzik a kasszából.
             </p>
@@ -420,9 +421,9 @@ export default async function KpForgalomPage() {
             (Kassza-egyenleg, legális/fekete bontás) számítanak bele, hogy
             azok a fizikai kasszával egyezzenek - lásd backend
             services/kassza.py és routes/finance.kp_naplo. */}
-        <Card title={`KP forgalom (${megjelenitett.length} mozgás - a Notion "KP forgalom" táblájával egyezik)`}>
+        <Card title={`KP forgalom (${megjelenitett.length} mozgás, 2026.01.01 óta)`}>
           <p className="mb-3 text-[12.5px] text-text-muted">
-            Ez a lista egy az egyben a Notion „KP forgalom" táblája: helyben szerkeszthető/törölhető/felvehető,
+            Ez a lista egy az egyben a Notion „KP forgalom" táblája (a 2026.01.01 előtti sorok nélkül): helyben szerkeszthető/törölhető/felvehető,
             mert eddig SEHOL nem volt javítható, pedig ezeknél van a legtöbb elcsúszás az importált adatban. A
             készpénzes{" "}
             <a href="/penzugyek" className="text-text-accent hover:underline">

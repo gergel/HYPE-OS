@@ -767,6 +767,14 @@ is meg tudja adni a választ.
   (a kijelölt pont részleteivel együtt).
 - Fájl: `frontend/components/admin-agent/Tudashalo.tsx`.
 
+### AD. KP forgalom kezdőnap Lara rendszerfigyelésében is ✅ (tesztelve)
+- A 2026.01.01 előtti KP forgalom sorokat a Pénzügyek sehol nem számolja
+  (lásd `docs/kezikonyv/07-penzugyek.md`). Lara rendszerfigyelése és a
+  fogalom-kérdések a `kp_forgalmak` helyett egy szűrt allekérdezést kapnak,
+  így Lara sem lát és nem kérdez rá régi sorokra.
+- Fájl: `backend/app/admin_agent/rendszer.py` (`_figyelt_tablak`). Teszt:
+  `tests/test_kp_kezdonap.py::test_lara_sem_latja_a_regi_kp_sort`.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

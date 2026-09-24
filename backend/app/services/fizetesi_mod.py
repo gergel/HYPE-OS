@@ -91,6 +91,18 @@ def keszpenz_sql(oszlop):
     return func.lower(func.coalesce(oszlop, "")).in_(sorted(KESZPENZ_ALAKOK))
 
 
+def bankszamlas_sql(oszlop):
+    """A BANKSZÁMLÁT mozgató tétel SQL-ben: se nem készpénz, se nem „Nincs
+    pénzmozgás” (utalás, bankkártya - és a megjelöletlen is).
+
+    A megjelöletlen azért számít ide, mert a készpénz mostantól KIZÁRÓLAG a KP
+    forgalom táblából jön (lásd services/kassza.py): ami nem ott van, és
+    mozdult pénz, az a számlán mozdult."""
+    from sqlalchemy import func
+
+    return ~keszpenz_sql(oszlop) & (func.lower(func.coalesce(oszlop, "")) != NINCS_PENZMOZGAS.lower())
+
+
 #: Amit a kiadás TÍPUSÁBÓL/nevéből egyértelműen fel lehet ismerni.
 #:
 #: Honnan van erre egyáltalán esély? A Notionben a projekt kiadásoknál a

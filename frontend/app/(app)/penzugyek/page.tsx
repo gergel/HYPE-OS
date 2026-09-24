@@ -1,4 +1,4 @@
-import { AlertCircle, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { AlertCircle, Coins, Landmark, TrendingDown, TrendingUp } from "lucide-react";
 import {
   ENTITY_PATHS,
   Expense,
@@ -115,7 +115,7 @@ export default async function PenzugyekPage() {
                 néznénk, a "profit" az ÁFA-tartalmak különbségével csúszna el.
                 A bruttó ettől még ott van, halványan a szám alatt: az megy ki
                 (és jön be) a bankszámlán. */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
               <StatCard
                 label="Bevétel (idén, nettó)"
                 value={formatHuf(summary.ytd_bevetel)}
@@ -130,12 +130,26 @@ export default async function PenzugyekPage() {
                 icon={TrendingDown}
                 tone="orange"
               />
+              {/* A régi "Profit (idén)" helyén KÉT egyenleg: a kassza (KP
+                  forgalom, 2026.01.01 óta - a régebbi sorok nem számítanak)
+                  és a bankszámla idei mozgása. Mindkettő BRUTTÓ: egy doboz
+                  pénz és egy bankszámla sem tud nettó lenni. */}
               <StatCard
-                label="Profit (idén, nettó)"
-                value={formatHuf(summary.ytd_profit)}
-                megjegyzes="Nettó bevétel mínusz nettó kiadás"
-                icon={Wallet}
-                tone={summary.ytd_profit >= 0 ? "accent" : "danger"}
+                label="KP egyenleg"
+                value={formatHuf(summary.kp_egyenleg)}
+                megjegyzes="Kassza, 2026.01.01 óta (bruttó)"
+                icon={Coins}
+                href="/penzugyek/kp-forgalom"
+                tone={summary.kp_egyenleg >= 0 ? "accent" : "danger"}
+              />
+              <StatCard
+                label="Számla egyenleg (idén, bruttó)"
+                value={formatHuf(summary.szamla_egyenleg)}
+                megjegyzes={`Be: ${formatHuf(summary.szamla_be)} · ki: ${formatHuf(summary.szamla_ki)}${
+                  summary.szamla_atvezetes ? ` (ebből kasszába: ${formatHuf(summary.szamla_atvezetes)})` : ""
+                }`}
+                icon={Landmark}
+                tone={summary.szamla_egyenleg >= 0 ? "accent" : "danger"}
               />
               <StatCard
                 label={`Kintlévőség (${summary.kintlevo_projektek_szama} projekt, nettó)`}

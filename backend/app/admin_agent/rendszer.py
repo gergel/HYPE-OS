@@ -32,7 +32,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.admin_agent.observer import tanulas_kezdete
@@ -110,11 +110,22 @@ def _figyelt_tablak(db: Session) -> dict[str, Any]:
 
     import app.models  # noqa: F401 — minden modell regisztrálva legyen
 
+    from app.services.kassza import KP_KEZDET
+
     letezo = set(inspect(db.get_bind()).get_table_names())
-    return {
+    tablak = {
         n: t for n, t in Base.metadata.tables.items()
         if n in letezo and not n.startswith(KIZART_ELOTAGOK) and n not in KIZART_TABLAK
     }
+    # A 2026.01.01 előtti KP forgalom nem létezik (lásd services/kassza.KP_KEZDET):
+    # Lara is csak a kezdőnap óta felvett sorokat látja. Az allekérdezésnek
+    # ugyanolyan `.c`-je van, mint a táblának, így a számlálók változatlanok.
+    kp = tablak.get("kp_forgalmak")
+    if kp is not None:
+        tablak["kp_forgalmak"] = select(kp).where(
+            or_(kp.c.kiadas_datuma.is_(None), kp.c.kiadas_datuma >= KP_KEZDET)
+        ).subquery("kp_forgalmak")
+    return tablak
 
 
 def _leiras(tabla: str) -> str:

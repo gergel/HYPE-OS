@@ -32,6 +32,12 @@ kézzel ide vesznek fel. A készpénzes Bevételek/Kiadások NEM számítanak be
 külön ágon - korábban beleszámítottak, de ettől a napló sosem egyezett a
 Notionnal (a kiürített KP tábla mellett is "bent ragadt" 119 tétel). Egy
 készpénz-mozgás akkor és csak akkor látszik itt, ha KP forgalom sora van.
+
+KEZDŐNAP: 2026.01.01 (a felhasználó 2026-09-24-i döntése). Az ennél régebbi
+KP forgalom sorokat úgy kezeljük, mintha nem léteznének: nem látszanak a
+naplóban és a táblában, és nem számítanak bele sehova (egyenleg, havi
+bontás, számla-párosítás célpontjai). A dátum nélküli sor megmarad - az nem
+"régebbi", csak még nincs kitöltve, és eltüntetve senki nem pótolná.
 """
 
 from __future__ import annotations
@@ -40,7 +46,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.finance import KpForgalom
@@ -51,6 +57,16 @@ from app.services.hu_szoveg import ekezet_nelkul
 #: A KP forgalom sor iránya. A Notionben szabad szöveg ("bevetel"/"kiadas"),
 #: ezért előtag szerint nézzük.
 _KIADAS_ELOTAG = "kiad"
+
+#: A KP forgalom kezdőnapja - ami ennél régebbi, az nem létezik (lásd fent).
+KP_KEZDET = date(2026, 1, 1)
+
+
+def kp_ervenyes_sql():
+    """A kezdőnap óta (vagy dátum nélkül) felvett KP forgalom sorok szűrője -
+    MINDEN KP forgalom lekérdezés ezen megy át, hogy a régi sorok sehol ne
+    bukkanjanak fel."""
+    return or_(KpForgalom.kiadas_datuma.is_(None), KpForgalom.kiadas_datuma >= KP_KEZDET)
 
 
 @dataclass
@@ -260,7 +276,9 @@ def kep(db: Session, ma: date | None = None) -> KasszaKep:
     # A kiadáshoz kötött (`expense_id`) sor is BELESZÁMÍT: a kötés csak címke
     # ("melyik kiadás papírjához tartozik"), a pénzmozgás egyetlen helyen - itt
     # - szerepel, tehát nincs mivel duplázódnia.
-    kp_forgalom_sorok = db.scalars(select(KpForgalom).options(selectinload(KpForgalom.project_code))).all()
+    kp_forgalom_sorok = db.scalars(
+        select(KpForgalom).where(kp_ervenyes_sql()).options(selectinload(KpForgalom.project_code))
+    ).all()
     kp_forgalom_csatolmanyok = attachments.list_for_many(db, "kpForgalom", [f.id for f in kp_forgalom_sorok])
     for f in kp_forgalom_sorok:
         osszeg, kiadas_e = kp_forgalom_iranya(f)

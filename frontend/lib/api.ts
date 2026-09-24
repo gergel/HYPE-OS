@@ -2483,7 +2483,15 @@ export type PaymentMethodBreakdown = { kifizetes_modja: string | null; osszeg: n
 export type FinanceSummary = {
   ytd_bevetel: number;
   ytd_kiadas: number;
-  ytd_profit: number;
+  /** A régi "Profit (idén)" helyett két egyenleg (lásd backend
+   * routes/finance.FinanceSummary): a kassza (KP forgalom, 2026.01.01 óta)
+   * és a bankszámla idei mozgásának egyenlege, bruttóban. */
+  kp_egyenleg: number;
+  szamla_egyenleg: number;
+  szamla_be: number;
+  szamla_ki: number;
+  /** Ebből az ATM-ről a kasszába átvezetett készpénz (a `szamla_ki` része). */
+  szamla_atvezetes: number;
   ytd_bevetel_brutto: number;
   ytd_kiadas_brutto: number;
   osszes_kintlevoseg: number;

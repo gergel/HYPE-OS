@@ -1338,6 +1338,11 @@ def jovahagy(db: Session, bejovo: BejovoSzamla, user: Employee, dontes: dict) ->
         naplo["csatolt"].append({"tipus": "kotelezettsegIdoszak", "id": idoszak.id})
     elif cel_tipus == "kp":
         kp = db.get(KpForgalom, dontes.get("cel_kp_forgalom_id") or bejovo.cel_kp_forgalom_id or 0)
+        # A 2026.01.01 előtti KP forgalom nem létezik (lásd services/kassza.KP_KEZDET).
+        from app.services.kassza import KP_KEZDET
+
+        if kp is not None and kp.kiadas_datuma is not None and kp.kiadas_datuma < KP_KEZDET:
+            kp = None
         if kp is None:
             raise ErkeztetesHiba("A kiválasztott KP-tétel nem található.")
         # Bizonylat-pótlás: NEM új pénzmozgás - csak a papír kerül a tételhez.

@@ -304,8 +304,10 @@ def cel_valasztek(
             )
     elif tipus == "kp":
         from app.models.finance import KpForgalom
+        from app.services.kassza import kp_ervenyes_sql
 
-        for kp in db.scalars(sel(KpForgalom).order_by(KpForgalom.id.desc()).limit(300)):
+        # A 2026.01.01 előtti KP forgalom nem létezik (lásd services/kassza.KP_KEZDET).
+        for kp in db.scalars(sel(KpForgalom).where(kp_ervenyes_sql()).order_by(KpForgalom.id.desc()).limit(300)):
             lista.append(
                 {
                     "id": kp.id,

@@ -399,6 +399,12 @@ def _kp_forgalom_kezi_javitas(obj: KpForgalom, adat: dict, db: Session, current_
     adat["forintban_notion"] = None
 
 
+def _kp_forgalom_kezdonap_ota(stmt, db: Session, _user: Employee):
+    """A 2026.01.01 előtti KP forgalom sorok nem léteznek (lásd
+    services/kassza.KP_KEZDET) - a listában sem, egyenként lekérve sem."""
+    return stmt.where(kassza_szolg.kp_ervenyes_sql())
+
+
 kp_forgalom_router = build_crud_router(
     model=KpForgalom,
     create_schema=KpForgalomCreate,
@@ -409,6 +415,7 @@ kp_forgalom_router = build_crud_router(
     page="/penzugyek",
     before_create=_kp_forgalom_before_create,
     before_update=_kp_forgalom_kezi_javitas,
+    sor_szuro=_kp_forgalom_kezdonap_ota,
 )
 
 summary_router = APIRouter(prefix="/finance", tags=["finance"])
@@ -496,6 +503,8 @@ class Kassza(BaseModel):
     #: munka összeszedni a hiányzó bizonylatokat.
     idei_ki_szamlaval_db: int
     idei_ki_szamla_nelkul_db: int
+    #: Az idei ATM-felvétel (bankszámla -> kassza átvezetés).
+    idei_atvezetes: float = 0
     havi: list[KasszaHavi]
     #: Hány olyan KIFIZETETT tétel van, amin nincs megjelölve a fizetési mód.
     #: Amíg ez nem nulla, az egyenleg csak közelítés - ezért írjuk ki.
@@ -513,7 +522,19 @@ class FinanceSummary(BaseModel):
 
     ytd_bevetel: float
     ytd_kiadas: float
-    ytd_profit: float
+    #: A régi "Profit (idén)" helyett KÉT egyenleg (a felhasználó kérése):
+    #: - KP egyenleg: a kassza egyenlege a KP forgalomból (lásd
+    #:   services/kassza.py, 2026.01.01 óta) - ugyanaz, mint `kassza.egyenleg`;
+    #: - SZÁMLA egyenleg: az idei, BANKSZÁMLÁN mozgott pénz egyenlege, bruttóban
+    #:   (a számlán a bruttó mozog): a nem készpénzes bevétel mínusz a nem
+    #:   készpénzes kiadás, mínusz az ATM-ről a kasszába átvezetett készpénz.
+    #:   Nyitó egyenleg nélkül - az idei mozgás mérlege, nem a banki kivonat.
+    kp_egyenleg: float
+    szamla_egyenleg: float
+    szamla_be: float
+    szamla_ki: float
+    #: Ebből a kasszába átvezetett ATM-felvétel (a `szamla_ki` része).
+    szamla_atvezetes: float
     #: Ugyanaz az időszak bruttóban - tájékoztatásul, a tényleges pénzmozgás.
     ytd_bevetel_brutto: float
     ytd_kiadas_brutto: float
@@ -582,6 +603,7 @@ def _kassza(db: Session, today: date, months: list[tuple[int, int]]) -> Kassza:
         idei_ki_szamla_nelkul=kep.idei.ki_szamla_nelkul,
         idei_ki_szamlaval_db=kep.idei.ki_szamlaval_db,
         idei_ki_szamla_nelkul_db=kep.idei.ki_szamla_nelkul_db,
+        idei_atvezetes=kep.idei.be_atvezetes - kep.idei.ki_atvezetes,
         havi=havi_sorok,
         jeloletlen_kiadas=kep.jeloletlen_kiadas,
         jeloletlen_bevetel=kep.jeloletlen_bevetel,
@@ -912,6 +934,32 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         or 0
     )
 
+    # SZÁMLA EGYENLEG: az idei, bankszámlán mozgott pénz, bruttóban (lásd
+    # FinanceSummary.szamla_egyenleg). Ugyanazok a kapuk, mint az éves
+    # összesítőnél - csak a fizetés útja szerint szűrve.
+    szamla_be = float(
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.brutto_sql(Revenue)), 0)).where(
+                Revenue.fizetes_datuma.is_not(None),
+                Revenue.fizetes_datuma >= year_start,
+                _REVENUE_COUNTS_TOWARD_TOTALS,
+                fizetesi_mod.bankszamlas_sql(Revenue.fizetes_modja),
+            )
+        )
+        or 0
+    )
+    szamla_kiadas = float(
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.brutto_sql(Expense)), 0)).where(
+                Expense.fizetes_datuma.is_not(None),
+                Expense.fizetes_datuma >= year_start,
+                _EXPENSE_COUNTS_TOWARD_TOTALS,
+                fizetesi_mod.bankszamlas_sql(Expense.kifizetes_modja),
+            )
+        )
+        or 0
+    )
+
     months = _last_n_months(today, 12)
     min_year, min_month = months[0]
     min_date = date(min_year, min_month, 1)
@@ -972,10 +1020,21 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
     bontas = kintlevoseg_szolg.osszesito(kintlevo_sorok)
     osszes_kintlevoseg = float(sum(p.kintlevo_osszeg or 0 for p in kintlevo_projektek))
 
+    kassza = _kassza(db, today, months)
+    # Az ATM-felvétel a számláról megy ki (a kasszába érkezik) - a kassza
+    # átvezetés-összegéből vesszük, mert a hozzá tartozó kiadás-sor
+    # szándékosan nem számít bele a kiadásokba (lásd _kp_felvetel_kiadas_sorral).
+    szamla_atvezetes = kassza.idei_atvezetes
+    szamla_ki = szamla_kiadas + szamla_atvezetes
+
     return FinanceSummary(
         ytd_bevetel=float(ytd_bevetel),
         ytd_kiadas=float(ytd_kiadas),
-        ytd_profit=float(ytd_bevetel) - float(ytd_kiadas),
+        kp_egyenleg=kassza.egyenleg,
+        szamla_egyenleg=szamla_be - szamla_ki,
+        szamla_be=szamla_be,
+        szamla_ki=szamla_ki,
+        szamla_atvezetes=szamla_atvezetes,
         ytd_bevetel_brutto=float(ytd_bevetel_brutto),
         ytd_kiadas_brutto=float(ytd_kiadas_brutto),
         osszes_kintlevoseg=osszes_kintlevoseg,
@@ -984,7 +1043,7 @@ def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get
         kintlevo_projektek=kintlevo_projektek,
         **bontas,
         ytd_kiadas_fizetesi_mod_szerint=ytd_kiadas_fizetesi_mod_szerint,
-        kassza=_kassza(db, today, months),
+        kassza=kassza,
     )
 
 

@@ -37,6 +37,23 @@ Néhány dolog a listákon szándékosan van így:
   oszlop ugyanazt a semmit ismételte minden soron. Ugyanezért mutat a
   kintlévőség-táblázat is projektnevet.
 
+### KP egyenleg és Számla egyenleg (a régi „Profit (idén)” helyett)
+
+A felső kártyasorban a „Profit (idén, nettó)” megszűnt, a helyén két egyenleg
+áll - mindkettő **bruttó**, mert egy doboz pénz és egy bankszámla sem tud
+nettó lenni:
+
+| Kártya | Mit mutat |
+|---|---|
+| **KP egyenleg** | A kassza egyenlege a KP forgalomból, **2026.01.01 óta** (lásd lent: Kassza). Kattintva a KP forgalom oldalra visz. |
+| **Számla egyenleg (idén, bruttó)** | Az idei, bankszámlán mozgott pénz: a nem készpénzes bevétel mínusz a nem készpénzes kiadás, mínusz az ATM-ről a kasszába átvezetett készpénz. A „Nincs pénzmozgás” tételek kimaradnak, a megjelöletlen fizetési módú tétel a számlához számít. |
+
+A Számla egyenleg **nyitó egyenleg nélküli** mérleg: az idei mozgás összege,
+nem a banki kivonat záró egyenlege. Ugyanazok a kapuk érvényesek rá, mint az
+éves bevételre/kiadásra (csak kifizetett kiadás, csak a bevételbe számító
+bevétel-sor). Kód: `routes/finance.finance_summary`,
+`services/fizetesi_mod.bankszamlas_sql`.
+
 ### Projekt kintlévőségek
 
 A Pénzügyek oldal "Projekt kintlévőségek" blokkja **minden** projektkódot
@@ -275,6 +292,14 @@ Frontend: `components/finance/`, `RevenueInvoiceStatus.tsx`,
 `TigInvoiceManager.tsx`, `TigAllapotSelect.tsx`.
 
 ### Kassza: mennyi készpénz van épp
+
+> **Kezdőnap: 2026.01.01.** A KP forgalom ennél régebbi sorait a rendszer úgy
+> kezeli, mintha nem léteznének: nem látszanak a naplóban és a táblában,
+> egyenként lekérve sem, és sehova nem számítanak bele (kassza-egyenleg,
+> havi bontás, legális/fekete bontás, számla-érkeztetés KP-célpontjai, Lara
+> rendszerfigyelése). Az adatbázisból nem törlődnek. A **dátum nélküli** sor
+> megmarad - az nem régebbi, csak nincs kitöltve. Kód:
+> `services/kassza.KP_KEZDET` és `kp_ervenyes_sql()`.
 
 Minden kiadásnál és bevételnél megadható, **hogyan mozgott a pénz**:
 

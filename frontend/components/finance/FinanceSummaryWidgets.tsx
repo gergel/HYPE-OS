@@ -76,7 +76,7 @@ export function KasszaWidget({ kassza }: { kassza: FinanceSummary["kassza"] }) {
           nem statisztika (lásd backend services/bizonylat.py). */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
-          <p className="text-[12px] text-text-secondary">KP a kasszában</p>
+          <p className="text-[12px] text-text-secondary">KP a kasszában (2026.01.01 óta)</p>
           <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
             {formatHuf(kassza.egyenleg)}
           </p>
