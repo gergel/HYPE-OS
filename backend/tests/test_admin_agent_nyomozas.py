@@ -182,3 +182,67 @@ def test_lathatosag_es_elfogadas_statisztika(db, admin):
     db.flush()
     utana = nyomozas.statisztika(db)
     assert utana["elfogadva"] == elotte["elfogadva"] + 1
+
+
+def test_magabiztos_valasznal_nem_kerdez_csak_ellenorizteti(db, admin, monkeypatch):
+    """Ha Lara utánanézve magabiztos választ talál, nem kérdez: „magától
+    megválaszolta" állapotba teszi, értesítés nélkül; ahol nem talált, ott
+    kérdez (és akkor megy értesítés). Tudás csak elfogadás után lesz."""
+    from app.admin_agent import osszesito
+    from app.models.admin_agent import MemoryChunk
+
+    ertesitett: list = []
+    monkeypatch.setattr(osszesito, "kerdes_ertesites", lambda _db, ks: ertesitett.extend(ks) or len(ks))
+    s = get_settings(db)
+    s.limitek = {**(s.limitek or {}), "felelos_employee_id": admin.id, "nyomozas": True, "onallo_valasz": True}
+    for kerd in db.scalars(select(LaraKerdes).where(LaraKerdes.allapot == "nyitott")).all():
+        kerd.allapot = "elvetve"
+    biztos = _kerdes(db, kulcs="nyom|biztos")
+    bizonytalan = _kerdes(db, kulcs="nyom|bizonytalan")
+    for k in (biztos, bizonytalan):
+        k.kontextus = {**k.kontextus, nyomozas.ERTESITES_FUGGO: True}
+    db.flush()
+    valaszok = {bizonytalan.id: _veg(biztossag=0.4, javaslat="magyarazat"), biztos.id: _veg(biztossag=0.9)}
+    sorrend = [bizonytalan.id, biztos.id]  # a futás a legfrissebbel kezd
+
+    def gyar(rendszer, kerdes, eszkozok):
+        return _Hamis([valaszok[sorrend.pop()]], [])
+
+    sorrend.reverse()
+    nyomozas.teszt_beszelgetes(gyar)
+    r = nyomozas.futtat(db)
+    assert r["onallo"] == 1 and r["nyomozott"] == 2
+    assert biztos.allapot == nyomozas.ONALLO_ALLAPOT and biztos.valasz_tipus == "mindig" and biztos.valasz_szoveg
+    assert bizonytalan.allapot == "nyitott"
+    assert [k.id for k in ertesitett] == [bizonytalan.id]
+    assert not db.scalar(select(MemoryChunk).where(MemoryChunk.forras == f"kerdes:{biztos.id}"))
+
+    # „Nem így" → újra nyitott; utána a felelős válasza a szokásos úton megy.
+    from app.api.routes.admin_agent import kerdes_visszanyitas
+
+    monkeypatch.setattr(db, "commit", db.flush)
+    kerdes_visszanyitas(biztos.id, db, admin)
+    assert biztos.allapot == "nyitott" and biztos.valasz_tipus is None
+    assert biztos.kontextus[nyomozas.KULCS]["elutasitva"] is True
+
+
+def test_uj_kerdes_ertesitese_var_az_utananezesre(db, admin, monkeypatch):
+    from app.admin_agent import osszesito
+    from app.admin_agent.onellenorzes import onellenorzes
+    from app.models.project_code import ProjectCode
+    from datetime import date
+
+    hivas: list = []
+    monkeypatch.setattr(osszesito, "kerdes_ertesites", lambda _db, ks: hivas.extend(ks) or len(ks))
+    s = get_settings(db)
+    s.limitek = {**(s.limitek or {}), "felelos_employee_id": admin.id, "nyomozas": True}
+    for kerd in db.scalars(select(LaraKerdes).where(LaraKerdes.allapot == "nyitott")).all():
+        kerd.allapot = "elvetve"
+    db.add(ProjectCode(projektkod="NYOM-ERT-1", megrendelo_neve="Értesítés Teszt Kft.", datum=date.today(),
+                       szamla_kihagyva=True))
+    db.flush()
+    nyomozas.teszt_beszelgetes(lambda *_: _Hamis([_veg()], []))
+    r = onellenorzes(db, trigger="onellenorzes:teszt")
+    assert r["uj_kerdes"] >= 1 and r["ertesitett"] == 0 and not hivas
+    uj = db.scalars(select(LaraKerdes).where(LaraKerdes.allapot == "nyitott")).all()
+    assert uj and all((k.kontextus or {}).get(nyomozas.ERTESITES_FUGGO) for k in uj)

@@ -138,7 +138,8 @@ class Valaszok:
             jel = c.get("terulet") if k.tipus == TIPUS_DONTES else c.get("ellenorzes")
             for e in c.get("esetek") or []:
                 self.eset[(f"{jel}:{c.get('dimenzio', '')}", str(e.get("rekord")))] = k.valasz_tipus
-            if k.valasz_tipus in TANITO and c.get("partner_kulcs"):
+            # Lara magától adott (még nem ellenőrzött) válaszából nem tanul.
+            if k.valasz_tipus in TANITO and c.get("partner_kulcs") and k.allapot != "lara_valaszolt":
                 if k.tipus == TIPUS_DONTES:
                     idok = [_ido(e.get("ido")) for e in c.get("esetek") or []]
                     idok = [i for i in idok if i]

@@ -16,7 +16,11 @@ export default async function LaraKerdesekPage() {
   if (!canView) redirect("/nincs-jogosultsag");
   const canEdit = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
 
-  const [nyitott, kesz] = await Promise.all([getLaraKerdesek("nyitott"), getLaraKerdesek("megvalaszolt")]);
+  const [nyitott, kesz, onallo] = await Promise.all([
+    getLaraKerdesek("nyitott"),
+    getLaraKerdesek("megvalaszolt"),
+    getLaraKerdesek("lara_valaszolt"),
+  ]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -31,6 +35,7 @@ export default async function LaraKerdesekPage() {
             megvalaszoltak={kesz?.elemek ?? []}
             canEdit={canEdit}
             nyomozas={nyitott.nyomozas ?? null}
+            onallok={onallo?.elemek ?? []}
           />
         )}
       </div>

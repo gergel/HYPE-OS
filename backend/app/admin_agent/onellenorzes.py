@@ -382,10 +382,17 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER, teljes_vizsga: bool = F
     # így a válasz órák helyett percek alatt jöhet (lásd admin_agent/osszesito.py).
     ertesitve = 0
     if uj_kerdesek:
+        from app.admin_agent import nyomozas
         from app.admin_agent.osszesito import kerdes_ertesites
 
         db.flush()
-        ertesitve = kerdes_ertesites(db, uj_kerdesek)
+        if nyomozas.elore_nez_utana(db):
+            # Előbb Lara maga néz utána (lásd nyomozas.futtat): csak arról megy
+            # értesítés, amire utána sem talált magabiztos választ.
+            for k in uj_kerdesek:
+                k.kontextus = {**(k.kontextus or {}), nyomozas.ERTESITES_FUGGO: True}
+        else:
+            ertesitve = kerdes_ertesites(db, uj_kerdesek)
 
     osszefoglalo = {
         **_osszesit(teruletek),

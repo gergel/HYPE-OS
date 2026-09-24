@@ -139,17 +139,21 @@ export function LaraKerdesek({
   megvalaszoltak,
   canEdit,
   nyomozas,
+  onallok = [],
 }: {
   nyitottak: LaraKerdes[];
   megvalaszoltak: LaraKerdes[];
   canEdit: boolean;
   nyomozas: LaraNyomozasStat | null;
+  /** Amit Lara utánanézve magától megválaszolt — a felelős csak ellenőrzi. */
+  onallok?: LaraKerdes[];
 }) {
   const router = useRouter();
   const [lista, setLista] = useState(nyitottak);
   const [kesz, setKesz] = useState(megvalaszoltak);
   const [uzenet, setUzenet] = useState<string | null>(null);
   const [szuro, setSzuro] = useState("mind");
+  const [onallo, setOnallo] = useState(onallok);
   const lathato = szuro === "mind" ? lista : lista.filter((k) => terulet(k) === szuro);
   const szurok = [
     { kulcs: "mind", cim: "Mind", n: lista.length },
@@ -180,10 +184,30 @@ export function LaraKerdesek({
             <span className="text-text-secondary">
               Eddig <b className="tabular-nums">{nyomozas.nyomozott}</b> kérdésnél nézett utána, ebből{" "}
               <b className="tabular-nums">{nyomozas.valaszt_talalt}</b>-nál talált választ;{" "}
-              <b className="tabular-nums">{nyomozas.elfogadva}</b> válaszát fogadtad el.
+              <b className="tabular-nums">{nyomozas.elfogadva}</b> válaszát fogadtad el
+              {nyomozas.onallo ? (
+                <>
+                  ; <b className="tabular-nums">{nyomozas.onallo}</b> kérdést fel sem kellett tennie
+                </>
+              ) : null}
+              .
             </span>
           )}
         </p>
+      )}
+
+      {onallo.length > 0 && (
+        <OnalloLista
+          lista={onallo}
+          canEdit={canEdit}
+          onKesz={(k, uzen, visszanyitva) => {
+            setOnallo((p) => p.filter((x) => x.id !== k.id));
+            if (visszanyitva) setLista((p) => [k, ...p]);
+            else setKesz((p) => [k, ...p]);
+            setUzenet(uzen);
+            router.refresh();
+          }}
+        />
       )}
 
       {lista.length > 0 && (
@@ -692,5 +716,159 @@ function NyomozasPanel({
         </div>
       )}
     </div>
+  );
+}
+
+/** Amit Lara utánanézve MAGÁTÓL megválaszolt (magabiztos volt, ezért nem
+ * kérdezett): a felelős csak ellenőrzi — elfogadja, vagy visszanyitja. Tudás
+ * csak az elfogadás után lesz belőle. */
+function OnalloLista({
+  lista,
+  canEdit,
+  onKesz,
+}: {
+  lista: LaraKerdes[];
+  canEdit: boolean;
+  onKesz: (k: LaraKerdes, uzenet: string, visszanyitva: boolean) => void;
+}) {
+  const [folyamatban, setFolyamatban] = useState<number | "mind" | null>(null);
+  const [hiba, setHiba] = useState<string | null>(null);
+
+  async function elfogad(k: LaraKerdes): Promise<boolean> {
+    const ny = k.kontextus?.lara_nyomozas;
+    const tipus = k.tipus === "rendszer_fogalom" ? "magyarazat" : (k.valasz_tipus ?? ny?.javaslat ?? "magyarazat");
+    const res = await authFetch(`/api/v1/admin-agent/questions/${k.id}/answer`, {
+      method: "POST",
+      body: JSON.stringify({
+        valasz_tipus: tipus,
+        magyarazat: `Lara utánanézése alapján: ${ny?.valasz ?? k.valasz_szoveg ?? ""}`.slice(0, 2000),
+        elesit: true,
+        lara_valasza: true,
+      }),
+    });
+    const d = (await res.json().catch(() => ({}))) as { detail?: unknown; kerdes?: LaraKerdes };
+    if (!res.ok || !d.kerdes) {
+      setHiba(typeof d.detail === "string" ? d.detail : "Az elfogadás nem sikerült.");
+      return false;
+    }
+    onKesz(d.kerdes, "Elfogadtad Lara válaszát — bekerült a tudásába.", false);
+    return true;
+  }
+
+  async function egyet(k: LaraKerdes) {
+    setHiba(null);
+    setFolyamatban(k.id);
+    try {
+      await elfogad(k);
+    } finally {
+      setFolyamatban(null);
+    }
+  }
+
+  async function mind() {
+    setHiba(null);
+    setFolyamatban("mind");
+    try {
+      for (const k of lista) {
+        if (!(await elfogad(k))) break;
+      }
+    } finally {
+      setFolyamatban(null);
+    }
+  }
+
+  async function visszanyit(k: LaraKerdes) {
+    setHiba(null);
+    setFolyamatban(k.id);
+    try {
+      const res = await authFetch(`/api/v1/admin-agent/questions/${k.id}/reopen`, { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as { detail?: unknown; kerdes?: LaraKerdes };
+      if (!res.ok || !d.kerdes) {
+        setHiba(typeof d.detail === "string" ? d.detail : "A visszanyitás nem sikerült.");
+        return;
+      }
+      onKesz(d.kerdes, "Rendben — a kérdés újra nyitott, a lenti listában válaszolhatsz rá.", true);
+    } finally {
+      setFolyamatban(null);
+    }
+  }
+
+  return (
+    <section className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="t-card">Lara magától megválaszolta — ellenőrizd ({lista.length})</p>
+          <p className="text-[12px] text-text-muted">
+            Ezeknek Lara utánanézett, és magabiztos választ talált, ezért nem kérdezett. Tudás csak az elfogadásod
+            után lesz belőlük; ha valami nem így van, nyisd vissza.
+          </p>
+        </div>
+        {canEdit && lista.length > 1 && (
+          <button
+            type="button"
+            disabled={folyamatban !== null}
+            onClick={mind}
+            className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[13px] font-medium text-text-accent disabled:opacity-50"
+          >
+            {folyamatban === "mind" ? "Elfogadás…" : `Mind a ${lista.length} rendben`}
+          </button>
+        )}
+      </div>
+      {hiba && <div className="mb-2 rounded-[var(--radius)] bg-bg-danger px-3 py-2 text-[12.5px] text-text-danger">{hiba}</div>}
+      <ul className="flex flex-col gap-2">
+        {lista.map((k) => {
+          const ny = k.kontextus?.lara_nyomozas;
+          return (
+            <li key={k.id} className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5">
+              <p className="text-[11.5px] text-text-muted">
+                {k.kontextus?.cimke ?? k.partner_nev}
+                {ny ? ` · ${Math.round(ny.biztossag * 100)}% biztos` : ""}
+              </p>
+              <p className="text-[12.5px] text-text-secondary">{k.kerdes}</p>
+              <p className="mt-1 text-[13px] text-text-primary">
+                <span className="text-text-muted">Lara: </span>
+                {ny?.valasz ?? k.valasz_szoveg ?? "—"}
+              </p>
+              {ny && ny.bizonyitekok.length > 0 && (
+                <p className="mt-1 text-[12px] text-text-muted">
+                  {ny.bizonyitekok.map((b, i) => (
+                    <span key={i}>
+                      {i > 0 ? " · " : ""}
+                      {b.link ? (
+                        <Link href={b.link} className="hover:text-text-accent hover:underline">
+                          {b.leiras}
+                        </Link>
+                      ) : (
+                        b.leiras
+                      )}
+                    </span>
+                  ))}
+                </p>
+              )}
+              {canEdit && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={folyamatban !== null}
+                    onClick={() => egyet(k)}
+                    className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-primary hover:bg-surface-2 disabled:opacity-50"
+                  >
+                    {folyamatban === k.id ? "…" : "Rendben"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={folyamatban !== null}
+                    onClick={() => visszanyit(k)}
+                    className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-2 disabled:opacity-50"
+                  >
+                    Nem így — kérdezz
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

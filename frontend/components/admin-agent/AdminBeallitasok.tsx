@@ -274,6 +274,13 @@ export function AdminBeallitasok({
             onValt={(v) => limitMent({ nyomozas: v })}
           />
           <Kapcsolo
+            cim="Magabiztos válasznál ne kérdezzen"
+            leiras="Ha Lara utánanézve legalább 75%-ban biztos a válaszban, nem teszi fel a kérdést: magától megválaszolja, és a Kérdések oldal tetején csak ellenőrizned kell (Rendben / Nem így). Tudás csak az elfogadásod után lesz belőle; értesítés csak a valóban nyitott kérdésekről megy."
+            aktiv={limitBe("onallo_valasz")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ onallo_valasz: v })}
+          />
+          <Kapcsolo
             cim="Megoldási javaslat a feladatokhoz"
             leiras="A kérdésekből született javítási feladatokhoz (és a többi „egyéb” feladathoz) Lara konkrét megoldási lépéseket javasol: utánanéz az érintett rekordoknak az AI asszisztens csak-olvasó eszközeivel. Semmit nem módosít. Kétóránként legfeljebb 3 feladatnál, és a feladat oldalán kézzel bármikor."
             aktiv={limitBe("megoldas")}

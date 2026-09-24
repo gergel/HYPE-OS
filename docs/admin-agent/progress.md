@@ -681,6 +681,22 @@ mindig ugyanazokon az adatokon fut.
   teljes vizsga lefutott (a dev adatban nincs régi rekord → 0), a futás sorai
   törölve.
 
+### AA. Lara előbb utánanéz, és csak akkor kérdez, ha tényleg nem tudja ✅ (valós Gemini-hívás: ⚠️ nem ellenőrzött)
+Visszajelzés: sok olyan kérdés jön, amire a „Nézz utána” gombbal Lara magának
+is meg tudja adni a választ.
+- Az önellenőrzés új kérdéseiről NEM megy azonnal értesítés (ha az utánanézés
+  elérhető): a kétóránkénti futás előbb utánanéz (futásonként legfeljebb 10,
+  eddig 3). Ha Lara legalább 75%-ban biztos (`limitek.onallo_min`), nem
+  kérdez: a kérdés `lara_valaszolt` állapotba kerül („Lara magától
+  megválaszolta — ellenőrizd”), értesítés nélkül. Értesítés csak arról megy,
+  ami utánanézés után is nyitott maradt.
+- Tudás a magától adott válaszból csak a felelős elfogadása után lesz (a
+  bővített önellenőrzés sem tanul belőle addig). Kérdések oldal: új szakasz
+  „Rendben” / „Nem így — kérdezz” / „Mind rendben” gombokkal
+  (`POST /questions/{id}/answer` a felelős-őrrel, `POST /questions/{id}/reopen`).
+  Kapcsoló: `limitek.onallo_valasz`.
+- Tesztek: `test_admin_agent_nyomozas.py` +2.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

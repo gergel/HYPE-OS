@@ -1340,9 +1340,12 @@ def _kerdes_sor(k: LaraKerdes, user: Employee | None = None) -> dict:
     from app.admin_agent.nyomozas import KULCS, lathato
 
     ktx = dict(k.kontextus or {})
+    valasz_szoveg = k.valasz_szoveg
     # Lara utánanézése a futtató jogosultságával készült — csak neki látszik.
     if KULCS in ktx and not lathato(ktx.get(KULCS), user):
         ktx.pop(KULCS)
+        if k.allapot == "lara_valaszolt":
+            valasz_szoveg = None
     return {
         "id": k.id,
         "tipus": k.tipus,
@@ -1351,7 +1354,7 @@ def _kerdes_sor(k: LaraKerdes, user: Employee | None = None) -> dict:
         "kerdes": k.kerdes,
         "kontextus": ktx,
         "valasz_tipus": k.valasz_tipus,
-        "valasz_szoveg": k.valasz_szoveg,
+        "valasz_szoveg": valasz_szoveg,
         "megvalaszolva_at": k.megvalaszolva_at.isoformat() if k.megvalaszolva_at else None,
         "szabaly_id": k.szabaly_id,
         "letrehozva": k.created_at.isoformat() if k.created_at else None,
@@ -1595,6 +1598,31 @@ def kerdesek_lista(
     }
 
 
+@router.post("/questions/{kerdes_id}/reopen")
+def kerdes_visszanyitas(
+    kerdes_id: int,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """„Nem így" — Lara magától adott válaszát a felelős nem fogadja el: a
+    kérdés újra nyitott, és Lara a felelőstől várja a választ."""
+    from app.admin_agent.nyomozas import KULCS
+
+    _csak_a_felelos_donthet(db, user)
+    k = db.get(LaraKerdes, kerdes_id)
+    if k is None:
+        raise HTTPException(status_code=404, detail="A kérdés nem található.")
+    if k.allapot != "lara_valaszolt":
+        raise HTTPException(status_code=409, detail="Ezt a kérdést nem Lara válaszolta meg magától.")
+    k.allapot, k.valasz_tipus, k.valasz_szoveg, k.megvalaszolva_at = "nyitott", None, None, None
+    ktx = dict(k.kontextus or {})
+    if KULCS in ktx:
+        ktx[KULCS] = {**ktx[KULCS], "onallo": False, "elutasitva": True, "elfogadva": False}
+    k.kontextus = ktx
+    db.commit()
+    return {"kerdes": _kerdes_sor(k, user)}
+
+
 @router.post("/questions/{kerdes_id}/investigate")
 def kerdes_nyomozas(
     kerdes_id: int,
@@ -1648,6 +1676,11 @@ def kerdes_valasz(
     k = db.get(LaraKerdes, kerdes_id)
     if k is None:
         raise HTTPException(status_code=404, detail="A kérdés nem található.")
+    if k.allapot == "lara_valaszolt":
+        # Lara magától megválaszolta — a felelős most dönt róla (elfogadja
+        # vagy a saját válaszát adja): a kérdés újra nyitottként megy tovább.
+        _csak_a_felelos_donthet(db, user)
+        k.allapot = "nyitott"
     elesithet = False
     if body.valasz_tipus == "mindig" and body.elesit:
         try:

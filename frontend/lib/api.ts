@@ -846,12 +846,17 @@ export type LaraNyomozas = {
   futtato_nev?: string;
   ido: string;
   elfogadva?: boolean;
+  /** Lara magától megválaszolta (magabiztos volt) — a felelős ellenőrzi. */
+  onallo?: boolean;
+  elutasitva?: boolean;
 };
 
 export type LaraNyomozasStat = {
   nyomozott: number;
   valaszt_talalt: number;
   elfogadva: number;
+  /** Ennyi kérdést Lara magától megválaszolt (nem kérdezett). */
+  onallo?: number;
   bekapcsolva: boolean;
   elerheto: boolean;
 };

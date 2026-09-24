@@ -52,7 +52,13 @@ OLVASO_ESZKOZOK = (
 )
 MAX_LEPES = 12
 #: Futásonként (kétóránként) legfeljebb ennyi kérdésnek néz utána — modellköltség.
-ALAP_MAX_FUTASONKENT = 3
+ALAP_MAX_FUTASONKENT = 10
+#: Ennyire biztos válasznál Lara nem kérdez: magától megválaszolja, és a
+#: felelős csak ellenőrzi (`lara_valaszolt` állapot).
+ALAP_ONALLO_MIN = 0.75
+ONALLO_ALLAPOT = "lara_valaszolt"
+#: A kérdés értesítése addig vár, amíg Lara utána nem nézett.
+ERTESITES_FUGGO = "ertesites_fuggo"
 JAVASLATOK = ("mindig", "magyarazat", "kivetel", "hibas", "nem_tudom")
 MAX_LEPES_NAPLO = 20
 MAX_BIZONYITEK = 8
@@ -326,6 +332,63 @@ def max_futasonkent(db: Session) -> int:
         return ALAP_MAX_FUTASONKENT
 
 
+def elore_nez_utana(db: Session) -> bool:
+    """Lesz-e utánanézés, mielőtt a kérdésről értesítés megy?"""
+    from app.admin_agent.settings_service import lara_felelos, leallitva
+
+    return bool(bekapcsolva(db) and elerheto() and not leallitva() and lara_felelos(db) is not None)
+
+
+def onallo_kuszob(db: Session) -> float | None:
+    """A magától megválaszolás küszöbe — None, ha ki van kapcsolva."""
+    from app.admin_agent.settings_service import get_settings
+
+    lim = get_settings(db).limitek or {}
+    if lim.get("onallo_valasz", True) is False:
+        return None
+    try:
+        return max(0.5, min(1.0, float(lim.get("onallo_min", ALAP_ONALLO_MIN))))
+    except (TypeError, ValueError):
+        return ALAP_ONALLO_MIN
+
+
+def onallo_valasz(db: Session, k: LaraKerdes, n: dict, kuszob: float | None) -> bool:
+    """Ha Lara magabiztos választ talált, a kérdést NEM teszi fel: magától
+    megválaszolja, és a felelős csak ellenőrzi (elfogad / visszanyit). Tudás
+    ebből csak a felelős elfogadása után lesz."""
+    if kuszob is None or n.get("allapot") != "kesz" or n.get("javaslat") == "nem_tudom":
+        return False
+    if float(n.get("biztossag") or 0) < kuszob or not n.get("valasz"):
+        return False
+    k.allapot = ONALLO_ALLAPOT
+    k.valasz_tipus = "magyarazat" if k.tipus == "rendszer_fogalom" else n["javaslat"]
+    k.valasz_szoveg = n["valasz"][:2000]
+    k.megvalaszolva_at = datetime.now(timezone.utc)
+    ktx = dict(k.kontextus or {})
+    ktx[KULCS] = {**n, "onallo": True}
+    ktx.pop(ERTESITES_FUGGO, None)
+    k.kontextus = ktx
+    return True
+
+
+def fuggo_ertesitesek(db: Session) -> int:
+    """A még nem értesített, NYITOTT kérdésekről most megy értesítés (amire
+    Lara utánanézése után sem talált magabiztos választ)."""
+    from app.admin_agent.osszesito import kerdes_ertesites
+
+    kerdesek = [
+        k for k in db.scalars(select(LaraKerdes).where(LaraKerdes.allapot == "nyitott")).all()
+        if (k.kontextus or {}).get(ERTESITES_FUGGO)
+        and (KULCS in (k.kontextus or {}) or not elore_nez_utana(db))
+    ]
+    for k in kerdesek:
+        ktx = dict(k.kontextus or {})
+        ktx.pop(ERTESITES_FUGGO, None)
+        k.kontextus = ktx
+    db.flush()
+    return kerdes_ertesites(db, kerdesek) if kerdesek else 0
+
+
 def futtat(db: Session, max_db: int | None = None) -> dict:
     """Háttérfutás: a legfrissebb nyitott, még utána nem nézett kérdések közül
     legfeljebb `max_db`-nek utánanéz, Lara FELELŐSÉNEK jogosultságával.
@@ -335,12 +398,12 @@ def futtat(db: Session, max_db: int | None = None) -> dict:
     if leallitva():
         return {"allapot": "leallitva", "nyomozott": 0}
     if not bekapcsolva(db):
-        return {"allapot": "kikapcsolva", "nyomozott": 0}
+        return {"allapot": "kikapcsolva", "nyomozott": 0, "ertesitve": fuggo_ertesitesek(db)}
     if not elerheto():
-        return {"allapot": "beallitas_szukseges", "nyomozott": 0}
+        return {"allapot": "beallitas_szukseges", "nyomozott": 0, "ertesitve": fuggo_ertesitesek(db)}
     futtato = lara_felelos(db)
     if futtato is None:
-        return {"allapot": "nincs_felelos", "nyomozott": 0}
+        return {"allapot": "nincs_felelos", "nyomozott": 0, "ertesitve": fuggo_ertesitesek(db)}
     n = max_futasonkent(db) if max_db is None else max_db
     kerdesek = [
         k for k in db.scalars(
@@ -348,11 +411,15 @@ def futtat(db: Session, max_db: int | None = None) -> dict:
         ).all()
         if KULCS not in (k.kontextus or {})
     ][:n]
-    talalt = 0
+    talalt = onallo = 0
+    kuszob = onallo_kuszob(db)
     for k in kerdesek:
         r = nyomoz(db, k, futtato)
         talalt += r["javaslat"] != "nem_tudom"
-    return {"allapot": "kesz", "nyomozott": len(kerdesek), "valaszt_talalt": talalt}
+        onallo += onallo_valasz(db, k, r, kuszob)
+    db.flush()
+    return {"allapot": "kesz", "nyomozott": len(kerdesek), "valaszt_talalt": talalt, "onallo": onallo,
+            "ertesitve": fuggo_ertesitesek(db)}
 
 
 def lathato(nyomozas: dict | None, user: Employee | None) -> bool:
@@ -363,7 +430,7 @@ def lathato(nyomozas: dict | None, user: Employee | None) -> bool:
 
 def statisztika(db: Session) -> dict:
     """Mennyi kérdésnek nézett utána Lara, és mennyi javaslatát fogadtátok el."""
-    nyomozott = talalt = elfogadva = 0
+    nyomozott = talalt = elfogadva = onallo = 0
     for k in db.scalars(select(LaraKerdes).order_by(LaraKerdes.id.desc()).limit(1000)).all():
         n = (k.kontextus or {}).get(KULCS)
         if not n:
@@ -371,7 +438,8 @@ def statisztika(db: Session) -> dict:
         nyomozott += 1
         talalt += n.get("javaslat") != "nem_tudom"
         elfogadva += bool(n.get("elfogadva"))
-    return {"nyomozott": nyomozott, "valaszt_talalt": talalt, "elfogadva": elfogadva}
+        onallo += bool(n.get("onallo"))
+    return {"nyomozott": nyomozott, "valaszt_talalt": talalt, "elfogadva": elfogadva, "onallo": onallo}
 
 
 def elfogadas_jelolese(k: LaraKerdes, elfogadva: bool) -> None:
