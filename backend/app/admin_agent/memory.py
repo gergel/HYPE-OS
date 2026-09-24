@@ -150,14 +150,15 @@ def kivetelek(db: Session, *, partner: str | None = None, szoveg: str | None = N
     ).all()
     p_kulcs = partner_kulcs(partner)
     tokenek = _tokenek(szoveg)
+    jell = _jellegzetes(szoveg)
     pont: list[tuple[int, MemoryChunk]] = []
     for m in sorok:
         hp = partner_kulcs(((m.hatokor_reszletek or {}).get("partner")) or "")
         if p_kulcs and hp and (hp == p_kulcs or _partner_egyezik(p_kulcs, hp)):
             pont.append((100, m))
         elif tokenek:
-            t = len(tokenek & _tokenek(m.tartalom))
-            if t >= 2:
+            t = egyezes(tokenek, jell, _tokenek(m.tartalom) | _tokenek(hp))
+            if t:
                 pont.append((t, m))
     pont.sort(key=lambda x: (-x[0], -x[1].id))
     return [{"id": m.id, "tartalom": jelolt_szoveg(m), "hatokor": m.hatokor} for _, m in pont[:limit]]
@@ -260,11 +261,35 @@ _STOP = frozenset(
 )
 
 
-def _tokenek(szoveg: str | None) -> set[str]:
+#: Egyszerű tövesítés: a magyar toldalékok miatt („számlája” / „számlái”)
+#: a szavak első TO_HOSSZ betűje számít.
+TO_HOSSZ = 5
+#: Ennyi betűtől jellegzetes egy szó (pl. partnernév): egyetlen egyezése is elég.
+JELLEGZETES = 8
+
+
+def _szavak(szoveg: str | None) -> list[str]:
     if not szoveg:
-        return set()
-    k = partner_kulcs(szoveg)
-    return {t for t in k.split() if len(t) >= 4 and t not in _STOP}
+        return []
+    return [t for t in partner_kulcs(szoveg).split() if len(t) >= 4 and t not in _STOP]
+
+
+def _tokenek(szoveg: str | None) -> set[str]:
+    """A szöveg szó-tövei (a keresés egysége)."""
+    return {t[:TO_HOSSZ] for t in _szavak(szoveg)}
+
+
+def _jellegzetes(szoveg: str | None) -> set[str]:
+    return {t[:TO_HOSSZ] for t in _szavak(szoveg) if len(t) >= JELLEGZETES}
+
+
+def egyezes(kerdes: set[str], jell: set[str], doku: set[str]) -> int:
+    """Szó-egyezés pontszáma (0 = nem releváns): legalább két közös tő, vagy
+    egy JELLEGZETES (hosszú, pl. partnernév) tő, vagy rövid kérdésnél egy tő."""
+    t = len(kerdes & doku)
+    if t >= 2 or (t >= 1 and (len(kerdes) <= 2 or kerdes & jell & doku)):
+        return t
+    return 0
 
 
 def tudas_csomag(
@@ -280,6 +305,7 @@ def tudas_csomag(
     Az aktuális üzleti adat NEM innen jön: azt a beszélgetés a hiteles
     rendszerrekordokból olvassa (csak olvasó eszközökkel)."""
     tokenek = _tokenek(szoveg)
+    jell = _jellegzetes(szoveg)
     p_kulcs = partner_kulcs(partner)
     kizart_ugyek = kizart_ugyek or set()
     # `engedelyezett`: oldal-kulcs -> bool (a kérdező jogosultsága); az
@@ -297,7 +323,7 @@ def tudas_csomag(
         if rp and p_kulcs and (rp == p_kulcs or _partner_egyezik(rp, p_kulcs) or _partner_egyezik(p_kulcs, rp)):
             szab_pont.append((100, r))
             continue
-        t = len(tokenek & (_tokenek(r.cim) | _tokenek(r.tartalom) | _tokenek(rp)))
+        t = egyezes(tokenek, jell, _tokenek(r.cim) | _tokenek(r.tartalom) | _tokenek(rp))
         if t:
             szab_pont.append((t, r))
         elif hatokor and r.hatokor == hatokor and not rp:
@@ -318,10 +344,10 @@ def tudas_csomag(
     for m in ablak:
         if m.ugy_kulcs and m.ugy_kulcs in kizart_ugyek:
             continue
-        t = len(tokenek & _tokenek(m.tartalom))
+        t = egyezes(tokenek, jell, _tokenek(m.tartalom))
         if p_kulcs and _partner_egyezik(p_kulcs, m.tartalom):
             t += 5
-        if t >= 2 or (t >= 1 and len(tokenek) <= 2):
+        if t:
             pont.append((t * (0.85 if m.regi_korszak else 1.0), m))
     pont.sort(key=lambda x: (-x[0], -x[1].id))
     esetek = [

@@ -429,8 +429,14 @@ def _nyom(db: Session, t: AdminTask, run: AgentRun, muvelet: str, eredmeny: str,
     )
 
 
-def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual") -> AdminTask:
+def arnyek_elemzes(
+    db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual", csak_javaslat: bool = False,
+) -> AdminTask:
     """Egy beérkező számla L0 árnyék-elemzése. A hívó commitál.
+
+    `csak_javaslat=True` (az automatikus elemzés, lásd visszacsatolas.py): a
+    policy döntésétől FÜGGETLENÜL csak javaslat születik — nincs jóváhagyás,
+    nincs végrehajtási sor, nincs értesítés (bizalmi szinttől függetlenül).
 
     Létrehozza (idempotensen) a forráseseményt, a feladatot, egy Lara-futást,
     a nyomvonalat és a művelet-javaslatot, a döntést a policy engine adja. L0-ban
@@ -545,7 +551,11 @@ def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual"
     # A feladat állapota a döntés + az ellenőrzések szerint. L0-ban a döntés
     # BLOCKED → a javaslat kész, de árnyék (nem hajtódik végre).
     regi_allapot = t.allapot
-    if not ellenorzesek["rendben"]:
+    if csak_javaslat and ellenorzesek["rendben"]:
+        # Automatikus elemzés: csak javaslat, bármit mondana a policy.
+        t.allapot = TaskState.PROPOSAL_READY.value
+        t.blokkolo_ok = "Automatikus elemzés: csak javaslat (jóváhagyás és végrehajtás nélkül)."
+    elif not ellenorzesek["rendben"]:
         t.allapot = TaskState.NEEDS_INFO.value
         t.blokkolo_ok = "; ".join(ellenorzesek["hianyok"])
     elif dontes.decision is Decision.NEEDS_APPROVAL:
@@ -571,7 +581,8 @@ def arnyek_elemzes(db: Session, bejovo: BejovoSzamla, *, trigger: str = "manual"
     # A felelős értesítése: ellenőrzésre / jóváhagyásra vár (lásd osszesito.py).
     from app.admin_agent.osszesito import feladat_ertesites
 
-    feladat_ertesites(db, t, regi_allapot)
+    if not csak_javaslat:
+        feladat_ertesites(db, t, regi_allapot)
 
     run.allapot = AgentRunState.SUCCEEDED.value
     run.veg_at = _most()

@@ -79,7 +79,11 @@ def run_eval(db: Session, *, release_id: int | None = None) -> EvalRun:
     db.add(run)
     db.flush()
 
-    esetek = db.scalars(select(EvalCase).where(EvalCase.ervenyes.is_(True))).all()
+    # A szabályverzióhoz kötött SZAKMAI esetek külön értékelőn futnak (lásd
+    # szakmai_eval.py) — ez a biztonsági / pénzügyi invariánsok őre.
+    esetek = db.scalars(
+        select(EvalCase).where(EvalCase.ervenyes.is_(True), EvalCase.szabaly_id.is_(None))
+    ).all()
     reszletek: list[dict] = []
     sikeres = 0
     kritikus = 0

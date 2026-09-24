@@ -9,6 +9,8 @@
   (lásd admin_agent/asszisztens.py).
 * Óránkénti tapasztalás — a teljes adattörténet ismétlődő tényei, és a Gemini
   állításai, amelyeket Lara az adaton ellenőriz (lásd admin_agent/tapasztalas.py).
+* Percenkénti gyors visszacsatolás és automatikus L0 számla-elemzés — csak
+  bekapcsolt kapcsolóval (alapból KI), lásd admin_agent/visszacsatolas.py.
 * Kétóránkénti önellenőrzés — Lara a rögzített munkán ellenőrzi a tudását, és
   kérdez, ahol nem érti az eltérést (lásd admin_agent/onellenorzes.py).
 
@@ -24,7 +26,9 @@ kétszeres tudáskiadás ellen a jelölt→jóváhagyás→aktiválás lánc vé
 
 from __future__ import annotations
 
+import functools
 import logging
+from datetime import datetime, timezone
 
 from celery.schedules import crontab
 
@@ -42,6 +46,50 @@ def _leallitva(feladat: str) -> bool:
         logger.info("Lara le van állítva (vészleállítás) — %s kihagyva.", feladat)
         return True
     return False
+
+def _naplo(forras: str, allapot: str, kezdes: datetime, eredmeny=None, hiba: str | None = None) -> None:
+    """A futás rögzítése a forrás futásnaplójában (lásd admin_agent/folyamat.py)
+    - külön munkamenetben, hogy a feladat hibája ne vigye el. A napló hibája
+    sosem állítja meg a feladatot."""
+    from app.admin_agent.folyamat import naplo
+
+    db = SessionLocal()
+    try:
+        naplo(db, forras, allapot, kezdes=kezdes, eredmeny=eredmeny, hiba=hiba)
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        logger.debug("Lara futásnapló írása sikertelen (%s).", forras, exc_info=True)
+    finally:
+        db.close()
+
+
+def _feladat(nev: str):
+    """Celery-feladat + futásnapló: siker, hiba (rövid, titok nélkül) vagy
+    kihagyás (kikapcsolt forrás / vészleállítás). A percenkénti gyors
+    visszacsatolás kihagyását nem naplózzuk (napi 1440 bejegyzés lenne)."""
+
+    def deco(fn):
+        @functools.wraps(fn)
+        def inner(*args, **kwargs):
+            kezdes = datetime.now(timezone.utc)
+            try:
+                eredmeny = fn(*args, **kwargs)
+            except Exception as exc:
+                _naplo(nev, "hiba", kezdes, hiba=f"{type(exc).__name__}: {str(exc)[:250]}")
+                raise
+            if eredmeny is None or (isinstance(eredmeny, dict) and eredmeny.get("leallitva")):
+                if nev != "visszacsatolas":
+                    ok = "vészleállítás" if isinstance(eredmeny, dict) else "kikapcsolt forrás / nincs teendő"
+                    _naplo(nev, "kihagyva", kezdes, hiba=ok)
+            else:
+                _naplo(nev, "kesz", kezdes, eredmeny=eredmeny)
+            return eredmeny
+
+        return celery_app.task(name=f"admin_agent.{nev}")(inner)
+
+    return deco
+
 
 # Europe/Budapest 02:00 — a Celery a beat időzónáját használja; ha a rendszer
 # UTC-ben jár, ez UTC 02:00-nak felel meg. A pontos DST-kezelés a scheduler
@@ -93,6 +141,12 @@ celery_app.conf.beat_schedule = {
         # adat-ellenőrzéssel (lásd admin_agent/tapasztalas.py). Csak olvas, csak tanul.
         "schedule": crontab(minute=10),
     },
+    "admin-agent-visszacsatolas": {
+        "task": "admin_agent.visszacsatolas",
+        # Percenként — de csak bekapcsolt „gyors visszacsatolás" / „automatikus
+        # számla-elemzés" kapcsolóval dolgozik (alapból mindkettő KI).
+        "schedule": crontab(),
+    },
     "admin-agent-napi-osszesito": {
         "task": "admin_agent.napi_osszesito",
         # Munkanapokon reggel (UTC 05:30 ≈ budapesti 07:30 nyáron, 06:30 télen).
@@ -101,7 +155,7 @@ celery_app.conf.beat_schedule = {
 }
 
 
-@celery_app.task(name="admin_agent.observer")
+@_feladat("observer")
 def observer_task() -> dict | None:
     """A projektkód/utókövetés megfigyelő ütemezett futása. Csak bekapcsolt
     forrással dolgozik (a megfigyeles modul maga ellenőrzi)."""
@@ -122,7 +176,7 @@ def observer_task() -> dict | None:
         db.close()
 
 
-@celery_app.task(name="admin_agent.nightly_distill")
+@_feladat("nightly_distill")
 def nightly_distill_task() -> dict | None:
     """A háttér-tanuló futtatása. Akkor dolgozik, ha a tanulás engedélyezett: a
     modul be van kapcsolva VAGY a „Tanulás és megfigyelés" forrás aktív (L0-ban
@@ -171,7 +225,7 @@ def nightly_distill_task() -> dict | None:
         db.close()
 
 
-@celery_app.task(name="admin_agent.weekly_eval")
+@_feladat("weekly_eval")
 def weekly_eval_task() -> dict | None:
     """Heti teljes értékelés. A beépített biztonsági eseteket mindig ellenőrzi
     (a modul állapotától függetlenül — ez regressziós védelem)."""
@@ -193,7 +247,7 @@ def weekly_eval_task() -> dict | None:
         db.close()
 
 
-@celery_app.task(name="admin_agent.self_check")
+@_feladat("self_check")
 def self_check_task() -> dict | None:
     """Lara folyamatos önellenőrzése: a friss rögzítések visszajátszása, majd a
     jelenlegi tudással „vak" jóslat a rögzített számlákra, összevetés a
@@ -249,7 +303,7 @@ def self_check_task() -> dict | None:
         db.close()
 
 
-@celery_app.task(name="admin_agent.levelezes")
+@_feladat("levelezes")
 def levelezes_task() -> dict | None:
     """A szamla@ postafiók levelezésének olvasása (szálanként tudás-jelölt).
     Csak bekapcsolt „Levelezés olvasása" forrással fut; futás közben is
@@ -271,7 +325,7 @@ def levelezes_task() -> dict | None:
         db.close()
 
 
-@celery_app.task(name="admin_agent.asszisztens")
+@_feladat("asszisztens")
 def asszisztens_task() -> dict | None:
     """Az AI asszisztens lezárt kérés-köreinek figyelése (körönként tudás-jelölt).
     Csak bekapcsolt „AI asszisztens figyelése" forrással fut."""
@@ -292,7 +346,7 @@ def asszisztens_task() -> dict | None:
         db.close()
 
 
-@celery_app.task(name="admin_agent.beagyazas")
+@_feladat("beagyazas")
 def beagyazas_task() -> dict | None:
     """A tudás-darabok beágyazása a jelentés szerinti kereséshez (lásd
     admin_agent/embedding.py). Kikapcsolt keresésnél / kulcs nélkül nem fut."""
@@ -315,7 +369,7 @@ def beagyazas_task() -> dict | None:
         db.close()
 
 
-@celery_app.task(name="admin_agent.napi_osszesito")
+@_feladat("napi_osszesito")
 def napi_osszesito_task() -> dict | None:
     """Reggeli értesítés: hány tudás-jelölt vár jóváhagyásra, és melyik a
     legértékesebb (lásd admin_agent/osszesito.py)."""
@@ -336,7 +390,7 @@ def napi_osszesito_task() -> dict | None:
         db.close()
 
 
-@celery_app.task(name="admin_agent.rendszer")
+@_feladat("rendszer")
 def rendszer_task() -> dict | None:
     """A teljes rendszer figyelése: modulonkénti rendszerismeret és projektkód-
     életút (lásd admin_agent/rendszer.py). Csak olvas; csak bekapcsolt „Teljes
@@ -360,7 +414,7 @@ def rendszer_task() -> dict | None:
         db.close()
 
 
-@celery_app.task(name="admin_agent.tapasztalas")
+@_feladat("tapasztalas")
 def tapasztalas_task() -> dict | None:
     """Lara önálló tapasztalás-köre: tények a teljes történetből, majd a Gemini
     ellenőrizhető állításai, amelyeket Lara a teljes adaton igazol vagy elvet.
@@ -378,6 +432,29 @@ def tapasztalas_task() -> dict | None:
     except Exception:
         db.rollback()
         logger.exception("Lara tapasztalás-köre sikertelen.")
+        raise
+    finally:
+        db.close()
+
+
+@_feladat("visszacsatolas")
+def visszacsatolas_task() -> dict | None:
+    """A gyors visszacsatolás tartós sorának feldolgozása és az automatikus,
+    CSAK JAVASLATOS számla-elemzés. Kikapcsolt kapcsolóknál nem dolgozik."""
+    if _leallitva("visszacsatolas"):
+        return {"leallitva": True}
+    from app.admin_agent import visszacsatolas
+
+    db = SessionLocal()
+    try:
+        if not (visszacsatolas.bekapcsolva(db) or visszacsatolas.auto_elemzes_be(db)):
+            return None
+        eredmeny = {"sor": visszacsatolas.feldolgoz(db), "auto_elemzes": visszacsatolas.auto_szamla_elemzes(db)}
+        db.commit()
+        return eredmeny
+    except Exception:
+        db.rollback()
+        logger.exception("Lara gyors visszacsatolása sikertelen.")
         raise
     finally:
         db.close()

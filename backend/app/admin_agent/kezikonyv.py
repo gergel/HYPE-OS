@@ -369,9 +369,10 @@ def kereses(db: Session, szoveg: str, *, limit: int = 4, engedelyezett=None) -> 
     `engedelyezett`: függvény (oldal-kulcs -> bool); ha meg van adva, az
     oldalhoz kötött szakasz csak akkor jön, ha a felhasználó látja az oldalt.
     Az üzleti eljárás előrébb sorolódik az azonos pontszámú technikainál."""
-    from app.admin_agent.memory import _tokenek
+    from app.admin_agent.memory import _jellegzetes, _tokenek, egyezes
 
     tokenek = _tokenek(szoveg)
+    jell = _jellegzetes(szoveg)
     if not tokenek:
         return []
     pont: list[tuple[float, MemoryChunk]] = []
@@ -380,8 +381,9 @@ def kereses(db: Session, szoveg: str, *, limit: int = 4, engedelyezett=None) -> 
         if oldal and engedelyezett is not None and not engedelyezett(oldal):
             continue
         cim_t = _tokenek((m.hatokor_reszletek or {}).get("cim"))
-        t = 2 * len(tokenek & cim_t) + len(tokenek & _tokenek(m.tartalom))
-        if t >= 2 or (t >= 1 and len(tokenek) <= 2):
+        alap = egyezes(tokenek, jell, cim_t | _tokenek(m.tartalom))
+        t = alap + len(tokenek & cim_t) if alap else 0  # a cím-egyezés többet ér
+        if t:
             pont.append((t + (0.5 if m.tudas_fajta == UZLETI else 0.0), m))
     pont.sort(key=lambda x: (-x[0], -x[1].id))
     return [szakasz_sor(m, kivonat=True) for _, m in pont[:limit]]

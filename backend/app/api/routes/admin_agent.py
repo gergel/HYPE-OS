@@ -888,10 +888,19 @@ def task_correction(
             tanulasi_halmaz="jovahagyott",
             ervenyes=True,  # ember magyarázta — kifejezett tanítás
             regi_korszak=False,
+            tudas_fajta="eseti_magyarazat",
+            bizonyitek_szint="forras",
+            jovahagyta_id=user.id,
+            jovahagyva_at=_most(),
         )
         db.add(m)
         db.flush()
         pelda_id = m.id
+    # Gyors visszacsatolás (kapcsolóval, alapból ki): a javítás / magyarázat
+    # ugyanebben a tranzakcióban a tartós sorba kerül (lásd visszacsatolas.py).
+    from app.admin_agent.visszacsatolas import sorba
+
+    sorba(db, "tudas" if csak_magyarazat else "korrekcio", pelda_id if csak_magyarazat else c.id)
     db.commit()
     return {"correction_id": c.id, "tipus": c.tipus, "mezo_diff": mezo_diff, "pelda_id": pelda_id}
 
@@ -1123,6 +1132,12 @@ def rule_modositas(
                     status_code=409,
                     detail="Aktiválás előtt sikeres értékelés (eval) szükséges — futtass evaluációt.",
                 )
+            # A szabály aktuális verziójának SZAKMAI tesztje (ha van) — lásd szakmai_eval.py.
+            from app.admin_agent.szakmai_eval import elesitesi_kapu
+
+            ok, indok = elesitesi_kapu(db, r)
+            if not ok:
+                raise HTTPException(status_code=409, detail=indok)
         r.allapot = payload.allapot
     db.commit()
     return _rule_sor(r)
@@ -1697,6 +1712,9 @@ def kerdes_valasz(
     from app.admin_agent.nyomozas import elfogadas_jelolese
 
     elfogadas_jelolese(k, body.lara_valasza)
+    from app.admin_agent.visszacsatolas import sorba
+
+    sorba(db, "kerdes_valasz", k.id)
     db.commit()
     return {"kerdes": _kerdes_sor(k, user), **eredmeny}
 
@@ -1900,6 +1918,8 @@ def memory_tomeges(
         raise HTTPException(status_code=400, detail="Ismeretlen művelet.")
     if body.muvelet == "jovahagy":
         check_page_action(db, user, PAGE, "delete")
+    from app.admin_agent.visszacsatolas import sorba
+
     sorok = db.scalars(select(MemoryChunk).where(MemoryChunk.id.in_(body.ids))).all()
     kesz = 0
     kihagyott = 0
@@ -1914,6 +1934,8 @@ def memory_tomeges(
                 continue
             m.ervenyes = True
             m.minosites = "jovahagyott"
+            m.jovahagyta_id, m.jovahagyva_at = user.id, _most()
+            sorba(db, "tudas", m.id)
         else:
             m.visszavont = True
             m.ervenyes = False
@@ -1944,6 +1966,10 @@ def memory_modositas(
             raise HTTPException(status_code=409, detail="Elvetett példa nem hagyható jóvá.")
         m.ervenyes = True
         m.minosites = "jovahagyott"
+        m.jovahagyta_id, m.jovahagyva_at = user.id, _most()
+        from app.admin_agent.visszacsatolas import sorba
+
+        sorba(db, "tudas", m.id)
     elif payload.ervenyes is False:
         m.ervenyes = False
         # Ha Lara hagyta jóvá magától, és ember vette vissza, a megerősítés
@@ -2135,7 +2161,20 @@ def settings_modositas(
     if payload.engedett_forrasok is not None:
         s.engedett_forrasok = payload.engedett_forrasok
     if payload.limitek is not None:
-        s.limitek = payload.limitek
+        regi = dict(s.limitek or {})
+        uj = dict(payload.limitek)
+        # Szerveroldali kulcsok: a felhasználók SAJÁT megszólítása (csak ők
+        # állíthatják, lásd /chat/preferences) és az automatikus elemzés
+        # bekapcsolásának ideje - a beállítás-mentés nem írhatja felül.
+        for kulcs in ("megszolitasok", "auto_szamla_elemzes_tol"):
+            if kulcs in regi:
+                uj[kulcs] = regi[kulcs]
+            else:
+                uj.pop(kulcs, None)
+        if uj.get("auto_szamla_elemzes") is True and regi.get("auto_szamla_elemzes") is not True:
+            # Csak a bekapcsolás UTÁN érkezett számlákat elemzi (lásd visszacsatolas.py).
+            uj["auto_szamla_elemzes_tol"] = _most().isoformat()
+        s.limitek = uj
     korszak = None
     if payload.tanulas_kezdete is not None:
         if payload.tanulas_kezdete > date.today():
