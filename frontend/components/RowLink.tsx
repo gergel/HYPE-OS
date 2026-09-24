@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useFelugroNyitas } from "@/components/FelugroAblak";
 import type { ReactNode } from "react";
 
 export function RowLink({
@@ -18,9 +19,15 @@ export function RowLink({
   className?: string;
 }) {
   const router = useRouter();
+  // A felugró területeken (Pénzügyek, projektkódok) a sor felugró ablakban
+  // nyílik, nem navigál - lásd components/FelugroAblak.tsx.
+  const felugro = useFelugroNyitas();
   return (
     <tr
-      onClick={() => (onClick ? onClick() : href && router.push(href))}
+      onClick={() => {
+        if (onClick) onClick();
+        else if (href && !felugro?.(href)) router.push(href);
+      }}
       className={`cursor-pointer hover:bg-surface-3 ${className}`}
     >
       {children}

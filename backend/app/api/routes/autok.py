@@ -28,6 +28,7 @@ from app.models.document_attachment import DocumentAttachment
 from app.models.employee import Employee
 from app.models.finance import Expense
 from app.models.project_code import ProjectCode
+from app.services import fizetesi_mod as fizetesi_mod_szolg
 from app.services import elszamolas
 from app.services import kotelezettseg as szolg
 from app.services import notifications
@@ -69,6 +70,9 @@ class AutoKiadasRead(BaseModel):
     megjegyzes: str | None = None
     #: Ki lett-e már fizetve (a Pénzügy oldal ezt is kezeli).
     kesz: bool = False
+    #: Nincs számla, nem is lesz - készpénzes FEKETE kiadás (lásd
+    #: services/kassza.py).
+    nincs_szamla: bool = False
     #: Hány dokumentum (számla, blokk) van feltöltve hozzá.
     dokumentum_db: int = 0
     #: Melyik PROJEKTKÓD költsége (a felhasználó kérése: a tankolás a
@@ -157,6 +161,7 @@ def _kiadas_kimenet(e: Expense, dokumentumok: dict[int, int] | None = None) -> A
         fizetesi_mod=e.kifizetes_modja,
         megjegyzes=e.megjegyzes,
         kesz=bool(e.kesz),
+        nincs_szamla=bool(e.nincs_szamla),
         dokumentum_db=(dokumentumok or {}).get(e.id, 0),
         project_code_id=e.project_code_id,
         projektkod=e.project_code.projektkod if e.project_code is not None else None,
@@ -380,6 +385,10 @@ class AutoKiadasIn(BaseModel):
     #: Ki van-e már fizetve. Alapból igen: ami az autónál felmerül (tankolás,
     #: parkolás), azt jellemzően a helyszínen kifizetik.
     kifizetve: bool = True
+    #: NINCS SZÁMLA, NEM IS LESZ (a felhasználó kérése) - csak KÉSZPÉNZES
+    #: fizetésnél. Ugyanaz az `Expense.nincs_szamla`, mint a Kiadásoknál: a
+    #: Házipénztárban FEKETE kiadásként jelenik meg (lásd services/kassza.py).
+    nincs_szamla: bool = False
     #: Ha a költés egy PROJEKT miatt merült fel (pl. tankolás egy forgatáshoz),
     #: itt köthető a projektkódhoz - a kiadás beleszámít a kód költségeibe,
     #: de mivel ugyanaz az EGY sor, a Pénzügyben nem duplázódik.
@@ -406,6 +415,11 @@ def create_auto_kiadas(
 
     if payload.project_code_id is not None and db.get(ProjectCode, payload.project_code_id) is None:
         raise HTTPException(status_code=404, detail="A megadott projektkód nem található.")
+    keszpenzes = fizetesi_mod_szolg.keszpenzes(payload.fizetesi_mod)
+    if payload.nincs_szamla and not keszpenzes:
+        raise HTTPException(
+            status_code=400, detail="A „nincs számla, nem is lesz” csak készpénzes fizetésnél jelölhető."
+        )
 
     datum = payload.datum or date.today()
     kiadas = Expense(
@@ -421,7 +435,11 @@ def create_auto_kiadas(
         # Egyetlen dátummező: a felvitt nap; a kifizetés tényét a `kesz` jelzi,
         # a kimutatásba csak akkor számít bele.
         fizetes_datuma=datum,
-        kesz=payload.kifizetve,
+        # Készpénz: a pénz abban a pillanatban kiment a házipénztárból -
+        # ugyanaz a szabály, mint a Kiadások felvitelénél (lásd
+        # routes/finance._expense_before_create).
+        kesz=payload.kifizetve or keszpenzes,
+        nincs_szamla=payload.nincs_szamla,
         hozzaadas_a_kiadasokhoz=True,
         megjegyzes=payload.megjegyzes,
     )

@@ -3676,6 +3676,9 @@ export type AutoKiadas = {
   fizetesi_mod: string | null;
   megjegyzes: string | null;
   kesz: boolean;
+  /** Nincs számla, nem is lesz - készpénzes FEKETE kiadás (lásd backend
+   * services/kassza.py). */
+  nincs_szamla: boolean;
   dokumentum_db: number;
   /** Melyik projektkód költsége (ha a költés egy projekthez tartozik). */
   project_code_id: number | null;

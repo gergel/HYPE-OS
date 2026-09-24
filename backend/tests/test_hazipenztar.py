@@ -163,3 +163,43 @@ def test_nullazas_vegpont_megerosites_nelkul_nem_fut(db):
     assert r.status_code == 400
     r = TestClient(app).get("/api/v1/finance/hazipenztar/nullazas", headers=fej)
     assert r.status_code == 200 and r.json()["megerosites"] == "NULLÁZÁS"
+
+
+def test_autos_kp_kiadas_nincs_szamla_fekete(db):
+    from fastapi import HTTPException
+
+    from app.api.routes.autok import AutoKiadasIn, create_auto_kiadas
+    from app.models.auto import Auto
+    from app.services import kassza
+
+    auto = Auto(rendszam="DEMO-001 (demó)")
+    db.add(auto)
+    db.flush()
+    monkey_commit = db.commit
+    db.commit = db.flush  # a végpont commitolna - a teszt tranzakciója maradjon visszagörgethető
+    try:
+        fekete = create_auto_kiadas(
+            auto.id,
+            AutoKiadasIn(megnevezes="Parkolás (demó)", osszeg=3_000, fizetesi_mod="Készpénz", nincs_szamla=True,
+                         kifizetve=False, datum=date(2026, 7, 1)),
+            db=db, _user=None,
+        )
+        sima = create_auto_kiadas(
+            auto.id,
+            AutoKiadasIn(megnevezes="Tankolás (demó)", osszeg=20_000, fizetesi_mod="Készpénz", datum=date(2026, 7, 2)),
+            db=db, _user=None,
+        )
+        # Nem készpénznél nem jelölhető.
+        with pytest.raises(HTTPException):
+            create_auto_kiadas(
+                auto.id,
+                AutoKiadasIn(megnevezes="Szerviz (demó)", osszeg=1, fizetesi_mod="Átutalás", nincs_szamla=True),
+                db=db, _user=None,
+            )
+    finally:
+        db.commit = monkey_commit
+
+    assert fekete.nincs_szamla is True and fekete.kesz is True  # készpénz = rögtön kifizetett
+    tipus = {s.id: s.tipus for s in kassza.kep(db).sorok if s.forras == "kiadas"}
+    assert tipus[fekete.id] == kassza.FEKETE_KIADAS
+    assert tipus[sima.id] == kassza.SIMA_KIADAS

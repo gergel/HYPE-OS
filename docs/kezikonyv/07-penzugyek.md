@@ -292,6 +292,16 @@ kifizetettsége.
 Frontend: `components/finance/`, `RevenueInvoiceStatus.tsx`,
 `TigInvoiceManager.tsx`, `TigAllapotSelect.tsx`.
 
+### Felugró ablakok a Pénzügyekben és a projektkódoknál
+
+A Pénzügyek csoport minden oldalán (`/penzugyek/...`) és a projektkódoknál
+(lista és adatlap) minden megnyitás - kiadás, bevétel, projektkód, projekt,
+szerződés, munkatárs… - **felugró ablakban** nyílik, nem teljes oldalként. Az
+ablak az `/embed/*` keret nélküli nézetet tölti be; a „Megnyitás új oldalon”
+gomb a teljes oldalra visz, a Ctrl/Cmd-kattintás pedig új lapon nyit. Ami egy
+lista-oldal (nincs `/embed` párja), az a megszokott módon navigál. Kód:
+`components/FelugroAblak.tsx`, szabályok: `lib/felugro.ts`.
+
 ### Házipénztár (2026-09-24-től)
 
 A régi „KP forgalom” oldal neve **Házipénztár** (útvonal: `/penzugyek/kp-forgalom`,
@@ -308,7 +318,11 @@ mert egy doboz pénz nem tud nettó lenni:
     egyenleg = bevétel + átvezetés − kiadás − fekete kiadás
 
 A dátummal felvett készpénzes kiadás automatikusan kifizetett (`kesz`): a pénz
-abban a pillanatban kiment a dobozból. A régi „fedezet” (számla nélküli
+abban a pillanatban kiment a dobozból. Az **autós költés** ugyanígy működik: az
+Autók oldalon készpénzes fizetésnél megjelenik a „Nincs számla, nem is lesz”
+pipa (ugyanaz az `Expense.nincs_szamla`) - bepipálva a bizonylat-feltöltés
+eltűnik, és a Házipénztárban fekete kiadásként látszik. Más fizetési módnál a
+szerver el is utasítja ezt a jelölést. A régi „fedezet” (számla nélküli
 bevétel) és a legális/fekete egyenleg megszűnt.
 
 **Nullázás.** A Házipénztár oldal alján (törlési jog kell): minden készpénzes

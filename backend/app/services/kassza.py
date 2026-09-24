@@ -277,7 +277,9 @@ def _kiadasok(db: Session) -> list[KasszaSor]:
         )
         .options(selectinload(Expense.project_code))
     ).all()
-    szamlas = _szamlas_ids(db, "expense")
+    # Az autós kiadás bizonylata "autoKiadas" csatolmányként él (lásd
+    # routes/autok.py KIADAS_ENTITAS) - az is számla.
+    szamlas = _szamlas_ids(db, "expense") | _szamlas_ids(db, "autoKiadas")
     return [
         KasszaSor(
             id=e.id,

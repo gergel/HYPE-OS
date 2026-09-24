@@ -60,6 +60,11 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
   }, []);
   const [pluszAfa, setPluszAfa] = useState(false);
   const [fizetesiMod, setFizetesiMod] = useState("");
+  // NINCS SZÁMLA, NEM IS LESZ (a felhasználó kérése) - csak készpénznél
+  // jelölhető; ugyanaz, mint a Kiadások felvitelénél: a Házipénztárban
+  // FEKETE kiadásként jelenik meg.
+  const [nincsSzamla, setNincsSzamla] = useState(false);
+  const keszpenzes = fizetesiMod === "Készpénz";
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
   const [megjegyzes, setMegjegyzes] = useState("");
   // A bizonylat (számla PDF, blokk-fotó) MÁR A FELVITELKOR csatolható: a
@@ -84,6 +89,7 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
           osszeg: Number(osszeg),
           plusz_afa: pluszAfa,
           fizetesi_mod: fizetesiMod || null,
+          nincs_szamla: keszpenzes && nincsSzamla,
           datum: datum || null,
           megjegyzes: megjegyzes.trim() || null,
           project_code_id: projektkodId ? Number(projektkodId) : null,
@@ -98,7 +104,7 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       // létrejött kiadás-sorhoz tartozik, tehát kell az azonosítója. Ha a
       // feltöltés hibázik, a KÖLTÉS attól még megvan - csak szólunk, hogy a
       // bizonylat kimaradt, és utólag a sorból pótolható.
-      if (fajlok.length > 0) {
+      if (fajlok.length > 0 && !(keszpenzes && nincsSzamla)) {
         const kiadas = (await res.json()) as { id: number };
         for (const file of fajlok) {
           const fd = new FormData();
@@ -121,6 +127,7 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       setOsszeg("");
       setPluszAfa(false);
       setFizetesiMod("");
+      setNincsSzamla(false);
       setMegjegyzes("");
       setProjektkodId("");
       setFajlok([]);
@@ -175,6 +182,15 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
           className="w-[160px]"
         />
       </label>
+      {keszpenzes && (
+        <label className="flex flex-col gap-1.5">
+          <span className="t-label">Számla</span>
+          <span className="flex h-[34px] items-center gap-2 text-[13px] text-text-primary">
+            <input type="checkbox" checked={nincsSzamla} onChange={(e) => setNincsSzamla(e.target.checked)} />
+            Nincs számla, nem is lesz
+          </span>
+        </label>
+      )}
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Mikor</span>
         <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} className={`${inputClass} w-[160px]`} />
@@ -199,6 +215,7 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
           className="w-[240px]"
         />
       </label>
+      {!(keszpenzes && nincsSzamla) && (
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Bizonylat</span>
         <span
@@ -220,6 +237,7 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
           />
         </span>
       </label>
+      )}
       <button type="button" onClick={ment} disabled={busy} className="btn btn-primary">
         {busy ? "Mentés…" : "Hozzáadás"}
       </button>
@@ -486,6 +504,11 @@ export function AutoKezelo({
                                   jogosultságával (lásd backend
                                   routes/autok.py KIADAS_ENTITAS). */}
                               <td className="py-1.5 pr-4">
+                                {kiadas.nincs_szamla ? (
+                                  // Készpénzes FEKETE kiadás: nem lesz
+                                  // számlája, tehát feltölteni sincs mit.
+                                  <StatusBadge label="Nincs számla, nem is lesz" tone="danger" />
+                                ) : (
                                 <PapirFeltoltes
                                   entityType="autoKiadas"
                                   entityId={kiadas.id}
@@ -494,6 +517,7 @@ export function AutoKezelo({
                                   canDelete={canDelete}
                                   uresSzoveg="–"
                                 />
+                                )}
                               </td>
                               <td className="py-1.5 text-right">
                                 {canDelete && (

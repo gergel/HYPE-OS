@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { vanEmbedParja } from "@/lib/felugro";
 
 /** A felugró ablakba (iframe-be) ágyazott nézetek NAVIGÁCIÓ-KEZELŐJE.
  *
@@ -16,29 +17,6 @@ import { usePathname, useRouter } from "next/navigation";
  * 2. Minden útvonal-váltásról értesíti a szülő ablakot (postMessage), hogy a
  *    felugró ablak címe és "Megnyitás új oldalon" gombja mindig az ÉPPEN
  *    LÁTOTT tartalmat kövesse, ne ragadjon az elsőn. */
-
-//: Amely útvonal-mintáknak VAN keret nélküli (/embed) párja - lásd app/embed/*.
-const EMBED_MINTAK = [
-  /^\/csapat\/\d+/,
-  /^\/feladatok\/\d+/,
-  /^\/felszereles\/\d+/,
-  /^\/kampanyok\/\d+/,
-  /^\/media-portal\/\d+/,
-  /^\/penzugyek\/bevetel\/\d+/,
-  /^\/penzugyek\/kiadas\/\d+/,
-  /^\/projektek\/project-kodok\/\d+/,
-  /^\/projektek\/\d+/,
-  /^\/rekord\/[^/]+\/\d+/,
-  /^\/szerzodesek\/\d+/,
-  /^\/ugyfelek\/\d+/,
-  /^\/utokovetes\/projektkodok\/\d+/,
-  /^\/utokovetes\/\d+/,
-  /^\/utomunka\/\d+/,
-];
-
-function vanEmbedParja(utvonal: string): boolean {
-  return EMBED_MINTAK.some((m) => m.test(utvonal));
-}
 
 export function EmbedNavigacio() {
   const router = useRouter();

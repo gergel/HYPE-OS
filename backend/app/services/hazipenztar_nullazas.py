@@ -149,6 +149,7 @@ def mentes(db: Session, c: Celpontok | None = None) -> dict:
             _sor(a)
             for a in _csatolmanyok(db, "kpForgalom", kp_idk)
             + _csatolmanyok(db, "expense", kiadas_idk)
+            + _csatolmanyok(db, "autoKiadas", kiadas_idk)
             + _csatolmanyok(db, "revenue", bevetel_idk)
         ],
         "visszaallitott_kifizetesek": [_sor(a) for a in _kifizetesi_csatolmanyok(db, bevetel_idk)],
@@ -178,6 +179,7 @@ def vegrehajt(db: Session) -> dict:
     for a in (
         _csatolmanyok(db, "kpForgalom", kp_idk)
         + _csatolmanyok(db, "expense", kiadas_idk)
+        + _csatolmanyok(db, "autoKiadas", kiadas_idk)
         + _csatolmanyok(db, "revenue", bevetel_idk)
     ):
         db.delete(a)

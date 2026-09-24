@@ -63,6 +63,9 @@ export function RecordDetailModal({ href, onClose }: { href: string | null; onCl
           <div className="flex items-center gap-2">
             <a
               href={href}
+              // A felugró-ablak link-elfogója (FelugroAblak) ezt NE nyissa
+              // újra ablakban - ez épp a teljes oldalra visz.
+              data-felugro-kihagy=""
               className="btn btn-ghost !text-[12px]"
             >
               Megnyitás új oldalon →

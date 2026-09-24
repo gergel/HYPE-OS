@@ -1,4 +1,5 @@
 import { ConfirmProvider } from "@/components/ConfirmProvider";
+import { FelugroAblak } from "@/components/FelugroAblak";
 import { NavigationTracker } from "@/components/NavigationTracker";
 import { Sidebar } from "@/components/Sidebar";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -19,11 +20,15 @@ export default async function AppLayout({
     <ToastProvider>
       <ConfirmProvider>
         <LiveProvider>
-          <div className="flex min-h-screen">
-            <NavigationTracker />
-            <Sidebar allowedPages={allowedPages} pagePermissions={pagePermissions} anyagKorlat={anyagKorlat} />
-            <main className="flex min-w-0 flex-1 flex-col">{children}</main>
-          </div>
+          {/* A Pénzügyek csoportban és a projektkódoknál minden megnyitás
+              felugró ablakban (lásd components/FelugroAblak.tsx). */}
+          <FelugroAblak>
+            <div className="flex min-h-screen">
+              <NavigationTracker />
+              <Sidebar allowedPages={allowedPages} pagePermissions={pagePermissions} anyagKorlat={anyagKorlat} />
+              <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+            </div>
+          </FelugroAblak>
         </LiveProvider>
       </ConfirmProvider>
     </ToastProvider>
