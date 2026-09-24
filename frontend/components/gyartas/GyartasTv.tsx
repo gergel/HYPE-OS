@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
 import type { GyartasTv as Adat, TvEmber, TvForgatas, TvVagas } from "@/lib/api";
@@ -10,7 +10,8 @@ import type { GyartasTv as Adat, TvEmber, TvForgatas, TvVagas } from "@/lib/api"
  * ÉLŐ: 10 másodpercenként a háttérben újra lekéri az adatot (a képernyő nem
  * villan, csak a változás látszik), óránként pedig az egész oldalt újratölti,
  * hogy a munkamenet megújuljon és az új verzió is felkerüljön. A képernyőt
- * ébren tartja (Wake Lock), a túl hosszú oszlopok lassan maguktól görögnek.
+ * ébren tartja (Wake Lock). Semmi nem görög: minden oszlop annyit mutat, amennyi
+ * kifér (tömörebben, ha kell), a többit „+N további" jelzi.
  * Hálózati hibánál a legutóbbi adat marad kint, és jelzi, hogy újrapróbálja. */
 
 const FRISSITES_MS = 10_000;
@@ -189,81 +190,89 @@ export function GyartasTv({ kezdo }: { kezdo: Adat | null }) {
       {!adat ? (
         <p className="text-[1.3em] text-text-secondary">Az adatok most nem érhetők el — újrapróbálom…</p>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-[46%_1fr] gap-[1.2vw]">
-          {/* A HÉT FORGATÁSAI */}
-          <section className="flex min-h-0 flex-col rounded-[1.2vh] border border-border bg-surface-2 p-[1.4vh_1vw]">
-            <div className="mb-[1vh] flex items-baseline justify-between">
-              <h2 className="text-[1.6em] font-semibold">A héten forgatunk</h2>
-              <span className="text-[0.85em] text-text-muted">
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,58fr)_minmax(0,42fr)] gap-[1.4vh]">
+          {/* A HÉT FORGATÁSAI — heti tábla, napokra bontva (nem görög: ami nem fér ki, tömörebb lesz) */}
+          <section className="flex min-h-0 flex-col rounded-[1.2vh] border border-border bg-surface-2 p-[1.2vh_0.9vw]">
+            <div className="mb-[1vh] flex items-center gap-[1.2vw]">
+              <h2 className="shrink-0 text-[1.6em] font-semibold">A héten forgatunk</h2>
+              <span className="shrink-0 text-[0.95em] text-text-muted">
                 {datumRovid(adat.het.tol)} – {datumRovid(adat.het.ig)}
               </span>
-            </div>
-            {adat.ma_forgat.length > 0 && (
-              <div className="mb-[1vh] rounded-[0.8vh] bg-surface-3 px-[0.8vw] py-[0.8vh]">
-                <p className="mb-[0.4vh] text-[0.8em] uppercase tracking-[0.14em] text-text-muted">Ma forgat</p>
-                <div className="text-[1.15em]">
-                  <Emberek emberek={adat.ma_forgat} />
+              {adat.ma_forgat.length > 0 && (
+                <div className="flex min-w-0 items-center gap-[0.7em] overflow-hidden rounded-full bg-surface-3 px-[1em] py-[0.35em]">
+                  <span className="shrink-0 text-[0.8em] uppercase tracking-[0.14em] text-text-muted">Ma forgat</span>
+                  <span className="min-w-0 text-[1.05em]">
+                    <Emberek emberek={adat.ma_forgat} egysor />
+                  </span>
                 </div>
-              </div>
-            )}
-            <AutoGorgeto>
-              <ul className="flex flex-col gap-[1vh]">
-                {adat.napok.map((n) => (
-                  <li
-                    key={n.datum}
-                    className={`rounded-[0.8vh] border px-[0.8vw] py-[0.9vh] ${
-                      n.ma ? "border-[#4f8cff] bg-[#4f8cff]/10" : "border-border"
-                    } ${n.multbeli ? "opacity-45" : ""}`}
-                  >
-                    <p className="flex items-baseline justify-between">
-                      <span className={`text-[1.3em] font-semibold ${n.ma ? "text-[#8fb5ff]" : ""}`}>
-                        {n.nev}
-                        {n.ma ? " · ma" : ""}
-                      </span>
-                      <span className="text-[1em] text-text-muted">{datumRovid(n.datum)}</span>
-                    </p>
-                    {n.forgatasok.length === 0 ? (
-                      <p className="mt-[0.3vh] text-[0.9em] text-text-muted">nincs forgatás</p>
-                    ) : (
-                      <ul className="mt-[0.8vh] flex flex-col gap-[1.1vh]">
-                        {n.forgatasok.map((f) => (
-                          <Forgatas key={`${n.datum}-${f.id}`} f={f} tomor={n.multbeli} />
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </AutoGorgeto>
-          </section>
-
-          {/* VÁGÁSOK */}
-          <section className="flex min-h-0 flex-col gap-[1.2vh]">
-            <div className="grid min-h-0 flex-1 grid-cols-4 gap-[0.9vw]">
-              {OSZLOPOK.map((o) => (
-                <div key={o.kulcs} className="flex min-h-0 flex-col rounded-[1.2vh] border border-border bg-surface-2">
-                  <div className="border-b border-border px-[0.8vw] py-[1vh]" style={{ boxShadow: `inset 0 3px 0 ${o.szin}` }}>
-                    <p className="flex items-baseline justify-between">
-                      <span className="text-[1.2em] font-semibold">{o.cim}</span>
-                      <span className="font-mono text-[1.4em] tabular-nums" style={{ color: o.szin }}>
-                        {adat.vagasok[o.kulcs].length}
-                      </span>
-                    </p>
-                    <p className="text-[0.8em] text-text-muted">{o.al}</p>
+              )}
+            </div>
+            <div
+              className="grid min-h-0 flex-1 gap-[0.6vw]"
+              style={{
+                gridTemplateColumns: adat.napok
+                  .map((n) => (n.ma ? "minmax(0,1.3fr)" : n.forgatasok.length ? "minmax(0,1fr)" : "minmax(0,0.5fr)"))
+                  .join(" "),
+              }}
+            >
+              {adat.napok.map((n) => (
+                <div
+                  key={n.datum}
+                  className={`flex min-h-0 flex-col rounded-[0.9vh] border ${
+                    n.ma ? "border-[#4f8cff] bg-[#4f8cff]/10" : "border-border bg-surface-1/40"
+                  } ${n.multbeli ? "opacity-50" : ""}`}
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-[0.4em] px-[0.6vw] pt-[0.8vh] pb-[0.6vh]">
+                    <span className={`whitespace-nowrap text-[1.25em] font-semibold ${n.ma ? "text-[#8fb5ff]" : ""}`}>
+                      {n.forgatasok.length || n.ma ? n.nev : `${n.nev.slice(0, 3)}.`}
+                      {n.ma ? " · ma" : ""}
+                    </span>
+                    <span className="whitespace-nowrap text-[0.9em] text-text-muted">{datumRovid(n.datum)}</span>
                   </div>
-                  <AutoGorgeto>
-                    <ul className="flex flex-col gap-[0.8vh] p-[0.8vh_0.6vw]">
-                      {adat.vagasok[o.kulcs].length === 0 && (
-                        <li className="px-[0.3vw] py-[1vh] text-[0.95em] text-text-muted">nincs ilyen anyag</li>
-                      )}
-                      {adat.vagasok[o.kulcs].map((v) => (
-                        <Vagas key={v.id} v={v} oszlop={o.kulcs} most={most} />
-                      ))}
-                    </ul>
-                  </AutoGorgeto>
+                  <div className="min-h-0 flex-1 px-[0.4vw] pb-[0.6vh]">
+                    {n.forgatasok.length === 0 ? (
+                      <p className="px-[0.2vw] text-[0.9em] text-text-muted">nincs forgatás</p>
+                    ) : (
+                      <Kifer
+                        elemek={n.forgatasok}
+                        kulcs={(f) => `${n.datum}-${f.id}`}
+                        tomorAlap={n.multbeli}
+                        render={(f, szint) => <Forgatas f={f} szint={szint} ma={n.ma} />}
+                      />
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
+          </section>
+
+          {/* VÁGÁSOK */}
+          <section className="grid min-h-0 grid-cols-4 gap-[0.9vw]">
+            {OSZLOPOK.map((o) => (
+              <div key={o.kulcs} className="flex min-h-0 flex-col rounded-[1.2vh] border border-border bg-surface-2">
+                <div className="border-b border-border px-[0.8vw] py-[0.8vh]" style={{ boxShadow: `inset 0 3px 0 ${o.szin}` }}>
+                  <p className="flex items-baseline justify-between gap-[0.5em]">
+                    <span className="text-[1.2em] font-semibold">
+                      {o.cim} <span className="text-[0.7em] font-normal text-text-muted">{o.al}</span>
+                    </span>
+                    <span className="font-mono text-[1.4em] tabular-nums" style={{ color: o.szin }}>
+                      {adat.vagasok[o.kulcs].length}
+                    </span>
+                  </p>
+                </div>
+                <div className="min-h-0 flex-1 p-[0.7vh_0.5vw]">
+                  {adat.vagasok[o.kulcs].length === 0 ? (
+                    <p className="px-[0.3vw] py-[1vh] text-[0.95em] text-text-muted">nincs ilyen anyag</p>
+                  ) : (
+                    <Kifer
+                      elemek={adat.vagasok[o.kulcs]}
+                      kulcs={(v) => v.id}
+                      render={(v, szint) => <Vagas v={v} oszlop={o.kulcs} most={most} szint={szint} />}
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
           </section>
         </div>
       )}
@@ -308,11 +317,15 @@ function Pont({ szin, el }: { szin: string | null; el?: boolean }) {
   );
 }
 
-function Emberek({ emberek, kicsi }: { emberek: TvEmber[]; kicsi?: boolean }) {
+function Emberek({ emberek, kicsi, egysor }: { emberek: TvEmber[]; kicsi?: boolean; egysor?: boolean }) {
   return (
-    <span className={`flex flex-wrap gap-x-[0.8em] gap-y-[0.2em] ${kicsi ? "text-[0.88em]" : "text-[1em]"}`}>
+    <span
+      className={`flex gap-x-[0.8em] gap-y-[0.2em] ${egysor ? "flex-nowrap overflow-hidden" : "flex-wrap"} ${
+        kicsi ? "text-[0.88em]" : "text-[1em]"
+      }`}
+    >
       {emberek.map((e) => (
-        <span key={e.id} className="inline-flex items-center gap-[0.35em] text-text-primary">
+        <span key={e.id} className="inline-flex shrink-0 items-center gap-[0.35em] text-text-primary">
           <Pont szin={e.szin} />
           {e.nev}
         </span>
@@ -321,43 +334,63 @@ function Emberek({ emberek, kicsi }: { emberek: TvEmber[]; kicsi?: boolean }) {
   );
 }
 
-function Forgatas({ f, tomor }: { f: TvForgatas; tomor?: boolean }) {
+function Forgatas({ f, szint, ma }: { f: TvForgatas; szint: Szint; ma?: boolean }) {
+  const tomor = szint === 2;
   const ido = f.kezdes ? `${f.kezdes}${f.veg ? `–${f.veg}` : ""}` : null;
+  const meta = [f.projektkod, f.megrendelo].filter(Boolean).join(" · ");
   return (
-    <li className={`border-l-[3px] pl-[0.7vw] ${f.meeting ? "border-[#b07cff]" : "border-[#4f8cff]"}`}>
-      <p className={`${tomor ? "text-[1.05em]" : "text-[1.35em]"} font-semibold leading-snug`}>
-        {ido && <span className="mr-[0.45em] font-mono text-[0.85em] font-medium text-[#8fb5ff]">{ido}</span>}
+    <li
+      className={`rounded-[0.7vh] border-l-[4px] bg-surface-3 px-[0.55vw] py-[0.7vh] ${
+        f.meeting ? "border-[#b07cff]" : "border-[#4f8cff]"
+      }`}
+    >
+      {(ido || f.meeting) && (
+        <p className={`font-mono font-medium text-[#8fb5ff] ${tomor ? "text-[0.95em]" : "text-[1.1em]"}`}>
+          {ido}
+          {f.meeting && <span className="ml-[0.4em] font-sans text-[0.85em] text-[#c4a3ff]">meeting</span>}
+        </p>
+      )}
+      <p
+        className={`font-semibold leading-tight ${tomor ? "line-clamp-2 text-[1.05em]" : ma ? "line-clamp-3 text-[1.4em]" : "line-clamp-3 text-[1.25em]"}`}
+      >
         {f.nev}
-        {f.meeting && <span className="ml-[0.4em] text-[0.8em] text-[#c4a3ff]">meeting</span>}
       </p>
-      {!tomor && (
-      <p className="text-[1em] text-text-secondary">
-        {[f.projektkod, f.megrendelo, f.helyszin].filter(Boolean).join(" · ")}
-        {f.datum_vege && f.datum_vege !== f.datum ? ` · ${datumRovid(f.datum)}–${datumRovid(f.datum_vege)}` : ""}
-      </p>
+      {szint === 0 && (meta || f.helyszin) && (
+        <p className="mt-[0.2vh] line-clamp-2 text-[0.92em] text-text-secondary">
+          {[meta, f.helyszin].filter(Boolean).join(" · ")}
+        </p>
       )}
-      {!tomor && f.stab.length > 0 && (
-        <div className="mt-[0.4vh] text-[1.08em]">
-          <Emberek emberek={f.stab} />
-        </div>
+      {f.datum_vege && f.datum_vege !== f.datum && szint === 0 && (
+        <p className="text-[0.85em] text-text-muted">
+          {datumRovid(f.datum)}–{datumRovid(f.datum_vege)}
+        </p>
       )}
+      {f.stab.length > 0 &&
+        (tomor ? (
+          <p className="mt-[0.2vh] truncate text-[0.88em] text-text-secondary">{f.stab.map((e) => e.nev).join(", ")}</p>
+        ) : (
+          <div className="mt-[0.5vh] text-[1em]">
+            <Emberek emberek={f.stab} />
+          </div>
+        ))}
     </li>
   );
 }
 
-function Vagas({ v, oszlop, most }: { v: TvVagas; oszlop: string; most: number }) {
+function Vagas({ v, oszlop, most, szint }: { v: TvVagas; oszlop: string; most: number; szint: Szint }) {
+  const tomor = szint === 2;
   const var_ = oszlop === "gyartasra_var" ? mennyiIdeje(v.ota, most) : null;
   return (
     <li
-      className={`rounded-[0.8vh] border bg-surface-3 px-[0.7vw] py-[0.9vh] ${
+      className={`rounded-[0.8vh] border bg-surface-3 px-[0.7vw] ${tomor ? "py-[0.5vh]" : "py-[0.9vh]"} ${
         v.fut.length ? "border-[#4f8cff]" : v.kesik ? "border-[#e5484d]/70" : "border-border"
       }`}
     >
-      <p className="text-[1.02em] font-semibold leading-snug">
+      <p className={`font-semibold leading-snug ${tomor ? "truncate text-[0.98em]" : "text-[1.02em]"}`}>
         {v.prioritas && <span className="mr-[0.3em] text-[#f0a53a]">★</span>}
         {v.projekt}
       </p>
-      <p className="mt-[0.2vh] flex flex-wrap items-center gap-x-[0.5em] text-[0.82em] text-text-muted">
+      <p className={`mt-[0.2vh] flex-wrap items-center gap-x-[0.5em] text-[0.82em] text-text-muted ${tomor ? "hidden" : "flex"}`}>
         {v.projektkod && <span>{v.projektkod}</span>}
         {v.allapot && (
           <span
@@ -368,7 +401,7 @@ function Vagas({ v, oszlop, most }: { v: TvVagas; oszlop: string; most: number }
           </span>
         )}
       </p>
-      {v.emberek.some((e) => !v.fut.some((f) => f.id === e.id)) && (
+      {szint === 0 && v.emberek.some((e) => !v.fut.some((f) => f.id === e.id)) && (
         <div className="mt-[0.4vh]">
           <Emberek emberek={v.emberek} kicsi />
         </div>
@@ -390,44 +423,76 @@ function Vagas({ v, oszlop, most }: { v: TvVagas; oszlop: string; most: number }
   );
 }
 
-/** Ha a tartalom nem fér ki, lassan legörget az aljára, ott megáll, majd
- * visszaugrik a tetejére — a TV-t senki nem görgeti kézzel. */
-function AutoGorgeto({ children }: { children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
+type Szint = 0 | 1 | 2;
+
+/** A TV-t senki nem görgeti, ezért SEMMI nem görög: a lista annyi elemet mutat,
+ * amennyi kifér. Ha nem fér ki minden, előbb közepes, aztán tömör nézetre vált; ha úgy sem,
+ * az alján „+N további" jelzi a többit. Adatváltozáskor és átméretezéskor
+ * újramér (a mérés festés előtt történik, nem villan). */
+function Kifer<T>({
+  elemek,
+  kulcs,
+  render,
+  tomorAlap = false,
+}: {
+  elemek: T[];
+  kulcs: (x: T) => string | number;
+  /** 0 = teljes, 1 = közepes, 2 = tömör nézet. */
+  render: (x: T, szint: Szint) => React.ReactNode;
+  tomorAlap?: boolean;
+}) {
+  const ref = useRef<HTMLUListElement>(null);
+  const [meretJel, setMeretJel] = useState(0);
+  const alap = `${meretJel}|${JSON.stringify(elemek)}`;
+  const kezdoSzint: Szint = tomorAlap ? 2 : 0;
+  const [a, setA] = useState<{ alap: string; szint: Szint; n: number }>({ alap, szint: kezdoSzint, n: elemek.length });
+  let aktualis = a;
+  if (a.alap !== alap) {
+    aktualis = { alap, szint: kezdoSzint, n: elemek.length };
+    setA(aktualis);
+  }
+
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let raf = 0;
-    let utolso = performance.now();
-    let varakozas = 4000;
-    let irany: "le" | "fel" = "le";
-    const lep = (t: number) => {
-      const dt = t - utolso;
-      utolso = t;
-      const tulfolyik = el.scrollHeight - el.clientHeight > 4;
-      if (!tulfolyik) {
-        el.scrollTop = 0;
-      } else if (varakozas > 0) {
-        varakozas -= dt;
-      } else if (irany === "le") {
-        el.scrollTop += (dt / 1000) * 28;
-        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 1) {
-          irany = "fel";
-          varakozas = 5000;
-        }
-      } else {
-        el.scrollTo({ top: 0, behavior: "smooth" });
-        irany = "le";
-        varakozas = 6000;
+    const el = ref.current?.parentElement;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let elozo = el.clientHeight;
+    const ro = new ResizeObserver(() => {
+      if (Math.abs(el.clientHeight - elozo) > 1) {
+        elozo = el.clientHeight;
+        setMeretJel((x) => x + 1);
       }
-      raf = requestAnimationFrame(lep);
-    };
-    raf = requestAnimationFrame(lep);
-    return () => cancelAnimationFrame(raf);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
+
+  useLayoutEffect(() => {
+    const ul = ref.current;
+    if (!ul || aktualis.n < elemek.length) return;
+    const hatar = ul.clientHeight;
+    const li = Array.from(ul.children) as HTMLElement[];
+    const fer = (limit: number) => li.filter((x) => x.offsetTop + x.offsetHeight <= limit + 1).length;
+    if (fer(hatar) >= elemek.length) return;
+    // Mérés után kell dönteni (a DOM-ból) — előbb tömörít, és ha úgy sem fér ki, levág.
+    const jel = parseFloat(getComputedStyle(ul).fontSize) * 2.2;
+    const kovetkezo =
+      aktualis.szint < 2
+        ? { ...aktualis, szint: (aktualis.szint + 1) as Szint }
+        : { ...aktualis, n: Math.max(0, fer(hatar - jel)) };
+    setA(kovetkezo);
+  }, [aktualis, elemek.length]);
+
+  const tobb = elemek.length - aktualis.n;
   return (
-    <div ref={ref} className="min-h-0 flex-1 overflow-hidden">
-      {children}
-    </div>
+    <ul ref={ref} className="relative flex h-full flex-col gap-[0.8vh] overflow-hidden">
+      {elemek.slice(0, aktualis.n).map((x) => (
+        <Fragment key={kulcs(x)}>{render(x, aktualis.szint)}</Fragment>
+      ))}
+      {tobb > 0 && (
+        <li className="mt-auto rounded-full bg-surface-3 px-[0.8em] py-[0.25em] text-center text-[0.9em] text-text-secondary">
+          +{tobb} további
+        </li>
+      )}
+    </ul>
   );
 }
