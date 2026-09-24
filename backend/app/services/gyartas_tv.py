@@ -28,6 +28,8 @@ from app.models.project import Project
 from app.models.timesheet import Timesheet
 
 IDOZONA = ZoneInfo("Europe/Budapest")
+#: Az admin állapotonkénti felülírásának értékei (a „vagas" csak a régi
+#: beállításokért maradt: az „Épp vágják" oszlopot a futó mérő adja).
 TV_CSOPORTOK = ("vagas", "ellenorzes", "kikuldheto", "gyartasra_var", "rejtett")
 LATHATO_CSOPORTOK = ("vagas", "ellenorzes", "kikuldheto", "gyartasra_var")
 #: Az ennél régebben nem mozdult, határidő nélküli / régi határidejű anyag
@@ -40,20 +42,27 @@ def _egyszeru(s: str | None) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", (s or "").lower()) if unicodedata.category(c) != "Mn")
 
 
+#: A „Gyártásra vár" oszlop állapota (a felhasználó meghatározása).
+GYARTASTOL_KERDES = "gyartastol kerdes"
+
+
 def auto_csoport(allapot: str | None) -> str | None:
-    """Az állapot NEVE alapján: melyik TV-oszlop (None = nincs állapot)."""
-    e = _egyszeru(allapot)
+    """Az állapot NEVE alapján: melyik TV-oszlop (None = nem jelenik meg).
+
+    Az „Épp vágják" oszlopot NEM az állapot adja: oda az kerül, amin épp fut
+    valakinek az időmérője (lásd aktiv_vagasok)."""
+    e = " ".join(_egyszeru(allapot).split())
     if not e:
         return None
     if ("kesz" in e and "kikuld" in e) or "archiv" in e or "torol" in e or "lezar" in e:
         return "rejtett"
-    if any(k in e for k in ("gyartas", "kerdes", "valasz", "egyeztet", "info")):
+    if e == GYARTASTOL_KERDES:
         return "gyartasra_var"
     if "kikuld" in e:
         return "kikuldheto"
     if "ellenorz" in e or "beerkez" in e:
         return "ellenorzes"
-    return "vagas"
+    return None
 
 
 def _ember(e: Employee | None) -> dict | None:
@@ -117,12 +126,15 @@ def heti_forgatasok(db: Session, ma: date) -> tuple[date, date, list[dict]]:
 def aktiv_vagasok(db: Session, ma: date) -> dict[str, list[dict]]:
     konfig = {c.allapot: c for c in db.scalars(select(DeliverableStatusConfig)).all()}
     futok: dict[int, list[dict]] = {}
-    for did, emp in db.execute(
-        select(Timesheet.deliverable_id, Employee)
+    fut_ota: dict[int, datetime] = {}
+    for did, emp, kezdet in db.execute(
+        select(Timesheet.deliverable_id, Employee, Timesheet.start_date)
         .join(Employee, Employee.id == Timesheet.employee_id)
         .where(Timesheet.deliverable_id.is_not(None), Timesheet.end_date.is_(None), Timesheet.start_date.is_not(None))
     ).all():
         futok.setdefault(did, []).append(_ember(emp))
+        if did not in fut_ota or kezdet < fut_ota[did]:
+            fut_ota[did] = kezdet
 
     hatar = datetime.now(timezone.utc) - timedelta(days=ELAVULT_NAP)
     sorok = db.scalars(
@@ -134,7 +146,13 @@ def aktiv_vagasok(db: Session, ma: date) -> dict[str, list[dict]]:
     csoportok: dict[str, list[dict]] = {c: [] for c in LATHATO_CSOPORTOK}
     for d in sorok:
         k = konfig.get(d.allapot or "")
-        cs = (k.tv_csoport if k is not None and k.tv_csoport in TV_CSOPORTOK else None) or auto_csoport(d.allapot)
+        if d.id in futok:
+            # ÉPP VÁGJÁK = amin most fut valakinek az időmérője (bármi az állapota).
+            cs = "vagas"
+        else:
+            cs = (k.tv_csoport if k is not None and k.tv_csoport in TV_CSOPORTOK else None) or auto_csoport(d.allapot)
+            if cs == "vagas":
+                cs = None  # a régi „Épp vágják" beállítás: mérő nélkül nem vágják épp
         if cs not in csoportok:
             continue
         if "archivalva" in _egyszeru(d.archivalas):
@@ -154,6 +172,7 @@ def aktiv_vagasok(db: Session, ma: date) -> dict[str, list[dict]]:
             "szin": k.szin if k is not None else None,
             "emberek": emberek,
             "fut": futok.get(d.id, []),
+            "fut_ota": fut_ota[d.id].isoformat() if d.id in fut_ota else None,
             "hatarido": d.hatarido.isoformat() if d.hatarido else None,
             "kesik": bool(d.hatarido and d.hatarido < ma),
             "prioritas": bool(d.prioritas),
@@ -164,7 +183,8 @@ def aktiv_vagasok(db: Session, ma: date) -> dict[str, list[dict]]:
     def _hatarido(x: dict) -> str:
         return x["hatarido"] or "9999-12-31"
 
-    csoportok["vagas"].sort(key=lambda x: (not x["fut"], not x["prioritas"], _hatarido(x)))
+    # Aki a legrégebben vágja (legkorábban indított mérő), az elöl.
+    csoportok["vagas"].sort(key=lambda x: x["fut_ota"] or "")
     csoportok["ellenorzes"].sort(key=lambda x: (not x["prioritas"], _hatarido(x)))
     csoportok["kikuldheto"].sort(key=lambda x: (not x["prioritas"], _hatarido(x)))
     # Aki a legrégebben vár a gyártásra, az elöl.
@@ -184,7 +204,7 @@ def tv_adatok(db: Session, ma: date | None = None) -> dict:
         for e in f["stab"]:
             ma_dolgozik.setdefault(e["id"], e)
     most_vag: dict[int, dict] = {}
-    for v in vagasok["vagas"] + vagasok["ellenorzes"]:
+    for v in vagasok["vagas"]:
         for e in v["fut"]:
             most_vag.setdefault(e["id"], {**e, "projekt": v["projekt"]})
     return {

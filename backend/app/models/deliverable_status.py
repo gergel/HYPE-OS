@@ -40,8 +40,9 @@ class DeliverableStatusConfig(TimestampMixin, Base):
     #: a váltást a _after_deliverable_update hajtja végre).
     auto_kiosztott_employee_ids: Mapped[list | None] = mapped_column(JSON)
     #: GYÁRTÁS-TV: melyik oszlopban jelenjen meg az ilyen állapotú anyag
-    #: (vagas / ellenorzes / kikuldheto / gyartasra_var / rejtett). Üres =
-    #: automatikus, az állapot neve alapján (lásd services/gyartas_tv.py).
+    #: (ellenorzes / kikuldheto / gyartasra_var / rejtett). Üres = automatikus,
+    #: az állapot neve alapján. Az „Épp vágják" oszlopot a futó időmérő adja,
+    #: nem az állapot (lásd services/gyartas_tv.py).
     tv_csoport: Mapped[str | None] = mapped_column(String(20))
 
 

@@ -45,15 +45,18 @@ def _ember(db, nev: str) -> Employee:
 
 
 def test_allapot_nev_szerinti_oszlop():
-    assert auto_csoport("Aktuális") == "vagas"
-    assert auto_csoport("Javítás") == "vagas"
+    """Az „Épp vágják" oszlopot a futó mérő adja, nem az állapot; a „Gyártásra
+    vár" pontosan a „Gyártástól kérdés" állapot."""
+    assert auto_csoport("Aktuális") is None
+    assert auto_csoport("Javítás") is None
     assert auto_csoport("Beérkező") == "ellenorzes"
     assert auto_csoport("Ellenőrzésre vár") == "ellenorzes"
     assert auto_csoport("Kiküldhető") == "kikuldheto"
     assert auto_csoport("Kiküldésre vár") == "kikuldheto"
     assert auto_csoport("Kész kiküldve") == "rejtett"
-    assert auto_csoport("Gyártásra vár") == "gyartasra_var"
-    assert auto_csoport("Kérdés a gyártásnak") == "gyartasra_var"
+    assert auto_csoport("Gyártástól kérdés") == "gyartasra_var"
+    assert auto_csoport("gyártástól  Kérdés ") == "gyartasra_var"
+    assert auto_csoport("Gyártásra vár") is None
     assert auto_csoport(None) is None
 
 
@@ -77,31 +80,35 @@ def test_heti_forgatasok_stabbal_es_ma(db):
     assert napok["Szerda"]["forgatasok"][0]["stab"][0]["szin"] == "#3366ff"
 
 
-def test_vagasok_oszlopai_felulirassal_es_futo_merovel(db):
+def test_vagasok_oszlopai_futo_merovel_es_felulirassal(db):
     vago = _ember(db, "TV Teszt Vágó")
     db.add(DeliverableStatusConfig(allapot="TV-teszt Megrendelőnél", tv_csoport="gyartasra_var", sorrend=99))
     anyagok = {
         a: Deliverable(projekt_neve=f"TV-teszt {a}", allapot=a, vago_employee_id=vago.id, hatarido=SZERDA + timedelta(days=2))
-        for a in ("Aktuális", "Beérkező", "Kiküldhető", "Gyártásra vár", "TV-teszt Megrendelőnél", "Kész kiküldve")
+        for a in ("Aktuális", "Javítás", "Beérkező", "Kiküldhető", "Gyártástól kérdés", "TV-teszt Megrendelőnél",
+                  "Kész kiküldve")
     }
     db.add_all(anyagok.values())
     db.flush()
-    db.add(Timesheet(employee_id=vago.id, deliverable_id=anyagok["Aktuális"].id,
-                     start_date=datetime.now(timezone.utc) - timedelta(minutes=20)))
+    # Mérő fut az „Aktuális"-on ÉS egy „Kiküldhető"-n: mindkettő az Épp vágják oszlopba kerül.
+    for a, perc in (("Aktuális", 20), ("Kiküldhető", 50)):
+        db.add(Timesheet(employee_id=vago.id, deliverable_id=anyagok[a].id,
+                         start_date=datetime.now(timezone.utc) - timedelta(minutes=perc)))
     db.flush()
     d = tv_adatok(db, ma=SZERDA)
     v = d["vagasok"]
 
     def nevek(cs):
-        return {x["projekt"] for x in v[cs] if x["projekt"].startswith("TV-teszt")}
+        return [x["projekt"] for x in v[cs] if x["projekt"].startswith("TV-teszt")]
 
-    assert nevek("vagas") == {"TV-teszt Aktuális"}
-    assert nevek("ellenorzes") == {"TV-teszt Beérkező"}
-    assert nevek("kikuldheto") == {"TV-teszt Kiküldhető"}
-    assert nevek("gyartasra_var") == {"TV-teszt Gyártásra vár", "TV-teszt TV-teszt Megrendelőnél"}
-    assert all(not x["projekt"].endswith("Kész kiküldve") for cs in v.values() for x in cs)
+    assert nevek("vagas") == ["TV-teszt Kiküldhető", "TV-teszt Aktuális"]  # a legrégebben futó elöl
+    assert nevek("ellenorzes") == ["TV-teszt Beérkező"]
+    assert nevek("kikuldheto") == []
+    assert set(nevek("gyartasra_var")) == {"TV-teszt Gyártástól kérdés", "TV-teszt TV-teszt Megrendelőnél"}
+    minden = [x["projekt"] for cs in v.values() for x in cs]
+    assert "TV-teszt Javítás" not in minden and "TV-teszt Kész kiküldve" not in minden
     akt = next(x for x in v["vagas"] if x["projekt"] == "TV-teszt Aktuális")
-    assert akt["fut"][0]["nev"] == "TV Teszt Vágó" and akt["emberek"][0]["nev"] == "TV Teszt Vágó"
+    assert akt["fut"][0]["nev"] == "TV Teszt Vágó" and akt["fut_ota"]
     assert any(e["nev"] == "TV Teszt Vágó" for e in d["most_vag"])
 
 

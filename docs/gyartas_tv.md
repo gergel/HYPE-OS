@@ -7,32 +7,40 @@ külön állítható a Beállításokban (*Gyártás (TV)* oldal, megtekintés).
 
 ## Mit mutat
 
-- **A héten** (hétfőtől vasárnapig): a forgatások naponta: idő, név, projektkód,
-  megrendelő, helyszín és a stáb (a munkatársak saját színével). A mai nap
-  kiemelve, az elmúlt napok tömörítve. Felül: *Ma forgat*: aki ma forgatáson van.
-- **Most vág**: aki épp futó időmérővel dolgozik valamin, és min.
+- **A héten forgatunk** (hétfőtől vasárnapig; a képernyő bal fele, nagy
+  betűkkel): a forgatások naponta: idő, név, projektkód, megrendelő, helyszín és
+  a stáb (a munkatársak saját színével). A mai nap kiemelve, az elmúlt napok
+  tömörítve. Felül: *Ma forgat*: aki ma forgatáson van.
 - **Négy oszlop a vágásokról**:
-  - *Épp vágják*: ki mit vág, a futó mérővel dolgozók elöl.
+  - *Épp vágják*: amin **most fut valakinek az időmérője**, az állapotától
+    függetlenül. A kártya azt is mutatja, ki vágja és mióta; a legrégebben
+    futó mérő van elöl.
   - *Ellenőrzésen*: beérkező, ellenőrzés.
   - *Kiküldhető*: mehet a megrendelőnek.
-  - *Gyártásra vár*: válasz kell tőlünk; aki a legrégebben vár, az elöl.
+  - *Gyártástól kérdés*: azok az utómunkák, amelyeknek az állapota
+    „Gyártástól kérdés”. Aki a legrégebben vár, az elöl.
 
   A kártyán szerepel a lejárt határidő (piros), a prioritás (★) és az is, ki
   dolgozik rajta.
 
 ## Melyik állapot melyik oszlop
 
-Az utómunka-állapotok szabad szövegek, ezért alapból a **nevük** dönt:
+Ha egy anyagon fut valakinek az időmérője, akkor az *Épp vágják* oszlopba
+kerül, bármi is az állapota. Ha nem fut rajta mérő, az állapot **neve** dönt
+(kis- és nagybetű, ékezet és dupla szóköz nem számít):
 
-| Az állapot nevében | Oszlop |
+| Állapot | Oszlop |
 | --- | --- |
 | „kész … kiküld”, „archiv”, „töröl”, „lezár” | nem jelenik meg |
-| „gyártás”, „kérdés”, „válasz”, „egyeztet”, „info” | Gyártásra vár |
-| „kiküld” | Kiküldhető |
-| „ellenőrz”, „beérkez” | Ellenőrzésen |
-| minden más | Épp vágják |
+| pontosan „Gyártástól kérdés” | Gyártástól kérdés |
+| „kiküld” a nevében | Kiküldhető |
+| „ellenőrz”, „beérkez” a nevében | Ellenőrzésen |
+| minden más (pl. Aktuális, Javítás) mérő nélkül | nem jelenik meg |
 
-Állapotonként felülírható: *Utómunka → Nézet beállítása → Gyártás-TV*.
+Állapotonként felülírható: *Utómunka → Nézet beállítása → Gyártás-TV*
+(Ellenőrzésen / Kiküldhető / Gyártástól kérdés / Ne jelenjen meg). Az
+*Épp vágják* oszlopot nem lehet állapothoz rendelni, azt mindig a futó mérő
+adja.
 Ha 120 napja nem mozdult egy anyag, nincs futó mérője, és nincs jövőbeli
 határideje, akkor nem kerül ki.
 

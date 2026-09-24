@@ -17,10 +17,10 @@ const FRISSITES_MS = 10_000;
 const OLDAL_UJRATOLTES_MS = 60 * 60 * 1000;
 
 const OSZLOPOK: { kulcs: keyof Adat["vagasok"]; cim: string; al: string; szin: string }[] = [
-  { kulcs: "vagas", cim: "Épp vágják", al: "ki mit vág", szin: "#4f8cff" },
+  { kulcs: "vagas", cim: "Épp vágják", al: "most fut a mérő", szin: "#4f8cff" },
   { kulcs: "ellenorzes", cim: "Ellenőrzésen", al: "beérkező, ellenőrzés", szin: "#b07cff" },
   { kulcs: "kikuldheto", cim: "Kiküldhető", al: "mehet a megrendelőnek", szin: "#3fbf7f" },
-  { kulcs: "gyartasra_var", cim: "Gyártásra vár", al: "válasz kell tőlünk", szin: "#f0a53a" },
+  { kulcs: "gyartasra_var", cim: "Gyártástól kérdés", al: "válasz kell tőlünk", szin: "#f0a53a" },
 ];
 
 const HONAP = ["jan.", "febr.", "márc.", "ápr.", "máj.", "jún.", "júl.", "aug.", "szept.", "okt.", "nov.", "dec."];
@@ -189,11 +189,11 @@ export function GyartasTv({ kezdo }: { kezdo: Adat | null }) {
       {!adat ? (
         <p className="text-[1.3em] text-text-secondary">Az adatok most nem érhetők el — újrapróbálom…</p>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-[32%_1fr] gap-[1.2vw]">
+        <div className="grid min-h-0 flex-1 grid-cols-[46%_1fr] gap-[1.2vw]">
           {/* A HÉT FORGATÁSAI */}
           <section className="flex min-h-0 flex-col rounded-[1.2vh] border border-border bg-surface-2 p-[1.4vh_1vw]">
             <div className="mb-[1vh] flex items-baseline justify-between">
-              <h2 className="text-[1.35em] font-semibold">A héten</h2>
+              <h2 className="text-[1.6em] font-semibold">A héten forgatunk</h2>
               <span className="text-[0.85em] text-text-muted">
                 {datumRovid(adat.het.tol)} – {datumRovid(adat.het.ig)}
               </span>
@@ -201,7 +201,9 @@ export function GyartasTv({ kezdo }: { kezdo: Adat | null }) {
             {adat.ma_forgat.length > 0 && (
               <div className="mb-[1vh] rounded-[0.8vh] bg-surface-3 px-[0.8vw] py-[0.8vh]">
                 <p className="mb-[0.4vh] text-[0.8em] uppercase tracking-[0.14em] text-text-muted">Ma forgat</p>
-                <Emberek emberek={adat.ma_forgat} />
+                <div className="text-[1.15em]">
+                  <Emberek emberek={adat.ma_forgat} />
+                </div>
               </div>
             )}
             <AutoGorgeto>
@@ -214,16 +216,16 @@ export function GyartasTv({ kezdo }: { kezdo: Adat | null }) {
                     } ${n.multbeli ? "opacity-45" : ""}`}
                   >
                     <p className="flex items-baseline justify-between">
-                      <span className={`text-[1.1em] font-semibold ${n.ma ? "text-[#8fb5ff]" : ""}`}>
+                      <span className={`text-[1.3em] font-semibold ${n.ma ? "text-[#8fb5ff]" : ""}`}>
                         {n.nev}
                         {n.ma ? " · ma" : ""}
                       </span>
-                      <span className="text-[0.85em] text-text-muted">{datumRovid(n.datum)}</span>
+                      <span className="text-[1em] text-text-muted">{datumRovid(n.datum)}</span>
                     </p>
                     {n.forgatasok.length === 0 ? (
                       <p className="mt-[0.3vh] text-[0.9em] text-text-muted">nincs forgatás</p>
                     ) : (
-                      <ul className="mt-[0.6vh] flex flex-col gap-[0.8vh]">
+                      <ul className="mt-[0.8vh] flex flex-col gap-[1.1vh]">
                         {n.forgatasok.map((f) => (
                           <Forgatas key={`${n.datum}-${f.id}`} f={f} tomor={n.multbeli} />
                         ))}
@@ -237,18 +239,6 @@ export function GyartasTv({ kezdo }: { kezdo: Adat | null }) {
 
           {/* VÁGÁSOK */}
           <section className="flex min-h-0 flex-col gap-[1.2vh]">
-            {adat.most_vag.length > 0 && (
-              <div className="flex flex-wrap items-center gap-[0.6vw] rounded-[1.2vh] border border-border bg-surface-2 px-[1vw] py-[1vh]">
-                <span className="text-[0.8em] uppercase tracking-[0.14em] text-text-muted">Most vág</span>
-                {adat.most_vag.map((e) => (
-                  <span key={e.id} className="flex items-center gap-[0.4em] text-[1em]">
-                    <Pont szin={e.szin} el />
-                    <b className="font-semibold">{e.nev}</b>
-                    <span className="text-text-secondary">— {e.projekt}</span>
-                  </span>
-                ))}
-              </div>
-            )}
             <div className="grid min-h-0 flex-1 grid-cols-4 gap-[0.9vw]">
               {OSZLOPOK.map((o) => (
                 <div key={o.kulcs} className="flex min-h-0 flex-col rounded-[1.2vh] border border-border bg-surface-2">
@@ -334,21 +324,21 @@ function Emberek({ emberek, kicsi }: { emberek: TvEmber[]; kicsi?: boolean }) {
 function Forgatas({ f, tomor }: { f: TvForgatas; tomor?: boolean }) {
   const ido = f.kezdes ? `${f.kezdes}${f.veg ? `–${f.veg}` : ""}` : null;
   return (
-    <li className={`border-l-2 pl-[0.6vw] ${f.meeting ? "border-[#b07cff]" : "border-[#4f8cff]"}`}>
-      <p className="text-[1.02em] font-medium leading-snug">
-        {ido && <span className="mr-[0.4em] font-mono text-[0.9em] text-text-secondary">{ido}</span>}
+    <li className={`border-l-[3px] pl-[0.7vw] ${f.meeting ? "border-[#b07cff]" : "border-[#4f8cff]"}`}>
+      <p className={`${tomor ? "text-[1.05em]" : "text-[1.35em]"} font-semibold leading-snug`}>
+        {ido && <span className="mr-[0.45em] font-mono text-[0.85em] font-medium text-[#8fb5ff]">{ido}</span>}
         {f.nev}
         {f.meeting && <span className="ml-[0.4em] text-[0.8em] text-[#c4a3ff]">meeting</span>}
       </p>
       {!tomor && (
-      <p className="text-[0.85em] text-text-muted">
+      <p className="text-[1em] text-text-secondary">
         {[f.projektkod, f.megrendelo, f.helyszin].filter(Boolean).join(" · ")}
         {f.datum_vege && f.datum_vege !== f.datum ? ` · ${datumRovid(f.datum)}–${datumRovid(f.datum_vege)}` : ""}
       </p>
       )}
       {!tomor && f.stab.length > 0 && (
-        <div className="mt-[0.3vh]">
-          <Emberek emberek={f.stab} kicsi />
+        <div className="mt-[0.4vh] text-[1.08em]">
+          <Emberek emberek={f.stab} />
         </div>
       )}
     </li>
@@ -378,14 +368,15 @@ function Vagas({ v, oszlop, most }: { v: TvVagas; oszlop: string; most: number }
           </span>
         )}
       </p>
-      {v.emberek.length > 0 && (
+      {v.emberek.some((e) => !v.fut.some((f) => f.id === e.id)) && (
         <div className="mt-[0.4vh]">
           <Emberek emberek={v.emberek} kicsi />
         </div>
       )}
       {v.fut.length > 0 && (
-        <p className="mt-[0.3vh] text-[0.85em] font-medium text-[#8fb5ff]">
-          ● most dolgozik rajta: {v.fut.map((e) => e.nev).join(", ")}
+        <p className="mt-[0.3vh] text-[0.88em] font-medium text-[#8fb5ff]">
+          ● {v.fut.map((e) => e.nev).join(", ")} vágja
+          {v.fut_ota ? ` — ${mennyiIdeje(v.fut_ota, most) ?? ""}` : ""}
         </p>
       )}
       {(v.hatarido || var_) && (

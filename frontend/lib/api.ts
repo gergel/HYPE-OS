@@ -4539,6 +4539,8 @@ export type TvVagas = {
   szin: string | null;
   emberek: TvEmber[];
   fut: TvEmber[];
+  /** Mióta fut rajta a (legkorábban indított) mérő. */
+  fut_ota: string | null;
   hatarido: string | null;
   kesik: boolean;
   prioritas: boolean;
