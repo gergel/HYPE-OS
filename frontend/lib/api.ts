@@ -562,6 +562,21 @@ export type LaraMegoldas = {
 };
 
 /** Lara Gemini-kapcsolata (ugyanaz, mint az AI asszisztensé) és a Gemini-tanulás. */
+/** Lara tapasztalása: tények a teljes adattörténetből + a Gemini állításai,
+ * amelyeket Lara a teljes adaton ellenőrzött (lásd admin_agent/tapasztalas.py). */
+export type LaraTapasztalas = {
+  bekapcsolva: boolean;
+  partnerek: number;
+  tenyek: number;
+  igazolt_allitasok: number;
+  gemini_vizsgalt_partner: number;
+  gemini_varakozo_partner: number;
+  gemini_talalati_arany: number | null;
+  gemini_javasolt: number;
+  legjobb_allitasok: { nev: string | null; szoveg: string | null; n: number | null; ossz: number | null }[];
+  utolso_futas: { ido: string | null; osszefoglalo: Record<string, unknown> | null };
+};
+
 export type LaraGeminiAllapot = {
   kulcs_beallitva: boolean;
   kozos_az_asszisztenssel: boolean;
@@ -572,6 +587,7 @@ export type LaraGeminiAllapot = {
   tanulsagok: { osszes: number; jovahagyott: number };
   utolso_futas: { ido: string | null; osszefoglalo: Record<string, unknown> | null };
   utolso_reflexio: { ido: string | null; osszefoglalo: string | null; gyenge_pontok: string[] | null };
+  tapasztalas?: LaraTapasztalas;
 };
 
 export async function getLaraGemini(): Promise<LaraGeminiAllapot | null> {
@@ -1087,6 +1103,8 @@ export type TudashaloEl = {
   jovahagyott: number;
   jelolt: number;
   egyeb: number;
+  /** Tapasztalat: a teljes adattörténet ismétlődő tényei / az adaton igazolt állítások. */
+  tapasztalat?: number;
   t: string | null;
   /** Szerkezeti vázkapcsolat (mag ↔ témakör). */
   vaz?: boolean;
@@ -1103,7 +1121,10 @@ export type Tudashalo = {
     kapcsolatok: number;
     eros_kapcsolatok: number;
     jovahagyott_kapcsolatok: number;
+    tapasztalt_kapcsolatok?: number;
     csak_jelolt_kapcsolatok: number;
+    teljes_pontszam?: number;
+    teljes_kapcsolatszam?: number;
     aktiv_szabalyok: number;
     atlag_bizonyossag: number | null;
   };

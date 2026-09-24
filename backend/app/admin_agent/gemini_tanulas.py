@@ -325,6 +325,7 @@ FUNKCIOK = (
     ("nyomozas", "Utánanézés kérdés előtt (az AI asszisztens eszközeivel)", "nyomozas"),
     ("megoldas", "Megoldási javaslat a feladatokhoz", "megoldas"),
     ("gemini_tanulas", "Gyorsított tanulás: partner-profilok és önreflexió", "gemini_tanulas"),
+    ("tapasztalas", "Tapasztalás: állítások a teljes adatból, adaton ellenőrizve", "tapasztalas"),
 )
 
 
@@ -337,6 +338,8 @@ def allapot(db: Session) -> dict:
                        .order_by(LearningRun.id.desc()))
     reflexio = db.scalar(select(LearningRun).where(LearningRun.trigger == f"{TRIGGER}:reflexio")
                          .order_by(LearningRun.id.desc()))
+    from app.admin_agent import tapasztalas
+
     profilok = db.scalars(select(MemoryChunk).where(MemoryChunk.forras.like("gemini:profil:%"))).all()
     tanulsagok = db.scalars(select(MemoryChunk).where(MemoryChunk.forras.like("gemini:tanulsag:%"))).all()
     return {
@@ -349,6 +352,7 @@ def allapot(db: Session) -> dict:
         "tanulsagok": {"osszes": len(tanulsagok), "jovahagyott": sum(m.ervenyes for m in tanulsagok)},
         "utolso_futas": {"ido": utolso.veg_at.isoformat() if utolso and utolso.veg_at else None,
                          "osszefoglalo": utolso.osszefoglalo if utolso else None},
+        "tapasztalas": tapasztalas.allapot(db),
         "utolso_reflexio": {
             "ido": reflexio.veg_at.isoformat() if reflexio and reflexio.veg_at else None,
             "osszefoglalo": (reflexio.osszefoglalo or {}).get("osszefoglalo") if reflexio else None,

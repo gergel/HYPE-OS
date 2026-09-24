@@ -741,10 +741,11 @@ Magyarul, tömören és konkrétan válaszolj. A folyamat közben ne írj hossz�
 
 
 def _muveleti_rendszeruzenet(db: Session, employee: Employee, kontextus: dict | None, fajlok: list) -> str:
-    ma = date.today().isoformat()
+    from app.admin_agent.llm import mai_datum
+
     reszek = [
         _MUVELETI_PROMPT,
-        f"\nMai dátum: {ma} (Europe/Budapest). A bejelentkezett felhasználó: {employee.full_name} (#{employee.id}, szerepkör: {employee.role.value}).",
+        f"\n{mai_datum()} A bejelentkezett felhasználó: {employee.full_name} (#{employee.id}, szerepkör: {employee.role.value}).",
     ]
     if kontextus:
         reszek.append(

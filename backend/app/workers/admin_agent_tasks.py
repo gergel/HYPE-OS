@@ -7,6 +7,8 @@
   (lásd admin_agent/levelezes.py).
 * Félóránkénti AI-asszisztens-figyelés — a lezárt kérés-körökből tudás-jelölt
   (lásd admin_agent/asszisztens.py).
+* Óránkénti tapasztalás — a teljes adattörténet ismétlődő tényei, és a Gemini
+  állításai, amelyeket Lara az adaton ellenőriz (lásd admin_agent/tapasztalas.py).
 * Kétóránkénti önellenőrzés — Lara a rögzített munkán ellenőrzi a tudását, és
   kérdez, ahol nem érti az eltérést (lásd admin_agent/onellenorzes.py).
 
@@ -84,6 +86,12 @@ celery_app.conf.beat_schedule = {
         "task": "admin_agent.rendszer",
         # Óránként (:40) — a teljes rendszer figyelése (csak olvas, csak tanul).
         "schedule": crontab(minute=40),
+    },
+    "admin-agent-tapasztalas": {
+        "task": "admin_agent.tapasztalas",
+        # Óránként (:10) — a teljes adattörténet tényei + Gemini-hipotézisek
+        # adat-ellenőrzéssel (lásd admin_agent/tapasztalas.py). Csak olvas, csak tanul.
+        "schedule": crontab(minute=10),
     },
     "admin-agent-napi-osszesito": {
         "task": "admin_agent.napi_osszesito",
@@ -347,6 +355,29 @@ def rendszer_task() -> dict | None:
     except Exception:
         db.rollback()
         logger.exception("Lara rendszer-figyelése sikertelen.")
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="admin_agent.tapasztalas")
+def tapasztalas_task() -> dict | None:
+    """Lara önálló tapasztalás-köre: tények a teljes történetből, majd a Gemini
+    ellenőrizhető állításai, amelyeket Lara a teljes adaton igazol vagy elvet.
+    Csak bekapcsolt „Tanulás és megfigyelés" forrással fut (a modul maga
+    ellenőrzi); üzleti rekordot nem módosít."""
+    if _leallitva("tapasztalas"):
+        return {"leallitva": True}
+    from app.admin_agent.tapasztalas import futtat
+
+    db = SessionLocal()
+    try:
+        eredmeny = futtat(db, trigger="utemezett")
+        db.commit()
+        return eredmeny
+    except Exception:
+        db.rollback()
+        logger.exception("Lara tapasztalás-köre sikertelen.")
         raise
     finally:
         db.close()

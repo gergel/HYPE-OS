@@ -262,10 +262,14 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
     return Math.min(kezdet, ...(idok.length ? idok : [kezdet]));
   }, [valodiElek, adat.tanulas_kezdete]);
   // Az idősáv vége az adatból (determinisztikus — szerver és kliens ugyanazt rajzolja).
-  const tMax = useMemo(() => {
+  // A legutolsó tudás ideje (tVeg) a KIÍRT dátum vége; a sáv egy nappal tovább
+  // fut (tMax), hogy a végén minden kapcsolat kirajzolódjon — ezt a +1 napot
+  // viszont nem írjuk ki (korábban emiatt mutatta a HUD mindig a holnapi dátumot).
+  const tVeg = useMemo(() => {
     const utolso = adat.utolso_ido ? Date.parse(adat.utolso_ido) : 0;
-    return Math.max(utolso, tMin) + NAP;
+    return Math.max(utolso, tMin);
   }, [adat.utolso_ido, tMin]);
+  const tMax = tVeg + NAP;
   const [ido, setIdo] = useState(tMax);
   // A rajzoló hurok (rAF) a refekből olvas; a render után szinkronizáljuk.
   const idoRef = useRef(ido);
@@ -328,6 +332,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
     let kapcsolat = 0;
     let eros = 0;
     let jovahagyott = 0;
+    let tapasztalt = 0;
     let bizSum = 0;
     elek.forEach((e, i) => {
       if (!elLathato[i] || e.vaz) return;
@@ -335,10 +340,11 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
       bizSum += e.bizonyossag;
       if (e.bizonyossag >= 0.6) eros++;
       if (e.jovahagyott > 0) jovahagyott++;
+      if ((e.tapasztalat ?? 0) > 0) tapasztalt++;
     });
     const pontSzam = pontok.filter((p, i) => pontLathato[i] && p.fajta !== "core" && p.fajta !== "tema").length;
     const arany = haloArany(pontSzam, kapcsolat, jovahagyott);
-    return { fok, elLathato, pontLathato, kapcsolat, eros, jovahagyott, atlag: kapcsolat ? bizSum / kapcsolat : null, pontSzam, arany };
+    return { fok, elLathato, pontLathato, kapcsolat, eros, jovahagyott, tapasztalt, atlag: kapcsolat ? bizSum / kapcsolat : null, pontSzam, arany };
   }, [pontok, elek, ido, rejtett]);
   const lathatoRef = useRef(lathato);
   useLayoutEffect(() => {
@@ -513,7 +519,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.quadraticCurveTo(qx, qy, x2, y2);
-        ctx.setLineDash(!e.vaz && e.jovahagyott === 0 ? [3, 4] : []);
+        ctx.setLineDash(!e.vaz && e.jovahagyott === 0 && !e.tapasztalat ? [3, 4] : []);
         ctx.lineWidth = (e.vaz ? 1.4 : 0.5 + 3.4 * c) * (erint ? 1.4 : 1);
         ctx.strokeStyle = rgba(e.szin.startsWith("#") ? e.szin : SEMLEGES, (0.08 + 0.55 * c) * (halvany ? 0.12 : erint ? 1.6 : 1));
         ctx.stroke();
@@ -777,7 +783,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
                   <tr className="border-b border-border text-left text-text-muted">
                     <th className="px-2 py-1.5 font-medium">Kapcsolat</th>
                     <th className="px-2 py-1.5 font-medium">Bizonyosság</th>
-                    <th className="px-2 py-1.5 font-medium">Jóváhagyott / jelölt</th>
+                    <th className="px-2 py-1.5 font-medium">Jóváhagyott / jelölt / tapasztalat</th>
                     <th className="px-2 py-1.5 font-medium">Első megjelenés</th>
                   </tr>
                 </thead>
@@ -789,7 +795,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
                       </td>
                       <td className="px-2 py-1.5 tabular-nums text-text-primary">{szazalek(e.bizonyossag)}</td>
                       <td className="px-2 py-1.5 tabular-nums text-text-secondary">
-                        {e.jovahagyott} / {e.jelolt}
+                        {e.jovahagyott} / {e.jelolt} / {e.tapasztalat ?? 0}
                       </td>
                       <td className="px-2 py-1.5 text-text-muted">{e.tMs ? datum(e.tMs) : "—"}</td>
                     </tr>
@@ -811,12 +817,13 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
               {/* HUD: a látható tudás számai (lejátszás közben nőnek). Mobilon a vászon alatt. */}
               <div className="pointer-events-none static px-3 pb-3 font-mono sm:absolute sm:left-3 sm:top-3 sm:p-0 text-[10.5px] uppercase tracking-[0.12em]" style={{ color: TINTA_2 }}>
                 <p style={{ color: "#ffd49a" }}>Tudásháló // Lara</p>
-                <p className="mt-0.5">{datum(ido)}</p>
+                <p className="mt-0.5">{datum(Math.min(ido, tVeg))}</p>
                 <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
                   <HudSzam cimke="Pont" ertek={lathato.pontSzam} />
                   <HudSzam cimke="Kapcsolat" ertek={lathato.kapcsolat} />
                   <HudSzam cimke="Erős (≥60%)" ertek={lathato.eros} />
                   <HudSzam cimke="Jóváhagyott kapcs." ertek={lathato.jovahagyott} />
+                  <HudSzam cimke="Tapasztalt kapcs." ertek={lathato.tapasztalt} />
                   <HudSzam cimke="Átl. bizonyosság" ertek={lathato.atlag === null ? "—" : szazalek(lathato.atlag)} />
                   <HudSzam cimke="Aktív szabály" ertek={adat.osszesites.aktiv_szabalyok} />
                   <HudSzam cimke="Háló átmérő" ertek={szazalek(lathato.arany)} />
@@ -843,7 +850,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
                   aria-label="Időpont: a tudás állapota eddig a napig"
                   className="flex-1 accent-[#a06604]"
                 />
-                <span>{datum(tMax)}</span>
+                <span>{datum(tVeg)}</span>
               </div>
               {hover && hoverAdat && (
                 <div
@@ -939,8 +946,9 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
 
       <p className="text-[11.5px] text-text-muted">
         Pontméret = a kapcsolatok súlya · vonalvastagság és fényerő = bizonyosság (jóváhagyott példa és élesített szabály
-        erős, jelölt gyenge, régi Notion-korszakbeli tudás kisebb súlyú) · szaggatott = még csak jelölt. A háló csak
-        rögzített, valós tudásból épül.
+        erős, jelölt gyenge, régi Notion-korszakbeli tudás kisebb súlyú; a tapasztalat — a teljes adattörténet ismétlődő
+        tényei és az adaton igazolt állítások — a mögötte álló esetek számával erősödik) · szaggatott = még csak jelölt. A
+        háló csak rögzített, valós tudásból épül.
       </p>
     </div>
   );

@@ -426,7 +426,13 @@ export function AdminTudastarKezelo({
               <Sor
                 key={`m${m.id}`}
                 cimke={`Példa · ${peldaCimke(m)}${m.regi_korszak ? " · régi (kisebb súllyal)" : ""}${
-                  m.minosites === "auto_jovahagyott" ? " · magától jóváhagyva (a valóság igazolta)" : ""
+                  m.minosites === "auto_jovahagyott"
+                    ? " · magától jóváhagyva (a valóság igazolta)"
+                    : m.minosites === "tapasztalat"
+                      ? " · tapasztalat (a teljes adattörténetből számolva)"
+                      : m.minosites === "adat_igazolta"
+                        ? " · a Gemini javasolta, az adat igazolta"
+                        : ""
                 }`}
                 szoveg={m.tartalom}
                 forras={m.forras}
@@ -505,6 +511,9 @@ function peldaCimke(m: { hatokor: string; forras?: string | null }): string {
   // Gyorsított tanulás a Geminivel (lásd backend admin_agent/gemini_tanulas.py).
   if (m.forras?.startsWith("gemini:profil:")) return "Partner-profil (Gemini)";
   if (m.forras?.startsWith("gemini:tanulsag:")) return "Tanulság (önreflexió)";
+  // Tapasztalás (lásd backend admin_agent/tapasztalas.py): tény / adaton igazolt állítás.
+  if (m.forras?.startsWith("tapasztalas:partner:")) return "Tapasztalat (tény)";
+  if (m.forras?.startsWith("tapasztalas:allitas:")) return "Tapasztalat · adat igazolta";
   if (m.forras?.startsWith("megfigyeles:")) {
     const kulcs = m.forras.split(":")[1];
     // Az alap négy forrásnál a feladattípus a beszédesebb; az újaknál a forrás.

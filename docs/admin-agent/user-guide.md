@@ -198,6 +198,18 @@ Minden lépés kattintással megy:
    adminisztrációs területen végez (számla, TIG, szerződés, adminisztrációs
    e-mail); más területhez nem nyúlhat. Állapota: Tanulás és minőség → „A
    teljes rendszer figyelése"; kikapcsolni a Beállításokban lehet.
+   **Tapasztalás (óránként, magától):** Lara végigjárja a teljes
+   adattörténetet (szerződés, TIG, kiadás, megrendelői papír, bevétel,
+   utalás), és partnerenként kigyűjti, mi ismétlődik. Ebből a Gemini
+   ellenőrizhető állításokat javasol (pl. „a számláit a HYP-2641 kódra
+   rögzítjük”). Lara mindet a teljes adaton ellenőrzi, és csak azt tartja meg,
+   amit legalább 3 eset és 80% igazol. Új adatnál újraellenőriz, és
+   visszavonja, ami már nem áll. A Tudásháló bizonyossága ebből, valódi
+   bizonyítékból nő, nem becslésből.
+   - Hol látod: Tanulás és minőség → Gemini kártya → „Tapasztalás”. Ott van a
+     „Tapasztalás most” gomb is.
+   - A Tudástárban „Tapasztalat (tény)” és „Tapasztalat · adat igazolta”
+     címkével jelennek meg, és egy kattintással visszavonhatók.
 10. **Javítsd, ha téved:** a feladat oldalán **„Javítás / magyarázat Larának"**
    → elég röviden leírni, **mit hova kellett volna tennie és miért** — mezőket
    nem kell kitölteni. A magyarázat azonnal Lara tudásába kerül, és a hasonló

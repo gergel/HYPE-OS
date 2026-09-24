@@ -21,9 +21,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from app.core.config import settings
+
+BUDAPEST = ZoneInfo("Europe/Budapest")
 
 RENDSZER_ALAP = (
     "Lara vagy: egy magyar videógyártó cég (HYPE Productions) adminisztrációs munkatársa. "
@@ -39,6 +43,23 @@ RENDSZER_ALAP = (
     "adminisztrációs e-mail, papírmunka). Más terület (pl. diszpó, utómunka, portál, beosztás) módosítását "
     "soha ne javasold — ha a feladat ilyet kívánna, jelezd a 'figyelmeztetesek' listában."
 )
+
+
+_NAPNEVEK = ("hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat", "vasárnap")
+
+
+def mai_datum(most: datetime | None = None) -> str:
+    """A MAI NAP budapesti idő szerint, a modellnek szóló mondatként.
+
+    Minden Lara-modellhívás megkapja: e nélkül a modell maga „tippelte" a mai
+    napot (és rendre mellélőtt), az utánanézés pedig UTC-dátumot kapott. A
+    dátumot a SZERVER mondja meg, a modell nem számolja."""
+    t = (most or datetime.now(timezone.utc)).astimezone(BUDAPEST)
+    return (
+        f"MAI DÁTUM: {t.date().isoformat()} ({_NAPNEVEK[t.weekday()]}), most {t.strftime('%H:%M')} budapesti idő "
+        "szerint. Ez a mai nap — ne számold át, ne told el. A „ma / tegnap / holnap” ehhez képest értendő. "
+        "Az adatokban szereplő, „+00:00”-ra végződő időbélyegek UTC-ben vannak (Budapest ehhez képest +1/+2 óra)."
+    )
 
 
 class ModellNincsBeallitva(Exception):
@@ -121,6 +142,8 @@ def strukturalt_hivas(felhasznalo: str, schema: dict, *, rendszer: str = RENDSZE
     if _TESZT_ADAPTER is None and not getattr(settings, "gemini_api_key", None):
         raise ModellNincsBeallitva("Nincs modell-kulcs (GEMINI_API_KEY) — beállítás szükséges.")
 
+    if "MAI DÁTUM:" not in rendszer:
+        rendszer = f"{rendszer}\n\n{mai_datum()}"
     kiegeszites = ""
     utolso_hiba = "ismeretlen"
     for proba in range(1, max_proba + 1):

@@ -697,6 +697,58 @@ is meg tudja adni a választ.
   Kapcsoló: `limitek.onallo_valasz`.
 - Tesztek: `test_admin_agent_nyomozas.py` +2.
 
+### AB. Tapasztalás: önálló tanulás a teljes adattörténetből, a Geminivel, adaton ellenőrizve ✅ (éles adaton és valós Gemini-hívással: ⚠️ nem ellenőrzött)
+- Kérés: Lara a Gemini segítségével a háttérben önállóan tanuljon, hogy az
+  adat és a kapcsolatok száma drasztikusan nőjön, és vele a bizonyosság is
+  (a Tudásháló átlagos bizonyossága 21% volt).
+- A bizonyosságot nem hangoltuk fel, és a modell sem mondhatja meg, mennyire
+  biztos valami: csak valódi, ellenőrzött bizonyíték növeli.
+- `app/admin_agent/tapasztalas.py`:
+  1. **Tények a teljes történetből**, modell nélkül. Minden lezárt emberi munka
+     (szerződés, TIG, belsős TIG, kiadás, megrendelői papír, bevétel,
+     utalás-felvezetés), a megfigyelő kinyerőivel. Partnerenként: milyen
+     formában, melyik projektkódon, melyik megrendelőnek, milyen típussal
+     dolgozunk vele. Tapasztalat az, ami legalább kétszer megtörtént. A régi
+     korszak ×0,4 súllyal számít.
+     - Tárolás: `aa_source_events` (`forras=tapasztalas`, partnerenként egy
+       sor, lenyomattal) és egy tudás-darab `minosites=tapasztalat`
+       címkével.
+  2. **Hipotézis → ellenőrzés.** A Gemini zárt típusú, ellenőrizhető
+     állításokat javasol: forrás, projektkód, megrendelő, típus, összegsáv,
+     „papír a kiadás mellett”, fizetési késés.
+     - Lara mindet a partner összes rekordján ellenőrzi. Megmarad, ha legalább
+       3 eset és 80% igazolja (`minosites=adat_igazolta`); egyébként cáfolt,
+       és a Gemini találati arányába számít.
+     - Új adatnál újraellenőriz, és visszavonja, ami már nem áll
+       (`adat_cafolta`).
+     - Szabályt nem javasol és nem élesít. Az ember által elvetett állítást
+       nem hozza vissza.
+- **Tudásháló:** új „tapasztalat” kapcsolatfajta.
+  - Súly: rekordonként 0,35, igazolt állítás esetén igazoló esetenként 0,5.
+  - A tapasztalt kapcsolat folytonos vonal; a HUD mutatja a számukat.
+  - `MAX_PARTNER` 320-ra, `MAX_KOD` 220-ra nőtt.
+- **Dátum:**
+  - Valódi hiba: a Tudásháló HUD a hálót egy nappal a legutolsó tudás után
+    mutatta, ezért mindig a holnapi dátumot írta ki. A kiírt dátum mostantól
+    legfeljebb a legutolsó tudás ideje.
+  - Minden Lara-modellhívás megkapja a budapesti mai dátumot
+    (`llm.mai_datum()`). Eddig a `strukturalt_hivas` promptjaiban nem volt
+    benne, az utánanézés pedig UTC-dátumot kapott. Az AI asszisztens is ezt
+    használja.
+- **Ütemezés és vezérlés:**
+  - Celery `admin_agent.tapasztalas` óránként (:10). Csak bekapcsolt
+    „Tanulás és megfigyelés” forrással fut, vészleállításnál nem.
+  - Kapcsolók: `limitek.tapasztalas` és `limitek.tapasztalas_gemini_max`
+    (alap: 6 partner/kör).
+  - Kézi indítás: `POST /api/v1/admin-agent/experience` (felelős-őr).
+  - Állapot: a `GET /gemini` válaszában (`tapasztalas`), a felületen a
+    Tanulás és minőség → Gemini kártyán.
+- **Tesztek:** `test_admin_agent_tapasztalas.py` (5).
+- **Nem ellenőrzött:** a dev adatbázisban szinte nincs adat (3 partner,
+  partnerenként 1 rekord), ezért a bizonyosság tényleges emelkedése csak éles
+  adaton mérhető. Valós Gemini-kulcs nélkül a hipotézis-kör kimarad, a
+  tény-gyűjtés akkor is fut.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

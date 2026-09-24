@@ -1750,6 +1750,31 @@ def gemini_tanulas_most(
     return eredmeny
 
 
+@router.post("/experience")
+def tapasztalas_most(
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Tapasztalás most: tények a teljes adattörténetből + a Gemini állításai,
+    amelyeket Lara a teljes adaton ellenőriz. Csak Lara saját tábláiba ír."""
+    from app.admin_agent.settings_service import leallitva
+    from app.admin_agent.tapasztalas import futtat
+
+    _csak_a_felelos_donthet(db, user)
+    if leallitva(db):
+        raise HTTPException(status_code=409, detail="Lara le van állítva (vészleállítás).")
+    try:
+        eredmeny = futtat(db, trigger="kezi", kenyszeritett=True)
+    except Exception as exc:  # noqa: BLE001 — érthető hibaüzenet a felületnek
+        import logging
+
+        db.rollback()
+        logging.getLogger(__name__).exception("Lara tapasztalás-köre sikertelen.")
+        raise HTTPException(status_code=500, detail=f"A tapasztalás nem sikerült: {type(exc).__name__}") from exc
+    db.commit()
+    return eredmeny
+
+
 @router.get("/knowledge-graph")
 def tudashalo_lekeres(
     db: Session = Depends(get_db),

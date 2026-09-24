@@ -7,7 +7,9 @@ kapcsolat közöttük. A gráf KIZÁRÓLAG valós, rögzített tudásból épül
 * megfigyelt emberi munka (szerződés, TIG, kiadás — a megfigyelő forrásai),
 * a visszajátszott számlák végső emberi döntései,
 * a szabályok (partner / cél / projektkód feltételekkel),
-* az emberi javítások.
+* az emberi javítások,
+* a TAPASZTALAT: a teljes adattörténet ismétlődő tényei és a Geminivel
+  javasolt, de az adaton ellenőrzött állítások (lásd admin_agent/tapasztalas.py).
 
 Egy kapcsolat BIZONYOSSÁGA a mögötte álló bizonyítékok súlyából jön: a
 jóváhagyott példa és az élesített szabály erős, a még jóvá nem hagyott jelölt
@@ -70,9 +72,13 @@ S_SZABALY_JELOLT = 0.5
 #: A rendszer-figyelés ténye (projektkód-életút): valós, de nem döntés.
 S_RENDSZER = 0.5
 REGI_SZORZO = 0.4
+#: Tapasztalat: rekordonként ennyi (egy ismétlődő, lezárt, rögzített eset).
+S_TAPASZTALAT = 0.35
+#: Az adaton ellenőrzött állítás igazoló esetenként (erősebb: próbára tett tudás).
+S_IGAZOLT_ESET = 0.5
 
-MAX_PARTNER = 220
-MAX_KOD = 140
+MAX_PARTNER = 320
+MAX_KOD = 220
 MAX_PELDA = 3
 
 
@@ -96,6 +102,7 @@ class _El:
     jovahagyott: int = 0
     jelolt: int = 0
     egyeb: int = 0
+    tapasztalat: int = 0
 
     def hozzaad(self, suly: float, t: datetime | None, fajta: str) -> None:
         self.suly += suly
@@ -105,6 +112,8 @@ class _El:
             self.jovahagyott += 1
         elif fajta == "jelolt":
             self.jelolt += 1
+        elif fajta == "tapasztalat":
+            self.tapasztalat += 1
         else:
             self.egyeb += 1
 
@@ -391,7 +400,59 @@ def tudashalo(db: Session) -> dict:
             e.pont(f"kod:{kod_id}", "kod", kodok.get(kod_id) or f"#{kod_id}")
             e.el(sid, f"kod:{kod_id}", suly, r.created_at, fajta)
 
+    _tapasztalat(db, e, kodok)
     return _kimenet(db, e)
+
+
+def _tapasztalat(db: Session, e: _Epito, kodok: dict[int, str]) -> None:
+    """5) Tapasztalat: a teljes adattörténet ismétlődő tényei (partner ↔ téma,
+    partner ↔ projektkód) és az adaton igazolt állítások. A súly a mögöttük álló
+    rögzített esetek száma (a régi korszak kisebb súllyal)."""
+    from app.admin_agent.tapasztalas import FORRAS, FORRAS_TEMA, IGAZOLT, TENY
+
+    visszavont = {
+        m.forras for m in db.scalars(
+            select(MemoryChunk).where(MemoryChunk.forras.like(f"{FORRAS}:%"),
+                                      MemoryChunk.visszavont.is_(True) | MemoryChunk.minosites.not_in((TENY, IGAZOLT)))
+        ).all()
+    }
+    for se in db.scalars(select(SourceEvent).where(SourceEvent.forras == FORRAS)).all():
+        m = se.metaadat or {}
+        pk = m.get("partner")
+        if not pk or len(pk) < 3 or f"{FORRAS}:partner:{pk}"[:120] in visszavont:
+            continue
+        pid = f"partner:{pk}"
+        t = se.created_at
+        for teny in m.get("tenyek") or []:
+            n_eff = (teny.get("n_uj") or 0) + REGI_SZORZO * (teny.get("n_regi") or 0)
+            suly = S_TAPASZTALAT * n_eff
+            if teny.get("fajta") == "forras":
+                tema = FORRAS_TEMA.get(teny.get("ertek"))
+                if tema:
+                    p = e.pont(pid, "partner", m.get("nev") or pk)
+                    p.tema_suly[tema] += suly
+                    e.el(f"tema:{tema}", pid, suly, t, "tapasztalat")
+            elif teny.get("fajta") == "projektkod" and str(teny.get("ertek")).isdigit():
+                kod_id = int(teny["ertek"])
+                e.pont(pid, "partner", m.get("nev") or pk)
+                e.pont(f"kod:{kod_id}", "kod", kodok.get(kod_id) or teny.get("cimke") or f"#{kod_id}")
+                e.el(pid, f"kod:{kod_id}", suly, t, "tapasztalat")
+        for a in m.get("igazolt") or []:
+            if a.get("forras") in visszavont:
+                continue
+            regi_arany = 1.0 if a.get("n_uj") else REGI_SZORZO
+            suly = S_IGAZOLT_ESET * (a.get("n") or 0) * regi_arany
+            p = e.pont(pid, "partner", m.get("nev") or pk)
+            if len(p.peldak) < MAX_PELDA and a.get("szoveg"):
+                p.peldak.append(f"Adat igazolta ({a.get('n')}/{a.get('ossz')}): {a['szoveg']}"[:240])
+            tema = max(p.tema_suly.items(), key=lambda kv: kv[1])[0] if p.tema_suly else (m.get("hatokor") or "szamla")
+            tema = tema if tema in TEMAK else "szamla"
+            e.el(f"tema:{tema}", pid, suly, t, "tapasztalat")
+            if a.get("tipus") == "projektkod":
+                kod_id = next((k for k, v in kodok.items() if v and v.strip().lower() == str(a.get("ertek")).strip().lower()), None)
+                if kod_id:
+                    e.pont(f"kod:{kod_id}", "kod", kodok[kod_id])
+                    e.el(pid, f"kod:{kod_id}", suly, t, "tapasztalat")
 
 
 def _kimenet(db: Session, e: _Epito) -> dict:
@@ -421,6 +482,7 @@ def _kimenet(db: Session, e: _Epito) -> dict:
                     "jovahagyott": el.jovahagyott,
                     "jelolt": el.jelolt,
                     "egyeb": el.egyeb,
+                    "tapasztalat": el.tapasztalat,
                     "t": _iso(el.t),
                 }
             )
@@ -475,7 +537,10 @@ def _kimenet(db: Session, e: _Epito) -> dict:
             "kapcsolatok": len(valodi),
             "eros_kapcsolatok": len([el for el in valodi if el["bizonyossag"] >= 0.6]),
             "jovahagyott_kapcsolatok": len([el for el in valodi if el["jovahagyott"] > 0]),
-            "csak_jelolt_kapcsolatok": len([el for el in valodi if el["jovahagyott"] == 0]),
+            "tapasztalt_kapcsolatok": len([el for el in valodi if el["tapasztalat"] > 0]),
+            "csak_jelolt_kapcsolatok": len([el for el in valodi if el["jovahagyott"] == 0 and el["tapasztalat"] == 0]),
+            "teljes_pontszam": len([p for p in e.pontok.values() if p.fajta not in ("core", "tema")]),
+            "teljes_kapcsolatszam": len(e.elek),
             "aktiv_szabalyok": len([p for p in pontok if p["fajta"] == "szabaly" and p["allapot"] == "active"]),
             "atlag_bizonyossag": round(sum(el["bizonyossag"] for el in valodi) / len(valodi), 3) if valodi else None,
         },

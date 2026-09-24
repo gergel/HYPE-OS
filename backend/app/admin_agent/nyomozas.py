@@ -38,6 +38,7 @@ from typing import Callable, Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.admin_agent import llm
 from app.core.config import settings
 from app.models.admin_agent import LaraKerdes
 from app.models.employee import Employee
@@ -200,7 +201,7 @@ def _kerdes_leiras(db: Session, k: LaraKerdes) -> str:
 def rendszeruzenet(db: Session, futtato: Employee, alap: str = RENDSZER) -> str:
     return "\n\n".join(filter(None, [
         alap,
-        f"Mai dátum: {datetime.now(timezone.utc).date().isoformat()}. A rendszert {futtato.full_name} jogosultságával látod.",
+        f"{llm.mai_datum()} A rendszert {futtato.full_name} jogosultságával látod.",
         "AZ AI ASSZISZTENS TUDÁSA — hol mi található a rendszerben:\n" + asszisztens_receptjei(),
         "A query_entity / aggregate_entity entitástípusai és mezőik:\n" + _entitas_sema(db, futtato),
     ]))

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
-import type { LaraGeminiAllapot } from "@/lib/api";
+import type { LaraGeminiAllapot, LaraTapasztalas } from "@/lib/api";
 
 /** Lara GEMINI-KAPCSOLATA és gyorsított tanulása (kliens).
  *
@@ -16,7 +16,7 @@ export function LaraGemini({ kezdo, canRun }: { kezdo: LaraGeminiAllapot | null;
   const router = useRouter();
   const [uzenet, setUzenet] = useState<string | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
-  const [fut, setFut] = useState<"teszt" | "tanulas" | null>(null);
+  const [fut, setFut] = useState<"teszt" | "tanulas" | "tapasztalas" | null>(null);
 
   if (!kezdo) return <p className="text-[13px] text-text-secondary">Az állapot nem tölthető be.</p>;
   const a = kezdo;
@@ -60,6 +60,36 @@ export function LaraGemini({ kezdo, canRun }: { kezdo: LaraGeminiAllapot | null;
             `${d.reflexio?.uj_tanulsag ?? 0} új tanulság — jóváhagyásra várnak a Tudástárban.`,
         );
       }
+      router.refresh();
+    } finally {
+      setFut(null);
+    }
+  }
+
+  async function tapasztal() {
+    setUzenet(null);
+    setHiba(null);
+    setFut("tapasztalas");
+    try {
+      const res = await authFetch("/api/v1/admin-agent/experience", { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as {
+        allapot?: string;
+        tenyek?: Record<string, number>;
+        hipotezisek?: Record<string, number | string>;
+        detail?: unknown;
+      };
+      if (!res.ok) {
+        setHiba(typeof d.detail === "string" ? d.detail : "A tapasztalás nem sikerült.");
+        return;
+      }
+      const t = d.tenyek ?? {};
+      const h = d.hipotezisek ?? {};
+      setUzenet(
+        `Kész: ${(t.uj_partner ?? 0) + (t.frissult_partner ?? 0)} partner tényei frissültek (${t.teny ?? 0} tény). ` +
+          (h.allapot === "kesz"
+            ? `A Gemini ${h.javasolt ?? 0} állítást javasolt ${h.partner ?? 0} partnerre — ebből ${h.igazolt ?? 0}-t az adat igazolt, ${h.cafolt ?? 0}-t cáfolt.`
+            : "A Gemini-kör most kimaradt (nincs kulcs vagy ki van kapcsolva)."),
+      );
       router.refresh();
     } finally {
       setFut(null);
@@ -110,6 +140,14 @@ export function LaraGemini({ kezdo, canRun }: { kezdo: LaraGeminiAllapot | null;
           >
             {fut === "tanulas" ? "Lara tanul a Geminivel… (akár pár perc)" : "Tanulás a Geminivel most"}
           </button>
+          <button
+            type="button"
+            disabled={fut !== null}
+            onClick={tapasztal}
+            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-primary hover:bg-surface-3 disabled:opacity-50"
+          >
+            {fut === "tapasztalas" ? "Lara tapasztal… (akár pár perc)" : "Tapasztalás most"}
+          </button>
         </div>
       )}
 
@@ -127,6 +165,8 @@ export function LaraGemini({ kezdo, canRun }: { kezdo: LaraGeminiAllapot | null;
           al="bekapcsolva"
         />
       </div>
+
+      {a.tapasztalas && <Tapasztalas t={a.tapasztalas} />}
 
       {a.utolso_reflexio.osszefoglalo && (
         <div className="mb-4 rounded-[var(--radius)] border border-border bg-surface-3 px-3.5 py-3">
@@ -156,6 +196,48 @@ export function LaraGemini({ kezdo, canRun }: { kezdo: LaraGeminiAllapot | null;
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function Tapasztalas({ t }: { t: LaraTapasztalas }) {
+  const arany = t.gemini_talalati_arany;
+  return (
+    <div className="mb-4 rounded-[var(--radius)] border border-border px-3.5 py-3">
+      <p className="mb-1 text-[11.5px] uppercase tracking-[0.08em] text-text-muted">Tapasztalás — a háttérben, óránként</p>
+      <p className="mb-2.5 text-[12.5px] text-text-secondary">
+        Lara végigjárja a teljes adattörténetet (szerződés, TIG, kiadás, megrendelői papír, bevétel, utalás), és
+        partnerenként kigyűjti, mi ismétlődik. A Gemini ebből ellenőrizhető állításokat javasol; Lara mindet a teljes adaton
+        próbára teszi, és csak azt tartja meg, amit legalább 3 eset és 80% igazol. Új adatnál újraellenőriz, és visszavonja,
+        ami már nem áll. A Tudásháló bizonyossága ebből, valódi bizonyítékból nő.
+        {!t.bekapcsolva && " (Most nem fut: a „Tanulás és megfigyelés” forrás vagy a tapasztalás ki van kapcsolva.)"}
+      </p>
+      <div className="mb-2.5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Szam cimke="Partner tapasztalattal" ertek={t.partnerek} al={`${t.tenyek} ismétlődő tény`} />
+        <Szam cimke="Adat igazolta" ertek={t.igazolt_allitasok} al="ellenőrzött állítás" />
+        <Szam
+          cimke="Gemini-állítások"
+          ertek={arany === null ? "—" : `${Math.round(arany * 100)}%`}
+          al={`igazolódott ${t.gemini_javasolt} javaslatból`}
+        />
+        <Szam
+          cimke="Gemini-vizsgálat"
+          ertek={t.gemini_vizsgalt_partner}
+          al={t.gemini_varakozo_partner ? `${t.gemini_varakozo_partner} partner vár sorára` : "minden partner átnézve"}
+        />
+      </div>
+      {t.legjobb_allitasok.length > 0 && (
+        <ul className="space-y-1 text-[12.5px] text-text-primary">
+          {t.legjobb_allitasok.map((x, i) => (
+            <li key={i}>
+              <span className="font-medium">{x.nev}</span>: {x.szoveg}{" "}
+              <span className="tabular-nums text-text-muted">
+                ({x.n}/{x.ossz} eset)
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
