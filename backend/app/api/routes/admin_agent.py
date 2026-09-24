@@ -1362,18 +1362,21 @@ def _kerdes_sor(k: LaraKerdes, user: Employee | None = None) -> dict:
 def onellenorzes_inditas(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+    vizsga: str = Query(default="minta", pattern="^(minta|teljes)$"),
 ):
     """Lara önellenőrzése most: előbb a friss rögzítések visszajátszása, majd a
     jelenlegi tudással „vak" jóslat minden rögzített számlára és lezárt eseti
     szerződés/TIG döntésre (Utókövetés), összevetés a valósággal; ahol nem érti
-    az eltérést, kérdez. Üzleti rekord nem változik."""
+    az eltérést, kérdez. Mellette VIZSGA a tanulás kezdete előtti adaton: egy
+    véletlen adag (`vizsga=minta`), vagy a teljes régi adat (`vizsga=teljes`).
+    Üzleti rekord nem változik."""
     from app.admin_agent.onellenorzes import onellenorzes
     from app.admin_agent.visszajatszas import visszajatszas
 
     from app.admin_agent.megerosites import futtat
 
     vj = visszajatszas(db)
-    eredmeny = onellenorzes(db, trigger="onellenorzes:kezi")
+    eredmeny = onellenorzes(db, trigger="onellenorzes:kezi", teljes_vizsga=vizsga == "teljes")
     db.commit()
     m = futtat(db, trigger="megerosites:onellenorzes")
     db.commit()

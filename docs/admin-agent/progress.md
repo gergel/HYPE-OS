@@ -653,6 +653,34 @@ gyorsan fejlessze önmagát.
   eslint, `next build` rendben. Dev szerveren demóadattal kipróbálva, utána a
   demósorok törölve.
 
+### Z. Önellenőrzés: a válaszok beszámítanak + vizsga véletlen / teljes adaton ✅ (éles adaton: ⚠️ nem ellenőrzött)
+Visszajelzés: telik az idő, válaszolt is Lara kérdéseire, de a találati arány
+nem javult (94%, 15 eltérés — mind a 15 megválaszolva), és az önellenőrzés
+mindig ugyanazokon az adatokon fut.
+- Ok: a megválaszolt eltérés továbbra is „eltért”-ként számított, és a vak
+  jóslat (helyesen) nem használhatja az adott eset saját tanulságát — ezért a
+  válasz ugyanazt az esetet sosem javíthatta a mérőszámban.
+- Új `app/admin_agent/idoszak.py`: a válasz-kategóriák — „hibás rögzítés” →
+  Lara javára (`lara_helyes`), „mindig így” / „magyarázat” → megtanulta
+  (`tanult`), „kivétel” / „nem releváns” → kimarad. Új mérőszám: **pontosság a
+  válaszaid után**; mellette a **vak találati arány** változatlan (szigorú), és
+  a **nyitott eltérés** (amire még nincs válasz). Minden területre is.
+- Adatkör (`Idoszak`): a fő kör a tanulás kezdete óta mindent néz (mint eddig);
+  minden futásnál **vizsga** is: a tanulás kezdete ELŐTTI rekordokból egy
+  VÉLETLEN adag (alap 30%, a mag futásonként más; `limitek.onellenorzes_minta`),
+  a teljes múlt társ-adatával. Kézzel „Vizsga az összes elérhető adaton”
+  (`POST /self-check?vizsga=teljes`). A régi adatból futásonként legfeljebb 3
+  új kérdés, „Régi adatból” jelöléssel. Kapcsoló: `limitek.onellenorzes_vizsga`.
+- A bővített rekordok az adatkörnél a LÉTREHOZÁS idejét nézik (a módosítás
+  ideje friss lehet).
+- Felület: Tanulás oldal — Pontosság / Vak arány / Nyitott eltérés, vizsga-
+  sáv, két indítógomb, a futás-táblában pontosság + vizsga oszlop; Beállítások
+  kapcsoló.
+- Tesztek: `test_admin_agent_onellenorzes_adatkor.py` (4). Teljes backend:
+  203 passed, 1 skipped. tsc, eslint, `next build` rendben. Dev szerveren a
+  teljes vizsga lefutott (a dev adatban nincs régi rekord → 0), a futás sorai
+  törölve.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

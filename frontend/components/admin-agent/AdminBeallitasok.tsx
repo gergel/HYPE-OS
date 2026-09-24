@@ -281,6 +281,13 @@ export function AdminBeallitasok({
             onValt={(v) => limitMent({ megoldas: v })}
           />
           <Kapcsolo
+            cim="Önellenőrzés: vizsga a régi adaton"
+            leiras="Minden önellenőrzésnél Lara a tanulás kezdete előtti adatból is kivizsgáztat magán egy véletlen adagot (alapból 30%, futásonként más) — így nem mindig ugyanazon az adaton méri magát. A régi adatból futásonként legfeljebb 3 új kérdést tesz fel, „Régi adatból” jelöléssel. Kézzel az összes adaton is futtatható (Tanulás oldal)."
+            aktiv={limitBe("onellenorzes_vizsga")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ onellenorzes_vizsga: v })}
+          />
+          <Kapcsolo
             cim="Gyorsított tanulás a Geminivel"
             leiras="Éjszakánként partner-profilt ír (ahol legalább 3 jóváhagyott eset van), szabályt javasol, és önreflexiót végez a saját hibáiból. Ugyanazt a Gemini-kapcsolatot használja, mint az AI asszisztens. Minden eredmény jelölt — a Tudástárban hagyod jóvá."
             aktiv={limitBe("gemini_tanulas")}

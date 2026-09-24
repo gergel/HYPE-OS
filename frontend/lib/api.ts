@@ -879,6 +879,15 @@ export type OnellenorzesFutas = {
   bovitett_kerdes?: number;
   szabalyok?: number;
   tanult_partnerek?: number;
+  /** A válaszok utáni pontosság (a vak arány mellett) és bontása. */
+  pontossag?: number | null;
+  lara_helyes?: number;
+  tanult?: number;
+  kivetel?: number;
+  nyitott_elteres?: number;
+  /** Vizsga a tanulás kezdete előtti adaton (véletlen adag / teljes). */
+  vizsga?: OnellenorzesVizsga | null;
+  vizsga_kerdes?: number;
 };
 
 export type OnellenorzesTerulet = {
@@ -888,6 +897,24 @@ export type OnellenorzesTerulet = {
   nem_tudta: number;
   megmagyarazva: number;
   talalati_arany: number | null;
+  pontossag?: number | null;
+  lara_helyes?: number;
+  tanult?: number;
+  kivetel?: number;
+  nyitott_elteres?: number;
+};
+
+export type OnellenorzesVizsga = {
+  /** minta | teljes */
+  mod: string;
+  minta_arany: number;
+  ellenorzott: number;
+  egyezik: number;
+  elter: number;
+  nem_tudta: number;
+  talalati_arany: number | null;
+  pontossag: number | null;
+  teruletek?: Record<string, OnellenorzesTerulet>;
 };
 
 /** Egy levelezés-olvasó futás (lásd backend admin_agent/levelezes.py). */

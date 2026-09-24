@@ -146,6 +146,11 @@ Minden lépés kattintással megy:
    lépések linkkel, és Lara utánanéz a konkrét megoldásnak is (melyik rekord,
    melyik mező, mire). A feladat oldalán bármely feladathoz kérhetsz javaslatot
    („Javasolj megoldást"). Lara semmit nem módosít — a javítást te végzed.
+   **Hogyan olvasd az önellenőrzést:** a **pontosság** beszámítja a válaszaidat
+   (ha Larának volt igaza — hibás rögzítés —, vagy megtanulta az okot, az eset
+   nem hiba többé; a kivétel kimarad); a **vak arány** a szigorú mérce. Minden
+   körben Lara a tanulás kezdete előtti adatból is kivizsgáztat magán egy
+   véletlen adagot; a „Vizsga az összes elérhető adaton” gombbal mindet.
 8. **Gemini — gyorsított tanulás:** Lara ugyanazt a Geminit használja, mint az AI
    asszisztens. Éjszakánként partner-profilt ír (ahol legalább 3 jóváhagyott eset
    van), szabályt javasol, és önreflexiót végez a saját hibáiból. Ezek a

@@ -37,6 +37,7 @@ from typing import Any, Callable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.admin_agent.idoszak import beszamit, idoszak, terulet_osszegzes
 from app.admin_agent.memory import partner_kulcs
 from app.models.admin_agent import LaraKerdes, MemoryChunk
 
@@ -123,8 +124,8 @@ class Valaszok:
         self.elvart: dict[tuple[str, str, str], tuple[Any, datetime | None]] = {}
         #: (ellenőrzés, partner) — ennél a partnernél ez rendben van.
         self.rendben: set[tuple[str, str]] = set()
-        #: (terület/ellenőrzés/fogalom, eset-azonosító) — már megválaszolt eset.
-        self.eset: set[tuple[str, str]] = set()
+        #: (terület/ellenőrzés, eset-azonosító) → a válasz típusa (megválaszolt eset).
+        self.eset: dict[tuple[str, str], str | None] = {}
         #: már megválaszolt fogalmak kulcsai.
         self.fogalom: set[str] = set()
         for k in db.scalars(select(LaraKerdes).where(LaraKerdes.tipus.in_(BOVITETT_TIPUSOK))).all():
@@ -136,7 +137,7 @@ class Valaszok:
                 continue
             jel = c.get("terulet") if k.tipus == TIPUS_DONTES else c.get("ellenorzes")
             for e in c.get("esetek") or []:
-                self.eset.add((f"{jel}:{c.get('dimenzio', '')}", str(e.get("rekord"))))
+                self.eset[(f"{jel}:{c.get('dimenzio', '')}", str(e.get("rekord")))] = k.valasz_tipus
             if k.valasz_tipus in TANITO and c.get("partner_kulcs"):
                 if k.tipus == TIPUS_DONTES:
                     idok = [_ido(e.get("ido")) for e in c.get("esetek") or []]
@@ -151,15 +152,18 @@ class Valaszok:
 
 
 class _Rekord:
-    __slots__ = ("azon", "partner", "kulcs", "ertekek", "meta", "ido")
+    __slots__ = ("azon", "partner", "kulcs", "ertekek", "meta", "ido", "letrehozva")
 
-    def __init__(self, azon: str, partner: str | None, ertekek: dict, meta: dict, ido: datetime | None):
+    def __init__(self, azon: str, partner: str | None, ertekek: dict, meta: dict, ido: datetime | None,
+                 letrehozva: datetime | None = None):
         self.azon = azon
         self.partner = partner or ""
         self.kulcs = partner_kulcs(partner)
         self.ertekek = ertekek
         self.meta = meta
         self.ido = ido
+        #: a rekord létrejötte — az adatkör (vizsga) ez alapján dönt
+        self.letrehozva = letrehozva or ido
 
 
 def _pc_meta(pc) -> dict:
@@ -174,14 +178,14 @@ def _megrendeloi(db: Session, model, kezdet: datetime, terulet: str) -> list[_Re
 
     ki = []
     ugyfel = dict(db.execute(select(Client.id, Client.nev)).all())
-    for r in db.scalars(select(model).where(model.created_at >= kezdet)).all():
+    for r in db.scalars(select(model).where(*idoszak(kezdet).feltetelek(model.created_at))).all():
         if not papir_kesz(r):
             continue
         pc = db.get(ProjectCode, r.project_code_id)
         partner = (r.ceg_neve or "").strip() or ugyfel.get(r.client_id) or (pc.megrendelo_neve if pc else None)
         ert = {"kihagyas": r.allapot == KIHAGYVA and not r.alairt_file_url, "afa": r.plusz_afa}
         meta = {**_pc_meta(pc), "netto": _ft(r.netto_osszeg), "indok": (r.kihagyas_oka or "").strip() or None}
-        ki.append(_Rekord(f"{terulet}:{r.id}", partner, ert, meta, r.updated_at or r.created_at))
+        ki.append(_Rekord(f"{terulet}:{r.id}", partner, ert, meta, r.updated_at or r.created_at, r.created_at))
     return ki
 
 
@@ -191,14 +195,14 @@ def _projektkodok(db: Session, kezdet: datetime) -> list[_Rekord]:
 
     ugyfel = dict(db.execute(select(Client.id, Client.nev)).all())
     ki = []
-    for pc in db.scalars(select(ProjectCode).where(ProjectCode.created_at >= kezdet)).all():
+    for pc in db.scalars(select(ProjectCode).where(*idoszak(kezdet).feltetelek(ProjectCode.created_at))).all():
         partner = (pc.megrendelo_neve or "").strip() or ugyfel.get(pc.client_id)
         ert = {"papir_nelkul": bool(pc.papir_nelkul), "szamla_kihagyva": bool(pc.szamla_kihagyva),
                "bevetelbe_ne": bool(pc.bevetelbe_ne_keruljon)}
         indok = {"papir_nelkul": pc.papir_nelkul_indoka, "szamla_kihagyva": pc.szamla_kihagyas_oka,
                  "bevetelbe_ne": pc.bevetel_kihagyas_oka}
         meta = {**_pc_meta(pc), "indokok": {k: (v or "").strip() or None for k, v in indok.items()}}
-        ki.append(_Rekord(f"projektkod:{pc.id}", partner, ert, meta, pc.updated_at or pc.created_at))
+        ki.append(_Rekord(f"projektkod:{pc.id}", partner, ert, meta, pc.updated_at or pc.created_at, pc.created_at))
     return ki
 
 
@@ -210,7 +214,7 @@ def _bevetelek(db: Session, kezdet: datetime) -> list[_Rekord]:
     ugyfel = dict(db.execute(select(Client.id, Client.nev)).all())
     ki = []
     for r in db.scalars(
-        select(Revenue).where(Revenue.created_at >= kezdet, Revenue.fizetes_datuma.is_not(None),
+        select(Revenue).where(*idoszak(kezdet).feltetelek(Revenue.created_at), Revenue.fizetes_datuma.is_not(None),
                               Revenue.fizetes_hatarideje.is_not(None))
     ).all():
         pc = db.get(ProjectCode, r.project_code_id) if r.project_code_id else None
@@ -218,7 +222,7 @@ def _bevetelek(db: Session, kezdet: datetime) -> list[_Rekord]:
         keses = (r.fizetes_datuma - r.fizetes_hatarideje).days
         meta = {**_pc_meta(pc), "netto": _ft(r.netto), "hatarido": r.fizetes_hatarideje.isoformat(),
                 "fizetve": r.fizetes_datuma.isoformat()}
-        ki.append(_Rekord(f"bevetel:{r.id}", partner, {"keses": keses}, meta, r.updated_at or r.created_at))
+        ki.append(_Rekord(f"bevetel:{r.id}", partner, {"keses": keses}, meta, r.updated_at or r.created_at, r.created_at))
     return ki
 
 
@@ -229,14 +233,15 @@ def _belsos_tigek(db: Session, kezdet: datetime) -> list[_Rekord]:
 
     nevek = dict(db.execute(select(Employee.id, Employee.full_name)).all())
     ki = []
-    sorok = db.scalars(select(B).where(B.created_at >= kezdet).order_by(B.employee_id, B.ev, B.honap)).all()
+    sorok = db.scalars(select(B).where(*idoszak(kezdet).feltetelek(B.created_at)).order_by(B.employee_id, B.ev, B.honap)).all()
     for r in sorok:
         if not _allapot_lezart(r.allapot):
             continue
         ert = {"havi_osszeg": float(r.netto_osszeg) if r.netto_osszeg is not None else None, "afa": r.plusz_afa,
                "_idoszak": (r.ev, r.honap)}
         meta = {"projektkod": None, "projekt": f"Belsős TIG {r.ev}.{int(r.honap):02d}", "netto": _ft(r.netto_osszeg)}
-        ki.append(_Rekord(f"belsos_tig:{r.id}", nevek.get(r.employee_id), ert, meta, r.updated_at or r.created_at))
+        ki.append(_Rekord(f"belsos_tig:{r.id}", nevek.get(r.employee_id), ert, meta, r.updated_at or r.created_at,
+                          r.created_at))
     return ki
 
 
@@ -318,12 +323,13 @@ def _egyezik(dim: str, josolt, valos) -> bool:
     return _igen(josolt) == _igen(valos)
 
 
-def dontes_ellenorzes(db: Session, kezdet: datetime, valaszok: Valaszok) -> tuple[dict[str, Counter], dict[str, dict]]:
+def dontes_ellenorzes(db: Session, kezdet, valaszok: Valaszok) -> tuple[dict[str, Counter], dict[str, dict]]:
+    ido = idoszak(kezdet)
     stat: dict[str, Counter] = {t: Counter() for t in TERULETEK}
     csoport: dict[str, dict] = {}
     for terulet, (gyujto, dimek, alap) in TERULETEK.items():
         try:
-            rekordok = gyujto(db, kezdet)
+            rekordok = gyujto(db, ido)
         except Exception:  # noqa: BLE001 — egy terület hibája ne állítsa meg a többit
             stat[terulet]["hiba"] += 1
             continue
@@ -333,6 +339,10 @@ def dontes_ellenorzes(db: Session, kezdet: datetime, valaszok: Valaszok) -> tupl
                 partnerenkent[r.kulcs].append(r)
         for kulcs, lista in partnerenkent.items():
             for r in lista:
+                # A társak (a jóslat alapja) a teljes lekért kör; értékelni
+                # csak az adatkör értékelt részét kell (vizsgánál a véletlen adag).
+                if not ido.ertekel(r.azon, r.letrehozva):
+                    continue
                 tarsak = [t for t in lista if t.azon != r.azon]
                 for dim in dimek:
                     v = r.ertekek.get(dim)
@@ -347,7 +357,7 @@ def dontes_ellenorzes(db: Session, kezdet: datetime, valaszok: Valaszok) -> tupl
                         continue
                     stat[terulet]["elter"] += 1
                     if (f"{terulet}:{dim}", r.azon) in valaszok.eset:
-                        stat[terulet]["megmagyarazva"] += 1
+                        beszamit(stat[terulet], valaszok.eset[(f"{terulet}:{dim}", r.azon)])
                         continue
                     ck = f"dontes:{terulet}:{dim}:{kulcs}"
                     g = csoport.setdefault(ck, {
@@ -380,7 +390,7 @@ ELLENORZES_CIMKE = {
 }
 
 
-def elvaras_ellenorzes(db: Session, kezdet: datetime, valaszok: Valaszok) -> tuple[Counter, dict[str, dict]]:
+def elvaras_ellenorzes(db: Session, kezdet, valaszok: Valaszok) -> tuple[Counter, dict[str, dict]]:
     from app.models.client import Client
     from app.models.contract import Contract
     from app.models.employee import Employee
@@ -406,7 +416,7 @@ def elvaras_ellenorzes(db: Session, kezdet: datetime, valaszok: Valaszok) -> tup
             stat["rendben_valasz"] += 1
             return
         if (f"{ellenorzes}:", azon) in valaszok.eset:
-            stat["megmagyarazva"] += 1
+            beszamit(stat, valaszok.eset[(f"{ellenorzes}:", azon)])
             return
         stat["kerdeses"] += 1
         g = csoport.setdefault(f"elteres:{ellenorzes}:{kulcs}", {
@@ -422,10 +432,11 @@ def elvaras_ellenorzes(db: Session, kezdet: datetime, valaszok: Valaszok) -> tup
     bevetel_kodok = set(db.scalars(select(Revenue.project_code_id).where(Revenue.project_code_id.is_not(None))).all())
     fizetve_kodok = set(db.scalars(select(Revenue.project_code_id).where(Revenue.fizetes_datuma.is_not(None))).all())
 
-    kodok = {pc.id: pc for pc in db.scalars(select(ProjectCode).where(ProjectCode.created_at >= kezdet)).all()}
+    ido = idoszak(kezdet)
+    kodok = {pc.id: pc for pc in db.scalars(select(ProjectCode).where(*ido.feltetelek(ProjectCode.created_at))).all()}
     for pc_id, pc in kodok.items():
         # E1: a megrendelő fizetett, de nincs lezárt megrendelői papír és indoklás.
-        if pc_id in fizetve_kodok:
+        if pc_id in fizetve_kodok and ido.ertekel(f"projektkod:{pc_id}", pc.created_at):
             stat["vizsgalt"] += 1
             if not any(papir_kesz(p) for p in papirok.get(pc_id, [])) and not pc.papir_nelkul \
                     and not pc.tranzakcio_nelkul_lezarva:
@@ -437,13 +448,15 @@ def elvaras_ellenorzes(db: Session, kezdet: datetime, valaszok: Valaszok) -> tup
         for p in papirok.get(pc_id, []):
             if not isinstance(p, MegrendeloiTig) or not papir_kesz(p) or p.allapot == KIHAGYVA:
                 continue
-            ido = p.updated_at or p.created_at
-            if ido is None or ido > most - timedelta(days=TIG_UTAN_NAP):
+            tig_ido = p.updated_at or p.created_at
+            if tig_ido is None or tig_ido > most - timedelta(days=TIG_UTAN_NAP):
+                continue
+            if not ido.ertekel(f"megrendeloi_tig:{p.id}", p.created_at):
                 continue
             stat["vizsgalt"] += 1
             if pc_id not in bevetel_kodok and not pc.szamla_kihagyva and not pc.bevetelbe_ne_keruljon:
                 _eset("tig_utan_nincs_bevetel", _megrendelo(pc), f"megrendeloi_tig:{p.id}", pc,
-                      f"a TIG {ido.date().isoformat()} óta lezárt, bevétel/számla nincs rögzítve, kihagyás sincs jelölve")
+                      f"a TIG {tig_ido.date().isoformat()} óta lezárt, bevétel/számla nincs rögzítve, kihagyás sincs jelölve")
             else:
                 stat["rendben"] += 1
 
@@ -457,12 +470,12 @@ def elvaras_ellenorzes(db: Session, kezdet: datetime, valaszok: Valaszok) -> tup
             if emp and kod:
                 papir_par.add((emp, kod))
     for e in db.scalars(
-        select(Expense).where(Expense.created_at >= kezdet, Expense.kesz.is_(True), Expense.employee_id.is_not(None))
+        select(Expense).where(*ido.feltetelek(Expense.created_at), Expense.kesz.is_(True), Expense.employee_id.is_not(None))
     ).all():
         if (e.tipus or "").strip().lower() != "kulsos":
             continue
         kod = e.project_code_id or proj_kod.get(e.alvallalkozo_project_id)
-        if not kod:
+        if not kod or not ido.ertekel(f"kiadas:{e.id}", e.created_at):
             continue
         stat["vizsgalt"] += 1
         if (e.employee_id, kod) in papir_par:
@@ -579,29 +592,26 @@ def valasz(db: Session, k: LaraKerdes, valasz_tipus: str, szoveg: str | None, er
         javitasi_feladat(db, k, szoveg, eredmeny)
 
 
-def bovitett_ellenorzes(db: Session, kezdet: datetime) -> tuple[dict[str, dict], dict[str, dict]]:
-    """Mindhárom rész. Vissza: (területenkénti statisztika, kérdés-csoportok)."""
+def bovitett_ellenorzes(db: Session, kezdet) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Mindhárom rész. Vissza: (területenkénti statisztika, kérdés-csoportok).
+    `kezdet` lehet `Idoszak` is — vizsgánál a fogalom-kérdés kimarad."""
+    ido = idoszak(kezdet)
     valaszok = Valaszok(db)
-    dontes_stat, dontes_cs = dontes_ellenorzes(db, kezdet, valaszok)
-    elv_stat, elv_cs = elvaras_ellenorzes(db, kezdet, valaszok)
+    dontes_stat, dontes_cs = dontes_ellenorzes(db, ido, valaszok)
+    elv_stat, elv_cs = elvaras_ellenorzes(db, ido, valaszok)
+    teruletek = {t: terulet_osszegzes(c, nem_tudta=False) for t, c in dontes_stat.items()}
+    # Elvárás: a „rendben" (és a partnernél „így szokás") egyezésnek számít.
+    elv = Counter({k: v for k, v in elv_stat.items() if k not in ("vizsgalt", "rendben", "rendben_valasz", "kerdeses")})
+    elv["egyezik"] = elv_stat["rendben"] + elv_stat["rendben_valasz"]
+    elv["elter"] = elv_stat["kerdeses"] + elv_stat["megmagyarazva"]
+    teruletek["elvaras"] = terulet_osszegzes(elv, nem_tudta=False)
+    if ido.vizsga:
+        return teruletek, {**dontes_cs, **elv_cs}
     fog_stat, fog_cs = fogalom_ellenorzes(db, valaszok)
-
-    def _t(c: Counter) -> dict:
-        n = c["egyezik"] + c["elter"]
-        return {"ellenorzott": n, "egyezik": c["egyezik"], "elter": c["elter"], "nem_tudta": 0,
-                "megmagyarazva": c["megmagyarazva"], "talalati_arany": round(c["egyezik"] / n, 3) if n else None}
-
-    teruletek = {t: _t(c) for t, c in dontes_stat.items()}
-    n = elv_stat["vizsgalt"]
-    teruletek["elvaras"] = {
-        "ellenorzott": n, "egyezik": elv_stat["rendben"] + elv_stat["rendben_valasz"],
-        "elter": elv_stat["kerdeses"] + elv_stat["megmagyarazva"], "nem_tudta": 0,
-        "megmagyarazva": elv_stat["megmagyarazva"] + elv_stat["rendben_valasz"],
-        "talalati_arany": round((n - elv_stat["kerdeses"]) / n, 3) if n else None,
-    }
     j = fog_stat["jelentos"]
     teruletek["fogalom"] = {
         "ellenorzott": j, "egyezik": fog_stat["megertett"], "elter": j - fog_stat["megertett"], "nem_tudta": 0,
         "megmagyarazva": fog_stat["megertett"], "talalati_arany": round(fog_stat["megertett"] / j, 3) if j else None,
+        "pontossag": round(fog_stat["megertett"] / j, 3) if j else None,
     }
     return teruletek, {**dontes_cs, **elv_cs, **fog_cs}

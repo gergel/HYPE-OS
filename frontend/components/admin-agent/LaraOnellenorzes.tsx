@@ -36,30 +36,36 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
   const [futasok, setFutasok] = useState(kezdo);
   const [uzenet, setUzenet] = useState<string | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
-  const [fut, setFut] = useState(false);
+  const [fut, setFut] = useState<"minta" | "teljes" | null>(null);
   const utolso = futasok[0];
 
-  async function futtat() {
+  async function futtat(vizsga: "minta" | "teljes" = "minta") {
     setUzenet(null);
     setHiba(null);
-    setFut(true);
+    setFut(vizsga);
     try {
-      const res = await authFetch("/api/v1/admin-agent/self-check", { method: "POST" });
+      const res = await authFetch(`/api/v1/admin-agent/self-check?vizsga=${vizsga}`, { method: "POST" });
       if (!res.ok) {
         setHiba("Az önellenőrzés nem sikerült.");
         return;
       }
       const d = (await res.json()) as OnellenorzesFutas;
       setFutasok((p) => [{ ...d, id: Date.now(), trigger: "onellenorzes:kezi", veg_at: new Date().toISOString() }, ...p]);
+      const v = d.vizsga;
       setUzenet(
-        `Kész: ${d.ellenorzott ?? 0} döntést ellenőriztem (számlák, projektkódok, szerződések, TIG-ek, bevételek) — ${d.egyezik ?? 0} eltaláltam, ${d.elter ?? 0} eltért, ` +
-          `${d.nem_tudta ?? 0} esetben nem tudtam javasolni. ${d.uj_kerdes ?? 0} új kérdésem van` +
-          (d.bovitett_kerdes ? `, ${d.bovitett_kerdes} meglévő kérdéshez új eset került` : "") +
+        `Kész: ${d.ellenorzott ?? 0} döntést ellenőriztem — pontosság a válaszaid után ${szazalek(d.pontossag)}, ` +
+          `vak találati arány ${szazalek(d.talalati_arany)}; ${d.nyitott_elteres ?? 0} nyitott eltérés.` +
+          (v
+            ? ` Vizsga a régi adaton (${v.mod === "teljes" ? "mind" : `véletlen ${Math.round(v.minta_arany * 100)}%`}): ` +
+              `${v.ellenorzott} döntés, ${szazalek(v.pontossag)}.`
+            : "") +
+          ` ${d.uj_kerdes ?? 0} új kérdésem van` +
+          (d.vizsga_kerdes ? ` (ebből ${d.vizsga_kerdes} a régi adatból)` : "") +
           ".",
       );
       router.refresh();
     } finally {
-      setFut(false);
+      setFut(null);
     }
   }
 
@@ -75,36 +81,79 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
         <Link href="/admin-agent/kerdesek" className="text-text-accent hover:underline">
           kérdez
         </Link>
-        . Kétóránként magától is lefut, ha a „Tanulás és megfigyelés” be van kapcsolva.
+        . Kétóránként magától is lefut, ha a „Tanulás és megfigyelés” be van kapcsolva — és minden körben a tanulás
+        kezdete előtti adatból is kivizsgáztat magán egy véletlen adagot (kézzel az összeset is). A{" "}
+        <b>pontosság</b> beszámítja a válaszaidat: ha Larának volt igaza (hibás rögzítés), vagy megtanulta az okot, az
+        eset nem hiba többé; a kivétel kimarad. A <b>vak arány</b> a szigorú mérce, a saját tanulság nélkül.
       </p>
       {uzenet && (
         <div className="mb-3 rounded-[var(--radius)] bg-bg-success px-3 py-2 text-[13px] text-text-success">{uzenet}</div>
       )}
       {hiba && <div className="mb-3 rounded-[var(--radius)] bg-bg-danger px-3 py-2 text-[13px] text-text-danger">{hiba}</div>}
       {canRun && (
-        <button
-          type="button"
-          disabled={fut}
-          onClick={futtat}
-          className="mb-4 rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[13px] font-medium text-text-accent disabled:opacity-50"
-        >
-          {fut ? "Önellenőrzés fut…" : "Önellenőrzés most"}
-        </button>
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={fut !== null}
+            onClick={() => futtat("minta")}
+            className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[13px] font-medium text-text-accent disabled:opacity-50"
+          >
+            {fut === "minta" ? "Önellenőrzés fut…" : "Önellenőrzés most"}
+          </button>
+          <button
+            type="button"
+            disabled={fut !== null}
+            onClick={() => futtat("teljes")}
+            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-primary hover:bg-surface-3 disabled:opacity-50"
+          >
+            {fut === "teljes" ? "Vizsga az összes adaton… (akár pár perc)" : "Vizsga az összes elérhető adaton"}
+          </button>
+        </div>
       )}
       {!utolso ? (
         <p className="text-[13px] text-text-secondary">Még nem futott önellenőrzés.</p>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Szam cimke="Lara találati aránya" ertek={szazalek(utolso.talalati_arany)} al="eltalált / összes ellenőrzött" />
+          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <Szam
+              cimke="Pontosság a válaszaid után"
+              ertek={szazalek(utolso.pontossag ?? utolso.talalati_arany)}
+              al={
+                (utolso.lara_helyes ? `${utolso.lara_helyes}× Larának volt igaza` : "") +
+                (utolso.lara_helyes && utolso.tanult ? " · " : "") +
+                (utolso.tanult ? `${utolso.tanult} megtanulva` : "") || "a megválaszolt eltérésekkel"
+              }
+            />
+            <Szam cimke="Vak találati arány" ertek={szazalek(utolso.talalati_arany)} al="szigorú: a saját tanulság nélkül" />
             <Szam cimke="Ellenőrzött döntés" ertek={String(utolso.ellenorzott ?? 0)} al="számla, projektkód, papír, bevétel" />
             <Szam
-              cimke="Nem tudta / eltért"
-              ertek={`${utolso.nem_tudta ?? 0} / ${utolso.elter ?? 0}`}
-              al={utolso.megmagyarazva ? `${utolso.megmagyarazva} már megmagyarázva` : undefined}
+              cimke="Nyitott eltérés"
+              ertek={String(utolso.nyitott_elteres ?? Math.max(0, (utolso.elter ?? 0) + (utolso.nem_tudta ?? 0) - (utolso.megmagyarazva ?? 0)))}
+              al={utolso.megmagyarazva ? `${utolso.megmagyarazva} már megválaszolva` : "amire még nincs válasz"}
             />
             <Szam cimke="Tudása" ertek={String(utolso.szabalyok ?? 0)} al={`élesített szabály · ${utolso.tanult_partnerek ?? 0} tanult partner`} />
           </div>
+          {utolso.vizsga && (
+            <div className="mb-4 rounded-[var(--radius)] border border-border bg-surface-3 px-3.5 py-3">
+              <p className="text-[11.5px] uppercase tracking-[0.08em] text-text-muted">
+                Vizsga a régi adaton ·{" "}
+                {utolso.vizsga.mod === "teljes"
+                  ? "az összes elérhető adat"
+                  : `véletlen ${Math.round(utolso.vizsga.minta_arany * 100)}%-os adag (futásonként más)`}
+              </p>
+              <p className="mt-1 text-[13px] text-text-primary">
+                {utolso.vizsga.ellenorzott > 0 ? (
+                  <>
+                    <b className="tabular-nums">{utolso.vizsga.ellenorzott}</b> döntés a tanulás kezdete előttről —
+                    pontosság <b className="tabular-nums">{szazalek(utolso.vizsga.pontossag)}</b>, vak arány{" "}
+                    <b className="tabular-nums">{szazalek(utolso.vizsga.talalati_arany)}</b>.
+                  </>
+                ) : (
+                  "Ebben a körben nem volt régi, lezárt döntés a mintában."
+                )}
+              </p>
+            </div>
+          )}
           {utolso.teruletek && (
             <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
               {TERULETEK.filter((t) => utolso.teruletek?.[t.kulcs] !== undefined || ["szamla", "szerzodes", "tig"].includes(t.kulcs)).map((t) => {
@@ -112,7 +161,12 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
                 return (
                   <div key={t.kulcs} className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5">
                     <p className="text-[11.5px] text-text-muted">{t.cim}</p>
-                    <p className="text-[18px] font-medium tabular-nums text-text-primary">{szazalek(d?.talalati_arany)}</p>
+                    <p className="text-[18px] font-medium tabular-nums text-text-primary">
+                      {szazalek(d?.pontossag ?? d?.talalati_arany)}
+                      {d?.pontossag != null && d.talalati_arany != null && d.pontossag !== d.talalati_arany && (
+                        <span className="ml-1.5 text-[11.5px] font-normal text-text-muted">vak: {szazalek(d.talalati_arany)}</span>
+                      )}
+                    </p>
                     <p className="text-[11.5px] text-text-muted">
                       {d && d.ellenorzott
                         ? (t.kulcs === "fogalom"
@@ -121,7 +175,7 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
                               ? `${d.egyezik}/${d.ellenorzott} a várt módon áll · ${d.elter} eltér`
                               : `${d.egyezik}/${d.ellenorzott} ${t.egyseg} eltalálva · ${d.elter} eltért`) +
                           (d.nem_tudta ? ` · ${d.nem_tudta} nem tudta` : "") +
-                          (d.megmagyarazva ? ` · ${d.megmagyarazva} megmagyarázva` : "")
+                          (d.megmagyarazva ? ` · ${d.megmagyarazva} megválaszolva` : "")
                         : "még nincs lezárt eset a tanulás kezdete óta"}
                     </p>
                   </div>
@@ -138,7 +192,9 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
                   <th className="px-3 py-2 font-medium">Eltalálta</th>
                   <th className="px-3 py-2 font-medium">Eltért</th>
                   <th className="px-3 py-2 font-medium">Nem tudta</th>
-                  <th className="px-3 py-2 font-medium">Találati arány</th>
+                  <th className="px-3 py-2 font-medium">Pontosság</th>
+                  <th className="px-3 py-2 font-medium">Vak arány</th>
+                  <th className="px-3 py-2 font-medium">Vizsga (régi adat)</th>
                   <th className="px-3 py-2 font-medium">Új kérdés</th>
                 </tr>
               </thead>
@@ -155,7 +211,11 @@ export function LaraOnellenorzes({ kezdo, canRun }: { kezdo: OnellenorzesFutas[]
                     <td className="px-3 py-2 tabular-nums text-text-primary">{f.egyezik ?? 0}</td>
                     <td className="px-3 py-2 tabular-nums text-text-primary">{f.elter ?? 0}</td>
                     <td className="px-3 py-2 tabular-nums text-text-primary">{f.nem_tudta ?? 0}</td>
-                    <td className="px-3 py-2 tabular-nums text-text-primary">{szazalek(f.talalati_arany)}</td>
+                    <td className="px-3 py-2 tabular-nums text-text-primary">{szazalek(f.pontossag)}</td>
+                    <td className="px-3 py-2 tabular-nums text-text-secondary">{szazalek(f.talalati_arany)}</td>
+                    <td className="px-3 py-2 tabular-nums text-text-secondary">
+                      {f.vizsga ? `${f.vizsga.ellenorzott} · ${szazalek(f.vizsga.pontossag)}` : "—"}
+                    </td>
                     <td className="px-3 py-2 tabular-nums text-text-primary">{f.uj_kerdes ?? 0}</td>
                   </tr>
                 ))}

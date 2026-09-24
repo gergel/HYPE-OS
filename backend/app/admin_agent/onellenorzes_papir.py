@@ -23,7 +23,6 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import Counter, defaultdict
-from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -103,7 +102,10 @@ def ertekek(terulet: str, r) -> dict:
     return ki
 
 
-def _lezart_rekordok(db: Session, terulet: str, kezdet: datetime) -> list:
+def _lezart_rekordok(db: Session, terulet: str, kezdet) -> list:
+    from app.admin_agent.idoszak import idoszak
+
+    ido = idoszak(kezdet)
     if terulet == "szerzodes":
         q = select(Contract).where(
             Contract.tipus == ContractType.ALVALLALKOZOI,
@@ -114,10 +116,13 @@ def _lezart_rekordok(db: Session, terulet: str, kezdet: datetime) -> list:
     else:
         q = select(PerformanceCertificate).where(PerformanceCertificate.allapot.in_(LEZART["tig"]))
         model = PerformanceCertificate
-    sorok = db.scalars(q.where(model.created_at >= kezdet).order_by(model.id)).all()
+    sorok = db.scalars(q.where(*ido.feltetelek(model.created_at)).order_by(model.id)).all()
+    if ido.tol is None:
+        # Vizsga a teljes múlton: a régi (Notion-korszakbeli) rekord is kell.
+        return list(sorok)
     figyelt = next(f for f in FIGYELT if f.kulcs == terulet)
     notion = _notion_rekordok(db, figyelt, [r.id for r in sorok])
-    return [r for r in sorok if not _regi(r.created_at, r.id in notion, kezdet)]
+    return [r for r in sorok if not _regi(r.created_at, r.id in notion, ido.tol)]
 
 
 def _leiras(k: _Kontextus, terulet: str, r) -> dict:
@@ -227,15 +232,23 @@ def egyezik(dim: str, josolt, valos) -> bool:
     return bool(josolt) == bool(valos)
 
 
-def papir_ellenorzes(db: Session, kezdet: datetime, megvalaszolt: set[tuple[str, str]]) -> tuple[dict, dict]:
+def papir_ellenorzes(db: Session, kezdet, megvalaszolt: set[tuple[str, str]] | dict) -> tuple[dict, dict]:
     """Vak jóslat minden lezárt papír döntéseire. Vissza: (területenkénti
-    statisztika, kérdés-csoportok kulcs szerint)."""
+    statisztika, kérdés-csoportok kulcs szerint). `kezdet` lehet `Idoszak` is
+    (vizsga); `megvalaszolt` (rekord, dimenzió) → a válasz típusa."""
+    from app.admin_agent.idoszak import beszamit, idoszak
+
+    ido = idoszak(kezdet)
+    if not isinstance(megvalaszolt, dict):
+        megvalaszolt = {m: None for m in megvalaszolt}
     tudas = PapirTudas(db)
     ktx = _Kontextus(db)
     stat: dict[str, Counter] = {t: Counter() for t in TERULETEK}
     csoport: dict[str, dict] = {}
     for terulet in TERULETEK:
-        for r in _lezart_rekordok(db, terulet, kezdet):
+        for r in _lezart_rekordok(db, terulet, ido):
+            if not ido.ertekel(f"{terulet}:{r.id}", r.created_at):
+                continue
             meta = _leiras(ktx, terulet, r)
             partner = meta.get("partner")
             kulcs = partner_kulcs(partner)
@@ -256,7 +269,7 @@ def papir_ellenorzes(db: Session, kezdet: datetime, megvalaszolt: set[tuple[str,
                     continue
                 stat[terulet]["elter"] += 1
                 if (azon, dim) in megvalaszolt:
-                    stat[terulet]["megmagyarazva"] += 1
+                    beszamit(stat[terulet], megvalaszolt[(azon, dim)])
                     continue
                 ck = f"papir:{terulet}:{dim}:{kulcs}"
                 g = csoport.setdefault(

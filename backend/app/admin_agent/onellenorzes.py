@@ -33,6 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.admin_agent.enums import RuleState
+from app.admin_agent.idoszak import ALAP_MINTA_ARANY, Idoszak, beszamit, terulet_osszegzes
 from app.admin_agent.memory import partner_kulcs
 from app.admin_agent.observer import tanulas_kezdete
 from app.admin_agent.visszajatszas import (
@@ -51,6 +52,8 @@ from app.models.bejovo_szamla import CEL_TIPUSOK
 TRIGGER = "onellenorzes"
 #: Egyszerre legfeljebb ennyi nyitott kérdés (ne árassza el a csapatot).
 MAX_NYITOTT = 25
+#: A vizsga (régi adat) futásonként legfeljebb ennyi ÚJ kérdést tehet fel.
+VIZSGA_KERDES_MAX = 3
 #: Esetekből (szabály nélkül) akkor jósol, ha legalább ennyi egybehangzó eset van…
 MIN_ESET = 2
 #: …és az esetek legalább ekkora része ugyanoda került.
@@ -178,23 +181,28 @@ def _kerdes_szoveg(db: Session, partner: str, esetek: list[dict], valosag: dict)
     )
 
 
-def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
-    """Egy önellenőrző futás. A hívó commitál."""
-    kezdet = tanulas_kezdete(db)
-    tudas = Tudas(db)
-    megvalaszolt: set[int] = set()
-    megvalaszolt_papir: set[tuple[str, str]] = set()
+def _megvalaszoltak(db: Session) -> tuple[dict[int, str | None], dict[tuple[str, str], str | None]]:
+    """A lezárt kérdések esetei → a válasz típusa (számla, papír)."""
+    szamla: dict[int, str | None] = {}
+    papir: dict[tuple[str, str], str | None] = {}
     for k in db.scalars(select(LaraKerdes).where(LaraKerdes.allapot != "nyitott")).all():
         c = k.kontextus or {}
         for e in c.get("esetek") or []:
             if k.tipus == "papir":
-                megvalaszolt_papir.add((e.get("rekord") or "", c.get("dimenzio") or ""))
-            else:
-                megvalaszolt.add(int(e.get("bejovo_id") or 0))
+                papir[(e.get("rekord") or "", c.get("dimenzio") or "")] = k.valasz_tipus
+            elif k.tipus == "szamla_besorolas":
+                szamla[int(e.get("bejovo_id") or 0)] = k.valasz_tipus
+    return szamla, papir
 
+
+def _kor(db: Session, ido: Idoszak, tudas: Tudas) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Egy önellenőrző kör egy adatkörön. Vissza: (területek, kérdés-csoportok)."""
+    megvalaszolt, megvalaszolt_papir = _megvalaszoltak(db)
     stat = Counter()
     csoport: dict[str, dict] = {}
-    for b in _szamlak(db, kezdet):
+    for b in _szamlak(db, ido.tol or datetime(1970, 1, 1, tzinfo=timezone.utc)):
+        if not ido.ertekel(f"szamla:{b.id}", b.jovahagyva_at):
+            continue
         vegso = vegso_dontes(db, b)
         javasolt, alap = lara_javaslata(db, tudas, b)
         eredmeny = "nem_tudta" if javasolt is None else osszevet(javasolt, vegso)
@@ -202,7 +210,7 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
         if eredmeny == "egyezik":
             continue
         if b.id in megvalaszolt:
-            stat["megmagyarazva"] += 1
+            beszamit(stat, megvalaszolt[b.id])
             continue
         kulcs = partner_kulcs(b.kibocsato_nev)
         if len(kulcs) < 3 or not vegso.tipus:
@@ -231,9 +239,9 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
         )
 
     # Papírozás (eseti szerződések, TIG-ek — a Utókövetés döntései).
-    from app.admin_agent.onellenorzes_papir import papir_ellenorzes, papir_kerdes_szoveg
+    from app.admin_agent.onellenorzes_papir import papir_ellenorzes
 
-    papir_stat, papir_csoport = papir_ellenorzes(db, kezdet, megvalaszolt_papir)
+    papir_stat, papir_csoport = papir_ellenorzes(db, ido, megvalaszolt_papir)
     for g in csoport.values():
         g["tipus"] = "szamla_besorolas"
     for g in papir_csoport.values():
@@ -242,17 +250,80 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
     # és TIG, projektkód-döntések), a bevétel (kimenő számla), a belsős TIG, az
     # elvárás-ellenőrzés a projektkód egészén és a rendszer-fogalmak (lásd
     # onellenorzes_bovitett.py). Egy hibája nem állítja meg a régi részeket.
-    from app.admin_agent.onellenorzes_bovitett import bovitett_ellenorzes, kerdes_szoveg
+    from app.admin_agent.onellenorzes_bovitett import bovitett_ellenorzes
 
     try:
         with db.begin_nested():
-            bov_teruletek, bov_csoport = bovitett_ellenorzes(db, kezdet)
+            bov_teruletek, bov_csoport = bovitett_ellenorzes(db, ido)
     except Exception:  # noqa: BLE001
         import logging
 
         logging.getLogger(__name__).exception("Lara bővített önellenőrzése hibára futott.")
         bov_teruletek, bov_csoport = {}, {}
-    osszes_csoport = {**csoport, **papir_csoport, **bov_csoport}
+    teruletek = {
+        "szamla": terulet_osszegzes(stat, True),
+        **{t: terulet_osszegzes(c, False) for t, c in papir_stat.items()},
+        **bov_teruletek,
+    }
+    return teruletek, {**csoport, **papir_csoport, **bov_csoport}
+
+
+def _osszesit(teruletek: dict[str, dict]) -> dict:
+    """A területek összesítése — a fogalom-kérdés megértés, nem jóslat: kimarad."""
+    ossz = Counter()
+    for nev, t in teruletek.items():
+        if nev == "fogalom":
+            continue
+        for mezo in ("ellenorzott", "egyezik", "elter", "nem_tudta", "megmagyarazva", "lara_helyes", "tanult",
+                     "kivetel", "nyitott_elteres"):
+            ossz[mezo] += t.get(mezo) or 0
+    n = ossz["ellenorzott"]
+    jo = ossz["egyezik"] + ossz["lara_helyes"] + ossz["tanult"]
+    return {
+        **{k: ossz[k] for k in ("ellenorzott", "egyezik", "elter", "nem_tudta", "megmagyarazva", "lara_helyes",
+                                "tanult", "kivetel", "nyitott_elteres")},
+        "talalati_arany": round(ossz["egyezik"] / n, 3) if n else None,
+        "pontossag": round(jo / (n - ossz["kivetel"]), 3) if n - ossz["kivetel"] > 0 else None,
+    }
+
+
+def vizsga_idoszak(db: Session, *, teljes: bool = False) -> Idoszak | None:
+    """A vizsga adatköre: a tanulás kezdete ELŐTTI rekordok — futásonként egy
+    véletlen adag (`limitek.onellenorzes_minta`, alap 30%), vagy mind."""
+    from app.admin_agent.settings_service import get_settings
+
+    lim = get_settings(db).limitek or {}
+    if not teljes and lim.get("onellenorzes_vizsga", True) is False:
+        return None
+    try:
+        arany = 1.0 if teljes else max(0.05, min(1.0, float(lim.get("onellenorzes_minta", ALAP_MINTA_ARANY))))
+    except (TypeError, ValueError):
+        arany = ALAP_MINTA_ARANY
+    return Idoszak(tol=None, ertekel_ig=tanulas_kezdete(db), arany=arany, mag=_most().isoformat(),
+                   nev="teljes" if teljes else "minta")
+
+
+def onellenorzes(db: Session, *, trigger: str = TRIGGER, teljes_vizsga: bool = False) -> dict:
+    """Egy önellenőrző futás: a fő kör (a tanulás kezdete óta minden) + VIZSGA
+    a régi adaton (véletlen adag, vagy `teljes_vizsga`-val mind). A hívó commitál."""
+    kezdet = tanulas_kezdete(db)
+    tudas = Tudas(db)
+    teruletek, osszes_csoport = _kor(db, Idoszak(tol=kezdet), tudas)
+    vizsga = None
+    vizsga_csoport: dict[str, dict] = {}
+    vi = vizsga_idoszak(db, teljes=teljes_vizsga)
+    if vi is not None:
+        try:
+            with db.begin_nested():
+                v_teruletek, vizsga_csoport = _kor(db, vi, tudas)
+            vizsga = {**_osszesit(v_teruletek), "teruletek": v_teruletek, "minta_arany": vi.arany, "mod": vi.nev}
+        except Exception:  # noqa: BLE001 — a vizsga hibája ne vigye el a fő kört
+            import logging
+
+            logging.getLogger(__name__).exception("Lara vizsgája a régi adaton hibára futott.")
+
+    from app.admin_agent.onellenorzes_bovitett import kerdes_szoveg
+    from app.admin_agent.onellenorzes_papir import papir_kerdes_szoveg
 
     def _szoveg(g: dict) -> str:
         if g["tipus"] == "papir":
@@ -264,6 +335,17 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
     def _azon(e: dict) -> str:
         return str(e.get("rekord") or e.get("bejovo_id"))
 
+    # A vizsga (régi adat) kérdései: futásonként legfeljebb néhány, jelölve.
+    vizsga_kerdes = 0
+    for ck, g in vizsga_csoport.items():
+        if ck in osszes_csoport:
+            osszes_csoport[ck]["esetek"] += [e for e in g["esetek"] if _azon(e) not in
+                                             {_azon(x) for x in osszes_csoport[ck]["esetek"]}]
+        elif vizsga_kerdes < VIZSGA_KERDES_MAX:
+            osszes_csoport[ck] = {**g, "regi_adat": True}
+            vizsga_kerdes += 1
+
+    stat = Counter()
     nyitott = {k.kulcs: k for k in db.scalars(select(LaraKerdes).where(LaraKerdes.allapot == "nyitott")).all()}
     uj = bovitett = 0
     uj_kerdesek: list[LaraKerdes] = []
@@ -288,7 +370,8 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
             allapot="nyitott",
             kulcs=ck,
             partner_nev=(g["partner"] or "")[:300],
-            kerdes=_szoveg({**g, "tipus": tipus}),
+            kerdes=("Régi adatból (a tanulás kezdete előttről): " if g.get("regi_adat") else "")
+            + _szoveg({**g, "tipus": tipus}),
             kontextus=g,
         )
         db.add(kerdes)
@@ -304,39 +387,12 @@ def onellenorzes(db: Session, *, trigger: str = TRIGGER) -> dict:
         db.flush()
         ertesitve = kerdes_ertesites(db, uj_kerdesek)
 
-    def _terulet(c: Counter, nem_tudta: bool) -> dict:
-        n = c["egyezik"] + c["elter"] + (c["nem_tudta"] if nem_tudta else 0)
-        return {
-            "ellenorzott": n,
-            "egyezik": c["egyezik"],
-            "elter": c["elter"],
-            "nem_tudta": c["nem_tudta"] if nem_tudta else 0,
-            "megmagyarazva": c["megmagyarazva"],
-            "talalati_arany": round(c["egyezik"] / n, 3) if n else None,
-        }
-
-    teruletek = {
-        "szamla": _terulet(stat, True),
-        **{t: _terulet(c, False) for t, c in papir_stat.items()},
-        **bov_teruletek,
-    }
-    ossz = Counter()
-    # A fogalom-kérdés megértés, nem jóslat: a találati arányba nem számít bele.
-    for nev, t in teruletek.items():
-        if nev == "fogalom":
-            continue
-        for mezo in ("ellenorzott", "egyezik", "elter", "nem_tudta", "megmagyarazva"):
-            ossz[mezo] += t[mezo]
-    ellenorzott = ossz["ellenorzott"]
     osszefoglalo = {
-        "ellenorzott": ellenorzott,
-        "egyezik": ossz["egyezik"],
-        "elter": ossz["elter"],
-        "nem_tudta": ossz["nem_tudta"],
-        "megmagyarazva": ossz["megmagyarazva"],
-        "talalati_arany": round(ossz["egyezik"] / ellenorzott, 3) if ellenorzott else None,
+        **_osszesit(teruletek),
         "teruletek": teruletek,
+        "vizsga": vizsga,
         "uj_kerdes": uj,
+        "vizsga_kerdes": vizsga_kerdes,
         "bovitett_kerdes": bovitett,
         "ertesitett": ertesitve,
         "varolistan": stat["kerdes_varolistan"],
