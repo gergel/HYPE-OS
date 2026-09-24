@@ -266,6 +266,13 @@ export function AdminBeallitasok({
             tiltva={!canManage || folyamatban || b.kill_switch}
             onValt={(v) => limitMent({ kerdes_ertesites: v })}
           />
+          <Kapcsolo
+            cim="Utánanézés kérdés előtt (az AI asszisztens tudásával)"
+            leiras="Mielőtt kérdez, Lara maga is utánanéz a rendszerben — ugyanazokkal a csak-olvasó eszközökkel és tudással, amivel az AI asszisztens dolgozik, a felelős jogosultságával. Semmit nem módosít; amit talál, azt a kérdés mellett látod, és egy kattintással elfogadhatod. Kétóránként legfeljebb 3 kérdésnél (a Gemini-kulcsot használja)."
+            aktiv={limitBe("nyomozas")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ nyomozas: v })}
+          />
         </div>
       </div>
 

@@ -26,7 +26,12 @@ export default async function LaraKerdesekPage() {
         {nyitott === null ? (
           <p className="text-[13px] text-text-secondary">A kérdések most nem érhetők el.</p>
         ) : (
-          <LaraKerdesek nyitottak={nyitott.elemek} megvalaszoltak={kesz?.elemek ?? []} canEdit={canEdit} />
+          <LaraKerdesek
+            nyitottak={nyitott.elemek}
+            megvalaszoltak={kesz?.elemek ?? []}
+            canEdit={canEdit}
+            nyomozas={nyitott.nyomozas ?? null}
+          />
         )}
       </div>
     </div>

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
-import type { LaraKerdes } from "@/lib/api";
+import type { LaraKerdes, LaraNyomozas, LaraNyomozasStat } from "@/lib/api";
 
 type ValaszOpcio = { ertek: string; cim: string; leiras: string };
 
@@ -137,10 +138,12 @@ export function LaraKerdesek({
   nyitottak,
   megvalaszoltak,
   canEdit,
+  nyomozas,
 }: {
   nyitottak: LaraKerdes[];
   megvalaszoltak: LaraKerdes[];
   canEdit: boolean;
+  nyomozas: LaraNyomozasStat | null;
 }) {
   const router = useRouter();
   const [lista, setLista] = useState(nyitottak);
@@ -158,6 +161,30 @@ export function LaraKerdesek({
   return (
     <div className="flex flex-col gap-4">
       {uzenet && <div className="rounded-[var(--radius)] bg-bg-success px-3 py-2 text-[13px] text-text-success">{uzenet}</div>}
+
+      {nyomozas && (
+        <p className="text-[12px] text-text-muted">
+          Mielőtt kérdez, Lara maga is utánanéz a rendszerben — ugyanazokkal a csak-olvasó eszközökkel és tudással, amivel
+          az AI asszisztens dolgozik.{" "}
+          {!nyomozas.elerheto ? (
+            <span className="text-text-secondary">Beállítás szükséges: a szerveren nincs Gemini-kulcs.</span>
+          ) : !nyomozas.bekapcsolva ? (
+            <span className="text-text-secondary">
+              Most ki van kapcsolva (
+              <Link href="/admin-agent/beallitasok" className="text-text-accent hover:underline">
+                Beállítások
+              </Link>
+              ).
+            </span>
+          ) : (
+            <span className="text-text-secondary">
+              Eddig <b className="tabular-nums">{nyomozas.nyomozott}</b> kérdésnél nézett utána, ebből{" "}
+              <b className="tabular-nums">{nyomozas.valaszt_talalt}</b>-nál talált választ;{" "}
+              <b className="tabular-nums">{nyomozas.elfogadva}</b> válaszát fogadtad el.
+            </span>
+          )}
+        </p>
+      )}
 
       {lista.length > 0 && (
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Terület szerinti szűrés">
@@ -195,6 +222,7 @@ export function LaraKerdesek({
             key={k.id}
             k={k}
             canEdit={canEdit}
+            nyomozhat={!!nyomozas?.elerheto}
             onKesz={(uj, szoveg) => {
               setLista((p) => p.filter((x) => x.id !== uj.id));
               setKesz((p) => [uj, ...p]);
@@ -229,14 +257,19 @@ export function LaraKerdesek({
 }
 
 function KerdesKartya({
-  k,
+  k: kezdo,
   canEdit,
+  nyomozhat,
   onKesz,
 }: {
   k: LaraKerdes;
   canEdit: boolean;
+  nyomozhat: boolean;
   onKesz: (k: LaraKerdes, uzenet: string) => void;
 }) {
+  const [k, setK] = useState(kezdo);
+  const [nyomoz, setNyomoz] = useState(false);
+  const ny = k.kontextus?.lara_nyomozas;
   const opciok = valaszOpciok(k);
   const [valasz, setValasz] = useState(opciok[0].ertek);
   const [szoveg, setSzoveg] = useState("");
@@ -248,9 +281,26 @@ function KerdesKartya({
   const bov = bovitett(k);
   const fogalom = k.tipus === "rendszer_fogalom";
 
-  async function kuld(tipus: string) {
+  async function utananez() {
     setHiba(null);
-    if ((tipus === "magyarazat" || (fogalom && tipus !== "elvet")) && !szoveg.trim()) {
+    setNyomoz(true);
+    try {
+      const res = await authFetch(`/api/v1/admin-agent/questions/${k.id}/investigate`, { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as { detail?: unknown; kerdes?: LaraKerdes };
+      if (!res.ok || !d.kerdes) {
+        setHiba(typeof d.detail === "string" ? d.detail : "Az utánanézés nem sikerült.");
+        return;
+      }
+      setK(d.kerdes);
+    } finally {
+      setNyomoz(false);
+    }
+  }
+
+  async function kuld(tipus: string, lara?: LaraNyomozas) {
+    setHiba(null);
+    const szovegKuld = lara ? lara.valasz : szoveg.trim();
+    if (!lara && (tipus === "magyarazat" || (fogalom && tipus !== "elvet")) && !szoveg.trim()) {
       setHiba(fogalom ? "Írd le röviden, mit jelent ez az állapot — ebből tanul Lara." : "Írd le röviden, miért így van — ebből tanul Lara.");
       return;
     }
@@ -258,7 +308,12 @@ function KerdesKartya({
     try {
       const res = await authFetch(`/api/v1/admin-agent/questions/${k.id}/answer`, {
         method: "POST",
-        body: JSON.stringify({ valasz_tipus: tipus, magyarazat: szoveg.trim() || null, elesit }),
+        body: JSON.stringify({
+          valasz_tipus: tipus,
+          magyarazat: lara ? `Lara utánanézése alapján: ${szovegKuld}` : szovegKuld || null,
+          elesit,
+          lara_valasza: !!lara,
+        }),
       });
       const d = (await res.json().catch(() => ({}))) as {
         detail?: unknown;
@@ -401,6 +456,34 @@ function KerdesKartya({
         </div>
       )}
 
+      {ny ? (
+        <NyomozasPanel
+          ny={ny}
+          canEdit={canEdit}
+          folyamatban={folyamatban || nyomoz}
+          onElfogad={() => kuld(fogalom ? "magyarazat" : ny.javaslat, ny)}
+          onUjra={nyomozhat && canEdit ? utananez : undefined}
+          nyomoz={nyomoz}
+        />
+      ) : (
+        nyomozhat &&
+        canEdit && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-dashed border-border px-3 py-2.5">
+            <span className="text-[12.5px] text-text-secondary">
+              Lara még nem nézett utána ennek a kérdésnek a rendszerben.
+            </span>
+            <button
+              type="button"
+              disabled={nyomoz || folyamatban}
+              onClick={utananez}
+              className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-primary hover:bg-surface-3 disabled:opacity-50"
+            >
+              {nyomoz ? "Lara utánanéz a rendszerben… (akár egy perc)" : "Nézz utána most"}
+            </button>
+          </div>
+        )
+      )}
+
       {!canEdit ? (
         <p className="text-[12px] text-text-muted">A válaszhoz szerkesztési jogosultság szükséges.</p>
       ) : (
@@ -486,4 +569,114 @@ function bovitettUzenet(k: LaraKerdes, tipus: string, feladatId: number | null):
   return k.tipus === "rendszer_elteres"
     ? "Köszönöm! Megjegyeztem, hogy nála ez így szokás — erre többé nem kérdezek rá."
     : "Köszönöm! Megtanultam — ennél a partnernél a következő esetektől ezt várom.";
+}
+
+const JAVASLAT_CIMKE: Record<string, string> = {
+  mindig: "Így helyes, ez a bevett gyakorlat",
+  magyarazat: "Van rá konkrét magyarázat",
+  kivetel: "Egyszeri kivétel",
+  hibas: "Rögzítési hiba — javítani kell",
+  nem_tudom: "Nem talált elég bizonyítékot",
+};
+
+/** Lara utánanézésének eredménye a kérdés kártyáján: mit talált, milyen
+ * bizonyítékok alapján, és hol nézett utána. Egy kattintással elfogadható —
+ * a kérdést így is ember zárja le. */
+function NyomozasPanel({
+  ny,
+  canEdit,
+  folyamatban,
+  onElfogad,
+  onUjra,
+  nyomoz,
+}: {
+  ny: LaraNyomozas;
+  canEdit: boolean;
+  folyamatban: boolean;
+  onElfogad: () => void;
+  onUjra?: () => void;
+  nyomoz: boolean;
+}) {
+  const talalt = ny.javaslat !== "nem_tudom" && !!ny.valasz;
+  return (
+    <div
+      className={`mb-4 rounded-[var(--radius)] border px-3.5 py-3 ${
+        talalt ? "border-text-accent/40 bg-surface-3" : "border-border bg-surface-3"
+      }`}
+    >
+      <p className="mb-1.5 flex flex-wrap items-center gap-x-2 text-[11.5px] uppercase tracking-[0.08em] text-text-muted">
+        Lara utánanézett
+        <span className="normal-case tracking-normal">
+          · {new Date(ny.ido).toLocaleString("hu-HU", { dateStyle: "short", timeStyle: "short" })}
+        </span>
+        <span className="rounded-full border border-border px-2 py-px normal-case tracking-normal text-text-secondary">
+          {JAVASLAT_CIMKE[ny.javaslat] ?? ny.javaslat}
+          {talalt ? ` · ${Math.round(ny.biztossag * 100)}% biztos` : ""}
+        </span>
+      </p>
+      {ny.valasz ? (
+        <p className="text-[13.5px] leading-snug text-text-primary">{ny.valasz}</p>
+      ) : (
+        <p className="text-[13px] text-text-secondary">
+          {ny.allapot === "hiba"
+            ? "Az utánanézés most nem sikerült (a modell nem volt elérhető)."
+            : "Nem talált a rendszerben magyarázatot."}
+        </p>
+      )}
+      {ny.bizonyitekok.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-1">
+          {ny.bizonyitekok.map((b, i) => (
+            <li key={i} className="text-[12.5px] text-text-secondary">
+              ·{" "}
+              {b.link ? (
+                <Link href={b.link} className="text-text-accent hover:underline">
+                  {b.leiras}
+                </Link>
+              ) : (
+                b.leiras
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {ny.lepesek.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-[12px] text-text-muted">
+            Hol nézett utána ({ny.lepesek.length} lépés)
+          </summary>
+          <ul className="mt-1.5 flex flex-col gap-0.5">
+            {ny.lepesek.map((l, i) => (
+              <li key={i} className={`font-mono text-[11.5px] ${l.ok ? "text-text-secondary" : "text-text-danger"}`}>
+                {l.cel}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {canEdit && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {talalt && (
+            <button
+              type="button"
+              disabled={folyamatban}
+              onClick={onElfogad}
+              className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[13px] font-medium text-text-accent disabled:opacity-50"
+            >
+              Elfogadom Lara válaszát
+            </button>
+          )}
+          {onUjra && (
+            <button
+              type="button"
+              disabled={folyamatban}
+              onClick={onUjra}
+              className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+            >
+              {nyomoz ? "Lara utánanéz… (akár egy perc)" : "Nézz utána újra"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

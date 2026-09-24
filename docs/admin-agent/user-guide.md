@@ -134,6 +134,13 @@ Minden lépés kattintással megy:
    hármat kérdez. Ezeknél a kérdéseknél a „Nála mostantól így van" / „Rendben,
    így szokás" válasz tudás lesz (a korábbi eseteket nem írja át), a **„Hiba —
    javítani kell"** pedig javítási feladatot készít a felelősnek a Munkasorba.
+   **Mielőtt kérdez, Lara utánanéz:** ugyanazokkal a csak-olvasó eszközökkel és
+   tudással, amivel az AI asszisztens dolgozik (keresés, bármely rekord
+   megnyitása, végpont-katalógus), a felelős jogosultságával. Amit talál, a
+   kérdés mellett látod („Lara utánanézett": válasz, bizonyítékok, hol nézett
+   utána) — ha jó, **„Elfogadom Lara válaszát"**, és a kérdés lezárul. Semmit
+   nem módosít; kétóránként legfeljebb 3 kérdésnél fut, kézzel a „Nézz utána
+   most" gombbal. Kapcsoló: Beállítások → „Utánanézés kérdés előtt".
 7. **Tanul a levelezésből is:** Lara félóránként végigolvassa a
    **szamla@hypestab.hu** postafiók a tanulás kezdete óta érkezett és onnan
    küldött leveleit — a levelek szövegét, a ti válaszaitokat és a csatolmányok

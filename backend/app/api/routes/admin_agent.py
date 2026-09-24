@@ -1304,14 +1304,20 @@ def megfigyeles_inditas(
 # ── Lara önellenőrzése és kérdései ─────────────────────────────────────────────
 
 
-def _kerdes_sor(k: LaraKerdes) -> dict:
+def _kerdes_sor(k: LaraKerdes, user: Employee | None = None) -> dict:
+    from app.admin_agent.nyomozas import KULCS, lathato
+
+    ktx = dict(k.kontextus or {})
+    # Lara utánanézése a futtató jogosultságával készült — csak neki látszik.
+    if KULCS in ktx and not lathato(ktx.get(KULCS), user):
+        ktx.pop(KULCS)
     return {
         "id": k.id,
         "tipus": k.tipus,
         "allapot": k.allapot,
         "partner_nev": k.partner_nev,
         "kerdes": k.kerdes,
-        "kontextus": k.kontextus,
+        "kontextus": ktx,
         "valasz_tipus": k.valasz_tipus,
         "valasz_szoveg": k.valasz_szoveg,
         "megvalaszolva_at": k.megvalaszolva_at.isoformat() if k.megvalaszolva_at else None,
@@ -1540,13 +1546,45 @@ def onellenorzes_futasok(
 @router.get("/questions")
 def kerdesek_lista(
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+    user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
     allapot: str = Query(default="nyitott"),
     limit: int = Query(default=100, ge=1, le=500),
 ):
+    from app.admin_agent.nyomozas import bekapcsolva, elerheto, statisztika
+
     felt = [] if allapot == "mind" else [LaraKerdes.allapot == allapot]
     sorok = db.scalars(select(LaraKerdes).where(*felt).order_by(LaraKerdes.id.desc()).limit(limit)).all()
-    return {"elemek": [_kerdes_sor(k) for k in sorok]}
+    return {
+        "elemek": [_kerdes_sor(k, user) for k in sorok],
+        "nyomozas": {**statisztika(db), "bekapcsolva": bekapcsolva(db), "elerheto": elerheto()},
+    }
+
+
+@router.post("/questions/{kerdes_id}/investigate")
+def kerdes_nyomozas(
+    kerdes_id: int,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Lara utánanéz a kérdésnek — az AI asszisztens CSAK OLVASÓ eszközeivel és
+    tudásával, a kérő jogosultságával (lásd admin_agent/nyomozas.py). Semmit
+    nem módosít; a válasza javaslat, a kérdést ember zárja le."""
+    from app.admin_agent.nyomozas import elerheto, nyomoz
+    from app.admin_agent.settings_service import leallitva
+
+    _csak_a_felelos_donthet(db, user)
+    if leallitva(db):
+        raise HTTPException(status_code=409, detail="Lara le van állítva (vészleállítás).")
+    if not elerheto():
+        raise HTTPException(status_code=409, detail="Beállítás szükséges: a szerveren nincs Gemini-kulcs.")
+    k = db.get(LaraKerdes, kerdes_id)
+    if k is None:
+        raise HTTPException(status_code=404, detail="A kérdés nem található.")
+    if k.allapot != "nyitott":
+        raise HTTPException(status_code=409, detail="Erre a kérdésre már válaszoltak.")
+    nyomoz(db, k, user)
+    db.commit()
+    return {"kerdes": _kerdes_sor(k, user)}
 
 
 class ValaszIn(BaseModel):
@@ -1555,6 +1593,8 @@ class ValaszIn(BaseModel):
     magyarazat: str | None = Field(default=None, max_length=2000)
     #: „mindig így" esetén: élesítse-e azonnal a szabályt (joggal + sikeres eval mellett).
     elesit: bool = True
+    #: A válasz Lara saját utánanézésének elfogadása (statisztikához).
+    lara_valasza: bool = False
 
 
 @router.post("/questions/{kerdes_id}/answer")
@@ -1586,8 +1626,11 @@ def kerdes_valasz(
                             user_id=user.id, elesithet=elesithet)
     except ValaszHiba as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    from app.admin_agent.nyomozas import elfogadas_jelolese
+
+    elfogadas_jelolese(k, body.lara_valasza)
     db.commit()
-    return {"kerdes": _kerdes_sor(k), **eredmeny}
+    return {"kerdes": _kerdes_sor(k, user), **eredmeny}
 
 
 @router.get("/knowledge-graph")

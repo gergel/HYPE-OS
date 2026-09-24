@@ -783,6 +783,9 @@ export type LaraKerdes = {
     darab?: number;
     valosag?: { tipus?: string; kod_idk?: number[]; ertek?: unknown; szoveg?: string };
     esetek?: LaraKerdesEset[];
+    /** Lara saját utánanézése (az AI asszisztens csak-olvasó eszközeivel) —
+     * csak annak látszik, akinek a jogosultságával készült. */
+    lara_nyomozas?: LaraNyomozas;
   } | null;
   valasz_tipus: string | null;
   valasz_szoveg: string | null;
@@ -791,8 +794,34 @@ export type LaraKerdes = {
   letrehozva: string | null;
 };
 
-export async function getLaraKerdesek(allapot = "nyitott"): Promise<{ elemek: LaraKerdes[] } | null> {
-  return apiGet<{ elemek: LaraKerdes[] }>(`/api/v1/admin-agent/questions?allapot=${allapot}`);
+/** Lara utánanézése egy kérdésnél (lásd backend admin_agent/nyomozas.py). */
+export type LaraNyomozas = {
+  /** kesz | hiba | lepeskorlat */
+  allapot: string;
+  valasz: string;
+  /** mindig | magyarazat | kivetel | hibas | nem_tudom */
+  javaslat: string;
+  biztossag: number;
+  bizonyitekok: { leiras: string; link: string | null }[];
+  lepesek: { eszkoz: string; cel: string; ok: boolean }[];
+  futtato_id: number;
+  futtato_nev?: string;
+  ido: string;
+  elfogadva?: boolean;
+};
+
+export type LaraNyomozasStat = {
+  nyomozott: number;
+  valaszt_talalt: number;
+  elfogadva: number;
+  bekapcsolva: boolean;
+  elerheto: boolean;
+};
+
+export async function getLaraKerdesek(
+  allapot = "nyitott",
+): Promise<{ elemek: LaraKerdes[]; nyomozas?: LaraNyomozasStat } | null> {
+  return apiGet<{ elemek: LaraKerdes[]; nyomozas?: LaraNyomozasStat }>(`/api/v1/admin-agent/questions?allapot=${allapot}`);
 }
 
 /** Egy önellenőrző futás: Lara jóslata a rögzített munkára vs a valóság. */

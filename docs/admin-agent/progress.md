@@ -587,6 +587,38 @@ projektkód-, TIG-, szerződés- és számla-részen és a teljes Utókövetése
   kipróbálva demóadattal (kérdések megjelenése, „Hiba" → feladat), utána a
   demósorok törölve (időbélyeg-ellenőrzéssel).
 
+### X. Utánanézés az AI asszisztens tudásával ✅ (valós Gemini-hívás: ⚠️ nem ellenőrzött — kulcs nélkül „Beállítás szükséges")
+Kérés: Lara néha olyat kérdez, amire az AI asszisztens magától is jól
+válaszolna — vonjuk bele az asszisztens tudását egy az egyben, hogy Lara is
+átlásson mindent.
+- Új modul: `app/admin_agent/nyomozas.py`. Mielőtt Lara embert kérdezne, maga
+  is utánanéz, az AI asszisztens CSAK OLVASÓ eszközeivel (globális kereső,
+  teljes végpont-katalógus, GET a saját API-n, entitás-lekérdezés/-összesítés),
+  az asszisztens tudásával (a rendszerüzenet receptjei + az entitás-séma) és a
+  saját tudásával (szabályok, hasonló esetek, projektkód-életút).
+- Csak olvas: író eszköz (api_muvelet, számla-feltöltés, csatolás) nincs a
+  modell kezében, és ha kérné, az eszköz-réteg elutasítja. Minden hívás a
+  futtató jogosultságával megy (háttérben Lara felelőse, kézzel a kérő), és az
+  eredményt a felület CSAK neki mutatja.
+- Kimenet a kérdés kontextusában (`lara_nyomozas`): válasz, javaslat
+  (mindig / magyarázat / kivétel / hibás / nem tudom), biztosság,
+  bizonyítékok (csak belső link), a lépések listája. A kérdést továbbra is
+  ember zárja le — egy kattintással elfogadhatja Lara válaszát.
+- Ütemezés: a kétóránkénti önellenőrzés után legfeljebb 3 friss kérdésnél
+  (`limitek.nyomozas`, `limitek.nyomozas_max`); kézzel: „Nézz utána most"
+  (`POST /questions/{id}/investigate`, a felelős-őr mögött). Fail-closed:
+  modellhiba → „nem tudom", a kérdés marad.
+- Felület: Kérdések oldalon „Lara utánanézett" panel (válasz, bizonyítékok,
+  „Hol nézett utána", „Elfogadom Lara válaszát", „Nézz utána újra"),
+  statisztika (hánynál nézett utána, hánynál talált választ, hányat fogadtatok
+  el); Beállításokban kapcsoló.
+- Javítva: a modell rendszerpromptjában „ügynöke" helyett „munkatársa"
+  (CLAUDE.md elnevezési szabály).
+- Tesztek: `test_admin_agent_nyomozas.py` (5, hamis modellel). Teljes backend:
+  193 passed, 1 skipped. tsc, eslint, `next build` rendben. Dev szerveren
+  demóadattal kipróbálva (panel, elfogadás → tudás + statisztika; felelős
+  nélkül a kézi utánanézés 403), utána a demósorok törölve.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

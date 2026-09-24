@@ -199,6 +199,16 @@ def self_check_task() -> dict | None:
             k: v for k, v in futtat(db, trigger="megerosites:utemezett").items() if k != "reszletek"
         }
         db.commit()
+        # Mielőtt az ember válaszolna: Lara maga is utánanéz a friss kérdéseinek
+        # az AI asszisztens csak-olvasó eszközeivel (lásd admin_agent/nyomozas.py).
+        from app.admin_agent import nyomozas
+
+        try:
+            eredmeny["nyomozas"] = nyomozas.futtat(db)
+            db.commit()
+        except Exception:  # noqa: BLE001 — az utánanézés hibája ne vigye el az önellenőrzést
+            db.rollback()
+            logger.exception("Lara utánanézése sikertelen.")
         return eredmeny
     except Exception:
         db.rollback()
