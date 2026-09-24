@@ -12,8 +12,10 @@ import type { Tudashalo as TudashaloAdat, TudashaloEl, TudashaloPont } from "@/l
  *   • forma = a pont fajtája (partner ●, projektkód ■, számla-cél ▲, szabály ◆),
  *   • méret = a kapcsolatok súlya, vonalvastagság/fényerő = bizonyosság,
  *   • szaggatott vonal = még csak jelölt (nincs mögötte jóváhagyott tudás),
- *   • a HÁLÓ ÁTMÉRŐJE és Lara magjának mérete a tudás mennyiségével nő
- *     (lásd `haloArany`).
+ *   • a HÁLÓ MÉRETE a látható kapcsolatok ÁTLAGOS BIZONYOSSÁGA: 100%-os
+ *     bizonyosságnál tölti ki a teljes teret (lásd `haloArany`).
+ * Két nézet: 3D gömb (egérrel forgatható, görgővel nagyítható, magától lassan
+ * forog) és a sík glória. Teljes képernyőre is tehető.
  * A „Növekedés lejátszása" az első megjelenések szerint építi fel a hálót.
  * ────────────────────────────────────────────────────────────────────────── */
 
@@ -55,22 +57,24 @@ const HUD = "#a06604";
 
 const LEJATSZAS_MS = 14000;
 
-/** A HÁLÓ MÉRETE a tudással nő: kevés tudásnál kicsi, középen összehúzódó
- * háló (és kisebb Lara-mag), sok tudásnál kitölti a vásznat. Logaritmikus, hogy
- * az első tudás-darabok látványosan növeljék, a későbbiek egyre finomabban.
- * `HALO_TELJES` „tudás-egységnél" (pont + kapcsolat + 2× jóváhagyott
- * kapcsolat) éri el a teljes átmérőt. Lejátszás közben ez is nő. */
-const HALO_MIN = 0.34;
-const HALO_TELJES = 2500;
-function haloArany(pontSzam: number, kapcsolat: number, jovahagyott: number): number {
-  const n = pontSzam + kapcsolat + 2 * jovahagyott;
-  return Math.min(1, HALO_MIN + (1 - HALO_MIN) * (Math.log1p(n) / Math.log1p(HALO_TELJES)));
+/** A HÁLÓ MÉRETE = a látható kapcsolatok átlagos BIZONYOSSÁGA: 100%-os
+ * bizonyosságnál tölti ki a teljes teret. Hogy alacsony bizonyosságnál is
+ * olvasható maradjon, a legkisebb méret `HALO_MIN` — e fölött egyenesen arányos
+ * (21% → 45%, 60% → 72%, 100% → 100%). Lejátszás közben ez is változik.
+ * A nagyítás (görgő / + −) csak a nézetet közelíti, a méret-arányt nem. */
+const HALO_MIN = 0.3;
+function haloArany(atlagBizonyossag: number | null): number {
+  return HALO_MIN + (1 - HALO_MIN) * Math.max(0, Math.min(1, atlagBizonyossag ?? 0));
 }
 const NAP = 86400000;
 
 type Pont = TudashaloPont & {
   x: number;
   y: number;
+  /** 3D (gömb) elrendezés — egységgömbön belül. */
+  gx: number;
+  gy: number;
+  gz: number;
   szin: string;
   tMs: number;
   /** Célsugár (normalizált) — a glória gyűrűi. */
@@ -143,7 +147,7 @@ function elrendez(pontok: TudashaloPont[], elek: TudashaloEl[], sz: Szektorok): 
       r0 = 0.86 + (h - 0.5) * 0.08;
       szog = h * Math.PI * 2;
     }
-    return { ...p, szin, tMs, r0, x: Math.cos(szog) * r0, y: Math.sin(szog) * r0 };
+    return { ...p, szin, tMs, r0, x: Math.cos(szog) * r0, y: Math.sin(szog) * r0, gx: 0, gy: 0, gz: 0 };
   });
   // A témaszektoron belül EGYENLETES szögeloszlás (a sűrű témánál sem torlódik):
   // partnerek, szabályok, számla-célok külön gyűrűn, váltakozó sugárral.
@@ -217,6 +221,122 @@ function elrendez(pontok: TudashaloPont[], elek: TudashaloEl[], sz: Szektorok): 
   return kimenet;
 }
 
+/** A témák iránya a gömbön: egyenletesen körben, felváltva kissé fent és lent,
+ * hogy a (függőleges tengely körüli) forgásnál mindegyik elöl is látsszon. */
+function temaIrany(tema: string | null): [number, number, number] {
+  const k = Math.max(0, TEMA_SORREND.indexOf((tema ?? "szamla") as (typeof TEMA_SORREND)[number]));
+  const hossz = (k / TEMA_SORREND.length) * Math.PI * 2;
+  const szel = k % 2 ? -0.42 : 0.42;
+  return [Math.cos(szel) * Math.sin(hossz), Math.sin(szel), Math.cos(szel) * Math.cos(hossz)];
+}
+
+function norm(v: [number, number, number]): [number, number, number] {
+  const d = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / d, v[1] / d, v[2] / d];
+}
+
+/** 3D gömb-elrendezés (determinisztikus): mag középen → témák (r 0,36) a saját
+ * irányukban → szabály/cél (≈0,55) és partnerek (0,72–0,9, erősebb beljebb)
+ * napraforgó-mintában a téma iránya körüli kúpban → projektkódok a külső héjon
+ * (≈0,99), a hozzájuk kötött partnerek irányában. Végül 3D ütközés-feloldás. */
+function elrendez3d(kimenet: Pont[], elek: TudashaloEl[]): void {
+  const ARANY = Math.PI * (3 - Math.sqrt(5));
+  const maxSuly: Record<string, number> = {};
+  for (const p of kimenet) maxSuly[p.fajta] = Math.max(maxSuly[p.fajta] ?? 0, p.suly);
+  const helyez = (p: Pont, irany: [number, number, number], r: number) => {
+    const [x, y, z] = norm(irany);
+    p.gx = x * r;
+    p.gy = y * r;
+    p.gz = z * r;
+  };
+  const csoport = new Map<string, Pont[]>();
+  for (const p of kimenet) {
+    if (p.fajta === "core") helyez(p, [0, 0, 1], 0);
+    else if (p.fajta === "tema") helyez(p, temaIrany(p.tema), 0.36);
+    else if (p.fajta === "partner" || p.fajta === "szabaly" || p.fajta === "cel") {
+      const k = `${p.tema ?? "szamla"}|${p.fajta === "partner" ? "p" : "b"}`;
+      csoport.set(k, [...(csoport.get(k) ?? []), p]);
+    }
+  }
+  for (const [k, lista] of csoport) {
+    const [tema, fajta] = k.split("|");
+    const d = temaIrany(tema);
+    // A téma irányára merőleges bázis.
+    const seged: [number, number, number] = Math.abs(d[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+    const u = norm([d[1] * seged[2] - d[2] * seged[1], d[2] * seged[0] - d[0] * seged[2], d[0] * seged[1] - d[1] * seged[0]]);
+    const v = norm([d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]]);
+    lista.sort((a, b) => hash(a.id) - hash(b.id));
+    const kup = fajta === "p" ? Math.min(1.15, 0.5 + 0.1 * Math.sqrt(lista.length)) : Math.min(0.6, 0.25 + 0.04 * lista.length);
+    lista.forEach((p, i) => {
+      const rho = kup * Math.sqrt((i + 0.5) / lista.length);
+      const phi = i * ARANY;
+      const irany: [number, number, number] = [0, 1, 2].map(
+        (j) => d[j] * Math.cos(rho) + (u[j] * Math.cos(phi) + v[j] * Math.sin(phi)) * Math.sin(rho),
+      ) as [number, number, number];
+      const erosseg = maxSuly[p.fajta] ? Math.sqrt(p.suly / maxSuly[p.fajta]) : 0;
+      const r = p.fajta === "partner" ? 0.9 - 0.18 * erosseg + (hash(p.id) - 0.5) * 0.05 : p.fajta === "cel" ? 0.58 : 0.54;
+      helyez(p, irany, r);
+    });
+  }
+  // Projektkód: a kötött pontok irányában a külső héjon.
+  const index = new Map(kimenet.map((p, i) => [p.id, i]));
+  const irany = new Map<number, [number, number, number]>();
+  for (const e of elek) {
+    const [ia, ib] = [index.get(e.a), index.get(e.b)];
+    if (ia === undefined || ib === undefined) continue;
+    for (const [k, m] of [
+      [ia, ib],
+      [ib, ia],
+    ] as const) {
+      if (kimenet[k].fajta !== "kod" || kimenet[m].fajta === "kod" || kimenet[m].fajta === "core") continue;
+      const q = kimenet[m];
+      const d = Math.hypot(q.gx, q.gy, q.gz) || 1;
+      const w = irany.get(k) ?? [0, 0, 0];
+      irany.set(k, [w[0] + (q.gx / d) * e.suly, w[1] + (q.gy / d) * e.suly, w[2] + (q.gz / d) * e.suly]);
+    }
+  }
+  kimenet.forEach((p, i) => {
+    if (p.fajta !== "kod") return;
+    const h = hash(p.id);
+    const w = irany.get(i);
+    const vel: [number, number, number] = [hash(p.id + "x") - 0.5, hash(p.id + "y") - 0.5, hash(p.id + "z") - 0.5];
+    const alap: [number, number, number] = w && Math.hypot(...w) > 1e-9 ? norm(w) : norm(vel);
+    helyez(p, [alap[0] + vel[0] * 0.3, alap[1] + vel[1] * 0.3, alap[2] + vel[2] * 0.3], 0.99 + (h - 0.5) * 0.04);
+  });
+  // 3D ütközés-feloldás: taszítás + visszahúzás a saját héjra.
+  const mozgo = kimenet.filter((p) => p.fajta !== "core" && p.fajta !== "tema");
+  const cel = mozgo.map((p) => Math.hypot(p.gx, p.gy, p.gz));
+  for (let it = 0; it < 60; it++) {
+    for (let i = 0; i < mozgo.length; i++) {
+      const a = mozgo[i];
+      for (let j = i + 1; j < mozgo.length; j++) {
+        const b = mozgo[j];
+        const dx = b.gx - a.gx;
+        const dy = b.gy - a.gy;
+        const dz = b.gz - a.gz;
+        const d = Math.hypot(dx, dy, dz) || 1e-6;
+        const min = 0.07;
+        if (d < min) {
+          const tol = ((min - d) / d) * 0.5;
+          a.gx -= dx * tol;
+          a.gy -= dy * tol;
+          a.gz -= dz * tol;
+          b.gx += dx * tol;
+          b.gy += dy * tol;
+          b.gz += dz * tol;
+        }
+      }
+    }
+    mozgo.forEach((p, i) => {
+      const d = Math.hypot(p.gx, p.gy, p.gz) || 1e-6;
+      const uj = (d + (cel[i] - d) * 0.4) / d;
+      p.gx *= uj;
+      p.gy *= uj;
+      p.gz *= uj;
+    });
+  }
+}
+
 function datum(ms: number): string {
   return new Date(ms).toLocaleDateString("hu-HU", {
     year: "numeric",
@@ -241,7 +361,30 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
   const [lejatszik, setLejatszik] = useState(false);
 
   const szekt = useMemo(() => szektorok(adat.pontok), [adat]);
-  const pontok = useMemo(() => elrendez(adat.pontok, adat.elek, szekt), [adat, szekt]);
+  const pontok = useMemo(() => {
+    const k = elrendez(adat.pontok, adat.elek, szekt);
+    elrendez3d(k, adat.elek);
+    return k;
+  }, [adat, szekt]);
+  const [nezet, setNezet] = useState<"3d" | "sik">("3d");
+  const [teljesKepernyo, setTeljesKepernyo] = useState(false);
+  const teljesRef = useRef<HTMLDivElement>(null);
+  // Nézet-állapot a rajzoló huroknak (refben: az egér és a forgás nem renderel újra).
+  const nezetRef = useRef(nezet);
+  useLayoutEffect(() => {
+    nezetRef.current = nezet;
+  }, [nezet]);
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const forgasRef = useRef({ yaw: 0.6, pitch: -0.32 });
+  const huzasRef = useRef<{ x: number; y: number; mozgott: boolean; pan: boolean } | null>(null);
+  /** Az utolsó képkocka vetített pontjai (találatvizsgálathoz). */
+  const vetitesRef = useRef<{ x: Float32Array; y: Float32Array; r: Float32Array; z: Float32Array }>({
+    x: new Float32Array(0),
+    y: new Float32Array(0),
+    r: new Float32Array(0),
+    z: new Float32Array(0),
+  });
   const index = useMemo(() => new Map(pontok.map((p, i) => [p.id, i])), [pontok]);
   const elek = useMemo<El[]>(() => {
     const ki: El[] = [];
@@ -281,12 +424,29 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
   useEffect(() => {
     const el = tartoRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => {
-      const w = Math.max(320, Math.floor(e.contentRect.width));
-      setMeret({ w, h: Math.round(w < 640 ? w * 1.05 : Math.min(900, Math.max(480, w * 0.7))) });
-    });
+    const meretez = () => {
+      const w = Math.max(320, Math.floor(el.clientWidth));
+      const tk = !!document.fullscreenElement;
+      const h = tk
+        ? window.innerHeight - 24
+        : w < 640
+          ? Math.round(w * 1.05)
+          : Math.round(Math.min(window.innerHeight * 0.84, Math.max(560, w * 0.72)));
+      setMeret({ w, h });
+    };
+    const ro = new ResizeObserver(meretez);
     ro.observe(el);
-    return () => ro.disconnect();
+    const fs = () => {
+      setTeljesKepernyo(!!document.fullscreenElement);
+      requestAnimationFrame(meretez);
+    };
+    document.addEventListener("fullscreenchange", fs);
+    window.addEventListener("resize", meretez);
+    return () => {
+      ro.disconnect();
+      document.removeEventListener("fullscreenchange", fs);
+      window.removeEventListener("resize", meretez);
+    };
   }, []);
 
   // Lejátszás: a tanulás kezdetétől máig ~14 mp alatt.
@@ -343,8 +503,9 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
       if ((e.tapasztalat ?? 0) > 0) tapasztalt++;
     });
     const pontSzam = pontok.filter((p, i) => pontLathato[i] && p.fajta !== "core" && p.fajta !== "tema").length;
-    const arany = haloArany(pontSzam, kapcsolat, jovahagyott);
-    return { fok, elLathato, pontLathato, kapcsolat, eros, jovahagyott, tapasztalt, atlag: kapcsolat ? bizSum / kapcsolat : null, pontSzam, arany };
+    const atlag = kapcsolat ? bizSum / kapcsolat : null;
+    const arany = haloArany(atlag);
+    return { fok, elLathato, pontLathato, kapcsolat, eros, jovahagyott, tapasztalt, atlag, pontSzam, arany };
   }, [pontok, elek, ido, rejtett]);
   const lathatoRef = useRef(lathato);
   useLayoutEffect(() => {
@@ -401,17 +562,19 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
     cv.height = meret.h * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const csendes = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const cx = meret.w / 2;
-    const cy = meret.h / 2;
-    const Steljes = Math.min(meret.w, meret.h) / 2 - 28;
-    // S: a háló pillanatnyi sugara (a tudással nő) — minden rajzolás ehhez méretez.
-    let S = Steljes * haloRef.current;
-    const px = (p: Pont) => cx + p.x * S;
-    const py = (p: Pont) => cy + p.y * S;
+    const Steljes = Math.min(meret.w, meret.h) / 2 - 34;
+    const D = 3.2; // kamera-távolság (a gömb sugarának egységében)
+    const n = pontok.length;
+    const PX = new Float32Array(n);
+    const PY = new Float32Array(n);
+    const PZ = new Float32Array(n);
+    const PF = new Float32Array(n);
+    const PR = new Float32Array(n);
     type Reszecske = { el: number; k: number; seb: number };
     let reszecskek: Reszecske[] = [];
     let id = 0;
     const kezdes = performance.now();
+    let elozo = kezdes;
 
     const alak = (p: Pont, x: number, y: number, r: number, kitoltes: string, korvonal: boolean) => {
       ctx.beginPath();
@@ -439,12 +602,43 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
     };
 
     const rajzol = (most: number) => {
+      const dt = Math.min(0.1, (most - elozo) / 1000);
+      elozo = most;
       const fazis = csendes ? 0 : (most - kezdes) / 1000;
       const L = lathatoRef.current;
       const A = allapotRef.current;
       const T = idoRef.current;
+      const harom = nezetRef.current === "3d";
       haloRef.current = csendes ? L.arany : haloRef.current + (L.arany - haloRef.current) * 0.05;
-      S = Steljes * haloRef.current;
+      const zoom = zoomRef.current;
+      const S = Steljes * haloRef.current * zoom;
+      const cx = meret.w / 2 + panRef.current.x;
+      const cy = meret.h / 2 + panRef.current.y;
+      // Magától lassan forog, amíg nem nyúlnak hozzá (húzás, rámutatás, kijelölés).
+      if (harom && !csendes && !huzasRef.current && A.hover < 0 && A.kijelolt < 0) forgasRef.current.yaw += dt * 0.12;
+      const { yaw, pitch } = forgasRef.current;
+      const [cyw, syw, cp, sp] = [Math.cos(yaw), Math.sin(yaw), Math.cos(pitch), Math.sin(pitch)];
+      /** 3D → képernyő: forgatás (függőleges tengely, majd billentés) + perspektíva. */
+      const vetit = (x: number, y: number, z: number): [number, number, number, number] => {
+        if (!harom) return [cx + x * S, cy + y * S, 0, 1];
+        const x1 = x * cyw + z * syw;
+        const z1 = -x * syw + z * cyw;
+        const y2 = y * cp - z1 * sp;
+        const z2 = y * sp + z1 * cp;
+        const f = D / (D - z2);
+        return [cx + x1 * S * f, cy - y2 * S * f, z2, f];
+      };
+      const melyseg = (z: number) => (harom ? 0.28 + 0.72 * Math.max(0, Math.min(1, (z + 1) / 2)) : 1);
+      pontok.forEach((p, i) => {
+        const [x, y, z, f] = harom ? vetit(p.gx, p.gy, p.gz) : vetit(p.x, p.y, 0);
+        PX[i] = x;
+        PY[i] = y;
+        PZ[i] = z;
+        PF[i] = f;
+        PR[i] = sugar(i, Steljes) * f * Math.sqrt(zoom);
+      });
+      vetitesRef.current = { x: PX, y: PY, r: PR, z: PZ };
+
       ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = HATTER;
       ctx.fillRect(0, 0, meret.w, meret.h);
@@ -455,9 +649,18 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
       ctx.fillStyle = vignetta;
       ctx.fillRect(0, 0, meret.w, meret.h);
 
+      // A teljes (100%-os) méret halvány jelzése: ekkorára nő a háló 100% bizonyosságnál.
+      ctx.beginPath();
+      ctx.arc(cx, cy, Steljes * zoom * 1.035, 0, Math.PI * 2);
+      ctx.setLineDash([2, 6]);
+      ctx.strokeStyle = rgba(HUD, 0.22);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
       // HUD-gyűrűk, forgó ívek, skála.
       ctx.lineWidth = 1;
-      for (const r of [0.26, 0.4, 0.62, 0.86, 0.985]) {
+      for (const r of harom ? [1.02] : [0.26, 0.4, 0.62, 0.86, 0.985]) {
         ctx.beginPath();
         ctx.arc(cx, cy, r * S, 0, Math.PI * 2);
         ctx.strokeStyle = rgba(HUD, r > 0.9 ? 0.28 : 0.1);
@@ -469,40 +672,77 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
         [0.31, 0.2, 0.9, 1.5],
         [0.2, -0.3, 1.6, 1],
       ] as const) {
+        const rr = harom ? r * 1.1 : r;
         ctx.beginPath();
         const a0 = fazis * seb;
-        ctx.arc(cx, cy, r * S, a0, a0 + hossz);
+        ctx.arc(cx, cy, rr * S, a0, a0 + hossz);
         ctx.strokeStyle = rgba(HUD, 0.45);
         ctx.lineWidth = w;
         ctx.stroke();
         ctx.beginPath();
-        ctx.arc(cx, cy, r * S, a0 + Math.PI, a0 + Math.PI + hossz * 0.4);
+        ctx.arc(cx, cy, rr * S, a0 + Math.PI, a0 + Math.PI + hossz * 0.4);
         ctx.stroke();
       }
       ctx.lineWidth = 1;
+      const skala = harom ? 1.1 : 1.0;
       for (let i = 0; i < 180; i++) {
         const a = (i / 180) * Math.PI * 2;
         const hosszu = i % 15 === 0;
-        const r1 = S * 1.0;
-        const r2 = S * (hosszu ? 1.035 : 1.015);
+        const r1 = S * skala;
+        const r2 = S * (skala + (hosszu ? 0.035 : 0.015));
         ctx.beginPath();
         ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
         ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
         ctx.strokeStyle = rgba(HUD, hosszu ? 0.5 : 0.18);
         ctx.stroke();
       }
-      // Témaszektor-ívek a külső gyűrűn.
-      TEMA_SORREND.forEach((t) => {
-        if (rejtett.has(t)) return;
-        const { kozep: k, szel } = szekt[t];
-        ctx.beginPath();
-        ctx.arc(cx, cy, S * 0.985, k - szel * 0.46, k + szel * 0.46);
-        ctx.strokeStyle = rgba(TEMA_SZIN[t], 0.8);
-        ctx.lineWidth = 3;
-        ctx.stroke();
-      });
+      if (harom) {
+        // A gömb drótváza (délkörök, szélességi körök) — a hátsó fele halványabb.
+        const vonal = (pts: [number, number, number][]) => {
+          for (let k = 1; k < pts.length; k++) {
+            const [x1, y1, z1] = vetit(...pts[k - 1]);
+            const [x2, y2, z2] = vetit(...pts[k]);
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = rgba(HUD, (z1 + z2) / 2 > 0 ? 0.16 : 0.05);
+            ctx.stroke();
+          }
+        };
+        const R = 1.03;
+        for (let m = 0; m < 6; m++) {
+          const a = (m / 6) * Math.PI;
+          vonal(Array.from({ length: 49 }, (_, k) => {
+            const t = (k / 48) * Math.PI * 2;
+            return [R * Math.sin(t) * Math.cos(a), R * Math.cos(t), R * Math.sin(t) * Math.sin(a)] as [number, number, number];
+          }));
+        }
+        for (const lat of [-0.9, -0.45, 0, 0.45, 0.9]) {
+          vonal(Array.from({ length: 49 }, (_, k) => {
+            const t = (k / 48) * Math.PI * 2;
+            return [R * Math.cos(lat) * Math.cos(t), R * Math.sin(lat), R * Math.cos(lat) * Math.sin(t)] as [number, number, number];
+          }));
+        }
+      } else {
+        // Témaszektor-ívek a külső gyűrűn.
+        TEMA_SORREND.forEach((t) => {
+          if (rejtett.has(t)) return;
+          const { kozep: k, szel } = szekt[t];
+          ctx.beginPath();
+          ctx.arc(cx, cy, S * 0.985, k - szel * 0.46, k + szel * 0.46);
+          ctx.strokeStyle = rgba(TEMA_SZIN[t], 0.8);
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        });
+      }
 
-      // Kapcsolatok (additív fény).
+      // Kapcsolatok (additív fény), a középpont felé hajló ívvel.
+      const kontroll = (pa: Pont, pb: Pont): [number, number] => {
+        const [x, y] = harom
+          ? vetit(((pa.gx + pb.gx) / 2) * 0.82, ((pa.gy + pb.gy) / 2) * 0.82, ((pa.gz + pb.gz) / 2) * 0.82)
+          : vetit(((pa.x + pb.x) / 2) * 0.82, ((pa.y + pb.y) / 2) * 0.82, 0);
+        return [x, y];
+      };
       ctx.globalCompositeOperation = "lighter";
       const vanKijeloles = A.kijelolt >= 0 && A.szomszedok;
       elek.forEach((e, i) => {
@@ -511,17 +751,14 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
         const erint = vanKijeloles && (e.ia === A.kijelolt || e.ib === A.kijelolt);
         const halvany = vanKijeloles && !erint;
         const c = e.vaz ? 0.55 : e.bizonyossag;
-        const [x1, y1, x2, y2] = [px(pa), py(pa), px(pb), py(pb)];
-        const mx = (x1 + x2) / 2;
-        const my = (y1 + y2) / 2;
-        const qx = cx + (mx - cx) * 0.82;
-        const qy = cy + (my - cy) * 0.82;
+        const [qx, qy] = kontroll(pa, pb);
+        const mely = melyseg((PZ[e.ia] + PZ[e.ib]) / 2);
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo(qx, qy, x2, y2);
+        ctx.moveTo(PX[e.ia], PY[e.ia]);
+        ctx.quadraticCurveTo(qx, qy, PX[e.ib], PY[e.ib]);
         ctx.setLineDash(!e.vaz && e.jovahagyott === 0 && !e.tapasztalat ? [3, 4] : []);
-        ctx.lineWidth = (e.vaz ? 1.4 : 0.5 + 3.4 * c) * (erint ? 1.4 : 1);
-        ctx.strokeStyle = rgba(e.szin.startsWith("#") ? e.szin : SEMLEGES, (0.08 + 0.55 * c) * (halvany ? 0.12 : erint ? 1.6 : 1));
+        ctx.lineWidth = (e.vaz ? 1.4 : 0.5 + 3.4 * c) * (erint ? 1.4 : 1) * Math.sqrt(zoom) * (0.6 + 0.4 * mely);
+        ctx.strokeStyle = rgba(e.szin.startsWith("#") ? e.szin : SEMLEGES, (0.08 + 0.55 * c) * mely * (halvany ? 0.12 : erint ? 1.6 : 1));
         ctx.stroke();
         // Újonnan megjelenő kapcsolat felvillanása lejátszás közben.
         if (!e.vaz && T - e.tMs >= 0 && T - e.tMs < 3 * NAP && T < tMax - NAP) {
@@ -543,33 +780,36 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
           r.k += r.seb;
           const e = elek[r.el];
           const [pa, pb] = [pontok[e.ia], pontok[e.ib]];
-          const kulso = Math.hypot(pa.x, pa.y) > Math.hypot(pb.x, pb.y);
-          const [k1, k2] = kulso ? [pa, pb] : [pb, pa];
-          const [x1, y1, x2, y2] = [px(k1), py(k1), px(k2), py(k2)];
-          const qx = cx + ((x1 + x2) / 2 - cx) * 0.82;
-          const qy = cy + ((y1 + y2) / 2 - cy) * 0.82;
+          const hossz = (p: Pont) => (harom ? Math.hypot(p.gx, p.gy, p.gz) : Math.hypot(p.x, p.y));
+          const kulso = hossz(pa) > hossz(pb);
+          const [i1, i2] = kulso ? [e.ia, e.ib] : [e.ib, e.ia];
+          const [qx, qy] = kontroll(pa, pb);
           const u = r.k;
-          const x = (1 - u) * (1 - u) * x1 + 2 * (1 - u) * u * qx + u * u * x2;
-          const y = (1 - u) * (1 - u) * y1 + 2 * (1 - u) * u * qy + u * u * y2;
+          const x = (1 - u) * (1 - u) * PX[i1] + 2 * (1 - u) * u * qx + u * u * PX[i2];
+          const y = (1 - u) * (1 - u) * PY[i1] + 2 * (1 - u) * u * qy + u * u * PY[i2];
+          const mely = melyseg((PZ[i1] + PZ[i2]) / 2);
           const g = ctx.createRadialGradient(x, y, 0, x, y, 5);
-          g.addColorStop(0, rgba("#ffffff", 0.9));
-          g.addColorStop(0.4, rgba(e.szin.startsWith("#") ? e.szin : SEMLEGES, 0.6));
+          g.addColorStop(0, rgba("#ffffff", 0.9 * mely));
+          g.addColorStop(0.4, rgba(e.szin.startsWith("#") ? e.szin : SEMLEGES, 0.6 * mely));
           g.addColorStop(1, "rgba(0,0,0,0)");
           ctx.fillStyle = g;
           ctx.fillRect(x - 5, y - 5, 10, 10);
         }
       }
 
-      // Pontok: fényudvar + forma.
+      // Pontok: fényudvar + forma — hátulról előre (3D-ben a közelebbi van felül).
+      const sorrend = pontok.map((_, i) => i);
+      if (harom) sorrend.sort((a, b) => PZ[a] - PZ[b]);
       const cimkek: { i: number; r: number }[] = [];
-      pontok.forEach((p, i) => {
-        if (!L.pontLathato[i]) return;
-        const x = px(p);
-        const y = py(p);
-        let r = sugar(i, Steljes);
+      for (const i of sorrend) {
+        const p = pontok[i];
+        if (!L.pontLathato[i]) continue;
+        const x = PX[i];
+        const y = PY[i];
+        let r = PR[i];
         if (p.fajta === "core") r *= 1 + (csendes ? 0 : Math.sin(fazis * 2) * 0.06);
         const halvany = vanKijeloles && !A.szomszedok!.has(i);
-        const alfa = halvany ? 0.18 : 1;
+        const alfa = (halvany ? 0.18 : 1) * melyseg(PZ[i]);
         ctx.globalCompositeOperation = "lighter";
         const g = ctx.createRadialGradient(x, y, 0, x, y, r * (p.fajta === "core" ? 5 : 3.2));
         g.addColorStop(0, rgba(p.szin.startsWith("#") ? p.szin : SEMLEGES, 0.55 * alfa));
@@ -609,6 +849,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
           ctx.stroke();
         }
         if (i === A.kijelolt || i === A.hover) {
+          ctx.globalAlpha = 1;
           ctx.beginPath();
           ctx.arc(x, y, r + 5, 0, Math.PI * 2);
           ctx.strokeStyle = TINTA;
@@ -617,37 +858,44 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
         }
         ctx.globalAlpha = 1;
         cimkek.push({ i, r });
-      });
+      }
 
-      // Feliratok: témakörök mindig; a legerősebb pontok és a kijelölés környéke.
+      // Feliratok: témakörök mindig; a legerősebb (3D-ben az elöl lévő) pontok és a kijelölés környéke.
       ctx.globalCompositeOperation = "source-over";
       const foglalt: [number, number, number, number][] = [];
       const felirat = (i: number, r: number, fo: boolean) => {
         const p = pontok[i];
         const szoveg = p.fajta === "tema" ? p.cimke.toUpperCase() : p.cimke.length > 28 ? p.cimke.slice(0, 27) + "…" : p.cimke;
-        ctx.font = `${fo ? 600 : 400} ${fo ? 12 : 11}px var(--font-geist-mono, ui-monospace), ui-monospace, monospace`;
+        const meret = Math.round((fo ? 12 : 11) * Math.min(1.35, Math.sqrt(zoom)));
+        ctx.font = `${fo ? 600 : 400} ${meret}px var(--font-geist-mono, ui-monospace), ui-monospace, monospace`;
         const w = ctx.measureText(szoveg).width;
-        const x = px(p);
-        const y = py(p);
-        const kifele = Math.hypot(p.x, p.y) > 0.01 ? [p.x / Math.hypot(p.x, p.y), p.y / Math.hypot(p.x, p.y)] : [0, 1];
+        const x = PX[i];
+        const y = PY[i];
+        const dx = x - cx;
+        const dy = y - cy;
+        const d = Math.hypot(dx, dy);
+        const kifele = d > 1 ? [dx / d, dy / d] : [0, 1];
         const lx = x + kifele[0] * (r + 8) - (kifele[0] < -0.2 ? w : kifele[0] > 0.2 ? 0 : w / 2);
-        const ly = y + kifele[1] * (r + 8) + (kifele[1] > 0.2 ? 10 : kifele[1] < -0.2 ? -2 : 4);
-        const doboz: [number, number, number, number] = [lx - 2, ly - 11, w + 4, 14];
+        const ly = y + kifele[1] * (r + 8) + (kifele[1] > 0.2 ? meret - 1 : kifele[1] < -0.2 ? -2 : 4);
+        const doboz: [number, number, number, number] = [lx - 2, ly - meret, w + 4, meret + 3];
         if (!fo && foglalt.some((f) => doboz[0] < f[0] + f[2] && doboz[0] + doboz[2] > f[0] && doboz[1] < f[1] + f[3] && doboz[1] + doboz[3] > f[1])) return;
         foglalt.push(doboz);
+        ctx.globalAlpha = melyseg(PZ[i]);
         ctx.fillStyle = "rgba(7,9,13,0.72)";
         ctx.fillRect(doboz[0], doboz[1], doboz[2], doboz[3]);
         ctx.fillStyle = fo ? TINTA : TINTA_2;
         ctx.fillText(szoveg, lx, ly);
+        ctx.globalAlpha = 1;
       };
+      const elol = (i: number) => !harom || PZ[i] > -0.25;
       const rangsor = cimkek
         .filter(({ i }) => pontok[i].fajta !== "core" && pontok[i].fajta !== "tema")
         .sort((a, b) => L.fok[b.i] - L.fok[a.i]);
       cimkek.filter(({ i }) => pontok[i].fajta === "tema").forEach(({ i, r }) => felirat(i, r, true));
       if (vanKijeloles) {
-        rangsor.filter(({ i }) => A.szomszedok!.has(i)).slice(0, 24).forEach(({ i, r }) => felirat(i, r, i === A.kijelolt));
+        rangsor.filter(({ i }) => A.szomszedok!.has(i)).slice(0, 30).forEach(({ i, r }) => felirat(i, r, i === A.kijelolt));
       } else {
-        rangsor.slice(0, 14).forEach(({ i, r }) => felirat(i, r, false));
+        rangsor.filter(({ i }) => elol(i)).slice(0, Math.round(14 + 10 * Math.min(2, zoom - 1))).forEach(({ i, r }) => felirat(i, r, false));
       }
 
       id = requestAnimationFrame(rajzol);
@@ -656,37 +904,87 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
     return () => cancelAnimationFrame(id);
   }, [meret, pontok, elek, sugar, rejtett, tMax, tablazat, szekt]);
 
-  // ── Egér: hover-tooltip és kijelölés (a találati terület nagyobb a pontnál) ──
+  // Görgő: nagyítás (nem görgeti az oldalt, amíg az egér a hálón van).
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const gorgo = (ev: WheelEvent) => {
+      ev.preventDefault();
+      zoomRef.current = Math.max(0.6, Math.min(4, zoomRef.current * Math.exp(-ev.deltaY * 0.0015)));
+    };
+    cv.addEventListener("wheel", gorgo, { passive: false });
+    return () => cv.removeEventListener("wheel", gorgo);
+  }, [tablazat]);
+
+  // ── Egér: húzás = forgatás (3D) / mozgatás (sík, vagy Shift+húzás), kattintás = kijelölés ──
   const talalat = useCallback(
     (ex: number, ey: number): number => {
-      const Steljes = Math.min(meret.w, meret.h) / 2 - 28;
-      const S = Steljes * haloRef.current;
-      const [cx, cy] = [meret.w / 2, meret.h / 2];
+      const V = vetitesRef.current;
       let legjobb = -1;
       let tav = Infinity;
+      let legjobbZ = -Infinity;
       pontok.forEach((p, i) => {
-        if (!lathato.pontLathato[i]) return;
-        const d = Math.hypot(cx + p.x * S - ex, cy + p.y * S - ey);
-        const r = sugar(i, Steljes) + 7;
-        if (d < r && d < tav) {
+        if (!lathato.pontLathato[i] || i >= V.x.length) return;
+        const d = Math.hypot(V.x[i] - ex, V.y[i] - ey);
+        if (d < V.r[i] + 7 && (V.z[i] > legjobbZ + 0.05 || (Math.abs(V.z[i] - legjobbZ) <= 0.05 && d < tav))) {
           tav = d;
+          legjobbZ = V.z[i];
           legjobb = i;
         }
       });
       return legjobb;
     },
-    [meret, pontok, lathato, sugar],
+    [pontok, lathato],
   );
 
+  const onDown = (ev: React.PointerEvent<HTMLCanvasElement>) => {
+    huzasRef.current = { x: ev.clientX, y: ev.clientY, mozgott: false, pan: ev.shiftKey || nezet === "sik" };
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+  };
   const onMove = (ev: React.PointerEvent<HTMLCanvasElement>) => {
+    const h = huzasRef.current;
+    if (h) {
+      const dx = ev.clientX - h.x;
+      const dy = ev.clientY - h.y;
+      if (!h.mozgott && Math.hypot(dx, dy) < 4) return;
+      h.mozgott = true;
+      h.x = ev.clientX;
+      h.y = ev.clientY;
+      if (h.pan) {
+        panRef.current = { x: panRef.current.x + dx, y: panRef.current.y + dy };
+      } else {
+        const f = forgasRef.current;
+        f.yaw += dx * 0.006;
+        f.pitch = Math.max(-1.35, Math.min(1.35, f.pitch + dy * 0.006));
+      }
+      if (hover) setHover(null);
+      return;
+    }
     const r = ev.currentTarget.getBoundingClientRect();
     const i = talalat(ev.clientX - r.left, ev.clientY - r.top);
     setHover(i >= 0 ? { id: pontok[i].id, x: ev.clientX - r.left, y: ev.clientY - r.top } : null);
   };
-  const onClick = (ev: React.PointerEvent<HTMLCanvasElement>) => {
+  const onUp = (ev: React.PointerEvent<HTMLCanvasElement>) => {
+    const h = huzasRef.current;
+    huzasRef.current = null;
+    if (!h || h.mozgott) return;
     const r = ev.currentTarget.getBoundingClientRect();
     const i = talalat(ev.clientX - r.left, ev.clientY - r.top);
     setKijelolt(i >= 0 && pontok[i].id !== kijelolt ? pontok[i].id : null);
+  };
+  const nagyit = (k: number) => {
+    zoomRef.current = Math.max(0.6, Math.min(4, zoomRef.current * k));
+  };
+  const alaphelyzet = () => {
+    zoomRef.current = 1;
+    panRef.current = { x: 0, y: 0 };
+    forgasRef.current = { yaw: 0.6, pitch: -0.32 };
+  };
+  const teljesValt = () => {
+    const el = teljesRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void el.requestFullscreen?.().catch(() => undefined);
   };
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setKijelolt(null);
@@ -765,6 +1063,35 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
         >
           {lejatszik ? "❚❚ Megállítás" : "▶ Növekedés lejátszása"}
         </button>
+        {!tablazat && (
+          <div className="flex items-center gap-1">
+            <div className="flex overflow-hidden rounded-[var(--radius)] border border-border">
+              {(["3d", "sik"] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={nezet === n}
+                  onClick={() => setNezet(n)}
+                  className={`px-2.5 py-1.5 text-[12.5px] ${nezet === n ? "bg-surface-3 text-text-primary" : "text-text-secondary hover:bg-surface-3"}`}
+                >
+                  {n === "3d" ? "3D gömb" : "Sík"}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => nagyit(1 / 1.25)} aria-label="Kicsinyítés" className="rounded-[var(--radius)] border border-border px-2.5 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3">
+              −
+            </button>
+            <button type="button" onClick={() => nagyit(1.25)} aria-label="Nagyítás" className="rounded-[var(--radius)] border border-border px-2.5 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3">
+              +
+            </button>
+            <button type="button" onClick={alaphelyzet} className="rounded-[var(--radius)] border border-border px-2.5 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3">
+              Alaphelyzet
+            </button>
+            <button type="button" onClick={teljesValt} className="rounded-[var(--radius)] border border-border px-2.5 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3">
+              {teljesKepernyo ? "Kilépés" : "Teljes képernyő"}
+            </button>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => setTablazat((v) => !v)}
@@ -774,7 +1101,11 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
         </button>
       </div>
 
-      <div className="flex flex-col gap-3 xl:flex-row">
+      <div
+        ref={teljesRef}
+        className={`flex flex-col gap-3 xl:flex-row ${teljesKepernyo ? "items-start overflow-auto p-3" : ""}`}
+        style={teljesKepernyo ? { background: HATTER } : undefined}
+      >
         <div ref={tartoRef} className="relative min-w-0 flex-1 overflow-hidden rounded-[var(--radius-lg)] border border-border" style={{ background: HATTER }}>
           {tablazat ? (
             <div className="max-h-[80vh] overflow-auto p-3">
@@ -807,10 +1138,18 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
             <>
               <canvas
                 ref={canvasRef}
-                style={{ width: meret.w, height: meret.h, display: "block", cursor: hover ? "pointer" : "default" }}
+                style={{
+                  width: meret.w,
+                  height: meret.h,
+                  display: "block",
+                  cursor: hover ? "pointer" : nezet === "3d" ? "grab" : "move",
+                  touchAction: "none",
+                }}
+                onPointerDown={onDown}
                 onPointerMove={onMove}
+                onPointerUp={onUp}
+                onPointerCancel={() => (huzasRef.current = null)}
                 onPointerLeave={() => setHover(null)}
-                onClick={onClick}
                 role="img"
                 aria-label={`Tudásháló: ${lathato.pontSzam} pont, ${lathato.kapcsolat} kapcsolat. A részletekért használd a Táblázat nézetet.`}
               />
@@ -826,7 +1165,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
                   <HudSzam cimke="Tapasztalt kapcs." ertek={lathato.tapasztalt} />
                   <HudSzam cimke="Átl. bizonyosság" ertek={lathato.atlag === null ? "—" : szazalek(lathato.atlag)} />
                   <HudSzam cimke="Aktív szabály" ertek={adat.osszesites.aktiv_szabalyok} />
-                  <HudSzam cimke="Háló átmérő" ertek={szazalek(lathato.arany)} />
+                  <HudSzam cimke="Méret (100% = teljes biz.)" ertek={szazalek(lathato.arany)} />
                 </div>
               </div>
               {nincsTudas && (
@@ -945,7 +1284,9 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
       </div>
 
       <p className="text-[11.5px] text-text-muted">
-        Pontméret = a kapcsolatok súlya · vonalvastagság és fényerő = bizonyosság (jóváhagyott példa és élesített szabály
+        3D: húzással forgatod, görgővel / + − gombbal nagyítasz, Shift+húzással mozgatod · a háló MÉRETE = az átlagos
+        bizonyosság (100%-nál tölti ki a szaggatott külső kört) · Pontméret = a kapcsolatok súlya · vonalvastagság és
+        fényerő = bizonyosság (jóváhagyott példa és élesített szabály
         erős, jelölt gyenge, régi Notion-korszakbeli tudás kisebb súlyú; a tapasztalat — a teljes adattörténet ismétlődő
         tényei és az adaton igazolt állítások — a mögötte álló esetek számával erősödik) · szaggatott = még csak jelölt. A
         háló csak rögzített, valós tudásból épül.

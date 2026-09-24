@@ -749,6 +749,24 @@ is meg tudja adni a választ.
   adaton mérhető. Valós Gemini-kulcs nélkül a hipotézis-kör kimarad, a
   tény-gyűjtés akkor is fut.
 
+### AC. Tudásháló: 3D gömb, nagyobb nézet, a méret = a bizonyosság ✅ (vizuálisan ellenőrizve demóadattal)
+- **A méret mostantól a bizonyosságtól függ.** A háló mérete a látható
+  kapcsolatok átlagos bizonyossága: 100%-nál tölti ki a teljes teret
+  (szaggatott külső kör jelzi).
+  - Képlet: `méret = 30% + 70% × bizonyosság`. A legkisebb méret 30%, hogy
+    alacsony bizonyosságnál is olvasható maradjon.
+  - Eddig a tudás mennyiségétől (pont- és kapcsolatszámtól) függött.
+- **3D gömb** (alapnézet), saját perspektivikus vetítéssel, új függőség nélkül.
+  - Rétegek: középen a mag, a témák a saját irányukban, a partnerek és a
+    szabályok a téma körüli kúpban, a projektkódok a külső héjon.
+  - Húzással forgatható, magától lassan forog, görgővel vagy a +/− gombbal
+    nagyítható, Shift+húzással mozgatható.
+  - A hátsó elemek halványabbak, a közelebbiek felül rajzolódnak.
+  - A „Sík” gomb a régi glóriát mutatja.
+- **Nagyobb vászon:** a képernyő 84%-áig nő, és van teljes képernyős mód is
+  (a kijelölt pont részleteivel együtt).
+- Fájl: `frontend/components/admin-agent/Tudashalo.tsx`.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).
