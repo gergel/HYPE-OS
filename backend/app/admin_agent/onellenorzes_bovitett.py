@@ -38,7 +38,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.admin_agent.memory import partner_kulcs
-from app.models.admin_agent import AdminTask, LaraKerdes, MemoryChunk
+from app.models.admin_agent import LaraKerdes, MemoryChunk
 
 TIPUS_DONTES = "admin_dontes"
 TIPUS_ELTERES = "rendszer_elteres"
@@ -572,22 +572,11 @@ def valasz(db: Session, k: LaraKerdes, valasz_tipus: str, szoveg: str | None, er
         db.flush()
         eredmeny["pelda_id"] = m.id
     if valasz_tipus == "hibas" and k.tipus != TIPUS_FOGALOM:
-        # Hiba a rögzítésben → javítási feladat Lara felelősének (adminisztráció).
-        from app.admin_agent.enums import TaskState, TaskType
-        from app.admin_agent.settings_service import lara_felelos
+        # Hiba a rögzítésben → javítási feladat Lara felelősének, megoldási
+        # lépésekkel (lásd admin_agent/megoldas.py).
+        from app.admin_agent.megoldas import javitasi_feladat
 
-        eset = (c.get("esetek") or [{}])[0]
-        f = lara_felelos(db)
-        t = AdminTask(
-            tipus=TaskType.EGYEB.value, cim=f"Javítandó (Lara kérdéséből): {c.get('cimke') or ''} — {k.partner_nev}"[:300],
-            osszefoglalo=(k.kerdes or "")[:2000] + (f"\n\nMegjegyzés: {szoveg}" if szoveg else ""),
-            allapot=TaskState.NEW.value, trust_level="L0", project_code_id=eset.get("project_code_id"),
-            partner_nev=(k.partner_nev or "")[:255] or None, felelos_id=f.id if f else None,
-            forras_referenciak={"lara_kerdes_id": k.id},
-        )
-        db.add(t)
-        db.flush()
-        eredmeny["feladat_id"] = t.id
+        javitasi_feladat(db, k, szoveg, eredmeny)
 
 
 def bovitett_ellenorzes(db: Session, kezdet: datetime) -> tuple[dict[str, dict], dict[str, dict]]:

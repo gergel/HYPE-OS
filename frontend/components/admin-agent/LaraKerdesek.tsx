@@ -27,7 +27,7 @@ const VALASZOK: ValaszOpcio[] = [
   {
     ertek: "hibas",
     cim: "Rosszul rögzítettük — Lara javaslata volt a jó",
-    leiras: "Nem tanul belőle. A rögzítést javítsd (Beérkező számlák, illetve Utókövetés).",
+    leiras: "Nem tanul belőle. Lara javítási feladatot készít a Munkasorba, megoldási javaslattal.",
   },
 ];
 
@@ -45,7 +45,7 @@ const VALASZOK_DONTES: ValaszOpcio[] = [
   {
     ertek: "hibas",
     cim: "Hiba — javítani kell",
-    leiras: "Nem tanul belőle; Lara javítási feladatot készít a felelősnek a Munkasorba.",
+    leiras: "Nem tanul belőle; Lara javítási feladatot készít a felelősnek a Munkasorba, megoldási javaslattal.",
   },
 ];
 
@@ -323,6 +323,20 @@ function KerdesKartya({
       };
       if (!res.ok || !d.kerdes) {
         setHiba(typeof d.detail === "string" ? d.detail : "A válasz mentése nem sikerült.");
+        return;
+      }
+      if (tipus === "hibas" && d.feladat_id) {
+        // A javítási feladathoz Lara azonnal megoldási javaslatot is ír (a
+        // háttérben — a válasz nem vár rá; a feladat oldalán megjelenik).
+        if (nyomozhat) {
+          void authFetch(`/api/v1/admin-agent/tasks/${d.feladat_id}/solution`, { method: "POST" }).catch(() => undefined);
+        }
+        onKesz(
+          d.kerdes,
+          `Rendben, ebből nem tanulok. Javítási feladatot készítettem (#${d.feladat_id}) megoldási lépésekkel` +
+            (nyomozhat ? ", és most utánanézek a konkrét megoldásnak is" : "") +
+            " — a Munkasorban találod.",
+        );
         return;
       }
       const uzenet = bov

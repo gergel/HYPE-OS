@@ -136,11 +136,24 @@ def nightly_distill_task() -> dict | None:
 
         m = futtat(db, trigger="megerosites:ejszakai")
         db.commit()
+        # Gyorsított tanulás a Geminivel (ugyanaz a kulcs, mint az AI
+        # asszisztensé): partner-profilok + önreflexió — jelöltek, emberi
+        # jóváhagyásra (lásd admin_agent/gemini_tanulas.py).
+        from app.admin_agent import gemini_tanulas
+
+        try:
+            g = gemini_tanulas.futtat(db, trigger="ejszakai")
+            db.commit()
+        except Exception:  # noqa: BLE001 — a Gemini-tanulás hibája ne vigye el az éjszakai tanulást
+            db.rollback()
+            logger.exception("Lara Gemini-tanulása sikertelen.")
+            g = {"allapot": "hiba"}
         return {
             "learning_run_id": lr.id,
             "feldolgozott": lr.feldolgozott_korrekciok,
             "auto_jovahagyott": m["auto_jovahagyott"],
             "uj_szabalyjavaslat": m["uj_szabalyjavaslat"],
+            "gemini_tanulas": g.get("allapot"),
         }
     except Exception:
         db.rollback()
@@ -209,6 +222,16 @@ def self_check_task() -> dict | None:
         except Exception:  # noqa: BLE001 — az utánanézés hibája ne vigye el az önellenőrzést
             db.rollback()
             logger.exception("Lara utánanézése sikertelen.")
+        # A javítási (és más „egyéb") feladatokhoz megoldási javaslat
+        # (lásd admin_agent/megoldas.py) — korlátozott számban.
+        from app.admin_agent import megoldas
+
+        try:
+            eredmeny["megoldas"] = megoldas.futtat(db)
+            db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logger.exception("Lara megoldási javaslatai sikertelenek.")
         return eredmeny
     except Exception:
         db.rollback()

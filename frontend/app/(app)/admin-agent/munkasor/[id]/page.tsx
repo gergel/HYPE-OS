@@ -5,6 +5,7 @@ import { TopBar } from "@/components/TopBar";
 import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
 import { AdminJavaslatSzerkeszto } from "@/components/admin-agent/AdminJavaslatSzerkeszto";
 import { AdminTaskActions } from "@/components/admin-agent/AdminTaskActions";
+import { LaraMegoldas } from "@/components/admin-agent/LaraMegoldas";
 import { ALLAPOT_CIMKE, TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
 import { type AdminTaskTimeline, getAdminTaskTimeline, getMyPagePermissions } from "@/lib/api";
 
@@ -59,6 +60,10 @@ export default async function AdminAgentTaskReszletPage({
                   {adat.task.blokkolo_ok}
                 </div>
               )}
+            </Card>
+
+            <Card title="Lara megoldási javaslata">
+              <LaraMegoldas taskId={adat.task.id} kezdo={adat.task.lara_megoldas} canEdit={canEdit} />
             </Card>
 
             <Card title="Műveletek">

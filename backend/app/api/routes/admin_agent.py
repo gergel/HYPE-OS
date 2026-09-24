@@ -86,7 +86,9 @@ def _most() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _task_sor(t: AdminTask) -> dict:
+def _task_sor(t: AdminTask, user: Employee | None = None) -> dict:
+    from app.admin_agent.megoldas import lathato_megoldas
+
     return {
         "id": t.id,
         "tipus": t.tipus,
@@ -109,6 +111,9 @@ def _task_sor(t: AdminTask) -> dict:
         "row_version": t.row_version,
         "letrehozva": t.created_at.isoformat() if t.created_at else None,
         "befejezve_at": t.befejezve_at.isoformat() if t.befejezve_at else None,
+        # Lara megoldási javaslata (az alap-lépések mindenkinek, a modell-rész
+        # csak annak, akinek a jogosultságával készült — lásd admin_agent/megoldas.py).
+        "lara_megoldas": lathato_megoldas(t, user),
     }
 
 
@@ -317,19 +322,46 @@ def task_bejovo_szamlabol(
 def task_reszletek(
     task_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+    user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
     t = db.get(AdminTask, task_id)
     if t is None:
         raise HTTPException(status_code=404, detail="A feladat nem található.")
-    return _task_sor(t)
+    return _task_sor(t, user)
+
+
+@router.post("/tasks/{task_id}/solution")
+def task_megoldas(
+    task_id: int,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Lara megoldási javaslata a feladathoz — bármely feladathoz, a kérdésekből
+    született javítási feladatokhoz is. Utánanéz az érintett rekordoknak az AI
+    asszisztens CSAK OLVASÓ eszközeivel (a kérő jogosultságával), és konkrét
+    lépéseket javasol. Semmit nem módosít."""
+    from app.admin_agent.megoldas import ai_megoldas
+    from app.admin_agent.nyomozas import elerheto
+    from app.admin_agent.settings_service import leallitva
+
+    _csak_a_felelos_donthet(db, user)
+    if leallitva(db):
+        raise HTTPException(status_code=409, detail="Lara le van állítva (vészleállítás).")
+    if not elerheto():
+        raise HTTPException(status_code=409, detail="Beállítás szükséges: a szerveren nincs Gemini-kulcs.")
+    t = db.get(AdminTask, task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="A feladat nem található.")
+    ai_megoldas(db, t, user)
+    db.commit()
+    return _task_sor(t, user)
 
 
 @router.get("/tasks/{task_id}/timeline")
 def task_idovonal(
     task_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+    user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
     """A feladat teljes, olvasható idővonala: Lara-futások, nyomvonal-
     bejegyzések (ki mit tett, milyen eredménnyel) és a művelet-javaslatok a
@@ -350,7 +382,7 @@ def task_idovonal(
     )
     approval_allapot = {a.proposal_id: a.allapot for a in approvals}
     return {
-        "task": _task_sor(t),
+        "task": _task_sor(t, user),
         "runs": [
             {
                 "id": r.id,
@@ -1631,6 +1663,55 @@ def kerdes_valasz(
     elfogadas_jelolese(k, body.lara_valasza)
     db.commit()
     return {"kerdes": _kerdes_sor(k, user), **eredmeny}
+
+
+@router.get("/gemini")
+def gemini_allapot(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Lara Gemini-kapcsolata: ugyanaz a kulcs és modell, mint az AI
+    asszisztensé; mely Lara-funkciók használják, és a Gemini-tanulás eredménye.
+    Titkot nem ad vissza (csak azt, hogy van-e kulcs)."""
+    from app.admin_agent.gemini_tanulas import allapot
+
+    return allapot(db)
+
+
+@router.post("/gemini/test")
+def gemini_teszt(
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Egy apró, valódi modellhívás: él-e a Gemini-kapcsolat."""
+    from app.admin_agent.gemini_tanulas import kapcsolat_teszt
+
+    return kapcsolat_teszt()
+
+
+@router.post("/gemini/learn")
+def gemini_tanulas_most(
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Gyorsított tanulás most a Geminivel: partner-profilok és önreflexió.
+    Minden eredmény jelölt / függő szabály — élesíteni ember tud."""
+    from app.admin_agent.gemini_tanulas import futtat
+    from app.admin_agent.settings_service import leallitva
+
+    _csak_a_felelos_donthet(db, user)
+    if leallitva(db):
+        raise HTTPException(status_code=409, detail="Lara le van állítva (vészleállítás).")
+    try:
+        eredmeny = futtat(db, trigger="kezi")
+    except Exception as exc:  # noqa: BLE001 — érthető hibaüzenet a felületnek
+        import logging
+
+        db.rollback()
+        logging.getLogger(__name__).exception("Lara Gemini-tanulása sikertelen.")
+        raise HTTPException(status_code=500, detail=f"A Gemini-tanulás nem sikerült: {type(exc).__name__}") from exc
+    db.commit()
+    return eredmeny
 
 
 @router.get("/knowledge-graph")

@@ -387,6 +387,12 @@ def valaszol(db: Session, k: LaraKerdes, *, valasz_tipus: str, magyarazat: str |
     partner = k.partner_nev or ktx.get("partner_kulcs") or "?"
     eredmeny: dict = {"szabaly_id": None, "szabaly_allapot": None, "pelda_id": None}
 
+    if valasz_tipus == "hibas" and k.tipus in ("papir", "szamla_besorolas"):
+        # Rögzítési hiba → javítási feladat Lara felelősének, megoldási
+        # lépésekkel (lásd admin_agent/megoldas.py). Tudás nem lesz belőle.
+        from app.admin_agent.megoldas import javitasi_feladat
+
+        javitasi_feladat(db, k, szoveg, eredmeny)
     if k.tipus == "papir":
         _papir_valasz(db, k, valasz_tipus, szoveg, elesithet, eredmeny)
         return _lezar(db, k, valasz_tipus, szoveg, user_id, eredmeny)

@@ -15,6 +15,7 @@ function feltetelCimke(r: AdminRule): string {
   if (f.forras === "visszajatszas") reszek.push("visszajátszásból");
   if (f.forras === "kezi") reszek.push("kézi");
   if (f.forras === "megerosites") reszek.push("Lara javaslata egybehangzó esetekből");
+  if (f.forras === "gemini") reszek.push("Lara javaslata a Geminivel");
   return reszek.length ? ` · ${reszek.join(" · ")}` : "";
 }
 
@@ -501,6 +502,9 @@ function peldaCimke(m: { hatokor: string; forras?: string | null }): string {
   // A teljes rendszer figyelése: TÉNY a rendszer állapotáról (nem döntés).
   if (m.forras?.startsWith("rendszer:modul:")) return "Rendszerismeret · modul (tény)";
   if (m.forras?.startsWith("rendszer:projektkod:")) return "Projektkód-életút (tény)";
+  // Gyorsított tanulás a Geminivel (lásd backend admin_agent/gemini_tanulas.py).
+  if (m.forras?.startsWith("gemini:profil:")) return "Partner-profil (Gemini)";
+  if (m.forras?.startsWith("gemini:tanulsag:")) return "Tanulság (önreflexió)";
   if (m.forras?.startsWith("megfigyeles:")) {
     const kulcs = m.forras.split(":")[1];
     // Az alap négy forrásnál a feladattípus a beszédesebb; az újaknál a forrás.

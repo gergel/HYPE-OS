@@ -146,7 +146,13 @@ def test_hibas_papir_valasz_nem_tanit(db):
     db.flush()
     k = _kerdes(db, f"papir:tig:kihagyas:{kulcs}")[0]
     e = valaszol(db, k, valasz_tipus="hibas", magyarazat=None, user_id=2, elesithet=True)
-    assert e == {"szabaly_id": None, "szabaly_allapot": None, "pelda_id": None}
+    assert {k: e[k] for k in ("szabaly_id", "szabaly_allapot", "pelda_id")} == {
+        "szabaly_id": None, "szabaly_allapot": None, "pelda_id": None}
+    # A hiba javítási feladatot készít, megoldási lépésekkel.
+    from app.models.admin_agent import AdminTask
+
+    t = db.get(AdminTask, e["feladat_id"])
+    assert t.altipus == "javitas" and t.forras_referenciak["lara_megoldas"]["alap"]
     ujra = onellenorzes(db)
     assert ujra["teruletek"]["tig"]["megmagyarazva"] >= 1
 

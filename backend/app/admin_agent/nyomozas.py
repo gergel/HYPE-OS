@@ -191,9 +191,9 @@ def _kerdes_leiras(db: Session, k: LaraKerdes) -> str:
     return "\n\n".join(reszek)
 
 
-def rendszeruzenet(db: Session, futtato: Employee) -> str:
+def rendszeruzenet(db: Session, futtato: Employee, alap: str = RENDSZER) -> str:
     return "\n\n".join(filter(None, [
-        RENDSZER,
+        alap,
         f"Mai dátum: {datetime.now(timezone.utc).date().isoformat()}. A rendszert {futtato.full_name} jogosultságával látod.",
         "AZ AI ASSZISZTENS TUDÁSA — hol mi található a rendszerben:\n" + asszisztens_receptjei(),
         "A query_entity / aggregate_entity entitástípusai és mezőik:\n" + _entitas_sema(db, futtato),
@@ -241,15 +241,12 @@ def _cel(nev: str, arg: dict) -> str:
     return nev
 
 
-def nyomoz(db: Session, k: LaraKerdes, futtato: Employee) -> dict:
-    """Utánanéz egy kérdésnek; az eredményt a kérdés kontextusába írja.
-    A hívó commitál. Vissza: az utánanézés eredménye."""
-    rendszer = rendszeruzenet(db, futtato)
-    kerdes = _kerdes_leiras(db, k)
-    esz = eszkozok()
-    b: Beszelgetes = (_TESZT_BESZELGETES or _Gemini)(rendszer, kerdes, esz)
+def eszkozhurok(db: Session, futtato: Employee, rendszer: str, feladat: str) -> tuple[str, list[dict], str]:
+    """A közös, CSAK OLVASÓ eszköz-hurok (utánanézés, megoldási javaslat).
+    Vissza: (a modell végső szövege, a lépések naplója, állapot)."""
+    b: Beszelgetes = (_TESZT_BESZELGETES or _Gemini)(rendszer, feladat, eszkozok())
     lepesek: list[dict] = []
-    vegso: str | None = None
+    vegso = ""
     allapot = "kesz"
     try:
         for _ in range(MAX_LEPES):
@@ -266,9 +263,21 @@ def nyomoz(db: Session, k: LaraKerdes, futtato: Employee) -> dict:
             b.eredmenyek(parok)
         else:
             allapot = "lepeskorlat"
-    except Exception as exc:  # noqa: BLE001 — fail-closed: a kérdés marad, Lara nem talál ki semmit
-        logger.warning("Lara utánanézése hibára futott (kérdés #%s): %s", k.id, exc)
+    except Exception as exc:  # noqa: BLE001 — fail-closed: Lara nem talál ki semmit
+        logger.warning("Lara eszköz-hurka hibára futott: %s", exc)
         allapot = "hiba"
+    return vegso, lepesek, allapot
+
+
+def belso_link(link: object) -> str | None:
+    """Csak belső, relatív link — külső címre nem mutathat."""
+    return link if isinstance(link, str) and link.startswith("/") and not link.startswith("//") else None
+
+
+def nyomoz(db: Session, k: LaraKerdes, futtato: Employee) -> dict:
+    """Utánanéz egy kérdésnek; az eredményt a kérdés kontextusába írja.
+    A hívó commitál. Vissza: az utánanézés eredménye."""
+    vegso, lepesek, allapot = eszkozhurok(db, futtato, rendszeruzenet(db, futtato), _kerdes_leiras(db, k))
 
     adat = _json_kivag(vegso or "") or {}
     javaslat = adat.get("javaslat") if adat.get("javaslat") in JAVASLATOK else "nem_tudom"
@@ -283,12 +292,7 @@ def nyomoz(db: Session, k: LaraKerdes, futtato: Employee) -> dict:
     bizonyitekok = []
     for bz in (adat.get("bizonyitekok") or [])[:MAX_BIZONYITEK]:
         if isinstance(bz, dict) and bz.get("leiras"):
-            link = bz.get("link")
-            bizonyitekok.append({
-                "leiras": str(bz["leiras"])[:300],
-                # Csak belső, relatív link — külső címre nem mutathat.
-                "link": link if isinstance(link, str) and link.startswith("/") and not link.startswith("//") else None,
-            })
+            bizonyitekok.append({"leiras": str(bz["leiras"])[:300], "link": belso_link(bz.get("link"))})
     eredmeny = {
         "allapot": allapot,
         "valasz": valasz[:1500],

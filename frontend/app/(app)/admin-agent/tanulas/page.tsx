@@ -6,6 +6,7 @@ import { AdminTanulasVezerlok } from "@/components/admin-agent/AdminTanulasVezer
 import { AdminVisszajatszas } from "@/components/admin-agent/AdminVisszajatszas";
 import { LaraAsszisztens } from "@/components/admin-agent/LaraAsszisztens";
 import { LaraGyorsitas } from "@/components/admin-agent/LaraGyorsitas";
+import { LaraGemini } from "@/components/admin-agent/LaraGemini";
 import { LaraRendszer } from "@/components/admin-agent/LaraRendszer";
 import { LaraLevelezes } from "@/components/admin-agent/LaraLevelezes";
 import { LaraOnellenorzes } from "@/components/admin-agent/LaraOnellenorzes";
@@ -18,6 +19,7 @@ import {
   getLevelezesAllapot,
   getMyPagePermissions,
   getOnellenorzesFutasok,
+  getLaraGemini,
   getRendszerAllapot,
 } from "@/lib/api";
 
@@ -34,7 +36,7 @@ export default async function AdminAgentTanulasPage() {
   if (!canView) redirect("/nincs-jogosultsag");
   const canRun = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
 
-  const [tanulasok, evalok, visszajatszas, onellenorzes, levelezes, asszisztens, gyorsitas, rendszer] = await Promise.all([
+  const [tanulasok, evalok, visszajatszas, onellenorzes, levelezes, asszisztens, gyorsitas, rendszer, gemini] = await Promise.all([
     getAdminLearningRuns(),
     getAdminEvaluations(),
     getAdminReplaySummary(),
@@ -43,6 +45,7 @@ export default async function AdminAgentTanulasPage() {
     getAsszisztensAllapot(),
     getGyorsitasAllapot(),
     getRendszerAllapot(),
+    getLaraGemini(),
   ]);
 
   return (
@@ -59,6 +62,9 @@ export default async function AdminAgentTanulasPage() {
             <LaraGyorsitas kezdo={gyorsitas} canRun={canRun} />
           </Card>
 
+          <Card title="Gemini — gyorsított tanulás és önfejlesztés">
+            <LaraGemini kezdo={gemini} canRun={canRun} />
+          </Card>
           <Card title="A teljes rendszer figyelése — csak tanulás">
             <LaraRendszer kezdo={rendszer} canRun={canRun} />
           </Card>

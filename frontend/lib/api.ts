@@ -538,7 +538,45 @@ export type AdminTaskSor = {
   row_version: number;
   letrehozva: string | null;
   befejezve_at: string | null;
+  /** Lara megoldási javaslata (lásd backend admin_agent/megoldas.py). */
+  lara_megoldas?: LaraMegoldas | null;
 };
+
+export type LaraLepes = { leiras: string; link: string | null };
+
+export type LaraMegoldas = {
+  /** Azonnali lépések a kérdés adataiból (mindenkinek látszik). */
+  alap?: LaraLepes[];
+  ido?: string;
+  /** Lara saját javaslata — csak annak, akinek a jogosultságával készült. */
+  ai?: {
+    allapot: string;
+    osszefoglalo: string;
+    lepesek: LaraLepes[];
+    biztossag: number;
+    figyelmeztetesek: string[];
+    vizsgalt: { eszkoz: string; cel: string; ok: boolean }[];
+    futtato_nev?: string;
+    ido: string;
+  };
+};
+
+/** Lara Gemini-kapcsolata (ugyanaz, mint az AI asszisztensé) és a Gemini-tanulás. */
+export type LaraGeminiAllapot = {
+  kulcs_beallitva: boolean;
+  kozos_az_asszisztenssel: boolean;
+  modell: string;
+  embedding_modell: string | null;
+  funkciok: { kulcs: string; nev: string; be: boolean }[];
+  profilok: { osszes: number; jovahagyott: number };
+  tanulsagok: { osszes: number; jovahagyott: number };
+  utolso_futas: { ido: string | null; osszefoglalo: Record<string, unknown> | null };
+  utolso_reflexio: { ido: string | null; osszefoglalo: string | null; gyenge_pontok: string[] | null };
+};
+
+export async function getLaraGemini(): Promise<LaraGeminiAllapot | null> {
+  return apiGet<LaraGeminiAllapot>("/api/v1/admin-agent/gemini");
+}
 
 export type AdminAgentIntegracio = {
   kulcs: string;

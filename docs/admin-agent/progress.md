@@ -619,6 +619,40 @@ válaszolna — vonjuk bele az asszisztens tudását egy az egyben, hogy Lara is
   demóadattal kipróbálva (panel, elfogadás → tudás + statisztika; felelős
   nélkül a kézi utánanézés 403), utána a demósorok törölve.
 
+### Y. Megoldási javaslat a feladatokhoz + gyorsított tanulás a Geminivel ✅ (valós Gemini-hívás: ⚠️ nem ellenőrzött — kulcs nélkül „Beállítás szükséges")
+Kérés: (1) ha a kérdéseknél valami hiba miatt nem készül el, és Lara abból
+feladatot csinál, ahhoz is javasoljon megoldási ötletet — ne csak a kívülről
+kapott feladatnál; (2) a rendszerben bekötött Geminit (az AI asszisztensé)
+kössük be Larába is, hogy gyorsabban tanuljon, nagyobb tudásra tegyen szert és
+gyorsan fejlessze önmagát.
+- `app/admin_agent/megoldas.py`: MINDEN „hibás" válasz (számla, papír,
+  bővített kérdések) javítási feladatot készít (`egyeb` / `javitas`) Lara
+  felelősének, azonnali, linkes lépésekkel a kérdés adataiból. Erre épül Lara
+  saját javaslata: a közös csak-olvasó eszköz-hurok (`nyomozas.eszkozhurok`)
+  utánanéz a rekordoknak, és konkrét lépéseket ad (rekord, mező, érték, link;
+  csak belső link; nem-adminisztratív teendő csak figyelmeztetésként). Bármely
+  feladathoz kérhető (`POST /tasks/{id}/solution`, felelős-őr mögött); a
+  háttérben a javítási feladatok elöl, kétóránként legfeljebb 3; a „hibás"
+  válasz után a felület azonnal el is indítja. A modell-rész csak a
+  futtatónak látszik; semmit nem módosít.
+- `app/admin_agent/gemini_tanulas.py`: Lara UGYANAZT a Gemini-kapcsolatot
+  használja, mint az AI asszisztens (`GEMINI_API_KEY`, `GEMINI_MODEL`). Új:
+  éjszakánként **partner-profil** (≥3 jóváhagyott eset → tömör profil-jelölt
+  + függő szabályjavaslat, csak adminisztratív hatókörre; ujjlenyomattal nem
+  kérdez újra), és **önreflexió** (a kérdésekre adott válaszokból, a
+  javításokból és az önellenőrzés arányaiból tanulság-jelöltek + gyenge
+  pontok). Minden eredmény jelölt / függő — ember hagyja jóvá; kódot,
+  promptot, jogosultságot, küszöböt Lara nem ír át.
+- API: `GET /gemini` (állapot, funkciók, eredmények — titok nélkül),
+  `POST /gemini/test` (apró valódi hívás), `POST /gemini/learn`.
+- Felület: feladat oldalán „Lara megoldási javaslata" kártya; Tanulás oldalon
+  „Gemini — gyorsított tanulás és önfejlesztés" kártya; Beállításokban két új
+  kapcsoló; Tudástárban „Partner-profil (Gemini)" / „Tanulság (önreflexió)".
+- Tesztek: `test_admin_agent_megoldas_gemini.py` (6), a papír-teszt a
+  javítási feladattal bővült. Teljes backend: 199 passed, 1 skipped. tsc,
+  eslint, `next build` rendben. Dev szerveren demóadattal kipróbálva, utána a
+  demósorok törölve.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

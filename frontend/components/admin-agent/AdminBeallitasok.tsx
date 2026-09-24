@@ -273,6 +273,20 @@ export function AdminBeallitasok({
             tiltva={!canManage || folyamatban || b.kill_switch}
             onValt={(v) => limitMent({ nyomozas: v })}
           />
+          <Kapcsolo
+            cim="Megoldási javaslat a feladatokhoz"
+            leiras="A kérdésekből született javítási feladatokhoz (és a többi „egyéb” feladathoz) Lara konkrét megoldási lépéseket javasol: utánanéz az érintett rekordoknak az AI asszisztens csak-olvasó eszközeivel. Semmit nem módosít. Kétóránként legfeljebb 3 feladatnál, és a feladat oldalán kézzel bármikor."
+            aktiv={limitBe("megoldas")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ megoldas: v })}
+          />
+          <Kapcsolo
+            cim="Gyorsított tanulás a Geminivel"
+            leiras="Éjszakánként partner-profilt ír (ahol legalább 3 jóváhagyott eset van), szabályt javasol, és önreflexiót végez a saját hibáiból. Ugyanazt a Gemini-kapcsolatot használja, mint az AI asszisztens. Minden eredmény jelölt — a Tudástárban hagyod jóvá."
+            aktiv={limitBe("gemini_tanulas")}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ gemini_tanulas: v })}
+          />
         </div>
       </div>
 

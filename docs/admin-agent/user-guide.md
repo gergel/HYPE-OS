@@ -141,6 +141,16 @@ Minden lépés kattintással megy:
    utána) — ha jó, **„Elfogadom Lara válaszát"**, és a kérdés lezárul. Semmit
    nem módosít; kétóránként legfeljebb 3 kérdésnél fut, kézzel a „Nézz utána
    most" gombbal. Kapcsoló: Beállítások → „Utánanézés kérdés előtt".
+   **Ha a válaszod „Hiba — javítani kell"** (bármely kérdésnél), Lara javítási
+   feladatot tesz a Munkasorba, **megoldási javaslattal**: azonnal ott vannak a
+   lépések linkkel, és Lara utánanéz a konkrét megoldásnak is (melyik rekord,
+   melyik mező, mire). A feladat oldalán bármely feladathoz kérhetsz javaslatot
+   („Javasolj megoldást"). Lara semmit nem módosít — a javítást te végzed.
+8. **Gemini — gyorsított tanulás:** Lara ugyanazt a Geminit használja, mint az AI
+   asszisztens. Éjszakánként partner-profilt ír (ahol legalább 3 jóváhagyott eset
+   van), szabályt javasol, és önreflexiót végez a saját hibáiból. Ezek a
+   Tudástárban jelöltként várnak jóváhagyásra. A Tanulás oldal Gemini-kártyáján
+   ellenőrizheted a kapcsolatot, és kézzel is elindíthatod.
 7. **Tanul a levelezésből is:** Lara félóránként végigolvassa a
    **szamla@hypestab.hu** postafiók a tanulás kezdete óta érkezett és onnan
    küldött leveleit — a levelek szövegét, a ti válaszaitokat és a csatolmányok
