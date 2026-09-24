@@ -53,6 +53,19 @@ def _adat(db, n_kod: int = 4, n_mas: int = 1) -> ProjectCode:
     return pc
 
 
+def _adat_ugyek(db, n_ugy: int = 5) -> list[ProjectCode]:
+    """Több KÜLÖN üzleti ügy (projektkód) — az első kódon 4 számla (az EGY ügy)."""
+    kodok = [ProjectCode(projektkod=f"TAPASZT-{i + 1}", megrendelo_neve="Tapasztalat Megrendelő Zrt.")
+             for i in range(n_ugy)]
+    db.add_all(kodok)
+    db.flush()
+    for i, pc in enumerate(kodok):
+        db.add_all([Expense(megnevezes=PARTNER, netto=100_000 + j, brutto=127_000, kesz=True, tipus="Alvállalkozó",
+                            project_code_id=pc.id) for j in range(4 if i == 0 else 1)])
+    db.flush()
+    return kodok
+
+
 def _esemeny(db) -> SourceEvent:
     return db.scalar(select(SourceEvent).where(SourceEvent.forras == tapasztalas.FORRAS,
                                                SourceEvent.forras_azonosito == f"partner:{partner_kulcs(PARTNER)}"))
@@ -77,16 +90,18 @@ def test_tenyek_a_teljes_tortenetbol_idempotensen(db):
     se = _esemeny(db)
     assert se is not None and se.metaadat["ossz"] == 5  # a nyitott kiadás nem számít
     tenyek = {(t["fajta"], t["ertek"]): t for t in se.metaadat["tenyek"]}
-    assert tenyek[("forras", "kiadas")]["n"] == 5
-    assert tenyek[("projektkod", str(pc.id))]["n"] == 4 and tenyek[("projektkod", str(pc.id))]["ossz"] == 5
-    assert ("projektkod", "x") not in tenyek and all(t["n"] >= 2 for t in tenyek.values())  # 1 eset nem tapasztalat
+    # EGY ÜZLETI ÜGY = EGY ESET: a TAPASZT-1 négy számlája egy ügy, a TAPASZT-2 egy másik.
+    assert tenyek[("forras", "kiadas")]["n"] == 2 and tenyek[("forras", "kiadas")]["rekord"] == 5
+    assert ("projektkod", str(pc.id)) not in tenyek  # egy ügy nem tapasztalat, akárhány számlája van
+    assert all(t["n"] >= 2 for t in tenyek.values())
     m = db.scalar(select(MemoryChunk).where(MemoryChunk.forras == f"tapasztalas:partner:{partner_kulcs(PARTNER)}"))
-    assert m.ervenyes and m.minosites == tapasztalas.TENY and "TAPASZT-1 4/5" in m.tartalom
+    assert m.ervenyes and m.minosites == tapasztalas.TENY and "5 lezárt" in m.tartalom and "2 üzleti ügy" in m.tartalom
+    assert m.tudas_fajta == "teny" and m.bizonyitek_szint == "forras"
     assert tapasztalas.teny_gyujtes(db).get("valtozatlan", 0) >= 1 and _esemeny(db).id == se.id
 
 
 def test_gemini_allitas_csak_adat_igazolasaval_es_ujraellenorzes(db):
-    _adat(db)
+    _adat_ugyek(db)
     minden = tapasztalas.rekordok(db)
     tapasztalas.teny_gyujtes(db, minden)
     halo_elotte = tudashalo(db)
@@ -107,13 +122,16 @@ def test_gemini_allitas_csak_adat_igazolasaval_es_ujraellenorzes(db):
             se.metaadat = {**se.metaadat, "hipotezis_lenyomat": se.forras_verzio}
     r = tapasztalas.hipotezis_kor(db, 1, minden)
     assert len(kerdezett) == 1 and PARTNER in kerdezett[0]
-    assert r["igazolt"] == 2 and r["cafolt"] == 1  # 4/5 kód (80%) és 5/5 típus igaz; a milliós sáv nem
+    # A típus 5/5 ÜGYBEN igaz. A „TAPASZT-1 kódra” állítás 8 számlából 4-re igaz, de az
+    # EGYETLEN ügy (1/5) — nem általánosítható; a milliós sáv sehol sem igaz.
+    assert r["igazolt"] == 1 and r["cafolt"] == 2
     se = _esemeny(db)
-    assert {a["tipus"] for a in se.metaadat["igazolt"]} == {"projektkod", "tipus"}
-    assert se.metaadat["cafolt"][-1]["tipus"] == "osszeg_sav"
+    assert {a["tipus"] for a in se.metaadat["igazolt"]} == {"tipus"}
+    assert {c["tipus"] for c in se.metaadat["cafolt"]} >= {"osszeg_sav", "projektkod"}
     igazolt = db.scalars(select(MemoryChunk).where(MemoryChunk.forras.like("tapasztalas:allitas:%"),
                                                    MemoryChunk.minosites == tapasztalas.IGAZOLT)).all()
-    assert any("4/5 rögzített eset igazolja (80%)" in m.tartalom for m in igazolt)
+    assert any("5/5 rögzített eset igazolja (100%)" in m.tartalom for m in igazolt)
+    assert all(m.tudas_fajta == "tanulsag" for m in igazolt)
     # Ugyanarra az adatra nem kérdez újra.
     assert tapasztalas.hipotezis_kor(db, 1, minden).get("partner", 0) == 0
 
@@ -127,18 +145,20 @@ def test_gemini_allitas_csak_adat_igazolasaval_es_ujraellenorzes(db):
     elotte = {(e["a"], e["b"]): e["bizonyossag"] for e in halo_elotte["elek"] if pid in (e["a"], e["b"])}
     assert elotte and any(e["bizonyossag"] > elotte.get((e["a"], e["b"]), 0) for e in elek)
 
-    # Új adat: a kód már csak 4/8 → az állítás visszavonva, a típus marad.
-    masik = db.scalar(select(ProjectCode).where(ProjectCode.projektkod == "TAPASZT-2"))
-    db.add_all([Expense(megnevezes=PARTNER, netto=90_000, brutto=1, kesz=True, tipus="Alvállalkozó",
-                        project_code_id=masik.id) for _ in range(3)])
+    # Új adat: három új ügy más típussal → a típus már csak 5/8 ügyben igaz → visszavonva.
+    ujak = [ProjectCode(projektkod=f"TAPASZT-UJ-{i}") for i in range(3)]
+    db.add_all(ujak)
+    db.flush()
+    db.add_all([Expense(megnevezes=PARTNER, netto=90_000, brutto=1, kesz=True, tipus="Egyéb",
+                        project_code_id=pc.id) for pc in ujak])
     db.flush()
     stat = tapasztalas.teny_gyujtes(db)
     assert stat.get("visszavont", 0) >= 1
     se = _esemeny(db)
-    assert [a["tipus"] for a in se.metaadat["igazolt"]] == ["tipus"]
-    kod_allitas = next(m for m in db.scalars(select(MemoryChunk).where(MemoryChunk.forras.like("tapasztalas:allitas:%"))).all()
-                       if "TAPASZT-1" in m.tartalom)
-    assert not kod_allitas.ervenyes and kod_allitas.minosites == tapasztalas.CAFOLT
+    assert not se.metaadat["igazolt"]
+    tipus_allitas = next(m for m in db.scalars(select(MemoryChunk).where(MemoryChunk.forras.like("tapasztalas:allitas:%"))).all()
+                         if "Alvállalkozóként" in m.tartalom)
+    assert not tipus_allitas.ervenyes and tipus_allitas.minosites == tapasztalas.CAFOLT
 
 
 def test_modellhiba_eseten_a_tenyek_megmaradnak(db):

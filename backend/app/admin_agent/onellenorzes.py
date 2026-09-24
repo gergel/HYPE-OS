@@ -67,9 +67,18 @@ def _most() -> datetime:
 
 
 class Tudas:
-    """Lara jelenlegi, JÓVÁHAGYOTT tudása a számlák besorolásáról, partnerenként."""
+    """Lara jelenlegi, JÓVÁHAGYOTT tudása a számlák besorolásáról, partnerenként.
 
-    def __init__(self, db: Session):
+    ÜZLETI ÜGYEKET számol (2026-09, lásd admin_agent/ugyek.py): ugyanannak a
+    partnernek ugyanarra a projektkódra eső több számlája EGY esetnek számít;
+    projektkód nélkül minden számla külön ügy. A `kizart` függvény (ügykulcs ->
+    bool) a vizsgakészlet ügyeit hagyja ki; None = a beállítás szerint (alapból
+    semmi sincs kizárva)."""
+
+    def __init__(self, db: Session, *, kizart=None):
+        from app.admin_agent.ugyek import kizart as _kizart
+
+        self._kizart = kizart if kizart is not None else _kizart(db)
         self.szabalyok: dict[str, list[PlaybookRule]] = defaultdict(list)
         for r in db.scalars(
             select(PlaybookRule)
@@ -112,6 +121,12 @@ class Tudas:
             for e in ktx.get("esetek") or []:
                 self.esetek[kulcs].append((int(e.get("bejovo_id") or 0), v["tipus"], tuple(sorted(e.get("vegso_kod_idk") or []))))
 
+    @staticmethod
+    def ugy(kulcs: str, eset: tuple) -> str:
+        from app.admin_agent.ugyek import ugy_kulcs
+
+        return ugy_kulcs(partner=kulcs, projektkod_idk=eset[2], sajat=f"bejovo:{eset[0]}") or f"bejovo:{eset[0]}"
+
     def cel(self, kulcs: str, kiveve: int | None = None) -> dict | None:
         """Mit tud Lara erről a partnerről? A `kiveve` számla saját tanulságát nem
         használja (vak jóslat — nincs „puskázás")."""
@@ -129,17 +144,23 @@ class Tudas:
                 "szabaly_id": r.id,
                 "ellentmondo": len(tipusok) > 1,
             }
-        esetek = [e for e in self.esetek.get(kulcs, []) if e[0] != kiveve]
-        if len(esetek) < MIN_ESET:
+        esetek = [
+            e for e in self.esetek.get(kulcs, [])
+            if e[0] != kiveve and not self._kizart(self.ugy(kulcs, e))
+        ]
+        # Ügyenként egyszer számít egy döntés (több számla ugyanarra = egy eset).
+        ugy_tipus = {(self.ugy(kulcs, e), e[1]) for e in esetek}
+        ugyek = {u for u, _ in ugy_tipus}
+        if len(ugyek) < MIN_ESET:
             return None
-        tipus, db_ = Counter(e[1] for e in esetek).most_common(1)[0]
-        if db_ / len(esetek) < EGYETERTES:
+        tipus, db_ = Counter(t for _, t in ugy_tipus).most_common(1)[0]
+        if db_ / len(ugyek) < EGYETERTES:
             return None
         kodok = {e[2] for e in esetek if e[1] == tipus}
         return {
             "tipus": tipus,
             "kod_idk": list(kodok.pop()) if len(kodok) == 1 else [],
-            "forras": f"{db_} jóváhagyott korábbi eset",
+            "forras": f"{db_} jóváhagyott korábbi ügy",
             "fajta": "peldak",
             "szabaly_id": None,
             "ellentmondo": False,

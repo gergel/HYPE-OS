@@ -31,6 +31,10 @@ BIZTONSÁG:
   tapasztalat tény és igazolt állítás, nem utasítás.
 * A tények és az igazolt állítások a Tudástárban „tapasztalat" / „adat
   igazolta" címkével látszanak, és egy kattintással visszavonhatók.
+* ÜZLETI ÜGYEKET számol (2026-09, lásd admin_agent/ugyek.py): ugyanannak a
+  partnernek ugyanarra a projektkódra eső több rekordja EGY esetnek számít —
+  a küszöbök (tapasztalat, igazolt állítás) ügyekre értendők. A bekapcsolt
+  vizsgakészlet ügyei kimaradnak.
 * Fail-closed: nincs Gemini-kulcs / modellhiba → a tény-gyűjtés akkor is fut, a
   hipotézis-kör kimarad.
 * Vészleállításnál és kikapcsolt „Tanulás és megfigyelés" forrásnál nem fut;
@@ -160,8 +164,11 @@ def rekordok(db: Session) -> dict[str, dict]:
     munkából (a megfigyelő kinyerőivel). Csak olvas."""
     from app.admin_agent.observer import FIGYELT, _Kontextus, _notion_rekordok, _regi, tanulas_kezdete
 
+    from app.admin_agent.ugyek import kizart
+
     kezdet = tanulas_kezdete(db)
     k = _Kontextus(db)
+    vizsga = kizart(db)
     ki: dict[str, dict] = defaultdict(lambda: {"nev": None, "rekordok": []})
     for f in FIGYELT:
         if f.kulcs not in TENY_FORRASOK:
@@ -175,6 +182,8 @@ def rekordok(db: Session) -> dict[str, dict]:
             if len(pk) < 3:
                 continue
             pc_id = meta.get("project_code_id")
+            if vizsga(_ugy_kulcs(pk, f.kulcs, r.id, pc_id)):
+                continue  # vizsgaeset: a tapasztalatba sem kerül
             ido = r.updated_at or r.created_at
             osszeg = meta.get("osszeg")
             g = ki[pk]
@@ -194,20 +203,35 @@ def rekordok(db: Session) -> dict[str, dict]:
     return ki
 
 
+def _ugy_kulcs(pk: str, forras: str, rid: int, pc_id: int | None) -> str:
+    from app.admin_agent.ugyek import ugy_kulcs
+
+    return ugy_kulcs(partner=pk, projektkod_idk=[pc_id] if pc_id else None, sajat=f"{forras}:{rid}") or f"{forras}:{rid}"
+
+
+def _ugy(s: dict) -> str:
+    """Egy rekord üzleti ügye: projektkóddal a projektkód, anélkül a rekord."""
+    return f"pk:{s['pc_id']}" if s.get("pc_id") else f"{s['forras']}:{s['id']}"
+
+
+def _ugyszam(sorok: list[dict]) -> int:
+    return len({_ugy(s) for s in sorok})
+
+
 # ── 2) Tények (determinista) ─────────────────────────────────────────────────
 
 
 def _teny(fajta: str, ertek: str, cimke: str, sorok: list[dict], ossz: int) -> dict:
     return {
-        "fajta": fajta, "ertek": ertek, "cimke": cimke, "n": len(sorok), "ossz": ossz,
+        "fajta": fajta, "ertek": ertek, "cimke": cimke, "n": _ugyszam(sorok), "ossz": ossz, "rekord": len(sorok),
         "n_uj": sum(1 for s in sorok if not s["regi"]), "n_regi": sum(1 for s in sorok if s["regi"]),
     }
 
 
 def tenyek(rek: list[dict]) -> list[dict]:
-    """Egy partner ismétlődő tényei (legalább MIN_TAPASZTALAT egybehangzó rekord)."""
+    """Egy partner ismétlődő tényei (legalább MIN_TAPASZTALAT egybehangzó ÜGY)."""
     ki: list[dict] = []
-    ossz = len(rek)
+    ossz = _ugyszam(rek)
     for fajta, kulcs, cimke_fn in (
         ("forras", lambda s: s["forras"], lambda v: FORRAS_CIMKE.get(v, v)),
         ("projektkod", lambda s: str(s["pc_id"]) if s["pc_id"] else None, None),
@@ -219,9 +243,9 @@ def tenyek(rek: list[dict]) -> list[dict]:
             v = kulcs(s)
             if v:
                 csoport[v].append(s)
-        alap = sum(len(v) for v in csoport.values())
+        alap = _ugyszam([x for v in csoport.values() for x in v])
         for v, sorok in csoport.items():
-            if len(sorok) < MIN_TAPASZTALAT:
+            if _ugyszam(sorok) < MIN_TAPASZTALAT:
                 continue
             if cimke_fn is not None:
                 cimke = cimke_fn(v)
@@ -244,7 +268,7 @@ def _teny_szoveg(nev: str, rek: list[dict], tk: list[dict]) -> str:
         t = [x for x in tk if x["fajta"] == fajta][:6]
         if t:
             reszek.append(f"{elotag}: " + ", ".join(f"{x['cimke']} {x['n']}/{x['ossz']}" for x in t))
-    return (f"Tapasztalat — {nev}: {len(rek)} lezárt, ember által rögzített rekord{ido}. "
+    return (f"Tapasztalat — {nev}: {len(rek)} lezárt, ember által rögzített rekord, {_ugyszam(rek)} üzleti ügy{ido}. "
             + "; ".join(reszek) + ". (Lara a teljes adattörténetből számolta, nem becslés.)")
 
 
@@ -288,7 +312,8 @@ def teny_gyujtes(db: Session, minden: dict[str, dict] | None = None) -> dict:
         m = db.scalar(select(MemoryChunk).where(MemoryChunk.forras == forras))
         if m is None:
             db.add(MemoryChunk(hatokor=forras_hatokor, tartalom=tartalom, forras=forras, forras_verzio=lenyomat,
-                               minosites=TENY, tanulasi_halmaz="jovahagyott", ervenyes=True, regi_korszak=uj_regi))
+                               minosites=TENY, tanulasi_halmaz="jovahagyott", ervenyes=True, regi_korszak=uj_regi,
+                               tudas_fajta="teny", bizonyitek_szint="forras"))
         elif not m.visszavont:
             m.tartalom, m.forras_verzio, m.hatokor, m.regi_korszak = tartalom, lenyomat, forras_hatokor, uj_regi
         stat["teny"] += len(tk)
@@ -338,7 +363,8 @@ def ellenoriz(allitas: dict, rek: list[dict]) -> tuple[int, int]:
         jo = [s for s in sok if s["kules_nap"] <= felso]
     else:
         return 0, 0
-    return len(jo), len(sok)
+    # Üzleti ügyek száma (egy projektkód több rekordja egy eset).
+    return _ugyszam(jo), _ugyszam(sok)
 
 
 def igazolt(jo: int, sok: int) -> bool:
@@ -455,7 +481,9 @@ def hipotezis_kor(db: Session, max_partner: int, minden: dict[str, dict] | None 
             if m is None:
                 db.add(MemoryChunk(hatokor=hatokor, tartalom=tartalom, forras=forras, forras_verzio=se.forras_verzio,
                                    minosites=IGAZOLT, tanulasi_halmaz="jovahagyott", ervenyes=True,
-                                   regi_korszak=not any(not s["regi"] for s in g["rekordok"])))
+                                   regi_korszak=not any(not s["regi"] for s in g["rekordok"]),
+                                   # a Gemini állítása, de a TELJES adaton igazolva
+                                   tudas_fajta="tanulsag", bizonyitek_szint="forras"))
             elif m.visszavont:
                 continue  # ember már elvetette — nem hozzuk vissza
             else:

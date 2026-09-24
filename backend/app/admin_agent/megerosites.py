@@ -21,6 +21,9 @@ Biztonsági elvek:
   (törölt rekord) sosem hagyhatók jóvá automatikusan — azokat embernek kell
   elolvasnia. A megtörtént fizetés (bevétel) viszont TÉNY: önmagában igazolt.
 * A régi korszak (Notion) félretett jelöltjei kimaradnak.
+* ÜZLETI ÜGYEKET számolunk, nem rekordokat (2026-09, lásd admin_agent/ugyek.py):
+  ugyanannak a partnernek ugyanarra a projektkódra eső több dokumentuma EGY
+  esetnek számít. A bekapcsolt vizsgakészlet ügyei kimaradnak.
 * Minden automatikus jóváhagyás nyomot hagy (`aa_action_traces`), a Tudástárban
   „automatikusan jóváhagyva" címkét kap, és egy kattintással elvethető.
 * Kikapcsolható: `aa_settings.limitek.auto_jovahagyas` (alap: be).
@@ -44,6 +47,7 @@ from app.admin_agent.enums import ActorKind, RuleState
 from app.admin_agent.memory import partner_kulcs
 from app.admin_agent.observer import FELRETEVE, FORRAS_CIMKEK
 from app.admin_agent.settings_service import get_settings
+from app.admin_agent.ugyek import kizart, meta_ugy_kulcs
 from app.admin_agent.visszajatszas import CEL_CIMKE
 from app.models.admin_agent import ActionTrace, LearningRun, MemoryChunk, PlaybookRule, SourceEvent
 from app.models.contract import Contract
@@ -89,6 +93,7 @@ class _Elem:
     partner_nev: str
     minta: tuple
     meta: dict
+    ugy: str = ""  # az üzleti ügy kulcsa (lásd admin_agent/ugyek.py)
 
 
 def _norm(v: Any) -> str:
@@ -172,7 +177,10 @@ def _elemek(db: Session) -> list[_Elem]:
         pk = partner_kulcs(nev)
         if len(pk) < 3:
             continue
-        ki.append(_Elem(m, kulcs, pk, nev, minta, meta))
+        ugy = meta_ugy_kulcs(meta, sajat=m.forras) or f"egyedi:{m.forras}"
+        if m.ugy_kulcs != ugy:
+            m.ugy_kulcs = ugy  # Lara saját táblája: a visszakereséshez és a vizsgakészlethez
+        ki.append(_Elem(m, kulcs, pk, nev, minta, meta, ugy))
     return ki
 
 
@@ -207,12 +215,18 @@ def futtat(db: Session, *, trigger: str = TRIGGER) -> dict:
     elemek = _elemek(db)
 
     csoportok: dict[tuple, list[_Elem]] = defaultdict(list)
-    partner_ossz: Counter = Counter()
+    partner_ugyek: dict[tuple, set[str]] = defaultdict(set)
+    vizsga = kizart(db)
+    vizsga_db = 0
     for e in elemek:
         if e.kulcs in KEZI_FORRASOK or e.minta == ("szoveg",):
             continue
+        if vizsga(e.ugy):
+            vizsga_db += 1  # vizsgaeset: nem kerül a tanító összesítésbe
+            continue
         csoportok[(e.kulcs, e.partner, e.minta)].append(e)
-        partner_ossz[(e.kulcs, e.partner)] += 1
+        partner_ugyek[(e.kulcs, e.partner)].add(e.ugy)
+    partner_ossz: Counter = Counter({k: len(v) for k, v in partner_ugyek.items()})
 
     most = _most()
     jovahagyott = 0
@@ -220,7 +234,7 @@ def futtat(db: Session, *, trigger: str = TRIGGER) -> dict:
     reszletek: list[dict] = []
     if be:
         for (kulcs, pk, minta), lista in csoportok.items():
-            n = len(lista)
+            n = len({e.ugy for e in lista})  # ÜGYEK száma, nem rekordoké
             arany = n / partner_ossz[(kulcs, pk)]
             teny = minta == ("teny",)
             if not teny and (n < min_eset or arany < EGYETERTES):
@@ -243,6 +257,7 @@ def futtat(db: Session, *, trigger: str = TRIGGER) -> dict:
                             "partner": e.partner_nev,
                             "minta": _minta_szoveg(kulcs, minta),
                             "esetszam": n,
+                            "rekordszam": len(lista),
                             "arany": round(arany, 3),
                             "teny": teny,
                         },
@@ -263,6 +278,7 @@ def futtat(db: Session, *, trigger: str = TRIGGER) -> dict:
         "min_eset": min_eset,
         "vizsgalt_pelda": len(elemek),
         "csoport": len(csoportok),
+        "vizsgaeset_kihagyva": vizsga_db,
         "auto_jovahagyott": jovahagyott,
         "blokkolt_csoport": blokkolt,
         "reszletek": reszletek[:30],
@@ -345,7 +361,7 @@ def _szabalyjavaslatok(db: Session, csoportok: dict, partner_ossz: Counter) -> d
             )] += 1
             continue
 
-        n = len(ervenyes)
+        n = len({e.ugy for e in ervenyes})  # ÜGYEK száma
         if n < SZABALY_MIN_ESET or n / partner_ossz[(kulcs, pk)] < SZABALY_EGYETERTES:
             continue
         if any(e.chunk.visszavont for e in lista):

@@ -160,7 +160,10 @@ def _partner_peldak(db: Session) -> dict[str, dict]:
 def partner_profilok(db: Session, max_db: int = ALAP_PROFIL_MAX) -> dict:
     """Partner-profil jelöltek (és függő szabályjavaslatok) a Geminivel.
     A hívó commitál."""
+    from app.admin_agent.ugyek import kizart
+
     stat = Counter()
+    vizsga = kizart(db)
     jeloltek = sorted(
         ((pk, g) for pk, g in _partner_peldak(db).items() if len(g["peldak"]) >= PROFIL_MIN),
         key=lambda x: len(x[1]["peldak"]), reverse=True,
@@ -169,7 +172,11 @@ def partner_profilok(db: Session, max_db: int = ALAP_PROFIL_MAX) -> dict:
         if stat["uj"] + stat["frissult"] >= max_db:
             stat["varolistan"] += 1
             continue
-        peldak = sorted(g["peldak"], key=lambda m: m.id)[-PROFIL_PELDA_MAX:]
+        # A vizsgakészlet ügyei nem szivároghatnak át a profilon keresztül.
+        peldak = sorted((m for m in g["peldak"] if not vizsga(m.ugy_kulcs)), key=lambda m: m.id)[-PROFIL_PELDA_MAX:]
+        if len(peldak) < PROFIL_MIN:
+            stat["kevés_tanito_eset"] += 1
+            continue
         lenyomat = _ujjlenyomat([(m.id, m.tartalom) for m in peldak])
         forras = f"gemini:profil:{pk}"[:120]
         meglevo = db.scalar(select(MemoryChunk).where(MemoryChunk.forras == forras))
@@ -198,12 +205,15 @@ def partner_profilok(db: Session, max_db: int = ALAP_PROFIL_MAX) -> dict:
             db.add(MemoryChunk(
                 hatokor=hatokor, tartalom=tartalom, forras=forras, forras_verzio=lenyomat, minosites="jelolt",
                 tanulasi_halmaz="jovahagyott", ervenyes=False, regi_korszak=False,
+                # A modell összegzése, nem forrással igazolt tény (lásd memory.HIPOTEZIS_ELOTAG).
+                tudas_fajta="profil", bizonyitek_szint="hipotezis",
             ))
             stat["uj"] += 1
         else:
             # Új anyag → új szöveg, és újra ember hagyja jóvá.
             meglevo.tartalom, meglevo.forras_verzio = tartalom, lenyomat
             meglevo.hatokor, meglevo.ervenyes, meglevo.minosites = hatokor, False, "jelolt"
+            meglevo.tudas_fajta, meglevo.bizonyitek_szint = "profil", "hipotezis"
             stat["frissult"] += 1
         for sz in v.adat.get("szabalyok") or []:
             if sz.get("hatokor") not in ADMIN_HATOKOROK:
@@ -281,7 +291,7 @@ def onreflexio(db: Session) -> dict:
             hatokor=t["hatokor"],
             tartalom=f"Tanulság (Lara önreflexiója a Geminivel): {t['tanulsag'].strip()} Ezentúl: {t['mit_csinalok_maskepp'].strip()}",
             forras=forras, forras_verzio=lenyomat, minosites="jelolt", tanulasi_halmaz="jovahagyott",
-            ervenyes=False, regi_korszak=False,
+            ervenyes=False, regi_korszak=False, tudas_fajta="tanulsag", bizonyitek_szint="hipotezis",
         ))
         uj += 1
     most = _most()
