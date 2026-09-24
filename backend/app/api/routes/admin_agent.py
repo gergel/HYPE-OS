@@ -1847,6 +1847,9 @@ def memory_lista(
     felt = [MemoryChunk.tanulasi_halmaz == "jovahagyott"]
     if hatokor:
         felt.append(MemoryChunk.hatokor == hatokor)
+    else:
+        # A kézikönyv-szakaszoknak saját nézetük és jóváhagyásuk van (/kezikonyv).
+        felt.append(MemoryChunk.hatokor != "kezikonyv")
     if not felretett:
         felt.append(MemoryChunk.minosites != FELRETEVE)
     sorok = db.scalars(select(MemoryChunk).where(*felt).order_by(MemoryChunk.id.desc()).limit(limit)).all()
@@ -1901,6 +1904,10 @@ def memory_tomeges(
     kesz = 0
     kihagyott = 0
     for m in sorok:
+        if m.hatokor == "kezikonyv":
+            # A kézikönyv csak a saját (verziózó) útján hagyható jóvá / vethető el.
+            kihagyott += 1
+            continue
         if body.muvelet == "jovahagy":
             if m.visszavont:
                 kihagyott += 1
@@ -1929,6 +1936,8 @@ def memory_modositas(
     m = db.get(MemoryChunk, memory_id)
     if m is None:
         raise HTTPException(status_code=404, detail="A példa nem található.")
+    if m.hatokor == "kezikonyv":
+        raise HTTPException(status_code=409, detail="Kézikönyv-szakasz a Kézikönyv nézetben kezelhető.")
     if payload.ervenyes is True:
         check_page_action(db, user, PAGE, "delete")
         if m.visszavont:

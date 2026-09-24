@@ -172,10 +172,13 @@ def hasonlo(
     if not szoveg.strip() or not elerheto() or not bekapcsolva(db):
         return []
     kuszob = MIN_HASONLOSAG if min_hasonlosag is None else min_hasonlosag
+    from app.admin_agent.memory import ervenyes_most
+
     felt = [
         MemoryChunk.tanulasi_halmaz == "jovahagyott",
         MemoryChunk.ervenyes.is_(True),
         MemoryChunk.visszavont.is_(False),
+        ervenyes_most(),
         MemoryChunk.embedding.is_not(None),
         MemoryChunk.embedding_modell == modell(),
     ]
@@ -205,6 +208,8 @@ def hasonlo(
             "tartalom": m.tartalom,
             "hasonlosag": round(s, 3),
             "regi": bool(m.regi_korszak),
+            "hipotezis": m.bizonyitek_szint == "hipotezis",
+            "fajta": m.tudas_fajta,
         }
         for _, s, m in pontok[:limit]
     ]

@@ -24,7 +24,7 @@ from sqlalchemy import (
     event,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
 
@@ -329,6 +329,48 @@ class MemoryChunk(TimestampMixin, Base):
     #: jelölt; a már jóváhagyott csak az újak után, kisebb súllyal kerül elő.
     regi_korszak: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
+    # ── Visszakövethetőség és hatókör (2026-09 bővítés, lásd
+    #    docs/admin-agent/lara-fejlesztes-2026-09.md) ─────────────────────────
+    #: A tudás FAJTÁJA: eset | eseti_magyarazat | kivetel | fogalom |
+    #: szabaly_allitas | kezikonyv_technikai | kezikonyv_uzleti | profil |
+    #: tanulsag | teny. NULL = a bővítés előtti tudás (fajta nélkül).
+    tudas_fajta: Mapped[str | None] = mapped_column(String(30), index=True)
+    #: "forras" (forrással igazolt) vagy "hipotezis" (feltételezés, pl. a
+    #: modell indoklása). Hipotézis sosem kerül tényként a modell elé.
+    bizonyitek_szint: Mapped[str | None] = mapped_column(String(20))
+    #: A hatókör részletei: {partner, project_code_id, cel_tipus, terulet,
+    #: kivetelek: [...]} — a tanítás előnézetéből vagy a forrásból.
+    hatokor_reszletek: Mapped[dict | None] = mapped_column(JSONB)
+    #: Érvényesség: csak ebben az időablakban használható (NULL = nyitott).
+    ervenyes_tol: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ervenyes_ig: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Verzió: a kézikönyv-szakasz / átírt tudás új verziója új sor, az
+    #: előzőre mutatva (a régi NEM törlődik).
+    verzio: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    elozo_verzio_id: Mapped[int | None] = mapped_column(ForeignKey("aa_memory_chunks.id", ondelete="SET NULL"))
+    #: Ki és mikor hagyta jóvá (az automatikus megerősítésnél üres).
+    jovahagyta_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
+    jovahagyva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Mikor vált HASZNÁLHATÓVÁ (ervenyes=True) — a tanulási késés méréséhez.
+    felhasznalhato_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Az ÜZLETI ÜGY kulcsa (projektkód + partner): egy ügy több dokumentuma
+    #: egy esetnek számít (lásd admin_agent/ugyek.py).
+    ugy_kulcs: Mapped[str | None] = mapped_column(String(200), index=True)
+    #: Hányszor és mikor került legutóbb visszakeresésbe (modell / beszélgetés elé).
+    felhasznalva_db: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    utolso_felhasznalas_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+@event.listens_for(MemoryChunk, "before_insert")
+@event.listens_for(MemoryChunk, "before_update")
+def _felhasznalhatova_valt(_mapper, _conn, target: MemoryChunk) -> None:
+    """Az első pillanat rögzítése, amikor a tudás használhatóvá vált — a
+    tanulás késésének méréséhez (lásd admin_agent/minoseg.py)."""
+    if target.ervenyes and not target.visszavont and target.felhasznalhato_at is None:
+        from datetime import timezone as _tz
+
+        target.felhasznalhato_at = datetime.now(_tz.utc)
+
 
 @event.listens_for(MemoryChunk.tartalom, "set")
 def _tartalom_valtozott(target: MemoryChunk, value, oldvalue, _initiator) -> None:
@@ -360,6 +402,12 @@ class EvalCase(TimestampMixin, Base):
     halmaz: Mapped[str] = mapped_column(String(20), nullable=False, default="szintetikus", index=True)
     forras: Mapped[str | None] = mapped_column(String(120))
     ervenyes: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: SZAKMAI eset: melyik szabály melyik verziójához készült (NULL =
+    #: biztonsági eset) - lásd admin_agent/szakmai_eval.py.
+    szabaly_id: Mapped[int | None] = mapped_column(ForeignKey("aa_playbook_rules.id", ondelete="CASCADE"), index=True)
+    szabaly_verzio: Mapped[int | None] = mapped_column(Integer)
+    #: pozitiv | ellenpelda | hianyos (szakmai) — biztonsági esetnél NULL.
+    eset_fajta: Mapped[str | None] = mapped_column(String(20))
 
 
 class EvalRun(TimestampMixin, Base):
@@ -459,3 +507,41 @@ class LaraKerdes(TimestampMixin, Base):
     megvalaszolta_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
     megvalaszolva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     szabaly_id: Mapped[int | None] = mapped_column(ForeignKey("aa_playbook_rules.id", ondelete="SET NULL"))
+
+
+class LaraBeszelgetes(TimestampMixin, Base):
+    """Beszélgetés Larával a „Kérdezz Larától” felületen (lásd
+    admin_agent/beszelgetes.py). Csak a saját gazdája látja."""
+
+    __tablename__ = "aa_beszelgetesek"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    cim: Mapped[str] = mapped_column(String(200), nullable=False, default="Új beszélgetés")
+    #: kerdez | tanit — a felület módja.
+    mod: Mapped[str] = mapped_column(String(20), nullable=False, default="kerdez")
+    #: A beszélgetés rövid összefoglalója (a modell ezt kapja a régebbi
+    #: üzenetek helyett) — szerveroldalon képzett.
+    osszefoglalo: Mapped[str | None] = mapped_column(Text)
+    archivalva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+
+
+class LaraBeszelgetesUzenet(TimestampMixin, Base):
+    """Egy üzenet a beszélgetésben. Lara válaszánál az `adat` hordozza a
+    felhasznált tudást, a forrásokat, a lépéseket és az állapotot — ebből
+    mutatja a felület a „Honnan tudom” részt."""
+
+    __tablename__ = "aa_beszelgetes_uzenetek"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    beszelgetes_id: Mapped[int] = mapped_column(
+        ForeignKey("aa_beszelgetesek.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: felhasznalo | lara
+    szerep: Mapped[str] = mapped_column(String(20), nullable=False)
+    szoveg: Mapped[str] = mapped_column(Text, nullable=False)
+    adat: Mapped[dict | None] = mapped_column(JSONB)
+    #: A felhasználó értékelése Lara válaszáról: helyes | reszben | hibas.
+    ertekeles: Mapped[str | None] = mapped_column(String(20))
+    ertekeles_megjegyzes: Mapped[str | None] = mapped_column(Text)
+    ertekelve_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
