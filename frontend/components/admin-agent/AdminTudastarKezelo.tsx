@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import type { AdminMemory, AdminRule } from "@/lib/api";
 import { MEGFIGYELT_FORRAS_CIMKE, TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
+import { LaraSzakmaiTeszt } from "@/components/admin-agent/LaraSzakmaiTeszt";
 import { AdminSzabalyUrlap } from "@/components/admin-agent/AdminSzabalyUrlap";
 
 /** A szabály feltételeinek rövid, emberi címkéje (partner / cél). */
@@ -373,6 +374,7 @@ export function AdminTudastarKezelo({
               key={r.id}
               cimke={`${TIPUS_CIMKE[r.hatokor] ?? r.hatokor} · ${RULE_ALLAPOT[r.allapot] ?? r.allapot}${feltetelCimke(r)}`}
               szoveg={`${r.cim} — ${r.tartalom}`}
+              extra={<LaraSzakmaiTeszt ruleId={r.id} canEdit={canEdit} />}
             >
               {canEdit && (
                 <>
@@ -473,6 +475,7 @@ function Sor({
   megjegyzes,
   kijelolve,
   onKijel,
+  extra,
   children,
 }: {
   cimke: string;
@@ -481,6 +484,8 @@ function Sor({
   megjegyzes?: string;
   kijelolve?: boolean;
   onKijel?: () => void;
+  /** A szöveg alatti kiegészítő rész (pl. a szabály szakmai tesztje). */
+  extra?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
@@ -495,6 +500,7 @@ function Sor({
         <SorSzoveg szoveg={szoveg} />
         {megjegyzes && <p className="text-[11.5px] text-text-accent">{megjegyzes}</p>}
         {forras && <p className="text-[11px] text-text-muted">forrás: {forras}</p>}
+        {extra}
       </div>
       {children && <div className="flex shrink-0 gap-1.5">{children}</div>}
     </li>

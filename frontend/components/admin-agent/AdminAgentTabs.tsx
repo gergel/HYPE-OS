@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 
 const FULEK = [
   { href: "/admin-agent", label: "Áttekintés" },
+  { href: "/admin-agent/beszelgetes", label: "Kérdezz Larától" },
   { href: "/admin-agent/munkasor", label: "Munkasor" },
   { href: "/admin-agent/jovahagyasok", label: "Jóváhagyások" },
   { href: "/admin-agent/tudastar", label: "Tudástár" },

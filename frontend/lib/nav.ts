@@ -260,6 +260,7 @@ export const navGroups: NavGroup[] = [
       // routes/admin_agent.py PAGE). Induláskor L0/kikapcsolva - lásd
       // docs/admin-agent/.
       { label: "Áttekintés", href: "/admin-agent", icon: "Bot" },
+      { label: "Kérdezz Larától", href: "/admin-agent/beszelgetes", icon: "MessagesSquare", permissionPage: "/admin-agent" },
       { label: "Munkasor", href: "/admin-agent/munkasor", icon: "ListTodo", permissionPage: "/admin-agent" },
       { label: "Jóváhagyások", href: "/admin-agent/jovahagyasok", icon: "CheckSquare", permissionPage: "/admin-agent" },
       { label: "Tudástár", href: "/admin-agent/tudastar", icon: "BookOpen", permissionPage: "/admin-agent" },

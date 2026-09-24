@@ -102,19 +102,21 @@ def _most() -> datetime:
 _MINDIG = re.compile(r"\b(mindig|soha|minden esetben|általában|mindegyik|minden\s+\w+\s*(számlá|szerződés|TIG))", re.I)
 _KIVETEL = re.compile(r"\b(kivétel|kivéve|kivételesen|eltérően|csak\s+nála|nála\s+viszont)", re.I)
 _FOGALOM = re.compile(r"\b(jelenti|azt jelenti|jelentése|fogalom|azt értjük|nevezzük)\b", re.I)
+#: A konkrétabb terület előbb: „a számláinál nem kell TIG” a TIG-ről szól.
 _HATOKOR_SZAVAK = (
-    ("szamla", ("számla", "szamla", "kiadás", "számlá")),
     ("tig", ("tig", "teljesítésigazolás")),
     ("szerzodes", ("szerződés", "szerzodes", "keretszerződés")),
+    ("kintlevoseg", ("kintlevőség", "késve fizet", "késés", "tartozás")),
     ("email", ("e-mail", "email", "levél")),
-    ("kintlevoseg", ("kintlevőség", "fizetés", "késés", "tartozás")),
+    ("szamla", ("számla", "szamla", "kiadás", "számlá")),
 )
 
 
 def _hatokor_tipp(szoveg: str) -> str:
     kis = szoveg.lower()
     for h, szavak in _HATOKOR_SZAVAK:
-        if any(s in kis for s in szavak):
+        # Rövid szó (pl. „tig”) csak egész szóként; a hosszabbra toldalék jöhet.
+        if any(re.search(r"\b" + re.escape(s) + (r"\b" if len(s) <= 4 else ""), kis) for s in szavak):
             return h
     return "egyeb"
 

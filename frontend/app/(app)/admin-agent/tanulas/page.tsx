@@ -6,6 +6,7 @@ import { AdminTanulasVezerlok } from "@/components/admin-agent/AdminTanulasVezer
 import { AdminVisszajatszas } from "@/components/admin-agent/AdminVisszajatszas";
 import { LaraAsszisztens } from "@/components/admin-agent/LaraAsszisztens";
 import { LaraGyorsitas } from "@/components/admin-agent/LaraGyorsitas";
+import { LaraFolyamat } from "@/components/admin-agent/LaraFolyamat";
 import { LaraGemini } from "@/components/admin-agent/LaraGemini";
 import { LaraRendszer } from "@/components/admin-agent/LaraRendszer";
 import { LaraLevelezes } from "@/components/admin-agent/LaraLevelezes";
@@ -56,6 +57,10 @@ export default async function AdminAgentTanulasPage() {
         <div className="flex flex-col gap-4">
           <Card title="Vezérlés">
             <AdminTanulasVezerlok canRun={canRun} />
+          </Card>
+
+          <Card title="Tanulási folyamat és minőség — honnan hova tart a tudás">
+            <LaraFolyamat />
           </Card>
 
           <Card title="Gyorsított tanulás — amit a valóság már igazolt">

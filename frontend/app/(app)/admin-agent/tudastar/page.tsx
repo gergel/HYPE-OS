@@ -3,6 +3,7 @@ import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
 import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
 import { AdminTudastarKezelo } from "@/components/admin-agent/AdminTudastarKezelo";
+import { LaraKezikonyv } from "@/components/admin-agent/LaraKezikonyv";
 import { getAdminMemory, getAdminRules, getMyPagePermissions } from "@/lib/api";
 
 const PAGE = "/admin-agent";
@@ -25,6 +26,7 @@ export default async function AdminAgentTudastarPage({
   const canView = pagePermissions === null || !!pagePermissions[PAGE]?.includes("view");
   if (!canView) redirect("/nincs-jogosultsag");
   const canEdit = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
+  const canApprove = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
 
   const [szabalyok, peldak] = await Promise.all([getAdminRules(), getAdminMemory(ertekSzerint ? "ertek" : undefined)]);
 
@@ -47,6 +49,11 @@ export default async function AdminAgentTudastarPage({
             ertekSzerint={ertekSzerint}
           />
         )}
+        <div id="kezikonyv" className="mt-4 scroll-mt-4">
+          <Card title="Rendszerkézikönyv — technikai leírás és jóváhagyott üzleti eljárás">
+            <LaraKezikonyv canEdit={canEdit} canApprove={canApprove} />
+          </Card>
+        </div>
       </div>
     </div>
   );

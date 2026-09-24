@@ -141,9 +141,9 @@ def archival(db: Session, b: LaraBeszelgetes) -> None:
 
 def _link(fajta: str, d: dict) -> str | None:
     if fajta == "S":
-        return "/admin-agent/tudastar?nezet=szabalyok"
+        return "/admin-agent/tudastar"
     if fajta == "R":
-        return "/admin-agent/tudastar?nezet=kezikonyv" if d.get("id") else None
+        return "/admin-agent/tudastar#kezikonyv" if d.get("id") else None
     return "/admin-agent/tudastar" if d.get("id") else None
 
 
@@ -258,6 +258,8 @@ def valaszol(
     if not nyomozas.elerheto():
         valasz = _modell_nelkul(terkep)
         adat["allapot"] = "modell_nelkul"
+        # A tartalék-válasz szó szerint ezeket idézi — ezekre épül.
+        adat["hivatkozott"] = list(terkep)[:6]
     else:
         rendszer = nyomozas.rendszeruzenet(
             db, user, alap=szemelyiseg.rendszer_prompt(k, FELADAT, biztonsag=BIZTONSAG)
@@ -277,6 +279,7 @@ def valaszol(
             valasz = (
                 szemelyiseg.allapot_mondat("hiba", "A válasz elkészítése") + " " + _modell_nelkul(terkep)
             ).strip()
+            adat["hivatkozott"] = list(terkep)[:6]
         else:
             hiv = [c for c in (j.get("hivatkozasok") or []) if isinstance(c, str)]
             ismeretlen = [c for c in hiv if c not in terkep]

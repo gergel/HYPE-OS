@@ -1113,7 +1113,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
                 <thead>
                   <tr className="border-b border-border text-left text-text-muted">
                     <th className="px-2 py-1.5 font-medium">Kapcsolat</th>
-                    <th className="px-2 py-1.5 font-medium">Bizonyosság</th>
+                    <th className="px-2 py-1.5 font-medium">Bizonyíték-erősség</th>
                     <th className="px-2 py-1.5 font-medium">Jóváhagyott / jelölt / tapasztalat</th>
                     <th className="px-2 py-1.5 font-medium">Első megjelenés</th>
                   </tr>
@@ -1163,9 +1163,9 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
                   <HudSzam cimke="Erős (≥60%)" ertek={lathato.eros} />
                   <HudSzam cimke="Jóváhagyott kapcs." ertek={lathato.jovahagyott} />
                   <HudSzam cimke="Tapasztalt kapcs." ertek={lathato.tapasztalt} />
-                  <HudSzam cimke="Átl. bizonyosság" ertek={lathato.atlag === null ? "—" : szazalek(lathato.atlag)} />
+                  <HudSzam cimke="Átl. bizonyíték-erősség" ertek={lathato.atlag === null ? "—" : szazalek(lathato.atlag)} />
                   <HudSzam cimke="Aktív szabály" ertek={adat.osszesites.aktiv_szabalyok} />
-                  <HudSzam cimke="Méret (100% = teljes biz.)" ertek={szazalek(lathato.arany)} />
+                  <HudSzam cimke="Méret (100% = teljes bizonyíték)" ertek={szazalek(lathato.arany)} />
                 </div>
               </div>
               {nincsTudas && (
@@ -1240,7 +1240,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
             <div className="mb-3 grid grid-cols-3 gap-2 text-center">
               <MiniSzam cimke="Kapcsolat" ertek={String(kijeloltAdat.kapcs.length)} />
               <MiniSzam cimke="Jóváhagyott" ertek={String(kijeloltAdat.jov)} />
-              <MiniSzam cimke="Átl. bizonyosság" ertek={kijeloltAdat.atl === null ? "—" : szazalek(kijeloltAdat.atl)} />
+              <MiniSzam cimke="Átl. bizonyíték-erősség" ertek={kijeloltAdat.atl === null ? "—" : szazalek(kijeloltAdat.atl)} />
             </div>
             {kijeloltAdat.p.peldak.length > 0 && (
               <div className="mb-3">
@@ -1254,7 +1254,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
                 </ul>
               </div>
             )}
-            <p className="mb-1 text-[11.5px] text-text-muted">Kapcsolatai (bizonyosság szerint)</p>
+            <p className="mb-1 text-[11.5px] text-text-muted">Kapcsolatai (bizonyíték-erősség szerint)</p>
             <ul className="flex max-h-[46vh] flex-col gap-1 overflow-auto">
               {kijeloltAdat.kapcs.map(({ masik, e }) => (
                 <li key={masik.id}>
@@ -1285,11 +1285,12 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
 
       <p className="text-[11.5px] text-text-muted">
         3D: húzással forgatod, görgővel / + − gombbal nagyítasz, Shift+húzással mozgatod · a háló MÉRETE = az átlagos
-        bizonyosság (100%-nál tölti ki a szaggatott külső kört) · Pontméret = a kapcsolatok súlya · vonalvastagság és
-        fényerő = bizonyosság (jóváhagyott példa és élesített szabály
+        bizonyíték-erősség (100%-nál tölti ki a szaggatott külső kört) · Pontméret = a kapcsolatok súlya · vonalvastagság és
+        fényerő = bizonyíték-erősség (jóváhagyott példa és élesített szabály
         erős, jelölt gyenge, régi Notion-korszakbeli tudás kisebb súlyú; a tapasztalat — a teljes adattörténet ismétlődő
         tényei és az adaton igazolt állítások — a mögötte álló esetek számával erősödik) · szaggatott = még csak jelölt. A
-        háló csak rögzített, valós tudásból épül.
+        háló csak rögzített, valós tudásból épül. A százalék a kapcsolat mögötti BIZONYÍTÉK erőssége, nem Lara
+        feladat-pontossága — azt a „Tanulás és minőség” oldal méri, külön mérőszámokkal.
       </p>
     </div>
   );

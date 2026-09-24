@@ -304,6 +304,52 @@ export function AdminBeallitasok({
         </div>
       </div>
 
+      <div className="rounded-[var(--radius)] border border-border px-4 py-3.5">
+        <p className="text-[13px] font-medium text-text-primary">Gyors visszacsatolás és vizsgakészlet (alapból kikapcsolva)</p>
+        <p className="mt-0.5 text-[12px] text-text-muted">
+          Új automatizmusok, mindegyik külön kapcsolóval. Egyik sem változtat jogosultságot, bizalmi szintet vagy üzleti
+          kapcsolót; utalást nem végez és nem készít elő.
+        </p>
+        <div className="mt-3 flex flex-col gap-3">
+          <Kapcsolo
+            cim="Gyors visszacsatolás"
+            leiras="Egy mentett javítás, jóváhagyott tudás, tanítás vagy kérdésre adott válasz azonnal egy tartós sorba kerül, és Lara percen belül feldolgozza (háttér-tanuló, kereshetővé tétel, megerősítés) — nem kell a következő ütemezett futásra várni. Hibánál később újrapróbálja; az ütemezett folyamatok változatlanul futnak tovább."
+            aktiv={limitek.gyors_visszacsatolas === true}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ gyors_visszacsatolas: v })}
+          />
+          <Kapcsolo
+            cim="Automatikus számla-elemzés (csak javaslat)"
+            leiras="A bekapcsolás UTÁN beérkező, kiolvasott számlákat Lara magától elemzi (percenként legfeljebb 5-öt). Csak javaslat születik: nem jön létre jóváhagyás, nem kerül végrehajtási sorba, nem megy értesítés, nem változik üzleti rekord, és a bizalmi szint sem emelkedik. A Gemini-kulcsot használja."
+            aktiv={limitek.auto_szamla_elemzes === true}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ auto_szamla_elemzes: v })}
+          />
+          <Kapcsolo
+            cim="Elkülönített vizsgakészlet"
+            leiras="Az üzleti ügyek egy állandó része (alapból 20%) vizsgaeset: ezek NEM kerülnek a megerősítésbe, az önellenőrzés tudásába, a tapasztalásba és a partner-profilokba — így a Tudáspróba tisztán mér. Kikapcsolva a próba eredménye „szennyezett” jelölést kap. Bekapcsolva Lara kicsit kevesebb esetből tanul."
+            aktiv={limitek.vizsgakeszlet === true}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ vizsgakeszlet: v })}
+          />
+          <div className="flex flex-wrap items-center gap-2 pl-1 text-[12px] text-text-secondary">
+            A vizsgakészlet aránya:
+            <select
+              value={String(limitek.vizsga_arany ?? 0.2)}
+              disabled={!canManage || folyamatban || b.kill_switch}
+              onChange={(e) => limitMent({ vizsga_arany: Number(e.target.value) })}
+              className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[12.5px] text-text-primary disabled:opacity-50"
+            >
+              {[0.1, 0.15, 0.2, 0.25, 0.3].map((n) => (
+                <option key={n} value={String(n)}>
+                  {Math.round(n * 100)}%
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-[var(--radius)] border border-border bg-surface-3 px-4 py-3.5">
         <p className="text-[13px] font-medium text-text-primary">Tanulás kezdete</p>
         <p className="mt-0.5 text-[12px] text-text-muted">

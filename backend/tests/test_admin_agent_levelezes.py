@@ -249,6 +249,9 @@ def test_vesz_leallitas_api_es_utemezett_feladat(db, monkeypatch):
     beall = s.get(AdminAgentSetting, 1)
     elotte = (beall.kill_switch, beall.kill_switch_indok)
     utolso_nyom = s.scalar(select(func.max(ActionTrace.id))) or 0
+    from app.models.admin_agent import LearningRun
+
+    utolso_futas = s.scalar(select(func.max(LearningRun.id))) or 0
     h = {"Authorization": f"Bearer {create_access_token('2', 'admin')}"}
     c = TestClient(app)
     try:
@@ -290,6 +293,8 @@ def test_vesz_leallitas_api_es_utemezett_feladat(db, monkeypatch):
         ).all()
         assert set(naplo) == {"veszleallitas", "visszakapcsolas"}
         s.execute(delete(ActionTrace).where(ActionTrace.id > utolso_nyom, ActionTrace.eroforras == "lara"))
+        # A feladatok futásnaplója (lásd admin_agent/folyamat.py) is a teszté volt.
+        s.execute(delete(LearningRun).where(LearningRun.id > utolso_futas, LearningRun.trigger.like("folyamat:%")))
         s.commit()
         s.close()
 

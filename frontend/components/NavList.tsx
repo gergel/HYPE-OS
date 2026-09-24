@@ -9,6 +9,7 @@ import {
   GraduationCap,
   Orbit,
   MessageCircleQuestion,
+  MessagesSquare,
   ScrollText,
   Calculator,
   Car,
@@ -100,6 +101,7 @@ const ICONS: Record<string, LucideIcon> = {
   GraduationCap,
   Orbit,
   MessageCircleQuestion,
+  MessagesSquare,
   ScrollText,
 };
 
