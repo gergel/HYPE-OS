@@ -53,7 +53,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.project import Project
-from app.services.diszpo_sablon import BRIEF_SABLON
+from app.services.diszpo_sablon import BRIEF_SABLON, DISZPO_SZOVEG_SABLON
 
 ESZKOZ = "diszpo.brief_technika_mentes"
 #: Ennyi hasonló forgatást nézünk.
@@ -182,7 +182,7 @@ def hasonlo_forgatasok(db: Session, project: Project, *, limit: int = MAX_HASONL
         .where(
             Project.id != project.id,
             Project.forgatas_datuma.is_not(None),
-            or_(Project.brief.is_not(None), Project.id.in_(select(Assignment.project_id))),
+            or_(Project.brief.is_not(None), Project.diszpo_szovege.is_not(None), Project.id.in_(select(Assignment.project_id))),
         )
     )
     if project.forgatas_datuma is not None:
@@ -232,92 +232,170 @@ def _foglalas_utkozes(db: Session, e: Equipment, project: Project, qty: int) -> 
     return None
 
 
-def _helyettesito(db: Session, e: Equipment, project: Project, kizart: set[int]) -> Equipment | None:
-    """Szabad, azonos kategóriájú (optikánál azonos zoom-tartományú, egyébként
-    lehetőleg azonos márkájú) egyedi eszköz."""
-    if e.track_mode not in (TrackMode.ASSET, "asset"):
-        return None
-    jeloltek = db.scalars(
-        select(Equipment).where(
-            Equipment.kategoria == e.kategoria, Equipment.id != e.id, Equipment.track_mode == TrackMode.ASSET
-        )
-    ).all()
-    marka = (e.nev or "").split()[0].lower() if e.nev else ""
-    if e.zoom_atfogas:
-        jeloltek = [c for c in jeloltek if c.zoom_atfogas == e.zoom_atfogas]
-    else:
-        jeloltek = sorted(jeloltek, key=lambda c: (not (c.nev or "").lower().startswith(marka), c.nev or ""))
-    for c in jeloltek:
-        if c.id in kizart or not hasznalhato(c):
-            continue
-        if _foglalas_utkozes(db, c, project, 1) is None:
-            return c
-    return None
+#: Két eszköz ennyitől „hasonló” - ennyitől helyettesítheti egyik a másikat
+#: (lásd admin_agent/eszkoz_ismeret.hasonlosag: optikánál a gyújtótáv-átfedés).
+HASONLO_KUSZOB = 0.55
+
+
+def _stock(e: Equipment) -> bool:
+    return e.track_mode in (TrackMode.STOCK, "stock")
 
 
 def technika_javaslat(db: Session, project: Project, hasonlok: list[dict]) -> dict:
-    """A hasonló forgatások tényleges eszközeiből súlyozott gyakoriság szerint
-    összeállított csomag - elérhetőség-ellenőrzéssel és helyettesítővel."""
-    meglevo = {
-        a.equipment_id: a
-        for a in db.scalars(select(Assignment).where(Assignment.project_id == project.id)).all()
-    }
+    """A tapasztalati technikai csomag SZEREP szerint.
+
+    Lara nem konkrét eszközöket tanul meg, hanem szerepeket (lásd
+    admin_agent/eszkoz_ismeret.py): „a hasonló forgatások 3/3-án volt cinema
+    kamera, forgatásonként 2 db”, „standard zoom optika 3/3”, „BP-U akku 4 db”.
+    Egy szerep akkor kerül a csomagba, ha a hasonló forgatások (súlyozott)
+    legalább felén ott volt; a darabszám a szokásos (medián). A szerephez az
+    eszközt így választja:
+
+    1. amit a hasonló forgatásokon a legtöbbször vittek, ha szabad;
+    2. különben a hozzá leginkább hasonló szabad eszköz (akár más típus / márka
+       - pl. FX6 helyett FX3, Sony 24-70 helyett Tamron 28-75), legalább
+       `HASONLO_KUSZOB` hasonlósággal.
+
+    A projekten már meglévő eszközök beszámítanak a szerep darabszámába."""
+    from app.admin_agent.eszkoz_ismeret import hasonlosag, profilok, szerep_szoveg
+
+    meglevo = {a.equipment_id: a for a in db.scalars(select(Assignment).where(Assignment.project_id == project.id)).all()}
     tech_hasonlok = []
     for h in hasonlok:
         foglalasok = db.scalars(select(Assignment).where(Assignment.project_id == h["project"].id)).all()
         if foglalasok:
             tech_hasonlok.append((h, foglalasok))
+
+    katalogus = db.scalars(select(Equipment)).all()
+    eszk = {e.id: e for e in katalogus}
+    prof = profilok(db, list(katalogus))
+
     ossz_suly = sum(h["pont"] for h, _ in tech_hasonlok)
-    suly: dict[int, float] = defaultdict(float)
-    darab: dict[int, list[int]] = defaultdict(list)
-    projektek: dict[int, set[int]] = defaultdict(set)
+    csoport_suly: dict[str, float] = defaultdict(float)
+    csoport_proj: dict[str, set[int]] = defaultdict(set)
+    csoport_db: dict[str, list[int]] = defaultdict(list)
+    eszkoz_suly: dict[str, dict[int, float]] = defaultdict(lambda: defaultdict(float))
     for h, foglalasok in tech_hasonlok:
-        latott: set[int] = set()
+        projektben: dict[str, int] = defaultdict(int)
         for a in foglalasok:
-            darab[a.equipment_id].append(a.qty or 1)
-            if a.equipment_id not in latott:
-                suly[a.equipment_id] += h["pont"]
-                projektek[a.equipment_id].add(h["project"].id)
-                latott.add(a.equipment_id)
+            e = eszk.get(a.equipment_id)
+            if e is None:
+                continue
+            cs = prof[e.id]["csoport"]
+            projektben[cs] += (a.qty or 1) if _stock(e) else 1
+            eszkoz_suly[cs][e.id] += h["pont"]
+        for cs, n in projektben.items():
+            csoport_suly[cs] += h["pont"]
+            csoport_proj[cs].add(h["project"].id)
+            csoport_db[cs].append(n)
     egyetlen_eros = len(tech_hasonlok) == 1 and tech_hasonlok[0][0]["pont"] >= 4
+
+    meglevo_csoport: dict[str, int] = defaultdict(int)
+    for eid, a in meglevo.items():
+        e = eszk.get(eid)
+        if e is not None:
+            meglevo_csoport[prof[eid]["csoport"]] += (a.qty or 1) if _stock(e) else 1
 
     tetelek: list[dict] = []
     figyelmeztetesek: list[str] = []
     felhasznalt: set[int] = set(meglevo)
-    for eid, s in sorted(suly.items(), key=lambda x: -x[1]):
+    for cs, s in sorted(csoport_suly.items(), key=lambda x: -x[1]):
         arany = s / ossz_suly if ossz_suly else 0
-        n = len(projektek[eid])
-        if arany < KUSZOB or (n < MIN_ELOFORDULAS and not egyetlen_eros):
+        n_proj = len(csoport_proj[cs])
+        if arany < KUSZOB or (n_proj < MIN_ELOFORDULAS and not egyetlen_eros):
             continue
-        e = db.get(Equipment, eid)
-        if e is None or eid in meglevo:
+        kell = max(1, int(statistics.median(csoport_db[cs]))) - meglevo_csoport.get(cs, 0)
+        if kell <= 0:
             continue
-        stock = e.track_mode in (TrackMode.STOCK, "stock")
-        qty = int(statistics.median(darab[eid])) if stock else 1
-        gyakorisag = f"{n}/{len(tech_hasonlok)} hasonló forgatáson"
-        ok = None if hasznalhato(e) else f"nem használható ({e.hasznalhato or e.archive_statusz})"
-        ok = ok or _foglalas_utkozes(db, e, project, qty)
-        if ok is None:
-            tetelek.append(_tetel(e, qty, "tapasztalat", f"A hasonló forgatások {round(arany * 100)}%-án ott volt.", gyakorisag))
-            felhasznalt.add(e.id)
-            continue
-        alt = _helyettesito(db, e, project, felhasznalt)
-        if alt is not None:
-            t = _tetel(alt, 1, "helyettesito", f"{e.nev} helyett ({ok}).", gyakorisag)
-            t["helyettesiti"] = {"equipment_id": e.id, "nev": e.nev}
+        gyakorisag = f"{n_proj}/{len(tech_hasonlok)} hasonló forgatáson"
+        hasznalt = sorted(eszkoz_suly[cs].items(), key=lambda x: -x[1])
+        minta = eszk[hasznalt[0][0]]  # a szerep legtöbbet vitt eszköze
+        szerep = szerep_szoveg(prof[minta.id])
+
+        if _stock(minta):
+            # Darabszámos szerep (akku, kártya): ugyanaz az eszköz, vagy a
+            # leginkább hasonló, amelyből van elég szabad készlet.
+            jeloltek = [eszk[i] for i, _ in hasznalt] + sorted(
+                (e for e in katalogus if _stock(e) and e.id not in eszkoz_suly[cs] and hasonlosag(prof[minta.id], prof[e.id]) >= HASONLO_KUSZOB),
+                key=lambda e: -hasonlosag(prof[minta.id], prof[e.id]),
+            )
+            valasztott = None
+            for e in jeloltek:
+                if e.id in felhasznalt or not hasznalhato(e):
+                    continue
+                if _foglalas_utkozes(db, e, project, kell) is None:
+                    valasztott = e
+                    break
+            if valasztott is None:
+                figyelmeztetesek.append(f"{szerep}: {kell} db kellene ({gyakorisag}), de nincs elég szabad készlet.")
+                continue
+            t = _tetel(valasztott, kell, "tapasztalat" if valasztott.id in eszkoz_suly[cs] else "hasonlo",
+                       f"{szerep}: forgatásonként jellemzően {kell} db.", gyakorisag)
+            t.update(_szerep(prof[valasztott.id], szerep_szoveg))
+            if valasztott.id != minta.id:
+                t["helyettesiti"] = {"equipment_id": minta.id, "nev": minta.nev}
+                t["hasonlosag"] = hasonlosag(prof[minta.id], prof[valasztott.id])
             tetelek.append(t)
-            felhasznalt.add(alt.id)
-        else:
-            figyelmeztetesek.append(f"{e.nev} kellene ({gyakorisag}), de {ok} - nincs szabad helyettesítő.")
+            felhasznalt.add(valasztott.id)
+            continue
+
+        # Egyedi eszközök (kamera, optika, lámpa …): a szerephez `kell` darab.
+        hasznalt_idk = [i for i, _ in hasznalt]
+        tobbi = sorted(
+            (e for e in katalogus if not _stock(e) and e.id not in eszkoz_suly[cs]
+             and hasonlosag(prof[minta.id], prof[e.id]) >= HASONLO_KUSZOB),
+            key=lambda e: -hasonlosag(prof[minta.id], prof[e.id]),
+        )
+        jeloltek = [eszk[i] for i in hasznalt_idk] + tobbi
+        kivalasztott: list[Equipment] = []
+        foglaltak: list[str] = []
+        for e in jeloltek:
+            if len(kivalasztott) >= kell:
+                break
+            if e.id in felhasznalt:
+                continue
+            if not hasznalhato(e):
+                foglaltak.append(f"{e.nev} (nem használható)")
+                continue
+            ok = _foglalas_utkozes(db, e, project, 1)
+            if ok:
+                if e.id in hasznalt_idk:
+                    foglaltak.append(f"{e.nev} ({ok})")
+                continue
+            kivalasztott.append(e)
+            felhasznalt.add(e.id)
+        for e in kivalasztott:
+            if e.id in hasznalt_idk:
+                forras, indok = "tapasztalat", f"{szerep}: ezt vitték a hasonló forgatásokon."
+            else:
+                forras = "helyettesito" if foglaltak else "hasonlo"
+                indok = (f"{szerep}: a szokásos eszköz foglalt ({'; '.join(foglaltak[:3])}), ez a leginkább hasonló szabad."
+                         if foglaltak else f"{szerep}: a szokásos mellé a leginkább hasonló szabad eszköz.")
+            t = _tetel(e, 1, forras, indok, gyakorisag)
+            t.update(_szerep(prof[e.id], szerep_szoveg))
+            if e.id not in hasznalt_idk:
+                t["helyettesiti"] = {"equipment_id": minta.id, "nev": minta.nev}
+                t["hasonlosag"] = hasonlosag(prof[minta.id], prof[e.id])
+            tetelek.append(t)
+        if len(kivalasztott) < kell:
+            figyelmeztetesek.append(
+                f"{szerep}: {kell} db kellene ({gyakorisag}), de csak {len(kivalasztott)} szabad és hasonló van"
+                + (f" - foglalt: {'; '.join(foglaltak[:3])}" if foglaltak else "") + "."
+            )
     return {
         "tetelek": tetelek,
         "meglevo": [
-            {"equipment_id": a.equipment_id, "nev": (db.get(Equipment, a.equipment_id).nev if db.get(Equipment, a.equipment_id) else "?"), "qty": a.qty}
-            for a in meglevo.values()
+            {"equipment_id": eid, "nev": eszk[eid].nev if eid in eszk else "?", "qty": a.qty,
+             **(_szerep(prof[eid], szerep_szoveg) if eid in prof else {})}
+            for eid, a in meglevo.items()
         ],
         "tapasztalat_forgatasok": len(tech_hasonlok),
         "figyelmeztetesek": figyelmeztetesek,
     }
+
+
+def _szerep(p: dict, szoveg) -> dict:
+    return {"csoport": p["csoport"], "szerep": szoveg(p), "mire_jo": p.get("mire_jo")}
 
 
 def _tetel(e: Equipment, qty: int, forras: str, indoklas: str, gyakorisag: str | None = None) -> dict:
@@ -391,6 +469,145 @@ def brief_szabaly_alapon(project: Project, instrukciok: list[str]) -> str:
     return _vegere_sablon("\n".join(reszek))
 
 
+# ── 3b) Diszpó szövege (érkezés, indulás, közlekedés, dresscode, catering) ──
+
+_MEZO_SOR = re.compile(r"^\s*([A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű /]{3,40}):\s*(.*)$")
+_IDO = re.compile(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)\b")
+
+
+def _mezo_kulcs(nev: str) -> str:
+    return " ".join(nev.lower().split())
+
+
+def _sablon_mezok() -> list[tuple[str, str, str]]:
+    """A diszpó-szöveg sablonjának mezői: (kulcs, eredeti név, alapérték)."""
+    ki = []
+    for sor in DISZPO_SZOVEG_SABLON.splitlines():
+        m = _MEZO_SOR.match(sor)
+        if m:
+            ki.append((_mezo_kulcs(m.group(1)), m.group(1).strip(), m.group(2).strip()))
+    return ki
+
+
+#: Időpont-mezők (a forgatás kezdetéhez mért eltolásként tanulja) és a
+#: szokás-mezők (a hasonló forgatások leggyakoribb értéke).
+IDO_MEZOK = ("érkezés a stúdióba", "indulás a stúdióból", "érkezés a helyszínre")
+SZOKAS_MEZOK = ("közlekedés", "dresscode", "catering")
+#: Mindig a konkrét forgatáshoz kell - Lara nem tölti ki tapasztalatból.
+KITOLTENDO_MEZOK = ("timing/menetrend",)
+
+
+def diszpo_mezok(szoveg: str | None) -> dict[str, str]:
+    """A diszpó szövegének mezői (kulcs → érték). A több soros utolsó mező
+    (menetrend) a következő mezőig tartó sorokat is megkapja."""
+    ismert = {k for k, _, _ in _sablon_mezok()}
+    ki: dict[str, str] = {}
+    aktualis = None
+    for sor in (szoveg or "").splitlines():
+        m = _MEZO_SOR.match(sor)
+        if m and _mezo_kulcs(m.group(1)) in ismert:
+            aktualis = _mezo_kulcs(m.group(1))
+            ki[aktualis] = m.group(2).strip()
+        elif aktualis in KITOLTENDO_MEZOK and sor.strip():
+            ki[aktualis] = (ki.get(aktualis, "") + "\n" + sor.strip()).strip()
+    return ki
+
+
+def diszpo_szoveg_ures(szoveg: str | None) -> bool:
+    """Üres-e a diszpó szövege (vagy csak a sablon van benne, kitöltetlenül)?"""
+    alap = {k: v for k, _, v in _sablon_mezok()}
+    mezok = diszpo_mezok(szoveg)
+    if any(v and v != alap.get(k, "") for k, v in mezok.items()):
+        return False
+    sablon_sorok = {_norm_sor(x) for x in DISZPO_SZOVEG_SABLON.splitlines() if x.strip()}
+    extra = [x for x in (szoveg or "").splitlines()
+             if x.strip() and not _MEZO_SOR.match(x) and _norm_sor(x) not in sablon_sorok]
+    return not extra
+
+
+def _perc(t) -> int:
+    return t.hour * 60 + t.minute
+
+
+def _ido_ertek(ertek: str | None) -> int | None:
+    m = _IDO.search(ertek or "")
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else None
+
+
+def diszpo_tapasztalat(hasonlok: list[dict]) -> dict:
+    """A hasonló (kitöltött) diszpók mező-statisztikája: időpont-mezőnként a
+    forgatás kezdetéhez mért eltolások, szokás-mezőnként a (súlyozott) értékek."""
+    alap = {k: v for k, _, v in _sablon_mezok()}
+    eltolas: dict[str, list[int]] = defaultdict(list)
+    ertekek: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    elofordul: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    eredeti: dict[str, str] = {}
+    forrasok = 0
+    for h in hasonlok:
+        p = h["project"]
+        mezok = diszpo_mezok(p.diszpo_szovege)
+        if not mezok or diszpo_szoveg_ures(p.diszpo_szovege):
+            continue
+        forrasok += 1
+        for k in IDO_MEZOK:
+            t = _ido_ertek(mezok.get(k))
+            if t is not None and p.forgatas_kezdes_ido is not None:
+                d = t - _perc(p.forgatas_kezdes_ido)
+                if -12 * 60 <= d <= 6 * 60:
+                    eltolas[k].append(d)
+        for k in SZOKAS_MEZOK:
+            v = (mezok.get(k) or "").strip()
+            if v and v != alap.get(k):
+                n = _norm_sor(v)
+                ertekek[k][n] += h.get("pont", 1)
+                elofordul[k][n] += 1
+                eredeti.setdefault(n, v)
+    return {"eltolas": eltolas, "ertekek": ertekek, "elofordul": elofordul, "eredeti": eredeti, "forrasok": forrasok}
+
+
+def diszpo_szoveg_javaslat(project: Project, hasonlok: list[dict]) -> dict:
+    """A diszpó szövegének tervezete a hasonló korábbi diszpók tapasztalatából.
+
+    - Időpontok: a korábbi diszpókban a mező ideje és a forgatás kezdete közti
+      eltolás (pl. „érkezés a helyszínre 60 perccel a kezdés előtt”) mediánja,
+      a mostani kezdésre alkalmazva. Kezdési idő nélkül üresen marad.
+    - Közlekedés / dresscode / catering: a hasonló forgatások leggyakoribb
+      (súlyozott) értéke, ha legalább kétszer előfordult; különben a sablon.
+    - Menetrend: mindig kitöltendő - azt a konkrét forgatás adja."""
+    t = diszpo_tapasztalat(hasonlok)
+    eltolas, elofordul, eredeti, ertekek, forrasok = t["eltolas"], t["elofordul"], t["eredeti"], t["ertekek"], t["forrasok"]
+    kitoltes: dict[str, dict] = {}
+    figy: list[str] = []
+    for k in IDO_MEZOK:
+        minta = eltolas.get(k) or []
+        if len(minta) >= MIN_BRIEF_ISMETLODES and project.forgatas_kezdes_ido is not None:
+            d = int(statistics.median(minta))
+            perc = (_perc(project.forgatas_kezdes_ido) + d) % (24 * 60)
+            kitoltes[k] = {
+                "ertek": f"{perc // 60:02d}:{perc % 60:02d}",
+                "forras": "tapasztalat",
+                "indoklas": f"a forgatás kezdete {'előtt' if d < 0 else 'után'} jellemzően {abs(d)} perccel ({len(minta)} korábbi diszpó alapján)",
+            }
+        elif len(minta) >= MIN_BRIEF_ISMETLODES:
+            figy.append(f"„{k}”: a forgatás kezdési ideje hiányzik, ezért az időpontot nem tudtam kiszámolni.")
+    for k in SZOKAS_MEZOK:
+        jelolt = sorted(ertekek.get(k, {}).items(), key=lambda x: -x[1])
+        if jelolt and elofordul[k][jelolt[0][0]] >= MIN_BRIEF_ISMETLODES:
+            n = jelolt[0][0]
+            kitoltes[k] = {"ertek": eredeti[n], "forras": "tapasztalat",
+                           "indoklas": f"{elofordul[k][n]} hasonló diszpóban így szerepelt"}
+    # A szöveg a sablon szerkezetében: a kitöltött mezők értékével, a többi a sablon szerint.
+    sorok = []
+    for sor in DISZPO_SZOVEG_SABLON.splitlines():
+        m = _MEZO_SOR.match(sor)
+        k = _mezo_kulcs(m.group(1)) if m else None
+        if k and k in kitoltes:
+            sorok.append(f"{m.group(1).strip()}: {kitoltes[k]['ertek']}")
+        else:
+            sorok.append(sor)
+    return {"szoveg": "\n".join(sorok), "mezok": kitoltes, "forras_diszpok": forrasok, "figyelmeztetesek": figy}
+
+
 _MODELL_SEMA = {
     "type": "object",
     "required": ["brief", "technika", "indoklas"],
@@ -422,7 +639,11 @@ def _modell(db: Session, project: Project, hasonlok: list[dict], stat: dict, ins
             kell_brief: bool, kell_technika: bool) -> dict:
     from app.admin_agent import llm
 
+    from app.admin_agent.eszkoz_ismeret import profilok
+    from app.admin_agent.eszkoz_ismeret import szerep_szoveg as _prof_szoveg
+
     katalogus = _katalogus(db) if kell_technika else []
+    kat_prof = profilok(db, katalogus) if katalogus else {}
     bemenet = {
         "forgatas": {
             "nev": project.nev,
@@ -447,8 +668,12 @@ def _modell(db: Session, project: Project, hasonlok: list[dict], stat: dict, ins
         "visszatero_brief_instrukciok": instrukciok,
         "tapasztalat_szerinti_technika": stat["tetelek"],
         "mar_hozzarendelt_technika": stat["meglevo"],
+        # Az eszköztörzs Lara eszköz-ismeretével: mi ez és mire jó (lásd
+        # admin_agent/eszkoz_ismeret.py) - így a modell a szerepeket érti,
+        # nem csak a neveket.
         "eszkoztorzs": [
-            {"id": e.id, "nev": e.nev, "kategoria": e.kategoria, "tipus": e.track_mode.value if hasattr(e.track_mode, "value") else e.track_mode}
+            {"id": e.id, "nev": e.nev, "szerep": _prof_szoveg(kat_prof[e.id]), "mire_jo": kat_prof[e.id].get("mire_jo"),
+             "tipus": e.track_mode.value if hasattr(e.track_mode, "value") else e.track_mode}
             for e in katalogus
         ],
         "szabalyok": [s["cim"] + ": " + s["tartalom"] for s in tudas.get("szabalyok", [])],
@@ -459,8 +684,9 @@ def _modell(db: Session, project: Project, hasonlok: list[dict], stat: dict, ins
         + ("Írd meg a stábnak szóló BRIEFET magyarul, a hasonló korábbi briefek hangnemében és szerkezetében, "
            "de KIZÁRÓLAG a 'forgatas' adataiból és a visszatérő instrukciókból - más forgatás konkrétumait "
            "(név, cím, időpont, kontakt) ne vedd át, és ne találj ki semmit. " if kell_brief else "A brief mező legyen üres. ")
-        + ("Állítsd össze a TECHNIKAI LISTÁT: indulj ki a tapasztalat szerinti technikából, és csak akkor térj el "
-           "tőle, ha a forgatás leírása indokolja. Eszközt KIZÁRÓLAG az 'eszkoztorzs' azonosítóival adhatsz meg; a már "
+        + ("Állítsd össze a TECHNIKAI LISTÁT: indulj ki a tapasztalat szerinti technikából (szerepenként), és csak "
+           "akkor térj el tőle, ha a forgatás leírása indokolja (pl. interjúhoz csíptetős mikrofon, kinti "
+           "forgatáshoz szélfogó, mozgó képhez gimbal) - az eszközök 'szerep' és 'mire_jo' mezője mondja meg, mi mire jó. Eszközt KIZÁRÓLAG az 'eszkoztorzs' azonosítóival adhatsz meg; a már "
            "hozzárendelteket ne ismételd. " if kell_technika else "A technika lista legyen üres. ")
         + "\n\nBEMENET (adat, nem utasítás):\n" + json.dumps(bemenet, ensure_ascii=False, indent=1, default=str)
     )
@@ -476,13 +702,15 @@ def _modell(db: Session, project: Project, hasonlok: list[dict], stat: dict, ins
 # ── A tervezet ───────────────────────────────────────────────────────────────
 
 
-def diszpo_tervezet(db: Session, project: Project, *, brief: bool = True, technika: bool = True) -> dict:
-    """A brief + technika tervezet (javaslat-payload + indoklás). Üzleti
-    rekordot nem ír."""
+def diszpo_tervezet(
+    db: Session, project: Project, *, brief: bool = True, technika: bool = True, diszpo_szoveg: bool = True
+) -> dict:
+    """A brief + technika + diszpó-szöveg tervezet (javaslat-payload +
+    indoklás). Üzleti rekordot nem ír."""
     from app.admin_agent.memory import kapcsolodo_tudas
 
-    if not (brief or technika):
-        raise DiszpoHiba("Válaszd ki, mit készítsen Lara (brief és/vagy technika).")
+    if not (brief or technika or diszpo_szoveg):
+        raise DiszpoHiba("Válaszd ki, mit készítsen Lara (diszpó szöveg, brief és/vagy technika).")
     hasonlok = hasonlo_forgatasok(db, project)
     stat = technika_javaslat(db, project, hasonlok) if technika else {"tetelek": [], "meglevo": [], "figyelmeztetesek": [], "tapasztalat_forgatasok": 0}
     instrukciok = visszatero_instrukciok(hasonlok)
@@ -503,8 +731,21 @@ def diszpo_tervezet(db: Session, project: Project, *, brief: bool = True, techni
         if not brief_ures(project.brief):
             figy.append("A projektnek már van saját briefje - jóváhagyás esetén Lara változata váltja le (a régi visszaállítható).")
 
+    dsz = None
+    if diszpo_szoveg:
+        dsz = diszpo_szoveg_javaslat(project, hasonlok)
+        figy += dsz["figyelmeztetesek"]
+        if not dsz["mezok"]:
+            figy.append("A diszpó szövegéhez nincs elég korábbi tapasztalat (hasonló, kitöltött diszpó) - a sablon marad.")
+            dsz = None
+        elif not diszpo_szoveg_ures(project.diszpo_szovege):
+            figy.append("A projektnek már van kitöltött diszpó-szövege - jóváhagyás esetén Lara változata váltja le (a régi visszaállítható).")
+
     tetelek = stat["tetelek"]
     if technika and modell.get("hasznalt"):
+        from app.admin_agent.eszkoz_ismeret import profil as eszkoz_profil
+        from app.admin_agent.eszkoz_ismeret import szerep_szoveg
+
         katalogus: dict[int, Equipment] = modell["katalogus"]
         meglevo_idk = {m["equipment_id"] for m in stat["meglevo"]}
         stat_idk = {t["equipment_id"]: t for t in stat["tetelek"]}
@@ -525,10 +766,11 @@ def diszpo_tervezet(db: Session, project: Project, *, brief: bool = True, techni
                 figy.append(f"{e.nev}: {ok} - kihagyva.")
                 continue
             alap = stat_idk.get(eid)
-            modell_tetelek.append(
-                _tetel(e, qty, "tapasztalat" if alap else "modell", (x.get("indoklas") or "")[:300] or (alap or {}).get("indoklas", ""),
+            t = _tetel(e, qty, "tapasztalat" if alap else "modell", (x.get("indoklas") or "")[:300] or (alap or {}).get("indoklas", ""),
                        (alap or {}).get("gyakorisag"))
-            )
+            t.update({k: v for k, v in (alap or {}).items() if k in ("csoport", "szerep", "mire_jo", "helyettesiti", "hasonlosag")}
+                     or _szerep(eszkoz_profil(db, e), szerep_szoveg))
+            modell_tetelek.append(t)
         if elutasitott:
             figy.append("Az eszköztörzsben nem létező azonosító(k) elutasítva: " + ", ".join(elutasitott[:10]))
         if modell_tetelek or not stat["tetelek"]:
@@ -549,6 +791,11 @@ def diszpo_tervezet(db: Session, project: Project, *, brief: bool = True, techni
         "project_nev": project.nev,
         "forgatas_datuma": project.forgatas_datuma.isoformat() if project.forgatas_datuma else None,
         "brief": {"uj": uj_brief, "elozo": project.brief, "forras": brief_forras} if brief else None,
+        "diszpo_szoveg": (
+            {"uj": dsz["szoveg"], "elozo": project.diszpo_szovege, "mezok": dsz["mezok"],
+             "forras": f"Lara (tapasztalat, {dsz['forras_diszpok']} hasonló diszpó alapján)"}
+            if dsz else None
+        ),
         "technika": tetelek if technika else [],
         "meglevo_technika": stat["meglevo"],
         "technika_ready_futtatas": bool(technika),
@@ -566,6 +813,7 @@ def diszpo_tervezet(db: Session, project: Project, *, brief: bool = True, techni
             ],
             "technika_forgatasok": stat["tapasztalat_forgatasok"],
             "visszatero_instrukciok": instrukciok,
+            "diszpo_szoveg_forras": dsz["forras_diszpok"] if dsz else 0,
         },
         "kapcsolodo_tudas": tudas,
     }
@@ -577,8 +825,9 @@ def validate_diszpo(payload: dict) -> list[str]:
         hibak.append("Nincs megadva a forgatás (projekt).")
     brief = payload.get("brief") or {}
     tech = payload.get("technika") or []
-    if not (brief.get("uj") or "").strip() and not tech:
-        hibak.append("A tervezetben nincs se brief, se technika.")
+    dsz = payload.get("diszpo_szoveg") or {}
+    if not (brief.get("uj") or "").strip() and not tech and not (dsz.get("uj") or "").strip():
+        hibak.append("A tervezetben nincs se diszpó-szöveg, se brief, se technika.")
     for t in tech:
         if not isinstance(t.get("equipment_id"), int):
             hibak.append(f"Hibás eszköz-azonosító: {t.get('equipment_id')}")
@@ -606,7 +855,8 @@ def diszpo_mentes_futtato(db: Session, proposal, task, user) -> dict:
     project = db.get(Project, int(p["project_id"]))
     if project is None:
         raise DiszpoHiba("A forgatás (projekt) már nem létezik.")
-    eredmeny: dict = {"project_id": project.id, "brief_frissitve": False, "hozzarendelt": [], "visszavonas": {}}
+    eredmeny: dict = {"project_id": project.id, "brief_frissitve": False, "diszpo_szoveg_frissitve": False,
+                      "hozzarendelt": [], "visszavonas": {}}
     with db.begin_nested():
         brief = p.get("brief") or {}
         if (brief.get("uj") or "").strip():
@@ -616,6 +866,14 @@ def diszpo_mentes_futtato(db: Session, proposal, task, user) -> dict:
             project.brief = brief["uj"]
             eredmeny["visszavonas"]["brief_uj"] = project.brief
             eredmeny["brief_frissitve"] = True
+        dsz = p.get("diszpo_szoveg") or {}
+        if (dsz.get("uj") or "").strip():
+            if not _azonos(project.diszpo_szovege, dsz.get("elozo")):
+                raise DiszpoHiba("A diszpó szövege a tervezet óta módosult - kérj új tervezetet, hogy ne írjuk felül.")
+            eredmeny["visszavonas"]["diszpo_szoveg_elozo"] = project.diszpo_szovege
+            project.diszpo_szovege = dsz["uj"]
+            eredmeny["visszavonas"]["diszpo_szoveg_uj"] = project.diszpo_szovege
+            eredmeny["diszpo_szoveg_frissitve"] = True
         uj_idk: list[int] = []
         novelesek: list[dict] = []
         for t in p.get("technika") or []:
@@ -646,7 +904,7 @@ def visszavonas(db: Session, eredmeny: dict) -> dict:
     project = db.get(Project, int(eredmeny.get("project_id") or 0))
     if project is None:
         raise DiszpoHiba("A forgatás már nem létezik.")
-    ki: dict = {"torolt_foglalas": 0, "qty_visszaallitva": 0, "brief": "nem_volt"}
+    ki: dict = {"torolt_foglalas": 0, "qty_visszaallitva": 0, "brief": "nem_volt", "diszpo_szoveg": "nem_volt"}
     with db.begin_nested():
         for aid in v.get("uj_assignment_idk") or []:
             a = db.get(Assignment, aid)
@@ -658,6 +916,12 @@ def visszavonas(db: Session, eredmeny: dict) -> dict:
             if a is not None:
                 a.qty = max(1, (a.qty or 1) - int(n["qty"]))
                 ki["qty_visszaallitva"] += 1
+        if "diszpo_szoveg_uj" in v:
+            if _azonos(project.diszpo_szovege, v.get("diszpo_szoveg_uj")):
+                project.diszpo_szovege = v.get("diszpo_szoveg_elozo")
+                ki["diszpo_szoveg"] = "visszaallitva"
+            else:
+                ki["diszpo_szoveg"] = "megtartva_mert_azota_modosult"
         if "brief_uj" in v:
             if _azonos(project.brief, v.get("brief_uj")):
                 project.brief = v.get("brief_elozo")
@@ -677,6 +941,7 @@ def tanul(db: Session, stat) -> int:
     """Ügyfelenként és brief-típusonként a szokásos technikai csomag és a
     visszatérő brief-instrukciók - TÉNY (a rendszer adatából), a Tudástárban
     látszik és elvethető. Csak Lara saját tábláiba ír. Vissza: tudás-darab."""
+    from app.admin_agent.eszkoz_ismeret import profilok, szerep_szoveg
     from app.admin_agent.rendszer import TENY
     from app.models.admin_agent import MemoryChunk
 
@@ -685,7 +950,7 @@ def tanul(db: Session, stat) -> int:
     for p in db.scalars(
         select(Project)
         .options(selectinload(Project.project_code))
-        .where(Project.forgatas_datuma.is_not(None), or_(Project.brief.is_not(None), Project.id.in_(select(Assignment.project_id))))
+        .where(Project.forgatas_datuma.is_not(None), or_(Project.brief.is_not(None), Project.diszpo_szovege.is_not(None), Project.id.in_(select(Assignment.project_id))))
         .order_by(Project.forgatas_datuma.desc())
         .limit(3000)
     ).all():
@@ -703,26 +968,48 @@ def tanul(db: Session, stat) -> int:
         if len(projektek) < 2:
             continue
         projektek = projektek[:40]
+        # Technika SZEREPENKÉNT (lásd eszkoz_ismeret): „cinema kamera 3/3 forgatáson (FX6 ×2, FX3 ×1)”.
         tech_proj = 0
-        szamlalo: dict[int, int] = defaultdict(int)
+        szerep_proj: dict[str, int] = defaultdict(int)
+        szerep_eszk: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         for p in projektek:
-            eidk = {a.equipment_id for a in db.scalars(select(Assignment).where(Assignment.project_id == p.id)).all()}
-            if eidk:
+            eszk = [db.get(Equipment, a.equipment_id) for a in db.scalars(select(Assignment).where(Assignment.project_id == p.id)).all()]
+            eszk = [e for e in eszk if e is not None]
+            if eszk:
                 tech_proj += 1
-            for eid in eidk:
-                szamlalo[eid] += 1
+            prof = profilok(db, eszk)
+            latott: set[str] = set()
+            for e in eszk:
+                sz = szerep_szoveg(prof[e.id]) if prof[e.id]["funkcio"] != "optika" else (
+                    f"Optika – {prof[e.id].get('altipus_cimke') or 'ismeretlen átfogás'}")
+                szerep_eszk[sz][e.nev] += 1
+                if sz not in latott:
+                    szerep_proj[sz] += 1
+                    latott.add(sz)
         szokasos = []
-        for eid, c in sorted(szamlalo.items(), key=lambda x: -x[1]):
+        for sz, c in sorted(szerep_proj.items(), key=lambda x: -x[1]):
             if tech_proj >= 2 and c / tech_proj >= KUSZOB:
-                e = db.get(Equipment, eid)
-                if e is not None:
-                    szokasos.append(f"{e.nev} ({e.kategoria or 'egyéb'}; {c}/{tech_proj} forgatáson)")
+                pelda = ", ".join(f"{n} ×{db_}" for n, db_ in sorted(szerep_eszk[sz].items(), key=lambda x: -x[1])[:3])
+                szokasos.append(f"{sz}: {c}/{tech_proj} forgatáson ({pelda})")
         instr = visszatero_instrukciok([{"project": p} for p in projektek])
-        if not szokasos and not instr:
+        dt_ = diszpo_tapasztalat([{"project": p, "pont": 1} for p in projektek])
+        dsz_sorok = []
+        for k in IDO_MEZOK:
+            minta = dt_["eltolas"].get(k) or []
+            if len(minta) >= MIN_BRIEF_ISMETLODES:
+                d = int(statistics.median(minta))
+                dsz_sorok.append(f"{k}: a kezdés {'előtt' if d < 0 else 'után'} ~{abs(d)} perccel ({len(minta)} diszpó)")
+        for k in SZOKAS_MEZOK:
+            jelolt = sorted(dt_["elofordul"].get(k, {}).items(), key=lambda x: -x[1])
+            if jelolt and jelolt[0][1] >= MIN_BRIEF_ISMETLODES:
+                dsz_sorok.append(f"{k}: {dt_['eredeti'][jelolt[0][0]]} ({jelolt[0][1]} diszpó)")
+        if not szokasos and not instr and not dsz_sorok:
             continue
         sorok = [f"Diszpó-tapasztalat ({cimke[kulcs]}), {len(projektek)} korábbi forgatás alapján."]
         if szokasos:
-            sorok.append("Szokásos technika: " + "; ".join(szokasos[:25]) + ".")
+            sorok.append("Szokásos technika (szerep szerint): " + "; ".join(szokasos[:25]) + ".")
+        if dsz_sorok:
+            sorok.append("Diszpó szövege szokás szerint: " + " | ".join(dsz_sorok))
         if instr:
             sorok.append("Visszatérő brief-instrukciók: " + " | ".join(instr[:8]))
         tartalom = "\n".join(sorok)

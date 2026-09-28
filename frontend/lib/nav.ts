@@ -265,6 +265,7 @@ export const navGroups: NavGroup[] = [
       { label: "Jóváhagyások", href: "/admin-agent/jovahagyasok", icon: "CheckSquare", permissionPage: "/admin-agent" },
       { label: "Tudástár", href: "/admin-agent/tudastar", icon: "BookOpen", permissionPage: "/admin-agent" },
       { label: "Tudásháló", href: "/admin-agent/tudashalo", icon: "Orbit", permissionPage: "/admin-agent" },
+      { label: "Eszköz-ismeret", href: "/admin-agent/eszkozok", icon: "Wrench", permissionPage: "/admin-agent" },
       { label: "Lara kérdései", href: "/admin-agent/kerdesek", icon: "MessageCircleQuestion", permissionPage: "/admin-agent" },
       { label: "Tanulás és minőség", href: "/admin-agent/tanulas", icon: "GraduationCap", permissionPage: "/admin-agent" },
       { label: "Napló", href: "/admin-agent/naplo", icon: "ScrollText", permissionPage: "/admin-agent" },

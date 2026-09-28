@@ -378,6 +378,18 @@ def rendszer_figyeles(db: Session, *, trigger: str = "rendszer:kezi", kenyszerit
     except Exception:  # noqa: BLE001 — a diszpó-tanulás hibája ne állítsa meg a figyelést
         diszpo_tudas = 0
         stat["hibas_tabla"] += 1
+    # Eszköz-ismeret AI-pontosítása: KÜLÖN kapcsolóval, alapból kikapcsolva.
+    eszkoz_ai = None
+    if (get_settings(db).limitek or {}).get("eszkoz_ai_profilozas") is True:
+        from app.admin_agent import llm
+        from app.admin_agent.eszkoz_ismeret import ProfilHiba, ai_profilozas
+
+        if llm.elerheto():
+            try:
+                with db.begin_nested():
+                    eszkoz_ai = ai_profilozas(db, limit=30)
+            except ProfilHiba as exc:
+                eszkoz_ai = {"allapot": "hiba", "uzenet": str(exc)[:200]}
     leg = sorted(aktivitas, key=lambda a: a["uj_30"] + a["modositott_30"], reverse=True)
     osszefoglalo = {
         "figyelt_tabla": len(tablak),
@@ -385,6 +397,7 @@ def rendszer_figyeles(db: Session, *, trigger: str = "rendszer:kezi", kenyszerit
         "modul_tudas": sum(1 for a in aktivitas if a["osszes"]),
         "projektkod": kodok,
         "diszpo_tapasztalat": diszpo_tudas,
+        "eszkoz_ai_profilozas": eszkoz_ai,
         "uj": stat["uj"],
         "frissitett": stat["frissitve"],
         "hibas_tabla": stat["hibas_tabla"],

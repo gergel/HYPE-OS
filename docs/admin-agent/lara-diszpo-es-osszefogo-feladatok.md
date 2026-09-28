@@ -109,6 +109,84 @@ A **Visszavonás** gomb a feladat oldalán:
   diszpó-feladat lesz. A „küldd ki a diszpót” kérésre Lara elmondja, hogy az
   nem az ő dolga.
 
+## Eszköz-ismeret: mi micsoda, és mire jó (2026-09-28, második kör)
+
+Lara minden eszközhöz profilt tart fenn. A profil mezői:
+- **szerep:** kamera, optika, hang, világítás, akku, kártya, mozgató, statív,
+  drón, monitor…;
+- **altípus**, például:
+  - kamera: cinema vagy fotós / hibrid gép;
+  - optika: ultraszéles / standard / telezoom, széles / normál / portré fix;
+  - hang: csíptetős vagy puskamikrofon;
+  - világítás: COB spot, panel vagy fénycső;
+  - akku: V-mount, BP-U vagy NP-F;
+- **márka**, és optikánál **gyújtótáv**, **fényerő** és **bajonett**;
+- **„mire jó”**: egy mondat arról, mire használható a forgatáson.
+
+A profil forrásai, gyengébbtől az erősebbig:
+
+1. **Szabály:** a névből, a kategóriából és a zoom-mezőből (kulcsszavak,
+   márkalista, „24-70mm f/2.8” minta). Mindig elérhető, modell nélkül is.
+2. **AI (modell):** a *Lara → Eszköz-ismeret* oldalon kézzel, vagy óránként a
+   rendszer-figyeléssel (külön kapcsoló, alapból KI).
+   - Csak valid mezőt fogad el (ismert szerep, értelmes mm- és f-érték).
+   - Ha az eszközt átnevezik, a profil elavul, és újraprofilozódik.
+3. **Ember:** a javítás a legerősebb forrás; a modell sem írja felül.
+
+A profilok Lara saját táblájában vannak (`aa_eszkoz_profilok`, migráció
+`t3o0l41i8j62`). Az eszköztörzshöz Lara nem nyúl.
+
+**Hasonlóság (0–100%)**
+- Optikánál a fő tényező a gyújtótáv-tartományok log-skálás átfedése, emellett
+  a zoom / fix, a bajonett és a fényerő.
+  - 24-70 ~ 28-75: 81%;
+  - 24-70 ~ 24-105: 74%;
+  - 24-70 ~ 70-200: 35%;
+  - 24-70 ~ 35 mm fix: 16%.
+- Kameránál az altípus, a márka és a bajonett számít.
+  - FX6 ~ FX3: 100%;
+  - FX6 ~ Canon R5 (fotós gép): 10%.
+
+## A technikai csomag szerep szerint
+
+A tapasztalat nem konkrét eszközöket tanul, hanem szerepeket, például:
+- „a hasonló forgatások 3/3-án volt cinema kamera, forgatásonként 2 db”;
+- „standard zoom optika”;
+- „puskamikrofon”;
+- „BP-U akku 6 db”.
+
+A szerephez az eszközt így választja:
+1. amit a hasonló forgatásokon a legtöbbször vittek, ha szabad;
+2. különben a hozzá leginkább hasonló szabad eszköz, legalább 55%-os
+   hasonlósággal, akár más típus vagy márka. Például FX6 helyett FX30, Sony
+   24-70 helyett Tamron 28-75.
+
+**Darabszám:** a szerep szokásos darabszáma (például két kamera) a medián. A
+projekten már meglévő eszközök ebbe beszámítanak.
+
+**Minden tétel mellett látszik:** a szerep, a „mire jó”, a hasonlóság, és hogy
+melyik eszköz helyett került be. A modell is ezt az ismeretet kapja.
+
+## A diszpó szövegének tanulása
+
+Lara a diszpó szövegét a sablon mezői szerint tanulja: érkezés a stúdióba,
+indulás, érkezés a helyszínre, közlekedés, dresscode, catering, menetrend.
+
+- **Időpontok:** a korábbi diszpókban a mező ideje és a forgatás kezdete közti
+  eltolás mediánja, például „érkezés a helyszínre 60 perccel a kezdés előtt”.
+  - Ezt a mostani kezdési időre alkalmazza.
+  - Legalább 2 korábbi diszpó kell hozzá.
+  - Kezdési idő nélkül üresen marad, figyelmeztetéssel.
+- **Közlekedés / dresscode / catering:** a hasonló diszpók leggyakoribb
+  értéke, ha legalább kétszer szerepelt. Különben a sablon marad.
+- **Menetrend:** mindig kitöltendő; azt a konkrét forgatás adja.
+- **Felülírás:**
+  - ha a projekt diszpó-szövege már ki van töltve, a javaslat figyelmeztet;
+  - ha a szöveg a tervezet óta módosult, a végrehajtás nem írja felül;
+  - a visszavonás visszaállítja a korábbi szöveget.
+- **Tudástár:** a rendszer-figyelés ügyfelenként és brief-típusonként ezeket a
+  szokásokat is tényként menti ide.
+
 ## Összefogó adminisztrációs feladat
 
 Példák:

@@ -870,6 +870,25 @@ is meg tudja adni a választ.
   - valódi Gemini-hívással;
   - böngészős bejárás.
 
+### AH. Eszköz-ismeret, szerep szerinti technika, a diszpó szövegének tanulása ✅ (tesztelve, élőben demóadattal megnézve; valódi Geminivel: ⚠️ nem ellenőrzött)
+- Eszköz-profil:
+  - szerep, altípus, márka, gyújtótáv, fényerő, bajonett, „mire jó”;
+  - forrás: szabály, AI vagy ember (az ember a legerősebb);
+  - hasonlósági mérték: optikánál gyújtótáv-átfedés, kameránál altípus / márka;
+  - migráció `t3o0l41i8j62`, csak Lara saját táblája.
+- Technikai csomag szerep szerint:
+  - foglalt eszköz helyett a leginkább hasonló szabad (akár másik típus);
+  - a szokásos darabszám (pl. két kamera).
+- Diszpó szövege:
+  - időpontok a kezdéshez mért tanult eltolásból;
+  - dresscode / közlekedés / catering a hasonló diszpókból;
+  - végrehajtás és visszavonás.
+- Új oldal: *Lara → Eszköz-ismeret* (lista, hasonlók, javítás, AI-pontosítás).
+  Új kapcsoló: óránkénti AI-pontosítás, alapból KI.
+- Tesztek: 7 új teszt; a teljes backend-csomag átment. Frontend: `tsc`,
+  `eslint`, `next build` rendben.
+- Élő bejárás demóadattal, utána takarítva (időbélyeg-szken üres).
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

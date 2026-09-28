@@ -12,6 +12,7 @@ from app.models.admin_agent import (
     Approval,
     Correction,
     EvalCase,
+    EszkozProfil,
     EvalRun,
     LearningRun,
     MemoryChunk,
@@ -127,6 +128,7 @@ from app.models.ai_beszelgetes import AiBeszelgetes, AiFajl, AiMuvelet, AiUzenet
 
 __all__ = [
     "Base",
+    "EszkozProfil",
     "AgiTodoItem",
     "AutomatizalasAudit",
     "UtokovetesDokumentum",

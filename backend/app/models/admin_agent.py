@@ -545,3 +545,28 @@ class LaraBeszelgetesUzenet(TimestampMixin, Base):
     ertekeles: Mapped[str | None] = mapped_column(String(20))
     ertekeles_megjegyzes: Mapped[str | None] = mapped_column(Text)
     ertekelve_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class EszkozProfil(TimestampMixin, Base):
+    """Lara eszköz-ismerete: mi ez az eszköz és mire jó (szerep, altípus,
+    márka, gyújtótáv, fényerő, bajonett, felhasználás). Csak Lara saját táblája -
+    az eszköztörzshöz (equipment) nem nyúl.
+
+    A szabály alapú profil mindig kiszámolható (nem kell tárolni); ide a
+    MODELL (AI) által pontosított és az EMBER által javított profil kerül.
+    Elsőbbség: ember > modell > szabály (lásd admin_agent/eszkoz_ismeret.py)."""
+
+    __tablename__ = "aa_eszkoz_profilok"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    equipment_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    profil: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    #: modell | ember
+    forras: Mapped[str] = mapped_column(String(20), nullable=False)
+    modell: Mapped[str | None] = mapped_column(String(120))
+    #: Az eszköz neve/kategóriája a profilozáskor - ha azóta átírták, a
+    #: modell-profil elavult és újraprofilozandó.
+    forras_ujjlenyomat: Mapped[str | None] = mapped_column(String(64))
+    employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))

@@ -703,6 +703,7 @@ class TervezetIn(BaseModel):
     #: Diszpó-feladatnál: mit készítsen Lara.
     brief: bool = True
     technika: bool = True
+    diszpo_szoveg: bool = True
     #: Diszpó-feladatnál a forgatás, ha a feladaton még nincs.
     project_id: int | None = None
 
@@ -780,7 +781,7 @@ def _diszpo_ter(db: Session, t: AdminTask, body: TervezetIn) -> dict:
         raise DiszpoHiba("A forgatás nem található.")
     if t.project_code_id is None:
         t.project_code_id = project.project_code_id
-    return diszpo_tervezet(db, project, brief=body.brief, technika=body.technika)
+    return diszpo_tervezet(db, project, brief=body.brief, technika=body.technika, diszpo_szoveg=body.diszpo_szoveg)
 
 
 @router.get("/diszpo/{project_id}/tapasztalat")
@@ -791,7 +792,12 @@ def diszpo_tapasztalat(
 ):
     """Előnézet: a hasonló korábbi forgatások, a tapasztalat szerinti technikai
     csomag (elérhetőséggel) és a visszatérő brief-instrukciók. Csak olvas."""
-    from app.admin_agent.diszpo_tervezo import hasonlo_forgatasok, technika_javaslat, visszatero_instrukciok
+    from app.admin_agent.diszpo_tervezo import (
+        diszpo_szoveg_javaslat,
+        hasonlo_forgatasok,
+        technika_javaslat,
+        visszatero_instrukciok,
+    )
     from app.models.project import Project
 
     project = db.get(Project, project_id)
@@ -806,12 +812,14 @@ def diszpo_tapasztalat(
         ],
         "technika": technika_javaslat(db, project, hasonlok),
         "visszatero_instrukciok": visszatero_instrukciok(hasonlok),
+        "diszpo_szoveg": diszpo_szoveg_javaslat(project, hasonlok),
     }
 
 
 class DiszpoFeladatIn(BaseModel):
     brief: bool = True
     technika: bool = True
+    diszpo_szoveg: bool = True
 
 
 @router.post("/diszpo/{project_id}/tervezet")
@@ -842,7 +850,7 @@ def diszpo_tervezet_projektrol(
         db.add(t)
         db.flush()
     b = body or DiszpoFeladatIn()
-    return task_tervezet(t.id, TervezetIn(brief=b.brief, technika=b.technika), db=db, user=user)
+    return task_tervezet(t.id, TervezetIn(brief=b.brief, technika=b.technika, diszpo_szoveg=b.diszpo_szoveg), db=db, user=user)
 
 
 @router.post("/tasks/{task_id}/diszpo/visszavonas")
@@ -967,6 +975,133 @@ def osszefogo_frissites(
     a = osszefogo.frissites(db, _osszefogo_task(db, task_id))
     db.commit()
     return a
+
+
+# ── Lara eszköz-ismerete (mi micsoda, mire jó, mi hasonló) ────────────────────
+
+
+def _eszkoz_or_404(db: Session, equipment_id: int):
+    from app.models.equipment import Equipment
+
+    e = db.get(Equipment, equipment_id)
+    if e is None:
+        raise HTTPException(status_code=404, detail="Az eszköz nem található.")
+    return e
+
+
+@router.get("/eszkozok/ismeret")
+def eszkoz_ismeret_lista(
+    q: str | None = Query(default=None, max_length=100),
+    funkcio: str | None = Query(default=None, max_length=30),
+    limit: int = Query(default=300, ge=1, le=2000),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Lara eszköz-ismerete az eszköztörzsre: szerep, altípus, gyújtótáv,
+    „mire jó”, és hogy a profil honnan van (szabály / modell / ember). Csak olvas."""
+    from app.admin_agent.eszkoz_ismeret import FUNKCIOK, profilok, szerep_szoveg
+    from app.admin_agent.diszpo_tervezo import hasznalhato
+    from app.models.equipment import Equipment
+
+    lek = select(Equipment).order_by(Equipment.kategoria, Equipment.nev)
+    if q:
+        lek = lek.where(Equipment.nev.ilike(f"%{q.strip()}%"))
+    eszk = db.scalars(lek.limit(limit)).all()
+    prof = profilok(db, list(eszk))
+    elemek = [
+        {"id": e.id, "nev": e.nev, "kategoria": e.kategoria, "hasznalhato": hasznalhato(e),
+         "szerep": szerep_szoveg(prof[e.id]), **prof[e.id]}
+        for e in eszk if not funkcio or prof[e.id]["funkcio"] == funkcio
+    ]
+    return {"funkciok": FUNKCIOK, "elemek": elemek,
+            "forrasok": {f: sum(1 for x in elemek if x["forras"] == f) for f in ("szabaly", "modell", "ember")}}
+
+
+@router.get("/eszkozok/{equipment_id}/ismeret")
+def eszkoz_ismeret(
+    equipment_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Egy eszköz profilja és a hozzá leginkább hasonló (helyettesítésre
+    alkalmas) eszközök."""
+    from app.admin_agent.eszkoz_ismeret import hasonlo_eszkozok, profil, szerep_szoveg
+
+    e = _eszkoz_or_404(db, equipment_id)
+    p = profil(db, e)
+    return {"id": e.id, "nev": e.nev, "kategoria": e.kategoria, "szerep": szerep_szoveg(p), "profil": p,
+            "hasonlok": hasonlo_eszkozok(db, e)}
+
+
+class EszkozProfilIn(BaseModel):
+    funkcio: str | None = None
+    altipus: str | None = None
+    marka: str | None = None
+    gyujto_min: float | None = None
+    gyujto_max: float | None = None
+    fenyero: float | None = None
+    bajonett: str | None = None
+    mire_jo: str | None = Field(default=None, max_length=300)
+
+
+@router.patch("/eszkozok/{equipment_id}/profil")
+def eszkoz_profil_javitas(
+    equipment_id: int,
+    body: EszkozProfilIn,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Emberi javítás: mostantól ez Lara ismerete erről az eszközről (a modell
+    sem írja felül). Csak Lara saját táblájába ír."""
+    from app.admin_agent.eszkoz_ismeret import ProfilHiba, ember_javitas
+
+    e = _eszkoz_or_404(db, equipment_id)
+    try:
+        p = ember_javitas(db, e, body.model_dump(exclude_unset=True), user)
+    except ProfilHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.add(ActionTrace(task_id=None, szereplo="human", muvelet="eszkoz_profil_javitas", eroforras=f"equipment:{e.id}",
+                       diff={"javitas": body.model_dump(exclude_unset=True), "employee_id": user.id}, eredmeny="kesz",
+                       tortent_at=datetime.now(timezone.utc)))
+    db.commit()
+    return p
+
+
+@router.delete("/eszkozok/{equipment_id}/profil", status_code=204)
+def eszkoz_profil_visszaallitas(
+    equipment_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A tárolt (modell / ember) profil törlése - újra a szabály alapú érvényes."""
+    from app.admin_agent.eszkoz_ismeret import ember_javitas_torlese
+
+    ember_javitas_torlese(db, _eszkoz_or_404(db, equipment_id))
+    db.commit()
+
+
+class AiProfilozasIn(BaseModel):
+    limit: int = Field(default=40, ge=1, le=100)
+    ujra: bool = False
+
+
+@router.post("/eszkozok/ai-profilozas")
+def eszkoz_ai_profilozas(
+    body: AiProfilozasIn | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Kézi indítás: a modell pontosítja a még nem profilozott eszközöket
+    (emberi profilt nem ír felül). Modell nélkül 400 - beállítás szükséges."""
+    from app.admin_agent.eszkoz_ismeret import ProfilHiba, ai_profilozas
+
+    b = body or AiProfilozasIn()
+    try:
+        ki = ai_profilozas(db, limit=b.limit, ujra=b.ujra)
+    except ProfilHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return ki
 
 
 def _lapos(ertek: object, elotag: str = "") -> dict:

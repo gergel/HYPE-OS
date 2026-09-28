@@ -13,12 +13,20 @@ type Tetel = {
   forras: string;
   gyakorisag: string | null;
   helyettesiti?: { nev: string } | null;
+  szerep?: string;
+  mire_jo?: string | null;
+  hasonlosag?: number;
 };
 
 type Tapasztalat = {
   hasonlo_forgatasok: { id: number; nev: string; datum: string; okok: string[] }[];
   technika: { tetelek: Tetel[]; figyelmeztetesek: string[]; tapasztalat_forgatasok: number };
   visszatero_instrukciok: string[];
+  diszpo_szoveg: {
+    mezok: Record<string, { ertek: string; indoklas: string }>;
+    forras_diszpok: number;
+    figyelmeztetesek: string[];
+  };
 };
 
 function hibaSzoveg(status: number, d: { detail?: unknown }): string {
@@ -34,6 +42,7 @@ function hibaSzoveg(status: number, d: { detail?: unknown }): string {
  * „Technika ready” ellenőrzést. A diszpót nem küldi ki. */
 export function LaraDiszpoGomb({ projectId }: { projectId: number }) {
   const [brief, setBrief] = useState(true);
+  const [diszpoSzoveg, setDiszpoSzoveg] = useState(true);
   const [technika, setTechnika] = useState(true);
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState<string | null>(null);
@@ -47,7 +56,7 @@ export function LaraDiszpoGomb({ projectId }: { projectId: number }) {
     try {
       const res = await authFetch(`/api/v1/admin-agent/diszpo/${projectId}/tervezet`, {
         method: "POST",
-        body: JSON.stringify({ brief, technika }),
+        body: JSON.stringify({ brief, technika, diszpo_szoveg: diszpoSzoveg }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -89,10 +98,13 @@ export function LaraDiszpoGomb({ projectId }: { projectId: number }) {
   return (
     <div className="flex flex-col gap-2 text-[13px]">
       <p className="text-text-secondary">
-        <strong className="text-text-primary">Lara:</strong> brief és technikai lista a korábbi hasonló forgatások alapján
-        (az eszközöket jóváhagyás után hozzá is rendeli).
+        <strong className="text-text-primary">Lara:</strong> diszpó szövege, brief és technikai lista a korábbi hasonló
+        forgatások alapján (az eszközöket jóváhagyás után hozzá is rendeli - foglalt eszköz helyett hasonlót).
       </p>
       <div className="flex flex-wrap items-center gap-3 text-text-secondary">
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={diszpoSzoveg} onChange={(e) => setDiszpoSzoveg(e.target.checked)} /> diszpó szöveg
+        </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={brief} onChange={(e) => setBrief(e.target.checked)} /> brief
         </label>
@@ -101,7 +113,7 @@ export function LaraDiszpoGomb({ projectId }: { projectId: number }) {
         </label>
         <button
           type="button"
-          disabled={busy || (!brief && !technika)}
+          disabled={busy || (!brief && !technika && !diszpoSzoveg)}
           onClick={tervezet}
           className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 font-medium text-text-accent disabled:opacity-50"
         >
@@ -154,15 +166,39 @@ export function LaraDiszpoGomb({ projectId }: { projectId: number }) {
                 {tap.technika.tetelek.map((t) => (
                   <li key={t.equipment_id}>
                     {t.track_mode === "stock" ? `${t.qty} db ` : ""}
-                    {t.nev}
-                    {t.kategoria ? ` (${t.kategoria})` : ""}
-                    {t.helyettesiti ? ` — ${t.helyettesiti.nev} helyett, mert az foglalt` : ""}
+                    <span className="text-text-primary">{t.nev}</span>
+                    {t.szerep ? ` — ${t.szerep}` : t.kategoria ? ` (${t.kategoria})` : ""}
+                    {t.helyettesiti
+                      ? ` · ${t.helyettesiti.nev} helyett${t.hasonlosag != null ? ` (${Math.round(t.hasonlosag * 100)}% hasonló)` : ""}`
+                      : ""}
                     {t.gyakorisag ? ` · ${t.gyakorisag}` : ""}
+                    {t.mire_jo && <span className="block text-[12px] text-text-muted">{t.mire_jo}</span>}
                   </li>
                 ))}
               </ul>
             )}
             {tap.technika.figyelmeztetesek.map((f, i) => (
+              <p key={i} className="text-text-warning">
+                {f}
+              </p>
+            ))}
+          </div>
+          <div>
+            <p className="font-medium text-text-primary">
+              Diszpó szövege a tapasztalatból ({tap.diszpo_szoveg.forras_diszpok} hasonló diszpó)
+            </p>
+            {Object.keys(tap.diszpo_szoveg.mezok).length === 0 ? (
+              <p className="text-text-muted">Nincs elég kitöltött, hasonló diszpó - a sablon marad.</p>
+            ) : (
+              <ul className="list-disc pl-5 text-text-secondary">
+                {Object.entries(tap.diszpo_szoveg.mezok).map(([k, v]) => (
+                  <li key={k}>
+                    <span className="text-text-primary">{k}: {v.ertek}</span> — {v.indoklas}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {tap.diszpo_szoveg.figyelmeztetesek.map((f, i) => (
               <p key={i} className="text-text-warning">
                 {f}
               </p>

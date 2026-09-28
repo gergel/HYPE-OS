@@ -48,6 +48,7 @@ export function AdminTaskActions({
   const [folyamatban, setFolyamatban] = useState(false);
   // Diszpó-tervezetnél: mit készítsen Lara.
   const [kellBrief, setKellBrief] = useState(true);
+  const [kellDiszpoSzoveg, setKellDiszpoSzoveg] = useState(true);
   const [kellTechnika, setKellTechnika] = useState(true);
 
   if (!canEdit) {
@@ -111,7 +112,7 @@ export function AdminTaskActions({
     try {
       const res = await authFetch(`/api/v1/admin-agent/tasks/${taskId}/tervezet`, {
         method: "POST",
-        body: tipus === "diszpo" ? JSON.stringify({ brief: kellBrief, technika: kellTechnika }) : undefined,
+        body: tipus === "diszpo" ? JSON.stringify({ brief: kellBrief, technika: kellTechnika, diszpo_szoveg: kellDiszpoSzoveg }) : undefined,
       });
       const d = (await res.json().catch(() => ({}))) as { detail?: string; modell?: string; allapot?: string };
       if (!res.ok) {
@@ -136,7 +137,7 @@ export function AdminTaskActions({
   }
 
   async function diszpoVisszavonas() {
-    if (!window.confirm("Visszavonod Lara diszpó-módosítását? A hozzárendelt eszközök lekerülnek a projektről, és a korábbi brief visszaáll (ha azóta senki nem írta át).")) return;
+    if (!window.confirm("Visszavonod Lara diszpó-módosítását? A hozzárendelt eszközök lekerülnek a projektről, a korábbi brief és diszpó-szöveg visszaáll (ha azóta senki nem írta át).")) return;
     setHiba(null);
     setUzenet(null);
     setFolyamatban(true);
@@ -193,6 +194,10 @@ export function AdminTaskActions({
         <div className="mb-2 flex flex-wrap items-center gap-4 text-[13px] text-text-secondary">
           <span>Lara készítse el:</span>
           <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={kellDiszpoSzoveg} onChange={(e) => setKellDiszpoSzoveg(e.target.checked)} />
+            diszpó szövegét (érkezés, dresscode…)
+          </label>
+          <label className="flex items-center gap-1.5">
             <input type="checkbox" checked={kellBrief} onChange={(e) => setKellBrief(e.target.checked)} />
             briefet
           </label>
@@ -210,7 +215,7 @@ export function AdminTaskActions({
             onClick={diszpoVisszavonas}
             className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
           >
-            Visszavonás (eszközök + brief)
+            Visszavonás (eszközök, brief, diszpó-szöveg)
           </button>
         )}
         {TERVEZHETO.has(tipus) && (

@@ -326,6 +326,13 @@ export function AdminBeallitasok({
             onValt={(v) => limitMent({ auto_szamla_elemzes: v })}
           />
           <Kapcsolo
+            cim="Eszköz-ismeret pontosítása AI-jal (óránként)"
+            leiras="A teljes rendszer figyelésekor Lara óránként legfeljebb 30 eszközt a modellel is felismer: mi ez (szerep, altípus, márka, gyújtótáv, fényerő, bajonett) és mire jó a forgatáson. Csak Lara saját eszköz-ismeretébe ír, az eszköztörzshöz nem nyúl; az ember által javított profilt sosem írja felül. Kikapcsolva is működik a szabály alapú felismerés. A Gemini-kulcsot használja."
+            aktiv={limitek.eszkoz_ai_profilozas === true}
+            tiltva={!canManage || folyamatban || b.kill_switch}
+            onValt={(v) => limitMent({ eszkoz_ai_profilozas: v })}
+          />
+          <Kapcsolo
             cim="Elkülönített vizsgakészlet"
             leiras="Az üzleti ügyek egy állandó része (alapból 20%) vizsgaeset: ezek NEM kerülnek a megerősítésbe, az önellenőrzés tudásába, a tapasztalásba és a partner-profilokba — így a Tudáspróba tisztán mér. Kikapcsolva a próba eredménye „szennyezett” jelölést kap. Bekapcsolva Lara kicsit kevesebb esetből tanul."
             aktiv={limitek.vizsgakeszlet === true}

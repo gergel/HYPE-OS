@@ -268,7 +268,15 @@ def diszpo_leiras(payload: dict) -> dict:
     """Diszpó brief + technikai lista leírása: mi kerül a projektre."""
     brief = payload.get("brief") or {}
     tech = payload.get("technika") or []
+    dsz = payload.get("diszpo_szoveg") or {}
     lepesek: list[str] = []
+    if (dsz.get("uj") or "").strip():
+        mezok = dsz.get("mezok") or {}
+        reszek = [f"{k}: {v.get('ertek')}" for k, v in mezok.items()]
+        lepesek.append(
+            "A diszpó szövege kitöltődik a korábbi diszpók tapasztalatából"
+            + (f" ({'; '.join(reszek)})" if reszek else "") + ". A menetrend kitöltendő marad."
+        )
     if (brief.get("uj") or "").strip():
         eleje = brief["uj"].strip()
         lepesek.append(
@@ -280,19 +288,21 @@ def diszpo_leiras(payload: dict) -> dict:
         for t in tech[:25]:
             db_ = f"{t.get('qty')} db " if (t.get("track_mode") == "stock") else ""
             extra = f" ({t['helyettesiti']['nev']} helyett)" if t.get("helyettesiti") else ""
+            if t.get("szerep"):
+                extra += f" [{t['szerep']}]"
             sorok.append(f"{db_}{t.get('nev')}{extra}")
         lepesek.append(f"{len(tech)} eszköz a projekthez rendelve (a forgatás napjaira): " + ", ".join(sorok)
                        + ("…" if len(tech) > 25 else "") + ".")
     if payload.get("technika_ready_futtatas"):
         lepesek.append("Lefut a „Technika ready” ellenőrzés: elkészül a technikai lista szövege és az ütközés-riport.")
     return {
-        "cim": f"Diszpó brief + technika: {payload.get('project_nev') or 'forgatás'}"
+        "cim": f"Diszpó (szöveg / brief / technika): {payload.get('project_nev') or 'forgatás'}"
                + (f" ({payload['forgatas_datuma']})" if payload.get("forgatas_datuma") else ""),
         "reszletek": [f"Már hozzárendelt eszköz: {len(payload.get('meglevo_technika') or [])} db — ezek maradnak."],
         "lepesek": lepesek,
         "nem_tortenik": ["A diszpó nem megy ki senkinek.", "A meglévő eszközök és foglalások nem törlődnek.",
                          "Minden visszavonható a feladat „Visszavonás” gombjával."],
-        "figyelmeztetesek": [] if (lepesek) else ["A javaslatban nincs se brief, se eszköz."],
+        "figyelmeztetesek": [] if (lepesek) else ["A javaslatban nincs se diszpó-szöveg, se brief, se eszköz."],
         "link": f"/projektek/{payload.get('project_id')}" if payload.get("project_id") else None,
     }
 
