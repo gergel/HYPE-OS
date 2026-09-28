@@ -48,8 +48,11 @@ MAX_KERDES = 4000
 #: Ennyi korábbi üzenet kerül a modell elé (a régebbiek helyett az összefoglaló).
 ELOZMENY = 6
 CSATORNA = "lara_chat"
-#: A beszélgetés válaszának kimeneti korlátja (táblázatos lebontás is beleférjen).
-MAX_VALASZ_TOKEN = 8192
+#: A beszélgetés válaszának kimeneti korlátja. Ha ez is elfogy, a modell
+#: folytatja (lásd nyomozas.MAX_FOLYTATAS) — a válasz nem szakad meg.
+MAX_VALASZ_TOKEN = 16384
+#: A válasz szövege és a gépi adatai (hivatkozás, bizonyosság…) közti jelölő.
+META_JELOLO = "<<<LARA-META>>>"
 
 BIZTONSAG = """\
 - Ez a beszélgetés CSAK OLVASÓ. Semmit nem módosíthatsz, nem küldhetsz el, nem hagyhatsz jóvá és nem rögzíthetsz. Ha a kérdező ilyet kér, mondd meg egyenesen, hogy itt erre nincs lehetőséged, és hol teheti meg ő (a HYPE OS megfelelő oldalán, vagy Lara feladatként a Munkasorban, jóváhagyással).
@@ -66,9 +69,11 @@ A HYPE OS egyik belső munkatársa kérdez tőled a „Kérdezz Larától” fel
 
 A TUDÁSOD rovatokban kapod, minden darab előtt egy címkével ([S1] szabály, [K1] kivétel, [R1] rendszerismeret, [E1] hasonló korábbi eset). A kivétel NEM általános szabály; a rendszerismeret technikai leírás vagy jóváhagyott üzleti eljárás (jelölve).
 
-A VÉGÉN kizárólag egy JSON objektumot írj (kódblokk-jelölés nélkül), ebben a formában:
-{"valasz": "a válaszod magyarul, a személyiséged szerint", "hivatkozasok": ["S1", "E2"], "bizonyossag": "biztos|valoszinu|bizonytalan", "tisztazo_kerdes": "egy célzott kérdés, vagy null", "bizonyitekok": [{"leiras": "mit néztél meg a rendszerben", "link": "/belso/utvonal vagy null"}]}
-A "valasz" formája (a felület Markdownként jeleníti meg):
+A VÉGSŐ VÁLASZOD FORMÁJA — pontosan két rész:
+1. ELŐSZÖR maga a válasz, magyarul, a személyiséged szerint, Markdownban (NEM JSON-ban, kódblokk nélkül).
+2. UTÁNA egy külön sorban pontosan ez a jelölő: <<<LARA-META>>>
+   és alatta egy JSON objektum: {"hivatkozasok": ["S1", "E2"], "bizonyossag": "biztos|valoszinu|bizonytalan", "tisztazo_kerdes": "egy célzott kérdés, vagy null", "bizonyitekok": [{"leiras": "mit néztél meg a rendszerben", "link": "/belso/utvonal vagy null"}]}
+A válasz szövegének formája (a felület Markdownként jeleníti meg):
 - az első mondat maga a válasz (pl. a végösszeg félkövérrel), utána a részletek;
 - több tételből álló számszerű lebontásnál (projektkódok, összegek, tételek) Markdown-táblázatot használj, fejléccel, pl. „| Projektkód | Megnevezés | Összeg |”, az utolsó sorban az összesítéssel;
 - rövid felsorolás „- ” jellel; címsor csak hosszú válasznál;
@@ -124,12 +129,20 @@ _VALASZ_MEZO = re.compile(r'"valasz"\s*:\s*"((?:[^"\\]|\\.)*)("?)', re.S)
 
 
 def valasz_kinyeres(nyers: str) -> tuple[dict, str]:
-    """A modell végső szövegéből a (JSON-adat, válaszszöveg) pár.
+    """A modell végső szövegéből a (gépi adat, válaszszöveg) pár.
+
+    Az új forma: válaszszöveg, majd `<<<LARA-META>>>` és a JSON-adat — így a
+    válasz akkor is ép, ha az adatrész hiányos. A régi (egész JSON-os) formát
+    is kezeli:
 
     Tűri a kódblokkba tett és a CSONKA (a kimeneti korlátnál elvágott) JSON-t
     is: ilyenkor a "valasz" mező eddig meglévő részét adja vissza, a JSON-
     escape-ek feloldásával. Ha a szöveg nem JSON, változatlanul az a válasz."""
     s = (nyers or "").strip()
+    if META_JELOLO in s:
+        szoveg, _, meta = s.partition(META_JELOLO)
+        szoveg = _KODBLOKK.sub("", szoveg.strip()).strip()
+        return (nyomozas_json(meta) or {}), szoveg
     j = nyomozas_json(s)
     if j and isinstance(j.get("valasz"), str) and j["valasz"].strip():
         return j, j["valasz"].strip()

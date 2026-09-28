@@ -504,3 +504,48 @@ def test_modell_kodblokkos_valasza_a_beszelgetesben_tiszta_szoveg(db, admin):
     b = bz.uj(db, admin)
     _, v = bz.valaszol(db, admin, b, "Mennyibe került?")
     assert v.szoveg == "Összesen **12 000 Ft**." and v.adat["bizonyossag"] == "biztos"
+
+
+def test_hosszkorlatnal_megszakadt_valasz_folytatodik(monkeypatch):
+    """Ha a modell a kimeneti korlát (MAX_TOKENS) miatt áll meg, Lara kéri a
+    folytatást, és a részeket összefűzi — a válasz nem szakad meg."""
+    from types import SimpleNamespace
+
+    from google import genai
+
+    from app.admin_agent import nyomozas as ny
+    from app.core.config import settings
+
+    reszek = [("Első rész, ", "MAX_TOKENS"), ("második rész, ", "MAX_TOKENS"), ("vége.", "STOP")]
+    hivasok = []
+
+    class _Modellek:
+        def generate_content(self, model, contents, config):
+            hivasok.append(len(contents))
+            szoveg, ok = reszek.pop(0)
+            jelolt = SimpleNamespace(content=SimpleNamespace(role="model", parts=[]),
+                                     finish_reason=SimpleNamespace(name=ok))
+            return SimpleNamespace(function_calls=None, text=szoveg, candidates=[jelolt])
+
+    monkeypatch.setattr(genai, "Client", lambda api_key=None: SimpleNamespace(models=_Modellek()))
+    monkeypatch.setattr(settings, "gemini_api_key", "teszt-kulcs")
+    g = ny._Gemini("rendszer", "kérdés", [], 1000)
+    hivas, vegso = g.lepes()
+    assert hivas == [] and vegso == "Első rész, második rész, vége."
+    assert hivasok == [1, 3, 5]  # minden folytatásnál: a modell eddigi része + a „folytasd” kérés
+    assert ny._levagva(SimpleNamespace(candidates=[SimpleNamespace(finish_reason=SimpleNamespace(name="STOP"))])) is False
+
+
+def test_uj_valaszforma_szoveg_elol_meta_kulon(db, admin):
+    from app.admin_agent import beszelgetes as bz
+
+    _tudas(db, "A csörgőfuvar (demó) számlái működési költségre mennek.")
+    _hamis_modell([
+        "Összesen **12 000 Ft**.\n\n| Tétel | Összeg |\n|---|---:|\n| A | 12 000 Ft |\n"
+        + bz.META_JELOLO + '\n{"hivatkozasok": ["E1"], "bizonyossag": "valoszinu", "tisztazo_kerdes": null}'
+    ])
+    b = bz.uj(db, admin)
+    _, v = bz.valaszol(db, admin, b, "Mennyibe került a csörgőfuvar?")
+    assert v.szoveg.startswith("Összesen **12 000 Ft**.") and "| Tétel | Összeg |" in v.szoveg
+    assert bz.META_JELOLO not in v.szoveg and "hivatkozasok" not in v.szoveg
+    assert v.adat["bizonyossag"] == "valoszinu" and v.adat["hivatkozott"] == ["E1"]

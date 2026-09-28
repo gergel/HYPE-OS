@@ -88,6 +88,30 @@ def elerheto() -> bool:
     return _TESZT_BESZELGETES is not None or bool(getattr(settings, "gemini_api_key", None))
 
 
+#: A kimeneti korlát miatt megállt válasz legfeljebb ennyiszer folytatódik.
+MAX_FOLYTATAS = 4
+FOLYTATAS_KERES = (
+    "A válaszod a hosszkorlát miatt megszakadt. Folytasd PONTOSAN attól a karaktertől, ahol abbahagytad — "
+    "ismétlés, bevezetés és magyarázat nélkül."
+)
+#: A gondolkodó modellek gondolkodási kerete (token) — külön a válasz keretétől.
+GONDOLKODAS_KERET = 2048
+
+
+def _gondolkodo_modell(nev: str | None) -> bool:
+    n = (nev or "").lower()
+    return "2.5" in n or n.startswith("gemini-3")
+
+
+def _levagva(resp) -> bool:
+    """A modell a kimeneti korlát (MAX_TOKENS) miatt állt meg?"""
+    try:
+        ok = resp.candidates[0].finish_reason
+    except (AttributeError, IndexError, TypeError):
+        return False
+    return getattr(ok, "name", str(ok)).upper().endswith("MAX_TOKENS")
+
+
 class _Gemini:
     def __init__(self, rendszer: str, kerdes: str, eszkozok: list[dict], max_tokens: int = 2048):
         from google import genai
@@ -101,16 +125,34 @@ class _Gemini:
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             temperature=0.1,
             max_output_tokens=max_tokens,
+            # A „gondolkodó” modelleknél a gondolkodás is a kimeneti keretből
+            # fogy: korlátos külön keretet kap, hogy ne a válaszból vegyen el.
+            **({"thinking_config": types.ThinkingConfig(thinking_budget=GONDOLKODAS_KERET)}
+               if _gondolkodo_modell(settings.gemini_model) else {}),
         )
         self._contents = [types.Content(role="user", parts=[types.Part(text=kerdes)])]
 
-    def lepes(self) -> tuple[list[tuple[str, dict]], str | None]:
-        resp = self._client.models.generate_content(
+    def _general(self):
+        return self._client.models.generate_content(
             model=settings.gemini_model, contents=self._contents, config=self._config
         )
+
+    def lepes(self) -> tuple[list[tuple[str, dict]], str | None]:
+        resp = self._general()
         hivasok = resp.function_calls or []
         if not hivasok:
-            return [], (resp.text or "").strip()
+            # Ha a válasz a kimeneti korlát miatt állt meg, a modell FOLYTATJA
+            # (legfeljebb MAX_FOLYTATAS-szor) — a válasz nem szakad meg.
+            szoveg = resp.text or ""
+            for _ in range(MAX_FOLYTATAS):
+                if not _levagva(resp):
+                    break
+                jelolt = resp.candidates[0].content if resp.candidates else None
+                self._contents.append(jelolt or self._types.Content(role="model", parts=[self._types.Part(text=szoveg)]))
+                self._contents.append(self._types.Content(role="user", parts=[self._types.Part(text=FOLYTATAS_KERES)]))
+                resp = self._general()
+                szoveg += resp.text or ""
+            return [], szoveg.strip()
         jelolt = resp.candidates[0].content if resp.candidates else None
         self._contents.append(jelolt or self._types.Content(role="model", parts=[]))
         return [(h.name or "", dict(h.args or {})) for h in hivasok], None
