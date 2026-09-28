@@ -37,6 +37,7 @@ from app.models.bejovo_szamla import (
     ALLAPOT_DUPLIKATUM,
     ALLAPOT_JOVAHAGYVA,
     ALLAPOT_NEM_SZAMLA,
+    ALLAPOT_PONTOSITAS,
     ALLAPOTOK,
     CEL_TIPUSOK,
     BejovoEmail,
@@ -48,7 +49,8 @@ from app.models.internal_performance_certificate import InternalPerformanceCerti
 from app.models.kotelezettseg import KotelezettsegIdoszak
 from app.models.performance_certificate import PerformanceCertificate
 from app.models.project_code import ProjectCode
-from app.services import document_storage, hatter_feladat, szamla_erkeztetes
+from app.schemas.szamla_draft import Megerosites, SzamlaDraftIn
+from app.services import automatizalas_audit, document_storage, hatter_feladat, szamla_draft, szamla_erkeztetes
 from app.services.szamla_erkeztetes import ErkeztetesHiba
 
 router = APIRouter(prefix="/bejovo-szamlak", tags=["bejovo-szamlak"])
@@ -120,6 +122,17 @@ class BejovoReszlet(BejovoListItem):
     #: A mentett bontás-piszkozat (több projekt egy számlán) - lásd
     #: models/bejovo_szamla.BejovoSzamla.bontas.
     bontas: dict | list | None = None
+    #: Strukturált (gépi) piszkozat mezői - lásd services/szamla_draft.py.
+    hivatkozott_projektkod: str | None = None
+    hivatkozott_forgatas_datuma: date | None = None
+    partner_vallalkozas_id: int | None = None
+    partner_employee_id: int | None = None
+    szerzodes_id: int | None = None
+    validacio: dict | None = None
+    #: A jóváhagyáshoz explicit megerősítés kell-e, és ha igen, az aktuális
+    #: pénzügyi adatok ujjlenyomata, amit a megerősítésnek vissza kell adnia.
+    megerosites_kell: bool = False
+    ellenorzo_kod: str | None = None
 
 
 def _cel_cimke(db: Session, b: BejovoSzamla) -> str | None:
@@ -167,6 +180,9 @@ def _kimenet(db: Session, b: BejovoSzamla, reszletes: bool = False) -> BejovoLis
     adat.javaslat_indoklas = (b.javaslat or {}).get("indoklas")
     adat.javaslat_erosseg = (b.javaslat or {}).get("erosseg")
     adat.jovahagyo_nev = b.jovahagyo.full_name if b.jovahagyo else None
+    if reszletes:
+        adat.megerosites_kell = szamla_draft.megerosites_kell(b)
+        adat.ellenorzo_kod = szamla_draft.ellenorzo_kod(b)
     return adat
 
 
@@ -353,7 +369,14 @@ async def fajl_potlas(
     kulcs = f"bejovo-szamla/{b.id}-{_re.sub(r'[^A-Za-z0-9._-]+', '_', b.fajl_nev)[:80]}"
     b.url = document_storage.upload_bytes(adat, kulcs, mime)
     b.storage_key = kulcs
-    szamla_erkeztetes.feldolgoz(db, b, adat=adat)
+    if b.forras == szamla_draft.FORRAS_DRAFT:
+        # Gépi piszkozat: az adatai strukturáltan jöttek, a fájl a jóváhagyáshoz
+        # (TIG-hez csatoláshoz) kell - újrakiolvasás nem írja felül őket, csak
+        # a dokumentum-ellenőrzés fut újra (az ellenőrző kód a fájllal változik).
+        if b.allapot in szamla_draft.VALIDALHATO_ALLAPOTOK:
+            szamla_draft.validal(db, b, user=_user)
+    else:
+        szamla_erkeztetes.feldolgoz(db, b, adat=adat)
     db.commit()
     if regi_kulcs and regi_kulcs != kulcs:
         try:
@@ -371,6 +394,82 @@ def reszlet(
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
     return _kimenet(db, _lekeres(db, bejovo_id), reszletes=True)
+
+
+class DraftValasz(BaseModel):
+    """A strukturált piszkozat eredménye: a piszkozat, és hogy új-e."""
+
+    szamla: BejovoReszlet
+    mar_letezett: bool
+
+
+@router.post("/draft", response_model=DraftValasz, status_code=201)
+def draft_letrehozas(
+    payload: SzamlaDraftIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """STRUKTURÁLT SZÁMLA-PISZKOZAT (AI-kiolvasó, Lara vagy kézi beküldés).
+
+    A bemenet formai szabályait a séma érvényesíti (422 - lásd
+    schemas/szamla_draft.py), a törzsadattal való összevetést a szolgáltatás
+    (services/szamla_draft.py): partner adószám alapján, érvényes
+    alvállalkozói keretszerződés (vagy a projektre szóló eseti szerződés), és
+    kiküldött külsős TIG a projektkód + forgatási nap szerint. Ha a szerződés
+    vagy a TIG hiányzik, az állapot `hianyzo_dokumentumok`, és a `validacio`
+    előkészítési opciókat ad - ezeket a rendszer NEM futtatja le.
+
+    Pénzügyi rekord itt nem keletkezik; az elfogadás a jóváhagyás végpontján,
+    explicit megerősítéssel történik. Ugyanaz a beküldés kétszer: a meglévő
+    piszkozatot adja vissza (200-zal értelmezendő `mar_letezett=true`);
+    ugyanaz a számla eltérő adattal: 409."""
+    try:
+        b, mar_letezett = szamla_draft.letrehoz(db, payload, current_user)
+    except szamla_draft.DraftUtkozes as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"uzenet": str(exc), "meglevo_id": exc.meglevo_id}) from exc
+    except szamla_draft.DraftHiba as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(b)
+    return DraftValasz(szamla=_kimenet(db, b, reszletes=True), mar_letezett=mar_letezett)
+
+
+@router.post("/{bejovo_id}/draft/ujravalidalas", response_model=BejovoReszlet)
+def draft_ujravalidalas(
+    bejovo_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A dokumentum-ellenőrzés újrafuttatása (pl. miután elkészült a hiányzó
+    TIG vagy keretszerződés) - csak gépi piszkozaton, és jóváhagyás előtt."""
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    if b.forras != szamla_draft.FORRAS_DRAFT:
+        raise HTTPException(status_code=400, detail="Ez nem strukturált piszkozat - használd az újrafeldolgozást.")
+    try:
+        szamla_draft.validal(db, b, user=current_user)
+    except szamla_draft.DraftHiba as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(b)
+    return _kimenet(db, b, reszletes=True)
+
+
+@router.get("/{bejovo_id}/audit")
+def audit_naplo(
+    bejovo_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Az automatikus műveletek és gépi adategyeztetések naplója ehhez a
+    számlához (létrehozás, ellenőrzések, jóváhagyási kísérletek)."""
+    _lekeres(db, bejovo_id)
+    return [
+        automatizalas_audit.sor_dict(s)
+        for s in automatizalas_audit.lista(db, eroforras_tipus="bejovo_szamla", eroforras_id=bejovo_id)
+    ]
 
 
 @router.post("/feltoltes", response_model=BejovoReszlet, status_code=201)
@@ -425,6 +524,10 @@ class MezoJavitasIn(BaseModel):
     teljesites_datuma: date | None = None
     fizetesi_hatarido: date | None = None
     dokumentum_tipus: str | None = None
+    #: Strukturált piszkozatnál: a hivatkozott projektkód és forgatási nap
+    #: javítása (utána az ellenőrzés automatikusan újrafut).
+    hivatkozott_projektkod: str | None = None
+    hivatkozott_forgatas_datuma: date | None = None
     cel_tipus: str | None = None
     cel_project_code_id: int | None = None
     cel_expense_id: int | None = None
@@ -490,7 +593,15 @@ def javitas(
                 **b.kinyert,
                 "mezo_forrasok": {**(b.kinyert.get("mezo_forrasok") or {}), mezo: "felhasznalo"},
             }
-    if utasitas_valtozott:
+    if "hivatkozott_projektkod" in valtozasok and b.hivatkozott_projektkod:
+        b.hivatkozott_projektkod = b.hivatkozott_projektkod.strip().upper()[:50] or None
+    adat_valtozott = any(not m.startswith("cel_") and m != "bontas" for m in valtozasok)
+    if b.forras == szamla_draft.FORRAS_DRAFT and adat_valtozott and b.allapot in szamla_draft.VALIDALHATO_ALLAPOTOK:
+        # Gépi piszkozatnál a besorolás a dokumentum-ellenőrzésből jön: a
+        # javított adatokon az fut újra (nem a fájl-alapú javaslattevő), így
+        # a hiányzó szerződés/TIG nem tűnhet el egy mezőjavítással.
+        szamla_draft.validal(db, b, user=_user)
+    elif utasitas_valtozott:
         # Az utasítás a besorolás első számú forrása - újrajavaslunk (a már
         # kinyert adatokon, új kiolvasás nélkül).
         szamla_erkeztetes.javasol(db, b)
@@ -524,6 +635,9 @@ class JovahagyasIn(BaseModel):
     #: "cel_id"?, "netto", "megjegyzes"?} - ha nincs küldve, a mentett
     #: piszkozat (BejovoSzamla.bontas) érvényes.
     bontas: list[dict] | None = None
+    #: EXPLICIT MEGERŐSÍTÉS - a gépi (strukturált piszkozatból jött) számlák
+    #: jóváhagyásához kötelező, lásd services/szamla_draft.megerosites_ellenorzes.
+    megerosites: Megerosites | None = None
 
 
 @router.post("/{bejovo_id}/jovahagyas", response_model=BejovoReszlet)
@@ -538,11 +652,55 @@ def jovahagyas(
     a második a már megtörtént eredményt kapja. Az éles összesítők eddig a
     pillanatig változatlanok voltak."""
     b = _lekeres(db, bejovo_id, zarolva=True)
+    dontes = payload.model_dump(exclude_unset=True, exclude={"megerosites"})
+    megerosites = payload.megerosites.model_dump() if payload.megerosites else None
+    mar_jovahagyva = b.allapot == ALLAPOT_JOVAHAGYVA
+    elotte = {"allapot": b.allapot, "cel_tipus": b.cel_tipus, "javaslat": (b.javaslat or {}).get("javasolt_cel")}
     try:
-        szamla_erkeztetes.jovahagy(db, b, current_user, payload.model_dump(exclude_unset=True))
+        if not mar_jovahagyva:
+            szamla_draft.megerosites_ellenorzes(b, megerosites)
+        naplo = szamla_erkeztetes.jovahagy(db, b, current_user, dontes)
+    except szamla_draft.MegerositesHiba as exc:
+        db.rollback()
+        # Az elutasított kísérlet is nyomot hagy (külön tranzakcióban, mert
+        # a jóváhagyásét visszagörgettük).
+        automatizalas_audit.naplo(
+            db,
+            muvelet="szamla.jovahagyas",
+            eroforras_tipus="bejovo_szamla",
+            eroforras_id=bejovo_id,
+            szereplo="felhasznalo",
+            employee_id=current_user.id,
+            eredmeny="elutasitva",
+            reszletek={"ok": str(exc), "megerosites_erkezett": megerosites is not None},
+        )
+        db.commit()
+        raise HTTPException(status_code=exc.statusz, detail=str(exc)) from exc
     except ErkeztetesHiba as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not mar_jovahagyva:
+        # A gépi javaslat és az emberi döntés összevetése - ebből látszik
+        # utólag, hol tért el a jóváhagyó a javasolt adategyeztetéstől.
+        automatizalas_audit.naplo(
+            db,
+            muvelet="szamla.jovahagyas",
+            eroforras_tipus="bejovo_szamla",
+            eroforras_id=b.id,
+            szereplo="felhasznalo",
+            employee_id=current_user.id,
+            reszletek={
+                "forras": b.forras,
+                "allapot_elotte": elotte["allapot"],
+                "javasolt_cel": elotte["javaslat"],
+                "javasolt_cel_tipus": elotte["cel_tipus"],
+                "dontes_cel_tipus": naplo.get("cel_tipus"),
+                "dontes": {k: v for k, v in dontes.items() if k.startswith("cel_")},
+                "explicit_megerosites": megerosites is not None,
+                "letrejott": naplo.get("letrejott"),
+                "csatolt": naplo.get("csatolt"),
+            },
+        )
     db.commit()
     db.refresh(b)
     return _kimenet(db, b, reszletes=True)
@@ -624,7 +782,13 @@ def ujrafeldolgozas(
         "cel_employee_id",
     ):
         setattr(b, mezo, None)
-    if mod == "javaslat" and (b.kinyert or {}).get("mezok"):
+    if b.forras == szamla_draft.FORRAS_DRAFT:
+        # Gépi piszkozat: nincs fájl, amit újra ki lehetne olvasni - a
+        # dokumentum-ellenőrzés fut újra a friss törzsadaton.
+        if b.allapot not in szamla_draft.VALIDALHATO_ALLAPOTOK:
+            b.allapot = ALLAPOT_PONTOSITAS
+        szamla_draft.validal(db, b, user=_user)
+    elif mod == "javaslat" and (b.kinyert or {}).get("mezok"):
         # Gyors út: a már kinyert adatokon csak a duplikáció-vizsgálat és a
         # párosítás fut újra (AI-kiolvasás nélkül).
         duplikatum = szamla_erkeztetes._duplikacio(db, b)

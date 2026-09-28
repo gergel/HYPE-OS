@@ -97,6 +97,15 @@ def _run_szamla_jovahagy(db: Session, proposal: ActionProposal, task: AdminTask,
     bejovo = db.get(BejovoSzamla, int(ref))
     if bejovo is None:
         raise VegrehajtasHiba("A beérkező számla nem található.")
+    from app.services import szamla_draft
+
+    if szamla_draft.megerosites_kell(bejovo):
+        # Gépi (strukturált) piszkozat pénzügyi rögzítése csak a Beérkező
+        # számlák felületén, a számla-szintű explicit megerősítéssel mehet -
+        # egy Lara-javaslat jóváhagyása nem helyettesíti.
+        raise VegrehajtasHiba(
+            "Ez a számla gépi feldolgozásból jött: csak a Beérkező számlák felületén, explicit megerősítéssel rögzíthető."
+        )
     naplo = szamla_erkeztetes.jovahagy(db, bejovo, user, dict(proposal.payload))
     return {"rogzites_naplo": naplo, "rogzitett_expense_id": bejovo.rogzitett_expense_id}
 

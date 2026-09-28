@@ -21,6 +21,7 @@ from app.models.admin_agent import (
     TrustPolicy,
 )
 from app.models.agi_todo import AgiTodoItem
+from app.models.automatizalas import AutomatizalasAudit, UtokovetesDokumentum
 from app.models.belsos_idoszak import BelsosIdoszak
 from app.models.callsheet import Callsheet
 from app.models.calendar_sync import CalendarSyncState
@@ -127,6 +128,8 @@ from app.models.ai_beszelgetes import AiBeszelgetes, AiFajl, AiMuvelet, AiUzenet
 __all__ = [
     "Base",
     "AgiTodoItem",
+    "AutomatizalasAudit",
+    "UtokovetesDokumentum",
     "Callsheet",
     "CalendarSyncState",
     "Campaign",

@@ -799,6 +799,45 @@ is meg tudja adni a választ.
 - Az ügyfél-profil előkészítve, KIKAPCSOLVA: Lara ügyfelekkel nem
   kommunikál.
 
+### AF. Strukturált számla-piszkozat, hiányzó dokumentumok, audit-napló ✅ (tesztelve; éles adaton: ⚠️ nem ellenőrzött)
+- Részletes leírás: `docs/szamla-draft-es-utokovetes-hianyok.md`.
+- Migráció: `r1m8j29g6h40`. Csak additív: új mezők a `bejovo_szamlak`
+  táblán, és két új tábla (`automatizalas_audit`, `utokovetes_dokumentumok`).
+- `POST /api/v1/bejovo-szamlak/draft`:
+  - a partnert adószám alapján azonosítja;
+  - ellenőrzi, van-e érvényes keretszerződés (vagy eseti szerződés) a
+    forgatás napján;
+  - megkeresi a kiküldött külsős TIG-et projektkód és nap szerint.
+  - Ha a szerződés vagy a TIG hiányzik, az állapot `hianyzo_dokumentumok`,
+    és előkészítési opciókat ad (meglévő végpont + előtöltött adat). Ezeket
+    a rendszer nem futtatja le.
+- `GET /api/v1/utokovetes/hianyok` + `POST …/hianyok/emlekezteto`:
+  - a lezajlott forgatások számlázó felei × szerződés / TIG / számla;
+  - emlékeztető-szám, utolsó értesítés, állapot az értesítéskor.
+  - Az emlékeztető-végpont levelet nem küld, csak a tényt rögzíti.
+- Pénzügyi állapotváltozás:
+  - a gépi piszkozat csak explicit megerősítéssel hagyható jóvá (ellenőrző
+    kóddal; hiányzó megerősítésre 428, elavultra 409);
+  - Lara végrehajtója gépi piszkozatot nem rögzíthet;
+  - a kifizetés-jelölő végpontok nem változtak.
+- Audit-napló készül:
+  - a piszkozat létrehozásáról és ellenőrzéséről;
+  - a fájl-alapú automatikus besorolásról;
+  - minden jóváhagyásról (a javasolt és a döntött cél összevetésével, az
+    elutasított kísérletekkel együtt);
+  - az emlékeztetőkről.
+- A modul-, mellékhatás- és vészleállítás-kapcsolók és a bizalmi szintek nem
+  változtak.
+- Tesztek:
+  - 13 új integrációs teszt;
+  - a teljes backend-csomag átment;
+  - frontend: `tsc` rendben, az eslint-hibák száma nem nőtt.
+- NEM ELLENŐRZÖTT:
+  - éles adat;
+  - valódi AI-kiolvasó beküldése;
+  - böngészős bejárás.
+- A hiány-mátrixhoz még nincs felület.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

@@ -1699,7 +1699,33 @@ export type BejovoSzamla = {
   hiba_uzenet: string | null;
 };
 
+/** A strukturált (gépi) számla-piszkozat érvényesítési eredménye - lásd
+ * backend services/szamla_draft.py. */
+export type SzamlaDraftValidacio = {
+  allapot: string;
+  hianyzo: { dokumentum: string; ok: string }[];
+  elokeszitesi_opciok: {
+    kod: string;
+    cim: string;
+    leiras: string;
+    link: string | null;
+    vegpont: { metodus: string; utvonal: string; torzs: Record<string, unknown> } | null;
+    kulso_hatas: boolean;
+    automatikusan_fut: boolean;
+  }[];
+  figyelmeztetesek: string[];
+  ellenorizve_at: string;
+};
+
 export type BejovoSzamlaReszlet = BejovoSzamla & {
+  /** Strukturált piszkozat: hivatkozott projektkód/nap és az ellenőrzés eredménye. */
+  hivatkozott_projektkod?: string | null;
+  hivatkozott_forgatas_datuma?: string | null;
+  validacio?: SzamlaDraftValidacio | null;
+  /** A jóváhagyáshoz explicit megerősítés kell-e (gépi piszkozat), és az
+   * aktuális pénzügyi adatok ujjlenyomata, amit vissza kell küldeni. */
+  megerosites_kell?: boolean;
+  ellenorzo_kod?: string | null;
   kinyert: {
     mezok?: Record<string, unknown>;
     mezo_forrasok?: Record<string, string>;

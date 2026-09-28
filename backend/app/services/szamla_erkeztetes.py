@@ -166,7 +166,38 @@ def letrehozas(
 
 def feldolgoz(db: Session, bejovo: BejovoSzamla, adat: bytes | None = None) -> None:
     """Kiolvasás, duplikáció-vizsgálat és besorolási javaslat - az állapotot is
-    beállítja (ellenorzendo / pontositas / duplikatum / hiba). A hívó commitol."""
+    beállítja (ellenorzendo / pontositas / duplikatum / hiba). A hívó commitol.
+
+    Az eredmény (a gépi kiolvasás és a javasolt adategyeztetés) az
+    automatizálási audit-naplóba kerül - lásd services/automatizalas_audit.py."""
+    _feldolgoz(db, bejovo, adat)
+    from app.services import automatizalas_audit
+
+    javaslat = bejovo.javaslat or {}
+    automatizalas_audit.naplo(
+        db,
+        muvelet="szamla.automatikus_besorolas",
+        eroforras_tipus="bejovo_szamla",
+        eroforras_id=bejovo.id,
+        szereplo="ai",
+        eredmeny="hiba" if bejovo.allapot == ALLAPOT_HIBA else "ok",
+        reszletek={
+            "forras": bejovo.forras,
+            "allapot": bejovo.allapot,
+            "dokumentum_tipus": bejovo.dokumentum_tipus,
+            "kibocsato_adoszam": bejovo.kibocsato_adoszam,
+            "szamlaszam": bejovo.szamlaszam,
+            "netto": float(bejovo.netto) if bejovo.netto is not None else None,
+            "javasolt_cel_tipus": javaslat.get("tipus"),
+            "javasolt_cel": javaslat.get("javasolt_cel"),
+            "erosseg": javaslat.get("erosseg"),
+            "duplikatum_bejovo_id": bejovo.duplikatum_bejovo_id,
+            "hiba": (bejovo.hiba_uzenet or "")[:300] or None,
+        },
+    )
+
+
+def _feldolgoz(db: Session, bejovo: BejovoSzamla, adat: bytes | None = None) -> None:
     try:
         if bejovo.content_type in XML_MIME:
             # XML-változat: nem olvassuk ki - a PDF-párjához kapcsoljuk, ha

@@ -40,6 +40,10 @@ ALLAPOT_NEM_SZAMLA = "nem_szamla"
 #: visszaminősíthető és feldolgozható).
 ALLAPOT_EGYEB_DOKUMENTUM = "egyeb_dokumentum"
 ALLAPOT_HIBA = "hiba"
+#: A strukturált piszkozatnál (POST /bejovo-szamlak/draft) hiányzik a
+#: fedező szerződés vagy a külsős TIG - amíg ezek nincsenek meg, a számla nem
+#: hagyható jóvá; az érvényesítés előkészítési opciókat ad a hiányzókra.
+ALLAPOT_HIANYZO_DOKUMENTUMOK = "hianyzo_dokumentumok"
 
 ALLAPOTOK = (
     ALLAPOT_FELDOLGOZAS,
@@ -50,6 +54,7 @@ ALLAPOTOK = (
     ALLAPOT_NEM_SZAMLA,
     ALLAPOT_EGYEB_DOKUMENTUM,
     ALLAPOT_HIBA,
+    ALLAPOT_HIANYZO_DOKUMENTUMOK,
 )
 
 #: Hová készül a rögzítés (a jóváhagyás célja). A "kiadas_uj" új kiadást hoz
@@ -84,7 +89,7 @@ class BejovoSzamla(TimestampMixin, Base):
 
     #: Honnan érkezett: "email" | "asszisztens" | "kezi".
     forras: Mapped[str] = mapped_column(String(20), nullable=False, default="kezi")
-    allapot: Mapped[str] = mapped_column(String(20), nullable=False, default=ALLAPOT_FELDOLGOZAS, index=True)
+    allapot: Mapped[str] = mapped_column(String(30), nullable=False, default=ALLAPOT_FELDOLGOZAS, index=True)
     hiba_uzenet: Mapped[str | None] = mapped_column(Text)
 
     # ── Az eredeti dokumentum ────────────────────────────────────────────────
@@ -193,6 +198,23 @@ class BejovoSzamla(TimestampMixin, Base):
         ForeignKey("bejovo_szamlak.id", ondelete="SET NULL")
     )
     duplikatum_megjegyzes: Mapped[str | None] = mapped_column(Text)
+
+    # ── Strukturált piszkozat (POST /bejovo-szamlak/draft) ───────────────────
+    #: A beküldő által HIVATKOZOTT projektkód és forgatási nap - a külsős TIG
+    #: ezekből keresendő (lásd services/szamla_draft.py). Szövegként őrizzük,
+    #: ahogy jött: az ismeretlen kód is bizonyíték.
+    hivatkozott_projektkod: Mapped[str | None] = mapped_column(String(50))
+    hivatkozott_forgatas_datuma: Mapped[date | None] = mapped_column(Date)
+    #: A törzsadatban azonosított partner (adószám alapján) - pontosan az
+    #: egyik lehet kitöltve, vagy egyik sem (ismeretlen partner).
+    partner_vallalkozas_id: Mapped[int | None] = mapped_column(ForeignKey("vallalkozasok.id", ondelete="SET NULL"))
+    partner_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
+    #: A számlát fedező szerződés (érvényes keretszerződés vagy a projektre
+    #: szóló eseti szerződés), ha van.
+    szerzodes_id: Mapped[int | None] = mapped_column(ForeignKey("contracts.id", ondelete="SET NULL"))
+    #: A legutóbbi érvényesítés teljes eredménye: ellenőrzések, hiányzó
+    #: dokumentumok, előkészítési opciók, figyelmeztetések, időbélyeg.
+    validacio: Mapped[dict | None] = mapped_column(JSON)
 
     letrehozo = relationship("Employee", foreign_keys=[letrehozo_employee_id])
     jovahagyo = relationship("Employee", foreign_keys=[jovahagyo_employee_id])

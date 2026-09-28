@@ -18,6 +18,7 @@ const ALLAPOTOK: Record<string, { cimke: string; tone: "success" | "warning" | "
   feldolgozas: { cimke: "Feldolgozás alatt", tone: "blue" },
   ellenorzendo: { cimke: "Ellenőrizendő", tone: "warning" },
   pontositas: { cimke: "Pontosítás szükséges", tone: "warning" },
+  hianyzo_dokumentumok: { cimke: "Hiányzó szerződés / TIG", tone: "warning" },
   jovahagyva: { cimke: "Rögzítve", tone: "success" },
   duplikatum: { cimke: "Duplikátum", tone: "neutral" },
   nem_szamla: { cimke: "Nem számla / elutasítva", tone: "neutral" },
@@ -38,7 +39,7 @@ const EROSSEG: Record<string, { cimke: string; tone: "success" | "warning" | "da
  * badge-eken marad (a felhasználó kérése). */
 const NEZETEK: { kulcs: string; cimke: string; allapotok: string[] | null }[] = [
   { kulcs: "ellenorzes", cimke: "Ellenőrzésre vár", allapotok: ["ellenorzendo"] },
-  { kulcs: "elakadt", cimke: "Elakadt", allapotok: ["pontositas", "hiba", "feldolgozas"] },
+  { kulcs: "elakadt", cimke: "Elakadt", allapotok: ["pontositas", "hianyzo_dokumentumok", "hiba", "feldolgozas"] },
   { kulcs: "rogzitett", cimke: "Rögzített", allapotok: ["jovahagyva"] },
   { kulcs: "felretett", cimke: "Félretett", allapotok: ["duplikatum", "nem_szamla", "egyeb_dokumentum"] },
   { kulcs: "mind", cimke: "Mind", allapotok: null },
@@ -90,6 +91,7 @@ function bruttoSzoveg(b: BejovoSzamla): string {
 function kovetkezoTeendo(b: BejovoSzamla): string {
   if (b.allapot === "ellenorzendo") return "Ellenőrizd és hagyd jóvá";
   if (b.allapot === "pontositas") return b.fajl_nev ? "Válassz célt / pontosíts" : "Töltsd fel a letöltött számlát";
+  if (b.allapot === "hianyzo_dokumentumok") return "Készítsd elő a hiányzó szerződést / TIG-et";
   if (b.allapot === "hiba") return "Nézd meg a hibát, próbáld újra";
   if (b.allapot === "feldolgozas") return "Feldolgozás alatt";
   if (b.allapot === "jovahagyva") return "Kész";
@@ -865,6 +867,24 @@ function Reszletes({
       }));
     }
     if (adat?.cel_tipus === "bontas" && bontas !== null) body.bontas = bontasKuldheto(bontas);
+    if (adat?.megerosites_kell) {
+      // GÉPI PISZKOZAT: a pénzügyi rögzítés csak kifejezett megerősítéssel
+      // megy át - a friss (mentés utáni) adatokat mutatjuk, és azok
+      // ujjlenyomatát küldjük vissza (ha közben változott, a szerver elutasítja).
+      const res = await authFetch(`/api/v1/bejovo-szamlak/${bejovoId}`);
+      if (!res.ok) {
+        setHiba(`Nem sikerült frissíteni a számla adatait (${res.status}).`);
+        return;
+      }
+      const friss: BejovoSzamlaReszlet = await res.json();
+      const szoveg =
+        `Megerősíted a számla rögzítését?\n\n${friss.kibocsato_nev ?? "?"} (${friss.kibocsato_adoszam ?? "?"})\n` +
+        `Számlaszám: ${friss.szamlaszam ?? "?"}\nBruttó: ${bruttoSzoveg(friss)}\n` +
+        `Cél: ${CEL_CIMKEK[friss.cel_tipus ?? ""] ?? friss.cel_tipus ?? "?"}${friss.cel_cimke ? ` – ${friss.cel_cimke}` : ""}\n\n` +
+        "Ez gépi feldolgozásból jött; a rögzítés nem jelöli kifizetettnek.";
+      if (!window.confirm(szoveg)) return;
+      body.megerosites = { megerositve: true, ellenorzo_kod: friss.ellenorzo_kod };
+    }
     await hivas("/jovahagyas", body);
   }
 
@@ -1014,6 +1034,43 @@ function Reszletes({
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
               {hiba && <p className="rounded-[var(--radius)] border border-text-danger/50 bg-text-danger/10 px-3 py-2 text-[12.5px] text-text-danger">{hiba}</p>}
               {adat.hiba_uzenet && <p className="text-[12.5px] text-text-danger">Feldolgozási hiba: {adat.hiba_uzenet}</p>}
+              {adat.allapot === "hianyzo_dokumentumok" && adat.validacio && (
+                <section className="space-y-2 rounded-[var(--radius)] border border-text-warning/50 bg-bg-warning px-3 py-2 text-[12.5px]">
+                  <p className="font-medium text-text-warning">Hiányzó dokumentum - amíg nincs meg, a számla nem rögzíthető.</p>
+                  <ul className="list-disc space-y-0.5 pl-5 text-text-primary">
+                    {adat.validacio.hianyzo.map((h, i) => (
+                      <li key={i}>{h.ok}</li>
+                    ))}
+                  </ul>
+                  {adat.validacio.elokeszitesi_opciok.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-text-muted">Előkészítési lehetőségek (a rendszer magától nem indítja el őket):</p>
+                      {adat.validacio.elokeszitesi_opciok.map((o) => (
+                        <div key={o.kod} className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5">
+                          <p className="font-medium text-text-primary">
+                            {o.link ? (
+                              <a href={o.link} className="text-text-accent hover:underline">
+                                {o.cim} →
+                              </a>
+                            ) : (
+                              o.cim
+                            )}
+                          </p>
+                          <p className="text-text-muted">{o.leiras}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void hivas("/draft/ujravalidalas", {})}
+                    className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                  >
+                    Ellenőrzés újra (ha elkészült a hiányzó papír)
+                  </button>
+                </section>
+              )}
               {(adat.javaslat?.figyelmeztetesek ?? []).map((f, i) => (
                 <p key={i} className="rounded-[var(--radius)] border border-text-warning/50 bg-bg-warning px-3 py-2 text-[12.5px] text-text-warning">
                   {f}

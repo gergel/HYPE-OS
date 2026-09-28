@@ -58,6 +58,7 @@ from app.api.routes.timeline import router as timeline_router
 from app.api.routes.user_access import router as user_access_router
 from app.api.routes.vagoi_visszajelzesek import router as vagoi_visszajelzesek_router
 from app.api.routes.utokovetes_admin import router as utokovetes_admin_router
+from app.api.routes.utokovetes_hianyok import router as utokovetes_hianyok_router
 from app.api.routes.krumpello import router as krumpello_router
 from app.api.routes.megrendeloi_keretszerzodesek import router as megrendeloi_keretszerzodesek_router
 from app.api.routes.megrendeloi_papirok import router as megrendeloi_papirok_router
@@ -143,6 +144,8 @@ api_router.include_router(performance_certificates_router)
 # Az összes külsős TIG egy listában (a kihagyottakkal együtt).
 api_router.include_router(kulsos_tigek_router)
 api_router.include_router(internal_performance_certificates_router)
+# A /utokovetes/hianyok ELŐBB kell, mint a /utokovetes/{project_id}.
+api_router.include_router(utokovetes_hianyok_router)
 api_router.include_router(utokovetes_admin_router)
 # 14. Kampányok
 api_router.include_router(campaigns_router)
