@@ -664,6 +664,17 @@ export type AdminApprovalSor = {
   payload_hash: string;
   partner_nev: string | null;
   letrehozva: string | null;
+  /** Emberi nyelven: mi fog történni jóváhagyáskor (a szerver állítja össze). */
+  leiras?: JavaslatLeiras | null;
+};
+
+export type JavaslatLeiras = {
+  cim: string;
+  reszletek: string[];
+  lepesek: string[];
+  nem_tortenik: string[];
+  figyelmeztetesek: string[];
+  link: string | null;
 };
 
 export async function getAdminAgentApprovals(): Promise<{ elemek: AdminApprovalSor[] } | null> {

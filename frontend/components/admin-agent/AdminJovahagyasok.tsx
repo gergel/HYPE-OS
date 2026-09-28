@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
-import type { AdminApprovalSor } from "@/lib/api";
+import Link from "next/link";
+import type { AdminApprovalSor, JavaslatLeiras } from "@/lib/api";
 import { TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
 
 /** Lara — JÓVÁHAGYÁSOK (kliens).
@@ -93,18 +94,24 @@ export function AdminJovahagyasok({
           <li key={a.approval_id} className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               {a.kockazat && (
-                <span className="rounded-[var(--radius)] bg-bg-warning px-2 py-0.5 text-[12px] font-medium text-text-warning">
-                  {a.kockazat}
+                <span
+                  title={`Kockázati besorolás: ${a.kockazat}`}
+                  className="rounded-[var(--radius)] bg-bg-warning px-2 py-0.5 text-[12px] font-medium text-text-warning"
+                >
+                  {KOCKAZAT_CIMKE[a.kockazat] ?? a.kockazat}
                 </span>
               )}
               <span className="text-[13px] font-medium text-text-primary">{a.cim}</span>
-              <span className="text-[12px] text-text-muted">
-                · {TIPUS_CIMKE[a.tipus] ?? a.tipus} · {a.eszkoz}
-              </span>
+              <span className="text-[12px] text-text-muted">· {TIPUS_CIMKE[a.tipus] ?? a.tipus}</span>
             </div>
-            <pre className="mb-3 max-h-48 overflow-auto rounded-[var(--radius)] bg-surface-2 p-2.5 text-[11.5px] text-text-secondary">
-              {JSON.stringify(a.payload, null, 2)}
-            </pre>
+            {a.leiras ? <Leiras l={a.leiras} /> : null}
+            <details className="mb-3 text-[12px] text-text-muted">
+              <summary className="cursor-pointer select-none">Technikai adatok</summary>
+              <p className="mt-1">Művelet: {a.eszkoz}</p>
+              <pre className="mt-1 max-h-48 overflow-auto rounded-[var(--radius)] bg-surface-2 p-2.5 text-[11.5px] text-text-secondary">
+                {JSON.stringify(a.payload, null, 2)}
+              </pre>
+            </details>
             {canDecide ? (
               <div className="flex flex-wrap gap-2">
                 <button
@@ -130,6 +137,48 @@ export function AdminJovahagyasok({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+const KOCKAZAT_CIMKE: Record<string, string> = {
+  R0: "Csak olvasás",
+  R1: "Belső, visszafordítható",
+  R2: "Pénzügyi / külső hatás",
+  R3: "Tiltott",
+};
+
+/** Mi fog történni jóváhagyáskor — emberi nyelven, a szerver leírásából. */
+function Leiras({ l }: { l: JavaslatLeiras }) {
+  return (
+    <div className="mb-3 rounded-[var(--radius)] bg-surface-2 px-3 py-2.5 text-[13px]">
+      <p className="font-medium text-text-primary">
+        {l.cim}
+        {l.link && (
+          <Link href={l.link} className="ml-2 text-[12px] font-normal text-text-accent hover:underline">
+            megnyitás
+          </Link>
+        )}
+      </p>
+      {l.reszletek.length > 0 && <p className="mt-0.5 text-text-secondary">{l.reszletek.join(" ")}</p>}
+      {l.figyelmeztetesek.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-1 rounded-[var(--radius)] bg-bg-danger px-2.5 py-1.5 text-[12.5px] text-text-danger">
+          {l.figyelmeztetesek.map((f, i) => (
+            <li key={i}>{f}</li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-[12px] font-medium text-text-muted">Jóváhagyáskor ez történik:</p>
+      <ul className="mt-0.5 flex flex-col gap-0.5 text-text-primary">
+        {l.lepesek.map((x, i) => (
+          <li key={i} className={x.startsWith("  ") ? "pl-5 text-text-secondary" : "pl-3 -indent-3"}>
+            {x.startsWith("  ") ? x.trim() : `• ${x}`}
+          </li>
+        ))}
+      </ul>
+      {l.nem_tortenik.length > 0 && (
+        <p className="mt-2 text-[12px] text-text-muted">Nem történik: {l.nem_tortenik.join(" ")}</p>
+      )}
     </div>
   );
 }

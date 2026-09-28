@@ -481,8 +481,10 @@ def approvals_lista(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
 ):
-    """Jóváhagyásra váró javaslatok. (A javaslat-generáló és végrehajtó réteg a
-    következő fázisokban készül; addig ez a lista üres.)"""
+    """Jóváhagyásra váró javaslatok, mindegyikhez emberi nyelvű leírással arról,
+    mi fog történni jóváhagyáskor."""
+    from app.admin_agent.javaslat_leiras import leiras as javaslat_leiras
+
     sorok = db.execute(
         select(Approval, ActionProposal, AdminTask)
         .join(ActionProposal, ActionProposal.id == Approval.proposal_id)
@@ -504,6 +506,8 @@ def approvals_lista(
                 "payload_hash": p.payload_hash,
                 "partner_nev": t.partner_nev,
                 "letrehozva": a.created_at.isoformat() if a.created_at else None,
+                # Emberi nyelven: mi fog történni jóváhagyáskor (lásd admin_agent/javaslat_leiras.py).
+                "leiras": javaslat_leiras(db, p, t),
             }
             for (a, p, t) in sorok
         ]
