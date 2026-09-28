@@ -38,7 +38,11 @@ from app.admin_agent.enums import ADMIN_FELADATTIPUSOK, ActorKind, TaskState
 from app.models.admin_agent import ActionTrace, AdminTask, LaraBeszelgetes, LaraBeszelgetesUzenet
 from app.models.employee import Employee
 
-TIPUS_CIMKE = {"szamla": "Számla", "email": "E-mail", "tig": "TIG", "szerzodes": "Szerződés", "egyeb": "Egyéb adminisztráció"}
+TIPUS_CIMKE = {
+    "szamla": "Számla", "email": "E-mail", "tig": "TIG", "szerzodes": "Szerződés",
+    "diszpo": "Diszpó brief + technika", "osszefogo": "Összefogó adminisztrációs feladat",
+    "egyeb": "Egyéb adminisztráció",
+}
 
 #: Kifejezett feladat-kérés („vedd fel feladatnak…”).
 _KIFEJEZETT = re.compile(
@@ -50,13 +54,26 @@ _KIFEJEZETT = re.compile(
 _KERES = re.compile(
     r"\b(intézd|intézz|készítsd|készíts|csináld|csinálj|küldd|küldj|írd meg|írj|rögzítsd|vezesd fel|vegyél fel|"
     r"állítsd ki|kérd be|kérj be|egyeztesd|egyeztess|nézz utána és|ellenőrizd és|pótold|javítsd|töltsd ki|"
-    r"szólj rá|jelezd|készítsen|kellene (egy|a)|meg kéne|meg kellene)\b",
+    r"szólj rá|jelezd|készítsen|kellene (egy|a)|meg kéne|meg kellene|zárd le|nézd át|tedd rendbe|rendezd|"
+    r"vizsgáld meg|gyűjtsd össze|készítsd elő)\b",
     re.I,
 )
 _KERDES_ELEJE = re.compile(r"^\s*(mi|mennyi|mennyibe|hány|hol|mikor|miért|hogyan|ki|kinek|melyik|van|volt|kell)\b", re.I)
 #: Hatáskörön kívül — ebből soha nem lesz feladat.
 _UTALAS = re.compile(r"\b(utald|utalj|utalás|átutal|fizesd ki|fizess ki|kifizetni|bankba)\w*", re.I)
-_NEM_ADMIN = re.compile(r"\b(diszpó|diszpo|utómunka|vágás|portál|beosztás|forgatási nap)\w*", re.I)
+_NEM_ADMIN = re.compile(r"\b(utómunka|vágás|portál|beosztás|forgatási nap)\w*", re.I)
+#: A diszpóból Lara a BRIEFET és a TECHNIKAI LISTÁT vállalja (2026-09-28 óta);
+#: a kiküldést, az átütemezést és a beosztást továbbra sem.
+_DISZPO = re.compile(r"\b(diszpó|diszpo)\w*", re.I)
+_DISZPO_RESZ = re.compile(r"\b(brief|technik|eszközlist|eszközök|felszerelés)\w*", re.I)
+#: Összefogó (több projektkódot / időszakot átfogó) feladatra utaló szavak.
+_OSSZEFOGO = re.compile(
+    r"\b(összes|mindegyik|minden|valamennyi|az egész|teljes körű|havi|heti|negyedév\w*|q[1-4]|"
+    r"január\w*|február\w*|március\w*|április\w*|május\w*|június\w*|július\w*|augusztus\w*|"
+    r"szeptember\w*|október\w*|november\w*|december\w*|lezárás\w*|zárd le|rendbe tenni|rendbe tedd|tedd rendbe)\b",
+    re.I,
+)
+_TOBB_KOD = re.compile(r"\b[A-Z]{2,8}\d{2}-\d{3,5}\b")
 
 #: A teendő (ige) előbb számít, mint a téma: „írj levelet a TIG-ről” e-mail.
 _TIPUS_SZAVAK = (
@@ -71,8 +88,19 @@ class FeladatHiba(ValueError):
     pass
 
 
+def osszefogo_e(szoveg: str) -> bool:
+    """Több projektkódot / időszakot / partnert átfogó adminisztrációs feladat-e?"""
+    if len(set(_TOBB_KOD.findall(szoveg or ""))) >= 2:
+        return True
+    return bool(_OSSZEFOGO.search(szoveg or ""))
+
+
 def _tipus_tipp(szoveg: str) -> str:
     kis = szoveg.lower()
+    if _DISZPO_RESZ.search(kis) and (_DISZPO.search(kis) or re.search(r"\b(brief|technikai lista)", kis)):
+        return "diszpo"
+    if osszefogo_e(szoveg) and not re.search(r"\b(írj|írd meg|levél|levelet|válaszolj)\b", kis):
+        return "osszefogo"
     for t, szavak in _TIPUS_SZAVAK:
         if any(re.search(r"\b" + re.escape(s) + (r"\b" if len(s) <= 4 else ""), kis) for s in szavak):
             return t
@@ -129,7 +157,12 @@ def hataskoron_kivul(szoveg: str) -> str | None:
     if _UTALAS.search(szoveg):
         return "Utalást Lara nem végez és nem készít elő — ebből nem lehet Lara-feladat."
     if _NEM_ADMIN.search(szoveg) and not re.search(r"\b(számla|tig|szerződés)", szoveg, re.I):
-        return "Ez nem adminisztrációs terület (diszpó / utómunka / portál / beosztás) — Lara ott nem vállal feladatot."
+        return "Ez nem adminisztrációs terület (utómunka / portál / beosztás) — Lara ott nem vállal feladatot."
+    if _DISZPO.search(szoveg) and not _DISZPO_RESZ.search(szoveg) and not re.search(r"\b(számla|tig|szerződés)", szoveg, re.I):
+        return (
+            "A diszpó kiküldése, átütemezése és a beosztás nem Lara dolga — a diszpóhoz a briefet és a "
+            "technikai listát (az eszközök hozzárendelésével) tudja elkészíteni."
+        )
     return None
 
 
@@ -200,12 +233,15 @@ def letrehoz(db: Session, user: Employee, uzenet_id: int, modositott: dict | Non
     j = dict(adat["feladat_javaslat"])
     if j.get("allapot") == "letrehozva" and j.get("task_id"):
         return j
-    for k in ("tipus", "cim", "leiras", "partner", "projektkod", "hatarido"):
+    for k in ("tipus", "cim", "leiras", "partner", "projektkod", "hatarido", "project_id"):
         if modositott and k in modositott:
             j[k] = modositott[k]
     tipus = j.get("tipus") or "egyeb"
     if tipus not in ADMIN_FELADATTIPUSOK:
-        raise FeladatHiba("Lara csak adminisztrációs feladatot vállalhat (számla, e-mail, TIG, szerződés, egyéb).")
+        raise FeladatHiba(
+            "Lara csak a hatáskörébe tartozó feladatot vállalhat (számla, e-mail, TIG, szerződés, diszpó brief + "
+            "technika, összefogó adminisztráció, egyéb)."
+        )
     cim = str(j.get("cim") or "").strip()
     if len(cim) < 3:
         raise FeladatHiba("Adj a feladatnak címet.")
@@ -218,6 +254,12 @@ def letrehoz(db: Session, user: Employee, uzenet_id: int, modositott: dict | Non
         if pc is None:
             raise FeladatHiba(f"Nincs ilyen projektkód: {j['projektkod']}")
         pc_id = pc.id
+    project_id = None
+    if tipus == "diszpo":
+        from app.admin_agent.diszpo_tervezo import forgatas_kereses
+
+        project_id = forgatas_kereses(db, project_id=j.get("project_id"), project_code_id=pc_id,
+                                      szoveg=f"{cim} {j.get('leiras') or ''}")
     hatarido = None
     if j.get("hatarido"):
         try:
@@ -236,6 +278,7 @@ def letrehoz(db: Session, user: Employee, uzenet_id: int, modositott: dict | Non
         felelos_id=felelos.id if felelos is not None else user.id,
         hatarido=hatarido,
         project_code_id=pc_id,
+        project_id=project_id,
         partner_nev=(str(j.get("partner") or "").strip() or None),
         trust_level="L0",
         forras_referenciak={"lara_chat": {"beszelgetes_id": b.id, "uzenet_id": u.id, "letrehozta_id": user.id}},
@@ -247,8 +290,14 @@ def letrehoz(db: Session, user: Employee, uzenet_id: int, modositott: dict | Non
         eroforras=f"lara_chat:{b.id}:{u.id}", diff={"tipus": tipus, "cim": cim[:300], "letrehozta_id": user.id},
         eredmeny="letrehozva", tortent_at=datetime.now(timezone.utc),
     ))
+    if tipus == "osszefogo":
+        # A nagy feladat értelmezése (hatókör + terv) rögtön elkészül; a
+        # részfeladatok csak külön, kifejezett lépésre jönnek létre.
+        from app.admin_agent import osszefogo
+
+        osszefogo.ertelmez(db, t)
     j.update({"tipus": tipus, "cim": cim[:300], "allapot": "letrehozva", "task_id": t.id,
-              "project_code_id": pc_id, "hatarido": hatarido.date().isoformat() if hatarido else None})
+              "project_code_id": pc_id, "project_id": project_id, "hatarido": hatarido.date().isoformat() if hatarido else None})
     adat["feladat_javaslat"] = j
     u.adat = adat
     db.add(LaraBeszelgetesUzenet(

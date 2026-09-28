@@ -838,6 +838,38 @@ is meg tudja adni a választ.
   - böngészős bejárás.
 - A hiány-mátrixhoz még nincs felület.
 
+### AG. Diszpó brief + technikai lista a tapasztalatból, összefogó adminisztrációs feladatok ✅ (tesztelve, modell nélkül; éles adaton és valódi Geminivel: ⚠️ nem ellenőrzött)
+- Leírás: `docs/admin-agent/lara-diszpo-es-osszefogo-feladatok.md`.
+- Hatáskör-bővítés (a felhasználó döntése):
+  - új feladattípusok: `diszpo` (brief + technika) és `osszefogo`;
+  - továbbra is tiltott: a diszpó kiküldése / átütemezése, a beosztás, az
+    utómunka, a portál és az utalás;
+  - az eval biztonsági esetei ennek megfelelően frissültek; az elavult
+    „diszpó tiltott” eset érvénytelenítve, nem törölve.
+- Diszpó:
+  - a hasonló korábbi forgatásokból súlyozott technikai csomag;
+  - foglalt eszköz helyett szabad helyettesítő;
+  - brief a saját adatokból és a visszatérő instrukciókból;
+  - modellel: csak az eszköztörzsből választhat;
+  - jóváhagyás után a brief íródik, az eszközök a közös foglalási úton a
+    projekthez kerülnek, és lefut a „Technika ready”;
+  - visszavonható.
+- A tapasztalat a rendszer-figyelés része: ügyfelenként / brief-típusonként
+  tényként kerül a Tudástárba.
+- Összefogó feladat:
+  - a szövegből értelmezett hatókör: időszak, projektkódok, ügyfél, témák;
+  - élő terv a teljes rendszerből;
+  - idempotens részfeladat-bontás, előrehaladás.
+- Migráció: `s2n9k30h7i51` (csak L0 bizalmi sorok az új típusokra).
+- Tesztek:
+  - 13 új teszt;
+  - a teljes backend-csomag átment;
+  - frontend: `tsc`, `eslint`, `next build` rendben.
+- NEM ELLENŐRZÖTT:
+  - éles adaton;
+  - valódi Gemini-hívással;
+  - böngészős bejárás.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

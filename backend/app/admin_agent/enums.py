@@ -21,14 +21,25 @@ class TaskType(str, Enum):
     EMAIL = "email"  # e-mail-válasz
     TIG = "tig"  # teljesítésigazolás előkészítés
     SZERZODES = "szerzodes"  # szerződés előkészítés
+    #: Diszpó brief + technikai lista (a felhasználó 2026-09-28-i döntése):
+    #: Lara a korábbi forgatások tapasztalatából megírja a briefet és
+    #: összeállítja a technikát - az eszközöket ténylegesen hozzá is rendeli
+    #: a projekthez, ahogy a rendszer máshol is (lásd admin_agent/diszpo_tervezo.py).
+    DISZPO = "diszpo"
+    #: ÖSSZEFOGÓ adminisztrációs feladat: több projektkódot / partnert /
+    #: időszakot átfogó nagy feladat, részfeladatokra bontva (lásd
+    #: admin_agent/osszefogo.py). Nem egyetlen projektkódhoz kötött.
+    OSSZEFOGO = "osszefogo"
     EGYEB = "egyeb"
 
 
 #: LARA HATÁSKÖRE (a felhasználó döntése): Lara az EGÉSZ rendszert figyelheti
 #: és tanulhat belőle (lásd admin_agent/rendszer.py), de feladatot — tervezetet,
-#: javaslatot, végrehajtást — KIZÁRÓLAG adminisztrációs területen végezhet:
-#: számla, adminisztrációs e-mail, TIG, szerződés (és az ezekhez tartozó egyéb
-#: papírmunka). A végrehajtó minden eszköznél ellenőrzi, és az eszköz-regiszter
+#: javaslatot, végrehajtást — csak ezeken a területeken végezhet: számla,
+#: adminisztrációs e-mail, TIG, szerződés (és az ezekhez tartozó egyéb
+#: papírmunka), a diszpó briefje és technikai listája (2026-09-28 óta), és az
+#: ezeket átfogó összefogó adminisztrációs feladatok. A diszpó kiküldése, a
+#: forgatás időpontja, a beosztás, az utómunka és a portál továbbra sem az övé. A végrehajtó minden eszköznél ellenőrzi, és az eszköz-regiszter
 #: betöltéskor is (egy nem adminisztratív eszköz fel sem vehető).
 ADMIN_FELADATTIPUSOK: frozenset[str] = frozenset(t.value for t in TaskType)
 

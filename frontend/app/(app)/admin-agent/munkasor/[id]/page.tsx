@@ -6,6 +6,7 @@ import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
 import { AdminJavaslatSzerkeszto } from "@/components/admin-agent/AdminJavaslatSzerkeszto";
 import { AdminTaskActions } from "@/components/admin-agent/AdminTaskActions";
 import { LaraMegoldas } from "@/components/admin-agent/LaraMegoldas";
+import { LaraOsszefogo } from "@/components/admin-agent/LaraOsszefogo";
 import { ALLAPOT_CIMKE, TIPUS_CIMKE } from "@/components/admin-agent/allapotok";
 import { type AdminTaskTimeline, getAdminTaskTimeline, getMyPagePermissions } from "@/lib/api";
 
@@ -74,14 +75,21 @@ export default async function AdminAgentTaskReszletPage({
                   .filter((p) => p.allapot === "ready" || p.allapot === "draft")
                   .map((p) => ({ id: p.id, eszkoz: p.eszkoz }))}
                 canEdit={canEdit}
+                allapot={adat.task.allapot}
               />
             </Card>
+
+            {adat.task.tipus === "osszefogo" && (
+              <Card title="Összefogó feladat: hatókör, teendők, részfeladatok">
+                <LaraOsszefogo taskId={adat.task.id} canEdit={canEdit} />
+              </Card>
+            )}
 
             <Card title="Javaslatok">
               {adat.proposals.length === 0 ? (
                 <p className="text-[13px] text-text-secondary">
                   Ehhez a feladathoz még nincs javaslat.
-                  {["tig", "szerzodes", "email"].includes(adat.task.tipus) &&
+                  {["tig", "szerzodes", "email", "diszpo"].includes(adat.task.tipus) &&
                     " A „Tervezet készítése (Lara)” gombbal kérhetsz egyet."}
                 </p>
               ) : (

@@ -134,16 +134,19 @@ def _find_alternative_optics(
     return alternatives
 
 
-def check_technika(db: Session, project: Project) -> dict:
+def check_technika(db: Session, project: Project, *, commit: bool = True) -> dict:
     """Lefuttatja az ütközés-ellenőrzést a projekthez rendelt (Assignment) eszközökre,
     és visszaírja az eredményt a projektre (technika_lista, backend_statusz,
-    backend_uzenet, technika_ready=False - egyszeri trigger, mint az eredetiben)."""
+    backend_uzenet, technika_ready=False - egyszeri trigger, mint az eredetiben).
+
+    `commit=False`: a hívó tranzakciójában marad (Lara végrehajtója egy
+    mentési ponton belül hívja, a brief-mentéssel és a foglalásokkal együtt)."""
     project_range = _project_range(project)
     if project_range is None:
         project.backend_statusz = "ISSUE"
         project.backend_uzenet = "Hiányzik a forgatás dátuma."
         project.technika_ready = False
-        db.commit()
+        db.commit() if commit else db.flush()
         return {"status": project.backend_statusz, "message": project.backend_uzenet, "technika_lista": None}
 
     start, end = project_range
@@ -219,6 +222,6 @@ def check_technika(db: Session, project: Project) -> dict:
     project.backend_statusz = "OK" if ok else "ISSUE"
     project.backend_uzenet = "\n".join(messages) if messages else "OK"
     project.technika_ready = False
-    db.commit()
+    db.commit() if commit else db.flush()
 
     return {"status": project.backend_statusz, "message": project.backend_uzenet, "technika_lista": project.technika_lista}

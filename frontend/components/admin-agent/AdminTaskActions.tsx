@@ -15,7 +15,7 @@ const KORREKCIO_TIPUSOK: { ertek: string; cimke: string }[] = [
 ];
 
 /** Azok a feladattípusok, amelyekhez Lara tervezetet tud készíteni. */
-const TERVEZHETO = new Set(["tig", "szerzodes", "email"]);
+const TERVEZHETO = new Set(["tig", "szerzodes", "email", "diszpo"]);
 
 /** Lara — feladat-műveletek (kliens): tervezet készítése, javítás /
  * magyarázat, újraelemzés, megszakítás. Elég egy összefoglaló magyarázat
@@ -28,11 +28,14 @@ export function AdminTaskActions({
   tipus,
   proposals,
   canEdit,
+  allapot,
 }: {
   taskId: number;
   tipus: string;
   proposals: ProposalRef[];
   canEdit: boolean;
+  /** A feladat állapota - a diszpó-tervezet visszavonása csak végrehajtott feladatnál. */
+  allapot?: string;
 }) {
   const router = useRouter();
   const [nyitva, setNyitva] = useState(false);
@@ -43,6 +46,9 @@ export function AdminTaskActions({
   const [hiba, setHiba] = useState<string | null>(null);
   const [uzenet, setUzenet] = useState<string | null>(null);
   const [folyamatban, setFolyamatban] = useState(false);
+  // Diszpó-tervezetnél: mit készítsen Lara.
+  const [kellBrief, setKellBrief] = useState(true);
+  const [kellTechnika, setKellTechnika] = useState(true);
 
   if (!canEdit) {
     return <p className="text-[12px] text-text-muted">Javításhoz / művelethez szerkesztési jogosultság szükséges.</p>;
@@ -103,7 +109,10 @@ export function AdminTaskActions({
     setUzenet(null);
     setFolyamatban(true);
     try {
-      const res = await authFetch(`/api/v1/admin-agent/tasks/${taskId}/tervezet`, { method: "POST" });
+      const res = await authFetch(`/api/v1/admin-agent/tasks/${taskId}/tervezet`, {
+        method: "POST",
+        body: tipus === "diszpo" ? JSON.stringify({ brief: kellBrief, technika: kellTechnika }) : undefined,
+      });
       const d = (await res.json().catch(() => ({}))) as { detail?: string; modell?: string; allapot?: string };
       if (!res.ok) {
         setHiba(typeof d.detail === "string" ? d.detail : "A tervezet elkészítése nem sikerült.");
@@ -119,6 +128,36 @@ export function AdminTaskActions({
               : "";
       setUzenet(
         `Tervezet elkészült${d.allapot === "draft" ? " (hiányos — a „Javaslat szerkesztése” gombbal pótold)" : ""}. ${modellSzoveg}`,
+      );
+      router.refresh();
+    } finally {
+      setFolyamatban(false);
+    }
+  }
+
+  async function diszpoVisszavonas() {
+    if (!window.confirm("Visszavonod Lara diszpó-módosítását? A hozzárendelt eszközök lekerülnek a projektről, és a korábbi brief visszaáll (ha azóta senki nem írta át).")) return;
+    setHiba(null);
+    setUzenet(null);
+    setFolyamatban(true);
+    try {
+      const res = await authFetch(`/api/v1/admin-agent/tasks/${taskId}/diszpo/visszavonas`, { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as {
+        detail?: string;
+        torolt_foglalas?: number;
+        brief?: string;
+      };
+      if (!res.ok) {
+        setHiba(typeof d.detail === "string" ? d.detail : "A visszavonás nem sikerült.");
+        return;
+      }
+      setUzenet(
+        `Visszavonva: ${d.torolt_foglalas ?? 0} eszköz lekerült a projektről` +
+          (d.brief === "visszaallitva"
+            ? ", a korábbi brief visszaállt."
+            : d.brief === "megtartva_mert_azota_modosult"
+              ? "; a briefet azóta módosították, ezért az marad."
+              : "."),
       );
       router.refresh();
     } finally {
@@ -150,7 +189,30 @@ export function AdminTaskActions({
         <div className="mb-3 rounded-[var(--radius)] bg-bg-success px-3 py-2 text-[13px] text-text-success">{uzenet}</div>
       )}
 
+      {tipus === "diszpo" && (
+        <div className="mb-2 flex flex-wrap items-center gap-4 text-[13px] text-text-secondary">
+          <span>Lara készítse el:</span>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={kellBrief} onChange={(e) => setKellBrief(e.target.checked)} />
+            briefet
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={kellTechnika} onChange={(e) => setKellTechnika(e.target.checked)} />
+            technikai listát (az eszközök hozzárendelésével)
+          </label>
+        </div>
+      )}
       <div className="mb-3 flex flex-wrap gap-2">
+        {tipus === "diszpo" && allapot === "completed" && (
+          <button
+            type="button"
+            disabled={folyamatban}
+            onClick={diszpoVisszavonas}
+            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+          >
+            Visszavonás (eszközök + brief)
+          </button>
+        )}
         {TERVEZHETO.has(tipus) && (
           <button
             type="button"

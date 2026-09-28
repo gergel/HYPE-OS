@@ -62,6 +62,8 @@ const FELADAT_TIPUS: Record<string, string> = {
   email: "E-mail",
   tig: "TIG",
   szerzodes: "Szerződés",
+  diszpo: "Diszpó brief + technika",
+  osszefogo: "Összefogó (több projekt / időszak)",
   egyeb: "Egyéb adminisztráció",
 };
 

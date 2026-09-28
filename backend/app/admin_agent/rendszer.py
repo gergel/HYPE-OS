@@ -368,12 +368,23 @@ def rendszer_figyeles(db: Session, *, trigger: str = "rendszer:kezi", kenyszerit
     utolso = _utolso_futas(db)
     tol = max(tanulas_kezdete(db), (utolso - timedelta(hours=1)) if utolso else tanulas_kezdete(db))
     kodok = _projektkod_eletut(db, tablak, tol, stat)
+    # Diszpó-tapasztalat: ügyfelenként / brief-típusonként a szokásos technika
+    # és a visszatérő brief-instrukciók (lásd admin_agent/diszpo_tervezo.py).
+    from app.admin_agent.diszpo_tervezo import tanul as diszpo_tanul
+
+    try:
+        with db.begin_nested():
+            diszpo_tudas = diszpo_tanul(db, stat)
+    except Exception:  # noqa: BLE001 — a diszpó-tanulás hibája ne állítsa meg a figyelést
+        diszpo_tudas = 0
+        stat["hibas_tabla"] += 1
     leg = sorted(aktivitas, key=lambda a: a["uj_30"] + a["modositott_30"], reverse=True)
     osszefoglalo = {
         "figyelt_tabla": len(tablak),
         "kizart_tabla": len(Base.metadata.tables) - len(tablak),
         "modul_tudas": sum(1 for a in aktivitas if a["osszes"]),
         "projektkod": kodok,
+        "diszpo_tapasztalat": diszpo_tudas,
         "uj": stat["uj"],
         "frissitett": stat["frissitve"],
         "hibas_tabla": stat["hibas_tabla"],

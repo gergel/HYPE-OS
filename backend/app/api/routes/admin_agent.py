@@ -106,6 +106,7 @@ def _task_sor(t: AdminTask, user: Employee | None = None) -> dict:
         "project_code_id": t.project_code_id,
         "client_id": t.client_id,
         "partner_nev": t.partner_nev,
+        "parent_task_id": t.parent_task_id,
         "blokkolo_ok": t.blokkolo_ok,
         "utolso_hiba": t.utolso_hiba,
         "row_version": t.row_version,
@@ -255,6 +256,8 @@ class TaskCreateIn(BaseModel):
     felelos_id: int | None = None
     hatarido: str | None = None
     project_code_id: int | None = None
+    #: Diszpó-feladatnál a forgatás (projekt).
+    project_id: int | None = None
     partner_nev: str | None = None
 
 
@@ -291,10 +294,20 @@ def task_letrehozas(
         felelos_id=_uj_feladat_felelose(db, payload.felelos_id),
         hatarido=hatarido,
         project_code_id=payload.project_code_id,
+        project_id=payload.project_id,
         partner_nev=(payload.partner_nev or "").strip() or None,
         trust_level="L0",
     )
     db.add(t)
+    db.flush()
+    if t.tipus == "diszpo" and t.project_id is None:
+        from app.admin_agent.diszpo_tervezo import forgatas_kereses
+
+        t.project_id = forgatas_kereses(db, project_code_id=t.project_code_id)
+    if t.tipus == "osszefogo":
+        from app.admin_agent import osszefogo
+
+        osszefogo.ertelmez(db, t)
     db.commit()
     return _task_sor(t)
 
@@ -686,9 +699,18 @@ def task_propose(
     }
 
 
+class TervezetIn(BaseModel):
+    #: Diszpó-feladatnál: mit készítsen Lara.
+    brief: bool = True
+    technika: bool = True
+    #: Diszpó-feladatnál a forgatás, ha a feladaton még nincs.
+    project_id: int | None = None
+
+
 @router.post("/tasks/{task_id}/tervezet")
 def task_tervezet(
     task_id: int,
+    body: TervezetIn | None = None,
     db: Session = Depends(get_db),
     user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ):
@@ -709,8 +731,11 @@ def task_tervezet(
         elif t.tipus == "email":
             ter = email_tervezet(db, t, user)
             extra_hiany = ter.get("extra_hianyok", [])
+        elif t.tipus == "diszpo":
+            ter = _diszpo_ter(db, t, body or TervezetIn())
+            extra_hiany = []
         else:
-            raise TervezetHiba("Tervezet TIG, szerződés és e-mail feladathoz készíthető.")
+            raise TervezetHiba("Tervezet TIG, szerződés, e-mail és diszpó feladathoz készíthető.")
         modell = ter.get("modell") or {}
         proposal, dontes = keszit_javaslat(
             db,
@@ -720,10 +745,11 @@ def task_tervezet(
             trigger="tervezet",
             provider="gemini" if modell.get("hasznalt") else "szabaly",
             modell=modell.get("modell"),
-            extra_ellenorzesek={"modell": modell, "kapcsolodo_tudas": ter.get("kapcsolodo_tudas")},
+            extra_ellenorzesek={"modell": modell, "kapcsolodo_tudas": ter.get("kapcsolodo_tudas"),
+                                **({"tapasztalat": ter["tapasztalat"]} if ter.get("tapasztalat") else {})},
             extra_hianyok=extra_hiany,
         )
-    except (TervezetHiba, JavaslatHiba) as exc:
+    except (TervezetHiba, JavaslatHiba, DiszpoHiba) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
     return {
@@ -734,6 +760,213 @@ def task_tervezet(
         "modell": modell.get("allapot"),
         "task": _task_sor(t),
     }
+
+
+from app.admin_agent.diszpo_tervezo import DiszpoHiba  # noqa: E402
+
+
+def _diszpo_ter(db: Session, t: AdminTask, body: TervezetIn) -> dict:
+    from app.admin_agent.diszpo_tervezo import diszpo_tervezet, forgatas_kereses
+    from app.models.project import Project
+
+    if body.project_id:
+        t.project_id = forgatas_kereses(db, project_id=body.project_id)
+    if t.project_id is None:
+        t.project_id = forgatas_kereses(db, project_code_id=t.project_code_id)
+    if t.project_id is None:
+        raise DiszpoHiba("Nem egyértelmű, melyik forgatásról van szó - add meg a forgatást (projektet).")
+    project = db.get(Project, t.project_id)
+    if project is None:
+        raise DiszpoHiba("A forgatás nem található.")
+    if t.project_code_id is None:
+        t.project_code_id = project.project_code_id
+    return diszpo_tervezet(db, project, brief=body.brief, technika=body.technika)
+
+
+@router.get("/diszpo/{project_id}/tapasztalat")
+def diszpo_tapasztalat(
+    project_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Előnézet: a hasonló korábbi forgatások, a tapasztalat szerinti technikai
+    csomag (elérhetőséggel) és a visszatérő brief-instrukciók. Csak olvas."""
+    from app.admin_agent.diszpo_tervezo import hasonlo_forgatasok, technika_javaslat, visszatero_instrukciok
+    from app.models.project import Project
+
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="A forgatás nem található.")
+    hasonlok = hasonlo_forgatasok(db, project)
+    return {
+        "hasonlo_forgatasok": [
+            {"id": h["project"].id, "nev": h["project"].nev, "datum": h["project"].forgatas_datuma.isoformat(),
+             "pont": round(h["pont"], 1), "okok": h["okok"]}
+            for h in hasonlok
+        ],
+        "technika": technika_javaslat(db, project, hasonlok),
+        "visszatero_instrukciok": visszatero_instrukciok(hasonlok),
+    }
+
+
+class DiszpoFeladatIn(BaseModel):
+    brief: bool = True
+    technika: bool = True
+
+
+@router.post("/diszpo/{project_id}/tervezet")
+def diszpo_tervezet_projektrol(
+    project_id: int,
+    body: DiszpoFeladatIn | None = None,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """A forgatás oldaláról: Lara-feladat (a nyitott diszpó-feladat újrahasználva)
+    és rögtön a brief + technika tervezete, jóváhagyásra."""
+    from app.models.project import Project
+
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="A forgatás nem található.")
+    lezart = [s.value for s in LEZART_TASK_STATES]
+    t = db.scalar(
+        select(AdminTask).where(AdminTask.tipus == "diszpo", AdminTask.project_id == project.id,
+                                AdminTask.allapot.notin_(lezart)).order_by(AdminTask.id.desc())
+    )
+    if t is None:
+        t = AdminTask(
+            tipus="diszpo", cim=f"Diszpó brief + technika: {project.nev}"[:300], allapot=TaskState.NEW.value,
+            felelos_id=_uj_feladat_felelose(db, user.id), project_id=project.id, project_code_id=project.project_code_id,
+            trust_level="L0", forras_referenciak={"diszpo_projekt": project.id, "letrehozta_id": user.id},
+        )
+        db.add(t)
+        db.flush()
+    b = body or DiszpoFeladatIn()
+    return task_tervezet(t.id, TervezetIn(brief=b.brief, technika=b.technika), db=db, user=user)
+
+
+@router.post("/tasks/{task_id}/diszpo/visszavonas")
+def diszpo_visszavonas(
+    task_id: int,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A végrehajtott diszpó-tervezet visszavonása: a Lara által hozzárendelt
+    eszközök törlése / darabszám visszaállítása, és a korábbi brief visszaírása
+    (ha azóta senki nem módosította)."""
+    from app.admin_agent.diszpo_tervezo import ESZKOZ, visszavonas
+
+    ex = db.scalar(
+        select(ActionExecution)
+        .join(ActionProposal, ActionProposal.id == ActionExecution.proposal_id)
+        .where(ActionProposal.task_id == task_id, ActionProposal.eszkoz == ESZKOZ, ActionExecution.allapot == "succeeded")
+        .order_by(ActionExecution.id.desc())
+    )
+    if ex is None:
+        raise HTTPException(status_code=404, detail="Ennél a feladatnál nincs végrehajtott diszpó-tervezet.")
+    if (ex.eredmeny or {}).get("visszavonva"):
+        raise HTTPException(status_code=409, detail="Ezt már visszavontad.")
+    try:
+        ki = visszavonas(db, ex.eredmeny or {})
+    except DiszpoHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    ex.eredmeny = {**(ex.eredmeny or {}), "visszavonva": {"at": datetime.now(timezone.utc).isoformat(), "ki": user.id, **ki}}
+    db.add(ActionTrace(task_id=task_id, szereplo="human", muvelet="diszpo_visszavonas", eroforras=ESZKOZ,
+                       diff={"execution_id": ex.id, **ki}, eredmeny="kesz", tortent_at=datetime.now(timezone.utc)))
+    db.commit()
+    return ki
+
+
+def _osszefogo_task(db: Session, task_id: int) -> AdminTask:
+    t = db.get(AdminTask, task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="A feladat nem található.")
+    if t.tipus != "osszefogo":
+        raise HTTPException(status_code=400, detail="Ez nem összefogó feladat.")
+    return t
+
+
+@router.get("/tasks/{task_id}/osszefogo")
+def osszefogo_allapot(
+    task_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Az összefogó feladat hatóköre, élő terve (konkrét teendők a teljes
+    rendszerből) és a részfeladatok előrehaladása."""
+    from app.admin_agent import osszefogo
+
+    return osszefogo.allapot(db, _osszefogo_task(db, task_id))
+
+
+@router.post("/tasks/{task_id}/osszefogo/ertelmezes")
+def osszefogo_ertelmezes(
+    task_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    from app.admin_agent import osszefogo
+
+    t = _osszefogo_task(db, task_id)
+    o = osszefogo.ertelmez(db, t)
+    db.commit()
+    return o
+
+
+class HatokorIn(BaseModel):
+    temak: list[str] | None = None
+    idoszak: dict | None = None
+    projektkodok: list[str] | None = None
+
+
+@router.patch("/tasks/{task_id}/osszefogo/hatokor")
+def osszefogo_hatokor(
+    task_id: int,
+    body: HatokorIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    from app.admin_agent import osszefogo
+
+    t = _osszefogo_task(db, task_id)
+    try:
+        o = osszefogo.hatokor_modositas(db, t, body.model_dump(exclude_unset=True))
+    except osszefogo.OsszefogoHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return o
+
+
+@router.post("/tasks/{task_id}/osszefogo/bontas")
+def osszefogo_bontas(
+    task_id: int,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """Részfeladatok létrehozása a terv tételeiből (idempotens). Üzleti rekordot
+    nem ír: a részfeladatok a szokásos javaslat → jóváhagyás úton mennek tovább."""
+    from app.admin_agent import osszefogo
+
+    t = _osszefogo_task(db, task_id)
+    try:
+        ki = osszefogo.bontas(db, t, user)
+    except osszefogo.OsszefogoHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return ki
+
+
+@router.post("/tasks/{task_id}/osszefogo/frissites")
+def osszefogo_frissites(
+    task_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    from app.admin_agent import osszefogo
+
+    a = osszefogo.frissites(db, _osszefogo_task(db, task_id))
+    db.commit()
+    return a
 
 
 def _lapos(ertek: object, elotag: str = "") -> dict:

@@ -264,6 +264,39 @@ def email_leiras(payload: dict) -> dict:
     }
 
 
+def diszpo_leiras(payload: dict) -> dict:
+    """Diszpó brief + technikai lista leírása: mi kerül a projektre."""
+    brief = payload.get("brief") or {}
+    tech = payload.get("technika") or []
+    lepesek: list[str] = []
+    if (brief.get("uj") or "").strip():
+        eleje = brief["uj"].strip()
+        lepesek.append(
+            f"A forgatás briefje lecserélődik Lara változatára ({brief.get('forras') or 'Lara'}): "
+            f"„{eleje[:240]}{'…' if len(eleje) > 240 else ''}”"
+        )
+    if tech:
+        sorok = []
+        for t in tech[:25]:
+            db_ = f"{t.get('qty')} db " if (t.get("track_mode") == "stock") else ""
+            extra = f" ({t['helyettesiti']['nev']} helyett)" if t.get("helyettesiti") else ""
+            sorok.append(f"{db_}{t.get('nev')}{extra}")
+        lepesek.append(f"{len(tech)} eszköz a projekthez rendelve (a forgatás napjaira): " + ", ".join(sorok)
+                       + ("…" if len(tech) > 25 else "") + ".")
+    if payload.get("technika_ready_futtatas"):
+        lepesek.append("Lefut a „Technika ready” ellenőrzés: elkészül a technikai lista szövege és az ütközés-riport.")
+    return {
+        "cim": f"Diszpó brief + technika: {payload.get('project_nev') or 'forgatás'}"
+               + (f" ({payload['forgatas_datuma']})" if payload.get("forgatas_datuma") else ""),
+        "reszletek": [f"Már hozzárendelt eszköz: {len(payload.get('meglevo_technika') or [])} db — ezek maradnak."],
+        "lepesek": lepesek,
+        "nem_tortenik": ["A diszpó nem megy ki senkinek.", "A meglévő eszközök és foglalások nem törlődnek.",
+                         "Minden visszavonható a feladat „Visszavonás” gombjával."],
+        "figyelmeztetesek": [] if (lepesek) else ["A javaslatban nincs se brief, se eszköz."],
+        "link": f"/projektek/{payload.get('project_id')}" if payload.get("project_id") else None,
+    }
+
+
 def leiras(db: Session, proposal: ActionProposal, task: AdminTask) -> dict:
     """A javaslat leírása eszköz szerint; ismeretlen eszköznél általános."""
     try:
@@ -271,6 +304,8 @@ def leiras(db: Session, proposal: ActionProposal, task: AdminTask) -> dict:
             return szamla_leiras(db, proposal.payload, task)
         if proposal.eszkoz == "email.valasz_kuldes":
             return email_leiras(proposal.payload)
+        if proposal.eszkoz == "diszpo.brief_technika_mentes":
+            return diszpo_leiras(proposal.payload)
     except Exception:  # noqa: BLE001 — a leírás hibája ne akassza el a listát
         pass
     from app.admin_agent.executor import TOOL_REGISTRY

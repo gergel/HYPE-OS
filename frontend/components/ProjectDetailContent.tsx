@@ -25,6 +25,7 @@ import { ProjektPapirokEsKoltsegek } from "@/components/projekt/ProjektPapirokEs
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
+import { LaraDiszpoGomb } from "@/components/admin-agent/LaraDiszpoGomb";
 import { DISZPO_MAX_BAJT, DISZPO_MERET_TANACS } from "@/lib/csatolmany";
 import { canDoAction, szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
@@ -330,6 +331,11 @@ export async function ProjectDetailContent({
           <div className="mt-4 border-t border-border pt-4">
             <TechnikaCheckButton projectId={project.id} />
           </div>
+          {szerkeszthet && (
+            <div className="mt-4 border-t border-border pt-4">
+              <LaraDiszpoGomb projectId={project.id} />
+            </div>
+          )}
         </Card>
       ),
     },

@@ -89,34 +89,13 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projekt nem található")
 
-    data = payload.model_dump()
-    if data.get("kivitel_datuma") is None:
-        data["kivitel_datuma"] = project.forgatas_datuma
-    if data.get("visszahozatal_datuma") is None:
-        data["visszahozatal_datuma"] = project.forgatas_datuma_vege or project.forgatas_datuma
-
     # UGYANAZ az eszköz, UGYANARRA a projektre és időszakra: nem nyitunk új
-    # sort. Készletes (stock) eszköznél a darabszám adódik hozzá - a felületen
-    # a listára kattintás azonnal hozzáad, így az ismételt kattintás +1 db,
-    # nem egy zavaró duplikált sor. Egyedi (asset) eszköznél nincs mit
-    # növelni: a meglévő sort adjuk vissza változatlanul.
-    meglevo = db.scalar(
-        select(Assignment).where(
-            Assignment.equipment_id == payload.equipment_id,
-            Assignment.project_id == payload.project_id,
-            Assignment.kivitel_datuma == data["kivitel_datuma"],
-            Assignment.visszahozatal_datuma == data["visszahozatal_datuma"],
-        )
-    )
-    if meglevo is not None:
-        if equipment.track_mode == "stock":
-            meglevo.qty = (meglevo.qty or 0) + (data.get("qty") or 1)
-            db.commit()
-            db.refresh(meglevo)
-        return meglevo
+    # sort (készletesnél +db, egyedinél a meglévő sor) - a közös szabály a
+    # services/eszkoz_foglalas.py-ban él, Lara technikai listája is azt hívja.
+    from app.services.eszkoz_foglalas import hozzarendel
 
-    obj = Assignment(**data)
-    db.add(obj)
+    data = payload.model_dump(exclude={"equipment_id", "project_id"})
+    obj, _ = hozzarendel(db, project, equipment, **data)
     db.commit()
     db.refresh(obj)
     return obj

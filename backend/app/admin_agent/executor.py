@@ -220,6 +220,23 @@ TOOL_REGISTRY["szerzodes.piszkozat_mentes"] = ToolSpec(
     validate=validate_tervezet("szerzodes"),
 )
 
+# DISZPÓ brief + technikai lista (2026-09-28): a brief mező írása és az
+# eszközök hozzárendelése a KÖZÖS foglalási úton + „Technika ready” ellenőrzés.
+# R1: belső, visszavonható írás (lásd diszpo_tervezo.visszavonas) — a diszpó
+# kiküldése továbbra is emberi lépés.
+from app.admin_agent.diszpo_tervezo import ESZKOZ as _DISZPO_ESZKOZ  # noqa: E402
+from app.admin_agent.diszpo_tervezo import diszpo_mentes_futtato, validate_diszpo  # noqa: E402
+
+TOOL_REGISTRY[_DISZPO_ESZKOZ] = ToolSpec(
+    eszkoz=_DISZPO_ESZKOZ,
+    cim="Diszpó brief + technikai lista (eszközök hozzárendelése)",
+    risk=RiskClass.R1,
+    tipus="diszpo",
+    run=diszpo_mentes_futtato,
+    side_effect=True,
+    validate=validate_diszpo,
+)
+
 # FONTOS: banki utalást INDÍTÓ/aláíró/végrehajtó eszköz SZÁNDÉKOSAN NINCS
 # regisztrálva (master prompt 10./8.: R3, tiltott), és utalás-előkészítés sincs:
 # az utalással Lara nem foglalkozik - a kifizetendőket a Pénzügyek „Utalásra
@@ -295,7 +312,10 @@ def execute_approved(
     # 3a) HATÁSKÖR: Lara csak adminisztrációs feladatot végezhet (a rendszer
     #     többi részét csak figyeli és tanul belőle).
     if spec.tipus not in ADMIN_FELADATTIPUSOK or (task is not None and task.tipus not in ADMIN_FELADATTIPUSOK):
-        return _blokk("Lara csak adminisztrációs feladatot végezhet (számla, TIG, szerződés, adminisztrációs e-mail).")
+        return _blokk(
+            "Lara csak a hatáskörébe tartozó feladatot végezhet (számla, TIG, szerződés, adminisztrációs e-mail, "
+            "diszpó brief és technikai lista)."
+        )
 
     # 3b) Determinista validálás ÚJRA a végrehajtás előtt (a payload időközben
     #     nem változott, de a szabály lehet, hogy szigorodott — fail-closed).

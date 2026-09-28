@@ -131,9 +131,10 @@ def test_hataskor_csak_adminisztracio(db):
     from app.models.employee import Employee
 
     assert all(spec.tipus in ADMIN_FELADATTIPUSOK for spec in TOOL_REGISTRY.values())
-    assert ADMIN_FELADATTIPUSOK == {"szamla", "email", "tig", "szerzodes", "egyeb"}
+    # 2026-09-28 óta a diszpó briefje/technikája és az összefogó feladat is Lara hatásköre.
+    assert ADMIN_FELADATTIPUSOK == {"szamla", "email", "tig", "szerzodes", "diszpo", "osszefogo", "egyeb"}
 
-    t = AdminTask(tipus="diszpo", cim="Nem adminisztratív", allapot="awaiting_approval", trust_level="L0")
+    t = AdminTask(tipus="utomunka", cim="Nem adminisztratív", allapot="awaiting_approval", trust_level="L0")
     db.add(t)
     db.flush()
     payload = {"cel_tipus": "mukodesi"}
@@ -153,7 +154,7 @@ def test_hataskor_csak_adminisztracio(db):
     safety_esetek_magveto(db)
     run = run_eval(db)
     hataskor = [e for e in run.eredmeny["esetek"] if e["nev"].startswith("Hatáskör")]
-    assert len(hataskor) == 3 and all(e["sikeres"] and not e["kritikus"] for e in hataskor)
+    assert len(hataskor) == 5 and all(e["sikeres"] and not e["kritikus"] for e in hataskor)
 
 
 def test_idozona_nelkuli_tabla_nem_dont_el(db):
