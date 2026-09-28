@@ -46,6 +46,25 @@ type Elonezet = {
   meglevo_tudas?: { rovat: string; id: number | null; cim: string | null; kivonat: string }[];
 };
 
+type FeladatJavaslat = {
+  tipus: string;
+  cim: string;
+  leiras: string;
+  partner: string | null;
+  projektkod: string | null;
+  hatarido: string | null;
+  allapot: "javasolt" | "letrehozva" | "elvetve";
+  task_id?: number;
+};
+
+const FELADAT_TIPUS: Record<string, string> = {
+  szamla: "Számla",
+  email: "E-mail",
+  tig: "TIG",
+  szerzodes: "Szerződés",
+  egyeb: "Egyéb adminisztráció",
+};
+
 type UzenetAdat = {
   tipus?: string;
   allapot?: string;
@@ -61,6 +80,9 @@ type UzenetAdat = {
   elvart?: string;
   ido_ms?: number;
   elonezet?: Elonezet;
+  feladat_javaslat?: FeladatJavaslat;
+  feladat_elutasitva?: string;
+  task_id?: number;
   mentve?: { tudas_id: number; allapot: string; szabaly_id: number | null; uzenet: string };
   tudas_id?: number;
   szabaly_id?: number | null;
@@ -233,6 +255,32 @@ export function LaraBeszelgetes({ canEdit }: { canEdit: boolean }) {
     return r.adat.id;
   }
 
+  const canCreate = !!info?.jogok.includes("create");
+
+  /** „Feladat Larának”: a beírt szövegből rögtön feladat-javaslat (megerősítésre jön létre). */
+  async function feladatKuldes() {
+    const s = szoveg.trim();
+    if (!s || kuld) return;
+    setKuld(true);
+    setHiba(null);
+    try {
+      const id = aktivId ?? (await ujBeszelgetes());
+      if (id === null) return;
+      const r = await kuldJson<{ kerdes: Uzenet; valasz: Uzenet }>(`/api/v1/admin-agent/chat/${id}/feladat`, "POST", {
+        szoveg: s,
+      });
+      if (!r.ok) {
+        setHiba(r.hiba ?? "A feladat-javaslat nem készült el.");
+        return;
+      }
+      setUzenetek((u) => [...u, r.adat.kerdes, r.adat.valasz]);
+      setSzoveg("");
+      void listaBetoltes();
+    } finally {
+      setKuld(false);
+    }
+  }
+
   async function kuldes() {
     const s = szoveg.trim();
     if (!s || kuld) return;
@@ -363,6 +411,7 @@ export function LaraBeszelgetes({ canEdit }: { canEdit: boolean }) {
                     u={u}
                     beszelgetesId={aktivId}
                     canEdit={canEdit}
+                    canCreate={canCreate}
                     onFrissult={(uj) => setUzenetek((l) => l.map((x) => (x.id === uj.id ? uj : x)))}
                     onUjUzenet={() => aktivId && void megnyit(aktivId)}
                     onTanitas={tanitasbol}
@@ -428,19 +477,32 @@ export function LaraBeszelgetes({ canEdit }: { canEdit: boolean }) {
                   }
                   className="flex-1 resize-y rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[13px] text-text-primary"
                 />
-                <button
-                  type="button"
-                  disabled={kuld || !szoveg.trim()}
-                  onClick={() => void kuldes()}
-                  className="self-end rounded-[var(--radius)] bg-bg-accent px-4 py-2 text-[13px] font-medium text-text-accent disabled:opacity-50"
-                >
-                  {mod === "tanit" ? "Előnézet" : "Küldés"}
-                </button>
+                <div className="flex flex-col justify-end gap-1.5 self-end">
+                  {mod === "kerdez" && canCreate && (
+                    <button
+                      type="button"
+                      disabled={kuld || !szoveg.trim()}
+                      onClick={() => void feladatKuldes()}
+                      title="A beírt szövegből feladat lesz Lara Munkasorában — előbb átnézheted"
+                      className="rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[13px] font-medium text-text-primary hover:bg-surface-4 disabled:opacity-50"
+                    >
+                      Feladat Larának
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={kuld || !szoveg.trim()}
+                    onClick={() => void kuldes()}
+                    className="rounded-[var(--radius)] bg-bg-accent px-4 py-2 text-[13px] font-medium text-text-accent disabled:opacity-50"
+                  >
+                    {mod === "tanit" ? "Előnézet" : "Küldés"}
+                  </button>
+                </div>
               </div>
               <p className="mt-1.5 text-[11px] text-text-muted">
                 {mod === "tanit"
                   ? "Semmi nem kerül a tudásba, amíg az előnézetet nem mented."
-                  : "Lara itt csak olvas: nem küld, nem rögzít, nem hagy jóvá semmit."}
+                  : "Lara itt csak olvas: nem küld, nem rögzít, nem hagy jóvá semmit. Feladatot csak a jóváhagyásoddal vesz fel."}
               </p>
             </div>
           </div>
@@ -530,6 +592,7 @@ function LaraUzenet({
   u,
   beszelgetesId,
   canEdit,
+  canCreate,
   onFrissult,
   onUjUzenet,
   onTanitas,
@@ -537,6 +600,7 @@ function LaraUzenet({
   u: Uzenet;
   beszelgetesId: number | null;
   canEdit: boolean;
+  canCreate: boolean;
   onFrissult: (u: Uzenet) => void;
   onUjUzenet: () => void;
   onTanitas: (u: Uzenet, megjegyzes: string) => void;
@@ -550,6 +614,28 @@ function LaraUzenet({
         canEdit={canEdit}
         onMentve={onUjUzenet}
       />
+    );
+  }
+  if (a.tipus === "feladat_letrehozva") {
+    return (
+      <div className="max-w-[85%] rounded-[var(--radius)] bg-bg-success px-3 py-2 text-[13px] text-text-success">
+        <Markdown szoveg={u.szoveg} />
+        {a.task_id ? (
+          <Link href={`/admin-agent/munkasor/${a.task_id}`} className="underline">
+            Megnyitás a Munkasorban
+          </Link>
+        ) : null}
+      </div>
+    );
+  }
+  if (a.tipus === "feladat_javaslat" || a.tipus === "feladat_elutasitva") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="max-w-[85%] rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[13px] text-text-primary">
+          {u.szoveg}
+        </div>
+        {a.feladat_javaslat && <FeladatKartya u={u} canCreate={canCreate} onValtozott={onUjUzenet} />}
+      </div>
     );
   }
   if (a.tipus === "tanitas_mentve") {
@@ -593,7 +679,135 @@ function LaraUzenet({
         )}
       </div>
       <HonnanTudom a={a} />
+      {a.feladat_javaslat && <FeladatKartya u={u} canCreate={canCreate} onValtozott={onUjUzenet} />}
+      {a.feladat_elutasitva && <p className="text-[12px] text-text-warning">{a.feladat_elutasitva}</p>}
       <Ertekeles u={u} canEdit={canEdit} onFrissult={onFrissult} onTanitas={onTanitas} />
+    </div>
+  );
+}
+
+/** Lara rákérdez: készítsen-e feladatot a kérésből. Csak a megerősítésre jön létre. */
+function FeladatKartya({ u, canCreate, onValtozott }: { u: Uzenet; canCreate: boolean; onValtozott: () => void }) {
+  const j0 = u.adat.feladat_javaslat as FeladatJavaslat;
+  const [j, setJ] = useState<FeladatJavaslat>(j0);
+  const [nyitva, setNyitva] = useState(false);
+  const [fut, setFut] = useState(false);
+  const [hiba, setHiba] = useState<string | null>(null);
+
+  if (j0.allapot === "letrehozva") {
+    return (
+      <p className="text-[12px] text-text-success">
+        Feladat felvéve: „{j0.cim}”.{" "}
+        {j0.task_id ? (
+          <Link href={`/admin-agent/munkasor/${j0.task_id}`} className="underline">
+            Megnyitás a Munkasorban
+          </Link>
+        ) : null}
+      </p>
+    );
+  }
+  if (j0.allapot === "elvetve") return <p className="text-[12px] text-text-muted">Nem lett belőle feladat.</p>;
+
+  async function dont(igen: boolean) {
+    setFut(true);
+    setHiba(null);
+    try {
+      const r = await kuldJson<FeladatJavaslat>(
+        igen ? `/api/v1/admin-agent/chat/uzenet/${u.id}/feladat` : `/api/v1/admin-agent/chat/uzenet/${u.id}/feladat/elvetes`,
+        "POST",
+        igen
+          ? {
+              modositott: {
+                tipus: j.tipus,
+                cim: j.cim,
+                leiras: j.leiras,
+                partner: j.partner || null,
+                projektkod: j.projektkod || null,
+                hatarido: j.hatarido || null,
+              },
+            }
+          : undefined,
+      );
+      if (!r.ok) {
+        setHiba(r.hiba ?? "Nem sikerült.");
+        return;
+      }
+      onValtozott();
+    } finally {
+      setFut(false);
+    }
+  }
+
+  const mezo = "rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary";
+  return (
+    <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-3 text-[13px]">
+      <p className="font-medium text-text-primary">Ez egy feladatnak tűnik. Felvegyem a Munkasoromba?</p>
+      <p className="mt-0.5 text-text-secondary">
+        {FELADAT_TIPUS[j.tipus] ?? j.tipus}: <b>{j.cim}</b>
+        {j.partner ? ` · ${j.partner}` : ""}
+        {j.projektkod ? ` · ${j.projektkod}` : ""}
+        {j.hatarido ? ` · határidő: ${j.hatarido}` : ""}
+      </p>
+      {nyitva && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-[11px] text-text-muted">
+            Típus
+            <select value={j.tipus} onChange={(e) => setJ({ ...j, tipus: e.target.value })} className={mezo}>
+              {Object.entries(FELADAT_TIPUS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-text-muted">
+            Határidő
+            <input type="date" value={j.hatarido ?? ""} onChange={(e) => setJ({ ...j, hatarido: e.target.value })} className={mezo} />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-text-muted sm:col-span-2">
+            Cím
+            <input value={j.cim} onChange={(e) => setJ({ ...j, cim: e.target.value })} className={mezo} />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-text-muted sm:col-span-2">
+            Mit kell elvégezni
+            <textarea value={j.leiras} rows={3} onChange={(e) => setJ({ ...j, leiras: e.target.value })} className={mezo} />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-text-muted">
+            Partner
+            <input value={j.partner ?? ""} onChange={(e) => setJ({ ...j, partner: e.target.value })} className={mezo} />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-text-muted">
+            Projektkód
+            <input value={j.projektkod ?? ""} onChange={(e) => setJ({ ...j, projektkod: e.target.value })} className={mezo} />
+          </label>
+        </div>
+      )}
+      {hiba && <p className="mt-2 rounded-[var(--radius)] bg-bg-danger px-2 py-1 text-text-danger">{hiba}</p>}
+      {canCreate ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={fut}
+            onClick={() => void dont(true)}
+            className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 font-medium text-text-accent disabled:opacity-50"
+          >
+            Igen, vedd fel feladatnak
+          </button>
+          {!nyitva && (
+            <button type="button" onClick={() => setNyitva(true)} className="text-[12px] text-text-accent hover:underline">
+              Módosítom előtte
+            </button>
+          )}
+          <button type="button" disabled={fut} onClick={() => void dont(false)} className="text-[12px] text-text-muted hover:underline">
+            Nem kell
+          </button>
+        </div>
+      ) : (
+        <p className="mt-2 text-[12px] text-text-muted">Feladat felvételéhez „létrehozás” jog kell a Lara oldalon.</p>
+      )}
+      <p className="mt-1.5 text-[11px] text-text-muted">
+        A feladat csak Lara Munkasorába kerül; amit ott javasol, azt jóváhagyásra eléd teszi. Utalást nem vállal.
+      </p>
     </div>
   );
 }

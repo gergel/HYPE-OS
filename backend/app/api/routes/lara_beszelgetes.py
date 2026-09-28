@@ -42,7 +42,7 @@ def _van_joga(db: Session, user: Employee, muvelet: str) -> bool:
 
 
 def _jogok(db: Session, user: Employee) -> list[str]:
-    return [m for m in ("view", "edit", "delete") if _van_joga(db, user, m)]
+    return [m for m in ("view", "create", "edit", "delete") if _van_joga(db, user, m)]
 
 
 def _besz(db: Session, user: Employee, beszelgetes_id: int):
@@ -162,6 +162,67 @@ def chat_ertekeles(uzenet_id: int, body: ErtekelesIn, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     db.commit()
     return uzenet_sor(u)
+
+
+# ── Feladat Larának a beszélgetésből ─────────────────────────────────────────
+
+_create = require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)
+
+
+class FeladatIn(BaseModel):
+    #: A felhasználó javításai a javaslaton: tipus, cim, leiras, partner,
+    #: projektkod, hatarido (ÉÉÉÉ-HH-NN).
+    modositott: dict = Field(default_factory=dict)
+
+
+@router.post("/chat/uzenet/{uzenet_id}/feladat")
+def chat_feladat_letrehozas(uzenet_id: int, body: FeladatIn, db: Session = Depends(get_db),
+                            user: Employee = Depends(_create)):
+    """A beszélgetésben felismert (vagy kért) feladat felvétele Lara
+    Munkasorába — csak erre a megerősítésre. Egy javaslatból egy feladat."""
+    from app.admin_agent.chat_feladat import FeladatHiba, letrehoz
+
+    try:
+        j = letrehoz(db, user, uzenet_id, body.modositott)
+    except FeladatHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    db.commit()
+    return j
+
+
+@router.post("/chat/uzenet/{uzenet_id}/feladat/elvetes")
+def chat_feladat_elvetes(uzenet_id: int, db: Session = Depends(get_db), user: Employee = Depends(_view)):
+    from app.admin_agent.chat_feladat import elvet
+
+    try:
+        j = elvet(db, user, uzenet_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    db.commit()
+    return j
+
+
+class FeladatSzovegIn(BaseModel):
+    szoveg: str = Field(min_length=1, max_length=4000)
+
+
+@router.post("/chat/{beszelgetes_id}/feladat")
+def chat_feladat_kozvetlen(beszelgetes_id: int, body: FeladatSzovegIn, db: Session = Depends(get_db),
+                           user: Employee = Depends(_create)):
+    """„Feladat Larának”: a szövegből rögtön feladat-javaslat (még nem jön
+    létre — a felhasználó átnézi, és a /feladat végponttal hagyja jóvá)."""
+    from app.admin_agent.beszelgetes import uzenet_sor
+    from app.admin_agent.chat_feladat import FeladatHiba, kozvetlen
+
+    b = _besz(db, user, beszelgetes_id)
+    try:
+        k, v = kozvetlen(db, user, b, body.szoveg)
+    except FeladatHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return {"kerdes": uzenet_sor(k), "valasz": uzenet_sor(v), "cim": b.cim}
 
 
 # ── Tanítás ──────────────────────────────────────────────────────────────────
