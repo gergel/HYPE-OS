@@ -473,3 +473,34 @@ def test_api_vezerlok_leallitva_423_es_idegen_beszelgetes_404(db, kliens, masik)
     db.flush()
     assert kliens.post("/api/v1/admin-agent/chat", json={"mod": "kerdez"}).status_code == 423
     assert kliens.get("/api/v1/admin-agent/chat").status_code == 200  # olvasni lehet
+
+
+# ── A válasz formája ─────────────────────────────────────────────────────────
+
+
+def test_valasz_kinyeres_kodblokkos_csonka_es_regi_json():
+    """A modell kódblokkba tett, vagy a kimeneti korlátnál elvágott JSON-ja se
+    jelenjen meg nyersen: a "valasz" mező olvasható szövege jön ki."""
+    from app.admin_agent.beszelgetes import _megjelenitheto, valasz_kinyeres
+
+    teljes = '```json\n{"valasz": "Összesen **687 512 Ft**.\\n\\n| Projektkód | Összeg |\\n|---|---:|\\n| HYPE26-0244 | 338 258 Ft |", "hivatkozasok": ["E1"]}\n```'
+    j, s = valasz_kinyeres(teljes)
+    assert j["hivatkozasok"] == ["E1"] and s.startswith("Összesen **687 512 Ft**.") and "\n| Projektkód | Összeg |" in s
+
+    csonka = '```json\n{\n "valasz": "A TTM projektek összesen **687 512 Ft**.\\n\\n- **TTM június**: 338 258 Ft\\n'
+    j, s = valasz_kinyeres(csonka)
+    assert j == {} and "```" not in s and '"valasz"' not in s
+    assert s.startswith("A TTM projektek összesen **687 512 Ft**.\n\n- **TTM június**") and "megszakadt" in s
+
+    assert valasz_kinyeres("Sima válasz.") == ({}, "Sima válasz.")
+    regi = LaraBeszelgetesUzenet(szerep="lara", szoveg=csonka)
+    assert _megjelenitheto(regi).startswith("A TTM projektek")
+
+
+def test_modell_kodblokkos_valasza_a_beszelgetesben_tiszta_szoveg(db, admin):
+    from app.admin_agent import beszelgetes as bz
+
+    _hamis_modell(['```json\n{"valasz": "Összesen **12 000 Ft**.", "hivatkozasok": [], "bizonyossag": "biztos"}\n```'])
+    b = bz.uj(db, admin)
+    _, v = bz.valaszol(db, admin, b, "Mennyibe került?")
+    assert v.szoveg == "Összesen **12 000 Ft**." and v.adat["bizonyossag"] == "biztos"

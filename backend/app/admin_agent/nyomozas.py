@@ -89,7 +89,7 @@ def elerheto() -> bool:
 
 
 class _Gemini:
-    def __init__(self, rendszer: str, kerdes: str, eszkozok: list[dict]):
+    def __init__(self, rendszer: str, kerdes: str, eszkozok: list[dict], max_tokens: int = 2048):
         from google import genai
         from google.genai import types
 
@@ -100,7 +100,7 @@ class _Gemini:
             tools=[types.Tool(function_declarations=eszkozok)],
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             temperature=0.1,
-            max_output_tokens=2048,
+            max_output_tokens=max_tokens,
         )
         self._contents = [types.Content(role="user", parts=[types.Part(text=kerdes)])]
 
@@ -248,10 +248,17 @@ def _cel(nev: str, arg: dict) -> str:
     return nev
 
 
-def eszkozhurok(db: Session, futtato: Employee, rendszer: str, feladat: str) -> tuple[str, list[dict], str]:
-    """A közös, CSAK OLVASÓ eszköz-hurok (utánanézés, megoldási javaslat).
-    Vissza: (a modell végső szövege, a lépések naplója, állapot)."""
-    b: Beszelgetes = (_TESZT_BESZELGETES or _Gemini)(rendszer, feladat, eszkozok())
+def eszkozhurok(
+    db: Session, futtato: Employee, rendszer: str, feladat: str, *, max_tokens: int = 2048,
+) -> tuple[str, list[dict], str]:
+    """A közös, CSAK OLVASÓ eszköz-hurok (utánanézés, megoldási javaslat,
+    beszélgetés). Vissza: (a modell végső szövege, a lépések naplója, állapot).
+    `max_tokens`: a válasz hossza — a beszélgetés hosszabb (táblázatos)
+    választ is adhat, ezért ott nagyobb."""
+    b: Beszelgetes = (
+        _TESZT_BESZELGETES(rendszer, feladat, eszkozok()) if _TESZT_BESZELGETES
+        else _Gemini(rendszer, feladat, eszkozok(), max_tokens)
+    )
     lepesek: list[dict] = []
     vegso = ""
     allapot = "kesz"

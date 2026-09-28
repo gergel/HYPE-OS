@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
+import { Markdown } from "@/components/Markdown";
 
 /** „Kérdezz Larától” — beszélgetés, tanítás és tudáspróba (kliens).
  *
@@ -578,8 +579,8 @@ function LaraUzenet({
         )}
       </div>
       <div className={a.elvart ? "grid gap-2 md:grid-cols-2" : ""}>
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[13px] text-text-primary md:max-w-none">
-          {u.szoveg}
+        <div className="max-w-[85%] rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 text-[13px] leading-relaxed text-text-primary md:max-w-none">
+          <Markdown szoveg={u.szoveg} />
           {a.tisztazo_kerdes && (
             <p className="mt-2 border-t border-border pt-2 text-text-accent">Kérdésem: {a.tisztazo_kerdes}</p>
           )}

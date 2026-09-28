@@ -9,7 +9,7 @@ import Link from "next/link";
  * Szándékosan nem HTML-t állít elő (nincs dangerouslySetInnerHTML, tehát
  * nincs XSS-felület), hanem React-elemekre bontja a szöveget. A támogatott
  * készlet a hétköznapi jegyzet-formázás: # címsorok, **félkövér**, *dőlt*,
- * `kód`, ``` kódblokk, - felsorolás, 1. számozott lista, > idézet, [cím](url)
+ * `kód`, ``` kódblokk, - felsorolás, 1. számozott lista, > idézet, | táblázat |, [cím](url)
  * linkek, nyers http(s)/www linkek, és @Név kiemelés (mentions kapcsolóval).
  * A formázatlan szöveg pontosan úgy jelenik meg, mint eddig. */
 
@@ -114,8 +114,21 @@ type Blokk =
   | { t: "h"; szint: number; s: string }
   | { t: "ul" | "ol"; elemek: string[] }
   | { t: "kod"; s: string }
+  | { t: "tabla"; fej: string[]; sorok: string[][]; igazitas: ("left" | "right" | "center")[] }
   | { t: "hr" }
   | { t: "ures" };
+
+const TABLA_SOR = /^\s*\|.*\|\s*$/;
+const TABLA_ELVALASZTO = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+
+function cellak(sor: string): string[] {
+  return sor
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((c) => c.trim());
+}
 
 function blokkok(szoveg: string): Blokk[] {
   const ki: Blokk[] = [];
@@ -132,6 +145,21 @@ function blokkok(szoveg: string): Blokk[] {
       }
       i++; // a záró ``` átlépése
       ki.push({ t: "kod", s: kod.join("\n") });
+      continue;
+    }
+    // Táblázat (GitHub-stílus): fejléc-sor + elválasztó sor (|---|---:|).
+    if (TABLA_SOR.test(sor) && i + 1 < sorok.length && TABLA_ELVALASZTO.test(sorok[i + 1])) {
+      const fej = cellak(sor);
+      const igazitas = cellak(sorok[i + 1]).map((c) =>
+        c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : "left",
+      ) as ("left" | "right" | "center")[];
+      i += 2;
+      const tsorok: string[][] = [];
+      while (i < sorok.length && TABLA_SOR.test(sorok[i])) {
+        tsorok.push(cellak(sorok[i]));
+        i++;
+      }
+      ki.push({ t: "tabla", fej, sorok: tsorok, igazitas });
       continue;
     }
     const h = /^(#{1,3})\s+(.*)$/.exec(sor);
@@ -188,6 +216,7 @@ function blokkok(szoveg: string): Blokk[] {
       !/^\s*[-*]\s+/.test(sorok[i]) &&
       !/^\s*\d+[.)]\s+/.test(sorok[i]) &&
       !/^\s*>\s?/.test(sorok[i]) &&
+      !(TABLA_SOR.test(sorok[i]) && i + 1 < sorok.length && TABLA_ELVALASZTO.test(sorok[i + 1])) &&
       !sorok[i].trim().startsWith("```")
     ) {
       bek.push(sorok[i]);
@@ -253,6 +282,40 @@ export function Markdown({ szoveg, mentions = false }: { szoveg: string; mention
               </p>
             </blockquote>
           );
+        if (b.t === "tabla") {
+          // Számot tartalmazó oszlop jobbra igazítva, ha az elválasztó nem mondja meg.
+          const szamos = b.fej.map((_, k) =>
+            b.sorok.length > 0 && b.sorok.every((r) => !r[k] || /^[-+]?[\d\s.,]+(\s?(Ft|HUF|EUR|€|%))?\**$/.test(r[k].replace(/\*/g, ""))),
+          );
+          const igaz = (k: number) =>
+            b.igazitas[k] === "center" ? "text-center" : b.igazitas[k] === "right" || szamos[k] ? "text-right" : "text-left";
+          return (
+            <div key={i} className="my-1.5 overflow-x-auto rounded border border-border">
+              <table className="w-full border-collapse text-[0.95em]">
+                <thead>
+                  <tr className="border-b border-border bg-surface-3 text-text-secondary">
+                    {b.fej.map((c, k) => (
+                      <th key={k} className={`whitespace-nowrap px-2.5 py-1.5 font-medium ${igaz(k)}`}>
+                        <Inline szoveg={c} mentions={mentions} />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {b.sorok.map((r, j) => (
+                    <tr key={j} className="border-b border-border last:border-0">
+                      {b.fej.map((_, k) => (
+                        <td key={k} className={`px-2.5 py-1.5 align-top ${igaz(k)} ${szamos[k] ? "tabular-nums whitespace-nowrap" : ""}`}>
+                          <Inline szoveg={r[k] ?? ""} mentions={mentions} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
         if (b.t === "hr") return <hr key={i} className="my-2 border-border" />;
         // Tagoló üres sor: egy sornyi függőleges hézag (a felhasználó kérése).
         if (b.t === "ures") return <div key={i} aria-hidden className="h-[0.9em]" />;
