@@ -28,6 +28,10 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
       : field.inputType === "time"
         ? String(field.rawValue).slice(0, 5)
         : String(field.rawValue);
+  // A piszkozat a SZERKESZTÉS INDÍTÁSAKOR töltődik a mező aktuális
+  // értékéből (lásd lent a kattintást) - nem csak az első betöltéskor. Enélkül
+  // egy közben (pl. a „Technika ready” gombbal) frissült érték helyett a régi,
+  // akár üres szöveg nyílt meg, és elkattintáskor az felül is írta az újat.
   const [draft, setDraft] = useState<string>(initialDraft);
   const [busy, setBusy] = useState(false);
 
@@ -36,6 +40,12 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
     : "";
 
   async function save(value: unknown) {
+    // Változatlan szöveg: nincs mit menteni (egy puszta be- és kikattintás
+    // ne írjon az adatbázisba).
+    if (field.inputType !== "number" && (value ?? "") === initialDraft) {
+      setEditing(false);
+      return;
+    }
     setBusy(true);
     try {
       const res = await authFetch(patchPath, { method: "PATCH", body: JSON.stringify({ [field.key]: value }) });
@@ -95,7 +105,10 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
       <dd
         role="button"
         tabIndex={0}
-        onClick={() => setEditing(true)}
+        onClick={() => {
+          setDraft(initialDraft);
+          setEditing(true);
+        }}
         className={`cursor-text text-[13px] leading-relaxed text-text-primary break-words ${boxed ? restBoxClass : "-mx-1.5 rounded px-1.5 transition-colors duration-200 hover:bg-surface-3"}`}
       >
         {field.value ?? <span className="text-text-muted italic">Üres</span>}
