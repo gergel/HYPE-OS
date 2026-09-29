@@ -236,8 +236,8 @@ class Settings(BaseSettings):
     # A kiadott árajánlat (XLSX / PDF) fejlécének cégadatai - a HYPE és a
     # ContentBee ajánlatain is a kiállító cég.
     arajanlat_ceg_nev: str = "Hype Productions Kft."
-    arajanlat_ceg_cim: str = "1045 Budapest, Virág utca 24. 1. em. 2."
-    arajanlat_ceg_adoszam: str = "23995828-2-41"
+    arajanlat_ceg_cim: str = "3036 Gyöngyöstarján, Kossuth Lajos utca 3."
+    arajanlat_ceg_adoszam: str = "23995828-2-10"
 
     # ───────── Számla-érkeztetés (Beérkező számlák) ─────────
     # A bejövő számla-cím, amire a beszállítók küldenek. A lehúzás a meglévő
