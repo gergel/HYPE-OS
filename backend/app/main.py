@@ -65,6 +65,9 @@ app.add_middleware(
     allow_credentials=_cors_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    # A letöltések (pl. az árajánlat XLSX / PDF exportja) fájlnevét a böngésző
+    # csak így olvashatja ki a más originről jövő válaszból.
+    expose_headers=["Content-Disposition"],
 )
 
 # A nagy listák (projektkódok, utómunka, kiadások) több száz kilobájtos

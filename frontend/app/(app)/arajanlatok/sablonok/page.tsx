@@ -3,13 +3,12 @@ import { TopBar } from "@/components/TopBar";
 import { ArajanlatFulek } from "@/components/arajanlat/ArajanlatFulek";
 import { getMyPagePermissions } from "@/lib/api";
 import { canDoPageAction, lathatjaAzOldalt } from "@/lib/permissions";
-import { AjanlatLista } from "@/components/arajanlat/AjanlatLista";
+import { SablonSzerkeszto } from "@/components/arajanlat/SablonSzerkeszto";
 
 const PAGE = "/arajanlatok";
 
-/** Árajánlat-készítő: a lista (szűrőkkel) és az „Új árajánlat” (sablonból
- * vagy üresen). Külön adható oldal-jog: „/arajanlatok”. */
-export default async function ArajanlatokPage() {
+/** Az ajánlat-sablonok szerkesztője. */
+export default async function ArajanlatSablonokPage() {
   const pagePermissions = await getMyPagePermissions();
   if (!lathatjaAzOldalt(pagePermissions, PAGE)) redirect("/nincs-jogosultsag");
   const van = (m: "create" | "edit" | "delete") => canDoPageAction(pagePermissions, PAGE, m);
@@ -19,7 +18,7 @@ export default async function ArajanlatokPage() {
       <TopBar />
       <div className="flex-1 p-4 md:p-8">
         <ArajanlatFulek />
-        <AjanlatLista canCreate={van("create")} canEdit={van("edit")} />
+        <SablonSzerkeszto canEdit={van("edit")} canCreate={van("create")} />
       </div>
     </div>
   );

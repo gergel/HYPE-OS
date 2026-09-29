@@ -49,6 +49,9 @@ requests==2.34.2
 # Lara levelezés-olvasása: a PDF-csatolmányok szövegkivonata (tiszta Python,
 # lásd admin_agent/levelezes.py).
 pypdf==6.18.0
+# Árajánlat PDF-exportja (app/quotes/export.py) - tiszta Python wheel
+# (py3-none-any), a függőségei (pillow, charset-normalizer) már rögzítve vannak.
+reportlab==5.0.1
 
 # --- Közvetett függőségek (a fentiek húzzák be) ---
 # Ezeket is rögzítjük, mert a build szempontjából ugyanúgy kockázatot jelentenek:

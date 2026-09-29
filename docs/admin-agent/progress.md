@@ -914,6 +914,13 @@ is meg tudja adni a választ.
   backend-csomag átment (326). Frontend: `tsc`, `eslint`, `next build` rendben.
 - Élesben még ellenőrizendő: a gombbal, hogy mi volt a tényleges ok.
 
+### AJ. Árajánlat-készítő modul – Lara szempontjából ⚠️ (Lara még nincs bekötve)
+- Az Árajánlatok oldal új modulra épült át (lásd `docs/arajanlat-keszito.md`):
+  `quote_*` táblák, katalógus, sablonok, XLSX / PDF export.
+- Lara megfigyelése továbbra is a régi `arajanlatok` táblát figyeli; az új
+  ajánlatokból még NEM tanul. A bekötés külön kapcsoló mögé kerülne (alapból KI),
+  ha kérik.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

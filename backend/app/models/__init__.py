@@ -50,6 +50,17 @@ from app.models.bejovo_szamla import BejovoEmail, BejovoSzamla
 from app.models.finance import Expense, KpForgalom, Revenue
 from app.models.utalas_felvezetes import UtalasAdag, UtalasTetel
 from app.models.arajanlat import Arajanlat, ArajanlatTetel
+from app.models.quote import (
+    Quote,
+    QuoteCatalogCategory,
+    QuoteCatalogItem,
+    QuoteCatalogPriceHistory,
+    QuoteItem,
+    QuoteNotePreset,
+    QuoteNumberCounter,
+    QuoteTemplate,
+    QuoteTemplateItem,
+)
 from app.models.flora_feladat import FloraFeladat
 from app.models.flora_komment import FloraKomment
 from app.models.anyagbekeres import (
@@ -229,6 +240,15 @@ __all__ = [
     "PageAccessConfig",
     "Arajanlat",
     "ArajanlatTetel",
+    "Quote",
+    "QuoteCatalogCategory",
+    "QuoteCatalogItem",
+    "QuoteCatalogPriceHistory",
+    "QuoteItem",
+    "QuoteNotePreset",
+    "QuoteNumberCounter",
+    "QuoteTemplate",
+    "QuoteTemplateItem",
     "UtalasAdag",
     "UtalasTetel",
 ]

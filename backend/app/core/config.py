@@ -232,6 +232,13 @@ class Settings(BaseSettings):
     # tudás-darabok beágyazó modellje. Ugyanazzal a gemini_api_key-jel megy.
     gemini_embedding_model: str = "gemini-embedding-001"
 
+    # ───────── Árajánlat-készítő (lásd app/quotes/export.py) ─────────
+    # A kiadott árajánlat (XLSX / PDF) fejlécének cégadatai - a HYPE és a
+    # ContentBee ajánlatain is a kiállító cég.
+    arajanlat_ceg_nev: str = "Hype Productions Kft."
+    arajanlat_ceg_cim: str = "1045 Budapest, Virág utca 24. 1. em. 2."
+    arajanlat_ceg_adoszam: str = "23995828-2-41"
+
     # ───────── Számla-érkeztetés (Beérkező számlák) ─────────
     # A bejövő számla-cím, amire a beszállítók küldenek. A lehúzás a meglévő
     # Gmail-hitelesítéssel (gmail.readonly scope) a hitelesített fiók

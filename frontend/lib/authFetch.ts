@@ -61,6 +61,12 @@ async function nyersAuthFetch(path: string, init: RequestInit = {}): Promise<Res
   return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
 }
 
+/** Bejelentkezett hívás a rendszerszintű Ctrl+Z-gyűjtés NÉLKÜL - a sűrű,
+ * automatikus mentéshez (pl. az árajánlat-szerkesztő), ahol minden
+ * billentyűleütés utáni mentés nem kerülhet a visszavonási verembe, és a
+ * PATCH előtti régi-érték lekérés is fölösleges forgalom lenne. */
+export const authFetchVisszavonasNelkul = nyersAuthFetch;
+
 /** PATCH előtt a mező RÉGI értékeit kérdezzük le ugyanarról az útvonalról -
  * ebből lesz a Ctrl+Z. Ha az útvonal nem GET-elhető (nem generikus rekord),
  * vagy bármi hibázik, egyszerűen nincs visszavonás - a mentést nem
