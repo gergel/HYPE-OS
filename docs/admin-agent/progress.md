@@ -889,6 +889,31 @@ is meg tudja adni a választ.
   `eslint`, `next build` rendben.
 - Élő bejárás demóadattal, utána takarítva (időbélyeg-szken üres).
 
+### AI. „Kérdezz Larától”: a modellhibák kezelése és láthatóvá tétele ✅ (tesztelve hamis modellel; valódi Geminivel: ⚠️ nem ellenőrzött)
+- A bejelentett hiba: a kérdésekre rendszeresen a „A nyelvi modell most nem
+  érhető el…” tartalék-válasz jött, holott a kulcs be van állítva. Az éles ok
+  innen nem látható (nincs éles napló); ezért a javítás két részből áll:
+  a gyakori okok kezelése, és a pontos ok kiírása.
+- Kezelt esetek (`nyomozas._Gemini`):
+  - átmeneti hiba (429, 5xx, időtúllépés): 2 s, majd 5 s várakozással újrapróbál;
+  - ha a szolgáltatás a beállítást utasítja el (kimeneti keret, gondolkodási
+    keret): biztonságos mód, gondolkodás nélkül, 8192-es kerettel;
+  - a kimeneti keret a modell saját korlátjára vágva (2.5/3: 65 536, régebbi: 8192);
+  - hibás eszközhívás vagy üres válasz: még egy kör eszköz nélkül, az eddig
+    összegyűjtött információból;
+  - lépéskorlát: zárókör eszköz nélkül, hogy mégis legyen válasz;
+  - az eszköz-eredmények biztosan JSON-kompatibilisek (dátum, Decimal szövegként).
+- Ha így sem sikerül, a válasz a KONKRÉT okot mondja (pl. kvóta, érvénytelen
+  kulcs, nem létező `GEMINI_MODEL`), nem azt, hogy „nem érhető el”; az ok az
+  üzenet adataiban is ott van (`hiba_ok`). A „nem érhető el” szöveg csak kulcs
+  nélkül marad.
+- Új: *Lara → Beállítások → Modell-kapcsolat ellenőrzése* gomb
+  (`POST /api/v1/admin-agent/modell/ellenorzes`, szerkesztési jog): egy egyszerű
+  hívás és egy Lara eszközeivel, lépésenként ok / hiba / idő. Adatot nem olvas, nem ír.
+- Tesztek: 13 új (hamis Gemini-klienssel) + 1 a beszélgetésben; a teljes
+  backend-csomag átment (326). Frontend: `tsc`, `eslint`, `next build` rendben.
+- Élesben még ellenőrizendő: a gombbal, hogy mi volt a tényleges ok.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

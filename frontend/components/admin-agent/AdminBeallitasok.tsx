@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import type { AdminAgentSettings } from "@/lib/api";
+import { LaraModellEllenorzes } from "./LaraModellEllenorzes";
 
 /** Lara — BEÁLLÍTÁSOK (kliens).
  *
@@ -167,6 +168,8 @@ export function AdminBeallitasok({
           />
         </div>
       </div>
+
+      <LaraModellEllenorzes canManage={canManage} />
 
       <Kapcsolo
         cim="Tanulás és megfigyelés (L0)"

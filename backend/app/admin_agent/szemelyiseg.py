@@ -297,6 +297,16 @@ def stilusor(szoveg: str, *, csak_olvaso: bool = True) -> tuple[str, list[str]]:
     return s, jelzesek
 
 
+def hiba_tartalek(ok: str | None, talalatok: list[str]) -> str:
+    """Tartalék-válasz, ha a modell be van állítva, de a válasz elkészítése
+    nem sikerült: kimondja a konkrét okot, és megmutatja a tudás-találatokat."""
+    eleje = "A válasz elkészítése most nem sikerült" + (f" - {ok.strip().rstrip('.')}." if ok and ok.strip() else ".")
+    eleje += " Újra még nem indítottam; kérdezz rá újra kicsit később."
+    if not talalatok:
+        return eleje
+    return eleje + "\nAddig ezt találtam a jóváhagyott tudásomban:\n" + "\n".join(f"– {t}" for t in talalatok)
+
+
 def modell_nelkuli_valasz(talalatok: list[str]) -> str:
     """Rövid, tényszerű fallback, ha a nyelvi modell nem érhető el: nem játszik
     el beszélgetést, csak megmutatja, mit talált a jóváhagyott tudásban."""

@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from datetime import datetime, timezone
 from typing import Callable, Protocol
 
@@ -96,6 +97,29 @@ FOLYTATAS_KERES = (
 )
 #: A gondolkodó modellek gondolkodási kerete (token) — külön a válasz keretétől.
 GONDOLKODAS_KERET = 2048
+#: Átmeneti hibák (kvóta, túlterhelés, időtúllépés) után ennyi várakozással
+#: próbáljuk újra ugyanazt a kérést.
+UJRAPROBA_VARAKOZAS: tuple[float, ...] = (2.0, 5.0)
+_ATMENETI_KODOK = frozenset({408, 429, 500, 502, 503, 504})
+#: Ha a modell eszközhívás helyett hibás / üres választ ad, ezzel kérjük, hogy
+#: a már összegyűjtött információból, eszköz nélkül válaszoljon.
+ESZKOZ_NELKUL_KERES = (
+    "Az előző lépésed nem adott használható választ (hibás eszközhívás vagy üres válasz). "
+    "Most eszköz nélkül válaszolj a kérdésre azokból az információkból, amelyeket eddig összegyűjtöttél — "
+    "ha valami nem derült ki, azt mondd ki egyenesen."
+)
+ZARO_KERES = (
+    "Elérted az utánanézés lépéskorlátját. Most már ne hívj eszközt: válaszolj a kérdésre abból, amit eddig "
+    "összegyűjtöttél, a kért formában — ami nem derült ki, azt mondd ki egyenesen."
+)
+_URES_OKOK = frozenset({
+    "MALFORMED_FUNCTION_CALL", "UNEXPECTED_TOOL_CALL", "TOO_MANY_TOOL_CALLS", "OTHER", "FINISH_REASON_UNSPECIFIED",
+    "STOP", "MAX_TOKENS", "",
+})
+
+
+class ModellValaszHiba(Exception):
+    """A modell nem adott használható választ (tiltás, üres válasz)."""
 
 
 def _gondolkodo_modell(nev: str | None) -> bool:
@@ -103,13 +127,75 @@ def _gondolkodo_modell(nev: str | None) -> bool:
     return "2.5" in n or n.startswith("gemini-3")
 
 
+def kimeneti_korlat(nev: str | None, kert: int) -> int:
+    """A kért kimeneti keret a modell saját korlátjára vágva: a 2.5-ös és 3-as
+    modellek 65 536, a régebbiek 8192 tokent engednek - efölött a szolgáltatás
+    400-as hibával elutasítja a kérést."""
+    return min(kert, 65536 if _gondolkodo_modell(nev) else 8192)
+
+
 def _levagva(resp) -> bool:
     """A modell a kimeneti korlát (MAX_TOKENS) miatt állt meg?"""
+    return _vegok(resp) == "MAX_TOKENS"
+
+
+def _vegok(resp) -> str:
     try:
         ok = resp.candidates[0].finish_reason
     except (AttributeError, IndexError, TypeError):
+        return ""
+    return (getattr(ok, "name", None) or str(ok or "")).upper().split(".")[-1]
+
+
+def _kulcs_nelkul(szoveg: str) -> str:
+    return re.sub(r"(key=|api[_-]?key[\"':= ]+)[A-Za-z0-9_\-]{8,}", r"\1***", szoveg, flags=re.I)
+
+
+def hiba_leiras(exc: BaseException) -> str:
+    """A modellhívás hibájának emberi, titokmentes leírása."""
+    from google.genai import errors
+
+    if isinstance(exc, ModellValaszHiba):
+        return str(exc)
+    if isinstance(exc, errors.APIError):
+        kod = exc.code or 0
+        uzenet = _kulcs_nelkul(str(exc.message or exc.status or ""))[:200]
+        if kod == 429:
+            return "a modell-szolgáltatás túl sok kérést kapott, vagy elfogyott a kvóta (429)"
+        if kod in (500, 502, 503, 504):
+            return f"a modell-szolgáltatás átmenetileg túlterhelt vagy nem elérhető ({kod})"
+        if kod in (401, 403):
+            return f"a Gemini-kulcs érvénytelen, vagy nincs jogosultsága ehhez a modellhez ({kod})"
+        if kod == 404:
+            return f"a beállított modell ({settings.gemini_model}) nem található (404) - ellenőrizd a GEMINI_MODEL értékét"
+        if kod == 400:
+            return f"a modell elutasította a kérést (400): {uzenet}"
+        return f"a modell-szolgáltatás hibát adott ({kod}): {uzenet}"
+    nev = type(exc).__name__
+    if "timeout" in nev.lower() or "timed out" in str(exc).lower():
+        return "időtúllépés a modell-szolgáltatásnál"
+    if "connect" in nev.lower():
+        return "nem sikerült kapcsolódni a modell-szolgáltatáshoz"
+    return f"váratlan hiba a modellhívásban ({nev})"
+
+
+def _atmeneti(exc: BaseException) -> bool:
+    from google.genai import errors
+
+    if isinstance(exc, errors.APIError):
+        return (exc.code or 0) in _ATMENETI_KODOK
+    nev = type(exc).__name__.lower()
+    return "timeout" in nev or "connect" in nev or "timed out" in str(exc).lower()
+
+
+def _konfig_hiba(exc: BaseException) -> bool:
+    """A 400-as elutasítás a beállításainkra (kimeneti keret, gondolkodás) vonatkozik?"""
+    from google.genai import errors
+
+    if not isinstance(exc, errors.APIError) or exc.code != 400:
         return False
-    return getattr(ok, "name", str(ok)).upper().endswith("MAX_TOKENS")
+    u = str(exc.message or exc).lower()
+    return any(s in u for s in ("max_output_tokens", "maxoutputtokens", "thinking", "budget", "supported range"))
 
 
 class _Gemini:
@@ -119,31 +205,83 @@ class _Gemini:
 
         self._types = types
         self._client = genai.Client(api_key=settings.gemini_api_key)
-        self._config = types.GenerateContentConfig(
-            system_instruction=rendszer,
-            tools=[types.Tool(function_declarations=eszkozok)],
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            temperature=0.1,
-            max_output_tokens=max_tokens,
-            # A „gondolkodó” modelleknél a gondolkodás is a kimeneti keretből
-            # fogy: korlátos külön keretet kap, hogy ne a válaszból vegyen el.
-            **({"thinking_config": types.ThinkingConfig(thinking_budget=GONDOLKODAS_KERET)}
-               if _gondolkodo_modell(settings.gemini_model) else {}),
-        )
+        self._rendszer = rendszer
+        self._eszkozok = eszkozok
+        self._max_tokens = max_tokens
+        #: Biztonságos mód: egy 400-as beállítás-elutasítás után gondolkodási
+        #: keret nélkül és 8192-es kimeneti kerettel próbálkozunk.
+        self.biztonsagos = False
+        self._config = self._konfig()
         self._contents = [types.Content(role="user", parts=[types.Part(text=kerdes)])]
 
-    def _general(self):
-        return self._client.models.generate_content(
-            model=settings.gemini_model, contents=self._contents, config=self._config
+    def _konfig(self, *, eszkoz_nelkul: bool = False):
+        t = self._types
+        gondolkodo = _gondolkodo_modell(settings.gemini_model) and not self.biztonsagos
+        return t.GenerateContentConfig(
+            system_instruction=self._rendszer,
+            tools=[t.Tool(function_declarations=self._eszkozok)],
+            automatic_function_calling=t.AutomaticFunctionCallingConfig(disable=True),
+            # Eszköz nélküli kör: a deklarációk maradnak (az előzményben vannak
+            # eszközhívások), de újat a modell nem kezdeményezhet.
+            **({"tool_config": t.ToolConfig(function_calling_config=t.FunctionCallingConfig(mode="NONE"))}
+               if eszkoz_nelkul else {}),
+            temperature=0.1,
+            max_output_tokens=min(kimeneti_korlat(settings.gemini_model, self._max_tokens), 8192 if self.biztonsagos else 65536),
+            # A „gondolkodó” modelleknél a gondolkodás is a kimeneti keretből
+            # fogy: korlátos külön keretet kap, hogy ne a válaszból vegyen el.
+            **({"thinking_config": t.ThinkingConfig(thinking_budget=GONDOLKODAS_KERET)} if gondolkodo else {}),
         )
+
+    def _general(self, *, eszkoz_nelkul: bool = False):
+        """Egy modellhívás újrapróbálással (átmeneti hibánál) és biztonságos
+        visszalépéssel (ha a szolgáltatás a beállításainkat utasítja el)."""
+        varakozasok = list(UJRAPROBA_VARAKOZAS)
+        while True:
+            config = self._konfig(eszkoz_nelkul=True) if eszkoz_nelkul else self._config
+            try:
+                return self._client.models.generate_content(
+                    model=settings.gemini_model, contents=self._contents, config=config
+                )
+            except Exception as exc:  # noqa: BLE001 — osztályozzuk, a végén továbbdobjuk
+                if _konfig_hiba(exc) and not self.biztonsagos:
+                    logger.warning("Lara: a modell elutasította a beállítást, biztonságos módra váltok: %s", hiba_leiras(exc))
+                    self.biztonsagos = True
+                    self._config = self._konfig()
+                    continue
+                if _atmeneti(exc) and varakozasok:
+                    time.sleep(varakozasok.pop(0))
+                    continue
+                raise
+
+    def _szoveg(self, resp) -> str:
+        try:
+            return resp.text or ""
+        except (ValueError, AttributeError):
+            return ""
 
     def lepes(self) -> tuple[list[tuple[str, dict]], str | None]:
         resp = self._general()
         hivasok = resp.function_calls or []
         if not hivasok:
+            szoveg = self._szoveg(resp)
+            if not szoveg.strip():
+                blokk = getattr(getattr(resp, "prompt_feedback", None), "block_reason", None)
+                if blokk:
+                    raise ModellValaszHiba(f"a modell biztonsági szűrője elutasította a kérést ({getattr(blokk, 'name', blokk)})")
+                ok = _vegok(resp)
+                if ok not in _URES_OKOK:
+                    raise ModellValaszHiba(f"a modell nem adott választ ({ok})")
+                # Hibás eszközhívás vagy üres válasz: még egy kör, eszköz nélkül,
+                # a már összegyűjtött információból.
+                t = self._types
+                self._contents.append(t.Content(role="model", parts=[t.Part(text="…")]))
+                self._contents.append(t.Content(role="user", parts=[t.Part(text=ESZKOZ_NELKUL_KERES)]))
+                resp = self._general(eszkoz_nelkul=True)
+                szoveg = self._szoveg(resp)
+                if not szoveg.strip():
+                    raise ModellValaszHiba(f"a modell üres választ adott ({ok or 'ismeretlen ok'}, majd {_vegok(resp) or 'ismeretlen ok'})")
             # Ha a válasz a kimeneti korlát miatt állt meg, a modell FOLYTATJA
             # (legfeljebb MAX_FOLYTATAS-szor) — a válasz nem szakad meg.
-            szoveg = resp.text or ""
             for _ in range(MAX_FOLYTATAS):
                 if not _levagva(resp):
                     break
@@ -151,17 +289,64 @@ class _Gemini:
                 self._contents.append(jelolt or self._types.Content(role="model", parts=[self._types.Part(text=szoveg)]))
                 self._contents.append(self._types.Content(role="user", parts=[self._types.Part(text=FOLYTATAS_KERES)]))
                 resp = self._general()
-                szoveg += resp.text or ""
+                szoveg += self._szoveg(resp)
             return [], szoveg.strip()
         jelolt = resp.candidates[0].content if resp.candidates else None
         self._contents.append(jelolt or self._types.Content(role="model", parts=[]))
         return [(h.name or "", dict(h.args or {})) for h in hivasok], None
 
+    def zaras(self) -> str:
+        """A lépéskorlát elérésekor: egy utolsó kör eszköz nélkül, hogy az
+        addig összegyűjtöttből mégis legyen válasz."""
+        t = self._types
+        self._contents.append(t.Content(role="user", parts=[t.Part(text=ZARO_KERES)]))
+        return self._szoveg(self._general(eszkoz_nelkul=True)).strip()
+
     def eredmenyek(self, parok: list[tuple[str, dict]]) -> None:
         t = self._types
         self._contents.append(
-            t.Content(role="user", parts=[t.Part.from_function_response(name=n, response=r) for n, r in parok])
+            t.Content(role="user", parts=[t.Part.from_function_response(name=n, response=_jsonba(r)) for n, r in parok])
         )
+
+
+def _jsonba(ertek):
+    """Az eszköz-eredmény biztosan JSON-kompatibilis alakja (dátum, Decimal…
+    szövegként) - különben a modellhívás szerializálása bukna el."""
+    try:
+        return json.loads(json.dumps(ertek, ensure_ascii=False, default=str))
+    except (TypeError, ValueError):
+        return {"eredmeny": str(ertek)[:4000]}
+
+
+def modell_ellenorzes() -> dict:
+    """Élő kapcsolat-próba (Beállítások gomb): egy egyszerű hívás, majd egy
+    Lara eszközeivel deklarált hívás. Vissza: lépésenként ok / hiba-leírás / idő."""
+    from google import genai
+    from google.genai import types
+
+    if not getattr(settings, "gemini_api_key", None):
+        return {"ok": False, "modell": settings.gemini_model, "lepesek": [], "hiba": "Nincs GEMINI_API_KEY beállítva."}
+    client = genai.Client(api_key=settings.gemini_api_key)
+    lepesek = []
+    for cim, config in (
+        ("Egyszerű válasz", types.GenerateContentConfig(max_output_tokens=kimeneti_korlat(settings.gemini_model, 256))),
+        ("Válasz Lara eszközeivel (a beszélgetés beállításaival)", _Gemini("Válaszolj röviden.", "x", eszkozok(), 16384)._config),
+    ):
+        kezd = time.monotonic()
+        try:
+            r = client.models.generate_content(
+                model=settings.gemini_model, contents="Válaszolj egyetlen szóval: rendben", config=config
+            )
+            szoveg = ""
+            try:
+                szoveg = (r.text or "").strip()
+            except (ValueError, AttributeError):
+                pass
+            lepesek.append({"cim": cim, "ok": bool(szoveg or r.function_calls), "ms": int((time.monotonic() - kezd) * 1000),
+                            "valasz": szoveg[:80], "vegok": _vegok(r)})
+        except Exception as exc:  # noqa: BLE001 — a diagnózis maga a hiba
+            lepesek.append({"cim": cim, "ok": False, "ms": int((time.monotonic() - kezd) * 1000), "hiba": hiba_leiras(exc)})
+    return {"ok": all(x["ok"] for x in lepesek), "modell": settings.gemini_model, "lepesek": lepesek}
 
 
 # ── A tudás: az asszisztensé + Laráé ─────────────────────────────────────────
@@ -319,8 +504,22 @@ def eszkozhurok(
             b.eredmenyek(parok)
         else:
             allapot = "lepeskorlat"
+            # Utolsó, eszköz nélküli kör: az addig összegyűjtöttből válaszoljon.
+            zaras = getattr(b, "zaras", None)
+            if zaras:
+                vegso = zaras() or ""
+                if vegso:
+                    allapot = "kesz"
+                    lepesek.append({"eszkoz": "modell", "cel": "lépéskorlát - válasz az eddig összegyűjtöttből", "ok": True})
     except Exception as exc:  # noqa: BLE001 — fail-closed: Lara nem talál ki semmit
-        logger.warning("Lara eszköz-hurka hibára futott: %s", exc)
+        ok = hiba_leiras(exc)
+        from google.genai import errors
+
+        # A modell-szolgáltatás hibája várható eset (rövid napló); minden más
+        # teljes hívási lánccal kerül a naplóba, hogy javítható legyen.
+        logger.warning("Lara eszköz-hurka hibára futott: %s", ok,
+                       exc_info=not isinstance(exc, (errors.APIError, ModellValaszHiba)))
+        lepesek.append({"eszkoz": "modell", "cel": ok, "ok": False, "hiba": True})
         allapot = "hiba"
     return vegso, lepesek, allapot
 

@@ -2479,6 +2479,18 @@ def settings_lekeres(
     }
 
 
+@router.post("/modell/ellenorzes")
+def modell_ellenorzes(
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Élő kapcsolat-próba a nyelvi modellel (Beállítások gomb): egy egyszerű
+    hívás, majd egy Lara eszközeivel, a beszélgetés beállításaival. Adatot nem
+    olvas és nem ír; a válasz a hiba emberi, titokmentes leírása."""
+    from app.admin_agent import nyomozas
+
+    return nyomozas.modell_ellenorzes()
+
+
 def _felelos_allapot(db: Session) -> dict:
     f = lara_felelos(db)
     return {

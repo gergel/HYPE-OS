@@ -549,3 +549,24 @@ def test_uj_valaszforma_szoveg_elol_meta_kulon(db, admin):
     assert v.szoveg.startswith("Összesen **12 000 Ft**.") and "| Tétel | Összeg |" in v.szoveg
     assert bz.META_JELOLO not in v.szoveg and "hivatkozasok" not in v.szoveg
     assert v.adat["bizonyossag"] == "valoszinu" and v.adat["hivatkozott"] == ["E1"]
+
+
+def test_modellhibanal_a_valasz_a_konkret_okot_mondja(db, admin):
+    from google.genai import errors
+
+    from app.admin_agent import beszelgetes as bz
+
+    class _Kvota:
+        def lepes(self):
+            raise errors.ClientError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED"}})
+
+        def eredmenyek(self, parok):
+            pass
+
+    _tudas(db, "A kvótafuvar (demó) számlái működési költségre mennek.")
+    nyomozas.teszt_beszelgetes(lambda *_: _Kvota())
+    b = bz.uj(db, admin)
+    _, v = bz.valaszol(db, admin, b, "Hová megy a kvótafuvar számlája?")
+    assert v.adat["allapot"] == "hiba" and "429" in v.adat["hiba_ok"]
+    assert "429" in v.szoveg and "nem érhető el" not in v.szoveg
+    assert "kvótafuvar (demó) számlái" in v.szoveg
