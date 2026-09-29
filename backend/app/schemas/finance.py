@@ -34,6 +34,9 @@ class ExpenseBase(BaseModel):
     #: NINCS SZÁMLA: ehhez a tételhez nem is lesz számla/blokk (a felhasználó
     #: kérése) - a felületek ne hiányzóként mutassák.
     nincs_szamla: bool = False
+    #: HÁZIPÉNZTÁR-FEDEZET: van mögötte számla, de a pénz nem jött ki a
+    #: dobozból - a házipénztár egyenlegét nem csökkenti (lásd models/finance.py).
+    kp_fedezet: bool = False
     netto: float | None = None
     brutto: float | None = None
     penznem: str = "HUF"

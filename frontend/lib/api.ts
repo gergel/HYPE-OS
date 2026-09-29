@@ -2578,7 +2578,8 @@ export async function getFinanceSummary(): Promise<FinanceSummary | null> {
 }
 
 /** A házipénztár-tétel FAJTÁJA (lásd backend services/kassza.py). */
-export type HazipenztarTipus = "bevetel" | "atvezetes" | "kiadas" | "fekete_kiadas";
+/** A `fedezet` látszik, de nem mozgatja az egyenleget (lásd backend services/kassza.py). */
+export type HazipenztarTipus = "bevetel" | "atvezetes" | "kiadas" | "fekete_kiadas" | "fedezet";
 
 /** Egy mozgás a Házipénztár naplójában. */
 export type KpNaploSor = {
@@ -2592,6 +2593,8 @@ export type KpNaploSor = {
   projektkod: string | null;
   be: number;
   ki: number;
+  /** FEDEZET-sornál a kiadás összege (a be/ki nulla: a pénz nem mozdult). */
+  fedezet: number;
   /** A házipénztár egyenlege EZ UTÁN a sor után, időrendben számolva. */
   egyenleg: number;
   /** Van-e feltöltött számla (kiadásnál/bevételnél). */
@@ -2617,6 +2620,9 @@ export type KpOsszesites = {
   sima_kiadas_db: number;
   fekete_kiadas: number;
   fekete_kiadas_db: number;
+  /** Számlás kiadás, amiért a pénz nem jött ki a dobozból - nincs az egyenlegben. */
+  fedezet: number;
+  fedezet_db: number;
   be: number;
   ki: number;
   egyenleg: number;

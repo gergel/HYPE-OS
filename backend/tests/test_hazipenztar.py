@@ -203,3 +203,75 @@ def test_autos_kp_kiadas_nincs_szamla_fekete(db):
     tipus = {s.id: s.tipus for s in kassza.kep(db).sorok if s.forras == "kiadas"}
     assert tipus[fekete.id] == kassza.FEKETE_KIADAS
     assert tipus[sima.id] == kassza.SIMA_KIADAS
+
+
+def test_fedezet_latszik_de_nem_csokkenti_az_egyenleget(db):
+    """FEDEZET: készpénzes kiadásként felvezetett, számlás tétel, amiért a pénz
+    NEM jött ki a dobozból - külön összesítve látszik, az egyenleg nem mozdul."""
+    from app.models.finance import Expense
+    from app.services import kassza
+
+    elotte = kassza.kep(db).osszes
+    nap = date(2026, 7, 2)
+    db.add_all([
+        Expense(megnevezes="Fedezet-számla (demó)", netto=40_000, brutto=50_800, fizetes_datuma=nap, kesz=True,
+                kifizetes_modja="Készpénz", kp_fedezet=True),
+        Expense(megnevezes="Taxi2 (demó)", netto=10_000, brutto=12_700, fizetes_datuma=nap, kesz=True,
+                kifizetes_modja="Készpénz"),
+    ])
+    db.flush()
+    kep = kassza.kep(db)
+    o = kep.osszes
+    assert o.fedezet - elotte.fedezet == pytest.approx(50_800) and o.fedezet_db - elotte.fedezet_db == 1
+    assert o.sima_kiadas - elotte.sima_kiadas == pytest.approx(12_700)
+    assert o.egyenleg - elotte.egyenleg == pytest.approx(-12_700)  # a fedezet nem mozgat
+    sor = next(s for s in kep.sorok if s.megnevezes == "Fedezet-számla (demó)")
+    assert sor.tipus == kassza.FEDEZET and sor.be == 0 and sor.ki == 0 and sor.fedezet == pytest.approx(50_800)
+
+
+def test_fedezet_es_sosem_lesz_szamla_kizarja_egymast(db):
+    from fastapi import HTTPException
+
+    from app.api.routes.finance import _expense_before_create, _fedezet_es_nincs_szamla
+    from app.models.finance import Expense
+
+    with pytest.raises(HTTPException) as e:
+        _expense_before_create({"megnevezes": "x", "kp_fedezet": True, "nincs_szamla": True}, db)
+    assert e.value.status_code == 400
+    fekete = Expense(megnevezes="Fekete (demó)", nincs_szamla=True, kp_fedezet=False)
+    adat = {"kp_fedezet": True}
+    _fedezet_es_nincs_szamla(adat, fekete)
+    assert adat == {"kp_fedezet": True, "nincs_szamla": False}
+    fedezet = Expense(megnevezes="Fedezet (demó)", nincs_szamla=False, kp_fedezet=True)
+    adat = {"nincs_szamla": True}
+    _fedezet_es_nincs_szamla(adat, fedezet)
+    assert adat == {"nincs_szamla": True, "kp_fedezet": False}
+
+
+def test_kp_naplo_vegpont_fedezet_osszesito(db, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.core.database import get_db
+    from app.core.security import get_current_user
+    from app.main import app
+    from app.models.employee import Employee
+    from app.models.finance import Expense
+
+    admin = db.get(Employee, 2)
+    if admin is None:
+        pytest.skip("Nincs admin munkatárs (#2).")
+    db.add(Expense(megnevezes="Fedezet API (demó)", netto=1_000, brutto=1_270, fizetes_datuma=date(2026, 7, 3),
+                   kesz=True, kifizetes_modja="Készpénz", kp_fedezet=True))
+    db.flush()
+    monkeypatch.setattr(db, "commit", db.flush)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: admin
+    try:
+        r = TestClient(app).get("/api/v1/finance/kp-naplo")
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["osszes"]["fedezet"] >= 1_270 and d["osszes"]["fedezet_db"] >= 1
+    sor = next(s for s in d["sorok"] if s["megnevezes"] == "Fedezet API (demó)")
+    assert sor["tipus"] == "fedezet" and sor["ki"] == 0 and sor["fedezet"] == 1_270

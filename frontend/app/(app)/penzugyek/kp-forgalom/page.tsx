@@ -18,15 +18,16 @@ import {
 } from "@/lib/api";
 import { formatHuf } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, EyeOff, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, EyeOff, ShieldCheck, Wallet } from "lucide-react";
 
 const PAGE = "/penzugyek";
 
-const TIPUS: Record<HazipenztarTipus, { cimke: string; tone: "teal" | "blue" | "orange" | "danger" }> = {
+const TIPUS: Record<HazipenztarTipus, { cimke: string; tone: "teal" | "blue" | "orange" | "danger" | "neutral" }> = {
   bevetel: { cimke: "Bevétel", tone: "teal" },
   atvezetes: { cimke: "Átvezetés (ATM)", tone: "blue" },
   kiadas: { cimke: "Kiadás", tone: "orange" },
   fekete_kiadas: { cimke: "Fekete kiadás", tone: "danger" },
+  fedezet: { cimke: "Fedezet", tone: "neutral" },
 };
 
 /** HÁZIPÉNZTÁR: minden készpénz-mozgás egy listában, időrendben, futó
@@ -40,6 +41,10 @@ const TIPUS: Record<HazipenztarTipus, { cimke: string; tone: "teal" | "blue" | "
  * - KIADÁS: készpénzes kiadás, amihez van vagy lesz számla;
  * - FEKETE KIADÁS: készpénzes kiadás, amire rányomták, hogy sosem lesz
  *   számlája.
+ *
+ * És egy ötödik, ami csak LÁTSZIK: a FEDEZET - kiadásként felvezetett tétel,
+ * ami mögött van számla, de a pénz valójában nem jött ki a dobozból. A
+ * könyvekben kiadás, az egyenleget nem csökkenti.
  *
  * A számokat a szerver adja, ugyanabból a számításból, mint a Pénzügyek
  * kártyája - így a két felület nem mondhat mást ugyanarról a dobozról. */
@@ -62,6 +67,8 @@ export default async function HazipenztarPage() {
     sima_kiadas_db: 0,
     fekete_kiadas: 0,
     fekete_kiadas_db: 0,
+    fedezet: 0,
+    fedezet_db: 0,
     be: 0,
     ki: 0,
     egyenleg: 0,
@@ -116,7 +123,11 @@ export default async function HazipenztarPage() {
       header: "Összeg",
       align: "right",
       render: (s) =>
-        helybenSzerkesztheto(s) ? (
+        s.tipus === "fedezet" ? (
+          <span className="text-text-muted" title="Fedezet: van számla, de a pénz nem jött ki a dobozból - az egyenleget nem csökkenti">
+            ({formatHuf(s.fedezet)})
+          </span>
+        ) : helybenSzerkesztheto(s) ? (
           <span className={s.ki > 0 ? "text-text-orange" : "text-text-teal"}>
             {s.ki > 0 ? "−" : "+"}
             <EditableTableCell patchPath={patchUt(s)} field="osszeg" value={s.be || s.ki} type="number" />
@@ -126,7 +137,7 @@ export default async function HazipenztarPage() {
         ) : (
           <span className="text-text-teal">+{formatHuf(s.be)}</span>
         ),
-      sortAccessor: (s) => s.be - s.ki,
+      sortAccessor: (s) => (s.tipus === "fedezet" ? -s.fedezet : s.be - s.ki),
     },
     {
       header: "Egyenleg",
@@ -138,11 +149,27 @@ export default async function HazipenztarPage() {
       header: "Sosem lesz számla",
       align: "right",
       render: (s) =>
-        s.forras !== "kiadas" ? (
+        s.forras !== "kiadas" || s.tipus === "fedezet" ? (
           <span className="text-text-muted">–</span>
         ) : canEdit ? (
           <EditableBooleanCell patchPath={patchUt(s)} field="nincs_szamla" value={s.tipus === "fekete_kiadas"} />
         ) : s.tipus === "fekete_kiadas" ? (
+          "Igen"
+        ) : (
+          "–"
+        ),
+    },
+    {
+      // FEDEZET: van mögötte számla, de a pénz nem jött ki - bekapcsolva a
+      // sor az egyenleget nem csökkenti (és a „sosem lesz számla” kikapcsol).
+      header: "Fedezet",
+      align: "right",
+      render: (s) =>
+        s.forras !== "kiadas" ? (
+          <span className="text-text-muted">–</span>
+        ) : canEdit ? (
+          <EditableBooleanCell patchPath={patchUt(s)} field="kp_fedezet" value={s.tipus === "fedezet"} />
+        ) : s.tipus === "fedezet" ? (
           "Igen"
         ) : (
           "–"
@@ -154,7 +181,7 @@ export default async function HazipenztarPage() {
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 space-y-6 p-4 md:p-8">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <StatCard
             label="Házipénztár egyenlege"
             value={formatHuf(osszes.egyenleg)}
@@ -190,6 +217,13 @@ export default async function HazipenztarPage() {
             tone={osszes.fekete_kiadas > 0 ? "danger" : "default"}
             megjegyzes={`${osszes.fekete_kiadas_db} tétel · nem elszámolható költség`}
           />
+          <StatCard
+            label="Fedezet (számla van, pénz nem jött ki)"
+            value={formatHuf(osszes.fedezet)}
+            icon={ShieldCheck}
+            tone="default"
+            megjegyzes={`${osszes.fedezet_db} tétel · az egyenleget nem csökkenti`}
+          />
         </div>
 
         <Card title={`Házipénztár (${megjelenitett.length} mozgás)`}>
@@ -197,7 +231,9 @@ export default async function HazipenztarPage() {
             Egyenleg = bevétel + átvezetés − kiadás − fekete kiadás, bruttóban, 2026.01.01 óta. <b>Bevétel</b> csak a
             projektkód készpénzes kifizetéséből kerülhet ide (projektkód → Számla → Kifizetve, fizetési mód: Készpénz).{" "}
             <b>Átvezetés</b> az ATM-ből felvett készpénz: a házipénztár nő, a bankszámla egyenlege csökken, kiadás nem
-            keletkezik. A <b>kiadás</b> fekete, ha rányomjátok, hogy sosem lesz számlája.
+            keletkezik. A <b>kiadás</b> fekete, ha rányomjátok, hogy sosem lesz számlája. A <b>fedezet</b> olyan kiadás,
+            ami mögött van számla, de a pénz valójában nem jött ki a dobozból: a könyvekben kiadás, a házipénztár
+            egyenlegét nem csökkenti (egy meglévő készpénzes kiadás is átállítható a „Fedezet” oszlopban).
           </p>
           {canCreate && (
             <div className="mb-3 flex flex-wrap items-start gap-3">
@@ -228,6 +264,28 @@ export default async function HazipenztarPage() {
                   { name: "kiadas_leiras", label: "Megjegyzés" },
                   { name: "fizetes_datuma", label: "Dátum", type: "date", required: true },
                   { name: "brutto", label: "Kifizetett összeg (bruttó, Ft)", type: "number", required: true },
+                  { name: "netto", label: "Nettó (ha van ÁFA-s számla)", type: "number" },
+                  {
+                    name: "project_code_id",
+                    label: "Projektkód",
+                    type: "select",
+                    options: projectCodes.map((pc) => ({ value: pc.id, label: pc.projektkod })),
+                  },
+                ]}
+              />
+              <QuickCreateForm
+                postPath={ENTITY_PATHS.expense}
+                addLabel="+ Fedezet (számla van, pénz nem jött ki)"
+                // FEDEZET: a könyvekben készpénzes kiadás (van számlája), de a
+                // pénz nem jött ki a dobozból - az egyenleget nem csökkenti
+                // (lásd backend services/kassza.py).
+                presetFields={{ kifizetes_modja: "Készpénz", tipus: "egyeb", kesz: true, kp_fedezet: true }}
+                fajlFeltoltes={{ entityType: "expense", kategoria: "szamla" }}
+                fields={[
+                  { name: "megnevezes", label: "Kinek / mire (a számla szerint)", required: true },
+                  { name: "kiadas_leiras", label: "Megjegyzés" },
+                  { name: "fizetes_datuma", label: "Dátum", type: "date", required: true },
+                  { name: "brutto", label: "A számla összege (bruttó, Ft)", type: "number", required: true },
                   { name: "netto", label: "Nettó (ha van ÁFA-s számla)", type: "number" },
                   {
                     name: "project_code_id",

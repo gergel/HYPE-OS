@@ -97,6 +97,12 @@ class Expense(TimestampMixin, Base):
     #: számla/blokk (pl. borravaló, magánszemélyes tétel) - a felületek ne
     #: hiányzó számlaként mutassák.
     nincs_szamla: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    #: HÁZIPÉNZTÁR-FEDEZET (a felhasználó kérése): készpénzes kiadásként
+    #: felvezetett tétel, ami mögött VAN számla, de a pénz a valóságban NEM
+    #: jött ki a dobozból. A könyvekben kiadás, a házipénztár egyenlegét
+    #: viszont nem csökkenti (lásd services/kassza.py). A „nincs számla”
+    #: jelöléssel kizárják egymást.
+    kp_fedezet: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     projekt_kiadasok_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Projekt kiadások")
     kiadasok_notion_ids: Mapped[dict | list | None] = mapped_column(JSON, comment="Kiadások")
     szamla_statusza: Mapped[str | None] = mapped_column(String(50))

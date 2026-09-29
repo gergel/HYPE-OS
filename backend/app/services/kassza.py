@@ -6,7 +6,8 @@ a számításból dolgozik, mert két külön implementáció előbb-utóbb két
 egyenleget adna.
 
 MI MOZGATJA A HÁZIPÉNZTÁRAT? (a felhasználó 2026-09-24-i döntése, a pénztár
-nulláról újraindításával együtt) Pontosan négyféle tétel:
+nulláról újraindításával együtt) Pontosan négyféle tétel - és egy ötödik, ami
+látszik, de NEM mozgat:
 
 1. **BEVÉTEL** - kizárólag KÉSZPÉNZES projektkód-kifizetés: a projektkód
    számla-lépésénél „Kifizetve / Készpénz”-ként rögzített bevétel-sor (lásd
@@ -20,7 +21,13 @@ nulláról újraindításával együtt) Pontosan négyféle tétel:
 4. **FEKETE KIADÁS** - készpénzben kifizetett kiadás, amire rányomták, hogy
    SOHA nem lesz számlája (`Expense.nincs_szamla`).
 
+5. **FEDEZET** (2026-09-29) - készpénzes kiadásként felvezetett tétel, ami
+   mögött VAN számla, de a pénz a valóságban NEM jött ki a dobozból
+   (`Expense.kp_fedezet`). A könyvekben kiadás; a házipénztárban csak
+   látszik (külön összesítve), az egyenleget nem változtatja.
+
     egyenleg = bevétel + átvezetés - sima kiadás - fekete kiadás
+    (a fedezet nincs benne)
 
 Minden összeg BRUTTÓ: egy doboz pénz nem tud nettó lenni.
 
@@ -56,6 +63,7 @@ BEVETEL = "bevetel"
 ATVEZETES = "atvezetes"
 SIMA_KIADAS = "kiadas"
 FEKETE_KIADAS = "fekete_kiadas"
+FEDEZET = "fedezet"
 
 
 def kp_ervenyes_sql():
@@ -77,13 +85,16 @@ class KasszaSor:
     id: int
     #: bevetel (Revenue) | kiadas (Expense) | kp_forgalom (átvezetés)
     forras: str
-    #: bevetel | atvezetes | kiadas | fekete_kiadas - lásd fent.
+    #: bevetel | atvezetes | kiadas | fekete_kiadas | fedezet - lásd fent.
     tipus: str
     datum: date | None
     megnevezes: str
     projektkod: str | None = None
     be: float = 0.0
     ki: float = 0.0
+    #: FEDEZET-sornál a kiadás összege - kijelzésre; a `be`/`ki` ilyenkor nulla,
+    #: mert a pénz nem mozdult.
+    fedezet: float = 0.0
     #: Van-e feltöltött számla (csak kiadásnál/bevételnél értelmes).
     van_szamla: bool = False
     #: A házipénztár egyenlege EZ UTÁN a sor után - időrendben számolva.
@@ -120,6 +131,9 @@ class Osszesites:
     sima_kiadas_db: int = 0
     fekete_kiadas: float = 0.0
     fekete_kiadas_db: int = 0
+    #: FEDEZET: számlás kiadás, amiért a pénz nem jött ki - az egyenlegben nincs.
+    fedezet: float = 0.0
+    fedezet_db: int = 0
 
     @property
     def atvezetes(self) -> float:
@@ -146,6 +160,9 @@ class Osszesites:
         elif sor.tipus == BEVETEL:
             self.bevetel += sor.be
             self.bevetel_db += 1
+        elif sor.tipus == FEDEZET:
+            self.fedezet += sor.fedezet
+            self.fedezet_db += 1
         elif sor.tipus == FEKETE_KIADAS:
             self.fekete_kiadas += sor.ki
             self.fekete_kiadas_db += 1
@@ -264,9 +281,15 @@ def _bevetelek(db: Session) -> list[KasszaSor]:
     ]
 
 
+def _kiadas_tipus(e: Expense) -> str:
+    if e.kp_fedezet:
+        return FEDEZET
+    return FEKETE_KIADAS if e.nincs_szamla else SIMA_KIADAS
+
+
 def _kiadasok(db: Session) -> list[KasszaSor]:
     """A készpénzben KIFIZETETT kiadások - sima vagy fekete a „nem lesz
-    számla” jelölés szerint. Az "összesítőbe nem számít" jelölés itt nem
+    számla” jelölés szerint; a fedezet-jelölésű csak látszik, nem mozgat. Az "összesítőbe nem számít" jelölés itt nem
     szűr: a pénz attól még kiment a dobozból."""
     sorok = db.scalars(
         select(Expense)
@@ -284,11 +307,12 @@ def _kiadasok(db: Session) -> list[KasszaSor]:
         KasszaSor(
             id=e.id,
             forras="kiadas",
-            tipus=FEKETE_KIADAS if e.nincs_szamla else SIMA_KIADAS,
+            tipus=_kiadas_tipus(e),
             datum=e.fizetes_datuma,
             megnevezes=e.megnevezes or "Készpénzes kiadás",
             projektkod=e.project_code.projektkod if e.project_code else None,
-            ki=elszamolas.brutto_osszeg(e),
+            ki=0.0 if e.kp_fedezet else elszamolas.brutto_osszeg(e),
+            fedezet=elszamolas.brutto_osszeg(e) if e.kp_fedezet else 0.0,
             van_szamla=e.id in szamlas or bool(e.szamla_pdf_urls),
             href=f"/penzugyek/kiadas/{e.id}",
             project_code_id=e.project_code_id,

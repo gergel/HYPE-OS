@@ -184,7 +184,31 @@ def _afa_brutto(
     adat["brutto"] = round(float(netto) * (1 + szazalek / 100), 2)
 
 
+def _fedezet_es_nincs_szamla(adat: dict, obj=None) -> None:
+    """A házipénztár-FEDEZET mögött van számla, ezért nem lehet egyszerre
+    „sosem lesz számlája” is. Felvitelkor ez hiba; szerkesztéskor az újonnan
+    bekapcsolt jelölés kikapcsolja a másikat (a táblázat kapcsolói így
+    egy kattintással átválthatók)."""
+    if obj is None:
+        if adat.get("kp_fedezet") and adat.get("nincs_szamla"):
+            raise HTTPException(
+                status_code=400,
+                detail="A fedezet mögött van számla - nem lehet egyszerre „sosem lesz számlája” is.",
+            )
+        return
+    if adat.get("kp_fedezet") and "nincs_szamla" not in adat and obj.nincs_szamla:
+        adat["nincs_szamla"] = False
+    elif adat.get("nincs_szamla") and "kp_fedezet" not in adat and obj.kp_fedezet:
+        adat["kp_fedezet"] = False
+    elif adat.get("kp_fedezet") and adat.get("nincs_szamla"):
+        raise HTTPException(
+            status_code=400,
+            detail="A fedezet mögött van számla - nem lehet egyszerre „sosem lesz számlája” is.",
+        )
+
+
 def _expense_before_create(adat: dict, db: Session) -> dict:
+    _fedezet_es_nincs_szamla(adat)
     # EGYÉB (nem külsős) kiadás megadott dátummal: ezek mindig már KIFIZETETT
     # tételek (a felhasználó kérése), ezért rögtön kifizetettként (kesz=True)
     # vezetjük fel - így a megadott fizetés dátumával automatikusan bekerülnek
@@ -217,6 +241,7 @@ def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee
     """PATCH-nél a hiányzó alapokat a meglévő rekordból vesszük: egy
     önmagában érkező nettó- vagy százalék-javítás is újraszámolja a bruttót,
     ha a soron "+ÁFA" van jelölve."""
+    _fedezet_es_nincs_szamla(adat, obj)
     if any(mezo in adat for mezo in ("netto", "plusz_afa", "afa_szazalek", "egyeni_afa_osszege")):
         _afa_brutto(
             adat, netto=obj.netto, plusz_afa=obj.plusz_afa, afa_szazalek=obj.afa_szazalek,
@@ -599,7 +624,7 @@ class KpNaploSor(BaseModel):
     id: int
     #: bevetel (Revenue) | kiadas (Expense) | kp_forgalom (átvezetés)
     forras: str
-    #: bevetel | atvezetes | kiadas | fekete_kiadas (lásd services/kassza.py)
+    #: bevetel | atvezetes | kiadas | fekete_kiadas | fedezet (lásd services/kassza.py)
     tipus: str
     datum: date | None
     megnevezes: str
@@ -607,6 +632,8 @@ class KpNaploSor(BaseModel):
     #: Egy sor vagy be, vagy ki - a másik nulla.
     be: float = 0
     ki: float = 0
+    #: FEDEZET-sornál a kiadás összege (a be/ki nulla: a pénz nem mozdult).
+    fedezet: float = 0
     #: A házipénztár egyenlege EZ UTÁN a sor után, időrendben számolva.
     egyenleg: float = 0
     #: Van-e feltöltött számla (kiadásnál/bevételnél).
@@ -635,6 +662,9 @@ class KpOsszesites(BaseModel):
     sima_kiadas_db: int = 0
     fekete_kiadas: float = 0
     fekete_kiadas_db: int = 0
+    #: FEDEZET: számlás kiadás, amiért a pénz nem jött ki - nincs az egyenlegben.
+    fedezet: float = 0
+    fedezet_db: int = 0
     be: float = 0
     ki: float = 0
     egyenleg: float = 0
@@ -658,6 +688,8 @@ def _osszesites(o) -> KpOsszesites:
         sima_kiadas_db=o.sima_kiadas_db,
         fekete_kiadas=o.fekete_kiadas,
         fekete_kiadas_db=o.fekete_kiadas_db,
+        fedezet=o.fedezet,
+        fedezet_db=o.fedezet_db,
         be=o.be,
         ki=o.ki,
         egyenleg=o.egyenleg,
@@ -825,6 +857,7 @@ def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_curren
                 projektkod=s.projektkod,
                 be=s.be,
                 ki=s.ki,
+                fedezet=s.fedezet,
                 egyenleg=s.egyenleg,
                 van_szamla=s.van_szamla,
                 atvezetes=s.atvezetes,
