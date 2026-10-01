@@ -274,7 +274,9 @@ def _bevetelek(db: Session) -> list[KasszaSor]:
             projektkod=r.project_code.projektkod if r.project_code else None,
             be=elszamolas.brutto_osszeg(r),
             van_szamla=r.id in szamlas,
-            href=f"/projektek/project-kodok/{r.project_code_id}" if r.project_code_id else None,
+            # A bevétel saját adatlapja nyílik (a projektkód onnan linkként
+            # elérhető) - korábban a projektkódra ugrott.
+            href=f"/penzugyek/bevetel/{r.id}",
             project_code_id=r.project_code_id,
         )
         for r in sorok

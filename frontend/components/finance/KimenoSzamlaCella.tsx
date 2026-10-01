@@ -18,12 +18,15 @@ export function KimenoSzamlaCella({
   url,
   canEdit,
   canDelete,
+  balra = false,
 }: {
   revenueId: number;
   filename: string | null;
   url: string | null;
   canEdit: boolean;
   canDelete: boolean;
+  /** Balra igazítva (adatlapon) - a táblázat cellájában jobbra áll. */
+  balra?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -67,7 +70,7 @@ export function KimenoSzamlaCella({
 
   return (
     <StopClickPropagation>
-      <span className="flex items-center justify-end gap-1.5">
+      <span className={`flex items-center gap-1.5 ${balra ? "justify-start" : "justify-end"}`}>
         {url ? (
           <a href={url} target="_blank" rel="noopener noreferrer" className="max-w-[140px] truncate text-text-accent hover:underline">
             {filename ?? "Számla"}

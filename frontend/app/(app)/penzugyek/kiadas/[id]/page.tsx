@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
-import { Card } from "@/components/Card";
-import { EditableDetailGrid } from "@/components/EditableDetailGrid";
 import { KiadasSzamlak } from "@/components/finance/KiadasSzamlak";
+import { AdatlapFej, PenzugyiSzekciok, type Jelveny } from "@/components/finance/PenzugyiAdatlap";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
@@ -12,8 +11,16 @@ import {
   getRecord,
   getVisibleFields,
 } from "@/lib/api";
-import { toEditableDetailFields } from "@/lib/detail";
+import { formatHuf } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
+
+const TIPUS_CIMKE: Record<string, string> = { belsos: "Belsős", kulsos: "Külsős", extra: "Extra", egyeb: "Egyéb" };
+
+function szam(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,42 +44,125 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     expense.employee_id ? getRecord(ENTITY_PATHS.employee, Number(expense.employee_id)) : null,
   ]);
 
+  const tipus = String(expense.tipus ?? "").trim().toLowerCase();
+  const brutto = szam(expense.brutto);
+  const netto = szam(expense.netto);
+  const deviza = expense.eredeti_penznem ? String(expense.eredeti_penznem) : null;
+  const vanKulsosAdat = ["tulora_osszege", "tulora_orabere", "tulora_szama", "plusz_napok_ara", "plusz_napok_szama"].some(
+    (k) => szam(expense[k]) !== null,
+  );
+
+  const jelvenyek: Jelveny[] = [
+    expense.kesz ? { label: "Kifizetve", tone: "success" } : { label: "Fizetésre vár", tone: "warning" },
+  ];
+  if (expense.kifizetes_modja) jelvenyek.push({ label: String(expense.kifizetes_modja), tone: "neutral" });
+  if (tipus) jelvenyek.push({ label: TIPUS_CIMKE[tipus] ?? String(expense.tipus), tone: "accent" });
+  if (expense.kp_fedezet) jelvenyek.push({ label: "Fedezet", tone: "blue" });
+  if (expense.nincs_szamla) jelvenyek.push({ label: "Sosem lesz számla", tone: "danger" });
+  if (deviza) jelvenyek.push({ label: `Devizás (${deviza})`, tone: "teal" });
+
+  const linkek = [
+    ...(projectCode ? [{ href: `/projektek/project-kodok/${projectCode.id}`, label: `Project Code: ${String(projectCode.projektkod)}` }] : []),
+    ...(employee ? [{ href: `/csapat/${employee.id}`, label: `Crew tag: ${String(employee.full_name)}` }] : []),
+  ];
+
   return (
     <div className="flex flex-1 flex-col">
       <TopBar />
-      <div className="flex-1 space-y-8 p-4 md:p-8">
+      <div className="flex-1 space-y-6 p-4 md:p-8">
         <BackLink href="/penzugyek" label="Pénzügyek" />
 
-        <Card title={String(expense.megnevezes ?? `Kiadás #${expense.id}`)}>
-          <div className="mb-4 flex flex-wrap gap-4 text-[13px] text-text-secondary">
-            {projectCode && (
-              <a href={`/projektek/project-kodok/${projectCode.id}`} className="text-text-accent hover:underline">
-                Project Code: {String(projectCode.projektkod)}
-              </a>
-            )}
-            {employee && (
-              <a href={`/csapat/${employee.id}`} className="text-text-accent hover:underline">
-                Crew tag: {String(employee.full_name)}
-              </a>
-            )}
-          </div>
-          <EditableDetailGrid
-            patchPath={`${ENTITY_PATHS.expense}/${expense.id}`}
-            fields={toEditableDetailFields(expense, ["project_code_id", "employee_id"], visibleFields, fieldTypes).map(
-              // A kiadásnál a `megnevezes` a felületen "Cégnév" (kinek
-              // fizettünk) - a kulcsot más entitások is használják, ezért a
-              // címkét itt, helyben írjuk át (lásd backend models/finance).
-              (f) => (f.key === "megnevezes" ? { ...f, label: "Cégnév" } : f),
-            )}
-          />
-        </Card>
+        <AdatlapFej
+          felirat="Kiadás"
+          cim={String(expense.megnevezes ?? `Kiadás #${expense.id}`)}
+          osszeg={brutto !== null ? formatHuf(brutto) : netto !== null ? formatHuf(netto) : null}
+          osszegAlatt={brutto !== null && netto !== null ? `bruttó · nettó ${formatHuf(netto)}` : brutto !== null ? "bruttó" : netto !== null ? "nettó" : null}
+          jelvenyek={jelvenyek}
+          linkek={linkek}
+        />
 
-        {/* A kiadás számlái (a felhasználó kérése): közvetlen feltöltés, és -
-            átvezetett tételnél - a forrásnál (TIG, autó, KP forgalom)
-            feltöltött számlák is, hogy ne kelljen kétszer feltölteni. */}
-        <Card title="Számlák">
-          <KiadasSzamlak expenseId={expenseId} canEdit={canEdit} canDelete={canDelete} />
-        </Card>
+        {/* Csak a fontos mezők, szekciókba rendezve (a felhasználó kérése) -
+            a Notionből átjött, nem használt mezők a csukott „Régi adatok”
+            blokkba kerülnek (lásd PenzugyiAdatlap). */}
+        <PenzugyiSzekciok
+          record={expense}
+          fieldTypes={fieldTypes}
+          visibleFields={visibleFields}
+          patchPath={`${ENTITY_PATHS.expense}/${expense.id}`}
+          readOnly={!canEdit}
+          // A kapcsolatok a fejlécben linkként látszanak.
+          rejtett={["project_code_id", "employee_id", "alvallalkozo_project_id", "auto_id"]}
+          szekciok={[
+            {
+              key: "alap",
+              cim: "Alapadatok",
+              mezok: [
+                // A kiadásnál a `megnevezes` a felületen "Cégnév" (kinek
+                // fizettünk) - lásd backend models/finance.
+                { key: "megnevezes", label: "Cégnév" },
+                { key: "tipus", label: "Típus" },
+                { key: "kiadas_leiras", label: "Leírás" },
+                { key: "megjegyzes", label: "Megjegyzés" },
+              ],
+            },
+            {
+              key: "osszeg",
+              cim: "Összeg",
+              mezok: [
+                { key: "netto", label: "Nettó" },
+                { key: "afa_szazalek", label: "ÁFA %" },
+                { key: "egyeni_afa_osszege", label: "Egyéni ÁFA összege" },
+                { key: "brutto", label: "Bruttó" },
+                { key: "penznem", label: "Pénznem" },
+              ],
+            },
+            {
+              key: "deviza",
+              cim: "Deviza",
+              lathato: Boolean(deviza) || szam(expense.arfolyam) !== null,
+              mezok: [
+                { key: "eredeti_penznem", label: "Eredeti pénznem" },
+                { key: "eredeti_netto", label: "Eredeti nettó" },
+                { key: "eredeti_brutto", label: "Eredeti bruttó" },
+                { key: "arfolyam", label: "Árfolyam" },
+              ],
+            },
+            {
+              key: "fizetes",
+              cim: "Fizetés",
+              mezok: [
+                { key: "kesz", label: "Kifizetve" },
+                { key: "kifizetes_modja", label: "Fizetési mód" },
+                { key: "fizetes_datuma", label: "Fizetés dátuma" },
+                { key: "fizetes_hatarideje", label: "Fizetési határidő" },
+              ],
+            },
+            {
+              key: "szamla",
+              cim: "Számla",
+              mezok: [
+                { key: "nincs_szamla", label: "Sosem lesz számlája" },
+                { key: "kp_fedezet", label: "Fedezet (pénz nem jött ki)" },
+              ],
+              // A kiadás számlái: közvetlen feltöltés, és - átvezetett
+              // tételnél - a forrásnál (TIG, autó, KP forgalom) feltöltött
+              // számlák is, hogy ne kelljen kétszer feltölteni.
+              extra: <KiadasSzamlak expenseId={expenseId} canEdit={canEdit} canDelete={canDelete} />,
+            },
+            {
+              key: "kulsos",
+              cim: "Külsős tételek (túlóra, plusz napok)",
+              lathato: tipus === "kulsos" || vanKulsosAdat,
+              mezok: [
+                { key: "tulora_szama", label: "Túlóra (óra)" },
+                { key: "tulora_orabere", label: "Túlóra órabér" },
+                { key: "tulora_osszege", label: "Túlóra összege" },
+                { key: "plusz_napok_szama", label: "Plusz napok száma" },
+                { key: "plusz_napok_ara", label: "Plusz nap ára" },
+              ],
+            },
+          ]}
+        />
       </div>
     </div>
   );
