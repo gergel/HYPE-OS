@@ -31,12 +31,40 @@ import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
+import { DatumSzuro } from "@/components/finance/DatumSzuro";
+import { idoszakban } from "@/lib/idoszak";
 import { devizaNyom, PENZNEMEK } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 
 const PAGE = "/penzugyek";
 
-export default async function PenzugyekPage() {
+/** A bevétel DÁTUMA a listában és a szűrőben: a pénz beérkezése (fizetés
+ * dátuma); amíg az nincs, a számla kiállításáé - így a még ki nem fizetett,
+ * de már kiszámlázott bevétel is az időszakához sorolható. */
+function bevetelDatuma(r: Revenue): string | null {
+  return r.fizetes_datuma ?? r.szamla_kiallitva_datuma ?? null;
+}
+
+function szurtOsszegzes(sorok: { netto: number | null }[]): string {
+  const netto = sorok.reduce((ossz, s) => ossz + (Number(s.netto) || 0), 0);
+  return `${sorok.length} tétel ebben az időszakban · nettó ${formatHuf(netto)}`;
+}
+
+function param(v: string | string[] | undefined): string {
+  const s = Array.isArray(v) ? v[0] : v;
+  return s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+}
+
+export default async function PenzugyekPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const kiadasTol = param(sp.kiadas_tol);
+  const kiadasIg = param(sp.kiadas_ig);
+  const bevetelTol = param(sp.bevetel_tol);
+  const bevetelIg = param(sp.bevetel_ig);
   const [
     expenses,
     revenues,
@@ -99,6 +127,13 @@ export default async function PenzugyekPage() {
   );
   // A kiadások Projektkód oszlopának/űrlapjának választéka (lásd
   // KiadasProjektkodCella): kód + a munka neve, kód szerint rendezve.
+  // A listák a dátum-szűrő szerint (lásd DatumSzuro) - a kiadásnál a
+  // fizetés dátumára, a bevételnél a bevetelDatuma szerintire.
+  const listazottKiadasok = expenses
+    .filter((e) => e.kesz || e.fizetes_datuma !== null)
+    .filter((e) => idoszakban(e.fizetes_datuma, kiadasTol, kiadasIg));
+  const listazottBevetelek = revenues.filter((r) => idoszakban(bevetelDatuma(r), bevetelTol, bevetelIg));
+
   const projektkodOpciok = [...projectCodes]
     .sort((a, b) => (b.projektkod ?? "").localeCompare(a.projektkod ?? "", "hu"))
     .map((pc) => ({ id: pc.id, projektkod: pc.projektkod, nev: pc.project_nev || null }));
@@ -213,7 +248,14 @@ export default async function PenzugyekPage() {
 
         {/* A listázott kiadások: a dátum nélküli, még ki nem fizetett
             (csak a projektkódon élő) tételek nélkül - lásd lent a rows-nál. */}
-        <Card title={`Kiadások (${expenses.filter((e) => e.kesz || e.fizetes_datuma !== null).length})`}>
+        <Card title={`Kiadások (${listazottKiadasok.length})`}>
+          <DatumSzuro
+            elotag="kiadas"
+            tol={kiadasTol}
+            ig={kiadasIg}
+            mire="fizetés dátuma"
+            osszegzes={szurtOsszegzes(listazottKiadasok)}
+          />
           {canCreate && (
             <QuickCreateForm
               postPath={ENTITY_PATHS.expense}
@@ -351,7 +393,7 @@ export default async function PenzugyekPage() {
             // A DÁTUM NÉLKÜLI, még ki nem fizetett tételek NEM szerepelnek (a
             // felhasználó kérése): azok csak a projektkódjukon élnek, és a
             // Fizetés gomb + fizetés-dátum megadása után kerülnek ide.
-            rows={[...expenses].filter((e) => e.kesz || e.fizetes_datuma !== null).sort((a, b) => b.id - a.id)}
+            rows={[...listazottKiadasok].sort((a, b) => b.id - a.id)}
             emptyText="Még nincs felvett kiadás - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(e) => `/penzugyek/kiadas/${e.id}`}
             deleteHref={canDelete ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}
@@ -510,7 +552,14 @@ export default async function PenzugyekPage() {
           />
         </Card>
 
-        <Card title={`Bevételek (${revenues.length})`}>
+        <Card title={`Bevételek (${listazottBevetelek.length})`}>
+          <DatumSzuro
+            elotag="bevetel"
+            tol={bevetelTol}
+            ig={bevetelIg}
+            mire="beérkezés, ennek híján a számla kiállítása"
+            osszegzes={szurtOsszegzes(listazottBevetelek)}
+          />
           {canCreate && (
             <QuickCreateForm
               postPath={ENTITY_PATHS.revenue}
@@ -555,7 +604,7 @@ export default async function PenzugyekPage() {
             />
           )}
           <DataTable<Revenue>
-            rows={revenues}
+            rows={listazottBevetelek}
             emptyText="Még nincs felvett bevétel - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
             getHref={(r) => `/penzugyek/bevetel/${r.id}`}
             deleteHref={canDelete ? (r) => `${ENTITY_PATHS.revenue}/${r.id}` : undefined}
@@ -589,6 +638,32 @@ export default async function PenzugyekPage() {
                     r.bevetel_formaja ?? "–"
                   ),
                 sortAccessor: (r) => r.bevetel_formaja,
+              },
+              {
+                // A bevétel dátuma (a dátum-szűrő ezt nézi): a beérkezés; ha
+                // még nem fizették ki, a számla kiállítása - halványan jelölve.
+                header: "Dátum",
+                render: (r) =>
+                  r.fizetes_datuma ? (
+                    canEdit ? (
+                      <EditableTableCell
+                        patchPath={`${ENTITY_PATHS.revenue}/${r.id}`}
+                        field="fizetes_datuma"
+                        value={r.fizetes_datuma}
+                        type="date"
+                      />
+                    ) : (
+                      r.fizetes_datuma
+                    )
+                  ) : r.szamla_kiallitva_datuma ? (
+                    <span className="flex flex-col">
+                      <span>{r.szamla_kiallitva_datuma}</span>
+                      <span className="text-[12px] text-text-muted">kiállítva, még nincs fizetve</span>
+                    </span>
+                  ) : (
+                    "–"
+                  ),
+                sortAccessor: (r) => bevetelDatuma(r),
               },
               {
                 header: "Nettó",

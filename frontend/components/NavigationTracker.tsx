@@ -5,6 +5,9 @@ import { useEffect } from "react";
 
 const COUNT_KEY = "hype_nav_count";
 const LAST_PATH_KEY = "hype_nav_last_path";
+/** Az ELŐZŐ útvonal (ahonnan ide jöttünk) - a BackLink `csakInnen` módja
+ * ehhez hasonlít, hogy a „vissza” ne vigyen máshova, mint a megígért lista. */
+export const PREV_PATH_KEY = "hype_nav_prev_path";
 
 /** Nyomon követi, hány KÜLÖNBÖZŐ útvonalat látogatott meg a felhasználó ebben
  * a tab-ban (sessionStorage, tehát új tab-nál/ablaknál nullázódik, oldal-
@@ -24,6 +27,7 @@ export function NavigationTracker() {
     if (lastPath !== pathname) {
       const count = Number(sessionStorage.getItem(COUNT_KEY) || "0");
       sessionStorage.setItem(COUNT_KEY, String(count + 1));
+      if (lastPath) sessionStorage.setItem(PREV_PATH_KEY, lastPath);
       sessionStorage.setItem(LAST_PATH_KEY, pathname);
     }
   }, [pathname]);

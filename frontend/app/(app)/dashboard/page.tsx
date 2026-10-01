@@ -22,6 +22,7 @@ import {
   getMyTasksSummary,
   getProjectCodeOptions,
 } from "@/lib/api";
+import { projektkodElotag } from "@/lib/projektkod";
 import { szerepkorei } from "@/lib/permissions";
 import { EppVagasKartya } from "@/components/dashboard/EppVagasKartya";
 import { EszkozHianyKartya } from "@/components/dashboard/EszkozHianyKartya";
@@ -119,8 +120,15 @@ export default async function DashboardPage() {
   const isVisible = (key: string) => permittedKeys.has(key) && (!visibleWidgets || visibleWidgets.includes(key));
   const apiUnavailable = summary === null;
 
+  // Csak az ADOTT év projektkódjai (a felhasználó kérése) - az évet a kód
+  // előtagja mondja meg (HYPE26-… = 2026), ugyanúgy, mint a projektkód-lista
+  // évváltójánál (lásd ProjektkodEvValto). A régi évek lezárt munkái így nem
+  // nyomják el az idei állapotokat.
+  const ideiEv = new Date().getFullYear();
+  const ideiElotag = projektkodElotag(ideiEv);
+  const ideiKodok = projectCodes.filter((pc) => (pc.projektkod ?? "").trim().toUpperCase().startsWith(ideiElotag));
   const statusCounts = Array.from(
-    projectCodes.reduce((map, pc) => {
+    ideiKodok.reduce((map, pc) => {
       const label = normalizedStatusLabel(pc.esemeny_allapota);
       map.set(label, (map.get(label) ?? 0) + 1);
       return map;
@@ -217,8 +225,8 @@ export default async function DashboardPage() {
             </Card>
           )}
           {isVisible("projektek_statusza") && (
-            <Link href="/projektek/project-kodok" className="block">
-              <Card title="Projektek státusza" className="h-full transition-colors hover:border-text-accent/40">
+            <Link href={`/projektek/project-kodok?ev=${ideiEv}`} className="block">
+              <Card title={`Projektek státusza (${ideiEv})`} className="h-full transition-colors hover:border-text-accent/40">
                 <ProjectStatusDonut statusCounts={statusCounts} />
               </Card>
             </Link>

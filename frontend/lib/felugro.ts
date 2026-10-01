@@ -38,9 +38,13 @@ export function vanEmbedParja(href: string): boolean {
 }
 
 /** Azok a TERÜLETEK, ahol minden megnyitás felugró ablakban történik (a
- * felhasználó kérése): a teljes Pénzügyek csoport és a projektkódok - a
- * lista és az adatlap is. */
-export const FELUGRO_TERULETEK: RegExp[] = [/^\/penzugyek(\/|$)/, /^\/projektek\/project-kodok(\/|$)/];
+ * felhasználó kérése): a teljes Pénzügyek csoport, a projektkódok - a lista
+ * és az adatlap is - és a Belsősök listája. */
+export const FELUGRO_TERULETEK: RegExp[] = [
+  /^\/penzugyek(\/|$)/,
+  /^\/projektek\/project-kodok(\/|$)/,
+  /^\/csapat\/belsosok$/,
+];
 
 export function felugroTerulet(pathname: string): boolean {
   return FELUGRO_TERULETEK.some((m) => m.test(pathname));

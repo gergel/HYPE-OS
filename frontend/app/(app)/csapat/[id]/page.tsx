@@ -393,7 +393,9 @@ export default async function EmployeeDetailPage({
       <TopBar />
       <div className="flex-1 space-y-8 p-4 md:p-8">
         <div className="space-y-2">
-          <BackLink href={backTarget.href} label={backTarget.label} />
+          {/* Egy konkrét listáról (Vágók, Belsősök) nyitva a „vissza” mindig
+              oda visz - lásd BackLink csakInnen. */}
+          <BackLink href={backTarget.href} label={backTarget.label} csakInnen={Boolean(from && BACK_TARGETS[from])} />
           <h1 className="t-page">{String(employee.full_name ?? `Crew tag #${employee.id}`)}</h1>
         </div>
 

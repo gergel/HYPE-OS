@@ -138,6 +138,10 @@ function papirRang(pc: ProjectCode): number {
   );
 }
 
+/** Ha a mezőleírás (a meglévő értékekből gyűjtött választék) nem érkezne
+ * meg, ezek közül lehet választani az új projektkód státuszát. */
+const ALAP_STATUSZOK = ["Tervezés", "Folyamatban", "Kész", "Lezárva"];
+
 export default async function ProjectKodokPage({
   searchParams,
 }: {
@@ -395,6 +399,16 @@ export default async function ProjectKodokPage({
         // fut, és a valóságban "2026. május" vagy "két hétvégén" a pontos
         // válasz - a napokat úgyis a projektek hordozzák.
         { name: "datum_megjegyzes", label: "Dátum megjegyzés", placeholder: "Pl. 2026. május" },
+        // A STÁTUSZ felvételkor KÖTELEZŐ (a felhasználó kérése): státusz
+        // nélkül a kód a Dashboard „Projektek státusza” grafikonján „Nincs
+        // státusz”-ként lógna, és utólag könnyű elfelejteni beállítani.
+        {
+          name: "esemeny_allapota",
+          label: "Projekt státusza",
+          type: "select",
+          required: true,
+          options: (statusOptions.length > 0 ? statusOptions : ALAP_STATUSZOK).map((o) => ({ value: o, label: o })),
+        },
       ]}
     />
   ) : null;

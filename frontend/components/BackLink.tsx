@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { PREV_PATH_KEY } from "@/components/NavigationTracker";
 
 /** "Vissza" link minden részletnézet tetején. Ha a felhasználó az appon
  * belülről navigált ide (bármelyik listáról/kapcsolódó nézetről) - lásd
@@ -14,7 +15,20 @@ import { useRouter } from "next/navigation";
  * előzmény"-t jelezve. A `href`/`label` csak akkor kerül elő, ha nincs
  * app-on belüli előzmény (pl. közvetlen URL-lel/könyvjelzővel nyitották meg
  * a lapot) - ilyenkor ez a legjobb elérhető alapértelmezett cél. */
-export function BackLink({ href, label }: { href: string; label: string }) {
+export function BackLink({
+  href,
+  label,
+  csakInnen = false,
+}: {
+  href: string;
+  label: string;
+  /** Igaz: a böngésző-vissza CSAK akkor, ha a felhasználó tényleg a `href`
+   * oldaláról jött ide - különben egyenesen a `href`-re visz. Ott kell, ahol
+   * a link egy konkrét listát ígér („← Belsősök”): a puszta előzmény-lépés
+   * egy közbeiktatott (pl. felugró ablakos) lépés után máshova - például a
+   * projektkódokhoz - dobott vissza (a felhasználó hibajelzése). */
+  csakInnen?: boolean;
+}) {
   const router = useRouter();
 
   return (
@@ -24,7 +38,8 @@ export function BackLink({ href, label }: { href: string; label: string }) {
       onClick={(e) => {
         e.preventDefault();
         const navCount = typeof window !== "undefined" ? Number(sessionStorage.getItem("hype_nav_count") || "0") : 0;
-        if (navCount > 1) {
+        const innenJott = !csakInnen || sessionStorage.getItem(PREV_PATH_KEY) === href.split("?")[0];
+        if (navCount > 1 && innenJott) {
           router.back();
         } else {
           router.push(href);
