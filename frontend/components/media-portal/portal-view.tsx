@@ -337,10 +337,11 @@ export function PortalView({
                   accent={accent}
                   onShare={linkMasolas ? () => void linkreMasol({ folderId: g.folder.id }) : undefined}
                   onShareVideo={linkMasolas ? (v) => void linkreMasol({ videoId: v.id }) : undefined}
-                  // Az ALMAPPÁK a szülő lenyílóján BELÜL, behúzva - rekurzívan.
+                  // Az ALMAPPÁK a szülő lenyílóján BELÜL, behúzva, a mappa
+                  // saját videói és fotói ELŐTT - rekurzívan.
                   alszekciok={
                     g.gyerekek.length > 0 ? (
-                      <div className="mt-10 space-y-10 border-l border-ink-line pl-4 sm:pl-6">
+                      <div className="space-y-10 border-l border-ink-line pl-4 sm:pl-6">
                         {g.gyerekek.map(renderCsoport)}
                       </div>
                     ) : undefined
@@ -565,7 +566,11 @@ function FolderSection({
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
-            {/* Előbb a videók */}
+            {/* Legfelül az ALMAPPÁK (a felhasználó kérése: a mappák mindig
+                felül legyenek), utánuk a videók, végül a fotók. */}
+            {alszekciok && <div className={videos.length > 0 || images.length > 0 ? "mb-10" : ""}>{alszekciok}</div>}
+
+            {/* Aztán a videók */}
             {videos.length > 0 && (
               <div className="grid grid-cols-1 gap-6 pb-2 sm:grid-cols-2 lg:grid-cols-3">
                 {videos.map((v, i) => (
@@ -581,15 +586,13 @@ function FolderSection({
               </div>
             )}
 
-            {/* Utána a fotók */}
+            {/* Végül a fotók */}
             {images.length > 0 && (
               <div className={videos.length > 0 ? "mt-8" : ""}>
                 <ImageGrid images={images} onOpen={onOpenImage} />
               </div>
             )}
 
-            {/* Végül az almappák szekciói (rekurzívan). */}
-            {alszekciok}
           </motion.div>
         )}
       </AnimatePresence>
