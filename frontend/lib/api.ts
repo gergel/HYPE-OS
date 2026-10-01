@@ -4385,6 +4385,8 @@ export type { DiszpoSzin } from "@/lib/diszpoSzin";
 
 export type DiszpoMunkalapFej = {
   id: number;
+  /** Melyik év táblájához tartozik (HYPE 2026, HYPE 2027). */
+  ev: number;
   nev: string;
   sorrend: number;
   sor_szam: number;
@@ -4430,8 +4432,9 @@ export type DiszpoMunkalap = DiszpoMunkalapFej & {
   cellak: DiszpoCella[];
 };
 
-export async function getDiszpoMunkalapok(): Promise<DiszpoMunkalapFej[]> {
-  return (await apiGet<DiszpoMunkalapFej[]>("/api/v1/diszpo-tabla")) ?? [];
+/** Az adott ÉV táblájának fülei (HYPE 2026, HYPE 2027 ...). */
+export async function getDiszpoMunkalapok(ev: number): Promise<DiszpoMunkalapFej[]> {
+  return (await apiGet<DiszpoMunkalapFej[]>(`/api/v1/diszpo-tabla?ev=${ev}`)) ?? [];
 }
 
 export async function getDiszpoMunkalap(id: number): Promise<DiszpoMunkalap | null> {

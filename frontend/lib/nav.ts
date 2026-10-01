@@ -190,6 +190,9 @@ export const navGroups: NavGroup[] = [
       // A Google Sheetből átvett HYPE 2026 táblázat - a cellák SZÍNE itt adat
       // (ki melyik nap dolgozott), lásd backend models/diszpo_tabla.py.
       { label: "HYPE 2026 tábla", href: "/diszpo-tabla", icon: "Table" },
+      // A HYPE 2027 tábla - ugyanaz a jogosultság, mint a 2026-osé (közös
+      // backend-router, lásd routes/diszpo_tabla.py PAGE).
+      { label: "HYPE 2027 tábla", href: "/diszpo-tabla/2027", icon: "Table", permissionPage: "/diszpo-tabla" },
     ],
   },
   {

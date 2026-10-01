@@ -44,6 +44,14 @@ from app.services.hu_szoveg import ekezet_nelkul
 #: A megosztott munkafüzet azonosítója (a link /d/ és /edit közti része).
 TABLAZAT_ID = "1Xflz0Ig3z7bgoN5hspeRIICHbY4P8XIcxCQ3fQPJcnA"
 
+#: A megosztott Sheet a HYPE 2026 tábla.
+SHEET_EVE = 2026
+
+#: Ezeket a munkalapokat a felhasználó kérésére TÖRÖLTÜK a rendszerből
+#: (Autók, a teljes projektkód-lista és a mappanév-generátor - lásd migrations
+#: w6r3o74m1n95) - egy esetleges újabb szinkron se hozza vissza őket.
+KIHAGYOTT_LAPOK: frozenset[str] = frozenset({"AUTÓK", "PROJECT KÓDOK", "Mappanévgenerátor"})
+
 #: A Sheet hexakódjai -> a mi elnevezett színeink. Ami nincs a listán, az
 #: nálunk szín nélkül marad: a jelentés nélküli szín csak zavarna a
 #: számolásnál (lásd models/diszpo_tabla.py).
@@ -192,7 +200,8 @@ def munkalap_atvetele(db: Session, ws, sorrend: int, vegrehajt: bool) -> dict:
     fejlec_sorok = fejlec_sorok_szama(ws, max_sor)
     ketsoros = ws.title in KETSOROS_FEJLECU
 
-    query = select(DiszpoMunkalap).where(DiszpoMunkalap.nev == ws.title)
+    # A Sheet a HYPE 2026 tábla - a 2027-es azonos nevű lapjait nem érinti.
+    query = select(DiszpoMunkalap).where(DiszpoMunkalap.nev == ws.title, DiszpoMunkalap.ev == SHEET_EVE)
     meglevo = db.scalar(query.with_for_update() if vegrehajt else query)
     regi_cellak = (
         db.scalar(select(DiszpoCella.id).where(DiszpoCella.munkalap_id == meglevo.id).limit(1)) is not None
@@ -323,7 +332,7 @@ def munkalap_atvetele(db: Session, ws, sorrend: int, vegrehajt: bool) -> dict:
         return osszegzes
 
     if meglevo is None:
-        meglevo = DiszpoMunkalap(nev=ws.title)
+        meglevo = DiszpoMunkalap(nev=ws.title, ev=SHEET_EVE)
         db.add(meglevo)
     meglevo.sorrend = sorrend
     meglevo.sor_szam = len(sorok)
@@ -363,6 +372,8 @@ def teljes_szinkron(
     eredmeny: list[dict] = []
     for sorrend, nev in enumerate(wb.sheetnames):
         if munkalapok and nev not in munkalapok:
+            continue
+        if nev in KIHAGYOTT_LAPOK:
             continue
         eredmeny.append(munkalap_atvetele(db, wb[nev], sorrend, vegrehajt))
     return eredmeny

@@ -21,6 +21,7 @@ import type { DiszpoMunkalap, DiszpoNezet } from "@/lib/api";
 import { DISZPO_SZINEK, SZIN_LEIRAS, type DiszpoSzin } from "@/lib/diszpoSzin";
 import { DiszpoOszlopValaszto, type OszlopTetel } from "@/components/DiszpoOszlopValaszto";
 import { KeresosSelect } from "@/components/KeresosSelect";
+import { selectColor } from "@/lib/selectColor";
 
 // A rács MÉRETEI. Fixek, mert a virtualizálás ebből számol: enélkül minden
 // görgetésnél meg kellene mérni a tényleges cellamagasságokat.
@@ -41,6 +42,15 @@ const RATARTAS = 6;
 //: Ennyi lépés fér a visszavonás-naplóba - egy tömeges beillesztés is EGY
 //: lépés, tehát ez bőven elég egy napi munkára.
 const UNDO_MERET = 200;
+//: A hónap-ugró sáv rövid hónapnevei („rendezett” rács).
+const HONAP_ROVID = ["jan", "febr", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
+const HETVEGE = new Set(["szombat", "vasárnap"]);
+
+/** A mai nap "YYYY-MM-DD" alakban (a sorok `datum` mezőjével összevethető). */
+function maiNap(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 /** Oszlopbetű, mint a táblázatban: 0 -> A, 25 -> Z, 26 -> AA. */
 function oszlopBetu(idx: number): string {
@@ -125,6 +135,7 @@ export function DiszpoTablaRacs({
   rejtettetLatja = false,
   emberek,
   kezdoNezet,
+  rendezett = false,
 }: {
   munkalap: DiszpoMunkalap;
   canEdit?: boolean;
@@ -141,6 +152,11 @@ export function DiszpoTablaRacs({
   /** A bejelentkezett munkatárs SZEMÉLYES nézete (saját oszlop-elrejtés,
    * szélességek) - ezzel indul a rács, és ide mentődik vissza. */
   kezdoNezet?: DiszpoNezet;
+  /** ÁTLÁTHATÓBB rács (a HYPE 2027 táblától - a felhasználó kérése):
+   * hónap-ugró sáv, színmagyarázat, a hétvégék és a mai nap kiemelése, az
+   * osztályok (oszlop-csoportok) színezett fejléce és elválasztó vonala, és
+   * a mai naphoz görgetve nyílik. Az adatot nem érinti. */
+  rendezett?: boolean;
 }) {
   const router = useRouter();
   const gorgetoRef = useRef<HTMLDivElement | null>(null);
@@ -219,6 +235,34 @@ export function DiszpoTablaRacs({
 
   const oszlopTerkep = useMemo(() => new Map(munkalap.oszlopok.map((o) => [o.idx, o])), [munkalap.oszlopok]);
   const sorTerkep = useMemo(() => new Map(munkalap.sorok.map((s) => [s.idx, s])), [munkalap.sorok]);
+
+  // ── „RENDEZETT” RÁCS segédei ──────────────────────────────────────────────
+  const [maStr] = useState(maiNap);
+  /** Azok az oszlopok, ahol ÚJ osztály (csoport) kezdődik - ott vastagabb
+   * elválasztó vonal fut, hogy egy pillantással látszódjon, hol ér véget a
+   * camera crew és hol kezdődik a gyártás. */
+  const csoportKezdet = useMemo(() => {
+    const t = new Set<number>();
+    if (!rendezett) return t;
+    let elozo: string | null = null;
+    for (let c = 0; c < munkalap.oszlop_szam; c++) {
+      const cs = oszlopTerkep.get(c)?.csoport ?? null;
+      if (cs && cs !== elozo && c > 0) t.add(c);
+      elozo = cs;
+    }
+    return t;
+  }, [rendezett, munkalap.oszlop_szam, oszlopTerkep]);
+  /** Egy sor jellege a kiemeléshez: a MAI nap, vagy HÉTVÉGE. */
+  const sorJelleg = useCallback(
+    (sor: number): "ma" | "hetvege" | null => {
+      if (!rendezett) return null;
+      const s = sorTerkep.get(sor);
+      if (!s?.datum || s.elvalaszto) return null;
+      if (s.datum === maStr) return "ma";
+      return s.nap && HETVEGE.has(s.nap.trim().toLowerCase()) ? "hetvege" : null;
+    },
+    [rendezett, sorTerkep, maStr],
+  );
 
   // Az első oszlopok BEFAGYASZTVA: 146 oszlopnál a dátum nélkül nem lehet
   // tudni, melyik sorban vagyunk. Ahol nincs dátum-oszlop, ott egy elég.
@@ -720,6 +764,57 @@ export function DiszpoTablaRacs({
     ugras(talalat.idx, kijelolt.oszlop);
   }, [munkalap.sorok, sorMagassaga, ugras, kijelolt.oszlop]);
 
+  // ── HÓNAP-UGRÓ („rendezett” rács) ─────────────────────────────────────────
+  /** A tábla hónapjai: a hónap első LÁTHATÓ sora (az előtte álló
+   * hónap-elválasztóval együtt, ha van). */
+  const honapok = useMemo(() => {
+    if (!rendezett) return [];
+    const lista: { kulcs: string; cimke: string; idx: number }[] = [];
+    const latott = new Set<string>();
+    for (const sor of [...munkalap.sorok].sort((a, b) => a.idx - b.idx)) {
+      if (!sor.datum || sor.elvalaszto || sorMagassaga[sor.idx] === 0) continue;
+      const k = sor.datum.slice(0, 7);
+      if (latott.has(k)) continue;
+      latott.add(k);
+      const elotte = sorTerkep.get(sor.idx - 1);
+      lista.push({
+        kulcs: k,
+        cimke: HONAP_ROVID[Number(k.slice(5, 7)) - 1] ?? k,
+        idx: elotte?.elvalaszto && sorMagassaga[sor.idx - 1] > 0 ? sor.idx - 1 : sor.idx,
+      });
+    }
+    return lista;
+  }, [rendezett, munkalap.sorok, sorMagassaga, sorTerkep]);
+
+  /** Görgetés úgy, hogy a sor épp a rögzített fejléc alá kerüljön. */
+  const honapra = useCallback(
+    (sor: number) => {
+      const elem = gorgetoRef.current;
+      if (!elem) return;
+      elem.scrollTop = Math.max(sorTeteje[sor] - sorTeteje[munkalap.fejlec_sorok], 0);
+      const elsoNap = munkalap.sorok.find((x) => x.idx >= sor && x.datum && !x.elvalaszto);
+      if (elsoNap) {
+        setKijelolt({ sor: elsoNap.idx, oszlop: kijelolt.oszlop });
+        setTartomany(null);
+      }
+    },
+    [sorTeteje, munkalap.fejlec_sorok, munkalap.sorok, kijelolt.oszlop],
+  );
+
+  // A „rendezett” rács a MAI naphoz görgetve nyílik (ha a tábla évében
+  // vagyunk) - nem kell minden megnyitáskor januártól legörgetni.
+  const nyitoGorgetes = useRef(false);
+  useEffect(() => {
+    if (!rendezett || nyitoGorgetes.current) return;
+    if (!munkalap.sorok.some((x) => x.datum === maStr)) return;
+    // A következő képkockában: addigra a görgető mérete is megvan.
+    const keret = requestAnimationFrame(() => {
+      nyitoGorgetes.current = true;
+      ugrasMa();
+    });
+    return () => cancelAnimationFrame(keret);
+  }, [rendezett, munkalap.sorok, maStr, ugrasMa]);
+
   // ── KERESÉS A TÁBLÁBAN ───────────────────────────────────────────────────
 
   const talalatok = useMemo(() => {
@@ -958,6 +1053,14 @@ export function DiszpoTablaRacs({
   // ── LÁTHATÓ ABLAK ────────────────────────────────────────────────────────
 
   const elsoSor = Math.max(munkalap.fejlec_sorok, sorAPontnal(gorgetes.top) - RATARTAS);
+  // A hónap-ugrón kiemelt hónap: amelyikben a fejléc alatti első látható sor jár.
+  const aktivHonap = (() => {
+    if (!rendezett) return null;
+    const felso = sorAPontnal(gorgetes.top + sorTeteje[munkalap.fejlec_sorok]);
+    let utolso: string | null = null;
+    for (const h of honapok) if (h.idx <= felso + 1) utolso = h.kulcs;
+    return utolso ?? honapok[0]?.kulcs ?? null;
+  })();
   const utolsoSor = Math.min(sorSzam, sorAPontnal(gorgetes.top + meret.magas) + RATARTAS + 1);
   const elsoOszlop = Math.max(fagyasztott, oszlopAPontnal(gorgetes.left + fagyasztottSzeles) - RATARTAS);
   const utolsoOszlop = Math.min(oszlopSzam, oszlopAPontnal(gorgetes.left + meret.szeles) + RATARTAS + 1);
@@ -1003,6 +1106,7 @@ export function DiszpoTablaRacs({
     // Az admin a "Rejtettek mutatása" mellett a GLOBÁLISAN rejtett oszlopot/
     // sort is látja, de halványítva - így látszik, hogy a többiek nem látják.
     const rejtveDeLatszik = rejtettetLatja && rejtettMutat && !!(oszlopTerkep.get(oszlop)?.rejtett || s?.rejtett);
+    const jelleg = sorJelleg(sor);
     return (
       <div
         style={{
@@ -1021,8 +1125,21 @@ export function DiszpoTablaRacs({
           // görgetéskor a mögötte (a rács tartalmában) elhaladó, színes sorok
           // átütnének rajta. Az "üresen hagyva" jelölés (feher) szándékosan
           // nem fest hátteret (lásd cellaStilus) - itt ezért külön kezeljük.
-          fagyott && (!c?.szin || uresJelolt) ? "bg-surface-2" : ""
-        } ${rejtveDeLatszik ? "opacity-50" : ""}`}
+          // A „rendezett” rácsban a mai nap és a hétvége itt is kiemelődik.
+          !c?.szin || uresJelolt
+            ? fagyott
+              ? jelleg === "ma"
+                ? "bg-bg-accent font-semibold text-text-accent"
+                : jelleg === "hetvege"
+                  ? "bg-surface-3 text-text-muted"
+                  : "bg-surface-2"
+              : jelleg === "ma"
+                ? "bg-bg-accent/40"
+                : jelleg === "hetvege"
+                  ? "bg-surface-3/50"
+                  : ""
+            : ""
+        } ${csoportKezdet.has(oszlop) ? "border-l-2 border-l-border-strong" : ""} ${rejtveDeLatszik ? "opacity-50" : ""}`}
         onPointerDown={(e) => {
           // ÉRINTŐKIJELZŐN nincs dupla katt és billentyűzet sem, amivel a
           // szerkesztés elindulna (a felhasználó jelzése: telefonról nem
@@ -1448,7 +1565,7 @@ export function DiszpoTablaRacs({
           munkanap-számlálásba (lásd backend routes/diszpo_tabla.py). CSAK az
           admin látja (a felhasználó kérése), és csak a diszpó-jellegű (két
           fejléc-soros) munkalapokon van értelme. */}
-      {canEmberKotes && canEdit && munkalap.fejlec_sorok > 1 && kijeloltOszlop && (
+      {canEmberKotes && canEdit && munkalap.fejlec_sorok > 1 && kijeloltOszlop && kijelolt.oszlop >= fagyasztott && (
         <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-1.5 text-[12.5px]">
           <span className="text-text-secondary">
             „{kijeloltOszlop.cimke ?? oszlopBetu(kijelolt.oszlop)}” oszlop munkatársa:
@@ -1473,6 +1590,53 @@ export function DiszpoTablaRacs({
               Kötés nélkül ennek az oszlopnak a napjai nem számítanak bele a munkanap-számlálásba.
             </span>
           )}
+        </div>
+      )}
+
+      {/* HÓNAP-UGRÓ + SZÍNMAGYARÁZAT („rendezett” rács): egy kattintás a
+          hónapra, és mindig látszik, melyik szín mit jelent. */}
+      {rendezett && honapok.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="mr-1 text-[12px] text-text-muted">Ugrás:</span>
+          {honapok.map((h) => (
+            <button
+              key={h.kulcs}
+              type="button"
+              onClick={() => honapra(h.idx)}
+              className={`rounded-[var(--radius)] px-2.5 py-1 text-[12px] transition-colors ${
+                h.kulcs === aktivHonap
+                  ? "bg-bg-accent font-semibold text-text-accent"
+                  : "text-text-secondary hover:bg-surface-3"
+              }`}
+            >
+              {h.cimke}
+            </button>
+          ))}
+        </div>
+      )}
+      {rendezett && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-text-muted">
+          {DISZPO_SZINEK.map((szin) => (
+            <span key={szin} className="inline-flex items-center gap-1.5" title={SZIN_LEIRAS[szin].jelentes}>
+              <span
+                aria-hidden
+                className="h-3 w-3 shrink-0 rounded-sm border border-border"
+                style={{ backgroundColor: SZIN_LEIRAS[szin].jelolt ? "transparent" : SZIN_LEIRAS[szin].hatter }}
+              />
+              <span>
+                <b className="font-medium text-text-secondary">{SZIN_LEIRAS[szin].cimke}:</b>{" "}
+                {SZIN_LEIRAS[szin].jelentes.split(" – ")[0]}
+              </span>
+            </span>
+          ))}
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-3 w-3 shrink-0 rounded-sm border border-border bg-surface-3" />
+            Hétvége
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-3 w-3 shrink-0 rounded-sm border border-border bg-bg-accent" />
+            Ma
+          </span>
         </div>
       )}
 
@@ -1608,7 +1772,7 @@ export function DiszpoTablaRacs({
               }}
             >
               {/* FEJLÉC-SOROK: fent ragadnak. */}
-              {fejlecSorok.map((r) => (
+              {fejlecSorok.map((r) => sorMagassaga[r] === 0 ? null : (
                 <div key={`f${r}`} style={{ position: "sticky", top: 0, zIndex: 3, height: 0 }}>
                   <div style={{ position: "absolute", top: sorTeteje[r], left: 0, right: 0 }}>
                     {/* Átlátszatlan aljzat a TELJES látható szélességben: a
@@ -1629,6 +1793,17 @@ export function DiszpoTablaRacs({
                       const cl = cella(r, c);
                       const fagyott = c < fagyasztott;
                       const bal = fagyott ? oszlopBal[c] + gorgetes.left : oszlopBal[c];
+                      // „Rendezett” rács: az osztály (csoport) színe a
+                      // fejlécen - egy pillantásra látszik, ki melyik osztály.
+                      const csoport = rendezett && !cl?.szin ? oszlopTerkep.get(c)?.csoport : null;
+                      const csoportSzin = csoport ? selectColor(csoport) : null;
+                      // Az OSZTÁLY-sor (két fejléc-sor esetén a felső): az
+                      // osztály neve egyben, az osztály teljes szélességén
+                      // fut végig - nem vágódik le az első oszlop szélén, és
+                      // az osztályon belül nincs köztes vonal.
+                      const osztalySor = !!csoport && munkalap.fejlec_sorok >= 2 && r === 0;
+                      const osztalyFelirat = osztalySor && !!cl?.ertek;
+                      const osztalyonBelul = osztalySor && oszlopTerkep.get(c + 1)?.csoport === csoport;
                       return (
                         <div
                           key={c}
@@ -1637,11 +1812,13 @@ export function DiszpoTablaRacs({
                             left: bal,
                             width: oszlopSzelessege[c],
                             height: sorMagassaga[r],
-                            zIndex: fagyott ? 2 : 1,
+                            zIndex: fagyott ? 2 : osztalyFelirat ? 2 : 1,
+                            ...(osztalyFelirat ? { overflow: "visible" } : {}),
                             // A fejléc-blokkban is látszódjon a cella színe: a
                             // külsős tábla felső sorai a JELMAGYARÁZAT (zöld =
                             // ..., piros = ...), szín nélkül értelmetlenek.
                             ...cellaStilus(cl?.szin),
+                            ...(csoportSzin ? { backgroundColor: csoportSzin.bg, color: csoportSzin.text } : {}),
                           }}
                           onPointerDown={(e) => {
                             // Koppintás a már kijelölt fejléc-cellára =
@@ -1660,7 +1837,11 @@ export function DiszpoTablaRacs({
                           onDoubleClick={() =>
                             canEdit && setSzerkesztes({ pont: { sor: r, oszlop: c }, ertek: cl?.ertek ?? "" })
                           }
-                          className="overflow-hidden border-b border-r border-border bg-surface-2 px-1.5 text-[11.5px] font-medium leading-[24px] text-text-primary"
+                          className={`overflow-hidden border-b border-border bg-surface-2 px-1.5 text-[11.5px] font-medium leading-[24px] text-text-primary ${
+                            osztalyonBelul ? "" : "border-r"
+                          } ${csoportKezdet.has(c) ? "border-l-2 border-l-border-strong" : ""} ${
+                            osztalySor ? "font-semibold uppercase tracking-wide" : ""
+                          }`}
                           title={cl?.ertek ?? undefined}
                         >
                           {szerkesztes?.pont.sor === r && szerkesztes?.pont.oszlop === c ? (
@@ -1682,7 +1863,9 @@ export function DiszpoTablaRacs({
                               className="h-full w-full bg-surface-1 text-[12px] text-text-primary outline-none"
                             />
                           ) : (
-                            <span className="block truncate">{cl?.ertek ?? ""}</span>
+                            <span className={osztalyFelirat ? "block whitespace-nowrap" : "block truncate"}>
+                              {cl?.ertek ?? ""}
+                            </span>
                           )}
                         </div>
                       );

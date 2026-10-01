@@ -55,10 +55,16 @@ class DiszpoMunkalap(TimestampMixin, Base):
     """Egy munkalap (fül) a táblázatból."""
 
     __tablename__ = "diszpo_munkalapok"
+    #: A fül neve ÉVENKÉNT egyedi: a HYPE 2027 táblának is van „BELSŐS”
+    #: lapja, a 2026-os mellett (lásd migrations w6r3o74m1n95).
+    __table_args__ = (UniqueConstraint("ev", "nev", name="uq_diszpo_munkalap_ev_nev"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    #: Melyik ÉV táblájához tartozik (HYPE 2026, HYPE 2027 ...) - a felület
+    #: évenként külön oldalon mutatja a füleket.
+    ev: Mapped[int] = mapped_column(Integer, nullable=False, default=2026, server_default="2026", index=True)
     #: A fül neve, ahogy a Sheetben áll ("BELSŐS DISZPÓSTÁBLA").
-    nev: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    nev: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     #: Balról jobbra a fülek sorrendje - a felület ebben mutatja őket.
     sorrend: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     #: Hány sor és oszlop tartozik hozzá (a tartalom határa, nem a Sheet

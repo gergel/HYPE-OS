@@ -58,6 +58,8 @@ def _csak_admin_rejthet(user: Employee) -> None:
 
 class MunkalapFej(BaseModel):
     id: int
+    #: Melyik év táblájához tartozik (HYPE 2026, HYPE 2027).
+    ev: int = 2026
     nev: str
     sorrend: int
     sor_szam: int
@@ -100,12 +102,17 @@ class MunkalapOut(MunkalapFej):
 
 
 @router.get("", response_model=list[MunkalapFej])
-def list_munkalapok(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
-    """A fülek - a rács tartalma nélkül."""
-    return [
-        MunkalapFej.model_validate(m)
-        for m in db.scalars(select(DiszpoMunkalap).order_by(DiszpoMunkalap.sorrend, DiszpoMunkalap.id)).all()
-    ]
+def list_munkalapok(
+    ev: int | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """A fülek - a rács tartalma nélkül. Az `ev` megadásával csak az adott év
+    táblájáé (a HYPE 2026 és a HYPE 2027 oldal külön mutatja őket)."""
+    query = select(DiszpoMunkalap).order_by(DiszpoMunkalap.sorrend, DiszpoMunkalap.id)
+    if ev is not None:
+        query = query.where(DiszpoMunkalap.ev == ev)
+    return [MunkalapFej.model_validate(m) for m in db.scalars(query).all()]
 
 
 def _munkalap_vagy_404(db: Session, munkalap_id: int, *, lock: bool = False) -> DiszpoMunkalap:
