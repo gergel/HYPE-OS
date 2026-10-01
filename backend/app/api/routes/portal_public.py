@@ -112,6 +112,27 @@ def _rejtett_mappak_rekurzivan(portal: Portal) -> set[int]:
     return rejtett
 
 
+def _mappa_reszfa(portal: Portal, gyoker) -> list:
+    """A mappa és az összes (nem rejtett) leszármazott mappája. A rejtett
+    almappa a teljes részfájával együtt kimarad; a gyökér maga mindig benne
+    van (a megosztó linkje célzottan kiadott link)."""
+    gyerekek: dict[int | None, list] = {}
+    for f in portal.folders:
+        gyerekek.setdefault(f.parent_folder_id, []).append(f)
+    ki = [gyoker]
+    sor = [gyoker.id]
+    latott = {gyoker.id}
+    while sor:
+        szulo = sor.pop()
+        for gy in gyerekek.get(szulo, []):
+            if gy.id in latott or gy.rejtett:
+                continue
+            latott.add(gy.id)
+            ki.append(gy)
+            sor.append(gy.id)
+    return ki
+
+
 def _serialize(portal: Portal, belsos: bool = False) -> PublicPortal:
     # A REJTETT (csak belső ellenőrzésre feltöltött) videó és a REJTETT mappa
     # (a tartalmával és az almappáival együtt) nem megy ki az ügyfélnek (a
@@ -672,9 +693,15 @@ def megosztas(token: str, db: Session = Depends(get_db)):
     folder = db.scalar(select(PortalFolder).where(PortalFolder.share_token == token))
     if folder is not None:
         portal = folder.portal
+        # A mappa TELJES RÉSZFÁJA megy ki (a felhasználó kérése: a kimásolt
+        # mappa linkjén az almappák is látsszanak) - a rejtett almappa a saját
+        # részfájával együtt kimarad, ahogy a portálon is. A megosztott mappa
+        # maga akkor is látszik, ha rejtett (célzottan kiadott link).
+        mappak = _mappa_reszfa(portal, folder)
+        mappa_idk = {f.id for f in mappak}
         # A rejtett videó ÉS kép a mappa-megosztásból is kimarad (lásd _serialize).
-        ready = [v for v in folder.videos if v.status == "ready" and not v.rejtett]
-        kepek = [i for i in folder.images if not i.rejtett]
+        ready = [v for v in portal.videos if v.folder_id in mappa_idk and v.status == "ready" and not v.rejtett]
+        kepek = [i for i in portal.images if i.folder_id in mappa_idk and not i.rejtett]
         project = PublicPortal(
             slug=portal.slug,
             title=f"{resolve_title(portal)} – {folder.name}" if folder.name else resolve_title(portal),
@@ -686,7 +713,15 @@ def megosztas(token: str, db: Session = Depends(get_db)):
             expires_at=portal.expires_at,
             payment_mode="contact",
             videos=[PortalVideoOut.model_validate(v) for v in ready],
-            folders=[PortalFolderOut.model_validate(folder)],
+            # A megosztott mappa a link nézetében FŐSZINTŰ (akkor is, ha a
+            # portálon egy másik mappán belül van) - különben a nézet nem
+            # találná a fa gyökerét, és üres oldalt mutatna.
+            folders=[
+                PortalFolderOut.model_validate(f).model_copy(update={"parent_folder_id": None})
+                if f.id == folder.id
+                else PortalFolderOut.model_validate(f)
+                for f in mappak
+            ],
             images=[PortalImageOut.model_validate(i) for i in kepek],
         )
         return {"tipus": "mappa", "project": project.model_dump()}
