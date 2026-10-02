@@ -702,6 +702,15 @@ def megosztas(token: str, db: Session = Depends(get_db)):
         # A rejtett videó ÉS kép a mappa-megosztásból is kimarad (lásd _serialize).
         ready = [v for v in portal.videos if v.folder_id in mappa_idk and v.status == "ready" and not v.rejtett]
         kepek = [i for i in portal.images if i.folder_id in mappa_idk and not i.rejtett]
+        # A link nézetében a megosztott mappa „KICSOMAGOLVA” jelenik meg (a
+        # felhasználó kérése, 2026-10): aki megnyitja, nem magát a mappát
+        # látja, hanem rögtön a TARTALMÁT - a mappa saját videói és képei
+        # főszintű (mappa nélküli) elemek, a közvetlen almappái főszintű
+        # mappák; a mélyebb szintek a helyükön maradnak. A mappa neve a címben
+        # látszik.
+        def _kicsomagolt(elem, mezo: str):
+            return elem.model_copy(update={mezo: None}) if getattr(elem, mezo) == folder.id else elem
+
         project = PublicPortal(
             slug=portal.slug,
             title=f"{resolve_title(portal)} – {folder.name}" if folder.name else resolve_title(portal),
@@ -712,17 +721,13 @@ def megosztas(token: str, db: Session = Depends(get_db)):
             project_date=resolve_project_date(portal),
             expires_at=portal.expires_at,
             payment_mode="contact",
-            videos=[PortalVideoOut.model_validate(v) for v in ready],
-            # A megosztott mappa a link nézetében FŐSZINTŰ (akkor is, ha a
-            # portálon egy másik mappán belül van) - különben a nézet nem
-            # találná a fa gyökerét, és üres oldalt mutatna.
+            videos=[_kicsomagolt(PortalVideoOut.model_validate(v), "folder_id") for v in ready],
             folders=[
-                PortalFolderOut.model_validate(f).model_copy(update={"parent_folder_id": None})
-                if f.id == folder.id
-                else PortalFolderOut.model_validate(f)
+                _kicsomagolt(PortalFolderOut.model_validate(f), "parent_folder_id")
                 for f in mappak
+                if f.id != folder.id
             ],
-            images=[PortalImageOut.model_validate(i) for i in kepek],
+            images=[_kicsomagolt(PortalImageOut.model_validate(i), "folder_id") for i in kepek],
         )
         return {"tipus": "mappa", "project": project.model_dump()}
 

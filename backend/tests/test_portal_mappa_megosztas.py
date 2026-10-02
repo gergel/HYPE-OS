@@ -64,13 +64,19 @@ def test_megosztott_mappa_almappai_es_tartalmuk_is_latszanak(db):
     assert d["tipus"] == "mappa"
     pr = d["project"]
     mappak = {f["name"]: f for f in pr["folders"]}
-    assert set(mappak) == {"Kimásolt", "Al", "Mély"}
-    # A megosztott mappa a link nézetében főszintű (a nézet innen építi a fát).
-    assert mappak["Kimásolt"]["parent_folder_id"] is None
-    assert mappak["Al"]["parent_folder_id"] == m["Kimásolt"].id
+    # A megosztott mappát magát NEM látja, aki megnyitja - csak a tartalmát
+    # (a felhasználó kérése, 2026-10): a közvetlen almappák főszintűek ...
+    assert set(mappak) == {"Al", "Mély"}
+    assert mappak["Al"]["parent_folder_id"] is None
     assert mappak["Mély"]["parent_folder_id"] == m["Al"].id
-    assert {v["title"] for v in pr["videos"]} == {"v-Kimásolt", "v-Al", "v-Mély"}
-    assert {i["title"] for i in pr["images"]} == {"k-Kimásolt", "k-Al", "k-Mély"}
+    # ... a mappa saját videói / képei pedig mappa nélküli, főszintű elemek.
+    videok = {v["title"]: v for v in pr["videos"]}
+    kepek = {i["title"]: i for i in pr["images"]}
+    assert set(videok) == {"v-Kimásolt", "v-Al", "v-Mély"}
+    assert set(kepek) == {"k-Kimásolt", "k-Al", "k-Mély"}
+    assert videok["v-Kimásolt"]["folder_id"] is None and kepek["k-Kimásolt"]["folder_id"] is None
+    assert videok["v-Al"]["folder_id"] == m["Al"].id
+    assert "Kimásolt" in pr["title"]
 
 
 def test_rejtett_megosztott_mappa_sajat_linkje_el(db):
@@ -78,7 +84,8 @@ def test_rejtett_megosztott_mappa_sajat_linkje_el(db):
     m["Kimásolt"].rejtett = True
     db.commit()
     pr = megosztas("mappa-token", db)["project"]
-    assert {f["name"] for f in pr["folders"]} == {"Kimásolt", "Al", "Mély"}
+    assert {f["name"] for f in pr["folders"]} == {"Al", "Mély"}
+    assert "v-Kimásolt" in {v["title"] for v in pr["videos"]}
 
 
 def test_letoltes_engedi_az_almappa_fajljait(db):
