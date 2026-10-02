@@ -35,7 +35,7 @@ from app.core.config import settings
 from app.models.dispo_responsible import DiszpoMasolatCimzett
 from app.models.employee import Employee
 from app.models.project import Project
-from app.services import attachments, document_storage, projektkod_kotes
+from app.services import attachments, diszpo_sablon, document_storage, projektkod_kotes
 from app.services.gdoc_template import gdoc_fill_and_export_pdf, pdf_feltoltes
 from app.services.google_email import HYPE_ALAIRAS_HTML, send_message
 
@@ -306,6 +306,8 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
     if not to_list:
         raise ValueError("Nincs kitöltve 'Résztvevők email' - nincs kinek küldeni az előzetes diszpót.")
 
+    # A régebbi projekteknél is a stáb létszámához igazodjon a catering-mondat.
+    diszpo_sablon.igazitsd_a_cateringet(project)
     html = (
         _PRE_DISPO_HTML.format(
             helyszin=project.helyszin or "",
@@ -407,6 +409,8 @@ def send_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     if not to_list:
         raise ValueError("Nincs kitöltve 'Résztvevők email' - nincs kinek küldeni a diszpót.")
 
+    # A régebbi projekteknél is a stáb létszámához igazodjon a catering-mondat.
+    diszpo_sablon.igazitsd_a_cateringet(project)
     doc_link = None
     pdf_bytes = None
     if settings.gdoc_dispo_template_id:

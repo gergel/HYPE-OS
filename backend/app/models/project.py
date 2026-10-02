@@ -1,7 +1,8 @@
 from datetime import date, datetime, time
 
 from sqlalchemy import JSON, Boolean, Column, Date, DateTime, ForeignKey, Numeric, String, Table, Text, Time
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import event
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
@@ -410,3 +411,18 @@ class Project(TimestampMixin, Base):
             for e in self.alvallalkozo_kiadasok
             if e.employee is not None and e.alvallalkozoi_papirt_igenyel
         ]
+
+
+@event.listens_for(Session, "before_flush")
+def _catering_a_stabhoz(session: Session, _flush_context, _instances) -> None:
+    """Mentéskor a diszpó-szöveg catering-mondata a stáb létszámához igazodik
+    (egy ember: „készülj magadnak”, több: „készüljetek magatoknak” - a
+    felhasználó kérése, lásd services/diszpo_sablon). Minden úton lefut, ahol
+    a stáb vagy a szöveg változik (felület, Lara, munkafelajánlás, másolás)."""
+    from app.services.diszpo_sablon import igazitsd_a_cateringet
+
+    with session.no_autoflush:
+        for obj in list(session.new) + list(session.dirty):
+            if isinstance(obj, Project):
+                igazitsd_a_cateringet(obj)
+

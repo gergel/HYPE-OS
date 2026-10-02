@@ -57,3 +57,37 @@ def toltsd_ki_a_sablonokat_objektumon(project: Any) -> None:
     for mezo, sablon in SABLONOK.items():
         if not (getattr(project, mezo, None) or "").strip():
             setattr(project, mezo, sablon)
+
+
+# ── A CATERING-MONDAT SZÁMA ─────────────────────────────────────────────────
+# A felhasználó kérése: a sablon catering-mondata a diszpós stáb létszámához
+# igazodjon - egy embernek egyes számban („készülj magadnak”), többnek
+# többes számban („készüljetek magatoknak”). Csak ezt a két pontos
+# szófordulatot cseréljük, a szöveg többi (akár kézzel átírt) részéhez nem
+# nyúlunk; ha valaki a mondatot átfogalmazta, nincs mit cserélni.
+CATERING_TOBBES = "készüljetek magatoknak kérlek"
+CATERING_EGYES = "készülj magadnak kérlek"
+
+
+def catering_a_letszamhoz(szoveg: str, letszam: int) -> str:
+    """A catering-mondat egyes/többes száma a létszám szerint. Stáb nélkül
+    (0 fő) nem változtat."""
+    if letszam == 1:
+        return szoveg.replace(CATERING_TOBBES, CATERING_EGYES)
+    if letszam >= 2:
+        return szoveg.replace(CATERING_EGYES, CATERING_TOBBES)
+    return szoveg
+
+
+def igazitsd_a_cateringet(project: Any) -> bool:
+    """A projekt diszpó-szövegében a catering-mondat igazítása a diszpós stáb
+    (project.crew - ők kapják a diszpót) létszámához. Igaz, ha változott."""
+    szoveg = getattr(project, "diszpo_szovege", None)
+    if not szoveg:
+        return False
+    uj = catering_a_letszamhoz(szoveg, len(getattr(project, "crew", None) or []))
+    if uj == szoveg:
+        return False
+    project.diszpo_szovege = uj
+    return True
+
