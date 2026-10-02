@@ -9,7 +9,11 @@ kapcsolat közöttük. A gráf KIZÁRÓLAG valós, rögzített tudásból épül
 * a szabályok (partner / cél / projektkód feltételekkel),
 * az emberi javítások,
 * a TAPASZTALAT: a teljes adattörténet ismétlődő tényei és a Geminivel
-  javasolt, de az adaton ellenőrzött állítások (lásd admin_agent/tapasztalas.py).
+  javasolt, de az adaton ellenőrzött állítások (lásd admin_agent/tapasztalas.py),
+* a FORGATÁS-ISMERET: feladat-típusok (konferencia, esküvő …), az ilyen
+  forgatások szokásos eszköz-szerepei, a jellemzőhöz kötött eszközök (drón →
+  drón) és hogy melyik megrendelőnek milyen feladatú forgatásai voltak (lásd
+  admin_agent/forgatas_ismeret.py).
 
 Egy kapcsolat BIZONYOSSÁGA a mögötte álló bizonyítékok súlyából jön: a
 jóváhagyott példa és az élesített szabály erős, a még jóvá nem hagyott jelölt
@@ -35,7 +39,7 @@ from app.admin_agent.visszajatszas import CEL_CIMKE
 from app.models.admin_agent import AdminTask, Correction, MemoryChunk, PlaybookRule, SourceEvent
 from app.models.project_code import ProjectCode
 
-TEMAK = ("szamla", "tig", "szerzodes", "email", "asszisztens", "projekt")
+TEMAK = ("szamla", "tig", "szerzodes", "email", "asszisztens", "projekt", "forgatas")
 TEMA_CIMKE = {
     "szamla": "Számlák",
     "tig": "TIG-ek",
@@ -43,6 +47,7 @@ TEMA_CIMKE = {
     "email": "E-mailek",
     "asszisztens": "AI asszisztens",
     "projekt": "Projektek, rendszer",
+    "forgatas": "Forgatások, technika",
 }
 #: A megfigyelő táblái → témakör. A bevétel (megrendelői fizetés) és az
 #: utalás-felvezetés pénzügyi tanulság, ezért a Számlák témához tartozik; a
@@ -76,6 +81,9 @@ REGI_SZORZO = 0.4
 S_TAPASZTALAT = 0.35
 #: Az adaton ellenőrzött állítás igazoló esetenként (erősebb: próbára tett tudás).
 S_IGAZOLT_ESET = 0.5
+#: Forgatás-ismeret: forgatásonként ennyi (10 ilyen forgatás ≈ 0,39 bizonyosság,
+#: 40 ≈ 0,86) - lásd admin_agent/forgatas_ismeret.halo_pillanatkep.
+S_FORGATAS = 0.1
 
 MAX_PARTNER = 320
 MAX_KOD = 220
@@ -401,7 +409,75 @@ def tudashalo(db: Session) -> dict:
             e.el(sid, f"kod:{kod_id}", suly, r.created_at, fajta)
 
     _tapasztalat(db, e, kodok)
+    _forgatas(db, e)
     return _kimenet(db, e)
+
+
+def _ido(s: str | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(s) if s else None
+    except ValueError:
+        return None
+
+
+def _forgatas(db: Session, e: _Epito) -> None:
+    """6) Forgatás-ismeret (a háttér-tanulás pillanatképéből): téma ↔
+    feladat-típus, feladat-típus ↔ szokásos eszköz-szerep, jellemző ↔ hozzá
+    kötött eszköz-szerep, megrendelő ↔ feladat-típus. A súly a mögöttük álló
+    forgatások száma. A Tudástárban elvetett feladat-tudás nem jelenik meg."""
+    from app.admin_agent.forgatas_ismeret import HALO_AZONOSITO, HALO_FORRAS
+
+    se = db.scalar(select(SourceEvent).where(SourceEvent.forras == HALO_FORRAS, SourceEvent.forras_azonosito == HALO_AZONOSITO))
+    if se is None or not se.metaadat:
+        return
+    m = se.metaadat
+    elso = m.get("elso") or {}
+    alap_ido = se.created_at
+    elvetett = {
+        x.forras for x in db.scalars(
+            select(MemoryChunk).where(MemoryChunk.forras.like("diszpo:feladat:%"), MemoryChunk.visszavont.is_(True))
+        ).all()
+    }
+    tema_id = "tema:forgatas"
+    for t in m.get("tipusok") or []:
+        if f"diszpo:feladat:{t['tipus']}" in elvetett:
+            continue
+        fid = f"feladat:{t['tipus']}"
+        fp = e.pont(fid, "feladat", t["cimke"], "forgatas")
+        if len(fp.peldak) < MAX_PELDA:
+            fp.peldak.append(f"{t.get('forgatasok')} korábbi forgatás, ebből {t.get('technikas')} ismert technikával.")
+        e.el(tema_id, fid, S_FORGATAS * (t.get("forgatasok") or 0), _ido(elso.get(fid)) or alap_ido, "tapasztalat")
+        for x in t.get("szerepek") or []:
+            sid = f"szerep:{x['csoport']}"
+            e.pont(sid, "szerep", x["szerep"], "forgatas")
+            e.el(fid, sid, S_FORGATAS * (x.get("proj") or 0),
+                 _ido(elso.get(f"{fid}|{x['csoport']}")) or alap_ido, "tapasztalat")
+        if len(fp.peldak) < MAX_PELDA and t.get("szerepek"):
+            fp.peldak.append("Szokásos technika: " + "; ".join(
+                f"{x['szerep']} {x['proj']}/{x['n']}" for x in t["szerepek"][:5]))
+    if "diszpo:feladat:jellemzok" not in elvetett:
+        for x in m.get("jellemzok") or []:
+            jid = f"jellemzo:{x['jellemzo']}"
+            jp = e.pont(jid, "feladat", x["cimke"], "forgatas")
+            sid = f"szerep:{x['csoport']}"
+            e.pont(sid, "szerep", x["szerep"], "forgatas")
+            t = _ido(elso.get(f"{jid}|{x['csoport']}")) or alap_ido
+            e.el(tema_id, jid, S_FORGATAS * (x.get("n") or 0), t, "tapasztalat")
+            e.el(jid, sid, S_FORGATAS * (x.get("proj") or 0), t, "tapasztalat")
+            if len(jp.peldak) < MAX_PELDA:
+                jp.peldak.append(f"Ahol {x['cimke'].lower()} volt, ott {x['proj']}/{x['n']} forgatáson {x['szerep']} "
+                                 f"(máshol {round(100 * (x.get('alap_arany') or 0))}%).")
+    for x in m.get("partnerek") or []:
+        fid = f"feladat:{x['tipus']}"
+        if fid not in e.pontok:
+            continue
+        pk = partner_kulcs(x["partner"])
+        if len(pk) < 3:
+            continue
+        pid = f"partner:{pk}"
+        suly = S_FORGATAS * (x.get("db") or 0)
+        e.pont(pid, "partner", x["partner"]).tema_suly["forgatas"] += suly
+        e.el(pid, fid, suly, _ido(elso.get(f"partner:{x['partner']}|{x['tipus']}")) or alap_ido, "tapasztalat")
 
 
 def _tapasztalat(db: Session, e: _Epito, kodok: dict[int, str]) -> None:
@@ -467,7 +543,7 @@ def _kimenet(db: Session, e: _Epito) -> dict:
         ids = [p.id for p in e.pontok.values() if p.fajta == fajta]
         return set(sorted(ids, key=lambda i: fok[i], reverse=True)[:n])
 
-    marad = {p.id for p in e.pontok.values() if p.fajta in ("core", "tema", "cel", "szabaly")}
+    marad = {p.id for p in e.pontok.values() if p.fajta in ("core", "tema", "cel", "szabaly", "feladat", "szerep")}
     marad |= legerosebb("partner", MAX_PARTNER) | legerosebb("kod", MAX_KOD)
 
     elek = []

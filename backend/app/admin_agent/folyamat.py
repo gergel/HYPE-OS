@@ -44,6 +44,7 @@ FORRASOK: dict[str, str] = {
     "asszisztens": "AI asszisztens figyelése",
     "rendszer": "Rendszer-figyelés",
     "tapasztalas": "Tapasztalás",
+    "forgatas_tanulas": "Forgatás-ismeret (háttér-tanulás)",
     "self_check": "Önellenőrzés",
     "nightly_distill": "Háttér-tanuló (javításokból)",
     "beagyazas": "Jelentés szerinti kereshetőség (beágyazás)",
@@ -106,7 +107,16 @@ def _naplo_sorok(db: Session) -> dict[str, dict]:
 
 def _kapcsolok(db: Session) -> dict[str, tuple[bool, str | None]]:
     """forrás -> (fut-e, ha nem: miért)."""
-    from app.admin_agent import asszisztens, embedding, levelezes, observer, rendszer, tapasztalas, visszacsatolas
+    from app.admin_agent import (
+        asszisztens,
+        embedding,
+        forgatas_ismeret,
+        levelezes,
+        observer,
+        rendszer,
+        tapasztalas,
+        visszacsatolas,
+    )
     from app.admin_agent.settings_service import get_settings
 
     s = get_settings(db)
@@ -122,6 +132,8 @@ def _kapcsolok(db: Session) -> dict[str, tuple[bool, str | None]]:
         "beagyazas": (embedding.bekapcsolva(db), "A jelentés szerinti keresés ki van kapcsolva."),
         "visszacsatolas": (visszacsatolas.bekapcsolva(db) or visszacsatolas.auto_elemzes_be(db),
                            "A gyors visszacsatolás és az automatikus számla-elemzés ki van kapcsolva (alapállás)."),
+        "forgatas_tanulas": (forgatas_ismeret.hatter_bekapcsolva(db),
+                             "A forgatás-ismeret háttér-tanulása ki van kapcsolva (Beállítások)."),
         "weekly_eval": (True, None),
         "napi_osszesito": (True, None),
     }
@@ -131,7 +143,7 @@ def _kapcsolok(db: Session) -> dict[str, tuple[bool, str | None]]:
 def _jogosultsag_hiany(forras: str) -> str | None:
     from app.admin_agent.integrations import BEALLITAS_SZUKSEGES, integracio_allapotok
 
-    igeny = {"levelezes": "gmail", "beagyazas": "modell", "tapasztalas": None}.get(forras)
+    igeny = {"levelezes": "gmail", "beagyazas": "modell", "tapasztalas": None, "forgatas_tanulas": "modell"}.get(forras)
     if not igeny:
         return None
     for i in integracio_allapotok():

@@ -30,8 +30,12 @@ const TEMA_SZIN: Record<string, string> = {
   // 6. szín: minden ellenőrzés PASS; a kontraszt WARN-t a feliratok + a
   // jelmagyarázat kezelik (a témát sosem csak a szín jelöli).
   projekt: "#5d10f8",
+  // 7. szín (forgatás-ismeret): a 7 együtt is minden ellenőrzésen PASS (CVD
+  // ΔE 9,5, normál látás ΔE 16,3); a kontraszt WARN-t (2,97) a feliratok, a
+  // jelmagyarázat és a saját alakok (⬢ ▼) kezelik.
+  forgatas: "#b4065f",
 };
-const TEMA_SORREND = ["szamla", "tig", "szerzodes", "email", "asszisztens", "projekt"] as const;
+const TEMA_SORREND = ["szamla", "tig", "szerzodes", "email", "asszisztens", "projekt", "forgatas"] as const;
 const TEMA_CIMKE: Record<string, string> = {
   szamla: "Számlák",
   tig: "TIG-ek",
@@ -39,6 +43,7 @@ const TEMA_CIMKE: Record<string, string> = {
   email: "E-mailek",
   asszisztens: "AI asszisztens",
   projekt: "Projektek, rendszer",
+  forgatas: "Forgatások, technika",
 };
 const FAJTA_CIMKE: Record<string, string> = {
   core: "Mag",
@@ -47,6 +52,8 @@ const FAJTA_CIMKE: Record<string, string> = {
   kod: "Projektkód",
   cel: "Számla-cél",
   szabaly: "Szabály",
+  feladat: "Feladat / jellemző",
+  szerep: "Eszköz-szerep",
 };
 /** A projektkód témafüggetlen: semleges tinta (formája — négyzet — azonosítja). */
 const SEMLEGES = "#c9d3de";
@@ -106,7 +113,7 @@ type Szektorok = Record<string, { kozep: number; szel: number }>;
 function szektorok(pontok: TudashaloPont[]): Szektorok {
   const db: Record<string, number> = {};
   for (const p of pontok)
-    if (p.tema && (p.fajta === "partner" || p.fajta === "szabaly" || p.fajta === "cel")) db[p.tema] = (db[p.tema] ?? 0) + 1;
+    if (p.tema && ["partner", "szabaly", "cel", "feladat", "szerep"].includes(p.fajta)) db[p.tema] = (db[p.tema] ?? 0) + 1;
   const suly = TEMA_SORREND.map((t) => (db[t] ?? 0) + 3);
   const osszes = suly.reduce((a, b) => a + b, 0);
   const ki: Szektorok = {};
@@ -146,6 +153,12 @@ function elrendez(pontok: TudashaloPont[], elek: TudashaloEl[], sz: Szektorok): 
     } else if (p.fajta === "kod") {
       r0 = 0.86 + (h - 0.5) * 0.08;
       szog = h * Math.PI * 2;
+    } else if (p.fajta === "feladat") {
+      r0 = 0.42;
+      szog += (h - 0.5) * 0.6;
+    } else if (p.fajta === "szerep") {
+      r0 = 0.62;
+      szog += (h - 0.5) * 0.9;
     }
     return { ...p, szin, tMs, r0, x: Math.cos(szog) * r0, y: Math.sin(szog) * r0, gx: 0, gy: 0, gz: 0 };
   });
@@ -155,6 +168,8 @@ function elrendez(pontok: TudashaloPont[], elek: TudashaloEl[], sz: Szektorok): 
     ["partner", 0, 0.045],
     ["szabaly", 0.36, 0.03],
     ["cel", 0.42, 0.03],
+    ["feladat", 0.42, 0.03],
+    ["szerep", 0.62, 0.04],
   ] as const) {
     const csoport = new Map<string, Pont[]>();
     for (const p of kimenet) if (p.fajta === fajta) csoport.set(p.tema ?? "", [...(csoport.get(p.tema ?? "") ?? []), p]);
@@ -253,8 +268,8 @@ function elrendez3d(kimenet: Pont[], elek: TudashaloEl[]): void {
   for (const p of kimenet) {
     if (p.fajta === "core") helyez(p, [0, 0, 1], 0);
     else if (p.fajta === "tema") helyez(p, temaIrany(p.tema), 0.36);
-    else if (p.fajta === "partner" || p.fajta === "szabaly" || p.fajta === "cel") {
-      const k = `${p.tema ?? "szamla"}|${p.fajta === "partner" ? "p" : "b"}`;
+    else if (["partner", "szabaly", "cel", "feladat", "szerep"].includes(p.fajta)) {
+      const k = `${p.tema ?? "szamla"}|${p.fajta === "partner" || p.fajta === "szerep" ? "p" : "b"}`;
       csoport.set(k, [...(csoport.get(k) ?? []), p]);
     }
   }
@@ -274,7 +289,14 @@ function elrendez3d(kimenet: Pont[], elek: TudashaloEl[]): void {
         (j) => d[j] * Math.cos(rho) + (u[j] * Math.cos(phi) + v[j] * Math.sin(phi)) * Math.sin(rho),
       ) as [number, number, number];
       const erosseg = maxSuly[p.fajta] ? Math.sqrt(p.suly / maxSuly[p.fajta]) : 0;
-      const r = p.fajta === "partner" ? 0.9 - 0.18 * erosseg + (hash(p.id) - 0.5) * 0.05 : p.fajta === "cel" ? 0.58 : 0.54;
+      const r =
+        p.fajta === "partner"
+          ? 0.9 - 0.18 * erosseg + (hash(p.id) - 0.5) * 0.05
+          : p.fajta === "szerep"
+            ? 0.78 + (hash(p.id) - 0.5) * 0.05
+            : p.fajta === "cel" || p.fajta === "feladat"
+              ? 0.58
+              : 0.54;
       helyez(p, irany, r);
     });
   }
@@ -583,6 +605,18 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
         ctx.moveTo(x, y - r * 1.2);
         ctx.lineTo(x + r * 1.05, y + r * 0.7);
         ctx.lineTo(x - r * 1.05, y + r * 0.7);
+        ctx.closePath();
+      } else if (p.fajta === "feladat") {
+        for (let k = 0; k < 6; k++) {
+          const sz = (Math.PI / 3) * k - Math.PI / 2;
+          if (k === 0) ctx.moveTo(x + Math.cos(sz) * r * 1.2, y + Math.sin(sz) * r * 1.2);
+          else ctx.lineTo(x + Math.cos(sz) * r * 1.2, y + Math.sin(sz) * r * 1.2);
+        }
+        ctx.closePath();
+      } else if (p.fajta === "szerep") {
+        ctx.moveTo(x, y + r * 1.2);
+        ctx.lineTo(x + r * 1.05, y - r * 0.7);
+        ctx.lineTo(x - r * 1.05, y - r * 0.7);
         ctx.closePath();
       } else if (p.fajta === "szabaly") {
         ctx.moveTo(x, y - r * 1.25);
@@ -1048,7 +1082,7 @@ export function Tudashalo({ adat }: { adat: TudashaloAdat }) {
           );
         })}
         <span className="mx-1 hidden h-5 w-px bg-border sm:inline-block" />
-        <span className="text-[11.5px] text-text-muted">● partner · ■ projektkód · ▲ számla-cél · ◆ szabály · ‒ ‒ jelölt</span>
+        <span className="text-[11.5px] text-text-muted">● partner · ■ projektkód · ▲ számla-cél · ◆ szabály · ⬢ feladat · ▼ eszköz-szerep · ‒ ‒ jelölt</span>
         <span className="flex-1" />
         <button
           type="button"

@@ -15,7 +15,18 @@ type Sor = FelismertFeladat & {
   technika_forras: string | null;
 };
 
+type Hatter = {
+  bekapcsolva: boolean;
+  modell: boolean;
+  utolso_siker: string | null;
+  utolso_hiba: { ido: string; hiba: string } | null;
+  tanulhato: number;
+  kesz: number;
+  hatralevo: number;
+};
+
 type Attekintes = {
+  hatter: Hatter;
   forgatasok: number;
   technikas: number;
   tech_forrasok: Record<string, number>;
@@ -47,6 +58,41 @@ const TECH_FORRAS: Record<string, string> = {
   technika_lista: "régi technika lista",
   "foglalas+lista": "foglalás + technika lista",
 };
+
+function idopont(iso: string | null): string {
+  if (!iso) return "még nem futott";
+  return new Date(iso).toLocaleString("hu-HU", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/** A háttér-tanulás állapota: Lara magától, 10 percenként olvassa végig a
+ * korábbi forgatásokat, amíg mind kész - itt csak követni kell. */
+function HatterSav({ h }: { h: Hatter }) {
+  const arany = h.tanulhato ? h.kesz / h.tanulhato : 1;
+  const allapot = !h.bekapcsolva
+    ? "Kikapcsolva (Beállítások) - most csak a kulcsszavas felismerés működik."
+    : !h.modell
+      ? "Nincs beállítva a modell-kulcs - most csak a kulcsszavas felismerés működik."
+      : h.hatralevo === 0
+        ? "Minden forgatást végigolvastam; az újakat és a megváltozottakat 10 percen belül megtanulom."
+        : `A háttérben tanulok: 10 percenként 50 forgatás, még kb. ${Math.ceil(h.hatralevo / 50) * 10} perc.`;
+  return (
+    <div className="rounded-[var(--radius)] border border-border px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="font-medium text-text-primary">Háttér-tanulás</p>
+        <p className="tabular-nums text-text-secondary">
+          {h.kesz} / {h.tanulhato} forgatás végigolvasva ({Math.round(arany * 100)}%)
+        </p>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-3" role="progressbar" aria-valuenow={h.kesz} aria-valuemax={h.tanulhato}>
+        <div className="h-full rounded-full bg-bg-accent" style={{ width: `${Math.round(arany * 100)}%` }} />
+      </div>
+      <p className="mt-1.5 text-[12px] text-text-muted">
+        {allapot} Utolsó futás: {idopont(h.utolso_siker)}.
+        {h.utolso_hiba && (!h.utolso_siker || h.utolso_hiba.ido > h.utolso_siker) ? ` Utolsó hiba: ${h.utolso_hiba.hiba}` : ""}
+      </p>
+    </div>
+  );
+}
 
 async function lekeres(tipus: string, q: string): Promise<Attekintes | string> {
   const p = new URLSearchParams();
@@ -205,8 +251,8 @@ export function LaraForgatasIsmeret({ canEdit, kezdoForgatas }: { canEdit: boole
           Minden forgatásnál felismeri, mi volt pontosan a feladat (konferencia, esküvő, interjú, élő közvetítés …), milyen
           kimenetre (aftermovie, social, teljes felvétel) és milyen körülmények között (drón, kültér, sötét helyszín, több
           kamera). Megnézi, mi ment ki rá ténylegesen (eszközkivitel, foglalás, régi technika lista), és ebből tanulja meg,
-          hogy az ilyen feladatokhoz milyen technika és milyen brief kell. A felismerés kulcsszó alapú; az AI
-          visszamenőleg pontosíthatja, a te javításod a legerősebb.
+          hogy az ilyen feladatokhoz milyen technika és milyen brief kell. Az AI a háttérben, magától végigolvassa az
+          összes forgatást; a megszerzett tudás a Tudástárban és a Tudáshálóban is látszik. A te javításod a legerősebb.
         </p>
         {adat && (
           <p className="mt-1 text-[12px] text-text-muted">
@@ -219,6 +265,8 @@ export function LaraForgatasIsmeret({ canEdit, kezdoForgatas }: { canEdit: boole
           </p>
         )}
       </div>
+
+      {adat && <HatterSav h={adat.hatter} />}
 
       {adat && (
         <div className="flex flex-wrap gap-1.5">
@@ -257,7 +305,7 @@ export function LaraForgatasIsmeret({ canEdit, kezdoForgatas }: { canEdit: boole
             onClick={aiTanulas}
             className="ml-auto rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 font-medium text-text-accent disabled:opacity-50"
           >
-            {busy ? "Dolgozom…" : "AI-tanulás most (20 forgatás)"}
+            {busy ? "Dolgozom…" : "Gyorsítás: 20 forgatás most"}
           </button>
         )}
       </div>

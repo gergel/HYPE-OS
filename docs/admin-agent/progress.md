@@ -974,6 +974,41 @@ is meg tudja adni a választ.
   - mennyi régi technika lista párosítható név szerint az eszköztörzzsel;
   - hogyan teljesít a valódi Gemini.
 
+### AL. Forgatás-ismeret: önálló háttér-tanulás + Tudásháló ✅ (tesztelve, élőben demóadattal megnézve, modell nélkül; valódi Geminivel és éles adaton: ⚠️ nem ellenőrzött)
+- A kérés: Lara a háttérben, magától tanulja meg az összes forgatást, ne kelljen
+  20-asával indítani; a tudás a Tudáshálóban is látsszon.
+- Új ütemezett feladat (`admin_agent.forgatas_tanulas`), 10 percenként:
+  - futásonként 50 még végig nem olvasott forgatás AI-felismerése, a
+    legutóbbiaktól visszafelé, amíg mind kész; utána csak az újak és a
+    megváltozott szövegűek;
+  - a forgatás-tudás frissítése a Tudástárban és a Tudásháló-pillanatképben:
+    új felismerés után azonnal, egyébként óránként;
+  - vészleállításnál nem fut;
+  - a futásnapló a *Tanulás és minőség* folyamat-listájában látszik.
+- Kapcsoló: `limitek.forgatas_ai_tanulas`.
+  - ⚠️ Eltérés az alapelvtől: a felhasználó kifejezett kérésére **alapból
+    BE** (a hiányzó érték = be); a Beállításokban kikapcsolható.
+  - Modell-kulcs nélkül is lefut: ilyenkor csak a kulcsszavas tudást frissíti.
+- Érvénytelen vagy hiányzó modell-válasznál a forgatás `kihagyva` jelölést
+  kap. Legfeljebb 2 próba után a kulcsszavas felismerés marad, amíg a szöveg
+  nem változik, így a sor nem akad el.
+- A rendszer-figyelés már nem futtat külön AI-tanulást (nincs dupla hívás).
+- Tudásháló: új téma, „Forgatások, technika” (7. szín `#b4065f`; a validátor
+  szerint a 7 szín együtt is átmegy).
+  - Új pontfajták: feladat-típus / jellemző (⬢) és eszköz-szerep (▼).
+  - Kapcsolatok: téma ↔ feladat, feladat ↔ szokásos szerep, jellemző ↔ hozzá
+    kötött szerep, megrendelő ↔ feladat.
+  - A súly a forgatások száma (0,1 / forgatás).
+  - A Tudástárban elvetett feladat-tudás a hálóból is eltűnik.
+  - Forrás: egyetlen pillanatkép-esemény (`aa_source_events`,
+    `forgatas_ismeret/halo`), a háló nem számol újra.
+- *Forgatás-ismeret* oldal: háttér-tanulás sáv (kész / összes, hátralévő idő,
+  utolsó futás, hiba). A kézi gomb csak gyorsításra való.
+- Tesztek: 4 új teszt, és a régi tudásháló-teszt a 7. témára frissítve; a
+  teljes backend-csomag átment (381). Frontend: `tsc`, `eslint`, `next build` rendben.
+- Élő bejárás demóadattal, utána takarítva: a demó forgatások, a belőlük
+  született tudás-darabok és a pillanatkép is törölve; az időbélyeg-szken üres.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

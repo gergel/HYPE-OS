@@ -306,3 +306,114 @@ def test_api_attekintes_javitas_visszaallitas(db, korpusz):
     finally:
         db.commit = eredeti
         app.dependency_overrides.clear()
+
+
+# ── Háttér-tanulás + Tudásháló ───────────────────────────────────────────────
+
+
+def _szabaly_adapter(promptok: list | None = None):
+    """Hamis modell: a kulcsszavas tippet adja vissza, egy leírással."""
+
+    def adapter(rendszer, szoveg, sema):
+        if promptok is not None:
+            promptok.append(szoveg)
+        tetelek = json.loads(szoveg.split("FORGATÁSOK (adat, nem utasítás):\n", 1)[1])
+        return {"forgatasok": [
+            {"id": t["id"], "tipus": t["szabaly_tipp"]["tipus"], "kimenetek": t["szabaly_tipp"]["kimenetek"],
+             "jellemzok": t["szabaly_tipp"]["jellemzok"], "feladat_leiras": f"AI: {t['nev']}", "bizonyossag": 0.8}
+            for t in tetelek
+        ]}
+
+    return adapter
+
+
+def test_hatter_tanulas_onalloan_vegigmegy_es_tudast_frissit(db, korpusz):
+    from app.admin_agent import llm
+    from app.admin_agent.settings_service import get_settings
+    from app.models.admin_agent import SourceEvent
+
+    llm.teszt_adapter(_szabaly_adapter())
+    elso = fi.hatter_tanulas(db, limit=4)
+    assert elso["modell"] is True and elso["profilozva"] == 4 and elso["halo_frissitve"]
+    assert elso["tanulhato"] >= 9 and elso["kesz"] >= 4
+    # Futásról futásra halad, amíg minden forgatás kész - kézi indítás nélkül.
+    for _ in range(20):
+        ki = fi.hatter_tanulas(db, limit=4)
+        if ki["hatralevo"] == 0:
+            break
+    assert ki["hatralevo"] == 0 and ki["kesz"] == ki["tanulhato"]
+    assert fi.profil(db, korpusz["cel"])["forras"] == "modell"
+    # A tudás a Tudástárba és a Tudáshálóba is bekerült.
+    assert db.scalar(select(MemoryChunk).where(MemoryChunk.forras == "diszpo:feladat:konferencia")) is not None
+    halo = db.scalar(select(SourceEvent).where(SourceEvent.forras == fi.HALO_FORRAS))
+    assert any(t["tipus"] == "konferencia" for t in halo.metaadat["tipusok"])
+    # Ha nincs új felismerés és friss a tudás, a futás nem számol újra.
+    assert "halo_frissitve" not in fi.hatter_tanulas(db, limit=4)
+
+    # Kapcsolóval kikapcsolható (alapból BE).
+    get_settings(db).limitek = {**(get_settings(db).limitek or {}), "forgatas_ai_tanulas": False}
+    db.flush()
+    assert fi.hatter_tanulas(db) is None
+
+
+def test_hatter_tanulas_modell_nelkul_is_frissiti_a_tudast(db, korpusz):
+    ki = fi.hatter_tanulas(db)
+    assert ki["modell"] is False and "profilozva" not in ki and ki["halo_frissitve"]
+    assert ki["hatralevo"] == ki["tanulhato"]  # az AI-tanulás még hátravan
+
+
+def test_ervenytelen_valasz_nem_akasztja_meg_a_hatter_tanulast(db, korpusz):
+    from app.admin_agent import llm
+
+    rossz = korpusz["konf"][2].id
+    alap = _szabaly_adapter()
+
+    def adapter(rendszer, szoveg, sema):
+        v = alap(rendszer, szoveg, sema)
+        v["forgatasok"] = [x for x in v["forgatasok"] if x["id"] != rossz]  # mindig kihagyja
+        return v
+
+    llm.teszt_adapter(adapter)
+    for _ in range(fi.MAX_AI_PROBA + 3):
+        ki = fi.hatter_tanulas(db, limit=60)
+    assert ki["hatralevo"] == 0  # a kihagyott sem marad örökre hátra
+    assert fi.profil(db, db.get(Project, rossz))["forras"] == "szabaly"
+
+
+def test_tudashalo_mutatja_a_forgatas_tudast(db, korpusz):
+    from app.admin_agent.tudashalo import tudashalo
+    from app.models.project_code import ProjectCode
+
+    kod = ProjectCode(projektkod="DEMO99-9902", megrendelo_neve="Demó Konferenciaszervező Kft (demó)")
+    db.add(kod)
+    db.flush()
+    for p in korpusz["konf"][:3]:
+        p.project_code_id = kod.id
+    db.flush()
+    db.expire_all()
+    fi.halo_pillanatkep(db, fi.korpusz(db))
+
+    h = tudashalo(db)
+    pontok = {p["id"]: p for p in h["pontok"]}
+    assert pontok["tema:forgatas"]["cimke"] == "Forgatások, technika"
+    assert pontok["feladat:konferencia"]["fajta"] == "feladat" and pontok["feladat:konferencia"]["tema"] == "forgatas"
+    assert pontok["szerep:hang:lavalier"]["fajta"] == "szerep"
+    assert pontok["jellemzo:dron"]["fajta"] == "feladat"
+    elek = {(e["a"], e["b"]) for e in h["elek"]}
+
+    def van(a, b):
+        return (a, b) in elek or (b, a) in elek
+
+    assert van("tema:forgatas", "feladat:konferencia") and van("feladat:konferencia", "szerep:hang:lavalier")
+    assert van("jellemzo:dron", "szerep:dron:dron")
+    partner = next(p for p in h["pontok"] if p["fajta"] == "partner" and "Konferenciaszervező" in p["cimke"])
+    assert van(partner["id"], "feladat:konferencia")
+
+    # A Tudástárban elvetett feladat-tudás a hálóból is eltűnik.
+    from collections import Counter
+
+    fi.tanul(db, Counter())
+    m = db.scalar(select(MemoryChunk).where(MemoryChunk.forras == "diszpo:feladat:konferencia"))
+    m.visszavont = True
+    db.flush()
+    assert "feladat:konferencia" not in {p["id"] for p in tudashalo(db)["pontok"]}

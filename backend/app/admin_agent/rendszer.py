@@ -390,20 +390,6 @@ def rendszer_figyeles(db: Session, *, trigger: str = "rendszer:kezi", kenyszerit
                     eszkoz_ai = ai_profilozas(db, limit=30)
             except ProfilHiba as exc:
                 eszkoz_ai = {"allapot": "hiba", "uzenet": str(exc)[:200]}
-    # Forgatás-ismeret visszamenőleges AI-tanulása: KÜLÖN kapcsolóval, alapból
-    # kikapcsolva; futásonként legfeljebb 30 korábbi forgatás (a legutóbbiaktól).
-    forgatas_ai = None
-    if (get_settings(db).limitek or {}).get("forgatas_ai_tanulas") is True:
-        from app.admin_agent import llm
-        from app.admin_agent.forgatas_ismeret import ProfilHiba as ForgatasProfilHiba
-        from app.admin_agent.forgatas_ismeret import ai_tanulas
-
-        if llm.elerheto():
-            try:
-                with db.begin_nested():
-                    forgatas_ai = ai_tanulas(db, limit=30)
-            except ForgatasProfilHiba as exc:
-                forgatas_ai = {"allapot": "hiba", "uzenet": str(exc)[:200]}
     leg = sorted(aktivitas, key=lambda a: a["uj_30"] + a["modositott_30"], reverse=True)
     osszefoglalo = {
         "figyelt_tabla": len(tablak),
@@ -412,7 +398,6 @@ def rendszer_figyeles(db: Session, *, trigger: str = "rendszer:kezi", kenyszerit
         "projektkod": kodok,
         "diszpo_tapasztalat": diszpo_tudas,
         "eszkoz_ai_profilozas": eszkoz_ai,
-        "forgatas_ai_tanulas": forgatas_ai,
         "uj": stat["uj"],
         "frissitett": stat["frissitve"],
         "hibas_tabla": stat["hibas_tabla"],

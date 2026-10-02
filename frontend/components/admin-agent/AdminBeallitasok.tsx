@@ -336,9 +336,9 @@ export function AdminBeallitasok({
             onValt={(v) => limitMent({ eszkoz_ai_profilozas: v })}
           />
           <Kapcsolo
-            cim="Forgatás-ismeret: visszamenőleges tanulás AI-jal (óránként)"
-            leiras="A teljes rendszer figyelésekor Lara óránként legfeljebb 30 korábbi forgatást a modellel is végigolvas (a legutóbbiaktól visszafelé, amíg mindet meg nem ismeri): mi volt pontosan a feladat, milyen kimenetre, milyen körülmények között. Ebből pontosabb a diszpó technikai listája és briefje. Csak Lara saját forgatás-ismeretébe ír, a forgatásokhoz nem nyúl; e-mail címet és telefonszámot nem küld a modellnek; az ember által javított felismerést sosem írja felül. Kikapcsolva is működik a kulcsszó alapú felismerés. A Gemini-kulcsot használja."
-            aktiv={limitek.forgatas_ai_tanulas === true}
+            cim="Forgatás-ismeret: háttér-tanulás AI-jal (10 percenként)"
+            leiras="Lara a háttérben, magától végigolvassa az összes korábbi forgatást (10 percenként 50-et, a legutóbbiaktól visszafelé, amíg mind kész; utána csak az újakat és a megváltozottakat): mi volt pontosan a feladat, milyen kimenetre, milyen körülmények között. Az így szerzett tudás a Tudástárba és a Tudáshálóba is bekerül, és ebből pontosabb a diszpó technikai listája és briefje. Csak Lara saját tudásába ír, a forgatásokhoz nem nyúl; e-mail címet és telefonszámot nem küld a modellnek; az ember által javított felismerést sosem írja felül. Alapból BE (kérésre); kikapcsolva is működik a kulcsszó alapú felismerés. A Gemini-kulcsot használja."
+            aktiv={limitek.forgatas_ai_tanulas !== false}
             tiltva={!canManage || folyamatban || b.kill_switch}
             onValt={(v) => limitMent({ forgatas_ai_tanulas: v })}
           />
