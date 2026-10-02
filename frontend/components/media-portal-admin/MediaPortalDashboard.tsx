@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, Lock, Plus, Trash2, Video } from "lucide-react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { AlertTriangle, ExternalLink, LayoutGrid, List, Lock, Plus, Trash2, Video } from "lucide-react";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
@@ -17,6 +17,38 @@ import { TorlesMegerosites } from "@/components/media-portal-admin/TorlesMegeros
 import { useLiveTopic } from "@/lib/live";
 import type { PortalSummary, Project } from "@/lib/api";
 import { KeresosSelect } from "@/components/KeresosSelect";
+
+/** A portál-lista NÉZETE (a felhasználó kérése): lista vagy ikonok (borítóképes
+ * rács). Böngészőnként megjegyezzük - ez kényelmi beállítás, nem adat. */
+type Nezet = "lista" | "ikon";
+const NEZET_KULCS = "hype_portal_nezet";
+const NEZET_ESEMENY = "hype-portal-nezet";
+
+function nezetFeliratkozas(ertesit: () => void): () => void {
+  window.addEventListener(NEZET_ESEMENY, ertesit);
+  window.addEventListener("storage", ertesit);
+  return () => {
+    window.removeEventListener(NEZET_ESEMENY, ertesit);
+    window.removeEventListener("storage", ertesit);
+  };
+}
+
+function nezetOlvas(): Nezet {
+  try {
+    return window.localStorage.getItem(NEZET_KULCS) === "ikon" ? "ikon" : "lista";
+  } catch {
+    return "lista";
+  }
+}
+
+function nezetIr(nezet: Nezet): void {
+  try {
+    window.localStorage.setItem(NEZET_KULCS, nezet);
+  } catch {
+    // Privát ablakban a tároló tilthatja - ilyenkor csak erre a betöltésre szól.
+  }
+  window.dispatchEvent(new Event(NEZET_ESEMENY));
+}
 
 const inputClass =
   "w-full min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface-3 px-3.5 py-2.5 text-[13px] text-text-primary outline-none focus:border-text-accent/40 sm:w-auto";
@@ -51,6 +83,14 @@ export function MediaPortalDashboard({
   const [confirmDelete, setConfirmDelete] = useState<{ id: number; title: string } | null>(null);
   const [confirmPurge, setConfirmPurge] = useState<{ id: number; title: string } | null>(null);
   const [purging, setPurging] = useState(false);
+  const tarolt = useSyncExternalStore(nezetFeliratkozas, nezetOlvas, () => "lista" as Nezet);
+  // Ha a böngésző nem enged tárolni, a választás legalább erre a betöltésre éljen.
+  const [helyiNezet, setHelyiNezet] = useState<Nezet | null>(null);
+  const nezet: Nezet = helyiNezet ?? tarolt;
+  function nezetValt(uj: Nezet) {
+    setHelyiNezet(uj);
+    nezetIr(uj);
+  }
 
   // Ha valaki más hoz létre/töröl portált, itt is látszódjon újratöltés nélkül.
   useLiveTopic("portals", () => {
@@ -295,8 +335,85 @@ export function MediaPortalDashboard({
           onChange={(ertek) => setSortBy(ertek as typeof sortBy)}
           className="w-[220px]"
         />
+        {/* NÉZETVÁLTÓ: lista vagy ikonok (a felhasználó kérése). */}
+        <div className="flex shrink-0 rounded-[var(--radius)] border border-border p-0.5" role="group" aria-label="Nézet">
+          {(
+            [
+              { ertek: "lista", cimke: "Lista", Ikon: List },
+              { ertek: "ikon", cimke: "Ikonok", Ikon: LayoutGrid },
+            ] as const
+          ).map(({ ertek, cimke, Ikon }) => (
+            <button
+              key={ertek}
+              type="button"
+              onClick={() => nezetValt(ertek)}
+              aria-pressed={nezet === ertek}
+              title={`${cimke} nézet`}
+              className={`flex items-center gap-1.5 rounded-[calc(var(--radius)-2px)] px-3 py-1.5 text-[13px] transition-colors ${
+                nezet === ertek ? "bg-bg-accent text-text-accent" : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              <Ikon className="h-4 w-4" aria-hidden />
+              {cimke}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {nezet === "ikon" ? (
+        visibleProjects.length === 0 ? (
+          <p className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-8 text-center text-[13px] text-text-muted">
+            {projects.length === 0 ? "Még nincs Portál. Hozz létre egyet a kezdéshez." : "Nincs találat a keresésre."}
+          </p>
+        ) : (
+          /* IKON NÉZET: borítóképes kártyák rácsban - képre emlékezve
+             gyorsabb megtalálni egy portált, mint a nevéről. */
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+            {visibleProjects.map((p) => (
+              <a
+                key={p.id}
+                href={`/media-portal/${p.id}`}
+                className="group relative flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface-2 transition-colors hover:border-text-accent/40"
+              >
+                <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-surface-3">
+                  {p.cover_image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.cover_image_url}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                    />
+                  ) : (
+                    <Video className="h-8 w-8 text-text-muted" aria-hidden />
+                  )}
+                  <div className="absolute left-2 top-2 flex items-center gap-1.5">
+                    <StatusBadge label={p.status === "live" ? "Élő" : p.status} tone={p.status === "live" ? "success" : "neutral"} />
+                    {p.has_password && (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-surface-1/80" title="Jelszóval védett">
+                        <Lock className="h-3.5 w-3.5 text-text-accent" aria-hidden />
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => onDelete(e, p.id, p.title)}
+                    title="Portál törlése"
+                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-1/80 text-text-muted opacity-100 transition-opacity hover:bg-bg-danger hover:text-text-danger sm:opacity-0 sm:group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="min-w-0 p-3">
+                  <h3 className="line-clamp-2 break-words text-[14px] font-medium leading-snug text-text-primary">{p.title}</h3>
+                  <p className="mt-0.5 truncate text-[12px] text-text-secondary">
+                    {p.client_name}
+                    {p.project_date ? ` · ${p.project_date}` : ""}
+                  </p>
+                </div>
+              </a>
+            ))}
+          </div>
+        )
+      ) : (
       <div className="overflow-hidden rounded-[var(--radius-lg)] border border-border">
         {visibleProjects.length === 0 && (
           <p className="bg-surface-2 p-8 text-center text-[13px] text-text-muted">
@@ -345,6 +462,7 @@ export function MediaPortalDashboard({
           ))}
         </div>
       </div>
+      )}
 
       {/* NAGY, PIROS megerősítés (a felhasználó kérése) - a teljes portál
           törlése a legveszélyesebb művelet ezen az oldalon. */}
