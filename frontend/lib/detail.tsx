@@ -11,7 +11,10 @@ const HIDDEN_KEYS = new Set(["id", "created_at", "updated_at"]);
  * amiket a hívó oldal illeszt a rekordba (pl. equipment.project_ids.length) -
  * ezek sosem PATCH-elhetők, még akkor sem, ha az értékük szám/string (amit a
  * classifyInput önmagában szerkeszthetőnek nézne). */
-const FORCE_READONLY_KEYS = new Set(["forgatasok_szama"]);
+// A felszerelés munka-statisztikája SZÁMOLT érték (lásd backend
+// services/eszkoz_statisztika.py) - kézzel írni értelmetlen volna, a
+// következő betöltéskor úgyis a számolt érték látszana.
+const FORCE_READONLY_KEYS = new Set(["forgatasok_szama", "hany_napot_dolgozott", "hany_forgatason_vett_reszt", "ahol_utoljara_volt"]);
 
 const MONEY_KEY_PATTERN = /(netto|brutto|osszeg|koltseg|profit|bevetel|arfolyam|dij|ber)/i;
 const DATE_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}/;

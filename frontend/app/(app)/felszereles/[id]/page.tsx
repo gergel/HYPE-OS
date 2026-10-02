@@ -4,7 +4,21 @@ import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
-import { ENTITY_PATHS, getDetailTabs, getFieldTypes, getMyPagePermissions, getRecord, getRecordsByIds, getVisibleFields } from "@/lib/api";
+import { StatusBadge } from "@/components/StatusBadge";
+import {
+  ENTITY_PATHS,
+  getDetailTabs,
+  getEszkozForgatasai,
+  getFieldTypes,
+  getMyPagePermissions,
+  getRecord,
+  getRecordsByIds,
+  getVisibleFields,
+} from "@/lib/api";
+
+function datumHu(iso: string): string {
+  return iso.replaceAll("-", ".") + ".";
+}
 import { buildFieldTabs } from "@/lib/detailTabs";
 
 const PAGE = "/felszereles";
@@ -17,17 +31,27 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
   // project_ids mezőjétől) - a többi csak equipmentId-t vagy semmit nem kér,
   // ezért azok a getRecord-dal EGYSZERRE indulnak, nem utána: egy kevesebb
   // kör az oldalbetöltésnél.
-  const [equipment, visibleFields, fieldTypes, dbTabs, pagePermissions] = await Promise.all([
+  const [equipment, visibleFields, fieldTypes, dbTabs, pagePermissions, forgatasok] = await Promise.all([
     getRecord(ENTITY_PATHS.equipment, equipmentId),
     getVisibleFields("equipment"),
     getFieldTypes("equipment"),
     getDetailTabs("equipment"),
     getMyPagePermissions(),
+    // A forgatások, amiken TÉNYLEG dolgozott (napokkal) - a „hány napot
+    // dolgozott” is ebből számol (lásd backend services/eszkoz_statisztika).
+    getEszkozForgatasai(equipmentId),
   ]);
   if (!equipment) notFound();
 
+  // A KÖZELGŐ foglalások: a még el nem kezdődött forgatások, amikre az eszköz
+  // fel van véve - ezek még nem számítanak munkának, de jó látni őket.
   const projectIds = Array.isArray(equipment.project_ids) ? (equipment.project_ids as number[]) : [];
-  const projects = await getRecordsByIds(ENTITY_PATHS.project, projectIds);
+  const maIso = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
+  const dolgozottIdk = new Set(forgatasok.map((f) => f.project_id));
+  const kozelgo = (await getRecordsByIds(ENTITY_PATHS.project, projectIds))
+    .filter((p) => !dolgozottIdk.has(Number(p.id)) && typeof p.forgatas_datuma === "string" && p.forgatas_datuma > maIso)
+    .sort((a, b) => String(a.forgatas_datuma).localeCompare(String(b.forgatas_datuma)));
+  const osszesNap = Number(equipment.hany_napot_dolgozott ?? 0);
 
   // A FORGATÁSOK SZÁMA a „Történet” kártyán áll (a felhasználó kérése) - ez
   // számolt mező, egyik admin-fül sem sorolja fel, ezért eddig egyedül egy
@@ -45,16 +69,16 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
   const tabs = buildFieldTabs({
     page: PAGE,
     patchPath: `${ENTITY_PATHS.equipment}/${equipment.id}`,
-    // A ténylegesen betöltött projektek számát mutatjuk, nem a nyers
-    // project_ids hosszát - így a szám sosem térhet el attól, amit a
-    // "Projektek" szekció alant ténylegesen felsorol (pl. ha egy hivatkozott
-    // projekt rekord lekérése valamiért nem sikerülne).
-    record: { ...equipment, forgatasok_szama: projects.length },
+    // Ugyanaz a szám, amit a lenti „Forgatások” lista felsorol: a forgatások,
+    // amiken az eszköz TÉNYLEG dolgozott (a jövőbeli foglalások nélkül).
+    record: { ...equipment, forgatasok_szama: forgatasok.length },
     dbTabs: fulek,
     visibleFields,
     fieldTypes,
     pagePermissions,
-    alwaysHidden: ["project_ids"],
+    // A „hány forgatáson vett részt” ugyanazt mondja, mint a forgatások száma
+    // - kétszer kiírva csak zavarna.
+    alwaysHidden: ["project_ids", "hany_forgatason_vett_reszt"],
   });
 
   return (
@@ -68,12 +92,46 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
 
         <DetailSections sections={tabs} />
 
-        <Card title={`Forgatások (összesen ${projects.length})`}>
-          <RelatedTable
-            rows={projects}
-            emptyText="Ez az eszköz még egyetlen forgatáson sem volt."
-            getHref={(p) => `/projektek/${p.id}`}
-          />
+        <Card title={`Forgatások (${forgatasok.length} forgatás · ${osszesNap} nap)`}>
+          {forgatasok.length === 0 ? (
+            <p className="text-[13px] text-text-muted">Ez az eszköz még egyetlen forgatáson sem dolgozott.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {forgatasok.map((f) => (
+                <li key={f.project_id}>
+                  <a
+                    href={`/projektek/${f.project_id}`}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-[13.5px] hover:bg-surface-3"
+                  >
+                    <span className="min-w-0 flex-1 font-medium text-text-primary">
+                      {f.nev}
+                      {f.helyszin && <span className="ml-1.5 font-normal text-text-muted">· {f.helyszin}</span>}
+                    </span>
+                    <span className="tabular-nums text-text-secondary">
+                      {datumHu(f.kezdet)}
+                      {f.vege !== f.kezdet ? ` – ${datumHu(f.vege).slice(5)}` : ""}
+                    </span>
+                    <span className="w-14 text-right font-semibold tabular-nums text-text-primary">{f.napok} nap</span>
+                    <StatusBadge
+                      label={f.forras === "kivitel" ? "Eszközkivitel" : "Foglalás"}
+                      tone={f.forras === "kivitel" ? "success" : "neutral"}
+                    />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 text-[12px] text-text-muted">
+            Minden nap egy napnak számít, amin az eszköz dolgozott (pár óra is) - egy napon két forgatás is egy
+            nap. Ahol van eszközkivitel, ott a kint töltött napok számítanak, máshol a foglalás és a forgatás
+            napjai. A jövőbeli foglalások még nem számítanak.
+          </p>
+          {kozelgo.length > 0 && (
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="t-label mb-2">Közelgő foglalások ({kozelgo.length})</p>
+              <RelatedTable rows={kozelgo} emptyText="" getHref={(p) => `/projektek/${p.id}`} />
+            </div>
+          )}
         </Card>
 
         {/* A Foglalások lista lekerült (a felhasználó kérése) - a foglalások

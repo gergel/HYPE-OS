@@ -3026,6 +3026,22 @@ export async function getContactsByClient(clientId: number): Promise<Contact[]> 
  * forgatásos eszköz adatlapjánál több száz egyidejű HTTP-kérést jelentett,
  * ami kimerítette a szerver adatbázis-kapcsolatait, és az egész rendszert
  * megakasztotta. */
+/** Egy eszköz forgatásai (hány napot dolgozott rajtuk) - lásd backend
+ * routes/equipment.eszkoz_forgatasai és services/eszkoz_statisztika.py. */
+export type EszkozForgatas = {
+  project_id: number;
+  nev: string;
+  helyszin: string | null;
+  kezdet: string;
+  vege: string;
+  napok: number;
+  forras: "kivitel" | "foglalas";
+};
+
+export async function getEszkozForgatasai(equipmentId: number): Promise<EszkozForgatas[]> {
+  return (await apiGet<EszkozForgatas[]>(`/api/v1/equipment/${equipmentId}/forgatasok`)) ?? [];
+}
+
 export async function getRecordsByIds(basePath: string, ids: number[]): Promise<JsonRecord[]> {
   if (ids.length === 0) return [];
   // Adagokban, hogy az URL ne nőhessen a határok fölé.

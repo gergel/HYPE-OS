@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -11,6 +11,8 @@ from app.core.security import FOGLALAS_OLDAL, get_current_user, require_page_act
 from app.models.employee import Employee
 from app.models.equipment import Assignment, Equipment, TrackMode
 from app.models.project import Project
+from app.services import eszkoz_statisztika
+from app.services.hu_datum import BUDAPEST_IDOZONA
 from app.schemas.equipment import (
     AssignmentCreate,
     AssignmentRead,
@@ -18,6 +20,32 @@ from app.schemas.equipment import (
     EquipmentRead,
     EquipmentUpdate,
 )
+
+def _rendszerbe_kerules(data: dict, db: Session) -> dict:
+    """Új eszköznél a RENDSZERBE KERÜLÉS időpontja magától kitöltődik (a
+    felhasználó kérése) - ha kézzel megadták, az marad."""
+    if not data.get("rendszerbe_kerules_idopontja"):
+        data["rendszerbe_kerules_idopontja"] = datetime.now(BUDAPEST_IDOZONA).replace(tzinfo=None, microsecond=0)
+    return data
+
+
+def _statisztika_kimenet(sorok: list[dict], db: Session, _user: Employee) -> list[dict]:
+    """A kimenő eszköz-sorokba a SZÁMOLT munka-statisztika kerül (hány napot
+    dolgozott, hány forgatáson vett részt, hol volt utoljára) - lásd
+    services/eszkoz_statisztika.py. Egy forgatás nélküli eszköznél a régi
+    (Notionból jött / kézzel írt) „ahol utoljára volt” szöveg megmarad."""
+    idk = [s["id"] for s in sorok if isinstance(s.get("id"), int)]
+    stat = eszkoz_statisztika.statisztikak(db, idk)
+    for sor in sorok:
+        s = stat.get(sor.get("id"))
+        if s is None:
+            continue
+        sor["hany_napot_dolgozott"] = float(s.napok_szama)
+        sor["hany_forgatason_vett_reszt"] = str(len(s.forgatasok))
+        if s.ahol_utoljara_volt:
+            sor["ahol_utoljara_volt"] = s.ahol_utoljara_volt
+    return sorok
+
 
 router = build_crud_router(
     model=Equipment,
@@ -28,7 +56,46 @@ router = build_crud_router(
     tags=["equipment"],
     page="/felszereles",
     entity_type="equipment",
+    before_create=_rendszerbe_kerules,
+    kimenet_szuro=_statisztika_kimenet,
 )
+
+
+class EszkozForgatas(BaseModel):
+    project_id: int
+    nev: str
+    helyszin: str | None = None
+    kezdet: date
+    vege: date
+    napok: int
+    #: "kivitel" (az eszközkivitel szerint kint volt) vagy "foglalas" (a
+    #: projektre volt foglalva - ahol még nincs kivitel).
+    forras: str
+
+
+@router.get("/{equipment_id}/forgatasok", response_model=list[EszkozForgatas])
+def eszkoz_forgatasai(
+    equipment_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Mely forgatásokon dolgozott az eszköz, forgatásonként hány napot -
+    ugyanaz a számítás, ami a „hány napot dolgozott” mezőt adja."""
+    if db.get(Equipment, equipment_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipment nem található")
+    stat = eszkoz_statisztika.statisztikak(db, [equipment_id])[equipment_id]
+    return [
+        EszkozForgatas(
+            project_id=f.project_id,
+            nev=f.nev,
+            helyszin=f.helyszin,
+            kezdet=f.kezdet,
+            vege=f.vege,
+            napok=len(f.napok),
+            forras=f.forras,
+        )
+        for f in stat.forgatasok
+    ]
 
 assignments_router = APIRouter(prefix="/assignments", tags=["equipment"])
 
