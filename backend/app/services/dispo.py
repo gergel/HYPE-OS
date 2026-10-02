@@ -69,17 +69,16 @@ _SIGNATURE_HTML = HYPE_ALAIRAS_HTML
 
 
 def _format_hu_date_range(project: Project) -> str:
-    """A forgatás ideje a levélben/PDF-ben: dátum(ok), és ha meg van adva, a
-    napon belüli időpont is ("2026.07.06., 08:00 – 17:00")."""
+    """A forgatás dátuma a levélben/PDF-ben - CSAK a dátum(ok), óra és perc
+    nélkül (a felhasználó kérése, 2026-10): "2026.07.06" vagy
+    "2026.07.06 – 2026.07.08". Az időbeosztás a diszpó szövegében
+    (érkezés, timing) szerepel."""
     if not project.forgatas_datuma:
         return ""
     start = project.forgatas_datuma.strftime("%Y.%m.%d")
     if project.forgatas_datuma_vege and project.forgatas_datuma_vege != project.forgatas_datuma:
-        datum = f"{start} – {project.forgatas_datuma_vege.strftime('%Y.%m.%d')}"
-    else:
-        datum = start
-    ido = _format_ido(project)
-    return f"{datum}, {ido}" if ido else datum
+        return f"{start} – {project.forgatas_datuma_vege.strftime('%Y.%m.%d')}"
+    return start
 
 
 def _recipients(project: Project) -> list[str]:
@@ -151,20 +150,6 @@ def _require_projektkod(project: Project) -> None:
         "azonosíthatatlan lenne a forgatás. Add meg a projektkódot a projekt adatlapján - "
         "bármilyen formátum megadható, nem kell a megszokott alakot követnie."
     )
-
-
-def _format_ido(project: Project) -> str:
-    """A forgatás napon belüli időpontja ("08:00 – 17:00"), ha meg van adva -
-    egyébként üres. Csak kezdés is elég ("08:00-tól")."""
-    kezdes = project.forgatas_kezdes_ido
-    veg = project.forgatas_veg_ido
-    if kezdes and veg:
-        return f"{kezdes.strftime('%H:%M')} – {veg.strftime('%H:%M')}"
-    if kezdes:
-        return f"{kezdes.strftime('%H:%M')}-tól"
-    if veg:
-        return f"{veg.strftime('%H:%M')}-ig"
-    return ""
 
 
 def _subject_date(project: Project) -> str:
