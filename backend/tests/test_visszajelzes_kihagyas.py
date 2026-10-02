@@ -48,8 +48,14 @@ def test_stabos_forgatasnal_nem_hagyhato_ki(db):
     assert deliverable_actions.kihagyhato_a_visszajelzes(db, anyag) is False
     with pytest.raises(ValueError, match="nem hagyható ki"):
         deliverable_actions.send_visszajelzes(db, anyag, ember, kihagyas_indoka="Nincs időm (demó)")
-    # Kitöltve viszont rendben megy.
-    fb = deliverable_actions.send_visszajelzes(db, anyag, ember, technikai_helyesseg=8)
+    # Pontszám mellé a megjegyzés is kötelező, legalább 50 karakter -
+    # összevont szóközökkel számolva.
+    with pytest.raises(ValueError, match="legalább 50 karakter"):
+        deliverable_actions.send_visszajelzes(db, anyag, ember, technikai_helyesseg=8)
+    with pytest.raises(ValueError, match="legalább 50 karakter"):
+        deliverable_actions.send_visszajelzes(db, anyag, ember, technikai_helyesseg=8, megjegyzes="a" + " " * 80 + "b")
+    szoveg = "A nyersanyag jó volt, de a második blokkban életlen a fókusz (demó)."
+    fb = deliverable_actions.send_visszajelzes(db, anyag, ember, technikai_helyesseg=8, megjegyzes=szoveg)
     assert fb.kihagyva is not True
 
 

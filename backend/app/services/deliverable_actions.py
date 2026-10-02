@@ -442,6 +442,16 @@ def forgatasok_stabbal(db: Session, deliverable: Deliverable) -> list[tuple[Proj
     return eredmeny
 
 
+#: A kötelező megjegyzés legkisebb hossza, ahol a visszajelzés nem hagyható ki.
+MEGJEGYZES_MIN = 50
+
+
+def megjegyzes_hossza(szoveg: str | None) -> int:
+    """A megjegyzés hossza ÖSSZEVONT szóközökkel - a szóköz-billentyű
+    nyomkodása ne töltse fel az 50 karaktert."""
+    return len(" ".join((szoveg or "").split()))
+
+
 def kihagyhato_a_visszajelzes(db: Session, deliverable: Deliverable) -> bool:
     """A vágói visszajelzés NEM hagyható ki, ha az anyag egy KONKRÉT
     forgatáshoz (projekthez) kötött, és azon volt stáb (a felhasználó kérése):
@@ -508,6 +518,14 @@ def send_visszajelzes(
     szoveg = (megjegyzes or "").strip() or None
     if nyersanyag_felhasznalhatosaga is None and technikai_helyesseg is None and kreativ_kepivilag is None and not szoveg:
         raise ValueError("Adj legalább egy pontszámot vagy írj megjegyzést.")
+    # Ahol a visszajelzés NEM hagyható ki (az anyag forgatásán stáb dolgozott),
+    # ott a szöveges megjegyzés is kötelező, legalább MEGJEGYZES_MIN karakter
+    # (a felhasználó kérése) - egy betű vagy pár szóköz nem visszajelzés.
+    if not kihagyhato_a_visszajelzes(db, deliverable) and megjegyzes_hossza(szoveg) < MEGJEGYZES_MIN:
+        raise ValueError(
+            f"Ehhez az anyaghoz a megjegyzés kötelező, legalább {MEGJEGYZES_MIN} karakter "
+            f"(most {megjegyzes_hossza(szoveg)}) - a forgatás stábjának szól."
+        )
 
     feedback = Feedback(
         deliverable_id=deliverable.id,

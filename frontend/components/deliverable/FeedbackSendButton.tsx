@@ -26,6 +26,15 @@ const SZEMPONTOK = [
   },
 ];
 
+/** A kötelező megjegyzés legkisebb hossza, ahol a visszajelzés nem hagyható
+ * ki - a szerverrel azonos (services/deliverable_actions.MEGJEGYZES_MIN). */
+const MEGJEGYZES_MIN = 50;
+
+/** Hossz ÖSSZEVONT szóközökkel - a szóköz-nyomkodás nem számít bele. */
+function megjegyzesHossza(szoveg: string): number {
+  return szoveg.trim().split(/\s+/).filter(Boolean).join(" ").length;
+}
+
 type Pontok = Partial<Record<(typeof SZEMPONTOK)[number]["kulcs"], number>>;
 
 /** `sajat`: az anyag SAJÁT forgatása (közvetlenül ehhez a projekthez kötött) -
@@ -102,6 +111,10 @@ export function VisszajelzesModal({
       const vanPont = SZEMPONTOK.some((sz) => pontok[sz.kulcs] != null);
       if (!vanPont && !megjegyzes.trim()) {
         alert("Adj legalább egy pontszámot, vagy írj megjegyzést.");
+        return;
+      }
+      if (kihagyasTiltva && megjegyzesHossza(megjegyzes) < MEGJEGYZES_MIN) {
+        alert(`Ehhez az anyaghoz a megjegyzés kötelező, legalább ${MEGJEGYZES_MIN} karakter.`);
         return;
       }
     }
@@ -202,7 +215,10 @@ export function VisszajelzesModal({
           ))}
 
           <div className="flex flex-col gap-1">
-            <label className="text-[13px] text-text-primary">Megjegyzés</label>
+            <label className="text-[13px] text-text-primary">
+              Megjegyzés
+              {kihagyasTiltva && <span className="text-text-danger"> *</span>}
+            </label>
             <textarea
               rows={5}
               value={megjegyzes}
@@ -210,6 +226,20 @@ export function VisszajelzesModal({
               placeholder="Egyéb meglátások – ez az a rész, ami a stábnak is kiküldhető."
               className="w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
             />
+            {/* Ahol a visszajelzés nem hagyható ki (az anyag forgatásán stáb
+                dolgozott), a megjegyzés is kötelező, legalább 50 karakter (a
+                felhasználó kérése) - a számláló mutatja, mennyi van még hátra. */}
+            {kihagyasTiltva && (
+              <p
+                className={`text-[12px] ${
+                  megjegyzesHossza(megjegyzes) >= MEGJEGYZES_MIN ? "text-text-success" : "text-text-warning"
+                }`}
+              >
+                {megjegyzesHossza(megjegyzes) >= MEGJEGYZES_MIN
+                  ? `✓ ${megjegyzesHossza(megjegyzes)} karakter`
+                  : `Kötelező, legalább ${MEGJEGYZES_MIN} karakter – még ${MEGJEGYZES_MIN - megjegyzesHossza(megjegyzes)} hiányzik.`}
+              </p>
+            )}
             <p className="text-[11px] text-text-muted">
               A forgatás stábjának később CSAK ez a szöveg és a kész anyag linkje küldhető ki – a pontszámok belső
               mérőszámok.
@@ -264,7 +294,7 @@ export function VisszajelzesModal({
           <button
             type="button"
             onClick={() => void kuld()}
-            disabled={busy}
+            disabled={busy || (kihagyasTiltva && megjegyzesHossza(megjegyzes) < MEGJEGYZES_MIN)}
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
             {busy ? "Küldés…" : "Küldés"}
