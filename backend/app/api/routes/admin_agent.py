@@ -800,17 +800,26 @@ def diszpo_tapasztalat(
     )
     from app.models.project import Project
 
+    from app.admin_agent.forgatas_ismeret import profil as forgatas_profil
+    from app.admin_agent.forgatas_ismeret import tapasztalat_kivonat, tipus_tapasztalat
+    from app.admin_agent.diszpo_tervezo import tanulasi_korpusz
+
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="A forgatás nem található.")
-    hasonlok = hasonlo_forgatasok(db, project)
+    k = tanulasi_korpusz(db, project)
+    felismeres = forgatas_profil(db, project)
+    hasonlok = hasonlo_forgatasok(db, project, k=k, felismeres=felismeres)
+    tipus_tap = tipus_tapasztalat(k, felismeres)
     return {
+        "felismert_feladat": felismeres,
+        "feladat_tapasztalat": tapasztalat_kivonat(tipus_tap),
         "hasonlo_forgatasok": [
             {"id": h["project"].id, "nev": h["project"].nev, "datum": h["project"].forgatas_datuma.isoformat(),
              "pont": round(h["pont"], 1), "okok": h["okok"]}
             for h in hasonlok
         ],
-        "technika": technika_javaslat(db, project, hasonlok),
+        "technika": technika_javaslat(db, project, hasonlok, tipus_tap=tipus_tap),
         "visszatero_instrukciok": visszatero_instrukciok(hasonlok),
         "diszpo_szoveg": diszpo_szoveg_javaslat(project, hasonlok),
     }
@@ -1098,6 +1107,116 @@ def eszkoz_ai_profilozas(
     b = body or AiProfilozasIn()
     try:
         ki = ai_profilozas(db, limit=b.limit, ujra=b.ujra)
+    except ProfilHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return ki
+
+
+# ── Forgatás-ismeret: mi a feladat a forgatáson ─────────────────────────────
+
+
+def _forgatas_or_404(db: Session, project_id: int):
+    from app.models.project import Project
+
+    p = db.get(Project, project_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="A forgatás nem található.")
+    return p
+
+
+@router.get("/forgatasok/ismeret")
+def forgatas_ismeret_attekintes(
+    tipus: str | None = Query(default=None, max_length=30),
+    q: str | None = Query(default=None, max_length=100),
+    limit: int = Query(default=200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Mit tud Lara a korábbi forgatásokról: feladat-típusonként hány forgatás,
+    ebből hánynál ismert a kivitt technika, a felismerés forrása (szabály / AI /
+    ember), és a forgatások listája. Csak olvas."""
+    from app.admin_agent.forgatas_ismeret import attekintes
+
+    return attekintes(db, tipus=tipus, q=q, limit=limit)
+
+
+@router.get("/forgatasok/{project_id}/ismeret")
+def forgatas_ismeret(
+    project_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Egy forgatás felismert feladata, kivitt technikája szerepenként és amit
+    Lara az ilyen feladatú korábbi forgatásokról tud. Csak olvas."""
+    from app.admin_agent.forgatas_ismeret import forgatas_reszlet
+
+    return forgatas_reszlet(db, _forgatas_or_404(db, project_id))
+
+
+class ForgatasProfilIn(BaseModel):
+    tipus: str | None = Field(default=None, max_length=30)
+    tipusok: list[str] | None = None
+    kimenetek: list[str] | None = None
+    jellemzok: list[str] | None = None
+    feladat_leiras: str | None = Field(default=None, max_length=400)
+
+
+@router.patch("/forgatasok/{project_id}/feladat")
+def forgatas_feladat_javitas(
+    project_id: int,
+    body: ForgatasProfilIn,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Emberi javítás: mostantól ez Lara tudása a forgatás feladatáról (a modell
+    sem írja felül). Csak Lara saját táblájába ír, a forgatáshoz nem nyúl."""
+    from app.admin_agent.forgatas_ismeret import ProfilHiba, ember_javitas
+
+    p = _forgatas_or_404(db, project_id)
+    try:
+        pr = ember_javitas(db, p, body.model_dump(exclude_unset=True), user)
+    except ProfilHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.add(ActionTrace(task_id=None, szereplo="human", muvelet="forgatas_feladat_javitas", eroforras=f"project:{p.id}",
+                       diff={"javitas": body.model_dump(exclude_unset=True), "employee_id": user.id}, eredmeny="kesz",
+                       tortent_at=datetime.now(timezone.utc)))
+    db.commit()
+    return pr
+
+
+@router.delete("/forgatasok/{project_id}/feladat", status_code=204)
+def forgatas_feladat_visszaallitas(
+    project_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A tárolt (AI / ember) felismerés törlése - újra a szabály alapú érvényes."""
+    from app.admin_agent.forgatas_ismeret import ember_javitas_torlese
+
+    ember_javitas_torlese(db, _forgatas_or_404(db, project_id))
+    db.commit()
+
+
+class ForgatasAiTanulasIn(BaseModel):
+    limit: int = Field(default=20, ge=1, le=60)
+    ujra: bool = False
+
+
+@router.post("/forgatasok/ai-tanulas")
+def forgatas_ai_tanulas(
+    body: ForgatasAiTanulasIn | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Kézi indítás: a modell végigolvas `limit` korábbi forgatást (a
+    legutóbbiaktól visszafelé), és pontosítja a feladatukat. Emberi javítást
+    nem ír felül. Modell nélkül 400 - beállítás szükséges."""
+    from app.admin_agent.forgatas_ismeret import ProfilHiba, ai_tanulas
+
+    b = body or ForgatasAiTanulasIn()
+    try:
+        ki = ai_tanulas(db, limit=b.limit, ujra=b.ujra)
     except ProfilHiba as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()

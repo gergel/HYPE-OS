@@ -921,6 +921,59 @@ is meg tudja adni a választ.
   ajánlatokból még NEM tanul. A bekötés külön kapcsoló mögé kerülne (alapból KI),
   ha kérik.
 
+### AK. Forgatás-ismeret: mi a feladat a forgatáson, és mi kell hozzá ✅ (tesztelve, élőben demóadattal megnézve; éles ~1000 forgatáson és valódi Geminivel: ⚠️ nem ellenőrzött)
+- A kérés: Lara értse, melyik forgatáson pontosan mi a feladat, és ez alapján
+  rakja össze a technikai listát és a briefet, visszamenőleg tanulva.
+- Feladat-felismerés (`admin_agent/forgatas_ismeret.py`), forgatásonként:
+  - típus: konferencia, koncert, rendezvény, esküvő, interjú, podcast, élő
+    közvetítés, sport, reklám, termék, fotó, oktató, ingatlan vagy egyéb;
+  - kimenetek: aftermovie, social, teljes felvétel, fotó, élő adás, interjú, reklámfilm;
+  - technikai jellemzők: interjú, hang, drón, kültér, sötét, mozgó kamera, több
+    kamera, stúdió, több napos, fotós, nagy stáb.
+- Rétegek: ember > AI > kulcsszó.
+  - A kulcsszavas réteg a név, esemény, kampány, leírás, brief, diszpó és az
+    utómunka-anyagok szövegéből dolgozik; a sablon-sorokat és a diszpó
+    mezőcímkéit kihagyja.
+  - Az AI-profil elavul, ha a forgatás szövege változik.
+- Tény-technika:
+  - forrás sorrendben: eszközkivitel, majd foglalás, majd a régi „Technika lista” szövege;
+  - a régi listából darabszámot is olvas („- 4db …”), így a Notion-korszak forgatásai is tanítanak.
+- Feladat-típus tapasztalat:
+  - az ilyen feladatú forgatások szokásos szerepei (legalább 60%-on, minimum 3 forgatásból);
+  - jellemzőhöz kötött szerepek, ahol a jellemző mellett legalább 50%, és a
+    gyakoriság legalább másfélszerese a jellemző nélkülinek (pl. drón → drón);
+  - a típus briefjeiben visszatérő instrukciók.
+- Diszpó-tervező:
+  - a hasonlóságban a közös feladat +2,5, a közös kimenet és jellemző is számít;
+  - a teljes korpuszból válogat: max. 3000 forgatás, nem csak az utolsó 600;
+  - a csomagot a típus és a jellemzők szerepei egészítik ki („a feladatból” jelölés);
+  - a briefbe „Feladat:” sor és a típus visszatérő instrukciói kerülnek;
+  - a modell megkapja a felismerést és a típus-tapasztalatot, és visszaadja a
+    saját értelmezését (`feladat_ertelmezes`).
+- Tudástár: típusonként `diszpo:feladat:<típus>`, valamint `diszpo:feladat:jellemzok`.
+- Visszamenőleges AI-tanulás:
+  - KÜLÖN kapcsoló: `limitek.forgatas_ai_tanulas`, alapból KI, óránként 30
+    forgatás, a legutóbbiaktól kezdve;
+  - kézzel is indítható (`POST /api/v1/admin-agent/forgatasok/ai-tanulas`);
+  - e-mail címet és telefonszámot nem küld a modellnek;
+  - az emberi javítást nem írja felül.
+- Tábla: `aa_forgatas_profilok`, migráció `a1s2f3p4r5o6`. Csak új tábla, a
+  forgatásokhoz nem nyúl.
+- API (forgatás-ismeret):
+  - `GET /forgatasok/ismeret`, `GET /forgatasok/{id}/ismeret`;
+  - `PATCH` és `DELETE /forgatasok/{id}/feladat`.
+- Felület:
+  - új oldal: *Lara → Forgatás-ismeret* (típus-szűrő, lista, részlet, javítás, AI-tanulás gomb);
+  - a diszpó-gomb előnézete mutatja a felismert feladatot és a típus tapasztalatát;
+  - új kapcsoló a Beállításokban.
+- Tesztek: 9 új; a teljes backend-csomag átment (377). Frontend: `tsc`,
+  `eslint`, `next build` rendben.
+- Élő bejárás demóadattal, utána takarítva (időbélyeg-szken üres).
+- ⚠️ A helyi adatbázisban csak 7 forgatás van, ezért élesben még ellenőrizendő:
+  - mennyire pontos a kulcsszavas felismerés a valódi ~1000 forgatáson;
+  - mennyi régi technika lista párosítható név szerint az eszköztörzzsel;
+  - hogyan teljesít a valódi Gemini.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

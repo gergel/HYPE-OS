@@ -18,9 +18,32 @@ type Tetel = {
   hasonlosag?: number;
 };
 
+export type FelismertFeladat = {
+  tipus: string;
+  tipus_cimke: string;
+  kimenetek: string[];
+  jellemzok: string[];
+  feladat_leiras: string | null;
+  osszegzes: string;
+  bizonyossag: number | null;
+  bizonyitek?: string[];
+  forras: "szabaly" | "modell" | "ember";
+};
+
+export type FeladatTapasztalat = {
+  cimke: string;
+  forgatasok: number;
+  technikas_forgatasok: number;
+  szerepek: { szerep: string; arany: number; db: number; proj: number; n: number; pelda: string[] }[];
+  jellemzo_szerepek: { jellemzo: string; szerep: string; arany: number; alap_arany: number; db: number; proj: number; n: number }[];
+  visszatero_instrukciok: string[];
+};
+
 type Tapasztalat = {
+  felismert_feladat: FelismertFeladat;
+  feladat_tapasztalat: FeladatTapasztalat;
   hasonlo_forgatasok: { id: number; nev: string; datum: string; okok: string[] }[];
-  technika: { tetelek: Tetel[]; figyelmeztetesek: string[]; tapasztalat_forgatasok: number };
+  technika: { tetelek: Tetel[]; figyelmeztetesek: string[]; tapasztalat_forgatasok: number; feladat_forgatasok?: number };
   visszatero_instrukciok: string[];
   diszpo_szoveg: {
     mezok: Record<string, { ertek: string; indoklas: string }>;
@@ -28,6 +51,69 @@ type Tapasztalat = {
     figyelmeztetesek: string[];
   };
 };
+
+const FELISMERES_FORRAS: Record<string, string> = {
+  szabaly: "kulcsszavak alapján",
+  modell: "AI pontosította",
+  ember: "ember javította",
+};
+
+/** Lara felismerése a forgatás feladatáról + amit az ilyen feladatú korábbi
+ * forgatásokról tud (szerepenként, arányokkal). */
+export function FeladatBlokk({ f, t, javitasLink }: { f: FelismertFeladat; t: FeladatTapasztalat | null; javitasLink?: string }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="font-medium text-text-primary">Mi a feladat? (Lara felismerése)</p>
+      <p className="text-text-primary">{f.feladat_leiras || f.osszegzes}</p>
+      {f.feladat_leiras && <p className="text-[12px] text-text-secondary">{f.osszegzes}</p>}
+      <p className="text-[12px] text-text-muted">
+        {FELISMERES_FORRAS[f.forras] ?? f.forras}
+        {f.bizonyossag != null ? ` · ${Math.round(f.bizonyossag * 100)}% biztos` : ""}
+        {f.bizonyitek && f.bizonyitek.length > 0 ? ` · ${f.bizonyitek.join(", ")}` : ""}
+        {javitasLink && (
+          <>
+            {" · "}
+            <Link href={javitasLink} className="underline">
+              javítás
+            </Link>
+          </>
+        )}
+      </p>
+      {t && t.forgatasok > 0 && (
+        <div className="mt-1">
+          <p className="text-text-secondary">
+            Az ilyen („{t.cimke.toLowerCase()}”) korábbi forgatások: {t.forgatasok}, ebből {t.technikas_forgatasok} ismert
+            technikával.
+          </p>
+          {t.szerepek.length > 0 && (
+            <ul className="list-disc pl-5 text-text-secondary">
+              {t.szerepek.slice(0, 10).map((s) => (
+                <li key={s.szerep}>
+                  <span className="text-text-primary">{s.szerep}</span> — {s.proj}/{s.n} forgatáson (
+                  {Math.round(s.arany * 100)}%), jellemzően {s.db} db
+                  {s.pelda.length > 0 ? ` · pl. ${s.pelda.join(", ")}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {t && t.jellemzo_szerepek.length > 0 && (
+        <div className="mt-1">
+          <p className="text-text-secondary">Ehhez a feladathoz kötődő eszközök (a korábbi forgatásokból felfedezve):</p>
+          <ul className="list-disc pl-5 text-text-secondary">
+            {t.jellemzo_szerepek.slice(0, 8).map((s) => (
+              <li key={`${s.jellemzo}-${s.szerep}`}>
+                {s.jellemzo} → <span className="text-text-primary">{s.szerep}</span> — {Math.round(s.arany * 100)}% (máshol{" "}
+                {Math.round(s.alap_arany * 100)}%)
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function hibaSzoveg(status: number, d: { detail?: unknown }): string {
   if (status === 423) return "Lara most le van állítva (vészleállítás).";
@@ -98,8 +184,8 @@ export function LaraDiszpoGomb({ projectId }: { projectId: number }) {
   return (
     <div className="flex flex-col gap-2 text-[13px]">
       <p className="text-text-secondary">
-        <strong className="text-text-primary">Lara:</strong> diszpó szövege, brief és technikai lista a korábbi hasonló
-        forgatások alapján (az eszközöket jóváhagyás után hozzá is rendeli - foglalt eszköz helyett hasonlót).
+        <strong className="text-text-primary">Lara:</strong> felismeri, mi a feladat a forgatáson, és ehhez írja meg a diszpó
+        szövegét, a briefet és a technikai listát a korábbi hasonló és ugyanilyen feladatú forgatások alapján (az eszközöket jóváhagyás után hozzá is rendeli - foglalt eszköz helyett hasonlót).
       </p>
       <div className="flex flex-wrap items-center gap-3 text-text-secondary">
         <label className="flex items-center gap-1.5">
@@ -141,6 +227,11 @@ export function LaraDiszpoGomb({ projectId }: { projectId: number }) {
       )}
       {tap && (
         <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-border p-3">
+          <FeladatBlokk
+            f={tap.felismert_feladat}
+            t={tap.feladat_tapasztalat}
+            javitasLink={`/admin-agent/forgatasok?forgatas=${projectId}`}
+          />
           <div>
             <p className="font-medium text-text-primary">Hasonló korábbi forgatások ({tap.hasonlo_forgatasok.length})</p>
             {tap.hasonlo_forgatasok.length === 0 ? (
@@ -157,7 +248,9 @@ export function LaraDiszpoGomb({ projectId }: { projectId: number }) {
           </div>
           <div>
             <p className="font-medium text-text-primary">
-              Szokásos technika ({tap.technika.tapasztalat_forgatasok} forgatás eszközei alapján)
+              Javasolt technika ({tap.technika.tapasztalat_forgatasok} hasonló forgatás
+              {tap.technika.feladat_forgatasok ? ` + ${tap.technika.feladat_forgatasok} ilyen feladatú forgatás` : ""} kivitt
+              eszközei alapján)
             </p>
             {tap.technika.tetelek.length === 0 ? (
               <p className="text-text-muted">Nincs elég tapasztalat a technikai csomaghoz.</p>
@@ -172,6 +265,9 @@ export function LaraDiszpoGomb({ projectId }: { projectId: number }) {
                       ? ` · ${t.helyettesiti.nev} helyett${t.hasonlosag != null ? ` (${Math.round(t.hasonlosag * 100)}% hasonló)` : ""}`
                       : ""}
                     {t.gyakorisag ? ` · ${t.gyakorisag}` : ""}
+                    {t.forras === "feladat" && (
+                      <span className="ml-1 rounded bg-bg-accent px-1 text-[11px] text-text-accent">a feladatból</span>
+                    )}
                     {t.mire_jo && <span className="block text-[12px] text-text-muted">{t.mire_jo}</span>}
                   </li>
                 ))}

@@ -570,3 +570,28 @@ class EszkozProfil(TimestampMixin, Base):
     #: modell-profil elavult és újraprofilozandó.
     forras_ujjlenyomat: Mapped[str | None] = mapped_column(String(64))
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
+
+
+class ForgatasProfil(TimestampMixin, Base):
+    """Lara forgatás-ismerete: MI A FELADAT egy forgatáson (feladat-típus,
+    kimenetek, technikai jellemzők, egy-két mondatos feladatleírás). Csak Lara
+    saját táblája - a forgatáshoz (projects) nem nyúl.
+
+    A szabály alapú felismerés mindig kiszámolható (nem kell tárolni); ide a
+    MODELL (AI) által pontosított és az EMBER által javított profil kerül.
+    Elsőbbség: ember > friss modell > szabály (lásd admin_agent/forgatas_ismeret.py)."""
+
+    __tablename__ = "aa_forgatas_profilok"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    profil: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    #: modell | ember
+    forras: Mapped[str] = mapped_column(String(20), nullable=False)
+    modell: Mapped[str | None] = mapped_column(String(120))
+    #: A forgatás szövegeinek lenyomata a profilozáskor - ha azóta átírták
+    #: (brief, leírás …), a modell-profil elavult és újraprofilozandó.
+    forras_ujjlenyomat: Mapped[str | None] = mapped_column(String(64))
+    employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
