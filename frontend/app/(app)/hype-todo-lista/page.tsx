@@ -7,6 +7,7 @@ import {
 } from "@/lib/api";
 import { HypeTodoContent } from "@/components/HypeTodoContent";
 import { TopBar } from "@/components/TopBar";
+import { budapestiMa } from "@/lib/idoszak";
 import { canDoPageAction } from "@/lib/permissions";
 
 const PAGE = "/hype-todo-lista";
@@ -46,6 +47,7 @@ export default async function HypeTodoListaPage() {
           canCreate={canCreate}
           canDelete={canDelete}
           canEdit={canEdit}
+          ma={budapestiMa()}
         />
       </div>
     </div>
