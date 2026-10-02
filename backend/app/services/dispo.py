@@ -24,6 +24,7 @@ lásd Project modell) is eltároljuk, és EZT adjuk át `in_reply_to`-ként."""
 from __future__ import annotations
 
 import logging
+from html import escape as html_escape
 import secrets
 from datetime import datetime, time, timedelta, timezone
 
@@ -45,7 +46,7 @@ _PRE_DISPO_HTML = """\
 <p>Alább a tárgyban említett diszpó előzetes infói.</p>
 <p>Helyszín:</p>
 <p><pre style="font-family:Arial">{helyszin}</pre></p>
-<p><pre style="font-family:Arial">{diszpo_szoveg}</pre></p>
+{kontaktok_blokk}<p><pre style="font-family:Arial">{diszpo_szoveg}</pre></p>
 <p><b>TOVÁBBI INFÓK HAMAROSAN!</b></p>
 <p><b>Fontos: válasz esetén mindig a 'Válasz Mindenkinek' funkciót használd!</b></p>
 <p>Köszönettel</p>
@@ -286,6 +287,16 @@ def diszpo_allapota(project: Project) -> str | None:
     return project.diszpo or ("Kiküldve" if project.diszpo_kikuldve_at else None)
 
 
+def _kontaktok_blokk(project: Project) -> str:
+    """A projekt KONTAKTOK mezője az előzetes diszpóban (a felhasználó
+    kérése): a stáb már ekkor tudjon egyeztetni a helyszíni kapcsolattal. Üres
+    mezőnél nincs blokk. A teljes diszpó PDF-jében eddig is benne volt."""
+    kontaktok = (project.kontaktok or "").strip()
+    if not kontaktok:
+        return ""
+    return f'<p>Kontaktok:</p>\n<p><pre style="font-family:Arial">{html_escape(kontaktok)}</pre></p>\n'
+
+
 def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) -> dict:
     """'Előzetes diszpó' gomb - rövid, technika-lista nélküli tájékoztató email
     (helyszín + diszpó szövege), nem generál PDF-et."""
@@ -295,7 +306,14 @@ def send_elozetes_diszpo(db: Session, project: Project, current_user: Employee) 
     if not to_list:
         raise ValueError("Nincs kitöltve 'Résztvevők email' - nincs kinek küldeni az előzetes diszpót.")
 
-    html = _PRE_DISPO_HTML.format(helyszin=project.helyszin or "", diszpo_szoveg=project.diszpo_szovege or "") + _SIGNATURE_HTML
+    html = (
+        _PRE_DISPO_HTML.format(
+            helyszin=project.helyszin or "",
+            kontaktok_blokk=_kontaktok_blokk(project),
+            diszpo_szoveg=project.diszpo_szovege or "",
+        )
+        + _SIGNATURE_HTML
+    )
     thread_id, _msg_id, rfc822 = send_message(
         to_list,
         _subject(project),

@@ -229,3 +229,43 @@ def test_2027_kulsos_d_g_oszlopok_torlese_nev_szerint(conn):
     assert conn.execute(sa.text("SELECT COUNT(*) FROM diszpo_oszlopok WHERE munkalap_id = :l"), {"l": regi}).scalar() == 1
     # Újrafuttatva nem töröl semmit.
     assert oszlop_torles.torles(conn) == []
+
+
+_spec_ures = importlib.util.spec_from_file_location(
+    "hype_2026_ures_oszlopok", Path(__file__).parents[1] / "alembic/versions/y8t5q96o3p17_hype_2026_kulsos_ures_oszlopok.py"
+)
+ures_oszlopok = importlib.util.module_from_spec(_spec_ures)
+_spec_ures.loader.exec_module(ures_oszlopok)
+
+
+def test_2026_kulsos_ures_b_e_oszlopok_torlese(conn):
+    # A = dátum, B-E üres (a D-ben viszont egy dátumos sorban van szöveg - az
+    # marad), F = nap, G = név.
+    cimkek = ["DÁTUM", None, None, None, None, "fotó + op", "GINO (demó)"]
+    lap = _lap(conn, 2026, "KÜLSŐS DISZPÓSTÁBLA", 1, 3, len(cimkek))
+    _sorok(conn, lap, 3)
+    conn.execute(sa.text("UPDATE diszpo_sorok SET datum = '2026-01-01' WHERE munkalap_id = :l AND idx >= 1"), {"l": lap})
+    for i, c in enumerate(cimkek):
+        _oszlop(conn, lap, i, c)
+        if c:
+            _cella(conn, lap, 0, i, c)
+    # A jelmagyarázat-sor (nem dátumos) „üresen hagyva” jele nem számít tartalomnak.
+    conn.execute(
+        sa.text("INSERT INTO diszpo_cellak (munkalap_id, sor_idx, oszlop_idx, szin) VALUES (:l, 0, 2, 'feher')"),
+        {"l": lap},
+    )
+    _cella(conn, lap, 2, 3, "HYPE26-0001 (demó)")
+    _cella(conn, lap, 1, 5, "csütörtök")
+
+    assert ures_oszlopok.torles(conn) == [1, 2, 4]
+
+    maradt = conn.execute(
+        sa.text("SELECT idx, cimke FROM diszpo_oszlopok WHERE munkalap_id = :l ORDER BY idx"), {"l": lap}
+    ).all()
+    assert [(o.idx, o.cimke) for o in maradt] == [(0, "DÁTUM"), (1, None), (2, "fotó + op"), (3, "GINO (demó)")]
+    assert conn.execute(
+        sa.text("SELECT ertek FROM diszpo_cellak WHERE munkalap_id = :l AND sor_idx = 1 AND oszlop_idx = 2"), {"l": lap}
+    ).scalar() == "csütörtök"
+    assert conn.execute(sa.text("SELECT oszlop_szam FROM diszpo_munkalapok WHERE id = :l"), {"l": lap}).scalar() == 4
+    # Újrafuttatva a kitöltött oszlop marad, más nem üres - nem töröl.
+    assert ures_oszlopok.torles(conn) == []
