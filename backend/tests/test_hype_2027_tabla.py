@@ -190,3 +190,42 @@ def test_2027_lapok_letrejonnek(conn):
     # Újrafuttatva nem jön létre második 2027-es tábla.
     migracio._tabla_2027(conn)
     assert conn.execute(sa.text("SELECT COUNT(*) FROM diszpo_munkalapok WHERE ev = 2027")).scalar() == 3
+
+
+_spec_torles = importlib.util.spec_from_file_location(
+    "hype_2027_oszlop_torles", Path(__file__).parents[1] / "alembic/versions/x7s4p85n2o06_hype_2027_kulsos_oszlopok_torlese.py"
+)
+oszlop_torles = importlib.util.module_from_spec(_spec_torles)
+_spec_torles.loader.exec_module(oszlop_torles)
+
+
+def test_2027_kulsos_d_g_oszlopok_torlese_nev_szerint(conn):
+    # A D-G a négy törlendő név - közéjük ékelve egy MARAD oszlop, hogy
+    # látszódjon: a név dönt, nem a betűjel.
+    cimkek = ["DÁTUM", "NAP", "DISZPÓSZÁM", "BALLA BERCI", "GINO", "MARAD (demó)", "PITE", "Stream Terminal", "UTOLSÓ (demó)"]
+    lap = _lap(conn, 2027, "KÜLSŐS DISZPÓSTÁBLA", 1, 2, len(cimkek))
+    _sorok(conn, lap, 2)
+    for i, c in enumerate(cimkek):
+        _oszlop(conn, lap, i, c)
+        _cella(conn, lap, 0, i, c)
+        _cella(conn, lap, 1, i, f"munka {i} (demó)")
+    # A 2026-os azonos nevű lapot nem érintheti.
+    regi = _lap(conn, 2026, "KÜLSŐS DISZPÓSTÁBLA", 1, 1, 4)
+    _oszlop(conn, regi, 3, "GINO")
+
+    assert oszlop_torles.torles(conn) == [3, 4, 6, 7]
+
+    maradt = conn.execute(
+        sa.text("SELECT idx, cimke FROM diszpo_oszlopok WHERE munkalap_id = :l ORDER BY idx"), {"l": lap}
+    ).all()
+    assert [(o.idx, o.cimke) for o in maradt] == [
+        (0, "DÁTUM"), (1, "NAP"), (2, "DISZPÓSZÁM"), (3, "MARAD (demó)"), (4, "UTOLSÓ (demó)"),
+    ]
+    # A cellák is a helyükre csúsztak.
+    assert conn.execute(
+        sa.text("SELECT ertek FROM diszpo_cellak WHERE munkalap_id = :l AND sor_idx = 1 AND oszlop_idx = 4"), {"l": lap}
+    ).scalar() == "munka 8 (demó)"
+    assert conn.execute(sa.text("SELECT oszlop_szam FROM diszpo_munkalapok WHERE id = :l"), {"l": lap}).scalar() == 5
+    assert conn.execute(sa.text("SELECT COUNT(*) FROM diszpo_oszlopok WHERE munkalap_id = :l"), {"l": regi}).scalar() == 1
+    # Újrafuttatva nem töröl semmit.
+    assert oszlop_torles.torles(conn) == []
