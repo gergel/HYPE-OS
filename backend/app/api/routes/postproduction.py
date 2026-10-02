@@ -873,6 +873,10 @@ class ForgatasStab(BaseModel):
     forgatas: str | None
     datum: str | None
     nevek: list[str]
+    #: Az anyag SAJÁT forgatása (közvetlenül ehhez a projekthez kötött) - csak
+    #: ennek a stábja tiltja a visszajelzés kihagyását, a projektkód többi
+    #: forgatásáé nem (lásd deliverable_actions.kihagyhato_a_visszajelzes).
+    sajat: bool = False
 
 
 @deliverable_actions_router.get("/{deliverable_id}/forgatas-stab", response_model=list[ForgatasStab])
@@ -891,6 +895,7 @@ def forgatas_stab(
             forgatas=projekt.nev,
             datum=projekt.forgatas_datuma.isoformat() if projekt.forgatas_datuma else None,
             nevek=nevek,
+            sajat=obj.project_id is not None and projekt.id == obj.project_id,
         )
         for projekt, nevek in deliverable_actions.forgatasok_stabbal(db, obj)
     ]

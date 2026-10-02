@@ -443,9 +443,14 @@ def forgatasok_stabbal(db: Session, deliverable: Deliverable) -> list[tuple[Proj
 
 
 def kihagyhato_a_visszajelzes(db: Session, deliverable: Deliverable) -> bool:
-    """A vágói visszajelzés csak akkor hagyható ki, ha az anyaghoz NEM tartozik
-    olyan forgatás, amin volt stáb (a felhasználó kérése): ahol emberek
-    forgattak, ott nekik szól a visszajelzés, azt nem lehet átugrani."""
+    """A vágói visszajelzés NEM hagyható ki, ha az anyag egy KONKRÉT
+    forgatáshoz (projekthez) kötött, és azon volt stáb (a felhasználó kérése):
+    ott nekik szól a visszajelzés. Csak a PROJEKT számít, a projektkód nem:
+    egy kód akár egy hónapot is átölel, és alatta vannak forgatás nélküli
+    anyagok is - azoknál a kód másik forgatásának stábja nem tiltja a
+    kihagyást."""
+    if deliverable.project_id is None:
+        return True
     return not any(nevek for _, nevek in forgatasok_stabbal(db, deliverable))
 
 
@@ -478,7 +483,7 @@ def send_visszajelzes(
 
         if not kihagyhato_a_visszajelzes(db, deliverable):
             raise ValueError(
-                "Ez a visszajelzés nem hagyható ki: az anyaghoz tartozó forgatáson stáb dolgozott - "
+                "Ez a visszajelzés nem hagyható ki: az anyag forgatásán stáb dolgozott - "
                 "nekik szól, kérjük, töltsd ki."
             )
 

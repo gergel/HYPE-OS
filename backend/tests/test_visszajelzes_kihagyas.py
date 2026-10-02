@@ -67,3 +67,23 @@ def test_forgatas_nelkuli_anyagnal_kihagyhato(db):
     db.add(anyag)
     db.flush()
     assert deliverable_actions.kihagyhato_a_visszajelzes(db, anyag) is True
+
+
+def test_csak_projektkodhoz_kotott_anyag_kihagyhato_akkor_is_ha_a_kod_mas_forgatasan_volt_stab(db):
+    from app.models.project_code import ProjectCode
+
+    ember = db.scalars(select(Employee).where(Employee.full_name.is_not(None)).limit(1)).first()
+    kod = ProjectCode(projektkod="HYPE99-9901")
+    db.add(kod)
+    db.flush()
+    p = Project(nev="Stábos forgatás (demó)", forgatas_datuma=date(2026, 9, 1), project_code_id=kod.id)
+    p.crew = [ember]
+    db.add(p)
+    db.flush()
+    # Ugyanazon a kódon egy forgatás NÉLKÜLI anyag - kihagyható.
+    anyag = Deliverable(projekt_neve="Forgatás nélküli anyag (demó)", project_code_id=kod.id)
+    db.add(anyag)
+    db.flush()
+    assert deliverable_actions.kihagyhato_a_visszajelzes(db, anyag) is True
+    fb = deliverable_actions.send_visszajelzes(db, anyag, ember, kihagyas_indoka="Archív anyag (demó)")
+    assert fb.kihagyva is True

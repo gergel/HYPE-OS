@@ -28,7 +28,10 @@ const SZEMPONTOK = [
 
 type Pontok = Partial<Record<(typeof SZEMPONTOK)[number]["kulcs"], number>>;
 
-type ForgatasStab = { forgatas: string | null; datum: string | null; nevek: string[] };
+/** `sajat`: az anyag SAJÁT forgatása (közvetlenül ehhez a projekthez kötött) -
+ * csak ennek a stábja tiltja a visszajelzés kihagyását, a projektkód többi
+ * forgatásáé nem (egy kód akár egy hónapot is átölel). */
+type ForgatasStab = { forgatas: string | null; datum: string | null; nevek: string[]; sajat?: boolean };
 
 /** A vágói visszajelzés felugró űrlapja - ide szedve ki a FeedbackSendButton-
  * ból, hogy máshonnan is nyitható legyen (lásd UtomunkaContent.kartyaAthelyezes:
@@ -84,6 +87,10 @@ export function VisszajelzesModal({
       aktiv = false;
     };
   }, [deliverableId]);
+
+  // Csak az anyag SAJÁT forgatásának stábja tiltja a kihagyást - a szerver
+  // ugyanezt ellenőrzi (services/deliverable_actions.kihagyhato_a_visszajelzes).
+  const kihagyasTiltva = stab.some((s) => s.sajat && s.nevek.length > 0);
 
   async function kuld(kihagyassal = false) {
     if (kihagyassal) {
@@ -213,15 +220,16 @@ export function VisszajelzesModal({
         {/* KIHAGYÁS (a felhasználó kérése): az automatikusan feldobott űrlap
             átugorható, de csak indoklással - az indok "kihagyva" jelöléssel a
             visszajelzések közé kerül, és az állapotváltás így is folytatódik. */}
-        {/* Ha az anyaghoz tartozó forgatáson STÁB dolgozott, a visszajelzés
+        {/* Ha az anyag SAJÁT forgatásán STÁB dolgozott, a visszajelzés
             nem hagyható ki (a felhasználó kérése) - nekik szól; ezt a szerver
-            is ellenőrzi (services/deliverable_actions.kihagyhato_a_visszajelzes). */}
-        {kihagyhato && stab.length > 0 && (
+            is ellenőrzi (services/deliverable_actions.kihagyhato_a_visszajelzes).
+            Csak a saját forgatás számít, a projektkód többi forgatása nem. */}
+        {kihagyhato && kihagyasTiltva && (
           <p className="mt-5 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5 text-[12.5px] text-text-secondary">
-            Ez a visszajelzés nem hagyható ki: az anyaghoz tartozó forgatáson stáb dolgozott, nekik szól.
+            Ez a visszajelzés nem hagyható ki: az anyag forgatásán stáb dolgozott, nekik szól.
           </p>
         )}
-        {kihagyhato && stabBetoltve && stab.length === 0 && (
+        {kihagyhato && stabBetoltve && !kihagyasTiltva && (
           <div className="mt-5 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
             <p className="mb-1.5 text-[13px] text-text-primary">Most nem írok visszajelzést</p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
