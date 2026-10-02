@@ -886,29 +886,14 @@ def forgatas_stab(
     (forgatásonként csoportosítva). A stáb a diszpós stáblista (Project.crew)
     plusz az alvállalkozók (alvallalkozo_stab)."""
     obj = _get_deliverable_or_404(deliverable_id, db, current_user)
-    projektek = []
-    if obj.project_id is not None:
-        projekt = db.get(Project, obj.project_id)
-        if projekt is not None:
-            projektek = [projekt]
-    elif obj.project_code_id is not None:
-        projektek = db.scalars(
-            select(Project).where(Project.project_code_id == obj.project_code_id).order_by(Project.forgatas_datuma)
-        ).all()
-    valasz: list[ForgatasStab] = []
-    for projekt in projektek:
-        nevek: list[str] = []
-        for ember in list(projekt.crew) + list(getattr(projekt, "alvallalkozo_stab", []) or []):
-            if ember.full_name and ember.full_name not in nevek:
-                nevek.append(ember.full_name)
-        valasz.append(
-            ForgatasStab(
-                forgatas=projekt.nev,
-                datum=projekt.forgatas_datuma.isoformat() if projekt.forgatas_datuma else None,
-                nevek=nevek,
-            )
+    return [
+        ForgatasStab(
+            forgatas=projekt.nev,
+            datum=projekt.forgatas_datuma.isoformat() if projekt.forgatas_datuma else None,
+            nevek=nevek,
         )
-    return valasz
+        for projekt, nevek in deliverable_actions.forgatasok_stabbal(db, obj)
+    ]
 
 
 class VisszajelzesIn(BaseModel):

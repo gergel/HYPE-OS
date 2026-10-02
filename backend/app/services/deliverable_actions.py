@@ -17,6 +17,7 @@ from app.models.deliverable import Deliverable
 from app.models.deliverable_comment import DeliverableComment
 from app.models.employee import Employee
 from app.models.feedback import Feedback
+from app.models.project import Project
 from app.models.rate import Rate
 from app.models.timesheet import Timesheet
 from app.models.user_access import PageAccessConfig
@@ -412,6 +413,42 @@ def _ellenoriz_pont(nev: str, ertek: float | None) -> None:
         raise ValueError(f"A(z) {nev} pontszám {PONT_MIN} és {PONT_MAX} közé eshet (kapott: {ertek}).")
 
 
+def forgatasok_stabbal(db: Session, deliverable: Deliverable) -> list[tuple[Project, list[str]]]:
+    """Az anyaghoz tartozó forgatás(ok) és a stábjuk neve.
+
+    Ha az anyag közvetlenül egy forgatáshoz kötött, azé; ha csak
+    projektkódhoz, a kód összes forgatásáé. A stáb a diszpós stáblista
+    (Project.crew) plusz az alvállalkozók (alvallalkozo_stab)."""
+    projektek: list[Project] = []
+    if deliverable.project_id is not None:
+        projekt = db.get(Project, deliverable.project_id)
+        if projekt is not None:
+            projektek = [projekt]
+    elif deliverable.project_code_id is not None:
+        projektek = list(
+            db.scalars(
+                select(Project)
+                .where(Project.project_code_id == deliverable.project_code_id)
+                .order_by(Project.forgatas_datuma)
+            ).all()
+        )
+    eredmeny: list[tuple[Project, list[str]]] = []
+    for projekt in projektek:
+        nevek: list[str] = []
+        for ember in list(projekt.crew) + list(getattr(projekt, "alvallalkozo_stab", []) or []):
+            if ember.full_name and ember.full_name not in nevek:
+                nevek.append(ember.full_name)
+        eredmeny.append((projekt, nevek))
+    return eredmeny
+
+
+def kihagyhato_a_visszajelzes(db: Session, deliverable: Deliverable) -> bool:
+    """A vágói visszajelzés csak akkor hagyható ki, ha az anyaghoz NEM tartozik
+    olyan forgatás, amin volt stáb (a felhasználó kérése): ahol emberek
+    forgattak, ott nekik szól a visszajelzés, azt nem lehet átugrani."""
+    return not any(nevek for _, nevek in forgatasok_stabbal(db, deliverable))
+
+
 def send_visszajelzes(
     db: Session,
     deliverable: Deliverable,
@@ -438,6 +475,12 @@ def send_visszajelzes(
     # ellenőrzésbe-tétel feltételét viszont teljesíti.
     if (kihagyas_indoka or "").strip():
         from app.models.feedback import VisszajelzesAllapot
+
+        if not kihagyhato_a_visszajelzes(db, deliverable):
+            raise ValueError(
+                "Ez a visszajelzés nem hagyható ki: az anyaghoz tartozó forgatáson stáb dolgozott - "
+                "nekik szól, kérjük, töltsd ki."
+            )
 
         feedback = Feedback(
             deliverable_id=deliverable.id,

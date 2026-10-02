@@ -65,13 +65,19 @@ export function VisszajelzesModal({
   // KIK FORGATTAK az anyag projektjén (a felhasználó kérése) - a vágó lássa,
   // kiknek szól a visszajelzés. Csendben marad üres, ha nincs stáb-adat.
   const [stab, setStab] = useState<ForgatasStab[]>([]);
+  // Amíg a stáb nem töltődött be, a kihagyás sem kínálható fel: ha a
+  // forgatáson volt stáb, a visszajelzés NEM hagyható ki (lásd lent).
+  const [stabBetoltve, setStabBetoltve] = useState(false);
 
   useEffect(() => {
     let aktiv = true;
     authFetch(`/api/v1/deliverables/${deliverableId}/forgatas-stab`)
       .then((res) => (res.ok ? res.json() : []))
       .then((adat: ForgatasStab[]) => {
-        if (aktiv) setStab(adat.filter((s) => s.nevek.length > 0));
+        if (aktiv) {
+          setStab(adat.filter((s) => s.nevek.length > 0));
+          setStabBetoltve(true);
+        }
       })
       .catch(() => {});
     return () => {
@@ -207,7 +213,15 @@ export function VisszajelzesModal({
         {/* KIHAGYÁS (a felhasználó kérése): az automatikusan feldobott űrlap
             átugorható, de csak indoklással - az indok "kihagyva" jelöléssel a
             visszajelzések közé kerül, és az állapotváltás így is folytatódik. */}
-        {kihagyhato && (
+        {/* Ha az anyaghoz tartozó forgatáson STÁB dolgozott, a visszajelzés
+            nem hagyható ki (a felhasználó kérése) - nekik szól; ezt a szerver
+            is ellenőrzi (services/deliverable_actions.kihagyhato_a_visszajelzes). */}
+        {kihagyhato && stab.length > 0 && (
+          <p className="mt-5 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5 text-[12.5px] text-text-secondary">
+            Ez a visszajelzés nem hagyható ki: az anyaghoz tartozó forgatáson stáb dolgozott, nekik szól.
+          </p>
+        )}
+        {kihagyhato && stabBetoltve && stab.length === 0 && (
           <div className="mt-5 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
             <p className="mb-1.5 text-[13px] text-text-primary">Most nem írok visszajelzést</p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
