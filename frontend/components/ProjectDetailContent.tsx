@@ -177,7 +177,9 @@ export async function ProjectDetailContent({
       ]);
 
   const equipmentById = new Map(allEquipment.map((e) => [e.id, e]));
-  const equipmentOptions = allEquipment.map((e) => ({
+  // Archivált eszköz nem foglalható - a meglévő (akár múltbeli) foglalások
+  // neve viszont az equipmentById-ból továbbra is feloldódik.
+  const equipmentOptions = allEquipment.filter((e) => !e.archivalva_at).map((e) => ({
     id: e.id,
     label: e.nev,
     href: `/felszereles/${e.id}`,
@@ -262,7 +264,7 @@ export async function ProjectDetailContent({
       if (!equipment) return null;
       return {
         id: Number(b.id),
-        label: equipment.nev,
+        label: equipment.archivalva_at ? `${equipment.nev} (archivált)` : equipment.nev,
         href: `/felszereles/${equipment.id}`,
         qty: Number(b.qty ?? 1),
         trackMode: equipment.track_mode,

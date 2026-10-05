@@ -115,6 +115,8 @@ def _find_alternative_optics(
             continue
         if cand.hasznalhato and cand.hasznalhato != "Használható":
             continue
+        if cand.archivalva_at is not None:
+            continue
 
         conflict = False
         for a in db.scalars(select(Assignment).where(Assignment.equipment_id == cand.id)):
@@ -164,6 +166,13 @@ def check_technika(db: Session, project: Project, *, commit: bool = True) -> dic
         all_items.append(
             {"name": equipment.nev, "category": equipment.kategoria, "track_mode": equipment.track_mode.value, "qty": a.qty}
         )
+
+        # Archivált eszköz egy még előttünk álló forgatáson: le kell venni róla
+        # (a múltbeli forgatáson viszont rendben van - ott volt kint).
+        if equipment.archivalva_at is not None and end >= date.today():
+            ok = False
+            messages.append(f"{equipment.nev} archivált eszköz - vedd le a technikáról, vagy állítsd vissza.")
+            continue
 
         if equipment.track_mode == TrackMode.ASSET:
             conflict_project_ids = {

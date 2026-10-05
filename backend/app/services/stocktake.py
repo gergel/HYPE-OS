@@ -39,7 +39,8 @@ def start_session(db: Session, current_user: Employee) -> StocktakeSession:
     db.add(session)
     db.flush()
 
-    for equipment in db.scalars(select(Equipment)):
+    # Az archivált eszköz nincs a raktárban - nem kerül az új leltárba.
+    for equipment in db.scalars(select(Equipment).where(Equipment.archivalva_at.is_(None))):
         db.add(
             StocktakeItem(
                 session_id=session.id,

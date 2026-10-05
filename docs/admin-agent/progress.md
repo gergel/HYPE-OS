@@ -1032,6 +1032,16 @@ is meg tudja adni a választ.
   kapcsolattal, visszagörgetve). Egy régi tesztsor nem függ többé a helyi
   adatbázis extra forgatásaitól.
 
+### AN. Archivált eszköz: Lara sem javasolja ✅ (tesztelve)
+- Eszköz-archiválás (Felszerelés, 2026-10, migráció `b2e3q4u5i6p7`):
+  `equipment.archivalva_at` / `archivalta_id` / `archivalas_oka`.
+- Lara `hasznalhato()` (diszpó-tervező, eszköz-ismeret) az archivált eszközt
+  nem használhatónak veszi: nem kerül a technikai javaslatba, és helyettesítőnek
+  sem választható.
+- A közös foglalási út (`eszkoz_foglalas.hozzarendel`) is elutasítja, így Lara
+  végrehajtója sem tud ilyen eszközt kiírni. A múltbeli forgatások tény-
+  technikájában (tanulás) megmarad.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

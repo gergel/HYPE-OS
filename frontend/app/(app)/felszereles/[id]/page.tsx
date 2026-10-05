@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { DetailSections } from "@/components/DetailSections";
+import { EszkozArchivalas } from "@/components/EszkozArchivalas";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TopBar } from "@/components/TopBar";
 import { StatusBadge } from "@/components/StatusBadge";
+import { canDoPageAction } from "@/lib/permissions";
 import {
   ENTITY_PATHS,
   getDetailTabs,
@@ -78,7 +80,7 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
     pagePermissions,
     // A „hány forgatáson vett részt” ugyanazt mondja, mint a forgatások száma
     // - kétszer kiírva csak zavarna.
-    alwaysHidden: ["project_ids", "hany_forgatason_vett_reszt"],
+    alwaysHidden: ["project_ids", "hany_forgatason_vett_reszt", "archivalva_at", "archivalta_id", "archivalas_oka"],
   });
 
   return (
@@ -88,6 +90,12 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
         <div className="space-y-2">
           <BackLink href="/felszereles" label="Felszerelés" />
           <h1 className="t-page">{String(equipment.nev ?? `Eszköz #${equipment.id}`)}</h1>
+          <EszkozArchivalas
+            equipmentId={equipment.id}
+            archivalvaAt={(equipment.archivalva_at as string | null) ?? null}
+            archivalasOka={(equipment.archivalas_oka as string | null) ?? null}
+            canEdit={canDoPageAction(pagePermissions, PAGE, "edit")}
+          />
         </div>
 
         <DetailSections sections={tabs} />

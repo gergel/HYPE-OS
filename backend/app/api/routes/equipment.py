@@ -61,6 +61,83 @@ router = build_crud_router(
 )
 
 
+class ArchivalasIn(BaseModel):
+    ok: str | None = None
+
+
+class JovobeliFoglalas(BaseModel):
+    project_id: int
+    nev: str
+    datum: date | None
+
+
+class ArchivalasValasz(BaseModel):
+    id: int
+    archivalva_at: datetime | None
+    archivalas_oka: str | None
+    #: Az eszköz még előttünk álló forgatásai - ezekről le kell venni (az
+    #: archiválás nem törli a foglalást; a „Technika ready” is jelzi).
+    jovobeli_foglalasok: list[JovobeliFoglalas] = []
+
+
+def _jovobeli_foglalasok(db: Session, equipment_id: int) -> list[JovobeliFoglalas]:
+    ma = datetime.now(BUDAPEST_IDOZONA).date()
+    sorok = db.execute(
+        select(Project.id, Project.nev, Project.forgatas_datuma, Project.forgatas_datuma_vege)
+        .join(Assignment, Assignment.project_id == Project.id)
+        .where(Assignment.equipment_id == equipment_id)
+        .distinct()
+    ).all()
+    ki = [
+        JovobeliFoglalas(project_id=pid, nev=nev, datum=kezd)
+        for pid, nev, kezd, vege in sorok
+        if (vege or kezd) is not None and (vege or kezd) >= ma
+    ]
+    return sorted(ki, key=lambda f: f.datum or date.max)
+
+
+@router.post("/{equipment_id}/archivalas", response_model=ArchivalasValasz)
+def eszkoz_archivalas(
+    equipment_id: int,
+    payload: ArchivalasIn | None = None,
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action("/felszereles", "edit")),
+):
+    """ARCHIVÁLÁS (a felhasználó kérése, 2026-10): az eszköz eltűnik a
+    Felszerelés listáról, nem foglalható forgatásra és nem írható ki az
+    eszközkivitelben - a múltbeli forgatásainál (foglalás, kivitel) viszont
+    megmarad. Semmit nem töröl; visszaállítható. A válasz felsorolja, melyik
+    még előttünk álló forgatásra van foglalva - azokról le kell venni."""
+    e = db.get(Equipment, equipment_id)
+    if e is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Az eszköz nem található.")
+    if e.archivalva_at is None:
+        e.archivalva_at = datetime.now(BUDAPEST_IDOZONA)
+        e.archivalta_id = user.id
+    e.archivalas_oka = ((payload.ok if payload else None) or "").strip() or e.archivalas_oka
+    db.commit()
+    return ArchivalasValasz(id=e.id, archivalva_at=e.archivalva_at, archivalas_oka=e.archivalas_oka,
+                            jovobeli_foglalasok=_jovobeli_foglalasok(db, e.id))
+
+
+@router.post("/{equipment_id}/visszaallitas", response_model=ArchivalasValasz)
+def eszkoz_visszaallitas(
+    equipment_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action("/felszereles", "edit")),
+):
+    """Az archivált eszköz visszaállítása: újra látszik a listán, foglalható
+    és kiírható."""
+    e = db.get(Equipment, equipment_id)
+    if e is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Az eszköz nem található.")
+    e.archivalva_at = None
+    e.archivalta_id = None
+    e.archivalas_oka = None
+    db.commit()
+    return ArchivalasValasz(id=e.id, archivalva_at=None, archivalas_oka=None)
+
+
 class EszkozForgatas(BaseModel):
     project_id: int
     nev: str
@@ -159,10 +236,13 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
     # UGYANAZ az eszköz, UGYANARRA a projektre és időszakra: nem nyitunk új
     # sort (készletesnél +db, egyedinél a meglévő sor) - a közös szabály a
     # services/eszkoz_foglalas.py-ban él, Lara technikai listája is azt hívja.
-    from app.services.eszkoz_foglalas import hozzarendel
+    from app.services.eszkoz_foglalas import ArchivaltEszkoz, hozzarendel
 
     data = payload.model_dump(exclude={"equipment_id", "project_id"})
-    obj, _ = hozzarendel(db, project, equipment, **data)
+    try:
+        obj, _ = hozzarendel(db, project, equipment, **data)
+    except ArchivaltEszkoz as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     db.commit()
     db.refresh(obj)
     return obj

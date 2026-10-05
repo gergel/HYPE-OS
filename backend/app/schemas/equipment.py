@@ -32,6 +32,10 @@ class EquipmentUpdate(BaseModel):
 class EquipmentRead(EquipmentBase):
     id: int
     project_ids: list[int] = []
+    #: Archiválás (csak olvasható - az archivalas / visszaallitas végpont írja).
+    archivalva_at: datetime | None = None
+    archivalta_id: int | None = None
+    archivalas_oka: str | None = None
 
     # a 'Leltár' Notion tábla maradék mezői, egyenként (lásd scripts/dump_extra_keys.py)
     leltar_20240415: bool | None = None

@@ -166,7 +166,8 @@ def _belepes_valasz(db: Session, kivitel: EszkozKivitel) -> BelepesValasz:
             .options(selectinload(Assignment.equipment))
         ).all()
         for f in foglalasok:
-            if f.equipment is None:
+            # Az archivált eszköz nem ajánlható kiírásra (nem vihető ki).
+            if f.equipment is None or f.equipment.archivalva_at is not None:
                 continue
             ajanlott.append(
                 AjanlottTetel(
@@ -179,7 +180,9 @@ def _belepes_valasz(db: Session, kivitel: EszkozKivitel) -> BelepesValasz:
             )
     eszkozok = [
         EszkozInfo(id=e.id, nev=e.nev, kategoria=e.kategoria, track_mode=str(e.track_mode))
-        for e in db.scalars(select(Equipment).order_by(Equipment.kategoria, Equipment.nev)).all()
+        for e in db.scalars(
+            select(Equipment).where(Equipment.archivalva_at.is_(None)).order_by(Equipment.kategoria, Equipment.nev)
+        ).all()
     ]
     project = kivitel.project
     return BelepesValasz(
@@ -251,6 +254,13 @@ def tetel_mentes(kod: str, payload: TetelKeres, db: Session = Depends(get_db)):
     eszkoz = db.get(Equipment, payload.equipment_id)
     if eszkoz is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nincs ilyen eszköz.")
+    # Archivált eszközt KIVINNI nem lehet (visszahozni igen - ha épp kint volt,
+    # amikor archiválták, a visszahozatala rendben lezárható).
+    if eszkoz.archivalva_at is not None and (payload.kivitt_db or payload.kivitt_hozzaadas):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"„{eszkoz.nev}” archivált eszköz - nem írható ki forgatásra.",
+        )
     tetel = db.scalar(
         select(EszkozKivitelTetel).where(
             EszkozKivitelTetel.kivitel_id == kivitel.id,

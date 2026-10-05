@@ -274,6 +274,9 @@ export type Equipment = {
   allapot: string | null;
   track_mode: string;
   osszes_mennyiseg: number | null;
+  /** Archiválás ideje (null: aktív eszköz) - lásd backend models/equipment.py. */
+  archivalva_at?: string | null;
+  archivalas_oka?: string | null;
 };
 
 export type Campaign = {

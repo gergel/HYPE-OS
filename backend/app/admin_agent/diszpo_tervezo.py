@@ -111,6 +111,8 @@ def _tartomany(p: Project) -> tuple[date, date] | None:
 
 
 def hasznalhato(e: Equipment) -> bool:
+    if e.archivalva_at is not None:
+        return False
     if e.hasznalhato and e.hasznalhato != HASZNALHATO:
         return False
     if e.archive_statusz and "archiv" in e.archive_statusz.lower():
@@ -1014,7 +1016,8 @@ def diszpo_mentes_futtato(db: Session, proposal, task, user) -> dict:
             if e is None:
                 raise DiszpoHiba(f"Az eszköz már nem létezik: {t.get('nev')} (#{t.get('equipment_id')}).")
             if not hasznalhato(e):
-                raise DiszpoHiba(f"{e.nev} közben nem használhatóvá vált ({e.hasznalhato or e.archive_statusz}).")
+                raise DiszpoHiba(f"{e.nev} közben nem használhatóvá vált "
+                                 f"({'archiválták' if e.archivalva_at is not None else (e.hasznalhato or e.archive_statusz)}).")
             a, mi = hozzarendel(db, project, e, qty=int(t.get("qty") or 1))
             if mi == "uj":
                 uj_idk.append(a.id)

@@ -20,6 +20,10 @@ class Equipment(TimestampMixin, Base):
 
     __tablename__ = "equipment"
 
+    @property
+    def archivalt(self) -> bool:
+        return self.archivalva_at is not None
+
     id: Mapped[int] = mapped_column(primary_key=True)
     nev: Mapped[str] = mapped_column(String(255), nullable=False)
     # Nem unique: a Notion forrás nem garantálja az egyediséget (pl. több
@@ -31,6 +35,15 @@ class Equipment(TimestampMixin, Base):
     kategoria: Mapped[str | None] = mapped_column(String(100))
     allapot: Mapped[str | None] = mapped_column(String(50))
     archive_statusz: Mapped[str | None] = mapped_column(String(50))
+    #: ARCHIVÁLÁS (a felhasználó kérése, 2026-10): az archivált eszköz eltűnik a
+    #: Felszerelés listáról, nem foglalható forgatásra és nem írható ki az
+    #: eszközkivitelben - de a MÚLTBELI forgatásoknál (foglalás, kivitel)
+    #: megmarad, hogy látsszon, mi volt kint. Visszaállítható (lásd
+    #: routes/equipment.py archivalas / visszaallitas). A régi, Notionből
+    #: örökölt `archive_statusz` szöveg ettől független.
+    archivalva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archivalta_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
+    archivalas_oka: Mapped[str | None] = mapped_column(Text)
     track_mode: Mapped[TrackMode] = mapped_column(
         Enum(TrackMode, name="equipment_track_mode", values_callable=lambda obj: [e.value for e in obj]),
         default=TrackMode.ASSET,
