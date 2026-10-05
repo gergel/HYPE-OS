@@ -257,6 +257,9 @@ class Settings(BaseSettings):
     # be a számlák, ha senki nem nyitja meg az oldalt). 0 = kikapcsolva, csak
     # a kézi "Ellenőrzés most" fut. Env: SZAMLA_AUTO_GYAKORISAG_PERC.
     szamla_auto_gyakorisag_perc: int = 15
+    #: Lara forgatás-tanulásának gyakorisága percben (0 = nem fut a háttérben;
+    #: lásd main._lara_forgatas_tanulas).
+    forgatas_tanulas_gyakorisag_perc: int = 10
 
     # AI ASSZISZTENS: legfeljebb hány eszköz-kört futhat egy kérés (a
     # felhasználó kérése: bárhány lépés mehessen - 0 = nincs kör-korlát, csak

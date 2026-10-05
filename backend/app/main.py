@@ -140,6 +140,51 @@ def _szamla_auto_erkeztetes() -> None:
     logger.info("Automatikus számla-érkeztetés bekapcsolva: %s percenként.", gyakorisag)
 
 
+@app.on_event("startup")
+def _lara_forgatas_tanulas() -> None:
+    """Lara forgatás-ismeretének HÁTTÉR-TANULÁSA: 10 percenként a következő 50
+    korábbi forgatás AI-felismerése, amíg mind kész (lásd
+    admin_agent/forgatas_ismeret.hatter_futas). A webes folyamatban fut, nem
+    a Celery-workerben: annak két szálát a portál órás munkái (átkódolás,
+    ZIP-export) foglalhatják, és akkor a feladat csak állt a sorban.
+
+    Több uvicorn worker / konténer esetén a hatter_feladatok táblán lévő zár
+    biztosítja, hogy egyszerre csak egy példány dolgozzon. A kapcsoló
+    (Beállítások) és a vészleállítás minden körben számít. Tesztfutásnál nem
+    indul."""
+    import sys
+    import threading
+    import time as _time
+
+    if "pytest" in sys.modules:
+        return
+    gyakorisag = int(settings.forgatas_tanulas_gyakorisag_perc or 0)
+    if gyakorisag <= 0:
+        logger.info("Lara forgatás-tanulása kikapcsolva (FORGATAS_TANULAS_GYAKORISAG_PERC=0).")
+        return
+
+    def _kor() -> None:
+        from datetime import timedelta
+
+        from app.admin_agent import forgatas_ismeret
+        from app.services import hatter_feladat
+
+        _time.sleep(90)  # az indulás után rövid várakozás, aztán rögtön az első kör
+        while True:
+            try:
+                hatter_feladat.inditas(
+                    forgatas_ismeret.HATTER_NEV,
+                    forgatas_ismeret.hatter_futas,
+                    elavulas=timedelta(hours=1),
+                )
+            except Exception:  # noqa: BLE001 - a következő kör újrapróbálja
+                logger.exception("Lara forgatás-tanulása: a kör nem indult el.")
+            _time.sleep(gyakorisag * 60)
+
+    threading.Thread(target=_kor, daemon=True, name="lara-forgatas-tanulas").start()
+    logger.info("Lara forgatás-tanulása bekapcsolva: %s percenként.", gyakorisag)
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "environment": settings.environment}

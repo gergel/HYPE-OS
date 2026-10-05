@@ -1009,6 +1009,29 @@ is meg tudja adni a választ.
 - Élő bejárás demóadattal, utána takarítva: a demó forgatások, a belőlük
   született tudás-darabok és a pillanatkép is törölve; az időbélyeg-szken üres.
 
+### AM. Forgatás-ismeret: a háttér-tanulás a webes folyamatba költözött ✅ (tesztelve; élesben az első körök: ⚠️ nem ellenőrzött)
+- A hibajelzés: a felület szerint „10 percenként 50”, de a forgatások nem fogytak.
+- Ok (a kódból, éles napló nélkül): a feladat a Celery-workerben futott.
+  - A workernek két szála van, amit a portál órás munkái (HLS-átkódolás,
+    ZIP-export) is foglalnak; ilyenkor a 10 percenkénti feladat csak állt a sorban.
+  - A teljes kör egyetlen tranzakcióban mentett a végén, így egy megszakadt
+    futás minden addigi munkát elvitt.
+  - A modell hibája csak a futás eredményébe került, a naplóban nem látszott.
+- Javítás:
+  - A kör a webes folyamatban fut (`main._lara_forgatas_tanulas`), ugyanúgy,
+    mint az automatikus számla-érkeztetés.
+  - 10 percenként fut, indulás után 90 mp-cel az első kör.
+  - A `hatter_feladatok` zárja alatt egyszerre csak egy példány dolgozik.
+  - Gyakoriság: `FORGATAS_TANULAS_GYAKORISAG_PERC`, 0 = nem fut.
+  - A Celery-ütemezésből a feladat kikerült.
+  - Minden 10-es adag után mentés, így a kész munka megmarad.
+  - A modell hibája a folyamat-naplóba kerül: a Forgatás-ismeret oldalon
+    „Utolsó hiba”-ként, a *Tanulás és minőség* listán hibás állapotként látszik.
+  - A kapcsoló (Beállítások) és a vészleállítás minden körben számít.
+- Tesztek: 2 új (adagonkénti mentés, látható modellhiba, a teljes kör saját
+  kapcsolattal, visszagörgetve). Egy régi tesztsor nem függ többé a helyi
+  adatbázis extra forgatásaitól.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

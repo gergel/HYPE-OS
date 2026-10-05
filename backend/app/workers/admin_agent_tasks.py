@@ -141,14 +141,6 @@ celery_app.conf.beat_schedule = {
         # adat-ellenőrzéssel (lásd admin_agent/tapasztalas.py). Csak olvas, csak tanul.
         "schedule": crontab(minute=10),
     },
-    "admin-agent-forgatas-tanulas": {
-        "task": "admin_agent.forgatas_tanulas",
-        # 10 percenként - Lara önállóan végigolvassa a korábbi forgatásokat
-        # (futásonként 50-et, amíg mind kész), és frissíti a forgatás-tudást
-        # (Tudástár, Tudásháló). Kapcsoló: limitek.forgatas_ai_tanulas (alapból BE,
-        # a felhasználó kérésére). Csak olvas az üzleti táblákból.
-        "schedule": crontab(minute="*/10"),
-    },
     "admin-agent-visszacsatolas": {
         "task": "admin_agent.visszacsatolas",
         # Percenként — de csak bekapcsolt „gyors visszacsatolás" / „automatikus
@@ -417,29 +409,6 @@ def rendszer_task() -> dict | None:
     except Exception:
         db.rollback()
         logger.exception("Lara rendszer-figyelése sikertelen.")
-        raise
-    finally:
-        db.close()
-
-
-@_feladat("forgatas_tanulas")
-def forgatas_tanulas_task() -> dict | None:
-    """Lara forgatás-ismeretének háttér-tanulása (lásd
-    admin_agent/forgatas_ismeret.hatter_tanulas): a korábbi forgatások AI-
-    felismerése adagonként, és a forgatás-tudás frissítése a Tudástárban és a
-    Tudáshálóban. Vészleállításnál és kikapcsolt kapcsolónál nem fut."""
-    if _leallitva("forgatas_tanulas"):
-        return {"leallitva": True}
-    from app.admin_agent.forgatas_ismeret import hatter_tanulas
-
-    db = SessionLocal()
-    try:
-        eredmeny = hatter_tanulas(db)
-        db.commit()
-        return eredmeny
-    except Exception:
-        db.rollback()
-        logger.exception("Lara forgatás-tanulása sikertelen.")
         raise
     finally:
         db.close()

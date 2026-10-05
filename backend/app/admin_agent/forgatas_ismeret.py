@@ -1024,32 +1024,61 @@ def halo_pillanatkep(db: Session, k: Korpusz) -> dict:
     return adat
 
 
-def hatter_tanulas(db: Session, *, limit: int = HATTER_LIMIT) -> dict | None:
-    """Egy háttérfutás (10 percenként, lásd workers/admin_agent_tasks.py):
+#: Egy modellhívás ennyi forgatást olvas végig - és utána rögtön mentünk, hogy
+#: egy későbbi hiba (vagy újraindítás) ne vigye el a már kész adagot.
+HATTER_CSOMAG = 10
+#: A háttérfutás neve a `hatter_feladatok` zártáblában és a folyamat-naplóban.
+HATTER_NEV = "lara_forgatas_tanulas"
+FOLYAMAT_FORRAS = "forgatas_tanulas"
+
+
+def hatter_tanulas(db: Session, *, limit: int = HATTER_LIMIT, csomag: int = HATTER_CSOMAG,
+                   commit=None, naplo=None) -> dict | None:
+    """Egy háttérfutás (10 percenként, lásd hatter_futas):
 
     1. ha van modell, a következő `limit` még végig nem olvasott forgatás AI-
-       felismerése (a legutóbbiaktól visszafelé - amíg mind kész nincs);
+       felismerése (a legutóbbiaktól visszafelé - amíg mind kész nincs),
+       `csomag`-onként; minden adag után `commit()` (ha megadták), így a kész
+       munka akkor is megmarad, ha a futás később megszakad;
     2. ha volt új felismerés (vagy egy órája nem frissült), a forgatás-tudás
        frissítése a Tudástárban (feladat-típusonként) és a Tudáshálóban.
 
-    Kikapcsolt kapcsolónál None. Csak Lara saját tábláiba ír. A hívó commitál."""
+    Kikapcsolt kapcsolónál None. Csak Lara saját tábláiba ír."""
     from datetime import datetime, timedelta, timezone
 
     from app.admin_agent import llm
     from app.models.admin_agent import SourceEvent
 
+    log = naplo or (lambda _s: None)
     if not hatter_bekapcsolva(db):
         return None
     k = korpusz(db)
     ki: dict[str, Any] = {"modell": llm.elerheto()}
     if ki["modell"]:
-        try:
-            with db.begin_nested():
-                ai = ai_tanulas(db, limit=limit, k=k)
-        except ProfilHiba as exc:
-            ai = {"allapot": "hiba", "hiba": str(exc)[:200], "profilozva": 0}
-        ki.update({"profilozva": ai.get("profilozva", 0), "elutasitva": ai.get("elutasitva", 0),
-                   "ai_allapot": ai.get("allapot"), "hiba": ai.get("hiba")})
+        ki.update({"profilozva": 0, "elutasitva": 0, "ai_allapot": "nincs_teendo", "hiba": None})
+        maradt = limit
+        while maradt > 0:
+            try:
+                with db.begin_nested():
+                    ai = ai_tanulas(db, limit=min(csomag, maradt), csomag=csomag, k=k)
+            except ProfilHiba as exc:
+                ki.update({"ai_allapot": "hiba", "hiba": str(exc)[:300]})
+                log(f"A modell nem válaszolt: {str(exc)[:300]}")
+                break
+            if commit is not None:
+                commit()
+            ki["profilozva"] += ai.get("profilozva", 0)
+            ki["elutasitva"] += ai.get("elutasitva", 0)
+            ki["ai_allapot"] = ai.get("allapot")
+            if ai.get("allapot") == "nincs_teendo":
+                break
+            log(f"Végigolvasva {ai.get('profilozva', 0)} forgatás, még {ai.get('hatralevo', 0)} van hátra.")
+            if ai.get("hiba"):
+                ki["hiba"] = ai["hiba"]
+                break
+            maradt -= ai.get("jelolt", 0) or csomag
+            if not ai.get("hatralevo"):
+                break
     se = db.scalar(select(SourceEvent).where(SourceEvent.forras == HALO_FORRAS, SourceEvent.forras_azonosito == HALO_AZONOSITO))
     regi = se is None or se.feldolgozva_at is None or se.feldolgozva_at < datetime.now(timezone.utc) - timedelta(minutes=TUDAS_FRISSITES_PERC)
     if ki.get("profilozva") or regi:
@@ -1062,8 +1091,54 @@ def hatter_tanulas(db: Session, *, limit: int = HATTER_LIMIT) -> dict | None:
         ki["tudas_uj"], ki["tudas_frissitve"] = stat["uj"], stat["frissitve"]
         halo_pillanatkep(db, k)
         ki["halo_frissitve"] = True
+        log("A forgatás-tudás frissült (Tudástár, Tudásháló).")
     ki.update(ai_haladas(db, k))
     return ki
+
+
+def hatter_futas(naplo=None) -> dict | None:
+    """A háttérkör egy futása SAJÁT adatbázis-kapcsolattal - a webes folyamat
+    időzítője hívja (lásd main.py), a `hatter_feladatok` zárja alatt, hogy
+    egyszerre csak egy példányban fusson.
+
+    MIÉRT NEM A CELERY-WORKERBEN? Annak két szála van, amin a portál hosszú
+    munkái is futnak (videó-átkódolás, nagy ZIP-export - órákig); ilyenkor a
+    10 percenkénti feladat csak állt a sorban, és a forgatások nem fogytak (a
+    felhasználó hibajelzése, 2026-10). Ugyanezért fut a webes folyamatban az
+    automatikus számla-érkeztetés is.
+
+    Az eredmény (és a modell hibája) a folyamat-naplóba kerül - a Forgatás-
+    ismeret oldal és a Tanulás és minőség lista ebből mutatja az utolsó
+    futást és az utolsó hibát."""
+    from datetime import datetime, timezone
+
+    from app.admin_agent.folyamat import naplo as folyamat_naplo
+    from app.admin_agent.settings_service import leallitva
+    from app.core.database import SessionLocal
+
+    kezdes = datetime.now(timezone.utc)
+    db = SessionLocal()
+    try:
+        if leallitva(db):
+            folyamat_naplo(db, FOLYAMAT_FORRAS, "kihagyva", kezdes=kezdes, hiba="vészleállítás")
+            db.commit()
+            return None
+        ki = hatter_tanulas(db, commit=db.commit, naplo=naplo)
+        if ki is None:
+            folyamat_naplo(db, FOLYAMAT_FORRAS, "kihagyva", kezdes=kezdes, hiba="A háttér-tanulás kapcsolója ki van kapcsolva.")
+        elif ki.get("hiba") and not ki.get("profilozva"):
+            folyamat_naplo(db, FOLYAMAT_FORRAS, "hiba", kezdes=kezdes, hiba=ki["hiba"])
+        else:
+            folyamat_naplo(db, FOLYAMAT_FORRAS, "kesz", kezdes=kezdes, eredmeny=ki)
+        db.commit()
+        return ki
+    except Exception as exc:
+        db.rollback()
+        folyamat_naplo(db, FOLYAMAT_FORRAS, "hiba", kezdes=kezdes, hiba=f"{type(exc).__name__}: {str(exc)[:250]}")
+        db.commit()
+        raise
+    finally:
+        db.close()
 
 
 def _ment(db: Session, p: Project, pr: dict, *, forras: str, modell: str | None = None, ujj: str | None = None,

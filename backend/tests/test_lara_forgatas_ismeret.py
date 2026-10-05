@@ -232,7 +232,8 @@ def test_ai_tanulas_validal_maszkol_es_az_embert_nem_irja_felul(db, korpusz):
 
     llm.teszt_adapter(adapter)
     ki = fi.ai_tanulas(db, limit=60, csomag=25)
-    assert ki["allapot"] == "kesz" and ki["profilozva"] >= 8 and ki["elutasitva"] >= 1
+    # A 9 demó forgatásból: 1 elutasítva (ismeretlen típus), 1 emberi javítású (kimarad).
+    assert ki["allapot"] == "kesz" and ki["profilozva"] >= 7 and ki["elutasitva"] >= 1
     assert all("demo.vofely@pelda.hu" not in p and "123 4567" not in p for p in promptok)
     assert any("[e-mail]" in p for p in promptok)
 
@@ -417,3 +418,75 @@ def test_tudashalo_mutatja_a_forgatas_tudast(db, korpusz):
     m.visszavont = True
     db.flush()
     assert "feladat:konferencia" not in {p["id"] for p in tudashalo(db)["pontok"]}
+
+
+def test_hatter_tanulas_adagonkent_ment_es_a_modellhibat_jelzi(db, korpusz):
+    """Minden 10-es adag után mentés (a kész munka megmarad), a modell hibája
+    pedig nem vész el csendben - a futás eredményében és naplójában látszik."""
+    from app.admin_agent import llm
+
+    llm.teszt_adapter(_szabaly_adapter())
+    mentesek: list[int] = []
+    sorok: list[str] = []
+    ki = fi.hatter_tanulas(db, limit=50, csomag=3, commit=lambda: mentesek.append(1), naplo=sorok.append)
+    assert ki["profilozva"] >= 9 and len(mentesek) >= 3  # adagonként egy mentés
+    assert any("Végigolvasva" in s for s in sorok)
+
+    def hibas(rendszer, szoveg, sema):
+        raise llm.ModellHiba("429 RESOURCE_EXHAUSTED (demó)")
+
+    llm.teszt_adapter(hibas)
+    korpusz["cel"].description = "Megváltozott leírás (demó): koncert."  # újra jelölt lesz
+    db.flush()
+    ki = fi.hatter_tanulas(db, limit=50, csomag=3, naplo=sorok.append)
+    assert ki["ai_allapot"] == "hiba" and "429" in ki["hiba"] and ki["profilozva"] == 0
+    assert any("nem válaszolt" in s for s in sorok)
+
+
+def test_hatter_futas_sajat_kapcsolattal_naplozza_a_hibat(monkeypatch):
+    """A webes időzítő által hívott kör: saját munkamenet, adagonkénti commit,
+    és a modellhiba a folyamat-naplóba kerül („Utolsó hiba” a felületen).
+    A teszt egy visszagörgetett kapcsolaton fut - a commitok nem maradnak meg."""
+    from sqlalchemy import select as _select
+    from sqlalchemy.orm import Session as _Session
+
+    from app.admin_agent import llm
+    from app.core import database
+    from app.core.database import engine
+    from app.models.admin_agent import LearningRun
+
+    with engine.connect() as conn:
+        tx = conn.begin()
+        monkeypatch.setattr(database, "SessionLocal",
+                            lambda: _Session(bind=conn, join_transaction_mode="create_savepoint"))
+        try:
+            # Demó forgatások UGYANEZEN a kapcsolaton (a háttérkör saját
+            # munkamenete csak így látja őket).
+            s = _Session(bind=conn, join_transaction_mode="create_savepoint")
+            for i in range(3):
+                s.add(Project(nev=f"(demó) Háttér konferencia {i}", forgatas_datuma=MA - timedelta(days=10 + i),
+                              description="Szakmai konferencia, aftermovie és interjúk (demó)."))
+            s.commit()
+            s.close()
+
+            def hibas(rendszer, szoveg, sema):
+                raise llm.ModellHiba("A modell nem érhető el (demó)")
+
+            llm.teszt_adapter(hibas)
+            fi.hatter_futas()
+            s = _Session(bind=conn, join_transaction_mode="create_savepoint")
+            sor = s.scalar(_select(LearningRun).where(LearningRun.trigger == "folyamat:forgatas_tanulas"))
+            assert sor is not None and sor.allapot == "hiba"
+            assert "nem érhető el" in sor.osszefoglalo["utolso_hiba"]["hiba"]
+            s.close()
+
+            llm.teszt_adapter(_szabaly_adapter())
+            ki = fi.hatter_futas()
+            assert ki["profilozva"] > 0
+            s = _Session(bind=conn, join_transaction_mode="create_savepoint")
+            sor = s.scalar(_select(LearningRun).where(LearningRun.trigger == "folyamat:forgatas_tanulas"))
+            assert sor.allapot == "kesz" and sor.osszefoglalo["utolso_eredmeny"]["profilozva"] == ki["profilozva"]
+            s.close()
+        finally:
+            llm.teszt_adapter(None)
+            tx.rollback()
