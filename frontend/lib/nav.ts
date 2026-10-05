@@ -217,6 +217,10 @@ export const navGroups: NavGroup[] = [
     label: "Pénzügyek",
     items: [
       { label: "Pénzügyek", href: "/penzugyek", icon: "Wallet" },
+      // A kiadások és a bevételek SAJÁT oldalon is (a felhasználó kérése: a
+      // gyorsabb elérés miatt) - ugyanaz a lista, mint a Pénzügyek oldalon.
+      { label: "Kiadások", href: "/penzugyek/kiadasok", icon: "TrendingDown", permissionPage: "/penzugyek" },
+      { label: "Bevételek", href: "/penzugyek/bevetelek", icon: "TrendingUp", permissionPage: "/penzugyek" },
       // Számla-érkeztető: az e-mailben (szamla@) vagy az AI Assistantba dobva
       // érkezett számlák ellenőrzése és jóváhagyása - éles kiadás csak innen,
       // jóváhagyással születik (lásd backend services/szamla_erkeztetes.py).

@@ -49,6 +49,8 @@ import {
   UserCheck,
   UserRound,
   Users,
+  TrendingDown,
+  TrendingUp,
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
@@ -76,6 +78,8 @@ const ICONS: Record<string, LucideIcon> = {
   Send,
   Clapperboard,
   Globe,
+  TrendingDown,
+  TrendingUp,
   Wallet,
   Coins,
   FileSignature,
