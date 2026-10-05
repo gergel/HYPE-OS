@@ -32,7 +32,7 @@ from app.models.project import Project
 from app.models.project_code import KIFIZETETT_STATUSZ_MINTA, ProjectCode
 from app.schemas.document_attachment import DocumentAttachmentRead
 from app.services import attachments, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
-from app.services import hazipenztar_nullazas
+from app.services import hazipenztar_nullazas, kiadas_duplikacio
 from app.services import kassza as kassza_szolg
 from app.services import kintlevoseg as kintlevoseg_szolg
 from app.services import penznem as penznem_szolg
@@ -226,6 +226,9 @@ def _expense_before_create(adat: dict, db: Session) -> dict:
     _afa_brutto(adat)
     adat = _devizat_forintra(adat, db)
     _egyeni_afa_forintra(adat)
+    # LEHETSÉGES DUPLIKÁCIÓ (ugyanaz a dátum, összeg, cég): a forintosított
+    # összegekkel ellenőrzünk, ahogy elmentenénk - lásd services/kiadas_duplikacio.py.
+    kiadas_duplikacio.ellenoriz(db, adat)
     return _alvallalkozo_forgatas_kitoltese(adat, db)
 
 

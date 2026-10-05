@@ -3,6 +3,7 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { useConfirm } from "@/components/ConfirmProvider";
 import { KeresosSelect, type KeresosOpcio } from "@/components/KeresosSelect";
 import { UjAlvallalkozoDialog, type UjAlvallalkozoElotoltes } from "@/components/UjAlvallalkozoDialog";
 import { UjFajlValaszto } from "@/components/UjFajlValaszto";
@@ -149,6 +150,7 @@ export function QuickCreateForm({
   const [values, setValues] = useState<Record<string, string>>(() => kezdoErtekek(fields));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
   const [fajlok, setFajlok] = useState<File[]>([]);
   // A "nincs számla" kapcsoló állása (lásd fajlFeltoltes.nincsKapcsolo).
   const [nincsFajl, setNincsFajl] = useState(false);
@@ -291,7 +293,34 @@ export function QuickCreateForm({
         const isNumericSelect = f.type === "select" && typeof f.options?.[0]?.value === "number";
         body[f.name] = f.type === "number" || isNumericSelect ? Number(values[f.name]) : values[f.name];
       }
-      const res = await authFetch(postPath, { method: "POST", body: JSON.stringify(body) });
+      let res = await authFetch(postPath, { method: "POST", body: JSON.stringify(body) });
+      if (res.status === 409) {
+        // LEHETSÉGES DUPLIKÁCIÓ (kiadásnál: ugyanaz a dátum, összeg és cég -
+        // lásd backend services/kiadas_duplikacio.py): az ember megnézi a
+        // meglévő tételeket, és vagy MÉGIS felviszi, vagy elveti.
+        const detail = await res.json().catch(() => null);
+        const d = detail?.detail;
+        if (d && typeof d === "object" && d.kod === "lehetseges_duplikacio") {
+          const sorok = (d.tetelek ?? []).map(
+            (t: { megnevezes: string; kiadas_leiras: string | null; brutto: number | null; netto: number | null; fizetes_datuma: string | null; projektkod: string | null }) =>
+              `• ${t.fizetes_datuma ?? ""} · ${t.megnevezes}${t.kiadas_leiras ? ` – ${t.kiadas_leiras}` : ""} · ${
+                (t.brutto ?? t.netto ?? 0).toLocaleString("hu-HU")
+              } Ft${t.projektkod ? ` · ${t.projektkod}` : ""}`,
+          );
+          const mehet = await confirm(`${d.uzenet}\n\nMár felvezetve:\n${sorok.join("\n")}`, {
+            figyelmeztetes: "Lehet, hogy ez már fel van vezetve",
+            megerositoCimke: "Mégis felviszem",
+          });
+          if (!mehet) {
+            setError("Nem vittük fel - a meglévő tétel(ek) miatt elvetve.");
+            return;
+          }
+          res = await authFetch(postPath, { method: "POST", body: JSON.stringify({ ...body, duplikacio_engedve: true }) });
+        } else {
+          setError(`Sikertelen: ${typeof d === "string" ? d : res.status}`);
+          return;
+        }
+      }
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         setError(`Sikertelen: ${detail?.detail ?? res.status}`);

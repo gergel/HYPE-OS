@@ -50,7 +50,10 @@ class ExpenseBase(BaseModel):
 
 
 class ExpenseCreate(ExpenseBase):
-    pass
+    #: A felvezető megnézte a lehetséges duplikációt (ugyanaz a dátum, összeg,
+    #: cég), és MÉGIS felviszi - lásd services/kiadas_duplikacio.py. Nem
+    #: modell-mező: a létrehozás előtt kikerül az adatból.
+    duplikacio_engedve: bool = False
 
 
 class ExpenseUpdate(BaseModel):
