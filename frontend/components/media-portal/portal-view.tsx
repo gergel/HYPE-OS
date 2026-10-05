@@ -323,11 +323,15 @@ export function PortalView({
           className="mx-auto max-w-6xl px-6 py-20 sm:py-28"
         >
           <div className="space-y-12">
-            {foldersWithContent.map(function renderCsoport(g): React.ReactNode {
+            {foldersWithContent.map(function renderCsoport(g, _i, testverek): React.ReactNode {
               return (
                 <FolderSection
                   key={g.folder.id}
                   name={g.folder.name}
+                  // Ha ezen a szinten EGYETLEN mappa van (a felhasználó
+                  // kérése), az eleve kinyitva jelenik meg - nincs mit
+                  // választani, felesleges rákattintani.
+                  alapbolNyitva={testverek.length === 1}
                   rejtett={g.folder.rejtett}
                   videos={g.videos}
                   images={g.images}
@@ -485,8 +489,11 @@ function FolderSection({
   onShare,
   onShareVideo,
   alszekciok,
+  alapbolNyitva = false,
 }: {
   name: string;
+  /** Kinyitva induljon-e (egyetlen mappa az adott szinten - lásd PortalView). */
+  alapbolNyitva?: boolean;
   /** REJTETT mappa - csak a belsős néző kapja meg (a szerver az ügyfélnek ki
    * sem küldi), neki feltűnő jelölés jár. */
   rejtett?: boolean;
@@ -503,7 +510,7 @@ function FolderSection({
   onShare?: () => void;
   onShareVideo?: (v: VideoT) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(alapbolNyitva);
 
   const countLabel = [videos.length > 0 ? `${videos.length} videó` : "", images.length > 0 ? `${images.length} fotó` : ""]
     .filter(Boolean)
