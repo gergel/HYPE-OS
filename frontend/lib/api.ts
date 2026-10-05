@@ -1489,6 +1489,14 @@ export type ElkeszultSzerzodes = {
   /** MELYIK projekteket fedi ez az egy papír - egy szerződés több forgatási
    * napra is szólhat. Egynél több elemnél a felület kiírja, hogy közös. */
   projektek: string[];
+  /** ALÁÍRÁS-EMLÉKEZTETŐ (lásd backend services/szerzodes_emlekezteto.py):
+   * hány napja ment ki és vár aláírásra (null, ha nem vár), felajánljuk-e
+   * most a "kérjük, küldd vissza aláírva" válasz-levelet, és kinek menne. */
+  kikuldve_napja?: number | null;
+  emlekezteto_esedekes?: boolean;
+  emlekezteto_cimzett?: string | null;
+  emlekezteto_kuldve_at?: string | null;
+  emlekezteto_db?: number;
 };
 
 export async function getAllContractsForProject(projectId: number): Promise<ElkeszultSzerzodes[]> {

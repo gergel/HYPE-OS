@@ -20,7 +20,7 @@ mezőkészletével (lásd hu_number_words.py a nettó összeg szöveges kiírás
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -52,6 +52,7 @@ from app.services import (
     papir_tetelek,
     papirozas_hatokor,
     szamlazo,
+    szerzodes_emlekezteto,
 )
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
 from app.services.google_email import elso_ervenyes_cim, send_message
@@ -76,7 +77,8 @@ TERMINAL_STATUSES = {"Kiküldve", "Kihagyva", MAR_VAN_ALLAPOT}
 # A csatolt program email-sablonjának 1:1 portja (aláírás: "ADMINISZTRÁCIÓ",
 # nem "GYÁRTÁS" - lásd services/dispo.py _SIGNATURE_HTML, ami a diszpóhoz
 # tartozik, ide ezt a külön, adminisztrációs változatot használjuk).
-_CONTRACT_EMAIL_HTML = """\
+_CONTRACT_EMAIL_HTML = (
+    """\
 <p>Kedves Címzett,</p>
 <p>
   Levelemhez csatoltan küldöm a tárgyban említett projektre vonatkozó szerződést.<br>
@@ -85,25 +87,9 @@ _CONTRACT_EMAIL_HTML = """\
 </p>
 <p>Köszönettel,</p>
 <br><br>
-<table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
-  <tr>
-    <td style="vertical-align: middle; width: 150px;">
-      <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
-    </td>
-    <td style="padding-left: 20px; vertical-align: middle;">
-      <p style="margin: 0; font-size: 12px; font-weight: bold;">HYPE PRODUCTIONS - ADMINISZTRÁCIÓ</p>
-      <p style="margin: 0; color: #888; font-size: 12px;">Hype Productions Kft.</p>
-    </td>
-    <td style="padding-left: 40px; vertical-align: top; color: #888; font-size: 12px;">
-      <p style="margin: 0;">Rahman Martin – cégvezető</p>
-      <p style="margin: 0;">
-        <a href="mailto:martin.rahman@hypestab.hu" style="color: #888; text-decoration: underline;">martin.rahman@hypestab.hu</a><br>
-        +36 30 898 7600
-      </p>
-    </td>
-  </tr>
-</table>
 """
+    + szerzodes_emlekezteto.SZERZODES_ALAIRAS_HTML
+)
 
 
 def szerzodes_kulcsa(c: Contract) -> str | None:
@@ -684,6 +670,25 @@ class ElkeszultSzerzodes(BaseModel):
     #: napra is szólhat - ha csak azon az egy napon látszana, ahonnan indult, a
     #: többin úgy tűnne, mintha el sem készült volna.
     projektek: list[str] = []
+    #: ALÁÍRÁS-EMLÉKEZTETŐ (lásd services/szerzodes_emlekezteto.py): hány
+    #: napja ment ki és vár aláírásra (None, ha nem vár), felajánljuk-e most a
+    #: "kérjük, küldd vissza aláírva" válasz-levelet, és kinek menne.
+    kikuldve_napja: int | None = None
+    emlekezteto_esedekes: bool = False
+    emlekezteto_cimzett: str | None = None
+    emlekezteto_kuldve_at: datetime | None = None
+    emlekezteto_db: int = 0
+
+
+def _emlekezteto_mezok(c: Contract) -> dict:
+    esedekes = szerzodes_emlekezteto.esedekes(c)
+    return {
+        "kikuldve_napja": szerzodes_emlekezteto.napja(c),
+        "emlekezteto_esedekes": esedekes,
+        "emlekezteto_cimzett": szerzodes_emlekezteto.cimzett(c) if esedekes else None,
+        "emlekezteto_kuldve_at": c.emlekezteto_kuldve_at,
+        "emlekezteto_db": c.emlekezteto_db or 0,
+    }
 
 
 @router.get("/{project_id}/{szamlazo_kulcs}/nyitott-tetelek", response_model=list[TetelInfo])
@@ -788,9 +793,69 @@ def list_all_for_project(
                 alairt_file_url=c.alairt_file_url,
                 kihagyas_oka=c.kihagyas_oka,
                 projektek=_fedett_projektek(c),
+                **_emlekezteto_mezok(c),
             )
         )
     return eredmeny
+
+
+class EmlekeztetoEredmeny(BaseModel):
+    contract_id: int
+    cimzett: str
+    emlekezteto_kuldve_at: datetime | None = None
+    emlekezteto_db: int = 0
+
+
+def _eredeti_targy(c: Contract) -> str | None:
+    """A régi (a kiküldés nyomának rögzítése előtt kiküldött) szerződés
+    levelének tárgya, ugyanúgy összerakva, ahogy a generate-and-send tette."""
+    if c.vallalkozas is not None:
+        fel_nev = c.vallalkozas.nev
+    elif c.employee is not None:
+        fel_nev = c.employee.full_name
+    else:
+        fel_nev = c.ceg_neve or ""
+    if c.project is not None:
+        return f"{c.project.forgatas_datuma or ''}_{c.project.nev or ''}_{fel_nev}_szerződés"
+    if c.project_code is not None:
+        return f"{c.project_code.projektkod}_{fel_nev}_szerződés"
+    return None
+
+
+@router.post("/szerzodes/{contract_id}/emlekezteto", response_model=EmlekeztetoEredmeny)
+def emlekezteto_kuldese(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """"Kérjük, küldd vissza aláírva" - válasz-levél ugyanarra a címre,
+    ugyanabba a szálba, ahova a szerződés ment (lásd
+    services/szerzodes_emlekezteto.py).
+
+    Csak akkor megy ki, ha épp esedékes (kiküldve, legalább 7 napja, nincs
+    aláírva, és az előző emlékeztető óta is eltelt 7 nap) - így egy dupla
+    kattintás vagy egy régi, frissítetlen oldal sem küldi ki kétszer."""
+    c = db.query(Contract).filter(Contract.id == contract_id).with_for_update().one_or_none()
+    if c is None or c.tipus != ContractType.ALVALLALKOZOI or c.keretszerzodes:
+        raise HTTPException(status_code=404, detail="A szerződés nem található.")
+    if not szerzodes_emlekezteto.varakozik(c):
+        raise HTTPException(status_code=409, detail="Ez a szerződés már nem vár aláírásra.")
+    if not szerzodes_emlekezteto.esedekes(c):
+        raise HTTPException(
+            status_code=409,
+            detail="Most még nem esedékes emlékeztető (a kiküldés vagy az előző emlékeztető óta nem telt el 7 nap, vagy nincs címzett).",
+        )
+    try:
+        cim = szerzodes_emlekezteto.kuldes(c, send_message=send_message, alap_targy=_eredeti_targy(c))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    db.commit()
+    return EmlekeztetoEredmeny(
+        contract_id=c.id,
+        cimzett=cim,
+        emlekezteto_kuldve_at=c.emlekezteto_kuldve_at,
+        emlekezteto_db=c.emlekezteto_db,
+    )
 
 
 def _validate_szamlazo(db: Session, project: Project, szamlazo_kulcs: str) -> SzamlazoCsoport:
@@ -1130,7 +1195,9 @@ def generate_and_send(
             )
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
 
-        send_message([cimzett], base_name, _CONTRACT_EMAIL_HTML, pdf_bytes=pdf_bytes, pdf_filename="szerzodes.pdf")
+        kuldes_eredmenye = send_message(
+            [cimzett], base_name, _CONTRACT_EMAIL_HTML, pdf_bytes=pdf_bytes, pdf_filename="szerzodes.pdf"
+        )
     except RuntimeError as exc:
         # A kitöltött adatokat akkor is mentsük el, ha a küldés elhasal (pl.
         # hiányzó Google hitelesítő adat) - ne vesszen el az eddigi munka.
@@ -1139,6 +1206,10 @@ def generate_and_send(
 
     draft.szerzodes_allapota = "Kiküldve"
     draft.szerzodes_file_url = doc_link
+    # A kiküldés nyoma - az aláírás-emlékeztető ebbe a szálba válaszol.
+    szerzodes_emlekezteto.kikuldes_rogzitese(
+        draft, cimzett=cimzett, targy=base_name, kuldes_eredmenye=kuldes_eredmenye
+    )
     db.commit()
     db.refresh(draft)
     return ContractRead.model_validate(draft)
@@ -1832,13 +1903,19 @@ def generate_and_send_projektkodon(
             )
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
 
-        send_message([cimzett], base_name, _CONTRACT_EMAIL_HTML, pdf_bytes=pdf_bytes, pdf_filename="szerzodes.pdf")
+        kuldes_eredmenye = send_message(
+            [cimzett], base_name, _CONTRACT_EMAIL_HTML, pdf_bytes=pdf_bytes, pdf_filename="szerzodes.pdf"
+        )
     except RuntimeError as exc:
         db.commit()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     draft.szerzodes_allapota = "Kiküldve"
     draft.szerzodes_file_url = doc_link
+    # A kiküldés nyoma - az aláírás-emlékeztető ebbe a szálba válaszol.
+    szerzodes_emlekezteto.kikuldes_rogzitese(
+        draft, cimzett=cimzett, targy=base_name, kuldes_eredmenye=kuldes_eredmenye
+    )
     db.commit()
     db.refresh(draft)
     return ContractRead.model_validate(draft)
@@ -2028,6 +2105,7 @@ def list_all_for_project_code(
                 alairt_file_url=c.alairt_file_url,
                 kihagyas_oka=c.kihagyas_oka,
                 projektek=[],
+                **_emlekezteto_mezok(c),
             )
         )
     return eredmeny

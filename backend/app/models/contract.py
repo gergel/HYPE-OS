@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -112,6 +112,18 @@ class Contract(TimestampMixin, Base):
     #: indoklása, és a kihagyáskor kötelező megadni - fél év múlva senki nem
     #: fogja fejből tudni, miért maradt el egy szerződés.
     kihagyas_oka: Mapped[str | None] = mapped_column(Text)
+
+    # A KIKÜLDÉS nyoma (a generálás és küldés tölti, lásd
+    # services/szerzodes_emlekezteto.py): mikor, kinek, milyen tárggyal ment
+    # ki, és melyik Gmail-szálban - az emlékeztető ebbe a szálba válaszol.
+    kikuldve_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    kikuldott_cim: Mapped[str | None] = mapped_column(String(255))
+    kikuldott_targy: Mapped[str | None] = mapped_column(String(500))
+    gmail_thread_id: Mapped[str | None] = mapped_column(String(255))
+    gmail_rfc_message_id: Mapped[str | None] = mapped_column(String(500))
+    #: Az utolsó "kérjük, küldd vissza aláírva" emlékeztető, és hány ment ki.
+    emlekezteto_kuldve_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    emlekezteto_db: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     #: Mettől meddig élt a keretszerződés - több, egymást követő időszak is
     #: lehet (lásd ContractPeriod).

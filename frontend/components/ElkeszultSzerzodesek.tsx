@@ -7,7 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SZERZODES_ALLAPOTOK, SZERZODES_MAR_VAN, TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { useConfirm } from "@/components/ConfirmProvider";
-import { formatFt } from "@/lib/ido";
+import { formatFt, formatIdopont } from "@/lib/ido";
 import type { ElkeszultSzerzodes } from "@/lib/api";
 
 /** Egy projekt már elkészült eseti szerződései.
@@ -104,6 +104,34 @@ export function ElkeszultSzerzodesek({
       router.refresh();
     } catch (err) {
       alert(`Sikertelen törlés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /** "Kérjük, küldd vissza aláírva" - válasz-levél ugyanarra a címre, ugyanabba
+   * a szálba, ahova a szerződés ment. Csak akkor ajánljuk fel, ha 7 napja
+   * nem jött vissza aláírva (lásd backend services/szerzodes_emlekezteto.py);
+   * kimenni pedig csak ezzel a gombbal, megerősítés után megy ki. */
+  async function emlekeztetoKuld(s: ElkeszultSzerzodes) {
+    const ok = await confirm(
+      `Emlékeztetőt küldünk ${s.full_name} részére, hogy küldje vissza aláírva a szerződést.\n\nCímzett: ${s.emlekezteto_cimzett ?? "–"}\n\nA levél válaszként megy az eredeti szerződés-levélre (ha a szál nem ismert, új levélként, ugyanazzal a tárggyal):\n„Néhány napja küldtük a tárgyban említett projektre vonatkozó szerződést, aláírt példány azonban még nem érkezett vissza hozzánk. Kérjük, aláírva és/vagy pecsételve küldd vissza számunkra a szerződést, erre az e-mailre válaszolva.”`,
+      { figyelmeztetes: "Az e-mail ténylegesen kimegy", megerositoCimke: "Emlékeztető küldése" },
+    );
+    if (!ok) return;
+    setBusyId(s.szamlazo);
+    try {
+      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/szerzodes/${s.contract_id}/emlekezteto`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Az emlékeztető nem ment ki: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Az emlékeztető nem ment ki (hálózati hiba): ${err}`);
     } finally {
       setBusyId(null);
     }
@@ -266,6 +294,28 @@ export function ElkeszultSzerzodesek({
                             }}
                           />
                         </label>
+                      )}
+                      {/* 7 nap után felajánljuk a "küldd vissza aláírva"
+                          válasz-levelet - kimenni csak gombnyomásra megy ki. */}
+                      {typeof s.kikuldve_napja === "number" && s.kikuldve_napja >= 7 && (
+                        <span className="basis-full text-[11.5px] text-text-muted">
+                          {s.kikuldve_napja} napja nincs visszaküldve
+                          {s.emlekezteto_kuldve_at &&
+                            ` · emlékeztető: ${formatIdopont(s.emlekezteto_kuldve_at)}${
+                              (s.emlekezteto_db ?? 0) > 1 ? ` (${s.emlekezteto_db}×)` : ""
+                            }`}
+                        </span>
+                      )}
+                      {canEdit && s.emlekezteto_esedekes && (
+                        <button
+                          type="button"
+                          disabled={busyId === s.szamlazo}
+                          onClick={() => emlekeztetoKuld(s)}
+                          title={`Válasz-levél az eredeti címre: ${s.emlekezteto_cimzett ?? ""}`}
+                          className="text-[12px] text-text-accent hover:underline disabled:opacity-50"
+                        >
+                          Emlékeztető küldése
+                        </button>
                       )}
                     </span>
                   )}
