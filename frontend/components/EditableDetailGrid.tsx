@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { authFetch } from "@/lib/authFetch";
@@ -16,49 +16,85 @@ import type { EditableDetailField } from "@/lib/detail";
  * ki, mint egy input, nem csak kattintáskor) - a szerkesztés-logika
  * (kattintás -> input, Enter/elkattintás -> mentés) változatlan, csak a
  * nyugalmi állapot vizuálja tér el a Notion-stílusú "sima szöveg" nézettől. */
+/** A mentés után ennyi ideig a SAJÁT, frissen mentett értéket mutatjuk, akkor
+ * is, ha közben egy (korábban elindult) háttérfrissítés még a régit hozza. */
+const MENTETT_TARTAS_MS = 20_000;
+
 function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; field: EditableDetailField; boxed?: boolean }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   // Az <input type="time"> csak "HH:MM"-et fogad el (a backend "08:00:00"-t
   // ad vissza a Time oszlopból), ezért a másodperceket levágjuk - enélkül a
   // böngésző üresnek mutatná a mezőt, mintha nem lenne beállítva időpont.
-  const initialDraft =
+  const propDraft =
     field.rawValue === null
       ? ""
       : field.inputType === "time"
         ? String(field.rawValue).slice(0, 5)
         : String(field.rawValue);
+  // A FRISSEN MENTETT érték (a felhasználó hibajelzése, 2026-10: „beírom,
+  // nem menti el és eltűnik, néha háromszor kell beírni”). Mentés után a
+  // mező a szerver-oldali frissítésig a régi értéket mutatta - ha közben egy
+  // korábban elindult háttérfrissítés (lásd lib/live.tsx) még a régi adattal
+  // ért vissza, a beírt szöveg látszólag eltűnt, és újranyitáskor a régi
+  // szöveg jött vissza. Most a mentett értéket mutatjuk, amíg az oldal adata
+  // utol nem éri (vagy le nem jár a tartás).
+  const [mentett, setMentett] = useState<string | null>(null);
+  if (mentett !== null && propDraft === mentett) setMentett(null);
+  const initialDraft = mentett ?? propDraft;
+  const mentesben = useRef(false);
   // A piszkozat a SZERKESZTÉS INDÍTÁSAKOR töltődik a mező aktuális
   // értékéből (lásd lent a kattintást) - nem csak az első betöltéskor. Enélkül
   // egy közben (pl. a „Technika ready” gombbal) frissült érték helyett a régi,
   // akár üres szöveg nyílt meg, és elkattintáskor az felül is írta az újat.
   const [draft, setDraft] = useState<string>(initialDraft);
   const [busy, setBusy] = useState(false);
+  const mentetlen = editing && draft !== initialDraft;
+
+  // Mentetlen szöveg mellett az oldal bezárása / újratöltése előtt a böngésző
+  // rákérdez - így egy félig beírt mező nem vész el észrevétlenül.
+  useEffect(() => {
+    if (!mentetlen) return;
+    const figyelmeztet = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", figyelmeztet);
+    return () => window.removeEventListener("beforeunload", figyelmeztet);
+  }, [mentetlen]);
 
   const restBoxClass = boxed
     ? "rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2 min-h-[38px] transition-colors duration-200 hover:border-border-strong"
     : "";
 
   async function save(value: unknown) {
+    // Egy mentés egyszerre: az Enter után következő elkattintás ne küldje el
+    // másodszor is ugyanazt.
+    if (mentesben.current) return;
     // Változatlan szöveg: nincs mit menteni (egy puszta be- és kikattintás
     // ne írjon az adatbázisba).
     if (field.inputType !== "number" && (value ?? "") === initialDraft) {
       setEditing(false);
       return;
     }
+    mentesben.current = true;
     setBusy(true);
     try {
       const res = await authFetch(patchPath, { method: "PATCH", body: JSON.stringify({ [field.key]: value }) });
       if (!res.ok) {
+        // A mező nyitva marad a beírt szöveggel - újra lehet próbálni.
         const detail = await res.json().catch(() => null);
         alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
         return;
       }
+      const uj = value === null || value === undefined ? "" : String(value);
+      setMentett(uj);
+      window.setTimeout(() => setMentett((m) => (m === uj ? null : m)), MENTETT_TARTAS_MS);
       setEditing(false);
       router.refresh();
     } catch (err) {
       alert(`Sikertelen mentés (hálózati hiba): ${err}`);
     } finally {
+      mentesben.current = false;
       setBusy(false);
     }
   }
@@ -111,7 +147,15 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
         }}
         className={`cursor-text text-[13px] leading-relaxed text-text-primary break-words ${boxed ? restBoxClass : "-mx-1.5 rounded px-1.5 transition-colors duration-200 hover:bg-surface-3"}`}
       >
-        {field.value ?? <span className="text-text-muted italic">Üres</span>}
+        {mentett !== null ? (
+          mentett === "" ? (
+            <span className="text-text-muted italic">Üres</span>
+          ) : (
+            <span className="whitespace-pre-wrap">{mentett}</span>
+          )
+        ) : (
+          (field.value ?? <span className="text-text-muted italic">Üres</span>)
+        )}
       </dd>
     );
   }
