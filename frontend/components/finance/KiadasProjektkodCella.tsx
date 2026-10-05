@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { KeresosSelect } from "@/components/KeresosSelect";
 import { authFetch } from "@/lib/authFetch";
 
@@ -89,6 +89,20 @@ export function KiadasProjektkodCella({
             <span>{canEdit ? "+ Projektkódhoz" : "–"}</span>
           )}
           {canEdit && <Pencil size={11} className="shrink-0 text-text-muted" />}
+        </button>
+      )}
+      {/* LEVÉTEL egy kattintással (a felhasználó kérése) - a legördülő
+          "Nincs projektkód" sora mellett, hogy ne kelljen keresgélni. */}
+      {canEdit && aktualis && !szerkeszt && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void valaszt("")}
+          title="Projektkód levétele a kiadásról"
+          aria-label="Projektkód levétele a kiadásról"
+          className="ml-1 rounded-[var(--radius)] p-0.5 align-middle text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+        >
+          <X size={12} />
         </button>
       )}
       {hiba && <span className="block text-[11.5px] text-text-danger">Nem sikerült menteni.</span>}

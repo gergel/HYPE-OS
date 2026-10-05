@@ -240,6 +240,17 @@ def _egyeni_afa_forintra(adat: dict) -> None:
         adat["egyeni_afa_osszege"] = penznem_szolg.forintra(adat["egyeni_afa_osszege"], adat["arfolyam"])
 
 
+def _id_vagy_none(ertek) -> int | None:
+    """Egy PATCH-ben érkező azonosító (szám, szöveg vagy üres) összehasonlítható
+    alakra: az üres szöveg és a null egyaránt "nincs"."""
+    if ertek is None or ertek == "":
+        return None
+    try:
+        return int(ertek)
+    except (TypeError, ValueError):
+        return None
+
+
 def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee) -> None:
     """PATCH-nél a hiányzó alapokat a meglévő rekordból vesszük: egy
     önmagában érkező nettó- vagy százalék-javítás is újraszámolja a bruttót,
@@ -252,15 +263,26 @@ def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee
         )
     _devizat_forintra_frissiteskor(obj, adat, db, _current_user)
     _egyeni_afa_forintra(adat)
+    # A PROJEKTKÓD vagy az ALVÁLLALKOZÓ LEVÉTELE / CSERÉJE (a felhasználó
+    # kérése): a konkrét forgatás-hozzárendelés (alvallalkozo_project_id) a
+    # régi projektkód egyik forgatására és a régi emberre szólt. Ha bent
+    # maradna, a levett ember továbbra is ott állna annak a forgatásnak az
+    # Utókövetésében (szerződés/TIG-teendőként), ezért kinullázzuk - alább,
+    # ha továbbra is van ember és projektkód, újra kitöltődik az újhoz.
+    projektkod_valtozik = "project_code_id" in adat and _id_vagy_none(adat["project_code_id"]) != obj.project_code_id
+    ember_valtozik = "employee_id" in adat and _id_vagy_none(adat["employee_id"]) != obj.employee_id
+    if (projektkod_valtozik or ember_valtozik) and "alvallalkozo_project_id" not in adat:
+        adat["alvallalkozo_project_id"] = None
+        obj.alvallalkozo_project_id = None
     # UTÓLAG alvállalkozóivá váló kiadás (a felhasználó hibajelzése nyomán):
     # ha egy meglévő soron kap embert vagy vált "külsős" besorolásra, ugyanaz
     # a forgatás-hozzárendelés jár neki, mint felvitelkor - enélkül a
     # projektkód forgatásai mellett is a forgatás nélküli ágra került volna.
-    if ("employee_id" in adat or "tipus" in adat) and not obj.alvallalkozo_project_id:
+    if ("employee_id" in adat or "tipus" in adat or "project_code_id" in adat) and not obj.alvallalkozo_project_id:
         osszevonva = {
-            "employee_id": adat.get("employee_id", obj.employee_id),
+            "employee_id": _id_vagy_none(adat.get("employee_id", obj.employee_id)),
             "tipus": adat.get("tipus", obj.tipus),
-            "project_code_id": adat.get("project_code_id", obj.project_code_id),
+            "project_code_id": _id_vagy_none(adat.get("project_code_id", obj.project_code_id)),
             "alvallalkozo_project_id": adat.get("alvallalkozo_project_id"),
         }
         if (osszevonva["tipus"] or "").strip().lower() == "kulsos":

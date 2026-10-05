@@ -1,13 +1,17 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/BackLink";
+import { Card } from "@/components/Card";
+import { KiadasKapcsolatok } from "@/components/finance/KiadasKapcsolatok";
 import { KiadasSzamlak } from "@/components/finance/KiadasSzamlak";
 import { AdatlapFej, PenzugyiSzekciok, type Jelveny } from "@/components/finance/PenzugyiAdatlap";
 import { TopBar } from "@/components/TopBar";
 import {
   ENTITY_PATHS,
   getCurrentUser,
+  getEmployees,
   getFieldTypes,
   getMyPagePermissions,
+  getProjectCodeOptions,
   getRecord,
   getVisibleFields,
 } from "@/lib/api";
@@ -39,9 +43,12 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
   const canEdit = canDoAction(currentUser, pagePermissions, "/penzugyek", "edit");
   const canDelete = canDoAction(currentUser, pagePermissions, "/penzugyek", "delete");
 
-  const [projectCode, employee] = await Promise.all([
+  const [projectCode, employee, projektkodok, emberek] = await Promise.all([
     expense.project_code_id ? getRecord(ENTITY_PATHS.projectCode, Number(expense.project_code_id)) : null,
     expense.employee_id ? getRecord(ENTITY_PATHS.employee, Number(expense.employee_id)) : null,
+    // A csere/hozzáadás választéka - csak akkor kell, ha szerkeszthet.
+    canEdit ? getProjectCodeOptions() : Promise.resolve([]),
+    canEdit ? getEmployees() : Promise.resolve([]),
   ]);
 
   const tipus = String(expense.tipus ?? "").trim().toLowerCase();
@@ -61,10 +68,6 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
   if (expense.nincs_szamla) jelvenyek.push({ label: "Sosem lesz számla", tone: "danger" });
   if (deviza) jelvenyek.push({ label: `Devizás (${deviza})`, tone: "teal" });
 
-  const linkek = [
-    ...(projectCode ? [{ href: `/projektek/project-kodok/${projectCode.id}`, label: `Project Code: ${String(projectCode.projektkod)}` }] : []),
-    ...(employee ? [{ href: `/csapat/${employee.id}`, label: `Crew tag: ${String(employee.full_name)}` }] : []),
-  ];
 
   return (
     <div className="flex flex-1 flex-col">
@@ -78,8 +81,35 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
           osszeg={brutto !== null ? formatHuf(brutto) : netto !== null ? formatHuf(netto) : null}
           osszegAlatt={brutto !== null && netto !== null ? `bruttó · nettó ${formatHuf(netto)}` : brutto !== null ? "bruttó" : netto !== null ? "nettó" : null}
           jelvenyek={jelvenyek}
-          linkek={linkek}
+          // A projektkód és az alvállalkozó lent, a saját kártyáján látszik
+          // (ott szerkeszthető és levehető is).
+          linkek={[]}
         />
+
+        {/* A projektkód és az alvállalkozó itt adható hozzá, cserélhető és
+            vehető le (a felhasználó kérése) - lásd KiadasKapcsolatok. */}
+        <Card title="Projektkód és alvállalkozó">
+          <KiadasKapcsolatok
+            expenseId={expenseId}
+            projectCode={
+              projectCode
+                ? {
+                    id: Number(projectCode.id),
+                    projektkod: String(projectCode.projektkod ?? ""),
+                    nev: projectCode.project_nev ? String(projectCode.project_nev) : null,
+                  }
+                : null
+            }
+            employee={employee ? { id: Number(employee.id), nev: String(employee.full_name ?? "") } : null}
+            projektkodOpciok={[...projektkodok]
+              .sort((a, b) => (b.projektkod ?? "").localeCompare(a.projektkod ?? "", "hu"))
+              .map((pc) => ({ value: String(pc.id), label: pc.projektkod, sublabel: pc.project_nev || undefined }))}
+            emberOpciok={[...emberek]
+              .sort((a, b) => a.full_name.localeCompare(b.full_name, "hu"))
+              .map((e) => ({ value: String(e.id), label: e.full_name }))}
+            canEdit={canEdit}
+          />
+        </Card>
 
         {/* Csak a fontos mezők, szekciókba rendezve (a felhasználó kérése) -
             a Notionből átjött, nem használt mezők a csukott „Régi adatok”

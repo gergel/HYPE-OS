@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { X } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { KeresosSelect, type KeresosOpcio } from "@/components/KeresosSelect";
@@ -188,6 +189,13 @@ export function QuickCreateForm({
     setValues((v) => {
       const kovetkezo = { ...v, [f.name]: ertek };
       if (f.autoSet && ertek) kovetkezo[f.autoSet.field] = f.autoSet.value;
+      // A választás TÖRLÉSEKOR (lásd a legördülő melletti ×) az autoSet is
+      // visszaáll: pl. a levett alvállalkozó után a besorolás ne maradjon
+      // magától "Külsős" - csak ha azóta kézzel nem írták át.
+      if (f.autoSet && !ertek && v[f.autoSet.field] === f.autoSet.value) {
+        const cel = fields.find((m) => m.name === f.autoSet?.field);
+        kovetkezo[f.autoSet.field] = cel?.defaultValue ?? "";
+      }
       return kovetkezo;
     });
   }
@@ -430,24 +438,45 @@ export function QuickCreateForm({
               className="field min-h-[70px] w-72 max-w-full"
             />
           ) : f.type === "select" ? (
-            <KeresosSelect
-              // ?? (nem ||): az ÜRES STRING is érvényes választás lehet - pl. az
-              // ÁFA legördülő "Nincs ÁFA" opciója value="" (a felhasználó
-              // kérése: ilyenkor a "Nincs ÁFA" felirat látsszon, ne a
-              // "Válassz…" placeholder). Ha nincs ilyen opció, a KeresosSelect
-              // úgyis a placeholderre esik vissza.
-              value={values[f.name] ?? null}
-              options={[
-                ...(f.options ?? []).map((opt) => ({ value: String(opt.value), label: opt.label })),
-                // A most felvett emberek: a szerver-lista frissüléséig innen
-                // jön a nevük (lásd ujOpciok).
-                ...(ujOpciok[f.name] ?? []),
-              ]}
-              onChange={(ertek) => mezoValtozas(f, ertek)}
-              placeholder="Válassz…"
-              className="min-w-[200px]"
-              onUjFelvetel={f.ujAlvallalkozo ? (nev) => setUjAlvMezo({ mezoNev: f.name, nev }) : undefined}
-            />
+            <span className="flex items-center gap-1">
+              <KeresosSelect
+                // ?? (nem ||): az ÜRES STRING is érvényes választás lehet - pl. az
+                // ÁFA legördülő "Nincs ÁFA" opciója value="" (a felhasználó
+                // kérése: ilyenkor a "Nincs ÁFA" felirat látsszon, ne a
+                // "Válassz…" placeholder). Ha nincs ilyen opció, a KeresosSelect
+                // úgyis a placeholderre esik vissza.
+                value={values[f.name] ?? null}
+                options={[
+                  ...(f.options ?? []).map((opt) => ({ value: String(opt.value), label: opt.label })),
+                  // A most felvett emberek: a szerver-lista frissüléséig innen
+                  // jön a nevük (lásd ujOpciok).
+                  ...(ujOpciok[f.name] ?? []),
+                ]}
+                onChange={(ertek) => mezoValtozas(f, ertek)}
+                placeholder="Válassz…"
+                className="min-w-[200px]"
+                onUjFelvetel={f.ujAlvallalkozo ? (nev) => setUjAlvMezo({ mezoNev: f.name, nev }) : undefined}
+              />
+              {/* A NEM kötelező választás kiszedhető (a felhasználó kérése: pl.
+                  a tévesen hozzáadott projektkód vagy alvállalkozó). Ahol a
+                  listában van "üres" opció (pl. "Nincs ÁFA"), ott az a törlés;
+                  az alapértékkel induló mező (Besorolás, Pénznem) mindig
+                  kitöltött, azt csak átállítani lehet. */}
+              {!kotelezo(f, values) &&
+                !f.defaultValue &&
+                values[f.name] &&
+                !(f.options ?? []).some((o) => String(o.value) === "") && (
+                  <button
+                    type="button"
+                    onClick={() => mezoValtozas(f, "")}
+                    title={`${f.label} törlése`}
+                    aria-label={`${f.label} törlése`}
+                    className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+            </span>
           ) : (
             <>
               <input
