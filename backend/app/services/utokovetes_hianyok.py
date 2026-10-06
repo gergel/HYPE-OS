@@ -41,6 +41,9 @@ from app.services import automatizalas_audit, papirozas_hatokor
 #: Élő állapotok és emberi címkéik - dokumentumonként.
 SZERZODES_CIMKEK = {
     "keretszerzodes": "Keretszerződés fedi",
+    # Belsős munkatárs (a forgatás napján): nem kell eseti szerződés, mint a
+    # keretszerződésesnél - lásd subcontractor_contracts.belsos_fel_a_napon.
+    "belsos": "Belsős – nem kell szerződés",
     "alairva": "Aláírva visszaérkezett",
     "van_mar": "Van már szerződés",
     "kihagyva": "Kihagyva",
@@ -113,9 +116,17 @@ def lezajlott_projektek(db: Session, *, ma: date, napok: int | None, project_id:
     return projektek
 
 
-def _szerzodes_allapot(project: Project, kulcs: str, keretszerzodesek, project_contracts) -> tuple[str, int | None]:
-    from app.api.routes.subcontractor_contracts import MAR_VAN_ALLAPOT, _mentesul_keretszerzodessel
+def _szerzodes_allapot(
+    project: Project, kulcs: str, keretszerzodesek, project_contracts, fel=None
+) -> tuple[str, int | None]:
+    from app.api.routes.subcontractor_contracts import (
+        MAR_VAN_ALLAPOT,
+        _mentesul_keretszerzodessel,
+        belsos_fel_a_napon,
+    )
 
+    if belsos_fel_a_napon(fel, project.forgatas_datuma):
+        return "belsos", None
     keretek = keretszerzodesek.get(kulcs, [])
     if _mentesul_keretszerzodessel(keretek, project.forgatas_datuma):
         return "keretszerzodes", keretek[0].id if keretek else None
@@ -271,7 +282,7 @@ def matrix(
     osszesito = {"szerzodes": 0, "tig": 0, "szamla": 0}
     for p in projektek:
         for cs in tig_csoportok(p, felulirasok):
-            sz_allapot, sz_id = _szerzodes_allapot(p, cs.kulcs, keretszerzodesek, project_contracts)
+            sz_allapot, sz_id = _szerzodes_allapot(p, cs.kulcs, keretszerzodesek, project_contracts, cs.fel)
             cert = _tig(p, cs, tig_lookup)
             t_allapot = _tig_allapot(cert)
             p_draftok = draftok.get((p.id, cs.kulcs), [])

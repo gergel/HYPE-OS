@@ -98,7 +98,7 @@ def _szerzodes_candidates(
     total = sum(
         1
         for cs in csoportok
-        if not _mentesul_keretszerzodessel(keretszerzodesek.get(cs.kulcs, []), project.forgatas_datuma)
+        if not _mentesul_keretszerzodessel(keretszerzodesek.get(cs.kulcs, []), project.forgatas_datuma, cs.fel)
     )
     pending = _pending_csoportok(project, keretszerzodesek, project_contracts, felulirasok)
     return total, len(pending), pending
@@ -553,7 +553,7 @@ def _szerzodes_candidates_projektkodon(
     total = sum(
         1
         for cs in csoportok
-        if not _mentesul_keretszerzodessel(keretszerzodesek.get(cs.kulcs, []), projektkod.datum)
+        if not _mentesul_keretszerzodessel(keretszerzodesek.get(cs.kulcs, []), projektkod.datum, cs.fel)
     )
     pending = _pending_csoportok_projektkodon(projektkod, keretszerzodesek, project_code_contracts)
     return total, len(pending)

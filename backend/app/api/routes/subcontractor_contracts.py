@@ -196,11 +196,31 @@ def _load_contract_lookup(
     return keretszerzodesek, project_contracts
 
 
-def _mentesul_keretszerzodessel(keretszerzodesek: list[Contract], nap: date | None) -> bool:
-    """Fedi-e valamelyik keretszerződése a projekt napját?
+def belsos_fel_a_napon(fel: SzamlazoFel | None, nap: date | None) -> bool:
+    """A számlázó fél egy BELSŐS munkatárs (saját nevén), aki a forgatás
+    napján belsős volt? Ilyenkor nem kell tőle eseti szerződés (a felhasználó
+    kérése): a belsős ebben olyan, mint egy keretszerződéses - TIG viszont
+    ugyanúgy kell tőle (pl. ha egy alvállalkozói kiadáshoz pluszban
+    hozzáadják egy projekthez). Cég nevére menő papírnál nem érvényes: az
+    külön jogi személy."""
+    return (
+        fel is not None
+        and fel.vallalkozas is None
+        and fel.employee is not None
+        and belsos_idoszak.belsos_a_napon(fel.employee, nap or date.today())
+    )
+
+
+def _mentesul_keretszerzodessel(
+    keretszerzodesek: list[Contract], nap: date | None, fel: SzamlazoFel | None = None
+) -> bool:
+    """Fedi-e valamelyik keretszerződése a projekt napját - vagy BELSŐS volt a
+    fél azon a napon (lásd belsos_fel_a_napon), ami ugyanúgy mentesít?
 
     Dátum nélküli projektnél a MAI napot nézzük: ilyenkor az a kérdés, hogy
     él-e most keretszerződése - ennél többet a projektről nem tudunk."""
+    if belsos_fel_a_napon(fel, nap):
+        return True
     return any(keretszerzodes_ervenyes(c, nap or date.today()) for c in keretszerzodesek)
 
 
@@ -271,7 +291,7 @@ def csoport_szerzodes_kesz(
     (lásd performance_certificates.py)."""
     # A keretszerződés csak akkor mentesít, ha a FORGATÁS NAPJÁN élt: aki két
     # időszak közé eső projekten dolgozott, attól eseti szerződés kell.
-    if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project.forgatas_datuma):
+    if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project.forgatas_datuma, csoport.fel):
         return True
     existing = project_contracts.get((project.id, csoport.kulcs))
     return existing is not None and existing.szerzodes_allapota in TERMINAL_STATUSES
@@ -295,7 +315,7 @@ def alairasra_varo_csoportok(
     eseti szerződés sem készült."""
     result: list[tuple[SzamlazoCsoport, Contract]] = []
     for csoport in _szamlazo_csoportok(project, felulirasok):
-        if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project.forgatas_datuma):
+        if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project.forgatas_datuma, csoport.fel):
             continue
         szerzodes = project_contracts.get((project.id, csoport.kulcs))
         if szerzodes is None or szerzodes.szerzodes_allapota != "Kiküldve":
@@ -722,7 +742,7 @@ def list_nyitott_tetelek(
     eredmeny: list[TetelInfo] = []
     for p in projects:
         # Ahol keretszerződés fedi, ott nincs mit szerződni.
-        if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), p.forgatas_datuma):
+        if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), p.forgatas_datuma, fel):
             continue
         meglevo = project_contracts.get((p.id, fel.kulcs))
         # A már véglegesített (kiküldött/kihagyott) szerződést nem bontjuk meg.
@@ -884,9 +904,14 @@ def _validate_szamlazo(db: Session, project: Project, szamlazo_kulcs: str) -> Sz
         {fel.employee.id} if fel.employee else set(),
         {fel.vallalkozas.id} if fel.vallalkozas else set(),
     )
-    if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), project.forgatas_datuma):
+    if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), project.forgatas_datuma, fel):
         raise HTTPException(
-            status_code=400, detail="Ennek a félnek már van keretszerződése, nincs szükség eseti szerződésre."
+            status_code=400,
+            detail=(
+                "Belsős munkatárs: tőle nem kell eseti szerződés (mint a keretszerződésesnél), csak TIG."
+                if belsos_fel_a_napon(fel, project.forgatas_datuma)
+                else "Ennek a félnek már van keretszerződése, nincs szükség eseti szerződésre."
+            ),
         )
     return csoport
 
@@ -1012,7 +1037,7 @@ def _apply_tetelek(db: Session, draft: Contract, fel: SzamlazoFel, tetelek: list
                 status_code=400,
                 detail=f"„{projekt.nev}” projekten {ember.full_name} munkáját nem ez a fél számlázza.",
             )
-        if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), projekt.forgatas_datuma):
+        if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), projekt.forgatas_datuma, fel):
             raise HTTPException(
                 status_code=400,
                 detail=f"„{projekt.nev}” projekten keretszerződés fedi ezt a felet - oda nem kell eseti szerződés.",
@@ -1625,7 +1650,7 @@ def csoport_szerzodes_kesz_projektkodon(
 ) -> bool:
     """Lásd csoport_szerzodes_kesz (forgatás-alapú megfelelője) - itt a
     projektkód DÁTUMA (forgatás híján) dönti el, él-e a keretszerződés."""
-    if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project_code.datum):
+    if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project_code.datum, csoport.fel):
         return True
     existing = project_code_contracts.get((project_code.id, csoport.kulcs))
     return existing is not None and existing.szerzodes_allapota in TERMINAL_STATUSES
@@ -1651,7 +1676,7 @@ def alairasra_varo_csoportok_projektkodon(
     """Lásd alairasra_varo_csoportok (forgatás-alapú megfelelője)."""
     result: list[tuple[SzamlazoCsoport, Contract]] = []
     for csoport in szamlazo_csoportok_projektkodon(project_code):
-        if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project_code.datum):
+        if _mentesul_keretszerzodessel(keretszerzodesek.get(csoport.kulcs, []), project_code.datum, csoport.fel):
             continue
         szerzodes = project_code_contracts.get((project_code.id, csoport.kulcs))
         if szerzodes is None or szerzodes.szerzodes_allapota != "Kiküldve":
@@ -1753,9 +1778,14 @@ def _validate_szamlazo_projektkodon(db: Session, projektkod: ProjectCode, szamla
     keretszerzodesek, _ = _load_contract_lookup(
         db, {fel.employee.id} if fel.employee else set(), {fel.vallalkozas.id} if fel.vallalkozas else set()
     )
-    if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), projektkod.datum):
+    if _mentesul_keretszerzodessel(keretszerzodesek.get(fel.kulcs, []), projektkod.datum, fel):
         raise HTTPException(
-            status_code=400, detail="Ennek a félnek már van keretszerződése, nincs szükség eseti szerződésre."
+            status_code=400,
+            detail=(
+                "Belsős munkatárs: tőle nem kell eseti szerződés (mint a keretszerződésesnél), csak TIG."
+                if belsos_fel_a_napon(fel, projektkod.datum)
+                else "Ennek a félnek már van keretszerződése, nincs szükség eseti szerződésre."
+            ),
         )
     return csoport
 

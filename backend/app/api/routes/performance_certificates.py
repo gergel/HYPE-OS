@@ -178,13 +178,23 @@ def _tig_candidates(
     másik tételben szerepel, tehát nincs mit igazolni.
 
     "Belsős" itt A FORGATÁS NAPJÁRA értendő, nem a mai típusra (lásd
-    services/belsos_idoszak.belsos_a_napon)."""
+    services/belsos_idoszak.belsos_a_napon).
+
+    A belsős-szűrő CSAK a stábra vonatkozik (ugyanaz a szabály, mint a
+    szerződésnél - subcontractor_contracts.szerzodest_igenylo_emberek): ha egy
+    belsőst pluszban egy ALVÁLLALKOZÓI KIADÁSHOZ adnak hozzá, arról TIG kell
+    (a felhasználó kérése) - szerződés viszont nem, mert a belsős ilyenkor
+    olyan, mint egy keretszerződéses (lásd subcontractor_contracts.
+    belsos_fel_a_napon)."""
     crew_ids = {e.id for e in project.crew}
+    alvallalkozo_idk = {e.id for e in project.alvallalkozo_stab}
     alap_lista = list(project.crew) + [
         e for e in project.alvallalkozo_stab if e.id not in crew_ids
     ]
     emberek = [
-        e for e in alap_lista if not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)
+        e
+        for e in alap_lista
+        if e.id in alvallalkozo_idk or not belsos_idoszak.belsos_a_napon(e, project.forgatas_datuma)
     ]
     if felulirasok is None:
         return emberek
