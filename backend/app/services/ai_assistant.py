@@ -25,6 +25,7 @@ MAX_ROWS soros) lapján látott részhalmaz maximuma."""
 from __future__ import annotations
 
 import json
+import time
 from datetime import date, datetime
 from typing import Any
 from urllib.parse import quote
@@ -580,6 +581,58 @@ def _build_system_prompt(db: Session, employee: Employee) -> str:
     )
 
 
+#: ÁTMENETI Gemini-hibáknál (a felhasználó jelezte: a feladatok többször
+#: megakadtak a "503 UNAVAILABLE - high demand" üzenettel) ennyi másodperc
+#: várakozás után UGYANAZT a kérést UGYANAZZAL a modellel próbáljuk újra -
+#: modellt automatikusan nem váltunk. Összesen kb. 70 mp; ennél tovább egy
+#: szinkron kérés nem várakoztathatja a felhasználót.
+UJRAPROBA_VARAKOZAS: tuple[int, ...] = (3, 6, 12, 20, 30)
+_ATMENETI_KODOK = frozenset({408, 429, 500, 502, 503, 504})
+
+
+class _LeallitvaVarakozasKozben(Exception):
+    """A felhasználó az újrapróbálás előtti várakozás közben leállította a kört."""
+
+
+def _atmeneti_hiba(exc: BaseException) -> bool:
+    """Túlterhelés, kvóta, szerverhiba vagy időtúllépés - kis idő múlva jó eséllyel megy."""
+    if isinstance(exc, genai_errors.APIError):
+        return (exc.code or 0) in _ATMENETI_KODOK
+    nev = type(exc).__name__.lower()
+    return "timeout" in nev or "connect" in nev or "timed out" in str(exc).lower()
+
+
+def _atmeneti_leiras(exc: BaseException) -> str:
+    """Rövid, titokmentes leírás - a nyers API-válasz (JSON) nem a felhasználónak szól."""
+    kod = getattr(exc, "code", None) if isinstance(exc, genai_errors.APIError) else None
+    if kod == 429:
+        return "a Gemini túl sok kérést kapott (429)"
+    if kod:
+        return f"a Gemini most túlterhelt ({kod})"
+    return "a Gemini nem válaszolt időben"
+
+
+def _generalas(client, contents, config, varakozik=None):
+    """Egy modellhívás, átmeneti hibánál újrapróbálással (UJRAPROBA_VARAKOZAS).
+
+    `varakozik(exc, mp, proba, osszes)` végzi a várakozást (és jelzi a
+    felületen); ha False-t ad, a felhasználó leállította a kört."""
+    varakozasok = list(UJRAPROBA_VARAKOZAS)
+    proba = 0
+    while True:
+        try:
+            return client.models.generate_content(model=settings.gemini_model, contents=contents, config=config)
+        except Exception as exc:  # noqa: BLE001 - osztályozzuk, a nem átmenetit továbbdobjuk
+            if not _atmeneti_hiba(exc) or not varakozasok:
+                raise
+            proba += 1
+            mp = varakozasok.pop(0)
+            if varakozik is None:
+                time.sleep(mp)
+            elif not varakozik(exc, mp, proba, len(UJRAPROBA_VARAKOZAS)):
+                raise _LeallitvaVarakozasKozben from exc
+
+
 def ask(db: Session, employee: Employee, question: str) -> str:
     """A kérdés megválaszolása Gemini function-callinggal.
 
@@ -603,9 +656,7 @@ def ask(db: Session, employee: Employee, question: str) -> str:
 
     try:
         for _ in range(MAX_TOOL_ROUNDS):
-            response = client.models.generate_content(
-                model=settings.gemini_model, contents=contents, config=config
-            )
+            response = _generalas(client, contents, config)
             hivasok = response.function_calls or []
             if not hivasok:
                 return (response.text or "").strip() or "Nem érkezett válasz szöveg."
@@ -627,15 +678,14 @@ def ask(db: Session, employee: Employee, question: str) -> str:
                     types.Part.from_function_response(name=hivas.name or "", response=eredmeny)
                 )
             contents.append(types.Content(role="user", parts=valaszok))
-    except genai_errors.ClientError as exc:
-        # 401/403: rossz kulcs; 429: rate limit - a felhasználónak más a teendő.
-        if exc.code == 429:
-            return "Az AI Assistant túlterhelt (rate limit) - próbáld újra kicsit később."
-        if exc.code in (401, 403):
+    except Exception as exc:  # noqa: BLE001 - csak az átmeneti/API hibát fordítjuk le
+        if _atmeneti_hiba(exc):
+            return f"Az AI Assistant most nem érhető el: {_atmeneti_leiras(exc)}, és kb. egy percnyi újrapróbálás után sem válaszolt. Próbáld újra pár perc múlva."
+        if isinstance(exc, genai_errors.ClientError) and exc.code in (401, 403):
             return "Az AI Assistant hitelesítési hibába ütközött (érvénytelen GEMINI_API_KEY)."
-        return f"Az AI Assistant nem érhető el (API hiba): {exc}"
-    except genai_errors.APIError as exc:
-        return f"Az AI Assistant nem érhető el (hálózati/API hiba): {exc}"
+        if isinstance(exc, genai_errors.APIError):
+            return f"Az AI Assistant nem érhető el (API hiba): {exc}"
+        raise
 
     return "Nem sikerült választ generálni (túl sok lépés)."
 
@@ -803,11 +853,41 @@ def futtat(db: Session, employee: Employee, beszelgetes, szoveg: str, kontextus:
     modell memóriájában él - a felhasználó előírása)."""
     from app.models.ai_beszelgetes import AiFajl, AiUzenet
 
-    def esemeny(szov: str | None, adat: dict | None = None) -> None:
+    #: Az ebben a körben elvégzett lépések - megszakadásnál a válaszba kerülnek,
+    #: így a "folytasd" kérésnél a modell az előzményből látja, hol tartott.
+    lepesek: list[str] = []
+
+    def esemeny(szov: str | None, adat: dict | None = None, *, lepes: bool = False) -> None:
         if szov is None and adat is None:
             return
+        if lepes and szov:
+            lepesek.append(szov)
         db.add(AiUzenet(beszelgetes_id=beszelgetes.id, szerep="esemeny", szoveg=szov, adat=adat))
         db.commit()
+
+    def varakozik(exc: BaseException, mp: int, proba: int, osszes: int) -> bool:
+        """Újrapróbálás előtti várakozás - látszik a felületen, és a Leállítás
+        gomb közben is hat."""
+        esemeny(f"{_atmeneti_leiras(exc).capitalize()} - {mp} mp múlva újrapróbálom ({proba}/{osszes})…")
+        for _ in range(mp):
+            time.sleep(1)
+            db.refresh(beszelgetes)
+            if beszelgetes.leallitas_kert:
+                return False
+        return True
+
+    def megszakadt(ok: str) -> None:
+        szov = (
+            f"## A munka megszakadt\n{ok}\n\n"
+            "Írd azt, hogy **folytasd**, és onnan viszem tovább, ahol abbamaradt."
+        )
+        if lepesek:
+            szov += "\n\n**Ebben a körben eddig ez történt** (ami ebből módosítás volt, az érvényben van):\n" + "\n".join(
+                f"- {lepes}" for lepes in lepesek[-30:]
+            )
+        else:
+            szov += "\n\nEbben a körben még semmi nem történt, nem módosult semmi."
+        valasz(szov)
 
     def valasz(szov: str) -> None:
         db.add(AiUzenet(beszelgetes_id=beszelgetes.id, szerep="asszisztens", szoveg=szov))
@@ -858,9 +938,7 @@ def futtat(db: Session, employee: Employee, beszelgetes, szoveg: str, kontextus:
                 valasz("Leállítottam a munkát. A már végrehajtott lépések érvényben vannak - a naplóban látod, mi történt meg.")
                 return
 
-            response = client.models.generate_content(
-                model=settings.gemini_model, contents=contents, config=config
-            )
+            response = _generalas(client, contents, config, varakozik)
             hivasok = response.function_calls or []
             if not hivasok:
                 valasz((response.text or "").strip() or "Nem érkezett válasz.")
@@ -872,7 +950,7 @@ def futtat(db: Session, employee: Employee, beszelgetes, szoveg: str, kontextus:
             valaszok = []
             for hivas in hivasok:
                 argok = dict(hivas.args or {})
-                esemeny(_esemeny_cimke(hivas.name or "", argok))
+                esemeny(_esemeny_cimke(hivas.name or "", argok), lepes=True)
                 try:
                     eredmeny = _execute_tool(db, employee, hivas.name or "", argok, beszelgetes.id)
                 except Exception as exc:  # noqa: BLE001 - a modell kapja meg, és tud javítani
@@ -921,16 +999,22 @@ def futtat(db: Session, employee: Employee, beszelgetes, szoveg: str, kontextus:
                     types.Part.from_function_response(name=hivas.name or "", response=eredmeny)
                 )
             contents.append(types.Content(role="user", parts=valaszok))
-    except genai_errors.ClientError as exc:
-        if exc.code == 429:
-            valasz("Az AI Assistant túlterhelt (rate limit) - próbáld újra kicsit később. Az eddig elvégzett lépések érvényben vannak.")
-        elif exc.code in (401, 403):
-            valasz("Az AI Assistant hitelesítési hibába ütközött (érvénytelen GEMINI_API_KEY).")
-        else:
-            valasz(f"Az AI Assistant nem érhető el (API hiba): {exc}. Az eddig elvégzett lépések érvényben vannak.")
+    except _LeallitvaVarakozasKozben:
+        esemeny("Leállítva a kérésedre - az eddig elvégzett lépések érvényben maradtak.")
+        valasz("Leállítottam a munkát. A már végrehajtott lépések érvényben vannak - a naplóban látod, mi történt meg.")
         return
-    except genai_errors.APIError as exc:
-        valasz(f"Az AI Assistant nem érhető el (hálózati/API hiba): {exc}. Az eddig elvégzett lépések érvényben vannak.")
+    except Exception as exc:  # noqa: BLE001 - csak az átmeneti/API hibát fordítjuk le
+        if _atmeneti_hiba(exc):
+            megszakadt(
+                f"{_atmeneti_leiras(exc).capitalize()}, és kb. egy percnyi újrapróbálás után sem válaszolt "
+                "(ez a Google oldali átmeneti terhelés, nem a kérésed hibája)."
+            )
+        elif isinstance(exc, genai_errors.ClientError) and exc.code in (401, 403):
+            valasz("Az AI Assistant hitelesítési hibába ütközött (érvénytelen GEMINI_API_KEY).")
+        elif isinstance(exc, genai_errors.APIError):
+            megszakadt(f"Az AI Assistant API-hibát kapott: {exc}")
+        else:
+            raise
         return
 
     valasz(
