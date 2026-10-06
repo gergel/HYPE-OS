@@ -349,6 +349,265 @@ function IdoszakSor({
   );
 }
 
+/** Egy kötelezettség (előfizetés, biztosítás, autópapír) felvitele /
+ * szerkesztése felugró ablakban - a listák (KotelezettsegKezelo, az E-Rezsi
+ * ERezsiLista) közös űrlapja. `kezdo` null = új felvitele. */
+export function KotelezettsegUrlapModal({
+  kezdo,
+  alapTipus = "elofizetes",
+  tipusValaszthato = true,
+  fordulokNelkul = false,
+  emberek,
+  autoId,
+  onBezar,
+}: {
+  kezdo: Kotelezettseg | null;
+  alapTipus?: string;
+  tipusValaszthato?: boolean;
+  fordulokNelkul?: boolean;
+  emberek: { id: number; full_name: string }[];
+  autoId?: number;
+  onBezar: () => void;
+}) {
+  const router = useRouter();
+  const [urlap, setUrlap] = useState<UrlapAllapot>(() => (kezdo ? urlapBol(kezdo) : uresUrlap(alapTipus)));
+  const [busy, setBusy] = useState(false);
+
+  async function ment() {
+    if (!urlap.nev.trim()) {
+      alert("Add meg a megnevezést.");
+      return;
+    }
+    if (!fordulokNelkul && !urlap.kovetkezo_fordulo) {
+      alert("Add meg a következő forduló (lejárat) dátumát.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const test = {
+        nev: urlap.nev.trim(),
+        csomag: urlap.csomag.trim() || null,
+        tipus: urlap.tipus,
+        ciklus: urlap.ciklus,
+        // E-Rezsiben a lejárat NEM kötelező (a felhasználó kérése) - megadva
+        // is csak tájékoztató; üresen null.
+        kovetkezo_fordulo: urlap.kovetkezo_fordulo || null,
+        felelos_id: urlap.felelos_id ? Number(urlap.felelos_id) : null,
+        auto_id: autoId ?? null,
+        aktiv: urlap.aktiv,
+        fizetesi_mod: urlap.fizetesi_mod || null,
+        ar_osszeg: urlap.ar_osszeg.trim() ? Number(urlap.ar_osszeg) : null,
+        ar_plusz_afa: urlap.ar_plusz_afa,
+        ar_penznem: urlap.ar_penznem,
+        szamla_forras: urlap.szamla_forras.trim() || null,
+        kartya: urlap.kartya.trim() || null,
+        megjegyzes: urlap.megjegyzes.trim() || null,
+        ertesites_napokkal: Number(urlap.ertesites_napokkal) || 14,
+      };
+      const res = await authFetch(
+        kezdo ? `/api/v1/kotelezettsegek/${kezdo.id}` : "/api/v1/kotelezettsegek",
+        { method: kezdo ? "PUT" : "POST", body: JSON.stringify(test) },
+      );
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      onBezar();
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalReteg onClose={busy ? undefined : onBezar}>
+      <div
+        className="my-auto w-full max-w-2xl rounded-[var(--radius)] border border-border bg-surface-2 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-4 text-[15px] font-medium text-text-primary">
+          {kezdo ? "Szerkesztés" : "Új felvitele"}
+        </h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <label className="text-[11px] text-text-muted">Megnevezés *</label>
+            <input value={urlap.nev} onChange={(e) => setUrlap({ ...urlap, nev: e.target.value })} className={inputClass} />
+          </div>
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <label className="text-[11px] text-text-muted">Csomag / részletek</label>
+            <input value={urlap.csomag} onChange={(e) => setUrlap({ ...urlap, csomag: e.target.value })} className={inputClass} />
+          </div>
+          {tipusValaszthato && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] text-text-muted">Típus</label>
+              <KeresosSelect
+                value={urlap.tipus}
+                options={Object.entries(TIPUS_NEVEK).map(([ertek, nev]) => ({ value: ertek, label: nev }))}
+                onChange={(ertek) => setUrlap({ ...urlap, tipus: ertek })}
+              />
+            </div>
+          )}
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] text-text-muted">Ciklus</label>
+            <KeresosSelect
+              value={urlap.ciklus}
+              options={Object.entries(CIKLUS_NEVEK).map(([ertek, nev]) => ({ value: ertek, label: nev }))}
+              onChange={(ertek) => setUrlap({ ...urlap, ciklus: ertek })}
+            />
+          </div>
+
+          {/* A forduló EGY dátum: a nap és a hónap benne van, a ciklus
+              pedig megmondja, mennyivel lép tovább (havi egy hónapot, éves
+              egy évet) - lásd backend services/kotelezettseg.py. A
+              forduló-követés nélküli módban (E-Rezsi) nincs ilyen mező. */}
+          {!fordulokNelkul && (
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label className="text-[11px] text-text-muted">
+                {urlap.ciklus === "egyszeri" ? "Lejárat *" : "Következő forduló *"}
+              </label>
+              <input
+                type="date"
+                value={urlap.kovetkezo_fordulo}
+                onChange={(e) => setUrlap({ ...urlap, kovetkezo_fordulo: e.target.value })}
+                className={inputClass}
+              />
+              <p className="text-[11px] text-text-muted">
+                {urlap.ciklus === "egyszeri"
+                  ? "Ekkor jár le – magától nem újul meg."
+                  : "Innentől a ciklus lépteti tovább. Több évre előre kifizetett tételnél a tényleges lejáratot add meg."}
+              </p>
+            </div>
+          )}
+
+          {/* E-Rezsiben a lejárat NEM kötelező (a felhasználó kérése): ha
+              megadják (pl. egy éves előfizetés vége), csak tájékoztat -
+              forduló-követés és figyelmeztetés nincs hozzá. */}
+          {fordulokNelkul && (
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label className="text-[11px] text-text-muted">Lejárat / következő terhelés (nem kötelező)</label>
+              <input
+                type="date"
+                value={urlap.kovetkezo_fordulo}
+                onChange={(e) => setUrlap({ ...urlap, kovetkezo_fordulo: e.target.value })}
+                className={inputClass}
+              />
+            </div>
+          )}
+
+          {/* Az ár NETTÓBAN, mellette az áfa-kapcsoló: a bruttót ebből
+              számoljuk, nem külön mezőben tároljuk. */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] text-text-muted">Nettó ár (ciklusonként)</label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={urlap.ar_osszeg}
+                onChange={(e) => setUrlap({ ...urlap, ar_osszeg: e.target.value })}
+                className={inputClass}
+              />
+              <KeresosSelect
+                value={urlap.ar_penznem}
+                options={PENZNEMEK.map((p) => ({ value: p, label: p }))}
+                onChange={(ertek) => setUrlap({ ...urlap, ar_penznem: ertek })}
+                className="w-[90px]"
+              />
+            </div>
+            <label className="mt-1 flex items-center gap-2 text-[12.5px] text-text-primary">
+              <input
+                type="checkbox"
+                checked={urlap.ar_plusz_afa}
+                onChange={(e) => setUrlap({ ...urlap, ar_plusz_afa: e.target.checked })}
+              />
+              Plusz ÁFA
+            </label>
+            <p className="text-[11px] text-text-muted">
+              Bruttó:{" "}
+              {urlap.ar_osszeg.trim()
+                ? penzzel(bruttoBol(Number(urlap.ar_osszeg), urlap.ar_plusz_afa), urlap.ar_penznem)
+                : "–"}
+            </p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] text-text-muted">Hogyan fizetjük</label>
+            <KeresosSelect
+              value={urlap.fizetesi_mod || null}
+              options={FIZETESI_MODOK.map((m) => ({ value: m, label: m }))}
+              onChange={(ertek) => setUrlap({ ...urlap, fizetesi_mod: ertek })}
+              placeholder="–"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] text-text-muted">Felelős</label>
+            <KeresosSelect
+              value={urlap.felelos_id || null}
+              options={emberek.map((e) => ({ value: String(e.id), label: e.full_name }))}
+              onChange={(ertek) => setUrlap({ ...urlap, felelos_id: ertek })}
+              placeholder="–"
+            />
+            <p className="text-[11px] text-text-muted">Ő kapja az értesítést és a feladatot a fordulóról.</p>
+          </div>
+          {!fordulokNelkul && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] text-text-muted">Figyelmeztetés (nappal előbb)</label>
+              <input
+                type="number"
+                min={0}
+                value={urlap.ertesites_napokkal}
+                onChange={(e) => setUrlap({ ...urlap, ertesites_napokkal: e.target.value })}
+                className={inputClass}
+              />
+            </div>
+          )}
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] text-text-muted">Terhelt kártya</label>
+            <input value={urlap.kartya} onChange={(e) => setUrlap({ ...urlap, kartya: e.target.value })} className={inputClass} />
+          </div>
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <label className="text-[11px] text-text-muted">Számla forrása (email, letöltő link)</label>
+            <input
+              value={urlap.szamla_forras}
+              onChange={(e) => setUrlap({ ...urlap, szamla_forras: e.target.value })}
+              className={inputClass}
+            />
+          </div>
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <label className="text-[11px] text-text-muted">Megjegyzés</label>
+            <textarea
+              rows={3}
+              value={urlap.megjegyzes}
+              onChange={(e) => setUrlap({ ...urlap, megjegyzes: e.target.value })}
+              className={inputClass}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-[13px] text-text-primary sm:col-span-2">
+            <input type="checkbox" checked={urlap.aktiv} onChange={(e) => setUrlap({ ...urlap, aktiv: e.target.checked })} />
+            Aktív (a lejártáról figyelmeztessen)
+          </label>
+        </div>
+        <div className="mt-5 flex justify-end gap-3 border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={onBezar}
+            disabled={busy}
+            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+          >
+            Mégse
+          </button>
+          <button
+            type="button"
+            onClick={ment}
+            disabled={busy}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "Mentés…" : "Mentés"}
+          </button>
+        </div>
+      </div>
+    </ModalReteg>
+  );
+}
+
 /** Kötelezettségek listája és szerkesztése.
  *
  * Ugyanez a komponens szolgálja ki az E-Rezsit (előfizetések) és a
@@ -386,69 +645,16 @@ export function KotelezettsegKezelo({
   const router = useRouter();
   const confirm = useConfirm();
   const [nyitott, setNyitott] = useState<number | null>(null);
-  const [urlap, setUrlap] = useState<UrlapAllapot | null>(null);
-  const [szerkesztettId, setSzerkesztettId] = useState<number | null>(null);
+  // undefined = nincs nyitva az űrlap; null = új felvitele; egyébként a szerkesztett sor.
+  const [urlapKezdo, setUrlapKezdo] = useState<Kotelezettseg | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
   function ujat() {
-    setSzerkesztettId(null);
-    setUrlap(uresUrlap(alapTipus));
+    setUrlapKezdo(null);
   }
 
   function szerkeszt(k: Kotelezettseg) {
-    setSzerkesztettId(k.id);
-    setUrlap(urlapBol(k));
-  }
-
-  function bezar() {
-    setUrlap(null);
-    setSzerkesztettId(null);
-  }
-
-  async function ment() {
-    if (!urlap) return;
-    if (!urlap.nev.trim()) {
-      alert("Add meg a megnevezést.");
-      return;
-    }
-    if (!fordulokNelkul && !urlap.kovetkezo_fordulo) {
-      alert("Add meg a következő forduló (lejárat) dátumát.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const test = {
-        nev: urlap.nev.trim(),
-        csomag: urlap.csomag.trim() || null,
-        tipus: urlap.tipus,
-        ciklus: urlap.ciklus,
-        kovetkezo_fordulo: fordulokNelkul ? null : urlap.kovetkezo_fordulo || null,
-        felelos_id: urlap.felelos_id ? Number(urlap.felelos_id) : null,
-        auto_id: autoId ?? null,
-        aktiv: urlap.aktiv,
-        fizetesi_mod: urlap.fizetesi_mod || null,
-        ar_osszeg: urlap.ar_osszeg.trim() ? Number(urlap.ar_osszeg) : null,
-        ar_plusz_afa: urlap.ar_plusz_afa,
-        ar_penznem: urlap.ar_penznem,
-        szamla_forras: urlap.szamla_forras.trim() || null,
-        kartya: urlap.kartya.trim() || null,
-        megjegyzes: urlap.megjegyzes.trim() || null,
-        ertesites_napokkal: Number(urlap.ertesites_napokkal) || 14,
-      };
-      const res = await authFetch(
-        szerkesztettId ? `/api/v1/kotelezettsegek/${szerkesztettId}` : "/api/v1/kotelezettsegek",
-        { method: szerkesztettId ? "PUT" : "POST", body: JSON.stringify(test) },
-      );
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
-        return;
-      }
-      bezar();
-      router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    setUrlapKezdo(k);
   }
 
   async function torol(k: Kotelezettseg) {
@@ -712,182 +918,22 @@ export function KotelezettsegKezelo({
         </div>
       )}
 
-      {canCreate && !urlap && (
+      {canCreate && urlapKezdo === undefined && (
         <button type="button" onClick={ujat} className="btn btn-primary mt-4">
           <Plus size={13} /> Új felvitele
         </button>
       )}
 
-      {urlap && (
-        <ModalReteg onClose={busy ? undefined : bezar}>
-          <div
-            className="my-auto w-full max-w-2xl rounded-[var(--radius)] border border-border bg-surface-2 p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="mb-4 text-[15px] font-medium text-text-primary">
-              {szerkesztettId ? "Szerkesztés" : "Új felvitele"}
-            </h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1 sm:col-span-2">
-                <label className="text-[11px] text-text-muted">Megnevezés *</label>
-                <input value={urlap.nev} onChange={(e) => setUrlap({ ...urlap, nev: e.target.value })} className={inputClass} />
-              </div>
-              <div className="flex flex-col gap-1 sm:col-span-2">
-                <label className="text-[11px] text-text-muted">Csomag / részletek</label>
-                <input value={urlap.csomag} onChange={(e) => setUrlap({ ...urlap, csomag: e.target.value })} className={inputClass} />
-              </div>
-              {tipusValaszthato && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-text-muted">Típus</label>
-                  <KeresosSelect
-                    value={urlap.tipus}
-                    options={Object.entries(TIPUS_NEVEK).map(([ertek, nev]) => ({ value: ertek, label: nev }))}
-                    onChange={(ertek) => setUrlap({ ...urlap, tipus: ertek })}
-                  />
-                </div>
-              )}
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Ciklus</label>
-                <KeresosSelect
-                  value={urlap.ciklus}
-                  options={Object.entries(CIKLUS_NEVEK).map(([ertek, nev]) => ({ value: ertek, label: nev }))}
-                  onChange={(ertek) => setUrlap({ ...urlap, ciklus: ertek })}
-                />
-              </div>
-
-              {/* A forduló EGY dátum: a nap és a hónap benne van, a ciklus
-                  pedig megmondja, mennyivel lép tovább (havi egy hónapot, éves
-                  egy évet) - lásd backend services/kotelezettseg.py. A
-                  forduló-követés nélküli módban (E-Rezsi) nincs ilyen mező. */}
-              {!fordulokNelkul && (
-                <div className="flex flex-col gap-1 sm:col-span-2">
-                  <label className="text-[11px] text-text-muted">
-                    {urlap.ciklus === "egyszeri" ? "Lejárat *" : "Következő forduló *"}
-                  </label>
-                  <input
-                    type="date"
-                    value={urlap.kovetkezo_fordulo}
-                    onChange={(e) => setUrlap({ ...urlap, kovetkezo_fordulo: e.target.value })}
-                    className={inputClass}
-                  />
-                  <p className="text-[11px] text-text-muted">
-                    {urlap.ciklus === "egyszeri"
-                      ? "Ekkor jár le – magától nem újul meg."
-                      : "Innentől a ciklus lépteti tovább. Több évre előre kifizetett tételnél a tényleges lejáratot add meg."}
-                  </p>
-                </div>
-              )}
-
-              {/* Az ár NETTÓBAN, mellette az áfa-kapcsoló: a bruttót ebből
-                  számoljuk, nem külön mezőben tároljuk. */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Nettó ár (ciklusonként)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={urlap.ar_osszeg}
-                    onChange={(e) => setUrlap({ ...urlap, ar_osszeg: e.target.value })}
-                    className={inputClass}
-                  />
-                  <KeresosSelect
-                    value={urlap.ar_penznem}
-                    options={PENZNEMEK.map((p) => ({ value: p, label: p }))}
-                    onChange={(ertek) => setUrlap({ ...urlap, ar_penznem: ertek })}
-                    className="w-[90px]"
-                  />
-                </div>
-                <label className="mt-1 flex items-center gap-2 text-[12.5px] text-text-primary">
-                  <input
-                    type="checkbox"
-                    checked={urlap.ar_plusz_afa}
-                    onChange={(e) => setUrlap({ ...urlap, ar_plusz_afa: e.target.checked })}
-                  />
-                  Plusz ÁFA
-                </label>
-                <p className="text-[11px] text-text-muted">
-                  Bruttó:{" "}
-                  {urlap.ar_osszeg.trim()
-                    ? penzzel(bruttoBol(Number(urlap.ar_osszeg), urlap.ar_plusz_afa), urlap.ar_penznem)
-                    : "–"}
-                </p>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Hogyan fizetjük</label>
-                <KeresosSelect
-                  value={urlap.fizetesi_mod || null}
-                  options={FIZETESI_MODOK.map((m) => ({ value: m, label: m }))}
-                  onChange={(ertek) => setUrlap({ ...urlap, fizetesi_mod: ertek })}
-                  placeholder="–"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Felelős</label>
-                <KeresosSelect
-                  value={urlap.felelos_id || null}
-                  options={emberek.map((e) => ({ value: String(e.id), label: e.full_name }))}
-                  onChange={(ertek) => setUrlap({ ...urlap, felelos_id: ertek })}
-                  placeholder="–"
-                />
-                <p className="text-[11px] text-text-muted">Ő kapja az értesítést és a feladatot a fordulóról.</p>
-              </div>
-              {!fordulokNelkul && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-text-muted">Figyelmeztetés (nappal előbb)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={urlap.ertesites_napokkal}
-                    onChange={(e) => setUrlap({ ...urlap, ertesites_napokkal: e.target.value })}
-                    className={inputClass}
-                  />
-                </div>
-              )}
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] text-text-muted">Terhelt kártya</label>
-                <input value={urlap.kartya} onChange={(e) => setUrlap({ ...urlap, kartya: e.target.value })} className={inputClass} />
-              </div>
-              <div className="flex flex-col gap-1 sm:col-span-2">
-                <label className="text-[11px] text-text-muted">Számla forrása (email, letöltő link)</label>
-                <input
-                  value={urlap.szamla_forras}
-                  onChange={(e) => setUrlap({ ...urlap, szamla_forras: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-              <div className="flex flex-col gap-1 sm:col-span-2">
-                <label className="text-[11px] text-text-muted">Megjegyzés</label>
-                <textarea
-                  rows={3}
-                  value={urlap.megjegyzes}
-                  onChange={(e) => setUrlap({ ...urlap, megjegyzes: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-              <label className="flex items-center gap-2 text-[13px] text-text-primary sm:col-span-2">
-                <input type="checkbox" checked={urlap.aktiv} onChange={(e) => setUrlap({ ...urlap, aktiv: e.target.checked })} />
-                Aktív (a lejártáról figyelmeztessen)
-              </label>
-            </div>
-            <div className="mt-5 flex justify-end gap-3 border-t border-border pt-4">
-              <button
-                type="button"
-                onClick={bezar}
-                disabled={busy}
-                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
-              >
-                Mégse
-              </button>
-              <button
-                type="button"
-                onClick={ment}
-                disabled={busy}
-                className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
-              >
-                {busy ? "Mentés…" : "Mentés"}
-              </button>
-            </div>
-          </div>
-        </ModalReteg>
+      {urlapKezdo !== undefined && (
+        <KotelezettsegUrlapModal
+          kezdo={urlapKezdo}
+          alapTipus={alapTipus}
+          tipusValaszthato={tipusValaszthato}
+          fordulokNelkul={fordulokNelkul}
+          emberek={emberek}
+          autoId={autoId}
+          onBezar={() => setUrlapKezdo(undefined)}
+        />
       )}
     </div>
   );

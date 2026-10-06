@@ -171,6 +171,25 @@ def _papir_db(db: Session, kotelezettseg_idk: list[int]) -> dict[int, int]:
     return darab
 
 
+def _huf_becsles(k: Kotelezettseg) -> tuple[float | None, float | None]:
+    """(havi, éves) költség forintban. Elsőként a Google-táblázatból hozott,
+    forintosított érték; ha az nincs (kézzel felvitt sor), a FORINTOS nettó
+    árból a ciklus szerint (a felhasználó kérése: így a kézi előfizetés is
+    beleszámít az E-Rezsi összesítőibe). Devizás árnál nincs árfolyam-forrás
+    - ott üres marad, inkább, mint egy kitalált átváltás."""
+    havi = float(k.huf_becsles_honap) if k.huf_becsles_honap is not None else None
+    eves = float(k.huf_becsles_ev) if k.huf_becsles_ev is not None else None
+    if (havi is None or eves is None) and k.ar_osszeg is not None and (k.ar_penznem or "HUF") == "HUF":
+        ar = float(k.ar_osszeg)
+        if k.ciklus == KotelezettsegCiklus.HAVI.value:
+            havi, eves = (havi if havi is not None else ar), (eves if eves is not None else ar * 12)
+        elif k.ciklus == KotelezettsegCiklus.EVES.value:
+            havi, eves = (havi if havi is not None else round(ar / 12, 2)), (eves if eves is not None else ar)
+        else:
+            eves = eves if eves is not None else ar
+    return havi, eves
+
+
 def _kimenet(
     k: Kotelezettseg,
     darab: dict[int, list[DocumentAttachment]],
@@ -215,8 +234,8 @@ def _kimenet(
         ar_plusz_afa=bool(k.ar_plusz_afa),
         ar_brutto=brutto(float(k.ar_osszeg) if k.ar_osszeg is not None else None, bool(k.ar_plusz_afa)),
         ar_penznem=k.ar_penznem,
-        huf_becsles_honap=float(k.huf_becsles_honap) if k.huf_becsles_honap is not None else None,
-        huf_becsles_ev=float(k.huf_becsles_ev) if k.huf_becsles_ev is not None else None,
+        huf_becsles_honap=_huf_becsles(k)[0],
+        huf_becsles_ev=_huf_becsles(k)[1],
         szamla_forras=k.szamla_forras,
         kartya=k.kartya,
         megjegyzes=k.megjegyzes,
@@ -323,6 +342,11 @@ def _ellenoriz(payload: KotelezettsegIn) -> None:
         raise HTTPException(status_code=400, detail="A forduló napja 1 és 31 közé eshet.")
     if payload.fordulo_honap is not None and not 1 <= payload.fordulo_honap <= 12:
         raise HTTPException(status_code=400, detail="A forduló hónapja 1 és 12 közé eshet.")
+    # Az ELŐFIZETÉS (E-Rezsi) egyszerű adatbázis, lejárat-figyelés nélkül
+    # (lásd services/kotelezettseg.py): náluk a lejárat dátuma NEM kötelező (a
+    # felhasználó kérése) - megadva is csak tájékoztató.
+    if payload.tipus == KotelezettsegTipus.ELOFIZETES.value:
+        return
     # Enélkül a kötelezettség némán "nincs dátum" állapotban ülne a listán, és
     # sosem szólna a lejáratáról - pont az veszne el, amiért felvitték.
     if payload.kovetkezo_fordulo is None and payload.fordulo_nap is None:
