@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { LinkeltSzoveg } from "@/components/LinkeltSzoveg";
+import { elsoLink } from "@/lib/linkek";
 import { KotelezettsegUrlapModal } from "@/components/kotelezettseg/KotelezettsegKezelo";
 import { PapirFeltoltes } from "@/components/kotelezettseg/PapirFeltoltes";
 import { authFetch } from "@/lib/authFetch";
@@ -288,31 +290,46 @@ export function ERezsiLista({
                     {sz.tetelek.map((k) => {
                       const nyitva = nyitott === k.id;
                       const lejaratNap = k.kovetkezo_fordulo ? napKulonbseg(ma, k.kovetkezo_fordulo) : null;
+                      const letoltoLink = elsoLink(k.szamla_forras);
                       return (
                         <li key={k.id}>
                           <div className="grid grid-cols-1 gap-2 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_150px_120px_120px_160px_120px_110px] lg:items-start lg:gap-4">
-                            <button
-                              type="button"
-                              onClick={() => setNyitott(nyitva ? null : k.id)}
-                              className="flex min-w-0 items-start gap-1.5 text-left"
-                            >
-                              {nyitva ? (
-                                <ChevronDown size={14} className="mt-1 shrink-0 text-text-muted" />
-                              ) : (
-                                <ChevronRight size={14} className="mt-1 shrink-0 text-text-muted" />
+                            <div className="min-w-0">
+                              <button
+                                type="button"
+                                onClick={() => setNyitott(nyitva ? null : k.id)}
+                                className="flex min-w-0 items-start gap-1.5 text-left"
+                              >
+                                {nyitva ? (
+                                  <ChevronDown size={14} className="mt-1 shrink-0 text-text-muted" />
+                                ) : (
+                                  <ChevronRight size={14} className="mt-1 shrink-0 text-text-muted" />
+                                )}
+                                <span className="min-w-0">
+                                  <span className="block break-words text-[14px] font-medium text-text-primary hover:text-text-accent">
+                                    {k.nev}
+                                  </span>
+                                  <span className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-text-muted">
+                                    {k.csomag && <span>{k.csomag}</span>}
+                                    {k.fizetesi_mod && <span>{k.fizetesi_mod}</span>}
+                                    {k.kartya && <span>kártya: {k.kartya}</span>}
+                                    {k.papir_db > 0 && <span>📎 {k.papir_db}</span>}
+                                  </span>
+                                </span>
+                              </button>
+                              {/* A számla letöltő linkje egy kattintásra, kinyitás nélkül. */}
+                              {letoltoLink && (
+                                <a
+                                  href={letoltoLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={letoltoLink}
+                                  className="ml-5 mt-1 inline-flex items-center gap-1 text-[12px] text-text-accent hover:underline"
+                                >
+                                  <ExternalLink size={12} /> Számla letöltése
+                                </a>
                               )}
-                              <span className="min-w-0">
-                                <span className="block break-words text-[14px] font-medium text-text-primary hover:text-text-accent">
-                                  {k.nev}
-                                </span>
-                                <span className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-text-muted">
-                                  {k.csomag && <span>{k.csomag}</span>}
-                                  {k.fizetesi_mod && <span>{k.fizetesi_mod}</span>}
-                                  {k.kartya && <span>kártya: {k.kartya}</span>}
-                                  {k.papir_db > 0 && <span>📎 {k.papir_db}</span>}
-                                </span>
-                              </span>
-                            </button>
+                            </div>
                             <div className="text-[13px] text-text-secondary lg:text-right">
                               <span className="t-label mr-2 lg:hidden">Nettó ár</span>
                               {penzzel(k.ar_osszeg, k.ar_penznem)}
@@ -370,12 +387,18 @@ export function ERezsiLista({
                               <div className="mb-3 grid grid-cols-1 gap-x-8 gap-y-1 text-[12.5px] text-text-muted sm:grid-cols-2">
                                 {k.szamla_forras && (
                                   <p className="whitespace-pre-line sm:col-span-2">
-                                    Számla forrása: <span className="text-text-secondary">{k.szamla_forras}</span>
+                                    Számla forrása:{" "}
+                                    <span className="text-text-secondary">
+                                      <LinkeltSzoveg szoveg={k.szamla_forras} laza />
+                                    </span>
                                   </p>
                                 )}
                                 {k.megjegyzes && (
                                   <p className="whitespace-pre-line sm:col-span-2">
-                                    Megjegyzés: <span className="text-text-secondary">{k.megjegyzes}</span>
+                                    Megjegyzés:{" "}
+                                    <span className="text-text-secondary">
+                                      <LinkeltSzoveg szoveg={k.megjegyzes} />
+                                    </span>
                                   </p>
                                 )}
                                 {!k.szamla_forras && !k.megjegyzes && <p>Nincs megjegyzés vagy számla-forrás.</p>}

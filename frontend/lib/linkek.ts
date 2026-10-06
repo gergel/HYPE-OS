@@ -11,6 +11,13 @@
 
 const URL_MINTA = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
 
+/** Laza változat a "hol érhető el" jellegű mezőkhöz (E-Rezsi: számla forrása),
+ * ahová a cím gyakran séma nélkül kerül ("app.envato.com/account/invoices").
+ * A csupasz domaint csak ismert végződéssel fogadjuk el - így a "szamla.pdf"
+ * nem lesz link -, és email-címen belül (szamla@adobe.com) sem. */
+const URL_MINTA_LAZA =
+  /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+|(?<![@\w.\/-])(?:[a-z0-9-]+\.)+(?:com|hu|io|net|org|eu|app|co|de|me|tv|ai|dev|cloud)(?![\w-])(?:\/[^\s<>"']*)?)/gi;
+
 /** Záró írásjelek, amik jellemzően a MONDATHOZ tartoznak, nem a linkhez:
  * "lásd https://pelda.hu/anyag." végén a pont már nem része a címnek. */
 const ZARO_KARAKTEREK = ".,;:!?»\"'";
@@ -54,17 +61,18 @@ export function tartalmazLinket(szoveg: string): boolean {
 
 /** A szöveg felbontása sima szöveg- és link-darabokra, sorrendben. Ha nincs
  * benne link, egyetlen szöveg-darabot ad vissza. */
-export function linkDarabok(szoveg: string): SzovegDarab[] {
+export function linkDarabok(szoveg: string, { laza = false }: { laza?: boolean } = {}): SzovegDarab[] {
   const darabok: SzovegDarab[] = [];
   let utolsoVeg = 0;
-  URL_MINTA.lastIndex = 0;
+  const minta = laza ? URL_MINTA_LAZA : URL_MINTA;
+  minta.lastIndex = 0;
   let talalat: RegExpExecArray | null;
 
-  while ((talalat = URL_MINTA.exec(szoveg)) !== null) {
+  while ((talalat = minta.exec(szoveg)) !== null) {
     const { cim, maradek } = levagottVeg(talalat[0]);
     if (!cim) continue;
     if (talalat.index > utolsoVeg) darabok.push({ szoveg: szoveg.slice(utolsoVeg, talalat.index) });
-    darabok.push({ szoveg: cim, href: cim.startsWith("www.") ? `https://${cim}` : cim });
+    darabok.push({ szoveg: cim, href: /^https?:\/\//i.test(cim) ? cim : `https://${cim}` });
     if (maradek) darabok.push({ szoveg: maradek });
     utolsoVeg = talalat.index + talalat[0].length;
   }
@@ -72,4 +80,10 @@ export function linkDarabok(szoveg: string): SzovegDarab[] {
   if (darabok.length === 0) return [{ szoveg }];
   if (utolsoVeg < szoveg.length) darabok.push({ szoveg: szoveg.slice(utolsoVeg) });
   return darabok;
+}
+
+/** Az első megnyitható link a szövegből (laza felismeréssel), vagy null. */
+export function elsoLink(szoveg: string | null | undefined): string | null {
+  if (!szoveg) return null;
+  return linkDarabok(szoveg, { laza: true }).find((d) => d.href)?.href ?? null;
 }

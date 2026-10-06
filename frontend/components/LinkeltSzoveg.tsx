@@ -59,10 +59,10 @@ export function LinkMasolassal({ href }: { href: string }) {
  * legyenek (vágás leírása, gyártás komment). A szöveg minden más része
  * változatlan marad - a sortöréseket a hívó oldal `whitespace-pre-line`
  * osztálya tartja meg. */
-export function LinkeltSzoveg({ szoveg }: { szoveg: string }) {
+export function LinkeltSzoveg({ szoveg, laza = false }: { szoveg: string; laza?: boolean }) {
   return (
     <>
-      {linkDarabok(szoveg).map((darab, i) => (
+      {linkDarabok(szoveg, { laza }).map((darab, i) => (
         <Fragment key={i}>{darab.href ? <Hivatkozas href={darab.href}>{darab.szoveg}</Hivatkozas> : darab.szoveg}</Fragment>
       ))}
     </>

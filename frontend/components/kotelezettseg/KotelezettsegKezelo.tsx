@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Paperclip, Plus, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { LinkeltSzoveg } from "@/components/LinkeltSzoveg";
 import { ModalReteg } from "@/components/ModalReteg";
 import { PapirFeltoltes } from "@/components/kotelezettseg/PapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -831,12 +832,18 @@ export function KotelezettsegKezelo({
                           )}
                           {k.szamla_forras && (
                             <p className="sm:col-span-2 whitespace-pre-line">
-                              Számla forrása: <span className="text-text-secondary">{k.szamla_forras}</span>
+                              Számla forrása:{" "}
+                              <span className="text-text-secondary">
+                                <LinkeltSzoveg szoveg={k.szamla_forras} laza />
+                              </span>
                             </p>
                           )}
                           {k.megjegyzes && (
                             <p className="sm:col-span-2 whitespace-pre-line">
-                              Megjegyzés: <span className="text-text-secondary">{k.megjegyzes}</span>
+                              Megjegyzés:{" "}
+                              <span className="text-text-secondary">
+                                <LinkeltSzoveg szoveg={k.megjegyzes} />
+                              </span>
                             </p>
                           )}
                         </div>
