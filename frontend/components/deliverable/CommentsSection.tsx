@@ -222,7 +222,9 @@ export function CommentsSection({
   }
 
   async function send() {
-    const trimmed = body.trim();
+    // Csak fájllal (szöveg nélkül) is küldhető: a hozzászólásnak szöveg
+    // kell, ilyenkor a csatolt fájlok neve lesz az.
+    const trimmed = body.trim() || (pendingFiles.length > 0 ? `Fájl csatolva: ${pendingFiles.map((f) => f.name).join(", ")}` : "");
     if (!trimmed) return;
     setBusy(true);
     try {
@@ -407,7 +409,7 @@ export function CommentsSection({
       <div className="mt-2 flex items-center gap-3">
         <button
           type="button"
-          disabled={busy || !body.trim()}
+          disabled={busy || (!body.trim() && pendingFiles.length === 0)}
           onClick={send}
           className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
         >
@@ -421,7 +423,11 @@ export function CommentsSection({
               multiple
               className="hidden"
               onChange={(e) => {
-                setPendingFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])]);
+                // A fájlokat AZONNAL kiolvassuk: az alábbi value = "" kiüríti a
+                // FileList-et, a később lefutó állapot-frissítés már üreset látott
+                // volna - emiatt nem került fel a csatolt fájl (a felhasználó jelezte).
+                const ujFajlok = Array.from(e.target.files ?? []);
+                setPendingFiles((prev) => [...prev, ...ujFajlok]);
                 e.target.value = "";
               }}
             />
