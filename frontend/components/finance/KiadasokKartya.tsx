@@ -81,6 +81,11 @@ export async function KiadasokKartya({ tol, ig }: { tol: string; ig: string }) {
         <QuickCreateForm
           postPath={ENTITY_PATHS.expense}
           addLabel="+ Új kiadás hozzáadása"
+          // Ami a KIADÁSOK KÖZÉ kerül felvezetésre (itt a fizetés dátuma
+          // kötelező), az már ki van fizetve (a felhasználó kérése) - az
+          // alvállalkozós tétel is. Így ha később projektkódhoz rendelik, ott
+          // is eleve "Kifizetve" áll, nem "Fizetés" gomb.
+          presetFields={{ kesz: true }}
           // A számla/blokk már felvitelkor csatolható (a felhasználó
           // kérése) - a mentés után a létrejött tételhez töltődik fel.
           fajlFeltoltes={{

@@ -251,6 +251,19 @@ def _id_vagy_none(ertek) -> int | None:
         return None
 
 
+def _papirbol_keletkezett_kiadas(db: Session, expense_id: int) -> bool:
+    """A kiadás egy külsős/belsős TIG-ből vagy havi tételből keletkezett-e -
+    ezeknek a kifizetése a saját papírjukon (TIG "Kifizetve") történik."""
+    from app.models.employee_monthly_item import EmployeeMonthlyItem
+    from app.models.internal_performance_certificate import InternalPerformanceCertificate
+    from app.models.performance_certificate import PerformanceCertificate
+
+    return any(
+        db.scalar(select(m.id).where(m.expense_id == expense_id).limit(1)) is not None
+        for m in (PerformanceCertificate, InternalPerformanceCertificate, EmployeeMonthlyItem)
+    )
+
+
 def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee) -> None:
     """PATCH-nél a hiányzó alapokat a meglévő rekordból vesszük: egy
     önmagában érkező nettó- vagy százalék-javítás is újraszámolja a bruttót,
@@ -274,6 +287,21 @@ def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee
     if (projektkod_valtozik or ember_valtozik) and "alvallalkozo_project_id" not in adat:
         adat["alvallalkozo_project_id"] = None
         obj.alvallalkozo_project_id = None
+    # A KIADÁSOK KÖZÖTT MÁR SZEREPLŐ tétel (van fizetés dátuma) projektkódhoz
+    # rendelése (a felhasználó kérése): ami a Kiadások közé fel van vezetve,
+    # az már ki van fizetve - a projektkódon se "Fizetés" gombbal, nyitottként
+    # jelenjen meg. Kimarad a TIG-ből/havi elszámolásból keletkezett sor (azt a
+    # saját papírja fizeti ki) és a készpénzes (az a házipénztárat mozgatná).
+    if (
+        projektkod_valtozik
+        and _id_vagy_none(adat["project_code_id"]) is not None
+        and "kesz" not in adat
+        and not obj.kesz
+        and (adat.get("fizetes_datuma", obj.fizetes_datuma) is not None)
+        and not fizetesi_mod.keszpenzes(adat.get("kifizetes_modja", obj.kifizetes_modja))
+        and not _papirbol_keletkezett_kiadas(db, obj.id)
+    ):
+        adat["kesz"] = True
     # UTÓLAG alvállalkozóivá váló kiadás (a felhasználó hibajelzése nyomán):
     # ha egy meglévő soron kap embert vagy vált "külsős" besorolásra, ugyanaz
     # a forgatás-hozzárendelés jár neki, mint felvitelkor - enélkül a
