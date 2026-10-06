@@ -7,6 +7,7 @@ import {
   getExpenses,
   getFieldTypes,
   getKiadasSzamlaDarab,
+  getKifizetesreVaroKiadasIdk,
   getMyPagePermissions,
   getProjectCodeOptions,
 } from "@/lib/api";
@@ -24,6 +25,8 @@ import { idoszakban } from "@/lib/idoszak";
 import { devizaNyom, PENZNEMEK } from "@/lib/penz";
 import { canDoAction } from "@/lib/permissions";
 import { PENZUGYEK_PAGE, szurtOsszegzes } from "@/components/finance/listaSegedek";
+import { KiadasNezetFulek, type KiadasNezet } from "@/components/finance/KiadasNezetFulek";
+import { KifizetveDatummal } from "@/components/projektkod/KifizetveDatummal";
 
 /** A KIADÁSOK listája a felvivő űrlappal és a dátum-szűrővel.
  *
@@ -31,8 +34,17 @@ import { PENZUGYEK_PAGE, szurtOsszegzes } from "@/components/finance/listaSegede
  * is legyen): a Pénzügyek oldalon és a saját /penzugyek/kiadasok oldalán.
  * Ugyanaz a komponens, így a kettő nem tud elcsúszni egymástól. A szűrő az
  * URL `kiadas_tol` / `kiadas_ig` paramétereiből jön (lásd DatumSzuro). */
-export async function KiadasokKartya({ tol, ig }: { tol: string; ig: string }) {
-  const [expenses, projectCodes, expenseFieldTypes, currentUser, pagePermissions, szamlaDarab, employees] =
+export async function KiadasokKartya({
+  tol,
+  ig,
+  nezet = "kifizetett",
+}: {
+  tol: string;
+  ig: string;
+  /** Melyik fül (lásd KiadasNezetFulek) - az URL `kiadas_nezet` paramétere. */
+  nezet?: KiadasNezet;
+}) {
+  const [expenses, projectCodes, expenseFieldTypes, currentUser, pagePermissions, szamlaDarab, employees, varoIdk] =
     await Promise.all([
       getExpenses(),
       getProjectCodeOptions(),
@@ -43,6 +55,7 @@ export async function KiadasokKartya({ tol, ig }: { tol: string; ig: string }) {
       // Az alvállalkozó-választóhoz (a felhasználó kérése: a kiadáshoz itt is
       // hozzá lehessen kötni - vagy újként felvenni - az alvállalkozót).
       getEmployees(),
+      getKifizetesreVaroKiadasIdk(),
     ]);
   const PAGE = PENZUGYEK_PAGE;
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
@@ -62,6 +75,11 @@ export async function KiadasokKartya({ tol, ig }: { tol: string; ig: string }) {
   const listazottKiadasok = expenses
     .filter((e) => e.kesz || e.fizetes_datuma !== null)
     .filter((e) => idoszakban(e.fizetes_datuma, tol, ig));
+  // A KIFIZETÉSRE VÁRÓK a szerver sorrendjében (határidő szerint) - a
+  // szabály a backendé (services/kifizetesre_varo.py), itt csak megjelenítjük.
+  const kiadasSzerint = new Map(expenses.map((e) => [e.id, e]));
+  const varoKiadasok = varoIdk.map((id) => kiadasSzerint.get(id)).filter((e): e is Expense => e !== undefined);
+  const ma = new Date().toISOString().slice(0, 10);
   // A kiadások Projektkód oszlopának/űrlapjának választéka (lásd
   // KiadasProjektkodCella): kód + a munka neve, kód szerint rendezve.
   const projektkodOpciok = [...projectCodes]
@@ -69,23 +87,21 @@ export async function KiadasokKartya({ tol, ig }: { tol: string; ig: string }) {
     .map((pc) => ({ id: pc.id, projektkod: pc.projektkod, nev: pc.project_nev || null }));
 
   return (
-    <Card title={`Kiadások (${listazottKiadasok.length})`}>
-      <DatumSzuro
-        elotag="kiadas"
-        tol={tol}
-        ig={ig}
-        mire="fizetés dátuma"
-        osszegzes={szurtOsszegzes(listazottKiadasok)}
-      />
+    <Card title="Kiadások">
+      <KiadasNezetFulek nezet={nezet} kifizetettDb={listazottKiadasok.length} varoDb={varoKiadasok.length} />
+      {nezet === "kifizetett" && (
+        <DatumSzuro
+          elotag="kiadas"
+          tol={tol}
+          ig={ig}
+          mire="fizetés dátuma"
+          osszegzes={szurtOsszegzes(listazottKiadasok)}
+        />
+      )}
       {canCreate && (
         <QuickCreateForm
           postPath={ENTITY_PATHS.expense}
           addLabel="+ Új kiadás hozzáadása"
-          // Ami a KIADÁSOK KÖZÉ kerül felvezetésre (itt a fizetés dátuma
-          // kötelező), az már ki van fizetve (a felhasználó kérése) - az
-          // alvállalkozós tétel is. Így ha később projektkódhoz rendelik, ott
-          // is eleve "Kifizetve" áll, nem "Fizetés" gomb.
-          presetFields={{ kesz: true }}
           // A számla/blokk már felvitelkor csatolható (a felhasználó
           // kérése) - a mentés után a létrejött tételhez töltődik fel.
           fajlFeltoltes={{
@@ -103,10 +119,40 @@ export async function KiadasokKartya({ tol, ig }: { tol: string; ig: string }) {
             // (a felhasználó kérése - lásd backend models/finance.Expense).
             { name: "megnevezes", label: "Cégnév", required: true },
             { name: "kiadas_leiras", label: "Megnevezés", placeholder: "Mire ment a kiadás" },
-            // KÖTELEZŐ dátum (a felhasználó kérése): a kiadás e nélkül
-            // nem köthető hónaphoz - az összesítők és a számla-csomag is
-            // ebből dolgozik.
-            { name: "fizetes_datuma", label: "Fizetés dátuma", type: "date", required: true },
+            // KIFIZETVE-E MÁR (a felhasználó kérése, mint az Autóknál): az
+            // alap a kifizetett - ami így kerül fel, az alvállalkozós tétel
+            // is, kifizetettként (kesz) megy be, így projektkódhoz rendelve is
+            // eleve "Kifizetve" áll. Ha számla jött, de még nem utaltuk el,
+            // csak a fizetési határidőt kérjük: a tétel a "Kifizetésre vár"
+            // fülre kerül, és az egyenlegekbe csak a "Fizetés" gombbal
+            // (fizetés-dátummal) számít bele.
+            {
+              name: "kesz",
+              label: "Kifizetve?",
+              type: "select",
+              defaultValue: "true",
+              options: [
+                { value: "true", label: "Igen, kifizetve" },
+                { value: "false", label: "Még nem (számla jött)" },
+              ],
+            },
+            // KIFIZETETTNÉL KÖTELEZŐ dátum (a felhasználó kérése): a kiadás e
+            // nélkül nem köthető hónaphoz - az összesítők és a számla-csomag
+            // is ebből dolgozik.
+            {
+              name: "fizetes_datuma",
+              label: "Fizetés dátuma",
+              type: "date",
+              required: true,
+              showIf: { field: "kesz", oneOf: ["true"] },
+            },
+            {
+              name: "fizetes_hatarideje",
+              label: "Fizetési határidő",
+              type: "date",
+              required: true,
+              showIf: { field: "kesz", oneOf: ["false"] },
+            },
             { name: "netto", label: "Nettó összeg", type: "number" },
             // "+ÁFA" jelölés + százalék: a bruttót a szerver számolja
             // belőlük (lásd backend routes/finance._afa_brutto).
@@ -211,171 +257,248 @@ export async function KiadasokKartya({ tol, ig }: { tol: string; ig: string }) {
           ]}
         />
       )}
-      <DataTable<Expense>
-        // Alap rendezés: a LEGUTÓBB FELVITT tétel legfelül (a felhasználó
-        // kérése). Szándékosan id szerint, nem updated_at szerint: egy
-        // régi sor szerkesztése ne dobja a lista tetejére.
-        //
-        // A DÁTUM NÉLKÜLI, még ki nem fizetett tételek NEM szerepelnek (a
-        // felhasználó kérése): azok csak a projektkódjukon élnek, és a
-        // Fizetés gomb + fizetés-dátum megadása után kerülnek ide.
-        rows={[...listazottKiadasok].sort((a, b) => b.id - a.id)}
-        emptyText="Még nincs felvett kiadás - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
-        getHref={(e) => `/penzugyek/kiadas/${e.id}`}
-        deleteHref={canDelete ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}
-        filterable
-        columns={[
-          {
-            header: "Cégnév",
-            render: (e) =>
-              canEdit ? (
-                <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="megnevezes" value={e.megnevezes} />
-              ) : (
-                e.megnevezes
-              ),
-            sortAccessor: (e) => e.megnevezes,
-          },
-          {
-            header: "Megnevezés",
-            render: (e) =>
-              canEdit ? (
-                <EditableTableCell
-                  patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
-                  field="kiadas_leiras"
-                  value={e.kiadas_leiras}
-                />
-              ) : (
-                e.kiadas_leiras ?? "–"
-              ),
-            sortAccessor: (e) => e.kiadas_leiras,
-          },
-          { header: "Típus", render: (e) => e.tipus ?? "–", sortAccessor: (e) => e.tipus },
-          {
-            // Melyik projektkódra terhel a kiadás (a felhasználó kérése):
-            // itt látszik, és utólag is hozzárendelhető/átrendelhető - a
-            // hozzárendelt tétel a projektkód adatlapján is megjelenik
-            // (ugyanaz a rekord).
-            header: "Projektkód",
-            render: (e) => (
-              <KiadasProjektkodCella
-                expenseId={e.id}
-                projectCodeId={e.project_code_id}
-                opciok={projektkodOpciok}
-                canEdit={canEdit}
-              />
-            ),
-            sortAccessor: (e) => projektkodNeve.get(e.project_code_id ?? -1) ?? "",
-          },
-          {
-            // A listában a FIZETÉS (kifizetés) dátuma látszik (a felhasználó
-            // kérése), nem a kiadás/teljesítés dátuma. A kifizetéskor
-            // (utalás felvezetése) töltődik; itt kézzel is javítható.
-            header: "Fizetés dátuma",
-            render: (e) =>
-              canEdit ? (
-                <EditableTableCell
-                  patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
-                  field="fizetes_datuma"
-                  value={e.fizetes_datuma}
-                  type="date"
-                />
-              ) : (
-                e.fizetes_datuma ?? "–"
-              ),
-            sortAccessor: (e) => e.fizetes_datuma,
-          },
-          {
-            header: "Nettó",
-            align: "right",
-            render: (e) => (
-              <>
-                {canEdit ? (
-                  <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="netto" value={e.netto} type="number" />
-                ) : (
-                  formatHuf(e.netto)
-                )}
-                {/* A tárolt összeg forint - itt írjuk ki, MIBŐL lett. */}
-                {devizaNyom(e) && <span className="mt-0.5 block text-[11.5px] text-text-muted">{devizaNyom(e)}</span>}
-              </>
-            ),
-            sortAccessor: (e) => e.netto,
-          },
-          {
-            // Szerkeszthető, mert a felvitelkor csak a nettót kérjük be:
-            // ha valaki utólag tudja a bruttót (áfás számla), itt írhatja
-            // be. Az ELSZÁMOLÁSBA a nettó számít (a projekt költségébe és
-            // a Pénzügyek összesítőibe is) - a bruttó a tényleges
-            // pénzmozgás (lásd backend services/elszamolas.py).
-            header: "Bruttó",
-            align: "right",
-            render: (e) =>
-              canEdit ? (
-                <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="brutto" value={e.brutto} type="number" />
-              ) : (
-                formatHuf(e.brutto)
-              ),
-            sortAccessor: (e) => e.brutto,
-          },
-          {
-            header: "Fizetési mód",
-            render: (e) => (
-              <EditableStatusBadge
-                patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
-                field="kifizetes_modja"
-                value={e.kifizetes_modja}
-                options={fizetesiModOptions}
-                placeholder="Nincs megadva"
-              />
-            ),
-            sortAccessor: (e) => e.kifizetes_modja,
-          },
-          {
-            // Számla-feltöltés felugróban (a felhasználó kérése) - az
-            // átvezetett tételek (TIG-kifizetés, autó-költés, KP forgalom)
-            // forrásánál feltöltött számlák is itt látszanak.
-            header: "Számla",
-            align: "right",
-            render: (e) =>
-              // A felvitelkor bejelölt "nincs számla" (a felhasználó
-              // kérése): nem hiányzik, nem is lesz - fájl ettől még
-              // utólag feltölthető a gemkapoccsal.
-              e.nincs_szamla && !(szamlaDarab[e.id] ?? 0) ? (
-                <span className="text-[12px] text-text-muted">Nincs számla</span>
-              ) : (
-                <KiadasSzamlaGomb
+      {nezet === "varo" ? (
+        <DataTable<Expense>
+          // A még KI NEM FIZETETT kiadások (a felhasználó kérése): amiről
+          // jött számla vagy felvezettük, de nincs kifizetve. Az egyenlegekbe
+          // még NEM számítanak bele - a "Fizetés" gomb (a fizetés dátumával)
+          // teszi őket kifizetetté, onnan a Kifizetett fülre kerülnek.
+          rows={varoKiadasok}
+          emptyText="Nincs kifizetésre váró kiadás."
+          getHref={(e) => `/penzugyek/kiadas/${e.id}`}
+          deleteHref={canDelete ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}
+          filterable
+          columns={[
+            {
+              header: "Cégnév",
+              render: (e) => e.megnevezes,
+              sortAccessor: (e) => e.megnevezes,
+            },
+            { header: "Megnevezés", render: (e) => e.kiadas_leiras ?? "–", sortAccessor: (e) => e.kiadas_leiras },
+            {
+              header: "Projektkód",
+              render: (e) => (
+                <KiadasProjektkodCella
                   expenseId={e.id}
+                  projectCodeId={e.project_code_id}
+                  opciok={projektkodOpciok}
                   canEdit={canEdit}
-                  canDelete={canDelete}
-                  darab={szamlaDarab[e.id] ?? 0}
                 />
               ),
-          },
-          // Állapot-oszlop SZÁNDÉKOSAN nincs: a kiadások közé az kerül, ami
-          // már ki van fizetve - egy "Kifizetve / Nyitott" jelző itt minden
-          // soron ugyanazt mondaná. Ami tényleg utalásra vár, azt a fenti
-          // "Utalásra váró számlák" kártya hozza elő (az Expense.kesz mező
-          // ettől még megvan, a kiadás saját lapján látszik).
-          {
-            header: "Beleszámít",
-            align: "right",
-            render: (e) =>
-              canEdit ? (
-                <EditableBooleanCell
+              sortAccessor: (e) => projektkodNeve.get(e.project_code_id ?? -1) ?? "",
+            },
+            {
+              header: "Fizetési határidő",
+              render: (e) => (
+                <>
+                  {canEdit ? (
+                    <EditableTableCell
+                      patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
+                      field="fizetes_hatarideje"
+                      value={e.fizetes_hatarideje ?? null}
+                      type="date"
+                    />
+                  ) : (
+                    (e.fizetes_hatarideje ?? "–")
+                  )}
+                  {e.fizetes_hatarideje && e.fizetes_hatarideje < ma && (
+                    <span className="mt-0.5 block text-[11.5px] text-text-danger">Lejárt</span>
+                  )}
+                </>
+              ),
+              sortAccessor: (e) => e.fizetes_hatarideje ?? "9999-12-31",
+            },
+            { header: "Nettó", align: "right", render: (e) => formatHuf(e.netto), sortAccessor: (e) => e.netto },
+            { header: "Bruttó", align: "right", render: (e) => formatHuf(e.brutto), sortAccessor: (e) => e.brutto },
+            { header: "Fizetési mód", render: (e) => e.kifizetes_modja ?? "–", sortAccessor: (e) => e.kifizetes_modja },
+            {
+              header: "Számla",
+              align: "right",
+              render: (e) => (
+                <KiadasSzamlaGomb expenseId={e.id} canEdit={canEdit} canDelete={canDelete} darab={szamlaDarab[e.id] ?? 0} />
+              ),
+            },
+            {
+              // Ugyanaz a "Fizetés" gomb, mint a projektkód kiadásainál: a
+              // fizetés dátumát bekérdezve jelöli kifizetettnek.
+              header: "Fizetés",
+              align: "right",
+              render: (e) =>
+                canEdit ? (
+                  <KifizetveDatummal patchPath={`${ENTITY_PATHS.expense}/${e.id}`} kifizetve={e.kesz} />
+                ) : (
+                  <StatusBadge label="Fizetésre vár" tone="warning" />
+                ),
+            },
+          ]}
+        />
+      ) : (
+        <DataTable<Expense>
+          // Alap rendezés: a LEGUTÓBB FELVITT tétel legfelül (a felhasználó
+          // kérése). Szándékosan id szerint, nem updated_at szerint: egy
+          // régi sor szerkesztése ne dobja a lista tetejére.
+          //
+          // A DÁTUM NÉLKÜLI, még ki nem fizetett tételek NEM szerepelnek (a
+          // felhasználó kérése): azok csak a projektkódjukon élnek, és a
+          // Fizetés gomb + fizetés-dátum megadása után kerülnek ide.
+          rows={[...listazottKiadasok].sort((a, b) => b.id - a.id)}
+          emptyText="Még nincs felvett kiadás - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."
+          getHref={(e) => `/penzugyek/kiadas/${e.id}`}
+          deleteHref={canDelete ? (e) => `${ENTITY_PATHS.expense}/${e.id}` : undefined}
+          filterable
+          columns={[
+            {
+              header: "Cégnév",
+              render: (e) =>
+                canEdit ? (
+                  <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="megnevezes" value={e.megnevezes} />
+                ) : (
+                  e.megnevezes
+                ),
+              sortAccessor: (e) => e.megnevezes,
+            },
+            {
+              header: "Megnevezés",
+              render: (e) =>
+                canEdit ? (
+                  <EditableTableCell
+                    patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
+                    field="kiadas_leiras"
+                    value={e.kiadas_leiras}
+                  />
+                ) : (
+                  e.kiadas_leiras ?? "–"
+                ),
+              sortAccessor: (e) => e.kiadas_leiras,
+            },
+            { header: "Típus", render: (e) => e.tipus ?? "–", sortAccessor: (e) => e.tipus },
+            {
+              // Melyik projektkódra terhel a kiadás (a felhasználó kérése):
+              // itt látszik, és utólag is hozzárendelhető/átrendelhető - a
+              // hozzárendelt tétel a projektkód adatlapján is megjelenik
+              // (ugyanaz a rekord).
+              header: "Projektkód",
+              render: (e) => (
+                <KiadasProjektkodCella
+                  expenseId={e.id}
+                  projectCodeId={e.project_code_id}
+                  opciok={projektkodOpciok}
+                  canEdit={canEdit}
+                />
+              ),
+              sortAccessor: (e) => projektkodNeve.get(e.project_code_id ?? -1) ?? "",
+            },
+            {
+              // A listában a FIZETÉS (kifizetés) dátuma látszik (a felhasználó
+              // kérése), nem a kiadás/teljesítés dátuma. A kifizetéskor
+              // (utalás felvezetése) töltődik; itt kézzel is javítható.
+              header: "Fizetés dátuma",
+              render: (e) =>
+                canEdit ? (
+                  <EditableTableCell
+                    patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
+                    field="fizetes_datuma"
+                    value={e.fizetes_datuma}
+                    type="date"
+                  />
+                ) : (
+                  e.fizetes_datuma ?? "–"
+                ),
+              sortAccessor: (e) => e.fizetes_datuma,
+            },
+            {
+              header: "Nettó",
+              align: "right",
+              render: (e) => (
+                <>
+                  {canEdit ? (
+                    <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="netto" value={e.netto} type="number" />
+                  ) : (
+                    formatHuf(e.netto)
+                  )}
+                  {/* A tárolt összeg forint - itt írjuk ki, MIBŐL lett. */}
+                  {devizaNyom(e) && <span className="mt-0.5 block text-[11.5px] text-text-muted">{devizaNyom(e)}</span>}
+                </>
+              ),
+              sortAccessor: (e) => e.netto,
+            },
+            {
+              // Szerkeszthető, mert a felvitelkor csak a nettót kérjük be:
+              // ha valaki utólag tudja a bruttót (áfás számla), itt írhatja
+              // be. Az ELSZÁMOLÁSBA a nettó számít (a projekt költségébe és
+              // a Pénzügyek összesítőibe is) - a bruttó a tényleges
+              // pénzmozgás (lásd backend services/elszamolas.py).
+              header: "Bruttó",
+              align: "right",
+              render: (e) =>
+                canEdit ? (
+                  <EditableTableCell patchPath={`${ENTITY_PATHS.expense}/${e.id}`} field="brutto" value={e.brutto} type="number" />
+                ) : (
+                  formatHuf(e.brutto)
+                ),
+              sortAccessor: (e) => e.brutto,
+            },
+            {
+              header: "Fizetési mód",
+              render: (e) => (
+                <EditableStatusBadge
                   patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
-                  field="hozzaadas_a_kiadasokhoz"
-                  value={e.hozzaadas_a_kiadasokhoz}
-                  ureskent
-                />
-              ) : (
-                <StatusBadge
-                  label={e.hozzaadas_a_kiadasokhoz === false ? "Nem" : "Igen"}
-                  tone={e.hozzaadas_a_kiadasokhoz === false ? "neutral" : "success"}
+                  field="kifizetes_modja"
+                  value={e.kifizetes_modja}
+                  options={fizetesiModOptions}
+                  placeholder="Nincs megadva"
                 />
               ),
-            sortAccessor: (e) => (e.hozzaadas_a_kiadasokhoz === false ? 0 : 1),
-          },
-        ]}
-      />
+              sortAccessor: (e) => e.kifizetes_modja,
+            },
+            {
+              // Számla-feltöltés felugróban (a felhasználó kérése) - az
+              // átvezetett tételek (TIG-kifizetés, autó-költés, KP forgalom)
+              // forrásánál feltöltött számlák is itt látszanak.
+              header: "Számla",
+              align: "right",
+              render: (e) =>
+                // A felvitelkor bejelölt "nincs számla" (a felhasználó
+                // kérése): nem hiányzik, nem is lesz - fájl ettől még
+                // utólag feltölthető a gemkapoccsal.
+                e.nincs_szamla && !(szamlaDarab[e.id] ?? 0) ? (
+                  <span className="text-[12px] text-text-muted">Nincs számla</span>
+                ) : (
+                  <KiadasSzamlaGomb
+                    expenseId={e.id}
+                    canEdit={canEdit}
+                    canDelete={canDelete}
+                    darab={szamlaDarab[e.id] ?? 0}
+                  />
+                ),
+            },
+            // Állapot-oszlop SZÁNDÉKOSAN nincs: a kiadások közé az kerül, ami
+            // már ki van fizetve - egy "Kifizetve / Nyitott" jelző itt minden
+            // soron ugyanazt mondaná. Ami tényleg utalásra vár, azt a fenti
+            // "Utalásra váró számlák" kártya hozza elő (az Expense.kesz mező
+            // ettől még megvan, a kiadás saját lapján látszik).
+            {
+              header: "Beleszámít",
+              align: "right",
+              render: (e) =>
+                canEdit ? (
+                  <EditableBooleanCell
+                    patchPath={`${ENTITY_PATHS.expense}/${e.id}`}
+                    field="hozzaadas_a_kiadasokhoz"
+                    value={e.hozzaadas_a_kiadasokhoz}
+                    ureskent
+                  />
+                ) : (
+                  <StatusBadge
+                    label={e.hozzaadas_a_kiadasokhoz === false ? "Nem" : "Igen"}
+                    tone={e.hozzaadas_a_kiadasokhoz === false ? "neutral" : "success"}
+                  />
+                ),
+              sortAccessor: (e) => (e.hozzaadas_a_kiadasokhoz === false ? 0 : 1),
+            },
+          ]}
+        />
+      )}
     </Card>
   );
 }

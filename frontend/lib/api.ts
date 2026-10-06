@@ -357,6 +357,9 @@ export type Expense = {
    * keltezés/teljesítés. A listában ez a "Fizetés dátuma" oszlop; kézzel is
    * javítható. Kimutatásba csak kifizetve (kesz) számít bele. */
   fizetes_datuma: string | null;
+  /** A MÉG KI NEM FIZETETT kiadás fizetési határideje (a "Kifizetésre vár"
+   * fülön, lásd backend services/kifizetesre_varo.py). */
+  fizetes_hatarideje?: string | null;
   netto: number | null;
   brutto: number | null;
   penznem: string;
@@ -3101,6 +3104,12 @@ export type UtalasraVaroTetel = {
   projektkodok: string[];
   fedezetlen_projektkodok: string[];
 };
+
+/** A Kiadások "Kifizetésre vár" fülének tételei (azonosítók, határidő
+ * szerint rendezve) - lásd backend services/kifizetesre_varo.py. */
+export async function getKifizetesreVaroKiadasIdk(): Promise<number[]> {
+  return (await apiGet<number[]>("/api/v1/finance/kifizetesre-varo-kiadasok")) ?? [];
+}
 
 export async function getUtalasraVaro(): Promise<UtalasraVaroTetel[]> {
   return (await apiGet<UtalasraVaroTetel[]>("/api/v1/finance/utalasra-varo")) ?? [];

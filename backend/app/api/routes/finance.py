@@ -32,7 +32,7 @@ from app.models.project import Project
 from app.models.project_code import KIFIZETETT_STATUSZ_MINTA, ProjectCode
 from app.schemas.document_attachment import DocumentAttachmentRead
 from app.services import attachments, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
-from app.services import hazipenztar_nullazas, kiadas_duplikacio
+from app.services import hazipenztar_nullazas, kiadas_duplikacio, kifizetesre_varo
 from app.services import kassza as kassza_szolg
 from app.services import kintlevoseg as kintlevoseg_szolg
 from app.services import penznem as penznem_szolg
@@ -359,6 +359,7 @@ async def kiadas_kiolvasas_dokumentumbol(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    kiadas_kiolvasas.kifizetettseg_javaslat(adatok)
     meglevo = kiadas_kiolvasas.alvallalkozo_egyeztetes(db, adatok)
     if meglevo is not None:
         adatok["employee_id"] = meglevo.id
@@ -1549,51 +1550,44 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
             )
         )
 
-    # AZ AUTÓKHOZ felvitt, MÉG KI NEM FIZETETT számlák (pl. szerviz - a
-    # felhasználó kérése): ezek kivételek a fenti "a kiadás már kifizetett"
-    # szabály alól, mert a felvitelkor KIFEJEZETTEN kifizetetlenként,
-    # fizetési határidővel rögzítették őket (lásd routes/autok.py). A
-    # "Fizetés" gombjuk az autó lapján van.
-    auto_szamlak = (
-        db.query(Expense)
-        .options(selectinload(Expense.auto), selectinload(Expense.project_code))
-        .filter(
-            Expense.auto_id.is_not(None),
-            Expense.kesz.is_not(True),
-            Expense.fizetes_datuma.is_(None),
-            Expense.fizetes_hatarideje.is_not(None),
-        )
-        .all()
-    )
-    auto_bizonylatok: dict[int, list[DocumentAttachment]] = {}
-    if auto_szamlak:
+    # A FIZETÉSI HATÁRIDŐVEL rögzített, MÉG KI NEM FIZETETT kiadások (pl. egy
+    # szerviz-számla az autónál, vagy egy kiadás, amiről számla jött, de még
+    # nem utaltuk el - a felhasználó kérése): ezek kivételek a fenti "a
+    # kiadás már kifizetett" szabály alól, mert KIFEJEZETTEN kifizetetlenként,
+    # határidővel vezették fel őket (lásd services/kifizetesre_varo.py). A
+    # "Fizetés" gombjuk az autó lapján, ill. a Kiadások "Kifizetésre vár"
+    # fülén van.
+    hataridos = kifizetesre_varo.kiadasok(db, csak_hataridos=True)
+    bizonylatok: dict[int, list[DocumentAttachment]] = {}
+    if hataridos:
         for d in db.scalars(
             select(DocumentAttachment).where(
-                DocumentAttachment.entity_type == "autoKiadas",
-                DocumentAttachment.entity_id.in_([e.id for e in auto_szamlak]),
+                DocumentAttachment.entity_type.in_(("expense", "autoKiadas")),
+                DocumentAttachment.entity_id.in_([e.id for e in hataridos]),
             )
         ):
-            auto_bizonylatok.setdefault(d.entity_id, []).append(d)
-    for e in auto_szamlak:
-        bizonylatok = auto_bizonylatok.get(e.id, [])
+            bizonylatok.setdefault(d.entity_id, []).append(d)
+    for e in hataridos:
+        fajlok = bizonylatok.get(e.id, [])
+        autos = e.auto is not None
         eredmeny.append(
             (
                 UtalasraVaroTetel(
-                    # Mint a belsős TIG: az autó költsége nem a megrendelő
-                    # pénzéből megy, tehát nem vár fedezetre.
+                    # Mint a belsős TIG: ezt nem a megrendelő pénzéből
+                    # fizetjük, tehát nem vár fedezetre.
                     fedezettseg=FEDEZETT,
                     projektkodok=[e.project_code.projektkod] if e.project_code is not None else [],
-                    kulcs=f"auto_kiadas:{e.id}",
-                    tipus="Autó",
-                    megnevezes=e.megnevezes or "Autó költés",
-                    kinek=e.auto.rendszam if e.auto is not None else None,
+                    kulcs=f"{'auto_kiadas' if autos else 'kiadas'}:{e.id}",
+                    tipus="Autó" if autos else "Kiadás",
+                    megnevezes=(e.kiadas_leiras or e.megnevezes or "Kiadás") if not autos else (e.megnevezes or "Autó költés"),
+                    kinek=e.auto.rendszam if autos else e.megnevezes,
                     osszeg=float(e.netto) if e.netto is not None else None,
                     penznem="HUF",
                     hatarido=e.fizetes_hatarideje,
-                    szamla_db=len(bizonylatok),
-                    link="/autok",
+                    szamla_db=len(fajlok),
+                    link="/autok" if autos else "/penzugyek/kiadasok?kiadas_nezet=varo",
                 ),
-                [(f"auto_kiadas_{e.id}_{d.id}_{d.filename}", d.storage_key) for d in bizonylatok],
+                [(f"kiadas_{e.id}_{d.id}_{d.filename}", d.storage_key) for d in fajlok],
             )
         )
 
@@ -1609,6 +1603,16 @@ def utalasra_varo(
     _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
 ):
     return [tetel for tetel, _ in _utalasra_varo_tetelek(db)]
+
+
+@summary_router.get("/kifizetesre-varo-kiadasok", response_model=list[int])
+def kifizetesre_varo_kiadasok(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """A Kiadások "Kifizetésre vár" fülének tételei (azonosítók, határidő
+    szerint rendezve) - lásd services/kifizetesre_varo.py."""
+    return [e.id for e in kifizetesre_varo.kiadasok(db)]
 
 
 @summary_router.get("/kiadas-szamla-darab", response_model=dict[int, int])

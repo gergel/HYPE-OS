@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, Plus, Trash2, Upload } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AutoTeendok } from "@/components/kotelezettseg/AutoTeendok";
@@ -80,6 +80,78 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
   // bizonylat nélküli kiadás.
   const [fajlok, setFajlok] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  // AI-KIOLVASÁS a feltöltött számlából/blokkból (a felhasználó kérése) -
+  // ugyanaz a kiolvasó, mint a Kiadásoknál (lásd backend
+  // services/kiadas_kiolvasas.py). Csak előtölt: minden mező átírható.
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiUzenet, setAiUzenet] = useState<string | null>(null);
+
+  async function aiKitolt(fajl: File) {
+    setAiBusy(true);
+    setAiUzenet(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", fajl);
+      const res = await authFetch("/api/v1/autok/kiadasok/kiolvasas", { method: "POST", body: fd });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        setAiUzenet(`Nem sikerült kiolvasni: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      const a = (await res.json()) as Record<string, string | number | null>;
+      const szoveg = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+      let beirt = 0;
+      // "Mire ment" = a számla fő tétele; a partner neve a megjegyzésbe kerül,
+      // hogy a költés-sor rövid maradjon, de látszódjon, ki állította ki.
+      const mire = szoveg(a.kiadas_leiras) ?? szoveg(a.megnevezes);
+      if (mire) {
+        setMegnevezes(mire);
+        beirt++;
+      }
+      const partner = szoveg(a.megnevezes);
+      if (partner && partner !== mire) {
+        setMegjegyzes(partner);
+        beirt++;
+      }
+      if (a.netto !== null && a.netto !== undefined && a.netto !== "") {
+        setOsszeg(String(a.netto));
+        beirt++;
+      }
+      setPluszAfa(a.plusz_afa === "igen");
+      const mod = szoveg(a.kifizetes_modja);
+      const nemFizetett = a.kesz === "false";
+      if (nemFizetett) {
+        setKifizetve(false);
+        if (szoveg(a.fizetes_hatarideje)) {
+          setHatarido(String(a.fizetes_hatarideje));
+          beirt++;
+        }
+      } else {
+        setKifizetve(true);
+        if (szoveg(a.fizetes_datuma)) {
+          setDatum(String(a.fizetes_datuma));
+          beirt++;
+        }
+        if (szoveg(a.fizetes_hatarideje)) setHatarido(String(a.fizetes_hatarideje));
+      }
+      if (mod && FIZETESI_MODOK.includes(mod) && !(nemFizetett && mod === "Készpénz")) {
+        setFizetesiMod(mod);
+        beirt++;
+      }
+      // A számla a bizonylatok közé is bekerül - mentéskor feltöltődik.
+      setFajlok((elozo) => (elozo.includes(fajl) ? elozo : [...elozo, fajl]));
+      const deviza = szoveg(a.penznem);
+      setAiUzenet(
+        (beirt > 0 ? `Kiolvasva (${beirt} mező) – ellenőrizd mentés előtt.` : "A számlából nem sikerült mezőt kiolvasni.") +
+          (nemFizetett ? " A számlán még előttünk álló fizetési határidő van, ezért „Még nem” állásra tettük." : "") +
+          (deviza && deviza !== "HUF" ? ` A számla ${deviza}-ban szól – az összeget forintban add meg.` : ""),
+      );
+    } catch (err) {
+      setAiUzenet(`Nem sikerült kiolvasni (hálózati hiba): ${err}`);
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   async function ment() {
     if (!megnevezes.trim() || !osszeg.trim()) {
@@ -146,6 +218,7 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       setMegjegyzes("");
       setProjektkodId("");
       setFajlok([]);
+      setAiUzenet(null);
       onKesz();
       router.refresh();
     } finally {
@@ -155,6 +228,28 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
 
   return (
     <div className="fade-in flex flex-wrap items-end gap-3 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+      <div className="flex w-full flex-wrap items-center gap-3">
+        <label
+          className={`flex w-fit items-center gap-1.5 rounded-[var(--radius)] border border-border px-2 py-1.5 text-[12.5px] ${
+            aiBusy ? "opacity-50" : "cursor-pointer text-text-secondary hover:bg-surface-2"
+          }`}
+        >
+          <Sparkles size={13} />
+          {aiBusy ? "Kiolvasás…" : "Kitöltés számlából (AI)"}
+          <input
+            type="file"
+            accept="application/pdf,image/*"
+            disabled={aiBusy}
+            onChange={(e) => {
+              const fajl = e.target.files?.[0];
+              e.target.value = "";
+              if (fajl) void aiKitolt(fajl);
+            }}
+            className="hidden"
+          />
+        </label>
+        {aiUzenet && <span className="text-[12px] text-text-accent">{aiUzenet}</span>}
+      </div>
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Mire ment</span>
         <input

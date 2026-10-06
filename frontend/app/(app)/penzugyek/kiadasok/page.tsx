@@ -20,7 +20,11 @@ export default async function KiadasokPage({
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 space-y-6 p-4 md:p-8">
-        <KiadasokKartya tol={datumParam(sp.kiadas_tol)} ig={datumParam(sp.kiadas_ig)} />
+        <KiadasokKartya
+          tol={datumParam(sp.kiadas_tol)}
+          ig={datumParam(sp.kiadas_ig)}
+          nezet={sp.kiadas_nezet === "varo" ? "varo" : "kifizetett"}
+        />
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -406,6 +406,31 @@ class AutoKiadasIn(BaseModel):
     #: itt köthető a projektkódhoz - a kiadás beleszámít a kód költségeibe,
     #: de mivel ugyanaz az EGY sor, a Pénzügyben nem duplázódik.
     project_code_id: int | None = None
+
+
+@router.post("/kiadasok/kiolvasas")
+async def auto_kiadas_kiolvasas(
+    file: UploadFile = File(...),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """Az autós költés adatainak KIOLVASÁSA a feltöltött számlából/blokkból
+    (a felhasználó kérése) - ugyanaz az AI-kiolvasó, mint a Kiadásoknál (lásd
+    services/kiadas_kiolvasas.py), csak az Autók oldal jogosultságával. Semmit
+    nem ment: a felület az űrlapba tölti, az ember ellenőrzi és menti."""
+    from app.services import kiadas_kiolvasas
+
+    mime = (file.content_type or "").lower()
+    if mime not in kiadas_kiolvasas.ENGEDETT_MIME:
+        raise HTTPException(status_code=400, detail="PDF-et vagy fotót (JPG/PNG) tölts fel.")
+    adat = await file.read()
+    if len(adat) > kiadas_kiolvasas.MAX_MERET:
+        raise HTTPException(status_code=400, detail="A fájl túl nagy a kiolvasáshoz (max. 20 MB).")
+    try:
+        adatok = kiadas_kiolvasas.olvasd_ki(adat, mime)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    kiadas_kiolvasas.kifizetettseg_javaslat(adatok)
+    return adatok
 
 
 @router.post("/{auto_id}/kiadasok", response_model=AutoKiadasRead, status_code=201)

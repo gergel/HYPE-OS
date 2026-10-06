@@ -134,7 +134,7 @@ export default async function PenzugyekPage({
           <SzamlaCsomagLetoltes />
         </Card>
 
-        <KiadasokKartya tol={kiadasTol} ig={kiadasIg} />
+        <KiadasokKartya tol={kiadasTol} ig={kiadasIg} nezet={sp.kiadas_nezet === "varo" ? "varo" : "kifizetett"} />
 
         <BevetelekKartya tol={bevetelTol} ig={bevetelIg} />
       </div>

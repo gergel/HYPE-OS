@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date
 
 from google import genai
 from google.genai import types
@@ -34,6 +35,8 @@ Add vissza KIZÁRÓLAG ezt a JSON objektumot, más szöveg nélkül:
   "afa_szazalek": az ÁFA százaléka számként (ha csak "+ÁFA" szerepel konkrét százalék nélkül, akkor 27); ha nincs ÁFA, akkor null,
   "penznem": "HUF" vagy "EUR" vagy "USD",
   "fizetes_datuma": a teljesítés/esemény dátuma "YYYY-MM-DD" alakban; ha nincs, a keltezés dátuma; ha az sincs, null,
+  "fizetes_hatarideje": a számlán szereplő FIZETÉSI HATÁRIDŐ "YYYY-MM-DD" alakban, ha szerepel, különben null,
+  "kifizetes_modja": a számlán szereplő fizetési mód - "Átutalás", "Készpénz" vagy "Bankkártya" (pl. "átutalás" -> "Átutalás", "kártya"/"bankkártya" -> "Bankkártya"), ha szerepel, különben null,
   "adoszam": a partner adószáma, ha kiolvasható, különben null,
   "szekhely": a partner székhelye, ha kiolvasható, különben null,
   "kepviselo": a partner képviselője (természetes személy neve), ha kiolvasható, különben null,
@@ -267,3 +270,23 @@ def alvallalkozo_egyeztetes(db, adatok: dict):
             if _norm(e.full_name) == kepviselo:
                 return e
     return None
+
+
+def kifizetettseg_javaslat(adatok: dict, ma: date | None = None) -> None:
+    """A "Kifizetve?" kapcsoló ELŐTÖLTÉSE (a felhasználó kérése): ha a
+    számlán még előttünk álló fizetési határidő van, és nem helyben fizetett
+    (kártyás/készpénzes) blokk, akkor ez jó eséllyel még kifizetésre vár -
+    ilyenkor `kesz = "false"`. Csak javaslat: az ember az űrlapon átállíthatja.
+    Minden más esetben nem nyúl hozzá (az űrlap alapja a kifizetett)."""
+    hatarido = adatok.get("fizetes_hatarideje")
+    if not isinstance(hatarido, str):
+        return
+    try:
+        nap = date.fromisoformat(hatarido[:10])
+    except ValueError:
+        adatok["fizetes_hatarideje"] = None
+        return
+    if (adatok.get("kifizetes_modja") or "") in ("Készpénz", "Bankkártya"):
+        return
+    if nap >= (ma or date.today()):
+        adatok["kesz"] = "false"
