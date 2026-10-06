@@ -831,6 +831,67 @@ class DiszpoFeladatIn(BaseModel):
     diszpo_szoveg: bool = True
 
 
+class DiszpoGeneralasIn(BaseModel):
+    #: Mit írjon meg Lara: a stábnak szóló BRIEF szövegét, vagy a TECHNIKAI
+    #: csomagot (eszközlista).
+    resz: str
+
+
+@router.post("/diszpo/{project_id}/generalas")
+def diszpo_generalas(
+    project_id: int,
+    body: DiszpoGeneralasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """EGY GOMBNYOMÁSOS brief / technika (a felhasználó kérése): Lara a
+    tanultak alapján (hasonló korábbi forgatások, az ilyen feladatú forgatások
+    tapasztalata, a jóváhagyott tudás) megírja a kész brief-szöveget, illetve
+    összeállítja a technikai csomagot - ugyanaz a motor, mint a jóváhagyásos
+    tervezetnél (lásd admin_agent/diszpo_tervezo.diszpo_tervezet).
+
+    CSAK OLVAS: Lara itt semmit nem ír a projektre és nem foglal eszközt. A
+    kész szöveget / listát a gombot nyomó EMBER írja be a saját szerkesztési
+    jogával (a felület ezt rögtön megteszi, visszavonhatóan) - így Lara
+    biztonsági szabályai (alapból semmit nem hajt végre magától, jóváhagyás
+    csak a felelősétől) érintetlenek maradnak. Leállított Laránál (vészleállítás)
+    nem fut (lásd _nem_leallitva)."""
+    from app.admin_agent.diszpo_tervezo import diszpo_tervezet
+    from app.models.project import Project
+
+    if body.resz not in ("brief", "technika"):
+        raise HTTPException(status_code=400, detail="Mit írjon meg Lara: „brief” vagy „technika”.")
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="A forgatás nem található.")
+    try:
+        ter = diszpo_tervezet(
+            db, project, brief=body.resz == "brief", technika=body.resz == "technika", diszpo_szoveg=False
+        )
+    except DiszpoHiba as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    p, m = ter["payload"], ter["modell"]
+    figy = [f for f in (m.get("figyelmeztetesek") or []) if "jóváhagyás esetén" not in f]
+    db.commit()
+    return {
+        "resz": body.resz,
+        "brief": ((p.get("brief") or {}).get("uj") or None) if body.resz == "brief" else None,
+        "forras": (p.get("brief") or {}).get("forras") if body.resz == "brief" else (
+            "Lara (modell, a tapasztalat alapján)" if m.get("allapot") == "kesz" else "Lara (tapasztalat alapján)"
+        ),
+        "technika": [
+            {k: t.get(k) for k in ("equipment_id", "nev", "kategoria", "qty", "track_mode", "indoklas", "szerep", "forras")}
+            | {"helyettesiti": (t.get("helyettesiti") or {}).get("nev") if isinstance(t.get("helyettesiti"), dict) else None}
+            for t in (p.get("technika") or [])
+        ] if body.resz == "technika" else [],
+        "meglevo_technika": len(p.get("meglevo_technika") or []),
+        "figyelmeztetesek": figy[:10],
+        "feladat_ertelmezes": m.get("feladat_ertelmezes"),
+        "modell": m.get("allapot"),
+        "hasonlo_forgatasok": len((ter.get("tapasztalat") or {}).get("hasonlo_forgatasok") or []),
+    }
+
+
 @router.post("/diszpo/{project_id}/tervezet")
 def diszpo_tervezet_projektrol(
     project_id: int,

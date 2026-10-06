@@ -1042,6 +1042,34 @@ is meg tudja adni a választ.
   végrehajtója sem tud ilyen eszközt kiírni. A múltbeli forgatások tény-
   technikájában (tanulás) megmarad.
 
+### AO. Egygombos brief és technika a forgatás oldalán ✅ (tesztelve, élőben demóadattal megnézve, modell nélkül; valódi Geminivel: ⚠️ nem ellenőrzött)
+- A felhasználó kérése: Lara egy gombnyomással írja meg a kész briefet és
+  állítsa össze a technikát a tanultak alapján.
+- Felület: a projekt Eszközök kártyáján „Brief megírása” és „Technika
+  összeállítása” gomb (`components/admin-agent/LaraEgyGomb.tsx`). A régi,
+  jóváhagyásos tervezet (diszpó szöveggel együtt) alatta, lenyitható részben
+  megmaradt.
+- Végpont: `POST /api/v1/admin-agent/diszpo/{project_id}/generalas`
+  `{resz: "brief" | "technika"}`.
+  - Ugyanaz a motor, mint a jóváhagyásos tervezetnél (`diszpo_tervezet`):
+    hasonló forgatások, feladat-típus tapasztalata, jóváhagyott tudás,
+    modellel vagy szabály alapon.
+  - CSAK OLVAS: Lara nem ír a projektre és nem foglal eszközt.
+  - Leállított Laránál (vészleállítás) 423.
+- A beírást a gombot nyomó EMBER végzi a saját jogával (ugyanaz a projekt-
+  PATCH, eszköz-hozzárendelés és technika-ellenőrzés, mint kézzel), így
+  Lara biztonsági alapállása (L0, mellékhatás ki, jóváhagyás csak a
+  felelőstől) változatlan.
+  - Üres brief: rögtön beíródik. Meglévő brief: csere előtt megerősítést kér.
+  - Technika: a javasolt (nem foglalt, nem archivált, még nem kiírt) eszközök
+    a forgatásra kerülnek, és lefut a technika-ellenőrzés (ez tölti a diszpó
+    technika-listáját).
+  - Mindkettő egy kattintással visszavonható.
+- Tesztek: 4 új (kész brief, nem ír a projektre; technika-lista, nem foglal;
+  érvénytelen kérés; vészleállítás). Böngészőben demóadattal: brief beírva,
+  2 eszköz hozzáadva, technika-lista kitöltve, visszavonás után minden az
+  eredeti; meglévő briefnél a megerősítés „Mégse” után nem ír.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

@@ -26,6 +26,7 @@ import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { RelatedTable } from "@/components/RelatedTable";
 import { TechnikaCheckButton } from "@/components/TechnikaCheckButton";
 import { LaraDiszpoGomb } from "@/components/admin-agent/LaraDiszpoGomb";
+import { LaraEgyGomb } from "@/components/admin-agent/LaraEgyGomb";
 import { DISZPO_MAX_BAJT, DISZPO_MERET_TANACS } from "@/lib/csatolmany";
 import { canDoAction, szerepkorei } from "@/lib/permissions";
 import { TopBar } from "@/components/TopBar";
@@ -334,8 +335,19 @@ export async function ProjectDetailContent({
             <TechnikaCheckButton projectId={project.id} />
           </div>
           {szerkeszthet && (
-            <div className="mt-4 border-t border-border pt-4">
-              <LaraDiszpoGomb projectId={project.id} />
+            <div className="mt-4 flex flex-col gap-4 border-t border-border pt-4">
+              {/* EGY GOMBNYOMÁS (a felhasználó kérése): Lara megírja a kész
+                  briefet / összeállítja a technikát, és rögtön be is kerül -
+                  visszavonhatóan. Alatta a részletes, jóváhagyásos út. */}
+              <LaraEgyGomb projectId={project.id} brief={asText(project.brief)} />
+              <details className="text-[13px]">
+                <summary className="cursor-pointer text-text-secondary hover:text-text-primary">
+                  Részletes tervezet jóváhagyásra (diszpó szöveg is) és amit Lara ehhez tanult
+                </summary>
+                <div className="mt-3">
+                  <LaraDiszpoGomb projectId={project.id} />
+                </div>
+              </details>
             </div>
           )}
         </Card>
