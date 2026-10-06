@@ -358,6 +358,16 @@ def test_hatter_tanulas_onalloan_vegigmegy_es_tudast_frissit(db, korpusz):
 
 
 def test_hatter_tanulas_modell_nelkul_is_frissiti_a_tudast(db, korpusz):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.admin_agent import SourceEvent
+
+    # A helyi adatbázisban egy futó szerver háttérköre már készíthetett friss
+    # pillanatképet - azt itt (a visszagörgetett tranzakcióban) elavulttá
+    # tesszük, hogy a teszt ne a gép állapotától függjön.
+    for se in db.scalars(select(SourceEvent).where(SourceEvent.forras == fi.HALO_FORRAS)):
+        se.feldolgozva_at = datetime.now(timezone.utc) - timedelta(days=1)
+    db.flush()
     ki = fi.hatter_tanulas(db)
     assert ki["modell"] is False and "profilozva" not in ki and ki["halo_frissitve"]
     assert ki["hatralevo"] == ki["tanulhato"]  # az AI-tanulás még hátravan

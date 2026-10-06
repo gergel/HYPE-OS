@@ -1521,6 +1521,54 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
             )
         )
 
+    # AZ AUTÓKHOZ felvitt, MÉG KI NEM FIZETETT számlák (pl. szerviz - a
+    # felhasználó kérése): ezek kivételek a fenti "a kiadás már kifizetett"
+    # szabály alól, mert a felvitelkor KIFEJEZETTEN kifizetetlenként,
+    # fizetési határidővel rögzítették őket (lásd routes/autok.py). A
+    # "Fizetés" gombjuk az autó lapján van.
+    auto_szamlak = (
+        db.query(Expense)
+        .options(selectinload(Expense.auto), selectinload(Expense.project_code))
+        .filter(
+            Expense.auto_id.is_not(None),
+            Expense.kesz.is_not(True),
+            Expense.fizetes_datuma.is_(None),
+            Expense.fizetes_hatarideje.is_not(None),
+        )
+        .all()
+    )
+    auto_bizonylatok: dict[int, list[DocumentAttachment]] = {}
+    if auto_szamlak:
+        for d in db.scalars(
+            select(DocumentAttachment).where(
+                DocumentAttachment.entity_type == "autoKiadas",
+                DocumentAttachment.entity_id.in_([e.id for e in auto_szamlak]),
+            )
+        ):
+            auto_bizonylatok.setdefault(d.entity_id, []).append(d)
+    for e in auto_szamlak:
+        bizonylatok = auto_bizonylatok.get(e.id, [])
+        eredmeny.append(
+            (
+                UtalasraVaroTetel(
+                    # Mint a belsős TIG: az autó költsége nem a megrendelő
+                    # pénzéből megy, tehát nem vár fedezetre.
+                    fedezettseg=FEDEZETT,
+                    projektkodok=[e.project_code.projektkod] if e.project_code is not None else [],
+                    kulcs=f"auto_kiadas:{e.id}",
+                    tipus="Autó",
+                    megnevezes=e.megnevezes or "Autó költés",
+                    kinek=e.auto.rendszam if e.auto is not None else None,
+                    osszeg=float(e.netto) if e.netto is not None else None,
+                    penznem="HUF",
+                    hatarido=e.fizetes_hatarideje,
+                    szamla_db=len(bizonylatok),
+                    link="/autok",
+                ),
+                [(f"auto_kiadas_{e.id}_{d.id}_{d.filename}", d.storage_key) for d in bizonylatok],
+            )
+        )
+
     # A legrégebbi határidő elöl (ami már lejárt, azt kell először utalni), a
     # határidő nélküliek a végén.
     eredmeny.sort(key=lambda p: (p[0].hatarido is None, p[0].hatarido or date.max, p[0].megnevezes))

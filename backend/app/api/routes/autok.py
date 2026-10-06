@@ -70,6 +70,9 @@ class AutoKiadasRead(BaseModel):
     megjegyzes: str | None = None
     #: Ki lett-e már fizetve (a Pénzügy oldal ezt is kezeli).
     kesz: bool = False
+    #: A még KI NEM FIZETETT számla (pl. szerviz) fizetési határideje - a sor
+    #: "Fizetés" gombjával jelölhető utólag kifizetettnek.
+    fizetes_hatarideje: date | None = None
     #: Nincs számla, nem is lesz - készpénzes FEKETE kiadás (lásd
     #: services/kassza.py).
     nincs_szamla: bool = False
@@ -161,6 +164,7 @@ def _kiadas_kimenet(e: Expense, dokumentumok: dict[int, int] | None = None) -> A
         fizetesi_mod=e.kifizetes_modja,
         megjegyzes=e.megjegyzes,
         kesz=bool(e.kesz),
+        fizetes_hatarideje=e.fizetes_hatarideje,
         nincs_szamla=bool(e.nincs_szamla),
         dokumentum_db=(dokumentumok or {}).get(e.id, 0),
         project_code_id=e.project_code_id,
@@ -197,10 +201,15 @@ def _kimenet(db: Session, auto: Auto, ma: date) -> AutoRead:
     ]
     hataridok.sort(key=lambda h: (h.kovetkezo_esedekesseg is None, h.kovetkezo_esedekesseg or ma))
 
+    # A még KI NEM FIZETETT számlák állnak elöl (velük van teendő), a
+    # határidejük szerint; utánuk a kifizetettek, a legfrissebb felül.
     kiadasok = sorted(
         auto.kiadasok,
-        key=lambda e: (e.fizetes_datuma or date.min),
-        reverse=True,
+        key=lambda e: (
+            (0, (e.fizetes_hatarideje or date.max).toordinal())
+            if not e.kesz and e.fizetes_datuma is None
+            else (1, -(e.fizetes_datuma or date.min).toordinal())
+        ),
     )
     # NETTÓBAN, ahogy mindenütt máshol is az elszámolásban (lásd
     # services/elszamolas.py) - az ÁFA átfolyó tétel, nem az autó költsége.
@@ -385,6 +394,10 @@ class AutoKiadasIn(BaseModel):
     #: Ki van-e már fizetve. Alapból igen: ami az autónál felmerül (tankolás,
     #: parkolás), azt jellemzően a helyszínen kifizetik.
     kifizetve: bool = True
+    #: Ha MÉG NINCS kifizetve (pl. szerviz-számla jött, de nem utaltuk el - a
+    #: felhasználó kérése): a fizetési határidő. Ilyenkor nincs fizetési
+    #: dátum; a sor "Fizetés" gombja kérdezi be, amikor kifizettük.
+    fizetes_hatarideje: date | None = None
     #: NINCS SZÁMLA, NEM IS LESZ (a felhasználó kérése) - csak KÉSZPÉNZES
     #: fizetésnél. Ugyanaz az `Expense.nincs_szamla`, mint a Kiadásoknál: a
     #: Házipénztárban FEKETE kiadásként jelenik meg (lásd services/kassza.py).
@@ -421,7 +434,15 @@ def create_auto_kiadas(
             status_code=400, detail="A „nincs számla, nem is lesz” csak készpénzes fizetésnél jelölhető."
         )
 
-    datum = payload.datum or date.today()
+    # MÉG KI NEM FIZETETT SZÁMLA (pl. szerviz): csak a határidő kell, a
+    # fizetés dátuma majd a "Fizetés" gombbal kerül rá (lásd
+    # fizetes_jelolese). Készpénzes költés nem lehet kifizetetlen: a pénz
+    # ott helyben kiment a kasszából - ezért az mindig kifizetett (ahogy
+    # eddig is), a felület nem is kínálja fel kifizetetlenként.
+    kifizetve = payload.kifizetve or keszpenzes
+    if not kifizetve and payload.fizetes_hatarideje is None:
+        raise HTTPException(status_code=400, detail="Add meg a fizetési határidőt.")
+    datum = (payload.datum or date.today()) if kifizetve else None
     kiadas = Expense(
         megnevezes=f"{auto.rendszam} – {payload.megnevezes.strip()}",
         auto_id=auto.id,
@@ -435,10 +456,11 @@ def create_auto_kiadas(
         # Egyetlen dátummező: a felvitt nap; a kifizetés tényét a `kesz` jelzi,
         # a kimutatásba csak akkor számít bele.
         fizetes_datuma=datum,
+        fizetes_hatarideje=None if kifizetve else payload.fizetes_hatarideje,
         # Készpénz: a pénz abban a pillanatban kiment a házipénztárból -
         # ugyanaz a szabály, mint a Kiadások felvitelénél (lásd
         # routes/finance._expense_before_create).
-        kesz=payload.kifizetve or keszpenzes,
+        kesz=kifizetve,
         nincs_szamla=payload.nincs_szamla,
         hozzaadas_a_kiadasokhoz=True,
         megjegyzes=payload.megjegyzes,
@@ -447,6 +469,47 @@ def create_auto_kiadas(
     db.commit()
     db.refresh(kiadas)
     return _kiadas_kimenet(kiadas)
+
+
+class AutoKiadasFizetes(BaseModel):
+    """A "Fizetés" gomb (lásd frontend KifizetveDatummal): kifizetettnek
+    jelölés a fizetés dátumával, vagy a jelölés visszavonása."""
+
+    kesz: bool
+    fizetes_datuma: date | None = None
+    model_config = {"extra": "forbid"}
+
+
+@router.patch("/kiadasok/{kiadas_id}", response_model=AutoKiadasRead)
+def fizetes_jelolese(
+    kiadas_id: int,
+    payload: AutoKiadasFizetes,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Az autóhoz felvitt, még KI NEM FIZETETT számla (pl. szerviz)
+    kifizetése - a felhasználó kérése: úgy, mint az Utókövetésben, egy
+    "Fizetés" gombbal, ami a fizetés dátumát is bekérdezi. A dátummal kerül a
+    tétel a Pénzügy kiadásai közé és az összesítőkbe.
+
+    Az Autók oldal saját jogosultságával megy (nem kell hozzá Pénzügy-jog),
+    ezért csak autós kiadásra működik."""
+    kiadas = db.get(Expense, kiadas_id)
+    if kiadas is None or kiadas.auto_id is None:
+        raise HTTPException(status_code=404, detail="Ez a kiadás nem található az autóknál.")
+    if payload.kesz:
+        kiadas.kesz = True
+        kiadas.fizetes_datuma = payload.fizetes_datuma or date.today()
+    else:
+        kiadas.kesz = False
+        # A határidős (utólag fizetett) számla visszakerül "fizetésre vár"
+        # állapotba - a fizetés dátuma vele együtt megy, különben a tétel
+        # kifizetetlenül is a kiadások közt maradna.
+        if kiadas.fizetes_hatarideje is not None:
+            kiadas.fizetes_datuma = None
+    db.commit()
+    db.refresh(kiadas)
+    return _kiadas_kimenet(kiadas, _kiadas_dokumentumok(db, [kiadas.id]))
 
 
 @router.delete("/kiadasok/{kiadas_id}", status_code=204)

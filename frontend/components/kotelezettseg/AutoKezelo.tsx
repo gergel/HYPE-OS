@@ -13,6 +13,7 @@ import { huDatum } from "@/lib/huDate";
 import { formatHuf } from "@/lib/penz";
 import type { Auto, Kotelezettseg } from "@/lib/api";
 import { KeresosSelect } from "@/components/KeresosSelect";
+import { KifizetveDatummal } from "@/components/projektkod/KifizetveDatummal";
 
 const inputClass =
   "w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none";
@@ -66,6 +67,12 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
   const [nincsSzamla, setNincsSzamla] = useState(false);
   const keszpenzes = fizetesiMod === "Készpénz";
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
+  // KIFIZETVE-E MÁR (a felhasználó kérése): a legtöbb költés (tankolás,
+  // parkolás) azonnal ki van fizetve - ez az alap. Ha viszont számla jött
+  // (pl. szerviz), de még nem utaltuk el, csak a fizetési határidőt adjuk
+  // meg; a kifizetést később a sor "Fizetés" gombja jelöli, dátummal.
+  const [kifizetve, setKifizetve] = useState(true);
+  const [hatarido, setHatarido] = useState("");
   const [megjegyzes, setMegjegyzes] = useState("");
   // A bizonylat (számla PDF, blokk-fotó) MÁR A FELVITELKOR csatolható: a
   // költést jellemzően a papírral a kézben rögzítik, és külön lépésben
@@ -79,6 +86,10 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       alert("Add meg, mire ment és mennyi.");
       return;
     }
+    if (!kifizetve && !hatarido) {
+      alert("Add meg a fizetési határidőt.");
+      return;
+    }
     setBusy(true);
     try {
       const res = await authFetch(`/api/v1/autok/${autoId}/kiadasok`, {
@@ -90,7 +101,9 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
           plusz_afa: pluszAfa,
           fizetesi_mod: fizetesiMod || null,
           nincs_szamla: keszpenzes && nincsSzamla,
-          datum: datum || null,
+          datum: kifizetve ? datum || null : null,
+          kifizetve,
+          fizetes_hatarideje: kifizetve ? null : hatarido,
           megjegyzes: megjegyzes.trim() || null,
           project_code_id: projektkodId ? Number(projektkodId) : null,
         }),
@@ -128,6 +141,8 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       setPluszAfa(false);
       setFizetesiMod("");
       setNincsSzamla(false);
+      setKifizetve(true);
+      setHatarido("");
       setMegjegyzes("");
       setProjektkodId("");
       setFajlok([]);
@@ -172,11 +187,39 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
           {osszeg.trim() ? formatHuf(bruttoBol(Number(osszeg), pluszAfa)) : "–"}
         </span>
       </label>
+      <div className="flex flex-col gap-1.5">
+        <span className="t-label">Kifizetve?</span>
+        <span className="flex h-[34px] items-center gap-1 rounded-[var(--radius)] border border-border p-0.5 text-[12.5px]">
+          {[
+            { ertek: true, cimke: "Igen, kifizetve" },
+            { ertek: false, cimke: "Még nem (számla jött)" },
+          ].map((o) => (
+            <button
+              key={String(o.ertek)}
+              type="button"
+              onClick={() => {
+                setKifizetve(o.ertek);
+                // Készpénzes költés nem lehet kifizetetlen: a pénz helyben
+                // kiment a kasszából - ilyenkor a fizetési mód üresre áll.
+                if (!o.ertek && keszpenzes) {
+                  setFizetesiMod("");
+                  setNincsSzamla(false);
+                }
+              }}
+              className={`rounded-[calc(var(--radius)-2px)] px-2 py-1 ${
+                kifizetve === o.ertek ? "bg-surface-2 text-text-primary" : "text-text-muted hover:text-text-primary"
+              }`}
+            >
+              {o.cimke}
+            </button>
+          ))}
+        </span>
+      </div>
       <label className="flex flex-col gap-1.5">
-        <span className="t-label">Hogyan fizettük</span>
+        <span className="t-label">{kifizetve ? "Hogyan fizettük" : "Hogyan fizetjük"}</span>
         <KeresosSelect
           value={fizetesiMod || null}
-          options={FIZETESI_MODOK.map((m) => ({ value: m, label: m }))}
+          options={FIZETESI_MODOK.filter((m) => kifizetve || m !== "Készpénz").map((m) => ({ value: m, label: m }))}
           onChange={setFizetesiMod}
           placeholder="–"
           className="w-[160px]"
@@ -191,10 +234,22 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
           </span>
         </label>
       )}
-      <label className="flex flex-col gap-1.5">
-        <span className="t-label">Mikor</span>
-        <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} className={`${inputClass} w-[160px]`} />
-      </label>
+      {kifizetve ? (
+        <label className="flex flex-col gap-1.5">
+          <span className="t-label">Mikor</span>
+          <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} className={`${inputClass} w-[160px]`} />
+        </label>
+      ) : (
+        <label className="flex flex-col gap-1.5">
+          <span className="t-label">Fizetési határidő</span>
+          <input
+            type="date"
+            value={hatarido}
+            onChange={(e) => setHatarido(e.target.value)}
+            className={`${inputClass} w-[160px]`}
+          />
+        </label>
+      )}
       <label className="flex flex-col gap-1.5">
         <span className="t-label">Megjegyzés</span>
         <input value={megjegyzes} onChange={(e) => setMegjegyzes(e.target.value)} className={`${inputClass} w-[220px]`} />
@@ -442,7 +497,7 @@ export function AutoKezelo({
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <p className="t-label">Költések</p>
                       <p className="text-[12px] text-text-muted">
-                        Ezek a sorok a Pénzügy → Kiadások közt is ott vannak.
+                        Ezek a sorok a Pénzügy → Kiadások közt is ott vannak (a még ki nem fizetett számla a kifizetése után, addig az Utalásra várók közt).
                       </p>
                     </div>
                     {auto.kiadasok.length === 0 ? (
@@ -498,7 +553,39 @@ export function AutoKezelo({
                                     : `${kiadas.osszeg.toLocaleString("hu-HU")} ${kiadas.penznem}`
                                   : "–"}
                               </td>
-                              <td className="py-1.5 pr-4 text-text-muted">{kiadas.fizetesi_mod ?? "–"}</td>
+                              <td className="py-1.5 pr-4 text-text-muted">
+                                {kiadas.fizetesi_mod ?? "–"}
+                                {/* A MÉG KI NEM FIZETETT számla (pl. szerviz):
+                                    a határidő, és a "Fizetés" gomb, ami a
+                                    fizetés dátumát is bekérdezi - ugyanaz, mint
+                                    a projektkód kiadásainál. */}
+                                {(!kiadas.kesz || kiadas.fizetes_hatarideje) && (
+                                  <span className="mt-1 flex flex-wrap items-center gap-2">
+                                    {canEdit ? (
+                                      <KifizetveDatummal
+                                        patchPath={`/api/v1/autok/kiadasok/${kiadas.id}`}
+                                        kifizetve={kiadas.kesz}
+                                      />
+                                    ) : (
+                                      <StatusBadge
+                                        label={kiadas.kesz ? "Kifizetve" : "Fizetésre vár"}
+                                        tone={kiadas.kesz ? "success" : "warning"}
+                                      />
+                                    )}
+                                    {!kiadas.kesz && kiadas.fizetes_hatarideje && (
+                                      <span
+                                        className={`whitespace-nowrap text-[11.5px] ${
+                                          kiadas.fizetes_hatarideje < new Date().toISOString().slice(0, 10)
+                                            ? "text-text-danger"
+                                            : "text-text-muted"
+                                        }`}
+                                      >
+                                        határidő: {huDatum(kiadas.fizetes_hatarideje)}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
                               {/* A bizonylat (számla, blokk) magához a
                                   kiadás-sorhoz tartozik - az AUTÓK oldalának
                                   jogosultságával (lásd backend

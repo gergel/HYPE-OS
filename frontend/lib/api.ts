@@ -3746,6 +3746,9 @@ export type AutoKiadas = {
   fizetesi_mod: string | null;
   megjegyzes: string | null;
   kesz: boolean;
+  /** A még KI NEM FIZETETT számla (pl. szerviz) fizetési határideje - a sor
+   * "Fizetés" gombjával jelölhető utólag kifizetettnek. */
+  fizetes_hatarideje: string | null;
   /** Nincs számla, nem is lesz - készpénzes FEKETE kiadás (lásd backend
    * services/kassza.py). */
   nincs_szamla: boolean;
