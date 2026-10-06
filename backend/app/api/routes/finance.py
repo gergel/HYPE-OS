@@ -1361,7 +1361,8 @@ class UtalasraVaroKeres(BaseModel):
 def _belsos_honap(tig) -> tuple[int, int]:
     """Egy belsős TIG elszámolt hónapja a dátumaiból - ezzel nevezzük meg."""
     return belsos_tig_honapja(
-        tig.ev, tig.honap, tig.teljesites_datuma, tig.fizetesi_hatarido, tig.utalas_datuma
+        tig.ev, tig.honap, tig.teljesites_datuma, tig.fizetesi_hatarido, tig.utalas_datuma,
+        rogzitett=bool(tig.honap_rogzitve),
     )
 
 

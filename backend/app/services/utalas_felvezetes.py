@@ -924,7 +924,7 @@ def _rogzit_belsos_tigre(db: Session, tetel: UtalasTetel, datum: date, naplo: di
         expense = Expense(
             megnevezes=(
                 f"{'Belsős fizetés' if alkalmazott else 'Belsős TIG'} - {cert.employee.full_name} - "
-                f"{ev_honap_szoveg(*belsos_tig_honapja(cert.ev, cert.honap, cert.teljesites_datuma, cert.fizetesi_hatarido, cert.utalas_datuma))}"
+                f"{ev_honap_szoveg(*belsos_tig_honapja(cert.ev, cert.honap, cert.teljesites_datuma, cert.fizetesi_hatarido, cert.utalas_datuma, rogzitett=bool(cert.honap_rogzitve)))}"
             ),
             employee_id=cert.employee_id,
             tipus="belsos",

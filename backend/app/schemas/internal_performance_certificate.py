@@ -38,6 +38,8 @@ class InternalPerformanceCertificateRead(BaseModel):
     invoices: list[InternalPerformanceCertificateInvoiceRead] = []
     szamla_kifizetve: bool = False
     expense_id: int | None = None
+    #: A hónap kézzel rögzítve (visszamenőleges rendezés) - nem a dátumokból számolódik.
+    honap_rogzitve: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

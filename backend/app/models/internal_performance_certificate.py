@@ -87,6 +87,12 @@ class InternalPerformanceCertificate(TimestampMixin, Base):
 
     szamla_kifizetve: Mapped[bool] = mapped_column(Boolean, default=False)
     expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
+    #: KÉZZEL RÖGZÍTETT HÓNAP (a visszamenőleges rendezés áthelyezése, lásd
+    #: routes/internal_performance_certificates.athelyezes): ilyenkor a TIG
+    #: hónapját NEM a dátumaiból számoljuk (services/hu_datum.belsos_tig_honapja,
+    #: _apply_teljesites_honap), mert épp az tévedett - a régi, Notionből hozott
+    #: soroknál a teljesítés dátuma néha a ledolgozott hónapban áll.
+    honap_rogzitve: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
     employee: Mapped["Employee"] = relationship(back_populates="internal_performance_certificates")
     vallalkozas: Mapped["Vallalkozas | None"] = relationship()

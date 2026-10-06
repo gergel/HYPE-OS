@@ -41,6 +41,7 @@ from app.models.employee_monthly_item import (
 from app.models.finance import Expense
 from app.models.vallalkozas import VallalkozasTag
 from app.models.internal_performance_certificate import (
+    KIHAGYVA,
     LEZART_ALLAPOTOK,
     InternalPerformanceCertificate,
     InternalPerformanceCertificateInvoice,
@@ -642,7 +643,8 @@ def _apply_teljesites_honap(db: Session, record: InternalPerformanceCertificate)
     Ha a cél-hónapban már van TIG ugyanannak az embernek, nem írjuk felül -
     az adatbázis egyediség-megkötése (uq_internal_tig_employee_month) úgyis
     megakadályozná, csak nyers 500-zal; itt beszédes hibát adunk helyette."""
-    if record.teljesites_datuma is None:
+    if record.teljesites_datuma is None or record.honap_rogzitve:
+        # Kézzel rögzített hónapot (visszamenőleges rendezés) a dátum nem tol el.
         return
     ev, honap = elozo_honap(record.teljesites_datuma)
     if (ev, honap) == (record.ev, record.honap):
@@ -726,7 +728,8 @@ def generate_and_send(
     # (lásd hu_datum.belsos_tig_honapja): a 07.20-i teljesítésű a JÚNIUSI.
     honap_szoveg = ev_honap_szoveg(
         *belsos_tig_honapja(
-            record.ev, record.honap, record.teljesites_datuma, record.fizetesi_hatarido, record.utalas_datuma
+            record.ev, record.honap, record.teljesites_datuma, record.fizetesi_hatarido, record.utalas_datuma,
+            rogzitett=bool(record.honap_rogzitve),
         )
     )
     # Fájlnév és tárgy az eredeti program formátumában ("2026. május_Név_TIG").
@@ -1053,7 +1056,7 @@ def mark_szamla_kifizetve(
             # legyen a neve.
             megnevezes=(
                 f"{'Belsős fizetés' if alkalmazott else 'Belsős TIG'} - {record.employee.full_name} - "
-                f"{ev_honap_szoveg(*belsos_tig_honapja(record.ev, record.honap, record.teljesites_datuma, record.fizetesi_hatarido, record.utalas_datuma))}"
+                f"{ev_honap_szoveg(*belsos_tig_honapja(record.ev, record.honap, record.teljesites_datuma, record.fizetesi_hatarido, record.utalas_datuma, rogzitett=bool(record.honap_rogzitve)))}"
             ),
             employee_id=record.employee_id,
             tipus="belsos",
@@ -1519,3 +1522,258 @@ def employee_koltsegek(
             (ev, sorted(lista, key=lambda h: h.honap, reverse=True)) for ev, lista in evek.items()
         )
     ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Visszamenőleges rendezés (a felhasználó kérése, 2026-10)
+#
+# A régi (főleg Notionből hozott) belsős TIG-ek egy része elcsúszott: a hónapot
+# a dátumaikból számoltuk (mindig az előző hónap), de ahol a teljesítés a
+# ledolgozott hónapban állt, ott ez egy hónappal korábbra tette őket. Melyik
+# sor csúszott el, azt csak ember tudja eldönteni - ezért nincs automatikus
+# tömeges javítás, hanem egy éves rendező nézet: ki mikor mennyit keresett,
+# a hónap papírjai (TIG, számlák), a kifizetés, és soronként a kézi áthelyezés.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class RendezesSzamla(BaseModel):
+    id: int
+    filename: str
+    url: str
+
+
+class RendezesHonap(BaseModel):
+    honap: int
+    honap_nev: str
+    #: Belsős volt-e ebben a hónapban (az időszaka szerint).
+    belsos: bool = False
+    #: Kell-e havi TIG (megbízásos) - bejelentett alkalmazottnál nincs TIG és számla.
+    kell_tig: bool = True
+    tig_id: int | None = None
+    allapot: str | None = None
+    netto_osszeg: float | None = None
+    brutto_osszeg: float | None = None
+    #: Van-e tétele (alapbér/extrák) - akkor az összeg abból számolódik.
+    van_tetel: bool = False
+    tig_fajl_url: str | None = None
+    szamlak: list[RendezesSzamla] = []
+    szamla_kifizetve: bool = False
+    utalas_datuma: date | None = None
+    fizetesi_hatarido: date | None = None
+    teljesites_datuma: date | None = None
+    teljesites_szoveg: str | None = None
+    #: A kifizetéskor létrejött Kiadás sor (ha a kifizetés a kiadásokba is került).
+    kiadas_id: int | None = None
+    honap_rogzitve: bool = False
+    #: Melyik hónapra mutatnak a dátumai (forrásonként), ha nem erre a hónapra
+    #: - segít eldönteni, elcsúszott-e. Pl. {"teljesítés": "2025. május"}.
+    datumok_szerint: dict[str, str] = {}
+
+
+class RendezesSor(BaseModel):
+    employee_id: int
+    full_name: str
+    #: Az év kifizetett/rögzített összege (a hónapok nettó összegeinek összege).
+    osszesen: float = 0
+    honapok: list[RendezesHonap] = []
+
+
+def _datumok_szerint(t: InternalPerformanceCertificate) -> dict[str, str]:
+    ki: dict[str, str] = {}
+    for cimke, datum in (("teljesítés", t.teljesites_datuma), ("határidő", t.fizetesi_hatarido),
+                         ("utalás", t.utalas_datuma)):
+        if datum is None:
+            continue
+        ev, honap = elozo_honap(datum)
+        if (ev, honap) != (t.ev, t.honap):
+            ki[cimke] = ev_honap_szoveg(ev, honap)
+    return ki
+
+
+@router.get("/rendezes", response_model=list[RendezesSor])
+def rendezes(
+    ev: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view")),
+):
+    """Egy év összes belsős TIG-je munkatársanként, hónaponként: összeg,
+    állapot, TIG-dokumentum, számlák, kifizetés, dátumok - a visszamenőleges
+    rendezéshez. Benne van mindenki, aki az évben belsős volt, ÉS akinek az
+    évre TIG-je van (akkor is, ha azóta már nem belsős)."""
+    tigek = (
+        db.query(InternalPerformanceCertificate)
+        .options(selectinload(InternalPerformanceCertificate.invoices))
+        .filter(InternalPerformanceCertificate.ev == ev)
+        .all()
+    )
+    tetel_honapok = {
+        (t.employee_id, t.honap)
+        for t in db.query(EmployeeMonthlyItem).filter(EmployeeMonthlyItem.ev == ev).all()
+    }
+    belsosok = belsos_idoszak.belsosok(db)
+    nyomok = belsos_idoszak.nyom_kezdetek(db, [e.id for e in belsosok if not belsos_idoszak.van_idoszak_adat(e)])
+    emberek: dict[int, Employee] = {}
+    for e in belsosok:
+        if any(belsos_idoszak.belsos_volt(e, ev, h, nyomok.get(e.id)) for h in range(1, 13)):
+            emberek[e.id] = e
+    tig_szerint: dict[tuple[int, int], InternalPerformanceCertificate] = {}
+    for t in tigek:
+        tig_szerint[(t.employee_id, t.honap)] = t
+        if t.employee_id not in emberek:
+            emp = db.get(Employee, t.employee_id)
+            if emp is not None:
+                emberek[emp.id] = emp
+
+    sorok: list[RendezesSor] = []
+    for e in sorted(emberek.values(), key=lambda x: (x.full_name or "").lower()):
+        honapok: list[RendezesHonap] = []
+        for h in range(1, 13):
+            t = tig_szerint.get((e.id, h))
+            belsos = (
+                belsos_idoszak.belsos_volt(e, ev, h, nyomok.get(e.id)) if e.tipus == EmployeeType.BELSOS else False
+            )
+            adat = RendezesHonap(
+                honap=h, honap_nev=honap_neve(h), belsos=belsos,
+                kell_tig=belsos_idoszak.kell_havi_tig(e, ev, h), van_tetel=(e.id, h) in tetel_honapok,
+            )
+            if t is not None:
+                olvasott = InternalPerformanceCertificateRead.model_validate(t)
+                adat.tig_id = t.id
+                adat.allapot = t.allapot
+                adat.netto_osszeg = olvasott.netto_osszeg
+                adat.brutto_osszeg = olvasott.brutto_osszeg
+                adat.tig_fajl_url = t.file_url
+                adat.szamlak = [RendezesSzamla(id=i.id, filename=i.filename, url=i.url) for i in t.invoices]
+                adat.szamla_kifizetve = bool(t.szamla_kifizetve)
+                adat.utalas_datuma = t.utalas_datuma
+                adat.fizetesi_hatarido = t.fizetesi_hatarido
+                adat.teljesites_datuma = t.teljesites_datuma
+                adat.teljesites_szoveg = t.teljesites_szoveg
+                adat.kiadas_id = t.expense_id
+                adat.honap_rogzitve = bool(t.honap_rogzitve)
+                adat.datumok_szerint = {} if t.honap_rogzitve else _datumok_szerint(t)
+            honapok.append(adat)
+        sorok.append(
+            RendezesSor(
+                employee_id=e.id, full_name=e.full_name,
+                osszesen=float(sum(h.netto_osszeg or 0 for h in honapok if h.allapot != KIHAGYVA)),
+                honapok=honapok,
+            )
+        )
+    return sorok
+
+
+class AthelyezesIn(BaseModel):
+    cel_ev: int
+    cel_honap: int
+    #: Ha a cél hónapban már van TIG: a kettő HELYET CSERÉL (az elcsúszott
+    #: sorozatoknál ez a gyakori eset). Enélkül foglalt cél esetén 409.
+    csere: bool = False
+
+
+def _honap_atirasa(db: Session, employee_id: int, honnan: tuple[int, int], hova: tuple[int, int]) -> None:
+    for tetel in _honap_tetelei(db, employee_id, *honnan):
+        tetel.ev, tetel.honap = hova
+
+
+@router.post("/{employee_id}/{ev}/{honap}/athelyezes", response_model=InternalPerformanceCertificateRead)
+def athelyezes(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    payload: AthelyezesIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Egy elcsúszott belsős TIG KÉZI áthelyezése a helyes hónapba - a hónap
+    tételeivel (alapbér, extrák) együtt. A hónap ettől kezdve KÉZZEL
+    RÖGZÍTETT: a dátumai már nem tolják el (lásd honap_rogzitve). Ugyanerre a
+    hónapra "áthelyezve" csak rögzít (jelzi, hogy ez a hónap a helyes).
+
+    Foglalt cél hónapnál `csere=true`-val a két TIG helyet cserél (mindkettő
+    rögzítve lesz), különben 409. Papír, számla, kifizetés a TIG-gel együtt
+    mozdul (azok a TIG-hez tartoznak); a kifizetéskor létrejött Kiadás sor
+    érintetlen marad."""
+    if not 1 <= payload.cel_honap <= 12 or not 2000 <= payload.cel_ev <= 2100:
+        raise HTTPException(status_code=400, detail="Érvénytelen cél hónap.")
+    record = _find(db, employee_id, ev, honap)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Ehhez a hónaphoz nem tartozik Belsős TIG bejegyzés.")
+    cel = (payload.cel_ev, payload.cel_honap)
+    if cel == (ev, honap):
+        record.honap_rogzitve = True
+        db.commit()
+        db.refresh(record)
+        return InternalPerformanceCertificateRead.model_validate(record)
+
+    masik = _find(db, employee_id, *cel)
+    if masik is not None and not payload.csere:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A(z) {ev_honap_szoveg(*cel)} hónapban már van Belsős TIG ehhez a munkatárshoz - cserélheted a kettőt.",
+        )
+    if masik is None and _honap_tetelei(db, employee_id, *cel):
+        raise HTTPException(
+            status_code=409,
+            detail=f"A(z) {ev_honap_szoveg(*cel)} hónapban már vannak tételek (alapbér/extrák) - előbb azokat rendezd.",
+        )
+    if masik is not None:
+        # Csere: az egyedi (munkatárs, év, hónap) megkötés miatt átmeneti
+        # helyen át - a tételek is cserélnek.
+        masik_tetelek = _honap_tetelei(db, employee_id, *cel)
+        masik.ev, masik.honap = 0, 0
+        db.flush()
+        _honap_atirasa(db, employee_id, (ev, honap), cel)
+        for t in masik_tetelek:
+            t.ev, t.honap = ev, honap
+        record.ev, record.honap = cel
+        db.flush()
+        masik.ev, masik.honap = ev, honap
+        masik.honap_rogzitve = True
+    else:
+        _honap_atirasa(db, employee_id, (ev, honap), cel)
+        record.ev, record.honap = cel
+    record.honap_rogzitve = True
+    db.commit()
+    db.refresh(record)
+    return InternalPerformanceCertificateRead.model_validate(record)
+
+
+class RendezesOsszegIn(BaseModel):
+    netto_osszeg: float
+
+
+@router.post("/{employee_id}/{ev}/{honap}/rendezes-osszeg", response_model=InternalPerformanceCertificateRead)
+def rendezes_osszeg(
+    employee_id: int,
+    ev: int,
+    honap: int,
+    payload: RendezesOsszegIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit")),
+):
+    """Egy RÉGI hónap összegének javítása a rendezésben - akkor is, ha a TIG
+    már lezárt (a régi hónapoknál a papír nem itt készült). Csak tétel nélküli
+    hónapnál: ahol vannak tételek, ott az összeg azokból számolódik (a
+    munkatárs adatlapján javítható). Ahol a kifizetés már Kiadás sort is
+    létrehozott, ott sem - különben a kettő elválna egymástól."""
+    if payload.netto_osszeg < 0:
+        raise HTTPException(status_code=400, detail="Az összeg nem lehet negatív.")
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Munkatárs nem található")
+    if _honap_tetelei(db, employee_id, ev, honap):
+        raise HTTPException(
+            status_code=409,
+            detail="Ennek a hónapnak tételei vannak - az összege azokból jön, a munkatárs adatlapján javítható.",
+        )
+    record = _get_or_create(db, employee, ev, honap)
+    if record.expense_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Ehhez a hónaphoz már Kiadás sor tartozik (a kifizetéskor jött létre) - az összeg ott is szerepel.",
+        )
+    record.netto_osszeg = payload.netto_osszeg
+    db.commit()
+    db.refresh(record)
+    return InternalPerformanceCertificateRead.model_validate(record)

@@ -2332,6 +2332,43 @@ export type BelsosTigHonap = {
   teendok: BelsosTigTeendo[];
 };
 
+/** A belsős TIG VISSZAMENŐLEGES RENDEZÉSE (lásd backend
+ * internal_performance_certificates.rendezes): egy év, munkatársanként és
+ * hónaponként. */
+export type BelsosRendezesHonap = {
+  honap: number;
+  honap_nev: string;
+  belsos: boolean;
+  kell_tig: boolean;
+  tig_id: number | null;
+  allapot: string | null;
+  netto_osszeg: number | null;
+  brutto_osszeg: number | null;
+  van_tetel: boolean;
+  tig_fajl_url: string | null;
+  szamlak: { id: number; filename: string; url: string }[];
+  szamla_kifizetve: boolean;
+  utalas_datuma: string | null;
+  fizetesi_hatarido: string | null;
+  teljesites_datuma: string | null;
+  teljesites_szoveg: string | null;
+  kiadas_id: number | null;
+  honap_rogzitve: boolean;
+  /** Forrásonként, melyik MÁSIK hónapra mutatnak a dátumai (elcsúszás jele). */
+  datumok_szerint: Record<string, string>;
+};
+
+export type BelsosRendezesSor = {
+  employee_id: number;
+  full_name: string;
+  osszesen: number;
+  honapok: BelsosRendezesHonap[];
+};
+
+export async function getBelsosTigRendezes(ev: number): Promise<BelsosRendezesSor[]> {
+  return (await apiGet<BelsosRendezesSor[]>(`/api/v1/belsos-tig/rendezes?ev=${ev}`)) ?? [];
+}
+
 export async function getBelsosTigAttekintes(honapok = 12): Promise<BelsosTigHonap[]> {
   return (await apiGet<BelsosTigHonap[]>(`/api/v1/belsos-tig/attekintes?honapok=${honapok}`)) ?? [];
 }

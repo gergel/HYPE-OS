@@ -71,6 +71,7 @@ def belsos_tig_honapja(
     teljesites_datuma: date | None = None,
     fizetesi_hatarido: date | None = None,
     utalas_datuma: date | None = None,
+    rogzitett: bool = False,
 ) -> tuple[int, int]:
     """Melyik hónap elszámolása ez a belsős TIG - MEGNEVEZÉSHEZ.
 
@@ -82,7 +83,11 @@ def belsos_tig_honapja(
     helyes hónap nevével jelenik meg (a tárolt hónapot migráció igazítja, de a
     kiírásnak enélkül is stimmelnie kell).
 
-    Dátum híján marad a tárolt hónap: nincs mihez visszaszámolni."""
+    Dátum híján marad a tárolt hónap: nincs mihez visszaszámolni. KÉZZEL
+    RÖGZÍTETT hónapnál (`rogzitett`, lásd InternalPerformanceCertificate.
+    honap_rogzitve) is a tárolt hónap a mérvadó: ott épp a dátum tévedett."""
+    if rogzitett:
+        return ev, honap
     for datum in (teljesites_datuma, fizetesi_hatarido, utalas_datuma):
         if datum is not None:
             return elozo_honap(datum)

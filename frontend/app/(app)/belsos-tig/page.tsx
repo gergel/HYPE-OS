@@ -102,6 +102,15 @@ export default async function BelsosTigPage({
           </div>
         )}
 
+        {/* A régi, elcsúszott hónapok rendezése egy helyen (a felhasználó
+            kérése): ki mikor mennyit keresett, papírok, kifizetés kiadás nélkül. */}
+        <Link
+          href={`/belsos-tig/rendezes?ev=${ev}`}
+          className="inline-flex items-center gap-1 text-[13px] text-text-accent hover:underline"
+        >
+          Visszamenőleges rendezés (éves áttekintés) →
+        </Link>
+
         <Card title="Havi áttekintés">
           <BelsosTigHaviAttekintes honapok={attekintes} />
         </Card>
