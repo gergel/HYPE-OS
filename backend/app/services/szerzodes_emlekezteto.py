@@ -19,34 +19,16 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta, timezone
 
 from app.models.contract import Contract
-from app.services.google_email import elso_ervenyes_cim
+from app.services.google_email import ADMIN_ALAIRAS_HTML, elso_ervenyes_cim
 
 UTC = timezone.utc
 VARAKOZAS = timedelta(days=7)
 KIKULDVE_ALLAPOT = "Kiküldve"
 
 #: Az adminisztrációs aláírás (a szerződés-levéllel azonos - lásd
-#: routes/subcontractor_contracts.py _CONTRACT_EMAIL_HTML).
-SZERZODES_ALAIRAS_HTML = """\
-<table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
-  <tr>
-    <td style="vertical-align: middle; width: 150px;">
-      <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
-    </td>
-    <td style="padding-left: 20px; vertical-align: middle;">
-      <p style="margin: 0; font-size: 12px; font-weight: bold;">HYPE PRODUCTIONS - ADMINISZTRÁCIÓ</p>
-      <p style="margin: 0; color: #888; font-size: 12px;">Hype Productions Kft.</p>
-    </td>
-    <td style="padding-left: 40px; vertical-align: top; color: #888; font-size: 12px;">
-      <p style="margin: 0;">Rahman Martin – cégvezető</p>
-      <p style="margin: 0;">
-        <a href="mailto:martin.rahman@hypestab.hu" style="color: #888; text-decoration: underline;">martin.rahman@hypestab.hu</a><br>
-        +36 30 898 7600
-      </p>
-    </td>
-  </tr>
-</table>
-"""
+#: routes/subcontractor_contracts.py _CONTRACT_EMAIL_HTML, és a közös
+#: google_email.ADMIN_ALAIRAS_HTML).
+SZERZODES_ALAIRAS_HTML = ADMIN_ALAIRAS_HTML
 
 EMLEKEZTETO_HTML = (
     """\

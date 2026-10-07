@@ -50,7 +50,7 @@ from app.schemas.finance import KifizetesIn
 from app.schemas.internal_performance_certificate import InternalPerformanceCertificateRead
 from app.services import belsos_idoszak, document_storage
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
-from app.services.google_email import send_message
+from app.services.google_email import ADMIN_ALAIRAS_HTML, send_message
 from app.services.hu_datum import (
     belsos_tig_honapja,
     elozo_honap,
@@ -69,7 +69,8 @@ TERMINAL_STATUSES = {"Kész", "Kiküldve", "Kihagyva"}
 #: lista is ebből dolgozik, ezért a modell mellett lakik.
 FINALIZED_STATUSES = LEZART_ALLAPOTOK
 
-_BELSOS_TIG_EMAIL_HTML = """\
+_BELSOS_TIG_EMAIL_HTML = (
+    """\
 <p>Kedves {nev},</p>
 <p>
   Mellékelten küldjük a <b>{honap}</b> havi teljesítési igazolásodat.<br>
@@ -77,25 +78,9 @@ _BELSOS_TIG_EMAIL_HTML = """\
 </p>
 <p>Köszönettel,</p>
 <br><br>
-<table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
-  <tr>
-    <td style="vertical-align: middle; width: 150px;">
-      <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
-    </td>
-    <td style="padding-left: 20px; vertical-align: middle;">
-      <p style="margin: 0; font-size: 12px; font-weight: bold;">HYPE PRODUCTIONS - ADMINISZTRÁCIÓ</p>
-      <p style="margin: 0; color: #888; font-size: 12px;">Hype Productions Kft.</p>
-    </td>
-    <td style="padding-left: 40px; vertical-align: top; color: #888; font-size: 12px;">
-      <p style="margin: 0;">Rahman Martin – cégvezető</p>
-      <p style="margin: 0;">
-        <a href="mailto:martin.rahman@hypestab.hu" style="color: #888; text-decoration: underline;">martin.rahman@hypestab.hu</a><br>
-        +36 30 898 7600
-      </p>
-    </td>
-  </tr>
-</table>
 """
+    + ADMIN_ALAIRAS_HTML
+)
 
 
 def _belsos_employees(db: Session, ev: int | None = None, honap: int | None = None) -> list[Employee]:

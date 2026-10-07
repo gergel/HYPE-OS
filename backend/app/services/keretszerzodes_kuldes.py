@@ -30,7 +30,7 @@ from app.core.config import settings
 from app.models.contract import Contract
 from app.models.employee import Employee
 from app.services.gdoc_template import gdoc_fill_export_and_store_both
-from app.services.google_email import send_message
+from app.services.google_email import ADMIN_ALAIRAS_HTML, send_message
 
 #: A kiküldés utáni állapot - a csatolt program mark_item_sent()-je ezt írta a
 #: Notion "Állapot" mezőjébe.
@@ -42,7 +42,8 @@ FELADO_NEV = "HYPE Productions - ADMINISZTRÁCIÓ"
 #: A levél törzse - a csatolt gmail.py html_content-je, változatlan szöveggel
 #: és aláírás-blokkal (ugyanaz, mint az eseti szerződésnél: lásd
 #: api/routes/subcontractor_contracts.py _CONTRACT_EMAIL_HTML).
-EMAIL_HTML = """\
+EMAIL_HTML = (
+    """\
 <body style="font-family: Arial, sans-serif; font-size: 14px; color: #000;">
   <p>Kedves Címzett,</p>
   <p>
@@ -52,26 +53,10 @@ EMAIL_HTML = """\
   </p>
   <p>Köszönettel,</p>
   <br><br>
-  <table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
-    <tr>
-      <td style="vertical-align: middle; width: 150px;">
-        <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
-      </td>
-      <td style="padding-left: 20px; vertical-align: middle;">
-        <p style="margin: 0; font-size: 12px; font-weight: bold;">HYPE PRODUCTIONS - ADMINISZTRÁCIÓ</p>
-        <p style="margin: 0; color: #888; font-size: 12px;">Hype Productions Kft.</p>
-      </td>
-      <td style="padding-left: 40px; vertical-align: top; color: #888; font-size: 12px;">
-        <p style="margin: 0;">Rahman Martin – cégvezető</p>
-        <p style="margin: 0;">
-          <a href="mailto:martin.rahman@hypestab.hu" style="color: #888; text-decoration: underline;">martin.rahman@hypestab.hu</a><br>
-          +36 30 898 7600
-        </p>
-      </td>
-    </tr>
-  </table>
-</body>
 """
+    + ADMIN_ALAIRAS_HTML
+    + "</body>\n"
+)
 
 
 class KeretszerzodesHiba(Exception):

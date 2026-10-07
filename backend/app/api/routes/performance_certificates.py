@@ -58,7 +58,7 @@ from app.services import (
     szamlazo,
 )
 from app.services.gdoc_template import gdoc_fill_and_export_pdf
-from app.services.google_email import elso_ervenyes_cim, send_message
+from app.services.google_email import ADMIN_ALAIRAS_HTML, elso_ervenyes_cim, send_message
 from app.services.hu_number_words import szam_betukkel
 from app.services.papir_elonezet import ElonezetOut, KimenoPapir
 from app.services.szamlazo import SzamlazoCsoport, SzamlazoFel
@@ -71,7 +71,8 @@ PAGE = "/utokovetes"
 
 TERMINAL_STATUSES = {"Kiküldve", "Kihagyva"}
 
-_TIG_EMAIL_HTML = """\
+_TIG_EMAIL_HTML = (
+    """\
 <p>Kedves Címzett,</p>
 <p>
   Alább a <b>{projektdatum}</b> dátumú, tárgyban említett projekt kódú esemény teljesítési igazolása.<br>
@@ -79,25 +80,9 @@ _TIG_EMAIL_HTML = """\
 </p>
 <p>Köszönettel,</p>
 <br><br>
-<table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
-  <tr>
-    <td style="vertical-align: middle; width: 150px;">
-      <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
-    </td>
-    <td style="padding-left: 20px; vertical-align: middle;">
-      <p style="margin: 0; font-size: 12px; font-weight: bold;">HYPE PRODUCTIONS - ADMINISZTRÁCIÓ</p>
-      <p style="margin: 0; color: #888; font-size: 12px;">Hype Productions Kft.</p>
-    </td>
-    <td style="padding-left: 40px; vertical-align: top; color: #888; font-size: 12px;">
-      <p style="margin: 0;">Rahman Martin – cégvezető</p>
-      <p style="margin: 0;">
-        <a href="mailto:martin.rahman@hypestab.hu" style="color: #888; text-decoration: underline;">martin.rahman@hypestab.hu</a><br>
-        +36 30 898 7600
-      </p>
-    </td>
-  </tr>
-</table>
 """
+    + ADMIN_ALAIRAS_HTML
+)
 
 
 def _get_project_or_404(db: Session, project_id: int) -> Project:
