@@ -269,6 +269,19 @@ def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee
     önmagában érkező nettó- vagy százalék-javítás is újraszámolja a bruttót,
     ha a soron "+ÁFA" van jelölve."""
     _fedezet_es_nincs_szamla(adat, obj)
+    # UTÓLAG MEGADOTT ÁFA % (a felhasználó hibajelzése): a "Nincs ÁFA"-val
+    # felvitt kiadásnál (pl. projektkódról) az adatlapon csak az "ÁFA %" mező
+    # szerkeszthető, és az önmagában érkezett. A sor jelölése nélkül a bruttó
+    # a nettó maradt - a megadott (0-nál nagyobb) százalék maga a "+ÁFA"
+    # szándék, ezért a sort annak jelöljük, és a bruttó újraszámolódik.
+    if (
+        adat.get("afa_szazalek") not in (None, "")
+        and "plusz_afa" not in adat
+        and "brutto" not in adat
+        and float(adat["afa_szazalek"]) > 0
+        and not _plusz_afa_jelolt(obj.plusz_afa)
+    ):
+        adat["plusz_afa"] = "igen"
     if any(mezo in adat for mezo in ("netto", "plusz_afa", "afa_szazalek", "egyeni_afa_osszege")):
         _afa_brutto(
             adat, netto=obj.netto, plusz_afa=obj.plusz_afa, afa_szazalek=obj.afa_szazalek,

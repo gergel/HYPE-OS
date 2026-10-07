@@ -1,6 +1,4 @@
-import { Card } from "@/components/Card";
 import { TopBar } from "@/components/TopBar";
-import { GoogleTablazatImport } from "@/components/kotelezettseg/GoogleTablazatImport";
 import { ERezsiLista } from "@/components/kotelezettseg/ERezsiLista";
 import { getEmployees, getKotelezettsegek, getMyPagePermissions } from "@/lib/api";
 import { budapestiMa } from "@/lib/idoszak";
@@ -16,8 +14,9 @@ const PAGE = "/e-rezsi";
  *
  * A felhasználó döntése (2026-08-30): nincs forduló-követés és "mikor újul"
  * jelzés - az oldal csak azt mutatja, MENNYIT költünk és MIKOR (havi/éves
- * gyakorisággal), meg az éves szummát. Az adat a Google-táblázat tükre
- * (lásd lenti import), plusz ami kézzel kerül ide.
+ * gyakorisággal), meg az éves szummát. A tételek kézzel kerülnek ide (a
+ * korábbi Google-táblázatos behozatalt a felhasználó kérésére levettük az
+ * oldalról, 2026-10; az addig behozott tételek megmaradtak).
  *
  * A biztosítások és az autók papírjai (ahol a lejárat-figyelés továbbra is
  * kell) ugyanezen a motoron futnak, külön oldalon (lásd /kotelezettsegek és
@@ -47,12 +46,6 @@ export default async function ERezsiPage() {
           canDelete={canDoPageAction(pagePermissions, PAGE, "delete")}
           ma={budapestiMa()}
         />
-
-        {canDoPageAction(pagePermissions, PAGE, "create") && (
-          <Card title="Behozatal Google Táblázatból">
-            <GoogleTablazatImport />
-          </Card>
-        )}
       </div>
     </div>
   );
