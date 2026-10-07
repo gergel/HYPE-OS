@@ -48,6 +48,11 @@ class PerformanceCertificate(TimestampMixin, Base):
     #: nem fogja fejből tudni, miért maradt el egy teljesítési igazolás, és a
     #: puszta "Kihagyva" jelölés ilyenkor gyanúsabb, mint amilyen indokolt.
     kihagyas_oka: Mapped[str | None] = mapped_column(Text)
+    #: SOK PROJEKTRE szóló TIG-nél (a felhasználó kérése): ami a dokumentumon a
+    #: projektkódok felsorolása HELYETT álljon, és a kimenő levél tárgya. Üresen
+    #: a szokásos - lásd services/papir_tetelek.py.
+    projekt_szoveg: Mapped[str | None] = mapped_column(Text)
+    email_targy: Mapped[str | None] = mapped_column(String(500))
     file_url: Mapped[str | None] = mapped_column(String(500), comment="A TIG dokumentum linkje")
     # Csak akkor van kitöltve, ha a TIG dokumentumot MI tároljuk (a kiküldés
     # helyett feltöltött saját papír az R2-n) - a rendszer által generált,

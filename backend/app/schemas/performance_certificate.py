@@ -48,6 +48,9 @@ class PerformanceCertificateRead(BaseModel):
     allapot: str | None = None
     #: Miért hagytuk ki - a kihagyásnál kötelező (lásd routes skip_tig).
     kihagyas_oka: str | None = None
+    #: Sok projektre szóló papírnál: a felsorolás helyetti szöveg és a levél tárgya.
+    projekt_szoveg: str | None = None
+    email_targy: str | None = None
     file_url: str | None = None
     ceg_neve: str | None = None
     szekhely: str | None = None

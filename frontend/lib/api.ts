@@ -1417,6 +1417,10 @@ export type SubcontractorContractDraft = {
    * akkor, ha egy fél több ember munkájáról vagy több forgatásról szerződik
    * egyben (lásd backend models/contract.py ContractTetel). */
   tetelek: TigTetel[];
+  /** SOK PROJEKTRE szóló papírnál: ami a dokumentumon a projektek felsorolása
+   * helyett áll, és a kimenő levél tárgya - üresen a szokásos. */
+  projekt_szoveg?: string | null;
+  email_targy?: string | null;
 };
 
 /** Egy stábtag, akinek a munkáját egy szerződés/TIG lefedi. */
@@ -2043,6 +2047,10 @@ export type TigDraft = {
   keltezes: string | null;
   plusz_afa: boolean | null;
   tetelek: TigTetel[];
+  /** SOK PROJEKTRE szóló papírnál: ami a dokumentumon a projektek felsorolása
+   * helyett áll, és a kimenő levél tárgya - üresen a szokásos. */
+  projekt_szoveg?: string | null;
+  email_targy?: string | null;
 };
 
 /** Egy SZÁMLÁZÓ FÉL, akitől TIG kell egy projekten (ember vagy cég). */

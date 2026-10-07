@@ -79,6 +79,9 @@ class ContractRead(ContractBase):
     szerzodes_file_url: str | None = None
     #: Miért hagytuk ki, vagy hol van a máshol készült papír.
     kihagyas_oka: str | None = None
+    #: Sok projektre szóló papírnál: a felsorolás helyetti szöveg és a levél tárgya.
+    projekt_szoveg: str | None = None
+    email_targy: str | None = None
     #: A megbízott által aláírva visszaküldött példány.
     alairt_file_url: str | None = None
     #: Mettől meddig élt a keretszerződés - üres lista = időbeli korlát nélkül.

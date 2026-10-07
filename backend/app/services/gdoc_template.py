@@ -382,6 +382,24 @@ def gdoc_fill_export_and_store_both(
     return pdf_bytes, doc_id, pdf_link
 
 
+def gdoc_elonezet_pdf(*, template_file_id: str, base_name: str, fields: dict[str, str]) -> bytes:
+    """ELŐNÉZET (a felhasználó kérése): a sablon kitöltése PONTOSAN úgy, mint a
+    kiküldésnél, de csak a PDF kell - az ideiglenes Google Docs példány utána
+    törlődik, és semmi nem marad a Drive-on."""
+    doc_name = f"ELŐNÉZET – {(base_name or 'Dokumentum').strip() or 'Dokumentum'}"
+    doc_id = _copy_template(template_file_id, doc_name, None)
+    try:
+        _replace_placeholders(doc_id, fields)
+        _urlek_kattinthatova(doc_id)
+        return _export_pdf_bytes(doc_id)
+    finally:
+        # A takarítás hibája ne bukja meg az előnézetet.
+        try:
+            _delete_file(doc_id)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def gdoc_fill_and_export_pdf(
     *,
     template_file_id: str,

@@ -112,6 +112,12 @@ class Contract(TimestampMixin, Base):
     #: indoklása, és a kihagyáskor kötelező megadni - fél év múlva senki nem
     #: fogja fejből tudni, miért maradt el egy szerződés.
     kihagyas_oka: Mapped[str | None] = mapped_column(Text)
+    #: SOK PROJEKTRE szóló papírnál (a felhasználó kérése): ami a dokumentumon
+    #: a projektek felsorolása HELYETT álljon, és a kimenő levél tárgya. Üresen
+    #: a szokásos (felsorolás, ill. a projektből képzett tárgy) - lásd
+    #: services/papir_tetelek.py.
+    projekt_szoveg: Mapped[str | None] = mapped_column(Text)
+    email_targy: Mapped[str | None] = mapped_column(String(500))
 
     # A KIKÜLDÉS nyoma (a generálás és küldés tölti, lásd
     # services/szerzodes_emlekezteto.py): mikor, kinek, milyen tárggyal ment

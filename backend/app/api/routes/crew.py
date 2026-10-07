@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.crud_router import build_crud_router
@@ -16,7 +16,13 @@ from app.core.security import (
     require_roles,
     vedett_rendszergazda,
 )
-from app.models.contract import Contract, ContractType, keretszerzodes_ervenyes, megkotott_keretszerzodes
+from app.models.contract import (
+    Contract,
+    ContractTetel,
+    ContractType,
+    keretszerzodes_ervenyes,
+    megkotott_keretszerzodes,
+)
 from app.models.deliverable import Deliverable
 from app.models.employee import Employee
 from app.models.employee_document import EmployeeDocument
@@ -427,6 +433,35 @@ class KulsosMunkakOsszesites(BaseModel):
     keretszerzodes_url: str | None = None
 
 
+def _sajat_tetelek(papir, employee_id: int) -> list:
+    """A papír tételei, amik ennek az embernek a munkalistájába tartoznak: ha
+    ő a számlázó fél, az összes (más munkáját is ő számlázza), különben csak a
+    saját munkája."""
+    if papir.employee_id == employee_id and papir.vallalkozas_id is None:
+        return list(papir.tetelek)
+    return [t for t in papir.tetelek if t.employee_id == employee_id]
+
+
+def _soronkenti_osszegek(fej_netto, tetelek: list, projektek: list[int], otthon: int | None) -> dict[int, float | None]:
+    """Egy (akár több projektre szóló) papír összege projektenként.
+
+    Egy projektnél a papír összege. Több projektnél, ha a tételekre megadták az
+    összeget, az; ha nem, a fejösszeg CSAK EGYSZER (az indító, ill. az első
+    projektnél) - különben az összesítés a papírt annyiszor számolná, ahány
+    projektre szól."""
+    fej = float(fej_netto) if fej_netto is not None else None
+    if len(projektek) <= 1:
+        return {pid: fej for pid in projektek}
+    tetel_osszeg: dict[int, float] = {}
+    for t in tetelek:
+        if t.netto_osszeg is not None:
+            tetel_osszeg[t.project_id] = tetel_osszeg.get(t.project_id, 0.0) + float(t.netto_osszeg)
+    if tetel_osszeg:
+        return {pid: tetel_osszeg.get(pid) for pid in projektek}
+    elso = otthon if otthon in projektek else projektek[0]
+    return {pid: (fej if pid == elso else None) for pid in projektek}
+
+
 @router.get("/{employee_id}/munkak", response_model=KulsosMunkakOsszesites)
 def kulsos_munkak(
     employee_id: int,
@@ -461,19 +496,40 @@ def kulsos_munkak(
     ]
     keretszerzodes = keretszerzodesek[0] if keretszerzodesek else None
 
-    esetiek = {
-        c.project_id: c
-        for c in db.query(Contract)
-        .options(selectinload(Contract.project).selectinload(Project.project_code))
-        .filter(Contract.employee_id == employee_id, Contract.project_id.is_not(None))
+    # Projektenként az ESETI szerződés, ami az ő munkáját fedi. Egy szerződés
+    # TÖBB projektre is szólhat (a tételein keresztül - lásd
+    # models/contract.py ContractTetel): a felhasználó kérése, hogy ilyenkor
+    # MINDEN érintett projektnél ott legyen a kész szerződés linkje, ne csak
+    # annál, ahonnan indult. Tétel nélküli (régi/import) sornál a saját
+    # projektje számít (lásd services/papir_fedettseg.py).
+    esetiek: dict[int, tuple[Contract, Project | None]] = {}
+    for c in (
+        db.query(Contract)
+        .options(
+            selectinload(Contract.project).selectinload(Project.project_code),
+            selectinload(Contract.tetelek).selectinload(ContractTetel.project).selectinload(Project.project_code),
+        )
+        .filter(
+            Contract.tipus == ContractType.ALVALLALKOZOI,
+            Contract.keretszerzodes.is_(False),
+            or_(
+                and_(Contract.employee_id == employee_id, Contract.project_id.is_not(None)),
+                Contract.tetelek.any(ContractTetel.employee_id == employee_id),
+            ),
+        )
         .order_by(Contract.id)
         .all()
-    }
+    ):
+        for t in _sajat_tetelek(c, employee_id):
+            esetiek[t.project_id] = (c, t.project)
+        if not c.tetelek and c.project_id is not None and c.employee_id == employee_id:
+            esetiek[c.project_id] = (c, c.project)
 
     tigek = (
         db.query(PerformanceCertificate)
         .options(
             selectinload(PerformanceCertificate.invoices),
+            selectinload(PerformanceCertificate.tetelek),
             selectinload(PerformanceCertificate.project).selectinload(Project.project_code),
         )
         .filter(PerformanceCertificate.employee_id == employee_id)
@@ -488,51 +544,70 @@ def kulsos_munkak(
         }
 
     sorok: list[KulsosProjektMunka] = []
+    tiges_projektek: set[int] = set()
     for tig in tigek:
-        dokumentumok: list[MunkaDokumentum] = []
-        eseti = esetiek.get(tig.project_id)
-        if eseti is not None and eseti.szerzodes_file_url:
-            dokumentumok.append(MunkaDokumentum(cimke="Szerződés", url=eseti.szerzodes_file_url))
-        if tig.file_url:
-            dokumentumok.append(MunkaDokumentum(cimke="TIG", url=tig.file_url))
-        for szamla in tig.invoices:
-            dokumentumok.append(MunkaDokumentum(cimke=f"Számla – {szamla.filename}", url=szamla.url))
-
-        netto = float(tig.netto_osszeg) if tig.netto_osszeg is not None else None
-        brutto = round(netto * 1.27, 2) if (netto is not None and tig.plusz_afa) else netto
-        sorok.append(
-            KulsosProjektMunka(
-                project_id=tig.project_id,
-                **projekt_mezok(tig.project),
-                megbizas_targya=tig.megbizas_targya,
-                netto=netto,
-                brutto=brutto,
-                tig_allapot=tig.allapot,
-                szamla_kifizetve=bool(tig.szamla_kifizetve),
-                szamla_kihagyva=bool(tig.szamla_kihagyva),
-                dokumentumok=dokumentumok,
-                # A keretszerződés csak akkor váltja ki az eseti szerződést, ha a
-                # FORGATÁS NAPJÁN élt (lásd models/contract.py idoszakok).
-                keretszerzodessel=eseti is None
-                and any(
-                    keretszerzodes_ervenyes(c, (tig.project.forgatas_datuma if tig.project else None) or date.today())
-                    for c in keretszerzodesek
-                ),
-            )
+        # Egy TIG TÖBB projektre is szólhat (a tételein keresztül): minden
+        # érintett projekt külön sort kap, a papírok linkjeivel együtt.
+        projektek = {t.project_id: t.project for t in tig.tetelek} or (
+            {tig.project_id: tig.project} if tig.project_id is not None else {}
         )
+        osszegek = _soronkenti_osszegek(tig.netto_osszeg, list(tig.tetelek), list(projektek), tig.project_id)
+        for project_id, projekt in projektek.items():
+            tiges_projektek.add(project_id)
+            dokumentumok: list[MunkaDokumentum] = []
+            eseti = (esetiek.get(project_id) or (None, None))[0]
+            if eseti is not None and eseti.szerzodes_file_url:
+                dokumentumok.append(MunkaDokumentum(cimke="Szerződés", url=eseti.szerzodes_file_url))
+            if tig.file_url:
+                dokumentumok.append(MunkaDokumentum(cimke="TIG", url=tig.file_url))
+            for szamla in tig.invoices:
+                dokumentumok.append(MunkaDokumentum(cimke=f"Számla – {szamla.filename}", url=szamla.url))
+
+            netto = osszegek.get(project_id)
+            brutto = round(netto * 1.27, 2) if (netto is not None and tig.plusz_afa) else netto
+            sorok.append(
+                KulsosProjektMunka(
+                    project_id=project_id,
+                    **projekt_mezok(projekt),
+                    megbizas_targya=tig.megbizas_targya,
+                    netto=netto,
+                    brutto=brutto,
+                    tig_allapot=tig.allapot,
+                    szamla_kifizetve=bool(tig.szamla_kifizetve),
+                    szamla_kihagyva=bool(tig.szamla_kihagyva),
+                    dokumentumok=dokumentumok,
+                    # A keretszerződés csak akkor váltja ki az eseti szerződést, ha a
+                    # FORGATÁS NAPJÁN élt (lásd models/contract.py idoszakok).
+                    keretszerzodessel=eseti is None
+                    and any(
+                        keretszerzodes_ervenyes(c, (projekt.forgatas_datuma if projekt else None) or date.today())
+                        for c in keretszerzodesek
+                    ),
+                )
+            )
 
     # Amelyik projektre már van szerződése, de TIG még nincs: az is munka, amin
     # részt vett - csak még nem tudjuk, mennyiért. Ezek nélkül a lista hiányos
     # lenne (a szerződés kiküldése és a TIG között hetek is eltelnek).
-    tiges_projektek = {tig.project_id for tig in tigek}
-    for project_id, eseti in esetiek.items():
+    # Egy több projektre szóló szerződés FEJÖSSZEGE csak egyszer számít bele
+    # az összesítésbe - lásd _soronkenti_osszegek.
+    osszegek_szerzodesenkent: dict[int, dict[int, float | None]] = {}
+    for project_id, (eseti, projekt) in esetiek.items():
         if project_id in tiges_projektek:
             continue
-        netto = float(eseti.netto_osszeg) if eseti.netto_osszeg is not None else None
+        if eseti.id not in osszegek_szerzodesenkent:
+            sajat = _sajat_tetelek(eseti, employee_id)
+            erintett = [pid for pid, (c, _p) in esetiek.items() if c.id == eseti.id]
+            nyitott = [pid for pid in erintett if pid not in tiges_projektek]
+            # Ha a szerződés egy részéről már van TIG, a pénzt az a sor mutatja -
+            # a fejösszeg itt már csak duplán számolna (a tételösszeg marad).
+            fej = eseti.netto_osszeg if len(nyitott) == len(erintett) else None
+            osszegek_szerzodesenkent[eseti.id] = _soronkenti_osszegek(fej, sajat, nyitott, eseti.project_id)
+        netto = osszegek_szerzodesenkent[eseti.id].get(project_id)
         sorok.append(
             KulsosProjektMunka(
                 project_id=project_id,
-                **projekt_mezok(eseti.project),
+                **projekt_mezok(projekt),
                 megbizas_targya=eseti.megbizas_targya,
                 netto=netto,
                 brutto=round(netto * 1.27, 2) if (netto is not None and eseti.plusz_afa) else netto,
