@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SZERZODES_ALLAPOTOK, SZERZODES_MAR_VAN, TigAllapotSelect } from "@/components/TigAllapotSelect";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { EmlekeztetoElonezet } from "@/components/EmlekeztetoElonezet";
 import { formatFt, formatIdopont } from "@/lib/ido";
 import type { ElkeszultSzerzodes } from "@/lib/api";
 
@@ -51,6 +52,7 @@ export function ElkeszultSzerzodesek({
   // A számlázó fél kulcsa ("e12" / "v3"), nem ember-azonosító: a
   // szerződés cég nevére is szólhat (lásd backend services/szamlazo.py).
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [elonezetId, setElonezetId] = useState<number | null>(null);
 
   // Minden LEZÁRT szerződés ide tartozik - a "Van már szerződés" is, ami a
   // máshol elkészült papírt jelöli (lásd backend MAR_VAN_ALLAPOT).
@@ -295,15 +297,30 @@ export function ElkeszultSzerzodesek({
                           />
                         </label>
                       )}
-                      {/* 7 nap után felajánljuk a "küldd vissza aláírva"
-                          válasz-levelet - kimenni csak gombnyomásra megy ki. */}
-                      {typeof s.kikuldve_napja === "number" && s.kikuldve_napja >= 7 && (
+                      {/* KIKÜLDÉS ÉS EMLÉKEZTETŐ (a felhasználó kérése): a
+                          kiküldéstől kezdve látszik, mikor ment ki, és hány
+                          nap múlva ajánljuk fel a "küldd vissza aláírva"
+                          válasz-levelet. Kimenni csak gombnyomásra megy ki. */}
+                      {s.kikuldve_at && typeof s.kikuldve_napja === "number" && (
                         <span className="basis-full text-[11.5px] text-text-muted">
-                          {s.kikuldve_napja} napja nincs visszaküldve
+                          Kiküldve: {formatIdopont(s.kikuldve_at)} ({s.kikuldve_napja === 0 ? "ma" : `${s.kikuldve_napja} napja`})
                           {s.emlekezteto_kuldve_at &&
-                            ` · emlékeztető: ${formatIdopont(s.emlekezteto_kuldve_at)}${
+                            ` · emlékeztető ment: ${formatIdopont(s.emlekezteto_kuldve_at)}${
                               (s.emlekezteto_db ?? 0) > 1 ? ` (${s.emlekezteto_db}×)` : ""
                             }`}
+                          {" · "}
+                          {s.emlekezteto_esedekes
+                            ? "az emlékeztető most küldhető"
+                            : typeof s.emlekezteto_hatra_nap === "number" && s.emlekezteto_hatra_nap > 0
+                              ? `${s.emlekezteto_hatra_nap} nap múlva küldhető emlékeztető (${formatIdopont(s.emlekezteto_felajanlhato_at).slice(0, 13)})`
+                              : "emlékeztető nem küldhető (nincs e-mail cím)"}
+                          <button
+                            type="button"
+                            onClick={() => setElonezetId(s.contract_id)}
+                            className="ml-2 text-text-accent hover:underline"
+                          >
+                            Emlékeztető előnézete
+                          </button>
                         </span>
                       )}
                       {canEdit && s.emlekezteto_esedekes && (
@@ -338,6 +355,7 @@ export function ElkeszultSzerzodesek({
           </tbody>
         </table>
       </div>
+      {elonezetId !== null && <EmlekeztetoElonezet contractId={elonezetId} onClose={() => setElonezetId(null)} />}
     </div>
   );
 }

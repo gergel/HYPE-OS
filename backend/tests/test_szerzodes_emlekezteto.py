@@ -220,3 +220,48 @@ def test_generalas_es_kuldes_rogziti_a_szalat(db, admin, kuldott, monkeypatch):
         assert szerz.kikuldve_at is not None and not em.esedekes(szerz)
     finally:
         app.dependency_overrides.clear()
+
+
+def test_hatra_napok_a_kikuldestol_latszik(szerzodes):
+    # 3 napja ment ki: 4 nap múlva ajánljuk fel.
+    szerzodes.kikuldve_at = MOST - timedelta(days=3)
+    assert em.hatra_napok(szerzodes, MOST) == 4
+    assert em.kovetkezo_felajanlas(szerzodes) == szerzodes.kikuldve_at + em.VARAKOZAS
+    # 8 napja: már most.
+    szerzodes.kikuldve_at = MOST - timedelta(days=8)
+    assert em.hatra_napok(szerzodes, MOST) == 0
+    # Emlékeztető után újra 7 nap.
+    szerzodes.emlekezteto_kuldve_at = MOST - timedelta(days=2)
+    assert em.hatra_napok(szerzodes, MOST) == 5
+    # Aláírva megjött: nincs mit visszaszámolni.
+    szerzodes.alairva = True
+    assert em.hatra_napok(szerzodes, MOST) is None
+
+
+def test_lista_mutatja_a_kikuldest_es_a_hatralevo_napokat(db, admin, szerzodes):
+    szerzodes.kikuldve_at = MOST - timedelta(days=3)
+    db.flush()
+    c, app = _kliens(db, admin)
+    try:
+        sor = c.get(f"/api/v1/alvallalkozoi-szerzodesek/{szerzodes.project_id}/all").json()[0]
+        assert sor["kikuldve_at"] is not None
+        assert sor["emlekezteto_hatra_nap"] == 4
+        assert sor["emlekezteto_esedekes"] is False
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_emlekezteto_elonezete_semmit_nem_kuld(db, admin, szerzodes, kuldott):
+    c, app = _kliens(db, admin)
+    try:
+        r = c.get(f"/api/v1/alvallalkozoi-szerzodesek/szerzodes/{szerzodes.id}/emlekezteto/elonezet")
+        assert r.status_code == 200, r.text
+        v = r.json()
+        assert v["cimzett"] == "kulsos-demo@example.test"
+        assert v["targy"] == "Re: 2026-09-01_Forgatás_Külsős_szerződés"
+        assert v["valaszkent"] is True
+        assert "aláírt példány azonban még nem érkezett vissza" in v["level_html"]
+        assert "Berta Zsóka" in v["level_html"]
+        assert kuldott == []
+    finally:
+        app.dependency_overrides.clear()

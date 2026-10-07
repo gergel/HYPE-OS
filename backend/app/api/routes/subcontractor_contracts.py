@@ -705,11 +705,19 @@ class ElkeszultSzerzodes(BaseModel):
     emlekezteto_cimzett: str | None = None
     emlekezteto_kuldve_at: datetime | None = None
     emlekezteto_db: int = 0
+    #: Mikor ment ki, és hány nap múlva ajánljuk fel (újra) az emlékeztetőt
+    #: (0 = most) - a felület a kiküldéstől kezdve mutatja (a felhasználó kérése).
+    kikuldve_at: datetime | None = None
+    emlekezteto_hatra_nap: int | None = None
+    emlekezteto_felajanlhato_at: datetime | None = None
 
 
 def _emlekezteto_mezok(c: Contract) -> dict:
     esedekes = szerzodes_emlekezteto.esedekes(c)
     return {
+        "kikuldve_at": szerzodes_emlekezteto.kikuldes_ideje(c),
+        "emlekezteto_hatra_nap": szerzodes_emlekezteto.hatra_napok(c),
+        "emlekezteto_felajanlhato_at": szerzodes_emlekezteto.kovetkezo_felajanlas(c),
         "kikuldve_napja": szerzodes_emlekezteto.napja(c),
         "emlekezteto_esedekes": esedekes,
         "emlekezteto_cimzett": szerzodes_emlekezteto.cimzett(c) if esedekes else None,
@@ -847,6 +855,33 @@ def _eredeti_targy(c: Contract) -> str | None:
     if c.project_code is not None:
         return f"{c.project_code.projektkod}_{fel_nev}_szerződés"
     return None
+
+
+class EmlekeztetoElonezet(BaseModel):
+    cimzett: str | None = None
+    targy: str
+    level_html: str
+    #: Válaszként megy-e az eredeti levélszálba (ha nem ismert, új levél).
+    valaszkent: bool = False
+
+
+@router.get("/szerzodes/{contract_id}/emlekezteto/elonezet", response_model=EmlekeztetoElonezet)
+def emlekezteto_elonezet(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
+):
+    """Hogyan néz ki az aláírás-emlékeztető (a felhasználó kérése): pontosan
+    az a levél, ami a gombnyomásra kimenne - semmit nem küld."""
+    c = db.get(Contract, contract_id)
+    if c is None or c.tipus != ContractType.ALVALLALKOZOI or c.keretszerzodes:
+        raise HTTPException(status_code=404, detail="A szerződés nem található.")
+    return EmlekeztetoElonezet(
+        cimzett=szerzodes_emlekezteto.cimzett(c),
+        targy=szerzodes_emlekezteto.targya(c, _eredeti_targy(c)),
+        level_html=szerzodes_emlekezteto.EMLEKEZTETO_HTML,
+        valaszkent=bool(c.gmail_thread_id),
+    )
 
 
 @router.post("/szerzodes/{contract_id}/emlekezteto", response_model=EmlekeztetoEredmeny)

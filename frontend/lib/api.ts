@@ -1504,6 +1504,11 @@ export type ElkeszultSzerzodes = {
   emlekezteto_cimzett?: string | null;
   emlekezteto_kuldve_at?: string | null;
   emlekezteto_db?: number;
+  /** Mikor ment ki, és hány nap múlva ajánljuk fel (újra) az emlékeztetőt
+   * (0 = most) - a kiküldéstől kezdve látszik. */
+  kikuldve_at?: string | null;
+  emlekezteto_hatra_nap?: number | null;
+  emlekezteto_felajanlhato_at?: string | null;
 };
 
 export async function getAllContractsForProject(projectId: number): Promise<ElkeszultSzerzodes[]> {

@@ -121,6 +121,42 @@ def esedekes(c: Contract, most: datetime | None = None) -> bool:
     return True
 
 
+def kovetkezo_felajanlas(c: Contract) -> datetime | None:
+    """Mikortól ajánljuk fel (újra) az emlékeztetőt: a kiküldés, ill. az
+    előző emlékeztető után VARAKOZAS-sal. None, ha a szerződés nem vár
+    aláírásra (vagy nem tudni, mikor ment ki)."""
+    ido = kikuldes_ideje(c)
+    if ido is None or not varakozik(c):
+        return None
+    alap = ido
+    if c.emlekezteto_kuldve_at is not None:
+        alap = max(alap, _aware(c.emlekezteto_kuldve_at))
+    return alap + VARAKOZAS
+
+
+def hatra_napok(c: Contract, most: datetime | None = None) -> int | None:
+    """Hány nap múlva ajánljuk fel az emlékeztetőt (0 = már most). A felület
+    ezt mutatja a kiküldéstől kezdve (a felhasználó kérése), nem csak a 7.
+    nap után."""
+    kovetkezo = kovetkezo_felajanlas(c)
+    if kovetkezo is None:
+        return None
+    hatra = kovetkezo - (most or _most())
+    if hatra <= timedelta(0):
+        return 0
+    return hatra.days + (1 if hatra.seconds or hatra.microseconds else 0)
+
+
+def targya(c: Contract, alap_targy: str | None = None) -> str:
+    """Az emlékeztető tárgya: válasz az eredeti szerződés-levélre ("Re: …").
+    Az `alap_targy` a régi (rögzített tárgy nélküli) szerződés eredeti tárgya,
+    ahogy a kiküldés összerakta."""
+    targy = c.kikuldott_targy or alap_targy or "Szerződés"
+    if not targy.lower().startswith("re:"):
+        targy = f"Re: {targy}"
+    return targy
+
+
 def kuldes(c: Contract, *, send_message, alap_targy: str | None = None) -> str:
     """Kiküldi az emlékeztetőt (ugyanarra a címre; ha ismert a szál, abba
     válaszolva), és rögzíti. Visszaadja a címzettet. RuntimeError, ha a
@@ -130,12 +166,9 @@ def kuldes(c: Contract, *, send_message, alap_targy: str | None = None) -> str:
     cim = cimzett(c)
     if cim is None:
         raise ValueError("Nincs címzett e-mail cím ehhez a szerződéshez.")
-    targy = c.kikuldott_targy or alap_targy or "Szerződés"
-    if not targy.lower().startswith("re:"):
-        targy = f"Re: {targy}"
     send_message(
         [cim],
-        targy,
+        targya(c, alap_targy),
         EMLEKEZTETO_HTML,
         thread_id=c.gmail_thread_id,
         in_reply_to=c.gmail_rfc_message_id,
