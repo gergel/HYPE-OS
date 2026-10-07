@@ -1107,6 +1107,28 @@ is meg tudja adni a választ.
   a kolléga nem látja sem a menüpontot, sem az oldalt; a tulajdonos
   beállította a figyelést, Lara 6 jelzést adott (semmitmondó indok, törlés,
   késések), a napló a 4 lépést mutatta, a visszadobás feladatot hozott létre.
+- Pontosítás (a felhasználó kérése): Lara HETENTE nézze át a kijelölt
+  munkatársat, és az egész rendszer csak 2026.10.05-től nézze a dolgokat
+  (a figyelt kolléga azóta dolgozik itt).
+  - Heti áttekintés (`lara_figyeles.heti_attekintes`): a háttérszál
+    óránként ránéz, de csak hétfő 7:00 (magyar idő) után, hetente egyszer
+    fut le: lefuttatja a szabályokat, és „Heti áttekintés” jelzést ír az
+    előző hétről (kiküldött/feltöltött papírok, kihagyások, törlések,
+    határidőn túli papírok, nyitott jelzések; „rendben” = info, különben
+    „figyelem”). A kézi „Lara nézze át most” gomb ugyanezt csinálja.
+    Kikapcsolva és vészleállításnál továbbra sem fut.
+  - Kezdőnap (`figyeles_kezdete`, alap 2026.10.05., a Beállításokban
+    átírható): a napló, a kivételek, a heti összesítő, a fejléc számai és
+    Lara szabályai csak az azóta történteket nézik; a lejárt hiányok csak az
+    azóta lezajlott forgatásokat (a korábbiak hiányai az Utókövetésben
+    továbbra is látszanak).
+  - Migráció: `g7h8e9t0i1a2` (két új, üres oszlop a beállítás-sorban).
+  - Tesztek: +2 (kezdőnap-szűrés; hétfő reggeli esedékesség, egyszeri
+    futás, összefoglaló). Böngészőben demóadattal: a kezdőnap 2026.10.05.,
+    a napló a szept. 30-i lépést már nem mutatja; kezdőnapot szept. 28-ra
+    állítva a kézi átnézés megírta a szept. 28.–okt. 4. heti áttekintést;
+    az időzített kör esedékesen lefutott, másodszorra „nem esedékes” lett.
+    Éles adaton: ⚠️ nem ellenőrzött.
 
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).

@@ -187,10 +187,11 @@ def _lara_forgatas_tanulas() -> None:
 
 @app.on_event("startup")
 def _lara_admin_figyeles() -> None:
-    """Lara FIGYELÉSE (Adminisztráció ellenőrzése): óránként egy kör. A kör
-    maga dönti el, hogy fut-e - csak ha a tulajdonos bekapcsolta (alapból KI)
-    és nincs vészleállítás (lásd services/lara_figyeles.py). Csak olvas és
-    jelez, az ellenőrző oldalon. Tesztfutásnál nem indul."""
+    """Lara FIGYELÉSE (Adminisztráció ellenőrzése): óránként ránéz, de csak
+    HETENTE egyszer (hétfő reggel, magyar idő) nézi át a figyelt kollégát - és
+    csak ha a tulajdonos bekapcsolta (alapból KI) és nincs vészleállítás (lásd
+    services/lara_figyeles.py). Csak olvas és jelez, az ellenőrző oldalon.
+    Tesztfutásnál nem indul."""
     import sys
     import threading
     import time as _time

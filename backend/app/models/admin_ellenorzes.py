@@ -8,7 +8,7 @@ Négy tábla:
   TIG, kiadás, számla...). Csak hozzáfűzhető napló - a rekordokon csak
   létrehozás/módosítás ideje van, felhasználó nincs, ezért kellett.
 - `admin_ellenorzes_beallitasok`: egyetlen sor (id=1) - határidők, a figyelt
-  kolléga és Lara figyelésének kapcsolója (alapból KI).
+  kolléga, Lara figyelésének kapcsolója (alapból KI) és a heti áttekintés ideje.
 - `admin_kivetel_jelolesek`: a tulajdonos döntése egy-egy kivételről
   (kihagyás, "van már szerződés", számla kihagyva...): rendben / visszadobva.
 - `lara_figyeles_jelzesek`: Lara jelzései a figyelt kolléga munkájáról - csak
@@ -16,12 +16,16 @@ Négy tábla:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+
+#: Ettől a naptól nézi az ellenőrzés (a figyelt kolléga ekkor kezdett) -
+#: a beállításokban átírható.
+ALAP_KEZDET = date(2026, 10, 5)
 
 #: Alapértelmezett határidők (nap) - a beállításokban átírhatók.
 ALAP_HATARIDOK = {
@@ -77,6 +81,13 @@ class AdminEllenorzesBeallitas(Base):
     #: Határidők napban (lásd ALAP_HATARIDOK).
     hataridok: Mapped[dict | None] = mapped_column(JSON)
     utolso_futas_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Mikor volt az utolsó HETI áttekintés (a felhasználó kérése: Lara hetente
+    #: nézze át a kijelölt munkatársat - lásd services/lara_figyeles.py).
+    heti_attekintes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Ettől a naptól nézi az ellenőrzés a dolgokat (a felhasználó kérése: a
+    #: figyelt kolléga 2026.10.05. óta dolgozik itt - ami előtte volt, az nem
+    #: az ő munkája). Üresen az ALAP_KEZDET.
+    figyeles_kezdete: Mapped[date | None] = mapped_column(Date)
     modositva_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
 
 

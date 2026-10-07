@@ -12,6 +12,11 @@ kollégánál így elcsúsztak dolgok. Négy nézet:
 3. LEJÁRT HIÁNYOK: a beállított határidőknél régebben hiányzó papírok.
 4. HETI ÖSSZESÍTŐ: mennyi készült el / maradt nyitva hétről hétre.
 
+KEZDŐNAP (a felhasználó kérése): az egész ellenőrzés csak a beállított
+naptól (alapból 2026.10.05. - a figyelt kolléga ekkor kezdett) nézi a
+dolgokat: a napló, a kivételek, a heti összesítő és Lara is csak az azóta
+történteket, a lejárt hiányok csak az azóta lezajlott forgatásokat.
+
 Minden csak OLVAS, kivéve a tulajdonos saját jelölését (és az abból
 keletkező feladatot)."""
 
@@ -25,6 +30,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.admin_ellenorzes import (
     ALAP_HATARIDOK,
+    ALAP_KEZDET,
     AdminEllenorzesBeallitas,
     AdminKivetelJeloles,
     AdminTevekenyseg,
@@ -39,6 +45,7 @@ from app.models.megrendeloi_papir import MegrendeloiSzerzodes, MegrendeloiTig
 from app.models.performance_certificate import PerformanceCertificate
 from app.models.task import Task
 from app.services import szerzodes_emlekezteto
+from app.services.hu_datum import BUDAPEST_IDOZONA
 
 PAGE = "/admin-ellenorzes"
 KIHAGYVA = "Kihagyva"
@@ -78,6 +85,26 @@ def hataridok(b: AdminEllenorzesBeallitas) -> dict[str, int]:
     return {k: int(meglevo.get(k, v)) for k, v in ALAP_HATARIDOK.items()}
 
 
+def kezdet(b: AdminEllenorzesBeallitas | None) -> date:
+    """Ettől a naptól nézi az ellenőrzés a dolgokat (a figyelt kolléga kezdete)."""
+    return (b.figyeles_kezdete if b is not None else None) or ALAP_KEZDET
+
+
+def kezdet_idopont(nap: date) -> datetime:
+    """A kezdőnap 0:00 budapesti idő szerint (az időbélyegek szűréséhez)."""
+    return datetime.combine(nap, datetime.min.time(), tzinfo=BUDAPEST_IDOZONA)
+
+
+def _hatar(napok: int | None, tol: date | None) -> datetime | None:
+    """Az "utolsó N nap" és a kezdőnap közül a későbbi."""
+    jeloltek = []
+    if napok:
+        jeloltek.append(_most() - timedelta(days=napok))
+    if tol is not None:
+        jeloltek.append(kezdet_idopont(tol))
+    return max(jeloltek) if jeloltek else None
+
+
 # ── Napló ───────────────────────────────────────────────────────────────────
 
 
@@ -89,11 +116,15 @@ def _nevek(db: Session, idk: set[int]) -> dict[int, str]:
 
 
 def naplo(
-    db: Session, *, napok: int = 14, employee_id: int | None = None, csak_kivetel: bool = False, limit: int = 500
+    db: Session, *, napok: int | None = 14, employee_id: int | None = None, csak_kivetel: bool = False,
+    limit: int = 500, tol: date | None = None,
 ) -> list[dict]:
     from app.services.tevekenyseg_naplo import KIVETEL_MUVELETEK
 
-    q = select(AdminTevekenyseg).where(AdminTevekenyseg.letrejott_at >= _most() - timedelta(days=napok))
+    q = select(AdminTevekenyseg)
+    hatar = _hatar(napok, tol)
+    if hatar is not None:
+        q = q.where(AdminTevekenyseg.letrejott_at >= hatar)
     if employee_id is not None:
         q = q.where(AdminTevekenyseg.employee_id == employee_id)
     if csak_kivetel:
@@ -176,9 +207,12 @@ def _projekt_cimke(papir) -> str:
     return pk.projektkod if pk is not None else "–"
 
 
-def kivetelek(db: Session, *, napok: int | None = 90, csak_nyitott: bool = False) -> list[dict]:
-    """Minden kivétel (kihagyás és társai) a tulajdonos döntésével együtt."""
-    hatar = _most() - timedelta(days=napok) if napok else None
+def kivetelek(
+    db: Session, *, napok: int | None = 90, csak_nyitott: bool = False, tol: date | None = None
+) -> list[dict]:
+    """Minden kivétel (kihagyás és társai) a tulajdonos döntésével együtt -
+    a `tol` kezdőnap előtt módosítottak nélkül."""
+    hatar = _hatar(napok, tol)
     sorok: list[dict] = []
 
     def frissebb(oszlop):
@@ -277,8 +311,7 @@ def kivetelek(db: Session, *, napok: int | None = 90, csak_nyitott: bool = False
             })
 
     # 8-9. Ami már nincs meg (törlés, eldobott papír) vagy kézzel lett átállítva - a naplóból.
-    nnapok = napok or 3650
-    for s in naplo(db, napok=nnapok, csak_kivetel=True, limit=1000):
+    for s in naplo(db, napok=napok, csak_kivetel=True, limit=1000, tol=tol):
         if s["muvelet"] not in ("torles", "fajl_eldobas", "allapot"):
             continue
         sorok.append({
@@ -353,10 +386,13 @@ def jeloles(
 # ── Lejárt hiányok ──────────────────────────────────────────────────────────
 
 
-def lejart_hianyok(db: Session, *, ma: date | None = None, hatarido: dict[str, int] | None = None) -> list[dict]:
+def lejart_hianyok(
+    db: Session, *, ma: date | None = None, hatarido: dict[str, int] | None = None, tol: date | None = None
+) -> list[dict]:
     """A beállított határidőnél régebben hiányzó papírok (a lezajlott
     forgatások alvállalkozói szerződése, TIG-je, számlája, és a vissza nem
-    érkezett aláírt szerződés)."""
+    érkezett aláírt szerződés). A `tol` kezdőnap előtt lezajlott forgatások
+    nem számítanak (azok még nem a figyelt kolléga idejére esnek)."""
     from app.services import utokovetes_hianyok
 
     ma = ma or date.today()
@@ -372,6 +408,8 @@ def lejart_hianyok(db: Session, *, ma: date | None = None, hatarido: dict[str, i
     eredmeny: list[dict] = []
     for r in m["sorok"]:
         napja = r.get("lezajlott_napja")
+        if tol is not None and napja is not None and ma - timedelta(days=napja) < tol:
+            continue
         for dok in r["hianyzo"]:
             allapot = r["dokumentumok"][dok]["allapot"]
             if dok == "szerzodes" and allapot == "alairasra_var":
@@ -407,16 +445,22 @@ def _het_kezdete(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
-def heti_osszesito(db: Session, *, hetek: int = 8, figyelt_id: int | None = None, ma: date | None = None) -> dict:
+def heti_osszesito(
+    db: Session, *, hetek: int = 8, figyelt_id: int | None = None, ma: date | None = None, kezdonap: date | None = None
+) -> dict:
+    """Hétről hétre a napló számai - a kezdőnap hetétől (előtte nincs mit nézni)."""
     from app.services.tevekenyseg_naplo import KIVETEL_MUVELETEK
 
     ma = ma or date.today()
     elso = _het_kezdete(ma) - timedelta(weeks=hetek - 1)
-    tol = datetime.combine(elso, datetime.min.time(), tzinfo=timezone.utc)
+    if kezdonap is not None and _het_kezdete(kezdonap) > elso:
+        elso = min(_het_kezdete(kezdonap), _het_kezdete(ma))
+        hetek = (_het_kezdete(ma) - elso).days // 7 + 1
+    tol = kezdet_idopont(max(elso, kezdonap)) if kezdonap else datetime.combine(elso, datetime.min.time(), tzinfo=timezone.utc)
     szamlalo: dict[date, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     figyelt: dict[date, int] = defaultdict(int)
     for s in db.scalars(select(AdminTevekenyseg).where(AdminTevekenyseg.letrejott_at >= tol)):
-        het = _het_kezdete(s.letrejott_at.date())
+        het = _het_kezdete(s.letrejott_at.astimezone(BUDAPEST_IDOZONA).date())
         if s.muvelet in HETI_CSOPORTOK:
             csoport = s.muvelet
         elif s.muvelet in ("fajl_eldobas",):
@@ -446,7 +490,7 @@ def allapot_szamok(db: Session) -> dict:
     """A fejléc számai: át nem nézett kivételek, lejárt hiányok, nyitott jelzések."""
     b = beallitas(db)
     return {
-        "atnezetlen_kivetel": len(kivetelek(db, napok=90, csak_nyitott=True)),
-        "lejart_hiany": len(lejart_hianyok(db, hatarido=hataridok(b))),
+        "atnezetlen_kivetel": len(kivetelek(db, napok=None, csak_nyitott=True, tol=kezdet(b))),
+        "lejart_hiany": len(lejart_hianyok(db, hatarido=hataridok(b), tol=kezdet(b))),
         "nyitott_jelzes": db.query(LaraFigyelesJelzes).filter(LaraFigyelesJelzes.lezarva_at.is_(None)).count(),
     }

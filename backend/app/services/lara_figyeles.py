@@ -1,9 +1,16 @@
 """LARA FIGYELÉSE - a kiválasztott (adminisztrációs) kolléga munkájának
-folyamatos figyelése.
+HETI átnézése.
 
-A felhasználó kérése (2026-10): Lara figyelje folyamatosan egy adott ember
-munkáját, és az Adminisztráció ellenőrzése oldalon CSAK a tulajdonosnak
-jelezzen, ha valami szokatlan, vagy nem azt adja, amit vártunk.
+A felhasználó kérése (2026-10): Lara figyelje egy adott ember munkáját, és az
+Adminisztráció ellenőrzése oldalon CSAK a tulajdonosnak jelezzen, ha valami
+szokatlan, vagy nem azt adja, amit vártunk. Később pontosítva: HETENTE nézze
+át (hétfő reggel, magyar idő szerint, az előző hetet), és csak a kezdőnaptól
+(alapból 2026.10.05., a kolléga első napja) nézze a dolgokat.
+
+Egy heti áttekintés = a szabályok lefuttatása (lásd lent) + egy összefoglaló
+jelzés az előző hétről (mennyi papír ment ki, mennyi kihagyás/törlés volt,
+mennyi papír késik, és milyen új jelzések születtek). A tulajdonos kézzel is
+elindíthatja („Átnézés most").
 
 Biztonság:
 - új automatizmus, ezért SAJÁT kapcsolóval megy, alapból KIKAPCSOLVA
@@ -39,6 +46,7 @@ from app.models.admin_ellenorzes import AdminTevekenyseg, LaraFigyelesJelzes
 from app.models.employee import Employee
 from app.models.performance_certificate import PerformanceCertificate
 from app.services import admin_ellenorzes
+from app.services.hu_datum import BUDAPEST_IDOZONA
 
 #: Ennél rövidebb kihagyás-indok semmitmondó (pl. "nem kell", "-", "x").
 MIN_INDOK_HOSSZ = 15
@@ -51,8 +59,10 @@ NAGY_OSSZEG = 100_000
 KESES_JELZES_NAP = 7
 #: Ennyi munkanap tétlenség után szól (ha közben vannak lejárt hiányok).
 INAKTIV_MUNKANAP = 3
-#: Ennyi napra visszamenőleg nézi a naplót.
+#: Ennyi napra visszamenőleg nézi a naplót (de a kezdőnapnál korábbra soha).
 VISSZATEKINTES_NAP = 30
+#: A heti áttekintés ideje: hétfő ennyi órakor (magyar idő).
+HETI_ORA = 7
 
 HATTER_NEV = "lara_admin_figyeles"
 
@@ -111,11 +121,13 @@ def futtat(db: Session, *, most: datetime | None = None, kenyszer: bool = False)
         return {"allapot": "nincs_figyelt", "uj_jelzes": 0}
 
     nev = figyelt.full_name
+    tol = admin_ellenorzes.kezdet(b)
     sorok = db.scalars(
         select(AdminTevekenyseg)
         .where(
             AdminTevekenyseg.employee_id == figyelt.id,
-            AdminTevekenyseg.letrejott_at >= most - timedelta(days=VISSZATEKINTES_NAP),
+            AdminTevekenyseg.letrejott_at >= max(most - timedelta(days=VISSZATEKINTES_NAP),
+                                                 admin_ellenorzes.kezdet_idopont(tol)),
         )
         .order_by(AdminTevekenyseg.letrejott_at)
     ).all()
@@ -127,9 +139,9 @@ def futtat(db: Session, *, most: datetime | None = None, kenyszer: bool = False)
     kivetelek_naponta: dict[date, list[AdminTevekenyseg]] = defaultdict(list)
     for s in sorok:
         adat = s.adat or {}
-        mikor = s.letrejott_at.astimezone().strftime("%Y.%m.%d. %H:%M")
+        mikor = s.letrejott_at.astimezone(BUDAPEST_IDOZONA).strftime("%Y.%m.%d. %H:%M")
         if s.muvelet in ("kihagyas", "szamla_kihagyas", "mar_van"):
-            kivetelek_naponta[s.letrejott_at.date()].append(s)
+            kivetelek_naponta[s.letrejott_at.astimezone(BUDAPEST_IDOZONA).date()].append(s)
         if s.muvelet in ("kihagyas", "szamla_kihagyas"):
             indok = (adat.get("kihagyas_oka") or adat.get("szamla_kihagyas_oka") or "").strip()
             if len(indok) < MIN_INDOK_HOSSZ:
@@ -187,7 +199,8 @@ def futtat(db: Session, *, most: datetime | None = None, kenyszer: bool = False)
                 leiras="Szokatlanul sok kivétel egyszerre: " + "; ".join(s.leiras for s in lista[:6]),
             )
 
-    lejart = admin_ellenorzes.lejart_hianyok(db, ma=most.date(), hatarido=admin_ellenorzes.hataridok(b))
+    ma = most.astimezone(BUDAPEST_IDOZONA).date()
+    lejart = admin_ellenorzes.lejart_hianyok(db, ma=ma, hatarido=admin_ellenorzes.hataridok(b), tol=tol)
     for h in lejart:
         if h["keses_nap"] >= KESES_JELZES_NAP:
             uj += _jelzes(
@@ -196,10 +209,11 @@ def futtat(db: Session, *, most: datetime | None = None, kenyszer: bool = False)
                 leiras=f"Határidő: {h['hatarido_nap']} nap, eltelt: {h['eltelt_nap']} nap. Állapot: {h['allapot']}.",
             )
 
-    utolso = sorok[-1].letrejott_at.date() if sorok else None
-    tetlen = _munkanapok_kozott(utolso, most.date()) if utolso else INAKTIV_MUNKANAP
+    utolso = sorok[-1].letrejott_at.astimezone(BUDAPEST_IDOZONA).date() if sorok else None
+    # Ha a naplóban még semmi nincs tőle, a kezdőnaptól (azt is beleértve) számít.
+    tetlen = _munkanapok_kozott(utolso, ma) if utolso else _munkanapok_kozott(tol - timedelta(days=1), ma)
     if lejart and tetlen >= INAKTIV_MUNKANAP:
-        het = most.date().isocalendar()
+        het = ma.isocalendar()
         uj += _jelzes(
             db, kulcs=f"inaktiv:{figyelt.id}:{het[0]}-{het[1]}", szabaly="inaktivitas", employee_id=figyelt.id,
             link="/admin-ellenorzes?ful=lejart",
@@ -230,13 +244,121 @@ def _tig_a_naplobol(db: Session, p: dict) -> PerformanceCertificate | None:
     return db.scalars(q).first()
 
 
+# ── Heti áttekintés ─────────────────────────────────────────────────────────
+
+
+def heti_idopont(most: datetime) -> datetime:
+    """A legutóbbi esedékes heti áttekintés ideje: hétfő HETI_ORA óra (magyar
+    idő) - ha most hétfő hajnal van, még az előző hétfői."""
+    helyi = most.astimezone(BUDAPEST_IDOZONA)
+    hetfo = helyi.date() - timedelta(days=helyi.weekday())
+    ido = datetime.combine(hetfo, datetime.min.time(), tzinfo=BUDAPEST_IDOZONA).replace(hour=HETI_ORA)
+    if helyi < ido:
+        ido = datetime.combine(hetfo - timedelta(days=7), datetime.min.time(), tzinfo=BUDAPEST_IDOZONA).replace(hour=HETI_ORA)
+    return ido
+
+
+def kovetkezo_heti(most: datetime) -> datetime:
+    utolso = heti_idopont(most)
+    # A naptári hét hozzáadása (nem 7*24 óra), hogy az óraátállítás ne csúsztassa.
+    return datetime.combine(utolso.date() + timedelta(days=7), datetime.min.time(), tzinfo=BUDAPEST_IDOZONA).replace(hour=HETI_ORA)
+
+
+def heti_esedekes(b, most: datetime) -> bool:
+    return b.heti_attekintes_at is None or b.heti_attekintes_at < heti_idopont(most)
+
+
+def _heti_szamok(db: Session, figyelt_id: int, tol: datetime, ig: datetime) -> dict[str, int]:
+    from app.services.tevekenyseg_naplo import KIVETEL_MUVELETEK
+
+    sz: dict[str, int] = defaultdict(int)
+    for s in db.scalars(
+        select(AdminTevekenyseg).where(
+            AdminTevekenyseg.employee_id == figyelt_id,
+            AdminTevekenyseg.letrejott_at >= tol,
+            AdminTevekenyseg.letrejott_at < ig,
+        )
+    ):
+        sz["osszes"] += 1
+        if s.muvelet in ("torles", "fajl_eldobas"):
+            sz["torles"] += 1
+        elif s.muvelet in ("kikuldes", "sajat_fajl", "alairt_feltoltes", "szamla_feltoltes", "kifizetes"):
+            sz[s.muvelet] += 1
+        elif s.muvelet in KIVETEL_MUVELETEK:
+            sz["kivetel"] += 1
+    return sz
+
+
+def heti_attekintes(db: Session, *, most: datetime | None = None, kenyszer: bool = False) -> dict:
+    """Lara heti átnézése: ha esedékes (vagy a tulajdonos kézzel kéri),
+    lefuttatja a szabályokat, és összefoglaló jelzést ír az előző hétről."""
+    most = most or _most()
+    b = admin_ellenorzes.beallitas(db)
+    if not kenyszer:
+        if not b.lara_figyeles:
+            return {"allapot": "kikapcsolva", "uj_jelzes": 0}
+        if not heti_esedekes(b, most):
+            return {"allapot": "nem_esedekes", "uj_jelzes": 0}
+    eredmeny = futtat(db, most=most, kenyszer=kenyszer)
+    if eredmeny["allapot"] != "lefutott":
+        return eredmeny
+
+    figyelt = db.get(Employee, b.figyelt_employee_id)
+    tol_nap = admin_ellenorzes.kezdet(b)
+    # Az előző (lezárt) hét hétfőtől vasárnapig, magyar idő szerint.
+    het_vege = heti_idopont(most).date()  # hétfő (már nem tartozik bele)
+    het_eleje = het_vege - timedelta(days=7)
+    uj = eredmeny["uj_jelzes"]
+    if het_vege > tol_nap:
+        tol = admin_ellenorzes.kezdet_idopont(max(het_eleje, tol_nap))
+        ig = admin_ellenorzes.kezdet_idopont(het_vege)
+        sz = _heti_szamok(db, figyelt.id, tol, ig)
+        lejart = admin_ellenorzes.lejart_hianyok(
+            db, ma=most.astimezone(BUDAPEST_IDOZONA).date(), hatarido=admin_ellenorzes.hataridok(b), tol=tol_nap)
+        friss = db.scalars(
+            select(LaraFigyelesJelzes).where(
+                LaraFigyelesJelzes.employee_id == figyelt.id,
+                LaraFigyelesJelzes.szabaly != "heti_osszegzes",
+                LaraFigyelesJelzes.letrejott_at >= tol,
+                LaraFigyelesJelzes.lezarva_at.is_(None),
+            )
+        ).all()
+        figyelem = [j for j in friss if j.szint == "figyelem"]
+        rendben = not figyelem and not lejart and sz["osszes"] > 0
+        idoszak = f"{max(het_eleje, tol_nap).strftime('%Y.%m.%d.')}–{(het_vege - timedelta(days=1)).strftime('%m.%d.')}"
+        sorok = [
+            f"Papírozási lépés összesen: {sz['osszes']}",
+            f"Kiküldött papír: {sz['kikuldes']}, feltöltött saját papír: {sz['sajat_fajl']}, "
+            f"visszaérkezett aláírt: {sz['alairt_feltoltes']}, feltöltött számla: {sz['szamla_feltoltes']}, "
+            f"kifizetve jelölés: {sz['kifizetes']}",
+            f"Kihagyás / kivétel: {sz['kivetel']}, törlés: {sz['torles']}",
+            f"Most határidőn túl lévő papír: {len(lejart)}",
+            f"Nyitott, nézd-meg jelzés: {len(figyelem)}" + (f" (pl. {figyelem[0].cim})" if figyelem else ""),
+        ]
+        if sz["osszes"] == 0:
+            sorok.append("A héten egyetlen papírozási lépése sem volt a rendszerben.")
+        ev, het, _ = het_eleje.isocalendar()
+        uj += _jelzes(
+            db, kulcs=f"heti:{figyelt.id}:{ev}-{het:02d}", szabaly="heti_osszegzes", employee_id=figyelt.id,
+            szint="info" if rendben else "figyelem", link="/admin-ellenorzes?ful=osszesito",
+            cim=f"Heti áttekintés – {figyelt.full_name}, {idoszak}: "
+            + ("rendben, nincs szokatlan" if rendben else "van, amit érdemes megnézni"),
+            leiras="\n".join(sorok),
+            adat={**dict(sz), "lejart": len(lejart), "jelzes": len(figyelem), "het_eleje": het_eleje.isoformat()},
+        )
+    b.heti_attekintes_at = most
+    db.commit()
+    return {**eredmeny, "uj_jelzes": uj, "heti": True}
+
+
 def hatter_futas(naplo) -> dict:
-    """Az időzített kör (main.py) - saját munkamenettel."""
+    """Az időzített kör (main.py, óránként néz rá) - saját munkamenettel.
+    Csak akkor csinál valamit, ha a heti áttekintés esedékes."""
     from app.core.database import SessionLocal
 
     db = SessionLocal()
     try:
-        eredmeny = futtat(db)
+        eredmeny = heti_attekintes(db)
         naplo(f"Lara figyelése: {eredmeny}")
         return eredmeny
     finally:

@@ -7,14 +7,14 @@ végén VISSZAGÖRGETŐDIK."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import engine
-from app.models.admin_ellenorzes import AdminTevekenyseg, LaraFigyelesJelzes
+from app.models.admin_ellenorzes import ALAP_KEZDET, AdminTevekenyseg, LaraFigyelesJelzes
 from app.models.employee import Employee, EmployeeType, SystemRole
 from app.models.project import Project
 from app.models.task import Task
@@ -60,6 +60,12 @@ def k(db, monkeypatch):
     db.flush()
     monkeypatch.setattr(settings, "vedett_admin_emailek", "tulaj-demo@example.test")
     monkeypatch.setattr("app.api.routes.subcontractor_contracts.send_message", lambda *a, **kw: ("t", "g", "<r>"))
+    # A teszt-forgatások a valódi kezdőnap (2026.10.05.) előttiek is lehetnek -
+    # itt 60 nappal korábbról nézzük; a kezdőnap szűrését külön teszt nézi.
+    from app.services import admin_ellenorzes
+
+    admin_ellenorzes.beallitas(db).figyeles_kezdete = date.today() - timedelta(days=60)
+    db.flush()
     ki = {"u": kollega}
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: ki["u"]
@@ -185,3 +191,78 @@ def test_lara_figyeles_csak_bekapcsolva_es_csak_egyszer_jelez(k, monkeypatch):
 
     get_settings(db).kill_switch = True
     assert lara_figyeles.futtat(db)["allapot"] == "veszleallitas"
+
+
+def test_csak_a_kezdonaptol_nez(k):
+    """A felhasználó kérése: az egész rendszer csak a kezdőnaptól (alapból
+    2026.10.05., a kolléga első napja) nézze a dolgokat."""
+    c, db, p, kulcs = k["c"], k["db"], k["lezajlott"], f"e{k['kulsos'].id}"
+    c.post(f"{SZ}/{p.id}/{kulcs}/skip", json={"kihagyas_oka": "A partnercég számlázza, velünk nincs szerződése."})
+    _mint(k, "tulaj")
+    assert c.get(f"{AE}/beallitasok").json()["figyeles_kezdete"] == (date.today() - timedelta(days=60)).isoformat()
+    assert any(h["project_id"] == p.id for h in c.get(f"{AE}/lejart").json())
+    assert c.get(f"{AE}/naplo").json() and c.get(f"{AE}/kivetelek").json()
+
+    # A kezdőnap a 20 napja lezajlott forgatás utánra kerül: se lejárt hiány,
+    # se a korábbi napló/kivétel nem látszik, a heti összesítő is a kezdőnaptól indul.
+    holnap = date.today() + timedelta(days=1)
+    r = c.put(f"{AE}/beallitasok", json={"figyeles_kezdete": holnap.isoformat()})
+    assert r.status_code == 200 and r.json()["figyeles_kezdete"] == holnap.isoformat()
+    assert not [h for h in c.get(f"{AE}/lejart").json() if h["project_id"] == p.id]
+    assert c.get(f"{AE}/naplo").json() == []
+    assert not [s for s in c.get(f"{AE}/kivetelek").json() if s["projekt"].startswith("Lezajlott")]
+    o = c.get(f"{AE}/osszesito").json()
+    assert len(o["hetek"]) == 1 and o["hetek"][0]["osszes"] == 0
+    assert o["szamok"]["lejart_hiany"] == 0
+
+    # Üresen hagyva a 2026.10.05. az alap.
+    from app.services import admin_ellenorzes
+
+    admin_ellenorzes.beallitas(db).figyeles_kezdete = None
+    assert admin_ellenorzes.kezdet(admin_ellenorzes.beallitas(db)) == ALAP_KEZDET == date(2026, 10, 5)
+
+
+def test_heti_attekintes_hetfo_reggel_egyszer(k):
+    """Lara hetente (hétfő 7:00, magyar idő) nézi át a kollégát, és összefoglalót
+    ír az előző hétről - a hét közbeni óránkénti ránézés nem csinál semmit."""
+    from app.services import lara_figyeles
+
+    c, db, p, kulcs = k["c"], k["db"], k["lezajlott"], f"e{k['kulsos'].id}"
+    c.post(f"{SZ}/{p.id}/{kulcs}/skip", json={"kihagyas_oka": "nem kell"})
+    # A naplósort a múlt hétre tesszük (a heti összefoglaló az előző hetet nézi).
+    hetfo = date.today() - timedelta(days=date.today().weekday())
+    sor = db.query(AdminTevekenyseg).one()
+    sor.letrejott_at = datetime.combine(hetfo - timedelta(days=5), datetime.min.time(), tzinfo=timezone.utc).replace(hour=10)
+    db.flush()
+    # Ez a hétfő 8:00 magyar idő (UTC-ben 6:00 vagy 7:00 - mindkettő 7 óra után).
+    hetfo_reggel = datetime.combine(hetfo, datetime.min.time(), tzinfo=timezone.utc).replace(hour=7)
+
+    # Kikapcsolva semmi.
+    assert lara_figyeles.heti_attekintes(db, most=hetfo_reggel)["allapot"] == "kikapcsolva"
+    _mint(k, "tulaj")
+    c.put(f"{AE}/beallitasok", json={"figyelt_employee_id": k["kollega"].id, "lara_figyeles": True})
+    assert c.get(f"{AE}/beallitasok").json()["heti_attekintes_at"] is None
+
+    e = lara_figyeles.heti_attekintes(db, most=hetfo_reggel)
+    assert e["allapot"] == "lefutott" and e["heti"] is True
+    heti = db.query(LaraFigyelesJelzes).filter_by(szabaly="heti_osszegzes").one()
+    assert heti.cim.startswith("Heti áttekintés – Adminos Kolléga (demó)")
+    assert heti.szint == "figyelem"  # semmitmondó indok + 20 napos késés
+    assert "Kihagyás / kivétel: 1" in heti.leiras and heti.adat["osszes"] == 1
+    assert {"semmitmondo_indok", "nagy_keses"} <= {j.szabaly for j in db.query(LaraFigyelesJelzes).all()}
+
+    # Ugyanazon a héten (pl. szerdán) már nem esedékes, a következő hétfőn igen.
+    assert lara_figyeles.heti_attekintes(db, most=hetfo_reggel + timedelta(days=2))["allapot"] == "nem_esedekes"
+    # Jövő hétfő 3:00 UTC (magyar idő szerint még 7 óra előtt) - még nem.
+    assert not lara_figyeles.heti_esedekes(lara_figyeles.admin_ellenorzes.beallitas(db),
+                                           hetfo_reggel + timedelta(days=6, hours=20))
+    assert lara_figyeles.heti_attekintes(db, most=hetfo_reggel + timedelta(days=7))["allapot"] == "lefutott"
+    # Hétfő hajnalban (7 előtt) még a múlt heti számít.
+    hajnal = datetime.combine(hetfo + timedelta(days=14), datetime.min.time(), tzinfo=timezone.utc).replace(hour=3)
+    assert lara_figyeles.heti_idopont(hajnal).date() == hetfo + timedelta(days=7)
+    assert lara_figyeles.kovetkezo_heti(hetfo_reggel).date() == hetfo + timedelta(days=7)
+
+    # A kézi gomb bármikor lefut (de ugyanarról a hétről nem ír még egy összefoglalót).
+    db_elotte = db.query(LaraFigyelesJelzes).filter_by(szabaly="heti_osszegzes").count()
+    assert c.post(f"{AE}/lara/futtatas").json()["allapot"] == "lefutott"
+    assert db.query(LaraFigyelesJelzes).filter_by(szabaly="heti_osszegzes").count() <= db_elotte + 1

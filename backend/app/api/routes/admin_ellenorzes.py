@@ -7,7 +7,7 @@ sem, ha valaki megadná neki (a felhasználó kérése: "csak nekem jelezzen")."
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -54,12 +54,21 @@ class BeallitasOut(BaseModel):
     lara_figyeles: bool
     hataridok: dict[str, int]
     utolso_futas_at: datetime | None
+    #: Ettől a naptól nézi az ellenőrzés a dolgokat (a kolléga kezdete).
+    figyeles_kezdete: date
+    #: Lara heti áttekintése: mikor volt utoljára, és mikor lesz a következő.
+    heti_attekintes_at: datetime | None
+    kovetkezo_heti_at: datetime
+    #: Be van kapcsolva, és a mostani heti áttekintés még nem futott le (a
+    #: következő órás körben jön).
+    heti_esedekes: bool
 
 
 class BeallitasIn(BaseModel):
     figyelt_employee_id: int | None = None
     lara_figyeles: bool | None = None
     hataridok: dict[str, int] | None = None
+    figyeles_kezdete: date | None = None
     #: A figyelt kolléga TÖRLÉSE (None nem jelenti azt, hogy "ne változzon").
     figyelt_torles: bool = False
 
@@ -73,6 +82,10 @@ def _beallitas_out(db: Session) -> BeallitasOut:
         lara_figyeles=bool(b.lara_figyeles),
         hataridok=admin_ellenorzes.hataridok(b),
         utolso_futas_at=b.utolso_futas_at,
+        figyeles_kezdete=admin_ellenorzes.kezdet(b),
+        heti_attekintes_at=b.heti_attekintes_at,
+        kovetkezo_heti_at=lara_figyeles.kovetkezo_heti(lara_figyeles._most()),
+        heti_esedekes=bool(b.lara_figyeles) and lara_figyeles.heti_esedekes(b, lara_figyeles._most()),
     )
 
 
@@ -105,6 +118,8 @@ def beallitasok_mentese(payload: BeallitasIn, db: Session = Depends(get_db), use
                 raise HTTPException(status_code=400, detail="A határidő 0 és 365 nap között lehet.")
             uj[k] = int(v)
         b.hataridok = uj
+    if payload.figyeles_kezdete is not None:
+        b.figyeles_kezdete = payload.figyeles_kezdete
     db.commit()
     return _beallitas_out(db)
 
@@ -117,17 +132,21 @@ def naplo(
     db: Session = Depends(get_db),
     _user: Employee = Depends(csak_tulajdonos),
 ) -> list[dict]:
-    return admin_ellenorzes.naplo(db, napok=napok, employee_id=employee_id, csak_kivetel=csak_kivetel)
+    b = admin_ellenorzes.beallitas(db)
+    return admin_ellenorzes.naplo(
+        db, napok=napok, employee_id=employee_id, csak_kivetel=csak_kivetel, tol=admin_ellenorzes.kezdet(b))
 
 
 @router.get("/kivetelek")
 def kivetelek(
-    napok: int | None = Query(90, ge=1, le=3650),
+    napok: int | None = Query(None, ge=1, le=3650),
     csak_nyitott: bool = False,
     db: Session = Depends(get_db),
     _user: Employee = Depends(csak_tulajdonos),
 ) -> list[dict]:
-    return admin_ellenorzes.kivetelek(db, napok=napok, csak_nyitott=csak_nyitott)
+    """`napok` nélkül: minden a kezdőnap óta."""
+    b = admin_ellenorzes.beallitas(db)
+    return admin_ellenorzes.kivetelek(db, napok=napok, csak_nyitott=csak_nyitott, tol=admin_ellenorzes.kezdet(b))
 
 
 class JelolesIn(BaseModel):
@@ -155,14 +174,14 @@ def kivetel_jelolese(payload: JelolesIn, db: Session = Depends(get_db), user: Em
 @router.get("/lejart")
 def lejart(db: Session = Depends(get_db), _user: Employee = Depends(csak_tulajdonos)) -> list[dict]:
     b = admin_ellenorzes.beallitas(db)
-    return admin_ellenorzes.lejart_hianyok(db, hatarido=admin_ellenorzes.hataridok(b))
+    return admin_ellenorzes.lejart_hianyok(db, hatarido=admin_ellenorzes.hataridok(b), tol=admin_ellenorzes.kezdet(b))
 
 
 @router.get("/osszesito")
 def osszesito(db: Session = Depends(get_db), _user: Employee = Depends(csak_tulajdonos)) -> dict:
     b = admin_ellenorzes.beallitas(db)
     return {
-        **admin_ellenorzes.heti_osszesito(db, figyelt_id=b.figyelt_employee_id),
+        **admin_ellenorzes.heti_osszesito(db, figyelt_id=b.figyelt_employee_id, kezdonap=admin_ellenorzes.kezdet(b)),
         "szamok": admin_ellenorzes.allapot_szamok(db),
     }
 
@@ -197,5 +216,6 @@ def lara_jelzes_lezarasa(jelzes_id: int, db: Session = Depends(get_db), user: Em
 
 @router.post("/lara/futtatas")
 def lara_futtatas(db: Session = Depends(get_db), _user: Employee = Depends(csak_tulajdonos)) -> dict:
-    """Kézi figyelési kör - csak olvas és jelez (ugyanaz, mint az időzített)."""
-    return lara_figyeles.futtat(db, kenyszer=True)
+    """Kézi átnézés - ugyanaz, mint a heti (szabályok + összefoglaló az előző
+    hétről); csak olvas és jelez."""
+    return lara_figyeles.heti_attekintes(db, kenyszer=True)

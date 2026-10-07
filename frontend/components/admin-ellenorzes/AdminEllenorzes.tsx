@@ -80,7 +80,16 @@ type Beallitas = {
   lara_figyeles: boolean;
   hataridok: Record<string, number>;
   utolso_futas_at: string | null;
+  figyeles_kezdete: string;
+  heti_attekintes_at: string | null;
+  kovetkezo_heti_at: string;
+  heti_esedekes: boolean;
 };
+
+/** "2026-10-05" -> "2026.10.05." */
+function datumHu(iso: string | null | undefined): string {
+  return iso ? `${iso.slice(0, 10).replaceAll("-", ".")}.` : "–";
+}
 
 const HATARIDO_CIMKEK: Record<string, string> = {
   szerzodes: "Szerződés (a forgatás után, nap)",
@@ -157,11 +166,12 @@ export function AdminEllenorzes({ emberek }: { emberek: { id: number; full_name:
         <div>
           <h1 className="text-[22px] font-semibold text-text-primary">Adminisztráció ellenőrzése</h1>
           <p className="mt-0.5 text-[13px] text-text-muted">
-            Mikor mi készült el, mindenhez van-e papír, és nincs-e csendben kihagyva semmi.{" "}
+            Mikor mi készült el, mindenhez van-e papír, és nincs-e csendben kihagyva semmi.
+            {beallitas && <> Csak a {datumHu(beallitas.figyeles_kezdete)} óta történteket nézi.</>}{" "}
             {beallitas?.figyelt_nev ? (
               <>
                 Figyelt kolléga: <span className="text-text-secondary">{beallitas.figyelt_nev}</span>
-                {beallitas.lara_figyeles ? " · Lara figyeli" : " · Lara figyelése ki van kapcsolva"}
+                {beallitas.lara_figyeles ? " · Lara hetente átnézi" : " · Lara heti átnézése ki van kapcsolva"}
               </>
             ) : (
               "Még nincs kiválasztva figyelt kolléga (Beállítások fül)."
@@ -173,7 +183,7 @@ export function AdminEllenorzes({ emberek }: { emberek: { id: number; full_name:
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
           { cim: "Nyitott Lara-jelzés", ertek: szamok?.nyitott_jelzes, ful: "lara" as Ful },
-          { cim: "Át nem nézett kivétel (90 nap)", ertek: szamok?.atnezetlen_kivetel, ful: "kivetelek" as Ful },
+          { cim: "Át nem nézett kivétel", ertek: szamok?.atnezetlen_kivetel, ful: "kivetelek" as Ful },
           { cim: "Határidőn túli hiány", ertek: szamok?.lejart_hiany, ful: "lejart" as Ful },
         ].map((t) => (
           <button
@@ -207,7 +217,9 @@ export function AdminEllenorzes({ emberek }: { emberek: { id: number; full_name:
 
       {ful === "lara" && <LaraJelzesek beallitas={beallitas} onValtozas={frissit} onBeallitasok={() => fulValtas("beallitasok")} />}
       {ful === "naplo" && <Naplo figyeltId={beallitas?.figyelt_employee_id ?? null} />}
-      {ful === "kivetelek" && <Kivetelek figyeltNev={beallitas?.figyelt_nev ?? null} onValtozas={frissit} />}
+      {ful === "kivetelek" && (
+        <Kivetelek figyeltNev={beallitas?.figyelt_nev ?? null} kezdet={beallitas?.figyeles_kezdete ?? null} onValtozas={frissit} />
+      )}
       {ful === "lejart" && <LejartHianyok />}
       {ful === "osszesito" && osszesito && <HetiOsszesito adat={osszesito} figyeltNev={beallitas?.figyelt_nev ?? null} />}
       {ful === "beallitasok" && beallitas && (
@@ -256,7 +268,7 @@ function LaraJelzesek({
           ? "Előbb válaszd ki a figyelt kollégát a Beállítások fülön."
           : d.allapot === "veszleallitas"
             ? "Lara le van állítva (vészleállítás) - most nem figyel."
-            : `Lara végignézte: ${d.uj_jelzes} új jelzés.`,
+            : `Lara végignézte: ${d.uj_jelzes} új jelzés (benne az előző heti áttekintés, ha még nem volt).`,
       );
       setKor((n) => n + 1);
       onValtozas();
@@ -282,7 +294,7 @@ function LaraJelzesek({
     <div className="space-y-3">
       {beallitas && !beallitas.lara_figyeles && (
         <p className="rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[13px] text-text-secondary">
-          Lara folyamatos figyelése ki van kapcsolva.{" "}
+          Lara heti átnézése ki van kapcsolva.{" "}
           <button type="button" onClick={onBeallitasok} className="text-text-accent hover:underline">
             Bekapcsolás a Beállítások fülön
           </button>
@@ -297,8 +309,12 @@ function LaraJelzesek({
           <input type="checkbox" checked={lezartak} onChange={(e) => setLezartak(e.target.checked)} />
           lezártak is
         </label>
-        {beallitas?.utolso_futas_at && (
-          <span className="text-[12px] text-text-muted">Utolsó kör: {formatIdopont(beallitas.utolso_futas_at)}</span>
+        {beallitas && (
+          <span className="text-[12px] text-text-muted">
+            {beallitas.heti_attekintes_at ? `Utolsó áttekintés: ${formatIdopont(beallitas.heti_attekintes_at)}` : "Még nem volt áttekintés"}
+            {beallitas.lara_figyeles &&
+              ` · következő: ${beallitas.heti_esedekes ? "egy órán belül (esedékes)" : formatIdopont(beallitas.kovetkezo_heti_at)}`}
+          </span>
         )}
         {uzenet && <span className="text-[12.5px] text-text-secondary">{uzenet}</span>}
       </div>
@@ -315,10 +331,13 @@ function LaraJelzesek({
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-medium text-text-primary">
-                    <StatusBadge label={j.szint === "info" ? "Nézd meg" : "Figyelem"} tone={j.szint === "info" ? "neutral" : "warning"} />
+                    <StatusBadge
+                      label={j.szabaly === "heti_osszegzes" ? "Heti áttekintés" : j.szint === "info" ? "Nézd meg" : "Figyelem"}
+                      tone={j.szint === "info" ? "neutral" : "warning"}
+                    />
                     {j.cim}
                   </p>
-                  {j.leiras && <p className="mt-1 text-[12.5px] text-text-secondary">{j.leiras}</p>}
+                  {j.leiras && <p className="mt-1 whitespace-pre-line text-[12.5px] text-text-secondary">{j.leiras}</p>}
                   <p className="mt-1 text-[11.5px] text-text-muted">
                     Lara jelezte: {formatIdopont(j.letrejott_at)}
                     {j.lezarva_at && ` · lezárva: ${formatIdopont(j.lezarva_at)}`}
@@ -442,9 +461,18 @@ function Naplo({ figyeltId }: { figyeltId: number | null }) {
 
 // ── Kivételek ──────────────────────────────────────────────────────────────
 
-function Kivetelek({ figyeltNev, onValtozas }: { figyeltNev: string | null; onValtozas: () => void }) {
+function Kivetelek({
+  figyeltNev,
+  kezdet,
+  onValtozas,
+}: {
+  figyeltNev: string | null;
+  kezdet: string | null;
+  onValtozas: () => void;
+}) {
   const [csakNyitott, setCsakNyitott] = useState(true);
-  const [napok, setNapok] = useState<number | null>(90);
+  // Alapból minden a kezdőnap óta (a szerver a kezdőnapnál korábbit sosem adja).
+  const [napok, setNapok] = useState<number | null>(null);
   const [lista, setLista] = useState<Kivetel[] | null>(null);
   const [kor, setKor] = useState(0);
   const [visszadobas, setVisszadobas] = useState<Kivetel | null>(null);
@@ -454,7 +482,6 @@ function Kivetelek({ figyeltNev, onValtozas }: { figyeltNev: string | null; onVa
     let ervenyes = true;
     const q = new URLSearchParams({ csak_nyitott: String(csakNyitott) });
     if (napok) q.set("napok", String(napok));
-    else q.set("napok", "3650");
     getJson<Kivetel[]>(`${API}/kivetelek?${q}`)
       .then((l) => ervenyes && setLista(l))
       .catch(() => ervenyes && setLista([]));
@@ -499,7 +526,7 @@ function Kivetelek({ figyeltNev, onValtozas }: { figyeltNev: string | null; onVa
           <option value={30}>utolsó 30 nap</option>
           <option value={90}>utolsó 90 nap</option>
           <option value={365}>utolsó év</option>
-          <option value={0}>összes</option>
+          <option value={0}>{kezdet ? `${datumHu(kezdet)} óta mind` : "mind"}</option>
         </select>
         <span className="text-text-muted">
           Kihagyások, „van már szerződése” jelölések, számla-kihagyások, törlések és kézi állapot-átállítások – egy helyen.
@@ -729,6 +756,7 @@ function Beallitasok({
 }) {
   const [figyelt, setFigyelt] = useState<string>(beallitas.figyelt_employee_id ? String(beallitas.figyelt_employee_id) : "");
   const [lara, setLara] = useState(beallitas.lara_figyeles);
+  const [kezdet, setKezdet] = useState(beallitas.figyeles_kezdete);
   const [hataridok, setHataridok] = useState<Record<string, string>>(
     Object.fromEntries(Object.entries(beallitas.hataridok).map(([k, v]) => [k, String(v)])),
   );
@@ -745,6 +773,7 @@ function Beallitasok({
           figyelt_employee_id: figyelt ? Number(figyelt) : null,
           figyelt_torles: !figyelt,
           lara_figyeles: lara,
+          ...(kezdet ? { figyeles_kezdete: kezdet } : {}),
           hataridok: Object.fromEntries(Object.entries(hataridok).map(([k, v]) => [k, Number(v) || 0])),
         }),
       });
@@ -777,14 +806,30 @@ function Beallitasok({
         <label className="mt-2 flex items-start gap-2 text-[13px] text-text-primary">
           <input type="checkbox" checked={lara} onChange={(e) => setLara(e.target.checked)} className="mt-0.5" />
           <span>
-            Lara folyamatosan figyelje (óránként átnézi)
+            Lara hetente nézze át (hétfő reggel 7-kor, az előző hetet)
             <span className="block text-[12px] text-text-muted">
-              Csak olvas és csak itt, neked jelez: kihagyás semmitmondó indokkal, sok kihagyás egy napon, törlés, „van már
+              Minden héten ír egy rövid áttekintést (mennyi papír ment ki, mennyi kihagyás és törlés volt, mi késik), és
+              külön jelez, ha valami szokatlan. Csak olvas és csak itt, neked jelez: kihagyás semmitmondó indokkal, sok kihagyás egy napon, törlés, „van már
               szerződése” jelölés, kézzel „kiküldött”-re állított papír, számla nélkül kifizetett TIG, nagy összegű „sosem lesz
               számlája”, egy héttel a határidőn túl késő papír, napok óta tartó tétlenség. A vészleállítás őt is megállítja.
             </span>
           </span>
         </label>
+      </section>
+
+      <section className="space-y-2 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4">
+        <p className="text-[14px] font-medium text-text-primary">Figyelés kezdete</p>
+        <p className="text-[12.5px] text-text-muted">
+          Az egész ellenőrzés csak ettől a naptól nézi a dolgokat (a kolléga első munkanapja): a napló, a kivételek, a heti
+          összesítő és Lara is csak az azóta történteket, a lejárt hiányok pedig csak az azóta lezajlott forgatásokat.
+        </p>
+        <input
+          type="date"
+          value={kezdet}
+          onChange={(e) => setKezdet(e.target.value)}
+          aria-label="Figyelés kezdete"
+          className="rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+        />
       </section>
 
       <section className="space-y-2 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4">
