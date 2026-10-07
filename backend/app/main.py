@@ -185,6 +185,35 @@ def _lara_forgatas_tanulas() -> None:
     logger.info("Lara forgatás-tanulása bekapcsolva: %s percenként.", gyakorisag)
 
 
+@app.on_event("startup")
+def _lara_admin_figyeles() -> None:
+    """Lara FIGYELÉSE (Adminisztráció ellenőrzése): óránként egy kör. A kör
+    maga dönti el, hogy fut-e - csak ha a tulajdonos bekapcsolta (alapból KI)
+    és nincs vészleállítás (lásd services/lara_figyeles.py). Csak olvas és
+    jelez, az ellenőrző oldalon. Tesztfutásnál nem indul."""
+    import sys
+    import threading
+    import time as _time
+
+    if "pytest" in sys.modules:
+        return
+
+    def _kor() -> None:
+        from datetime import timedelta
+
+        from app.services import hatter_feladat, lara_figyeles
+
+        _time.sleep(120)
+        while True:
+            try:
+                hatter_feladat.inditas(lara_figyeles.HATTER_NEV, lara_figyeles.hatter_futas, elavulas=timedelta(hours=1))
+            except Exception:  # noqa: BLE001 - a következő kör újrapróbálja
+                logger.exception("Lara figyelése: a kör nem indult el.")
+            _time.sleep(60 * 60)
+
+    threading.Thread(target=_kor, daemon=True, name="lara-admin-figyeles").start()
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "environment": settings.environment}

@@ -1070,6 +1070,44 @@ is meg tudja adni a választ.
   2 eszköz hozzáadva, technika-lista kitöltve, visszavonás után minden az
   eredeti; meglévő briefnél a megerősítés „Mégse” után nem ír.
 
+### AP. Lara figyeli az adminisztrációs kolléga munkáját – Adminisztráció ellenőrzése oldal ✅ (tesztelve, élőben demóadattal megnézve; éles adaton: ⚠️ nem ellenőrzött)
+- A felhasználó kérése: a tulajdonos ellenőrizhesse az adminisztrációs
+  kolléga munkáját (mikor mi készült el, van-e mindenhez papír, nincs-e
+  csendben kihagyva semmi), és Lara figyelje folyamatosan egy kiválasztott
+  ember munkáját – de CSAK a tulajdonosnak, csak ezen az oldalon jelezzen.
+- Új oldal: `/admin-ellenorzes` („Admin ellenőrzés” menüpont). Csak a
+  védett rendszergazda (tulajdonos) és akinek az oldalt kifejezetten
+  megadják; a figyelt kolléga SOHA (akkor sem, ha jogot kapna). A menüpont is
+  csak nekik látszik (szerver dönti el: `/admin-ellenorzes/hozzaferes`).
+- Tevékenységnapló (`admin_tevekenysegek`, `services/tevekenyseg_naplo.py`):
+  a papírozási routerek (alvállalkozói szerződés, külsős/belsős TIG, kiadás,
+  házipénztár, bevétel, bejövő számla, megrendelői papírok, utalás,
+  utókövetés) minden SIKERES író kérése egy sor: ki, mikor, mit, az
+  útvonal-sablonból képzett leírással és a lényeges adatokkal (pl. kihagyás
+  oka). Előnézet, olvasás és hibás kérés nem kerül bele. Visszamenőleg nincs
+  adat (a rekordokon eddig nem volt „ki”).
+- Kivételek: kihagyott szerződés/TIG/belsős TIG/megrendelői papír, „van már
+  szerződése”, számla kihagyva, „sosem lesz számlája”, törlés, kézi
+  állapot-átállítás – egy listában, ki/mikor/indok adattal. A tulajdonos
+  „Rendben”-re teszi vagy visszadobja; visszadobásnál (kérésre) feladat
+  megy a figyelt kollégának – ez az egyetlen, ami hozzá eljut, és csak a
+  tulajdonos gombnyomására.
+- Lejárt hiányok (beállítható határidők: szerződés, TIG, számla, aláírt
+  példány) és heti összesítő a naplóból.
+- Lara figyelése (`services/lara_figyeles.py`): SAJÁT kapcsoló, alapból KI;
+  a vészleállítás megállítja; óránként fut (`main.py`), kézzel is
+  indítható. CSAK OLVAS; jelzés = egy sor a `lara_figyeles_jelzesek`
+  táblában (egyszer jelez ugyanarról). Szabályok: semmitmondó/hiányzó
+  kihagyás-indok, ≥3 kivétel egy napon, törlés/eldobott papír, „van már
+  szerződése”, kézzel kiküldöttre állított papír, számla nélkül kifizetett
+  TIG, nagy összegű „sosem lesz számlája”, a határidőn túl még egy hetet
+  késő papír, 3 munkanapos tétlenség lejárt hiányok mellett.
+- Migráció: `f6a7d8m9e0l1` (négy új, üres tábla; meglévő adat nem változik).
+- Tesztek: `tests/test_admin_ellenorzes.py` (5). Böngészőben demóadattal:
+  a kolléga nem látja sem a menüpontot, sem az oldalt; a tulajdonos
+  beállította a figyelést, Lara 6 jelzést adott (semmitmondó indok, törlés,
+  késések), a napló a 4 lépést mutatta, a visszadobás feladatot hozott létre.
+
 ## Biztonsági alapállás (induláskor)
 - Modul: KIKAPCSOLVA (`aa_settings.module_enabled=false`, auditált DB-config).
 - Mellékhatás: TILTVA (`aa_settings.side_effects_enabled=false`).

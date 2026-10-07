@@ -55,6 +55,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { NavItem, navGroups } from "@/lib/nav";
 import { oldalMuveletei } from "@/lib/permissions";
 
@@ -128,8 +130,24 @@ export function NavList({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  // A "csak engedélyezettnek" menüpontokat (pl. Admin ellenőrzés) a szerver
+  // dönti el - addig rejtve maradnak.
+  const [engedelyezett, setEngedelyezett] = useState(false);
+  const vanEngedelyKoteles = navGroups.some((g) => g.items.some((i) => i.csakEngedelyezettnek));
+  useEffect(() => {
+    if (!vanEngedelyKoteles) return;
+    let ervenyes = true;
+    authFetch("/api/v1/admin-ellenorzes/hozzaferes")
+      .then((r) => (r.ok ? r.json() : { lathatja: false }))
+      .then((d: { lathatja?: boolean }) => ervenyes && setEngedelyezett(Boolean(d.lathatja)))
+      .catch(() => undefined);
+    return () => {
+      ervenyes = false;
+    };
+  }, [vanEngedelyKoteles]);
 
   function isAllowed(item: NavItem): boolean {
+    if (item.csakEngedelyezettnek && !engedelyezett) return false;
     const page = item.permissionPage ?? item.href;
     if (anyagKorlat !== null) return page === "/dashboard";
     if (!allowedPages) return true;

@@ -24,6 +24,10 @@ export type NavItem = {
    * csak nézheti az eszközöket (pl. a diszpós, aki a projekten technikát vezet
    * fel - lásd core/security.OLDAL_ALIASZOK), egy zsákutcát látna a menüben. */
   permissionAction?: "edit" | "create" | "delete";
+  /** Csak annak látszik, akit a szerver kifejezetten beenged (nem elég, hogy
+   * nincs korlátozása) - pl. az Adminisztráció ellenőrzése, ami csak a
+   * tulajdonosé (lásd backend routes/admin_ellenorzes.py hozzaferes). */
+  csakEngedelyezettnek?: boolean;
 };
 
 export type NavGroup = {
@@ -290,6 +294,14 @@ export const navGroups: NavGroup[] = [
       // performance_certificates.py PAGE konstansa).
       { label: "Belsős TIG", href: "/belsos-tig", icon: "BadgeCheck" },
       { label: "Utókövetés", href: "/utokovetes", icon: "History" },
+      // Az adminisztrációs munka ellenőrzése: napló, kivételek, lejárt hiányok,
+      // Lara figyelése - CSAK a tulajdonosnak (a figyelt kollégának soha).
+      {
+        label: "Admin ellenőrzés",
+        href: "/admin-ellenorzes",
+        icon: "ShieldCheck",
+        csakEngedelyezettnek: true,
+      },
       // Az összes külsős TIG egy listában, a kihagyottakkal együtt. Ugyanaz a
       // backend jogosultság, mint az Utókövetésé (a TIG-műveletek oda
       // tartoznak, lásd backend performance_certificates.py PAGE).

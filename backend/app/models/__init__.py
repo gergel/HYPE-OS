@@ -258,3 +258,10 @@ __all__ = [
 from app.models.portal_export import PortalExport  # noqa: F401
 
 from app.models.push import PushDevice, PushDelivery  # noqa: F401
+
+from app.models.admin_ellenorzes import (  # noqa: F401
+    AdminEllenorzesBeallitas,
+    AdminKivetelJeloles,
+    AdminTevekenyseg,
+    LaraFigyelesJelzes,
+)

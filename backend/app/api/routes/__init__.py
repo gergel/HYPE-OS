@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.routes.admin_calendar_sync import router as admin_calendar_sync_router
+from app.api.routes.admin_ellenorzes import router as admin_ellenorzes_router
 from app.api.routes.dispo_responsibles import router as dispo_responsibles_router
 from app.api.routes.diszpo_tabla import router as diszpo_tabla_router
 from app.api.routes.admin_import import router as admin_import_router
@@ -69,6 +70,13 @@ from app.api.routes.visszavonas import router as visszavonas_router
 
 api_router = APIRouter()
 
+#: A PAPÍROZÁSI routerek író kérései a tevékenységnaplóba kerülnek (ki, mikor,
+#: mit) - az Adminisztráció ellenőrzése oldalhoz (lásd
+#: services/tevekenyseg_naplo.py).
+from app.services.tevekenyseg_naplo import naplo_fuggoseg  # noqa: E402
+
+_NAPLOZOTT = [Depends(naplo_fuggoseg)]
+
 # 1. Auth
 api_router.include_router(auth_router)
 # 2. Dashboard
@@ -119,21 +127,21 @@ api_router.include_router(anyagbekeres_public_router)
 api_router.include_router(portal_public_router)
 api_router.include_router(portal_downloads_router)
 # 13. Pénzügyek
-api_router.include_router(expenses_router)
-api_router.include_router(revenues_router)
-api_router.include_router(kp_forgalom_router)
+api_router.include_router(expenses_router, dependencies=_NAPLOZOTT)
+api_router.include_router(revenues_router, dependencies=_NAPLOZOTT)
+api_router.include_router(kp_forgalom_router, dependencies=_NAPLOZOTT)
 api_router.include_router(finance_summary_router)
-api_router.include_router(contracts_router)
-api_router.include_router(subcontractor_contracts_router)
-api_router.include_router(eseti_szerzodesek_router)
+api_router.include_router(contracts_router, dependencies=_NAPLOZOTT)
+api_router.include_router(subcontractor_contracts_router, dependencies=_NAPLOZOTT)
+api_router.include_router(eseti_szerzodesek_router, dependencies=_NAPLOZOTT)
 api_router.include_router(krumpello_router)
-api_router.include_router(megrendeloi_keretszerzodesek_router)
-api_router.include_router(megrendeloi_papirok_router)
+api_router.include_router(megrendeloi_keretszerzodesek_router, dependencies=_NAPLOZOTT)
+api_router.include_router(megrendeloi_papirok_router, dependencies=_NAPLOZOTT)
 api_router.include_router(vagoi_jatek_router)
 api_router.include_router(vallalkozasok_router)
 api_router.include_router(visszavonas_router)
-api_router.include_router(bejovo_szamlak_router)
-api_router.include_router(utalas_felvezetes_router)
+api_router.include_router(bejovo_szamlak_router, dependencies=_NAPLOZOTT)
+api_router.include_router(utalas_felvezetes_router, dependencies=_NAPLOZOTT)
 api_router.include_router(belsos_idoszakok_router)
 # Visszatérő kötelezettségek (E-Rezsi, biztosítások) és a céges autók - a
 # kettő ugyanazt a lejárat-figyelést használja (lásd services/kotelezettseg.py).
@@ -141,13 +149,15 @@ api_router.include_router(kotelezettsegek_router)
 api_router.include_router(autok_router)
 # A megrendelői kontaktok önálló listája (az adat maga a /contacts CRUD-é).
 api_router.include_router(megrendeloi_kontaktok_router)
-api_router.include_router(performance_certificates_router)
+api_router.include_router(performance_certificates_router, dependencies=_NAPLOZOTT)
 # Az összes külsős TIG egy listában (a kihagyottakkal együtt).
-api_router.include_router(kulsos_tigek_router)
-api_router.include_router(internal_performance_certificates_router)
+api_router.include_router(kulsos_tigek_router, dependencies=_NAPLOZOTT)
+api_router.include_router(internal_performance_certificates_router, dependencies=_NAPLOZOTT)
 # A /utokovetes/hianyok ELŐBB kell, mint a /utokovetes/{project_id}.
-api_router.include_router(utokovetes_hianyok_router)
+api_router.include_router(utokovetes_hianyok_router, dependencies=_NAPLOZOTT)
 api_router.include_router(utokovetes_admin_router)
+# Adminisztráció ellenőrzése (csak a tulajdonosnak) - napló, kivételek, Lara figyelése.
+api_router.include_router(admin_ellenorzes_router)
 # 14. Kampányok
 api_router.include_router(campaigns_router)
 # Feladatok
