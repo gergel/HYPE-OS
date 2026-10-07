@@ -254,7 +254,7 @@ def test_lista_mutatja_a_kikuldest_es_a_hatralevo_napokat(db, admin, szerzodes):
 def test_emlekezteto_elonezete_semmit_nem_kuld(db, admin, szerzodes, kuldott):
     c, app = _kliens(db, admin)
     try:
-        r = c.get(f"/api/v1/alvallalkozoi-szerzodesek/szerzodes/{szerzodes.id}/emlekezteto/elonezet")
+        r = c.post(f"/api/v1/alvallalkozoi-szerzodesek/szerzodes/{szerzodes.id}/emlekezteto/elonezet")
         assert r.status_code == 200, r.text
         v = r.json()
         assert v["cimzett"] == "kulsos-demo@example.test"
@@ -262,6 +262,40 @@ def test_emlekezteto_elonezete_semmit_nem_kuld(db, admin, szerzodes, kuldott):
         assert v["valaszkent"] is True
         assert "aláírt példány azonban még nem érkezett vissza" in v["level_html"]
         assert "Berta Zsóka" in v["level_html"]
+        assert v["alap_szoveg"].startswith("Kedves Címzett,")
+        assert v["esedekes"] is True
         assert kuldott == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_emlekezteto_szovege_kuldes_elott_atirhato(db, admin, szerzodes, kuldott):
+    c, app = _kliens(db, admin)
+    url = f"/api/v1/alvallalkozoi-szerzodesek/szerzodes/{szerzodes.id}/emlekezteto"
+    szoveg = "Szia Peti,\n\nmég mindig várjuk az aláírt szerződést <b>ma</b>!\nKöszi előre.\n\nÜdv,"
+    try:
+        # Az előnézet az átírt szöveget mutatja - escape-elve, aláírással.
+        v = c.post(f"{url}/elonezet", json={"szoveg": szoveg}).json()
+        assert "<p>Szia Peti,</p>" in v["level_html"]
+        assert "&lt;b&gt;ma&lt;/b&gt;!<br>Köszi előre." in v["level_html"]
+        assert "Néhány napja küldtük" not in v["level_html"]
+        assert "Rahman Martin" in v["level_html"] and "Berta Zsóka" in v["level_html"]
+        assert kuldott == []
+
+        r = c.post(url, json={"szoveg": szoveg})
+        assert r.status_code == 200, r.text
+        assert len(kuldott) == 1
+        assert "Szia Peti," in kuldott[0]["html"] and "Néhány napja küldtük" not in kuldott[0]["html"]
+        assert "Berta Zsóka" in kuldott[0]["html"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_ures_szovegnel_az_alap_megy(db, admin, szerzodes, kuldott):
+    c, app = _kliens(db, admin)
+    try:
+        r = c.post(f"/api/v1/alvallalkozoi-szerzodesek/szerzodes/{szerzodes.id}/emlekezteto", json={"szoveg": "   "})
+        assert r.status_code == 200, r.text
+        assert kuldott[0]["html"] == em.EMLEKEZTETO_HTML
     finally:
         app.dependency_overrides.clear()

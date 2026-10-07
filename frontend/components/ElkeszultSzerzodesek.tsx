@@ -111,34 +111,6 @@ export function ElkeszultSzerzodesek({
     }
   }
 
-  /** "Kérjük, küldd vissza aláírva" - válasz-levél ugyanarra a címre, ugyanabba
-   * a szálba, ahova a szerződés ment. Csak akkor ajánljuk fel, ha 7 napja
-   * nem jött vissza aláírva (lásd backend services/szerzodes_emlekezteto.py);
-   * kimenni pedig csak ezzel a gombbal, megerősítés után megy ki. */
-  async function emlekeztetoKuld(s: ElkeszultSzerzodes) {
-    const ok = await confirm(
-      `Emlékeztetőt küldünk ${s.full_name} részére, hogy küldje vissza aláírva a szerződést.\n\nCímzett: ${s.emlekezteto_cimzett ?? "–"}\n\nA levél válaszként megy az eredeti szerződés-levélre (ha a szál nem ismert, új levélként, ugyanazzal a tárggyal):\n„Néhány napja küldtük a tárgyban említett projektre vonatkozó szerződést, aláírt példány azonban még nem érkezett vissza hozzánk. Kérjük, aláírva és/vagy pecsételve küldd vissza számunkra a szerződést, erre az e-mailre válaszolva.”`,
-      { figyelmeztetes: "Az e-mail ténylegesen kimegy", megerositoCimke: "Emlékeztető küldése" },
-    );
-    if (!ok) return;
-    setBusyId(s.szamlazo);
-    try {
-      const res = await authFetch(`/api/v1/alvallalkozoi-szerzodesek/szerzodes/${s.contract_id}/emlekezteto`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        alert(`Az emlékeztető nem ment ki: ${detail?.detail ?? res.status}`);
-        return;
-      }
-      router.refresh();
-    } catch (err) {
-      alert(`Az emlékeztető nem ment ki (hálózati hiba): ${err}`);
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   async function torol(s: ElkeszultSzerzodes) {
     // A több napra szóló papír törlése MINDEGYIK napról leveszi a szerződést -
     // ezt előre kimondjuk, mert a törlés a papírt viszi, nem a kapcsolatot.
@@ -327,7 +299,7 @@ export function ElkeszultSzerzodesek({
                         <button
                           type="button"
                           disabled={busyId === s.szamlazo}
-                          onClick={() => emlekeztetoKuld(s)}
+                          onClick={() => setElonezetId(s.contract_id)}
                           title={`Válasz-levél az eredeti címre: ${s.emlekezteto_cimzett ?? ""}`}
                           className="text-[12px] text-text-accent hover:underline disabled:opacity-50"
                         >
@@ -355,7 +327,17 @@ export function ElkeszultSzerzodesek({
           </tbody>
         </table>
       </div>
-      {elonezetId !== null && <EmlekeztetoElonezet contractId={elonezetId} onClose={() => setElonezetId(null)} />}
+      {/* Az emlékeztető ELŐNÉZETE és SZERKESZTÉSE egy ablakban: a szöveg
+          küldés előtt átírható (a felhasználó kérése), és innen megy ki. */}
+      {elonezetId !== null && (
+        <EmlekeztetoElonezet
+          contractId={elonezetId}
+          nev={szerzodesek.find((x) => x.contract_id === elonezetId)?.full_name ?? ""}
+          kuldheto={canEdit}
+          onClose={() => setElonezetId(null)}
+          onElkuldve={() => router.refresh()}
+        />
+      )}
     </div>
   );
 }

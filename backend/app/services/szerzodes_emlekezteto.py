@@ -30,18 +30,28 @@ KIKULDVE_ALLAPOT = "Kiküldve"
 #: google_email.ADMIN_ALAIRAS_HTML).
 SZERZODES_ALAIRAS_HTML = ADMIN_ALAIRAS_HTML
 
-EMLEKEZTETO_HTML = (
-    """\
-<p>Kedves Címzett,</p>
-<p>
-  Néhány napja küldtük a tárgyban említett projektre vonatkozó szerződést, aláírt példány azonban még nem érkezett vissza hozzánk.<br>
-  Kérjük, a projekt további dokumentációjához (teljesítés igazolása, számlázás és kifizetés) aláírva és/vagy pecsételve küldd vissza számunkra a szerződést, erre az e-mailre válaszolva.
-</p>
-<p>Köszönettel,</p>
-<br><br>
-"""
-    + SZERZODES_ALAIRAS_HTML
+#: Az emlékeztető ALAP szövege (sima szöveg - az üres sor új bekezdés). A
+#: küldés előtt átírható (a felhasználó kérése) - lásd level_html.
+ALAP_SZOVEG = (
+    "Kedves Címzett,\n\n"
+    "Néhány napja küldtük a tárgyban említett projektre vonatkozó szerződést, aláírt példány azonban még nem "
+    "érkezett vissza hozzánk.\n"
+    "Kérjük, a projekt további dokumentációjához (teljesítés igazolása, számlázás és kifizetés) aláírva és/vagy "
+    "pecsételve küldd vissza számunkra a szerződést, erre az e-mailre válaszolva.\n\n"
+    "Köszönettel,"
 )
+
+
+def level_html(szoveg: str | None = None) -> str:
+    """Az emlékeztető levél HTML-je: a (megadott vagy alap) szöveg, alatta
+    MINDIG a közös adminisztrációs aláírás. A beírt szöveg escape-elve megy
+    (lásd admin_level.szoveg_html) - HTML-t nem lehet becsempészni."""
+    from app.services.admin_level import szoveg_html
+
+    return szoveg_html((szoveg or "").strip() or ALAP_SZOVEG) + "<br><br>\n" + SZERZODES_ALAIRAS_HTML
+
+
+EMLEKEZTETO_HTML = level_html()
 
 
 def _most() -> datetime:
@@ -157,19 +167,20 @@ def targya(c: Contract, alap_targy: str | None = None) -> str:
     return targy
 
 
-def kuldes(c: Contract, *, send_message, alap_targy: str | None = None) -> str:
+def kuldes(c: Contract, *, send_message, alap_targy: str | None = None, szoveg: str | None = None) -> str:
     """Kiküldi az emlékeztetőt (ugyanarra a címre; ha ismert a szál, abba
     válaszolva), és rögzíti. Visszaadja a címzettet. RuntimeError, ha a
     küldés nem sikerült - ilyenkor semmi nem változik. Az `alap_targy` a
     régi (rögzített tárgy nélküli) szerződés eredeti tárgya, ahogy a
-    kiküldés összerakta."""
+    kiküldés összerakta. A `szoveg` a küldés előtt átírt levélszöveg (üresen
+    az ALAP_SZOVEG)."""
     cim = cimzett(c)
     if cim is None:
         raise ValueError("Nincs címzett e-mail cím ehhez a szerződéshez.")
     send_message(
         [cim],
         targya(c, alap_targy),
-        EMLEKEZTETO_HTML,
+        level_html(szoveg),
         thread_id=c.gmail_thread_id,
         in_reply_to=c.gmail_rfc_message_id,
     )

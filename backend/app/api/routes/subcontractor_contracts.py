@@ -861,32 +861,53 @@ class EmlekeztetoElonezet(BaseModel):
     cimzett: str | None = None
     targy: str
     level_html: str
+    #: Az alap szöveg - ebből indul a szerkesztés (a felhasználó kérése: a
+    #: szöveg küldés előtt átírható).
+    alap_szoveg: str
     #: Válaszként megy-e az eredeti levélszálba (ha nem ismert, új levél).
     valaszkent: bool = False
+    #: Most kiküldhető-e (a felület ehhez igazítja a küldés gombot).
+    esedekes: bool = False
 
 
-@router.get("/szerzodes/{contract_id}/emlekezteto/elonezet", response_model=EmlekeztetoElonezet)
+class EmlekeztetoSzovegIn(BaseModel):
+    #: A küldés előtt átírt levélszöveg (sima szöveg; üres = az alap szöveg).
+    szoveg: str | None = None
+
+
+def _emlekezteto_szerzodes(db: Session, contract_id: int, *, zarolva: bool = False) -> Contract:
+    q = db.query(Contract).filter(Contract.id == contract_id)
+    c = (q.with_for_update() if zarolva else q).one_or_none()
+    if c is None or c.tipus != ContractType.ALVALLALKOZOI or c.keretszerzodes:
+        raise HTTPException(status_code=404, detail="A szerződés nem található.")
+    return c
+
+
+@router.post("/szerzodes/{contract_id}/emlekezteto/elonezet", response_model=EmlekeztetoElonezet)
 def emlekezteto_elonezet(
     contract_id: int,
+    payload: EmlekeztetoSzovegIn | None = None,
     db: Session = Depends(get_db),
     _user: Employee = Depends(get_current_user),
 ):
     """Hogyan néz ki az aláírás-emlékeztető (a felhasználó kérése): pontosan
-    az a levél, ami a gombnyomásra kimenne - semmit nem küld."""
-    c = db.get(Contract, contract_id)
-    if c is None or c.tipus != ContractType.ALVALLALKOZOI or c.keretszerzodes:
-        raise HTTPException(status_code=404, detail="A szerződés nem található.")
+    az a levél, ami a gombnyomásra kimenne - a megadott (átírt) szöveggel, ill.
+    anélkül az alap szöveggel. Semmit nem küld."""
+    c = _emlekezteto_szerzodes(db, contract_id)
     return EmlekeztetoElonezet(
         cimzett=szerzodes_emlekezteto.cimzett(c),
         targy=szerzodes_emlekezteto.targya(c, _eredeti_targy(c)),
-        level_html=szerzodes_emlekezteto.EMLEKEZTETO_HTML,
+        level_html=szerzodes_emlekezteto.level_html(payload.szoveg if payload else None),
+        alap_szoveg=szerzodes_emlekezteto.ALAP_SZOVEG,
         valaszkent=bool(c.gmail_thread_id),
+        esedekes=szerzodes_emlekezteto.esedekes(c),
     )
 
 
 @router.post("/szerzodes/{contract_id}/emlekezteto", response_model=EmlekeztetoEredmeny)
 def emlekezteto_kuldese(
     contract_id: int,
+    payload: EmlekeztetoSzovegIn | None = None,
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
@@ -896,10 +917,10 @@ def emlekezteto_kuldese(
 
     Csak akkor megy ki, ha épp esedékes (kiküldve, legalább 7 napja, nincs
     aláírva, és az előző emlékeztető óta is eltelt 7 nap) - így egy dupla
-    kattintás vagy egy régi, frissítetlen oldal sem küldi ki kétszer."""
-    c = db.query(Contract).filter(Contract.id == contract_id).with_for_update().one_or_none()
-    if c is None or c.tipus != ContractType.ALVALLALKOZOI or c.keretszerzodes:
-        raise HTTPException(status_code=404, detail="A szerződés nem található.")
+    kattintás vagy egy régi, frissítetlen oldal sem küldi ki kétszer. A
+    levél szövege küldés előtt átírható (`szoveg`; üresen az alap szöveg) -
+    az aláírás mindig a közös adminisztrációs aláírás."""
+    c = _emlekezteto_szerzodes(db, contract_id, zarolva=True)
     if not szerzodes_emlekezteto.varakozik(c):
         raise HTTPException(status_code=409, detail="Ez a szerződés már nem vár aláírásra.")
     if not szerzodes_emlekezteto.esedekes(c):
@@ -908,7 +929,9 @@ def emlekezteto_kuldese(
             detail="Most még nem esedékes emlékeztető (a kiküldés vagy az előző emlékeztető óta nem telt el 7 nap, vagy nincs címzett).",
         )
     try:
-        cim = szerzodes_emlekezteto.kuldes(c, send_message=send_message, alap_targy=_eredeti_targy(c))
+        cim = szerzodes_emlekezteto.kuldes(
+            c, send_message=send_message, alap_targy=_eredeti_targy(c), szoveg=payload.szoveg if payload else None
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     db.commit()
