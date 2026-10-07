@@ -54,6 +54,11 @@ class ExpenseCreate(ExpenseBase):
     #: cég), és MÉGIS felviszi - lásd services/kiadas_duplikacio.py. Nem
     #: modell-mező: a létrehozás előtt kikerül az adatból.
     duplikacio_engedve: bool = False
+    #: Felvitelkor a HIÁNYZÓ "kifizetve" (None) más, mint a kifejezett "nem":
+    #: hiányzónál a szerver dönt (pl. dátummal felvezetett projektkódos kiadás
+    #: kifizetett - lásd routes/finance._expense_before_create), és ha nem
+    #: dönt, "nem kifizetett" lesz.
+    kesz: bool | None = None
 
 
 class ExpenseUpdate(BaseModel):

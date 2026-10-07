@@ -207,6 +207,24 @@ def _fedezet_es_nincs_szamla(adat: dict, obj=None) -> None:
         )
 
 
+def _projektkodos_kifizetettnek_veheto(adat: dict) -> bool:
+    """PROJEKTKÓDHOZ felvezetett, dátummal megadott kiadás KIFIZETETT (a
+    felhasználó kérése) - akkor is, ha "Külsős" a besorolása.
+
+    Kivétel az ALVÁLLALKOZÓS kiadás (van kiválasztott ember): annak a
+    kifizetése a TIG-jén megy (Utókövetés -> számla -> "Kifizetve"), és az
+    Utókövetés a TIG saját jelzőjéből látja, ki van-e fizetve. Ha itt
+    kifizetettnek vennénk, a TIG továbbra is kifizetésre várna - kétszeri
+    utalás veszélye. Kifejezetten megadott kesz (pl. "nincs kifizetve") is
+    nyer."""
+    return (
+        _id_vagy_none(adat.get("project_code_id")) is not None
+        and bool(adat.get("fizetes_datuma"))
+        and adat.get("kesz") in (None, "")
+        and _id_vagy_none(adat.get("employee_id")) is None
+    )
+
+
 def _expense_before_create(adat: dict, db: Session) -> dict:
     _fedezet_es_nincs_szamla(adat)
     # EGYÉB (nem külsős) kiadás megadott dátummal: ezek mindig már KIFIZETETT
@@ -221,6 +239,12 @@ def _expense_before_create(adat: dict, db: Session) -> dict:
     # házipénztárból - nincs "utalásra vár" állapota (lásd services/kassza.py).
     if fizetesi_mod.keszpenzes(adat.get("kifizetes_modja")) and adat.get("fizetes_datuma") and not adat.get("kesz"):
         adat["kesz"] = True
+    # PROJEKTKÓDHOZ felvezetett kiadás dátummal (a felhasználó kérése): a
+    # megadott dátum a kifizetésé, tehát kifizetett - a "Külsős" besorolású is.
+    if _projektkodos_kifizetettnek_veheto(adat):
+        adat["kesz"] = True
+    if adat.get("kesz") is None:
+        adat["kesz"] = False
     # Az ÁFA-számítás a deviza-átváltás ELŐTT fut: a bruttó még az eredeti
     # pénznemben számolódik ki, és az átváltás azt is forintosítja.
     _afa_brutto(adat)
@@ -305,6 +329,26 @@ def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee
     # az már ki van fizetve - a projektkódon se "Fizetés" gombbal, nyitottként
     # jelenjen meg. Kimarad a TIG-ből/havi elszámolásból keletkezett sor (azt a
     # saját papírja fizeti ki) és a készpénzes (az a házipénztárat mozgatná).
+    # UTÓLAG MEGADOTT DÁTUM projektkódos kiadáson (a felhasználó kérése): a
+    # dátum a kifizetésé, tehát kifizetett - ugyanaz, mint felvitelkor (lásd
+    # _projektkodos_kifizetettnek_veheto). Kimarad a készpénzes (az a
+    # házipénztárat mozgatná) és a TIG-ből/havi elszámolásból keletkezett sor.
+    if (
+        adat.get("fizetes_datuma")
+        and obj.fizetes_datuma is None
+        and not obj.kesz
+        and "kesz" not in adat
+        and _projektkodos_kifizetettnek_veheto(
+            {
+                "project_code_id": adat.get("project_code_id", obj.project_code_id),
+                "fizetes_datuma": adat["fizetes_datuma"],
+                "employee_id": adat.get("employee_id", obj.employee_id),
+            }
+        )
+        and not fizetesi_mod.keszpenzes(adat.get("kifizetes_modja", obj.kifizetes_modja))
+        and not _papirbol_keletkezett_kiadas(db, obj.id)
+    ):
+        adat["kesz"] = True
     if (
         projektkod_valtozik
         and _id_vagy_none(adat["project_code_id"]) is not None
