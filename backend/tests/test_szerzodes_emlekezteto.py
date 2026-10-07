@@ -299,3 +299,23 @@ def test_ures_szovegnel_az_alap_megy(db, admin, szerzodes, kuldott):
         assert kuldott[0]["html"] == em.EMLEKEZTETO_HTML
     finally:
         app.dependency_overrides.clear()
+
+
+def test_utokovetes_kartyan_latszik_a_kikuldes_es_az_emlekezteto(db, admin, szerzodes):
+    """Az "Aláírt szerződésre vár" kártyán (a felhasználó kérése) is látszik,
+    mikor ment ki a szerződés, és mikor esedékes az emlékeztető."""
+    projekt = db.get(Project, szerzodes.project_id)
+    projekt.crew.append(szerzodes.employee)
+    szerzodes.kikuldve_at = MOST - timedelta(days=3)
+    db.flush()
+    c, app = _kliens(db, admin)
+    try:
+        sor = next(s for s in c.get("/api/v1/utokovetes").json() if s["project_id"] == projekt.id)
+        assert sor["alairas_varo"] == 1
+        a = sor["alairas_varok"][0]
+        assert a["contract_id"] == szerzodes.id
+        assert a["nev"] == "Külsős Operatőr (demó)"
+        assert a["kikuldve_napja"] == 3 and a["emlekezteto_hatra_nap"] == 4
+        assert a["emlekezteto_esedekes"] is False and a["emlekezteto_felajanlhato_at"] is not None
+    finally:
+        app.dependency_overrides.clear()

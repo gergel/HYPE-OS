@@ -14,7 +14,7 @@ szerződés és egyetlen TIG kell - lásd services/szamlazo.py."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -59,7 +59,7 @@ from app.models.project import Project
 from app.models.project_code import ProjectCode
 from app.models.project_szamlazo import ProjectSzamlazo
 from app.schemas.post_shoot_feedback import PostShootFeedbackRead
-from app.services import papirozas_hatokor, szamlazo
+from app.services import papirozas_hatokor, szamlazo, szerzodes_emlekezteto
 from app.services.szamlazo import SzamlazoCsoport
 
 router = APIRouter(prefix="/utokovetes", tags=["utokovetes-admin"])
@@ -175,6 +175,43 @@ def _kifizetes_state(
     return total, pending
 
 
+class AlairasVaro(BaseModel):
+    """Egy kiküldött, aláírva még vissza nem érkezett szerződés a kártyán (a
+    felhasználó kérése): kinek, mikor ment ki, és mikor esedékes a "küldd
+    vissza aláírva" emlékeztető (lásd services/szerzodes_emlekezteto.py)."""
+
+    contract_id: int
+    nev: str
+    kikuldve_at: datetime | None = None
+    kikuldve_napja: int | None = None
+    #: Hány nap múlva küldhető az emlékeztető (0 = most).
+    emlekezteto_hatra_nap: int | None = None
+    emlekezteto_felajanlhato_at: datetime | None = None
+    emlekezteto_esedekes: bool = False
+    emlekezteto_kuldve_at: datetime | None = None
+    emlekezteto_db: int = 0
+
+
+def _alairas_varok(parok: list) -> list[AlairasVaro]:
+    sorok = [
+        AlairasVaro(
+            contract_id=c.id,
+            nev=csoport.fel.nev,
+            kikuldve_at=szerzodes_emlekezteto.kikuldes_ideje(c),
+            kikuldve_napja=szerzodes_emlekezteto.napja(c),
+            emlekezteto_hatra_nap=szerzodes_emlekezteto.hatra_napok(c),
+            emlekezteto_felajanlhato_at=szerzodes_emlekezteto.kovetkezo_felajanlas(c),
+            emlekezteto_esedekes=szerzodes_emlekezteto.esedekes(c),
+            emlekezteto_kuldve_at=c.emlekezteto_kuldve_at,
+            emlekezteto_db=c.emlekezteto_db or 0,
+        )
+        for csoport, c in parok
+    ]
+    # A legrégebben kiküldött elöl - annál a legsürgősebb az emlékeztető.
+    sorok.sort(key=lambda a: (a.kikuldve_at is None, a.kikuldve_at or datetime.max.replace(tzinfo=timezone.utc)))
+    return sorok
+
+
 class ProjectOverviewSummary(BaseModel):
     project_id: int
     project_nev: str | None
@@ -193,6 +230,8 @@ class ProjectOverviewSummary(BaseModel):
     #: Hány kiküldött szerződést várunk még vissza ALÁÍRVA (lásd
     #: subcontractor_contracts.alairasra_varo_csoportok).
     alairas_varo: int
+    #: Az aláírásra váró szerződések részletei (kiküldés, emlékeztető).
+    alairas_varok: list[AlairasVaro] = []
     kifizetes_osszes: int
     kifizetes_fuggo: int
     # Akkor és csak akkor teljesen kész a projekt, ha az adminisztráció mindhárom
@@ -239,7 +278,8 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
             p, keretszerzodesek, project_contracts, felulirasok, tig_lookup
         )
         kifizetes_osszes, kifizetes_fuggo = _kifizetes_state(p, felulirasok, tig_lookup)
-        alairas_varo = len(alairasra_varo_csoportok(p, keretszerzodesek, project_contracts, felulirasok))
+        alairas_parok = alairasra_varo_csoportok(p, keretszerzodesek, project_contracts, felulirasok)
+        alairas_varo = len(alairas_parok)
         result.append(
             ProjectOverviewSummary(
                 project_id=p.id,
@@ -254,6 +294,7 @@ def list_utokovetes_overview(db: Session = Depends(get_db), _user: Employee = De
                 tig_fuggo=tig_fuggo,
                 tig_szerzodesre_var=tig_szerzodesre_var,
                 alairas_varo=alairas_varo,
+                alairas_varok=_alairas_varok(alairas_parok),
                 kifizetes_osszes=kifizetes_osszes,
                 kifizetes_fuggo=kifizetes_fuggo,
                 # A kiküldött szerződés még nem lezárt ügy: amíg aláírva vissza
@@ -387,6 +428,8 @@ class ProjectCodeOverviewSummary(BaseModel):
     #: Hány kiküldött szerződést várunk még vissza ALÁÍRVA (lásd
     #: subcontractor_contracts.alairasra_varo_csoportok_projektkodon).
     alairas_varo: int
+    #: Lásd ProjectOverviewSummary.alairas_varok.
+    alairas_varok: list[AlairasVaro] = []
     kifizetes_osszes: int
     kifizetes_fuggo: int
     kesz: bool
@@ -414,7 +457,8 @@ def list_utokovetes_overview_projektkodok(db: Session = Depends(get_db), _user: 
             pk, keretszerzodesek, project_code_contracts, tig_lookup
         )
         kifizetes_osszes, kifizetes_fuggo = _kifizetes_state_projektkodon(pk, tig_lookup)
-        alairas_varo = len(alairasra_varo_csoportok_projektkodon(pk, keretszerzodesek, project_code_contracts))
+        alairas_parok = alairasra_varo_csoportok_projektkodon(pk, keretszerzodesek, project_code_contracts)
+        alairas_varo = len(alairas_parok)
         result.append(
             ProjectCodeOverviewSummary(
                 project_code_id=pk.id,
@@ -427,6 +471,7 @@ def list_utokovetes_overview_projektkodok(db: Session = Depends(get_db), _user: 
                 tig_fuggo=tig_fuggo,
                 tig_szerzodesre_var=tig_szerzodesre_var,
                 alairas_varo=alairas_varo,
+                alairas_varok=_alairas_varok(alairas_parok),
                 kifizetes_osszes=kifizetes_osszes,
                 kifizetes_fuggo=kifizetes_fuggo,
                 # A kiküldött szerződés még nem lezárt ügy: amíg aláírva vissza

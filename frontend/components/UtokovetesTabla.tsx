@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { UtokovetesDetailModal } from "@/components/UtokovetesDetailModal";
 import type { UtokovetesOverview } from "@/lib/api";
-import { FAZISOK, type Fazis, datum, fazisa, hianyzik, hianyzikDarab } from "@/lib/utokovetes";
+import { FAZISOK, type Fazis, alairasVaroSor, datum, fazisa, hianyzik, hianyzikDarab } from "@/lib/utokovetes";
 import { KeresosSelect } from "@/components/KeresosSelect";
 
 type Rendezes = "ujabb" | "regebbi" | "nev" | "hianyzo";
@@ -143,6 +143,23 @@ export function UtokovetesTabla({ rows }: { rows: UtokovetesOverview[] }) {
                       >
                         {hianyzik(sor)}
                       </p>
+                      {/* ALÁÍRÁSRA VÁRÓ szerződések (a felhasználó kérése):
+                          kinek, mikor ment ki, mikor küldhető az emlékeztető. */}
+                      {(sor.alairas_varok ?? []).length > 0 && (
+                        <span className="mt-1.5 block space-y-0.5 border-t border-border pt-1.5 text-[11.5px]">
+                          {(sor.alairas_varok ?? []).slice(0, 4).map((a) => {
+                            const { szoveg, esedekes } = alairasVaroSor(a);
+                            return (
+                              <span key={a.contract_id} className={`block ${esedekes ? "text-text-warning" : "text-text-muted"}`}>
+                                {szoveg}
+                              </span>
+                            );
+                          })}
+                          {(sor.alairas_varok ?? []).length > 4 && (
+                            <span className="block text-text-muted">+ még {(sor.alairas_varok ?? []).length - 4} szerződés</span>
+                          )}
+                        </span>
+                      )}
                     </button>
                   ))
                 )}

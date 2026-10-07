@@ -2431,6 +2431,9 @@ export type UtokovetesOverview = {
    * önmagában nem zárja le az ügyet (lásd backend
    * subcontractor_contracts.alairasra_varo_csoportok). */
   alairas_varo: number;
+  /** Az aláírásra váró szerződések: kinek, mikor ment ki, mikor esedékes az
+   * emlékeztető (a kártyán látszik). */
+  alairas_varok?: AlairasVaro[];
   /** Kifizetés: a nem belsős stábtagok (külsős + keretszerződéses) közül
    * hánynak kell fizetni, és hány van még hátra (lásd backend
    * utokovetes_admin.py _kifizetes_state). */
@@ -2514,6 +2517,21 @@ export async function getUtokovetesDetail(projectId: number): Promise<Utokovetes
   return apiGet<UtokovetesDetail>(`/api/v1/utokovetes/${projectId}`);
 }
 
+/** Egy kiküldött, aláírva még vissza nem érkezett szerződés az Utókövetés
+ * kártyáján (lásd backend utokovetes_admin.AlairasVaro). */
+export type AlairasVaro = {
+  contract_id: number;
+  nev: string;
+  kikuldve_at: string | null;
+  kikuldve_napja: number | null;
+  /** Hány nap múlva küldhető az emlékeztető (0 = most). */
+  emlekezteto_hatra_nap: number | null;
+  emlekezteto_felajanlhato_at: string | null;
+  emlekezteto_esedekes: boolean;
+  emlekezteto_kuldve_at: string | null;
+  emlekezteto_db: number;
+};
+
 /** Egy projektkód, amin FORGATÁS NÉLKÜL van alvállalkozói kiadás - lásd
  * backend utokovetes_admin.py "projektkód-szintű ág". Ugyanazok a mezők,
  * mint UtokovetesOverview-én (szándékosan azonos nevekkel) - az Utókövetés
@@ -2530,6 +2548,7 @@ export type UtokovetesOverviewProjectCode = {
   tig_fuggo: number;
   tig_szerzodesre_var: number;
   alairas_varo: number;
+  alairas_varok?: AlairasVaro[];
   kifizetes_osszes: number;
   kifizetes_fuggo: number;
   kesz: boolean;

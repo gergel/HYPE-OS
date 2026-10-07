@@ -65,6 +65,7 @@ export default async function UtokovetesPage({
     tig_fuggo: pk.tig_fuggo,
     tig_szerzodesre_var: pk.tig_szerzodesre_var,
     alairas_varo: pk.alairas_varo,
+    alairas_varok: pk.alairas_varok,
     kifizetes_osszes: pk.kifizetes_osszes,
     kifizetes_fuggo: pk.kifizetes_fuggo,
     kesz: pk.kesz,
