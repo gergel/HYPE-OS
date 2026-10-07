@@ -279,7 +279,7 @@ def list_tig_ready_projects(db: Session = Depends(get_db), _user: Employee = Dep
     # a kiadás a commitment, nem a stáb-behívás.
     projects = papirozas_hatokor.papirozando_projektek(
         db.query(Project)
-        .filter(or_(papirozas_hatokor.diszpozott_projekt_feltetel(), Project.alvallalkozo_kiadasok.any(Expense.alvallalkozoi_papir_feltetel())))
+        .filter(papirozas_hatokor.utokovetes_projekt_feltetel())
         .options(selectinload(Project.crew), selectinload(Project.project_code))
         .all()
     )
@@ -648,7 +648,8 @@ def nyitott_munkak(db: Session, fel: SzamlazoFel, project_ids: set[int] | None =
 
     Három szűrő van rajta, és mindhárom kell:
 
-    - csak DISZPÓZOTT projekt (a papírozás onnantól van napirenden);
+    - csak az UTÓKÖVETÉSBEN lévő projekt (diszpózott, vagy alvállalkozói kiadás
+      köti - ugyanaz, mint a listákon, lásd papirozas_hatokor.utokovetes_projekt_feltetel);
     - a félnek a projekten már megvan a szerződéses háttere - és csak az ÖVÉ
       számít: a többi stábtag hiányzó szerződése nem tartja vissza az ő
       tételeit;
@@ -657,7 +658,7 @@ def nyitott_munkak(db: Session, fel: SzamlazoFel, project_ids: set[int] | None =
     A `project_ids` szűkítéssel ugyanez kérdezhető egy adott projekthalmazra -
     ezt használja a szerződés szerinti előtöltés (lásd
     _szerzodes_szerinti_parok)."""
-    q = db.query(Project).filter(papirozas_hatokor.diszpozott_projekt_feltetel())
+    q = db.query(Project).filter(papirozas_hatokor.utokovetes_projekt_feltetel())
     if project_ids is not None:
         if not project_ids:
             return []

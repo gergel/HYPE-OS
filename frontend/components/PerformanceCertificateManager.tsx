@@ -518,6 +518,16 @@ export function PerformanceCertificateManager({
               tiltva={busyState}
               onBillen={billen}
               onOsszeg={(kulcs, ertek) => setOsszegek((elozo) => ({ ...elozo, [kulcs]: ertek }))}
+              onTobb={(kulcsok, be) =>
+                setKivalasztott((elozo) => {
+                  const uj = new Set(elozo);
+                  for (const k of kulcsok) {
+                    if (be) uj.add(k);
+                    else uj.delete(k);
+                  }
+                  return uj;
+                })
+              }
               fejOsszeg={form.netto_osszeg}
               cim="Mit igazol ez a TIG?"
               // Ha a SZERZŐDÉS több forgatásra szól, a TIG alapból ugyanazokra

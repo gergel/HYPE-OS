@@ -518,6 +518,16 @@ export function SubcontractorContractManager({
               tiltva={busyState}
               onBillen={billen}
               onOsszeg={(kulcs, ertek) => setOsszegek((elozo) => ({ ...elozo, [kulcs]: ertek }))}
+              onTobb={(kulcsok, be) =>
+                setKivalasztott((elozo) => {
+                  const uj = new Set(elozo);
+                  for (const k of kulcsok) {
+                    if (be) uj.add(k);
+                    else uj.delete(k);
+                  }
+                  return uj;
+                })
+              }
               fejOsszeg={form.netto_osszeg}
               cim="Mire szól ez a szerződés?"
               leiras="Pipáld ki, kinek a munkájára szól ez az egy szerződés. Más projekt munkája is rátehető – így három nap forgatásról egy szerződés köthető, az összevont TIG mellé. A tételenkénti összeg elhagyható."

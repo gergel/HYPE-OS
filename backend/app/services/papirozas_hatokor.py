@@ -180,3 +180,24 @@ def diszpozott_projekt_feltetel():
         exists().where(PerformanceCertificate.project_id == Project.id),
         exists().where(PerformanceCertificateTetel.project_id == Project.id),
     )
+
+
+def utokovetes_projekt_feltetel():
+    """SQLAlchemy-feltétel: mely projektek vannak az UTÓKÖVETÉSBEN - a
+    diszpózottak (lásd diszpozott_projekt_feltetel) ÉS amiket valós
+    alvállalkozói kiadás köt (ott maga a kiadás a vállalás, nincs mire várni).
+
+    EGY helyen, mert a listáknak és a szerződésre/TIG-re PIPÁLHATÓ munkáknak
+    ugyanazt kell látniuk (a felhasználó hibajelzése): korábban a pipálható
+    lista csak a diszpózottakat hozta, így egy 10-20 projektes összevont
+    szerződésből kimaradt az a forgatás, amit csak alvállalkozói kiadás köt -
+    és ott továbbra is "nincs szerződése" teendő látszott."""
+    from sqlalchemy import or_
+
+    from app.models.finance import Expense
+    from app.models.project import Project
+
+    return or_(
+        diszpozott_projekt_feltetel(),
+        Project.alvallalkozo_kiadasok.any(Expense.alvallalkozoi_papir_feltetel()),
+    )

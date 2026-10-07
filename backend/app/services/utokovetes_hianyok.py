@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.automatizalas import DOKUMENTUM_TIPUSOK, UtokovetesDokumentum
@@ -92,10 +92,7 @@ def lezajlott_projektek(db: Session, *, ma: date, napok: int | None, project_id:
     q = (
         db.query(Project)
         .filter(
-            or_(
-                papirozas_hatokor.diszpozott_projekt_feltetel(),
-                Project.alvallalkozo_kiadasok.any(Expense.alvallalkozoi_papir_feltetel()),
-            ),
+            papirozas_hatokor.utokovetes_projekt_feltetel(),
             Project.forgatas_datuma.is_not(None),
             Project.forgatas_datuma < ma,
         )

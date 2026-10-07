@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { TigTetel } from "@/lib/api";
 
 /** Egy papír-tétel: kinek a munkája, melyik projekten. A szerződés-tétel és a
@@ -35,6 +36,7 @@ export function PapirTetelValaszto({
   tiltva,
   onBillen,
   onOsszeg,
+  onTobb,
   fejOsszeg,
   cim,
   leiras,
@@ -46,14 +48,33 @@ export function PapirTetelValaszto({
   tiltva: boolean;
   onBillen: (kulcs: string) => void;
   onOsszeg: (kulcs: string, ertek: string) => void;
+  /** Több tétel egyszerre be/ki (a "Mind kijelölése" gombokhoz). */
+  onTobb?: (kulcsok: string[], be: boolean) => void;
   fejOsszeg: string;
   cim: string;
   leiras: string;
 }) {
+  // HOSSZÚ LISTA (a felhasználó kérése: 30-40 projekt is kényelmesen
+  // pipálható legyen) - kereső és "mind" gombok, görgethető lista.
+  const [kereses, setKereses] = useState("");
   if (toltodik) {
     return <p className="mt-4 border-t border-border pt-4 text-[12px] text-text-muted">Tételek betöltése…</p>;
   }
   if (tetelek.length === 0) return null;
+
+  const hosszu = tetelek.length > 6;
+  const q = kereses.trim().toLowerCase();
+  const lathato = q
+    ? tetelek.filter((t) =>
+        [t.employee_nev, t.projektkod, t.project_nev, t.forgatas_datuma]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(q),
+      )
+    : tetelek;
+  const kijeloltDb = tetelek.filter((t) => kivalasztott.has(tetelKulcs(t))).length;
+  const kijeloltProjektDb = new Set(tetelek.filter((t) => kivalasztott.has(tetelKulcs(t))).map((t) => t.project_id)).size;
 
   const bontott = tetelek
     .filter((t) => kivalasztott.has(tetelKulcs(t)))
@@ -67,8 +88,43 @@ export function PapirTetelValaszto({
     <div className="mt-4 border-t border-border pt-4">
       <p className="mb-1 text-[13px] font-medium text-text-primary">{cim}</p>
       <p className="mb-3 text-[12px] text-text-muted">{leiras}</p>
-      <div className="flex flex-col gap-1.5">
-        {tetelek.map((t) => {
+      {hosszu && (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <input
+            value={kereses}
+            onChange={(e) => setKereses(e.target.value)}
+            placeholder="Keresés (projekt, kód, dátum, név)…"
+            aria-label="Tételek keresése"
+            className="w-[260px] rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1 text-[12.5px] text-text-primary focus:outline-none"
+          />
+          {onTobb && (
+            <>
+              <button
+                type="button"
+                disabled={tiltva}
+                onClick={() => onTobb(lathato.map(tetelKulcs), true)}
+                className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                {q ? `A ${lathato.length} találat kijelölése` : "Mind kijelölése"}
+              </button>
+              <button
+                type="button"
+                disabled={tiltva}
+                onClick={() => onTobb(lathato.map(tetelKulcs), false)}
+                className="rounded-[var(--radius)] border border-border px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                {q ? "Találatok kijelölésének törlése" : "Kijelölés törlése"}
+              </button>
+            </>
+          )}
+          <span className="ml-auto text-[12px] text-text-muted">
+            {kijeloltDb} / {tetelek.length} kijelölve · {kijeloltProjektDb} projekt
+          </span>
+        </div>
+      )}
+      <div className={`flex flex-col gap-1.5 ${hosszu ? "max-h-[50vh] overflow-y-auto pr-1" : ""}`}>
+        {lathato.length === 0 && <p className="text-[12px] text-text-muted">Nincs találat.</p>}
+        {lathato.map((t) => {
           const kulcs = tetelKulcs(t);
           const be = kivalasztott.has(kulcs);
           return (
