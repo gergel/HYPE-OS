@@ -29,6 +29,8 @@ type FormState = {
   /** Sok projektnél: ami a papíron a projektnevek helyett áll, és a levél tárgya. */
   projekt_szoveg: string;
   email_targy: string;
+  /** A kísérőlevél átírt szövege - üresen az alap (az előnézetben írható át). */
+  email_szoveg: string;
 };
 
 /** `teljesitesAlap`: a projekt forgatási dátumából képzett alapértelmezett
@@ -48,6 +50,7 @@ function formFromEmployee(employee: PendingSubcontractorEmployee, teljesitesAlap
     plusz_afa: draft?.plusz_afa ?? employee.plusz_afa ?? false,
     projekt_szoveg: draft?.projekt_szoveg ?? "",
     email_targy: draft?.email_targy ?? "",
+    email_szoveg: draft?.email_szoveg ?? "",
   };
 }
 
@@ -198,6 +201,7 @@ export function SubcontractorContractManager({
       // Üres szöveg = a szokásos (a szerver törli a korábban megadottat).
       projekt_szoveg: form.projekt_szoveg,
       email_targy: form.email_targy,
+      email_szoveg: form.email_szoveg,
     };
   }
 
@@ -617,7 +621,7 @@ export function SubcontractorContractManager({
       {kuldesNyitva && selectedEmployee && (
         <KuldesEllenorzo
           cim="Megbízási szerződés kiküldése"
-          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben. Lent az előnézet: pontosan ez menne ki."
+          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben. Lent az előnézet: pontosan ez menne ki - a levelet ott át is írhatod."
           cimzett={selectedEmployee.email}
           sorok={ellenorzoSorok()}
           tetelek={valaszthato
@@ -630,6 +634,14 @@ export function SubcontractorContractManager({
           <PapirElonezet
             path={`/api/v1/alvallalkozoi-szerzodesek/${projectId}/${selectedEmployee.szamlazo}/elonezet`}
             payload={buildPayload()}
+            szerkeszto={{
+              targy: form?.email_targy ?? "",
+              szoveg: form?.email_szoveg ?? "",
+              onChange: (v) => {
+                if (v.targy !== undefined) update("email_targy", v.targy);
+                if (v.szoveg !== undefined) update("email_szoveg", v.szoveg);
+              },
+            }}
           />
         </KuldesEllenorzo>
       )}

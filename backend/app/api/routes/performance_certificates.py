@@ -84,6 +84,29 @@ _TIG_EMAIL_HTML = (
     + ADMIN_ALAIRAS_HTML
 )
 
+#: A fenti levél sima szövegként - ezt látja és írhatja át a felhasználó az
+#: előnézetben (a felhasználó kérése; lásd papir_elonezet.kimeno_level).
+TIG_ALAP_SZOVEG = (
+    "Kedves Címzett,\n\n"
+    "Alább a {projektdatum} dátumú, tárgyban említett projekt kódú esemény teljesítési igazolása.\n"
+    "Kérjük figyelj rá, hogy a számla teljesítési dátuma egyezzen a teljesítési igazolás teljesítési dátumával.\n\n"
+    "Köszönettel,"
+)
+
+
+def _kimeno(
+    cimzett: str, targy: str, alap_targy: str, projektdatum: str, draft: PerformanceCertificate,
+    mezok: dict[str, str] | None,
+) -> KimenoPapir:
+    alap_szoveg = TIG_ALAP_SZOVEG.format(projektdatum=projektdatum)
+    level_html, szoveg = papir_elonezet.kimeno_level(
+        _TIG_EMAIL_HTML.format(projektdatum=projektdatum), alap_szoveg, draft.email_szoveg
+    )
+    return KimenoPapir(
+        cimzett=cimzett, targy=targy, level_html=level_html, mezok=mezok,
+        alap_targy=alap_targy, alap_szoveg=alap_szoveg, szoveg=szoveg,
+    )
+
 
 def _get_project_or_404(db: Session, project_id: int) -> Project:
     project = db.get(Project, project_id)
@@ -334,6 +357,8 @@ class DraftInfo(BaseModel):
     #: Sok projektre szóló TIG-nél: a felsorolás helyetti szöveg és a levél tárgya.
     projekt_szoveg: str | None = None
     email_targy: str | None = None
+    #: A kísérőlevél átírt szövege (üresen az alap levél megy).
+    email_szoveg: str | None = None
     tetelek: list[TetelInfo] = []
 
 
@@ -459,6 +484,7 @@ def _draft_info(c: PerformanceCertificate | None) -> DraftInfo | None:
         kihagyas_oka=c.kihagyas_oka,
         projekt_szoveg=c.projekt_szoveg,
         email_targy=c.email_targy,
+        email_szoveg=c.email_szoveg,
         tetelek=[_tetel_info(t) for t in c.tetelek],
     )
 
@@ -941,6 +967,8 @@ class TigDraftIn(BaseModel):
     #: vissza a szokásosra (None = maradjon, ami van).
     projekt_szoveg: str | None = None
     email_targy: str | None = None
+    #: A kísérőlevél átírt szövege (a felhasználó kérése). Üres = alap levél.
+    email_szoveg: str | None = None
 
 
 def _felkesz_piszkozatok_atvetele(
@@ -1099,7 +1127,11 @@ def _apply_draft_fields(draft: PerformanceCertificate, payload: TigDraftIn) -> N
             setattr(draft, field, value)
     # Az egyedi szövegeknél az ÜRES szöveg is érvényes válasz: "mégis a
     # szokásos legyen" - ezért ott a None jelenti a "ne nyúlj hozzá"-t.
-    for field in ("projekt_szoveg", "email_targy"):
+    _apply_egyedi_szovegek(draft, payload, ("projekt_szoveg", "email_targy", "email_szoveg"))
+
+
+def _apply_egyedi_szovegek(draft: PerformanceCertificate, payload: BaseModel, mezok: tuple[str, ...]) -> None:
+    for field in mezok:
         value = getattr(payload, field)
         if value is not None:
             setattr(draft, field, value.strip() or None)
@@ -1166,14 +1198,14 @@ def _kimeno_tig(project: Project, csoport: SzamlazoCsoport, draft: PerformanceCe
             "nettoki": szam_betukkel(netto),
         }
 
-    targy = (draft.email_targy or "").strip() or f"{draft.ceg_neve or fel.nev}_{project.projektkod_szoveg or ''} - Projekt_TIG"
+    alap_targy = f"{draft.ceg_neve or fel.nev}_{project.projektkod_szoveg or ''} - Projekt_TIG"
+    targy = (draft.email_targy or "").strip() or alap_targy
     # A levélben a teljesítés ideje: ha SZÖVEGGEL adták meg (pl. "2026
     # július"), az az igazság - az kerül ide is, ne egy "–" (a felhasználó
     # kérése). Szöveg híján a forgatás dátuma, végső tartalékként a
     # tételekből számolt teljesítés-szöveg.
     email_datum = (draft.teljesites_szoveg or "").strip() or projektdatum or teljesites_str
-    html = _TIG_EMAIL_HTML.format(projektdatum=email_datum or "–")
-    return KimenoPapir(cimzett=cimzett, targy=targy, level_html=html, mezok=mezok)
+    return _kimeno(cimzett, targy, alap_targy, email_datum or "–", draft, mezok)
 
 
 @router.post("/{project_id}/{szamlazo_kulcs}/generate-and-send", response_model=PerformanceCertificateRead)
@@ -2019,6 +2051,10 @@ class TigDraftInProjektkod(BaseModel):
     teljesites_szoveg: str | None = None
     keltezes: date | None = None
     plusz_afa: bool | None = None
+    #: A levél tárgya és átírt szövege (a felhasználó kérése). Üres = alap;
+    #: None = maradjon, ami van.
+    email_targy: str | None = None
+    email_szoveg: str | None = None
 
 
 def _apply_draft_fields_projektkodon(draft: PerformanceCertificate, payload: TigDraftInProjektkod) -> None:
@@ -2035,6 +2071,7 @@ def _apply_draft_fields_projektkodon(draft: PerformanceCertificate, payload: Tig
         value = getattr(payload, field)
         if value is not None:
             setattr(draft, field, value)
+    _apply_egyedi_szovegek(draft, payload, ("email_targy", "email_szoveg"))
 
 
 @router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/save", response_model=PerformanceCertificateRead)
@@ -2066,51 +2103,31 @@ def generate_and_send_projektkodon(
 ):
     projektkod = _get_project_code_or_404(db, project_code_id)
     csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs)
-    fel = csoport.fel
     draft = _get_or_create_draft_projektkodon(db, projektkod, csoport)
     _apply_draft_fields_projektkodon(draft, payload)
 
     if not draft.netto_osszeg or draft.netto_osszeg <= 0:
         raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
-    cimzett = elso_ervenyes_cim(draft.email, fel.email) or ""
-    if not cimzett:
+    draft.keltezes = draft.keltezes or date.today()
+    kimeno = _kimeno_tig_projektkodon(projektkod, csoport, draft)
+    if not kimeno.cimzett:
         raise HTTPException(status_code=400, detail="A számlázó félnek nincs email címe.")
-
-    keltezes = draft.keltezes or date.today()
-    draft.keltezes = keltezes
-    teljesites_str = papir_tetelek.teljesites_szovege(draft.teljesites_szoveg, [], "")
 
     doc_link = None
     pdf_bytes = None
-    base_name = f"{projektkod.projektkod}_{draft.ceg_neve or fel.nev}_TIG"
     try:
-        if settings.gdoc_kulsos_tig_template_id:
-            fields = {
-                "nev": draft.ceg_neve or fel.nev,
-                "hely": draft.szekhely or "",
-                "adoszam": draft.adoszam or "",
-                "targy": papir_tetelek.targy_szovege(draft.megbizas_targya, []),
-                "tido": teljesites_str,
-                "projkod": projektkod.projektkod,
-                "netto": f"{draft.netto_osszeg:,.0f}".replace(",", " "),
-                "kelt": keltezes.strftime("%Y.%m.%d."),
-                "afa": "+ ÁFA" if draft.plusz_afa else "",
-                "nettoki": szam_betukkel(draft.netto_osszeg),
-            }
+        if kimeno.mezok is not None:
             pdf_bytes, new_doc_id = gdoc_fill_and_export_pdf(
                 template_file_id=settings.gdoc_kulsos_tig_template_id,
-                base_name=base_name,
-                fields=fields,
+                base_name=_tig_dokumentum_neve(projektkod, csoport, draft),
+                fields=kimeno.mezok,
                 output_folder_id=settings.drive_kulsos_tig or settings.gdoc_output_folder_id or settings.drive_folder_id or None,
             )
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
-
-        subject = f"{draft.ceg_neve or fel.nev}_{projektkod.projektkod} - Projekt_TIG"
-        # A projektkód-alapú TIG-nél nincs forgatás-dátum - a szöveggel megadott
-        # teljesítés (pl. "2026 július") kerül a levélbe is, ne egy "–"
-        # (a felhasználó kérése).
-        html = _TIG_EMAIL_HTML.format(projektdatum=teljesites_str or "–")
-        send_message([cimzett], subject, html, pdf_bytes=pdf_bytes, pdf_filename="teljesitesi_igazolas.pdf")
+        send_message(
+            [kimeno.cimzett], kimeno.targy, kimeno.level_html, pdf_bytes=pdf_bytes,
+            pdf_filename="teljesitesi_igazolas.pdf",
+        )
     except RuntimeError as exc:
         db.commit()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -2120,6 +2137,66 @@ def generate_and_send_projektkodon(
     db.commit()
     db.refresh(draft)
     return PerformanceCertificateRead.model_validate(draft)
+
+
+def _tig_dokumentum_neve(projektkod: ProjectCode, csoport: SzamlazoCsoport, draft: PerformanceCertificate) -> str:
+    return f"{projektkod.projektkod}_{draft.ceg_neve or csoport.fel.nev}_TIG"
+
+
+def _kimeno_tig_projektkodon(
+    projektkod: ProjectCode, csoport: SzamlazoCsoport, draft: PerformanceCertificate
+) -> KimenoPapir:
+    """A projektkódos TIG kimenő tartalma - a kiküldés és az előnézet is ezt
+    használja (lásd services/papir_elonezet.py)."""
+    fel = csoport.fel
+    cimzett = elso_ervenyes_cim(draft.email, fel.email) or ""
+    keltezes = draft.keltezes or date.today()
+    teljesites_str = papir_tetelek.teljesites_szovege(draft.teljesites_szoveg, [], "")
+    mezok = None
+    if settings.gdoc_kulsos_tig_template_id:
+        netto = float(draft.netto_osszeg or 0)
+        mezok = {
+            "nev": draft.ceg_neve or fel.nev,
+            "hely": draft.szekhely or "",
+            "adoszam": draft.adoszam or "",
+            "targy": papir_tetelek.targy_szovege(draft.megbizas_targya, []),
+            "tido": teljesites_str,
+            "projkod": projektkod.projektkod,
+            "netto": f"{netto:,.0f}".replace(",", " "),
+            "kelt": keltezes.strftime("%Y.%m.%d."),
+            "afa": "+ ÁFA" if draft.plusz_afa else "",
+            "nettoki": szam_betukkel(netto),
+        }
+    alap_targy = f"{draft.ceg_neve or fel.nev}_{projektkod.projektkod} - Projekt_TIG"
+    targy = (draft.email_targy or "").strip() or alap_targy
+    # A projektkód-alapú TIG-nél nincs forgatás-dátum - a szöveggel megadott
+    # teljesítés (pl. "2026 július") kerül a levélbe is, ne egy "–"
+    # (a felhasználó kérése).
+    return _kimeno(cimzett, targy, alap_targy, teljesites_str or "–", draft, mezok)
+
+
+@router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/elonezet", response_model=ElonezetOut)
+def elonezet_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: TigDraftInProjektkod,
+    pdf: bool = True,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """ELŐNÉZET a projektkódos TIG kiküldése előtt (a felhasználó kérése) -
+    lásd `elonezet`: semmi nem mentődik és semmi nem megy ki."""
+    projektkod = _get_project_code_or_404(db, project_code_id)
+    csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs)
+    mentesi_pont = db.begin_nested()
+    try:
+        draft = _get_or_create_draft_projektkodon(db, projektkod, csoport)
+        _apply_draft_fields_projektkodon(draft, payload)
+        kimeno = _kimeno_tig_projektkodon(projektkod, csoport, draft)
+    finally:
+        if mentesi_pont.is_active:
+            mentesi_pont.rollback()
+    return papir_elonezet.elonezet_valasz(kimeno, settings.gdoc_kulsos_tig_template_id, pdf=pdf)
 
 
 class TigKihagyasInProjektkod(BaseModel):

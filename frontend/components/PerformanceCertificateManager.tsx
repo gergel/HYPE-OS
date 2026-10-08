@@ -27,6 +27,8 @@ type FormState = {
   /** Sok projektnél: ami a papíron a projektkódok helyett áll, és a levél tárgya. */
   projekt_szoveg: string;
   email_targy: string;
+  /** A kísérőlevél átírt szövege - üresen az alap (az előnézetben írható át). */
+  email_szoveg: string;
 };
 
 /** Az űrlap kiindulása három forrásból, ebben a sorrendben:
@@ -63,6 +65,7 @@ function formFromEmployee(employee: PendingTigEmployee, teljesitesAlap: string):
     plusz_afa: draft?.plusz_afa ?? sz?.plusz_afa ?? employee.plusz_afa ?? false,
     projekt_szoveg: draft?.projekt_szoveg ?? "",
     email_targy: draft?.email_targy ?? "",
+    email_szoveg: draft?.email_szoveg ?? "",
   };
 }
 
@@ -222,6 +225,7 @@ export function PerformanceCertificateManager({
       // Üres szöveg = a szokásos (a szerver törli a korábban megadottat).
       projekt_szoveg: form.projekt_szoveg,
       email_targy: form.email_targy,
+      email_szoveg: form.email_szoveg,
     };
   }
 
@@ -615,7 +619,7 @@ export function PerformanceCertificateManager({
       {kuldesNyitva && selectedEmployee && (
         <KuldesEllenorzo
           cim="Teljesítési igazolás kiküldése"
-          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben. Lent az előnézet: pontosan ez menne ki."
+          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben. Lent az előnézet: pontosan ez menne ki - a levelet ott át is írhatod."
           cimzett={selectedEmployee.email}
           sorok={ellenorzoSorok()}
           tetelek={valaszthato
@@ -628,6 +632,14 @@ export function PerformanceCertificateManager({
           <PapirElonezet
             path={`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/elonezet`}
             payload={buildPayload()}
+            szerkeszto={{
+              targy: form?.email_targy ?? "",
+              szoveg: form?.email_szoveg ?? "",
+              onChange: (v) => {
+                if (v.targy !== undefined) update("email_targy", v.targy);
+                if (v.szoveg !== undefined) update("email_szoveg", v.szoveg);
+              },
+            }}
           />
         </KuldesEllenorzo>
       )}

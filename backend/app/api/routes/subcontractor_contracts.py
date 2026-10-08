@@ -93,6 +93,16 @@ _CONTRACT_EMAIL_HTML = (
     + szerzodes_emlekezteto.SZERZODES_ALAIRAS_HTML
 )
 
+#: A fenti levél sima szövegként - ezt látja és írhatja át a felhasználó az
+#: előnézetben (a felhasználó kérése; lásd papir_elonezet.kimeno_level).
+SZERZODES_ALAP_SZOVEG = (
+    "Kedves Címzett,\n\n"
+    "Levelemhez csatoltan küldöm a tárgyban említett projektre vonatkozó szerződést.\n"
+    "Kérjük a projekt további dokumentációjához (teljesítés igazolása, számlázás és kifizetés) aláírva és/vagy "
+    "pecsételve küldd vissza számunkra a csatolt dokumentumot, válasz e-mailben.\n\n"
+    "Köszönettel,"
+)
+
 
 def szerzodes_kulcsa(c: Contract) -> str | None:
     """Melyik SZÁMLÁZÓ FÉLHEZ tartozik ez a szerződés (lásd
@@ -443,6 +453,8 @@ class DraftInfo(BaseModel):
     #: Sok projektre szóló papírnál: a felsorolás helyetti szöveg és a levél tárgya.
     projekt_szoveg: str | None = None
     email_targy: str | None = None
+    #: A kísérőlevél átírt szövege (üresen az alap levél megy).
+    email_szoveg: str | None = None
     tetelek: list[TetelInfo] = []
 
 
@@ -554,6 +566,7 @@ def _draft_info(c: Contract | None) -> DraftInfo | None:
         kihagyas_oka=c.kihagyas_oka,
         projekt_szoveg=c.projekt_szoveg,
         email_targy=c.email_targy,
+        email_szoveg=c.email_szoveg,
         tetelek=[_tetel_info(t) for t in c.tetelek],
     )
 
@@ -1217,6 +1230,8 @@ class ContractDraftIn(BaseModel):
     #: tárgya. Üres szöveg = vissza a szokásosra (None = maradjon, ami van).
     projekt_szoveg: str | None = None
     email_targy: str | None = None
+    #: A kísérőlevél átírt szövege (a felhasználó kérése). Üres = alap levél.
+    email_szoveg: str | None = None
 
 
 _DRAFT_FIELDS = (
@@ -1240,7 +1255,11 @@ def _apply_draft_fields(draft: Contract, payload: ContractDraftIn) -> None:
             setattr(draft, field, value)
     # Az egyedi szövegeknél az ÜRES szöveg is érvényes válasz: "mégis a
     # szokásos legyen" - ezért ott a None jelenti a "ne nyúlj hozzá"-t.
-    for field in ("projekt_szoveg", "email_targy"):
+    _apply_egyedi_szovegek(draft, payload, ("projekt_szoveg", "email_targy", "email_szoveg"))
+
+
+def _apply_egyedi_szovegek(draft: Contract, payload: BaseModel, mezok: tuple[str, ...]) -> None:
+    for field in mezok:
         value = getattr(payload, field)
         if value is not None:
             setattr(draft, field, value.strip() or None)
@@ -1288,7 +1307,8 @@ def _kimeno_szerzodes(project: Project, csoport: SzamlazoCsoport, draft: Contrac
 
     # SOK PROJEKTNÉL (a felhasználó kérése) a felsorolás helyett a megadott
     # szöveg áll a papíron, és a levél tárgya is megadható.
-    targy = (draft.email_targy or "").strip() or f"{project.forgatas_datuma or ''}_{project.nev or ''}_{fel.nev}_szerződés"
+    alap_targy = f"{project.forgatas_datuma or ''}_{project.nev or ''}_{fel.nev}_szerződés"
+    targy = (draft.email_targy or "").strip() or alap_targy
 
     mezok = None
     if settings.gdoc_alvallalkozoi_szerzodes_template_id:
@@ -1311,7 +1331,15 @@ def _kimeno_szerzodes(project: Project, csoport: SzamlazoCsoport, draft: Contrac
             "projektnev": (draft.projekt_szoveg or "").strip()
             or papir_tetelek.projektnevek_szovege(tetelek, project.nev or ""),
         }
-    return KimenoPapir(cimzett=cimzett, targy=targy, level_html=_CONTRACT_EMAIL_HTML, mezok=mezok)
+    return _kimeno(cimzett, targy, alap_targy, draft, mezok)
+
+
+def _kimeno(cimzett: str, targy: str, alap_targy: str, draft: Contract, mezok: dict[str, str] | None) -> KimenoPapir:
+    level_html, szoveg = papir_elonezet.kimeno_level(_CONTRACT_EMAIL_HTML, SZERZODES_ALAP_SZOVEG, draft.email_szoveg)
+    return KimenoPapir(
+        cimzett=cimzett, targy=targy, level_html=level_html, mezok=mezok,
+        alap_targy=alap_targy, alap_szoveg=SZERZODES_ALAP_SZOVEG, szoveg=szoveg,
+    )
 
 
 @router.post("/{project_id}/{szamlazo_kulcs}/generate-and-send", response_model=ContractRead)
@@ -2002,6 +2030,7 @@ def _apply_draft_fields_projektkodon(draft: Contract, payload: "ContractDraftInP
         value = getattr(payload, field)
         if value is not None:
             setattr(draft, field, value)
+    _apply_egyedi_szovegek(draft, payload, ("email_targy", "email_szoveg"))
 
 
 class ContractDraftInProjektkod(BaseModel):
@@ -2015,6 +2044,10 @@ class ContractDraftInProjektkod(BaseModel):
     teljesites_szoveg: str | None = None
     keltezes: date | None = None
     plusz_afa: bool | None = None
+    #: A levél tárgya és átírt szövege (a felhasználó kérése). Üres = alap;
+    #: None = maradjon, ami van.
+    email_targy: str | None = None
+    email_szoveg: str | None = None
 
 
 @router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/save", response_model=ContractRead)
@@ -2046,52 +2079,30 @@ def generate_and_send_projektkodon(
 ):
     projektkod = _get_project_code_or_404(db, project_code_id)
     csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs)
-    fel = csoport.fel
     draft = _get_or_create_draft_projektkodon(db, projektkod, csoport)
     _apply_draft_fields_projektkodon(draft, payload)
 
     if not draft.netto_osszeg or draft.netto_osszeg <= 0:
         raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
-    cimzett = elso_ervenyes_cim(draft.email, fel.email) or ""
-    if not cimzett:
+    draft.keltezes = draft.keltezes or date.today()
+    kimeno = _kimeno_szerzodes_projektkodon(projektkod, csoport, draft)
+    if not kimeno.cimzett:
         raise HTTPException(status_code=400, detail="A számlázó félnek nincs email címe.")
-
-    keltezes = draft.keltezes or date.today()
-    draft.keltezes = keltezes
-
-    teljesites_str = papir_tetelek.teljesites_szovege(_teljesites_szovege(draft), [])
-    brutto_osszeg = round(float(draft.netto_osszeg) * 1.27, 2) if draft.plusz_afa else draft.netto_osszeg
 
     doc_link = None
     pdf_bytes = None
-    base_name = f"{projektkod.projektkod}_{fel.nev}_szerződés"
     try:
-        if settings.gdoc_alvallalkozoi_szerzodes_template_id:
-            fields = {
-                "nev": draft.ceg_neve or fel.nev,
-                "hely": draft.szekhely or "",
-                "adoszam": draft.adoszam or "",
-                "targy": papir_tetelek.targy_szovege(draft.megbizas_targya, []),
-                "tido": teljesites_str,
-                "netto": f"{draft.netto_osszeg:,.0f}".replace(",", " "),
-                "kelt": keltezes.strftime("%Y.%m.%d."),
-                "afa": "+ ÁFA" if draft.plusz_afa else "",
-                "brutto": f"{brutto_osszeg:,.0f}".replace(",", " "),
-                "nettoki": szam_betukkel(draft.netto_osszeg),
-                "nyilvszam": draft.vallalkozas_nyilvantartasi_szam or "",
-                "kepvis": draft.vallalkozas_kepviseloje or "",
-                "projektnev": projektkod.project_nev or projektkod.projektkod,
-            }
+        if kimeno.mezok is not None:
             pdf_bytes, new_doc_id = gdoc_fill_and_export_pdf(
                 template_file_id=settings.gdoc_alvallalkozoi_szerzodes_template_id,
-                base_name=base_name,
-                fields=fields,
+                base_name=kimeno.targy,
+                fields=kimeno.mezok,
                 output_folder_id=settings.gdoc_output_folder_id or settings.drive_folder_id or None,
             )
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
 
         kuldes_eredmenye = send_message(
-            [cimzett], base_name, _CONTRACT_EMAIL_HTML, pdf_bytes=pdf_bytes, pdf_filename="szerzodes.pdf"
+            [kimeno.cimzett], kimeno.targy, kimeno.level_html, pdf_bytes=pdf_bytes, pdf_filename="szerzodes.pdf"
         )
     except RuntimeError as exc:
         db.commit()
@@ -2101,11 +2112,65 @@ def generate_and_send_projektkodon(
     draft.szerzodes_file_url = doc_link
     # A kiküldés nyoma - az aláírás-emlékeztető ebbe a szálba válaszol.
     szerzodes_emlekezteto.kikuldes_rogzitese(
-        draft, cimzett=cimzett, targy=base_name, kuldes_eredmenye=kuldes_eredmenye
+        draft, cimzett=kimeno.cimzett, targy=kimeno.targy, kuldes_eredmenye=kuldes_eredmenye
     )
     db.commit()
     db.refresh(draft)
     return ContractRead.model_validate(draft)
+
+
+def _kimeno_szerzodes_projektkodon(projektkod: ProjectCode, csoport: SzamlazoCsoport, draft: Contract) -> KimenoPapir:
+    """A projektkódos szerződés kimenő tartalma - a kiküldés és az előnézet is
+    ezt használja (lásd services/papir_elonezet.py)."""
+    fel = csoport.fel
+    cimzett = elso_ervenyes_cim(draft.email, fel.email) or ""
+    keltezes = draft.keltezes or date.today()
+    alap_targy = f"{projektkod.projektkod}_{fel.nev}_szerződés"
+    targy = (draft.email_targy or "").strip() or alap_targy
+    mezok = None
+    if settings.gdoc_alvallalkozoi_szerzodes_template_id:
+        netto = float(draft.netto_osszeg or 0)
+        brutto_osszeg = round(netto * 1.27, 2) if draft.plusz_afa else netto
+        mezok = {
+            "nev": draft.ceg_neve or fel.nev,
+            "hely": draft.szekhely or "",
+            "adoszam": draft.adoszam or "",
+            "targy": papir_tetelek.targy_szovege(draft.megbizas_targya, []),
+            "tido": papir_tetelek.teljesites_szovege(_teljesites_szovege(draft), []),
+            "netto": f"{netto:,.0f}".replace(",", " "),
+            "kelt": keltezes.strftime("%Y.%m.%d."),
+            "afa": "+ ÁFA" if draft.plusz_afa else "",
+            "brutto": f"{brutto_osszeg:,.0f}".replace(",", " "),
+            "nettoki": szam_betukkel(netto),
+            "nyilvszam": draft.vallalkozas_nyilvantartasi_szam or "",
+            "kepvis": draft.vallalkozas_kepviseloje or "",
+            "projektnev": projektkod.project_nev or projektkod.projektkod,
+        }
+    return _kimeno(cimzett, targy, alap_targy, draft, mezok)
+
+
+@router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/elonezet", response_model=ElonezetOut)
+def elonezet_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: ContractDraftInProjektkod,
+    pdf: bool = True,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """ELŐNÉZET a projektkódos kiküldés előtt (a felhasználó kérése) - lásd
+    `elonezet`: semmi nem mentődik és semmi nem megy ki."""
+    projektkod = _get_project_code_or_404(db, project_code_id)
+    csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs)
+    mentesi_pont = db.begin_nested()
+    try:
+        draft = _get_or_create_draft_projektkodon(db, projektkod, csoport)
+        _apply_draft_fields_projektkodon(draft, payload)
+        kimeno = _kimeno_szerzodes_projektkodon(projektkod, csoport, draft)
+    finally:
+        if mentesi_pont.is_active:
+            mentesi_pont.rollback()
+    return papir_elonezet.elonezet_valasz(kimeno, settings.gdoc_alvallalkozoi_szerzodes_template_id, pdf=pdf)
 
 
 @router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/sajat-fajl", response_model=ContractRead)

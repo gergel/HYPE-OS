@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
 import { IndoklasDialog } from "@/components/IndoklasDialog";
 import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
+import { PapirElonezet } from "@/components/PapirElonezet";
 import { formatFt } from "@/lib/ido";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import type { PendingSubcontractorProjectCodeEmployee } from "@/lib/api";
@@ -22,6 +23,9 @@ type FormState = {
   teljesites_szoveg: string;
   keltezes: string;
   plusz_afa: boolean;
+  /** A kísérőlevél tárgya és szövege - üresen az alap (az előnézetben írható át). */
+  email_targy: string;
+  email_szoveg: string;
 };
 
 function formFromEmployee(employee: PendingSubcontractorProjectCodeEmployee): FormState {
@@ -37,6 +41,8 @@ function formFromEmployee(employee: PendingSubcontractorProjectCodeEmployee): Fo
     teljesites_szoveg: draft?.teljesites_szoveg ?? "",
     keltezes: draft?.keltezes ?? "",
     plusz_afa: draft?.plusz_afa ?? employee.plusz_afa ?? false,
+    email_targy: draft?.email_targy ?? "",
+    email_szoveg: draft?.email_szoveg ?? "",
   };
 }
 
@@ -105,6 +111,9 @@ export function SubcontractorContractManagerProjektkod({
       teljesites_szoveg: form.teljesites_szoveg || null,
       keltezes: form.keltezes || null,
       plusz_afa: form.plusz_afa,
+      // Üres szöveg = vissza az alapra (a backend None-ként kezeli).
+      email_targy: form.email_targy,
+      email_szoveg: form.email_szoveg,
     };
   }
 
@@ -394,6 +403,17 @@ export function SubcontractorContractManagerProjektkod({
                   router.refresh();
                 }}
               />
+              {/* ELŐNÉZET (a felhasználó kérése): ugyanaz az ablak, mint a
+                  küldés előtti ellenőrzés - benne a levél (átírható) és a
+                  kitöltött dokumentum, és onnan lehet továbbküldeni. */}
+              <button
+                type="button"
+                onClick={kuldesInditasa}
+                disabled={busyState}
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Előnézet
+              </button>
               <button
                 type="button"
                 onClick={kuldesInditasa}
@@ -409,14 +429,27 @@ export function SubcontractorContractManagerProjektkod({
       {kuldesNyitva && selectedEmployee && (
         <KuldesEllenorzo
           cim="Megbízási szerződés kiküldése"
-          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben."
+          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben. Lent az előnézet: pontosan ez menne ki - a levelet ott át is írhatod."
           cimzett={selectedEmployee.email}
           sorok={ellenorzoSorok()}
           tetelek={[]}
           gombCimke="Generálás és küldés"
           onMegse={() => setKuldesNyitva(false)}
           onKuld={handleGenerateAndSend}
-        />
+        >
+          <PapirElonezet
+            path={`${alap}/${selectedEmployee.szamlazo}/elonezet`}
+            payload={buildPayload()}
+            szerkeszto={{
+              targy: form?.email_targy ?? "",
+              szoveg: form?.email_szoveg ?? "",
+              onChange: (v) => {
+                if (v.targy !== undefined) update("email_targy", v.targy);
+                if (v.szoveg !== undefined) update("email_szoveg", v.szoveg);
+              },
+            }}
+          />
+        </KuldesEllenorzo>
       )}
       {kihagyasNyitva && (
         <IndoklasDialog

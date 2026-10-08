@@ -118,6 +118,9 @@ class Contract(TimestampMixin, Base):
     #: services/papir_tetelek.py.
     projekt_szoveg: Mapped[str | None] = mapped_column(Text)
     email_targy: Mapped[str | None] = mapped_column(String(500))
+    #: A kísérőlevél átírt szövege (sima szöveg) - üresen az alap levél megy
+    #: (a felhasználó kérése; lásd services/papir_elonezet.kimeno_level).
+    email_szoveg: Mapped[str | None] = mapped_column(Text)
 
     # A KIKÜLDÉS nyoma (a generálás és küldés tölti, lásd
     # services/szerzodes_emlekezteto.py): mikor, kinek, milyen tárggyal ment

@@ -53,6 +53,9 @@ class PerformanceCertificate(TimestampMixin, Base):
     #: a szokásos - lásd services/papir_tetelek.py.
     projekt_szoveg: Mapped[str | None] = mapped_column(Text)
     email_targy: Mapped[str | None] = mapped_column(String(500))
+    #: A kísérőlevél átírt szövege (sima szöveg) - üresen az alap levél megy
+    #: (a felhasználó kérése; lásd services/papir_elonezet.kimeno_level).
+    email_szoveg: Mapped[str | None] = mapped_column(Text)
     file_url: Mapped[str | None] = mapped_column(String(500), comment="A TIG dokumentum linkje")
     # Csak akkor van kitöltve, ha a TIG dokumentumot MI tároljuk (a kiküldés
     # helyett feltöltött saját papír az R2-n) - a rendszer által generált,

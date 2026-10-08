@@ -1421,6 +1421,8 @@ export type SubcontractorContractDraft = {
    * helyett áll, és a kimenő levél tárgya - üresen a szokásos. */
   projekt_szoveg?: string | null;
   email_targy?: string | null;
+  /** A kísérőlevél átírt szövege (sima szöveg) - üresen az alap levél megy. */
+  email_szoveg?: string | null;
 };
 
 /** Egy stábtag, akinek a munkáját egy szerződés/TIG lefedi. */
@@ -2056,6 +2058,8 @@ export type TigDraft = {
    * helyett áll, és a kimenő levél tárgya - üresen a szokásos. */
   projekt_szoveg?: string | null;
   email_targy?: string | null;
+  /** A kísérőlevél átírt szövege (sima szöveg) - üresen az alap levél megy. */
+  email_szoveg?: string | null;
 };
 
 /** Egy SZÁMLÁZÓ FÉL, akitől TIG kell egy projekten (ember vagy cég). */
