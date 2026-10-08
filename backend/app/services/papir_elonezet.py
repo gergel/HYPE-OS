@@ -34,17 +34,20 @@ class KimenoPapir(BaseModel):
     szoveg: str | None = None
 
 
-def kimeno_level(alap_html: str, alap_szoveg: str, egyedi: str | None) -> tuple[str, str]:
+def kimeno_level(
+    alap_html: str, alap_szoveg: str, egyedi: str | None, *, alairas: bool = True
+) -> tuple[str, str]:
     """(levél HTML, érvényes szöveg). Átírt szöveg nélkül PONTOSAN az eddigi
     alap levél megy; átírva a beírt szöveg (escape-elve, lásd
-    admin_level.szoveg_html), alatta mindig a közös adminisztrációs aláírás."""
+    admin_level.szoveg_html), alatta - `alairas`-sal - a közös adminisztrációs
+    aláírás. (A megrendelői levélben az aláírás a szöveg része, ott nincs.)"""
     from app.services.admin_level import szoveg_html
     from app.services.google_email import ADMIN_ALAIRAS_HTML
 
     egyedi = (egyedi or "").strip()
     if not egyedi:
         return alap_html, alap_szoveg
-    return szoveg_html(egyedi) + "<br><br>\n" + ADMIN_ALAIRAS_HTML, egyedi
+    return szoveg_html(egyedi) + ("<br><br>\n" + ADMIN_ALAIRAS_HTML if alairas else ""), egyedi
 
 
 class ElonezetOut(BaseModel):

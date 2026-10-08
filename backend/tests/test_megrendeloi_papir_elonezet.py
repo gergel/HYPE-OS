@@ -126,3 +126,39 @@ def test_sablon_nelkul_az_elonezet_megmondja_hogy_nem_kuldheto(k, monkeypatch):
     monkeypatch.setattr(settings, "gdoc_megrendeloi_eseti_template_id", "")
     e = k["c"].post(f"{MP}/szerzodes/{k['pk'].id}/elonezet", json=ADAT).json()
     assert e["pdf_base64"] is None and "nem is küldhető ki" in e["pdf_hiba"]
+
+
+def test_atirt_level_megy_ki_es_megmarad_ures_az_alap(k):
+    """Kapcsolóval átírható levél (a felhasználó kérése): az előnézet és a
+    küldés is az átírttal megy; üresen (vagy átírás nélkül) az alap levél."""
+    c, pk, kint = k["c"], k["pk"], k["kint"]
+    e = c.post(f"{MP}/szerzodes/{pk.id}/elonezet?pdf=false", json={"projekt_nev": "Tavaszi kampányfilm (demó)"}).json()
+    assert e["alap_szoveg"].startswith("Kedves Partnerünk!") and "Tavaszi kampányfilm (demó)" in e["alap_szoveg"]
+    assert e["alap_targy"] == "Tavaszi kampányfilm (demó) – megrendelői szerződés"
+
+    sajat = "Kedves Anna!\n\nCsatolva a szerződés <aláírásra>.\n\nÜdv,\nHYPE"
+    r = c.post(f"{MP}/szerzodes/{pk.id}/mentes", json={**ADAT, "email_targy": "Szerződés – tavasz", "email_szoveg": sajat})
+    papir = r.json()
+    assert papir["email_szoveg"] == sajat and papir["email_targy"] == "Szerződés – tavasz"
+
+    e = c.post(f"{MP}/szerzodes/{pk.id}/elonezet?papir_id={papir['id']}&pdf=false", json={}).json()
+    assert e["targy"] == "Szerződés – tavasz" and "<p>Kedves Anna!</p>" in e["level_html"]
+    assert "&lt;aláírásra&gt;" in e["level_html"] and "Rahman Martin" not in e["level_html"]
+
+    r = c.post(f"{MP}/szerzodes/{pk.id}/generalas-es-kuldes?papir_id={papir['id']}", json={})
+    assert r.status_code == 200, r.text
+    assert kint["level"][-1]["subject"] == "Szerződés – tavasz" and "<p>Kedves Anna!</p>" in kint["level"][-1]["html"]
+
+
+def test_kikapcsolva_ures_szoveg_az_alap_levelet_kuldi(k):
+    from app.api.routes.megrendeloi_papirok import _EMAIL_HTML
+
+    c, pk, kint = k["c"], k["pk"], k["kint"]
+    r = c.post(f"{MP}/tig/{pk.id}/mentes", json={**ADAT, "email_szoveg": "Átírt", "email_targy": "X"})
+    papir_id = r.json()["id"]
+    # A kapcsoló kikapcsolása üres szövegeket küld -> vissza az alapra.
+    r = c.post(f"{MP}/tig/{pk.id}/generalas-es-kuldes?papir_id={papir_id}", json={"email_szoveg": "", "email_targy": " "})
+    assert r.status_code == 200, r.text
+    assert r.json()["email_szoveg"] is None and r.json()["email_targy"] is None
+    assert kint["level"][-1]["html"] == _EMAIL_HTML.format(projekt="Tavaszi kampányfilm (demó)", papir="teljesítési igazolás")
+    assert kint["level"][-1]["subject"] == "Tavaszi kampányfilm (demó) – teljesítési igazolás"

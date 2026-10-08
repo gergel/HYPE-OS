@@ -4288,6 +4288,9 @@ export type MegrendeloiPapir = {
   plusz_afa: boolean | null;
   keltezes: string | null;
   megjegyzes: string | null;
+  /** A kísérőlevél átírt tárgya és szövege - üresen az alap levél megy. */
+  email_targy?: string | null;
+  email_szoveg?: string | null;
   allapot: string | null;
   file_url: string | null;
   alairt_file_url: string | null;

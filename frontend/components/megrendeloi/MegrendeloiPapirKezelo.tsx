@@ -7,6 +7,7 @@ import { IndoklasDialog } from "@/components/IndoklasDialog";
 import { KeresosSelect } from "@/components/KeresosSelect";
 import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
 import { PapirElonezet } from "@/components/PapirElonezet";
+import { LevelSzerkesztoKapcsolo } from "@/components/megrendeloi/LevelSzerkesztoKapcsolo";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -34,6 +35,9 @@ type Urlap = {
   plusz_afa: boolean;
   keltezes: string;
   megjegyzes: string;
+  /** A kísérőlevél átírt tárgya és szövege - üresen az alap levél megy. */
+  email_targy: string;
+  email_szoveg: string;
   client_id: number | null;
   contact_id: number | null;
   keretszerzodes_id: number | null;
@@ -53,6 +57,8 @@ const URES: Urlap = {
   plusz_afa: false,
   keltezes: "",
   megjegyzes: "",
+  email_targy: "",
+  email_szoveg: "",
   client_id: null,
   contact_id: null,
   keretszerzodes_id: null,
@@ -73,6 +79,8 @@ function urlapPapirbol(p: MegrendeloiPapir): Urlap {
     plusz_afa: p.plusz_afa ?? false,
     keltezes: p.keltezes ?? "",
     megjegyzes: p.megjegyzes ?? "",
+    email_targy: p.email_targy ?? "",
+    email_szoveg: p.email_szoveg ?? "",
     client_id: p.client_id,
     contact_id: p.contact_id,
     keretszerzodes_id: p.keretszerzodes_id,
@@ -317,6 +325,9 @@ export function MegrendeloiPapirKezelo({
       plusz_afa: urlap.plusz_afa,
       keltezes: urlap.keltezes || null,
       megjegyzes: urlap.megjegyzes || null,
+      // Üres szöveg = vissza az alap levélre (a szerver None-ként menti).
+      email_targy: urlap.email_targy,
+      email_szoveg: urlap.email_szoveg,
     };
   }
 
@@ -765,6 +776,22 @@ export function MegrendeloiPapirKezelo({
                 />
               </Mezo>
             </div>
+
+            {/* A KIMENŐ LEVÉL ÁTÍRÁSA (a felhasználó kérése): kapcsolóval,
+                az előnézet előtt; átírás nélkül az alap levél megy. */}
+            <LevelSzerkesztoKapcsolo
+              key={szerkesztett?.id ?? "uj"}
+              fajta={fajta}
+              projectCodeId={projectCodeId}
+              projektNev={urlap.projekt_nev}
+              targy={urlap.email_targy}
+              szoveg={urlap.email_szoveg}
+              onChange={(v) => {
+                if (v.targy !== undefined) frissit("email_targy", v.targy);
+                if (v.szoveg !== undefined) frissit("email_szoveg", v.szoveg);
+              }}
+              disabled={dolgozik}
+            />
 
             <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-border pt-4">
               <button

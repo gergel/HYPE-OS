@@ -40,7 +40,7 @@ from app.models.project_code import ProjectCode
 from app.services import document_storage, megrendeloi_papir, megrendeloi_szamla
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
-from app.services.papir_elonezet import ElonezetOut, KimenoPapir, elonezet_valasz
+from app.services.papir_elonezet import ElonezetOut, KimenoPapir, elonezet_valasz, kimeno_level
 from app.services import penznem as penznem_szolg
 from app.services.hu_number_words import szam_betukkel
 
@@ -131,6 +131,10 @@ class PapirIn(BaseModel):
     plusz_afa: bool | None = None
     keltezes: date | None = None
     megjegyzes: str | None = None
+    #: A kísérőlevél átírt tárgya és szövege (a felhasználó kérése). Üres
+    #: szöveg = vissza az alap levélre.
+    email_targy: str | None = None
+    email_szoveg: str | None = None
 
 
 class PapirRead(PapirIn):
@@ -203,6 +207,8 @@ def _kimenet(papir, fajta: str) -> PapirRead:
         plusz_afa=papir.plusz_afa,
         keltezes=papir.keltezes,
         megjegyzes=papir.megjegyzes,
+        email_targy=papir.email_targy,
+        email_szoveg=papir.email_szoveg,
         allapot=papir.allapot,
         file_url=papir.file_url,
         alairt_file_url=papir.alairt_file_url,
@@ -382,6 +388,9 @@ def list_papirok(
 
 def _alkalmaz(papir, payload: PapirIn) -> None:
     for mezo, ertek in payload.model_dump(exclude_unset=True).items():
+        # A levél átírt szövegénél az üres = "mégis az alap levél menjen".
+        if mezo in ("email_targy", "email_szoveg") and isinstance(ertek, str):
+            ertek = ertek.strip() or None
         setattr(papir, mezo, ertek)
 
 
@@ -482,6 +491,16 @@ Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszakülde
 <p>Köszönettel,<br>HYPE Productions Kft.</p>
 """
 
+#: A fenti levél sima szövegként - ezt látja és írhatja át a felhasználó (a
+#: felhasználó kérése; lásd papir_elonezet.kimeno_level). Az aláírás itt a
+#: szöveg része.
+_ALAP_SZOVEG = (
+    "Kedves Partnerünk!\n\n"
+    "Mellékelten küldjük a(z) {projekt} projekthez tartozó {papir}.\n"
+    "Kérjük, ellenőrizzék az adatokat, és aláírva szíveskedjenek visszaküldeni.\n\n"
+    "Köszönettel,\nHYPE Productions Kft."
+)
+
 
 def _projekt_neve(papir, pk: ProjectCode) -> str:
     """A PROJEKT NEVE a levélhez - nem a projektkód.
@@ -576,11 +595,19 @@ def _kimeno(papir, fajta: str, pk: ProjectCode) -> KimenoPapir:
     # A LEVÉLBEN a projekt NEVE megy, nem a kódja - a fájlnévben viszont
     # marad a kód: az iktatáshoz az a jó, mert egyedi.
     projekt_neve = _projekt_neve(papir, pk)
+    alap_targy = f"{projekt_neve} – {cimke}" if projekt_neve else cimke.capitalize()
+    alap_szoveg = _ALAP_SZOVEG.format(projekt=projekt_neve, papir=cimke)
+    level_html, szoveg = kimeno_level(
+        _EMAIL_HTML.format(projekt=projekt_neve, papir=cimke), alap_szoveg, papir.email_szoveg, alairas=False
+    )
     return KimenoPapir(
         cimzett=papir.email or "",
-        targy=f"{projekt_neve} – {cimke}" if projekt_neve else cimke.capitalize(),
-        level_html=_EMAIL_HTML.format(projekt=projekt_neve, papir=cimke),
+        targy=(papir.email_targy or "").strip() or alap_targy,
+        level_html=level_html,
         mezok=_sablon_mezok(papir, fajta),
+        alap_targy=alap_targy,
+        alap_szoveg=alap_szoveg,
+        szoveg=szoveg,
     )
 
 

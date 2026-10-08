@@ -125,6 +125,10 @@ class MegrendeloiSzerzodes(TimestampMixin, Base):
 
     kihagyas_oka: Mapped[str | None] = mapped_column(Text)
     megjegyzes: Mapped[str | None] = mapped_column(Text)
+    #: A kísérőlevél átírt tárgya és szövege (a felhasználó kérése) - üresen
+    #: az alap levél megy (lásd routes/megrendeloi_papirok._kimeno).
+    email_targy: Mapped[str | None] = mapped_column(String(500))
+    email_szoveg: Mapped[str | None] = mapped_column(Text)
 
     project_code: Mapped["ProjectCode"] = relationship()
     client: Mapped["Client | None"] = relationship()
@@ -168,6 +172,10 @@ class MegrendeloiTig(TimestampMixin, Base):
 
     kihagyas_oka: Mapped[str | None] = mapped_column(Text)
     megjegyzes: Mapped[str | None] = mapped_column(Text)
+    #: A kísérőlevél átírt tárgya és szövege (a felhasználó kérése) - üresen
+    #: az alap levél megy (lásd routes/megrendeloi_papirok._kimeno).
+    email_targy: Mapped[str | None] = mapped_column(String(500))
+    email_szoveg: Mapped[str | None] = mapped_column(Text)
 
     project_code: Mapped["ProjectCode"] = relationship()
     client: Mapped["Client | None"] = relationship()
