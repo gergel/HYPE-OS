@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { IndoklasDialog } from "@/components/IndoklasDialog";
 import { KeresosSelect } from "@/components/KeresosSelect";
 import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
+import { PapirElonezet } from "@/components/PapirElonezet";
 import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -190,6 +191,9 @@ export function MegrendeloiPapirKezelo({
   const [munka, setMunka] = useState<"mentes" | "kuldes" | "kihagyas" | null>(null);
   const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
   const [kuldesNyitva, setKuldesNyitva] = useState(false);
+  // Az előnézet útvonala - a megnyitáskor dől el (a papír azonosítója a
+  // mentés után derül ki, lásd utvonal).
+  const [elonezetUt, setElonezetUt] = useState<string | null>(null);
   // Van-e a választott megrendelővel ÉLŐ keretszerződés. Nem tiltás, csak
   // figyelmeztetés: a keret alatt eseti szerződés nem kell (a TIG viszont
   // igen), és jobb ezt a papír megírása ELŐTT tudni.
@@ -383,6 +387,7 @@ export function MegrendeloiPapirKezelo({
       toast("Add meg a nettó összeget.");
       return;
     }
+    setElonezetUt(utvonal("elonezet"));
     setKuldesNyitva(true);
   }
 
@@ -800,6 +805,17 @@ export function MegrendeloiPapirKezelo({
                   router.refresh();
                 }}
               />
+              {/* ELŐNÉZET (a felhasználó kérése): ugyanaz az ablak, mint a
+                  küldés előtti ellenőrzés - benne a kitöltött dokumentum és a
+                  levél, és onnan lehet továbbküldeni. */}
+              <button
+                type="button"
+                onClick={kuldesInditasa}
+                disabled={dolgozik}
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Előnézet
+              </button>
               <button
                 type="button"
                 onClick={kuldesInditasa}
@@ -816,13 +832,15 @@ export function MegrendeloiPapirKezelo({
       {kuldesNyitva && (
         <KuldesEllenorzo
           cim={`${cimke.charAt(0).toUpperCase()}${cimke.slice(1)} kiküldése`}
-          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben."
+          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben. Lent az előnézet: pontosan ez menne ki."
           cimzett={urlap.email || null}
           sorok={ellenorzoSorok()}
           gombCimke="Generálás és küldés"
           onMegse={() => setKuldesNyitva(false)}
           onKuld={kuldes}
-        />
+        >
+          {elonezetUt && <PapirElonezet path={elonezetUt} payload={torzs()} />}
+        </KuldesEllenorzo>
       )}
 
       {kihagyasNyitva && (

@@ -64,7 +64,9 @@ class ElonezetOut(BaseModel):
     szoveg: str | None = None
 
 
-def elonezet_valasz(kimeno: KimenoPapir, sablon_id: str | None, *, pdf: bool) -> ElonezetOut:
+def elonezet_valasz(
+    kimeno: KimenoPapir, sablon_id: str | None, *, pdf: bool, sablon_nelkul: str | None = None
+) -> ElonezetOut:
     """Az előnézet válasza; a PDF-et csak kérésre készíti el (Google-hívás)."""
     valasz = ElonezetOut(
         cimzett=kimeno.cimzett or None, targy=kimeno.targy, level_html=kimeno.level_html,
@@ -73,7 +75,7 @@ def elonezet_valasz(kimeno: KimenoPapir, sablon_id: str | None, *, pdf: bool) ->
     if not pdf:
         return valasz
     if kimeno.mezok is None or not sablon_id:
-        valasz.pdf_hiba = "Nincs beállítva dokumentum-sablon - a levél PDF melléklet nélkül menne ki."
+        valasz.pdf_hiba = sablon_nelkul or "Nincs beállítva dokumentum-sablon - a levél PDF melléklet nélkül menne ki."
         return valasz
     try:
         adat = gdoc_elonezet_pdf(template_file_id=sablon_id, base_name=kimeno.targy, fields=kimeno.mezok)

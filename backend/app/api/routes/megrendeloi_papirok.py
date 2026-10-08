@@ -40,6 +40,7 @@ from app.models.project_code import ProjectCode
 from app.services import document_storage, megrendeloi_papir, megrendeloi_szamla
 from app.services.gdoc_template import gdoc_fill_export_and_store_pdf
 from app.services.google_email import send_message
+from app.services.papir_elonezet import ElonezetOut, KimenoPapir, elonezet_valasz
 from app.services import penznem as penznem_szolg
 from app.services.hu_number_words import szam_betukkel
 
@@ -535,22 +536,19 @@ def generate_and_send(
         )
 
     papir.keltezes = papir.keltezes or date.today()
-    cimke = "megrendelői szerződés" if fajta == SZERZODES else "teljesítési igazolás"
-    base_name = f"{pk.projektkod}_{papir.ceg_neve or 'megrendelo'}_{'szerzodes' if fajta == SZERZODES else 'TIG'}"
+    base_name = _fajlnev(papir, fajta, pk)
+    kimeno = _kimeno(papir, fajta, pk)
     try:
         pdf_bytes, pdf_link = gdoc_fill_export_and_store_pdf(
             template_file_id=sablon_id,
             base_name=base_name,
-            fields=_sablon_mezok(papir, fajta),
+            fields=kimeno.mezok,
             output_folder_id=settings.gdoc_output_folder_id or settings.drive_folder_id or None,
         )
-        # A LEVÉLBEN a projekt NEVE megy, nem a kódja - a fájlnévben viszont
-        # marad a kód: az iktatáshoz az a jó, mert egyedi.
-        projekt_neve = _projekt_neve(papir, pk)
         send_message(
-            [papir.email],
-            f"{projekt_neve} – {cimke}" if projekt_neve else cimke.capitalize(),
-            _EMAIL_HTML.format(projekt=projekt_neve, papir=cimke),
+            [kimeno.cimzett],
+            kimeno.targy,
+            kimeno.level_html,
             pdf_bytes=pdf_bytes,
             pdf_filename=f"{base_name}.pdf",
         )
@@ -565,6 +563,59 @@ def generate_and_send(
     db.commit()
     db.refresh(papir)
     return _kimenet(papir, fajta)
+
+
+def _fajlnev(papir, fajta: str, pk: ProjectCode) -> str:
+    return f"{pk.projektkod}_{papir.ceg_neve or 'megrendelo'}_{'szerzodes' if fajta == SZERZODES else 'TIG'}"
+
+
+def _kimeno(papir, fajta: str, pk: ProjectCode) -> KimenoPapir:
+    """Ami a kiküldéskor kimegy - a kiküldés és az előnézet is ezt használja
+    (lásd services/papir_elonezet.py)."""
+    cimke = "megrendelői szerződés" if fajta == SZERZODES else "teljesítési igazolás"
+    # A LEVÉLBEN a projekt NEVE megy, nem a kódja - a fájlnévben viszont
+    # marad a kód: az iktatáshoz az a jó, mert egyedi.
+    projekt_neve = _projekt_neve(papir, pk)
+    return KimenoPapir(
+        cimzett=papir.email or "",
+        targy=f"{projekt_neve} – {cimke}" if projekt_neve else cimke.capitalize(),
+        level_html=_EMAIL_HTML.format(projekt=projekt_neve, papir=cimke),
+        mezok=_sablon_mezok(papir, fajta),
+    )
+
+
+@router.post("/{fajta}/{project_code_id}/elonezet", response_model=ElonezetOut)
+def elonezet(
+    fajta: str,
+    project_code_id: int,
+    payload: PapirIn,
+    papir_id: int | None = None,
+    pdf: bool = True,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(papir_jog("create")),
+):
+    """ELŐNÉZET a kiküldés előtt (a felhasználó kérése): pontosan az a levél
+    és az a kitöltött dokumentum, ami a "Generálás és küldés"-sel kimenne - de
+    SEMMI nem mentődik és semmi nem megy ki. A beírt (még nem mentett)
+    adatokból dolgozik, egy visszagörgetett mentési ponton belül; a PDF egy
+    ideiglenes Google-dokumentumból készül, ami utána törlődik."""
+    pk = _projektkod_vagy_404(db, project_code_id)
+    mentesi_pont = db.begin_nested()
+    try:
+        papir = _uj_vagy_meglevo(db, fajta, project_code_id, papir_id)
+        _alkalmaz(papir, payload)
+        papir.project_code = pk
+        papir.keltezes = papir.keltezes or date.today()
+        kimeno = _kimeno(papir, fajta, pk)
+    finally:
+        if mentesi_pont.is_active:
+            mentesi_pont.rollback()
+    sablon_id, beallitas_nev = _sablon(fajta)
+    return elonezet_valasz(
+        kimeno, sablon_id, pdf=pdf,
+        # Itt sablon nélkül a küldés sem megy (lásd generate_and_send).
+        sablon_nelkul=f"Nincs beállítva a dokumentum-sablon ({beallitas_nev}) - így a papír nem is küldhető ki.",
+    )
 
 
 class AllapotIn(BaseModel):

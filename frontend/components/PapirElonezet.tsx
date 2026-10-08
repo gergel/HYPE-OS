@@ -81,7 +81,7 @@ export function PapirElonezet({
     let ervenyes = true;
     const adat = JSON.parse(kulcs) as unknown;
     const idozito = setTimeout(() => {
-      lekeres(`${path}?pdf=false`, adat)
+      lekeres(`${path}${path.includes("?") ? "&" : "?"}pdf=false`, adat)
         .then((v) => {
           if (!ervenyes) return;
           setLevel(v);
