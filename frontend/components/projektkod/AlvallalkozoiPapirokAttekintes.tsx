@@ -9,6 +9,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { authFetch } from "@/lib/authFetch";
 import { formatFt } from "@/lib/ido";
 import type { ElkeszultSzerzodes, PerformanceCertificate } from "@/lib/api";
+import { tigAllapotCimke } from "@/lib/tigAllapot";
 
 function tigSzamlazoKulcs(t: PerformanceCertificate): string {
   return t.vallalkozas_id ? `v${t.vallalkozas_id}` : `e${t.employee_id}`;
@@ -131,7 +132,7 @@ export function AlvallalkozoiPapirokAttekintes({
                           ? "Kifizetve"
                           : t.szamla_kihagyva
                             ? "Nincs számla"
-                            : (t.allapot ?? "Készítés alatt")
+                            : tigAllapotCimke(t.allapot, t.csak_generalva)
                       }
                       tone={t.szamla_kifizetve ? "success" : t.allapot === "Kiküldve" ? "warning" : "neutral"}
                     />

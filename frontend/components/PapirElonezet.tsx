@@ -57,10 +57,13 @@ export function PapirElonezet({
   path,
   payload,
   szerkeszto,
+  csakDokumentum = false,
 }: {
   path: string;
   payload: unknown;
   szerkeszto?: LevelSzerkeszto;
+  /** Csak a dokumentum (pl. kiküldés nélküli generálásnál nincs levél). */
+  csakDokumentum?: boolean;
 }) {
   const [level, setLevel] = useState<Elonezet | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -74,6 +77,7 @@ export function PapirElonezet({
 
   // A levél: gépelés közben kis késleltetéssel (ne minden betűre kérdezzen).
   useEffect(() => {
+    if (csakDokumentum) return;
     let ervenyes = true;
     const adat = JSON.parse(kulcs) as unknown;
     const idozito = setTimeout(() => {
@@ -89,7 +93,7 @@ export function PapirElonezet({
       ervenyes = false;
       clearTimeout(idozito);
     };
-  }, [path, kulcs]);
+  }, [path, kulcs, csakDokumentum]);
 
   // A dokumentum (PDF): csak ha a papírra kerülő adat változik.
   useEffect(() => {
@@ -121,8 +125,10 @@ export function PapirElonezet({
 
   return (
     <div className="mt-4 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">Előnézet – így megy ki</p>
-      {hiba ? (
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+        {csakDokumentum ? "Előnézet – így készül el a dokumentum" : "Előnézet – így megy ki"}
+      </p>
+      {csakDokumentum ? null : hiba ? (
         <p className="text-[12.5px] text-text-danger">Az előnézet nem készült el: {hiba}</p>
       ) : !level ? (
         <p className="text-[12.5px] text-text-muted">Az előnézet készül…</p>

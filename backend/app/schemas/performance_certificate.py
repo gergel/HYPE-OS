@@ -52,6 +52,8 @@ class PerformanceCertificateRead(BaseModel):
     projekt_szoveg: str | None = None
     email_targy: str | None = None
     file_url: str | None = None
+    #: Csak legenerálva, nem ment ki e-mailben (lásd models.csak_generalva).
+    csak_generalva: bool = False
     ceg_neve: str | None = None
     szekhely: str | None = None
     adoszam: str | None = None

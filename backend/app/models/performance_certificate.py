@@ -57,6 +57,11 @@ class PerformanceCertificate(TimestampMixin, Base):
     #: (a felhasználó kérése; lásd services/papir_elonezet.kimeno_level).
     email_szoveg: Mapped[str | None] = mapped_column(Text)
     file_url: Mapped[str | None] = mapped_column(String(500), comment="A TIG dokumentum linkje")
+    #: CSAK LEGENERÁLVA, nem ment ki e-mailben (a felhasználó kérése: az
+    #: utókövetésben lehessen csak generálni). Az állapot ilyenkor is
+    #: "Kiküldve" (= a TIG kész, mehet a számla-fázis), ez mondja meg, hogy a
+    #: levél nem ment ki - a kiküldött TIG-nél hamis.
+    csak_generalva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     # Csak akkor van kitöltve, ha a TIG dokumentumot MI tároljuk (a kiküldés
     # helyett feltöltött saját papír az R2-n) - a rendszer által generált,
     # Drive-on maradó dokumentumnál üres, mert azt nem a mi tárhelyünkről

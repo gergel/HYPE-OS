@@ -54,6 +54,7 @@ MAR_VAN = "Van már szerződés"
 #: A naplóból a heti összesítő csoportjai.
 HETI_CSOPORTOK = {
     "kikuldes": "Kiküldött papír",
+    "generalas": "Generált papír (nem ment ki)",
     "sajat_fajl": "Feltöltött saját papír",
     "alairt_feltoltes": "Aláírt példány megjött",
     "szamla_feltoltes": "Számla feltöltve",

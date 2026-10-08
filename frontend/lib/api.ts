@@ -1620,6 +1620,8 @@ export type KulsosTig = {
   /** Hány projekt munkáját igazolja összesen (1 = csak a sajátját). */
   projektek_szama: number;
   allapot: string | null;
+  /** Csak legenerálva, nem ment ki e-mailben. */
+  csak_generalva?: boolean;
   kihagyas_oka: string | null;
   megbizas_targya: string | null;
   netto_osszeg: number | null;
@@ -2213,6 +2215,8 @@ export type PerformanceCertificate = {
   /** Miért hagytuk ki, ha a fenti `allapot` "Kihagyva". */
   kihagyas_oka: string | null;
   file_url: string | null;
+  /** Csak legenerálva, nem ment ki e-mailben ("Kiküldve" állapot mellett). */
+  csak_generalva?: boolean;
   ceg_neve: string | null;
   netto_osszeg: number | null;
   plusz_afa: boolean | null;

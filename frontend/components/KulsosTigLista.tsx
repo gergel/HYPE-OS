@@ -8,6 +8,7 @@ import { StopClickPropagation } from "@/components/StopClickPropagation";
 import type { KulsosTig } from "@/lib/api";
 import { datum } from "@/lib/utokovetes";
 import { formatFt } from "@/lib/ido";
+import { tigAllapotCimke } from "@/lib/tigAllapot";
 
 /** A külsős TIG-ek táblázata, felugró ablakkal.
  *
@@ -109,7 +110,7 @@ export function KulsosTigLista({ rows }: { rows: KulsosTig[] }) {
                       {t.allapot === "Kihagyva" ? (
                         <StatusBadge label="Kihagyva" tone="neutral" />
                       ) : t.allapot === "Kiküldve" ? (
-                        <StatusBadge label="Kiküldve" tone="success" />
+                        <StatusBadge label={tigAllapotCimke(t.allapot, t.csak_generalva)} tone="success" />
                       ) : (
                         <StatusBadge label={t.allapot ?? "Készítés alatt"} tone="warning" />
                       )}

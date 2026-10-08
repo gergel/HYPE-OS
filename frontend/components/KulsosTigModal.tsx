@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { authFetch } from "@/lib/authFetch";
 import { formatFt } from "@/lib/ido";
 import type { KulsosTigReszlet } from "@/lib/api";
+import { tigAllapotCimke } from "@/lib/tigAllapot";
 
 /** EGY külsős TIG adatlapja felugró ablakban.
  *
@@ -99,7 +100,7 @@ export function KulsosTigModal({ tigId, onClose }: { tigId: number; onClose: () 
                 {adat.allapot === "Kihagyva" ? (
                   <StatusBadge label="Kihagyva" tone="neutral" />
                 ) : adat.allapot === "Kiküldve" ? (
-                  <StatusBadge label="Kiküldve" tone="success" />
+                  <StatusBadge label={tigAllapotCimke(adat.allapot, adat.csak_generalva)} tone="success" />
                 ) : (
                   <StatusBadge label={adat.allapot ?? "Készítés alatt"} tone="warning" />
                 )}

@@ -2,6 +2,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatFt } from "@/lib/ido";
 import type { ElkeszultSzerzodes, PerformanceCertificate, ProjektkodBontas } from "@/lib/api";
+import { tigAllapotCimke } from "@/lib/tigAllapot";
 
 /** Egy forgatás PAPÍRJAI és KÖLTSÉGE, áttekintésként a projekt adatlapján.
  *
@@ -106,7 +107,7 @@ export function ProjektPapirokEsKoltsegek({
                         ? "Kifizetve"
                         : t.szamla_kihagyva
                           ? "Nincs számla"
-                          : (t.allapot ?? "Készítés alatt")
+                          : tigAllapotCimke(t.allapot, t.csak_generalva)
                     }
                     tone={t.szamla_kifizetve ? "success" : t.allapot === "Kiküldve" ? "warning" : "neutral"}
                   />

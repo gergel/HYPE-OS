@@ -1216,6 +1216,32 @@ def generate_and_send(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
+    return _generalas(db, project_id, szamlazo_kulcs, payload, kuldes=True)
+
+
+@router.post("/{project_id}/{szamlazo_kulcs}/generalas", response_model=PerformanceCertificateRead)
+def generalas_kikuldes_nelkul(
+    project_id: int,
+    szamlazo_kulcs: str,
+    payload: TigDraftIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """CSAK GENERÁLÁS (a felhasználó kérése): a TIG ugyanúgy elkészül és
+    felkerül a rendszerbe (Drive-dokumentum, "Kiküldve" = kész állapot, mehet
+    a számla-fázis), de e-mail NEM megy ki. A `csak_generalva` jelzi, hogy a
+    levél nem ment ki. A generálás és küldés mellette változatlan."""
+    return _generalas(db, project_id, szamlazo_kulcs, payload, kuldes=False)
+
+
+def _nincs_mit_generalni() -> HTTPException:
+    return HTTPException(
+        status_code=400,
+        detail="Nincs beállítva TIG-sablon - kiküldés nélkül nincs mit legenerálni. Tölts fel saját TIG-et helyette.",
+    )
+
+
+def _generalas(db: Session, project_id: int, szamlazo_kulcs: str, payload: TigDraftIn, *, kuldes: bool):
     project = _get_project_or_404(db, project_id)
     csoport = _validate_szamlazo(db, project, szamlazo_kulcs)
     fel = csoport.fel
@@ -1227,8 +1253,10 @@ def generate_and_send(
         raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
     draft.keltezes = draft.keltezes or date.today()
     kimeno = _kimeno_tig(project, csoport, draft)
-    if not kimeno.cimzett:
+    if kuldes and not kimeno.cimzett:
         raise HTTPException(status_code=400, detail="Nincs email cím - se a résztvevőnek, se a számlázó félnek.")
+    if not kuldes and kimeno.mezok is None:
+        raise _nincs_mit_generalni()
 
     doc_link = None
     pdf_bytes = None
@@ -1245,10 +1273,11 @@ def generate_and_send(
             )
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
 
-        send_message(
-            [kimeno.cimzett], kimeno.targy, kimeno.level_html,
-            pdf_bytes=pdf_bytes, pdf_filename="teljesitesi_igazolas.pdf",
-        )
+        if kuldes:
+            send_message(
+                [kimeno.cimzett], kimeno.targy, kimeno.level_html,
+                pdf_bytes=pdf_bytes, pdf_filename="teljesitesi_igazolas.pdf",
+            )
     except RuntimeError as exc:
         # A kitöltött adatokat akkor is mentsük el, ha a küldés elhasal (pl.
         # hiányzó Google hitelesítő adat) - ne vesszen el az eddigi munka.
@@ -1257,6 +1286,7 @@ def generate_and_send(
 
     draft.allapot = "Kiküldve"
     draft.file_url = doc_link
+    draft.csak_generalva = not kuldes
     db.commit()
     db.refresh(draft)
     return PerformanceCertificateRead.model_validate(draft)
@@ -2101,6 +2131,24 @@ def generate_and_send_projektkodon(
     db: Session = Depends(get_db),
     _user: Employee = Depends(require_page_action(PAGE, "create")),
 ):
+    return _generalas_projektkodon(db, project_code_id, szamlazo_kulcs, payload, kuldes=True)
+
+
+@router.post("/projektkodok/{project_code_id}/{szamlazo_kulcs}/generalas", response_model=PerformanceCertificateRead)
+def generalas_kikuldes_nelkul_projektkodon(
+    project_code_id: int,
+    szamlazo_kulcs: str,
+    payload: TigDraftInProjektkod,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "create")),
+):
+    """CSAK GENERÁLÁS a projektkódos ágon - lásd generalas_kikuldes_nelkul."""
+    return _generalas_projektkodon(db, project_code_id, szamlazo_kulcs, payload, kuldes=False)
+
+
+def _generalas_projektkodon(
+    db: Session, project_code_id: int, szamlazo_kulcs: str, payload: TigDraftInProjektkod, *, kuldes: bool
+):
     projektkod = _get_project_code_or_404(db, project_code_id)
     csoport = _validate_szamlazo_projektkodon(db, projektkod, szamlazo_kulcs)
     draft = _get_or_create_draft_projektkodon(db, projektkod, csoport)
@@ -2110,8 +2158,10 @@ def generate_and_send_projektkodon(
         raise HTTPException(status_code=400, detail="Add meg a nettó összeget.")
     draft.keltezes = draft.keltezes or date.today()
     kimeno = _kimeno_tig_projektkodon(projektkod, csoport, draft)
-    if not kimeno.cimzett:
+    if kuldes and not kimeno.cimzett:
         raise HTTPException(status_code=400, detail="A számlázó félnek nincs email címe.")
+    if not kuldes and kimeno.mezok is None:
+        raise _nincs_mit_generalni()
 
     doc_link = None
     pdf_bytes = None
@@ -2124,16 +2174,18 @@ def generate_and_send_projektkodon(
                 output_folder_id=settings.drive_kulsos_tig or settings.gdoc_output_folder_id or settings.drive_folder_id or None,
             )
             doc_link = f"https://docs.google.com/document/d/{new_doc_id}/edit"
-        send_message(
-            [kimeno.cimzett], kimeno.targy, kimeno.level_html, pdf_bytes=pdf_bytes,
-            pdf_filename="teljesitesi_igazolas.pdf",
-        )
+        if kuldes:
+            send_message(
+                [kimeno.cimzett], kimeno.targy, kimeno.level_html, pdf_bytes=pdf_bytes,
+                pdf_filename="teljesitesi_igazolas.pdf",
+            )
     except RuntimeError as exc:
         db.commit()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     draft.allapot = "Kiküldve"
     draft.file_url = doc_link
+    draft.csak_generalva = not kuldes
     db.commit()
     db.refresh(draft)
     return PerformanceCertificateRead.model_validate(draft)

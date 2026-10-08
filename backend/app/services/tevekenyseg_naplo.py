@@ -57,6 +57,7 @@ TARGYAK: list[tuple[str, str, str]] = [
 MUVELETEK: list[tuple[str | None, str, str | None, str]] = [
     (None, r"/elonezet$", None, ""),
     ("POST", r"/(generate-and-send|generalas-es-kuldes)$", "kikuldes", "generálva és kiküldve"),
+    ("POST", r"/generalas$", "generalas", "legenerálva, kiküldés nélkül"),
     ("POST", r"/(save|mentes)$", "mentes", "piszkozat mentve"),
     ("POST", r"/(skip|kihagyas)$", "kihagyas", "KIHAGYVA"),
     ("POST", r"/mar-van$", "mar_van", "„van már” jelölés (nem itt készült)"),

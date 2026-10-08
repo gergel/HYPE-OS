@@ -27,6 +27,7 @@ export function KuldesEllenorzo({
   onMegse,
   onKuld,
   children,
+  emailNelkul = false,
 }: {
   cim: string;
   /** Kinek megy az e-mail. Üresen a küldés hibára fut, ezért ez is kiemelt. */
@@ -41,6 +42,8 @@ export function KuldesEllenorzo({
   /** Amit még a küldés előtt meg kell adni (pl. a kísérőlevél szövege).
    * Az adatok ALATT jelenik meg: előbb az ellenőrzés, aztán a szerkesztés. */
   children?: React.ReactNode;
+  /** Csak generálás, e-mail nélkül (a felhasználó kérése) - nincs címzett. */
+  emailNelkul?: boolean;
 }) {
   const hianyzok = sorok.filter((s) => !(s.ertek ?? "").trim()).map((s) => s.cimke);
 
@@ -60,7 +63,11 @@ export function KuldesEllenorzo({
         <div className="max-h-[65vh] overflow-y-auto p-5">
           <div className="mb-4 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
             <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Címzett</p>
-            {cimzett?.trim() ? (
+            {emailNelkul ? (
+              <p className="text-[13px] text-text-secondary">
+                Nem megy ki e-mail – a dokumentum csak elkészül és felkerül a rendszerbe.
+              </p>
+            ) : cimzett?.trim() ? (
               <p className="text-[13px] text-text-primary">{cimzett}</p>
             ) : (
               <p className="text-[13px] text-text-danger">

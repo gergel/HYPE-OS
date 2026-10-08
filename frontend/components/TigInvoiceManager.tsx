@@ -324,6 +324,11 @@ export function TigInvoiceManager({
                       value={c.allapot}
                       canEdit={canEdit}
                     />
+                    {/* Csak legenerálták (a felhasználó kérése) - a "Kiküldve"
+                        itt azt jelenti: kész, de e-mailben nem ment ki. */}
+                    {c.allapot === "Kiküldve" && c.csak_generalva && (
+                      <span className="mt-1 block text-[11px] text-text-warning">Csak legenerálva – e-mailben nem ment ki</span>
+                    )}
                   </td>
                   {/* Az elkészült TIG dokumentuma: a generálás+küldés után ez
                       mutatja meg, mi ment ki - enélkül a kiküldött TIG-hez

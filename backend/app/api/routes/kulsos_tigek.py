@@ -56,6 +56,8 @@ class KulsosTig(BaseModel):
     projektek_szama: int = 1
 
     allapot: str | None = None
+    #: Csak legenerálva, nem ment ki e-mailben (lásd models.csak_generalva).
+    csak_generalva: bool = False
     #: MIÉRT hagytuk ki - csak a kihagyottaknál van kitöltve.
     kihagyas_oka: str | None = None
     megbizas_targya: str | None = None
@@ -150,6 +152,7 @@ def list_kulsos_tigek(
                 forgatas_datuma=projekt.forgatas_datuma if projekt else None,
                 projektek_szama=projektek_szama,
                 allapot=t.allapot,
+                csak_generalva=bool(t.csak_generalva),
                 kihagyas_oka=t.kihagyas_oka,
                 megbizas_targya=t.megbizas_targya,
                 netto_osszeg=netto,
@@ -266,6 +269,7 @@ def get_kulsos_tig(
         forgatas_datuma=projekt.forgatas_datuma if projekt else None,
         projektek_szama=projektek_szama,
         allapot=t.allapot,
+        csak_generalva=bool(t.csak_generalva),
         kihagyas_oka=t.kihagyas_oka,
         megbizas_targya=t.megbizas_targya,
         netto_osszeg=netto,

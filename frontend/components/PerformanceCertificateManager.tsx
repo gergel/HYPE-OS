@@ -101,9 +101,11 @@ export function PerformanceCertificateManager({
   const [selectedId, setSelectedId] = useState<string>("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
-  const [busy, setBusy] = useState<"save" | "send" | "skip" | null>(null);
+  const [busy, setBusy] = useState<"save" | "send" | "skip" | "gen" | null>(null);
   const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
   const [kuldesNyitva, setKuldesNyitva] = useState(false);
+  // CSAK GENERÁLÁS (a felhasználó kérése): elkészül és felkerül, de nem megy ki.
+  const [generalasNyitva, setGeneralasNyitva] = useState(false);
 
   // A TIG TÉTELEI: mit igazol ez a papír. Alapból a projekten hozzá tartozó
   // stábtagok, de más projektek nyitott munkái is rátehetők - ez az "egy ember
@@ -322,6 +324,42 @@ export function PerformanceCertificateManager({
       router.refresh();
     } catch (err) {
       alert(`Sikertelen küldés (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function generalasInditasa() {
+    if (!selectedEmployee || !form) return;
+    if (!form.netto_osszeg.trim() || Number.isNaN(Number(form.netto_osszeg)) || Number(form.netto_osszeg) <= 0) {
+      alert("Add meg a nettó összeget.");
+      return;
+    }
+    setGeneralasNyitva(true);
+  }
+
+  /** Csak generálás: a TIG elkészül és felkerül a rendszerbe (kész állapot,
+   * mehet a számla), de e-mail NEM megy ki - lásd backend
+   * performance_certificates.generalas_kikuldes_nelkul. */
+  async function handleGeneralas() {
+    if (!selectedEmployee || !form) return;
+    setGeneralasNyitva(false);
+    setBusy("gen");
+    try {
+      const res = await authFetch(`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/generalas`, {
+        method: "POST",
+        body: JSON.stringify(buildPayload()),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen generálás: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      closeForm();
+      setSelectedId("");
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen generálás (hálózati hiba): ${err}`);
     } finally {
       setBusy(null);
     }
@@ -604,6 +642,17 @@ export function PerformanceCertificateManager({
               >
                 Előnézet
               </button>
+              {/* CSAK GENERÁLÁS (a felhasználó kérése): elkészül és felkerül a
+                  rendszerbe, de nem megy ki e-mailben. */}
+              <button
+                type="button"
+                onClick={generalasInditasa}
+                disabled={busyState}
+                title="A TIG elkészül és felkerül a rendszerbe, de e-mailben nem megy ki"
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                {busy === "gen" ? "Generálás…" : "Csak generálás (nem küldi ki)"}
+              </button>
               <button
                 type="button"
                 onClick={kuldesInditasa}
@@ -641,6 +690,23 @@ export function PerformanceCertificateManager({
               },
             }}
           />
+        </KuldesEllenorzo>
+      )}
+      {generalasNyitva && selectedEmployee && (
+        <KuldesEllenorzo
+          cim="Teljesítési igazolás generálása – kiküldés nélkül"
+          bevezeto="A dokumentum ezekkel az adatokkal generálódik és felkerül a rendszerbe (kész TIG, jöhet a számla), de e-mailben NEM megy ki. Lent az előnézet."
+          cimzett={selectedEmployee.email}
+          emailNelkul
+          sorok={ellenorzoSorok()}
+          tetelek={valaszthato
+            .filter((t) => kivalasztott.has(tetelKulcs(t)))
+            .map((t) => `${t.employee_nev} – ${t.projektkod ? `${t.projektkod} – ` : ""}${t.project_nev ?? ""}`)}
+          gombCimke="Generálás (kiküldés nélkül)"
+          onMegse={() => setGeneralasNyitva(false)}
+          onKuld={handleGeneralas}
+        >
+          <PapirElonezet path={`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/elonezet`} payload={buildPayload()} csakDokumentum />
         </KuldesEllenorzo>
       )}
       {kihagyasNyitva && (
