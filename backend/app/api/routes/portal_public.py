@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -482,9 +482,20 @@ def public_image_file(image_id: int, db: Session = Depends(get_db)):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FELTÖLTŐ LINK (a felhasználó kérése): aki a linket kapja, mappát hozhat
-# létre és feltölthet a portálra (vagy csak a kijelölt mappájába) - törölni
-# viszont SEMMIT nem tud (ilyen végpont ezen a tokenen nincs is).
+# létre és feltölthet a portálra (vagy csak a kijelölt mappájába).
+#
+# KI MIT LÁT (a felhasználó kérése): mindenki csak a SAJÁT feltöltéseit látja,
+# és azokból törölni is tud. A feltöltő böngészője egy véletlen azonosítót
+# küld (X-Feltolto-Kulcs fejléc); ennek a sha256-lenyomata kerül a mappára,
+# videóra, képre. Más feltöltő mappája és fájljai nem látszanak; az admin
+# felületen létrehozott mappák mindenkinek látszanak (oda lehet feltölteni),
+# de a bennük lévő MÁS fájlok nem. Törölni csak a sajátot lehet.
+#
+# PÁRHUZAMOS feltöltés: a lassú részek (fájl mentése, R2-feltöltés) szálon
+# futnak, így több feltöltés egyszerre haladhat (lásd _szalon).
 # ─────────────────────────────────────────────────────────────────────────────
+
+FELTOLTO_FEJLEC = "X-Feltolto-Kulcs"
 
 
 def _feltolto_link(db: Session, token: str):
@@ -499,17 +510,62 @@ def _feltolto_link(db: Session, token: str):
     return link
 
 
+def _feltolto(request: Request, kotelezo: bool = True) -> str | None:
+    """A feltöltő böngészőjének azonosítója - lenyomatként (sha256), a nyers
+    érték nem kerül az adatbázisba."""
+    import hashlib
+    import re as _re
+
+    nyers = (request.headers.get(FELTOLTO_FEJLEC) or "").strip()
+    if not nyers or not _re.fullmatch(r"[A-Za-z0-9_-]{16,128}", nyers):
+        if kotelezo:
+            raise HTTPException(
+                status_code=400, detail="Hiányzik a feltöltő azonosítója - frissítsd az oldalt, és próbáld újra."
+            )
+        return None
+    return hashlib.sha256(nyers.encode()).hexdigest()
+
+
+def _lathato_mappa(f, link, kulcs: str | None) -> bool:
+    """Az admin mappái mindenkinek, a feltöltő-készítette mappa csak a
+    készítőjének látszik; mappára szűkített linknél csak az az egy."""
+    if link.folder_id is not None:
+        return f.id == link.folder_id
+    return f.feltolto_kulcs is None or (kulcs is not None and f.feltolto_kulcs == kulcs)
+
+
+def _fajl_sor(elem, tipus: str) -> dict:
+    return {
+        "tipus": tipus,
+        "id": elem.id,
+        "title": elem.title or ("Videó" if tipus == "video" else "Kép"),
+        "folder_id": elem.folder_id,
+        "status": getattr(elem, "status", "ready"),
+        "thumbnail_url": elem.thumbnail_url,
+        "size_bytes": elem.size_bytes or 0,
+        "created_at": elem.created_at,
+    }
+
+
 @router.get("/feltoltes/{token}")
-def feltoltes_adatok(token: str, db: Session = Depends(get_db)):
-    """Mit lát a feltöltő link birtokosa: a portál címe és a mappák (a
-    kijelölt mappára szűkítve, ha a link csak oda szól)."""
+def feltoltes_adatok(token: str, request: Request, db: Session = Depends(get_db)):
+    """Mit lát a feltöltő link birtokosa: a portál címe, a látható mappák, és
+    a SAJÁT feltöltései (mappánként és mappa nélkül)."""
+    from app.models.portal import PortalFolder
+
     link = _feltolto_link(db, token)
     portal = link.portal
-    mappak = [f for f in portal.folders if link.folder_id in (None, f.id)]
+    kulcs = _feltolto(request, kotelezo=False)
+    # Közvetlen lekérdezés (nem a portál kapcsolt listája): a párhuzamos
+    # feltöltések közben keletkezett mappák/fájlok is biztosan látszanak.
+    osszes_mappa = db.scalars(
+        select(PortalFolder).where(PortalFolder.portal_id == portal.id).order_by(PortalFolder.sort_order)
+    ).all()
+    mappak = [f for f in osszes_mappa if _lathato_mappa(f, link, kulcs)]
 
     # Beágyazott mappánál a TELJES útvonal a név ("Szülő / Gyerek") - a lapos
     # listában enélkül nem derülne ki, melyik mappán belül van.
-    nev_szerint = {f.id: f for f in portal.folders}
+    nev_szerint = {f.id: f for f in osszes_mappa}
 
     def utvonal(f) -> str:
         reszek = [f.name or "Névtelen mappa"]
@@ -519,6 +575,21 @@ def feltoltes_adatok(token: str, db: Session = Depends(get_db)):
             reszek.append(szulo.name or "Névtelen mappa")
             szulo_id = szulo.parent_folder_id
         return " / ".join(reversed(reszek))
+
+    sajat = []
+    if kulcs is not None:
+        sajat = [
+            _fajl_sor(v, "video")
+            for v in db.scalars(
+                select(PortalVideo).where(PortalVideo.portal_id == portal.id, PortalVideo.feltolto_kulcs == kulcs)
+            )
+        ] + [
+            _fajl_sor(i, "kep")
+            for i in db.scalars(
+                select(PortalImage).where(PortalImage.portal_id == portal.id, PortalImage.feltolto_kulcs == kulcs)
+            )
+        ]
+        sajat.sort(key=lambda x: (x["created_at"] is None, x["created_at"]), reverse=True)
 
     # A feltöltő oldal ebből tudja jelezni: rejtett (ágban lévő) mappába
     # minden feltöltés automatikusan rejtett lesz (lásd _rejtett_agban).
@@ -531,12 +602,15 @@ def feltoltes_adatok(token: str, db: Session = Depends(get_db)):
             {
                 "id": f.id,
                 "name": utvonal(f),
-                "video_db": len(f.videos),
-                "kep_db": len(f.images),
+                # Csak a SAJÁT fájlok száma - a máséból semmi nem látszik.
+                "video_db": sum(1 for x in sajat if x["folder_id"] == f.id and x["tipus"] == "video"),
+                "kep_db": sum(1 for x in sajat if x["folder_id"] == f.id and x["tipus"] == "kep"),
                 "rejtett": f.id in rejtett_mappak,
+                "sajat": kulcs is not None and f.feltolto_kulcs == kulcs,
             }
             for f in mappak
         ],
+        "fajlok": sajat if link.folder_id is None else [x for x in sajat if x["folder_id"] == link.folder_id],
     }
 
 
@@ -545,17 +619,20 @@ class FeltoltesMappaIn(BaseModel):
 
 
 @router.post("/feltoltes/{token}/mappa")
-def feltoltes_mappa(token: str, payload: FeltoltesMappaIn, db: Session = Depends(get_db)):
+def feltoltes_mappa(token: str, payload: FeltoltesMappaIn, request: Request, db: Session = Depends(get_db)):
     from app.models.portal import PortalFolder
 
     link = _feltolto_link(db, token)
+    kulcs = _feltolto(request)
     portal = link.portal
     if link.folder_id is not None:
         raise HTTPException(status_code=403, detail="Ez a link csak egy megadott mappába enged feltölteni.")
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Adj nevet a mappának.")
     max_order = max([f.sort_order for f in portal.folders], default=-1)
-    folder = PortalFolder(portal_id=portal.id, name=payload.name.strip(), sort_order=max_order + 1)
+    folder = PortalFolder(
+        portal_id=portal.id, name=payload.name.strip(), sort_order=max_order + 1, feltolto_kulcs=kulcs
+    )
     db.add(folder)
     db.commit()
     db.refresh(folder)
@@ -570,8 +647,9 @@ def _rejtett_agban(portal: Portal, folder_id: int | None) -> bool:
     return folder_id is not None and folder_id in _rejtett_mappak_rekurzivan(portal)
 
 
-def _feltoltes_cel_mappa(db: Session, link, folder_id: int | None):
-    """A feltöltés cél-mappája - a link hatókörén belül."""
+def _feltoltes_cel_mappa(db: Session, link, folder_id: int | None, kulcs: str | None = None):
+    """A feltöltés cél-mappája - a link hatókörén belül, és csak olyan
+    mappa, amit a feltöltő lát (admin mappa vagy a sajátja)."""
     from app.models.portal import PortalFolder
 
     if link.folder_id is not None:
@@ -580,14 +658,35 @@ def _feltoltes_cel_mappa(db: Session, link, folder_id: int | None):
     if folder_id is None:
         return None
     folder = db.get(PortalFolder, folder_id)
-    if folder is None or folder.portal_id != link.portal_id:
+    if folder is None or folder.portal_id != link.portal_id or not _lathato_mappa(folder, link, kulcs):
         raise HTTPException(status_code=404, detail="Ez a mappa nem ehhez a portálhoz tartozik.")
     return folder.id
+
+
+async def _szalon(fn, *args):
+    """Blokkoló hívás (fájlmentés, R2-feltöltés) szálon - így a párhuzamos
+    feltöltések nem várnak egymásra (a felhasználó kérése)."""
+    from starlette.concurrency import run_in_threadpool
+
+    return await run_in_threadpool(fn, *args)
+
+
+def _temp_fajlba(upload: UploadFile, suffix: str) -> str:
+    """A feltöltött fájl darabonként egy ideiglenes fájlba (nem egyben a
+    memóriába - több nagy videó párhuzamosan sem fogyasztja el)."""
+    import shutil
+    import tempfile as _tempfile
+
+    with _tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        upload.file.seek(0)
+        shutil.copyfileobj(upload.file, tmp, length=8 * 1024 * 1024)
+        return tmp.name
 
 
 @router.post("/feltoltes/{token}/video")
 async def feltoltes_video(
     token: str,
+    request: Request,
     file: UploadFile = File(...),
     folder_id: int | None = Form(None),
     title: str | None = Form(None),
@@ -596,13 +695,13 @@ async def feltoltes_video(
     """Videó feltöltése a feltöltő linkkel - ugyanaz a tároló + feldolgozó
     csővezeték, mint az admin feltöltésnél (lásd portal_admin.upload_video)."""
     import os as _os
-    import tempfile as _tempfile
 
     from app.api.routes.portal_admin import _enqueue_processing
 
     link = _feltolto_link(db, token)
+    kulcs = _feltolto(request)
     portal = link.portal
-    cel_mappa = _feltoltes_cel_mappa(db, link, folder_id)
+    cel_mappa = _feltoltes_cel_mappa(db, link, folder_id, kulcs)
     max_order = max([v.sort_order for v in portal.videos], default=-1)
     video = PortalVideo(
         portal_id=portal.id,
@@ -614,49 +713,32 @@ async def feltoltes_video(
         # rejtett mappába a feltöltés KÉNYSZERÍTVE rejtett, máshova látható -
         # elrejteni utólag az admin felületen lehet (lásd _rejtett_agban).
         rejtett=_rejtett_agban(portal, cel_mappa),
+        feltolto_kulcs=kulcs,
     )
     db.add(video)
     db.commit()
     db.refresh(video)
 
     source_key = f"videos/{video.id}/upload.mp4"
-    with _tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-        tmp.write(await file.read())
-        tmp_path = tmp.name
-    storage.upload_file(tmp_path, source_key, "video/mp4")
-    _os.unlink(tmp_path)
+    tmp_path = await _szalon(_temp_fajlba, file, ".mp4")
+    try:
+        await _szalon(storage.upload_file, tmp_path, source_key, "video/mp4")
+    finally:
+        _os.unlink(tmp_path)
     video.source_key = source_key
     db.commit()
     _enqueue_processing(video.id, source_key)
     return {"id": video.id, "title": video.title, "status": video.status}
 
 
-@router.post("/feltoltes/{token}/kep")
-async def feltoltes_kep(
-    token: str,
-    file: UploadFile = File(...),
-    folder_id: int | None = Form(None),
-    db: Session = Depends(get_db),
-):
-    """Kép feltöltése a feltöltő linkkel - a bélyegkép-készítés ugyanaz, mint
-    az admin oldalon (lásd portal_admin.upload_image)."""
+def _kep_tarolasa(data: bytes, image_id: int, ext: str, content_type: str) -> tuple[str, str]:
+    """A kép és bélyegképe az R2-re - (eredeti kulcs, bélyegkép URL)."""
     import io as _io
 
     from PIL import Image as PILImage
 
-    link = _feltolto_link(db, token)
-    portal = link.portal
-    cel_mappa = _feltoltes_cel_mappa(db, link, folder_id)
-    # Rejtett mappába érkező kép automatikusan rejtett - a feltöltő ezen nem
-    # tud változtatni, csak az admin felület (lásd _rejtett_agban).
-    image = PortalImage(portal_id=portal.id, folder_id=cel_mappa, rejtett=_rejtett_agban(portal, cel_mappa))
-    db.add(image)
-    db.flush()
-
-    data = await file.read()
-    ext = (file.filename or "image.jpg").split(".")[-1].lower()
-    key = f"images/{image.id}/original.{ext}"
-    storage.upload_bytes(data, key, file.content_type or "image/jpeg")
+    key = f"images/{image_id}/original.{ext}"
+    storage.upload_bytes(data, key, content_type)
     thumb_url = ""
     try:
         img = PILImage.open(_io.BytesIO(data))
@@ -664,11 +746,39 @@ async def feltoltes_kep(
         img.thumbnail((1200, 1200))
         buf = _io.BytesIO()
         img.save(buf, format="JPEG", quality=75, optimize=True)
-        thumb_key = f"images/{image.id}/thumb.jpg"
+        thumb_key = f"images/{image_id}/thumb.jpg"
         storage.upload_bytes(buf.getvalue(), thumb_key, "image/jpeg")
         thumb_url = storage.public_url(thumb_key)
     except Exception:  # noqa: BLE001 - bélyegkép nélkül is él a kép
         thumb_url = ""
+    return key, thumb_url
+
+
+@router.post("/feltoltes/{token}/kep")
+async def feltoltes_kep(
+    token: str,
+    request: Request,
+    file: UploadFile = File(...),
+    folder_id: int | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Kép feltöltése a feltöltő linkkel - a bélyegkép-készítés ugyanaz, mint
+    az admin oldalon (lásd portal_admin.upload_image)."""
+    link = _feltolto_link(db, token)
+    kulcs = _feltolto(request)
+    portal = link.portal
+    cel_mappa = _feltoltes_cel_mappa(db, link, folder_id, kulcs)
+    # Rejtett mappába érkező kép automatikusan rejtett - a feltöltő ezen nem
+    # tud változtatni, csak az admin felület (lásd _rejtett_agban).
+    image = PortalImage(
+        portal_id=portal.id, folder_id=cel_mappa, rejtett=_rejtett_agban(portal, cel_mappa), feltolto_kulcs=kulcs
+    )
+    db.add(image)
+    db.flush()
+
+    data = await file.read()
+    ext = (file.filename or "image.jpg").split(".")[-1].lower()
+    key, thumb_url = await _szalon(_kep_tarolasa, data, image.id, ext, file.content_type or "image/jpeg")
     max_order = max([i.sort_order for i in portal.images], default=-1)
     image.title = (file.filename or "").rsplit(".", 1)[0]
     image.url = storage.public_url(key)
@@ -678,6 +788,75 @@ async def feltoltes_kep(
     image.sort_order = max_order + 1
     db.commit()
     return {"id": image.id, "title": image.title}
+
+
+def _sajat_elem(db: Session, link, modell, elem_id: int, kulcs: str):
+    """A feltöltő SAJÁT videója/képe ezen a linken - másé nem törölhető."""
+    elem = db.get(modell, elem_id)
+    if (
+        elem is None
+        or elem.portal_id != link.portal_id
+        or elem.feltolto_kulcs != kulcs
+        or (link.folder_id is not None and elem.folder_id != link.folder_id)
+    ):
+        raise HTTPException(status_code=404, detail="Nem található - csak a saját feltöltésedet törölheted.")
+    return elem
+
+
+@router.delete("/feltoltes/{token}/video/{video_id}", status_code=204)
+def feltoltes_video_torles(
+    token: str, video_id: int, request: Request, tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
+    """A feltöltő a SAJÁT videóját törölheti (a felhasználó kérése)."""
+    from app.api.routes.portal_admin import _r2_prefixek_torlese
+
+    link = _feltolto_link(db, token)
+    video = _sajat_elem(db, link, PortalVideo, video_id, _feltolto(request))
+    db.delete(video)
+    db.commit()
+    tasks.add_task(_r2_prefixek_torlese, [f"videos/{video_id}"])
+
+
+@router.delete("/feltoltes/{token}/kep/{image_id}", status_code=204)
+def feltoltes_kep_torles(
+    token: str, image_id: int, request: Request, tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
+    """A feltöltő a SAJÁT képét törölheti (a felhasználó kérése)."""
+    from app.api.routes.portal_admin import _r2_prefixek_torlese
+
+    link = _feltolto_link(db, token)
+    kep = _sajat_elem(db, link, PortalImage, image_id, _feltolto(request))
+    db.delete(kep)
+    db.commit()
+    tasks.add_task(_r2_prefixek_torlese, [f"images/{image_id}"])
+
+
+@router.delete("/feltoltes/{token}/mappa/{folder_id}", status_code=204)
+def feltoltes_mappa_torles(
+    token: str, folder_id: int, request: Request, tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
+    """A feltöltő a SAJÁT mappáját törölheti a saját fájljaival együtt - de
+    csak ha más (pl. az admin) nem tett bele semmit, és nincs benne almappa."""
+    from app.api.routes.portal_admin import _r2_prefixek_torlese
+    from app.models.portal import PortalFolder
+
+    link = _feltolto_link(db, token)
+    kulcs = _feltolto(request)
+    folder = db.get(PortalFolder, folder_id)
+    if folder is None or folder.portal_id != link.portal_id or folder.feltolto_kulcs != kulcs:
+        raise HTTPException(status_code=404, detail="Nem található - csak a saját mappádat törölheted.")
+    if db.scalar(select(PortalFolder.id).where(PortalFolder.parent_folder_id == folder.id).limit(1)) is not None:
+        raise HTTPException(status_code=400, detail="A mappában almappa is van - ezt csak az admin törölheti.")
+    videok = db.scalars(select(PortalVideo).where(PortalVideo.folder_id == folder.id)).all()
+    kepek = db.scalars(select(PortalImage).where(PortalImage.folder_id == folder.id)).all()
+    if any(x.feltolto_kulcs != kulcs for x in [*videok, *kepek]):
+        raise HTTPException(status_code=400, detail="A mappában más feltöltése is van - ezt csak az admin törölheti.")
+    prefixek = [f"videos/{v.id}" for v in videok] + [f"images/{i.id}" for i in kepek]
+    for x in [*videok, *kepek]:
+        db.delete(x)
+    db.delete(folder)
+    db.commit()
+    tasks.add_task(_r2_prefixek_torlese, prefixek)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -176,6 +176,17 @@ export async function startPayment(
 
 // ─── Feltöltő link és rész-megosztás (a felhasználó kérése) ────────────────
 
+export type FeltoltesFajl = {
+  tipus: "video" | "kep";
+  id: number;
+  title: string;
+  folder_id: number | null;
+  status: string;
+  thumbnail_url: string | null;
+  size_bytes: number;
+  created_at: string | null;
+};
+
 export type FeltoltesAdatok = {
   title: string;
   brand: string;
@@ -183,43 +194,110 @@ export type FeltoltesAdatok = {
   folders: {
     id: number;
     name: string;
+    /** A SAJÁT feltöltések száma ebben a mappában (a máséból semmi nem látszik). */
     video_db: number;
     kep_db: number;
     /** Rejtett (ágban lévő) mappa: ide minden feltöltés automatikusan rejtett
      * lesz, és ezt a feltöltő nem tudja felülbírálni (a szerver kényszeríti). */
     rejtett?: boolean;
+    /** Ezt a mappát ez a böngésző hozta létre (törölhető). */
+    sajat?: boolean;
   }[];
+  /** A SAJÁT feltöltések (a felhasználó kérése: mindenki csak azt látja, amit
+   * ő töltött fel, és abból törölhet). */
+  fajlok: FeltoltesFajl[];
 };
 
+/** A feltöltő BÖNGÉSZŐ azonosítója (a felhasználó kérése: mindenki a saját
+ * feltöltéseit lássa és törölhesse). Egyszer keletkezik, és a böngészőben
+ * marad; a szerver csak a lenyomatát tárolja. Ha a tároló nem érhető el
+ * (privát mód), az oldal életére szól. */
+let memoriaKulcs: string | null = null;
+export function feltoltoKulcs(): string {
+  const TAROLO = "hype-feltolto-kulcs";
+  try {
+    const meglevo = window.localStorage.getItem(TAROLO);
+    if (meglevo && /^[A-Za-z0-9_-]{16,128}$/.test(meglevo)) return meglevo;
+  } catch {
+    // privát mód / tiltott tároló - lent a memóriában tartjuk
+  }
+  if (!memoriaKulcs) {
+    memoriaKulcs =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID().replaceAll("-", "")
+        : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+  }
+  try {
+    window.localStorage.setItem(TAROLO, memoriaKulcs);
+  } catch {
+    // marad a memóriában
+  }
+  return memoriaKulcs;
+}
+
+function feltoltoFejlec(): Record<string, string> {
+  return { "X-Feltolto-Kulcs": feltoltoKulcs() };
+}
+
 export async function getFeltoltesAdatok(token: string) {
-  return req<FeltoltesAdatok>(`/feltoltes/${token}`);
+  return req<FeltoltesAdatok>(`/feltoltes/${token}`, { headers: feltoltoFejlec() });
 }
 
 export async function feltoltesMappa(token: string, name: string) {
   return req<{ id: number; name: string }>(`/feltoltes/${token}/mappa`, {
     method: "POST",
     body: JSON.stringify({ name }),
+    headers: feltoltoFejlec(),
   });
 }
 
-/** Fájl feltöltése a feltöltő linkkel - multipart, ezért nem a `req` helper.
- * A rejtett jelölést nem a feltöltő dönti el: rejtett (ágban lévő) mappába a
- * szerver KÉNYSZERÍTVE rejtettként menti a fájlt (a felhasználó kérése). */
-export async function feltoltesFajl(
+/** Egy fájl feltöltése HALADÁSJELZÉSSEL és megszakíthatóan (a felhasználó
+ * kérése: több feltöltés mehessen párhuzamosan, mappánként). */
+export function feltoltesFajl(
   token: string,
   file: File,
   folderId: number | null,
-): Promise<{ ok: boolean; hiba?: string }> {
-  const fd = new FormData();
-  fd.append("file", file);
-  if (folderId != null) fd.append("folder_id", String(folderId));
-  const vegpont = file.type.startsWith("image/") ? "kep" : "video";
-  const res = await fetch(`${BASE}/feltoltes/${token}/${vegpont}`, { method: "POST", body: fd });
+  haladas?: (szazalek: number) => void,
+): { kesz: Promise<{ ok: boolean; hiba?: string; megszakitva?: boolean }>; megszakit: () => void } {
+  const xhr = new XMLHttpRequest();
+  const kesz = new Promise<{ ok: boolean; hiba?: string; megszakitva?: boolean }>((resolve) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (folderId != null) fd.append("folder_id", String(folderId));
+    const vegpont = file.type.startsWith("image/") ? "kep" : "video";
+    xhr.open("POST", `${BASE}/feltoltes/${token}/${vegpont}`);
+    for (const [k, v] of Object.entries(feltoltoFejlec())) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && haladas) haladas(Math.min(99, Math.round((e.loaded / e.total) * 100)));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        haladas?.(100);
+        resolve({ ok: true });
+        return;
+      }
+      let hiba = `Sikertelen feltöltés (${xhr.status})`;
+      try {
+        hiba = JSON.parse(xhr.responseText).detail || hiba;
+      } catch {
+        // nem JSON válasz
+      }
+      resolve({ ok: false, hiba });
+    };
+    xhr.onerror = () => resolve({ ok: false, hiba: "Hálózati hiba a feltöltés közben." });
+    xhr.onabort = () => resolve({ ok: false, megszakitva: true, hiba: "Megszakítva." });
+    xhr.send(fd);
+  });
+  return { kesz, megszakit: () => xhr.abort() };
+}
+
+/** A SAJÁT feltöltés (vagy saját mappa) törlése. */
+export async function feltoltesTorles(token: string, mit: "video" | "kep" | "mappa", id: number) {
+  const res = await fetch(`${BASE}/feltoltes/${token}/${mit}/${id}`, { method: "DELETE", headers: feltoltoFejlec() });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    return { ok: false, hiba: body.detail || `Sikertelen feltöltés (${res.status})` };
+    throw new Error(body.detail || `Sikertelen törlés (${res.status})`);
   }
-  return { ok: true };
 }
 
 export async function getMegosztas(token: string) {

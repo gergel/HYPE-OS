@@ -185,6 +185,10 @@ class PortalFolder(TimestampMixin, Base):
     #: szándékosan él (célzottan kiadott link) - ugyanaz az elv, mint a
     #: PortalVideo.rejtett-nél.
     rejtett: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    #: Ki töltötte fel a FELTÖLTŐ LINKEN (a böngészője azonosítójának
+    #: sha256-lenyomata) - a feltöltő csak a sajátját látja és törölheti (lásd
+    #: routes/portal_public.py). Az admin felületen feltöltöttnél üres.
+    feltolto_kulcs: Mapped[str | None] = mapped_column(String(64), index=True)
     #: Ha van, a mappa ÖNMAGÁBAN megosztható linkkel (/megosztas/{token}) - a
     #: link birtokosa csak ezt a mappát látja, a portál többi részét nem.
     share_token: Mapped[str | None] = mapped_column(String(64), unique=True)
@@ -217,6 +221,10 @@ class PortalVideo(TimestampMixin, Base):
     #: anyag jóváhagyásra vár. A videó SAJÁT megosztó linkje viszont
     #: szándékosan él: azzal küldhető el az ellenőrnek.
     rejtett: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    #: Ki töltötte fel a FELTÖLTŐ LINKEN (a böngészője azonosítójának
+    #: sha256-lenyomata) - a feltöltő csak a sajátját látja és törölheti (lásd
+    #: routes/portal_public.py). Az admin felületen feltöltöttnél üres.
+    feltolto_kulcs: Mapped[str | None] = mapped_column(String(64), index=True)
     thumbnail_url: Mapped[str | None] = mapped_column(String(500))
 
     duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
@@ -246,6 +254,10 @@ class PortalImage(TimestampMixin, Base):
     #: automatikusan ezt kapja (a felhasználó kérése), és a feltöltő nem is
     #: tudja levenni - csak az admin.
     rejtett: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    #: Ki töltötte fel a FELTÖLTŐ LINKEN (a böngészője azonosítójának
+    #: sha256-lenyomata) - a feltöltő csak a sajátját látja és törölheti (lásd
+    #: routes/portal_public.py). Az admin felületen feltöltöttnél üres.
+    feltolto_kulcs: Mapped[str | None] = mapped_column(String(64), index=True)
     url: Mapped[str | None] = mapped_column(String(500))
     thumbnail_url: Mapped[str | None] = mapped_column(String(500))
     key: Mapped[str | None] = mapped_column(String(500), comment="Eredeti kép R2 kulcsa")
