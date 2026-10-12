@@ -3,6 +3,7 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { linkDarabok } from "@/lib/linkek";
+import { Markdown } from "@/components/Markdown";
 import { vagolapra } from "@/lib/vagolap";
 
 /** Egy link, amit új lapon nyit meg a böngésző.
@@ -66,5 +67,41 @@ export function LinkeltSzoveg({ szoveg, laza = false }: { szoveg: string; laza?:
         <Fragment key={i}>{darab.href ? <Hivatkozas href={darab.href}>{darab.szoveg}</Hivatkozas> : darab.szoveg}</Fragment>
       ))}
     </>
+  );
+}
+
+/** Van-e a szövegben markdown-jelölés (címsor, felsorolás, **félkövér**,
+ * elválasztó vonal) - ilyenkor formázva mutatjuk, különben pontosan úgy, mint
+ * eddig. */
+const MARKDOWN_JEL = /(^|\n)[ \t]{0,3}(#{1,6}[ \t]|[-*][ \t]|\d+[.)][ \t]|>[ \t]|(---|\*\*\*)[ \t]*(\n|$))|\*\*[^*\n]+\*\*/;
+
+export function markdownnakTunik(szoveg: string): boolean {
+  return MARKDOWN_JEL.test(szoveg);
+}
+
+/** Hosszú szabad szöveg (vágás leírása, gyártás komment...) FORMÁZVA (a
+ * felhasználó kérése: az AI-írta, markdownnal tagolt leírás ne nyers ###/**
+ * jelekkel látszódjon). Markdown-jelölés nélkül változatlanul a régi
+ * megjelenés (sortörések + kattintható linkek).
+ *
+ * A linkre kattintás itt sem kapcsolja szerkesztő módba a cellát (lásd
+ * Hivatkozas). */
+export function FormazottSzoveg({ szoveg }: { szoveg: string }) {
+  if (!markdownnakTunik(szoveg)) {
+    return (
+      <span className="whitespace-pre-line">
+        <LinkeltSzoveg szoveg={szoveg} />
+      </span>
+    );
+  }
+  return (
+    <div
+      className="formazott-szoveg"
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("a")) e.stopPropagation();
+      }}
+    >
+      <Markdown szoveg={szoveg} />
+    </div>
   );
 }

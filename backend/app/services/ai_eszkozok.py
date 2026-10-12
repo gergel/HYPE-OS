@@ -254,6 +254,11 @@ def api_muvelet(
     kulcs = (idempotencia_kulcs or "").strip()
     if not kulcs:
         raise EszkozHiba("Íráshoz kötelező az idempotencia_kulcs (rövid, stabil azonosító erre a műveletre).")
+    # Az AI által írt szövegbe (leírás, komment, feladat...) emoji nem kerül
+    # (a felhasználó kérése) - lásd services/emoji_szuro.py.
+    from app.services.emoji_szuro import emoji_nelkul_melyen
+
+    body = emoji_nelkul_melyen(body)
 
     meglevo = db.scalar(
         select(AiMuvelet).where(

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { FieldTypeInfo, formatDate, formatHuf } from "@/lib/api";
 import { formatSzam } from "@/lib/penz";
-import { LinkeltSzoveg, LinkMasolassal } from "@/components/LinkeltSzoveg";
+import { FormazottSzoveg, LinkeltSzoveg, LinkMasolassal } from "@/components/LinkeltSzoveg";
 import { tartalmazLinket } from "@/lib/linkek";
 import { humanizeKey } from "@/lib/mezoNev";
 
@@ -78,15 +78,10 @@ function formatValue(key: string, value: unknown, hint?: FieldTypeInfo): { node:
   if (typeof value === "string" && (hint?.type === "multiline" || isLongText(value))) {
     // a Notion rich_text mezők (pl. diszpó szövege, brief, technika lista) sortöréseit
     // meg kell tartani, különben az egész szöveg egy sorba tördelődik a böngészőben.
-    // A szövegbe írt linkek (vágás leírása, gyártás komment) kattinthatók.
-    return {
-      node: (
-        <span className="whitespace-pre-line">
-          <LinkeltSzoveg szoveg={value} />
-        </span>
-      ),
-      wide: true,
-    };
+    // A szövegbe írt linkek (vágás leírása, gyártás komment) kattinthatók,
+    // a markdownnal tagolt szöveg (címsor, felsorolás, félkövér) formázva
+    // látszik - lásd FormazottSzoveg.
+    return { node: <FormazottSzoveg szoveg={value} />, wide: true };
   }
   // Rövid szöveg is tartalmazhat linket ("nyers: https://..."), ilyenkor sem
   // kell kézzel kimásolni a címet.
