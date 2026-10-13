@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -91,6 +92,11 @@ def _belsos_employees(db: Session, ev: int | None = None, honap: int | None = No
     még nem, vagy már nem dolgoztak nálunk - az ilyen hónapok örökre
     "hiányzóként" állnának a listán (lásd services/belsos_idoszak.py)."""
     return belsos_idoszak.belsosok(db, ev, honap)
+
+
+def _nev_sorrend(e: Employee) -> str:
+    """Névsor ékezetektől függetlenül (az "Á" ne a "Z" után álljon)."""
+    return unicodedata.normalize("NFKD", e.full_name or "").encode("ascii", "ignore").decode().lower()
 
 
 def _find(db: Session, employee_id: int, ev: int, honap: int) -> InternalPerformanceCertificate | None:
@@ -258,18 +264,26 @@ def list_month(
     ev = ev or alap_ev
     honap = honap or alap_honap
     employees = _belsos_employees(db, ev, honap)
-    if not employees:
-        return []
     records = (
         db.query(InternalPerformanceCertificate)
-        .filter(
-            InternalPerformanceCertificate.ev == ev,
-            InternalPerformanceCertificate.honap == honap,
-            InternalPerformanceCertificate.employee_id.in_([e.id for e in employees]),
-        )
+        .filter(InternalPerformanceCertificate.ev == ev, InternalPerformanceCertificate.honap == honap)
         .all()
     )
     lookup = {r.employee_id: r for r in records}
+    # Akinek erre a hónapra VAN bejegyzése, az akkor is a listán van, ha a
+    # felvitt belsős időszaka nem fedi le a hónapot - ugyanaz a szabály, mint
+    # a havi áttekintésben (havi_attekintes). Enélkül az áttekintés hiányzónak
+    # mutatta (pl. "Készítés alatt"), a hónap megnyitásakor viszont sehol
+    # nem volt, így befejezni sem lehetett (a felhasználó jelezte).
+    ismert = {e.id for e in employees}
+    potoltak = [
+        e for e in (db.get(Employee, employee_id) for employee_id in lookup if employee_id not in ismert)
+        if e is not None and e.tipus == EmployeeType.BELSOS
+    ]
+    if potoltak:
+        employees = sorted(employees + potoltak, key=_nev_sorrend)
+    if not employees:
+        return []
 
     tetelek = (
         db.query(EmployeeMonthlyItem)
