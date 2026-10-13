@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Camera, Check, ChevronRight, ImagePlus, Loader2 } from "lucide-react";
 import { AutoKorvonal, OLDAL_SORREND, reszCimke, utmutato, type Karosszeria } from "@/components/auto-allapot/AutoKorvonal";
+import { KameraNezet } from "@/components/auto-allapot/KameraNezet";
 
 const API = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api/v1/public/auto-allapot";
 const NEV_TAROLO = "hype-auto-allapot-nev";
@@ -41,6 +42,11 @@ export function AllapotFeltoltes({ token }: { token: string }) {
   /** Amit legutóbb fotózott - alul ez látszik. */
   const [utolso, setUtolso] = useState<string | null>(null);
   const [elkezdte, setElkezdte] = useState(false);
+  /** A beépített kamera épp melyik részt fotózza (null = zárva). */
+  const [kameraResz, setKameraResz] = useState<string | null>(null);
+  /** A beépített kamera nem indult (nincs engedély / nem támogatott) - ilyenkor
+   * a telefon saját kamerája megy (ott a "Retake / Use Photo" a telefoné). */
+  const [kameraHiba, setKameraHiba] = useState<string | null>(null);
   const [nev, setNev] = useState(() => {
     try {
       return typeof window === "undefined" ? "" : (window.localStorage.getItem(NEV_TAROLO) ?? "");
@@ -98,11 +104,31 @@ export function AllapotFeltoltes({ token }: { token: string }) {
 
   /** A kamera (vagy galéria) megnyitása egy részhez - a gombnyomás
    * eseményén belül, különben a telefon nem engedi megnyitni. */
+  /** A kamera megnyitása egy részhez (a gombnyomás eseményén belül). Alapból
+   * a BEÉPÍTETT kamera nyílik ("Újra" / "Következő" gombokkal); ha az nem
+   * megy, a telefon saját kamerája, a galéria gomb pedig a képválasztó. */
   function megnyit(resz: string, galeria = false) {
     kertResz.current = resz;
     setCel(resz);
     setElkezdte(true);
+    if (!galeria && !kameraHiba && typeof navigator !== "undefined" && !!navigator.mediaDevices) {
+      setKameraResz(resz);
+      return;
+    }
     (galeria ? galeriaRef : kameraRef).current?.click();
+  }
+
+  /** A beépített kamera "Következő" (elfogadás) gombja: a kép felmegy, és
+   * ugyanabban a nézetben a következő hiányzó rész jön (ha nincs, bezárul). */
+  function kameraElfogad(kep: Blob) {
+    const resz = kameraResz;
+    if (!resz) return;
+    foglaltRef.current.add(resz);
+    setUtolso(resz);
+    const kov = kovetkezo(resz);
+    setCel(kov);
+    setKameraResz(kov);
+    feltolt(resz, new File([kep], `${resz}.jpg`, { type: "image/jpeg" }));
   }
 
   function kovetkezo(utan: string): string | null {
@@ -189,6 +215,29 @@ export function AllapotFeltoltes({ token }: { token: string }) {
   const osszes = OLDAL_SORREND.length;
   const mindKesz = keszDb === osszes;
   const utolsoAllapot = utolso ? folyamatban[utolso] : undefined;
+  // A kamera nézetnek: mi jön az épp fotózott rész után (a kész és a
+  // feltöltés alatt lévő részeket átugorva).
+  const foglalt = (o: string) => !!adatok.mai_fotok[o] || (!!folyamatban[o] && !folyamatban[o].hiba);
+  const kameraUtan = (() => {
+    if (!kameraResz) return null;
+    const i = OLDAL_SORREND.indexOf(kameraResz);
+    const sorrend = [...OLDAL_SORREND.slice(i + 1), ...OLDAL_SORREND.slice(0, i)];
+    return sorrend.find((o) => !foglalt(o)) ?? null;
+  })();
+  const kamera = kameraResz && (
+    <KameraNezet
+      cim={cimkek[kameraResz]}
+      lepes={`${OLDAL_SORREND.indexOf(kameraResz) + 1}. / ${osszes} rész`}
+      utmutatoSzoveg={utmutato(kameraResz, kar)}
+      kovetkezoCimke={kameraUtan ? cimkek[kameraUtan] : null}
+      onElfogad={kameraElfogad}
+      onBezar={() => setKameraResz(null)}
+      onHiba={(uzenet) => {
+        setKameraResz(null);
+        setKameraHiba(uzenet);
+      }}
+    />
+  );
   const fajlInputok = (
     <>
       <input
@@ -227,6 +276,7 @@ export function AllapotFeltoltes({ token }: { token: string }) {
     return (
       <div className={`${keret} px-5 pb-[max(env(safe-area-inset-bottom),16px)] pt-[max(env(safe-area-inset-top),16px)]`}>
         {fajlInputok}
+        {kamera}
         <div className="shrink-0">
           <p className="text-[12px] uppercase tracking-wide text-text-muted">Autó állapotfotók</p>
           <h1 className="mt-1 text-[26px] font-semibold leading-tight">{adatok.rendszam}</h1>
@@ -266,6 +316,7 @@ export function AllapotFeltoltes({ token }: { token: string }) {
   return (
     <div className={keret}>
       {fajlInputok}
+      {kamera}
       <header className="shrink-0 px-4 pb-2 pt-[max(env(safe-area-inset-top),12px)]">
         <div className="flex items-baseline justify-between gap-3">
           <p className="min-w-0 truncate text-[18px] font-semibold">
@@ -318,6 +369,12 @@ export function AllapotFeltoltes({ token }: { token: string }) {
                     : " – feltöltve"}
               </span>
             </span>
+          </p>
+        )}
+
+        {kameraHiba && (
+          <p className="text-[12.5px] text-text-muted">
+            A beépített kamera nem indult (nincs kamera-engedély?), ezért a gomb a telefon saját kameráját nyitja.
           </p>
         )}
 
