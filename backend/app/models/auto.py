@@ -47,6 +47,10 @@ class Auto(TimestampMixin, Base):
     felelos_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"), index=True)
     aktiv: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     megjegyzes: Mapped[str | None] = mapped_column(Text)
+    #: Karosszéria (az állapotfotók körvonalához): "szemelyauto" | "suv" |
+    #: "furgon". Üresen a típusnévből ismeri fel a rendszer (lásd
+    #: services/auto_allapot.karosszeria).
+    karosszeria: Mapped[str | None] = mapped_column(String(20))
 
     felelos: Mapped["Employee | None"] = relationship()
     #: A jármű határidői (forgalmi, biztosítás) - lásd a modul kommentjét.

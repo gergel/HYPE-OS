@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -56,12 +57,39 @@ def auto_allapot(
     bekeresek = db.scalars(
         select(AutoAllapotBekeres).where(AutoAllapotBekeres.auto_id == auto.id).order_by(AutoAllapotBekeres.id.desc())
     ).all()
+    kar, beallitva = szolg.karosszeria(auto)
     return {
-        "auto": {"id": auto.id, "rendszam": auto.rendszam, "megnevezes": auto.megnevezes, "tipus": auto.tipus},
+        "auto": {
+            "id": auto.id, "rendszam": auto.rendszam, "megnevezes": auto.megnevezes, "tipus": auto.tipus,
+            "karosszeria": kar, "karosszeria_beallitva": beallitva,
+        },
+        "karosszeriak": szolg.KAROSSZERIAK,
         "oldalak": szolg.oldalak(),
         "bekeresek": [_bekeres_kimenet(b, ma) for b in bekeresek],
         "napok": szolg.napok(db, auto.id),
     }
+
+
+class KarosszeriaIn(BaseModel):
+    #: None = a típusnévből ismerje fel.
+    karosszeria: str | None = None
+
+
+@router.put("/{auto_id}/karosszeria")
+def karosszeria_beallitasa(
+    auto_id: int,
+    payload: KarosszeriaIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+) -> dict:
+    """A karosszéria (az állapotfotó-körvonalhoz) - üresen a típusnévből."""
+    auto = _auto_vagy_404(db, auto_id)
+    if payload.karosszeria is not None and payload.karosszeria not in szolg.KAROSSZERIAK:
+        raise HTTPException(status_code=400, detail="Ismeretlen karosszéria.")
+    auto.karosszeria = payload.karosszeria
+    db.commit()
+    kar, beallitva = szolg.karosszeria(auto)
+    return {"karosszeria": kar, "karosszeria_beallitva": beallitva}
 
 
 @router.post("/{auto_id}/allapot/bekeres", status_code=201)
@@ -132,6 +160,7 @@ def publikus_adatok(token: str, db: Session = Depends(get_db)) -> dict:
     return {
         "rendszam": auto.rendszam,
         "megnevezes": auto.megnevezes or auto.tipus,
+        "karosszeria": szolg.karosszeria(auto)[0],
         "ma": ma.isoformat(),
         "oldalak": szolg.oldalak(),
         "mai_fotok": szolg.mai_fotok(db, auto.id, ma),

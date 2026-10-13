@@ -5,12 +5,21 @@ import Link from "next/link";
 import { ArrowLeft, Camera, Check, Copy, Link2, Trash2 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { vagolapra } from "@/lib/vagolap";
+import { AutoKorvonal, reszCimke, type Karosszeria } from "@/components/auto-allapot/AutoKorvonal";
 
 type Foto = { id: number; oldal: string; keszult_at: string; keszito: string | null; url: string; belyeg_url: string };
 type Bekeres = { id: number; token: string; letrejott_at: string; visszavonva_at: string | null; mai_db: number };
 type Nap = { datum: string; fotok: Record<string, Foto>; db: number; osszes: number };
 type Allapot = {
-  auto: { id: number; rendszam: string; megnevezes: string | null; tipus: string | null };
+  auto: {
+    id: number;
+    rendszam: string;
+    megnevezes: string | null;
+    tipus: string | null;
+    karosszeria: Karosszeria;
+    karosszeria_beallitva: boolean;
+  };
+  karosszeriak: Record<Karosszeria, string>;
   oldalak: { kulcs: string; cimke: string }[];
   bekeresek: Bekeres[];
   napok: Nap[];
@@ -86,6 +95,27 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
   }
   if (!adat) return <p className="text-[13px] text-text-muted">Betöltés…</p>;
 
+  const kar = adat.auto.karosszeria;
+  const cimke = (o: { kulcs: string; cimke: string }) => reszCimke(o.kulcs, kar, o.cimke);
+
+  async function karosszeriaMentes(ertek: string) {
+    setBusy(true);
+    try {
+      const r = await authFetch(`${API}/${autoId}/karosszeria`, {
+        method: "PUT",
+        body: JSON.stringify({ karosszeria: ertek || null }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => null);
+        alert(`Nem sikerült: ${d?.detail ?? r.status}`);
+        return;
+      }
+      betolt();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const elok = adat.bekeresek.filter((b) => !b.visszavonva_at);
   const visszavontak = adat.bekeresek.filter((b) => b.visszavonva_at);
 
@@ -101,6 +131,24 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
         {(adat.auto.megnevezes || adat.auto.tipus) && (
           <p className="text-[13px] text-text-muted">{adat.auto.megnevezes || adat.auto.tipus}</p>
         )}
+        {/* A fotózáskor ennek az autónak a KÖRVONALÁN kell kiválasztani a
+            részt (a felhasználó kérése) - a forma a karosszériától függ. */}
+        <label className="mt-3 flex flex-wrap items-center gap-2 text-[12.5px] text-text-muted">
+          Karosszéria (a fotózási körvonalhoz):
+          <select
+            value={adat.auto.karosszeria_beallitva ? kar : ""}
+            disabled={busy}
+            onChange={(e) => void karosszeriaMentes(e.target.value)}
+            className="rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1 text-[13px] text-text-primary"
+          >
+            <option value="">Automatikus (a típusnévből: {adat.karosszeriak[kar]})</option>
+            {Object.entries(adat.karosszeriak).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {/* BEKÉRŐ LINK - teszt jelleggel kézzel kiküldve. */}
@@ -188,7 +236,15 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
         {adat.napok.map((n) => (
           <div key={n.datum} className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[14px] font-medium text-text-primary">{napCimke(n.datum)}</p>
+              <div className="flex items-center gap-3">
+                <AutoKorvonal
+                  karosszeria={kar}
+                  kesz={Object.fromEntries(Object.keys(n.fotok).map((o) => [o, true]))}
+                  cimkek={false}
+                  className="w-[38px] shrink-0"
+                />
+                <p className="text-[14px] font-medium text-text-primary">{napCimke(n.datum)}</p>
+              </div>
               <span className={`text-[12.5px] ${n.db === n.osszes ? "text-text-success" : "text-text-warning"}`}>
                 {n.db === n.osszes ? `Mind a ${n.osszes} kép megvan` : `${n.db} / ${n.osszes} kép`}
               </span>
@@ -201,7 +257,7 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
                     {f ? (
                       <a href={f.url} target="_blank" rel="noopener noreferrer" title="Megnyitás teljes méretben">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={f.belyeg_url} alt={o.cimke} className="aspect-[4/3] w-full object-cover" />
+                        <img src={f.belyeg_url} alt={cimke(o)} className="aspect-[4/3] w-full object-cover" />
                       </a>
                     ) : (
                       <div className="flex aspect-[4/3] items-center justify-center bg-surface-3 text-text-muted">
@@ -209,7 +265,7 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
                       </div>
                     )}
                     <figcaption className="space-y-0.5 px-2 py-1.5">
-                      <p className="text-[12.5px] font-medium text-text-primary">{o.cimke}</p>
+                      <p className="text-[12.5px] font-medium text-text-primary">{cimke(o)}</p>
                       {f ? (
                         <div className="flex items-center justify-between gap-1 text-[11px] text-text-muted">
                           <span className="truncate">

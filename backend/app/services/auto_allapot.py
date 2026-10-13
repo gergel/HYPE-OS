@@ -32,6 +32,37 @@ class FotoHiba(ValueError):
     pass
 
 
+#: Karosszéria-típusok (az állapotfotó-körvonalhoz) és feliratuk.
+KAROSSZERIAK = {"szemelyauto": "Személyautó", "suv": "SUV / terepjáró", "furgon": "Kisbusz / furgon"}
+
+_FURGON = (
+    "trafic", "transit", "sprinter", "vito", "transporter", "crafter", "master", "ducato", "jumper", "boxer",
+    "vivaro", "movano", "expert", "jumpy", "proace", "daily", "caddy", "kangoo", "berlingo", "partner", "combo",
+    "doblo", "multivan", "caravelle", "kisbusz", "furgon", "busz", "van",
+)
+_SUV = (
+    "bigster", "duster", "suv", "terepjáró", "terepjaro", "qashqai", "tiguan", "kodiaq", "karoq", "x-trail",
+    "sportage", "tucson", "rav4", "cr-v", "kuga", "touareg", "vitara", "jogger", "x3", "x5", "q3", "q5", "q7",
+)
+
+
+def karosszeria(auto) -> tuple[str, bool]:
+    """(karosszéria, kézzel beállított-e). Beállítás nélkül a megnevezésből /
+    típusból ismeri fel (pl. "Dacia Bigster" -> SUV, "Renault Trafic" ->
+    furgon); ha semmi nem utal rá, személyautó."""
+    import re
+
+    if getattr(auto, "karosszeria", None) in KAROSSZERIAK:
+        return auto.karosszeria, True
+    szoveg = f" {auto.megnevezes or ''} {auto.tipus or ''} ".lower()
+    szavak = set(re.findall(r"[\wáéíóöőúüű-]+", szoveg))
+    if szavak & set(_FURGON):
+        return "furgon", False
+    if szavak & set(_SUV):
+        return "suv", False
+    return "szemelyauto", False
+
+
 def uj_token() -> str:
     return secrets.token_urlsafe(24)
 

@@ -140,3 +140,30 @@ def test_admin_torolheti_a_fotot(k):
     assert c.delete(f"{A}/{auto.id}/allapot/fotok/{f['id']}").status_code == 204
     assert db.get(AutoAllapotFoto, f["id"]) is None
     assert c.get(f"{A}/{auto.id}/allapot").json()["napok"] == []
+
+
+def test_karosszeria_felismeres_es_beallitas(k):
+    """A fotózási körvonal a karosszériától függ: beállítás nélkül a
+    típusnévből ismeri fel (Bigster -> SUV, Trafic -> furgon, A4 ->
+    személyautó), kézzel felülírható."""
+    from types import SimpleNamespace
+
+    from app.services.auto_allapot import karosszeria
+
+    def kar(megnevezes, tipus=None, beallitott=None):
+        return karosszeria(SimpleNamespace(megnevezes=megnevezes, tipus=tipus, karosszeria=beallitott))
+
+    assert kar("Dacia Bigster") == ("suv", False)
+    assert kar(None, "Renault Trafic") == ("furgon", False)
+    assert kar("Régi Audi A4") == ("szemelyauto", False)
+    assert kar("Dacia Bigster", beallitott="furgon") == ("furgon", True)
+
+    c, auto = k["c"], k["auto"]
+    # A demóautó "Gyártásos busz (demó)" -> furgon.
+    assert c.get(f"{A}/{auto.id}/allapot").json()["auto"]["karosszeria"] == "furgon"
+    r = c.put(f"{A}/{auto.id}/karosszeria", json={"karosszeria": "suv"})
+    assert r.json() == {"karosszeria": "suv", "karosszeria_beallitva": True}
+    token = c.post(f"{A}/{auto.id}/allapot/bekeres").json()["token"]
+    assert c.get(f"{P}/{token}").json()["karosszeria"] == "suv"
+    assert c.put(f"{A}/{auto.id}/karosszeria", json={"karosszeria": "hajo"}).status_code == 400
+    assert c.put(f"{A}/{auto.id}/karosszeria", json={"karosszeria": None}).json()["karosszeria_beallitva"] is False
