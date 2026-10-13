@@ -6,6 +6,7 @@ import { ArrowLeft, Camera, Check, Copy, Link2, Trash2 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { vagolapra } from "@/lib/vagolap";
 import { AutoKorvonal, reszCimke, type Karosszeria } from "@/components/auto-allapot/AutoKorvonal";
+import { FotoNezo, type NezettFoto } from "@/components/auto-allapot/FotoNezo";
 
 type Foto = { id: number; oldal: string; keszult_at: string; keszito: string | null; url: string; belyeg_url: string };
 type Bekeres = { id: number; token: string; letrejott_at: string; visszavonva_at: string | null; mai_db: number };
@@ -50,6 +51,8 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
   const [regiLinkek, setRegiLinkek] = useState(false);
   /** Az épp létrehozott link (kiemelve, és automatikusan kimásolva). */
   const [ujLinkId, setUjLinkId] = useState<number | null>(null);
+  /** A felugró képnéző: az adott kör képei, és melyik látszik. */
+  const [nezo, setNezo] = useState<{ fotok: NezettFoto[]; index: number } | null>(null);
 
   const betolt = useCallback(() => {
     authFetch(`${API}/${autoId}/allapot`)
@@ -139,6 +142,19 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Egy kör képeinek megnyitása a felugró nézőben (a kattintott képnél). */
+  function megnyit(n: Nap, fotoId: number) {
+    const fotok = adat!.oldalak.flatMap((o) => {
+      const f = n.fotok[o.kulcs];
+      if (!f) return [];
+      const ido = new Date(f.keszult_at).toLocaleString("hu-HU", {
+        month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
+      });
+      return [{ id: f.id, url: f.url, cimke: cimke(o), alcim: `${ido}${f.keszito ? ` · ${f.keszito}` : ""}` }];
+    });
+    setNezo({ fotok, index: Math.max(0, fotok.findIndex((f) => f.id === fotoId)) });
   }
 
   const elok = adat.bekeresek.filter((b) => !b.visszavonva_at);
@@ -294,10 +310,15 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
                 return (
                   <figure key={o.kulcs} className="overflow-hidden rounded-[var(--radius)] border border-border bg-surface-1">
                     {f ? (
-                      <a href={f.url} target="_blank" rel="noopener noreferrer" title="Megnyitás teljes méretben">
+                      <button
+                        type="button"
+                        onClick={() => megnyit(n, f.id)}
+                        title="Megnyitás nagyban"
+                        className="block w-full cursor-zoom-in"
+                      >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={f.belyeg_url} alt={cimke(o)} className="aspect-[4/3] w-full object-cover" />
-                      </a>
+                      </button>
                     ) : (
                       <div className="flex aspect-[4/3] items-center justify-center bg-surface-3 text-text-muted">
                         <Camera size={18} />
@@ -336,6 +357,15 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
           </div>
         ))}
       </section>
+
+      {nezo && (
+        <FotoNezo
+          fotok={nezo.fotok}
+          index={nezo.index}
+          onLapoz={(index) => setNezo({ ...nezo, index })}
+          onBezar={() => setNezo(null)}
+        />
+      )}
     </div>
   );
 }
