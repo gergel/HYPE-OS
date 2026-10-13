@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import Link from "next/link";
+import { Camera, ChevronDown, ChevronRight, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AutoTeendok } from "@/components/kotelezettseg/AutoTeendok";
@@ -529,6 +530,15 @@ export function AutoKezelo({
                   Eddigi költés (nettó): <span className="text-text-primary">{formatHuf(auto.koltseg_osszesen)}</span>
                 </span>
                 {auto.felelos_nev && <span className="text-[12.5px] text-text-muted">{auto.felelos_nev}</span>}
+                {/* ÁLLAPOTFOTÓK (a felhasználó kérése): bekérő link és a
+                    napról napra visszanézhető képek - lásd /autok/[id]/allapot. */}
+                <Link
+                  href={`/autok/${auto.id}/allapot`}
+                  className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-2 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3"
+                >
+                  <Camera size={13} />
+                  Állapotfotók
+                </Link>
                 {canDelete && (
                   <button
                     type="button"

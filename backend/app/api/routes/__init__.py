@@ -36,6 +36,7 @@ from app.api.routes.performance_certificates import router as performance_certif
 from app.api.routes.portal import payments_router, router as portal_router
 from app.api.routes.anyagbekeres_admin import router as anyagbekeres_admin_router
 from app.api.routes.anyagbekeres_public import router as anyagbekeres_public_router
+from app.api.routes.auto_allapot import public_router as auto_allapot_public_router, router as auto_allapot_router
 from app.api.routes.portal_admin import router as portal_admin_router
 from app.api.routes.portal_public import downloads_router as portal_downloads_router, router as portal_public_router
 from app.api.routes.postproduction import deliverable_actions_router, deliverables_router, feedback_router, timesheets_router
@@ -124,6 +125,8 @@ api_router.include_router(payments_router)
 api_router.include_router(portal_admin_router)
 api_router.include_router(anyagbekeres_admin_router)
 api_router.include_router(anyagbekeres_public_router)
+api_router.include_router(auto_allapot_router)
+api_router.include_router(auto_allapot_public_router)
 api_router.include_router(portal_public_router)
 api_router.include_router(portal_downloads_router)
 # 13. Pénzügyek

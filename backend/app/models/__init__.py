@@ -84,6 +84,7 @@ from app.models.internal_performance_certificate import (
     InternalPerformanceCertificateInvoice,
 )
 from app.models.auto import Auto, AutoTeendo, AutoTeendoKomment
+from app.models.auto_allapot import AutoAllapotBekeres, AutoAllapotFoto
 from app.models.keret_modositas import KeretModositas
 from app.models.kotelezettseg import (
     Kotelezettseg,
