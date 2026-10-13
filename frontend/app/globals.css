@@ -273,6 +273,12 @@ body {
     font-weight: 600;
     letter-spacing: -0.02em;
     color: var(--text-primary);
+    /* A szóköz nélküli, hosszú címek (pl. "TTM_Horizon_miniszteri_szoveg_...")
+       is törjenek sort: különben kilógnak, és telefonon az egész oldal
+       összezsugorodik (a felhasználó jelezte az Utómunka adatlapnál). */
+    overflow-wrap: anywhere;
+    min-width: 0;
+    max-width: 100%;
   }
   .t-section {
     font-size: 20px;
