@@ -1384,6 +1384,12 @@ FEDEZETT = "fedezett"
 RESZBEN_FEDEZETT = "reszben"
 FEDEZETRE_VAR = "var"
 NINCS_PROJEKTKOD = "nincs_projektkod"
+#: A fedezet megjött, de az alvállalkozó szerződése még nem érkezett vissza
+#: ALÁÍRVA (a felhasználó kérése) - ilyenkor még nem utalható.
+SZERZODESRE_VAR = "szerzodes"
+#: A szerződés ezekben az állapotokban HIÁNYZIK a kifizetéshez (ugyanaz a
+#: szabály, mint az utókövetésben - lásd services/utokovetes_hianyok.HIANYZO).
+_SZERZODES_HIANY = {"alairasra_var", "piszkozat", "hianyzik"}
 
 
 class UtalasraVaroTetel(BaseModel):
@@ -1409,6 +1415,9 @@ class UtalasraVaroTetel(BaseModel):
     projektkodok: list[str] = []
     #: Ezek közül melyek NINCSENEK még kifizetve (ezekre várunk).
     fedezetlen_projektkodok: list[str] = []
+    #: Hol hiányzik még az alvállalkozó ALÁÍRT szerződése (projekt: állapot) -
+    #: amíg nem üres, a tétel nem utalható (a felhasználó kérése).
+    szerzodes_hiany: list[str] = []
 
 
 class UtalasraVaroKeres(BaseModel):
@@ -1476,6 +1485,64 @@ def _fedezettseg(
     return FEDEZETRE_VAR, minden, fedezetlen
 
 
+def _szerzodes_hianyok(db: Session, tigek: list[PerformanceCertificate]) -> dict[int, list[str]]:
+    """Külsős TIG -> hol hiányzik még az ALÁÍRT szerződés (a felhasználó
+    kérése: csak az utalható, akinek a szerződése aláírva visszaérkezett).
+
+    Ugyanaz a szabály, mint az utókövetésben (services/utokovetes_hianyok):
+    rendben van az aláírva visszaérkezett eseti szerződés, a keretszerződés,
+    a belsős fél, a szándékosan kihagyott szerződés és a "van már
+    szerződése" jelölés; hiányzik a kiküldött, de alá nem írt, a piszkozat és
+    a nem létező szerződés. Forgatásos TIG-nél projektenként (összevont TIG:
+    mindegyik projektre), projektkódos TIG-nél a projektkódra nézzük."""
+    from app.api.routes.performance_certificates import tig_kulcsa
+    from app.api.routes.subcontractor_contracts import (
+        MAR_VAN_ALLAPOT,
+        _load_contract_lookup,
+        _load_contract_lookup_projektkodon,
+        _mentesul_keretszerzodessel,
+    )
+    from app.services.szamlazo import SzamlazoFel
+    from app.services.utokovetes_hianyok import SZERZODES_CIMKEK, _szerzodes_allapot
+
+    employee_ids = {t.employee_id for t in tigek if t.vallalkozas_id is None and t.employee_id is not None}
+    vallalkozas_ids = {t.vallalkozas_id for t in tigek if t.vallalkozas_id is not None}
+    keretek, projekt_szerzodesek = _load_contract_lookup(db, employee_ids, vallalkozas_ids)
+    projektkod_szerzodesek = _load_contract_lookup_projektkodon(db, employee_ids, vallalkozas_ids)
+
+    eredmeny: dict[int, list[str]] = {}
+    for tig in tigek:
+        kulcs = tig_kulcsa(tig)
+        if kulcs is None:
+            continue
+        fel = SzamlazoFel(employee=None if tig.vallalkozas is not None else tig.employee, vallalkozas=tig.vallalkozas)
+        hiany: list[str] = []
+        projektek = list({t.project.id: t.project for t in tig.tetelek if t.project is not None}.values())
+        if not projektek and tig.project is not None:
+            projektek = [tig.project]
+        for p in projektek:
+            allapot, _ = _szerzodes_allapot(p, kulcs, keretek, projekt_szerzodesek, fel)
+            if allapot in _SZERZODES_HIANY:
+                hiany.append(f"{p.projektkod_szoveg or p.nev or f'#{p.id}'}: {SZERZODES_CIMKEK[allapot]}")
+        if not projektek and tig.project_code_id is not None:
+            pk = tig.project_code
+            if not _mentesul_keretszerzodessel(keretek.get(kulcs, []), getattr(pk, "datum", None), fel):
+                c = projektkod_szerzodesek.get((tig.project_code_id, kulcs))
+                if c is None:
+                    allapot = "hianyzik"
+                elif c.szerzodes_allapota in ("Kihagyva", MAR_VAN_ALLAPOT):
+                    allapot = "rendben"
+                elif c.szerzodes_allapota == "Kiküldve":
+                    allapot = "alairva" if c.alairva else "alairasra_var"
+                else:
+                    allapot = "piszkozat"
+                if allapot in _SZERZODES_HIANY:
+                    hiany.append(f"{pk.projektkod if pk else f'#{tig.project_code_id}'}: {SZERZODES_CIMKEK[allapot]}")
+        if hiany:
+            eredmeny[tig.id] = hiany
+    return eredmeny
+
+
 def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]]:
     """(tétel, [(fájlnév a ZIP-ben, tárhely-kulcs)]) párok.
 
@@ -1510,9 +1577,9 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
         .filter(PerformanceCertificate.szamla_kifizetve.is_(False))
         .all()
     )
+    kulsos = [tig for tig in kulsos if tig.invoices]
+    szerzodes_hianyok = _szerzodes_hianyok(db, kulsos)
     for tig in kulsos:
-        if not tig.invoices:
-            continue
         # A fedezet a projektek PROJEKTKÓDJÁN érkezik meg. Egy TIG TÖBB projekt
         # munkáját is igazolhatja (egy ember több forgatást egy számlán küld
         # be) - ilyenkor minden érintett projektkódot nézni kell, és a tétel
@@ -1530,6 +1597,11 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
         if not tig_kodok and tig.project_code_id is not None:
             tig_kodok = [tig.project_code_id]
         allapot, minden_kod, fedezetlen = _fedezettseg(tig_kodok, kodok, kifizetett)
+        # A MÁSODIK feltétel (a felhasználó kérése): a fedezet mellett az
+        # alvállalkozó szerződésének is aláírva vissza kell érkeznie.
+        szerzodes_hiany = szerzodes_hianyok.get(tig.id, [])
+        if allapot == FEDEZETT and szerzodes_hiany:
+            allapot = SZERZODESRE_VAR
         if tig.project_id is not None:
             link = f"/projektek/{tig.project_id}"
         elif tig.project_code_id is not None:
@@ -1542,6 +1614,7 @@ def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tu
                     fedezettseg=allapot,
                     projektkodok=minden_kod,
                     fedezetlen_projektkodok=fedezetlen,
+                    szerzodes_hiany=szerzodes_hiany,
                     kulcs=f"kulsos_tig:{tig.id}",
                     tipus="Külsős TIG",
                     megnevezes=tig.megbizas_targya or "Külsős teljesítési igazolás",

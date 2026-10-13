@@ -18,14 +18,22 @@ const ELSO_ADAG = 10;
 type Rendezes = "hatarido" | "megnevezes" | "kinek" | "tipus" | "osszeg";
 
 /** Fedezettség-csoportok. A LÉNYEG az első: azok a tételek, amiknél a
- * megrendelő már kifizette a projektkódot, tehát a pénz nálunk van - ezek
- * mehetnek nyugodtan utalásra. A backend számolja (lásd routes/finance.py
- * _fedezettseg), itt csak csoportosítunk. */
+ * megrendelő már kifizette a projektkódot (a pénz nálunk van), ÉS az
+ * alvállalkozó szerződése aláírva visszaérkezett - ezek mehetnek nyugodtan
+ * utalásra. A backend számolja (lásd routes/finance.py _fedezettseg és
+ * _szerzodes_hianyok), itt csak csoportosítunk. */
 const FEDEZET_CSOPORTOK: { kulcs: string; cimke: string; leiras: string }[] = [
   {
     kulcs: "fedezett",
     cimke: "Utalható",
-    leiras: "A projektkódot a megrendelő már kifizette - a fedezet megérkezett.",
+    leiras:
+      "A projektkódot a megrendelő már kifizette (a fedezet megérkezett), és az alvállalkozó szerződése aláírva visszajött.",
+  },
+  {
+    kulcs: "szerzodes",
+    cimke: "Aláírt szerződésre vár",
+    leiras:
+      "A fedezet megérkezett, de az alvállalkozó még nem küldte vissza aláírva a szerződését - addig nem utalható.",
   },
   {
     kulcs: "var",
@@ -47,6 +55,7 @@ const FEDEZET_CSOPORTOK: { kulcs: string; cimke: string; leiras: string }[] = [
 
 const FEDEZET_SZIN: Record<string, string> = {
   fedezett: "text-text-green",
+  szerzodes: "text-text-orange",
   var: "text-text-orange",
   reszben: "text-text-blue",
   nincs_projektkod: "text-text-muted",
@@ -415,6 +424,11 @@ export function UtalasraVaroSzamlak({ kezdeti }: { kezdeti: UtalasraVaroTetel[] 
                           : t.projektkodok.join(", ")}
                       </span>
                     )}
+                    {(t.szerzodes_hiany ?? []).map((h) => (
+                      <span key={h} className="block text-text-orange">
+                        Szerződés – {h}
+                      </span>
+                    ))}
                   </td>
                   <td className="text-right tabular-nums text-text-secondary">{t.szamla_db}</td>
                   <td className="text-right tabular-nums">{t.osszeg === null ? "–" : formatFt(t.osszeg)}</td>

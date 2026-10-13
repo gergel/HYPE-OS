@@ -3175,11 +3175,14 @@ export type UtalasraVaroTetel = {
   szamla_db: number;
   link: string | null;
   /** Megjött-e a tétel fedezete (kifizette-e a megrendelő a projektkódot):
-   * "fedezett" | "reszben" | "var" | "nincs_projektkod" - lásd backend
-   * routes/finance.py _fedezettseg. */
+   * "fedezett" | "szerzodes" | "reszben" | "var" | "nincs_projektkod" - lásd
+   * backend routes/finance.py _fedezettseg. A "szerzodes": a fedezet megjött,
+   * de az alvállalkozó szerződése még nem érkezett vissza aláírva. */
   fedezettseg: string;
   projektkodok: string[];
   fedezetlen_projektkodok: string[];
+  /** Hol hiányzik még az ALÁÍRT szerződés ("projekt: állapot"). */
+  szerzodes_hiany?: string[];
 };
 
 /** A Kiadások "Kifizetésre vár" fülének tételei (azonosítók, határidő
