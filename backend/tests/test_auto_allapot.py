@@ -121,6 +121,31 @@ def test_ujrafotozas_aznap_lecserel_masnap_megmarad(k):
     assert len(napok) == 2 and all(n["fotok"].get("eleje") for n in napok)
 
 
+def test_uj_link_uj_kor_ures_es_a_regi_lezarul(k):
+    """Minden link külön fotózási kör (a felhasználó jelezte, hogy az új link
+    a régi aznapi képei miatt rögtön késznek látszott): az új link üresen
+    indul, a régi élő link lezárul, és mindkét kör képei megmaradnak."""
+    c, auto = k["c"], k["auto"]
+    regi = c.post(f"{A}/{auto.id}/allapot/bekeres").json()
+    for oldal in OLDAL_KULCSOK:
+        _feltolt(c, regi["token"], oldal)
+    assert len(c.get(f"{P}/{regi['token']}").json()["mai_fotok"]) == 7
+
+    uj = c.post(f"{A}/{auto.id}/allapot/bekeres").json()
+    assert uj["mai_db"] == 0
+    assert c.get(f"{P}/{uj['token']}").json()["mai_fotok"] == {}
+    assert c.get(f"{P}/{regi['token']}").status_code == 404  # a régi link lezárult
+
+    # Az új kör ugyanarról a nézetről nem írja felül a régi kör képét.
+    _feltolt(c, uj["token"], "eleje")
+    assert list(c.get(f"{P}/{uj['token']}").json()["mai_fotok"]) == ["eleje"]
+    allapot = c.get(f"{A}/{auto.id}/allapot").json()
+    assert [b["visszavonva_at"] is None for b in allapot["bekeresek"]] == [True, False]
+    korok = allapot["napok"]
+    assert [(n["bekeres_id"], n["db"]) for n in korok] == [(uj["id"], 1), (regi["id"], 7)]
+    assert korok[0]["datum"] == korok[1]["datum"]
+
+
 def test_hibas_keres_es_visszavont_link(k):
     c, auto = k["c"], k["auto"]
     b = c.post(f"{A}/{auto.id}/allapot/bekeres").json()

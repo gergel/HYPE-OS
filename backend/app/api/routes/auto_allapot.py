@@ -98,9 +98,19 @@ def bekeres_letrehozasa(
     db: Session = Depends(get_db),
     user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
 ) -> dict:
-    """Új bekérő link az autóhoz. Egyelőre teszt jelleggel: a linket kézzel
-    kell kiküldeni (a diszpóval nem megy ki automatikusan)."""
+    """Új bekérő link az autóhoz = új fotózási kör, üresen indul. Az autó
+    korábbi élő linkjei ezzel lezárulnak (a velük feltöltött képek
+    megmaradnak), így mindig egy élő link van, és nem lehet a régit
+    kimásolni. Egyelőre teszt jelleggel: a linket kézzel kell kiküldeni (a
+    diszpóval nem megy ki automatikusan)."""
     auto = _auto_vagy_404(db, auto_id)
+    most = datetime.now(timezone.utc)
+    for regi in db.scalars(
+        select(AutoAllapotBekeres).where(
+            AutoAllapotBekeres.auto_id == auto.id, AutoAllapotBekeres.visszavonva_at.is_(None)
+        )
+    ):
+        regi.visszavonva_at = most
     b = AutoAllapotBekeres(auto_id=auto.id, token=szolg.uj_token(), letrehozta_id=user.id)
     db.add(b)
     db.commit()
@@ -152,8 +162,8 @@ def _el_bekeres(db: Session, token: str) -> AutoAllapotBekeres:
 
 @public_router.get("/{token}")
 def publikus_adatok(token: str, db: Session = Depends(get_db)) -> dict:
-    """Mit lát a link birtokosa: melyik autó, a hét nézet, és ami MA már
-    elkészült közülük."""
+    """Mit lát a link birtokosa: melyik autó, a hét nézet, és ami ezen a
+    linken MA már elkészült közülük (egy új link üresen indul)."""
     b = _el_bekeres(db, token)
     auto = db.get(Auto, b.auto_id)
     ma = budapesti_ma()
@@ -163,7 +173,7 @@ def publikus_adatok(token: str, db: Session = Depends(get_db)) -> dict:
         "karosszeria": szolg.karosszeria(auto)[0],
         "ma": ma.isoformat(),
         "oldalak": szolg.oldalak(),
-        "mai_fotok": szolg.mai_fotok(db, auto.id, ma),
+        "mai_fotok": szolg.mai_fotok(db, b.id, ma),
     }
 
 

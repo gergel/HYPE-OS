@@ -9,7 +9,8 @@ import { AutoKorvonal, reszCimke, type Karosszeria } from "@/components/auto-all
 
 type Foto = { id: number; oldal: string; keszult_at: string; keszito: string | null; url: string; belyeg_url: string };
 type Bekeres = { id: number; token: string; letrejott_at: string; visszavonva_at: string | null; mai_db: number };
-type Nap = { datum: string; fotok: Record<string, Foto>; db: number; osszes: number };
+/** Egy nap egy fotózási köre (egy link aznapi képei). */
+type Nap = { datum: string; bekeres_id: number | null; kezdet: string; fotok: Record<string, Foto>; db: number; osszes: number };
 type Allapot = {
   auto: {
     id: number;
@@ -47,6 +48,8 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
   const [busy, setBusy] = useState(false);
   const [masolva, setMasolva] = useState<number | null>(null);
   const [regiLinkek, setRegiLinkek] = useState(false);
+  /** Az épp létrehozott link (kiemelve, és automatikusan kimásolva). */
+  const [ujLinkId, setUjLinkId] = useState<number | null>(null);
 
   const betolt = useCallback(() => {
     authFetch(`${API}/${autoId}/allapot`)
@@ -87,6 +90,28 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
     if (await vagolapra(linkje(b))) {
       setMasolva(b.id);
       setTimeout(() => setMasolva(null), 1500);
+    }
+  }
+
+  /** Új link = új fotózási kör: üresen indul, a korábbi élő link lezárul
+   * (a képei megmaradnak). Az új link rögtön a vágólapra kerül. */
+  async function ujLink() {
+    setBusy(true);
+    try {
+      const r = await authFetch(`${API}/${autoId}/allapot/bekeres`, { method: "POST" });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) {
+        alert(`Nem sikerült: ${d?.detail ?? r.status}`);
+        return;
+      }
+      setUjLinkId(d.id);
+      betolt();
+      if (await vagolapra(linkje(d as Bekeres))) {
+        setMasolva(d.id);
+        setTimeout(() => setMasolva(null), 2500);
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -157,14 +182,15 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
           <div>
             <p className="text-[14px] font-medium text-text-primary">Bekérő link</p>
             <p className="text-[12.5px] text-text-muted">
-              Aki megkapja, bejelentkezés nélkül feltöltheti a {adat.oldalak.length} képet. Egyelőre teszt: a linket
-              kézzel küldd ki – a diszpóval nem megy ki automatikusan.
+              Aki megkapja, bejelentkezés nélkül feltöltheti a {adat.oldalak.length} képet. Minden új link új fotózási
+              kör: üresen indul, a korábbi link pedig lezárul (a képei megmaradnak). Egyelőre teszt: a linket kézzel
+              küldd ki – a diszpóval nem megy ki automatikusan.
             </p>
           </div>
           <button
             type="button"
             disabled={busy}
-            onClick={() => void hivas(`${API}/${autoId}/allapot/bekeres`, "POST", "Nem sikerült")}
+            onClick={() => void ujLink()}
             className="flex items-center gap-1.5 rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
             <Link2 size={14} /> Új bekérő link
@@ -177,6 +203,11 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
             {elok.map((b) => (
               <li key={b.id} className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-border bg-surface-1 px-3 py-2">
                 <code className="min-w-0 flex-1 truncate text-[12.5px] text-text-secondary">{linkje(b)}</code>
+                {b.id === ujLinkId && (
+                  <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11.5px] font-medium text-text-success">
+                    Új link{masolva === b.id ? " – kimásolva" : ""}
+                  </span>
+                )}
                 <span className="text-[12px] text-text-muted">Ma: {b.mai_db} / {adat.oldalak.length}</span>
                 <button
                   type="button"
@@ -234,7 +265,7 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
           </p>
         )}
         {adat.napok.map((n) => (
-          <div key={n.datum} className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4">
+          <div key={`${n.datum}-${n.bekeres_id ?? "x"}`} className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-3">
                 <AutoKorvonal
@@ -243,7 +274,15 @@ export function AutoAllapotOldal({ autoId }: { autoId: number }) {
                   cimkek={false}
                   className="w-[38px] shrink-0"
                 />
-                <p className="text-[14px] font-medium text-text-primary">{napCimke(n.datum)}</p>
+                <p className="text-[14px] font-medium text-text-primary">
+                  {napCimke(n.datum)}
+                  {/* Ha aznap több fotózási kör (link) is volt, a kezdésük különbözteti meg őket. */}
+                  {adat.napok.filter((m) => m.datum === n.datum).length > 1 && (
+                    <span className="ml-2 text-[12.5px] font-normal text-text-muted">
+                      {new Date(n.kezdet).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}-kor kezdett kör
+                    </span>
+                  )}
+                </p>
               </div>
               <span className={`text-[12.5px] ${n.db === n.osszes ? "text-text-success" : "text-text-warning"}`}>
                 {n.db === n.osszes ? `Mind a ${n.osszes} kép megvan` : `${n.db} / ${n.osszes} kép`}

@@ -123,13 +123,14 @@ def ellenoriz(oldal: str, data: bytes, content_type: str | None) -> None:
 def rogzites(
     db: Session, bekeres: AutoAllapotBekeres, oldal: str, tarolt: dict, keszito: str | None, most: datetime | None = None
 ) -> tuple[AutoAllapotFoto, list[str]]:
-    """Az új fotó sora. Ugyanarról az autóról, ugyanabból a nézetből az AZNAPI
-    korábbi fotót lecseréli (az újrafotózás felülírja); a régi napokét nem.
+    """Az új fotó sora. UGYANAZON a linken, ugyanabból a nézetből az aznapi
+    korábbi fotót lecseréli (az újrafotózás felülírja); más link (másik
+    fotózási kör) és a régi napok képeit nem.
     Visszaadja az eldobott tárhely-kulcsokat is (a hívó törli őket)."""
     most = most or datetime.now(timezone.utc)
     eldobott: list[str] = []
     for regi in db.scalars(
-        select(AutoAllapotFoto).where(AutoAllapotFoto.auto_id == bekeres.auto_id, AutoAllapotFoto.oldal == oldal)
+        select(AutoAllapotFoto).where(AutoAllapotFoto.bekeres_id == bekeres.id, AutoAllapotFoto.oldal == oldal)
     ):
         if nap(regi.keszult_at) == nap(most):
             eldobott += [k for k in (regi.kulcs, regi.belyeg_kulcs) if k]
@@ -166,10 +167,12 @@ def oldalak() -> list[dict]:
     return [{"kulcs": k, "cimke": c} for k, c in OLDALAK]
 
 
-def mai_fotok(db: Session, auto_id: int, ma: date) -> dict[str, dict]:
+def mai_fotok(db: Session, bekeres_id: int, ma: date) -> dict[str, dict]:
+    """Ami a linken MA elkészült. Minden link külön fotózási kör: egy új link
+    üresen indul, akkor is, ha aznap egy másik linkkel már készültek képek."""
     eredmeny: dict[str, dict] = {}
     for f in db.scalars(
-        select(AutoAllapotFoto).where(AutoAllapotFoto.auto_id == auto_id).order_by(AutoAllapotFoto.keszult_at)
+        select(AutoAllapotFoto).where(AutoAllapotFoto.bekeres_id == bekeres_id).order_by(AutoAllapotFoto.keszult_at)
     ):
         if nap(f.keszult_at) == ma:
             eredmeny[f.oldal] = foto_kimenet(f)
@@ -178,13 +181,21 @@ def mai_fotok(db: Session, auto_id: int, ma: date) -> dict[str, dict]:
 
 def napok(db: Session, auto_id: int) -> list[dict]:
     """Az autó állapota NAPRÓL NAPRA (legfrissebb elöl): melyik nap melyik
-    nézetről készült kép, és mennyi van meg a hétből."""
-    szerint: dict[date, dict[str, dict]] = defaultdict(dict)
+    nézetről készült kép, és mennyi van meg a hétből. Ha egy nap több link
+    (fotózási kör) is volt, mindegyik külön sor - a kezdés időpontjával."""
+    szerint: dict[tuple[date, int | None], dict[str, dict]] = defaultdict(dict)
+    kezdet: dict[tuple[date, int | None], datetime] = {}
     for f in db.scalars(
         select(AutoAllapotFoto).where(AutoAllapotFoto.auto_id == auto_id).order_by(AutoAllapotFoto.keszult_at)
     ):
-        szerint[nap(f.keszult_at)][f.oldal] = foto_kimenet(f)
+        kulcs = (nap(f.keszult_at), f.bekeres_id)
+        szerint[kulcs][f.oldal] = foto_kimenet(f)
+        kezdet.setdefault(kulcs, f.keszult_at)
+    sorrend = sorted(szerint, key=lambda k: (k[0], kezdet[k]), reverse=True)
     return [
-        {"datum": d.isoformat(), "fotok": fotok, "db": len(fotok), "osszes": len(OLDALAK)}
-        for d, fotok in sorted(szerint.items(), reverse=True)
+        {
+            "datum": k[0].isoformat(), "bekeres_id": k[1], "kezdet": kezdet[k],
+            "fotok": szerint[k], "db": len(szerint[k]), "osszes": len(OLDALAK),
+        }
+        for k in sorrend
     ]
