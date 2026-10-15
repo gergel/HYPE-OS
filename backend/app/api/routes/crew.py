@@ -1,7 +1,7 @@
 import os
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -12,6 +12,7 @@ from app.core.security import (
     Role,
     get_current_user,
     hash_password,
+    lathatja_e_az_oldalt,
     require_page_action,
     require_roles,
     vedett_rendszergazda,
@@ -51,6 +52,83 @@ def _hash_employee_password(data: dict, db: Session) -> dict:
     return data
 
 
+# --- Pénz a Csapat oldalon: csak Pénzügy-joggal ------------------------------
+#
+# A felhasználó kérése: aki látja a Csapatot, de a Pénzügyhöz nincs joga, az
+# semmit ne lásson abból, ami pénz - a vágók órabérét, a belsősök napidíját és
+# minden elszámolását. A kitakarás a SZERVEREN történik (nem csak a felületen
+# rejtjük el), és ugyanez a jog kell a pénzes mezők írásához is. Ugyanaz a
+# szabály, mint a projektkódok pénz-mezőinél (routes/project_codes).
+
+PENZUGY_OLDAL = "/penzugyek"
+
+#: A munkatárs-rekord pénzes mezői.
+MUNKATARS_PENZ_MEZOK = (
+    "napi_dij",
+    "szerzodott_napok",
+    "plusz_nap_napi_dij",
+    "orabler_notion",
+    "napidij_notion",
+    "extra_kiadas_megnevezes",
+    "extra_kiadas_osszeg",
+    "extra_kiadas_datuma",
+    "netto_osszeg",
+    "legutolso_napi_dij_megegyezes",
+    "plusz_afa",
+)
+
+#: A bérezés (Rate) pénzes mezői - a vágók órabére is itt van.
+BEREZES_PENZ_MEZOK = ("orabler", "napibler", "tulora", "plusz_nap", "havi_alap", "fotos_napi_ber")
+
+_NINCS_PENZ_JOG = "A pénzes adatokat (bér, napidíj, órabér, elszámolás) csak Pénzügy-joggal lehet módosítani."
+
+
+def lathat_penzt(db: Session, user: Employee) -> bool:
+    return lathatja_e_az_oldalt(db, user, PENZUGY_OLDAL)
+
+
+def _kitakar(mezok: tuple[str, ...]):
+    def szuro(sorok: list[dict], db: Session, user: Employee) -> list[dict]:
+        if lathat_penzt(db, user):
+            return sorok
+        for sor in sorok:
+            for mezo in mezok:
+                if mezo in sor:
+                    sor[mezo] = None
+        return sorok
+
+    return szuro
+
+
+def _uj_munkatars(data: dict, db: Session, current_user: Employee) -> dict:
+    if not lathat_penzt(db, current_user) and any(data.get(m) not in (None, "") for m in MUNKATARS_PENZ_MEZOK):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_NINCS_PENZ_JOG)
+    return _hash_employee_password(data, db)
+
+
+def _penz_mezok_vedelme(obj: Employee, data: dict, db: Session, current_user: Employee) -> None:
+    """Pénzügy-jog nélkül a pénzes mező nem írható. Ami nem VÁLTOZTATNA (pl.
+    egy egész űrlapot visszaküldő mentés kitakart, üres értéke), azt csendben
+    elhagyjuk - különben a többi mező mentése is elakadna rajta."""
+    erintett = [m for m in MUNKATARS_PENZ_MEZOK if m in data]
+    if not erintett or lathat_penzt(db, current_user):
+        return
+    for mezo in erintett:
+        if data[mezo] in (None, "") or data[mezo] == getattr(obj, mezo, None):
+            data.pop(mezo)
+        else:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_NINCS_PENZ_JOG)
+
+
+def berezes_iras_vedelme(
+    request: Request, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)
+) -> None:
+    """A bérezés (Rate) írása - létrehozás, módosítás, törlés - csak
+    Pénzügy-joggal (lásd routes/__init__.py, a rates_router bekötése)."""
+    if request.method not in ("GET", "HEAD", "OPTIONS") and not lathat_penzt(db, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_NINCS_PENZ_JOG)
+
+
 #: Amit a védett rendszergazda fiókján nem lehet elállítani. Az `email` is itt
 #: van, mert a védettség A CÍMEN múlik (lásd core/security.vedett_rendszergazda):
 #: átírni annyi lenne, mint kikapcsolni a védelmet.
@@ -84,6 +162,11 @@ def _vedett_fiok_vedelme(obj: Employee, data: dict, _db: Session, _current_user:
         )
 
 
+def _munkatars_mentese_elott(obj: Employee, data: dict, db: Session, current_user: Employee) -> None:
+    _vedett_fiok_vedelme(obj, data, db, current_user)
+    _penz_mezok_vedelme(obj, data, db, current_user)
+
+
 def _vedett_fiok_torlese(obj: Employee, _db: Session) -> None:
     if vedett_rendszergazda(obj):
         raise HTTPException(
@@ -100,10 +183,11 @@ router = build_crud_router(
     prefix="/crew",
     tags=["crew"],
     page="/csapat",
-    before_create=_hash_employee_password,
-    before_update=_vedett_fiok_vedelme,
+    before_create=_uj_munkatars,
+    before_update=_munkatars_mentese_elott,
     before_delete=_vedett_fiok_torlese,
     entity_type="employee",
+    kimenet_szuro=_kitakar(MUNKATARS_PENZ_MEZOK),
 )
 
 
@@ -384,6 +468,9 @@ rates_router = build_crud_router(
     prefix="/rates",
     tags=["crew"],
     page="/csapat",
+    # A bérezés maga a pénz: Pénzügy-jog nélkül az összegek kitakarva mennek
+    # ki, írni pedig nem lehet (berezes_iras_vedelme).
+    kimenet_szuro=_kitakar(BEREZES_PENZ_MEZOK),
 )
 
 
@@ -466,7 +553,7 @@ def _soronkenti_osszegek(fej_netto, tetelek: list, projektek: list[int], otthon:
 def kulsos_munkak(
     employee_id: int,
     db: Session = Depends(get_db),
-    _user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(get_current_user),
 ):
     """Egy (jellemzően külsős) munkatárs projektjei: min dolgozott, mennyiért,
     és hol vannak a hozzá tartozó papírok.
@@ -474,9 +561,14 @@ def kulsos_munkak(
     A sorok a TIG-ekből jönnek (az mondja meg, mennyiért csinálta), és mellé
     kerül a projekthez tartozó eseti szerződés is - ha viszont a munkatársnak
     álló KERETSZERZŐDÉSE van, projektenként nincs külön szerződés, ezért azt
-    egyszer, a lista fölött mutatjuk."""
+    egyszer, a lista fölött mutatjuk.
+
+    Ez a munkatárs ELSZÁMOLÁSA (mennyit fizettünk neki, számlák) - Pénzügy-jog
+    nélkül üresen megy vissza (a felhasználó kérése)."""
     if db.get(Employee, employee_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Munkatárs nem található")
+    if not lathat_penzt(db, current_user):
+        return KulsosMunkakOsszesites()
 
     # Álló keretszerződés - de csak a VALÓDI (lásd models/contract.py
     # megkotott_keretszerzodes): a munkatárs Notion-lapjáról átvett, projekt

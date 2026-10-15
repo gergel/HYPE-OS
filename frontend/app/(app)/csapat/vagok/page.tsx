@@ -6,7 +6,7 @@ import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { TopBar } from "@/components/TopBar";
 import { EmployeeActiveToggle, EmployeeStartDateEditor, EmployeeTipusSelect, RateHourlyEditor } from "@/components/VagoInlineFields";
 import { Employee, ENTITY_PATHS, formatDate, getCurrentUser, getEmployees, getMyPagePermissions, getRates, Rate } from "@/lib/api";
-import { canDoAction } from "@/lib/permissions";
+import { canDoAction, lathatPenzt } from "@/lib/permissions";
 
 type VagoRow = Employee & { rate: Rate | null };
 
@@ -38,6 +38,7 @@ export default async function VagokPage() {
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  const penz = lathatPenzt(currentUser, pagePermissions);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -119,15 +120,21 @@ export default async function VagokPage() {
                 ),
                 sortAccessor: (e) => (e.is_active ? 1 : 0),
               },
-              {
-                header: "Óradíj",
-                render: (e) => (
-                  <StopClickPropagation>
-                    <RateHourlyEditor employeeId={e.id} rateId={e.rate?.id ?? null} initialValue={e.rate?.orabler ?? null} />
-                  </StopClickPropagation>
-                ),
-                sortAccessor: (e) => e.rate?.orabler ?? null,
-              },
+              // Az órabér csak Pénzügy-joggal (a felhasználó kérése) - a backend
+              // amúgy is kitakarja és írni sem engedi (lásd routes/crew.py).
+              ...(penz
+                ? [
+                    {
+                      header: "Óradíj",
+                      render: (e: VagoRow) => (
+                        <StopClickPropagation>
+                          <RateHourlyEditor employeeId={e.id} rateId={e.rate?.id ?? null} initialValue={e.rate?.orabler ?? null} />
+                        </StopClickPropagation>
+                      ),
+                      sortAccessor: (e: VagoRow) => e.rate?.orabler ?? null,
+                    },
+                  ]
+                : []),
               {
                 header: "Utolsó munkanap",
                 render: (e) => formatDate(e.utolso_munkanap),

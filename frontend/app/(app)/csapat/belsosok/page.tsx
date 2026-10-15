@@ -1,13 +1,13 @@
 import { Card } from "@/components/Card";
-import { DataTable } from "@/components/DataTable";
+import { DataTable, type Column } from "@/components/DataTable";
 import { EditableTableCell } from "@/components/EditableTableCell";
 import { QuickCreateForm } from "@/components/QuickCreateForm";
 import { StopClickPropagation } from "@/components/StopClickPropagation";
 import { TopBar } from "@/components/TopBar";
 import { BelsosAddWidget } from "@/components/BelsosAddWidget";
 import { EmployeeActiveToggle } from "@/components/VagoInlineFields";
-import { ENTITY_PATHS, formatHuf, getCurrentUser, getEmployees, getMyPagePermissions } from "@/lib/api";
-import { canDoAction } from "@/lib/permissions";
+import { type Employee, ENTITY_PATHS, formatHuf, getCurrentUser, getEmployees, getMyPagePermissions } from "@/lib/api";
+import { canDoAction, lathatPenzt } from "@/lib/permissions";
 
 const PAGE = "/csapat";
 
@@ -23,6 +23,7 @@ export default async function BelsosokPage() {
   const canCreate = canDoAction(currentUser, pagePermissions, PAGE, "create");
   const canDelete = canDoAction(currentUser, pagePermissions, PAGE, "delete");
   const canEdit = canDoAction(currentUser, pagePermissions, PAGE, "edit");
+  const penz = lathatPenzt(currentUser, pagePermissions);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -68,6 +69,10 @@ export default async function BelsosokPage() {
                   ),
                 sortAccessor: (e) => e.email,
               },
+              // A pénzes oszlopok csak Pénzügy-joggal (a felhasználó kérése) - a
+              // backend amúgy is kitakarja őket (lásd routes/crew.py).
+              ...(penz
+                ? ([
               {
                 // Mennyibe kerül egy munkanapja: ebből számoljuk, mennyi saját
                 // munka van egy projektben (lásd backend
@@ -131,6 +136,8 @@ export default async function BelsosokPage() {
                   ),
                 sortAccessor: (e) => e.plusz_nap_napi_dij,
               },
+                  ] satisfies Column<Employee>[])
+                : []),
               {
                 header: "Aktív",
                 render: (e) => (

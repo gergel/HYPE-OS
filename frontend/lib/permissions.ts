@@ -128,6 +128,32 @@ export function lathatjaAzOldalt(pagePermissions: Record<string, string[]> | nul
   return oldalMuveletei(pagePermissions, page) !== null;
 }
 
+/** A Pénzügy oldal kulcsa: a pénzes adatok (bér, napidíj, órabér,
+ * elszámolás) ehhez a joghoz kötöttek - a Csapat oldalon is (a felhasználó
+ * kérése). A backend ugyanezzel a szabállyal takar ki (lásd routes/crew.py
+ * lathat_penzt), ez csak a felület igazítása. */
+export const PENZUGY_OLDAL = "/penzugyek";
+
+/** Láthat-e pénzes adatot ez a felhasználó? */
+export function lathatPenzt(forras: SzerepkorForras, pagePermissions: Record<string, string[]> | null): boolean {
+  return vedettAdmin(forras) || lathatjaAzOldalt(pagePermissions, PENZUGY_OLDAL);
+}
+
+/** A munkatárs-rekord pénzes mezői (backend routes/crew.py MUNKATARS_PENZ_MEZOK). */
+export const MUNKATARS_PENZ_MEZOK = [
+  "napi_dij",
+  "szerzodott_napok",
+  "plusz_nap_napi_dij",
+  "orabler_notion",
+  "napidij_notion",
+  "extra_kiadas_megnevezes",
+  "extra_kiadas_osszeg",
+  "extra_kiadas_datuma",
+  "netto_osszeg",
+  "legutolso_napi_dij_megegyezes",
+  "plusz_afa",
+];
+
 /** Mit tehet egy RÉSZLETNÉZET-SZEKCIÓN belül - a backend
  * `core/security.check_tab_action` párja.
  *

@@ -39,7 +39,7 @@ import {
 } from "@/lib/api";
 import { toEditableDetailFields } from "@/lib/detail";
 import { buildFieldTabs } from "@/lib/detailTabs";
-import { canDoAction, szerepkorei } from "@/lib/permissions";
+import { canDoAction, lathatPenzt, MUNKATARS_PENZ_MEZOK, szerepkorei } from "@/lib/permissions";
 
 /** Ezek az adatok másolódnak át előtöltésként az alvállalkozói eseti
  * szerződés generálásakor (lásd backend/app/api/routes/subcontractor_contracts.py
@@ -125,9 +125,13 @@ export default async function EmployeeDetailPage({
   // Csak belsősnél értelmes: náluk a havi TIG hónapjait szabja meg.
   const belsosIdoszakok = employee.tipus === "belsos" ? await getBelsosIdoszakok(employeeId) : null;
 
-  const vallalkozasFieldKeys = visibleFields
-    ? VALLALKOZAS_FIELD_KEYS.filter((k) => visibleFields.includes(k))
-    : VALLALKOZAS_FIELD_KEYS;
+  // PÉNZ csak Pénzügy-joggal (a felhasználó kérése): bér, napidíj, órabér,
+  // elszámolás. A backend amúgy is kitakarja az összegeket (lásd
+  // routes/crew.py lathat_penzt) - itt a kártyáikat sem mutatjuk.
+  const penz = lathatPenzt(currentUser, pagePermissions);
+  const vallalkozasFieldKeys = (
+    visibleFields ? VALLALKOZAS_FIELD_KEYS.filter((k) => visibleFields.includes(k)) : VALLALKOZAS_FIELD_KEYS
+  ).filter((k) => penz || !MUNKATARS_PENZ_MEZOK.includes(k));
 
   // A külsős és a belsős elszámolása alapvetően különbözik (havi bér vs.
   // projektenkénti szerződés + TIG), ezért más blokkok kerülnek az adatlapra.
@@ -212,6 +216,23 @@ export default async function EmployeeDetailPage({
     ),
   };
 
+  /* Pénzügy-jog nélkül a belsős időszak (ami nem pénz) a havi kiadások
+     helyett külön kártyán marad meg. */
+  const belsosIdoszakTab = {
+    key: "belsos-idoszak",
+    label: "Belsős időszak",
+    content: (
+      <Card title="Belsős időszak" icon={FileText}>
+        {belsosIdoszakok && <BelsosIdoszakok adat={belsosIdoszakok} canEdit={szerkeszthet} />}
+      </Card>
+    ),
+  };
+  const elszamolasTabok = penz
+    ? [kulsos ? kulsosMunkakTab : haviKoltsegekTab]
+    : !kulsos && belsosIdoszakok
+      ? [belsosIdoszakTab]
+      : [];
+
   /* MINDEN blokk szekcióként megy be, nem a lap aljára fixen kirakva - így az
      admin által beállított sorrend (fogd és vidd) ugyanúgy vonatkozik rájuk,
      mint az adatlap mező-kártyáira. */
@@ -223,7 +244,7 @@ export default async function EmployeeDetailPage({
     visibleFields,
     fieldTypes,
     pagePermissions,
-    alwaysHidden: ["hashed_password", ...VALLALKOZAS_FIELD_KEYS],
+    alwaysHidden: ["hashed_password", ...VALLALKOZAS_FIELD_KEYS, ...(penz ? [] : MUNKATARS_PENZ_MEZOK)],
     extraTabs: [
       {
         key: "vallalkozas",
@@ -254,20 +275,24 @@ export default async function EmployeeDetailPage({
           </Card>
         ),
       },
-      {
-        key: "berezes",
-        label: "Bérezés",
-        content: (
-          <Card title={`Bérezés (${rates.length})`} icon={Wallet}>
-            <RelatedTable
-              rows={rates}
-              emptyText="Nincs felvett bérezés ehhez a crew taghoz."
-              entityKey="rate"
-              deleteBasePath={ENTITY_PATHS.rate}
-            />
-          </Card>
-        ),
-      },
+      ...(penz
+        ? [
+            {
+              key: "berezes",
+              label: "Bérezés",
+              content: (
+                <Card title={`Bérezés (${rates.length})`} icon={Wallet}>
+                  <RelatedTable
+                    rows={rates}
+                    emptyText="Nincs felvett bérezés ehhez a crew taghoz."
+                    entityKey="rate"
+                    deleteBasePath={ENTITY_PATHS.rate}
+                  />
+                </Card>
+              ),
+            },
+          ]
+        : []),
       ...(utomunkaIdo.length > 0
         ? [
             {
@@ -301,7 +326,7 @@ export default async function EmployeeDetailPage({
           </Card>
         ),
       },
-      ...(kulsos ? [kulsosMunkakTab] : [haviKoltsegekTab]),
+      ...elszamolasTabok,
       {
         key: "szerzodesek",
         label: "Szerződések",
