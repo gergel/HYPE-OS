@@ -6,7 +6,6 @@ import { DispoResponsiblesManager } from "@/components/DispoResponsiblesManager"
 import { DiszpoMasolatManager } from "@/components/DiszpoMasolatManager";
 import { EmployeeAccessManager } from "@/components/EmployeeAccessManager";
 import { EntityFieldManager } from "@/components/EntityFieldManager";
-import { NotionImportPanel } from "@/components/NotionImportPanel";
 import { RevokeAllOthersButton } from "@/components/RevokeAllOthersButton";
 import { TorlesNaplo } from "@/components/TorlesNaplo";
 import { szerepkorei } from "@/lib/permissions";
@@ -193,17 +192,6 @@ export default async function BeallitasokPage() {
         )}
 
         {szerepkorei(currentUser).includes("admin") && (
-          <Card title="Notion import">
-            <p className="mb-3 text-[13px] text-text-secondary">
-              A teljes (mind a 3 kör) idempotens Notion import elindítása innen, a böngészőből - nincs szükség `railway ssh`-ra, a
-              háttérben a Railway-en futó backend service saját processzében fut le, ezért egy megszakadt kapcsolat nem szakítja
-              félbe.
-            </p>
-            <NotionImportPanel />
-          </Card>
-        )}
-
-        {szerepkorei(currentUser).includes("admin") && (
           <Card title="Diszpó felelősök">
             <p className="mb-3 text-[13px] text-text-secondary">
               Akik itt szerepelnek, azoknak a &quot;Teendőim&quot; widget minden nap felhozza a MÁSNAPI forgatások
@@ -249,10 +237,6 @@ export default async function BeallitasokPage() {
             <div>
               <dt className="text-[12px] text-text-muted">API cím</dt>
               <dd className="mt-0.5 text-[13px] text-text-primary">{process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}</dd>
-            </div>
-            <div>
-              <dt className="text-[12px] text-text-muted">Adatforrás</dt>
-              <dd className="mt-0.5 text-[13px] text-text-primary">Notion import (idempotens, egyenkénti mezőleképezéssel)</dd>
             </div>
           </dl>
         </Card>
