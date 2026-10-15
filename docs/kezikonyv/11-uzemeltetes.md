@@ -179,6 +179,7 @@ beállítás nélkül is:
 |---|---|
 | Egy oldal 403-at ad | A `nav.ts` `permissionPage` értéke egyezik-e a backend `page=`/`PAGE` konstansával ([02](02-auth-jogosultsag.md)) |
 | Nem megy ki levél | `GMAIL_*` hitelesítés; a route hibaüzenete megmondja, mi hiányzik |
+| "A Google-fiók hozzáférése lejárt vagy visszavonták" | Új token kell: a saját gépeden `python backend/scripts/gmail_token_ujrakeres.py kliens.json`, a kapott fájl tartalma a Railway `GMAIL_OAUTH_TOKEN_JSON` (vagy `TIGTOKEN_JSON`) változójába. Hogy ne járjon le 7 naponta: Google Cloud Console → OAuth consent screen → Publish app ([10](10-integraciok.md)) |
 | A szerződésmódosítás nem megy ki, a többi levél igen | A `MODOSITAS_SENDER` cím nincs felvéve a küldő fiókban álnévként (Gmail → Beállítások → Fiókok → Küldés mint) ([06](06-papirozas.md)) |
 | A módosítás levelén nem a fiók aláírása van | A token nem tudta kiolvasni a Gmail-beállítást (`gmail.settings.basic`/`gmail.readonly`) - ilyenkor a beépített tartalék aláírás megy, a küldés nem hasal el |
 | Nem generálódik PDF | `GOOGLE_DOCS_OAUTH_TOKEN_JSON` scope-jai (`drive` + `documents`), sablon-ID |
