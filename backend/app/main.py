@@ -8,6 +8,7 @@ from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from app.api.routes import api_router
 from app.core.config import settings
+from app.services import hiba_forditas
 from app.services.portal_storage import R2NotConfiguredError
 
 logger = logging.getLogger("hype_os")
@@ -50,9 +51,17 @@ async def catch_unhandled_exceptions(request: Request, call_next):
             status_code=503,
             content={"detail": "A rendszer pillanatnyilag túlterhelt - próbáld újra pár másodperc múlva."},
         )
-    except Exception:
+    except Exception as exc:
         logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
-        return JSONResponse(status_code=500, content={"detail": "Váratlan szerverhiba történt."})
+        # A felismerhető hibák (lejárt Google-hozzáférés, zárolt sor,
+        # időtúllépés) érthető üzenetet kapnak a semmitmondó 500-as helyett -
+        # a többinél legalább a hiba típusa látszik (lásd services/hiba_forditas.py).
+        forditas = hiba_forditas.fordit(exc)
+        if forditas is not None:
+            if forditas.status_code == 409:
+                hiba_forditas.zarolok_naplozasa()
+            return JSONResponse(status_code=forditas.status_code, content={"detail": forditas.detail})
+        return JSONResponse(status_code=500, content={"detail": hiba_forditas.ismeretlen_uzenet(exc)})
 
 
 _cors_origins = settings.cors_origin_list
